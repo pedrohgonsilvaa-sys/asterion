@@ -1,10 +1,10 @@
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from alembic import context
 from asterion.config import get_settings
 from asterion.infrastructure.db import models  # noqa: F401
 from asterion.infrastructure.db.base import Base
