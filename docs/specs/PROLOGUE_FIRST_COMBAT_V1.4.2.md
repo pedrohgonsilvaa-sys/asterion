@@ -123,6 +123,11 @@ Para este encontro, Esquiva e Bloqueio base são 0% quando nenhuma outra fonte o
 
 A Arte já está aprendida no Nv.1. O tutorial controla apenas quando o botão é revelado.
 
+Recarga, conforme Fonte Mestra §10.2: uma skill CD2 usada no T1 fica indisponível
+no T2 e volta no T3. O turno de uso não é o primeiro tick do cooldown. Cooldowns
+avançam por oportunidade de turno do proprietário: uso em N bloqueia N+1 e permite
+novo uso em N+2.
+
 ## 7. K(level) e composição de inimigos
 
 Centro neutro Nv.60:
@@ -143,6 +148,16 @@ Regras:
 - multiplicador ausente = 1,00;
 - nenhum arredondamento intermediário;
 - um único `round_half_up` no atributo final.
+
+Categoria Solo **Comum**, conforme Fonte Mestra §49.6:
+
+- HP 70%;
+- ATQ 82%;
+- DEF 90%;
+- AGI 95%.
+
+Esses fatores `Category_A` entram na composição antes de qualquer arredondamento,
+junto de Arquétipo, Variante, Conteúdo e Grupo. Comum não equivale a 1,00.
 
 ## 8. Cão Cinéreo — primeiro encontro oficial
 

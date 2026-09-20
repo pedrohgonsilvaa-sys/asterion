@@ -7,7 +7,7 @@ from uuid import UUID
 RACES = ("remanescente", "velado", "cinereo", "hemario", "alvorano")
 CLASSES = ("sentinela", "errante", "vigia", "tecelao", "oraculo", "luminar")
 PROLOGUE = "cinzas_na_estrada:intro"
-RULESET = "gdd-1.4.1-baseline-1.0"
+RULESET = "gdd-1.4.2-baseline-1.0"
 
 
 def normalize_name(value: str) -> str | None:

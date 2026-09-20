@@ -106,8 +106,10 @@ e personagens com o estágio inicial persistente do prólogo.
 
 `/start` recupera o personagem ou a tela exata do draft no PostgreSQL, inclusive
 detalhes e revisão de escolhas. A confirmação é transacional e idempotente. O
-botão `Seguir pela Estrada` apenas reconstrói a tela persistente; sua transição
-pertence à próxima etapa. Não há combate, Arte, Braseiro ou Menu Principal.
+botão `Seguir pela Estrada` cria ou retoma a atividade Foreground persistente do
+primeiro Cão Cinéreo. O tutorial implementa Atacar, Defender, primeira Arte,
+combate normal, vitória e o grant fixo de 320 XP. O estado final fica pronto para
+o primeiro Braseiro; Braseiro, Descansar e Menu Principal não estão implementados.
 
 As imagens oficiais ainda não estão disponíveis. Todas as telas funcionam com
 texto e inline keyboard; a configuração opcional `ASTERION_CREATION_IMAGES`
@@ -117,9 +119,9 @@ placeholders de imagem da especificação não são exibidos.
 Consulte [operação e decisões técnicas](docs/CHARACTER_CREATION.md) para servidor,
 política de nomes, mídia opcional e testes em PostgreSQL.
 
-A próxima etapa autorizada pela Fonte Mestra v1.4.2 é o primeiro combate do prólogo.
-A especificação focada está em
-[`docs/specs/PROLOGUE_FIRST_COMBAT_V1.4.2.md`](docs/specs/PROLOGUE_FIRST_COMBAT_V1.4.2.md).
+A implementação técnica do encontro está documentada em
+[`docs/PROLOGUE_FIRST_COMBAT.md`](docs/PROLOGUE_FIRST_COMBAT.md), subordinada à
+[`especificação oficial focada`](docs/specs/PROLOGUE_FIRST_COMBAT_V1.4.2.md).
 
 ## Testes completos
 

@@ -12,8 +12,9 @@ conteúdo oficial; nenhuma mecânica de combate é implementada nesta etapa.
   devem usar a mesma configuração e banco.
 - `creation_drafts` contém tela atual, versão, nome, raça, classe, contexto de edição
   e eventual erro de nome. Páginas de detalhe também são persistidas.
-- `characters` contém as escolhas definitivas, `stage=cinzas_na_estrada:intro` e
-  `ruleset_version=gdd-1.4.1-baseline-1.0`.
+- `characters` contém as escolhas definitivas, `stage=cinzas_na_estrada:intro` e,
+  para novas criações, `ruleset_version=gdd-1.4.2-baseline-1.0`. A migration do
+  primeiro combate atualiza explicitamente intros antigas em v1.4.1.
 - Não existe estado crítico em FSM, Redis ou `message_id`. O router atende chats
   privados; a identidade vem de `from_user.id`, não do autor da mensagem do bot.
 
@@ -40,8 +41,9 @@ por drafts incompletos.
 Após o commit, a apresentação Telegram pode falhar sem desfazer a criação.
 `/start` ou retry recuperam o mesmo personagem. O outbox existente é preservado;
 este fluxo não depende de entrega garantida de notificação nem grava recompensas
-ou efeitos econômicos. `Seguir pela Estrada` apenas reconhece a intenção e
-reconstrói a tela, sem mudar estágio ou iniciar combate **na implementação atual**. A Fonte Mestra v1.4.2 agora define que esse botão cria o primeiro encontro Foreground autoritativo; essa transição pertence ao próximo bloco de implementação.
+ou efeitos econômicos. `Seguir pela Estrada` cria ou retoma idempotentemente a
+atividade Foreground do primeiro combate sob v1.4.2. O fluxo posterior está
+documentado em `docs/PROLOGUE_FIRST_COMBAT.md`.
 
 ## Política de nomes
 

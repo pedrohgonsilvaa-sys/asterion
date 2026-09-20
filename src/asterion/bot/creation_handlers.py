@@ -8,6 +8,8 @@ from aiogram.filters import CommandStart
 from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message, Update
 
 from asterion.application.creation import CreationService
+from asterion.application.prologue import PrologueService
+from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import CreationCallback, Screen, render
 
 
@@ -75,15 +77,27 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
     await message.answer(screen.text, reply_markup=screen.keyboard, parse_mode=None)
 
 
-def creation_router(service: CreationService, images: dict[str, str]) -> Router:
+def creation_router(
+    service: CreationService,
+    images: dict[str, str],
+    prologue: PrologueService | None = None,
+) -> Router:
     router = Router(name="character_creation")
     router.message.filter(F.chat.type == "private")
     router.callback_query.filter(F.message.chat.type == "private")
 
+    async def current_screen(actor, state):
+        if prologue is not None:
+            view = await prologue.resume(actor)
+            if view is not None:
+                return render_combat(view)
+        return render(state)
+
     @router.message(CommandStart())
     async def start(message: Message):
         if message.from_user:
-            await present(message, render(await service.start(message.from_user.id)), images)
+            state = await service.start(message.from_user.id)
+            await present(message, await current_screen(message.from_user.id, state), images)
 
     @router.callback_query(F.data.startswith("cc:"))
     async def callback(query: CallbackQuery):
@@ -99,16 +113,9 @@ def creation_router(service: CreationService, images: dict[str, str]) -> Router:
         state = await service.callback(query.from_user.id, draft_id, data.version, data.action)
         await query.answer()
         if state is not None:
-            await present(query.message, render(state), images, edit=True)
-
-    @router.callback_query(F.data == "prologue:continue")
-    async def prologue_boundary(query: CallbackQuery):
-        # Deliberate boundary: no gameplay transition or unapproved copy yet.
-        await query.answer()
-        if isinstance(query.message, Message):
-            state = await service.resume(query.from_user.id)
-            if state is not None:
-                await present(query.message, render(state), images, edit=True)
+            await present(
+                query.message, await current_screen(query.from_user.id, state), images, edit=True
+            )
 
     @router.message(F.text, ~F.text.startswith("/"))
     async def name(message: Message, event_update: Update):
@@ -118,6 +125,6 @@ def creation_router(service: CreationService, images: dict[str, str]) -> Router:
                 message.text or "",
                 event_update.update_id,
             )
-            await present(message, render(state), images)
+            await present(message, await current_screen(message.from_user.id, state), images)
 
     return router
