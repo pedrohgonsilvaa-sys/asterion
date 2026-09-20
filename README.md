@@ -96,10 +96,38 @@ No Windows, ative a virtualenv conforme o shell utilizado.
 alembic upgrade head
 ```
 
-A migration inicial cria apenas a infraestrutura de **Transactional Outbox**. Conta, personagem e os demais sistemas entram nas próximas etapas da vertical slice.
+A migration inicial cria a infraestrutura de **Transactional Outbox**. A migration
+`20260920_0002` adiciona contas Telegram, drafts versionados, deduplicação de entrada
+e personagens com o estágio inicial persistente do prólogo.
 
-## Próxima etapa
+## Criação persistente implementada
 
-Implementar o primeiro fluxo persistente oficial:
+`/start → Nome → Raça → Classe → Confirmação Final → Cinzas na Estrada`.
 
-`/start → conta → personagem existente ou criação → nome → raça → classe → confirmação → prólogo Cinzas na Estrada`.
+`/start` recupera o personagem ou a tela exata do draft no PostgreSQL, inclusive
+detalhes e revisão de escolhas. A confirmação é transacional e idempotente. O
+botão `Seguir pela Estrada` apenas reconstrói a tela persistente; sua transição
+pertence à próxima etapa. Não há combate, Arte, Braseiro ou Menu Principal.
+
+As imagens oficiais ainda não estão disponíveis. Todas as telas funcionam com
+texto e inline keyboard; a configuração opcional `ASTERION_CREATION_IMAGES`
+permite adicionar assets oficiais posteriormente, sem mudar o fluxo. Os
+placeholders de imagem da especificação não são exibidos.
+
+Consulte [operação e decisões técnicas](docs/CHARACTER_CREATION.md) para servidor,
+política de nomes, mídia opcional e testes em PostgreSQL.
+
+## Testes completos
+
+Além de `pip install -e ".[dev]"`, disponibilize um PostgreSQL exclusivo para testes
+e configure `ASTERION_TEST_DATABASE_URL`. A suíte cria um schema isolado por teste,
+aplica as migrations reais e remove somente esse schema ao terminar.
+
+```bash
+export ASTERION_TEST_DATABASE_URL="postgresql+asyncpg://asterion:asterion@localhost:5432/asterion_test"
+ruff check .
+pytest
+```
+
+Sem essa variável, os testes que exigem PostgreSQL são explicitamente pulados;
+isso não constitui execução completa. O CI fornece PostgreSQL 16 e executa toda a suíte.
