@@ -62,6 +62,15 @@ A API ficará disponível em `http://localhost:8000`.
 
 O bot Telegram permanece desligado por padrão até existir um token válido.
 
+Para executar o bot em polling durante o desenvolvimento:
+
+```bash
+export ASTERION_TELEGRAM_BOT_TOKEN="token-do-bot"
+docker compose --profile bot up --build
+```
+
+Não grave tokens reais no repositório.
+
 ## Desenvolvimento sem Docker
 
 ```bash
