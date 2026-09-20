@@ -4,12 +4,12 @@
 
 A implementação deve ser confrontada continuamente com:
 
-1. **ASTERION — GDD Estrutural v1.4.1**, Fonte Mestra vigente;
+1. **ASTERION — GDD Estrutural v1.4.2**, Fonte Mestra vigente;
 2. **ASTERION — Consolidação de Visual & UI (2026-09-20)**.
 
-A Fonte Mestra v1.4.1 substitui integralmente v1.4 e todas as versões anteriores. Sua **Baseline Numérica v1.0 está fechada para implementação e testes**.
+A Fonte Mestra v1.4.2 substitui integralmente v1.4 e todas as versões anteriores. Sua **Baseline Numérica v1.0 permanece autoritativa para implementação e testes**, salvo a reabertura pontual da conversão absoluta da unidade global de XP de inimigo descrita em 49.7.
 
-Este documento registra somente decisões de implementação da fundação. Ele não substitui as Fontes. Exemplos de mockup ainda podem usar `SIMULAR` quando não correspondem a conteúdo autoritativo, mas valores, custos, limites, fórmulas e slots já consolidados na Baseline Numérica v1.0 devem ser implementados como oficiais.
+Este documento registra somente decisões de implementação da fundação. Ele não substitui as Fontes. Exemplos de mockup ainda podem usar `SIMULAR` quando não correspondem a conteúdo autoritativo. Valores, custos, limites, fórmulas e slots já consolidados na Baseline Numérica v1.0 devem ser implementados como oficiais, exceto quando uma reabertura explícita da própria Fonte Mestra disser o contrário.
 
 ## Modular monolith
 
