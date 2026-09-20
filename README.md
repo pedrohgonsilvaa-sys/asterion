@@ -6,10 +6,10 @@ Fundação técnica do **Asterion**, RPG/MMORPG dark fantasy para Telegram.
 
 Este repositório começou do zero em setembro de 2026. A implementação segue duas fontes de projeto consolidadas:
 
-- **ASTERION — GDD Estrutural v1.4.1** — Fonte Mestra vigente, estrutural e numericamente fechada para implementação e testes na **Baseline Numérica v1.0**.
+- **ASTERION — GDD Estrutural v1.4.2** — Fonte Mestra vigente, estruturalmente fechada para implementação do escopo vigente na **Baseline Numérica v1.0**, com uma única reabertura pontual documentada: a conversão absoluta da unidade global de XP de inimigo em 49.7.
 - **ASTERION — Consolidação de Visual & UI (2026-09-20)** — Fonte de apresentação, navegação e UX player-facing.
 
-A Fonte Mestra v1.4.1 substitui integralmente as versões anteriores. Valores da Baseline Numérica v1.0 não devem ser tratados como `SIMULAR`; esse status fica reservado a mecânicas futuras ou explicitamente reabertas.
+A Fonte Mestra v1.4.2 substitui integralmente as versões anteriores. Valores da Baseline Numérica v1.0 não devem ser tratados como `SIMULAR`, exceto quando a própria Fonte Mestra registrar uma reabertura explícita. Na v1.4.2, a única reabertura vigente é a conversão absoluta da unidade global de XP de inimigo; ela não bloqueia recompensas fixas de conteúdo único/story, como o primeiro encontro do prólogo.
 
 A primeira meta de produção é uma **vertical slice das Terras do Ocaso**, antes da produção integral do conteúdo de lançamento.
 
