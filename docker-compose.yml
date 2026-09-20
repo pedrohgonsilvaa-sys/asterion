@@ -46,6 +46,23 @@ services:
       redis:
         condition: service_healthy
 
+  bot:
+    profiles: ["bot"]
+    build: .
+    environment:
+      ASTERION_APP_ENV: development
+      ASTERION_DATABASE_URL: postgresql+asyncpg://asterion:asterion@postgres:5432/asterion
+      ASTERION_REDIS_URL: redis://redis:6379/0
+      ASTERION_TELEGRAM_BOT_ENABLED: "true"
+      ASTERION_TELEGRAM_BOT_TOKEN: ${ASTERION_TELEGRAM_BOT_TOKEN:?set ASTERION_TELEGRAM_BOT_TOKEN}
+      ASTERION_TELEGRAM_MODE: polling
+    command: asterion-bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:
