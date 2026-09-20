@@ -1,7 +1,6 @@
 # Criação persistente: implementação e operação
 
-Escopo: criação até a tela inicial de **Cinzas na Estrada**. Fonte Mestra:
-GDD Estrutural v1.4.1 / Baseline Numérica v1.0. Texto e botões:
+Escopo: criação até a tela inicial de **Cinzas na Estrada**. Esta implementação foi concluída sob a Fonte Mestra v1.4.1 / Baseline Numérica v1.0. A Fonte vigente passou a ser **GDD Estrutural v1.4.2**, que substitui integralmente a v1.4.1; o próximo bloco de prólogo/combate deve adotar o ruleset v1.4.2 e migrar qualquer marcador técnico ainda preso à versão anterior antes de instanciar o primeiro combate. Texto e botões:
 `docs/specs/CHARACTER_CREATION_UI.md`. As passivas e Artes são apresentadas com o
 conteúdo oficial; nenhuma mecânica de combate é implementada nesta etapa.
 
@@ -42,7 +41,7 @@ Após o commit, a apresentação Telegram pode falhar sem desfazer a criação.
 `/start` ou retry recuperam o mesmo personagem. O outbox existente é preservado;
 este fluxo não depende de entrega garantida de notificação nem grava recompensas
 ou efeitos econômicos. `Seguir pela Estrada` apenas reconhece a intenção e
-reconstrói a tela, sem mudar estágio ou iniciar combate.
+reconstrói a tela, sem mudar estágio ou iniciar combate **na implementação atual**. A Fonte Mestra v1.4.2 agora define que esse botão cria o primeiro encontro Foreground autoritativo; essa transição pertence ao próximo bloco de implementação.
 
 ## Política de nomes
 
