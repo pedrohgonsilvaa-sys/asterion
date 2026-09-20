@@ -27,6 +27,15 @@ services:
       timeout: 3s
       retries: 10
 
+  migrate:
+    build: .
+    environment:
+      ASTERION_DATABASE_URL: postgresql+asyncpg://asterion:asterion@postgres:5432/asterion
+    command: alembic upgrade head
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build: .
     environment:
@@ -35,12 +44,17 @@ services:
       ASTERION_APP_PORT: 8000
       ASTERION_DATABASE_URL: postgresql+asyncpg://asterion:asterion@postgres:5432/asterion
       ASTERION_REDIS_URL: redis://redis:6379/0
+      ASTERION_SERVER_ID: ${ASTERION_SERVER_ID:-asterion}
+      ASTERION_BLOCKED_CHARACTER_NAMES: ${ASTERION_BLOCKED_CHARACTER_NAMES:-[]}
+      ASTERION_CREATION_IMAGES: ${ASTERION_CREATION_IMAGES:-{}}
       ASTERION_TELEGRAM_BOT_ENABLED: "false"
       ASTERION_TELEGRAM_MODE: polling
-    command: sh -c "alembic upgrade head && asterion-api"
+    command: asterion-api
     ports:
       - "8000:8000"
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -53,11 +67,16 @@ services:
       ASTERION_APP_ENV: development
       ASTERION_DATABASE_URL: postgresql+asyncpg://asterion:asterion@postgres:5432/asterion
       ASTERION_REDIS_URL: redis://redis:6379/0
+      ASTERION_SERVER_ID: ${ASTERION_SERVER_ID:-asterion}
+      ASTERION_BLOCKED_CHARACTER_NAMES: ${ASTERION_BLOCKED_CHARACTER_NAMES:-[]}
+      ASTERION_CREATION_IMAGES: ${ASTERION_CREATION_IMAGES:-{}}
       ASTERION_TELEGRAM_BOT_ENABLED: "true"
       ASTERION_TELEGRAM_BOT_TOKEN: ${ASTERION_TELEGRAM_BOT_TOKEN:?set ASTERION_TELEGRAM_BOT_TOKEN}
       ASTERION_TELEGRAM_MODE: polling
     command: asterion-bot
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:

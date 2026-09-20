@@ -2,10 +2,87 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, DateTime, Integer, String, Text, Uuid, func
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from asterion.infrastructure.db.base import Base
+
+
+class Account(Base):
+    __tablename__ = "accounts"
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+
+
+class CreationDraft(Base):
+    __tablename__ = "creation_drafts"
+    __table_args__ = (
+        UniqueConstraint("telegram_id", "server_id", name="uq_draft_actor_server"),
+        CheckConstraint("version >= 0", name="ck_draft_version"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    telegram_id: Mapped[int] = mapped_column(ForeignKey("accounts.telegram_id"), nullable=False)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    step: Mapped[str] = mapped_column(String(48), nullable=False, default="name")
+    name: Mapped[str | None] = mapped_column(String(16))
+    race: Mapped[str | None] = mapped_column(String(24))
+    character_class: Mapped[str | None] = mapped_column(String(24))
+    editing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    error: Mapped[str | None] = mapped_column(String(24))
+    rejected_name: Mapped[str | None] = mapped_column(String(16))
+
+
+class Character(Base):
+    __tablename__ = "characters"
+    __table_args__ = (
+        UniqueConstraint("telegram_id", "server_id", name="uq_character_actor_server"),
+        Index("uq_character_server_name", "server_id", text("lower(name)"), unique=True),
+        CheckConstraint("name ~ '^[A-Z][a-z]{2,15}$'", name="ck_character_name"),
+        CheckConstraint(
+            "race IN ('remanescente','velado','cinereo','hemario','alvorano')",
+            name="ck_character_race",
+        ),
+        CheckConstraint(
+            "character_class IN ('sentinela','errante','vigia','tecelao','oraculo','luminar')",
+            name="ck_character_class",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    telegram_id: Mapped[int] = mapped_column(ForeignKey("accounts.telegram_id"), nullable=False)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(16), nullable=False)
+    race: Mapped[str] = mapped_column(String(24), nullable=False)
+    character_class: Mapped[str] = mapped_column(String(24), nullable=False)
+    stage: Mapped[str] = mapped_column(String(64), nullable=False)
+    ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
+
+
+class CreationInput(Base):
+    """Durable Telegram update deduplication, including text input across step changes."""
+
+    __tablename__ = "creation_inputs"
+
+    telegram_id: Mapped[int] = mapped_column(ForeignKey("accounts.telegram_id"), primary_key=True)
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    update_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
 
 
 class OutboxMessage(Base):

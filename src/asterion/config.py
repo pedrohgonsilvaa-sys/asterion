@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +19,11 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://asterion:asterion@localhost:5432/asterion"
     redis_url: str = "redis://localhost:6379/0"
+
+    server_id: str = Field(default="asterion", min_length=1, max_length=64)
+    blocked_character_names: frozenset[str] = frozenset()
+    # Official Telegram file_ids or file: paths, keyed by screen ID. No bundled artwork.
+    creation_images: dict[str, str] = {}
 
     telegram_bot_enabled: bool = False
     telegram_bot_token: str | None = None
