@@ -1,6 +1,6 @@
 # Especificação player-facing — Criação de Personagem
 
-> Extraída da Fonte Visual/UI consolidada de 2026-09-20 para implementação. Em conflito mecânico ou numérico, a Fonte Mestra v1.4.1 prevalece.
+> Extraída da Fonte Visual/UI consolidada de 2026-09-20 para implementação. Em conflito mecânico ou numérico, a Fonte Mestra v1.4.2 prevalece.
 
 ## 45. Criação de Personagem e Prólogo — fluxo consolidado
 
