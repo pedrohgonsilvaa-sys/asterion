@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: asterion
+      POSTGRES_USER: asterion
+      POSTGRES_PASSWORD: asterion
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U asterion -d asterion"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    environment:
+      ASTERION_APP_ENV: development
+      ASTERION_APP_HOST: 0.0.0.0
+      ASTERION_APP_PORT: 8000
+      ASTERION_DATABASE_URL: postgresql+asyncpg://asterion:asterion@postgres:5432/asterion
+      ASTERION_REDIS_URL: redis://redis:6379/0
+      ASTERION_TELEGRAM_BOT_ENABLED: "false"
+      ASTERION_TELEGRAM_MODE: polling
+    command: sh -c "alembic upgrade head && asterion-api"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  bot:
+    profiles: ["bot"]
+    build: .
+    environment:
+      ASTERION_APP_ENV: development
+      ASTERION_DATABASE_URL: postgresql+asyncpg://asterion:asterion@postgres:5432/asterion
+      ASTERION_REDIS_URL: redis://redis:6379/0
+      ASTERION_TELEGRAM_BOT_ENABLED: "true"
+      ASTERION_TELEGRAM_BOT_TOKEN: ${ASTERION_TELEGRAM_BOT_TOKEN:?set ASTERION_TELEGRAM_BOT_TOKEN}
+      ASTERION_TELEGRAM_MODE: polling
+    command: asterion-bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
