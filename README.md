@@ -117,6 +117,10 @@ placeholders de imagem da especificação não são exibidos.
 Consulte [operação e decisões técnicas](docs/CHARACTER_CREATION.md) para servidor,
 política de nomes, mídia opcional e testes em PostgreSQL.
 
+A próxima etapa autorizada pela Fonte Mestra v1.4.2 é o primeiro combate do prólogo.
+A especificação focada está em
+[`docs/specs/PROLOGUE_FIRST_COMBAT_V1.4.2.md`](docs/specs/PROLOGUE_FIRST_COMBAT_V1.4.2.md).
+
 ## Testes completos
 
 Além de `pip install -e ".[dev]"`, disponibilize um PostgreSQL exclusivo para testes
