@@ -4,10 +4,12 @@ Fundação técnica do **Asterion**, RPG/MMORPG dark fantasy para Telegram.
 
 ## Estado atual
 
-Este repositório começou do zero em setembro de 2026. A implementação segue duas fontes de projeto já consolidadas:
+Este repositório começou do zero em setembro de 2026. A implementação segue duas fontes de projeto consolidadas:
 
-- **ASTERION — GDD Estrutural v1.3** — Fonte Mestra estrutural.
-- **ASTERION — Consolidação de Visual & UI (2026-09-19)** — Fonte de apresentação e UX player-facing.
+- **ASTERION — GDD Estrutural v1.4.1** — Fonte Mestra vigente, estrutural e numericamente fechada para implementação e testes na **Baseline Numérica v1.0**.
+- **ASTERION — Consolidação de Visual & UI (2026-09-20)** — Fonte de apresentação, navegação e UX player-facing.
+
+A Fonte Mestra v1.4.1 substitui integralmente as versões anteriores. Valores da Baseline Numérica v1.0 não devem ser tratados como `SIMULAR`; esse status fica reservado a mecânicas futuras ou explicitamente reabertas.
 
 A primeira meta de produção é uma **vertical slice das Terras do Ocaso**, antes da produção integral do conteúdo de lançamento.
 
@@ -46,6 +48,10 @@ src/asterion/
 ├── domain/          # regras de domínio puras
 └── infrastructure/  # banco, Redis, outbox e adapters
 ```
+
+## Autoridade de implementação
+
+Leia também `docs/SOURCE_AUTHORITY.md` antes de implementar regras de jogo. Em conflito entre documentação técnica local e a Fonte Mestra, a Fonte Mestra vigente prevalece.
 
 ## Subir a fundação localmente
 
