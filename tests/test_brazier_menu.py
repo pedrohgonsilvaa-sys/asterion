@@ -2,7 +2,10 @@ import asyncio
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
+import pytest
 from aiogram import Bot, Dispatcher
+from aiogram.exceptions import TelegramForbiddenError
+from aiogram.methods import EditMessageText
 from sqlalchemy import select
 
 from asterion.application.creation import CreationService
@@ -16,12 +19,11 @@ from asterion.infrastructure.db.models import (
     Achievement,
     Brazier,
     Character,
-    CombatRecord,
     GameActivity,
     Quest,
     WorldState,
 )
-from tests.test_creation_ui import message_update
+from tests.test_creation_ui import callback_update, message_update
 from tests.test_prologue_persistence import character, win
 
 
@@ -190,13 +192,12 @@ async def test_active_legacy_combat_keeps_v142_snapshot_until_safe_boundary(data
         activity = await session.scalar(
             select(GameActivity).where(GameActivity.id == view.activity_id)
         )
-        record = await session.scalar(select(CombatRecord).where(CombatRecord.id == view.combat.id))
         row = await session.scalar(select(Character).where(Character.telegram_id == 1))
         activity.ruleset_version = "gdd-1.4.2-baseline-1.0"
         row.ruleset_version = "gdd-1.4.2-baseline-1.0"
-        record.snapshot = {**record.snapshot, "ruleset": "gdd-1.4.2-baseline-1.0"}
     resumed = await service.resume(1)
     assert resumed is not None
+    assert resumed.combat.ruleset == "gdd-1.4.2-baseline-1.0"
     for action in ("attack", "defend", "art"):
         resumed = await service.action(1, resumed.activity_id, resumed.combat.version, action)
     for _ in range(30):
@@ -208,11 +209,7 @@ async def test_active_legacy_combat_keeps_v142_snapshot_until_safe_boundary(data
             select(GameActivity).where(GameActivity.id == view.activity_id)
         )
         row = await session.scalar(select(Character).where(Character.telegram_id == 1))
-        record = await session.scalar(
-            select(CombatRecord).where(CombatRecord.id == resumed.combat.id)
-        )
         assert activity.ruleset_version == "gdd-1.4.2-baseline-1.0"
-        assert record.snapshot["ruleset"] == "gdd-1.4.2-baseline-1.0"
         assert row.ruleset_version == "gdd-1.4.3-baseline-1.0"
 
 
@@ -241,5 +238,46 @@ async def test_dispatcher_start_and_menu_recover_brazier_then_menu(database):
     assert "🔥 Braseiro · Descoberto" in sent.text
     await world.rest(1)
     await dispatcher.feed_raw_update(bot, message_update("/start", actor=1, update_id=3))
+    sent = bot.session.make_request.call_args.args[1]
+    assert "🌑 Asterion" in sent.text and "Vozes na Estrada" in sent.text
+
+
+async def test_telegram_failure_after_rest_commit_recovers_menu(database):
+    await character(database)
+    async with database[1].begin() as session:
+        row = await session.scalar(select(Character).where(Character.telegram_id == 1))
+        row.stage = "cinzas_na_estrada:ready_for_first_brazier"
+        row.xp = 320
+        session.add(Brazier(character_id=row.id, brazier_id="tdo.brazier.estrada"))
+        session.add(
+            WorldState(character_id=row.id, region="Terras do Ocaso", location="Estrada das Cinzas")
+        )
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(
+        side_effect=[
+            True,
+            TelegramForbiddenError(method=EditMessageText(text="x"), message="bot blocked"),
+        ]
+    )
+    dispatcher = Dispatcher(disable_fsm=True)
+    world = WorldService(database[1], "ocaso")
+    dispatcher.include_router(world_router(world, {}))
+    with pytest.raises(TelegramForbiddenError):
+        await dispatcher.feed_raw_update(bot, callback_update("world:rest", actor=1))
+    async with database[1]() as session:
+        row = await session.scalar(select(Character).where(Character.telegram_id == 1))
+        assert (
+            row.stage == "menu:ready"
+            and row.hp == row.max_hp
+            and row.xp == 320
+            and row.vigor == 100
+        )
+        assert len((await session.scalars(select(Achievement))).all()) == 1
+        assert len((await session.scalars(select(Quest))).all()) == 1
+    bot.session.make_request = AsyncMock(return_value=True)
+    await dispatcher.feed_raw_update(bot, message_update("/start", actor=1, update_id=5))
+    sent = bot.session.make_request.call_args.args[1]
+    assert "🌑 Asterion" in sent.text
+    await dispatcher.feed_raw_update(bot, message_update("/menu", actor=1, update_id=4))
     sent = bot.session.make_request.call_args.args[1]
     assert "🌑 Asterion" in sent.text and "Vozes na Estrada" in sent.text
