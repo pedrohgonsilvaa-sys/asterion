@@ -1,3 +1,4 @@
+import asyncio
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -87,3 +88,51 @@ async def test_rest_creates_p1_and_achievement_once(database):
     async with database[1]() as session:
         assert len((await session.scalars(select(Achievement))).all()) == 1
         assert len((await session.scalars(select(Quest))).all()) == 1
+
+
+async def test_two_rest_calls_are_idempotent_and_both_reconstruct_menu(database):
+    await character(database)
+    async with database[1].begin() as session:
+        row = await session.scalar(select(Character).where(Character.telegram_id == 1))
+        row.stage = "cinzas_na_estrada:ready_for_first_brazier"
+        session.add(Brazier(character_id=row.id, brazier_id="tdo.brazier.estrada"))
+        session.add(
+            WorldState(character_id=row.id, region="Terras do Ocaso", location="Estrada das Cinzas")
+        )
+    first, second = await asyncio.gather(
+        WorldService(database[1], "ocaso").rest(1),
+        WorldService(database[1], "ocaso").rest(1),
+    )
+    assert first is not None and second is not None
+    assert first.kind == second.kind == "menu"
+    async with database[1]() as session:
+        row = await session.scalar(select(Character).where(Character.telegram_id == 1))
+        assert row.stage == "menu:ready" and row.vigor == 100 and row.xp == 0
+        assert len((await session.scalars(select(Achievement))).all()) == 1
+        assert len((await session.scalars(select(Quest))).all()) == 1
+        assert len((await session.scalars(select(Brazier))).all()) == 1
+        assert len((await session.scalars(select(WorldState))).all()) == 1
+
+
+async def test_old_rest_callback_after_menu_does_not_heal(database):
+    await character(database)
+    async with database[1].begin() as session:
+        row = await session.scalar(select(Character).where(Character.telegram_id == 1))
+        row.stage = "cinzas_na_estrada:ready_for_first_brazier"
+        session.add(Brazier(character_id=row.id, brazier_id="tdo.brazier.estrada"))
+        session.add(
+            WorldState(character_id=row.id, region="Terras do Ocaso", location="Estrada das Cinzas")
+        )
+    service = WorldService(database[1], "ocaso")
+    await service.rest(1)
+    async with database[1].begin() as session:
+        row = await session.scalar(
+            select(Character).where(Character.telegram_id == 1).with_for_update()
+        )
+        row.hp -= Decimal("10")
+        vigor, xp = row.vigor, row.xp
+    result = await service.rest(1)
+    assert result is not None and result.kind == "menu"
+    async with database[1]() as session:
+        row = await session.scalar(select(Character).where(Character.telegram_id == 1))
+        assert row.hp < row.max_hp and row.vigor == vigor and row.xp == xp

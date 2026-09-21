@@ -87,31 +87,33 @@ class WorldService:
             )
 
     async def rest(self, actor: int) -> WorldView | None:
-        current = await self.resume(actor)
-        if current is not None and current.kind == "menu":
-            return current
         async with self.sessions.begin() as session:
             c = await session.scalar(
                 select(Character)
                 .where(Character.telegram_id == actor, Character.server_id == self.server_id)
                 .with_for_update()
             )
-            if c is None or c.stage != "cinzas_na_estrada:ready_for_first_brazier":
+            if c is None:
                 return None
-            c.hp = c.max_hp
-            world = await session.scalar(select(WorldState).where(WorldState.character_id == c.id))
-            if world is None:
-                return None
-            session.add(Achievement(character_id=c.id, achievement_id=ACHIEVEMENT_ID))
-            session.add(
-                Quest(
-                    character_id=c.id,
-                    quest_id="P1",
-                    title="Vozes na Estrada",
-                    status="active",
-                    step=1,
-                    content_version="tdo-1.0.1",
+            if c.stage == "cinzas_na_estrada:ready_for_first_brazier":
+                c.hp = c.max_hp
+                world = await session.scalar(
+                    select(WorldState).where(WorldState.character_id == c.id)
                 )
-            )
-            c.stage = "menu:ready"
+                if world is None:
+                    return None
+                session.add(Achievement(character_id=c.id, achievement_id=ACHIEVEMENT_ID))
+                session.add(
+                    Quest(
+                        character_id=c.id,
+                        quest_id="P1",
+                        title="Vozes na Estrada",
+                        status="active",
+                        step=1,
+                        content_version="tdo-1.0.1",
+                    )
+                )
+                c.stage = "menu:ready"
+            elif c.stage != "menu:ready":
+                return None
         return await self.resume(actor)
