@@ -19,7 +19,16 @@ from asterion.domain.prologue import (
 )
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
-from asterion.infrastructure.db.models import Character, CombatRecord, Encounter, GameActivity
+from asterion.infrastructure.db.models import (
+    Achievement,
+    Brazier,
+    Character,
+    CombatRecord,
+    Encounter,
+    GameActivity,
+    Quest,
+    WorldState,
+)
 
 
 @dataclass(frozen=True)
@@ -125,6 +134,29 @@ class PrologueService:
                 activity.status = "completed"
                 character.stage = POST_COMBAT_STAGE
                 character.ruleset_version = RULESET
+                session.add(Brazier(character_id=character.id, brazier_id="tdo.brazier.estrada"))
+                session.add(
+                    Achievement(
+                        character_id=character.id, achievement_id="feat.tdo.cinzas_na_estrada"
+                    )
+                )
+                session.add(
+                    Quest(
+                        character_id=character.id,
+                        quest_id="P1",
+                        title="Vozes na Estrada",
+                        status="active",
+                        step=1,
+                        content_version="tdo-1.0.1",
+                    )
+                )
+                session.add(
+                    WorldState(
+                        character_id=character.id,
+                        region="Terras do Ocaso",
+                        location="Estrada das Cinzas",
+                    )
+                )
             elif updated.result == "defeat":
                 activity.status = "failed"
                 character.stage = FAILED_STAGE

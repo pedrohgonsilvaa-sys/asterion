@@ -55,4 +55,4 @@ async def test_v142_migration_adopts_intro_character_and_is_reversible(database)
         ).one()
         assert row.level == 1 and row.xp == 0
         assert row.hp == row.max_hp == Decimal("712.530")
-        assert row.ruleset_version == "gdd-1.4.2-baseline-1.0"
+        assert row.ruleset_version == "gdd-1.4.3-baseline-1.0"

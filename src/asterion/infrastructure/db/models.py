@@ -115,13 +115,18 @@ class Achievement(Base):
 
 class Quest(Base):
     __tablename__ = "quests"
-    __table_args__ = (UniqueConstraint("character_id", "quest_id", name="uq_character_quest"),)
+    __table_args__ = (
+        UniqueConstraint("character_id", "quest_id", name="uq_character_quest"),
+        CheckConstraint("status IN ('active','completed')", name="ck_quest_status"),
+        CheckConstraint("step >= 1", name="ck_quest_step"),
+    )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
     quest_id: Mapped[str] = mapped_column(String(32), nullable=False)
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     step: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    content_version: Mapped[str] = mapped_column(String(32), nullable=False, default="tdo-1.0.1")
 
 
 class WorldState(Base):

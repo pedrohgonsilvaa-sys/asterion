@@ -5,13 +5,15 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.world import WorldView
 from asterion.bot.creation_ui import Screen
 
-LORE = ("Sob céus cobertos de fuligem, as estradas de Asterion seguem marcadas por ruínas, "
-        "brasas antigas e promessas que nunca repousam por completo. Mesmo nos caminhos "
-        "mais silenciosos, cada passo ainda parece ecoar a memória de algo que o mundo "
-        "não conseguiu esquecer.")
+LORE = (
+    "Sob céus cobertos de fuligem, as estradas de Asterion seguem marcadas por ruínas, "
+    "brasas antigas e promessas que nunca repousam por completo. Mesmo nos caminhos "
+    "mais silenciosos, cada passo ainda parece ecoar a memória de algo que o mundo "
+    "não conseguiu esquecer."
+)
 
 
-def bar(current: int, maximum: int, fill: str) -> str:
+def bar(current, maximum, fill: str) -> str:
     n = min(10, max(0, int(current * 10 / maximum))) if maximum else 0
     return fill * n + "⬜" * (10 - n)
 
@@ -52,9 +54,9 @@ def render_world(view: WorldView) -> Screen:
         f"🌑 Asterion\n{view.region} · {view.location}\n\n{LORE}\n\n"
         f"{emoji} {escape(view.name)} · Nv. 1\n{title}\n\n"
         f"❤️ HP · {view.hp} / {view.max_hp}\n{bar(view.hp, view.max_hp, '🟩')}\n\n"
-        f"⚡ Vigor · {view.vigor} / {view.max_vigor}\n{'🟨' * 10}\n\n"
+        f"⚡ Vigor · {view.vigor} / {view.max_vigor}\n{bar(view.vigor, view.max_vigor, '🟨')}\n\n"
         f"✨ XP · {view.xp} / 4.800\n{bar(view.xp, 4800, '🟦')}\n\n"
-        f"📜 Missão Principal · {view.quest_title or 'Vozes na Estrada'}"
+        f"📜 Missão Principal · {escape(view.quest_title)}"
     )
     labels = [
         ("Aventura", "menu:noop"),

@@ -11,6 +11,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.execute(
+        "UPDATE characters SET ruleset_version = 'gdd-1.4.3-baseline-1.0' "
+        "WHERE ruleset_version = 'gdd-1.4.2-baseline-1.0' "
+        "AND stage IN ('cinzas_na_estrada:intro', 'cinzas_na_estrada:ready_for_first_brazier')"
+    )
     op.add_column(
         "characters", sa.Column("vigor", sa.Integer(), nullable=False, server_default="100")
     )
@@ -20,32 +25,28 @@ def upgrade() -> None:
     op.create_check_constraint(
         "ck_character_vigor", "characters", "vigor BETWEEN 0 AND max_vigor AND max_vigor = 100"
     )
-    for table, cols, uniques in (
-        (
-            "braziers",
-            [
-                ("id", sa.Uuid(), True),
-                ("character_id", sa.Uuid(), False),
-                ("brazier_id", sa.String(64), False),
-            ],
-            "uq_character_brazier",
+    op.create_table(
+        "braziers",
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column("character_id", sa.Uuid(), nullable=False),
+        sa.Column("brazier_id", sa.String(64), nullable=False),
+        sa.Column(
+            "discovered_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
         ),
-        (
-            "achievements",
-            [
-                ("id", sa.Uuid(), True),
-                ("character_id", sa.Uuid(), False),
-                ("achievement_id", sa.String(64), False),
-            ],
-            "uq_character_achievement",
-        ),
-    ):
-        op.create_table(
-            table,
-            *[sa.Column(name, typ, primary_key=pk, nullable=not pk) for name, typ, pk in cols],
-            sa.ForeignKeyConstraint(["character_id"], ["characters.id"]),
-            sa.UniqueConstraint("character_id", cols[-1][0], name=uniques),
-        )
+        sa.ForeignKeyConstraint(["character_id"], ["characters.id"]),
+        sa.UniqueConstraint("character_id", "brazier_id", name="uq_character_brazier"),
+    )
+    op.create_table(
+        "achievements",
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column("character_id", sa.Uuid(), nullable=False),
+        sa.Column("achievement_id", sa.String(64), nullable=False),
+        sa.ForeignKeyConstraint(["character_id"], ["characters.id"]),
+        sa.UniqueConstraint("character_id", "achievement_id", name="uq_character_achievement"),
+    )
     op.create_table(
         "quests",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -54,8 +55,11 @@ def upgrade() -> None:
         sa.Column("title", sa.String(120), nullable=False),
         sa.Column("status", sa.String(16), nullable=False),
         sa.Column("step", sa.Integer(), nullable=False, server_default="1"),
+        sa.Column("content_version", sa.String(32), nullable=False, server_default="tdo-1.0.1"),
         sa.ForeignKeyConstraint(["character_id"], ["characters.id"]),
         sa.UniqueConstraint("character_id", "quest_id", name="uq_character_quest"),
+        sa.CheckConstraint("status IN ('active','completed')", name="ck_quest_status"),
+        sa.CheckConstraint("step >= 1", name="ck_quest_step"),
     )
     op.create_table(
         "world_states",
