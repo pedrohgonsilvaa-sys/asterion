@@ -133,7 +133,8 @@ histórica do primeiro Braseiro, fim do Prólogo e Menu Principal permanece em
 
 As autoridades vigentes para o próximo bloco são **GDD v1.4.3 + Terras do Ocaso
 v1.0.2 FINAL + Visual/UI 2026-09-21 sincronizada com TDO v1.0.2**. Antes de código
-novo, consulte `docs/SOURCE_AUTHORITY.md`.
+novo, consulte `docs/SOURCE_AUTHORITY.md`. A especificação técnica do próximo bloco está em
+[`docs/specs/P1_VOZES_NA_ESTRADA_V1.4.3_TDO_V1.0.2.md`](docs/specs/P1_VOZES_NA_ESTRADA_V1.4.3_TDO_V1.0.2.md).
 
 ## Testes completos
 

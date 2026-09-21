@@ -126,3 +126,5 @@ Regras essenciais para a próxima implementação:
 - callbacks antigos, reconnect e outro dispositivo sempre reconstroem a partir do estado persistido.
 
 A implementação jogável de P1 ainda não está no `main`; este é o próximo bloco de produção após a sincronização documental.
+
+A especificação técnica focada está em `docs/specs/P1_VOZES_NA_ESTRADA_V1.4.3_TDO_V1.0.2.md`.
