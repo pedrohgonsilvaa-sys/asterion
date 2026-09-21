@@ -1,0 +1,290 @@
+"""Reusable deterministic duel engine. Inputs and outputs are pure domain snapshots."""
+
+from copy import deepcopy
+from dataclasses import dataclass, field
+from decimal import ROUND_FLOOR, Decimal, localcontext
+from uuid import UUID
+
+from asterion.domain.combat_math import PRECISION, CombatRng, Stats, direct_damage, stable_priority
+
+D = Decimal
+
+
+@dataclass
+class Effect:
+    id: str
+    stat: str
+    magnitude: Decimal
+    remaining: int
+    applied_opportunity: int
+    kind: str = "debuff"
+    removable: bool = True
+    duration_eligible: bool = True
+
+
+@dataclass(frozen=True)
+class Action:
+    id: str
+    name: str
+    coefficient: Decimal
+    blocked_opportunities: int = 0
+    attack_debuff: Decimal = D(0)
+    duration: int = 0
+
+
+@dataclass
+class Fighter:
+    id: str
+    name: str
+    level: int
+    stats: Stats
+    hp: Decimal
+    race: str = ""
+    character_class: str = ""
+    opportunity: int = 0
+    defending: bool = False
+    last_action: str | None = None
+    cooldowns: dict[str, int] = field(default_factory=dict)
+    effects: list[Effect] = field(default_factory=list)
+
+    def stat(self, name: str) -> Decimal:
+        value = getattr(self.stats, name)
+        for effect in self.effects:
+            if effect.stat == name:
+                value *= (
+                    D(1) - effect.magnitude if effect.kind == "debuff" else D(1) + effect.magnitude
+                )
+        return value
+
+
+@dataclass(frozen=True)
+class Tutorial:
+    responses: dict[str, str]
+    required_basics: tuple[str, ...] = ("attack", "defend")
+    required_art: str = "art"
+
+
+@dataclass(frozen=True)
+class CombatEvent:
+    sequence: int
+    round: int
+    actor: str
+    action: str
+    target: str = ""
+    damage: int = 0
+    critical: bool = False
+    healed: Decimal = D(0)
+    effect_id: str = ""
+
+
+@dataclass
+class Combat:
+    id: UUID
+    ruleset: str
+    fighters: dict[str, Fighter]
+    player_actions: dict[str, Action]
+    enemy_actions: dict[str, Action]
+    ai_cycle: tuple[str, ...]
+    tutorial: Tutorial | None = None
+    flavor: str = ""
+    opening_log: str = ""
+    version: int = 0
+    round: int = 1
+    order: tuple[str, ...] = ()
+    turn_index: int = 0
+    used_attack: bool = False
+    used_defend: bool = False
+    used_art: bool = False
+    pending_response: str | None = None
+    ai_position: int = 0
+    rng_cursor: int = 0
+    result: str | None = None
+    events: list[CombatEvent] = field(default_factory=list)
+
+    @property
+    def tutorial_stage(self) -> str:
+        if self.tutorial is None or self.used_art:
+            return "normal"
+        if self.used_attack and self.used_defend:
+            return "art"
+        if self.used_attack:
+            return "defend"
+        if self.used_defend:
+            return "attack"
+        return "basics"
+
+
+def initiative(state: Combat) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            state.fighters,
+            key=lambda key: (
+                -state.fighters[key].stat("agility"),
+                -stable_priority(state.id, key),
+            ),
+        )
+    )
+
+
+def allowed_actions(state: Combat) -> tuple[str, ...]:
+    if state.result or not state.order or state.order[state.turn_index] != "player":
+        return ()
+    player = state.fighters["player"]
+    allowed = [
+        key for key in state.player_actions if player.cooldowns.get(key, 0) <= player.opportunity
+    ]
+    if player.last_action != "defend":
+        allowed.append("defend")
+    mask = {
+        "basics": ("attack", "defend"),
+        "attack": ("attack",),
+        "defend": ("defend",),
+        "art": ("art",),
+    }.get(state.tutorial_stage)
+    return tuple(action for action in allowed if mask is None or action in mask)
+
+
+def apply_effect(state: Combat, target: Fighter, effect: Effect) -> None:
+    """Target-owned duration: future opportunities only, never the applying turn."""
+    effect = deepcopy(effect)
+    rng = CombatRng(state.id, state.rng_cursor)
+    if target.race == "velado" and effect.duration_eligible and effect.remaining >= 2:
+        if rng.chance(D("0.25"), f"racial-duration:{target.id}:{effect.id}"):
+            effect.remaining += 1 if effect.kind == "buff" else -1
+    if target.race == "alvorano" and effect.kind == "debuff" and effect.removable:
+        effect.magnitude *= D("0.88")
+    state.rng_cursor = rng.cursor
+    effect.applied_opportunity = target.opportunity
+    target.effects.append(effect)
+
+
+def _begin_turn(state: Combat) -> None:
+    actor = state.fighters[state.order[state.turn_index]]
+    actor.opportunity += 1
+    actor.defending = False
+
+
+def _end_turn(state: Combat) -> None:
+    actor = state.fighters[state.order[state.turn_index]]
+    for effect in actor.effects:
+        if actor.opportunity > effect.applied_opportunity:
+            effect.remaining -= 1
+    actor.effects = [effect for effect in actor.effects if effect.remaining > 0]
+    state.turn_index += 1
+    if state.turn_index == len(state.order):
+        state.round += 1
+        state.order = initiative(state)
+        state.turn_index = 0
+    _begin_turn(state)
+
+
+def _perform(state: Combat, actor_id: str, action_id: str) -> None:
+    actor = state.fighters[actor_id]
+    target = state.fighters["enemy" if actor_id == "player" else "player"]
+    if action_id == "defend":
+        actor.defending = True
+        actor.last_action = action_id
+        state.events.append(CombatEvent(len(state.events), state.round, actor_id, action_id))
+        return
+    actions = state.player_actions if actor_id == "player" else state.enemy_actions
+    action = actions[action_id]
+    rng = CombatRng(state.id, state.rng_cursor)
+    critical = rng.chance(D("0.05"), f"critical:{actor_id}:{action_id}")
+    state.rng_cursor = rng.cursor
+    mitigation = D(0)
+    if target.defending:
+        mitigation = D("0.52") if target.race == "cinereo" else D("0.45")
+    damage = direct_damage(
+        actor.stat("attack"),
+        action.coefficient,
+        target.stat("defense"),
+        actor.level,
+        critical=critical,
+        mitigation=mitigation,
+    )
+    actual_damage = min(target.hp, D(damage))
+    target.hp -= actual_damage
+    healed = D(0)
+    if actor.race == "hemario" and actor.hp <= actor.stats.hp * D("0.40"):
+        healed = min(
+            actual_damage * D("0.12"), actor.stats.hp * D("0.03"), actor.stats.hp - actor.hp
+        ).to_integral_value(rounding=ROUND_FLOOR)
+        healed = max(D(0), healed)
+        actor.hp += healed
+    if action.attack_debuff and target.hp > 0:
+        apply_effect(
+            state,
+            target,
+            Effect(
+                id=action.id,
+                stat="attack",
+                magnitude=action.attack_debuff,
+                remaining=action.duration,
+                applied_opportunity=target.opportunity,
+            ),
+        )
+    actor.last_action = action_id
+    if action.blocked_opportunities:
+        actor.cooldowns[action_id] = actor.opportunity + action.blocked_opportunities + 1
+    state.events.append(
+        CombatEvent(
+            len(state.events),
+            state.round,
+            actor_id,
+            action_id,
+            target.id,
+            damage,
+            critical,
+            healed,
+            action.id if action.attack_debuff else "",
+        )
+    )
+    if target.hp == 0:
+        state.result = "victory" if actor_id == "player" else "defeat"
+
+
+def _enemy_action(state: Combat) -> str:
+    if state.pending_response is not None:
+        action = state.pending_response
+        state.pending_response = None
+        return action
+    action = state.ai_cycle[state.ai_position]
+    state.ai_position = (state.ai_position + 1) % len(state.ai_cycle)
+    return action
+
+
+def _advance_to_player(state: Combat) -> None:
+    while not state.result and state.order[state.turn_index] != "player":
+        _perform(state, "enemy", _enemy_action(state))
+        if not state.result:
+            _end_turn(state)
+
+
+def start_combat(state: Combat) -> Combat:
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        state = deepcopy(state)
+        state.order = initiative(state)
+        _begin_turn(state)
+        _advance_to_player(state)
+        return state
+
+
+def act(state: Combat, action: str) -> Combat:
+    """Invalid intentions are a no-op; application also checks ownership/version."""
+    if action not in allowed_actions(state):
+        return state
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        state = deepcopy(state)
+        if state.tutorial and state.tutorial_stage != "normal":
+            state.pending_response = state.tutorial.responses.get(action)
+        _perform(state, "player", action)
+        state.used_attack |= action == "attack"
+        state.used_defend |= action == "defend"
+        state.used_art |= action == "art"
+        if not state.result:
+            _end_turn(state)
+            _advance_to_player(state)
+        state.version += 1
+        return state

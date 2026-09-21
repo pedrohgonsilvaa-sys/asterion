@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -9,8 +10,10 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -18,6 +21,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from asterion.infrastructure.db.base import Base
@@ -63,6 +67,8 @@ class Character(Base):
             "character_class IN ('sentinela','errante','vigia','tecelao','oraculo','luminar')",
             name="ck_character_class",
         ),
+        CheckConstraint("level BETWEEN 1 AND 60 AND xp >= 0", name="ck_character_progress"),
+        CheckConstraint("hp >= 0 AND hp <= max_hp AND max_hp > 0", name="ck_character_hp"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -73,6 +79,84 @@ class Character(Base):
     character_class: Mapped[str] = mapped_column(String(24), nullable=False)
     stage: Mapped[str] = mapped_column(String(64), nullable=False)
     ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
+    level: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    xp: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    hp: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    max_hp: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+
+
+class GameActivity(Base):
+    __tablename__ = "game_activities"
+    __table_args__ = (
+        UniqueConstraint("id", "character_id", name="uq_activity_character"),
+        Index(
+            "uq_active_foreground",
+            "character_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+        Index(
+            "uq_first_combat_occurrence",
+            "character_id",
+            "content_id",
+            unique=True,
+            postgresql_where=text("content_id = 'prologue_first_combat'"),
+        ),
+        CheckConstraint("status IN ('active','completed','failed')", name="ck_activity_status"),
+        CheckConstraint("state_version >= 0", name="ck_activity_version"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    content_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
+
+
+class Encounter(Base):
+    __tablename__ = "encounters"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    game_activity_id: Mapped[UUID] = mapped_column(
+        ForeignKey("game_activities.id"),
+        nullable=False,
+        unique=True,
+    )
+
+
+class CombatRecord(Base):
+    __tablename__ = "combats"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    encounter_id: Mapped[UUID] = mapped_column(
+        ForeignKey("encounters.id"), nullable=False, unique=True
+    )
+    snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+
+class RewardGrant(Base):
+    __tablename__ = "reward_grants"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["game_activity_id", "character_id"],
+            ["game_activities.id", "game_activities.character_id"],
+            name="fk_grant_activity_character",
+        ),
+        CheckConstraint("xp >= 0", name="ck_grant_xp"),
+    )
+
+    game_activity_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id"), nullable=False, index=True
+    )
+    xp: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
 
 
 class CreationInput(Base):

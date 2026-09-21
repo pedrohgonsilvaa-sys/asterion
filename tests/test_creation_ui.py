@@ -237,10 +237,6 @@ async def test_dispatcher_start_restores_each_persistent_screen(service, telegra
         sent = telegram.session.make_request.call_args.args[1]
         assert sent.text == render(state).text
     assert state.step == PROLOGUE
-    before = await service.start(10)
-    await dispatcher.feed_raw_update(telegram, callback_update("prologue:continue"))
-    assert await service.start(10) == before
-    assert telegram.session.make_request.call_args.args[1].text == PROLOGUE_TEXT
 
 
 async def test_telegram_failure_after_commit_is_recoverable(service, telegram):

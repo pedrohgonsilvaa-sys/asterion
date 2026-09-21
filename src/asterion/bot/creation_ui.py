@@ -35,6 +35,7 @@ class Screen:
     text: str
     image_key: str
     keyboard: InlineKeyboardMarkup | None
+    parse_mode: str | None = None
 
 
 def render(state: Creation) -> Screen:

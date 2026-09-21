@@ -33,6 +33,12 @@ Operações críticas devem usar transação, constraints, locks de linha e/ou v
 
 Atividades instanciadas carregarão `ruleset_version`. Patches não devem mudar silenciosamente uma run/combate já iniciado. Conteúdo permanente deve usar IDs estáveis e nunca reutilizados.
 
+O primeiro combate materializa essa regra com `game_activity_id`, `encounter_id`,
+`combat_id`, `state_version` e snapshot determinístico. A transação de aplicação
+bloqueia a identidade persistente do ator; índices parciais e grants únicos são a
+proteção final contra atividades e recompensas duplicadas. Consulte
+`docs/PROLOGUE_FIRST_COMBAT.md`.
+
 ## Transactional Outbox
 
 A fundação já cria a tabela `outbox_messages`.
