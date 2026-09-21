@@ -83,6 +83,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if op.get_bind().scalar(
+        sa.text(
+            "SELECT EXISTS (SELECT 1 FROM braziers) OR EXISTS "
+            "(SELECT 1 FROM achievements) OR EXISTS (SELECT 1 FROM quests) "
+            "OR EXISTS (SELECT 1 FROM world_states)"
+        )
+    ):
+        raise RuntimeError("Cannot downgrade populated brazier/menu state")
     op.drop_table("world_states")
     op.drop_table("quests")
     op.drop_table("achievements")

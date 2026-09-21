@@ -136,3 +136,33 @@ async def test_old_rest_callback_after_menu_does_not_heal(database):
     async with database[1]() as session:
         row = await session.scalar(select(Character).where(Character.telegram_id == 1))
         assert row.hp < row.max_hp and row.vigor == vigor and row.xp == xp
+
+
+async def test_rest_requires_persisted_brazier(database):
+    await character(database)
+    async with database[1].begin() as session:
+        row = await session.scalar(select(Character).where(Character.telegram_id == 1))
+        row.stage = "cinzas_na_estrada:ready_for_first_brazier"
+        session.add(
+            WorldState(character_id=row.id, region="Terras do Ocaso", location="Estrada das Cinzas")
+        )
+    result = await WorldService(database[1], "ocaso").rest(1)
+    assert result is None
+    async with database[1]() as session:
+        row = await session.scalar(select(Character).where(Character.telegram_id == 1))
+        assert row.stage == "cinzas_na_estrada:ready_for_first_brazier"
+        assert await session.scalar(select(Achievement)) is None
+        assert await session.scalar(select(Quest)) is None
+
+
+async def test_menu_without_p1_is_inconsistent(database):
+    await character(database)
+    async with database[1].begin() as session:
+        row = await session.scalar(select(Character).where(Character.telegram_id == 1))
+        row.stage = "menu:ready"
+        session.add(Brazier(character_id=row.id, brazier_id="tdo.brazier.estrada"))
+        session.add(
+            WorldState(character_id=row.id, region="Terras do Ocaso", location="Estrada das Cinzas")
+        )
+        session.add(Achievement(character_id=row.id, achievement_id="feat.tdo.cinzas_na_estrada"))
+    assert await WorldService(database[1], "ocaso").resume(1) is None

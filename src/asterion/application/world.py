@@ -96,12 +96,17 @@ class WorldService:
             if c is None:
                 return None
             if c.stage == "cinzas_na_estrada:ready_for_first_brazier":
-                c.hp = c.max_hp
+                brazier = await session.scalar(
+                    select(Brazier).where(
+                        Brazier.character_id == c.id, Brazier.brazier_id == BRAZIER_ID
+                    )
+                )
                 world = await session.scalar(
                     select(WorldState).where(WorldState.character_id == c.id)
                 )
-                if world is None:
+                if brazier is None or world is None:
                     return None
+                c.hp = c.max_hp
                 session.add(Achievement(character_id=c.id, achievement_id=ACHIEVEMENT_ID))
                 session.add(
                     Quest(
