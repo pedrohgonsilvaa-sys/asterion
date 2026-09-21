@@ -6,10 +6,11 @@ Fundação técnica do **Asterion**, RPG/MMORPG dark fantasy para Telegram.
 
 Este repositório começou do zero em setembro de 2026. A implementação segue duas fontes de projeto consolidadas:
 
-- **ASTERION — GDD Estrutural v1.4.2** — Fonte Mestra vigente, estruturalmente fechada para implementação do escopo vigente na **Baseline Numérica v1.0**, com uma única reabertura pontual documentada: a conversão absoluta da unidade global de XP de inimigo em 49.7.
-- **ASTERION — Consolidação de Visual & UI (2026-09-20)** — Fonte de apresentação, navegação e UX player-facing.
+- **ASTERION — GDD Estrutural v1.4.3** — Fonte Mestra vigente, com a **Baseline Numérica v1.0 fechada para implementação e testes**.
+- **ASTERION — Conteúdo: Terras do Ocaso v1.0.1 FINAL** — autoridade regional da vertical slice Nv.1–10.
+- **ASTERION — Consolidação de Visual & UI (2026-09-20), sincronizada com GDD v1.4.3 + Terras do Ocaso v1.0.1** — Fonte de apresentação, navegação e UX player-facing.
 
-A Fonte Mestra v1.4.2 substitui integralmente as versões anteriores. Valores da Baseline Numérica v1.0 não devem ser tratados como `SIMULAR`, exceto quando a própria Fonte Mestra registrar uma reabertura explícita. Na v1.4.2, a única reabertura vigente é a conversão absoluta da unidade global de XP de inimigo; ela não bloqueia recompensas fixas de conteúdo único/story, como o primeiro encontro do prólogo.
+A Fonte Mestra v1.4.3 substitui integralmente a v1.4.2 e versões anteriores. A reabertura da conversão absoluta de XP de inimigos foi encerrada na v1.4.3; a Baseline Numérica v1.0 não possui reabertura numérica vigente.
 
 A primeira meta de produção é uma **vertical slice das Terras do Ocaso**, antes da produção integral do conteúdo de lançamento.
 
@@ -119,9 +120,10 @@ placeholders de imagem da especificação não são exibidos.
 Consulte [operação e decisões técnicas](docs/CHARACTER_CREATION.md) para servidor,
 política de nomes, mídia opcional e testes em PostgreSQL.
 
-A implementação técnica do encontro está documentada em
-[`docs/PROLOGUE_FIRST_COMBAT.md`](docs/PROLOGUE_FIRST_COMBAT.md), subordinada à
-[`especificação oficial focada`](docs/specs/PROLOGUE_FIRST_COMBAT_V1.4.2.md).
+A implementação técnica do primeiro encontro está documentada em
+[`docs/PROLOGUE_FIRST_COMBAT.md`](docs/PROLOGUE_FIRST_COMBAT.md). A próxima etapa
+é o primeiro Braseiro, conclusão do prólogo e Menu Principal, especificados em
+[`docs/specs/PROLOGUE_BRAZIER_MENU_V1.4.3_TDO_V1.0.1.md`](docs/specs/PROLOGUE_BRAZIER_MENU_V1.4.3_TDO_V1.0.1.md).
 
 ## Testes completos
 
