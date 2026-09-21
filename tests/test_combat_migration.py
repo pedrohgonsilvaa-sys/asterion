@@ -125,6 +125,23 @@ async def test_ready_brazier_legacy_backfill_then_rest(database):
     menu = await world.rest(actor)
     assert menu is not None and menu.kind == "menu"
     async with sessions() as session:
+        character_row = (
+            await session.execute(
+                text("SELECT hp, max_hp, vigor, xp, stage FROM characters WHERE id=:id"),
+                {"id": character_id},
+            )
+        ).one()
+        assert character_row.hp == character_row.max_hp
+        assert character_row.vigor == 100 and character_row.xp == 320
+        assert character_row.stage == "menu:ready"
+        quest = (
+            await session.execute(
+                text("SELECT status, step, content_version FROM quests WHERE character_id=:id"),
+                {"id": character_id},
+            )
+        ).one()
+        assert quest.status == "active" and quest.step == 1
+        assert quest.content_version == "tdo-1.0.1"
         assert (
             await session.execute(
                 text("SELECT count(*) FROM achievements WHERE character_id=:id"),

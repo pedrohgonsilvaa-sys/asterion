@@ -230,9 +230,6 @@ async def test_dispatcher_start_and_menu_recover_brazier_then_menu(database):
     dispatcher.include_router(
         creation_router(CreationService(database[1], "ocaso"), {}, world=world)
     )
-    dispatcher.include_router(
-        creation_router(CreationService(database[1], "ocaso"), {}, world=world)
-    )
     await dispatcher.feed_raw_update(bot, message_update("/start", actor=1))
     sent = bot.session.make_request.call_args.args[1]
     assert "🔥 Braseiro · Descoberto" in sent.text
@@ -265,6 +262,9 @@ async def test_telegram_failure_after_rest_commit_recovers_menu(database):
     dispatcher = Dispatcher(disable_fsm=True)
     world = WorldService(database[1], "ocaso")
     dispatcher.include_router(world_router(world, {}))
+    dispatcher.include_router(
+        creation_router(CreationService(database[1], "ocaso"), {}, world=world)
+    )
     with pytest.raises(TelegramForbiddenError):
         await dispatcher.feed_raw_update(bot, callback_update("world:rest", actor=1))
     async with database[1]() as session:
@@ -281,6 +281,9 @@ async def test_telegram_failure_after_rest_commit_recovers_menu(database):
     await dispatcher.feed_raw_update(bot, message_update("/start", actor=1, update_id=5))
     sent = bot.session.make_request.call_args.args[1]
     assert "🌑 Asterion" in sent.text
+    await dispatcher.feed_raw_update(bot, message_update("/menu", actor=1, update_id=6))
+    sent = bot.session.make_request.call_args.args[1]
+    assert "🌑 Asterion" in sent.text and "Vozes na Estrada" in sent.text
     await dispatcher.feed_raw_update(bot, message_update("/menu", actor=1, update_id=4))
     sent = bot.session.make_request.call_args.args[1]
     assert "🌑 Asterion" in sent.text and "Vozes na Estrada" in sent.text
