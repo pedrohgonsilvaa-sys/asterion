@@ -25,15 +25,19 @@ def upgrade() -> None:
     op.add_column(
         "quests", sa.Column("state_version", sa.BigInteger(), nullable=False, server_default="0")
     )
-    op.add_column("quests", sa.Column("progress", JSONB(), nullable=False, server_default="{}"))
+    op.add_column(
+        "quests",
+        sa.Column("progress", JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+    )
+    op.create_check_constraint("ck_quest_state_version", "quests", "state_version >= 0")
     op.execute(
         "UPDATE quests SET content_version='tdo-1.0.2' WHERE quest_id='P1' AND status='active' AND step=1 AND content_version='tdo-1.0.1'"  # noqa: E501
     )
     op.alter_column("quests", "content_version", server_default="tdo-1.0.2")
-    for table, ident in (
-        ("location_discoveries", "location"),
-        ("codex_entries", "entry"),
-        ("unlocks", "unlock"),
+    for table, ident, unique_name in (
+        ("location_discoveries", "location", "uq_character_location"),
+        ("codex_entries", "entry", "uq_character_codex"),
+        ("unlocks", "unlock", "uq_character_unlock"),
     ):
         op.create_table(
             table,
@@ -41,7 +45,7 @@ def upgrade() -> None:
             sa.Column("character_id", sa.Uuid(), nullable=False),
             sa.Column(f"{ident}_id", sa.String(96 if ident != "location" else 64), nullable=False),
             sa.ForeignKeyConstraint(["character_id"], ["characters.id"]),
-            sa.UniqueConstraint("character_id", f"{ident}_id", name=f"uq_character_{ident}"),
+            sa.UniqueConstraint("character_id", f"{ident}_id", name=unique_name),
         )
     op.create_table(
         "material_stacks",
@@ -92,6 +96,7 @@ def downgrade() -> None:
     op.drop_table("unlocks")
     op.drop_table("codex_entries")
     op.drop_table("location_discoveries")
+    op.drop_constraint("ck_quest_state_version", "quests", type_="check")
     op.alter_column("quests", "content_version", server_default="tdo-1.0.1")
     op.drop_column("quests", "progress")
     op.drop_column("quests", "state_version")

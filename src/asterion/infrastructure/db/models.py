@@ -72,6 +72,7 @@ class Character(Base):
         CheckConstraint(
             "vigor BETWEEN 0 AND max_vigor AND max_vigor = 100", name="ck_character_vigor"
         ),
+        CheckConstraint("crowns >= 0", name="ck_character_crowns"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -120,6 +121,7 @@ class Quest(Base):
         UniqueConstraint("character_id", "quest_id", name="uq_character_quest"),
         CheckConstraint("status IN ('active','completed')", name="ck_quest_status"),
         CheckConstraint("step >= 1", name="ck_quest_step"),
+        CheckConstraint("state_version >= 0", name="ck_quest_state_version"),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
@@ -134,7 +136,7 @@ class Quest(Base):
         BigInteger, nullable=False, default=0, server_default="0"
     )
     progress: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False, default=dict, server_default="{}"
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
 
 
@@ -173,8 +175,10 @@ class MaterialStack(Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
     material_id: Mapped[str] = mapped_column(String(96), nullable=False)
-    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    bound: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    bound: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
 
 
 class RewardEvent(Base):

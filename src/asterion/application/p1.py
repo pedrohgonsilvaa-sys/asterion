@@ -45,6 +45,8 @@ class P1View:
     encounter_id: UUID | None = None
     combat_id: UUID | None = None
     context: str = "p1"
+    status: str = "active"
+    known_locations: tuple[str, ...] = ()
 
 
 class P1Service:
@@ -99,7 +101,14 @@ class P1Service:
             )
             if a is None:
                 return None
-            if a.status != "active" or a.state_version != version:
+            if (
+                q is None
+                or q.status != "active"
+                or q.content_version != P1_VERSION
+                or q.step != 3
+                or a.status != "active"
+                or a.state_version != version
+            ):
                 return await self._view(s, c, q)
             e, r = (
                 await s.execute(
@@ -300,8 +309,24 @@ class P1Service:
                 GameActivity.status == "active",
             )
         )
+        locations = tuple(
+            (
+                await s.scalars(
+                    select(LocationDiscovery.location_id).where(
+                        LocationDiscovery.character_id == c.id
+                    )
+                )
+            ).all()
+        )
         if a is None:
-            return P1View(c.id, q.step, q.state_version, q.progress or {})
+            return P1View(
+                c.id,
+                q.step,
+                q.state_version,
+                q.progress or {},
+                status=q.status,
+                known_locations=locations,
+            )
         e, r = (
             await s.execute(
                 select(Encounter, CombatRecord)
@@ -310,7 +335,18 @@ class P1Service:
             )
         ).one()
         combat = decode(r.snapshot, r.id, a.ruleset_version, a.state_version)
-        return P1View(c.id, q.step, q.state_version, q.progress or {}, combat, a.id, e.id, r.id)
+        return P1View(
+            c.id,
+            q.step,
+            q.state_version,
+            q.progress or {},
+            combat,
+            a.id,
+            e.id,
+            r.id,
+            status=q.status,
+            known_locations=locations,
+        )
 
     async def _ensure(self, s, model, **values):
         obj = await s.scalar(select(model).filter_by(**values).with_for_update())
