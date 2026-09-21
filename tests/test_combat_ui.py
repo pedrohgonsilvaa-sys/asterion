@@ -33,6 +33,8 @@ async def test_first_hud_matches_authoritative_shape(prologue, database):
     assert screen.text.startswith(
         "Turno 1 · <b>Heroa</b>\n\n<b>🐺 Cão Cinéreo</b>\n❤️ <code>244 / 244</code>"
     )
+    assert "🐺 🐺" not in screen.text
+    assert screen.text.count("🐺") == 2  # HUD creature plus opening-log entry
     assert "Um rosnado rompe o silêncio da estrada." in screen.text
     assert "👉 🛡️ <b>Heroa</b>" in screen.text
     assert "📜 Registro de Combate · Recentes" in screen.text
@@ -71,12 +73,14 @@ async def test_hud_reconstructs_persisted_events_and_tutorial_buttons(prologue, 
     screen = render_combat(view)
     assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["Defender"]
     assert "⚔️ <b>Heroa</b> ataca <b>Cão Cinéreo</b>" in screen.text
+    assert "⚔️ <b>Heroa</b> ataca <b>🐺" not in screen.text
     assert "🐺 <b>Cão Cinéreo</b> usa <b>Mordida Cinérea</b> em <b>Heroa</b>" in screen.text
     view = await prologue.action(1, view.activity_id, view.combat.version, "defend")
     screen = render_combat(view)
     assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["Golpe de Guarda"]
     assert "🎴 <b>Golpe de Guarda</b> · Arte de Classe" in screen.text
     assert "⚔️ Dano · <code>110%</code> ATQ" in screen.text
+    assert "🐺 <b>Cão Cinéreo</b> usa <b>Investida Cinérea</b> em <b>Heroa</b>" in screen.text
     # Reconnect uses the same persisted log and controls.
     assert render_combat(await prologue.resume(1)) == screen
 

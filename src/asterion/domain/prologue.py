@@ -59,7 +59,7 @@ class PrologueProfile:
             RULESET,
             fighters={
                 "player": Fighter("player", name, 1, stats, hp, race, character_class),
-                "enemy": Fighter("enemy", "🐺 Cão Cinéreo", 1, self.enemy, self.enemy.hp),
+                "enemy": Fighter("enemy", "Cão Cinéreo", 1, self.enemy, self.enemy.hp),
             },
             player_actions={
                 "attack": Action("attack", "⚔️ Atacar", D(1)),
