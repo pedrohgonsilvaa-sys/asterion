@@ -4,11 +4,11 @@ Fundação técnica do **Asterion**, RPG/MMORPG dark fantasy para Telegram.
 
 ## Estado atual
 
-Este repositório começou do zero em setembro de 2026. A implementação segue duas fontes de projeto consolidadas:
+Este repositório começou do zero em setembro de 2026. A implementação segue três fontes de projeto consolidadas:
 
 - **ASTERION — GDD Estrutural v1.4.3** — Fonte Mestra vigente, com a **Baseline Numérica v1.0 fechada para implementação e testes**.
-- **ASTERION — Conteúdo: Terras do Ocaso v1.0.1 FINAL** — autoridade regional da vertical slice Nv.1–10.
-- **ASTERION — Consolidação de Visual & UI (2026-09-20), sincronizada com GDD v1.4.3 + Terras do Ocaso v1.0.1** — Fonte de apresentação, navegação e UX player-facing.
+- **ASTERION — Conteúdo: Terras do Ocaso v1.0.2 FINAL** — autoridade regional da vertical slice Nv.1–10.
+- **ASTERION — Consolidação de Visual & UI (2026-09-21), sincronizada com GDD v1.4.3 + Terras do Ocaso v1.0.2** — Fonte de apresentação, navegação e UX player-facing.
 
 A Fonte Mestra v1.4.3 substitui integralmente a v1.4.2 e versões anteriores. A reabertura da conversão absoluta de XP de inimigos foi encerrada na v1.4.3; a Baseline Numérica v1.0 não possui reabertura numérica vigente.
 
@@ -99,7 +99,10 @@ alembic upgrade head
 
 A migration inicial cria a infraestrutura de **Transactional Outbox**. A migration
 `20260920_0002` adiciona contas Telegram, drafts versionados, deduplicação de entrada
-e personagens com o estágio inicial persistente do prólogo.
+e personagens com o estágio inicial persistente do prólogo. A `20260920_0003`
+adiciona a atividade Foreground e o primeiro combate persistente; a `20260920_0004`
+adiciona Vigor, Braseiros permanentes, estado mundial, Feitos e Missões mínimos
+necessários para o fim do Prólogo e o Menu Principal.
 
 ## Criação persistente implementada
 
@@ -109,8 +112,11 @@ e personagens com o estágio inicial persistente do prólogo.
 detalhes e revisão de escolhas. A confirmação é transacional e idempotente. O
 botão `Seguir pela Estrada` cria ou retoma a atividade Foreground persistente do
 primeiro Cão Cinéreo. O tutorial implementa Atacar, Defender, primeira Arte,
-combate normal, vitória e o grant fixo de 320 XP. O estado final fica pronto para
-o primeiro Braseiro; Braseiro, Descansar e Menu Principal não estão implementados.
+combate normal, vitória e o grant fixo de 320 XP. O **Braseiro da Estrada**, a ação
+`Descansar`, a conclusão do Prólogo, o Feito **Cinzas na Estrada**, o início
+automático de **P1 — Vozes na Estrada** e o Menu Principal persistente também já
+estão implementados. O próximo bloco jogável é a execução de P1 conforme Terras do
+Ocaso v1.0.2 + Visual/UI sincronizada de 21/09/2026.
 
 As imagens oficiais ainda não estão disponíveis. Todas as telas funcionam com
 texto e inline keyboard; a configuração opcional `ASTERION_CREATION_IMAGES`
@@ -121,9 +127,13 @@ Consulte [operação e decisões técnicas](docs/CHARACTER_CREATION.md) para ser
 política de nomes, mídia opcional e testes em PostgreSQL.
 
 A implementação técnica do primeiro encontro está documentada em
-[`docs/PROLOGUE_FIRST_COMBAT.md`](docs/PROLOGUE_FIRST_COMBAT.md). A próxima etapa
-é o primeiro Braseiro, conclusão do prólogo e Menu Principal, especificados em
+[`docs/PROLOGUE_FIRST_COMBAT.md`](docs/PROLOGUE_FIRST_COMBAT.md). A especificação
+histórica do primeiro Braseiro, fim do Prólogo e Menu Principal permanece em
 [`docs/specs/PROLOGUE_BRAZIER_MENU_V1.4.3_TDO_V1.0.1.md`](docs/specs/PROLOGUE_BRAZIER_MENU_V1.4.3_TDO_V1.0.1.md).
+
+As autoridades vigentes para o próximo bloco são **GDD v1.4.3 + Terras do Ocaso
+v1.0.2 FINAL + Visual/UI 2026-09-21 sincronizada com TDO v1.0.2**. Antes de código
+novo, consulte `docs/SOURCE_AUTHORITY.md`.
 
 ## Testes completos
 
