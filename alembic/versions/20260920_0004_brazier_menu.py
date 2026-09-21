@@ -68,6 +68,18 @@ def upgrade() -> None:
         sa.Column("location", sa.String(64), nullable=False),
         sa.ForeignKeyConstraint(["character_id"], ["characters.id"]),
     )
+    op.execute(
+        "INSERT INTO braziers (id, character_id, brazier_id) "
+        "SELECT gen_random_uuid(), id, 'tdo.brazier.estrada' FROM characters "
+        "WHERE stage = 'cinzas_na_estrada:ready_for_first_brazier' "
+        "ON CONFLICT (character_id, brazier_id) DO NOTHING"
+    )
+    op.execute(
+        "INSERT INTO world_states (character_id, region, location) "
+        "SELECT id, 'Terras do Ocaso', 'Estrada das Cinzas' FROM characters "
+        "WHERE stage = 'cinzas_na_estrada:ready_for_first_brazier' "
+        "ON CONFLICT (character_id) DO NOTHING"
+    )
 
 
 def downgrade() -> None:

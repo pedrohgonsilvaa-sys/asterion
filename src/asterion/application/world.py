@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from asterion.infrastructure.db.models import Brazier, Character, Quest, WorldState
+from asterion.infrastructure.db.models import Achievement, Brazier, Character, Quest, WorldState
 
 BRAZIER_ID = "tdo.brazier.estrada"
 ACHIEVEMENT_ID = "feat.tdo.cinzas_na_estrada"
@@ -46,16 +46,29 @@ class WorldService:
                 "menu:ready",
             }:
                 return None
-            q = await session.scalar(
-                select(Quest).where(Quest.character_id == c.id, Quest.quest_id == "P1")
-            )
             brazier = await session.scalar(
                 select(Brazier).where(
                     Brazier.character_id == c.id, Brazier.brazier_id == BRAZIER_ID
                 )
             )
             world = await session.scalar(select(WorldState).where(WorldState.character_id == c.id))
-            if q is None or q.status != "active" or brazier is None or world is None:
+            if brazier is None or world is None:
+                return None
+            q = await session.scalar(
+                select(Quest).where(Quest.character_id == c.id, Quest.quest_id == "P1")
+            )
+            achievement = await session.scalar(
+                select(Achievement).where(
+                    Achievement.character_id == c.id, Achievement.achievement_id == ACHIEVEMENT_ID
+                )
+            )
+            if c.stage == "menu:ready" and (
+                q is None
+                or q.status != "active"
+                or q.step < 1
+                or q.content_version != "tdo-1.0.1"
+                or achievement is None
+            ):
                 return None
             return WorldView(
                 "menu" if c.stage == "menu:ready" else "brazier",
@@ -70,7 +83,7 @@ class WorldService:
                 c.xp,
                 region=world.region,
                 location=world.location,
-                quest_title=q.title,
+                quest_title=q.title if q else None,
             )
 
     async def rest(self, actor: int) -> WorldView | None:
@@ -89,5 +102,16 @@ class WorldService:
             world = await session.scalar(select(WorldState).where(WorldState.character_id == c.id))
             if world is None:
                 return None
+            session.add(Achievement(character_id=c.id, achievement_id=ACHIEVEMENT_ID))
+            session.add(
+                Quest(
+                    character_id=c.id,
+                    quest_id="P1",
+                    title="Vozes na Estrada",
+                    status="active",
+                    step=1,
+                    content_version="tdo-1.0.1",
+                )
+            )
             c.stage = "menu:ready"
         return await self.resume(actor)

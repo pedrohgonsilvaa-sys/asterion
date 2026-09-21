@@ -1,7 +1,13 @@
 from decimal import Decimal
 
-from asterion.application.world import WorldView
+from sqlalchemy import select
+
+from asterion.application.prologue import PrologueService
+from asterion.application.world import WorldService, WorldView
 from asterion.bot.world_ui import render_world
+from asterion.domain.prologue import PROFILE
+from asterion.infrastructure.db.models import Achievement, Brazier, Character, Quest, WorldState
+from tests.test_prologue_persistence import character, win
 
 
 def world_view(**changes):
@@ -50,3 +56,34 @@ def test_menu_does_not_invent_missing_quest():
     # the renderer also requires the authoritative title explicitly.
     text = render_world(world_view(quest_title="Vozes na Estrada")).text
     assert "Vozes na Estrada" in text
+
+
+async def test_victory_creates_only_brazier_and_world_state(database):
+    await character(database)
+    service = PrologueService(database[1], "ocaso", PROFILE)
+    view = await service.enter(1)
+    view = await win(service, view)
+    async with database[1]() as session:
+        assert await session.scalar(select(Brazier)) is not None
+        assert await session.scalar(select(WorldState)) is not None
+        assert await session.scalar(select(Achievement)) is None
+        assert await session.scalar(select(Quest)) is None
+
+
+async def test_rest_creates_p1_and_achievement_once(database):
+    await character(database)
+    # Seed the post-victory boundary as a migration/backfill would.
+    async with database[1].begin() as session:
+        row = await session.scalar(select(Character).where(Character.telegram_id == 1))
+        row.stage = "cinzas_na_estrada:ready_for_first_brazier"
+        session.add(Brazier(character_id=row.id, brazier_id="tdo.brazier.estrada"))
+        session.add(
+            WorldState(character_id=row.id, region="Terras do Ocaso", location="Estrada das Cinzas")
+        )
+    service = WorldService(database[1], "ocaso")
+    view = await service.rest(1)
+    assert view is not None and view.kind == "menu"
+    await service.rest(1)
+    async with database[1]() as session:
+        assert len((await session.scalars(select(Achievement))).all()) == 1
+        assert len((await session.scalars(select(Quest))).all()) == 1
