@@ -245,14 +245,14 @@ class P1Service:
         return True
 
     async def _enter_refuge(self, s, c, q):
-        await self._ensure(
-            s, LocationDiscovery, character_id=c.id, location_id="tdo.location.refugio_do_ocaso"
-        )
         w = await s.scalar(
             select(WorldState).where(WorldState.character_id == c.id).with_for_update()
         )
         if w is None:
             return False
+        await self._ensure(
+            s, LocationDiscovery, character_id=c.id, location_id="tdo.location.refugio_do_ocaso"
+        )
         w.region, w.location = REGION, REFUGE
         q.step = 5
         return True

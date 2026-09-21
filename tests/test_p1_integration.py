@@ -2,7 +2,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from asterion.application.p1 import P1Service
 from asterion.application.world import WorldService
@@ -144,6 +144,33 @@ async def test_p1_refuge_codex_and_reward_are_persistent_and_idempotent(database
         )
         assert not await session.scalar(
             select(Unlock).where(Unlock.character_id == cid, Unlock.unlock_id.like("%ronda%"))
+        )
+
+
+@pytest.mark.asyncio
+async def test_enter_refuge_without_world_state_has_no_partial_discovery(database):
+    actor, service = await _seed(database, 991102)
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        quest = await session.scalar(
+            select(Quest).where(Quest.character_id == character.id, Quest.quest_id == "P1")
+        )
+        quest.step = 4
+        quest.state_version = 0
+        await session.execute(
+            delete(WorldState).where(WorldState.character_id == character.id)
+        )
+        await session.commit()
+
+    view = await service.enter_refuge(actor, 0)
+    assert view.step == 4
+    assert view.state_version == 0
+    async with database[1]() as session:
+        assert not await session.scalar(
+            select(LocationDiscovery).where(
+                LocationDiscovery.character_id == character.id,
+                LocationDiscovery.location_id == "tdo.location.refugio_do_ocaso",
+            )
         )
 
 
