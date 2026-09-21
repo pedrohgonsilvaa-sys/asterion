@@ -22,6 +22,7 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       ASTERION_TEST_DATABASE_URL: postgresql+asyncpg://asterion:asterion@localhost:5432/asterion_test
+      ASTERION_DATABASE_URL: postgresql+asyncpg://asterion:asterion@localhost:5432/asterion_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -35,4 +36,6 @@ jobs:
       - name: Test
         run: pytest
       - name: Alembic check
-        run: alembic check
+        run: |
+          alembic upgrade head
+          alembic check
