@@ -1,6 +1,8 @@
 """PostgreSQL integration tests use isolated, randomly named schemas."""
 
+import asyncio
 import os
+import sys
 from uuid import uuid4
 
 import pytest
@@ -11,6 +13,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from alembic import command
 from asterion.application.creation import CreationService
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 @pytest_asyncio.fixture

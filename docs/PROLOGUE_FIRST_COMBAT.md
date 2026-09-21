@@ -76,3 +76,12 @@ deliberadamente pendente de Fonte.
 Os 320 XP são um grant fixo de story content. Não existe `EnemyXPBase(level)` nem
 derivação por categoria. A conversão absoluta global de XP de inimigos permanece
 reaberta, portanto Caçadas, Ronda e XP repetível de Masmorras não são suportados.
+## Revisão de apresentação e cura
+
+O passo pedagógico da primeira Arte permanece dentro da HUD: durante `tutorial_stage == art`, a tela mostra o nome da Arte em negrito, `Arte de Classe`, o coeficiente de dano, a recarga `2` e, para Sinal Funesto, o efeito de redução de ATQ por 2T. O botão usa somente o nome limpo da Arte. Depois do uso válido, essas linhas desaparecem.
+
+O Registro de Combate usa linhas curtas em linguagem natural, com nomes e Artes em negrito e números mecânicos em monoespaçado. Todo conteúdo dinâmico é escapado antes do parse HTML do Telegram.
+
+Vampirismo do Hemário é cura: calcula dano direto real, aplica o limite de 3% do HP Máximo e o HP faltante, então usa `floor`, com mínimo zero.
+
+A barra de HP usa blocos preenchidos e `⬜` para a parte ausente. Os limiares oficiais para escolher entre 🟩, 🟨 e 🟥 ainda não foram definidos pela Fonte Visual/Balanceamento; a seleção dinâmica permanece pendente e não é inferida neste bloco.

@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 from dataclasses import dataclass, field
-from decimal import Decimal, localcontext
+from decimal import ROUND_FLOOR, Decimal, localcontext
 from uuid import UUID
 
 from asterion.domain.combat_math import PRECISION, CombatRng, Stats, direct_damage, stable_priority
@@ -208,7 +208,8 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
     if actor.race == "hemario" and actor.hp <= actor.stats.hp * D("0.40"):
         healed = min(
             actual_damage * D("0.12"), actor.stats.hp * D("0.03"), actor.stats.hp - actor.hp
-        )
+        ).to_integral_value(rounding=ROUND_FLOOR)
+        healed = max(D(0), healed)
         actor.hp += healed
     if action.attack_debuff and target.hp > 0:
         apply_effect(

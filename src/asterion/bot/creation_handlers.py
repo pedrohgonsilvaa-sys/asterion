@@ -35,7 +35,7 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
         try:
             if media:
                 await message.edit_media(
-                    InputMediaPhoto(media=media, caption=screen.text, parse_mode=None),
+                    InputMediaPhoto(media=media, caption=screen.text, parse_mode=screen.parse_mode),
                     reply_markup=screen.keyboard,
                 )
                 return
@@ -43,7 +43,7 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
                 await message.edit_text(
                     screen.text,
                     reply_markup=screen.keyboard,
-                    parse_mode=None,
+                    parse_mode=screen.parse_mode,
                 )
                 return
         except TelegramBadRequest as exc:
@@ -68,13 +68,13 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
                 media,
                 caption=screen.text,
                 reply_markup=screen.keyboard,
-                parse_mode=None,
+                parse_mode=screen.parse_mode,
             )
             return
         except TelegramBadRequest as exc:
             if not unavailable_media(exc):
                 raise
-    await message.answer(screen.text, reply_markup=screen.keyboard, parse_mode=None)
+    await message.answer(screen.text, reply_markup=screen.keyboard, parse_mode=screen.parse_mode)
 
 
 def creation_router(

@@ -57,9 +57,9 @@ async def test_first_hud_matches_authoritative_shape(prologue, database):
 def test_hp_bar_is_derived_from_real_values():
     from decimal import Decimal
 
-    assert hp_bar(Decimal(244), Decimal(244)) == "▰" * 10
-    assert hp_bar(Decimal(132), Decimal(244)) == "▰" * 5 + "▱" * 5
-    assert hp_bar(Decimal(0), Decimal(244)) == "▱" * 10
+    assert hp_bar(Decimal(244), Decimal(244)) == "🟩" * 10
+    assert hp_bar(Decimal(132), Decimal(244)) == "🟩" * 5 + "⬜" * 5
+    assert hp_bar(Decimal(0), Decimal(244)) == "⬜" * 10
 
 
 async def test_hud_reconstructs_persisted_events_and_tutorial_buttons(prologue, database):
@@ -68,12 +68,13 @@ async def test_hud_reconstructs_persisted_events_and_tutorial_buttons(prologue, 
     view = await prologue.action(1, view.activity_id, view.combat.version, "attack")
     screen = render_combat(view)
     assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["Defender"]
-    assert "Heroa · ⚔️ Atacar" in screen.text
-    assert "🐺 Cão Cinéreo · Mordida Cinérea" in screen.text
+    assert "⚔️ <b>Heroa</b> ataca <b>Cão Cinéreo</b>" in screen.text
+    assert "🐺 <b>Cão Cinéreo</b> usa <b>Mordida Cinérea</b>" in screen.text
     view = await prologue.action(1, view.activity_id, view.combat.version, "defend")
     screen = render_combat(view)
-    assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["🗡️ Golpe de Guarda"]
-    assert "Investida Cinérea" in screen.text
+    assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["Golpe de Guarda"]
+    assert "🎴 <b>Golpe de Guarda</b> · Arte de Classe" in screen.text
+    assert "⚔️ Dano · <code>110%</code> ATQ" in screen.text
     # Reconnect uses the same persisted log and controls.
     assert render_combat(await prologue.resume(1)) == screen
 

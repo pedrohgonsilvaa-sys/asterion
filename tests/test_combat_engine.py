@@ -182,12 +182,22 @@ def test_hemario_heals_actual_damage_only_and_caps_per_action():
     player.hp = player.stats.hp * D("0.40")
     state.fighters["enemy"].hp = D("2.5")
     result = act(state, "attack")
-    assert result.events[-1].healed == D("0.30")
-    assert result.fighters["player"].hp == player.hp + D("0.30")
+    assert result.events[-1].healed == D("0")
+    assert result.fighters["player"].hp == player.hp
     state.fighters["enemy"].hp = D(10000)
     player.stats = Stats(player.stats.hp, D(10000), player.stats.defense, player.stats.agility)
     result = act(state, "attack")
-    assert result.events[0].healed == player.stats.hp * D("0.03")
+    assert result.events[0].healed == D("21")
+
+
+def test_hemario_vampirism_floors_fractional_heal_and_keeps_positive_integer():
+    state = battle(race="hemario")
+    player = state.fighters["player"]
+    player.hp = player.stats.hp * D("0.40") - D("10")
+    state.fighters["enemy"].hp = D("10000")
+    player.stats = Stats(player.stats.hp, D("100"), player.stats.defense, player.stats.agility)
+    result = act(state, "attack")
+    assert result.events[0].healed == D("8")
 
 
 def test_hemario_above_threshold_does_not_heal():
