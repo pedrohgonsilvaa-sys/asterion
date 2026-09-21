@@ -9,8 +9,10 @@ from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message, 
 
 from asterion.application.creation import CreationService
 from asterion.application.prologue import PrologueService
+from asterion.application.world import WorldService
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import CreationCallback, Screen, render
+from asterion.bot.world_ui import render_world
 
 
 def unavailable_media(exc: TelegramBadRequest) -> bool:
@@ -81,12 +83,17 @@ def creation_router(
     service: CreationService,
     images: dict[str, str],
     prologue: PrologueService | None = None,
+    world: WorldService | None = None,
 ) -> Router:
     router = Router(name="character_creation")
     router.message.filter(F.chat.type == "private")
     router.callback_query.filter(F.message.chat.type == "private")
 
     async def current_screen(actor, state):
+        if world is not None:
+            world_view = await world.resume(actor)
+            if world_view is not None:
+                return render_world(world_view)
         if prologue is not None:
             view = await prologue.resume(actor)
             if view is not None:

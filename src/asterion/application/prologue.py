@@ -11,6 +11,7 @@ from asterion.domain.prologue import (
     COMBAT_STAGE,
     CONTENT_ID,
     FAILED_STAGE,
+    LEGACY_RULESET,
     POST_COMBAT_STAGE,
     REWARD_XP,
     RULESET,
@@ -86,8 +87,7 @@ class PrologueService:
             if activity is None:
                 if not enter or character.stage != PROLOGUE or character.level != 1:
                     return None
-                if character.ruleset_version != RULESET:
-                    # Data migration must explicitly adopt 1.4.2 before instantiation.
+                if character.ruleset_version not in {RULESET, LEGACY_RULESET}:
                     raise ValueError("Character has not been migrated to the supported ruleset")
                 state = self.profile.create(
                     uuid4(),
@@ -110,7 +110,7 @@ class PrologueService:
                 or activity.status != "active"
             ):
                 return current
-            if activity.ruleset_version != RULESET:
+            if activity.ruleset_version not in {RULESET, LEGACY_RULESET}:
                 raise ValueError(
                     "Unsupported combat ruleset; existing snapshots cannot be rebalanced"
                 )
@@ -124,6 +124,7 @@ class PrologueService:
                 await repo.grant(character, activity, REWARD_XP)
                 activity.status = "completed"
                 character.stage = POST_COMBAT_STAGE
+                character.ruleset_version = RULESET
             elif updated.result == "defeat":
                 activity.status = "failed"
                 character.stage = FAILED_STAGE

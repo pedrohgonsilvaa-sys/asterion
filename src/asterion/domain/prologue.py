@@ -8,7 +8,8 @@ from asterion.domain.combat import Action, Combat, Fighter, Tutorial, start_comb
 from asterion.domain.combat_math import Stats, class_stats, enemy_stats, racial_stats
 
 D = Decimal
-RULESET = "gdd-1.4.2-baseline-1.0"
+RULESET = "gdd-1.4.3-baseline-1.0"
+LEGACY_RULESET = "gdd-1.4.2-baseline-1.0"
 CONTENT_ID = "prologue_first_combat"
 COMBAT_STAGE = "cinzas_na_estrada:first_combat"
 POST_COMBAT_STAGE = "cinzas_na_estrada:ready_for_first_brazier"
