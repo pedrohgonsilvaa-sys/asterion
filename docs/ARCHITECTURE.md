@@ -5,12 +5,12 @@
 A implementação deve ser confrontada continuamente com:
 
 1. **ASTERION — GDD Estrutural v1.4.3**, Fonte Mestra vigente;
-2. **ASTERION — Conteúdo: Terras do Ocaso v1.0.1 FINAL**, autoridade regional;
-3. **ASTERION — Consolidação de Visual & UI (2026-09-20), sincronizada com GDD v1.4.3 + TDO v1.0.1**.
+2. **ASTERION — Conteúdo: Terras do Ocaso v1.0.2 FINAL**, autoridade regional;
+3. **ASTERION — Consolidação de Visual & UI (2026-09-21), sincronizada com GDD v1.4.3 + TDO v1.0.2**.
 
 A Fonte Mestra v1.4.3 substitui integralmente v1.4.2 e todas as versões anteriores. Sua **Baseline Numérica v1.0 está fechada para implementação e testes**; a reabertura da conversão absoluta de XP de inimigos foi encerrada.
 
-Este documento registra somente decisões de implementação da fundação. Ele não substitui as Fontes. Exemplos de mockup ainda podem usar `SIMULAR` quando não correspondem a conteúdo autoritativo. Valores, custos, limites, fórmulas e slots consolidados na Baseline Numérica v1.0 e o conteúdo fechado de Terras do Ocaso v1.0.1 devem ser tratados como oficiais.
+Este documento registra somente decisões de implementação da fundação. Ele não substitui as Fontes. Exemplos de mockup ainda podem usar `SIMULAR` quando não correspondem a conteúdo autoritativo. Valores, custos, limites, fórmulas e slots consolidados na Baseline Numérica v1.0 e o conteúdo fechado de Terras do Ocaso v1.0.2 devem ser tratados como oficiais.
 
 ## Modular monolith
 
@@ -63,9 +63,13 @@ O worker e a política de retry serão implementados antes de qualquer fluxo eco
 
 ## Etapas imediatas
 
-1. Fundação técnica e CI.
-2. Conta/personagem e `/start` persistente.
-3. Atividade Foreground autoritativa.
-4. Prólogo `Cinzas na Estrada`.
-5. Motor de combate determinístico.
-6. Terras do Ocaso: mundo, Caçada, Missões, Desbravar, Inventário/equipamentos e uma Masmorra representativa.
+Já implementados no `main`: fundação técnica/CI, conta e criação persistentes, atividade Foreground, Prólogo `Cinzas na Estrada`, primeiro combate determinístico, Braseiro da Estrada, conclusão do Prólogo, início de P1 e Menu Principal persistente.
+
+Próxima sequência de produção:
+
+1. **P1 — Vozes na Estrada** completa, usando TDO v1.0.2 + Visual/UI sincronizada de 21/09/2026;
+2. gates iniciais de Caçada Manual e Desbravar concedidos pela conclusão de P1;
+3. expansão incremental do mundo regional sem antecipar conteúdo fora das Fontes;
+4. Inventário/equipamentos e uma Masmorra representativa quando seus blocos entrarem no escopo do vertical slice.
+
+Cada novo bloco deve preservar reconstrução autoritativa, idempotência, `ruleset_version`/versão de conteúdo quando aplicável e compatibilidade com estados já persistidos.
