@@ -230,6 +230,9 @@ async def test_dispatcher_start_and_menu_recover_brazier_then_menu(database):
     dispatcher.include_router(
         creation_router(CreationService(database[1], "ocaso"), {}, world=world)
     )
+    dispatcher.include_router(
+        creation_router(CreationService(database[1], "ocaso"), {}, world=world)
+    )
     await dispatcher.feed_raw_update(bot, message_update("/start", actor=1))
     sent = bot.session.make_request.call_args.args[1]
     assert "🔥 Braseiro · Descoberto" in sent.text
