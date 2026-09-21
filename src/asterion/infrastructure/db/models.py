@@ -90,6 +90,7 @@ class Character(Base):
     max_vigor: Mapped[int] = mapped_column(
         Integer, nullable=False, default=100, server_default="100"
     )
+    crowns: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
 
 
 class Brazier(Base):
@@ -126,7 +127,73 @@ class Quest(Base):
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     step: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    content_version: Mapped[str] = mapped_column(String(32), nullable=False, default="tdo-1.0.1")
+    content_version: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="tdo-1.0.2", server_default="tdo-1.0.2"
+    )
+    state_version: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    progress: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+
+
+class LocationDiscovery(Base):
+    __tablename__ = "location_discoveries"
+    __table_args__ = (
+        UniqueConstraint("character_id", "location_id", name="uq_character_location"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    location_id: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class CodexEntry(Base):
+    __tablename__ = "codex_entries"
+    __table_args__ = (UniqueConstraint("character_id", "entry_id", name="uq_character_codex"),)
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    entry_id: Mapped[str] = mapped_column(String(96), nullable=False)
+
+
+class Unlock(Base):
+    __tablename__ = "unlocks"
+    __table_args__ = (UniqueConstraint("character_id", "unlock_id", name="uq_character_unlock"),)
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    unlock_id: Mapped[str] = mapped_column(String(96), nullable=False)
+
+
+class MaterialStack(Base):
+    __tablename__ = "material_stacks"
+    __table_args__ = (
+        UniqueConstraint("character_id", "material_id", "bound", name="uq_character_material"),
+        CheckConstraint("quantity BETWEEN 0 AND 999", name="ck_material_quantity"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    material_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    bound: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class RewardEvent(Base):
+    __tablename__ = "reward_events"
+    __table_args__ = (
+        UniqueConstraint("character_id", "source_id", name="uq_character_reward_source"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(96), nullable=False)
+
+
+class RewardComponent(Base):
+    __tablename__ = "reward_components"
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    reward_event_id: Mapped[UUID] = mapped_column(ForeignKey("reward_events.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    item_id: Mapped[str | None] = mapped_column(String(96))
+    quantity: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
 
 class WorldState(Base):

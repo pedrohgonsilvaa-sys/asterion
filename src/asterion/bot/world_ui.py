@@ -50,16 +50,17 @@ def render_world(view: WorldView) -> Screen:
         "oraculo": "Oráculo",
         "luminar": "Luminar",
     }[view.character_class]
+    quest_line = f"📜 Missão Principal · {escape(view.quest_title)}" if view.quest_title else ""
     text = (
         f"🌑 Asterion\n{view.region} · {view.location}\n\n{LORE}\n\n"
         f"{emoji} {escape(view.name)} · Nv. 1\n{title}\n\n"
         f"❤️ HP · {view.hp} / {view.max_hp}\n{bar(view.hp, view.max_hp, '🟩')}\n\n"
         f"⚡ Vigor · {view.vigor} / {view.max_vigor}\n{bar(view.vigor, view.max_vigor, '🟨')}\n\n"
         f"✨ XP · {view.xp} / 4.800\n{bar(view.xp, 4800, '🟦')}\n\n"
-        f"📜 Missão Principal · {escape(view.quest_title)}"
+        f"{quest_line}"
     )
     labels = [
-        ("Aventura", "menu:noop"),
+        ("Aventura", "world:adventure"),
         ("Personagem", "menu:noop"),
         ("Guilda", "menu:noop"),
         ("Mercado", "menu:noop"),

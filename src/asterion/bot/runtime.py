@@ -4,10 +4,12 @@ from functools import lru_cache
 from aiogram import Bot, Dispatcher
 
 from asterion.application.creation import CreationService
+from asterion.application.p1 import P1Service
 from asterion.application.prologue import PrologueService
 from asterion.application.world import WorldService
 from asterion.bot.combat_handlers import combat_router
 from asterion.bot.creation_handlers import creation_router
+from asterion.bot.p1_handlers import p1_router
 from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
 from asterion.domain.creation import NamePolicy
@@ -30,8 +32,10 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher = Dispatcher(disable_fsm=True)
     prologue = PrologueService(SessionFactory, settings.server_id, PROFILE)
     world = WorldService(SessionFactory, settings.server_id)
+    p1 = P1Service(SessionFactory, settings.server_id)
     dispatcher.include_router(combat_router(prologue, settings.creation_images, world))
     dispatcher.include_router(world_router(world, settings.creation_images))
+    dispatcher.include_router(p1_router(p1, settings.creation_images))
     dispatcher.include_router(
         creation_router(
             CreationService(

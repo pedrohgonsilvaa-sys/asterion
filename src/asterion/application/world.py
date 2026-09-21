@@ -27,7 +27,7 @@ class WorldView:
     xp: int
     region: str
     location: str
-    quest_title: str
+    quest_title: str | None
 
 
 class WorldService:
@@ -66,7 +66,7 @@ class WorldService:
                 q is None
                 or q.status != "active"
                 or q.step < 1
-                or q.content_version != "tdo-1.0.1"
+                or q.content_version != "tdo-1.0.2"
                 or achievement is None
             ):
                 return None
@@ -115,7 +115,7 @@ class WorldService:
                         title="Vozes na Estrada",
                         status="active",
                         step=1,
-                        content_version="tdo-1.0.1",
+                        content_version="tdo-1.0.2",
                     )
                 )
                 c.stage = "menu:ready"

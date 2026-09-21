@@ -141,7 +141,7 @@ async def test_ready_brazier_legacy_backfill_then_rest(database):
             )
         ).one()
         assert quest.status == "active" and quest.step == 1
-        assert quest.content_version == "tdo-1.0.1"
+        assert quest.content_version == "tdo-1.0.2"
         assert (
             await session.execute(
                 text("SELECT count(*) FROM achievements WHERE character_id=:id"),
