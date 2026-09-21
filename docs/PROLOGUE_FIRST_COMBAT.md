@@ -43,11 +43,14 @@ são bloqueados durante cada comando, serializando dispositivos concorrentes.
 Callbacks carregam somente `game_activity_id`, `state_version` e intenção; todo o
 restante é recuperado e validado no PostgreSQL.
 
-A migration converte explicitamente personagens ainda em
+A migration `20260920_0003` converte explicitamente personagens ainda em
 `cinzas_na_estrada:intro` de v1.4.1 para v1.4.2 e inicializa Nv.1, XP 0 e HP
-autoritativo. Novos personagens já são criados sob v1.4.2.
-O downgrade de schema não rebaixa esse marcador de Fonte: uma versão de ruleset
-adotada por dado persistente nunca é silenciosamente reinterpretada.
+autoritativo. Esse era o ruleset de criação naquele bloco histórico. Depois da
+fronteira `20260920_0004`, novas criações passam a usar
+`gdd-1.4.3-baseline-1.0`, enquanto atividades antigas continuam identificadas pelo
+ruleset em que foram materializadas. O downgrade de schema não rebaixa esse
+marcador de Fonte: uma versão de ruleset adotada por dado persistente nunca é
+silenciosamente reinterpretada.
 
 Ao vencer, a mesma transação persiste HP restante, conclui atividade, grava o
 grant e soma exatamente 320 XP. A chave primária do grant e o lock impedem nova
