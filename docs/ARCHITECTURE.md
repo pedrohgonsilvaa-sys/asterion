@@ -4,12 +4,13 @@
 
 A implementação deve ser confrontada continuamente com:
 
-1. **ASTERION — GDD Estrutural v1.4.2**, Fonte Mestra vigente;
-2. **ASTERION — Consolidação de Visual & UI (2026-09-20)**.
+1. **ASTERION — GDD Estrutural v1.4.3**, Fonte Mestra vigente;
+2. **ASTERION — Conteúdo: Terras do Ocaso v1.0.1 FINAL**, autoridade regional;
+3. **ASTERION — Consolidação de Visual & UI (2026-09-20), sincronizada com GDD v1.4.3 + TDO v1.0.1**.
 
-A Fonte Mestra v1.4.2 substitui integralmente v1.4 e todas as versões anteriores. Sua **Baseline Numérica v1.0 permanece autoritativa para implementação e testes**, salvo a reabertura pontual da conversão absoluta da unidade global de XP de inimigo descrita em 49.7.
+A Fonte Mestra v1.4.3 substitui integralmente v1.4.2 e todas as versões anteriores. Sua **Baseline Numérica v1.0 está fechada para implementação e testes**; a reabertura da conversão absoluta de XP de inimigos foi encerrada.
 
-Este documento registra somente decisões de implementação da fundação. Ele não substitui as Fontes. Exemplos de mockup ainda podem usar `SIMULAR` quando não correspondem a conteúdo autoritativo. Valores, custos, limites, fórmulas e slots já consolidados na Baseline Numérica v1.0 devem ser implementados como oficiais, exceto quando uma reabertura explícita da própria Fonte Mestra disser o contrário.
+Este documento registra somente decisões de implementação da fundação. Ele não substitui as Fontes. Exemplos de mockup ainda podem usar `SIMULAR` quando não correspondem a conteúdo autoritativo. Valores, custos, limites, fórmulas e slots consolidados na Baseline Numérica v1.0 e o conteúdo fechado de Terras do Ocaso v1.0.1 devem ser tratados como oficiais.
 
 ## Modular monolith
 
