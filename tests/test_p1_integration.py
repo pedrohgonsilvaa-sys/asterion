@@ -8,6 +8,7 @@ from asterion.application.p1 import P1Service
 from asterion.application.world import WorldService
 from asterion.infrastructure.db.models import (
     Account,
+    Achievement,
     Brazier,
     Character,
     LocationDiscovery,
@@ -147,7 +148,7 @@ async def test_p1_refuge_codex_and_reward_are_persistent_and_idempotent(database
 
 
 @pytest.mark.asyncio
-async def test_p1_retry_gets_new_ids_and_post_p1_menu(database):
+async def test_p1_retry_gets_new_ids(database):
     actor, service = await _seed(database, 991102)
     async with database[1]() as session:
         q = await session.scalar(select(Quest).where(Quest.quest_id == "P1"))
@@ -157,14 +158,40 @@ async def test_p1_retry_gets_new_ids_and_post_p1_menu(database):
     assert retry.combat is not None
     assert retry.combat.fighters["enemy"].name == "Cão Cinéreo"
     assert retry.activity_id and retry.encounter_id and retry.combat_id
+    assert retry.combat.fighters["enemy"].stats.hp == Decimal("406")
+
+
+@pytest.mark.asyncio
+async def test_p1_completed_state_reconstructs_post_p1_menu(database):
+    actor, service = await _seed(database, 991103)
     async with database[1]() as session:
+        cid = await session.scalar(select(Character.id).where(Character.telegram_id == actor))
         q = await session.scalar(select(Quest).where(Quest.quest_id == "P1"))
-        q.step, q.progress, q.state_version = 7, {}, retry.state_version + 1
+        q.step, q.status, q.state_version = 7, "active", 3
+        session.add(Achievement(character_id=cid, achievement_id="feat.tdo.cinzas_na_estrada"))
+        session.add(Brazier(character_id=cid, brazier_id="tdo.brazier.refugio_do_ocaso"))
+        world = await session.scalar(select(WorldState).where(WorldState.character_id == cid))
+        world.location = "Refúgio do Ocaso"
         await session.commit()
-    entered = await service.go_brazier(actor, retry.state_version + 1)
-    completed = await service.activate_brazier(actor, entered.state_version)
+    completed = await service.activate_brazier(actor, 3)
     assert completed.status == "completed"
     menu = await WorldService(database[1], "ocaso").resume(actor)
     assert menu.kind == "menu"
     assert menu.location == "Refúgio do Ocaso"
     assert menu.quest_title is None
+
+
+@pytest.mark.asyncio
+async def test_activate_brazier_rejects_active_foreground(database):
+    actor, service = await _seed(database, 991104)
+    progressed = await service.follow_road(actor, 0)
+    tracks = await service.examine(actor, "pegadas", progressed.state_version)
+    await service.examine(actor, "sulcos", tracks.state_version)
+    async with database[1]() as session:
+        q = await session.scalar(select(Quest).where(Quest.quest_id == "P1"))
+        q.step, q.state_version = 7, q.state_version + 1
+        version = q.state_version
+        await session.commit()
+    result = await service.activate_brazier(actor, version)
+    assert result.status == "active"
+    assert result.combat is not None

@@ -172,6 +172,13 @@ class P1Service:
             c, q = await self._locked(s, actor)
             if not self._valid(c, q, version, 7):
                 return await self._view(s, c, q)
+            active = await s.scalar(
+                select(GameActivity)
+                .where(GameActivity.character_id == c.id, GameActivity.status == "active")
+                .with_for_update()
+            )
+            if active is not None:
+                return await self._view(s, c, q)
             await self._ensure(s, Brazier, character_id=c.id, brazier_id=REFUGE_BRAZIER)
             event = await s.scalar(
                 select(RewardEvent)
