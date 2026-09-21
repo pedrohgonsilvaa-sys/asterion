@@ -47,6 +47,7 @@ async def _seed(database, actor=991100):
                 max_vigor=100,
             )
         )
+        await session.flush()
         session.add(
             Quest(
                 character_id=cid,
