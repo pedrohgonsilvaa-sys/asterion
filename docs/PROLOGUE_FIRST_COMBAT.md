@@ -2,7 +2,7 @@
 
 Este bloco foi implementado sob `gdd-1.4.2-baseline-1.0` e cobre somente
 `Seguir pela Estrada → Cão Cinéreo → vitória → estado pronto para o primeiro Braseiro`.
-A Fonte vigente passou a ser **GDD v1.4.3 + Terras do Ocaso v1.0.1 FINAL**.
+A Fonte vigente passou a ser **GDD v1.4.3 + Terras do Ocaso v1.0.2 FINAL**.
 Combates já instanciados em v1.4.2 devem continuar reprodutíveis no ruleset original;
 novas transições seguras passam a adotar v1.4.3 conforme a especificação seguinte.
 
@@ -43,11 +43,14 @@ são bloqueados durante cada comando, serializando dispositivos concorrentes.
 Callbacks carregam somente `game_activity_id`, `state_version` e intenção; todo o
 restante é recuperado e validado no PostgreSQL.
 
-A migration converte explicitamente personagens ainda em
+A migration `20260920_0003` converte explicitamente personagens ainda em
 `cinzas_na_estrada:intro` de v1.4.1 para v1.4.2 e inicializa Nv.1, XP 0 e HP
-autoritativo. Novos personagens já são criados sob v1.4.2.
-O downgrade de schema não rebaixa esse marcador de Fonte: uma versão de ruleset
-adotada por dado persistente nunca é silenciosamente reinterpretada.
+autoritativo. Esse era o ruleset de criação naquele bloco histórico. Depois da
+fronteira `20260920_0004`, novas criações passam a usar
+`gdd-1.4.3-baseline-1.0`, enquanto atividades antigas continuam identificadas pelo
+ruleset em que foram materializadas. O downgrade de schema não rebaixa esse
+marcador de Fonte: uma versão de ruleset adotada por dado persistente nunca é
+silenciosamente reinterpretada.
 
 Ao vencer, a mesma transação persiste HP restante, conclui atividade, grava o
 grant e soma exatamente 320 XP. A chave primária do grant e o lock impedem nova
@@ -56,16 +59,18 @@ de Vigor, Coroas, Material, Saque ou bônus de Bestiário neste bloco.
 
 ## Recuperação e Telegram
 
-`/start` consulta primeiro a atividade do personagem. Durante o combate, renderiza
-diretamente o snapshot atual; depois da vitória, renderiza o estado mecânico
-concluído, sem reiniciar o Cão ou conceder XP novamente. Log, HP, barras, cooldowns
-e ações disponíveis vêm do backend. A mídia continua opcional e usa o fallback
-texto + inline keyboard. Falha ao editar ou enviar uma mensagem ocorre depois do
-commit e não desfaz o jogo.
+`/start` consulta primeiro a atividade e o estado mundial do personagem. Durante o
+combate, renderiza diretamente o snapshot atual. Depois da vitória, o backend
+reconstrói o **Braseiro da Estrada** já descoberto, sem reiniciar o Cão ou conceder
+XP novamente. Log, HP, barras, cooldowns e ações disponíveis vêm do backend. A
+mídia continua opcional e usa o fallback texto + inline keyboard. Falha ao editar
+ou enviar uma mensagem ocorre depois do commit e não desfaz o jogo.
 
 O estágio pós-vitória é
-`cinzas_na_estrada:ready_for_first_brazier`. Ele é apenas a fronteira persistente
-para o próximo PR; nenhum Braseiro, botão Descansar ou Menu foi implementado.
+`cinzas_na_estrada:ready_for_first_brazier`. Nessa fronteira já existem o Braseiro
+da Estrada e o `WorldState` de **Terras do Ocaso · Estrada das Cinzas**. O Feito do
+Prólogo e P1 ainda não existem nesse instante. `[Descansar]` encerra o Prólogo e
+transiciona autoritativamente para `menu:ready`.
 
 A Fonte não define neste bloco uma interface ou recuperação narrativa para uma
 eventual derrota. O motor persiste `result=defeat` e encerra a atividade de forma
@@ -77,7 +82,7 @@ deliberadamente pendente de Fonte.
 Os 320 XP permanecem um grant fixo de story content para o tutorial. A Fonte
 Mestra v1.4.3 encerrou a antiga reabertura da conversão global de XP de inimigos;
 este documento histórico não deve ser usado como autoridade para fórmulas de XP
-repetível. Para conteúdo novo, consultar a v1.4.3 e Terras do Ocaso v1.0.1.
+repetível. Para conteúdo novo, consultar a v1.4.3 e Terras do Ocaso v1.0.2.
 ## Revisão de apresentação e cura
 
 O passo pedagógico da primeira Arte permanece dentro da HUD: durante `tutorial_stage == art`, a tela mostra o nome da Arte em negrito, `Arte de Classe`, o coeficiente de dano, a recarga `2` e, para Sinal Funesto, o efeito de redução de ATQ por 2T. O botão usa somente o nome limpo da Arte. Depois do uso válido, essas linhas desaparecem.
@@ -89,6 +94,10 @@ Vampirismo do Hemário é cura: calcula dano direto real, aplica o limite de 3% 
 A barra de HP usa blocos preenchidos e `⬜` para a parte ausente. Os limiares oficiais para escolher entre 🟩, 🟨 e 🟥 ainda não foram definidos pela Fonte Visual/Balanceamento; a seleção dinâmica permanece pendente e não é inferida neste bloco.
 ## Fronteira v1.4.3
 
-Após a vitória do primeiro combate, a mesma transação registra o Braseiro da Estrada, o feito `feat.tdo.cinzas_na_estrada`, a missão P1 (`Vozes na Estrada`, `tdo-1.0.1`) e o estado mundial persistido. O personagem adota `gdd-1.4.3-baseline-1.0` somente nessa fronteira segura; snapshots de combates v1.4.2 continuam identificados pelo ruleset original.
+Após a vitória do primeiro combate, a mesma transação encerra o combate, preserva o HP restante, mantém o grant único de `320 XP`, registra o **Braseiro da Estrada** e o `WorldState` de **Terras do Ocaso · Estrada das Cinzas**, e coloca o personagem em `cinzas_na_estrada:ready_for_first_brazier`. **Não** registra ainda o Feito do Prólogo nem P1. O personagem adota `gdd-1.4.3-baseline-1.0` somente nessa fronteira segura; snapshots de combates v1.4.2 continuam identificados pelo ruleset original.
 
-`Descansar` só aceita o estágio `cinzas_na_estrada:ready_for_first_brazier`. Depois de `menu:ready`, callbacks antigos são no-op e apenas reconstruem o Menu. O Menu exige Braseiro, WorldState e Quest P1 persistidos; não usa defaults para inventar conteúdo. HP permanece Decimal e as barras de HP/Vigor são derivadas do estado autoritativo.
+`Descansar` aceita `cinzas_na_estrada:ready_for_first_brazier`, restaura HP sem alterar Vigor e, na mesma transação lógica, conclui o Prólogo, registra uma única vez `feat.tdo.cinzas_na_estrada`, cria **P1 — Vozes na Estrada** ativa na Etapa 1 e transiciona para `menu:ready`. A implementação desse bloco foi criada quando a autoridade regional era TDO v1.0.1, por isso o registro histórico de Quest usa `content_version = tdo-1.0.1`.
+
+A autoridade vigente passou a ser **TDO v1.0.2 + Visual/UI 2026-09-21 sincronizada com TDO v1.0.2**. A futura implementação jogável de P1 deve tratar a atualização de versão de conteúdo de forma explícita e segura, sem reescrever progresso já materializado silenciosamente. Como o `main` atual só cria P1 na Etapa 1 e ainda não implementa suas etapas jogáveis, essa migração deve ser resolvida no próximo bloco técnico antes de avançar a missão.
+
+Depois de `menu:ready`, callbacks antigos de Descansar são no-op e apenas reconstroem o Menu. O Menu exige Braseiro, WorldState, Feito e Quest P1 persistidos; não usa defaults para inventar conteúdo. HP permanece Decimal e as barras de HP/Vigor são derivadas do estado autoritativo.
