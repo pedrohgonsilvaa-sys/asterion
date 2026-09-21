@@ -40,12 +40,22 @@ def world_router(
         if view is not None and isinstance(query.message, Message):
             await present(query.message, render_world(view), images, edit=True)
 
+    async def foreground(query: CallbackQuery) -> bool:
+        view = await p1.resume(query.from_user.id) if p1 else None
+        if view is not None and view.combat is not None and isinstance(query.message, Message):
+            await present(query.message, render_p1(view), images, edit=True)
+            return True
+        return False
+
     @router.message(Command("menu"))
     async def menu(message: Message):
         await show(message)
 
     @router.callback_query(F.data == "world:rest")
     async def rest(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         view = await service.rest(query.from_user.id)
         await query.answer()
         if view and isinstance(query.message, Message):
@@ -53,6 +63,9 @@ def world_router(
 
     @router.callback_query(F.data == "world:adventure")
     async def adventure(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if isinstance(query.message, Message):
             text = (
@@ -86,6 +99,9 @@ def world_router(
 
     @router.callback_query(F.data == "world:missions")
     async def missions(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if not isinstance(query.message, Message):
             return
@@ -111,6 +127,9 @@ def world_router(
 
     @router.callback_query(F.data == "world:principal")
     async def principal(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if not isinstance(query.message, Message):
             return
@@ -189,6 +208,9 @@ def world_router(
 
     @router.callback_query(F.data == "world:objective")
     async def objective(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if isinstance(query.message, Message) and p1 is not None:
             view = await p1.resume(query.from_user.id)
@@ -197,6 +219,9 @@ def world_router(
 
     @router.callback_query(F.data == "world:map")
     async def map_screen(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if not isinstance(query.message, Message):
             return
@@ -227,6 +252,9 @@ def world_router(
 
     @router.callback_query(F.data == "menu:back")
     async def back(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         await query.answer()
         await show_menu(query)
 

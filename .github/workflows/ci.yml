@@ -34,3 +34,5 @@ jobs:
         run: ruff check .
       - name: Test
         run: pytest
+      - name: Alembic check
+        run: alembic check

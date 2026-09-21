@@ -1,7 +1,7 @@
-from decimal import Decimal
 from uuid import UUID
 
 from asterion.domain.combat import act, allowed_actions
+from asterion.domain.combat_math import class_stats, racial_stats
 from asterion.domain.prologue import p1_combat_profile
 
 CLASSES = ("sentinela", "errante", "vigia", "tecelao", "oraculo", "luminar")
@@ -39,11 +39,12 @@ def _can_win(state, seen, depth=0):
 def test_all_class_race_combinations_have_a_real_victory_path():
     for index, character_class in enumerate(CLASSES):
         for race_index, race in enumerate(RACES):
+            maximum_hp = racial_stats(class_stats(character_class, 1), race).hp
             state = p1_combat_profile(
                 UUID(int=index * 5 + race_index + 1),
                 "Heroa",
                 character_class,
                 race,
-                Decimal("700"),
+                maximum_hp,
             )
             assert _can_win(state, set()), f"no victory path for {character_class}/{race}"

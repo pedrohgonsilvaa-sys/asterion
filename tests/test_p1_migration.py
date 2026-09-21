@@ -36,6 +36,26 @@ async def test_real_0004_0005_backfill_and_safe_roundtrip(database):
         )
         await connection.execute(
             text("""
+            INSERT INTO braziers (id, character_id, brazier_id)
+            VALUES ('00000000-0000-0000-0000-000000000505',
+                    '00000000-0000-0000-0000-000000000501', 'tdo.brazier.estrada')
+        """)
+        )
+        await connection.execute(
+            text("""
+            INSERT INTO world_states (character_id, region, location)
+            VALUES ('00000000-0000-0000-0000-000000000501', 'Terras do Ocaso', 'Estrada das Cinzas')
+        """)
+        )
+        await connection.execute(
+            text("""
+            INSERT INTO achievements (id, character_id, achievement_id)
+            VALUES ('00000000-0000-0000-0000-000000000506',
+                    '00000000-0000-0000-0000-000000000501', 'feat.tdo.cinzas_na_estrada')
+        """)
+        )
+        await connection.execute(
+            text("""
             INSERT INTO quests (id, character_id, quest_id, title, status, step, content_version)
             VALUES ('00000000-0000-0000-0000-000000000502', '00000000-0000-0000-0000-000000000501',
                     'P1', 'Vozes na Estrada', 'active', 1, 'tdo-1.0.1')
