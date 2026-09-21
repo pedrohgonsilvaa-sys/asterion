@@ -30,9 +30,11 @@ async def test_first_hud_matches_authoritative_shape(prologue, database):
     await character(database)
     view = await prologue.enter(1)
     screen = render_combat(view)
-    assert screen.text.startswith("Turno 1 · Heroa\n\n🐺 Cão Cinéreo\n❤️ 244 / 244")
+    assert screen.text.startswith(
+        "Turno 1 · <b>Heroa</b>\n\n<b>🐺 Cão Cinéreo</b>\n❤️ <code>244 / 244</code>"
+    )
     assert "Um rosnado rompe o silêncio da estrada." in screen.text
-    assert "👉 🛡️ Heroa" in screen.text
+    assert "👉 🛡️ <b>Heroa</b>" in screen.text
     assert "📜 Registro de Combate · Recentes" in screen.text
     assert "🐺 Cão Cinéreo bloqueia o caminho." in screen.text
     assert "⚔️ Atacar · Causa Dano" in screen.text
@@ -69,7 +71,7 @@ async def test_hud_reconstructs_persisted_events_and_tutorial_buttons(prologue, 
     screen = render_combat(view)
     assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["Defender"]
     assert "⚔️ <b>Heroa</b> ataca <b>Cão Cinéreo</b>" in screen.text
-    assert "🐺 <b>Cão Cinéreo</b> usa <b>Mordida Cinérea</b>" in screen.text
+    assert "🐺 <b>Cão Cinéreo</b> usa <b>Mordida Cinérea</b> em <b>Heroa</b>" in screen.text
     view = await prologue.action(1, view.activity_id, view.combat.version, "defend")
     screen = render_combat(view)
     assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["Golpe de Guarda"]

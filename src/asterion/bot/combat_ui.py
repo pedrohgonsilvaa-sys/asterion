@@ -44,18 +44,18 @@ def event_line(state: Combat, event: CombatEvent) -> str:
         return f"🛡️ <b>{actor_name}</b> usa Defender."
     actions = state.player_actions if event.actor == "player" else state.enemy_actions
     action = actions[event.action]
-    label = action.name.split(" ", 1)[-1]
+    label = action.name.split(" ", 1)[-1] if event.actor == "player" else action.name
     target = state.fighters["enemy" if event.actor == "player" else "player"]
     emoji = (
         "⚔️" if event.actor == "player" and event.action == "attack"
         else "🎴" if event.actor == "player" else "🐺"
     )
-    verb = "ataca" if event.action == "attack" else "usa"
-    line = (
-        f"{emoji} <b>{actor_name}</b> {verb} <b>{escape(target.name)}</b> "
-        f"e causa <code>{number(event.damage)}</code> de dano."
-    )
-    if event.action != "attack" and event.actor == "player":
+    if event.actor == "player" and event.action == "attack":
+        line = (
+            f"{emoji} <b>{actor_name}</b> ataca <b>{escape(target.name)}</b> "
+            f"e causa <code>{number(event.damage)}</code> de dano."
+        )
+    else:
         line = (
             f"{emoji} <b>{actor_name}</b> usa <b>{escape(label)}</b> em "
             f"<b>{escape(target.name)}</b> e causa <code>{number(event.damage)}</code> de dano."
@@ -81,7 +81,7 @@ def render_combat(view: CombatView) -> Screen:
     lines = [
         f"Turno {player.opportunity} · <b>{escape(player.name)}</b>",
         "",
-        f"<b>{escape(enemy.name)}</b>",
+        f"<b>🐺 {escape(enemy.name)}</b>",
         f"❤️ <code>{number(enemy.hp)} / {number(enemy.stats.hp)}</code>",
         hp_bar(enemy.hp, enemy.stats.hp),
         "",
