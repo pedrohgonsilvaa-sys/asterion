@@ -33,9 +33,9 @@ def get_bot_runtime() -> BotRuntime:
     prologue = PrologueService(SessionFactory, settings.server_id, PROFILE)
     world = WorldService(SessionFactory, settings.server_id)
     p1 = P1Service(SessionFactory, settings.server_id)
-    dispatcher.include_router(combat_router(prologue, settings.creation_images, world))
-    dispatcher.include_router(world_router(world, settings.creation_images))
     dispatcher.include_router(p1_router(p1, settings.creation_images))
+    dispatcher.include_router(combat_router(prologue, settings.creation_images, world))
+    dispatcher.include_router(world_router(world, settings.creation_images, p1))
     dispatcher.include_router(
         creation_router(
             CreationService(
@@ -46,6 +46,7 @@ def get_bot_runtime() -> BotRuntime:
             settings.creation_images,
             prologue,
             world,
+            p1,
         )
     )
     return BotRuntime(

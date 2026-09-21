@@ -25,6 +25,7 @@ from asterion.infrastructure.db.models import (
     CombatRecord,
     Encounter,
     GameActivity,
+    LocationDiscovery,
     WorldState,
 )
 
@@ -37,6 +38,7 @@ class CombatView:
     combat: Combat
     stage: str
     xp: int
+    context: str = "prologue"
 
 
 def view(character: Character, activity: GameActivity, encounter: Encounter, record: CombatRecord):
@@ -47,6 +49,7 @@ def view(character: Character, activity: GameActivity, encounter: Encounter, rec
         decode(record.snapshot, record.id, activity.ruleset_version, activity.state_version),
         character.stage,
         character.xp,
+        "prologue",
     )
 
 
@@ -138,6 +141,12 @@ class PrologueService:
                         character_id=character.id,
                         region="Terras do Ocaso",
                         location="Estrada das Cinzas",
+                    )
+                )
+                session.add(
+                    LocationDiscovery(
+                        character_id=character.id,
+                        location_id="tdo.location.estrada_das_cinzas",
                     )
                 )
             elif updated.result == "defeat":

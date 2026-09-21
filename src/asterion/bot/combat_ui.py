@@ -22,6 +22,16 @@ class CombatCallback(CallbackData, prefix="fight"):
         return UUID(hex=self.activity)
 
 
+class P1CombatCallback(CallbackData, prefix="p1fight"):
+    activity: str
+    version: int
+    action: str
+
+    @property
+    def activity_id(self) -> UUID:
+        return UUID(hex=self.activity)
+
+
 def number(value: Decimal | int) -> str:
     return (
         format(value, "f").rstrip("0").rstrip(".")
@@ -47,8 +57,11 @@ def event_line(state: Combat, event: CombatEvent) -> str:
     label = action.name.split(" ", 1)[-1] if event.actor == "player" else action.name
     target = state.fighters["enemy" if event.actor == "player" else "player"]
     emoji = (
-        "⚔️" if event.actor == "player" and event.action == "attack"
-        else "🎴" if event.actor == "player" else "🐺"
+        "⚔️"
+        if event.actor == "player" and event.action == "attack"
+        else "🎴"
+        if event.actor == "player"
+        else "🐺"
     )
     if event.actor == "player" and event.action == "attack":
         line = (
@@ -109,11 +122,13 @@ def render_combat(view: CombatView) -> Screen:
             label = clean
             hint = clean
             if state.tutorial_stage == "art":
-                lines.extend([
-                    f"🎴 <b>{escape(clean)}</b> · Arte de Classe",
-                    f"⚔️ Dano · <code>{number(art.coefficient * 100)}%</code> ATQ",
-                    "⏳ Recarga · <code>2</code>",
-                ])
+                lines.extend(
+                    [
+                        f"🎴 <b>{escape(clean)}</b> · Arte de Classe",
+                        f"⚔️ Dano · <code>{number(art.coefficient * 100)}%</code> ATQ",
+                        "⏳ Recarga · <code>2</code>",
+                    ]
+                )
                 if art.attack_debuff:
                     lines.insert(
                         -1,
@@ -124,7 +139,7 @@ def render_combat(view: CombatView) -> Screen:
         buttons.append(
             InlineKeyboardButton(
                 text=label,
-                callback_data=CombatCallback(
+                callback_data=(P1CombatCallback if view.context == "p1" else CombatCallback)(
                     activity=view.activity_id.hex,
                     version=state.version,
                     action=action,
@@ -135,8 +150,8 @@ def render_combat(view: CombatView) -> Screen:
         remaining = max(0, player.cooldowns.get("art", 0) - player.opportunity)
         if remaining:
             lines.append(f"{state.player_actions['art'].name} · CD{remaining}")
-    if state.result == "victory":
+    if state.result == "victory" and view.context == "prologue":
         # Mechanical receipt only: no new story scene or Braseiro/Descansar button.
         lines.append("320 XP")
     keyboard = InlineKeyboardMarkup(inline_keyboard=[buttons]) if buttons else None
-    return Screen("\n".join(lines).rstrip(), "prologue_first_combat", keyboard, parse_mode="HTML")
+    return Screen("\n".join(lines).rstrip(), view.context, keyboard, parse_mode="HTML")
