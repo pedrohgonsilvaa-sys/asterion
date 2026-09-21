@@ -6,6 +6,8 @@ A implementação do Asterion deve usar como autoridade principal:
 
 **ASTERION — GDD Estrutural v1.4.3 — Fonte Mestra Consolidada**
 
+Arquivo vigente: `ASTERION_GDD_Estrutural_v1.4.3_Fonte_Mestra.md`.
+
 Estado oficial:
 
 - a v1.4.3 substitui integralmente a v1.4.2 e versões anteriores;
