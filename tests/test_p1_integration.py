@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import select
 
 from asterion.application.p1 import P1Service
+from asterion.application.world import WorldService
 from asterion.infrastructure.db.models import (
     Account,
     Brazier,
@@ -85,6 +86,12 @@ async def test_p1_signs_are_ordered_idempotent_and_create_one_foreground(databas
     again = await service.examine(actor, "sulcos", tracks.state_version)
     assert again.step == 3
     assert combat.activity_id != combat.encounter_id != combat.combat_id
+    resumed = await service.resume(actor)
+    assert (resumed.activity_id, resumed.encounter_id, resumed.combat_id) == (
+        combat.activity_id,
+        combat.encounter_id,
+        combat.combat_id,
+    )
 
 
 @pytest.mark.asyncio
@@ -136,3 +143,27 @@ async def test_p1_refuge_codex_and_reward_are_persistent_and_idempotent(database
         assert not await session.scalar(
             select(Unlock).where(Unlock.character_id == cid, Unlock.unlock_id.like("%ronda%"))
         )
+
+
+@pytest.mark.asyncio
+async def test_p1_retry_gets_new_ids_and_post_p1_menu(database):
+    actor, service = await _seed(database, 991102)
+    async with database[1]() as session:
+        q = await session.scalar(select(Quest).where(Quest.quest_id == "P1"))
+        q.step, q.progress, q.state_version = 3, {"defeat": True, "recovery": True}, 9
+        await session.commit()
+    retry = await service.retry(actor, 9)
+    assert retry.combat is not None
+    assert retry.combat.fighters["enemy"].name == "Cão Cinéreo"
+    assert retry.activity_id and retry.encounter_id and retry.combat_id
+    async with database[1]() as session:
+        q = await session.scalar(select(Quest).where(Quest.quest_id == "P1"))
+        q.step, q.progress, q.state_version = 7, {}, retry.state_version + 1
+        await session.commit()
+    entered = await service.go_brazier(actor, retry.state_version + 1)
+    completed = await service.activate_brazier(actor, entered.state_version)
+    assert completed.status == "completed"
+    menu = await WorldService(database[1], "ocaso").resume(actor)
+    assert menu.kind == "menu"
+    assert menu.location == "Refúgio do Ocaso"
+    assert menu.quest_title is None
