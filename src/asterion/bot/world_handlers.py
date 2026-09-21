@@ -145,28 +145,44 @@ def world_router(
             )
         elif p1_view.step == 3:
             objective, local = "Sobreviver ao encontro na Estrada", "Estrada das Cinzas"
+            context = "Os sulcos desaparecem onde a estrada se estreita entre pedras partidas. Antes que você possa seguir as marcas, um rosnado baixo rompe o silêncio. Um Cão Cinéreo emerge da fuligem e fecha a passagem."
         elif p1_view.step == 4:
-            objective, local = "Alcançar o Refúgio do Ocaso", "Estrada das Cinzas"
+            objective, local = "Alcançar o Refúgio do Ocaso", "Refúgio do Ocaso"
+            context = "Mais adiante, a estrada deixa de ser apenas ruína. Pedras empilhadas, madeira reaproveitada e pontos de luz surgem através da fuligem."
         elif p1_view.step == 5:
             objective, local = "Falar com Alda Veyr", "Refúgio do Ocaso"
+            context = "Uma mulher observa a estrada antes mesmo de olhar para você. Sua atenção passa primeiro pelas marcas da fuligem, depois por suas armas e só então pelo seu rosto."
         elif p1_view.step == 6:
             objective, local = "Conhecer Oren Cal", "Refúgio do Ocaso"
+            context = "Alda indica um homem cercado por folhas, tábuas riscadas e fragmentos trazidos das estradas. Ele organiza cada peça como se perder uma palavra fosse tão grave quanto perder uma pessoa."
         else:
             objective, local = "Ativar o Braseiro do Refúgio", "Refúgio do Ocaso"
+            context = "No centro do Refúgio, uma chama resiste entre pedras marcadas pelo uso. Pessoas passam por ela sem cerimônia, mas nenhuma ignora completamente sua presença."
+        if p1_view.step == 1:
+            context = "A chama deixada para trás desaparece pouco a pouco entre a fuligem. A Estrada das Cinzas segue adiante, irregular e silenciosa, mas desta vez há marcas recentes onde antes havia apenas abandono."
+        elif p1_view.step == 2 and not progress.get("pegadas"):
+            context = "Marcas de botas cortam a fuligem em uma única direção. As bordas ainda estão nítidas demais para terem permanecido ali por muito tempo."
+        elif p1_view.step == 2:
+            context = "Duas marcas estreitas atravessam a cinza ao lado das pegadas. A fuligem ainda não voltou a cobrir completamente os sulcos deixados pelas rodas."
+        elif p1_view.step == 3 and progress.get("defeat"):
+            context = "Recuperado no Braseiro da Estrada, você precisará retornar ao encontro e vencê-lo antes de seguir viagem."
         text = (
-            f"📜 Vozes na Estrada · Em Andamento\nMissão Principal · Terras do Ocaso\n\n🎯 Objetivo · {objective}\n\n"
+            f"📜 Vozes na Estrada · Em Andamento\nMissão Principal · Terras do Ocaso\n\n<i>{context}</i>\n\n🎯 Objetivo · {objective}\n\n"
             f"Local · {local}\n\n🎁 Recompensas\n\n✨ XP · 2.400\n🪙 Coroas · 120\n📦 Ferro de Fuligem · 1 · Vinculado\n📦 Couro Escoriado · 1 · Vinculado"
         )
         buttons = [[InlineKeyboardButton(text="Ver Objetivo", callback_data="world:objective")]]
-        if (
-            local == "Estrada das Cinzas"
-            or "tdo.location.refugio_do_ocaso" in p1_view.known_locations
+        road_known = "tdo.location.estrada_das_cinzas" in p1_view.known_locations
+        refuge_known = "tdo.location.refugio_do_ocaso" in p1_view.known_locations
+        if (local == "Estrada das Cinzas" and road_known) or (
+            local == "Refúgio do Ocaso" and refuge_known
         ):
             buttons.append([InlineKeyboardButton(text="Ver no Mapa", callback_data="world:map")])
         buttons.append([InlineKeyboardButton(text="← Missões", callback_data="world:missions")])
         await present(
             query.message,
-            Screen(text, "mission_p1", InlineKeyboardMarkup(inline_keyboard=buttons)),
+            Screen(
+                text, "mission_p1", InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML"
+            ),
             images,
             edit=True,
         )
@@ -184,11 +200,15 @@ def world_router(
         await query.answer()
         if not isinstance(query.message, Message):
             return
-        known = {"Estrada das Cinzas"}
+        known: set[str] = set()
         if p1 is not None:
             view = await p1.resume(query.from_user.id)
-            if view is not None and "tdo.location.refugio_do_ocaso" in view.known_locations:
-                known.add("Refúgio do Ocaso")
+            if view is not None:
+                ids = set(view.known_locations)
+                if "tdo.location.estrada_das_cinzas" in ids:
+                    known.add("Estrada das Cinzas")
+                if "tdo.location.refugio_do_ocaso" in ids:
+                    known.add("Refúgio do Ocaso")
         text = "🗺️ Mapa · Mundo\n\n" + "\n".join(f"📍 {name}" for name in sorted(known))
         await present(
             query.message,

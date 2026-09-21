@@ -57,7 +57,7 @@ def render_p1(view: P1View) -> Screen:
         ]
     elif view.step == 2:
         text = (
-            f"{_mission_header()}\n\n〰️ Sulcos Recentes\n\n"
+            f"{_mission_header()}\n\n🛞 Sulcos Recentes\n\n"
             "<i>Duas marcas estreitas atravessam a cinza ao lado das pegadas. A fuligem ainda não voltou a cobrir completamente os sulcos deixados pelas rodas.</i>\n\n"
             "🎯 Objetivo · Examinar Sinais · 1/2"
         )

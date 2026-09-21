@@ -1,4 +1,5 @@
 """P1 mission state and minimal regional persistence."""
+# ruff: noqa: E501
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
@@ -81,15 +82,31 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    if op.get_bind().scalar(
+    bind = op.get_bind()
+    if bind.scalar(
         sa.text(
             "SELECT EXISTS (SELECT 1 FROM reward_events) OR "
-            "EXISTS (SELECT 1 FROM location_discoveries) OR "
             "EXISTS (SELECT 1 FROM codex_entries) OR EXISTS (SELECT 1 FROM unlocks) OR "
-            "EXISTS (SELECT 1 FROM material_stacks)"
+            "EXISTS (SELECT 1 FROM material_stacks) OR "
+            "EXISTS (SELECT 1 FROM braziers WHERE brazier_id='tdo.brazier.refugio_do_ocaso') OR "
+            "EXISTS (SELECT 1 FROM game_activities WHERE content_id='p1_step3_scripted_dog') OR "
+            "EXISTS (SELECT 1 FROM quests WHERE quest_id='P1' AND "
+            "(status <> 'active' OR step > 1 OR progress <> '{}'::jsonb)) OR "
+            "EXISTS (SELECT 1 FROM location_discoveries WHERE location_id <> 'tdo.location.estrada_das_cinzas')"
         )
     ):
         raise RuntimeError("Cannot downgrade populated P1 state")
+    # The road discovery is a migration backfill of state already represented by v0004.
+    bind.execute(
+        sa.text(
+            "DELETE FROM location_discoveries WHERE location_id='tdo.location.estrada_das_cinzas'"
+        )
+    )
+    bind.execute(
+        sa.text(
+            "UPDATE quests SET content_version='tdo-1.0.1' WHERE quest_id='P1' AND status='active' AND step=1"
+        )
+    )
     op.drop_table("reward_components")
     op.drop_table("reward_events")
     op.drop_table("material_stacks")

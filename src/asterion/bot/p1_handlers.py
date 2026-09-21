@@ -19,14 +19,22 @@ def p1_router(service: P1Service, images: dict[str, str]) -> Router:
 
     @router.callback_query(F.data.startswith("p1fight:"))
     async def fight(query: CallbackQuery):
-        cb = P1CombatCallback.unpack(query.data)
+        try:
+            cb = P1CombatCallback.unpack(query.data or "")
+        except (KeyError, TypeError, ValueError):
+            await query.answer()
+            return
         view = await service.action(query.from_user.id, cb.activity_id, cb.version, cb.action)
         await show(query, view)
 
     @router.callback_query(F.data.startswith("fight:"))
     async def shared_fight(query: CallbackQuery):
         """Route legacy fight callbacks to P1 only when their activity is P1."""
-        cb = CombatCallback.unpack(query.data)
+        try:
+            cb = CombatCallback.unpack(query.data or "")
+        except (KeyError, TypeError, ValueError):
+            await query.answer()
+            return
         view = await service.action(query.from_user.id, cb.activity_id, cb.version, cb.action)
         if view is None:
             raise SkipHandler()

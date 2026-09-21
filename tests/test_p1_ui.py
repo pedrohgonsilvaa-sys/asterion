@@ -17,6 +17,8 @@ def test_p1_official_step_screens_and_callbacks():
     assert "Marcas de botas cortam a fuligem" in tracks.text
     assert "0/2" in tracks.text
     furrows = render_p1(view(2, progress={"pegadas": True}))
+    assert "🛞 Sulcos Recentes" in furrows.text
+    assert "〰️ Sulcos Recentes" not in furrows.text
     assert "Duas marcas estreitas atravessam a cinza" in furrows.text
     assert "1/2" in furrows.text
 
