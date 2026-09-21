@@ -7,7 +7,14 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from asterion.infrastructure.db.models import Achievement, Brazier, Character, Quest, WorldState
+from asterion.infrastructure.db.models import (
+    Achievement,
+    Brazier,
+    Character,
+    GameActivity,
+    Quest,
+    WorldState,
+)
 
 BRAZIER_ID = "tdo.brazier.estrada"
 ACHIEVEMENT_ID = "feat.tdo.cinzas_na_estrada"
@@ -27,7 +34,7 @@ class WorldView:
     xp: int
     region: str
     location: str
-    quest_title: str
+    quest_title: str | None
 
 
 class WorldService:
@@ -46,6 +53,15 @@ class WorldService:
                 "menu:ready",
             }:
                 return None
+            active_p1 = await session.scalar(
+                select(GameActivity).where(
+                    GameActivity.character_id == c.id,
+                    GameActivity.content_id == "p1_step3_scripted_dog",
+                    GameActivity.status == "active",
+                )
+            )
+            if active_p1 is not None:
+                return None
             brazier = await session.scalar(
                 select(Brazier).where(
                     Brazier.character_id == c.id, Brazier.brazier_id == BRAZIER_ID
@@ -62,14 +78,22 @@ class WorldService:
                     Achievement.character_id == c.id, Achievement.achievement_id == ACHIEVEMENT_ID
                 )
             )
-            if c.stage == "menu:ready" and (
-                q is None
-                or q.status != "active"
-                or q.step < 1
-                or q.content_version != "tdo-1.0.1"
-                or achievement is None
-            ):
-                return None
+            if c.stage == "menu:ready":
+                valid_active = (
+                    q is not None
+                    and q.status == "active"
+                    and q.step >= 1
+                    and q.content_version == "tdo-1.0.2"
+                    and achievement is not None
+                )
+                valid_completed = (
+                    q is not None
+                    and q.status == "completed"
+                    and achievement is not None
+                    and world.location == "Refúgio do Ocaso"
+                )
+                if not (valid_active or valid_completed):
+                    return None
             return WorldView(
                 "menu" if c.stage == "menu:ready" else "brazier",
                 c.id,
@@ -83,7 +107,7 @@ class WorldService:
                 c.xp,
                 region=world.region,
                 location=world.location,
-                quest_title=q.title if q else None,
+                quest_title=q.title if q and q.status == "active" else None,
             )
 
     async def rest(self, actor: int) -> WorldView | None:
@@ -115,10 +139,34 @@ class WorldService:
                         title="Vozes na Estrada",
                         status="active",
                         step=1,
-                        content_version="tdo-1.0.1",
+                        content_version="tdo-1.0.2",
                     )
                 )
                 c.stage = "menu:ready"
-            elif c.stage != "menu:ready":
+            elif c.stage == "menu:ready":
+                q = await session.scalar(
+                    select(Quest)
+                    .where(Quest.character_id == c.id, Quest.quest_id == "P1")
+                    .with_for_update()
+                )
+                world = await session.scalar(
+                    select(WorldState).where(WorldState.character_id == c.id).with_for_update()
+                )
+                refuge = await session.scalar(
+                    select(Brazier).where(
+                        Brazier.character_id == c.id,
+                        Brazier.brazier_id == "tdo.brazier.refugio_do_ocaso",
+                    )
+                )
+                if not (
+                    q
+                    and q.status == "completed"
+                    and world
+                    and world.location == "Refúgio do Ocaso"
+                    and refuge
+                ):
+                    return await self.resume(actor)
+                c.hp = c.max_hp
+            else:
                 return None
         return await self.resume(actor)

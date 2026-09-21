@@ -83,3 +83,43 @@ class PrologueProfile:
 
 # CD2 used in N blocks N+1 and is available in N+2 (Fonte Mestra §10.2).
 PROFILE = PrologueProfile(enemy_stats(1, CATEGORY_COMMON, PREDATOR, PROLOGUE_MULTIPLIERS), 1)
+
+P1_CONTENT_ID = "p1_step3_scripted_dog"
+P1_FLAVOR = (
+    "Os sulcos desaparecem onde a estrada se estreita entre pedras partidas. "
+    "Antes que você possa seguir as marcas, um rosnado baixo rompe o silêncio. "
+    "Um Cão Cinéreo emerge da fuligem e fecha a passagem."
+)
+
+
+def p1_combat_profile(
+    combat_id: UUID, name: str, character_class: str, race: str, hp: Decimal
+) -> Combat:
+    stats = racial_stats(class_stats(character_class, 1), race)
+    state = Combat(
+        combat_id,
+        RULESET,
+        fighters={
+            "player": Fighter("player", name, 1, stats, hp, race, character_class),
+            "enemy": Fighter(
+                "enemy",
+                "Cão Cinéreo",
+                1,
+                enemy_stats(1, CATEGORY_COMMON, PREDATOR),
+                enemy_stats(1, CATEGORY_COMMON, PREDATOR).hp,
+            ),
+        },
+        player_actions={
+            "attack": Action("attack", "⚔️ Atacar", D(1)),
+            "art": first_art(character_class, 1),
+        },
+        enemy_actions={
+            "bite": Action("bite", "Mordida Faminta", D(1)),
+            "charge": Action("charge", "Investida Curta", D("1.10"), 1),
+        },
+        ai_cycle=("bite", "bite", "charge"),
+        tutorial=None,
+        flavor=P1_FLAVOR,
+        opening_log="🐺 Cão Cinéreo bloqueia o caminho.",
+    )
+    return start_combat(state)
