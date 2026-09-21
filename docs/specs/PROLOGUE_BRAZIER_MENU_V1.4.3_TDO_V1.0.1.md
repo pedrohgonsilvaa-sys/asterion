@@ -1,5 +1,11 @@
 # Especificação de implementação — Primeiro Braseiro, fim do Prólogo e Menu Principal
 
+## Status documental
+
+Esta é a especificação histórica usada para implementar o limite **primeiro Braseiro → fim do Prólogo → Menu Principal** sob Terras do Ocaso v1.0.1. O bloco já está implementado no `main`.
+
+A autoridade vigente para trabalho novo é **GDD v1.4.3 + Terras do Ocaso v1.0.2 FINAL + Visual/UI 2026-09-21 sincronizada com TDO v1.0.2**. Este arquivo não deve ser usado como autoridade para as etapas jogáveis de P1. O `content_version = tdo-1.0.1` citado abaixo descreve corretamente o estado persistido pela implementação histórica e deve ser tratado explicitamente na próxima migração de P1.
+
 > Autoridade: **GDD Estrutural v1.4.3 + Terras do Ocaso v1.0.1 FINAL + Visual/UI sincronizada v1.4.3/TDO v1.0.1**.
 >
 > Decisão adicional aprovada no projeto: **personagem novo inicia com 100 / 100 Vigor**. Essa decisão ainda não está textualizada na Fonte Mestra v1.4.3 e é registrada em `docs/SOURCE_AUTHORITY.md` como addendum autoritativo do projeto.
