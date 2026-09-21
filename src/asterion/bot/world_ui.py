@@ -1,0 +1,78 @@
+from html import escape
+
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from asterion.application.world import WorldView
+from asterion.bot.creation_ui import Screen
+
+LORE = (
+    "Sob céus cobertos de fuligem, as estradas de Asterion seguem marcadas por ruínas, "
+    "brasas antigas e promessas que nunca repousam por completo. Mesmo nos caminhos "
+    "mais silenciosos, cada passo ainda parece ecoar a memória de algo que o mundo "
+    "não conseguiu esquecer."
+)
+
+
+def bar(current, maximum, fill: str) -> str:
+    n = min(10, max(0, int(current * 10 / maximum))) if maximum else 0
+    return fill * n + "⬜" * (10 - n)
+
+
+def render_world(view: WorldView) -> Screen:
+    if view.kind == "brazier":
+        text = (
+            "🔥 Braseiro\nEstrada das Cinzas · Terras do Ocaso\n\n"
+            "Entre pedras escurecidas pela fuligem, uma chama permanece acesa onde tudo ao redor "
+            "parece ter sido abandonado. Seu calor atravessa o silêncio da estrada e oferece, "
+            "pela primeira vez, um lugar seguro para recuperar as forças.\n\n"
+            "🔥 Braseiro · Descoberto\n❤️ Descansar · Restaura HP\n\n"
+            "ℹ️ Braseiros permanentes podem servir para descanso e, quando outros forem "
+            "descobertos, "
+            "conectar diferentes pontos de Asterion através da Travessia dos Braseiros."
+        )
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="Descansar", callback_data="world:rest")]]
+        )
+        return Screen(text, "brazier_estrada", kb)
+    emoji = {
+        "sentinela": "🛡️",
+        "errante": "🗡️",
+        "vigia": "🏹",
+        "tecelao": "🪄",
+        "oraculo": "🔮",
+        "luminar": "☀️",
+    }[view.character_class]
+    title = {
+        "sentinela": "Sentinela",
+        "errante": "Errante",
+        "vigia": "Vigia",
+        "tecelao": "Tecelão",
+        "oraculo": "Oráculo",
+        "luminar": "Luminar",
+    }[view.character_class]
+    text = (
+        f"🌑 Asterion\n{view.region} · {view.location}\n\n{LORE}\n\n"
+        f"{emoji} {escape(view.name)} · Nv. 1\n{title}\n\n"
+        f"❤️ HP · {view.hp} / {view.max_hp}\n{bar(view.hp, view.max_hp, '🟩')}\n\n"
+        f"⚡ Vigor · {view.vigor} / {view.max_vigor}\n{bar(view.vigor, view.max_vigor, '🟨')}\n\n"
+        f"✨ XP · {view.xp} / 4.800\n{bar(view.xp, 4800, '🟦')}\n\n"
+        f"📜 Missão Principal · {escape(view.quest_title)}"
+    )
+    labels = [
+        ("Aventura", "menu:noop"),
+        ("Personagem", "menu:noop"),
+        ("Guilda", "menu:noop"),
+        ("Mercado", "menu:noop"),
+        ("Códice", "menu:noop"),
+        ("Calendário", "menu:noop"),
+        ("Vínculos", "menu:noop"),
+        ("Classificação", "menu:noop"),
+        ("Benefícios", "menu:noop"),
+        ("Comunidade", "menu:noop"),
+        ("Configurações", "menu:noop"),
+    ]
+    rows = [
+        [InlineKeyboardButton(text=a, callback_data=b) for a, b in labels[i : i + 2]]
+        for i in range(0, len(labels), 2)
+    ]
+    return Screen(text, "menu", InlineKeyboardMarkup(inline_keyboard=rows))

@@ -87,3 +87,8 @@ O Registro de Combate usa linhas curtas em linguagem natural, com nomes e Artes 
 Vampirismo do Hemário é cura: calcula dano direto real, aplica o limite de 3% do HP Máximo e o HP faltante, então usa `floor`, com mínimo zero.
 
 A barra de HP usa blocos preenchidos e `⬜` para a parte ausente. Os limiares oficiais para escolher entre 🟩, 🟨 e 🟥 ainda não foram definidos pela Fonte Visual/Balanceamento; a seleção dinâmica permanece pendente e não é inferida neste bloco.
+## Fronteira v1.4.3
+
+Após a vitória do primeiro combate, a mesma transação registra o Braseiro da Estrada, o feito `feat.tdo.cinzas_na_estrada`, a missão P1 (`Vozes na Estrada`, `tdo-1.0.1`) e o estado mundial persistido. O personagem adota `gdd-1.4.3-baseline-1.0` somente nessa fronteira segura; snapshots de combates v1.4.2 continuam identificados pelo ruleset original.
+
+`Descansar` só aceita o estágio `cinzas_na_estrada:ready_for_first_brazier`. Depois de `menu:ready`, callbacks antigos são no-op e apenas reconstruem o Menu. O Menu exige Braseiro, WorldState e Quest P1 persistidos; não usa defaults para inventar conteúdo. HP permanece Decimal e as barras de HP/Vigor são derivadas do estado autoritativo.

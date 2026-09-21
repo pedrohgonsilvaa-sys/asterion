@@ -5,8 +5,10 @@ from aiogram import Bot, Dispatcher
 
 from asterion.application.creation import CreationService
 from asterion.application.prologue import PrologueService
+from asterion.application.world import WorldService
 from asterion.bot.combat_handlers import combat_router
 from asterion.bot.creation_handlers import creation_router
+from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
 from asterion.domain.creation import NamePolicy
 from asterion.domain.prologue import PROFILE
@@ -27,7 +29,9 @@ def get_bot_runtime() -> BotRuntime:
 
     dispatcher = Dispatcher(disable_fsm=True)
     prologue = PrologueService(SessionFactory, settings.server_id, PROFILE)
-    dispatcher.include_router(combat_router(prologue, settings.creation_images))
+    world = WorldService(SessionFactory, settings.server_id)
+    dispatcher.include_router(combat_router(prologue, settings.creation_images, world))
+    dispatcher.include_router(world_router(world, settings.creation_images))
     dispatcher.include_router(
         creation_router(
             CreationService(
@@ -37,6 +41,7 @@ def get_bot_runtime() -> BotRuntime:
             ),
             settings.creation_images,
             prologue,
+            world,
         )
     )
     return BotRuntime(
