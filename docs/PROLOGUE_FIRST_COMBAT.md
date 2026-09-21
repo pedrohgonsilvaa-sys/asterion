@@ -1,9 +1,10 @@
 # Primeiro combate persistente do prólogo
 
-Este bloco implementa somente `Seguir pela Estrada → Cão Cinéreo → vitória →
-estado pronto para o primeiro Braseiro`, sob
-`gdd-1.4.2-baseline-1.0`. O Braseiro, Descansar, Menu Principal, conteúdo
-repetível, Saque e economia permanecem fora do escopo.
+Este bloco foi implementado sob `gdd-1.4.2-baseline-1.0` e cobre somente
+`Seguir pela Estrada → Cão Cinéreo → vitória → estado pronto para o primeiro Braseiro`.
+A Fonte vigente passou a ser **GDD v1.4.3 + Terras do Ocaso v1.0.1 FINAL**.
+Combates já instanciados em v1.4.2 devem continuar reprodutíveis no ruleset original;
+novas transições seguras passam a adotar v1.4.3 conforme a especificação seguinte.
 
 ## Domínio e determinismo
 
@@ -73,9 +74,10 @@ deliberadamente pendente de Fonte.
 
 ## Limite econômico
 
-Os 320 XP são um grant fixo de story content. Não existe `EnemyXPBase(level)` nem
-derivação por categoria. A conversão absoluta global de XP de inimigos permanece
-reaberta, portanto Caçadas, Ronda e XP repetível de Masmorras não são suportados.
+Os 320 XP permanecem um grant fixo de story content para o tutorial. A Fonte
+Mestra v1.4.3 encerrou a antiga reabertura da conversão global de XP de inimigos;
+este documento histórico não deve ser usado como autoridade para fórmulas de XP
+repetível. Para conteúdo novo, consultar a v1.4.3 e Terras do Ocaso v1.0.1.
 ## Revisão de apresentação e cura
 
 O passo pedagógico da primeira Arte permanece dentro da HUD: durante `tutorial_stage == art`, a tela mostra o nome da Arte em negrito, `Arte de Classe`, o coeficiente de dano, a recarga `2` e, para Sinal Funesto, o efeito de redução de ATQ por 2T. O botão usa somente o nome limpo da Arte. Depois do uso válido, essas linhas desaparecem.
