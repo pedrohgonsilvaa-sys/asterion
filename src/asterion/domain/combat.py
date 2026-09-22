@@ -100,6 +100,10 @@ class Combat:
     rng_cursor: int = 0
     result: str | None = None
     events: list[CombatEvent] = field(default_factory=list)
+    prepared_action: str | None = None
+    prepared_source: str | None = None
+    prepared_target: str | None = None
+    resolving_prepared: bool = False
 
     @property
     def tutorial_stage(self) -> str:
@@ -188,6 +192,16 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
         return
     actions = state.player_actions if actor_id == "player" else state.enemy_actions
     action = actions[action_id]
+    if actor_id == "enemy" and action_id == "leap" and not state.resolving_prepared:
+        state.prepared_action = action_id
+        state.prepared_source = actor_id
+        state.prepared_target = target.id
+        actor.last_action = f"prepare:{action_id}"
+        actor.cooldowns[action_id] = actor.opportunity + action.blocked_opportunities + 1
+        state.events.append(
+            CombatEvent(len(state.events), state.round, actor_id, f"prepare:{action_id}")
+        )
+        return
     rng = CombatRng(state.id, state.rng_cursor)
     critical = rng.chance(D("0.05"), f"critical:{actor_id}:{action_id}")
     state.rng_cursor = rng.cursor
@@ -241,6 +255,7 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
     )
     if target.hp == 0:
         state.result = "victory" if actor_id == "player" else "defeat"
+    state.resolving_prepared = False
 
 
 def _enemy_action(state: Combat) -> str:
@@ -248,9 +263,18 @@ def _enemy_action(state: Combat) -> str:
         action = state.pending_response
         state.pending_response = None
         return action
-    action = state.ai_cycle[state.ai_position]
-    state.ai_position = (state.ai_position + 1) % len(state.ai_cycle)
-    return action
+    if state.prepared_action is not None:
+        action = state.prepared_action
+        state.prepared_action = None
+        state.resolving_prepared = True
+        return action
+    enemy = state.fighters["enemy"]
+    for _ in range(len(state.ai_cycle)):
+        action = state.ai_cycle[state.ai_position]
+        state.ai_position = (state.ai_position + 1) % len(state.ai_cycle)
+        if enemy.cooldowns.get(action, 0) <= enemy.opportunity:
+            return action
+    return state.ai_cycle[state.ai_position]
 
 
 def _advance_to_player(state: Combat) -> None:
