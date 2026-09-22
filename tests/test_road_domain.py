@@ -67,3 +67,24 @@ def test_prepared_alpha_resolves_once_after_response_window():
         if state.prepared_action:
             break
     assert state.prepared_action in {None, "leap"}
+
+
+def test_all_class_race_pairs_have_a_legal_victory_path():
+    from asterion.domain.combat_math import class_stats, racial_stats
+    from asterion.domain.road import create_road_combat
+
+    races = ("remanescente", "velado", "cinereo", "hemario", "alvorano")
+    classes = ("sentinela", "errante", "vigia", "tecelao", "oraculo", "luminar")
+    for character_class in classes:
+        for race in races:
+            hp = racial_stats(class_stats(character_class, 1), race).hp
+            state = create_road_combat(
+                uuid4(), "Heroa", character_class, race, hp, CREATURES[0], 1, None
+            )
+            for _ in range(80):
+                if state.result:
+                    break
+                actions = allowed_actions(state)
+                assert actions
+                state = act(state, "art" if "art" in actions else "attack")
+            assert state.result == "victory", (character_class, race)
