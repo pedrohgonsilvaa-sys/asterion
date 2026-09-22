@@ -638,3 +638,193 @@ ID: `explore.tdo.estrada.rastros_cinereos`.
 Texto:
 
 > Pedras movidas, tecido preso aos espinhos e cinza revolvida mostram que viajantes ainda usam as margens da Estrada para descansar ou passar despercebidos.
+
+Repetível, sem estado permanente, XP ou economia própria.
+
+ID: `explore.tdo.estrada.sinais_margem`.
+
+### 13.4 Narrativo — Luzes na Estrada
+
+Único · XP 143.
+
+Texto:
+
+> Uma luz pálida surge entre as pedras por alguns instantes. Não há chama nem calor suficiente para explicá-la; quando você se aproxima, ela já desapareceu.
+
+Trecho compartilhado:
+
+`Estrada das Cinzas / Luzes na Estrada`.
+
+Se Desbravar vier primeiro: registrar Trecho +143 XP; S1 futura reconhece Trecho existente.
+
+Se S1 vier primeiro: Desbravar ainda pode resolver seu evento único e conceder 143 XP, mas não duplica Trecho.
+
+ID: `explore.tdo.estrada.luzes`.
+
+### 13.5 Narrativo — Vozes Levadas pelo Vento
+
+Texto:
+
+> O vento atravessa a estrada e traz um som que lembra uma voz distante. Quando você tenta segui-lo, resta apenas o ruído da cinza contra a pedra.
+
+Repetível; nenhum estado permanente/economia/XP próprio.
+
+ID: `explore.tdo.estrada.vozes_vento`.
+
+### 13.6 Combate
+
+Subpool:
+
+- Cão `40`;
+- Corvo `35`;
+- Peregrino `25`.
+
+Aplicar unlock_level e normalizar. Chance de Variante da Estrada: 8%.
+
+Selecionado o resultado:
+
+- persistir tentativa;
+- criar `encounter_id` dentro da mesma atividade Foreground;
+- entrar diretamente no combate normal;
+- reconnect retoma o mesmo resultado/encontro.
+
+Não existe tela intermediária.
+
+### 13.7 Pequeno Recurso
+
+Subpool:
+
+- Ferro 30;
+- Couro 30;
+- Erva 20;
+- Resíduo 20.
+
+Textos:
+
+Ferro:
+> Entre pedras partidas, um veio escuro de metal aflora sob a fuligem. Há material suficiente para ser recolhido.
+
+Couro:
+> Entre restos secos à margem da estrada, uma porção de couro ainda aproveitável resistiu à cinza e ao tempo.
+
+Erva:
+> Folhas acinzentadas crescem entre rachaduras protegidas do vento. Algumas ainda podem ser colhidas.
+
+Resíduo:
+> Um depósito escuro se acumulou entre as pedras. A substância é fina, mas distinta da fuligem comum da Estrada.
+
+Quando Vigor >=4 e economia puder ser concedida:
+
+- consumir 4 Vigor no mesmo commit;
+- Coroas `0,10 × C(nível aplicável)`;
+- +1 Material Básico sorteado pelo subpool `30/30/20/20`.
+
+Quando Vigor <4:
+
+- resultado narrativo/contextual ainda resolve;
+- 0 Coroas repetíveis;
+- 0 Material repetível;
+- 0 Vigor parcial.
+
+### 13.8 Atmosféricos
+
+Cinza sobre as Pegadas:
+> Uma rajada atravessa a Estrada. Em poucos instantes, a cinza cobre marcas antigas até não restar indicação de quem passou por ali.
+
+Carroça sem Rodas:
+> A estrutura apodrecida de uma carroça repousa fora da estrada. As rodas desapareceram há muito; o restante já não guarda nada de valor.
+
+Fogueira Fria:
+> Pedras enegrecidas cercam uma fogueira antiga. A cinza está fria e nenhum sinal recente indica quem a acendeu.
+
+Todos repetíveis, sem XP adicional, economia, Códice ou Bestiário próprio.
+
+## 14. Economia do combate de Desbravar
+
+`loot_profile = exploration_combat`.
+
+Não executar rolls completos de Equipamento/Runa/especial da Caçada.
+
+Na vitória:
+
+- XP normal de combate pelas regras globais, com fator de Vigor reduzido quando pertinente;
+- Bestiário normal;
+- se Vigor >=4 e economia for concedida: consumir 4 Vigor, `0,15 × C(nível aplicável)`, +1 Material Básico e 20% de +1 adicional;
+- cada unidade de Material Básico usa seleção independente no pool `Ferro30/Couro30/Erva20/Resíduo20`;
+- com Vigor <4, não pagar Coroas/Materiais repetíveis nem consumir Vigor parcial; XP repetível aplica o fator global de 25% quando pertinente.
+
+Tela pós-combate só mostra componentes realmente concedidos e nunca sugere Equipamento/Runa/especial.
+
+## 15. Derrota no combate de Desbravar
+
+- encontro → failed;
+- tentativa → failed/concluída como falha;
+- não rerrolar o resultado;
+- recompensas dependentes de vitória não são concedidas;
+- knowledge legitimamente commitado antes da derrota pode permanecer;
+- recovery PvE normal pelo Braseiro da Estrada;
+- HP 100%, Vigor inalterado;
+- Consumíveis gastos permanecem consumidos;
+- retorno à Estrada.
+
+Não existe retry do mesmo resultado.
+
+## 16. UI de Desbravar
+
+### 16.1 Entrada
+
+```text
+🧭 Desbravar
+
+🔥 Estrada das Cinzas
+Terras do Ocaso · Nv. 1–10
+
+Explore os arredores do Local em busca de sinais, descobertas, recursos e acontecimentos.
+
+👤 Exploração · Solo
+⚡ Economia Repetível · 4 Vigor quando concedida
+
+[Desbravar]
+[← Estrada das Cinzas]
+```
+
+Com Vigor <4, comunicar que exploração/descobertas continuam disponíveis e que economia repetível requer 4 Vigor.
+
+### 16.2 Cooldown/limite
+
+Cooldown:
+
+`⏳ Desbravar · Disponível em MM:SS`.
+
+Limite:
+
+`🔒 Desbravar · Limite recente atingido`
+`⏳ Disponível em · MM:SS`.
+
+Não exibir pesos, seed, `6/6`, botão desabilitado ou detalhes de janela deslizante.
+
+### 16.3 Resultados
+
+Shell:
+
+```text
+🧭 Desbravar
+Estrada das Cinzas · Terras do Ocaso
+
+{emoji} {Nome}
+
+{texto oficial}
+
+{somente consequências reais}
+
+⏳ Desbravar · Disponível em {MM:SS}
+
+[Desbravar Novamente]  # apenas se legal naquele momento
+[← Estrada das Cinzas]
+```
+
+Consequências possíveis:
+
+- XP;
+- Material/Coroas;
+- Códice/Trecho;
