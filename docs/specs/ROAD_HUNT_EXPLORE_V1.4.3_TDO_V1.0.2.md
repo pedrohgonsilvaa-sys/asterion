@@ -5,6 +5,8 @@
 > Decisões adicionais aprovadas para este bloco, ainda pendentes de consolidação nas Fontes: **materialização global de Equipamento/Runa de Saque; identidade regional de Materiais da Caçada; conteúdo textual/registro de Desbravar na Estrada; apresentação pós-combate e de exploração; IA PvE normal, Ação Preparada e pacotes Hemorrágico/Venenoso**.
 >
 > Estado de partida do repositório: `main@bc45b2746e4cf5666134d39291fa32a6cdac524e`, com **P1 — Vozes na Estrada já implementada e concluível**.
+>
+> **Leitura obrigatória para implementação no Codex:** `docs/specs/ROAD_HUNT_EXPLORE_IMPLEMENTATION_BASELINE_V1.4.3_TDO_V1.0.2.md`. Esse complemento transcreve para dentro do repositório as constantes globais/regionais que esta especificação referencia (stats de inimigos, EnemyXP, C(n), chances de Saque, budgets de Equipamento, catálogo e Runas), sem criar balanceamento novo.
 
 ## 1. Escopo
 
