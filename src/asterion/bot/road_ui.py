@@ -42,7 +42,7 @@ def render_road(view: RoadView) -> Screen:
         )
         keyboard = [
             [InlineKeyboardButton(text="[1] Solo", callback_data="road:hunt")],
-            [InlineKeyboardButton(text="[2] Grupo", callback_data="menu:noop")],
+            [InlineKeyboardButton(text="[2] Grupo", callback_data="road:unavailable:group")],
             [InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")],
         ]
         return Screen(text, "hunt_prepare", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
@@ -117,7 +117,7 @@ def render_road(view: RoadView) -> Screen:
         keyboard = [
             [InlineKeyboardButton(text="Caçar", callback_data="road:prepare")],
             *([[InlineKeyboardButton(text="Desbravar", callback_data="road:explore")]] if view.explore_available else []),
-            *([[InlineKeyboardButton(text="Ronda ×5", callback_data="menu:noop"), InlineKeyboardButton(text="Ronda ×10", callback_data="menu:noop"), InlineKeyboardButton(text="Ronda ×20", callback_data="menu:noop")]] if view.familiar else []),
+            *([[InlineKeyboardButton(text="Ronda ×5", callback_data="road:unavailable:round:5"), InlineKeyboardButton(text="Ronda ×10", callback_data="road:unavailable:round:10"), InlineKeyboardButton(text="Ronda ×20", callback_data="road:unavailable:round:20")]] if view.familiar else []),
             [
                 InlineKeyboardButton(
                     text="Travessia dos Braseiros", callback_data="road:travel:refuge"

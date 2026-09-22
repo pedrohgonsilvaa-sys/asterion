@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import delete, func, select
 
 from asterion.application.progression import consolidate_level, level_xp
-from asterion.application.road import ROAD, RoadService
+from asterion.application.road import REFUGE, ROAD, RoadService
 from asterion.domain.combat import allowed_actions
 from asterion.domain.road import materialize_equipment
 from asterion.infrastructure.db.models import (
@@ -134,6 +134,97 @@ async def test_road_travel_and_hunt_reconnect_are_persistent(database):
         combat.combat_id,
     )
     assert set(allowed_actions(resumed.combat)) >= {"attack", "defend", "art"}
+
+
+@pytest.mark.asyncio
+async def test_active_road_foreground_dominates_stale_travel_and_prepare_callbacks(database):
+    actor, service = await _seed_road(database, 771118)
+    await service.travel(actor, ROAD)
+    combat = await service.start_hunt(actor)
+
+    stale_travel = await service.travel(actor, REFUGE)
+    assert stale_travel.kind == "combat"
+    assert (stale_travel.activity_id, stale_travel.encounter_id, stale_travel.combat_id) == (
+        combat.activity_id,
+        combat.encounter_id,
+        combat.combat_id,
+    )
+    async with database[1]() as session:
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == combat.character_id)
+        )
+        assert world.location == ROAD
+
+    stale_prepare = await service.prepare_hunt(actor)
+    assert stale_prepare.kind == "combat"
+    assert (stale_prepare.activity_id, stale_prepare.encounter_id, stale_prepare.combat_id) == (
+        combat.activity_id,
+        combat.encounter_id,
+        combat.combat_id,
+    )
+
+
+@pytest.mark.asyncio
+async def test_unacknowledged_hunt_result_blocks_old_start_callback(database):
+    actor, service = await _seed_road(database, 771119)
+    await service.travel(actor, ROAD)
+    view = await service.start_hunt(actor)
+    for _ in range(100):
+        if view.kind != "combat":
+            break
+        action = "art" if "art" in allowed_actions(view.combat) else "attack"
+        view = await service.action(actor, view.activity_id, view.combat.version, action)
+    assert view.kind == "hunt_victory"
+    blocked = await service.start_hunt(actor)
+    assert blocked.kind == "hunt_victory"
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        assert await session.scalar(
+            select(func.count(GameActivity.id)).where(GameActivity.character_id == character.id)
+        ) == 1
+
+
+@pytest.mark.asyncio
+async def test_unacknowledged_exploration_result_blocks_old_explore_callback(database, monkeypatch):
+    import asterion.application.road as road_module
+
+    actor, service = await _seed_road(database, 771120)
+    await service.travel(actor, ROAD)
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *args: ("great_discovery", "explore.tdo.estrada.marco_viajantes", "Marco."),
+    )
+    first = await service.explore(actor)
+    stale = await service.explore(actor)
+    assert stale.attempt_id == first.attempt_id
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        assert await session.scalar(
+            select(func.count(ExplorationAttempt.id)).where(
+                ExplorationAttempt.character_id == character.id
+            )
+        ) == 1
+
+
+@pytest.mark.asyncio
+async def test_unacknowledged_hunt_defeat_blocks_stale_travel_callback(database):
+    actor, service = await _seed_road(database, 771121)
+    await service.travel(actor, ROAD)
+    combat = await service.start_hunt(actor)
+    async with database[1]() as session:
+        activity = await session.scalar(
+            select(GameActivity).where(GameActivity.id == combat.activity_id)
+        )
+        activity.status = "failed"
+        await session.commit()
+    blocked = await service.travel(actor, REFUGE)
+    assert blocked.kind == "hunt_defeat"
+    async with database[1]() as session:
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == blocked.character_id)
+        )
+        assert world.location == ROAD
 
 
 @pytest.mark.asyncio
@@ -722,6 +813,146 @@ async def test_rastros_context_is_persisted_for_reconnect(database, monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_rastros_with_existing_habitat_persists_flavor_without_bkp(
+    database, monkeypatch
+):
+    import asterion.application.road as road_module
+
+    actor, service = await _seed_road(database, 771122)
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        session.add_all([
+            BestiaryEvidence(
+                character_id=character.id,
+                creature_id="dog_cinereo",
+                evidence_id="habitat:estrada",
+                category="habitat",
+            ),
+            BestiaryEvidence(
+                character_id=character.id,
+                creature_id="corvo_fuligem",
+                evidence_id="habitat:estrada",
+                category="habitat",
+            ),
+        ])
+        await session.commit()
+    await service.travel(actor, ROAD)
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *args: ("knowledge", "explore.tdo.estrada.rastros_cinereos", "Texto-base."),
+    )
+    first = await service.explore(actor)
+    assert first.result_text.startswith("Texto-base.")
+    assert any(
+        context in first.result_text
+        for context in road_module.RASTROS_CONTEXT_TEXT.values()
+    )
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        entries = (
+            await session.scalars(
+                select(BestiaryEntry).where(
+                    BestiaryEntry.character_id == character.id,
+                    BestiaryEntry.creature_id.in_(("dog_cinereo", "corvo_fuligem")),
+                )
+            )
+        ).all()
+        assert {entry.bkp for entry in entries} == {7}
+        attempt = await session.scalar(select(ExplorationAttempt))
+        assert attempt.progress["context_materialized"] is True
+    resumed = await service.resume(actor)
+    assert resumed.result_text == first.result_text
+
+
+@pytest.mark.asyncio
+async def test_rastros_without_identifiable_creature_keeps_only_base_text(database, monkeypatch):
+    import asterion.application.road as road_module
+
+    actor, service = await _seed_road(database, 771123)
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        await session.execute(
+            delete(BestiaryEvidence).where(BestiaryEvidence.character_id == character.id)
+        )
+        await session.execute(
+            delete(BestiaryEntry).where(BestiaryEntry.character_id == character.id)
+        )
+        await session.commit()
+    await service.travel(actor, ROAD)
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *args: ("knowledge", "explore.tdo.estrada.rastros_cinereos", "Texto-base."),
+    )
+    first = await service.explore(actor)
+    assert first.result_text == "Texto-base."
+    async with database[1]() as session:
+        attempt = await session.scalar(select(ExplorationAttempt))
+        assert "context_creature_id" not in attempt.progress
+
+
+@pytest.mark.asyncio
+async def test_exploration_retry_is_server_authoritative_after_cooldown(database, monkeypatch):
+    import asterion.application.road as road_module
+
+    actor, service = await _seed_road(database, 771124)
+    await service.travel(actor, ROAD)
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *args: ("great_discovery", "explore.tdo.estrada.marco_viajantes", "Marco."),
+    )
+    first = await service.explore(actor)
+    assert first.retry_available is False
+    async with database[1]() as session:
+        attempt = await session.scalar(select(ExplorationAttempt))
+        attempt.created_at = datetime.now(UTC) - timedelta(minutes=6)
+        await session.commit()
+    resumed = await service.resume(actor)
+    assert resumed.kind == "exploration"
+    assert resumed.retry_available is True
+
+
+@pytest.mark.asyncio
+async def test_exploration_retry_is_hidden_at_six_per_hour(database, monkeypatch):
+    import asterion.application.road as road_module
+
+    actor, service = await _seed_road(database, 771125)
+    await service.travel(actor, ROAD)
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *args: ("great_discovery", "explore.tdo.estrada.marco_viajantes", "Marco."),
+    )
+    await service.explore(actor)
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        current = await session.scalar(select(ExplorationAttempt))
+        current.created_at = datetime.now(UTC) - timedelta(minutes=10)
+        now = datetime.now(UTC)
+        for index in range(5):
+            session.add(ExplorationAttempt(
+                character_id=character.id,
+                local_id=ROAD,
+                ruleset_version="gdd-1.4.3-baseline-1.0",
+                seed=f"retry-limit-{index}",
+                category="narrative",
+                result_id="explore.tdo.estrada.vozes_vento",
+                status="completed",
+                state_version=1,
+                progress={"result_text": "Outro resultado.", "settled": True},
+                created_at=now - timedelta(minutes=1),
+                completed_at=now - timedelta(minutes=1),
+                result_acknowledged=True,
+            ))
+        await session.commit()
+    resumed = await service.resume(actor)
+    assert resumed.kind == "exploration"
+    assert resumed.retry_available is False
+
+
+@pytest.mark.asyncio
 async def test_road_activity_expires_once_without_vigor_or_economy(database):
     actor, service = await _seed_road(database, 771116)
     await service.travel(actor, ROAD)
@@ -768,6 +999,7 @@ async def test_minimum_post_p1_journey_consolidates_before_next_hunt(database, m
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert (character.level, character.xp) == (2, 0)
+    await service.acknowledge_result(actor)
     hunt = await service.start_hunt(actor)
     assert hunt.kind == "combat"
     assert hunt.combat.fighters["player"].level == 2

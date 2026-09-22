@@ -99,8 +99,11 @@ def world_router(
         await query.answer()
         if road is not None and isinstance(query.message, Message):
             current = await road.resume(query.from_user.id)
-            if current is not None and current.kind == "hunt_victory":
-                await road.acknowledge_result(query.from_user.id)
+            if current is not None:
+                if current.kind == "hunt_victory":
+                    await road.acknowledge_result(query.from_user.id)
+                elif current.kind == "hunt_defeat":
+                    await road.acknowledge_defeat(query.from_user.id)
             view = await road.prepare_hunt(query.from_user.id)
             if view is not None:
                 await present(query.message, render_road(view), images, edit=True)
@@ -123,6 +126,9 @@ def world_router(
     async def explore_prepare(query: CallbackQuery):
         await query.answer()
         if road is not None and isinstance(query.message, Message):
+            current = await road.resume(query.from_user.id)
+            if current is not None and current.kind == "exploration" and current.retry_available:
+                await road.acknowledge_result(query.from_user.id)
             view = await road.prepare_explore(query.from_user.id)
             if view is not None:
                 await present(query.message, render_road(view), images, edit=True)
@@ -145,6 +151,10 @@ def world_router(
             view = await road.travel(query.from_user.id, destination)
             if view is not None:
                 await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("road:unavailable:"))
+    async def road_unavailable(query: CallbackQuery):
+        await query.answer("Indisponível nesta etapa.")
 
     @router.callback_query(F.data == "world:adventure")
     async def adventure(query: CallbackQuery):
