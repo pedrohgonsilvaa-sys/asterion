@@ -178,7 +178,6 @@ class Unlock(Base):
 class MaterialStack(Base):
     __tablename__ = "material_stacks"
     __table_args__ = (
-        UniqueConstraint("character_id", "material_id", "bound", name="uq_character_material"),
         CheckConstraint("quantity BETWEEN 0 AND 999", name="ck_material_quantity"),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -207,6 +206,9 @@ class RewardComponent(Base):
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     item_id: Mapped[str | None] = mapped_column(String(96))
     quantity: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
 
 
 class WorldState(Base):
@@ -479,3 +481,28 @@ class PendingItem(Base):
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+
+
+class BlockedDelivery(Base):
+    """Durable delivery hold used when both Inventory and Pending are full."""
+
+    __tablename__ = "blocked_deliveries"
+    __table_args__ = (
+        CheckConstraint("status IN ('pending','resolved')", name="ck_blocked_delivery_status"),
+        CheckConstraint("quantity > 0", name="ck_blocked_delivery_quantity"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    source_key: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default="pending"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -16,6 +16,11 @@ def _uuid():
 
 
 def upgrade() -> None:
+    op.drop_constraint("uq_character_material", "material_stacks", type_="unique")
+    op.add_column(
+        "reward_components",
+        sa.Column("payload", JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+    )
     op.add_column(
         "characters",
         sa.Column("elite_equipment_pity", sa.Integer(), nullable=False, server_default="0"),
@@ -144,11 +149,29 @@ def upgrade() -> None:
         sa.UniqueConstraint("character_id", "source_key", name="uq_character_pending_source"),
         sa.CheckConstraint("quantity > 0", name="ck_pending_quantity"),
     )
+    op.create_table(
+        "blocked_deliveries",
+        sa.Column("id", _uuid(), primary_key=True),
+        sa.Column("character_id", _uuid(), nullable=False),
+        sa.Column("source_key", sa.String(160), nullable=False, unique=True),
+        sa.Column("kind", sa.String(24), nullable=False),
+        sa.Column("payload", JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column("quantity", sa.Integer(), nullable=False, server_default="1"),
+        sa.Column("status", sa.String(16), nullable=False, server_default="pending"),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column("resolved_at", sa.DateTime(timezone=True)),
+        sa.ForeignKeyConstraint(["character_id"], ["characters.id"]),
+        sa.CheckConstraint("status IN ('pending','resolved')", name="ck_blocked_delivery_status"),
+        sa.CheckConstraint("quantity > 0", name="ck_blocked_delivery_quantity"),
+    )
 
 
 def downgrade() -> None:
     bind = op.get_bind()
     tables = (
+        "blocked_deliveries",
         "pending_items",
         "rune_stacks",
         "equipment_items",
@@ -161,6 +184,12 @@ def downgrade() -> None:
     for table in tables:
         if bind.execute(sa.text(f"SELECT 1 FROM {table} LIMIT 1")).first() is not None:
             raise RuntimeError("Cannot downgrade populated road hunt/explore state")
+    if bind.execute(sa.text("SELECT 1 FROM reward_components LIMIT 1")).first() is not None:
+        raise RuntimeError("Cannot downgrade populated reward component metadata")
+    op.drop_column("reward_components", "payload")
+    op.create_unique_constraint(
+        "uq_character_material", "material_stacks", ["character_id", "material_id", "bound"]
+    )
     op.drop_column("characters", "elite_legendary_pity")
     op.drop_column("characters", "elite_equipment_pity")
     op.drop_column("characters", "delivery_blocked")

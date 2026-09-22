@@ -5,6 +5,7 @@ from asterion.domain.combat import act, allowed_actions
 from asterion.domain.road import (
     CATEGORY,
     CREATURES,
+    anti_repeat_weight,
     enemy_xp,
     materialize_equipment,
     road_enemy_stats,
@@ -56,6 +57,13 @@ def test_variant_subdraws_and_materialization_are_deterministic():
     assert len(item["secondaries"]) == 1
     assert rune_potency("Brasa", "Rara") == "0.35%"
     assert weighted_recent_choice("seed", (("a", 50), ("b", 50)), ("a",)) == "b"
+
+
+def test_anti_repeat_weights_keep_exact_hundredths_without_intermediate_rounding():
+    assert anti_repeat_weight(33, "recent", ("other", "recent")) == 1155
+    assert anti_repeat_weight(25, "recent", ("other", "recent")) == 875
+    assert anti_repeat_weight(33, "normal", ("other",)) == 3300
+    assert anti_repeat_weight(25, "previous", ("previous", "recent")) == 0
 
 
 def test_equipment_secondary_scales_and_rounds_by_attribute_family():

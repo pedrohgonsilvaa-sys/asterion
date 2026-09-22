@@ -34,14 +34,20 @@ EXPLORATION_SUBWEIGHTS = {
     "atmospheric": (("cinza_pegadas", 34), ("carroca", 33), ("fogueira", 33)),
 }
 
+def anti_repeat_weight(weight: int, key: str, recent: tuple[str, ...] = ()) -> int:
+    """Return an exact hundredths weight for the result-specific penalty."""
+    if recent and key == recent[0]:
+        return 0
+    return weight * 35 if key in recent else weight * 100
+
+
 def weighted_recent_choice(seed: str, entries: tuple[tuple[str, int], ...], recent: tuple[str, ...] = ()) -> str:
     """Select with the official anti-repeat weights, before drawing a subresult."""
-    previous = recent[0] if recent else None
     adjusted = tuple(
-        (key, 0 if key == previous else (Decimal(weight) * D("0.35") if key in recent else D(weight)))
+        (key, anti_repeat_weight(weight, key, recent))
         for key, weight in entries
     )
-    eligible = tuple((key, int(weight * 100)) for key, weight in adjusted if weight > 0)
+    eligible = tuple((key, weight) for key, weight in adjusted if weight > 0)
     if not eligible:
         raise ValueError("no eligible result after anti-repeat filtering")
     return weighted_choice(seed, eligible)
@@ -250,8 +256,7 @@ def select_exploration_result(seed: str, player_level: int, recent: tuple[str, .
         # eligible result cannot fall back to its base weight when that result
         # is the immediately previous result.
         adjusted = tuple(
-            (key, int((D(weight) * (D(0) if key == (recent[0] if recent else None)
-                                     else D("0.35") if key in recent else D(1))).to_integral_value()))
+            (key, anti_repeat_weight(weight, key, recent))
             for key, weight in subweights
         )
         adjusted = tuple((key, weight) for key, weight in adjusted if weight > 0)

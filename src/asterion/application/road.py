@@ -34,6 +34,7 @@ from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
     BestiaryEntry,
     BestiaryEvidence,
+    BlockedDelivery,
     Brazier,
     Character,
     CodexEntry,
@@ -57,6 +58,20 @@ REFUGE = "Refúgio do Ocaso"
 REGION = "Terras do Ocaso"
 HUNT_CONTENT = "road_manual_hunt"
 EXPLORE_CONTENT = "road_exploration"
+
+VARIANT_LABELS = {
+    "furious": "Furioso",
+    "agile": "Ágil",
+    "resistant": "Resistente",
+    "hemorrhagic": "Hemorrágico",
+    "venomous": "Venenoso",
+}
+BESTIARY_STAGE_LABELS = {
+    "observed": "Observado",
+    "known": "Conhecido",
+    "studied": "Estudado",
+    "dominated": "Dominado",
+}
 
 
 @dataclass(frozen=True)
@@ -182,6 +197,7 @@ class RoadService:
             c, world = await self._locked_world(s, actor)
             if c is None or world is None or world.location != ROAD:
                 return None
+            await self._retry_blocked_deliveries(s, c)
             if c.delivery_blocked:
                 return await self._view_for_world(s, c, world)
             if not await s.scalar(
@@ -270,12 +286,17 @@ class RoadService:
             record.snapshot = encode(updated)
             c.hp = updated.fighters["player"].hp
             context = await s.scalar(select(HuntContext).where(HuntContext.game_activity_id == activity.id))
+            bestiary_evidence_ids = set()
             if context is not None:
-                await self._record_bestiary_combat_events(s, c.id, context, updated)
+                bestiary_evidence_ids = await self._record_bestiary_combat_events(
+                    s, c.id, context, updated
+                )
             if updated.result == "victory":
                 activity.status = "completed"
                 if activity.content_id == HUNT_CONTENT:
-                    await self._settle_hunt(s, c, activity, encounter.id)
+                    await self._settle_hunt(
+                        s, c, activity, encounter.id, bestiary_evidence_ids
+                    )
                     return await self._hunt_victory_view(s, c, activity)
                 else:
                     attempt = await s.scalar(
@@ -317,6 +338,19 @@ class RoadService:
     async def retry_hunt(self, actor: int) -> RoadView | None:
         return await self.prepare_hunt(actor)
 
+    async def retry_blocked_deliveries(self, actor: int) -> bool:
+        """Retry durable delivery holds without rerolling or duplicating loot."""
+        async with self.sessions.begin() as s:
+            c = await s.scalar(
+                select(Character)
+                .where(Character.telegram_id == actor, Character.server_id == self.server_id)
+                .with_for_update()
+            )
+            if c is None:
+                return False
+            await self._retry_blocked_deliveries(s, c)
+            return not c.delivery_blocked
+
     async def acknowledge_defeat(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
             c = await self._character(s, actor)
@@ -354,6 +388,7 @@ class RoadService:
             c, world = await self._locked_world(s, actor)
             if c is None or world is None or world.location != ROAD:
                 return None
+            await self._retry_blocked_deliveries(s, c)
             if c.delivery_blocked:
                 return await self._view_for_world(s, c, world)
             if not await s.scalar(
@@ -505,7 +540,9 @@ class RoadService:
                 return self._explore_limit_view(c, recent, last, now)
             return RoadView("explore_prepare", c.id, ROAD, vigor=c.vigor, max_vigor=c.max_vigor, name=c.name, hp=c.hp, max_hp=c.max_hp)
 
-    async def _settle_hunt(self, s, c, activity, encounter_id):
+    async def _settle_hunt(
+        self, s, c, activity, encounter_id, bestiary_evidence_ids=frozenset()
+    ):
         context = await s.scalar(
             select(HuntContext).where(HuntContext.game_activity_id == activity.id).with_for_update()
         )
@@ -529,9 +566,9 @@ class RoadService:
         c.xp += xp
         crowns_award = crowns(context.enemy_level, context.category) if enough else 0
         c.crowns += crowns_award
-        components = [("xp", None, xp)]
+        components = [("xp", None, xp, {})]
         if crowns_award:
-            components.append(("crowns", None, crowns_award))
+            components.append(("crowns", None, crowns_award, {}))
         if enough:
             c.vigor -= 2
             material_count = (
@@ -544,25 +581,49 @@ class RoadService:
             )
             for ordinal in range(material_count):
                 material = material_for(context.creature_id, f"{context.seed}:material:{ordinal}")
-                components.append(("material", material, 1))
-                await self._deliver_material(s, c, material, 1, f"activity:{activity.id}:material:{ordinal}")
+                components.append(("material", material, 1, {"material_id": material, "bound": False}))
+                await self._deliver_material(
+                    s, c, material, 1, f"activity:{activity.id}:material:{ordinal}"
+                )
             if context.category == "elite":
-                components.append(("catalyst", "material.tdo.catalisador_elite_i", 1))
+                components.append(("catalyst", "material.tdo.catalisador_elite_i", 1, {}))
                 if _draw_int(context.seed, "fragment", 100) < 40:
-                    components.append(("fragment", "material.tdo.fragmento_aprimoramento_i", 1))
+                    components.append(("fragment", "material.tdo.fragmento_aprimoramento_i", 1, {}))
             await self._materialize_optional_loot(s, c, context, components)
-            for kind, item_id, quantity in components:
+            for kind, item_id, quantity, *_ in components:
                 if kind in {"catalyst", "fragment"}:
                     await self._deliver_material(
                         s, c, item_id, quantity, f"activity:{activity.id}:{kind}"
                     )
-        for kind, item_id, quantity in components:
-            s.add(
-                RewardComponent(
-                    reward_event_id=event.id, kind=kind, item_id=item_id, quantity=quantity
+        bestiary_update = await self._bestiary(s, c.id, context.creature_id, victory=True)
+        if bestiary_update is None and bestiary_evidence_ids:
+            entry = await s.scalar(
+                select(BestiaryEntry).where(
+                    BestiaryEntry.character_id == c.id,
+                    BestiaryEntry.creature_id == context.creature_id,
                 )
             )
-        await self._bestiary(s, c.id, context.creature_id, victory=True)
+            if entry is not None:
+                bestiary_update = {
+                    "creature_id": context.creature_id,
+                    "creature_name": creature_for(context.creature_id).name,
+                    "stage": entry.stage,
+                    "stage_label": BESTIARY_STAGE_LABELS[entry.stage],
+                }
+        if bestiary_update is not None:
+            components.append(("bestiary", context.creature_id, 1, bestiary_update))
+        for component in components:
+            kind, item_id, quantity = component[:3]
+            payload = component[3] if len(component) > 3 else {}
+            s.add(
+                RewardComponent(
+                    reward_event_id=event.id,
+                    kind=kind,
+                    item_id=item_id,
+                    quantity=quantity,
+                    payload=payload,
+                )
+            )
         await self._ensure(s, Unlock, character_id=c.id, unlock_id=ROUND_FAMILIARITY)
         return xp
 
@@ -586,21 +647,21 @@ class RoadService:
             if await self._inventory_slots(s, c.id) < 60:
                 s.add(
                     EquipmentItem(
-                    character_id=c.id,
-                    source_key=f"activity:{context.game_activity_id}:equipment",
-                    item_name=item["item_name"],
-                    rarity=item["rarity"],
-                    slot=item["slot"],
-                    item_level=context.enemy_level,
-                    bound=False,
-                    payload=item,
+                        character_id=c.id,
+                        source_key=f"activity:{context.game_activity_id}:equipment",
+                        item_name=item["item_name"],
+                        rarity=item["rarity"],
+                        slot=item["slot"],
+                        item_level=context.enemy_level,
+                        bound=False,
+                        payload=item,
                     )
                 )
             else:
                 await self._pending(
                     s, c.id, f"activity:{context.game_activity_id}:equipment", "equipment", item
                 )
-            components.append(("equipment", item["item_name"], 1))
+            components.append(("equipment", item["item_name"], 1, dict(item)))
         if _draw_int(context.seed, "rune", 1000) < rune_chance:
             rarity = _rarity(context.seed, context.category, "rune")
             families = (
@@ -626,23 +687,43 @@ class RoadService:
                 .with_for_update()
             )
             if stack is None:
+                rune_payload = {
+                    "family": family,
+                    "rarity": rarity,
+                    "grade": 1,
+                    "potency": rune_potency(family, rarity),
+                    "bound": False,
+                }
                 if await self._inventory_slots(s, c.id) < 60:
                     s.add(
                         RuneStack(
-                        character_id=c.id,
-                        family=family,
-                        rarity=rarity,
-                        grade=1,
-                        potency=rune_potency(family, rarity),
-                        quantity=1,
-                        bound=False,
+                            character_id=c.id,
+                            family=family,
+                            rarity=rarity,
+                            grade=1,
+                            potency=rune_payload["potency"],
+                            quantity=1,
+                            bound=False,
                         )
                     )
                 else:
-                    await self._pending(s, c.id, f"activity:{context.game_activity_id}:rune", "rune", {"family": family, "rarity": rarity})
+                    await self._pending(
+                        s,
+                        c.id,
+                        f"activity:{context.game_activity_id}:rune",
+                        "rune",
+                        rune_payload,
+                    )
             else:
                 stack.quantity += 1
-            components.append(("rune", family, 1))
+                rune_payload = {
+                    "family": family,
+                    "rarity": rarity,
+                    "grade": stack.grade,
+                    "potency": stack.potency,
+                    "bound": stack.bound,
+                }
+            components.append(("rune", family, 1, rune_payload))
 
     async def _settle_exploration(self, s, c, attempt):
         if attempt.category == "combat" and attempt.activity_id is not None:
@@ -759,6 +840,16 @@ class RoadService:
                     await self._add_bestiary_evidence(s, entry, c.id, chosen, "habitat:estrada", "habitat", 3)
 
     async def _bestiary(self, s, character_id, creature_id, *, victory=False, evidence_id=None, variant=None, elite=False):
+        before_evidence_ids = set(
+            (
+                await s.scalars(
+                    select(BestiaryEvidence.evidence_id).where(
+                        BestiaryEvidence.character_id == character_id,
+                        BestiaryEvidence.creature_id == creature_id,
+                    )
+                )
+            ).all()
+        )
         entry = await s.scalar(
             select(BestiaryEntry)
             .where(
@@ -771,8 +862,12 @@ class RoadService:
                 character_id=character_id, creature_id=creature_id, bkp=7, wins=1 if victory else 0
             )
             s.add(entry)
+            previous_stage = None
         elif victory:
+            previous_stage = entry.stage
             entry.wins += 1
+        else:
+            previous_stage = entry.stage
         for evidence, category in (
             ("first_observation", "observation"),
             ("first_combat", "combat"),
@@ -829,9 +924,36 @@ class RoadService:
                 special = {"first_victory", "mechanic:bleed", "mechanic:prepared_leap"}.issubset(evidence_ids)
             else:
                 special = bool({"elite_victory", "mechanic"} & categories)
-            entry.stage = "dominated" if entry.bkp >= 45 and entry.wins >= 1 and special else "studied" if entry.bkp >= 25 else "known"
+            entry.stage = (
+                "dominated"
+                if entry.bkp >= 45 and entry.wins >= 1 and special
+                else "studied"
+                if entry.bkp >= 25
+                else "known"
+                if entry.bkp >= 10
+                else "observed"
+            )
         else:
-            entry.stage = "dominated" if entry.bkp >= 60 and len(categories) >= 3 else "studied" if entry.bkp >= 30 and len(categories) >= 2 else "known"
+            entry.stage = (
+                "dominated"
+                if entry.bkp >= 60 and len(categories) >= 3
+                else "studied"
+                if entry.bkp >= 30 and len(categories) >= 2
+                else "known"
+                if entry.bkp >= 10
+                else "observed"
+            )
+        new_evidence_ids = evidence_ids - before_evidence_ids
+        if (previous_stage is not None and previous_stage != entry.stage) or (
+            victory and new_evidence_ids
+        ):
+            return {
+                "creature_id": creature_id,
+                "creature_name": creature_for(creature_id).name,
+                "stage": entry.stage,
+                "stage_label": BESTIARY_STAGE_LABELS[entry.stage],
+            }
+        return None
 
     async def _add_bestiary_evidence(self, s, entry, character_id, creature_id, evidence_id, category, points=0):
         exists = await s.scalar(select(BestiaryEvidence).where(
@@ -842,42 +964,51 @@ class RoadService:
         if exists is None:
             s.add(BestiaryEvidence(character_id=character_id, creature_id=creature_id, evidence_id=evidence_id, category=category))
             entry.bkp += points
+            return True
+        return False
 
-    async def _record_bestiary_combat_events(self, s, character_id, context, combat) -> None:
+    async def _record_bestiary_combat_events(self, s, character_id, context, combat):
         entry = await s.scalar(select(BestiaryEntry).where(
             BestiaryEntry.character_id == character_id,
             BestiaryEntry.creature_id == context.creature_id,
         ).with_for_update())
         if entry is None:
-            return
+            return set()
+        new_evidence_ids = set()
         for event in combat.events:
             if event.actor != "enemy":
                 continue
             action_id = event.action.removeprefix("prepare:")
-            await self._add_bestiary_evidence(
+            if await self._add_bestiary_evidence(
                 s, entry, character_id, context.creature_id,
                 f"action:{action_id}", "behavior", 4,
-            )
+            ):
+                new_evidence_ids.add(f"action:{action_id}")
             if event.action == "prepare:leap":
-                await self._add_bestiary_evidence(
+                if await self._add_bestiary_evidence(
                     s, entry, character_id, context.creature_id,
                     "mechanic:prepared_leap", "mechanic", 5,
-                )
+                ):
+                    new_evidence_ids.add("mechanic:prepared_leap")
             if event.action == "rend":
-                await self._add_bestiary_evidence(
+                if await self._add_bestiary_evidence(
                     s, entry, character_id, context.creature_id,
                     "mechanic:bleed", "mechanic", 5,
-                )
+                ):
+                    new_evidence_ids.add("mechanic:bleed")
             if combat.variant == "hemorrhagic" and event.actor == "enemy" and event.damage > 0:
-                await self._add_bestiary_evidence(
+                if await self._add_bestiary_evidence(
                     s, entry, character_id, context.creature_id,
                     "mechanic:hemorrhage", "mechanic", 5,
-                )
+                ):
+                    new_evidence_ids.add("mechanic:hemorrhage")
             if combat.variant == "venomous" and event.actor == "enemy" and event.damage > 0:
-                await self._add_bestiary_evidence(
+                if await self._add_bestiary_evidence(
                     s, entry, character_id, context.creature_id,
                     "mechanic:poison", "mechanic", 5,
-                )
+                ):
+                    new_evidence_ids.add("mechanic:poison")
+        return new_evidence_ids
 
     async def _combat_view(self, s, c, activity):
         encounter, record = await CombatRepository(s).combat(activity)
@@ -939,24 +1070,71 @@ class RoadService:
             s.add(model(**values))
 
     async def _deliver_material(self, s, c, material_id: str, quantity: int, source_key: str) -> None:
-        stack = await s.scalar(select(MaterialStack).where(
-            MaterialStack.character_id == c.id,
-            MaterialStack.material_id == material_id,
-            MaterialStack.bound.is_(False),
-        ).with_for_update())
-        if stack is None:
-            if await self._inventory_slots(s, c.id) < 60:
-                s.add(MaterialStack(character_id=c.id, material_id=material_id, quantity=min(quantity, 999), bound=False))
-            else:
-                await self._pending(s, c.id, source_key, "material", {"material_id": material_id})
-                return
-            remaining = max(0, quantity - 999)
-        else:
-            available = max(0, 999 - stack.quantity)
-            stack.quantity += min(quantity, available)
-            remaining = max(0, quantity - available)
+        existing_delivery = await s.scalar(
+            select(BlockedDelivery)
+            .where(
+                BlockedDelivery.character_id == c.id,
+                BlockedDelivery.source_key == source_key,
+            )
+            .with_for_update()
+        )
+        if existing_delivery is not None:
+            if existing_delivery.status == "pending":
+                c.delivery_blocked = True
+            return
+        if await s.scalar(
+            select(PendingItem)
+            .where(
+                PendingItem.character_id == c.id,
+                PendingItem.source_key == source_key,
+            )
+            .with_for_update()
+        ) is not None:
+            return
+        remaining = await self._deliver_material_to_inventory(s, c, material_id, quantity, False)
         if remaining:
-            await self._pending(s, c.id, source_key, "material", {"material_id": material_id}, remaining)
+            await self._pending(
+                s,
+                c.id,
+                source_key,
+                "material",
+                {"material_id": material_id, "bound": False},
+                remaining,
+            )
+
+    async def _deliver_material_to_inventory(self, s, c, material_id, quantity, bound):
+        stacks = (
+            await s.scalars(
+                select(MaterialStack)
+                .where(
+                    MaterialStack.character_id == c.id,
+                    MaterialStack.material_id == material_id,
+                    MaterialStack.bound.is_(bound),
+                )
+                .order_by(MaterialStack.id)
+                .with_for_update()
+            )
+        ).all()
+        remaining = quantity
+        for stack in stacks:
+            if remaining <= 0:
+                break
+            available = max(0, 999 - stack.quantity)
+            added = min(remaining, available)
+            stack.quantity += added
+            remaining -= added
+        while remaining > 0 and await self._inventory_slots(s, c.id) < 60:
+            added = min(remaining, 999)
+            s.add(
+                MaterialStack(
+                    character_id=c.id,
+                    material_id=material_id,
+                    quantity=added,
+                    bound=bound,
+                )
+            )
+            remaining -= added
+        return remaining
 
     async def _inventory_slots(self, s, character_id):
         equipment = await s.scalar(select(func.count(EquipmentItem.id)).where(EquipmentItem.character_id == character_id)) or 0
@@ -965,11 +1143,25 @@ class RoadService:
         return int(equipment + materials + runes)
 
     async def _pending(self, s, character_id, source_key, kind, payload, quantity=1):
+        hold = await s.scalar(
+            select(BlockedDelivery)
+            .where(
+                BlockedDelivery.character_id == character_id,
+                BlockedDelivery.source_key == source_key,
+            )
+            .with_for_update()
+        )
+        if hold is not None:
+            character = await s.scalar(
+                select(Character).where(Character.id == character_id).with_for_update()
+            )
+            if character is not None and hold.status == "pending":
+                character.delivery_blocked = True
+            return
         existing = await s.scalar(select(PendingItem).where(
             PendingItem.character_id == character_id, PendingItem.source_key == source_key
         ).with_for_update())
         if existing is not None:
-            existing.quantity += quantity
             return
         count = await s.scalar(select(func.count(PendingItem.id)).where(PendingItem.character_id == character_id)) or 0
         if count < 20:
@@ -978,6 +1170,137 @@ class RoadService:
             character = await s.scalar(select(Character).where(Character.id == character_id).with_for_update())
             if character is not None:
                 character.delivery_blocked = True
+                s.add(
+                    BlockedDelivery(
+                        character_id=character_id,
+                        source_key=source_key,
+                        kind=kind,
+                        payload=payload,
+                        quantity=quantity,
+                        status="pending",
+                    )
+                )
+
+    async def _retry_blocked_deliveries(self, s, c) -> None:
+        holds = (
+            await s.scalars(
+                select(BlockedDelivery)
+                .where(
+                    BlockedDelivery.character_id == c.id,
+                    BlockedDelivery.status == "pending",
+                )
+                .order_by(BlockedDelivery.created_at, BlockedDelivery.id)
+                .with_for_update()
+            )
+        ).all()
+        for hold in holds:
+            payload = dict(hold.payload or {})
+            if hold.kind == "material":
+                remaining = await self._deliver_material_to_inventory(
+                    s,
+                    c,
+                    payload["material_id"],
+                    hold.quantity,
+                    bool(payload.get("bound", False)),
+                )
+                if remaining and await self._pending_slots(s, c.id) > 0:
+                    s.add(
+                        PendingItem(
+                            character_id=c.id,
+                            source_key=hold.source_key,
+                            kind=hold.kind,
+                            payload=payload,
+                            quantity=remaining,
+                        )
+                    )
+                    remaining = 0
+                hold.quantity = remaining or hold.quantity
+                if remaining == 0:
+                    self._resolve_delivery(hold)
+            elif hold.kind == "equipment":
+                if await self._inventory_slots(s, c.id) < 60:
+                    s.add(
+                        EquipmentItem(
+                            character_id=c.id,
+                            source_key=hold.source_key,
+                            item_name=payload["item_name"],
+                            rarity=payload["rarity"],
+                            slot=payload["slot"],
+                            item_level=payload["item_level"],
+                            bound=bool(payload.get("bound", False)),
+                            payload=payload,
+                        )
+                    )
+                    self._resolve_delivery(hold)
+                elif await self._pending_slots(s, c.id) > 0:
+                    s.add(
+                        PendingItem(
+                            character_id=c.id,
+                            source_key=hold.source_key,
+                            kind=hold.kind,
+                            payload=payload,
+                            quantity=hold.quantity,
+                        )
+                    )
+                    self._resolve_delivery(hold)
+            elif hold.kind == "rune":
+                stack = await s.scalar(
+                    select(RuneStack)
+                    .where(
+                        RuneStack.character_id == c.id,
+                        RuneStack.family == payload["family"],
+                        RuneStack.rarity == payload["rarity"],
+                        RuneStack.grade == payload.get("grade", 1),
+                        RuneStack.bound.is_(bool(payload.get("bound", False))),
+                    )
+                    .with_for_update()
+                )
+                if stack is not None:
+                    stack.quantity += hold.quantity
+                    self._resolve_delivery(hold)
+                elif await self._inventory_slots(s, c.id) < 60:
+                    s.add(
+                        RuneStack(
+                            character_id=c.id,
+                            family=payload["family"],
+                            rarity=payload["rarity"],
+                            grade=payload.get("grade", 1),
+                            potency=payload["potency"],
+                            quantity=hold.quantity,
+                            bound=bool(payload.get("bound", False)),
+                        )
+                    )
+                    self._resolve_delivery(hold)
+                elif await self._pending_slots(s, c.id) > 0:
+                    s.add(
+                        PendingItem(
+                            character_id=c.id,
+                            source_key=hold.source_key,
+                            kind=hold.kind,
+                            payload=payload,
+                            quantity=hold.quantity,
+                        )
+                    )
+                    self._resolve_delivery(hold)
+        c.delivery_blocked = bool(
+            await s.scalar(
+                select(func.count(BlockedDelivery.id)).where(
+                    BlockedDelivery.character_id == c.id,
+                    BlockedDelivery.status == "pending",
+                )
+            )
+        )
+
+    async def _pending_slots(self, s, character_id):
+        count = await s.scalar(
+            select(func.count(PendingItem.id)).where(PendingItem.character_id == character_id)
+        ) or 0
+        return 20 - int(count)
+
+    @staticmethod
+    def _resolve_delivery(hold):
+        hold.status = "resolved"
+        hold.resolved_at = datetime.now(UTC)
 
     async def _hunt_victory_view(self, s, c, activity):
         context = await s.scalar(select(HuntContext).where(HuntContext.game_activity_id == activity.id))
@@ -997,10 +1320,34 @@ class RoadService:
         }
         reward_lines = []
         for row in rows:
+            payload = row.payload or {}
             if row.kind == "xp":
                 reward_lines.append(f"✨ XP · {row.quantity}")
             elif row.kind == "crowns":
                 reward_lines.append(f"🪙 Coroas · {row.quantity}")
+            elif row.kind == "equipment":
+                reward_lines.append(
+                    "🛡️ "
+                    f"{payload.get('item_name', row.item_id or 'Equipamento')} · "
+                    f"+{payload.get('enhancement', 0)} · "
+                    f"{payload.get('rarity', 'Raridade desconhecida')} · "
+                    f"{payload.get('slot', 'Slot desconhecido')} · "
+                    f"Nível do Item {payload.get('item_level', '?')} · "
+                    f"{'Vinculado' if payload.get('bound', False) else 'Negociável'}"
+                )
+            elif row.kind == "rune":
+                reward_lines.append(
+                    "🔮 Runa "
+                    f"{payload.get('family', row.item_id or 'desconhecida')} · "
+                    f"{payload.get('rarity', 'Raridade desconhecida')} · "
+                    f"Grau {payload.get('grade', 1)} · "
+                    f"{'Vinculada' if payload.get('bound', False) else 'Negociável'}"
+                )
+            elif row.kind == "bestiary":
+                reward_lines.append(
+                    f"📖 Bestiário · {payload.get('creature_name', 'Atualização registrada')} · "
+                    f"{payload.get('stage_label', payload.get('stage', 'Atualizado'))}"
+                )
             else:
                 reward_lines.append(f"📦 {labels.get(row.item_id, row.item_id or row.kind)} · {row.quantity}")
         return RoadView(
@@ -1010,7 +1357,7 @@ class RoadService:
             name=c.name, hp=c.hp, max_hp=c.max_hp,
             reward_lines=tuple(reward_lines),
             creature=creature_for(context.creature_id).name,
-            variant=context.variant,
+            variant=VARIANT_LABELS.get(context.variant, context.variant),
         )
 
     def _explore_limit_view(self, c, recent, last, now, sixth=None):
