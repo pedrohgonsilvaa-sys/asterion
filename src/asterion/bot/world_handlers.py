@@ -98,6 +98,9 @@ def world_router(
     async def hunt_prepare(query: CallbackQuery):
         await query.answer()
         if road is not None and isinstance(query.message, Message):
+            current = await road.resume(query.from_user.id)
+            if current is not None and current.kind == "hunt_victory":
+                await road.acknowledge_result(query.from_user.id)
             view = await road.prepare_hunt(query.from_user.id)
             if view is not None:
                 await present(query.message, render_road(view), images, edit=True)
@@ -109,6 +112,8 @@ def world_router(
             view = await road.resume(query.from_user.id)
             if view is not None and view.kind == "hunt_defeat":
                 view = await road.acknowledge_defeat(query.from_user.id)
+            elif view is not None and view.kind == "hunt_victory":
+                view = await road.acknowledge_result(query.from_user.id)
             if view is not None:
                 await present(query.message, render_road(view), images, edit=True)
 

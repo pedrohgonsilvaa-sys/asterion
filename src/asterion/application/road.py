@@ -344,6 +344,22 @@ class RoadService:
             world = await s.scalar(select(WorldState).where(WorldState.character_id == c.id))
             return await self._view_for_world(s, c, world) if world else None
 
+    async def acknowledge_result(self, actor: int) -> RoadView | None:
+        async with self.sessions.begin() as s:
+            c = await self._character(s, actor)
+            if c is None:
+                return None
+            context = await s.scalar(
+                select(HuntContext)
+                .join(GameActivity, HuntContext.game_activity_id == GameActivity.id)
+                .where(HuntContext.character_id == c.id, GameActivity.content_id == HUNT_CONTENT)
+                .order_by(GameActivity.id.desc()).limit(1).with_for_update()
+            )
+            if context is not None:
+                context.result_acknowledged = True
+            world = await s.scalar(select(WorldState).where(WorldState.character_id == c.id))
+            return await self._view_for_world(s, c, world) if world else None
+
     async def explore(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
