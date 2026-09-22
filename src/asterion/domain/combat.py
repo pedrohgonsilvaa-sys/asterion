@@ -113,6 +113,7 @@ class Combat:
     prepared_source: str | None = None
     prepared_target: str | None = None
     resolving_prepared: bool = False
+    response_window_seen: bool = False
     variant: str | None = None
     dots: dict[str, list[str]] = field(default_factory=dict)
     dot_states: dict[str, list[DotState]] = field(default_factory=dict)
@@ -178,6 +179,8 @@ def _begin_turn(state: Combat) -> None:
     actor = state.fighters[state.order[state.turn_index]]
     actor.opportunity += 1
     actor.defending = False
+    if actor.id == "player" and state.prepared_action is not None:
+        state.response_window_seen = True
 
 
 def _end_turn(state: Combat) -> None:
@@ -222,6 +225,7 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
         state.prepared_action = action_id
         state.prepared_source = actor_id
         state.prepared_target = target.id
+        state.response_window_seen = False
         actor.last_action = f"prepare:{action_id}"
         actor.cooldowns[action_id] = actor.opportunity + action.blocked_opportunities + 1
         state.events.append(
@@ -311,10 +315,11 @@ def _enemy_action(state: Combat) -> str:
         action = state.pending_response
         state.pending_response = None
         return action
-    if state.prepared_action is not None:
+    if state.prepared_action is not None and state.response_window_seen:
         action = state.prepared_action
         state.prepared_action = None
         state.resolving_prepared = True
+        state.response_window_seen = False
         return action
     enemy = state.fighters["enemy"]
     # Alfa Cinéreo uses content priority rather than a positional cycle.
