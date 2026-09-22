@@ -335,6 +335,20 @@ class RoadService:
                 return await self._view_for_world(s, c, world)
             seed = uuid4().hex
             result = _explore_result(seed)
+            for reroll in range(8):
+                unique_fragment = {
+                    "explore.tdo.estrada.marco_viajantes": "codex.fragment.estrada.memoria_viajantes",
+                    "explore.tdo.estrada.luzes": "codex.fragment.estrada.luzes_na_estrada",
+                }.get(result[1])
+                if unique_fragment is None or not await s.scalar(
+                    select(CodexFragment).where(
+                        CodexFragment.character_id == c.id,
+                        CodexFragment.fragment_id == unique_fragment,
+                    )
+                ):
+                    break
+                seed = f"{seed}:{reroll}"
+                result = _explore_result(seed)
             category, result_id, result_text = result
             attempt = ExplorationAttempt(
                 character_id=c.id,
@@ -409,7 +423,10 @@ class RoadService:
         if enough:
             c.vigor -= 2
             material_count = (
-                1
+                0
+                if context.category == "common"
+                and _draw_int(context.seed, "material-roll", 100) >= 80
+                else 1
                 if context.category == "common"
                 else 3 + _draw_int(context.seed, "elite-materials", 2)
             )
