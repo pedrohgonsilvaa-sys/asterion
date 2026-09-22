@@ -22,6 +22,15 @@ class Effect:
     duration_eligible: bool = True
 
 
+@dataclass
+class DotState:
+    kind: str
+    stacks: int
+    remaining: int
+    snapshot_attack: Decimal
+    source: str
+
+
 @dataclass(frozen=True)
 class Action:
     id: str
@@ -100,6 +109,13 @@ class Combat:
     rng_cursor: int = 0
     result: str | None = None
     events: list[CombatEvent] = field(default_factory=list)
+    prepared_action: str | None = None
+    prepared_source: str | None = None
+    prepared_target: str | None = None
+    resolving_prepared: bool = False
+    response_window_seen: bool = False
+    variant: str | None = None
+    dot_states: dict[str, list[DotState]] = field(default_factory=dict)
 
     @property
     def tutorial_stage(self) -> str:
@@ -162,10 +178,26 @@ def _begin_turn(state: Combat) -> None:
     actor = state.fighters[state.order[state.turn_index]]
     actor.opportunity += 1
     actor.defending = False
+    if actor.id == "player" and state.prepared_action is not None:
+        state.response_window_seen = True
 
 
 def _end_turn(state: Combat) -> None:
     actor = state.fighters[state.order[state.turn_index]]
+    for dot in state.dot_states.get(actor.id, []):
+        coefficient = D("0.12") if dot.kind == "poison" else D("0.10")
+        damage = int(
+            (dot.snapshot_attack * coefficient * dot.stacks).to_integral_value(
+                rounding=ROUND_FLOOR
+            )
+        )
+        actor.hp = max(D(0), actor.hp - D(damage))
+        dot.remaining -= 1
+    state.dot_states[actor.id] = [
+        dot for dot in state.dot_states.get(actor.id, []) if dot.remaining > 0
+    ]
+    if actor.hp == 0 and not state.result:
+        state.result = "defeat" if actor.id == "player" else "victory"
     for effect in actor.effects:
         if actor.opportunity > effect.applied_opportunity:
             effect.remaining -= 1
@@ -181,13 +213,38 @@ def _end_turn(state: Combat) -> None:
 def _perform(state: Combat, actor_id: str, action_id: str) -> None:
     actor = state.fighters[actor_id]
     target = state.fighters["enemy" if actor_id == "player" else "player"]
+    if action_id == "hold":
+        actor.last_action = "hold"
+        state.events.append(CombatEvent(len(state.events), state.round, actor_id, action_id))
+        return
     if action_id == "defend":
         actor.defending = True
         actor.last_action = action_id
         state.events.append(CombatEvent(len(state.events), state.round, actor_id, action_id))
         return
+    if actor_id == "player" or actor_id == "enemy":
+        for dot in state.dot_states.get(actor.id, []):
+            if dot.kind == "bleed":
+                recoil = (
+                    dot.snapshot_attack * D("0.03") * dot.stacks
+                ).to_integral_value(rounding=ROUND_FLOOR)
+                actor.hp = max(D(0), actor.hp - recoil)
+        if actor.hp == 0:
+            state.result = "defeat" if actor_id == "player" else "victory"
+            return
     actions = state.player_actions if actor_id == "player" else state.enemy_actions
     action = actions[action_id]
+    if actor_id == "enemy" and action_id == "leap" and not state.resolving_prepared:
+        state.prepared_action = action_id
+        state.prepared_source = actor_id
+        state.prepared_target = target.id
+        state.response_window_seen = False
+        actor.last_action = f"prepare:{action_id}"
+        actor.cooldowns[action_id] = actor.opportunity + action.blocked_opportunities + 1
+        state.events.append(
+            CombatEvent(len(state.events), state.round, actor_id, f"prepare:{action_id}")
+        )
+        return
     rng = CombatRng(state.id, state.rng_cursor)
     critical = rng.chance(D("0.05"), f"critical:{actor_id}:{action_id}")
     state.rng_cursor = rng.cursor
@@ -223,6 +280,26 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
                 applied_opportunity=target.opportunity,
             ),
         )
+    # Variant riders are attached only to real direct offensive hits.  Native
+    # bleed from Investida Rasgante occupies the same per-action slot.
+    if actor_id == "enemy" and actual_damage > 0:
+        rider = (
+            "bleed" if state.variant == "hemorrhagic"
+            else "poison" if state.variant == "venomous" else None
+        )
+        native = "bleed" if action_id == "rend" else None
+        chosen = native or rider
+        states = state.dot_states.setdefault(target.id, [])
+        existing = next((dot for dot in states if dot.kind == chosen), None) if chosen else None
+        if chosen and (existing is None or existing.stacks < 3):
+            if existing is None:
+                states.append(
+                    DotState(chosen, 1, 3 if chosen == "poison" else 2,
+                             actor.stat("attack"), actor.id)
+                )
+            else:
+                existing.stacks = min(3, existing.stacks + 1)
+                existing.remaining = 3 if chosen == "poison" else 2
     actor.last_action = action_id
     if action.blocked_opportunities:
         actor.cooldowns[action_id] = actor.opportunity + action.blocked_opportunities + 1
@@ -241,6 +318,7 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
     )
     if target.hp == 0:
         state.result = "victory" if actor_id == "player" else "defeat"
+    state.resolving_prepared = False
 
 
 def _enemy_action(state: Combat) -> str:
@@ -248,9 +326,34 @@ def _enemy_action(state: Combat) -> str:
         action = state.pending_response
         state.pending_response = None
         return action
-    action = state.ai_cycle[state.ai_position]
-    state.ai_position = (state.ai_position + 1) % len(state.ai_cycle)
-    return action
+    if state.prepared_action is not None and state.response_window_seen:
+        action = state.prepared_action
+        state.prepared_action = None
+        state.resolving_prepared = True
+        state.response_window_seen = False
+        return action
+    if state.prepared_action is not None:
+        return "hold"
+    enemy = state.fighters["enemy"]
+    # Alfa Cinéreo uses content priority rather than a positional cycle.
+    if {"rend", "leap", "bite"}.issubset(state.enemy_actions):
+        bleed_count = next(
+            (dot.stacks for dot in state.dot_states.get("player", []) if dot.kind == "bleed"),
+            0,
+        )
+        if enemy.cooldowns.get("rend", 0) <= enemy.opportunity and bleed_count == 0:
+            return "rend"
+        if enemy.cooldowns.get("leap", 0) <= enemy.opportunity:
+            return "leap"
+        if enemy.cooldowns.get("rend", 0) <= enemy.opportunity and bleed_count < 3:
+            return "rend"
+        return "bite"
+    for _ in range(len(state.ai_cycle)):
+        action = state.ai_cycle[state.ai_position]
+        state.ai_position = (state.ai_position + 1) % len(state.ai_cycle)
+        if enemy.cooldowns.get(action, 0) <= enemy.opportunity:
+            return action
+    return state.ai_cycle[state.ai_position]
 
 
 def _advance_to_player(state: Combat) -> None:

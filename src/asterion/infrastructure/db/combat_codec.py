@@ -4,7 +4,7 @@ from dataclasses import asdict
 from decimal import Decimal
 from uuid import UUID
 
-from asterion.domain.combat import Action, Combat, CombatEvent, Effect, Fighter, Tutorial
+from asterion.domain.combat import Action, Combat, CombatEvent, DotState, Effect, Fighter, Tutorial
 from asterion.domain.combat_math import Stats
 
 
@@ -26,6 +26,8 @@ def encode(state: Combat) -> dict:
 
 
 def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat:
+    payload = dict(payload)
+    payload.pop("dots", None)  # legacy snapshots used a non-authoritative label list
     def action(value):
         return Action(
             **(
@@ -78,6 +80,13 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     CombatEvent(**(event | {"healed": Decimal(event["healed"])}))
                     for event in payload["events"]
                 ],
+                "dot_states": {
+                    target: [
+                        DotState(**dot | {"snapshot_attack": Decimal(dot["snapshot_attack"])})
+                        for dot in dots
+                    ]
+                    for target, dots in payload.get("dot_states", {}).items()
+                },
             }
         )
     )

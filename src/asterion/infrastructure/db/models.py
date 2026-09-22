@@ -92,6 +92,15 @@ class Character(Base):
         Integer, nullable=False, default=100, server_default="100"
     )
     crowns: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    elite_equipment_pity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    elite_legendary_pity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    delivery_blocked: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
 
 class Brazier(Base):
@@ -169,7 +178,6 @@ class Unlock(Base):
 class MaterialStack(Base):
     __tablename__ = "material_stacks"
     __table_args__ = (
-        UniqueConstraint("character_id", "material_id", "bound", name="uq_character_material"),
         CheckConstraint("quantity BETWEEN 0 AND 999", name="ck_material_quantity"),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -198,6 +206,9 @@ class RewardComponent(Base):
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     item_id: Mapped[str | None] = mapped_column(String(96))
     quantity: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
 
 
 class WorldState(Base):
@@ -234,6 +245,9 @@ class GameActivity(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
+    last_valid_action_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class Encounter(Base):
@@ -325,3 +339,176 @@ class OutboxMessage(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+
+
+class HuntContext(Base):
+    """Materialized, repeatable hunt facts attached to a foreground activity."""
+
+    __tablename__ = "hunt_contexts"
+    __table_args__ = (
+        UniqueConstraint("game_activity_id", name="uq_hunt_activity"),
+        CheckConstraint("enemy_level >= 1", name="ck_hunt_enemy_level"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    game_activity_id: Mapped[UUID] = mapped_column(ForeignKey("game_activities.id"), nullable=False)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    creature_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    category: Mapped[str] = mapped_column(String(16), nullable=False)
+    enemy_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    variant: Mapped[str | None] = mapped_column(String(24))
+    seed: Mapped[str] = mapped_column(String(128), nullable=False)
+    loot_profile: Mapped[str] = mapped_column(String(32), nullable=False, default="hunt")
+    result_acknowledged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+
+
+class ExplorationAttempt(Base):
+    __tablename__ = "exploration_attempts"
+    __table_args__ = (
+        UniqueConstraint("character_id", "id", name="uq_exploration_character"),
+        CheckConstraint("state_version >= 0", name="ck_exploration_version"),
+        CheckConstraint("status IN ('active','completed','failed')", name="ck_exploration_status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    local_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
+    seed: Mapped[str] = mapped_column(String(128), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    result_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    state_version: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    progress: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    activity_id: Mapped[UUID | None] = mapped_column(ForeignKey("game_activities.id"))
+    encounter_id: Mapped[UUID | None] = mapped_column(ForeignKey("encounters.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result_acknowledged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+
+
+class BestiaryEntry(Base):
+    __tablename__ = "bestiary_entries"
+    __table_args__ = (
+        UniqueConstraint("character_id", "creature_id", name="uq_character_bestiary"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    creature_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    bkp: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    stage: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="observed", server_default="observed"
+    )
+    wins: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+
+class BestiaryEvidence(Base):
+    __tablename__ = "bestiary_evidence"
+    __table_args__ = (
+        UniqueConstraint("character_id", "creature_id", "evidence_id", name="uq_bestiary_evidence"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    creature_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    evidence_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+
+
+class CodexFragment(Base):
+    __tablename__ = "codex_fragments"
+    __table_args__ = (
+        UniqueConstraint("character_id", "fragment_id", name="uq_character_fragment"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    entry_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    fragment_id: Mapped[str] = mapped_column(String(96), nullable=False)
+
+
+class EquipmentItem(Base):
+    __tablename__ = "equipment_items"
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    source_key: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
+    item_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    rarity: Mapped[str] = mapped_column(String(16), nullable=False)
+    slot: Mapped[str] = mapped_column(String(24), nullable=False)
+    item_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    bound: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+
+
+class RuneStack(Base):
+    __tablename__ = "rune_stacks"
+    __table_args__ = (
+        UniqueConstraint(
+            "character_id", "family", "rarity", "grade", "bound", name="uq_character_rune"
+        ),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    family: Mapped[str] = mapped_column(String(32), nullable=False)
+    rarity: Mapped[str] = mapped_column(String(16), nullable=False)
+    grade: Mapped[int] = mapped_column(Integer, nullable=False)
+    potency: Mapped[str] = mapped_column(String(24), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    bound: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+
+
+class PendingItem(Base):
+    __tablename__ = "pending_items"
+    __table_args__ = (
+        UniqueConstraint("character_id", "source_key", name="uq_character_pending_source"),
+        CheckConstraint("quantity > 0", name="ck_pending_quantity"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    source_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+
+
+class BlockedDelivery(Base):
+    """Durable delivery hold used when both Inventory and Pending are full."""
+
+    __tablename__ = "blocked_deliveries"
+    __table_args__ = (
+        CheckConstraint("status IN ('pending','resolved')", name="ck_blocked_delivery_status"),
+        CheckConstraint("quantity > 0", name="ck_blocked_delivery_quantity"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    source_key: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default="pending"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

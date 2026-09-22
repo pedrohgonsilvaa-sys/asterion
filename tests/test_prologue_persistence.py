@@ -18,6 +18,8 @@ from asterion.domain.prologue import (
 )
 from asterion.infrastructure.db.models import (
     Account,
+    BestiaryEntry,
+    BestiaryEvidence,
     Character,
     CombatRecord,
     Encounter,
@@ -93,6 +95,24 @@ async def test_enter_creates_stable_activity_encounter_and_combat(prologue, data
         assert await session.scalar(select(func.count()).select_from(CombatRecord)) == 1
         activity = await session.scalar(select(GameActivity))
         assert activity.content_id == CONTENT_ID and activity.status == "active"
+
+
+async def test_new_tutorial_records_dog_knowledge_without_observation_xp(prologue, database):
+    await character(database)
+    await prologue.enter(1)
+    async with database[1]() as session:
+        entry = await session.scalar(
+            select(BestiaryEntry).where(BestiaryEntry.creature_id == "dog_cinereo")
+        )
+        evidence = (
+            await session.scalars(
+                select(BestiaryEvidence).where(BestiaryEvidence.creature_id == "dog_cinereo")
+            )
+        ).all()
+        stored = await session.scalar(select(Character))
+        assert entry is not None and (entry.bkp, entry.stage) == (7, "observed")
+        assert {row.evidence_id for row in evidence} == {"first_observation", "first_combat"}
+        assert stored.xp == 0
 
 
 async def test_repeated_and_concurrent_enter_are_idempotent(prologue, database):
