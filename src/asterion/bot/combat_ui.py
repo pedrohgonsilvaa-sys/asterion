@@ -50,6 +50,11 @@ def hp_bar(current: Decimal, maximum: Decimal, *, color: str = "🟩") -> str:
 def event_line(state: Combat, event: CombatEvent) -> str:
     actor = state.fighters[event.actor]
     actor_name = escape(actor.name)
+    if event.action.startswith("prepare:"):
+        action_id = event.action.split(":", 1)[1]
+        action = state.enemy_actions.get(action_id)
+        label = escape(action.name if action else action_id)
+        return f"⚠️ <b>{actor_name}</b> prepara <b>{label}</b>."
     if event.action == "defend":
         return f"🛡️ <b>{actor_name}</b> usa Defender."
     actions = state.player_actions if event.actor == "player" else state.enemy_actions

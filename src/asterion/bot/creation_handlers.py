@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message, 
 from asterion.application.creation import CreationService
 from asterion.application.p1 import P1Service
 from asterion.application.prologue import PrologueService
+from asterion.application.road import RoadService
 from asterion.application.world import WorldService
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import CreationCallback, Screen, render
@@ -87,12 +88,19 @@ def creation_router(
     prologue: PrologueService | None = None,
     world: WorldService | None = None,
     p1: P1Service | None = None,
+    road: RoadService | None = None,
 ) -> Router:
     router = Router(name="character_creation")
     router.message.filter(F.chat.type == "private")
     router.callback_query.filter(F.message.chat.type == "private")
 
     async def current_screen(actor, state):
+        if road is not None:
+            road_view = await road.resume(actor)
+            if road_view is not None:
+                from asterion.bot.road_ui import render_road
+
+                return render_road(road_view)
         if p1 is not None:
             p1_view = await p1.resume(actor)
             if p1_view is not None and p1_view.combat is not None:
