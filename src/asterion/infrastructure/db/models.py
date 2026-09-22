@@ -245,6 +245,9 @@ class GameActivity(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
+    last_valid_action_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class Encounter(Base):
@@ -391,6 +394,9 @@ class ExplorationAttempt(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result_acknowledged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
 
 class BestiaryEntry(Base):

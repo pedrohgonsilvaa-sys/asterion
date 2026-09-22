@@ -1,5 +1,7 @@
 """Road hunt and exploration persistence."""
 
+from uuid import uuid4
+
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -17,6 +19,15 @@ def _uuid():
 
 def upgrade() -> None:
     op.drop_constraint("uq_character_material", "material_stacks", type_="unique")
+    op.add_column(
+        "game_activities",
+        sa.Column(
+            "last_valid_action_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+    )
     op.add_column(
         "reward_components",
         sa.Column("payload", JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
@@ -68,6 +79,7 @@ def upgrade() -> None:
             "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
         ),
         sa.Column("completed_at", sa.DateTime(timezone=True)),
+        sa.Column("result_acknowledged", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.ForeignKeyConstraint(["character_id"], ["characters.id"]),
         sa.ForeignKeyConstraint(["activity_id"], ["game_activities.id"]),
         sa.ForeignKeyConstraint(["encounter_id"], ["encounters.id"]),
@@ -166,6 +178,41 @@ def upgrade() -> None:
         sa.CheckConstraint("status IN ('pending','resolved')", name="ck_blocked_delivery_status"),
         sa.CheckConstraint("quantity > 0", name="ck_blocked_delivery_quantity"),
     )
+    bind = op.get_bind()
+    completed_tutorials = bind.execute(
+        sa.text(
+            "SELECT DISTINCT character_id FROM game_activities "
+            "WHERE content_id = 'prologue_first_combat' AND status = 'completed'"
+        )
+    ).fetchall()
+    for (character_id,) in completed_tutorials:
+        bind.execute(
+            sa.text(
+                "INSERT INTO bestiary_entries "
+                "(id, character_id, creature_id, bkp, stage, wins) "
+                "VALUES (:id, :character_id, 'dog_cinereo', 7, 'observed', 0) "
+                "ON CONFLICT (character_id, creature_id) DO NOTHING"
+            ),
+            {"id": uuid4(), "character_id": character_id},
+        )
+        for evidence_id, category in (
+            ("first_observation", "observation"),
+            ("first_combat", "combat"),
+        ):
+            bind.execute(
+                sa.text(
+                    "INSERT INTO bestiary_evidence "
+                    "(id, character_id, creature_id, evidence_id, category) "
+                    "VALUES (:id, :character_id, 'dog_cinereo', :evidence_id, :category) "
+                    "ON CONFLICT (character_id, creature_id, evidence_id) DO NOTHING"
+                ),
+                {
+                    "id": uuid4(),
+                    "character_id": character_id,
+                    "evidence_id": evidence_id,
+                    "category": category,
+                },
+            )
 
 
 def downgrade() -> None:
@@ -187,6 +234,7 @@ def downgrade() -> None:
     if bind.execute(sa.text("SELECT 1 FROM reward_components LIMIT 1")).first() is not None:
         raise RuntimeError("Cannot downgrade populated reward component metadata")
     op.drop_column("reward_components", "payload")
+    op.drop_column("game_activities", "last_valid_action_at")
     op.create_unique_constraint(
         "uq_character_material", "material_stacks", ["character_id", "material_id", "bound"]
     )

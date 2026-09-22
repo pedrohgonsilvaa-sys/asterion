@@ -1,23 +1,28 @@
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
+from asterion.application.progression import consolidate_level, level_xp
 from asterion.application.road import ROAD, RoadService
 from asterion.domain.combat import allowed_actions
 from asterion.domain.road import materialize_equipment
 from asterion.infrastructure.db.models import (
     Account,
     BestiaryEntry,
+    BestiaryEvidence,
     BlockedDelivery,
     Brazier,
     Character,
     EquipmentItem,
+    ExplorationAttempt,
     GameActivity,
     HuntContext,
     MaterialStack,
     PendingItem,
+    Quest,
     RewardComponent,
     RewardEvent,
     Unlock,
@@ -25,7 +30,14 @@ from asterion.infrastructure.db.models import (
 )
 
 
-async def _seed_road(database, actor=771100, vigor=100):
+async def _seed_road(
+    database,
+    actor=771100,
+    vigor=100,
+    p1_status="completed",
+    include_p1=True,
+    xp=2720,
+):
     _, sessions = database
     cid = uuid4()
     async with sessions() as session:
@@ -41,7 +53,7 @@ async def _seed_road(database, actor=771100, vigor=100):
                 stage="menu:ready",
                 ruleset_version="gdd-1.4.3-baseline-1.0",
                 level=1,
-                xp=2720,
+                xp=xp,
                 hp=Decimal("702"),
                 max_hp=Decimal("702"),
                 vigor=vigor,
@@ -50,13 +62,54 @@ async def _seed_road(database, actor=771100, vigor=100):
             )
         )
         await session.flush()
-        session.add_all(
-            [
+        seed_rows = [
+                *([Quest(
+                    character_id=cid,
+                    quest_id="P1",
+                    title="Vozes na Estrada",
+                    status=p1_status,
+                    step=7,
+                    content_version="tdo-1.0.2",
+                )] if include_p1 else []),
                 Brazier(character_id=cid, brazier_id="tdo.brazier.estrada"),
                 Brazier(character_id=cid, brazier_id="tdo.brazier.refugio_do_ocaso"),
                 WorldState(character_id=cid, region="Terras do Ocaso", location="Refúgio do Ocaso"),
                 Unlock(character_id=cid, unlock_id="hunt_manual.estrada_das_cinzas"),
                 Unlock(character_id=cid, unlock_id="explore.estrada_das_cinzas"),
+                BestiaryEntry(
+                    character_id=cid,
+                    creature_id="dog_cinereo",
+                    bkp=7,
+                    stage="observed",
+                ),
+                BestiaryEntry(
+                    character_id=cid,
+                    creature_id="corvo_fuligem",
+                    bkp=7,
+                    stage="observed",
+                ),
+            ]
+        session.add_all(seed_rows)
+        session.add_all(
+            [
+                BestiaryEvidence(
+                    character_id=cid,
+                    creature_id="dog_cinereo",
+                    evidence_id="first_observation",
+                    category="observation",
+                ),
+                BestiaryEvidence(
+                    character_id=cid,
+                    creature_id="dog_cinereo",
+                    evidence_id="first_combat",
+                    category="combat",
+                ),
+                BestiaryEvidence(
+                    character_id=cid,
+                    creature_id="corvo_fuligem",
+                    evidence_id="first_observation",
+                    category="observation",
+                ),
             ]
         )
         await session.commit()
@@ -487,3 +540,235 @@ async def test_bestiary_variant_repetition_and_alpha_requirements(database):
             session, character.id, "alfa_cinereo", victory=True, elite=True
         )
         assert alpha.stage == "dominated"
+
+
+@pytest.mark.asyncio
+async def test_road_navigation_waits_for_p1_completed(database):
+    actor, service = await _seed_road(database, 771110, include_p1=False)
+    assert await service.resume(actor) is None
+    assert await service.travel(actor, ROAD) is None
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        session.add(
+            Quest(
+                character_id=character.id,
+                quest_id="P1",
+                title="Vozes na Estrada",
+                status="active",
+                step=1,
+                content_version="tdo-1.0.2",
+            )
+        )
+        await session.commit()
+    assert await service.resume(actor) is None
+    async with database[1]() as session:
+        quest = await session.scalar(select(Quest).where(Quest.quest_id == "P1"))
+        quest.status = "completed"
+        await session.commit()
+    assert (await service.resume(actor)).kind == "refuge"
+
+
+@pytest.mark.asyncio
+async def test_travel_rejects_stale_callback_from_invalid_origin(database):
+    actor, service = await _seed_road(database, 771111)
+    async with database[1]() as session:
+        world = await session.scalar(select(WorldState).where(WorldState.character_id.is_not(None)))
+        world.location = "Local Antigo"
+        await session.commit()
+    assert await service.travel(actor, ROAD) is None
+    async with database[1]() as session:
+        world = await session.scalar(select(WorldState).where(WorldState.character_id.is_not(None)))
+        assert world.location == "Local Antigo"
+
+
+def test_progression_consolidates_carryover_and_caps_at_sixty():
+    from types import SimpleNamespace
+
+    character = SimpleNamespace(
+        level=1,
+        xp=level_xp(1) + 123,
+        character_class="sentinela",
+        race="remanescente",
+        hp=Decimal("100"),
+        max_hp=Decimal("999"),
+    )
+    assert consolidate_level(character) == 1
+    assert (character.level, character.xp) == (2, 123)
+    assert character.hp == Decimal("100")
+
+    character.level = 58
+    character.xp = sum(level_xp(level) for level in range(58, 60)) + 999
+    consolidate_level(character)
+    assert (character.level, character.xp) == (60, 0)
+
+
+@pytest.mark.asyncio
+async def test_first_observation_grants_fixed_xp_once_and_survives_reconnect(database, monkeypatch):
+    import asterion.application.road as road_module
+
+    actor, service = await _seed_road(database, 771112)
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        await session.execute(
+            delete(BestiaryEvidence).where(
+                BestiaryEvidence.character_id == character.id,
+                BestiaryEvidence.creature_id == "corvo_fuligem",
+            )
+        )
+        await session.execute(
+            delete(BestiaryEntry).where(
+                BestiaryEntry.character_id == character.id,
+                BestiaryEntry.creature_id == "corvo_fuligem",
+            )
+        )
+        await session.commit()
+    await service.travel(actor, ROAD)
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *args: ("combat", "explore.tdo.estrada.combat.corvo_fuligem", "Um Corvo."),
+    )
+    view = await service.explore(actor)
+    assert view.kind == "combat"
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        assert character.xp == 2720 + 48
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == f"bestiary:observation:{character.id}:corvo_fuligem",
+            )
+        ) == 1
+    resumed = await service.resume(actor)
+    assert resumed.kind == "combat"
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        assert character.xp == 2720 + 48
+
+
+@pytest.mark.asyncio
+async def test_alpha_first_major_victory_xp_is_unique(database):
+    actor, service = await _seed_road(database, 771113)
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        await service._bestiary(session, character.id, "alfa_cinereo", victory=True, elite=True)
+        await service._bestiary(session, character.id, "alfa_cinereo", victory=True, elite=True)
+        await session.commit()
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        assert character.xp == 2720 + 198
+        assert await session.scalar(
+            select(func.count(RewardComponent.id)).join(RewardEvent).where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == f"bestiary:first_victory:{character.id}:alfa_cinereo",
+                RewardComponent.kind == "bestiary_first_victory_xp",
+            )
+        ) == 1
+
+
+@pytest.mark.asyncio
+async def test_exploration_receipt_is_acknowledgeable_and_not_rerolled(database, monkeypatch):
+    import asterion.application.road as road_module
+
+    actor, service = await _seed_road(database, 771114)
+    await service.travel(actor, ROAD)
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *args: (
+            "great_discovery",
+            "explore.tdo.estrada.marco_viajantes",
+            "Marco oficial.",
+        ),
+    )
+    first = await service.explore(actor)
+    resumed = await service.resume(actor)
+    assert first.result_text == resumed.result_text
+    assert "✨ XP · 456" in resumed.result_text
+    await service.acknowledge_result(actor)
+    assert (await service.resume(actor)).kind == "road"
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        assert character.xp == 2720 + 456
+        attempt = await session.scalar(
+            select(ExplorationAttempt).where(ExplorationAttempt.character_id == character.id)
+        )
+        assert attempt.result_acknowledged is True
+
+
+@pytest.mark.asyncio
+async def test_rastros_context_is_persisted_for_reconnect(database, monkeypatch):
+    import asterion.application.road as road_module
+
+    actor, service = await _seed_road(database, 771115)
+    await service.travel(actor, ROAD)
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *args: (
+            "knowledge",
+            "explore.tdo.estrada.rastros_cinereos",
+            "Texto-base dos rastros.",
+        ),
+    )
+    first = await service.explore(actor)
+    assert "Texto-base dos rastros." in first.result_text
+    assert "Cão Cinéreo" in first.result_text or "Corvo de Fuligem" in first.result_text
+    resumed = await service.resume(actor)
+    assert resumed.result_text == first.result_text
+    async with database[1]() as session:
+        attempt = await session.scalar(select(ExplorationAttempt))
+        assert attempt.progress.get("context_creature_id") in {"dog_cinereo", "corvo_fuligem"}
+
+
+@pytest.mark.asyncio
+async def test_road_activity_expires_once_without_vigor_or_economy(database):
+    actor, service = await _seed_road(database, 771116)
+    await service.travel(actor, ROAD)
+    combat = await service.start_hunt(actor)
+    async with database[1]() as session:
+        activity = await session.scalar(
+            select(GameActivity).where(GameActivity.id == combat.activity_id)
+        )
+        activity.last_valid_action_at = datetime.now(UTC) - timedelta(minutes=31)
+        await session.commit()
+    expired = await service.resume(actor)
+    assert expired.kind == "hunt_defeat"
+    stale = await service.action(actor, combat.activity_id, combat.combat.version, "attack")
+    assert stale.kind == "hunt_defeat"
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        assert character.vigor == 100
+        assert await session.scalar(
+            select(func.count(GameActivity.id)).where(
+                GameActivity.character_id == character.id,
+                GameActivity.status == "active",
+            )
+        ) == 0
+
+
+@pytest.mark.asyncio
+async def test_minimum_post_p1_journey_consolidates_before_next_hunt(database, monkeypatch):
+    import asterion.application.road as road_module
+    from asterion.domain.road import road_pool
+
+    actor, service = await _seed_road(database, 771117, xp=level_xp(1) - 456)
+    await service.travel(actor, ROAD)
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *args: (
+            "great_discovery",
+            "explore.tdo.estrada.marco_viajantes",
+            "Marco oficial.",
+        ),
+    )
+    result = await service.explore(actor)
+    assert result.kind == "exploration"
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        assert (character.level, character.xp) == (2, 0)
+    hunt = await service.start_hunt(actor)
+    assert hunt.kind == "combat"
+    assert hunt.combat.fighters["player"].level == 2
+    assert "peregrino_calcinado" in {creature.creature_id for creature in road_pool(2)}

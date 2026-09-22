@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.domain.combat import Combat, act
@@ -20,6 +21,8 @@ from asterion.domain.prologue import (
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
+    BestiaryEntry,
+    BestiaryEvidence,
     Brazier,
     Character,
     CombatRecord,
@@ -107,6 +110,7 @@ class PrologueService:
                     character.hp,
                 )
                 activity, encounter, record = await repo.create(character, CONTENT_ID, state)
+                await self._ensure_tutorial_bestiary(session, character)
                 character.stage = COMBAT_STAGE
                 return view(character, activity, encounter, record)
             if activity.content_id != CONTENT_ID:
@@ -153,3 +157,42 @@ class PrologueService:
                 activity.status = "failed"
                 character.stage = FAILED_STAGE
             return view(character, activity, encounter, record)
+
+    async def _ensure_tutorial_bestiary(self, session, character) -> None:
+        """Record the tutorial Cão observation without granting observation XP."""
+        entry = await session.scalar(
+            select(BestiaryEntry)
+            .where(
+                BestiaryEntry.character_id == character.id,
+                BestiaryEntry.creature_id == "dog_cinereo",
+            )
+            .with_for_update()
+        )
+        if entry is None:
+            entry = BestiaryEntry(
+                character_id=character.id,
+                creature_id="dog_cinereo",
+                bkp=7,
+                stage="observed",
+            )
+            session.add(entry)
+        for evidence_id, category in (
+            ("first_observation", "observation"),
+            ("first_combat", "combat"),
+        ):
+            exists = await session.scalar(
+                select(BestiaryEvidence).where(
+                    BestiaryEvidence.character_id == character.id,
+                    BestiaryEvidence.creature_id == "dog_cinereo",
+                    BestiaryEvidence.evidence_id == evidence_id,
+                )
+            )
+            if exists is None:
+                session.add(
+                    BestiaryEvidence(
+                        character_id=character.id,
+                        creature_id="dog_cinereo",
+                        evidence_id=evidence_id,
+                        category=category,
+                    )
+                )

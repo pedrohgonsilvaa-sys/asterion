@@ -1,5 +1,6 @@
 """PostgreSQL storage primitives; callers own the encompassing transaction."""
 
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -71,6 +72,7 @@ class CombatRepository:
             status="active",
             state_version=state.version,
             ruleset_version=state.ruleset,
+            last_valid_action_at=datetime.now(UTC),
         )
         self.session.add(activity)
         await self.session.flush()

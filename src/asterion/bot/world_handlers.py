@@ -114,6 +114,8 @@ def world_router(
                 view = await road.acknowledge_defeat(query.from_user.id)
             elif view is not None and view.kind == "hunt_victory":
                 view = await road.acknowledge_result(query.from_user.id)
+            elif view is not None and view.kind == "exploration":
+                view = await road.acknowledge_result(query.from_user.id)
             if view is not None:
                 await present(query.message, render_road(view), images, edit=True)
 

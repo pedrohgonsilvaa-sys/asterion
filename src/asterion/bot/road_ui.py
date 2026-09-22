@@ -109,12 +109,14 @@ def render_road(view: RoadView) -> Screen:
         round_line = "[Ronda ×5] [Ronda ×10] [Ronda ×20]" if view.familiar else "🔒 Ronda de Caça · Vença uma Caçada neste Local"
         text = (
             "🔥 Estrada das Cinzas · Local Atual\nTerras do Ocaso · Nv. 1–10\n\n"
-            "🔥 Braseiro · Descoberto\n🧭 Desbravar · Disponível\n🦌 Caçada · Disponível\n\n"
+            "🔥 Braseiro · Descoberto\n"
+            + ("🧭 Desbravar · Disponível\n" if view.explore_available else "⏳ Desbravar · Em recarga\n")
+            + "🦌 Caçada · Disponível\n\n"
             + round_line
         )
         keyboard = [
             [InlineKeyboardButton(text="Caçar", callback_data="road:prepare")],
-            [InlineKeyboardButton(text="Desbravar", callback_data="road:explore")],
+            *([[InlineKeyboardButton(text="Desbravar", callback_data="road:explore")]] if view.explore_available else []),
             *([[InlineKeyboardButton(text="Ronda ×5", callback_data="menu:noop"), InlineKeyboardButton(text="Ronda ×10", callback_data="menu:noop"), InlineKeyboardButton(text="Ronda ×20", callback_data="menu:noop")]] if view.familiar else []),
             [
                 InlineKeyboardButton(
