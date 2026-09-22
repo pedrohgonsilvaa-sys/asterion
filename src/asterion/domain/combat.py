@@ -22,6 +22,15 @@ class Effect:
     duration_eligible: bool = True
 
 
+@dataclass
+class DotState:
+    kind: str
+    stacks: int
+    remaining: int
+    snapshot_attack: Decimal
+    source: str
+
+
 @dataclass(frozen=True)
 class Action:
     id: str
@@ -106,6 +115,7 @@ class Combat:
     resolving_prepared: bool = False
     variant: str | None = None
     dots: dict[str, list[str]] = field(default_factory=dict)
+    dot_states: dict[str, list[DotState]] = field(default_factory=dict)
 
     @property
     def tutorial_stage(self) -> str:
@@ -172,6 +182,20 @@ def _begin_turn(state: Combat) -> None:
 
 def _end_turn(state: Combat) -> None:
     actor = state.fighters[state.order[state.turn_index]]
+    for dot in state.dot_states.get(actor.id, []):
+        coefficient = D("0.12") if dot.kind == "poison" else D("0.10")
+        damage = int(
+            (dot.snapshot_attack * coefficient * dot.stacks).to_integral_value(
+                rounding=ROUND_FLOOR
+            )
+        )
+        actor.hp = max(D(0), actor.hp - D(damage))
+        dot.remaining -= 1
+    state.dot_states[actor.id] = [
+        dot for dot in state.dot_states.get(actor.id, []) if dot.remaining > 0
+    ]
+    if actor.hp == 0 and not state.result:
+        state.result = "defeat" if actor.id == "player" else "victory"
     for effect in actor.effects:
         if actor.opportunity > effect.applied_opportunity:
             effect.remaining -= 1
@@ -251,6 +275,16 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
         chosen = native or rider
         if chosen and chosen not in dots and len(dots) < 3:
             dots.append(chosen)
+            states = state.dot_states.setdefault(target.id, [])
+            existing = next((dot for dot in states if dot.kind == chosen), None)
+            if existing is None:
+                states.append(
+                    DotState(chosen, 1, 3 if chosen == "poison" else 2,
+                             actor.stat("attack"), actor.id)
+                )
+            else:
+                existing.stacks = min(3, existing.stacks + 1)
+                existing.remaining = 3 if chosen == "poison" else 2
     actor.last_action = action_id
     if action.blocked_opportunities:
         actor.cooldowns[action_id] = actor.opportunity + action.blocked_opportunities + 1

@@ -92,6 +92,12 @@ class Character(Base):
         Integer, nullable=False, default=100, server_default="100"
     )
     crowns: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    elite_equipment_pity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    elite_legendary_pity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
 
 class Brazier(Base):
@@ -345,6 +351,9 @@ class HuntContext(Base):
     variant: Mapped[str | None] = mapped_column(String(24))
     seed: Mapped[str] = mapped_column(String(128), nullable=False)
     loot_profile: Mapped[str] = mapped_column(String(32), nullable=False, default="hunt")
+    result_acknowledged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
 
 class ExplorationAttempt(Base):

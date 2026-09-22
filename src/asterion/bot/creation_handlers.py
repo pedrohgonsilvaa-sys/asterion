@@ -97,7 +97,7 @@ def creation_router(
     async def current_screen(actor, state):
         if p1 is not None:
             p1_view = await p1.resume(actor)
-            if p1_view is not None:
+            if p1_view is not None and (p1_view.status == "active" or p1_view.combat is not None):
                 return render_p1(p1_view)
         if road is not None:
             road_view = await road.resume(actor)

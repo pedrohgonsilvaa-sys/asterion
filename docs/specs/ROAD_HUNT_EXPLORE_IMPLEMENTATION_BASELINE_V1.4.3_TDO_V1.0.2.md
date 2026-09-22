@@ -412,6 +412,15 @@ Alfa Cinéreo, para Dominado, além do BKP Elite exige:
 
 ## 10. Desbravar — baseline global compacta
 
+### 10.0 Estado de Dano por Tempo
+
+- Veneno: `12% ATQ` por stack/tick, duração `3T`, máximo `3` stacks.
+- Sangramento: `10% ATQ` por stack/tick, duração `2T`, máximo `3` stacks.
+- Cada ação agressiva do afetado acrescenta `3% ATQ` snapshot por stack de Sangramento.
+- O tick ocorre no fim da oportunidade do afetado e depois reduz a duração.
+- DoT não causa crítico e não é reduzido por Defender.
+- Investida Rasgante aplica um Sangramento nativo; riders de Variante não duplicam o stack nativo.
+
 - cooldown 5 min;
 - máximo 6 tentativas / Local / 60 min;
 - Solo;

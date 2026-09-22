@@ -16,6 +16,14 @@ def _uuid():
 
 
 def upgrade() -> None:
+    op.add_column(
+        "characters",
+        sa.Column("elite_equipment_pity", sa.Integer(), nullable=False, server_default="0"),
+    )
+    op.add_column(
+        "characters",
+        sa.Column("elite_legendary_pity", sa.Integer(), nullable=False, server_default="0"),
+    )
     op.create_table(
         "hunt_contexts",
         sa.Column("id", _uuid(), primary_key=True),
@@ -27,6 +35,7 @@ def upgrade() -> None:
         sa.Column("variant", sa.String(24)),
         sa.Column("seed", sa.String(128), nullable=False),
         sa.Column("loot_profile", sa.String(32), nullable=False, server_default="hunt"),
+        sa.Column("result_acknowledged", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.ForeignKeyConstraint(["game_activity_id"], ["game_activities.id"]),
         sa.ForeignKeyConstraint(["character_id"], ["characters.id"]),
         sa.UniqueConstraint("game_activity_id", name="uq_hunt_activity"),
@@ -148,5 +157,7 @@ def downgrade() -> None:
     for table in tables:
         if bind.execute(sa.text(f"SELECT 1 FROM {table} LIMIT 1")).first() is not None:
             raise RuntimeError("Cannot downgrade populated road hunt/explore state")
+    op.drop_column("characters", "elite_legendary_pity")
+    op.drop_column("characters", "elite_equipment_pity")
     for table in tables:
         op.drop_table(table)
