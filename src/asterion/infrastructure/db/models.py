@@ -98,6 +98,9 @@ class Character(Base):
     elite_legendary_pity: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    delivery_blocked: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
 
 class Brazier(Base):

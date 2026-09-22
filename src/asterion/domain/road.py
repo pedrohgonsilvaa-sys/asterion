@@ -2,7 +2,7 @@
 # ruff: noqa: E501
 
 from dataclasses import dataclass
-from decimal import Decimal, localcontext
+from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal, localcontext
 from hashlib import sha256
 from uuid import UUID
 
@@ -43,7 +43,7 @@ def weighted_recent_choice(seed: str, entries: tuple[tuple[str, int], ...], rece
     )
     eligible = tuple((key, int(weight * 100)) for key, weight in adjusted if weight > 0)
     if not eligible:
-        eligible = tuple((key, weight * 100) for key, weight in entries)
+        raise ValueError("no eligible result after anti-repeat filtering")
     return weighted_choice(seed, eligible)
 
 CATEGORY = {
@@ -176,7 +176,19 @@ def materialize_equipment(seed: str, rarity: str, level: int) -> dict:
         pick = _stable_draw(seed, f"equipment.secondary.{index}", len(pool))
         attribute = pool.pop(pick)
         budget = D(SLOT_WEIGHTS["Principal" if slot == "2H" else slot]) * (RARITY_MULT[rarity] - 1) / max(1, count)
-        secondaries.append({"attribute": attribute, "value": str((budget * SECONDARY_SCALE[attribute] * g.sqrt()).quantize(D("0.01")))})
+        scale = g.sqrt() if attribute in {"PER", "CRIT", "Esquiva", "Bloqueio"} else g
+        raw = budget * SECONDARY_SCALE[attribute] * scale
+        if attribute in {"PER", "CRIT", "Esquiva", "Bloqueio"}:
+            # Percentage secondaries are quarter percentage points.  Decimal
+            # quantization with ROUND_HALF_EVEN is the authoritative ties-to-even
+            # rule; a positive roll always retains the 0.25 p.p. minimum.
+            value = (
+                (raw / D("0.25")).quantize(D(1), rounding=ROUND_HALF_EVEN) * D("0.25")
+            )
+            value = max(D("0.25"), value)
+        else:
+            value = raw.quantize(D(1), rounding=ROUND_HALF_UP)
+        secondaries.append({"attribute": attribute, "value": str(value)})
     return {"item_name": name, "slot": slot, "item_level": level, "rarity": rarity, "core": core, "secondaries": secondaries, "enhancement": 0, "rune": None, "enchantment": None, "bound": False}
 
 def rune_potency(family: str, rarity: str) -> str:
@@ -233,13 +245,21 @@ def select_exploration_result(seed: str, player_level: int, recent: tuple[str, .
                 if creature_for(key).unlock_level <= player_level
             )
         subweights = tuple((key, value) for key, value in subweights if key not in excluded)
-        if subweights:
+        # Apply anti-repeat to the *subresults* before deciding whether this
+        # category remains eligible.  In particular, a category with one
+        # eligible result cannot fall back to its base weight when that result
+        # is the immediately previous result.
+        adjusted = tuple(
+            (key, int((D(weight) * (D(0) if key == (recent[0] if recent else None)
+                                     else D("0.35") if key in recent else D(1))).to_integral_value()))
+            for key, weight in subweights
+        )
+        adjusted = tuple((key, weight) for key, weight in adjusted if weight > 0)
+        if adjusted:
             eligible_categories.append((category, weight))
-            eligible_subweights[category] = subweights
+            eligible_subweights[category] = adjusted
     category = weighted_recent_choice(seed, tuple(eligible_categories), recent)
-    subweights = eligible_subweights[category]
-    result = weighted_recent_choice(f"{seed}:category:{category}", subweights, recent)
-    return result
+    return weighted_choice(f"{seed}:category:{category}", eligible_subweights[category])
 
 
 def select_variant(seed: str, creature: Creature) -> str | None:

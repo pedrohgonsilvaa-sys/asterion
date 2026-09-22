@@ -24,6 +24,10 @@ def upgrade() -> None:
         "characters",
         sa.Column("elite_legendary_pity", sa.Integer(), nullable=False, server_default="0"),
     )
+    op.add_column(
+        "characters",
+        sa.Column("delivery_blocked", sa.Boolean(), nullable=False, server_default=sa.false()),
+    )
     op.create_table(
         "hunt_contexts",
         sa.Column("id", _uuid(), primary_key=True),
@@ -159,5 +163,6 @@ def downgrade() -> None:
             raise RuntimeError("Cannot downgrade populated road hunt/explore state")
     op.drop_column("characters", "elite_legendary_pity")
     op.drop_column("characters", "elite_equipment_pity")
+    op.drop_column("characters", "delivery_blocked")
     for table in tables:
         op.drop_table(table)

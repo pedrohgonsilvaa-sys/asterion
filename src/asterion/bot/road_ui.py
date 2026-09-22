@@ -48,6 +48,10 @@ def render_road(view: RoadView) -> Screen:
         return Screen(text, "hunt_prepare", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
     if view.kind == "hunt_victory":
         text = "🏆 Vitória\n\n🦌 Caçada concluída"
+        if view.creature:
+            text += f"\n🐾 {escape(view.creature)}"
+        if view.variant:
+            text += f"\n🧬 Variante · {escape(view.variant)}"
         if view.reward_lines:
             text += "\n\n" + "\n".join(view.reward_lines)
         keyboard = [
@@ -77,6 +81,30 @@ def render_road(view: RoadView) -> Screen:
             [InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")],
         ]
         return Screen(text, "explore_prepare", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
+    if view.kind == "explore_cooldown":
+        text = (
+            "🧭 Desbravar\n\n"
+            "⏳ Desbravar · Disponível em "
+            f"<code>{escape(view.result_text or '00:00')}</code>"
+        )
+        return Screen(
+            text,
+            "explore_cooldown",
+            InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")]]),
+            parse_mode="HTML",
+        )
+    if view.kind == "explore_limit":
+        text = (
+            "🧭 Desbravar\n\n"
+            "🔒 Desbravar · Limite recente atingido\n"
+            f"⏳ Disponível em · <code>{escape(view.result_text or '00:00')}</code>"
+        )
+        return Screen(
+            text,
+            "explore_limit",
+            InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")]]),
+            parse_mode="HTML",
+        )
     if view.location == ROAD:
         round_line = "[Ronda ×5] [Ronda ×10] [Ronda ×20]" if view.familiar else "🔒 Ronda de Caça · Vença uma Caçada neste Local"
         text = (

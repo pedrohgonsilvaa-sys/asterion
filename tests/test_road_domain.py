@@ -58,6 +58,30 @@ def test_variant_subdraws_and_materialization_are_deterministic():
     assert weighted_recent_choice("seed", (("a", 50), ("b", 50)), ("a",)) == "b"
 
 
+def test_equipment_secondary_scales_and_rounds_by_attribute_family():
+    seen_flat = False
+    seen_percent = False
+    for level in range(1, 6):
+        item = materialize_equipment(f"scale-{level}", "Lendário", level)
+        for secondary in item["secondaries"]:
+            value = Decimal(secondary["value"])
+            if secondary["attribute"] in {"PER", "CRIT", "Esquiva", "Bloqueio"}:
+                seen_percent = True
+                assert value >= Decimal("0.25")
+                assert (value * 4) == (value * 4).to_integral_value()
+            else:
+                seen_flat = True
+                assert value == value.to_integral_value()
+    assert seen_flat and seen_percent
+
+
+def test_anti_repeat_removes_a_category_with_its_only_eligible_result():
+    from asterion.domain.road import select_exploration_result
+
+    for seed in ("anti-repeat-a", "anti-repeat-b", "anti-repeat-c"):
+        assert select_exploration_result(seed, 1, recent=("marco_viajantes",)) != "marco_viajantes"
+
+
 def test_road_combat_has_normal_actions_and_no_tutorial():
     from asterion.domain.road import create_road_combat
 
