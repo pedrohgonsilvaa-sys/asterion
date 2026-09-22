@@ -6,10 +6,13 @@ from asterion.domain.road import (
     CATEGORY,
     CREATURES,
     enemy_xp,
+    materialize_equipment,
     road_enemy_stats,
     road_pool,
+    rune_potency,
     select_creature,
     select_variant,
+    weighted_recent_choice,
 )
 
 
@@ -40,6 +43,19 @@ def test_enemy_xp_and_variant_are_deterministic():
     assert first == select_creature("stable-seed", 1)
     assert select_variant("stable-seed", dog) == select_variant("stable-seed", dog)
     assert CATEGORY["common"].hp == Decimal("0.70")
+    assert enemy_xp(1, "common", player_level=5) < enemy_xp(1, "common", player_level=1)
+
+
+def test_variant_subdraws_and_materialization_are_deterministic():
+    dog = CREATURES[0]
+    assert select_variant("stable-seed", dog) == select_variant("stable-seed", dog)
+    item = materialize_equipment("equipment-seed", "Raro", 2)
+    assert item["item_level"] == 2
+    assert item["enhancement"] == 0
+    assert item["rune"] is None
+    assert len(item["secondaries"]) == 1
+    assert rune_potency("Brasa", "Rara") == "0.35%"
+    assert weighted_recent_choice("seed", (("a", 50), ("b", 50)), ("a",)) == "b"
 
 
 def test_road_combat_has_normal_actions_and_no_tutorial():

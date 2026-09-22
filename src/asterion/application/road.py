@@ -12,8 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.domain.combat import act
 from asterion.domain.road import (
-    EXPLORATION_CATEGORY_WEIGHTS,
-    EXPLORATION_SUBWEIGHTS,
     EXPLORE_UNLOCK,
     HUNT_UNLOCK,
     ROUND_FAMILIARITY,
@@ -21,9 +19,13 @@ from asterion.domain.road import (
     create_road_combat,
     creature_for,
     crowns,
+    equipment_rarity,
     enemy_xp,
     material_for,
+    materialize_equipment,
+    rune_potency,
     select_creature,
+    select_exploration_result,
     select_variant,
     weighted_choice,
 )
@@ -41,6 +43,7 @@ from asterion.infrastructure.db.models import (
     GameActivity,
     HuntContext,
     MaterialStack,
+    PendingItem,
     RewardComponent,
     RewardEvent,
     RuneStack,
@@ -70,6 +73,12 @@ class RoadView:
     state_version: int = 0
     vigor: int = 0
     max_vigor: int = 100
+    name: str = ""
+    hp: Decimal = Decimal(0)
+    max_hp: Decimal = Decimal(0)
+    reward_lines: tuple[str, ...] = ()
+    familiar: bool = False
+    retry_available: bool = True
 
 
 class RoadService:
@@ -173,7 +182,8 @@ class RoadService:
             variant = select_variant(seed, creature)
             combat_id = uuid4()
             combat = create_road_combat(
-                combat_id, c.name, c.character_class, c.race, c.hp, creature, level, variant
+                combat_id, c.name, c.character_class, c.race, c.hp, creature, level, variant,
+                player_level=c.level,
             )
             activity, encounter, record = await CombatRepository(s).create(c, HUNT_CONTENT, combat)
             s.add(
@@ -200,7 +210,8 @@ class RoadService:
             world = await s.scalar(select(WorldState).where(WorldState.character_id == c.id))
             if world is None or world.location != ROAD:
                 return None
-            return RoadView("hunt_prepare", c.id, ROAD, vigor=c.vigor, max_vigor=c.max_vigor)
+            return RoadView("hunt_prepare", c.id, ROAD, vigor=c.vigor, max_vigor=c.max_vigor,
+                            name=c.name, hp=c.hp, max_hp=c.max_hp)
 
     async def action(
         self, actor: int, activity_id: UUID, version: int, action: str
@@ -235,7 +246,7 @@ class RoadService:
             if updated.result == "victory":
                 activity.status = "completed"
                 if activity.content_id == HUNT_CONTENT:
-                    await self._settle_hunt(s, c, activity, encounter.id)
+                    xp = await self._settle_hunt(s, c, activity, encounter.id)
                     return RoadView(
                         "hunt_victory",
                         c.id,
@@ -243,6 +254,10 @@ class RoadService:
                         activity_id=activity.id,
                         vigor=c.vigor,
                         max_vigor=c.max_vigor,
+                        name=c.name,
+                        hp=c.hp,
+                        max_hp=c.max_hp,
+                        reward_lines=(f"✨ XP · {xp}",),
                     )
                 else:
                     attempt = await s.scalar(
@@ -281,16 +296,7 @@ class RoadService:
             return await self._combat_view(s, c, activity)
 
     async def retry_hunt(self, actor: int) -> RoadView | None:
-        async with self.sessions() as s:
-            c = await self._character(s, actor)
-            world = (
-                await s.scalar(select(WorldState).where(WorldState.character_id == c.id))
-                if c
-                else None
-            )
-            if c is None or world is None or world.location != ROAD:
-                return None
-            return RoadView("road", c.id, ROAD, vigor=c.vigor, max_vigor=c.max_vigor)
+        return await self.start_hunt(actor)
 
     async def explore(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
@@ -334,21 +340,14 @@ class RoadService:
             ):
                 return await self._view_for_world(s, c, world)
             seed = uuid4().hex
-            result = _explore_result(seed)
-            for reroll in range(8):
-                unique_fragment = {
-                    "explore.tdo.estrada.marco_viajantes": "codex.fragment.estrada.memoria_viajantes",
-                    "explore.tdo.estrada.luzes": "codex.fragment.estrada.luzes_na_estrada",
-                }.get(result[1])
-                if unique_fragment is None or not await s.scalar(
-                    select(CodexFragment).where(
-                        CodexFragment.character_id == c.id,
-                        CodexFragment.fragment_id == unique_fragment,
-                    )
-                ):
-                    break
-                seed = f"{seed}:{reroll}"
-                result = _explore_result(seed)
+            recent_rows = (await s.scalars(
+                select(ExplorationAttempt.result_id)
+                .where(ExplorationAttempt.character_id == c.id, ExplorationAttempt.local_id == ROAD)
+                .order_by(ExplorationAttempt.created_at.desc()).limit(3)
+            )).all()
+            result = _explore_result(
+                seed, c.level, tuple(str(item).rsplit(".", 1)[-1] for item in recent_rows)
+            )
             category, result_id, result_text = result
             attempt = ExplorationAttempt(
                 character_id=c.id,
@@ -369,7 +368,8 @@ class RoadService:
                 level = min(c.level, creature.max_level)
                 variant = select_variant(seed, creature)
                 combat = create_road_combat(
-                    uuid4(), c.name, c.character_class, c.race, c.hp, creature, level, variant
+                    uuid4(), c.name, c.character_class, c.race, c.hp, creature, level, variant,
+                    player_level=c.level,
                 )
                 activity, encounter, _ = await CombatRepository(s).create(
                     c, EXPLORE_CONTENT, combat
@@ -398,7 +398,7 @@ class RoadService:
             select(HuntContext).where(HuntContext.game_activity_id == activity.id).with_for_update()
         )
         if context is None:
-            return
+            return 0
         event = await s.scalar(
             select(RewardEvent)
             .where(
@@ -407,13 +407,13 @@ class RoadService:
             .with_for_update()
         )
         if event is not None:
-            return
+            return 0
         event = RewardEvent(character_id=c.id, source_id=f"activity:{activity.id}")
         s.add(event)
         await s.flush()
         enough = c.vigor >= 2
         factor = Decimal(1) if enough else Decimal("0.25")
-        xp = enemy_xp(context.enemy_level, context.category, factor)
+        xp = enemy_xp(context.enemy_level, context.category, factor, player_level=c.level)
         c.xp += xp
         crowns_award = crowns(context.enemy_level, context.category) if enough else 0
         c.crowns += crowns_award
@@ -455,6 +455,11 @@ class RoadService:
                 if _draw_int(context.seed, "fragment", 100) < 40:
                     components.append(("fragment", "material.tdo.fragmento_aprimoramento_i", 1))
             await self._materialize_optional_loot(s, c, context, components)
+            for kind, item_id, quantity in components:
+                if kind in {"catalyst", "fragment"}:
+                    pending_count = await s.scalar(select(func.count(PendingItem.id)).where(PendingItem.character_id == c.id)) or 0
+                    if pending_count < 20:
+                        s.add(PendingItem(character_id=c.id, source_key=f"activity:{activity.id}:{kind}", kind=kind, payload={"item_id": item_id}, quantity=quantity))
         for kind, item_id, quantity in components:
             s.add(
                 RewardComponent(
@@ -463,26 +468,32 @@ class RoadService:
             )
         await self._bestiary(s, c.id, context.creature_id, victory=True)
         await self._ensure(s, Unlock, character_id=c.id, unlock_id=ROUND_FAMILIARITY)
+        return xp
 
     async def _materialize_optional_loot(self, s, c, context, components):
         equipment_chance = 35 if context.category == "elite" else 8
-        rune_chance = 5 if context.category == "elite" else 1
+        rune_chance = 50 if context.category == "elite" else 5
         if _draw_int(context.seed, "equipment", 100) < equipment_chance:
-            item_name = "Arma do Caminhante"
-            s.add(
-                EquipmentItem(
+            rarity = equipment_rarity(context.seed, context.category)
+            item = materialize_equipment(context.seed, rarity, context.enemy_level)
+            equipment_count = await s.scalar(select(func.count(EquipmentItem.id)).where(EquipmentItem.character_id == c.id)) or 0
+            if equipment_count < 60:
+                s.add(
+                    EquipmentItem(
                     character_id=c.id,
                     source_key=f"activity:{context.game_activity_id}:equipment",
-                    item_name=item_name,
-                    rarity=_rarity(context.seed, context.category, "equipment"),
-                    slot="Principal",
+                    item_name=item["item_name"],
+                    rarity=item["rarity"],
+                    slot=item["slot"],
                     item_level=context.enemy_level,
                     bound=False,
-                    payload={"secondaries": []},
+                    payload=item,
+                    )
                 )
-            )
-            components.append(("equipment", item_name, 1))
-        if _draw_int(context.seed, "rune", 1000) < rune_chance * 10:
+            else:
+                s.add(PendingItem(character_id=c.id, source_key=f"activity:{context.game_activity_id}:equipment", kind="equipment", payload=item, quantity=1))
+            components.append(("equipment", item["item_name"], 1))
+        if _draw_int(context.seed, "rune", 1000) < rune_chance:
             rarity = _rarity(context.seed, context.category, "rune")
             families = (
                 "Brasa",
@@ -494,7 +505,7 @@ class RoadService:
                 "Desvio",
                 "Guarda",
             )
-            family = families[_draw_int(context.seed, "rune-family", len(families))]
+            family = families[_draw_int(context.seed, "rune.family", len(families))]
             stack = await s.scalar(
                 select(RuneStack)
                 .where(
@@ -513,7 +524,7 @@ class RoadService:
                         family=family,
                         rarity=rarity,
                         grade=1,
-                        potency="0.35%",
+                        potency=rune_potency(family, rarity),
                         quantity=1,
                         bound=False,
                     )
@@ -529,7 +540,7 @@ class RoadService:
             )
             if context is not None:
                 factor = Decimal(1) if c.vigor >= 4 else Decimal("0.25")
-                c.xp += enemy_xp(context.enemy_level, context.category, factor)
+                c.xp += enemy_xp(context.enemy_level, context.category, factor, player_level=c.level)
                 if c.vigor >= 4:
                     c.vigor -= 4
                     c.crowns += int(
@@ -538,26 +549,23 @@ class RoadService:
                         )
                         * 10
                     )
-                    material = material_for(
-                        context.creature_id, f"{attempt.seed}:exploration-material:0"
-                    )
-                    stack = await s.scalar(
-                        select(MaterialStack)
-                        .where(
-                            MaterialStack.character_id == c.id,
-                            MaterialStack.material_id == material,
-                            MaterialStack.bound.is_(False),
+                    pool = (("material.tdo.ferro_de_fuligem", 30), ("material.tdo.couro_escoriado", 30), ("material.tdo.erva_cinzenta", 20), ("material.tdo.residuo_ocaso", 20))
+                    units = 1 + (1 if _draw_int(attempt.seed, "exploration-material-extra", 100) < 20 else 0)
+                    for ordinal in range(units):
+                        material = weighted_choice(
+                            f"{attempt.seed}:exploration-material:{ordinal}", pool
                         )
-                        .with_for_update()
-                    )
-                    if stack is None:
-                        s.add(
-                            MaterialStack(
-                                character_id=c.id, material_id=material, quantity=1, bound=False
-                            )
+                        stack = await s.scalar(
+                            select(MaterialStack).where(
+                                MaterialStack.character_id == c.id,
+                                MaterialStack.material_id == material,
+                                MaterialStack.bound.is_(False),
+                            ).with_for_update()
                         )
-                    else:
-                        stack.quantity += 1
+                        if stack is None:
+                            s.add(MaterialStack(character_id=c.id, material_id=material, quantity=1, bound=False))
+                        else:
+                            stack.quantity += 1
                 await self._bestiary(s, c.id, context.creature_id, victory=True)
             return
         if attempt.category == "resource":
@@ -639,14 +647,28 @@ class RoadService:
             ("first_observation", "observation"),
             ("first_combat", "combat"),
         ):
-            await self._ensure(
-                s,
-                BestiaryEvidence,
-                character_id=character_id,
-                creature_id=creature_id,
-                evidence_id=evidence,
-                category=category,
-            )
+            exists = await s.scalar(select(BestiaryEvidence).where(
+                BestiaryEvidence.character_id == character_id,
+                BestiaryEvidence.creature_id == creature_id,
+                BestiaryEvidence.evidence_id == evidence,
+            ))
+            if exists is None:
+                s.add(BestiaryEvidence(character_id=character_id, creature_id=creature_id, evidence_id=evidence, category=category))
+        if victory:
+            first_victory = await s.scalar(select(BestiaryEvidence).where(
+                BestiaryEvidence.character_id == character_id,
+                BestiaryEvidence.creature_id == creature_id,
+                BestiaryEvidence.evidence_id == "first_victory",
+            ))
+            if first_victory is None:
+                s.add(BestiaryEvidence(character_id=character_id, creature_id=creature_id, evidence_id="first_victory", category="victory"))
+                entry.bkp += 5
+        if entry.bkp >= 60:
+            entry.stage = "dominated"
+        elif entry.bkp >= 30:
+            entry.stage = "studied"
+        else:
+            entry.stage = "known"
 
     async def _combat_view(self, s, c, activity):
         encounter, record = await CombatRepository(s).combat(activity)
@@ -663,15 +685,23 @@ class RoadService:
             combat,
             vigor=c.vigor,
             max_vigor=c.max_vigor,
+            name=c.name,
+            hp=c.hp,
+            max_hp=c.max_hp,
         )
 
     async def _view_for_world(self, s, c, world):
+        familiar = bool(await s.scalar(select(Unlock).where(Unlock.character_id == c.id, Unlock.unlock_id == ROUND_FAMILIARITY)))
         return RoadView(
             "road" if world.location == ROAD else "refuge",
             c.id,
             world.location,
             vigor=c.vigor,
             max_vigor=c.max_vigor,
+            name=c.name,
+            hp=c.hp,
+            max_hp=c.max_hp,
+            familiar=familiar,
         )
 
     async def _locked_world(self, s, actor):
@@ -713,9 +743,8 @@ class RoadService:
         )
 
 
-def _explore_result(seed: str) -> tuple[str, str, str]:
-    category = weighted_choice(seed, tuple(EXPLORATION_CATEGORY_WEIGHTS.items()))
-    result = weighted_choice(f"{seed}:category:{category}", EXPLORATION_SUBWEIGHTS[category])
+def _explore_result(seed: str, player_level: int = 1, recent: tuple[str, ...] = ()) -> tuple[str, str, str]:
+    result = select_exploration_result(seed, player_level, recent)
     texts = {
         "marco_viajantes": (
             "great_discovery",

@@ -95,16 +95,16 @@ def creation_router(
     router.callback_query.filter(F.message.chat.type == "private")
 
     async def current_screen(actor, state):
+        if p1 is not None:
+            p1_view = await p1.resume(actor)
+            if p1_view is not None:
+                return render_p1(p1_view)
         if road is not None:
             road_view = await road.resume(actor)
             if road_view is not None:
                 from asterion.bot.road_ui import render_road
 
                 return render_road(road_view)
-        if p1 is not None:
-            p1_view = await p1.resume(actor)
-            if p1_view is not None and p1_view.combat is not None:
-                return render_p1(p1_view)
         if world is not None:
             world_view = await world.resume(actor)
             if world_view is not None:

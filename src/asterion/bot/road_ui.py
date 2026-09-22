@@ -35,20 +35,26 @@ def render_road(view: RoadView) -> Screen:
         ]
         return Screen(text, "road_defeat", InlineKeyboardMarkup(inline_keyboard=keyboard))
     if view.kind == "hunt_prepare":
-        text = "🦌 Caçada\n\n🔥 Estrada das Cinzas\nTerras do Ocaso · Nv. 1–10\n\n👤 Grupo\n⚔️ Escolha o formato da Caçada."
+        text = (
+            "🦌 Caçada\n\n🔥 Estrada das Cinzas\nTerras do Ocaso · Nv. 1–10\n\n"
+            f"👤 {escape(view.name or 'Personagem')}\n❤️ <code>{view.hp} / {view.max_hp}</code>\n"
+            f"⚡ Vigor · <code>{view.vigor} / {view.max_vigor}</code>\n\n👤 Grupo\n⚔️ Escolha o formato da Caçada."
+        )
         keyboard = [
             [InlineKeyboardButton(text="[1] Solo", callback_data="road:hunt")],
             [InlineKeyboardButton(text="[2] Grupo", callback_data="menu:noop")],
             [InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")],
         ]
-        return Screen(text, "hunt_prepare", InlineKeyboardMarkup(inline_keyboard=keyboard))
+        return Screen(text, "hunt_prepare", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
     if view.kind == "hunt_victory":
-        text = "🏆 Vitória\n\n🦌 Caçada concluída\n\n🎁 Recompensas persistidas"
+        text = "🏆 Vitória\n\n🦌 Caçada concluída"
+        if view.reward_lines:
+            text += "\n\n" + "\n".join(view.reward_lines)
         keyboard = [
-            [InlineKeyboardButton(text="Caçar Novamente", callback_data="road:hunt")],
+            [InlineKeyboardButton(text="Caçar Novamente", callback_data="road:prepare")],
             [InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")],
         ]
-        return Screen(text, "road_victory", InlineKeyboardMarkup(inline_keyboard=keyboard))
+        return Screen(text, "road_victory", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
     if view.kind == "exploration":
         text = f"🧭 Desbravar\n\n🔥 Estrada das Cinzas\nTerras do Ocaso · Nv. 1–10\n\n{escape(view.result_text or '')}"
         buttons = [
@@ -59,14 +65,16 @@ def render_road(view: RoadView) -> Screen:
             text, "exploration", InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML"
         )
     if view.location == ROAD:
+        round_line = "[Ronda ×5] [Ronda ×10] [Ronda ×20]" if view.familiar else "🔒 Ronda de Caça · Vença uma Caçada neste Local"
         text = (
             "🔥 Estrada das Cinzas · Local Atual\nTerras do Ocaso · Nv. 1–10\n\n"
             "🔥 Braseiro · Descoberto\n🧭 Desbravar · Disponível\n🦌 Caçada · Disponível\n\n"
-            "🔒 Ronda de Caça · Vença uma Caçada neste Local"
+            + round_line
         )
         keyboard = [
             [InlineKeyboardButton(text="Caçar", callback_data="road:prepare")],
             [InlineKeyboardButton(text="Desbravar", callback_data="road:explore")],
+            *([[InlineKeyboardButton(text="Ronda ×5", callback_data="menu:noop"), InlineKeyboardButton(text="Ronda ×10", callback_data="menu:noop"), InlineKeyboardButton(text="Ronda ×20", callback_data="menu:noop")]] if view.familiar else []),
             [
                 InlineKeyboardButton(
                     text="Travessia dos Braseiros", callback_data="road:travel:refuge"

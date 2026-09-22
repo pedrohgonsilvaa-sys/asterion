@@ -34,6 +34,18 @@ EXPLORATION_SUBWEIGHTS = {
     "atmospheric": (("cinza_pegadas", 34), ("carroca", 33), ("fogueira", 33)),
 }
 
+def weighted_recent_choice(seed: str, entries: tuple[tuple[str, int], ...], recent: tuple[str, ...] = ()) -> str:
+    """Select with the official anti-repeat weights, before drawing a subresult."""
+    previous = recent[0] if recent else None
+    adjusted = tuple(
+        (key, 0 if key == previous else (Decimal(weight) * D("0.35") if key in recent else D(weight)))
+        for key, weight in entries
+    )
+    eligible = tuple((key, int(weight * 100)) for key, weight in adjusted if weight > 0)
+    if not eligible:
+        eligible = tuple((key, weight * 100) for key, weight in entries)
+    return weighted_choice(seed, eligible)
+
 CATEGORY = {
     "common": Stats(D("0.70"), D("0.82"), D("0.90"), D("0.95")),
     "elite": Stats(D("1.50"), D("1.05"), D("1.05"), D("1.02")),
@@ -128,6 +140,55 @@ VARIANT_POOL = {
     "alfa_cinereo": (),
 }
 
+EQUIPMENT_CATALOG = (
+    ("Arma do Caminhante", "Principal"), ("Guarda do Caminhante", "Secundária"),
+    ("Arma Pesada do Caminhante", "2H"), ("Elmo de Fuligem", "Cabeça"),
+    ("Couraça de Fuligem", "Torso"), ("Manoplas de Fuligem", "Mãos"),
+    ("Passos de Fuligem", "Pés"), ("Capuz das Cinzas", "Cabeça"),
+    ("Veste do Caminhante", "Torso"), ("Luvas de Fuligem", "Mãos"),
+    ("Botas da Estrada", "Pés"), ("Selo Enegrecido", "Acessório"),
+    ("Relicário de Cinzas", "Artefato"),
+)
+SLOT_WEIGHTS = {"Principal": 18, "2H": 28, "Secundária": 10, "Cabeça": 10, "Torso": 16, "Mãos": 10, "Pés": 10, "Acessório": 12, "Artefato": 14}
+RARITY_SECONDARIES = {"Comum": 0, "Raro": 1, "Épico": 2, "Lendário": 3, "Mítico": 4}
+RUNE_FAMILIES = (("Brasa", "ATQ"), ("Pedra", "DEF"), ("Caminhante", "AGI"), ("Fresta", "PER"), ("Presságio", "CRIT"), ("Persistência", "HP"), ("Desvio", "Esquiva"), ("Guarda", "Bloqueio"))
+RUNE_POTENCY = {"HP": ("0.35%", "0.45%", "0.55%"), "ATQ": ("0.35%", "0.45%", "0.55%"), "DEF": ("0.55%", "0.80%", "1.00%"), "AGI": ("0.55%", "0.80%", "1.00%"), "PER": ("0.25 p.p.", "0.50 p.p.", "0.50 p.p."), "CRIT": ("0.25 p.p.", "0.50 p.p.", "0.50 p.p."), "Esquiva": ("0.25 p.p.", "0.25 p.p.", "0.25 p.p."), "Bloqueio": ("0.25 p.p.", "0.50 p.p.", "0.50 p.p.")}
+
+def _stable_draw(seed: str, purpose: str, modulo: int) -> int:
+    return int.from_bytes(sha256(f"{seed}:{purpose}".encode()).digest(), "big") % modulo
+
+def materialize_equipment(seed: str, rarity: str, level: int) -> dict:
+    eligible = tuple((name, slot) for name, slot in EQUIPMENT_CATALOG if not (rarity == "Mítico" and slot == "Torso"))
+    groups = tuple(sorted({"Principal" if slot == "2H" else slot for _, slot in eligible}))
+    group = groups[_stable_draw(seed, "equipment.group", len(groups))]
+    templates = tuple(item for item in eligible if item[1] == group or (group == "Principal" and item[1] == "2H"))
+    name, slot = templates[_stable_draw(seed, "equipment.template", len(templates))]
+    count = RARITY_SECONDARIES[rarity]
+    pools = {"Principal": ("ATQ", "AGI", "PER", "CRIT"), "2H": ("ATQ", "AGI", "PER", "CRIT"), "Secundária": ("ATQ", "DEF", "PER", "CRIT", "Bloqueio"), "Cabeça": ("HP", "DEF", "PER", "CRIT"), "Torso": ("HP", "DEF", "Bloqueio"), "Mãos": ("ATQ", "AGI", "PER", "CRIT"), "Pés": ("HP", "DEF", "AGI", "Esquiva"), "Acessório": ("HP", "ATQ", "AGI", "PER", "CRIT", "Esquiva"), "Artefato": ("HP", "ATQ", "DEF", "PER", "CRIT", "Bloqueio")}
+    pool = list(pools[slot])
+    secondaries = []
+    for index in range(min(count, len(pool))):
+        pick = _stable_draw(seed, f"equipment.secondary.{index}", len(pool))
+        secondaries.append(pool.pop(pick))
+    return {"item_name": name, "slot": slot, "item_level": level, "rarity": rarity, "secondaries": secondaries, "enhancement": 0, "rune": None, "enchantment": None, "bound": False}
+
+def rune_potency(family: str, rarity: str) -> str:
+    stat = dict(RUNE_FAMILIES)[family]
+    return RUNE_POTENCY[stat][{"Rara": 0, "Épica": 1, "Lendária": 2}[rarity]]
+
+def equipment_rarity(seed: str, category: str, elite_pity: int = 0) -> str:
+    roll = _stable_draw(seed, "equipment.rarity", 10000) / 100
+    if category == "elite":
+        if elite_pity >= 12:
+            return "Épico" if roll < 80 else "Lendário" if roll < 99 else "Mítico"
+        bands = ((45, "Comum"), (87, "Raro"), (98, "Épico"), (99.9, "Lendário"), (100, "Mítico"))
+    else:
+        bands = ((78, "Comum"), (97, "Raro"), (99.8, "Épico"), (100, "Lendário"))
+    for limit, rarity in bands:
+        if roll < limit:
+            return rarity
+    return bands[-1][1]
+
 
 def creature_for(creature_id: str) -> Creature:
     return next(c for c in CREATURES if c.creature_id == creature_id)
@@ -152,13 +213,23 @@ def select_creature(seed: str, player_level: int) -> Creature:
     return creature_for(weighted_choice(seed, tuple((c.creature_id, c.weight) for c in pool)))
 
 
+def select_exploration_result(seed: str, player_level: int, recent: tuple[str, ...] = ()) -> str:
+    category = weighted_recent_choice(seed, tuple(EXPLORATION_CATEGORY_WEIGHTS.items()), recent)
+    subweights = EXPLORATION_SUBWEIGHTS[category]
+    if category == "combat":
+        subweights = tuple((key, weight) for key, weight in subweights if creature_for(key).unlock_level <= player_level)
+    result = weighted_recent_choice(f"{seed}:category:{category}", subweights, recent)
+    return result
+
+
 def select_variant(seed: str, creature: Creature) -> str | None:
     if not VARIANT_POOL[creature.creature_id]:
         return None
-    digest = int.from_bytes(sha256(f"{seed}:variant:chance".encode()).digest(), "big")
-    if digest % 100 >= 8:
+    chance = int.from_bytes(sha256(f"{seed}:variant.chance".encode()).digest(), "big") % 100
+    if chance >= 8:
         return None
-    return VARIANT_POOL[creature.creature_id][digest % len(VARIANT_POOL[creature.creature_id])]
+    family = int.from_bytes(sha256(f"{seed}:variant.family".encode()).digest(), "big")
+    return VARIANT_POOL[creature.creature_id][family % len(VARIANT_POOL[creature.creature_id])]
 
 
 def road_enemy_stats(creature: Creature, level: int, variant: str | None = None) -> Stats:
@@ -168,15 +239,34 @@ def road_enemy_stats(creature: Creature, level: int, variant: str | None = None)
     return enemy_stats(level, *factors)
 
 
-def enemy_xp(level: int, category: str, vigor_factor: Decimal | None = None) -> int:
+def enemy_xp(
+    level: int,
+    category: str,
+    vigor_factor: Decimal | None = None,
+    player_level: int | None = None,
+    powerlevel_factor: Decimal | None = None,
+    participation_factor: Decimal | None = None,
+    legacy_factor: Decimal | None = None,
+) -> int:
     with localcontext() as ctx:
         ctx.prec = 50
         xp = (D(4000) + D(750) * level + D(43) * level * level).quantize(
-            D(100), rounding="ROUND_HALF_EVEN"
+            D("1E2"), rounding="ROUND_HALF_EVEN"
         )
         h = D("0.905903") + D("0.094097") * level
         category_factor = D("1") if category == "common" else D("2.75")
-        value = xp / (D(20) * h) * category_factor * (vigor_factor or D(1))
+        delta = level - (level if player_level is None else player_level)
+        level_factor = (
+            D("1.10") if delta >= 5 else D("1.05") if delta >= 3 else
+            D("0.80") if delta <= -3 and delta >= -5 else
+            D("0.50") if delta <= -6 and delta >= -10 else
+            D("0.20") if delta <= -11 and delta >= -20 else
+            D("0.05") if delta <= -21 else D(1)
+        )
+        value = (
+            xp / (D(20) * h) * category_factor * level_factor * (powerlevel_factor or D(1))
+            * (participation_factor or D(1)) * (vigor_factor or D(1)) * (legacy_factor or D(1))
+        )
         return int((value / 10).quantize(D(1), rounding="ROUND_HALF_EVEN") * 10)
 
 
@@ -205,8 +295,10 @@ def create_road_combat(
     creature: Creature,
     level: int,
     variant: str | None,
+    player_level: int | None = None,
 ) -> Combat:
-    player_stats = racial_stats(class_stats(character_class, 1), race)
+    player_level = level if player_level is None else player_level
+    player_stats = racial_stats(class_stats(character_class, player_level), race)
     enemy = road_enemy_stats(creature, level, variant)
     actions = {
         key: Action(key, label, coefficient, cooldown, debuff, duration)
@@ -217,7 +309,7 @@ def create_road_combat(
             combat_id,
             RULESET,
             fighters={
-                "player": Fighter("player", name, 1, player_stats, hp, race, character_class),
+                "player": Fighter("player", name, player_level, player_stats, hp, race, character_class),
                 "enemy": Fighter("enemy", creature.name, level, enemy, enemy.hp),
             },
             player_actions={
@@ -229,5 +321,6 @@ def create_road_combat(
             tutorial=None,
             flavor="A Estrada guarda ameaças entre as cinzas.",
             opening_log=f"🦌 {creature.name} surge entre a fuligem.",
+            variant=variant,
         )
     )

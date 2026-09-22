@@ -56,6 +56,9 @@ def combat_router(
             view = await service.action(query.from_user.id, activity_id, data.version, data.action)
         await query.answer()
         if view is not None and isinstance(query.message, Message):
+            if road is not None and hasattr(view, "kind"):
+                await present(query.message, render_road(view), images, edit=True)
+                return
             world_view = await world.resume(query.from_user.id) if world else None
             await present(
                 query.message,

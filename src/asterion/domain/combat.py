@@ -104,6 +104,8 @@ class Combat:
     prepared_source: str | None = None
     prepared_target: str | None = None
     resolving_prepared: bool = False
+    variant: str | None = None
+    dots: dict[str, list[str]] = field(default_factory=dict)
 
     @property
     def tutorial_stage(self) -> str:
@@ -237,6 +239,18 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
                 applied_opportunity=target.opportunity,
             ),
         )
+    # Variant riders are attached only to real direct offensive hits.  Native
+    # bleed from Investida Rasgante occupies the same per-action slot.
+    if actor_id == "enemy" and actual_damage > 0:
+        rider = (
+            "bleed" if state.variant == "hemorrhagic"
+            else "poison" if state.variant == "venomous" else None
+        )
+        native = "bleed" if action_id == "rend" else None
+        dots = state.dots.setdefault(target.id, [])
+        chosen = native or rider
+        if chosen and chosen not in dots and len(dots) < 3:
+            dots.append(chosen)
     actor.last_action = action_id
     if action.blocked_opportunities:
         actor.cooldowns[action_id] = actor.opportunity + action.blocked_opportunities + 1
@@ -269,6 +283,16 @@ def _enemy_action(state: Combat) -> str:
         state.resolving_prepared = True
         return action
     enemy = state.fighters["enemy"]
+    # Alfa Cinéreo uses content priority rather than a positional cycle.
+    if {"rend", "leap", "bite"}.issubset(state.enemy_actions):
+        bleed_count = state.dots.get("player", []).count("bleed")
+        if enemy.cooldowns.get("rend", 0) <= enemy.opportunity and bleed_count == 0:
+            return "rend"
+        if enemy.cooldowns.get("leap", 0) <= enemy.opportunity:
+            return "leap"
+        if enemy.cooldowns.get("rend", 0) <= enemy.opportunity and bleed_count < 3:
+            return "rend"
+        return "bite"
     for _ in range(len(state.ai_cycle)):
         action = state.ai_cycle[state.ai_position]
         state.ai_position = (state.ai_position + 1) % len(state.ai_cycle)
