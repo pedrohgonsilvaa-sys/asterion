@@ -19,8 +19,8 @@ from asterion.domain.road import (
     create_road_combat,
     creature_for,
     crowns,
-    equipment_rarity,
     enemy_xp,
+    equipment_rarity,
     material_for,
     materialize_equipment,
     rune_potency,
@@ -231,7 +231,10 @@ class RoadService:
             )
             if activity is None:
                 return None
-            if activity.status != "active" or activity.state_version != version:
+            if activity.status != "active":
+                world = await s.scalar(select(WorldState).where(WorldState.character_id == c.id))
+                return await self._view_for_world(s, c, world) if world is not None else None
+            if activity.state_version != version:
                 return await self._combat_view(s, c, activity)
             encounter, record = await CombatRepository(s).combat(activity)
             combat = decode(
@@ -433,23 +436,7 @@ class RoadService:
             for ordinal in range(material_count):
                 material = material_for(context.creature_id, f"{context.seed}:material:{ordinal}")
                 components.append(("material", material, 1))
-                stack = await s.scalar(
-                    select(MaterialStack)
-                    .where(
-                        MaterialStack.character_id == c.id,
-                        MaterialStack.material_id == material,
-                        MaterialStack.bound.is_(False),
-                    )
-                    .with_for_update()
-                )
-                if stack is None:
-                    s.add(
-                        MaterialStack(
-                            character_id=c.id, material_id=material, quantity=1, bound=False
-                        )
-                    )
-                else:
-                    stack.quantity += 1
+                await self._deliver_material(s, c, material, 1, f"activity:{activity.id}:material:{ordinal}")
             if context.category == "elite":
                 components.append(("catalyst", "material.tdo.catalisador_elite_i", 1))
                 if _draw_int(context.seed, "fragment", 100) < 40:
@@ -540,32 +527,17 @@ class RoadService:
             )
             if context is not None:
                 factor = Decimal(1) if c.vigor >= 4 else Decimal("0.25")
-                c.xp += enemy_xp(context.enemy_level, context.category, factor, player_level=c.level)
+                base_xp = ((Decimal(100 + 15 * context.enemy_level) * Decimal("0.15")) / 10).quantize(Decimal(1), rounding="ROUND_HALF_EVEN") * 10
+                c.xp += int(base_xp * factor)
                 if c.vigor >= 4:
                     c.vigor -= 4
-                    c.crowns += int(
-                        ((Decimal(100 + 15 * context.enemy_level) * Decimal("0.15")) / 10).quantize(
-                            Decimal(1), rounding="ROUND_HALF_EVEN"
-                        )
-                        * 10
-                    )
                     pool = (("material.tdo.ferro_de_fuligem", 30), ("material.tdo.couro_escoriado", 30), ("material.tdo.erva_cinzenta", 20), ("material.tdo.residuo_ocaso", 20))
                     units = 1 + (1 if _draw_int(attempt.seed, "exploration-material-extra", 100) < 20 else 0)
                     for ordinal in range(units):
                         material = weighted_choice(
                             f"{attempt.seed}:exploration-material:{ordinal}", pool
                         )
-                        stack = await s.scalar(
-                            select(MaterialStack).where(
-                                MaterialStack.character_id == c.id,
-                                MaterialStack.material_id == material,
-                                MaterialStack.bound.is_(False),
-                            ).with_for_update()
-                        )
-                        if stack is None:
-                            s.add(MaterialStack(character_id=c.id, material_id=material, quantity=1, bound=False))
-                        else:
-                            stack.quantity += 1
+                        await self._deliver_material(s, c, material, 1, f"explore:{attempt.id}:material:{ordinal}")
                 await self._bestiary(s, c.id, context.creature_id, victory=True)
             return
         if attempt.category == "resource":
@@ -585,23 +557,7 @@ class RoadService:
                 }
                 material = material_ids.get(attempt.result_id.rsplit(".", 1)[-1])
                 if material:
-                    stack = await s.scalar(
-                        select(MaterialStack)
-                        .where(
-                            MaterialStack.character_id == c.id,
-                            MaterialStack.material_id == material,
-                            MaterialStack.bound.is_(False),
-                        )
-                        .with_for_update()
-                    )
-                    if stack is None:
-                        s.add(
-                            MaterialStack(
-                                character_id=c.id, material_id=material, quantity=1, bound=False
-                            )
-                        )
-                    else:
-                        stack.quantity += 1
+                    await self._deliver_material(s, c, material, 1, f"explore:{attempt.id}:resource")
             return
         if attempt.result_id == "explore.tdo.estrada.marco_viajantes":
             c.xp += 456
@@ -728,6 +684,24 @@ class RoadService:
         found = await s.scalar(select(model).filter_by(**values).with_for_update())
         if found is None:
             s.add(model(**values))
+
+    async def _deliver_material(self, s, c, material_id: str, quantity: int, source_key: str) -> None:
+        stack = await s.scalar(select(MaterialStack).where(
+            MaterialStack.character_id == c.id,
+            MaterialStack.material_id == material_id,
+            MaterialStack.bound.is_(False),
+        ).with_for_update())
+        if stack is None:
+            s.add(MaterialStack(character_id=c.id, material_id=material_id, quantity=min(quantity, 999), bound=False))
+            remaining = max(0, quantity - 999)
+        else:
+            available = max(0, 999 - stack.quantity)
+            stack.quantity += min(quantity, available)
+            remaining = max(0, quantity - available)
+        if remaining:
+            pending_count = await s.scalar(select(func.count(PendingItem.id)).where(PendingItem.character_id == c.id)) or 0
+            if pending_count < 20:
+                s.add(PendingItem(character_id=c.id, source_key=source_key, kind="material", payload={"material_id": material_id}, quantity=remaining))
 
     def _attempt_view(self, c, attempt, location, text=None):
         return RoadView(
