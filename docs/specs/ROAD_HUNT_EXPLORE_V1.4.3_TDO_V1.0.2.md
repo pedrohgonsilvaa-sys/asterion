@@ -281,6 +281,15 @@ Ao primeiro commit válido de vitória:
 
 Vitória manual válida inclui Variante legítima. Não contam P1, Desbravar, Missão, derrota ou abandono.
 
+**Caçada Manual não exige 2 Vigor para criar o encontro.** Vigor é limitador econômico, não bloqueador absoluto do combate manual. Na resolução da vitória:
+
+- com `Vigor >=2`, conceder a economia normal e consumir exatamente `2 Vigor` no mesmo commit;
+- com `Vigor <2`, conceder **0 Coroas farmáveis, 0 Materiais negociáveis, 0 Equipamento, 0 Runa e 0 especial econômico**, consumir `0 Vigor` e aplicar `VigorXPFactor=25%` à XP repetível pertinente;
+- Bestiário/knowledge continuam elegíveis normalmente;
+- a vitória continua válida para familiaridade da Ronda, pois o gatilho é a vitória manual válida e não a obtenção de drop.
+
+Não existe consumo parcial de 1 Vigor.
+
 ### 6.2 XP de inimigo
 
 Usar a fórmula global `EnemyXP` com `enemy_level` e categoria materializados.
@@ -542,8 +551,8 @@ Se Vigor <4, exploração continua disponível; apenas a camada econômica repet
 
 ### 12.2 Cooldown e janela
 
-- cooldown: `5 min` após tentativa válida;
-- máximo: `6 tentativas / Local / 60 min`;
+- cooldown: `5 min`, contado a partir do **commit de criação da tentativa**;
+- máximo: `6 tentativas / Local / 60 min`, contado pelos commits de criação das tentativas;
 - UI mostra tempo restante `MM:SS`;
 - quando bloqueado, não mostrar botão desabilitado.
 
@@ -577,7 +586,16 @@ Pool-base por categoria:
 - Pequeno Recurso `10`;
 - Atmosférico `20`.
 
-Remover resultados inelegíveis e redistribuir apenas entre elegíveis.
+Subpesos oficiais da Estrada:
+
+- Grande Descoberta: Marco dos Viajantes `100`;
+- Conhecimento: Rastros Cinéreos `60` / Sinais à Margem `40`;
+- Narrativo: Luzes na Estrada `70` / Vozes Levadas pelo Vento `30`;
+- Combate: Cão `40` / Corvo `35` / Peregrino `25`;
+- Pequeno Recurso: Ferro `30` / Couro `30` / Erva `20` / Resíduo `20`;
+- Atmosférico: Cinza sobre as Pegadas `34` / Carroça sem Rodas `33` / Fogueira Fria `33`.
+
+Remover resultados inelegíveis e redistribuir apenas entre elegíveis, preservando a hierarquia categoria → resultado.
 
 Anti-repetição por resultado específico:
 
@@ -597,8 +615,11 @@ Texto oficial:
 Commit idempotente:
 
 - resultado único concluído;
-- Trecho `Memória dos Viajantes` na Entrada `Estrada das Cinzas`;
+- garantir/usar a Entrada de Códice `Estrada das Cinzas`;
+- Trecho `Memória dos Viajantes` nessa Entrada;
 - 456 XP uma única vez.
+
+IDs estáveis recomendados: `codex.location.estrada_das_cinzas` e `codex.fragment.estrada.memoria_viajantes`.
 
 ID: `explore.tdo.estrada.marco_viajantes`.
 
@@ -629,6 +650,10 @@ Peregrino:
 
 Se todas as evidências elegíveis já existirem, ainda resolver Rastros como contexto repetível: selecionar criatura elegível apenas para Flavor, sem novo BKP/XP/estado.
 
+Se **nenhuma** criatura estiver atualmente elegível para identificação contextual — por exemplo, nenhuma das entradas permitidas ainda foi legitimamente observada — mostrar apenas o texto-base de Rastros, sem nomear criatura.
+
+Rastros Cinéreos concede, quando aplicável, somente a evidência global de **Habitat** (`+3 BKP` pelas regras vigentes). **Não** conceder adicionalmente os `+8 BKP` de investigação Desbravar apenas por este resultado.
+
 Não revelar criatura ainda não conhecida.
 
 ID: `explore.tdo.estrada.rastros_cinereos`.
@@ -654,6 +679,8 @@ Texto:
 Trecho compartilhado:
 
 `Estrada das Cinzas / Luzes na Estrada`.
+
+Usar a mesma Entrada estável `codex.location.estrada_das_cinzas`; ID recomendado do Trecho: `codex.fragment.estrada.luzes_na_estrada`.
 
 Se Desbravar vier primeiro: registrar Trecho +143 XP; S1 futura reconhece Trecho existente.
 
@@ -940,51 +967,52 @@ Usar PostgreSQL real no CI. Cobrir no mínimo:
 20. reconnect da Caçada mantém activity/encounter/combat/configuração;
 21. vitória concede XP/Coroas corretos;
 22. derrota não concede economia nem consome Vigor;
-23. vitória econômica consome 2 Vigor exatamente uma vez;
-24. Cão→Couro; Corvo→Resíduo; Peregrino Ferro/Erva; Alfa→Couro;
+23. vitória com Vigor>=2 consome 2 Vigor exatamente uma vez;
+24. vitória manual com Vigor<2 não paga economia, não consome Vigor, aplica fator de XP pertinente e ainda conta para familiaridade;
+26. Cão→Couro; Corvo→Resíduo; Peregrino Ferro/Erva; Alfa→Couro;
 25. Elite entrega 3–4 básicos + Catalisador e Fragmento conforme roll;
-26. Equipamento respeita chances/raridade globais e item_level=enemy_level;
-27. seleção de grupo/template/secundários é determinística;
-28. 2H participa de Principal e usa pool de Principal;
-29. Torso Mítico genérico é filtrado por pool insuficiente;
-30. Equipamento nasce +0, sem Runa/Encantamento e bind correto;
-31. Runa usa Grau I na Estrada e família uniforme/determinística;
-32. Runa não usa smart loot/compatibilidade no drop;
-33. reward repetido não cria segundo item/runa;
-34. Inventário/Pending não perde nem duplica reward;
-35. primeira vitória manual registra familiaridade uma vez;
-36. P1/Desbravar não registram familiaridade;
-37. Bestiário primeira observação/combate/vitória é idempotente;
-38. Arte/mecânica só registra quando observada;
-39. Variante oculta até descoberta;
-40. Desbravar exige Local atual/unlock e não Vigor para iniciar;
-41. cooldown 5min;
-42. máximo 6/Local/60min;
-43. resultado é persistido antes da apresentação e não rerrola;
-44. anti-repetição imediato peso0 e últimas3 ×0,35;
-45. Únicos saem do pool após resolução;
-46. Marco concede 456 + Trecho uma vez;
-47. Luzes concede 143 uma vez e Trecho idempotente;
-48. Rastros não revela criatura desconhecida e concede Habitat apenas elegível;
-49. Rastros esgotado continua contexto sem novo progresso;
-50. Sinais/Vozes/Atmosféricos não criam reward artificial;
-51. Pequeno Recurso com Vigor>=4 consome4 e paga economia correta;
-52. Pequeno Recurso com Vigor<4 resolve contexto sem economia/Vigor parcial;
-53. combate de Desbravar usa 40/35/25 e Variante 8%;
-54. exploration_combat nunca executa rolls de Equipamento/Runa/especial;
-55. vitória exploration_combat paga 0,15×C + material +20% extra quando Vigor suficiente;
-56. cada unidade de material de exploration_combat usa pool 30/30/20/20;
-57. com Vigor<4, economy suprimida e XP usa fator pertinente;
-58. derrota de exploração encerra tentativa sem reroll;
-59. `/start`/`/menu` durante Foreground retomam atividade;
-60. callback antigo não cria segunda atividade/reward/knowledge;
-61. Telegram falhando pós-commit reconstrói resultado sem duplicar;
-62. outro dispositivo observa o mesmo estado;
-63. migration upgrade/downgrade/upgrade quando seguro;
-64. `alembic check`;
-65. `ruff check .`;
-66. pytest completo com PostgreSQL real e zero skips;
-67. `git diff --check`.
+27. Equipamento respeita chances/raridade globais e item_level=enemy_level;
+28. seleção de grupo/template/secundários é determinística;
+29. 2H participa de Principal e usa pool de Principal;
+30. Torso Mítico genérico é filtrado por pool insuficiente;
+31. Equipamento nasce +0, sem Runa/Encantamento e bind correto;
+32. Runa usa Grau I na Estrada e família uniforme/determinística;
+33. Runa não usa smart loot/compatibilidade no drop;
+34. reward repetido não cria segundo item/runa;
+35. Inventário/Pending não perde nem duplica reward;
+36. primeira vitória manual registra familiaridade uma vez;
+37. P1/Desbravar não registram familiaridade;
+38. Bestiário primeira observação/combate/vitória é idempotente;
+39. Arte/mecânica só registra quando observada;
+40. Variante oculta até descoberta;
+41. Desbravar exige Local atual/unlock e não Vigor para iniciar;
+42. cooldown 5min;
+43. máximo 6/Local/60min;
+44. resultado é persistido antes da apresentação e não rerrola;
+45. anti-repetição imediato peso0 e últimas3 ×0,35;
+46. Únicos saem do pool após resolução;
+47. Marco concede 456 + Trecho uma vez;
+48. Luzes concede 143 uma vez e Trecho idempotente;
+49. Rastros não revela criatura desconhecida e concede Habitat apenas elegível;
+50. Rastros esgotado continua contexto sem novo progresso;
+51. Sinais/Vozes/Atmosféricos não criam reward artificial;
+52. Pequeno Recurso com Vigor>=4 consome4 e paga economia correta;
+53. Pequeno Recurso com Vigor<4 resolve contexto sem economia/Vigor parcial;
+54. combate de Desbravar usa 40/35/25 e Variante 8%;
+55. exploration_combat nunca executa rolls de Equipamento/Runa/especial;
+56. vitória exploration_combat paga 0,15×C + material +20% extra quando Vigor suficiente;
+57. cada unidade de material de exploration_combat usa pool 30/30/20/20;
+58. com Vigor<4, economy suprimida e XP usa fator pertinente;
+59. derrota de exploração encerra tentativa sem reroll;
+60. `/start`/`/menu` durante Foreground retomam atividade;
+61. callback antigo não cria segunda atividade/reward/knowledge;
+62. Telegram falhando pós-commit reconstrói resultado sem duplicar;
+63. outro dispositivo observa o mesmo estado;
+64. migration upgrade/downgrade/upgrade quando seguro;
+65. `alembic check`;
+66. `ruff check .`;
+67. pytest completo com PostgreSQL real e zero skips;
+68. `git diff --check`.
 
 ## 21. Limite do PR de código
 
