@@ -218,3 +218,213 @@ Prioridade:
 3. se Salto disponível → preparar Salto;
 4. se Investida disponível e Sangramento abaixo do cap → Investida;
 5. Mordida Alfa.
+
+Não aplicar Investida somente para tentar ultrapassar cap.
+
+### 5.5 Ação Preparada
+
+Ao preparar:
+
+- consome a oportunidade atual;
+- não aplica dano/efeito final ainda;
+- persiste telegraph/estado da mesma ação;
+- compromete Recarga naquele momento.
+
+Antes da resolução, o alvo precisa receber ao menos uma oportunidade normal de resposta.
+
+Resolver na primeira oportunidade elegível posterior da fonte depois da janela de resposta.
+
+Defender válido mitiga normalmente o ataque Preparado.
+
+Se a fonte morrer antes da resolução, a ação é cancelada sem ataque póstumo. Se perder oportunidade por impedimento normal, preparação permanece e tenta resolver na próxima oportunidade elegível. Alvo único inválido encerra a ação sem retarget e sem devolver Recarga.
+
+O snapshot precisa persistir semântica equivalente a:
+
+- action id;
+- source/target;
+- oportunidade de preparação;
+- janela de resposta observada;
+- cooldown comprometido;
+- estado de resolução;
+- identidade idempotente da ação.
+
+Reconnect reconstrói o telegraph pendente; nunca reinicia preparação ou dano.
+
+### 5.6 Hemorrágico/Venenoso
+
+Pacote de Variante aplica no máximo `+1` DoT por alvo e por **ação ofensiva de Dano Direto elegível**.
+
+Elegíveis: ataque simples, Arte de Dano Direto, Preparada, AoE/multi-hit (máximo 1 rider por alvo para a ação inteira).
+
+Não elegíveis: tick de DoT, Refletido, Reação, Ambiental, Cura, Barreira, Defender, ação sem Dano Direto.
+
+Se a Arte já aplica o mesmo DoT nativamente, o pacote não adiciona segundo stack nessa ação. Não existe cooldown interno adicional. Rider exclusivo da Variante é omitido quando o alvo já está no cap global.
+
+Hemorrágico mantém `ATQ −5%`; Venenoso mantém `HP −5%`.
+
+## 6. Resultado da Caçada e economia
+
+### 6.1 Vitória
+
+Ao primeiro commit válido de vitória:
+
+1. atividade/encounter → completed;
+2. persistir HP restante;
+3. calcular XP normal do inimigo;
+4. processar Bestiário elegível;
+5. resolver economia da Caçada;
+6. consumir `2 Vigor` **somente se a recompensa econômica for concedida**;
+7. persistir reward event e componentes;
+8. se for a primeira vitória manual válida no Local, registrar familiaridade da Ronda;
+9. liberar lock de Configuração somente após resolução persistida;
+10. renderizar recibo pós-vitória.
+
+Vitória manual válida inclui Variante legítima. Não contam P1, Desbravar, Missão, derrota ou abandono.
+
+### 6.2 XP de inimigo
+
+Usar a fórmula global `EnemyXP` com `enemy_level` e categoria materializados.
+
+Primeira observação válida de Bestiário, quando realmente inédita e elegível, usa sua recompensa única própria; P1 continua sendo a exceção já suprimida.
+
+### 6.3 Coroas
+
+Caçada:
+
+- Comum: `0,05 × C(enemy_level)`;
+- Elite: `0,25 × C(enemy_level)`.
+
+Usar o arredondamento global já vigente para recompensa econômica.
+
+### 6.4 Materiais
+
+Regras de quantidade globais permanecem:
+
+- Comum: `80% → 1 Material Básico`;
+- Elite: `3–4 básicos garantidos +1 Catalisador`;
+- Fragmento Elite: `40% →1`.
+
+Identidade regional quando um Material Básico é devido:
+
+- Cão → Couro Escoriado `100%`;
+- Corvo → Resíduo do Ocaso `100%`;
+- Peregrino → Ferro de Fuligem / Erva Cinzenta, seleção uniforme por unidade;
+- Alfa → Couro Escoriado `100%`.
+
+Variantes não trocam o pool material da criatura.
+
+### 6.5 Equipamento
+
+Chance por categoria permanece a global. Quando o roll tiver sucesso:
+
+`loot_reference_level = enemy_level`
+
+`item_level = loot_reference_level`.
+
+Materialização:
+
+1. raridade já resolvida, inclusive pity;
+2. secundários exigidos: `0/1/2/3/4` para Comum/Raro/Épico/Lendário/Mítico;
+3. grupos: Principal, Secundária, Cabeça, Torso, Mãos, Pés, Acessório, Artefato;
+4. 2H participa de Principal, não cria nono grupo;
+5. filtrar templates regionais normais `generic_loot_eligible`;
+6. 2H usa pool de secundários de Principal;
+7. remover template cujo pool não comporte a quantidade de secundários distintos;
+8. selecionar grupo uniforme salvo peso explícito;
+9. selecionar template uniforme salvo peso explícito;
+10. secundários uniformes, sem reposição/duplicação;
+11. calcular núcleo/budget/magnitudes pelas fórmulas globais;
+12. criar item `+0`, sem Runa, sem Encantamento, Negociável salvo override;
+13. persistir antes da apresentação.
+
+Templates normais elegíveis da região são os 13 do catálogo Ferreiro/Curteiro/Joalheiro. Itens de Campanha e Receita especial ficam fora do gerador genérico.
+
+Crafting Comum/Raro/Épico não limita a raridade possível em Saque.
+
+Consequência vigente: Torso Mítico genérico é inelegível enquanto Torso tiver apenas três secundários possíveis e Mítico exigir quatro distintos.
+
+### 6.6 Runa
+
+Chance/raridade permanecem globais.
+
+`loot_reference_level = enemy_level`
+
+`rune_grade = floor((loot_reference_level - 1) / 10) + 1`, limitado I–VI.
+
+Na Estrada, portanto, drops normais são Grau I.
+
+Selecionar uniformemente entre as oito famílias regionais na ausência de peso explícito:
+
+- Brasa · ATQ;
+- Pedra · DEF;
+- Caminhante · AGI;
+- Fresta · PER;
+- Presságio · CRIT;
+- Persistência · HP;
+- Desvio · Esquiva;
+- Guarda · Bloqueio.
+
+Não filtrar por slot/equipamento atual. Compatibilidade é validada apenas ao instalar.
+
+Runa genérica nasce Negociável salvo override. Persistir família, raridade, Grau, potência e bind antes da apresentação.
+
+### 6.7 Determinismo do Saque
+
+Cada roll econômico possui seed persistida antes da apresentação.
+
+Usar subdraws estáveis equivalentes a:
+
+- `equipment.slot`;
+- `equipment.template`;
+- `equipment.secondary.N`;
+- `rune.family`;
+- materiais/quantidades/especiais com chaves próprias.
+
+Depois que item/runa/reward component existe, recovery carrega a instância persistida; não rerrola RNG.
+
+Chave idempotente precisa distinguir `source activity/encounter + character + roll_type + ordinal` ou equivalente.
+
+## 7. Inventário e Pending mínimos
+
+Este PR introduz drops repetíveis de Equipamento/Runa, então não pode depender da suposição de Inventário infinito.
+
+Implementar a persistência mínima reutilizável compatível com:
+
+- Inventário 60 slots;
+- Pending 20 slots;
+- Materiais stack 999;
+- Runas idênticas podem agrupar quando propriedades econômicas coincidirem;
+- Equipamento é instância individual;
+- itens Pending não podem ser usados/equipados/negociados.
+
+A UI completa de Inventário/Pending fica fora do PR, mas entrega precisa ser segura:
+
+- tentar fundir em stack compatível antes de gastar novo slot;
+- se Inventário não comportar componente físico, criar entrega Pending quando houver capacidade;
+- se Inventário + Pending não comportarem, não duplicar nem descartar silenciosamente; atividade deve finalizar com estado de entrega impeditivo/auditável e impedir novo gerador de item até resolução futura.
+
+Reward event e descoberta/conclusão são separados da entrega física; retry só completa componente faltante.
+
+## 8. Bestiário mínimo reutilizável
+
+Criar persistência suficiente para a progressão oficial sem implementar a tela completa.
+
+Modelo lógico recomendado:
+
+- `BestiaryEntry(character_id, creature_id, profile, bkp, stage, wins, ...)`;
+- `BestiaryEvidence(character_id, creature_id, evidence_id, category, ...)` unique;
+- estado específico de Variante pode ser evidência/subregistro ligado à criatura.
+
+A UI não exibe BKP numérico.
+
+### 8.1 Eventos elegíveis neste PR
+
+Conforme aplicável e apenas uma vez por marco:
+
+- primeira observação: +4 BKP;
+- primeiro combate: +3;
+- primeira vitória: +5;
+- nova Arte/comportamento observada: +4;
+- nova mecânica: +5;
+- Habitat: +3;
+- investigação Desbravar: +8 somente quando uma regra de conteúdo realmente a conceder;
