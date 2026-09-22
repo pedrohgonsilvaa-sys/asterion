@@ -828,3 +828,187 @@ Consequências possíveis:
 - XP;
 - Material/Coroas;
 - Códice/Trecho;
+- Bestiário/Habitat.
+
+Nunca mostrar componentes ausentes.
+
+## 17. Foreground, reconnect e comandos
+
+Prioridade global de reconstrução:
+
+1. Foreground ativo de Caçada/Desbravar/P1/outro conteúdo;
+2. resultado persistido ainda pendente de apresentação quando aplicável;
+3. navegação do Local;
+4. Menu normal.
+
+Enquanto combate de Caçada ou combate de Desbravar estiver ativo:
+
+- `/start` e `/menu` retomam o mesmo combate;
+- troca de dispositivo retoma o mesmo encounter;
+- callback antigo de Mapa/Local não cria nova atividade;
+- Configuração de Combate permanece travada;
+- decisão inimiga, Variante, loot seed e resultado de exploração não rerrolam.
+
+Depois de resultado persistido:
+
+- reward não é concedido novamente;
+- familiaridade não duplica;
+- Bestiário/Códice não duplicam;
+- resultado de Desbravar não rerrola;
+- `/menu` volta a funcionar normalmente.
+
+Solo PvE manual expira após 30min sem ação válida conforme regra global; antes disso é retomável no mesmo estado.
+
+## 18. Concorrência e locks
+
+Toda mutação revalida sob lock do personagem/atividade:
+
+- ownership + server;
+- WorldState/Local;
+- unlock;
+- Foreground único;
+- activity/encounter/attempt id;
+- state_version;
+- callback action válida;
+- cooldown/janela de tentativas;
+- Vigor no commit da economia;
+- reward event/component;
+- capacidade de Inventário/Pending;
+- familiaridade;
+- knowledge IDs.
+
+Casos obrigatórios de corrida:
+
+- dois `Solo` tentando criar Caçada;
+- `Solo` concorrendo com `Desbravar`;
+- dois callbacks de ação de combate;
+- vitória processada duas vezes;
+- reward Telegram falhando após commit;
+- dois Desbravar simultâneos;
+- callback antigo de tentativa resolvida;
+- primeira vitória concorrente tentando criar familiaridade;
+- item/runa já materializado durante retry;
+- cooldown/janela mudando entre render e commit.
+
+Somente o primeiro commit lógico válido produz efeito.
+
+## 19. Migration/persistência
+
+Criar a próxima revision Alembic após `20260921_0005`.
+
+Persistência nova mínima esperada:
+
+- contexto de Caçada repetível ligado a `GameActivity`/Encounter;
+- tentativa de exploração;
+- seed/resultados persistidos;
+- BestiaryEntry/Evidence ou equivalente;
+- Trechos de Códice (a tabela atual de `CodexEntry` sozinha não representa múltiplos Trechos de uma Entrada);
+- ItemInstance;
+- Runa persistente/stack compatível;
+- entrega Pending mínima;
+- capacidade/estado de Inventário suficiente;
+- reward linkage idempotente para atividades repetíveis;
+- familiaridade via Unlock ou equivalente.
+
+Não apagar/reinterpretar P1 existente.
+
+Downgrade deve ser conservador: se houver Caçada/Exploração/reward/item/runa/knowledge novos materializados, falhar explicitamente em vez de perder estado silenciosamente.
+
+## 20. Testes obrigatórios
+
+Usar PostgreSQL real no CI. Cobrir no mínimo:
+
+1. pós-P1 no Refúgio não permite Caçar/Desbravar remotamente;
+2. Travessia Refúgio→Estrada e Estrada→Refúgio funciona e custa 0;
+3. Travessia bloqueada por Foreground;
+4. Solo cria exatamente um encounter e entra direto no combate;
+5. pool Nv.1 contém apenas Cão/Corvo, pesos normalizados;
+6. Peregrino entra no Nv.2; Alfa no Nv.3;
+7. enemy_level respeita teto individual;
+8. chance/seleção de Variante usa seed persistida e máximo 1;
+9. Cão mantém cadência oficial;
+10. Corvo Rasante/Bicada oficial;
+11. Peregrino Golpe/Golpe/Defender oficial;
+12. Alfa respeita prioridade, Sangramento e Salto preparado;
+13. Preparada cria telegraph, dá janela e resolve uma vez;
+14. Defender mitiga Preparada;
+15. derrota da fonte cancela Preparada;
+16. reconnect preserva Preparada;
+17. Hemorrágico aplica no máximo 1 rider por ação e não duplica Sangramento nativo;
+18. Venenoso equivalente;
+19. Furioso/Resistente/Ágil não mudam IA;
+20. reconnect da Caçada mantém activity/encounter/combat/configuração;
+21. vitória concede XP/Coroas corretos;
+22. derrota não concede economia nem consome Vigor;
+23. vitória econômica consome 2 Vigor exatamente uma vez;
+24. Cão→Couro; Corvo→Resíduo; Peregrino Ferro/Erva; Alfa→Couro;
+25. Elite entrega 3–4 básicos + Catalisador e Fragmento conforme roll;
+26. Equipamento respeita chances/raridade globais e item_level=enemy_level;
+27. seleção de grupo/template/secundários é determinística;
+28. 2H participa de Principal e usa pool de Principal;
+29. Torso Mítico genérico é filtrado por pool insuficiente;
+30. Equipamento nasce +0, sem Runa/Encantamento e bind correto;
+31. Runa usa Grau I na Estrada e família uniforme/determinística;
+32. Runa não usa smart loot/compatibilidade no drop;
+33. reward repetido não cria segundo item/runa;
+34. Inventário/Pending não perde nem duplica reward;
+35. primeira vitória manual registra familiaridade uma vez;
+36. P1/Desbravar não registram familiaridade;
+37. Bestiário primeira observação/combate/vitória é idempotente;
+38. Arte/mecânica só registra quando observada;
+39. Variante oculta até descoberta;
+40. Desbravar exige Local atual/unlock e não Vigor para iniciar;
+41. cooldown 5min;
+42. máximo 6/Local/60min;
+43. resultado é persistido antes da apresentação e não rerrola;
+44. anti-repetição imediato peso0 e últimas3 ×0,35;
+45. Únicos saem do pool após resolução;
+46. Marco concede 456 + Trecho uma vez;
+47. Luzes concede 143 uma vez e Trecho idempotente;
+48. Rastros não revela criatura desconhecida e concede Habitat apenas elegível;
+49. Rastros esgotado continua contexto sem novo progresso;
+50. Sinais/Vozes/Atmosféricos não criam reward artificial;
+51. Pequeno Recurso com Vigor>=4 consome4 e paga economia correta;
+52. Pequeno Recurso com Vigor<4 resolve contexto sem economia/Vigor parcial;
+53. combate de Desbravar usa 40/35/25 e Variante 8%;
+54. exploration_combat nunca executa rolls de Equipamento/Runa/especial;
+55. vitória exploration_combat paga 0,15×C + material +20% extra quando Vigor suficiente;
+56. cada unidade de material de exploration_combat usa pool 30/30/20/20;
+57. com Vigor<4, economy suprimida e XP usa fator pertinente;
+58. derrota de exploração encerra tentativa sem reroll;
+59. `/start`/`/menu` durante Foreground retomam atividade;
+60. callback antigo não cria segunda atividade/reward/knowledge;
+61. Telegram falhando pós-commit reconstrói resultado sem duplicar;
+62. outro dispositivo observa o mesmo estado;
+63. migration upgrade/downgrade/upgrade quando seguro;
+64. `alembic check`;
+65. `ruff check .`;
+66. pytest completo com PostgreSQL real e zero skips;
+67. `git diff --check`.
+
+## 21. Limite do PR de código
+
+Parar quando:
+
+- Travessia entre os dois Braseiros pós-P1 estiver funcional;
+- Caçada Manual Solo da Estrada estiver jogável de ponta a ponta;
+- Saque/Bestiário/familiaridade estiverem persistentes e idempotentes;
+- Desbravar da Estrada estiver jogável em todos os seus resultados;
+- exploration_combat estiver correto;
+- reconnect/recovery forem seguros;
+- CI estiver verde.
+
+Não iniciar Ronda automática, Grupo, P2/S1 ou outro Local no mesmo PR.
+
+## 22. Critério de aceite
+
+O bloco só está pronto para review quando:
+
+- nenhuma regra numérica das Fontes foi reaberta;
+- as decisões adicionais aprovadas neste documento estão implementadas literalmente;
+- nenhum roll materializado pode ser rerrolado por reconnect/callback/retry;
+- nenhuma recompensa/knowledge/familiaridade pode duplicar;
+- P1 continua intacta;
+- UI não revela conteúdo oculto;
+- Caçada e Desbravar mantêm economias distintas;
+- PostgreSQL CI completo está verde.
