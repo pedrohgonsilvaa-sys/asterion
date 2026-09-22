@@ -428,3 +428,213 @@ Conforme aplicável e apenas uma vez por marco:
 - nova mecânica: +5;
 - Habitat: +3;
 - investigação Desbravar: +8 somente quando uma regra de conteúdo realmente a conceder;
+- Variante descoberta: +8;
+- primeira vitória da Variante: +6;
+- forma Elite: +8;
+- primeira vitória de Elite: +6;
+- repetição de vitória conforme perfil global.
+
+Estágios derivam dos thresholds globais e categorias de evidência. Conteúdo oculto permanece ausente.
+
+### 8.2 Observação em combate
+
+Encontrar a criatura pode registrar primeira observação e primeiro combate quando elegíveis. A primeira observação pode sobreviver a derrota se já commitada antes dela.
+
+Arte/mecânica só é registrada quando realmente executada/observada.
+
+Para Alfa, o requisito regional de Dominado inclui vitória, observar Investida Rasgante com Sangramento e testemunhar Salto Predatório preparado.
+
+## 9. Derrota da Caçada
+
+Na derrota Solo:
+
+- atividade → failed;
+- nenhuma economia de vitória;
+- nenhum `2 Vigor` consumido por derrota sem recompensa;
+- consumíveis gastos permanecem consumidos;
+- knowledge já legitimamente observado pode permanecer;
+- personagem recupera pelo Braseiro permanente válido da Estrada: HP 100%, estados comuns removidos, Vigor inalterado;
+- WorldState fica/retorna à Estrada;
+- lock de Configuração é liberado após resolução persistida.
+
+Tela:
+
+```text
+💀 Derrota
+
+🔥 Braseiro da Estrada
+Estrada das Cinzas · Terras do Ocaso
+
+❤️ HP · Restaurado
+
+🦌 Caçada · Encerrada
+
+[Caçar Novamente]
+[← Estrada das Cinzas]
+```
+
+`Caçar Novamente` volta à preparação; não cria encontro automaticamente.
+
+## 10. UI pós-vitória da Caçada
+
+Recibo, nunca claim:
+
+```text
+🏆 Vitória
+
+{criatura}
+{Variante somente se houver}
+
+🎁 Recompensas
+
+{somente componentes realmente concedidos}
+
+[Caçar Novamente]
+[← Estrada das Cinzas]
+```
+
+Mostrar apenas linhas existentes:
+
+- XP;
+- Coroas;
+- Material;
+- Equipamento: `Nome · +0`, raridade/slot, `Nível do Item`, Negociável/Vinculado quando relevante;
+- Runa: família, raridade, Grau, bind quando relevante;
+- Catalisador/Fragmento/especial;
+- Bestiário somente se houve atualização qualitativa nova.
+
+Nunca mostrar `Nenhum Equipamento`, `+0 XP` ou blocos vazios.
+
+## 11. Familiaridade da Ronda
+
+Persistir familiaridade uma única vez na primeira vitória creditada ao personagem em **Caçada Manual da Estrada gerada pelo pool oficial**, inclusive Variante legítima.
+
+Não contam:
+
+- P1;
+- Desbravar;
+- Missão;
+- derrota/abandono.
+
+ID recomendado:
+
+`hunt_round.estrada_das_cinzas`
+
+Pode reutilizar `Unlock` com unique por personagem + unlock.
+
+Não conceder recompensa, popup ou XP pela familiaridade.
+
+## 12. Desbravar — tentativa e rate limits
+
+### 12.1 Entrada
+
+Somente na Estrada atual, Local conhecido, unlock presente e sem Foreground incompatível.
+
+Desbravar é Solo.
+
+Não exige Vigor para iniciar.
+
+UI informa:
+
+`⚡ Economia Repetível · 4 Vigor quando concedida`.
+
+Se Vigor <4, exploração continua disponível; apenas a camada econômica repetível é suprimida.
+
+### 12.2 Cooldown e janela
+
+- cooldown: `5 min` após tentativa válida;
+- máximo: `6 tentativas / Local / 60 min`;
+- UI mostra tempo restante `MM:SS`;
+- quando bloqueado, não mostrar botão desabilitado.
+
+A checagem é server-authoritative no commit. Callback antigo não ignora janela.
+
+### 12.3 Persistência
+
+Criar tentativa com identidade própria, preferencialmente ligada a `GameActivity`:
+
+- character/server;
+- Região/Local;
+- ruleset_version;
+- seed;
+- categoria selecionada;
+- resultado específico selecionado;
+- estado active/completed/failed;
+- timestamps para cooldown/janela;
+- encounter_id se transicionar para combate;
+- reward/knowledge IDs associados.
+
+Resultado é sorteado **uma vez** e persistido antes da apresentação.
+
+## 13. Pool de Desbravar — Estrada
+
+Pool-base por categoria:
+
+- Grande Descoberta `8`;
+- Conhecimento `22`;
+- Narrativo `15`;
+- Combate `25`;
+- Pequeno Recurso `10`;
+- Atmosférico `20`.
+
+Remover resultados inelegíveis e redistribuir apenas entre elegíveis.
+
+Anti-repetição por resultado específico:
+
+- resultado imediatamente anterior: peso `0`;
+- se apareceu entre os últimos 3 válidos: peso `×0,35`.
+
+Resultados Únicos saem permanentemente do pool depois de resolução válida.
+
+### 13.1 Grande Descoberta
+
+**Marco dos Viajantes** · único · XP 456.
+
+Texto oficial:
+
+> Um marco de pedra inclina-se à margem da estrada. Marcas gastas ao redor mostram que viajantes paravam aqui muito antes das passagens mais recentes.
+
+Commit idempotente:
+
+- resultado único concluído;
+- Trecho `Memória dos Viajantes` na Entrada `Estrada das Cinzas`;
+- 456 XP uma única vez.
+
+ID: `explore.tdo.estrada.marco_viajantes`.
+
+### 13.2 Conhecimento — Rastros Cinéreos
+
+Texto-base:
+
+> Marcas interrompidas atravessam a fuligem e desaparecem alguns passos adiante. Há sinais suficientes para reconhecer que alguma criatura utiliza esta rota.
+
+Elegibilidade para conceder Habitat:
+
+1. considerar Cão, Corvo, Peregrino;
+2. remover criatura bloqueada por `unlock_level`;
+3. exigir entrada de Bestiário já legitimamente conhecida/observada;
+4. entre as que ainda não possuam `Habitat · Estrada das Cinzas`, escolher uniformemente;
+5. registrar uma vez Habitat da Estrada.
+
+Textos contextuais:
+
+Cão:
+> Pegadas de quatro patas cortam a fuligem em passadas rápidas. Marcas de garras indicam que a criatura percorre a Estrada com frequência.
+
+Corvo:
+> Pequenas marcas interrompem a cinza junto a riscos estreitos no chão. Algo pousa e parte repetidamente deste trecho da Estrada.
+
+Peregrino:
+> Passadas irregulares seguem por alguns metros antes de desaparecer entre pedra e fuligem. O mesmo padrão já foi associado aos Peregrinos da região.
+
+Se todas as evidências elegíveis já existirem, ainda resolver Rastros como contexto repetível: selecionar criatura elegível apenas para Flavor, sem novo BKP/XP/estado.
+
+Não revelar criatura ainda não conhecida.
+
+ID: `explore.tdo.estrada.rastros_cinereos`.
+
+### 13.3 Conhecimento — Sinais à Margem
+
+Texto:
+
+> Pedras movidas, tecido preso aos espinhos e cinza revolvida mostram que viajantes ainda usam as margens da Estrada para descansar ou passar despercebidos.
