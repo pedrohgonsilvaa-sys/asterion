@@ -817,8 +817,19 @@ class RoadService:
                 BestiaryEvidence.creature_id == creature_id,
             ))).all()
         }
+        evidence_ids = {
+            row
+            for row in (await s.scalars(select(BestiaryEvidence.evidence_id).where(
+                BestiaryEvidence.character_id == character_id,
+                BestiaryEvidence.creature_id == creature_id,
+            ))).all()
+        }
         if elite:
-            entry.stage = "dominated" if entry.bkp >= 45 and entry.wins >= 1 and ({"elite_victory", "mechanic"} & categories) else "studied" if entry.bkp >= 25 else "known"
+            if creature_id == "alfa_cinereo":
+                special = {"first_victory", "mechanic:bleed", "mechanic:prepared_leap"}.issubset(evidence_ids)
+            else:
+                special = bool({"elite_victory", "mechanic"} & categories)
+            entry.stage = "dominated" if entry.bkp >= 45 and entry.wins >= 1 and special else "studied" if entry.bkp >= 25 else "known"
         else:
             entry.stage = "dominated" if entry.bkp >= 60 and len(categories) >= 3 else "studied" if entry.bkp >= 30 and len(categories) >= 2 else "known"
 

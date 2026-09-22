@@ -75,6 +75,17 @@ def test_equipment_secondary_scales_and_rounds_by_attribute_family():
     assert seen_flat and seen_percent
 
 
+def test_equipment_regression_vector_level_one_keeps_final_numeric_values():
+    item = materialize_equipment("scale-1", "Lendário", 1)
+    assert item["slot"] == "Secundária"
+    assert item["core"] == {"ATQ": 2, "DEF": 1}
+    assert item["secondaries"] == [
+        {"attribute": "CRIT", "value": "0.25"},
+        {"attribute": "PER", "value": "0.25"},
+        {"attribute": "Bloqueio", "value": "0.50"},
+    ]
+
+
 def test_anti_repeat_removes_a_category_with_its_only_eligible_result():
     from asterion.domain.road import select_exploration_result
 
