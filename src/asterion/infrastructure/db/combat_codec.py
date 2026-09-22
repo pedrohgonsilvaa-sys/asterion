@@ -26,6 +26,8 @@ def encode(state: Combat) -> dict:
 
 
 def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat:
+    payload = dict(payload)
+    payload.pop("dots", None)  # legacy snapshots used a non-authoritative label list
     def action(value):
         return Action(
             **(

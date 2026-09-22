@@ -7,7 +7,7 @@ from hashlib import sha256
 from uuid import UUID
 
 from asterion.domain.combat import Action, Combat, Fighter, start_combat
-from asterion.domain.combat_math import Stats, class_stats, enemy_stats, racial_stats
+from asterion.domain.combat_math import Stats, class_stats, enemy_stats, growth, racial_stats
 from asterion.domain.prologue import first_art
 
 D = Decimal
@@ -153,6 +153,9 @@ SLOT_WEIGHTS = {"Principal": 18, "2H": 28, "Secundária": 10, "Cabeça": 10, "To
 RARITY_SECONDARIES = {"Comum": 0, "Raro": 1, "Épico": 2, "Lendário": 3, "Mítico": 4}
 RUNE_FAMILIES = (("Brasa", "ATQ"), ("Pedra", "DEF"), ("Caminhante", "AGI"), ("Fresta", "PER"), ("Presságio", "CRIT"), ("Persistência", "HP"), ("Desvio", "Esquiva"), ("Guarda", "Bloqueio"))
 RUNE_POTENCY = {"HP": ("0.35%", "0.45%", "0.55%"), "ATQ": ("0.35%", "0.45%", "0.55%"), "DEF": ("0.55%", "0.80%", "1.00%"), "AGI": ("0.55%", "0.80%", "1.00%"), "PER": ("0.25 p.p.", "0.50 p.p.", "0.50 p.p."), "CRIT": ("0.25 p.p.", "0.50 p.p.", "0.50 p.p."), "Esquiva": ("0.25 p.p.", "0.25 p.p.", "0.25 p.p."), "Bloqueio": ("0.25 p.p.", "0.50 p.p.", "0.50 p.p.")}
+CORE60 = {"Principal": {"ATQ": 25}, "Secundária": {"ATQ": 7, "DEF": 5}, "2H": {"ATQ": 35}, "Cabeça": {"HP": 45, "DEF": 6}, "Torso": {"HP": 95, "DEF": 12}, "Mãos": {"ATQ": 10, "DEF": 5}, "Pés": {"HP": 60, "AGI": 8}, "Acessório": {"HP": 50, "ATQ": 7, "AGI": 4}, "Artefato": {"HP": 55, "ATQ": 7, "DEF": 5, "AGI": 4}}
+SECONDARY_SCALE = {"HP": D("8.5"), "ATQ": D("1.35"), "DEF": D("2.30"), "AGI": D("3.00"), "PER": D("0.80"), "CRIT": D("0.67"), "Esquiva": D("0.33"), "Bloqueio": D("0.95")}
+RARITY_MULT = {"Comum": D("1"), "Raro": D("1.07"), "Épico": D("1.15"), "Lendário": D("1.24"), "Mítico": D("1.45")}
 
 def _stable_draw(seed: str, purpose: str, modulo: int) -> int:
     return int.from_bytes(sha256(f"{seed}:{purpose}".encode()).digest(), "big") % modulo
@@ -167,18 +170,24 @@ def materialize_equipment(seed: str, rarity: str, level: int) -> dict:
     pools = {"Principal": ("ATQ", "AGI", "PER", "CRIT"), "2H": ("ATQ", "AGI", "PER", "CRIT"), "Secundária": ("ATQ", "DEF", "PER", "CRIT", "Bloqueio"), "Cabeça": ("HP", "DEF", "PER", "CRIT"), "Torso": ("HP", "DEF", "Bloqueio"), "Mãos": ("ATQ", "AGI", "PER", "CRIT"), "Pés": ("HP", "DEF", "AGI", "Esquiva"), "Acessório": ("HP", "ATQ", "AGI", "PER", "CRIT", "Esquiva"), "Artefato": ("HP", "ATQ", "DEF", "PER", "CRIT", "Bloqueio")}
     pool = list(pools[slot])
     secondaries = []
+    g = growth(level)
+    core = {attribute: int((D(value) * g).quantize(D(1), rounding="ROUND_HALF_UP")) for attribute, value in CORE60[slot].items()}
     for index in range(min(count, len(pool))):
         pick = _stable_draw(seed, f"equipment.secondary.{index}", len(pool))
-        secondaries.append(pool.pop(pick))
-    return {"item_name": name, "slot": slot, "item_level": level, "rarity": rarity, "secondaries": secondaries, "enhancement": 0, "rune": None, "enchantment": None, "bound": False}
+        attribute = pool.pop(pick)
+        budget = D(SLOT_WEIGHTS["Principal" if slot == "2H" else slot]) * (RARITY_MULT[rarity] - 1) / max(1, count)
+        secondaries.append({"attribute": attribute, "value": str((budget * SECONDARY_SCALE[attribute] * g.sqrt()).quantize(D("0.01")))})
+    return {"item_name": name, "slot": slot, "item_level": level, "rarity": rarity, "core": core, "secondaries": secondaries, "enhancement": 0, "rune": None, "enchantment": None, "bound": False}
 
 def rune_potency(family: str, rarity: str) -> str:
     stat = dict(RUNE_FAMILIES)[family]
     return RUNE_POTENCY[stat][{"Rara": 0, "Épica": 1, "Lendária": 2}[rarity]]
 
-def equipment_rarity(seed: str, category: str, elite_pity: int = 0) -> str:
+def equipment_rarity(seed: str, category: str, elite_pity: int = 0, legendary_pity: int = 0) -> str:
     roll = _stable_draw(seed, "equipment.rarity", 10000) / 100
     if category == "elite":
+        if legendary_pity >= 50:
+            return "Lendário" if roll < 95 else "Mítico"
         if elite_pity >= 12:
             return "Épico" if roll < 80 else "Lendário" if roll < 99 else "Mítico"
         bands = ((45, "Comum"), (87, "Raro"), (98, "Épico"), (99.9, "Lendário"), (100, "Mítico"))
@@ -214,11 +223,21 @@ def select_creature(seed: str, player_level: int) -> Creature:
 
 
 def select_exploration_result(seed: str, player_level: int, recent: tuple[str, ...] = (), excluded: tuple[str, ...] = ()) -> str:
-    category = weighted_recent_choice(seed, tuple(EXPLORATION_CATEGORY_WEIGHTS.items()), recent)
-    subweights = EXPLORATION_SUBWEIGHTS[category]
-    if category == "combat":
-        subweights = tuple((key, weight) for key, weight in subweights if creature_for(key).unlock_level <= player_level)
-    subweights = tuple((key, weight) for key, weight in subweights if key not in excluded) or subweights
+    eligible_categories = []
+    eligible_subweights = {}
+    for category, weight in EXPLORATION_CATEGORY_WEIGHTS.items():
+        subweights = EXPLORATION_SUBWEIGHTS[category]
+        if category == "combat":
+            subweights = tuple(
+                (key, value) for key, value in subweights
+                if creature_for(key).unlock_level <= player_level
+            )
+        subweights = tuple((key, value) for key, value in subweights if key not in excluded)
+        if subweights:
+            eligible_categories.append((category, weight))
+            eligible_subweights[category] = subweights
+    category = weighted_recent_choice(seed, tuple(eligible_categories), recent)
+    subweights = eligible_subweights[category]
     result = weighted_recent_choice(f"{seed}:category:{category}", subweights, recent)
     return result
 

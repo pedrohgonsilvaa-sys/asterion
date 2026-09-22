@@ -115,7 +115,6 @@ class Combat:
     resolving_prepared: bool = False
     response_window_seen: bool = False
     variant: str | None = None
-    dots: dict[str, list[str]] = field(default_factory=dict)
     dot_states: dict[str, list[DotState]] = field(default_factory=dict)
 
     @property
@@ -214,11 +213,25 @@ def _end_turn(state: Combat) -> None:
 def _perform(state: Combat, actor_id: str, action_id: str) -> None:
     actor = state.fighters[actor_id]
     target = state.fighters["enemy" if actor_id == "player" else "player"]
+    if action_id == "hold":
+        actor.last_action = "hold"
+        state.events.append(CombatEvent(len(state.events), state.round, actor_id, action_id))
+        return
     if action_id == "defend":
         actor.defending = True
         actor.last_action = action_id
         state.events.append(CombatEvent(len(state.events), state.round, actor_id, action_id))
         return
+    if actor_id == "player" or actor_id == "enemy":
+        for dot in state.dot_states.get(actor.id, []):
+            if dot.kind == "bleed":
+                recoil = (
+                    dot.snapshot_attack * D("0.03") * dot.stacks
+                ).to_integral_value(rounding=ROUND_FLOOR)
+                actor.hp = max(D(0), actor.hp - recoil)
+        if actor.hp == 0:
+            state.result = "defeat" if actor_id == "player" else "victory"
+            return
     actions = state.player_actions if actor_id == "player" else state.enemy_actions
     action = actions[action_id]
     if actor_id == "enemy" and action_id == "leap" and not state.resolving_prepared:
@@ -275,12 +288,10 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
             else "poison" if state.variant == "venomous" else None
         )
         native = "bleed" if action_id == "rend" else None
-        dots = state.dots.setdefault(target.id, [])
         chosen = native or rider
-        if chosen and chosen not in dots and len(dots) < 3:
-            dots.append(chosen)
-            states = state.dot_states.setdefault(target.id, [])
-            existing = next((dot for dot in states if dot.kind == chosen), None)
+        states = state.dot_states.setdefault(target.id, [])
+        existing = next((dot for dot in states if dot.kind == chosen), None) if chosen else None
+        if chosen and (existing is None or existing.stacks < 3):
             if existing is None:
                 states.append(
                     DotState(chosen, 1, 3 if chosen == "poison" else 2,
@@ -321,10 +332,15 @@ def _enemy_action(state: Combat) -> str:
         state.resolving_prepared = True
         state.response_window_seen = False
         return action
+    if state.prepared_action is not None:
+        return "hold"
     enemy = state.fighters["enemy"]
     # Alfa Cinéreo uses content priority rather than a positional cycle.
     if {"rend", "leap", "bite"}.issubset(state.enemy_actions):
-        bleed_count = state.dots.get("player", []).count("bleed")
+        bleed_count = next(
+            (dot.stacks for dot in state.dot_states.get("player", []) if dot.kind == "bleed"),
+            0,
+        )
         if enemy.cooldowns.get("rend", 0) <= enemy.opportunity and bleed_count == 0:
             return "rend"
         if enemy.cooldowns.get("leap", 0) <= enemy.opportunity:

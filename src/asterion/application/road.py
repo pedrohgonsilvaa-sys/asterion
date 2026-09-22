@@ -314,6 +314,7 @@ class RoadService:
                     )
                     if attempt is not None:
                         attempt.status = "failed"
+                        return self._attempt_view(c, attempt, ROAD, "A exploração foi interrompida. Recuperado na Estrada.")
                 return RoadView(
                     "hunt_defeat",
                     c.id,
@@ -526,6 +527,7 @@ class RoadService:
             rarity = equipment_rarity(
                 context.seed, context.category,
                 c.elite_equipment_pity if context.category == "elite" else 0,
+                c.elite_legendary_pity if context.category == "elite" else 0,
             )
             if context.category == "elite":
                 c.elite_equipment_pity += 1
@@ -535,8 +537,7 @@ class RoadService:
                 if rarity in {"Lendário", "Mítico"}:
                     c.elite_legendary_pity = 0
             item = materialize_equipment(context.seed, rarity, context.enemy_level)
-            equipment_count = await s.scalar(select(func.count(EquipmentItem.id)).where(EquipmentItem.character_id == c.id)) or 0
-            if equipment_count < 60:
+            if await self._inventory_slots(s, c.id) < 60:
                 s.add(
                     EquipmentItem(
                     character_id=c.id,
@@ -577,8 +578,9 @@ class RoadService:
                 .with_for_update()
             )
             if stack is None:
-                s.add(
-                    RuneStack(
+                if await self._inventory_slots(s, c.id) < 60:
+                    s.add(
+                        RuneStack(
                         character_id=c.id,
                         family=family,
                         rarity=rarity,
@@ -586,8 +588,10 @@ class RoadService:
                         potency=rune_potency(family, rarity),
                         quantity=1,
                         bound=False,
+                        )
                     )
-                )
+                else:
+                    await self._pending(s, c.id, f"activity:{context.game_activity_id}:rune", "rune", {"family": family, "rarity": rarity})
             else:
                 stack.quantity += 1
             components.append(("rune", family, 1))
@@ -599,8 +603,12 @@ class RoadService:
             )
             if context is not None:
                 factor = Decimal(1) if c.vigor >= 4 else Decimal("0.25")
-                base_xp = ((Decimal(100 + 15 * context.enemy_level) * Decimal("0.15")) / 10).quantize(Decimal(1), rounding="ROUND_HALF_EVEN") * 10
-                c.xp += int(base_xp * factor)
+                c.xp += enemy_xp(
+                    context.enemy_level,
+                    context.category,
+                    factor,
+                    player_level=c.level,
+                )
                 if c.vigor >= 4:
                     c.vigor -= 4
                     pool = (("material.tdo.ferro_de_fuligem", 30), ("material.tdo.couro_escoriado", 30), ("material.tdo.erva_cinzenta", 20), ("material.tdo.residuo_ocaso", 20))
@@ -801,7 +809,11 @@ class RoadService:
             MaterialStack.bound.is_(False),
         ).with_for_update())
         if stack is None:
-            s.add(MaterialStack(character_id=c.id, material_id=material_id, quantity=min(quantity, 999), bound=False))
+            if await self._inventory_slots(s, c.id) < 60:
+                s.add(MaterialStack(character_id=c.id, material_id=material_id, quantity=min(quantity, 999), bound=False))
+            else:
+                await self._pending(s, c.id, source_key, "material", {"material_id": material_id})
+                return
             remaining = max(0, quantity - 999)
         else:
             available = max(0, 999 - stack.quantity)
@@ -811,6 +823,17 @@ class RoadService:
             pending_count = await s.scalar(select(func.count(PendingItem.id)).where(PendingItem.character_id == c.id)) or 0
             if pending_count < 20:
                 s.add(PendingItem(character_id=c.id, source_key=source_key, kind="material", payload={"material_id": material_id}, quantity=remaining))
+
+    async def _inventory_slots(self, s, character_id):
+        equipment = await s.scalar(select(func.count(EquipmentItem.id)).where(EquipmentItem.character_id == character_id)) or 0
+        materials = await s.scalar(select(func.count(MaterialStack.id)).where(MaterialStack.character_id == character_id)) or 0
+        runes = await s.scalar(select(func.count(RuneStack.id)).where(RuneStack.character_id == character_id)) or 0
+        return int(equipment + materials + runes)
+
+    async def _pending(self, s, character_id, source_key, kind, payload):
+        count = await s.scalar(select(func.count(PendingItem.id)).where(PendingItem.character_id == character_id)) or 0
+        if count < 20:
+            s.add(PendingItem(character_id=character_id, source_key=source_key, kind=kind, payload=payload, quantity=1))
 
     def _attempt_view(self, c, attempt, location, text=None):
         return RoadView(
@@ -823,7 +846,7 @@ class RoadService:
             state_version=attempt.state_version if attempt else 0,
             vigor=c.vigor,
             max_vigor=c.max_vigor,
-            retry_available=not (attempt is not None and attempt.status == "completed"),
+            retry_available=not (attempt is not None and attempt.status != "active"),
         )
 
 
