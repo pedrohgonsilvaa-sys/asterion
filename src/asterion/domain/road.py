@@ -213,11 +213,12 @@ def select_creature(seed: str, player_level: int) -> Creature:
     return creature_for(weighted_choice(seed, tuple((c.creature_id, c.weight) for c in pool)))
 
 
-def select_exploration_result(seed: str, player_level: int, recent: tuple[str, ...] = ()) -> str:
+def select_exploration_result(seed: str, player_level: int, recent: tuple[str, ...] = (), excluded: tuple[str, ...] = ()) -> str:
     category = weighted_recent_choice(seed, tuple(EXPLORATION_CATEGORY_WEIGHTS.items()), recent)
     subweights = EXPLORATION_SUBWEIGHTS[category]
     if category == "combat":
         subweights = tuple((key, weight) for key, weight in subweights if creature_for(key).unlock_level <= player_level)
+    subweights = tuple((key, weight) for key, weight in subweights if key not in excluded) or subweights
     result = weighted_recent_choice(f"{seed}:category:{category}", subweights, recent)
     return result
 
