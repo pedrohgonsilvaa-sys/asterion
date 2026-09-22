@@ -8,6 +8,7 @@ from asterion.application.road import ROAD, RoadService
 from asterion.domain.combat import allowed_actions
 from asterion.infrastructure.db.models import (
     Account,
+    BestiaryEntry,
     Brazier,
     Character,
     MaterialStack,
@@ -240,3 +241,44 @@ async def test_inventory_slots_pending_cap_and_overflow_are_auditable(database):
         ) == 20
         assert character.delivery_blocked is True
         await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_bestiary_variant_repetition_and_alpha_requirements(database):
+    actor, service = await _seed_road(database, 771106)
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        await service._bestiary(
+            session, character.id, "dog_cinereo", variant="furious"
+        )
+        await session.flush()
+        for _ in range(5):
+            await service._bestiary(
+                session, character.id, "dog_cinereo", victory=True, variant="furious"
+            )
+        dog = await session.scalar(select(BestiaryEntry).where(
+            BestiaryEntry.character_id == character.id,
+            BestiaryEntry.creature_id == "dog_cinereo",
+        ))
+        assert dog.wins == 5
+        assert dog.bkp >= 30
+        assert dog.stage == "studied"
+
+        await service._bestiary(
+            session, character.id, "alfa_cinereo", victory=True, elite=True
+        )
+        alpha = await session.scalar(select(BestiaryEntry).where(
+            BestiaryEntry.character_id == character.id,
+            BestiaryEntry.creature_id == "alfa_cinereo",
+        ))
+        await service._add_bestiary_evidence(
+            session, alpha, character.id, "alfa_cinereo", "mechanic:bleed", "mechanic", 5
+        )
+        await service._add_bestiary_evidence(
+            session, alpha, character.id, "alfa_cinereo", "mechanic:prepared_leap", "mechanic", 5
+        )
+        alpha.bkp = 45
+        await service._bestiary(
+            session, character.id, "alfa_cinereo", victory=True, elite=True
+        )
+        assert alpha.stage == "dominated"
