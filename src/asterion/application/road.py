@@ -46,7 +46,6 @@ from asterion.infrastructure.db.models import (
     ExplorationAttempt,
     GameActivity,
     HuntContext,
-    LocationDiscovery,
     MaterialStack,
     PendingItem,
     Quest,
@@ -915,7 +914,7 @@ class RoadService:
                     s, c.id, f"activity:{context.game_activity_id}:equipment", "equipment", item
                 )
             components.append(("equipment", item["item_name"], 1, dict(item)))
-        if _draw_int(context.seed, "rune", 1000) < rune_chance:
+        if _draw_int(context.seed, "rune", 1000) < rune_chance_per_thousand:
             rarity = _rarity(context.seed, context.category, "rune")
             families = (
                 "Brasa",
