@@ -39,7 +39,12 @@ def upgrade() -> None:
         sa.Column("seed", sa.String(128), nullable=False),
         sa.Column("prepared_heal", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("prepared_purify", sa.Boolean(), nullable=False, server_default=sa.false()),
-        sa.Column("config_snapshot", JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "config_snapshot",
+            JSONB(),
+            nullable=False,
+            server_default=sa.text("'{}'::jsonb"),
+        ),
         sa.Column("cancel_requested", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("next_resolution_at", sa.DateTime(timezone=True)),
         sa.Column("result_acknowledged", sa.Boolean(), nullable=False, server_default=sa.false()),
@@ -55,7 +60,8 @@ def upgrade() -> None:
         sa.CheckConstraint("completed_encounters >= 0", name="ck_hunt_round_completed"),
         sa.CheckConstraint("state_version >= 0", name="ck_hunt_round_version"),
         sa.CheckConstraint(
-            "status IN ('preparing','active','completed','cancelled','defeated','ended','interrupted')",
+            "status IN ('preparing','active','completed','cancelled',"
+            "'defeated','ended','interrupted')",
             name="ck_hunt_round_status",
         ),
     )
