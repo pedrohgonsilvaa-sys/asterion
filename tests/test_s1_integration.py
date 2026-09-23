@@ -1,6 +1,5 @@
-from sqlalchemy import select
-
 import pytest
+from sqlalchemy import select
 
 from asterion.application.s1 import (
     CODEX_ROAD,
