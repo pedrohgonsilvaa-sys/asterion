@@ -25,6 +25,7 @@ from asterion.domain.combat import (
     use_heal_consumable,
     use_purification_consumable,
 )
+from asterion.domain.combat_math import dot_damage
 from asterion.domain.road import (
     ROUND_FAMILIARITY,
     RULESET,
@@ -812,14 +813,17 @@ class RoundService(RoadService):
     def _dot_metrics(self, combat, dot) -> tuple[Decimal, Decimal, Decimal]:
         coefficient = Decimal("0.12") if dot.kind == "poison" else Decimal("0.10")
         snapshots = list(dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks)
-        tick_damage = sum((snapshot * coefficient for snapshot in snapshots), Decimal(0))
-        tick_damage = tick_damage.to_integral_value(rounding=ROUND_FLOOR)
-        remaining = tick_damage * max(0, dot.remaining)
-        oldest_tick = (
-            (snapshots[0] * coefficient).to_integral_value(rounding=ROUND_FLOOR)
-            if snapshots
-            else Decimal(0)
+        player = combat.fighters["player"]
+        source = combat.fighters.get(dot.source)
+        attacker_level = source.level if source is not None else player.level
+        tick_damage = Decimal(
+            dot_damage(snapshots, coefficient, player.stat("defense"), attacker_level)
         )
+        without_oldest = Decimal(
+            dot_damage(snapshots[1:], coefficient, player.stat("defense"), attacker_level)
+        )
+        oldest_tick = max(Decimal(0), tick_damage - without_oldest)
+        remaining = tick_damage * max(0, dot.remaining)
         removal_gain = oldest_tick * max(0, dot.remaining)
         return remaining, removal_gain, oldest_tick
 
