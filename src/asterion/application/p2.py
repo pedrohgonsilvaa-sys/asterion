@@ -510,6 +510,7 @@ class P2Service(RoadService):
                 enemy_level=level,
                 variant=None,
                 seed=f"p2:{q.id}:{creature.creature_id}",
+                local_id=CHARNECA,
                 loot_profile="mission_scripted_p2",
             )
         )
