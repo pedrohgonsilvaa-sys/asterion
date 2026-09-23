@@ -46,3 +46,20 @@ def test_round_batch_selection_uses_numbered_list_and_numeric_buttons():
         if (button.callback_data or "").startswith("road:round:new:")
     ]
     assert [button.text for button in buttons] == ["1", "2", "3"]
+
+
+
+def test_refuge_keeps_oren_accessible_after_p1():
+    screen = render_road(RoadView("refuge", uuid4(), "Refúgio do Ocaso"))
+    labels = [
+        button.text
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+    ]
+    callbacks = [
+        button.callback_data
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+    ]
+    assert "Oren Cal" in labels
+    assert "s1:oren" in callbacks

@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.progression import level_xp
 from asterion.infrastructure.db.models import (
     Achievement,
     Brazier,
@@ -35,6 +36,9 @@ class WorldView:
     region: str
     location: str
     quest_title: str | None
+    level: int = 1
+    xp_required: int = 4800
+    tracked_secondary_quest_title: str | None = None
 
 
 class WorldService:
@@ -94,6 +98,15 @@ class WorldService:
                 )
                 if not (valid_active or valid_completed):
                     return None
+            tracked_secondary = None
+            if c.tracked_secondary_quest_id:
+                tracked_secondary = await session.scalar(
+                    select(Quest).where(
+                        Quest.character_id == c.id,
+                        Quest.quest_id == c.tracked_secondary_quest_id,
+                        Quest.status == "active",
+                    )
+                )
             return WorldView(
                 "menu" if c.stage == "menu:ready" else "brazier",
                 c.id,
@@ -108,6 +121,11 @@ class WorldService:
                 region=world.region,
                 location=world.location,
                 quest_title=q.title if q and q.status == "active" else None,
+                level=c.level,
+                xp_required=level_xp(c.level) if c.level < 60 else 0,
+                tracked_secondary_quest_title=(
+                    tracked_secondary.title if tracked_secondary is not None else None
+                ),
             )
 
     async def rest(self, actor: int) -> WorldView | None:

@@ -101,6 +101,7 @@ class Character(Base):
     delivery_blocked: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    tracked_secondary_quest_id: Mapped[str | None] = mapped_column(String(32))
 
 
 class Brazier(Base):
@@ -128,7 +129,7 @@ class Quest(Base):
     __tablename__ = "quests"
     __table_args__ = (
         UniqueConstraint("character_id", "quest_id", name="uq_character_quest"),
-        CheckConstraint("status IN ('active','completed')", name="ck_quest_status"),
+        CheckConstraint("status IN ('active','completed','abandoned')", name="ck_quest_status"),
         CheckConstraint("step >= 1", name="ck_quest_step"),
         CheckConstraint("state_version >= 0", name="ck_quest_state_version"),
     )
