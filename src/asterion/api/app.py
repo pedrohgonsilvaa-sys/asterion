@@ -4,12 +4,30 @@ from fastapi import FastAPI, Header, HTTPException, Request, status
 from redis.asyncio import Redis
 from sqlalchemy import text
 
+from asterion.bot.round_scheduler import build_round_scheduler
 from asterion.bot.runtime import get_bot_runtime
 from asterion.config import get_settings
 from asterion.infrastructure.db.session import engine
 
 settings = get_settings()
 app = FastAPI(title="Asterion", version="0.1.0")
+round_scheduler = (
+    build_round_scheduler()
+    if settings.telegram_bot_enabled and settings.telegram_mode == "webhook"
+    else None
+)
+
+
+@app.on_event("startup")
+async def start_round_scheduler() -> None:
+    if round_scheduler is not None and not round_scheduler.running:
+        round_scheduler.start()
+
+
+@app.on_event("shutdown")
+async def stop_round_scheduler() -> None:
+    if round_scheduler is not None and round_scheduler.running:
+        round_scheduler.shutdown(wait=False)
 
 
 @app.get("/health")
