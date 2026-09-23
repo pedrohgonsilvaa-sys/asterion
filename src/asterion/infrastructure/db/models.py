@@ -217,6 +217,7 @@ class WorldState(Base):
     character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), primary_key=True)
     region: Mapped[str] = mapped_column(String(64), nullable=False)
     location: Mapped[str] = mapped_column(String(64), nullable=False)
+    last_brazier_id: Mapped[str | None] = mapped_column(String(64))
 
 
 class GameActivity(Base):
@@ -365,6 +366,7 @@ class HuntContext(Base):
         default="Estrada das Cinzas",
         server_default=text("'Estrada das Cinzas'"),
     )
+    recovery_brazier_id: Mapped[str | None] = mapped_column(String(64))
     loot_profile: Mapped[str] = mapped_column(String(32), nullable=False, default="hunt")
     result_acknowledged: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
@@ -407,6 +409,7 @@ class HuntRound(Base):
         default="Estrada das Cinzas",
         server_default=text("'Estrada das Cinzas'"),
     )
+    recovery_brazier_id: Mapped[str | None] = mapped_column(String(64))
     prepared_heal: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
