@@ -33,11 +33,11 @@ class WorldView:
     vigor: int
     max_vigor: int
     xp: int
-    level: int
-    xp_required: int
     region: str
     location: str
     quest_title: str | None
+    level: int = 1
+    xp_required: int = 4800
     tracked_secondary_quest_title: str | None = None
 
 
@@ -118,11 +118,11 @@ class WorldService:
                 c.vigor,
                 c.max_vigor,
                 c.xp,
-                c.level,
-                level_xp(c.level) if c.level < 60 else 0,
                 region=world.region,
                 location=world.location,
                 quest_title=q.title if q and q.status == "active" else None,
+                level=c.level,
+                xp_required=level_xp(c.level) if c.level < 60 else 0,
                 tracked_secondary_quest_title=(
                     tracked_secondary.title if tracked_secondary is not None else None
                 ),
