@@ -18,6 +18,10 @@ def bar(current, maximum, fill: str) -> str:
     return fill * n + "⬜" * (10 - n)
 
 
+def number(value: int) -> str:
+    return f"{value:,}".replace(",", ".")
+
+
 def render_world(view: WorldView) -> Screen:
     if view.kind == "brazier":
         text = (
@@ -63,7 +67,8 @@ def render_world(view: WorldView) -> Screen:
         f"{emoji} {escape(view.name)} · Nv. {view.level}\n{title}\n\n"
         f"❤️ HP · {view.hp} / {view.max_hp}\n{bar(view.hp, view.max_hp, '🟩')}\n\n"
         f"⚡ Vigor · {view.vigor} / {view.max_vigor}\n{bar(view.vigor, view.max_vigor, '🟨')}\n\n"
-        f"✨ XP · {view.xp} / {view.xp_required}\n{bar(view.xp, view.xp_required, '🟦')}\n\n"
+        f"✨ XP · {number(view.xp)} / {number(view.xp_required)}\n"
+        f"{bar(view.xp, view.xp_required, '🟦')}\n\n"
         f"{quest_line}"
     )
     labels = [
