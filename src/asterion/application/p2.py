@@ -201,6 +201,7 @@ class P2Service(RoadService):
                 return None
             q = await self._locked_quest(s, c.id)
             world.location = destination
+            first_arrival = False
             if destination == CHARNECA:
                 first_arrival = await self._ensure(
                     s,
@@ -219,7 +220,13 @@ class P2Service(RoadService):
                     elif q.step == 3 and p.get("defeat"):
                         await self._materialize_scripted_encounter(s, c, q)
             if q is not None:
-                return await self._view(s, c, q, world, "objective")
+                return await self._view(
+                    s,
+                    c,
+                    q,
+                    world,
+                    "arrival" if first_arrival and q.step == 2 else "objective",
+                )
             return P2View(
                 "world",
                 c.id,
