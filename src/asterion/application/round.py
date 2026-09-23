@@ -13,16 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from asterion.application.road import (
     HUNT_CONTENT,
     MATERIAL_LABELS,
-    REGION,
     ROAD,
     VARIANT_LABELS,
     RoadService,
     RoadView,
 )
 from asterion.domain.combat import (
+    act,
     allowed_actions,
     consumable_available,
-    act,
     use_heal_consumable,
     use_purification_consumable,
 )
@@ -47,7 +46,6 @@ from asterion.infrastructure.db.models import (
     RewardComponent,
     RewardEvent,
     Unlock,
-    WorldState,
 )
 
 ROUND_CONTENT = "road_hunt_round"
@@ -424,6 +422,13 @@ class RoundService(RoadService):
             encounter.activity_id = activity.id
             encounter.status = "elite_combat"
             state.elite_engaged = True
+            # The Ronda itself has ended at the interruption boundary.  Once the
+            # persisted Elite is engaged, the manual encounter becomes the sole
+            # foreground authority; the hidden round result must not block a later batch.
+            state.status = "ended"
+            state.end_reason = "elite_engaged"
+            state.result_acknowledged = True
+            state.completed_at = now
             state.state_version += 1
             await s.flush()
             return await self._combat_view(s, c, activity)
@@ -444,6 +449,11 @@ class RoundService(RoadService):
                 )
             if state is not None and state.status in ROUND_RESULT_STATUSES:
                 state.result_acknowledged = True
+            # A stale interruption/result callback cannot visually escape a manual
+            # Elite encounter that already became foreground-authoritative.
+            blocking = await super()._road_blocking_view(s, c)
+            if blocking is not None:
+                return blocking
             return RoadView(
                 "hunt_prepare",
                 c.id,
