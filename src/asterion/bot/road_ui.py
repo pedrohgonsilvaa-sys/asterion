@@ -407,18 +407,40 @@ def render_road(view: RoadView) -> Screen:
             parse_mode="HTML",
         )
     if view.location == ROAD:
-        round_line = "[Ronda ×5] [Ronda ×10] [Ronda ×20]" if view.familiar else "🔒 Ronda de Caça · Vença uma Caçada neste Local"
+        round_line = (
+            "1 🏕️ Ronda · 5 Encontros\n"
+            "2 🏕️ Ronda · 10 Encontros\n"
+            "3 🏕️ Ronda · 20 Encontros"
+            if view.familiar
+            else "🔒 Ronda de Caça · Vença uma Caçada neste Local"
+        )
         text = (
             "🔥 Estrada das Cinzas · Local Atual\nTerras do Ocaso · Nv. 1–10\n\n"
             "🔥 Braseiro · Descoberto\n"
-            + ("🧭 Desbravar · Disponível\n" if view.explore_available else "⏳ Desbravar · Em recarga\n")
+            + (
+                "🧭 Desbravar · Disponível\n"
+                if view.explore_available
+                else "⏳ Desbravar · Em recarga\n"
+            )
             + "🦌 Caçada · Disponível\n\n"
             + round_line
         )
         keyboard = [
             [InlineKeyboardButton(text="Caçar", callback_data="road:prepare")],
-            *([[InlineKeyboardButton(text="Desbravar", callback_data="road:explore")]] if view.explore_available else []),
-            *([[InlineKeyboardButton(text="Ronda ×5", callback_data="road:round:new:5"), InlineKeyboardButton(text="Ronda ×10", callback_data="road:round:new:10"), InlineKeyboardButton(text="Ronda ×20", callback_data="road:round:new:20")]] if view.familiar else []),
+            *(
+                [[InlineKeyboardButton(text="Desbravar", callback_data="road:explore")]]
+                if view.explore_available
+                else []
+            ),
+            *(
+                [[
+                    InlineKeyboardButton(text="1", callback_data="road:round:new:5"),
+                    InlineKeyboardButton(text="2", callback_data="road:round:new:10"),
+                    InlineKeyboardButton(text="3", callback_data="road:round:new:20"),
+                ]]
+                if view.familiar
+                else []
+            ),
             [
                 InlineKeyboardButton(
                     text="Travessia dos Braseiros", callback_data="road:travel:refuge"
