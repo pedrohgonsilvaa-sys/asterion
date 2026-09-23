@@ -370,10 +370,12 @@ class RoundService(RoadService):
             )
             if state is None:
                 return await self._road_blocking_view(s, c)
+            if state.elite_engaged or (
+                state.status == "ended" and state.end_reason == "elite_engaged"
+            ):
+                return await super()._road_blocking_view(s, c)
             if state.status != "interrupted" or state.end_reason != "elite":
                 return await self._round_view(s, c, state)
-            if state.elite_engaged:
-                return await super()._road_blocking_view(s, c)
             if state.state_version != version:
                 return await self._round_view(s, c, state)
             encounter = await self._current_encounter(
