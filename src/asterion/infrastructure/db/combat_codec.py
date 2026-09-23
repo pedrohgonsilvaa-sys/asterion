@@ -82,7 +82,18 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 ],
                 "dot_states": {
                     target: [
-                        DotState(**dot | {"snapshot_attack": Decimal(dot["snapshot_attack"])})
+                        DotState(
+                            **(
+                                dot
+                                | {
+                                    "snapshot_attack": Decimal(dot["snapshot_attack"]),
+                                    "stack_snapshots": [
+                                        Decimal(value)
+                                        for value in dot.get("stack_snapshots", [])
+                                    ],
+                                }
+                            )
+                        )
                         for dot in dots
                     ]
                     for target, dots in payload.get("dot_states", {}).items()

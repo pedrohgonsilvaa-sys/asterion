@@ -5,7 +5,14 @@ from dataclasses import dataclass, field
 from decimal import ROUND_FLOOR, Decimal, localcontext
 from uuid import UUID
 
-from asterion.domain.combat_math import PRECISION, CombatRng, Stats, direct_damage, stable_priority
+from asterion.domain.combat_math import (
+    PRECISION,
+    CombatRng,
+    Stats,
+    direct_damage,
+    dot_damage,
+    stable_priority,
+)
 
 D = Decimal
 
@@ -29,6 +36,7 @@ class DotState:
     remaining: int
     snapshot_attack: Decimal
     source: str
+    stack_snapshots: list[Decimal] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -186,10 +194,14 @@ def _end_turn(state: Combat) -> None:
     actor = state.fighters[state.order[state.turn_index]]
     for dot in state.dot_states.get(actor.id, []):
         coefficient = D("0.12") if dot.kind == "poison" else D("0.10")
-        damage = int(
-            (dot.snapshot_attack * coefficient * dot.stacks).to_integral_value(
-                rounding=ROUND_FLOOR
-            )
+        snapshots = dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks
+        source = state.fighters.get(dot.source)
+        attacker_level = source.level if source is not None else actor.level
+        damage = dot_damage(
+            snapshots,
+            coefficient,
+            actor.stat("defense"),
+            attacker_level,
         )
         actor.hp = max(D(0), actor.hp - D(damage))
         dot.remaining -= 1
@@ -225,8 +237,9 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
     if actor_id == "player" or actor_id == "enemy":
         for dot in state.dot_states.get(actor.id, []):
             if dot.kind == "bleed":
+                snapshots = dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks
                 recoil = (
-                    dot.snapshot_attack * D("0.03") * dot.stacks
+                    sum(snapshots, D(0)) * D("0.03")
                 ).to_integral_value(rounding=ROUND_FLOOR)
                 actor.hp = max(D(0), actor.hp - recoil)
         if actor.hp == 0:
@@ -291,14 +304,30 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
         chosen = native or rider
         states = state.dot_states.setdefault(target.id, [])
         existing = next((dot for dot in states if dot.kind == chosen), None) if chosen else None
-        if chosen and (existing is None or existing.stacks < 3):
+        if chosen:
+            snapshot = actor.stat("attack")
             if existing is None:
                 states.append(
-                    DotState(chosen, 1, 3 if chosen == "poison" else 2,
-                             actor.stat("attack"), actor.id)
+                    DotState(
+                        chosen,
+                        1,
+                        3 if chosen == "poison" else 2,
+                        snapshot,
+                        actor.id,
+                        [snapshot],
+                    )
                 )
             else:
-                existing.stacks = min(3, existing.stacks + 1)
+                snapshots = list(
+                    existing.stack_snapshots
+                    or [existing.snapshot_attack] * existing.stacks
+                )
+                if len(snapshots) >= 3:
+                    snapshots.pop(0)
+                snapshots.append(snapshot)
+                existing.stack_snapshots = snapshots
+                existing.snapshot_attack = snapshots[0]
+                existing.stacks = len(snapshots)
                 existing.remaining = 3 if chosen == "poison" else 2
     actor.last_action = action_id
     if action.blocked_opportunities:
@@ -371,6 +400,98 @@ def start_combat(state: Combat) -> Combat:
         _begin_turn(state)
         _advance_to_player(state)
         return state
+
+
+CONSUMABLE_COOLDOWN_KEY = "consumable"
+
+
+def consumable_available(state: Combat) -> bool:
+    if state.result or not state.order or state.order[state.turn_index] != "player":
+        return False
+    player = state.fighters["player"]
+    return player.cooldowns.get(CONSUMABLE_COOLDOWN_KEY, 0) <= player.opportunity
+
+
+def _finish_consumable_turn(
+    state: Combat, action: str, healed: Decimal | None = None
+) -> Combat:
+    healed = D(0) if healed is None else healed
+    player = state.fighters["player"]
+    player.last_action = action
+    # CD2: unavailable on the next opportunity and available on the following one.
+    player.cooldowns[CONSUMABLE_COOLDOWN_KEY] = player.opportunity + 2
+    state.events.append(
+        CombatEvent(
+            len(state.events),
+            state.round,
+            "player",
+            action,
+            "player",
+            healed=healed,
+        )
+    )
+    if not state.result:
+        _end_turn(state)
+        _advance_to_player(state)
+    state.version += 1
+    return state
+
+
+def use_heal_consumable(state: Combat) -> Combat:
+    """Apply the official 22% HP-Max heal as a normal player action."""
+    if not consumable_available(state):
+        return state
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        updated = deepcopy(state)
+        player = updated.fighters["player"]
+        multiplier = D(1)
+        for effect in player.effects:
+            if effect.kind == "debuff" and effect.removable and effect.stat == "healing_received":
+                multiplier *= max(D(0), D(1) - effect.magnitude)
+        amount = (player.stats.hp * D("0.22") * multiplier).to_integral_value(
+            rounding=ROUND_FLOOR
+        )
+        healed = min(max(D(0), amount), player.stats.hp - player.hp)
+        if healed <= 0:
+            return state
+        player.hp += healed
+        return _finish_consumable_turn(updated, "consumable:heal", healed)
+
+
+def use_purification_consumable(
+    state: Combat, *, dot_index: int | None = None, effect_index: int | None = None
+) -> Combat:
+    """Remove one oldest DoT stack or one removable non-stack debuff."""
+    if not consumable_available(state) or (dot_index is None) == (effect_index is None):
+        return state
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        updated = deepcopy(state)
+        player = updated.fighters["player"]
+        if dot_index is not None:
+            dots = updated.dot_states.get("player", [])
+            if not 0 <= dot_index < len(dots):
+                return state
+            dot = dots[dot_index]
+            snapshots = list(dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks)
+            if not snapshots:
+                return state
+            snapshots.pop(0)
+            if snapshots:
+                dot.stack_snapshots = snapshots
+                dot.snapshot_attack = snapshots[0]
+                dot.stacks = len(snapshots)
+            else:
+                dots.pop(dot_index)
+        else:
+            if not 0 <= effect_index < len(player.effects):
+                return state
+            effect = player.effects[effect_index]
+            if effect.kind != "debuff" or not effect.removable:
+                return state
+            player.effects.pop(effect_index)
+        return _finish_consumable_turn(updated, "consumable:purify")
 
 
 def act(state: Combat, action: str) -> Combat:

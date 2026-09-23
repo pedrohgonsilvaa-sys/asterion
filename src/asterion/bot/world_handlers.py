@@ -1,13 +1,17 @@
 # ruff: noqa: E501
+from uuid import UUID
+
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
 from asterion.application.road import RoadService
 from asterion.application.world import WorldService
 from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
+from asterion.bot.inventory_ui import render_inventory
 from asterion.bot.p1_ui import render_p1
 from asterion.bot.road_ui import render_road
 from asterion.bot.world_ui import render_world
@@ -18,6 +22,7 @@ def world_router(
     images: dict[str, str],
     p1: P1Service | None = None,
     road: RoadService | None = None,
+    inventory: InventoryService | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -41,7 +46,7 @@ def world_router(
         if (
             road_view is not None
             and isinstance(query.message, Message)
-            and road_view.kind in {"combat", "exploration"}
+            and (road_view.kind in {"combat", "exploration"} or road_view.kind.startswith("round_"))
         ):
             await present(query.message, render_road(road_view), images, edit=True)
             return
@@ -61,7 +66,7 @@ def world_router(
         road_view = await road.resume(query.from_user.id) if road else None
         if (
             road_view is not None
-            and road_view.kind in {"combat", "exploration"}
+            and (road_view.kind in {"combat", "exploration"} or road_view.kind.startswith("round_"))
             and isinstance(query.message, Message)
         ):
             await present(query.message, render_road(road_view), images, edit=True)
@@ -140,6 +145,154 @@ def world_router(
             view = await road.explore(query.from_user.id)
             if view is not None:
                 await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("road:round:new:"))
+    async def round_prepare(query: CallbackQuery):
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        try:
+            batch_size = int((query.data or "").rsplit(":", 1)[1])
+        except (TypeError, ValueError):
+            return
+        view = await road.prepare_round(query.from_user.id, batch_size)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("road:round:prepare:view:"))
+    async def round_prepare_view(query: CallbackQuery):
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        try:
+            _, _, _, _, token, raw_version = (query.data or "").split(":")
+            round_id, version = UUID(hex=token), int(raw_version)
+        except (TypeError, ValueError):
+            return
+        view = await road.round_prepare_view(query.from_user.id, round_id, version)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("road:round:cons:"))
+    async def round_consumables(query: CallbackQuery):
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        try:
+            _, _, _, token, raw_version = (query.data or "").split(":")
+            round_id, version = UUID(hex=token), int(raw_version)
+        except (TypeError, ValueError):
+            return
+        view = await road.round_consumables(query.from_user.id, round_id, version)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("road:round:toggle:"))
+    async def round_toggle_consumable(query: CallbackQuery):
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        try:
+            _, _, _, raw_kind, token, raw_version = (query.data or "").split(":")
+            round_id, version = UUID(hex=token), int(raw_version)
+            consumable = (
+                "consumable.heal" if raw_kind == "h"
+                else "consumable.purification" if raw_kind == "p"
+                else ""
+            )
+        except (TypeError, ValueError):
+            return
+        if not consumable:
+            return
+        view = await road.toggle_round_consumable(
+            query.from_user.id, round_id, version, consumable
+        )
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("road:round:start:"))
+    async def round_start(query: CallbackQuery):
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        try:
+            _, _, _, token, raw_version = (query.data or "").split(":")
+            round_id, version = UUID(hex=token), int(raw_version)
+        except (TypeError, ValueError):
+            return
+        view = await road.start_round(query.from_user.id, round_id, version)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("road:round:cancel:"))
+    async def round_cancel(query: CallbackQuery):
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        try:
+            _, _, _, token, raw_version = (query.data or "").split(":")
+            round_id, version = UUID(hex=token), int(raw_version)
+        except (TypeError, ValueError):
+            return
+        view = await road.cancel_round(query.from_user.id, round_id, version)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("road:round:elite:"))
+    async def round_elite(query: CallbackQuery):
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        try:
+            _, _, _, token, raw_version = (query.data or "").split(":")
+            round_id, version = UUID(hex=token), int(raw_version)
+        except (TypeError, ValueError):
+            return
+        view = await road.engage_round_elite(query.from_user.id, round_id, version)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("road:round:back:"))
+    async def round_back(query: CallbackQuery):
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        try:
+            token = (query.data or "").rsplit(":", 1)[1]
+            round_id = UUID(hex=token)
+        except (TypeError, ValueError):
+            return
+        view = await road.round_back(query.from_user.id, round_id)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data == "inventory:root")
+    async def inventory_root(query: CallbackQuery):
+        await query.answer()
+        if inventory is None or not isinstance(query.message, Message):
+            return
+        view = await inventory.root(query.from_user.id)
+        if view is not None:
+            await present(query.message, render_inventory(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("inventory:category:"))
+    async def inventory_category(query: CallbackQuery):
+        await query.answer()
+        if inventory is None or not isinstance(query.message, Message):
+            return
+        category = (query.data or "").rsplit(":", 1)[-1]
+        view = await inventory.category(query.from_user.id, category)
+        if view is not None:
+            await present(query.message, render_inventory(view), images, edit=True)
+
+    @router.callback_query(F.data == "pending:root")
+    async def pending_root(query: CallbackQuery):
+        await query.answer()
+        if inventory is None or not isinstance(query.message, Message):
+            return
+        view = await inventory.pending(query.from_user.id)
+        if view is not None:
+            await present(query.message, render_inventory(view), images, edit=True)
 
     @router.callback_query(F.data.startswith("road:travel:"))
     async def travel(query: CallbackQuery):

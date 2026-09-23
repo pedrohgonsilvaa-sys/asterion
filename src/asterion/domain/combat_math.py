@@ -120,6 +120,22 @@ def direct_damage(
         return max(1, int(value.to_integral_value(rounding=ROUND_FLOOR)))
 
 
+def dot_damage(
+    snapshots: list[Decimal] | tuple[Decimal, ...],
+    coefficient: Decimal,
+    defense: Decimal,
+    attacker_level: int,
+) -> int:
+    """Official DoT tick: ATQ snapshot(s), no crit, using 50% effective normal DEF."""
+    if not snapshots:
+        return 0
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        raw = sum((snapshot * coefficient for snapshot in snapshots), ZERO)
+        value = raw * (D(1) - defense_reduction(defense * D("0.50"), attacker_level))
+        return max(1, int(value.to_integral_value(rounding=ROUND_FLOOR)))
+
+
 def stable_priority(combat_id: UUID, fighter_id: str) -> int:
     return int.from_bytes(sha256(f"{combat_id}:initiative:{fighter_id}".encode()).digest())
 
