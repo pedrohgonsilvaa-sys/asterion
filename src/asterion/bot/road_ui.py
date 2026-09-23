@@ -12,7 +12,6 @@ from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 
 
-
 def _round_token(view) -> str:
     round_id = getattr(view, "round_id", None)
     return round_id.hex if round_id is not None else ""
@@ -206,8 +205,7 @@ def _round_screen(view) -> Screen | None:
         text = (
             "🏆 Ronda de Caça · Concluída\n"
             "Estrada das Cinzas · Terras do Ocaso\n\n"
-            f"⚔️ Encontros · {view.completed_encounters}/{view.batch_size}\n\n"
-            "A Estrada guarda ameaças entre as cinzas."
+            f"⚔️ Encontros · {view.completed_encounters}/{view.batch_size}"
             f"{_reward_block(view)}"
         )
         return Screen(
