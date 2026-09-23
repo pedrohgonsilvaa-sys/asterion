@@ -145,6 +145,7 @@ class PrologueService:
                         character_id=character.id,
                         region="Terras do Ocaso",
                         location="Estrada das Cinzas",
+                        last_brazier_id="tdo.brazier.estrada",
                     )
                 )
                 session.add(
