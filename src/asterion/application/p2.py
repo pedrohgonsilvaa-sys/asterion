@@ -17,6 +17,7 @@ from asterion.domain.road import RULESET, create_road_combat, creature_for, enem
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
+    Brazier,
     Character,
     CodexEntry,
     CombatRecord,
@@ -98,6 +99,23 @@ class P2Service(RoadService):
             if q.content_version != P2_VERSION or q.status != "active":
                 return None
             return await self._view(s, c, q, world, "detail")
+
+    async def map_context(self, actor: int) -> tuple[set[str], str | None, set[str]]:
+        """Return durable map facts without requiring P2 to still be active."""
+        async with self.sessions() as s:
+            c = await self._character(s, actor)
+            if c is None:
+                return set(), None, set()
+            world = await self._world(s, c.id)
+            locations = set(await self._known_locations(s, c.id))
+            braziers = set(
+                (
+                    await s.scalars(
+                        select(Brazier.brazier_id).where(Brazier.character_id == c.id)
+                    )
+                ).all()
+            )
+            return locations, world.location if world is not None else None, braziers
 
     async def alda(self, actor: int) -> P2View | None:
         async with self.sessions() as s:
