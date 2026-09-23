@@ -25,6 +25,8 @@ from asterion.domain.road import (
     material_for,
     materialize_equipment,
     rune_potency,
+    select_charneca_creature,
+    select_charneca_exploration_result,
     select_creature,
     select_exploration_result,
     select_variant,
@@ -56,9 +58,15 @@ from asterion.infrastructure.db.models import (
 
 ROAD = "Estrada das Cinzas"
 REFUGE = "Refúgio do Ocaso"
+CHARNECA = "Charneca da Fuligem"
 REGION = "Terras do Ocaso"
 HUNT_CONTENT = "road_manual_hunt"
 EXPLORE_CONTENT = "road_exploration"
+CHARNECA_HUNT_UNLOCK = "hunt_manual.charneca_da_fuligem"
+CHARNECA_EXPLORE_UNLOCK = "explore.charneca_da_fuligem"
+CHARNECA_ROUND_FAMILIARITY = "hunt_round.charneca_da_fuligem"
+CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
+REFUGE_BRAZIER = "tdo.brazier.refugio_do_ocaso"
 
 VARIANT_LABELS = {
     "furious": "Furioso",
