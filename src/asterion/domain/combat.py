@@ -5,7 +5,14 @@ from dataclasses import dataclass, field
 from decimal import ROUND_FLOOR, Decimal, localcontext
 from uuid import UUID
 
-from asterion.domain.combat_math import PRECISION, CombatRng, Stats, direct_damage, stable_priority
+from asterion.domain.combat_math import (
+    PRECISION,
+    CombatRng,
+    Stats,
+    direct_damage,
+    dot_damage,
+    stable_priority,
+)
 
 D = Decimal
 
@@ -188,10 +195,13 @@ def _end_turn(state: Combat) -> None:
     for dot in state.dot_states.get(actor.id, []):
         coefficient = D("0.12") if dot.kind == "poison" else D("0.10")
         snapshots = dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks
-        damage = int(
-            sum((snapshot * coefficient for snapshot in snapshots), D(0)).to_integral_value(
-                rounding=ROUND_FLOOR
-            )
+        source = state.fighters.get(dot.source)
+        attacker_level = source.level if source is not None else actor.level
+        damage = dot_damage(
+            snapshots,
+            coefficient,
+            actor.stat("defense"),
+            attacker_level,
         )
         actor.hp = max(D(0), actor.hp - D(damage))
         dot.remaining -= 1
