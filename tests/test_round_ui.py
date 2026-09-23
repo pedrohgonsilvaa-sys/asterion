@@ -151,5 +151,5 @@ def test_inventory_pending_ending_exposes_both_direct_actions():
     assert "🎒 Inventário · Espaço Insuficiente" in screen.text
     assert "📦 Entregas Pendentes · Limite Atingido" in screen.text
     callbacks = _callbacks(screen)
-    assert "road:round:inventory" in callbacks
-    assert "road:round:pending" in callbacks
+    assert "inventory:root" in callbacks
+    assert "pending:root" in callbacks
