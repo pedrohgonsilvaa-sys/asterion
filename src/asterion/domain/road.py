@@ -478,7 +478,7 @@ def material_for(creature_id: str, seed: str) -> str:
             (("material.tdo.ferro_de_fuligem", 1), ("material.tdo.erva_cinzenta", 1)),
         )
     if creature_id == "cervo_escoriado":
-        raise ValueError("Cervo Escoriado material pool is not defined by the regional source")
+        return "material.tdo.couro_escoriado"
     raise ValueError(f"no material pool for creature {creature_id}")
 
 
