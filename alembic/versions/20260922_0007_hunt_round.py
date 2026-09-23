@@ -24,7 +24,7 @@ def upgrade() -> None:
         sa.Column("quantity", sa.Integer(), nullable=False, server_default="0"),
         sa.ForeignKeyConstraint(["character_id"], ["characters.id"]),
         sa.UniqueConstraint("character_id", "consumable_id", name="uq_character_consumable"),
-        sa.CheckConstraint("quantity >= 0", name="ck_consumable_quantity"),
+        sa.CheckConstraint("quantity BETWEEN 0 AND 99", name="ck_consumable_quantity"),
     )
     op.create_table(
         "hunt_rounds",
