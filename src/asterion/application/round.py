@@ -213,6 +213,11 @@ class RoundService(RoadService):
                 .limit(1)
                 .with_for_update()
             )
+            if current is not None and current.local_id != world.location:
+                current.status = "cancelled"
+                current.result_acknowledged = True
+                current.completed_at = datetime.now(UTC)
+                current = None
             if current is None:
                 current = HuntRound(
                     character_id=c.id,
@@ -220,13 +225,14 @@ class RoundService(RoadService):
                     batch_size=batch_size,
                     seed=uuid4().hex,
                     local_id=world.location,
+                    recovery_brazier_id=await self._select_recovery_brazier(
+                        s, c, world
+                    ),
                 )
                 s.add(current)
                 await s.flush()
-            elif current.batch_size != batch_size or current.local_id != world.location:
+            elif current.batch_size != batch_size:
                 current.batch_size = batch_size
-                current.local_id = world.location
-                current.seed = uuid4().hex
                 current.state_version += 1
             return await self._round_view(s, c, current)
 
@@ -350,9 +356,6 @@ class RoundService(RoadService):
             state.activity_id = activity.id
             state.status = "active"
             state.started_at = now
-            state.recovery_brazier_id = await self._select_recovery_brazier(
-                s, c, world
-            )
             state.config_snapshot = {
                 "character_class": c.character_class,
                 "race": c.race,
