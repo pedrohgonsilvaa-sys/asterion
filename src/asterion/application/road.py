@@ -65,8 +65,20 @@ EXPLORE_CONTENT = "road_exploration"
 CHARNECA_HUNT_UNLOCK = "hunt_manual.charneca_da_fuligem"
 CHARNECA_EXPLORE_UNLOCK = "explore.charneca_da_fuligem"
 CHARNECA_ROUND_FAMILIARITY = "hunt_round.charneca_da_fuligem"
+ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
 REFUGE_BRAZIER = "tdo.brazier.refugio_do_ocaso"
+LOCAL_BRAZIER = {
+    ROAD: ROAD_BRAZIER,
+    REFUGE: REFUGE_BRAZIER,
+    CHARNECA: CHARNECA_BRAZIER,
+}
+BRAZIER_LOCATION = {value: key for key, value in LOCAL_BRAZIER.items()}
+BRAZIER_LABEL = {
+    ROAD_BRAZIER: "Braseiro da Estrada",
+    REFUGE_BRAZIER: "Braseiro do Refúgio",
+    CHARNECA_BRAZIER: "Braseiro do Vento Morto",
+}
 
 VARIANT_LABELS = {
     "furious": "Furioso",
@@ -143,11 +155,69 @@ class RoadView:
     explore_available: bool = True
     creature: str | None = None
     variant: str | None = None
+    recovery_brazier: str | None = None
 
 
 class RoadService:
     def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
         self.sessions, self.server_id = sessions, server_id
+
+    async def _valid_brazier(self, s, character_id, brazier_id: str | None):
+        if not brazier_id or brazier_id not in BRAZIER_LOCATION:
+            return None
+        return await s.scalar(
+            select(Brazier).where(
+                Brazier.character_id == character_id,
+                Brazier.brazier_id == brazier_id,
+            )
+        )
+
+    async def _select_recovery_brazier(self, s, c, world) -> str:
+        local = LOCAL_BRAZIER.get(world.location)
+        if await self._valid_brazier(s, c.id, local):
+            return str(local)
+        if await self._valid_brazier(s, c.id, world.last_brazier_id):
+            return str(world.last_brazier_id)
+        discovered = (
+            await s.scalars(
+                select(Brazier)
+                .where(Brazier.character_id == c.id)
+                .order_by(Brazier.discovered_at.desc(), Brazier.id.desc())
+            )
+        ).all()
+        for brazier in discovered:
+            if brazier.brazier_id in BRAZIER_LOCATION:
+                return brazier.brazier_id
+        return REFUGE_BRAZIER
+
+    async def _apply_recovery(self, s, c, world, recovery_brazier_id: str | None):
+        chosen = recovery_brazier_id
+        if not await self._valid_brazier(s, c.id, chosen):
+            if await self._valid_brazier(s, c.id, world.last_brazier_id):
+                chosen = world.last_brazier_id
+            else:
+                discovered = (
+                    await s.scalars(
+                        select(Brazier)
+                        .where(Brazier.character_id == c.id)
+                        .order_by(Brazier.discovered_at.desc(), Brazier.id.desc())
+                    )
+                ).all()
+                chosen = next(
+                    (
+                        brazier.brazier_id
+                        for brazier in discovered
+                        if brazier.brazier_id in BRAZIER_LOCATION
+                    ),
+                    None,
+                )
+        destination = BRAZIER_LOCATION.get(chosen, REFUGE)
+        world.region = REGION
+        world.location = destination
+        c.hp = c.max_hp
+        if chosen in BRAZIER_LOCATION:
+            world.last_brazier_id = chosen
+        return destination, chosen, BRAZIER_LABEL.get(chosen, "Ponto Seguro")
 
     async def resume(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
