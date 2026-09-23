@@ -95,6 +95,30 @@ BESTIARY_STAGE_LABELS = {
 }
 
 
+def _hunt_unlock_for(location: str) -> str:
+    return HUNT_UNLOCK if location == ROAD else CHARNECA_HUNT_UNLOCK
+
+
+def _explore_unlock_for(location: str) -> str:
+    return EXPLORE_UNLOCK if location == ROAD else CHARNECA_EXPLORE_UNLOCK
+
+
+def _round_unlock_for(location: str) -> str:
+    return ROUND_FAMILIARITY if location == ROAD else CHARNECA_ROUND_FAMILIARITY
+
+
+def _variant_chance_for(location: str) -> int:
+    return 8 if location == ROAD else 10
+
+
+def _creature_for_location(location: str, seed: str, level: int):
+    return (
+        select_creature(seed, level)
+        if location == ROAD
+        else select_charneca_creature(seed, level)
+    )
+
+
 @dataclass(frozen=True)
 class RoadView:
     kind: str
