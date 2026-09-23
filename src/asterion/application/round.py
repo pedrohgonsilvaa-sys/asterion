@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.road import (
+    BRAZIER_LABEL,
     CHARNECA,
     CHARNECA_ROUND_FAMILIARITY,
     HUNT_CONTENT,
@@ -50,6 +51,7 @@ from asterion.infrastructure.db.models import (
     RewardComponent,
     RewardEvent,
     Unlock,
+    WorldState,
 )
 
 ROUND_CONTENT = "road_hunt_round"
@@ -117,6 +119,7 @@ class RoundView:
     enemy_level: int = 0
     variant: str | None = None
     result_text: str | None = None
+    recovery_brazier: str | None = None
     inventory_blocked: bool = False
     pending_blocked: bool = False
 
@@ -347,6 +350,9 @@ class RoundService(RoadService):
             state.activity_id = activity.id
             state.status = "active"
             state.started_at = now
+            state.recovery_brazier_id = await self._select_recovery_brazier(
+                s, c, world
+            )
             state.config_snapshot = {
                 "character_class": c.character_class,
                 "race": c.race,
@@ -456,6 +462,7 @@ class RoundService(RoadService):
                     variant=encounter.variant,
                     seed=encounter.seed,
                     local_id=state.local_id,
+                    recovery_brazier_id=state.recovery_brazier_id,
                     loot_profile="hunt",
                 )
             )
@@ -761,6 +768,7 @@ class RoundService(RoadService):
             variant=encounter.variant,
             seed=encounter.seed,
             local_id=state.local_id,
+            recovery_brazier_id=state.recovery_brazier_id,
             loot_profile="round",
             result_acknowledged=True,
         )
@@ -771,7 +779,17 @@ class RoundService(RoadService):
 
         if combat.result == "defeat":
             encounter.status = "defeated"
-            c.hp = c.max_hp
+            world = await s.scalar(
+                select(WorldState)
+                .where(WorldState.character_id == c.id)
+                .with_for_update()
+            )
+            if world is not None:
+                await self._apply_recovery(
+                    s, c, world, state.recovery_brazier_id
+                )
+            else:
+                c.hp = c.max_hp
             state.next_resolution_at = None
             await self._finish_round(s, state, "defeated")
             return
@@ -1190,10 +1208,17 @@ class RoundService(RoadService):
                 encounter.state_version,
             )
             flavor = combat.flavor
+        view_location = state.local_id
+        if state.status == "defeated":
+            world = await s.scalar(
+                select(WorldState).where(WorldState.character_id == c.id)
+            )
+            if world is not None:
+                view_location = world.location
         return RoundView(
             kind=kind,
             character_id=c.id,
-            location=state.local_id,
+            location=view_location,
             round_id=state.id,
             activity_id=state.activity_id,
             encounter_id=encounter_id,
@@ -1218,6 +1243,9 @@ class RoundService(RoadService):
             enemy_level=enemy_level,
             variant=variant,
             result_text=flavor,
+            recovery_brazier=BRAZIER_LABEL.get(
+                state.recovery_brazier_id, "Ponto Seguro"
+            ),
             inventory_blocked=inventory_blocked,
             pending_blocked=pending_blocked,
         )
