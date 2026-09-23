@@ -8,10 +8,12 @@ from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
 from asterion.application.prologue import PrologueService
 from asterion.application.round import RoundService
+from asterion.application.s1 import S1Service
 from asterion.application.world import WorldService
 from asterion.bot.combat_handlers import combat_router
 from asterion.bot.creation_handlers import creation_router
 from asterion.bot.p1_handlers import p1_router
+from asterion.bot.s1_handlers import s1_router
 from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
 from asterion.domain.creation import NamePolicy
@@ -37,9 +39,11 @@ def get_bot_runtime() -> BotRuntime:
     p1 = P1Service(SessionFactory, settings.server_id)
     road = RoundService(SessionFactory, settings.server_id)
     inventory = InventoryService(SessionFactory, settings.server_id)
+    s1 = S1Service(SessionFactory, settings.server_id)
     dispatcher.include_router(p1_router(p1, settings.creation_images))
+    dispatcher.include_router(s1_router(s1, settings.creation_images))
     dispatcher.include_router(combat_router(prologue, settings.creation_images, world, road))
-    dispatcher.include_router(world_router(world, settings.creation_images, p1, road, inventory))
+    dispatcher.include_router(world_router(world, settings.creation_images, p1, road, inventory, s1))
     dispatcher.include_router(
         creation_router(
             CreationService(
