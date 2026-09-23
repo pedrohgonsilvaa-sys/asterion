@@ -407,7 +407,7 @@ class RoadService:
                             "settled": True,
                         }
                         consolidate_level(c)
-                        return await self._attempt_view(s, c, attempt, ROAD)
+                        return await self._attempt_view(s, c, attempt, attempt.local_id)
                 consolidate_level(c)
                 return RoadView(
                     "hunt_defeat",
@@ -1527,10 +1527,13 @@ class RoadService:
                 consolidate_level(c)
                 return await self._attempt_view(s, c, attempt, ROAD)
         consolidate_level(c)
+        context = await s.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == activity.id)
+        )
         return RoadView(
             "hunt_defeat",
             c.id,
-            ROAD,
+            context.local_id if context is not None else ROAD,
             activity_id=activity.id,
             vigor=c.vigor,
             max_vigor=c.max_vigor,
@@ -1554,7 +1557,7 @@ class RoadService:
                     return RoadView(
                         "hunt_defeat",
                         c.id,
-                        ROAD,
+                        context.local_id,
                         activity_id=activity.id,
                         vigor=c.vigor,
                         max_vigor=c.max_vigor,
