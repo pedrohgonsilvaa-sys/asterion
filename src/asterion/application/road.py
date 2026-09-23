@@ -240,9 +240,7 @@ class RoadService:
             await self._retry_blocked_deliveries(s, c)
             if c.delivery_blocked:
                 return await self._view_for_world(s, c, world)
-            hunt_unlock = (
-                HUNT_UNLOCK if world.location == ROAD else CHARNECA_HUNT_UNLOCK
-            )
+            hunt_unlock = _hunt_unlock_for(world.location)
             if not await s.scalar(
                 select(Unlock).where(
                     Unlock.character_id == c.id,
@@ -262,16 +260,12 @@ class RoadService:
                     return await self._combat_view(s, c, active)
                 return await self._view_for_world(s, c, world)
             seed = uuid4().hex
-            creature = (
-                select_creature(seed, c.level)
-                if world.location == ROAD
-                else select_charneca_creature(seed, c.level)
-            )
+            creature = _creature_for_location(world.location, seed, c.level)
             level = min(c.level, creature.max_level)
             variant = select_variant(
                 seed,
                 creature,
-                chance_percent=8 if world.location == ROAD else 10,
+                chance_percent=_variant_chance_for(world.location),
             )
             combat_id = uuid4()
             combat = create_road_combat(
