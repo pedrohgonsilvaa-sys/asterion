@@ -263,12 +263,6 @@ def world_router(
         if view is not None:
             await present(query.message, render_road(view), images, edit=True)
 
-    @router.callback_query(F.data.in_({"road:round:inventory", "road:round:pending"}))
-    async def round_corrective_system(query: CallbackQuery):
-        # Inventory/Pending navigation is owned by their dedicated UI blocks.
-        # The callback is explicit so stale round messages never mutate round state.
-        await query.answer("Sistema ainda não disponível nesta vertical slice.")
-
     @router.callback_query(F.data.startswith("road:travel:"))
     async def travel(query: CallbackQuery):
         await query.answer()
