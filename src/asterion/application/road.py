@@ -1529,7 +1529,7 @@ class RoadService:
             )
             if attempt is None or attempt.status == "active":
                 return await self._combat_view(s, c, active)
-            return await self._attempt_view(s, c, attempt, ROAD)
+            return await self._attempt_view(s, c, attempt, attempt.local_id)
 
         attempt = await s.scalar(
             select(ExplorationAttempt)
@@ -1590,7 +1590,24 @@ class RoadService:
             return await self._result_view_for_activity(s, c, activity, world)
         activity.status = "failed"
         activity.last_valid_action_at = datetime.now(UTC)
-        c.hp = c.max_hp
+        world = await s.scalar(
+            select(WorldState)
+            .where(WorldState.character_id == c.id)
+            .with_for_update()
+        )
+        context = await s.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == activity.id)
+        )
+        if world is not None:
+            destination, _, recovery_name = await self._apply_recovery(
+                s,
+                c,
+                world,
+                context.recovery_brazier_id if context is not None else None,
+            )
+        else:
+            c.hp = c.max_hp
+            destination, recovery_name = ROAD, "Braseiro da Estrada"
         if activity.content_id == EXPLORE_CONTENT:
             attempt = await s.scalar(
                 select(ExplorationAttempt)
@@ -1602,22 +1619,23 @@ class RoadService:
                 attempt.completed_at = datetime.now(UTC)
                 attempt.progress = {
                     **(attempt.progress or {}),
-                    "receipt_text": "A exploração expirou por inatividade. Recuperado na Estrada.",
+                    "receipt_text": (
+                        "A exploração expirou por inatividade. "
+                        f"Recuperado em {recovery_name}."
+                    ),
                     "settled": True,
                 }
                 consolidate_level(c)
-                return await self._attempt_view(s, c, attempt, ROAD)
+                return await self._attempt_view(s, c, attempt, destination)
         consolidate_level(c)
-        context = await s.scalar(
-            select(HuntContext).where(HuntContext.game_activity_id == activity.id)
-        )
         return RoadView(
             "hunt_defeat",
             c.id,
-            context.local_id if context is not None else ROAD,
+            destination,
             activity_id=activity.id,
             vigor=c.vigor,
             max_vigor=c.max_vigor,
+            recovery_brazier=recovery_name,
         )
 
     async def _result_view_for_activity(self, s, c, activity, world):
@@ -1635,13 +1653,17 @@ class RoadService:
                     .with_for_update()
                 )
                 if context is not None and not context.result_acknowledged:
+                    recovery_name = BRAZIER_LABEL.get(
+                        context.recovery_brazier_id, "Ponto Seguro"
+                    )
                     return RoadView(
                         "hunt_defeat",
                         c.id,
-                        context.local_id,
+                        world.location if world is not None else context.local_id,
                         activity_id=activity.id,
                         vigor=c.vigor,
                         max_vigor=c.max_vigor,
+                        recovery_brazier=recovery_name,
                     )
         elif activity.content_id == EXPLORE_CONTENT:
             attempt = await s.scalar(
