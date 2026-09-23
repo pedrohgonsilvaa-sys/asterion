@@ -135,3 +135,62 @@ def test_predictable_lethal_dot_is_purified_before_other_priorities():
         DotState("poison", 1, 2, D("100"), "enemy", [D("100")])
     ]
     assert service._lethal_purification_candidate(state) == ("purify_dot", 0)
+
+
+
+def test_predictable_lethal_dot_uses_full_next_tick_pressure():
+    service = _service()
+    state = _combat()
+    state.fighters["player"].hp = D("20")
+    state.dot_states["player"] = [
+        DotState("poison", 2, 2, D("100"), "enemy", [D("100"), D("100")])
+    ]
+    # Full next tick is 24, while removing the oldest stack reduces it to 12.
+    assert service._lethal_purification_candidate(state) == ("purify_dot", 0)
+
+
+def test_bleed_aggressive_rider_uses_each_stack_snapshot():
+    state = _combat()
+    state.fighters["player"].hp = D("400")
+    state.fighters["enemy"].hp = D("1")
+    state.dot_states["player"] = [
+        DotState("bleed", 2, 2, D("100"), "enemy", [D("100"), D("300")])
+    ]
+    result = act(state, "attack")
+    # Rider = floor((100 + 300) * 3%) = 12; enemy dies before responding.
+    assert result.fighters["player"].hp == D("388")
+
+
+def test_consumable_budget_gates_automatic_choice_even_when_heal_is_critical():
+    service = _service()
+    state = _combat()
+    state.fighters["player"].hp = D("250")
+
+    class FakeSession:
+        async def scalar(self, _statement):
+            return 9
+
+    import asyncio
+
+    allowed = asyncio.run(
+        service._choose_round_action(
+            FakeSession(),
+            type("Character", (), {"id": uuid4()})(),
+            type("Round", (), {"prepared_heal": True, "prepared_purify": False})(),
+            state,
+            consumable_uses=0,
+            consumable_limit=1,
+        )
+    )
+    exhausted = asyncio.run(
+        service._choose_round_action(
+            FakeSession(),
+            type("Character", (), {"id": uuid4()})(),
+            type("Round", (), {"prepared_heal": True, "prepared_purify": False})(),
+            state,
+            consumable_uses=1,
+            consumable_limit=1,
+        )
+    )
+    assert allowed == ("heal", None)
+    assert exhausted != ("heal", None)

@@ -237,8 +237,9 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
     if actor_id == "player" or actor_id == "enemy":
         for dot in state.dot_states.get(actor.id, []):
             if dot.kind == "bleed":
+                snapshots = dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks
                 recoil = (
-                    dot.snapshot_attack * D("0.03") * dot.stacks
+                    sum(snapshots, D(0)) * D("0.03")
                 ).to_integral_value(rounding=ROUND_FLOOR)
                 actor.hp = max(D(0), actor.hp - recoil)
         if actor.hp == 0:

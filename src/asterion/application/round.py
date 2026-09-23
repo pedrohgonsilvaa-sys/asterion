@@ -60,6 +60,12 @@ SAFETY_THRESHOLD = Decimal("0.35")
 RECOVERY_THRESHOLD = Decimal("0.50")
 CRITICAL_THRESHOLD = Decimal("0.30")
 MIN_EFFECTIVE_HEAL = Decimal("0.10")
+CONSUMABLE_LIMITS = {
+    "common": 1,
+    "uncommon": 1,
+    "elite": 2,
+    "boss": 3,
+}
 
 
 @dataclass(frozen=True)
@@ -631,11 +637,20 @@ class RoundService(RoadService):
             encounter.state_version,
         )
         steps = 0
+        consumable_uses = 0
+        consumable_limit = CONSUMABLE_LIMITS.get(encounter.category, 0)
         while combat.result is None:
             steps += 1
             if steps > 200:
                 raise RuntimeError("automatic hunt combat exceeded action guard")
-            choice = await self._choose_round_action(s, c, state, combat)
+            choice = await self._choose_round_action(
+                s,
+                c,
+                state,
+                combat,
+                consumable_uses=consumable_uses,
+                consumable_limit=consumable_limit,
+            )
             if choice is None:
                 raise RuntimeError("automatic hunt combat has no valid action")
             kind, target = choice
@@ -648,6 +663,7 @@ class RoundService(RoadService):
                 updated = use_heal_consumable(combat)
                 if updated.version != before:
                     stack.quantity -= 1
+                    consumable_uses += 1
                 combat = updated
             elif kind == "purify_dot":
                 stack = await self._consumable_stack(s, c.id, PURIFY_CONSUMABLE, lock=True)
@@ -657,6 +673,7 @@ class RoundService(RoadService):
                 updated = use_purification_consumable(combat, dot_index=int(target))
                 if updated.version != before:
                     stack.quantity -= 1
+                    consumable_uses += 1
                 combat = updated
             elif kind == "purify_effect":
                 stack = await self._consumable_stack(s, c.id, PURIFY_CONSUMABLE, lock=True)
@@ -666,6 +683,7 @@ class RoundService(RoadService):
                 updated = use_purification_consumable(combat, effect_index=int(target))
                 if updated.version != before:
                     stack.quantity -= 1
+                    consumable_uses += 1
                 combat = updated
             else:
                 combat = act(combat, str(target))
@@ -741,10 +759,6 @@ class RoundService(RoadService):
             await self._finish_round(s, state, "cancelled")
         elif state.completed_encounters >= state.batch_size:
             await self._finish_round(s, state, "completed")
-        elif c.max_hp > 0 and c.hp < c.max_hp * SAFETY_THRESHOLD:
-            await self._finish_round(s, state, "ended", "hp")
-        elif c.vigor < 2:
-            await self._finish_round(s, state, "ended", "vigor")
         elif c.delivery_blocked:
             inventory_blocked = await self._inventory_slots(s, c.id) >= 60
             pending_blocked = await self._pending_slots(s, c.id) <= 0
@@ -756,14 +770,30 @@ class RoundService(RoadService):
                 else "pending"
             )
             await self._finish_round(s, state, "ended", reason)
+        elif c.vigor < 2:
+            await self._finish_round(s, state, "ended", "vigor")
+        elif c.max_hp > 0 and c.hp < c.max_hp * SAFETY_THRESHOLD:
+            await self._finish_round(s, state, "ended", "hp")
 
-    async def _choose_round_action(self, s, c, state, combat):
+    async def _choose_round_action(
+        self,
+        s,
+        c,
+        state,
+        combat,
+        *,
+        consumable_uses: int = 0,
+        consumable_limit: int = 0,
+    ):
         actions = allowed_actions(combat)
         if not actions:
             return None
         player = combat.fighters["player"]
         hp_ratio = player.hp / player.stats.hp if player.stats.hp else Decimal(0)
-        can_consumable = consumable_available(combat)
+        can_consumable = (
+            consumable_uses < consumable_limit
+            and consumable_available(combat)
+        )
 
         purify_available = (
             state.prepared_purify
@@ -819,7 +849,11 @@ class RoundService(RoadService):
         return min(max(Decimal(0), nominal), player.stats.hp - player.hp)
 
     def _dot_metrics(self, combat, dot) -> tuple[Decimal, Decimal, Decimal]:
-        coefficient = Decimal("0.12") if dot.kind == "poison" else Decimal("0.10")
+        coefficient = {
+            "poison": Decimal("0.12"),
+            "bleed": Decimal("0.10"),
+            "burn": Decimal("0.15"),
+        }.get(dot.kind, Decimal(0))
         snapshots = list(dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks)
         player = combat.fighters["player"]
         source = combat.fighters.get(dot.source)
@@ -911,7 +945,14 @@ class RoundService(RoadService):
         if not dots:
             return None
         metrics = [self._dot_metrics(combat, dot) for dot in dots]
-        next_tick = sum((metric[2] for metric in metrics), Decimal(0))
+        next_tick = sum(
+            (
+                remaining / Decimal(dot.remaining)
+                for dot, (remaining, _, _) in zip(dots, metrics, strict=True)
+                if dot.remaining > 0
+            ),
+            Decimal(0),
+        )
         if next_tick < player.hp:
             return None
         rescuing = []

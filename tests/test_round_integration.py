@@ -9,6 +9,7 @@ from asterion.application.round import (
     PURIFY_CONSUMABLE,
     RoundService,
 )
+from asterion.domain.combat_math import Stats
 from asterion.domain.road import CREATURES, ROUND_FAMILIARITY
 from asterion.infrastructure.db.models import (
     Character,
@@ -34,6 +35,20 @@ async def _seed_round(database, actor: int, *, vigor: int = 100):
     service = RoundService(sessions, "ocaso")
     await service.travel(actor, ROAD)
     return actor, service
+
+
+def _force_safe_common(monkeypatch, round_module):
+    """Keep scheduler/economy tests independent from combat-survival variance."""
+    monkeypatch.setattr(round_module, "select_creature", lambda seed, level: CREATURES[0])
+    original = round_module.create_road_combat
+
+    def safe_combat(*args, **kwargs):
+        state = original(*args, **kwargs)
+        enemy = state.fighters["enemy"]
+        enemy.stats = Stats(enemy.stats.hp, enemy.stats.attack * 0 + 1, enemy.stats.defense, enemy.stats.agility)
+        return state
+
+    monkeypatch.setattr(round_module, "create_road_combat", safe_combat)
 
 
 @pytest.mark.asyncio
@@ -108,7 +123,7 @@ async def test_round_resolves_due_encounter_once_and_charges_two_vigor(database,
     import asterion.application.round as round_module
 
     actor, service = await _seed_round(database, 772002)
-    monkeypatch.setattr(round_module, "select_creature", lambda seed, level: CREATURES[0])
+    _force_safe_common(monkeypatch, round_module)
     prepared = await service.prepare_round(actor, 5)
     started = await service.start_round(actor, prepared.round_id, prepared.state_version)
 
@@ -185,7 +200,7 @@ async def test_vigor_ending_happens_before_next_encounter_is_created(database, m
     import asterion.application.round as round_module
 
     actor, service = await _seed_round(database, 772004, vigor=2)
-    monkeypatch.setattr(round_module, "select_creature", lambda seed, level: CREATURES[0])
+    _force_safe_common(monkeypatch, round_module)
     prepared = await service.prepare_round(actor, 5)
     started = await service.start_round(actor, prepared.round_id, prepared.state_version)
 
@@ -252,6 +267,50 @@ async def test_elite_interrupts_before_auto_combat_and_reuses_encounter_id(datab
                 GameActivity.status == "active",
             )
         ) == 1
+
+
+@pytest.mark.asyncio
+async def test_common_round_encounter_commits_at_most_one_consumable(database, monkeypatch):
+    import asterion.application.round as round_module
+
+    actor, service = await _seed_round(database, 772007)
+    _force_safe_common(monkeypatch, round_module)
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        character.hp = 300
+        session.add(
+            ConsumableStack(
+                character_id=character.id,
+                consumable_id=HEAL_CONSUMABLE,
+                quantity=3,
+            )
+        )
+        await session.commit()
+
+    prepared = await service.prepare_round(actor, 5)
+    toggled = await service.toggle_round_consumable(
+        actor, prepared.round_id, prepared.state_version, HEAL_CONSUMABLE
+    )
+    started = await service.start_round(actor, toggled.round_id, toggled.state_version)
+    async with database[1]() as session:
+        state = await session.scalar(select(HuntRound).where(HuntRound.id == started.round_id))
+        state.next_resolution_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+
+    await service.advance_due_rounds()
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        quantity = await session.scalar(
+            select(ConsumableStack.quantity).where(
+                ConsumableStack.character_id == character.id,
+                ConsumableStack.consumable_id == HEAL_CONSUMABLE,
+            )
+        )
+        assert quantity == 2
 
 
 @pytest.mark.asyncio
