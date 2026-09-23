@@ -3,12 +3,12 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import func, select
 
+from asterion.application.road import ROAD
 from asterion.application.round import (
     HEAL_CONSUMABLE,
     PURIFY_CONSUMABLE,
     RoundService,
 )
-from asterion.application.road import ROAD
 from asterion.domain.road import CREATURES, ROUND_FAMILIARITY
 from asterion.infrastructure.db.models import (
     Character,
