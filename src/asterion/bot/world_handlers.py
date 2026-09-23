@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
 from asterion.application.road import RoadService
+from asterion.application.s1 import S1Service
 from asterion.application.world import WorldService
 from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
@@ -23,6 +24,7 @@ def world_router(
     p1: P1Service | None = None,
     road: RoadService | None = None,
     inventory: InventoryService | None = None,
+    s1: S1Service | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -354,18 +356,26 @@ def world_router(
         if not isinstance(query.message, Message):
             return
         p1_view = await p1.resume(query.from_user.id) if p1 else None
+        s1_view = await s1.resume(query.from_user.id) if s1 else None
+        text = "📜 Missões\n\nObjetivos, promessas e caminhos ainda inacabados acompanham sua jornada por Asterion."
+        keyboard = []
         if p1_view is not None and p1_view.status == "active":
-            text = (
-                "📜 Missões\n\nObjetivos, promessas e caminhos ainda inacabados acompanham sua jornada por Asterion.\n\n"
-                "🔥 Missão Principal\n\n📜 Vozes na Estrada · Em Andamento\nTerras do Ocaso · Nv. 1–10"
+            text += (
+                "\n\n🔥 Missão Principal\n\n"
+                "📜 Vozes na Estrada · Em Andamento\nTerras do Ocaso · Nv. 1–10"
             )
-            keyboard = [
-                [InlineKeyboardButton(text="Principal", callback_data="world:principal")],
-                [InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")],
-            ]
-        else:
-            text = "📜 Missões\n\nObjetivos, promessas e caminhos ainda inacabados acompanham sua jornada por Asterion."
-            keyboard = [[InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")]]
+            keyboard.append(
+                [InlineKeyboardButton(text="Principal", callback_data="world:principal")]
+            )
+        if s1_view is not None and s1_view.status == "active":
+            text += (
+                "\n\n📖 Missões Secundárias\n\n"
+                "1 🕯️ Luzes sob as Cinzas · Em Andamento"
+            )
+            keyboard.append([InlineKeyboardButton(text="1", callback_data="s1:detail")])
+        keyboard.append(
+            [InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")]
+        )
         await present(
             query.message,
             Screen(text, "missions", InlineKeyboardMarkup(inline_keyboard=keyboard)),
