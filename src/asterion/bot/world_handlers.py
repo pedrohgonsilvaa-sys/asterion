@@ -143,7 +143,7 @@ def world_router(
             if view is not None:
                 await present(query.message, render_road(view), images, edit=True)
 
-    @router.callback_query(F.data.startswith("road:round:prepare:"))
+    @router.callback_query(F.data.startswith("road:round:new:"))
     async def round_prepare(query: CallbackQuery):
         await query.answer()
         if road is None or not isinstance(query.message, Message):
