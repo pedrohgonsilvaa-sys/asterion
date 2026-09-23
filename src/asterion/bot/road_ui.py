@@ -14,7 +14,8 @@ from asterion.bot.creation_ui import Screen
 
 
 def _round_token(view) -> str:
-    return view.round_id.hex if view.round_id is not None else ""
+    round_id = getattr(view, "round_id", None)
+    return round_id.hex if round_id is not None else ""
 
 
 def _round_consumable_state(view) -> str:
@@ -41,6 +42,8 @@ def _reward_block(view) -> str:
 
 
 def _round_screen(view) -> Screen | None:
+    if not getattr(view, "kind", "").startswith("round_"):
+        return None
     token = _round_token(view)
     if view.kind == "round_prepare":
         text = (
@@ -171,7 +174,7 @@ def _round_screen(view) -> Screen | None:
         return Screen(
             text,
             "road_round_active",
-            InlineKeyboardMarkup(inline_keyboard=keyboard),
+            InlineKeyboardMarkup(inline_keyboard=keyboard) if keyboard else None,
         )
     if view.kind == "round_interrupted":
         creature = escape(view.creature or "Elite")
