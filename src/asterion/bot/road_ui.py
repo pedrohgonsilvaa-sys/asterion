@@ -288,12 +288,12 @@ def _round_screen(view) -> Screen | None:
         corrective = []
         if view.inventory_blocked:
             corrective.append(
-                InlineKeyboardButton(text="Inventário", callback_data="road:round:inventory")
+                InlineKeyboardButton(text="Inventário", callback_data="inventory:root")
             )
         if view.pending_blocked:
             corrective.append(
                 InlineKeyboardButton(
-                    text="Entregas Pendentes", callback_data="road:round:pending"
+                    text="Entregas Pendentes", callback_data="pending:root"
                 )
             )
         if corrective:
