@@ -1922,26 +1922,47 @@ class RoadService:
             variant=VARIANT_LABELS.get(context.variant, context.variant),
         )
 
-    def _explore_limit_view(self, c, recent, last, now, sixth=None):
+    def _explore_limit_view(self, c, recent, last, now, sixth=None, *, location=ROAD):
         if recent >= 6:
-            attempts = [sixth.created_at + timedelta(minutes=60)] if sixth and sixth.created_at else []
+            attempts = (
+                [sixth.created_at + timedelta(minutes=60)]
+                if sixth and sixth.created_at
+                else []
+            )
             available_at = min(attempts) if attempts else now
-            return RoadView("explore_limit", c.id, ROAD, vigor=c.vigor, max_vigor=c.max_vigor,
-                            name=c.name, hp=c.hp, max_hp=c.max_hp,
-                            result_text=_remaining(available_at, now))
+            return RoadView(
+                "explore_limit",
+                c.id,
+                location,
+                vigor=c.vigor,
+                max_vigor=c.max_vigor,
+                name=c.name,
+                hp=c.hp,
+                max_hp=c.max_hp,
+                result_text=_remaining(available_at, now),
+            )
         available_at = last.created_at + timedelta(minutes=5)
-        return RoadView("explore_cooldown", c.id, ROAD, vigor=c.vigor, max_vigor=c.max_vigor,
-                        name=c.name, hp=c.hp, max_hp=c.max_hp,
-                        result_text=_remaining(available_at, now))
+        return RoadView(
+            "explore_cooldown",
+            c.id,
+            location,
+            vigor=c.vigor,
+            max_vigor=c.max_vigor,
+            name=c.name,
+            hp=c.hp,
+            max_hp=c.max_hp,
+            result_text=_remaining(available_at, now),
+        )
 
     async def _explore_retry_available(self, s, c, attempt) -> bool:
         if attempt is None or attempt.status == "active":
             return False
         now = datetime.now(UTC)
+        location = attempt.local_id
         recent = await s.scalar(
             select(func.count(ExplorationAttempt.id)).where(
                 ExplorationAttempt.character_id == c.id,
-                ExplorationAttempt.local_id == ROAD,
+                ExplorationAttempt.local_id == location,
                 ExplorationAttempt.created_at >= now - timedelta(minutes=60),
             )
         ) or 0
@@ -1951,7 +1972,7 @@ class RoadService:
             select(ExplorationAttempt)
             .where(
                 ExplorationAttempt.character_id == c.id,
-                ExplorationAttempt.local_id == ROAD,
+                ExplorationAttempt.local_id == location,
             )
             .order_by(ExplorationAttempt.created_at.desc(), ExplorationAttempt.id.desc())
             .limit(1)
