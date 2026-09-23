@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -10,9 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.progression import consolidate_level
-from asterion.application.road import RoadService, enemy_xp
+from asterion.application.road import RoadService
 from asterion.domain.combat import act
-from asterion.domain.road import RULESET, create_road_combat, creature_for
+from asterion.domain.road import RULESET, create_road_combat, creature_for, enemy_xp
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
@@ -23,7 +24,6 @@ from asterion.infrastructure.db.models import (
     GameActivity,
     HuntContext,
     LocationDiscovery,
-    MaterialStack,
     Quest,
     RewardComponent,
     RewardEvent,
@@ -289,7 +289,9 @@ class P2Service(RoadService):
             if activity is None:
                 return await self._view(s, c, q, world, "objective")
             if (
-                not self._valid(q, q.state_version, 3)
+                q.status != "active"
+                or q.content_version != P2_VERSION
+                or q.step != 3
                 or activity.status != "active"
                 or activity.state_version != version
             ):
@@ -311,6 +313,7 @@ class P2Service(RoadService):
             if updated.version == combat.version:
                 return await self._view(s, c, q, world, "objective")
             activity.state_version = updated.version
+            activity.last_valid_action_at = datetime.now(UTC)
             record.snapshot = encode(updated)
             c.hp = updated.fighters["player"].hp
             context = await s.scalar(
