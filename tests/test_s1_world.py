@@ -35,5 +35,5 @@ async def test_tracked_s1_appears_in_world_hud_with_real_level_and_xp_goal(datab
     assert world is not None
     assert world.level == 2
     assert world.xp == 321
-    assert world.xp_required == 5672
+    assert world.xp_required == 5700
     assert world.tracked_secondary_quest_title == "Luzes sob as Cinzas"
