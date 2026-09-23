@@ -688,13 +688,19 @@ def world_router(
                         InlineKeyboardButton(text="Oren Cal", callback_data="s1:oren"),
                     ]
                 )
-        if not is_current:
-            walk_key = key
+        valid_normal_move = (
+            current in {"Estrada das Cinzas", "Refúgio do Ocaso"}
+            and name == "Charneca da Fuligem"
+        ) or (
+            current == "Charneca da Fuligem"
+            and name in {"Estrada das Cinzas", "Refúgio do Ocaso"}
+        )
+        if not is_current and valid_normal_move:
             keyboard.append(
                 [
                     InlineKeyboardButton(
                         text=f"Ir para {name}",
-                        callback_data=f"world:walk:{walk_key}",
+                        callback_data=f"world:walk:{key}",
                     )
                 ]
             )
