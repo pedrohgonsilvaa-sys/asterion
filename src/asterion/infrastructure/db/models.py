@@ -567,7 +567,7 @@ class ConsumableStack(Base):
     __tablename__ = "consumable_stacks"
     __table_args__ = (
         UniqueConstraint("character_id", "consumable_id", name="uq_character_consumable"),
-        CheckConstraint("quantity >= 0", name="ck_consumable_quantity"),
+        CheckConstraint("quantity BETWEEN 0 AND 99", name="ck_consumable_quantity"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
