@@ -213,6 +213,8 @@ class RoundService(RoadService):
             )
             if state is None:
                 return await self._road_blocking_view(s, c)
+            if state.status != "preparing" or state.state_version != version:
+                return await self._round_view(s, c, state)
             return await self._round_view(s, c, state, kind="round_prepare")
 
     async def round_consumables(
@@ -249,7 +251,9 @@ class RoundService(RoadService):
             )
             if state is None:
                 return await self._road_blocking_view(s, c)
-            if state.status != "preparing" or state.state_version != version:
+            if state.status != "preparing":
+                return await self._round_view(s, c, state)
+            if state.state_version != version:
                 return await self._round_view(s, c, state, kind="round_consumables")
             stack = await s.scalar(
                 select(ConsumableStack)
