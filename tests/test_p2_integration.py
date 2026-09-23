@@ -8,7 +8,6 @@ from asterion.application.p2 import (
     CHARNECA_CONNECTION,
     CHARNECA_LOCATION_ID,
     MARCAS_CODEX,
-    P2_CONTENT_ID,
     P2_REWARD_SOURCE,
     REFUGE,
     P2Service,
@@ -30,7 +29,6 @@ from asterion.infrastructure.db.models import (
     RewardComponent,
     RewardEvent,
     Unlock,
-    WorldState,
 )
 from tests.test_road_integration import _seed_road
 
@@ -228,7 +226,8 @@ async def test_p2_defeat_recovers_at_refuge_and_retry_keeps_species_new_encounte
 
     first_encounter = view.encounter_id
     await _force_combat_hp(database, view.activity_id, player_hp="1")
-    action = "attack" if "attack" in allowed_actions(view.combat) else allowed_actions(view.combat)[0]
+    available = allowed_actions(view.combat)
+    action = "attack" if "attack" in available else available[0]
     defeated = await service.action(
         actor,
         view.activity_id,
