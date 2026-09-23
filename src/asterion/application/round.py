@@ -1057,6 +1057,14 @@ class RoundService(RoadService):
             "material.tdo.catalisador_elite_i": "Catalisador de Elite I",
             "material.tdo.fragmento_aprimoramento_i": "Fragmento de Aprimoramento I",
         }
+        resource_icons = {
+            "material.tdo.ferro_de_fuligem": "⛏️",
+            "material.tdo.couro_escoriado": "🐾",
+            "material.tdo.erva_cinzenta": "🌿",
+            "material.tdo.residuo_ocaso": "💧",
+            "material.tdo.catalisador_elite_i": "⚗️",
+            "material.tdo.fragmento_aprimoramento_i": "🪨",
+        }
         for row in rows:
             payload = row.payload or {}
             if row.kind in {"xp", "bestiary_observation_xp", "bestiary_first_victory_xp"}:
@@ -1101,7 +1109,10 @@ class RoundService(RoadService):
                 item[0][0],
             ),
         ):
-            lines.append(f"📦 {labels.get(item_id, item_id or 'Recurso')} · {quantity}")
+            icon = resource_icons.get(item_id, "🧱")
+            lines.append(
+                f"{icon} {labels.get(item_id, item_id or 'Recurso')} · {quantity}"
+            )
         lines.extend(individual)
         return tuple(lines)
 
