@@ -264,6 +264,7 @@ class RoadService:
                     enemy_level=level,
                     variant=variant,
                     seed=seed,
+                    local_id=world.location,
                     loot_profile="hunt",
                 )
             )
