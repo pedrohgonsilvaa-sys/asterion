@@ -32,6 +32,16 @@ class P1CombatCallback(CallbackData, prefix="p1fight"):
         return UUID(hex=self.activity)
 
 
+class P2CombatCallback(CallbackData, prefix="p2fight"):
+    activity: str
+    version: int
+    action: str
+
+    @property
+    def activity_id(self) -> UUID:
+        return UUID(hex=self.activity)
+
+
 def number(value: Decimal | int) -> str:
     return (
         format(value, "f").rstrip("0").rstrip(".")
@@ -144,7 +154,13 @@ def render_combat(view: CombatView) -> Screen:
         buttons.append(
             InlineKeyboardButton(
                 text=label,
-                callback_data=(P1CombatCallback if view.context == "p1" else CombatCallback)(
+                callback_data=(
+                    P1CombatCallback
+                    if view.context == "p1"
+                    else P2CombatCallback
+                    if view.context == "p2"
+                    else CombatCallback
+                )(
                     activity=view.activity_id.hex,
                     version=state.version,
                     action=action,
