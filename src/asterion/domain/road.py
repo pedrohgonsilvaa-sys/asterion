@@ -54,11 +54,14 @@ def weighted_recent_choice(seed: str, entries: tuple[tuple[str, int], ...], rece
 
 CATEGORY = {
     "common": Stats(D("0.70"), D("0.82"), D("0.90"), D("0.95")),
+    "uncommon": Stats(D("0.85"), D("0.90"), D("0.95"), D("1.00")),
     "elite": Stats(D("1.50"), D("1.05"), D("1.05"), D("1.02")),
 }
 ARCHETYPE = {
     "balanced": Stats(D(1), D(1), D(1), D(1)),
+    "brute": Stats(D("1.15"), D("1.12"), D("0.95"), D("0.85")),
     "predator": Stats(D("0.90"), D("1.10"), D("0.90"), D("1.20")),
+    "controller": Stats(D("0.95"), D("0.90"), D("1.00"), D("1.10")),
 }
 
 
@@ -130,6 +133,34 @@ CREATURES = (
             ("leap", "Salto Predatório", D("1.60"), 3, D(0), 0),
         ),
     ),
+    Creature(
+        "aranha_cinza",
+        "Aranha de Cinza",
+        "uncommon",
+        "controller",
+        3,
+        6,
+        18,
+        ("toxic_bite", "bite"),
+        (
+            ("toxic_bite", "Picada Tóxica", D("0.80"), 1, D(0), 0),
+            ("bite", "Mordida", D("0.95"), 0, D(0), 0),
+        ),
+    ),
+    Creature(
+        "cervo_escoriado",
+        "Cervo Escoriado",
+        "common",
+        "brute",
+        4,
+        7,
+        20,
+        ("gore", "gore", "charge"),
+        (
+            ("gore", "Chifrada", D("1.05"), 0, D(0), 0),
+            ("charge", "Carga do Ocaso", D("1.60"), 3, D(0), 0),
+        ),
+    ),
 )
 
 VARIANTS = {
@@ -144,6 +175,27 @@ VARIANT_POOL = {
     "corvo_fuligem": ("agile", "furious"),
     "peregrino_calcinado": ("furious", "resistant", "hemorrhagic"),
     "alfa_cinereo": (),
+    "aranha_cinza": ("venomous", "agile"),
+    "cervo_escoriado": ("furious", "resistant"),
+}
+
+ROAD_CREATURE_IDS = (
+    "dog_cinereo",
+    "corvo_fuligem",
+    "peregrino_calcinado",
+    "alfa_cinereo",
+)
+CHARNECA_CREATURE_IDS = (
+    "peregrino_calcinado",
+    "dog_cinereo",
+    "aranha_cinza",
+    "cervo_escoriado",
+)
+CHARNECA_WEIGHTS = {
+    "peregrino_calcinado": 31,
+    "dog_cinereo": 31,
+    "aranha_cinza": 18,
+    "cervo_escoriado": 20,
 }
 
 EQUIPMENT_CATALOG = (
@@ -222,7 +274,19 @@ def creature_for(creature_id: str) -> Creature:
 
 
 def road_pool(player_level: int) -> tuple[Creature, ...]:
-    return tuple(c for c in CREATURES if player_level >= c.unlock_level)
+    return tuple(
+        c
+        for c in CREATURES
+        if c.creature_id in ROAD_CREATURE_IDS and player_level >= c.unlock_level
+    )
+
+
+def charneca_pool(player_level: int) -> tuple[Creature, ...]:
+    return tuple(
+        c
+        for c in CREATURES
+        if c.creature_id in CHARNECA_CREATURE_IDS and player_level >= c.unlock_level
+    )
 
 
 def weighted_choice(seed: str, entries: tuple[tuple[str, int], ...]) -> str:
@@ -238,6 +302,16 @@ def weighted_choice(seed: str, entries: tuple[tuple[str, int], ...]) -> str:
 def select_creature(seed: str, player_level: int) -> Creature:
     pool = road_pool(player_level)
     return creature_for(weighted_choice(seed, tuple((c.creature_id, c.weight) for c in pool)))
+
+
+def select_charneca_creature(seed: str, player_level: int) -> Creature:
+    pool = charneca_pool(player_level)
+    return creature_for(
+        weighted_choice(
+            seed,
+            tuple((c.creature_id, CHARNECA_WEIGHTS[c.creature_id]) for c in pool),
+        )
+    )
 
 
 def select_exploration_result(seed: str, player_level: int, recent: tuple[str, ...] = (), excluded: tuple[str, ...] = ()) -> str:
@@ -267,11 +341,11 @@ def select_exploration_result(seed: str, player_level: int, recent: tuple[str, .
     return weighted_choice(f"{seed}:category:{category}", eligible_subweights[category])
 
 
-def select_variant(seed: str, creature: Creature) -> str | None:
+def select_variant(seed: str, creature: Creature, chance_percent: int = 8) -> str | None:
     if not VARIANT_POOL[creature.creature_id]:
         return None
     chance = int.from_bytes(sha256(f"{seed}:variant.chance".encode()).digest(), "big") % 100
-    if chance >= 8:
+    if chance >= chance_percent:
         return None
     family = int.from_bytes(sha256(f"{seed}:variant.family".encode()).digest(), "big")
     return VARIANT_POOL[creature.creature_id][family % len(VARIANT_POOL[creature.creature_id])]
@@ -299,7 +373,12 @@ def enemy_xp(
             D("1E2"), rounding="ROUND_HALF_EVEN"
         )
         h = D("0.905903") + D("0.094097") * level
-        category_factor = D("1") if category == "common" else D("2.75")
+        category_factor = {
+            "common": D("1.00"),
+            "uncommon": D("1.35"),
+            "elite": D("2.75"),
+            "boss": D("6.00"),
+        }[category]
         delta = level - (level if player_level is None else player_level)
         level_factor = (
             D("1.10") if delta >= 5 else D("1.05") if delta >= 3 else
@@ -317,7 +396,12 @@ def enemy_xp(
 
 def crowns(level: int, category: str) -> int:
     value = D(100) + D(15) * level
-    factor = D("0.05") if category == "common" else D("0.25")
+    factor = {
+        "common": D("0.05"),
+        "uncommon": D("0.10"),
+        "elite": D("0.25"),
+        "boss": D("0.50"),
+    }[category]
     return int(((value * factor) / 10).quantize(D(1), rounding="ROUND_HALF_EVEN") * 10)
 
 
@@ -326,6 +410,16 @@ def material_for(creature_id: str, seed: str) -> str:
         return "material.tdo.couro_escoriado"
     if creature_id == "corvo_fuligem":
         return "material.tdo.residuo_ocaso"
+    if creature_id == "aranha_cinza":
+        return weighted_choice(
+            seed,
+            (
+                ("material.tdo.erva_cinzenta", 1),
+                ("material.tdo.residuo_ocaso", 1),
+            ),
+        )
+    if creature_id == "cervo_escoriado":
+        return "material.tdo.couro_escoriado"
     return weighted_choice(
         seed, (("material.tdo.ferro_de_fuligem", 1), ("material.tdo.erva_cinzenta", 1))
     )
