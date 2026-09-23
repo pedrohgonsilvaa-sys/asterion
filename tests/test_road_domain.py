@@ -46,13 +46,13 @@ def test_road_enemy_regression_vectors():
 
 def test_charneca_pool_gates_and_weights_are_authoritative():
     assert [c.creature_id for c in charneca_pool(3)] == [
-        "peregrino_calcinado",
         "dog_cinereo",
+        "peregrino_calcinado",
         "aranha_cinza",
     ]
     assert [c.creature_id for c in charneca_pool(4)] == [
-        "peregrino_calcinado",
         "dog_cinereo",
+        "peregrino_calcinado",
         "aranha_cinza",
         "cervo_escoriado",
     ]
