@@ -398,9 +398,9 @@ def crowns(level: int, category: str) -> int:
     value = D(100) + D(15) * level
     factor = {
         "common": D("0.05"),
-        "uncommon": D("0.10"),
+        "uncommon": D("0.08"),
         "elite": D("0.25"),
-        "boss": D("0.50"),
+        "boss": D("0.60"),
     }[category]
     return int(((value * factor) / 10).quantize(D(1), rounding="ROUND_HALF_EVEN") * 10)
 
