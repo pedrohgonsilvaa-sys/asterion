@@ -488,10 +488,11 @@ class RoadService:
             if (
                 c is None
                 or world is None
-                or world.location != ROAD
+                or world.location not in {ROAD, CHARNECA}
                 or not await self._p1_completed(s, c.id)
             ):
                 return None
+            location = world.location
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
@@ -500,13 +501,15 @@ class RoadService:
                 return await self._view_for_world(s, c, world)
             if not await s.scalar(
                 select(Unlock).where(
-                    Unlock.character_id == c.id, Unlock.unlock_id == EXPLORE_UNLOCK
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == _explore_unlock_for(location),
                 )
             ):
                 return await self._view_for_world(s, c, world)
             active = await s.scalar(
                 select(GameActivity).where(
-                    GameActivity.character_id == c.id, GameActivity.status == "active"
+                    GameActivity.character_id == c.id,
+                    GameActivity.status == "active",
                 )
             )
             if active is not None:
@@ -519,57 +522,99 @@ class RoadService:
                 if self._expired(active):
                     return await self._expire_activity(s, c, active)
                 attempt = await s.scalar(
-                    select(ExplorationAttempt).where(ExplorationAttempt.activity_id == active.id)
+                    select(ExplorationAttempt).where(
+                        ExplorationAttempt.activity_id == active.id
+                    )
                 )
-                return await self._combat_view(s, c, active) if attempt and attempt.status == "active" else await self._attempt_view(s, c, attempt, ROAD)
+                return (
+                    await self._combat_view(s, c, active)
+                    if attempt and attempt.status == "active"
+                    else await self._attempt_view(s, c, attempt, location)
+                )
+
             now = datetime.now(UTC)
             recent = await s.scalar(
                 select(func.count(ExplorationAttempt.id)).where(
                     ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == ROAD,
+                    ExplorationAttempt.local_id == location,
                     ExplorationAttempt.created_at >= now - timedelta(minutes=60),
                 )
-            )
+            ) or 0
             last = await s.scalar(
                 select(ExplorationAttempt)
-                .where(ExplorationAttempt.character_id == c.id, ExplorationAttempt.local_id == ROAD)
+                .where(
+                    ExplorationAttempt.character_id == c.id,
+                    ExplorationAttempt.local_id == location,
+                )
                 .order_by(ExplorationAttempt.created_at.desc())
                 .limit(1)
             )
             if recent >= 6:
-                sixth = await s.scalar(select(ExplorationAttempt).where(
-                    ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == ROAD,
-                    ExplorationAttempt.created_at >= now - timedelta(minutes=60),
-                ).order_by(ExplorationAttempt.created_at.desc()).offset(5).limit(1))
-                return self._explore_limit_view(c, recent, last, now, sixth)
+                sixth = await s.scalar(
+                    select(ExplorationAttempt)
+                    .where(
+                        ExplorationAttempt.character_id == c.id,
+                        ExplorationAttempt.local_id == location,
+                        ExplorationAttempt.created_at >= now - timedelta(minutes=60),
+                    )
+                    .order_by(ExplorationAttempt.created_at.desc())
+                    .offset(5)
+                    .limit(1)
+                )
+                return self._explore_limit_view(
+                    c, recent, last, now, sixth, location=location
+                )
             if last and last.created_at and last.created_at > now - timedelta(minutes=5):
-                return self._explore_limit_view(c, recent, last, now)
+                return self._explore_limit_view(c, recent, last, now, location=location)
+
             seed = uuid4().hex
-            recent_rows = (await s.scalars(
-                select(ExplorationAttempt.result_id)
-                .where(ExplorationAttempt.character_id == c.id, ExplorationAttempt.local_id == ROAD)
-                .order_by(ExplorationAttempt.created_at.desc()).limit(3)
-            )).all()
-            resolved_unique = tuple(
-                (await s.scalars(select(ExplorationAttempt.result_id).where(
-                    ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == ROAD,
-                    ExplorationAttempt.status == "completed",
-                    ExplorationAttempt.result_id.in_((
-                        "explore.tdo.estrada.marco_viajantes",
-                        "explore.tdo.estrada.luzes",
-                    )),
-                ))).all()
+            recent_rows = (
+                await s.scalars(
+                    select(ExplorationAttempt.result_id)
+                    .where(
+                        ExplorationAttempt.character_id == c.id,
+                        ExplorationAttempt.local_id == location,
+                    )
+                    .order_by(ExplorationAttempt.created_at.desc())
+                    .limit(3)
+                )
+            ).all()
+            unique_ids = (
+                (
+                    "explore.tdo.estrada.marco_viajantes",
+                    "explore.tdo.estrada.luzes",
+                )
+                if location == ROAD
+                else (
+                    "explore.tdo.charneca.braseiro",
+                    "explore.tdo.charneca.cripta",
+                    "explore.tdo.charneca.pedra_marcada",
+                    "explore.tdo.charneca.vento_morto",
+                )
             )
-            result = _explore_result(
-                seed, c.level, tuple(str(item).rsplit(".", 1)[-1] for item in recent_rows),
+            resolved_unique = tuple(
+                (
+                    await s.scalars(
+                        select(ExplorationAttempt.result_id).where(
+                            ExplorationAttempt.character_id == c.id,
+                            ExplorationAttempt.local_id == location,
+                            ExplorationAttempt.status == "completed",
+                            ExplorationAttempt.result_id.in_(unique_ids),
+                        )
+                    )
+                ).all()
+            )
+            result = _explore_result_for_location(
+                location,
+                seed,
+                c.level,
+                tuple(str(item).rsplit(".", 1)[-1] for item in recent_rows),
                 tuple(str(item).rsplit(".", 1)[-1] for item in resolved_unique),
             )
             category, result_id, result_text = result
             attempt = ExplorationAttempt(
                 character_id=c.id,
-                local_id=ROAD,
+                local_id=location,
                 ruleset_version=RULESET,
                 seed=seed,
                 category=category,
@@ -584,9 +629,20 @@ class RoadService:
                 creature_id = result_id.rsplit(".", 1)[-1]
                 creature = creature_for(creature_id)
                 level = min(c.level, creature.max_level)
-                variant = select_variant(seed, creature)
+                variant = select_variant(
+                    seed,
+                    creature,
+                    chance_percent=_variant_chance_for(location),
+                )
                 combat = create_road_combat(
-                    uuid4(), c.name, c.character_class, c.race, c.hp, creature, level, variant,
+                    uuid4(),
+                    c.name,
+                    c.character_class,
+                    c.race,
+                    c.hp,
+                    creature,
+                    level,
+                    variant,
                     player_level=c.level,
                 )
                 activity, encounter, _ = await CombatRepository(s).create(
@@ -603,11 +659,15 @@ class RoadService:
                         enemy_level=level,
                         variant=variant,
                         seed=seed,
+                        local_id=location,
                         loot_profile="exploration_combat",
                     )
                 )
                 await self._bestiary(
-                    s, c.id, creature.creature_id, variant=variant,
+                    s,
+                    c.id,
+                    creature.creature_id,
+                    variant=variant,
                     elite=creature.category == "elite",
                     grant_observation_xp=True,
                     observation_level=level,
@@ -616,23 +676,37 @@ class RoadService:
                 await s.flush()
                 return await self._combat_view(s, c, activity)
             await self._settle_exploration(s, c, attempt)
-            return await self._attempt_view(s, c, attempt, ROAD)
+            return await self._attempt_view(s, c, attempt, location)
 
     async def prepare_explore(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
-            if c is None or world is None or world.location != ROAD:
+            if (
+                c is None
+                or world is None
+                or world.location not in {ROAD, CHARNECA}
+                or not await self._p1_completed(s, c.id)
+            ):
                 return None
-            if not await self._p1_completed(s, c.id):
-                return None
+            location = world.location
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
             if c.delivery_blocked:
                 return await self._view_for_world(s, c, world)
-            active = await s.scalar(select(GameActivity).where(
-                GameActivity.character_id == c.id, GameActivity.status == "active"
-            ))
+            if not await s.scalar(
+                select(Unlock).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == _explore_unlock_for(location),
+                )
+            ):
+                return await self._view_for_world(s, c, world)
+            active = await s.scalar(
+                select(GameActivity).where(
+                    GameActivity.character_id == c.id,
+                    GameActivity.status == "active",
+                )
+            )
             if active is not None:
                 if active.content_id in {HUNT_CONTENT, EXPLORE_CONTENT}:
                     if self._expired(active):
@@ -640,30 +714,60 @@ class RoadService:
                     if active.content_id == HUNT_CONTENT:
                         return await self._combat_view(s, c, active)
                     attempt = await s.scalar(
-                        select(ExplorationAttempt).where(ExplorationAttempt.activity_id == active.id)
+                        select(ExplorationAttempt).where(
+                            ExplorationAttempt.activity_id == active.id
+                        )
                     )
-                    return await self._combat_view(s, c, active) if attempt and attempt.status == "active" else await self._attempt_view(s, c, attempt, ROAD)
+                    return (
+                        await self._combat_view(s, c, active)
+                        if attempt and attempt.status == "active"
+                        else await self._attempt_view(s, c, attempt, location)
+                    )
                 return None
             now = datetime.now(UTC)
-            recent = await s.scalar(select(func.count(ExplorationAttempt.id)).where(
-                ExplorationAttempt.character_id == c.id,
-                ExplorationAttempt.local_id == ROAD,
-                ExplorationAttempt.created_at >= now - timedelta(minutes=60),
-            )) or 0
-            last = await s.scalar(select(ExplorationAttempt).where(
-                ExplorationAttempt.character_id == c.id,
-                ExplorationAttempt.local_id == ROAD,
-            ).order_by(ExplorationAttempt.created_at.desc()).limit(1))
-            if recent >= 6:
-                sixth = await s.scalar(select(ExplorationAttempt).where(
+            recent = await s.scalar(
+                select(func.count(ExplorationAttempt.id)).where(
                     ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == ROAD,
+                    ExplorationAttempt.local_id == location,
                     ExplorationAttempt.created_at >= now - timedelta(minutes=60),
-                ).order_by(ExplorationAttempt.created_at.desc()).offset(5).limit(1))
-                return self._explore_limit_view(c, recent, last, now, sixth)
+                )
+            ) or 0
+            last = await s.scalar(
+                select(ExplorationAttempt)
+                .where(
+                    ExplorationAttempt.character_id == c.id,
+                    ExplorationAttempt.local_id == location,
+                )
+                .order_by(ExplorationAttempt.created_at.desc())
+                .limit(1)
+            )
+            if recent >= 6:
+                sixth = await s.scalar(
+                    select(ExplorationAttempt)
+                    .where(
+                        ExplorationAttempt.character_id == c.id,
+                        ExplorationAttempt.local_id == location,
+                        ExplorationAttempt.created_at >= now - timedelta(minutes=60),
+                    )
+                    .order_by(ExplorationAttempt.created_at.desc())
+                    .offset(5)
+                    .limit(1)
+                )
+                return self._explore_limit_view(
+                    c, recent, last, now, sixth, location=location
+                )
             if last and last.created_at and last.created_at > now - timedelta(minutes=5):
-                return self._explore_limit_view(c, recent, last, now)
-            return RoadView("explore_prepare", c.id, ROAD, vigor=c.vigor, max_vigor=c.max_vigor, name=c.name, hp=c.hp, max_hp=c.max_hp)
+                return self._explore_limit_view(c, recent, last, now, location=location)
+            return RoadView(
+                "explore_prepare",
+                c.id,
+                location,
+                vigor=c.vigor,
+                max_vigor=c.max_vigor,
+                name=c.name,
+                hp=c.hp,
+                max_hp=c.max_hp,
+            )
 
     async def _settle_hunt(
         self, s, c, activity, encounter_id, bestiary_evidence_ids=frozenset()
