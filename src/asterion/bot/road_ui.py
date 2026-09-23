@@ -451,7 +451,10 @@ def render_road(view: RoadView) -> Screen:
     else:
         text = "🔥 Braseiro do Refúgio\nRefúgio do Ocaso · Terras do Ocaso"
         keyboard = [
-            [InlineKeyboardButton(text="Oren Cal", callback_data="s1:oren")],
+            [
+                InlineKeyboardButton(text="Alda Veyr", callback_data="p2:alda"),
+                InlineKeyboardButton(text="Oren Cal", callback_data="s1:oren"),
+            ],
             [
                 InlineKeyboardButton(
                     text="Travessia dos Braseiros", callback_data="road:travel:road"
