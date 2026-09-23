@@ -5,7 +5,7 @@ from asterion.application.road import ROAD, RoadView
 from asterion.bot.road_ui import render_road
 
 
-def test_temporary_group_and_round_callbacks_are_explicitly_unavailable():
+def test_group_stays_unavailable_but_round_callbacks_are_live():
     prepare = render_road(
         RoadView(
             "hunt_prepare",
@@ -26,7 +26,8 @@ def test_temporary_group_and_round_callbacks_are_explicitly_unavailable():
         for button in row
     ]
     assert "road:unavailable:group" in callbacks
-    assert "road:unavailable:round:5" in callbacks
-    assert "road:unavailable:round:10" in callbacks
-    assert "road:unavailable:round:20" in callbacks
+    assert "road:round:new:5" in callbacks
+    assert "road:round:new:10" in callbacks
+    assert "road:round:new:20" in callbacks
+    assert all("road:unavailable:round" not in callback for callback in callbacks)
     assert all(callback != "menu:noop" for callback in callbacks)
