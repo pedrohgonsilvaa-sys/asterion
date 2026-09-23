@@ -247,7 +247,11 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
             return
     actions = state.player_actions if actor_id == "player" else state.enemy_actions
     action = actions[action_id]
-    if actor_id == "enemy" and action_id == "leap" and not state.resolving_prepared:
+    if (
+        actor_id == "enemy"
+        and action_id in {"leap", "charge"}
+        and not state.resolving_prepared
+    ):
         state.prepared_action = action_id
         state.prepared_source = actor_id
         state.prepared_target = target.id
@@ -300,7 +304,13 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
             "bleed" if state.variant == "hemorrhagic"
             else "poison" if state.variant == "venomous" else None
         )
-        native = "bleed" if action_id == "rend" else None
+        native = (
+            "bleed"
+            if action_id == "rend"
+            else "poison"
+            if action_id == "toxic_bite"
+            else None
+        )
         chosen = native or rider
         states = state.dot_states.setdefault(target.id, [])
         existing = next((dot for dot in states if dot.kind == chosen), None) if chosen else None
