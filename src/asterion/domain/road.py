@@ -155,10 +155,10 @@ CREATURES = (
         4,
         7,
         20,
-        ("gore", "gore", "charge"),
+        ("gore", "gore", "ocaso_charge"),
         (
             ("gore", "Chifrada", D("1.05"), 0, D(0), 0),
-            ("charge", "Carga do Ocaso", D("1.60"), 3, D(0), 0),
+            ("ocaso_charge", "Carga do Ocaso", D("1.60"), 3, D(0), 0),
         ),
     ),
 )
