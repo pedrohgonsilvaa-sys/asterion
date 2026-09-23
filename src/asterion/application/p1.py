@@ -180,6 +180,13 @@ class P1Service:
             if active is not None:
                 return await self._view(s, c, q)
             await self._ensure(s, Brazier, character_id=c.id, brazier_id=REFUGE_BRAZIER)
+            world = await s.scalar(
+                select(WorldState)
+                .where(WorldState.character_id == c.id)
+                .with_for_update()
+            )
+            if world is not None:
+                world.last_brazier_id = REFUGE_BRAZIER
             event = await s.scalar(
                 select(RewardEvent)
                 .where(
