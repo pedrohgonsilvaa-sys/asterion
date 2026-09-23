@@ -117,6 +117,14 @@ class P2Service(RoadService):
             )
             return locations, world.location if world is not None else None, braziers
 
+    async def charneca_content_unlocked(self, actor: int) -> bool:
+        async with self.sessions() as s:
+            c = await self._character(s, actor)
+            if c is None:
+                return False
+            q = await self._quest(s, c.id)
+            return bool(q is not None and q.status == "completed")
+
     async def alda(self, actor: int) -> P2View | None:
         async with self.sessions() as s:
             c = await self._character(s, actor)
