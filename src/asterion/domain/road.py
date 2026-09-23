@@ -472,11 +472,14 @@ def material_for(creature_id: str, seed: str) -> str:
                 ("material.tdo.residuo_ocaso", 1),
             ),
         )
+    if creature_id == "peregrino_calcinado":
+        return weighted_choice(
+            seed,
+            (("material.tdo.ferro_de_fuligem", 1), ("material.tdo.erva_cinzenta", 1)),
+        )
     if creature_id == "cervo_escoriado":
-        return "material.tdo.couro_escoriado"
-    return weighted_choice(
-        seed, (("material.tdo.ferro_de_fuligem", 1), ("material.tdo.erva_cinzenta", 1))
-    )
+        raise ValueError("Cervo Escoriado material pool is not defined by the regional source")
+    raise ValueError(f"no material pool for creature {creature_id}")
 
 
 def create_road_combat(
