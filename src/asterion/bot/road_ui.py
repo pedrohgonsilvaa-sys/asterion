@@ -420,7 +420,7 @@ def render_road(view: RoadView) -> Screen:
         keyboard = [
             [InlineKeyboardButton(text="Caçar", callback_data="road:prepare")],
             *([[InlineKeyboardButton(text="Desbravar", callback_data="road:explore")]] if view.explore_available else []),
-            *([[InlineKeyboardButton(text="Ronda ×5", callback_data="road:round:prepare:5"), InlineKeyboardButton(text="Ronda ×10", callback_data="road:round:prepare:10"), InlineKeyboardButton(text="Ronda ×20", callback_data="road:round:prepare:20")]] if view.familiar else []),
+            *([[InlineKeyboardButton(text="Ronda ×5", callback_data="road:round:new:5"), InlineKeyboardButton(text="Ronda ×10", callback_data="road:round:new:10"), InlineKeyboardButton(text="Ronda ×20", callback_data="road:round:new:20")]] if view.familiar else []),
             [
                 InlineKeyboardButton(
                     text="Travessia dos Braseiros", callback_data="road:travel:refuge"
