@@ -666,8 +666,7 @@ def world_router(
         if key in {"road", "charneca"}:
             content_available = key == "road" or (
                 p2 is not None
-                and (await p2.alda(query.from_user.id)) is not None
-                and (await p2.alda(query.from_user.id)).status == "completed"
+                and await p2.charneca_content_unlocked(query.from_user.id)
             )
             if content_available:
                 lines.extend(["🧭 Desbravar · Disponível", "🦌 Caçadas · Disponível"])
