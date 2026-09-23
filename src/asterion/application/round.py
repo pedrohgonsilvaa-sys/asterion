@@ -1020,22 +1020,27 @@ class RoundService(RoadService):
                 key = (row.kind, row.item_id)
                 stackables[key] = stackables.get(key, 0) + row.quantity
             elif row.kind == "equipment":
+                slot_icons = {
+                    "Principal": "🗡️",
+                    "Secundária": "🛡️",
+                    "2H": "⚔️",
+                    "Cabeça": "🪖",
+                    "Torso": "🥋",
+                    "Mãos": "🧤",
+                    "Pés": "🥾",
+                    "Acessório": "💍",
+                    "Artefato": "🧿",
+                }
                 individual.append(
-                    "🛡️ "
+                    f"{slot_icons.get(payload.get('slot'), '🛡️')} "
                     f"{payload.get('item_name', row.item_id or 'Equipamento')} · "
-                    f"+{payload.get('enhancement', 0)} · "
-                    f"{payload.get('rarity', 'Raridade desconhecida')} · "
-                    f"{payload.get('slot', 'Slot desconhecido')} · "
-                    f"Nível do Item {payload.get('item_level', '?')} · "
-                    f"{'Vinculado' if payload.get('bound', False) else 'Negociável'}"
+                    f"{payload.get('rarity', 'Raridade desconhecida')}"
                 )
             elif row.kind == "rune":
                 individual.append(
-                    "🔮 Runa "
+                    "🔷 Runa "
                     f"{payload.get('family', row.item_id or 'desconhecida')} · "
-                    f"{payload.get('rarity', 'Raridade desconhecida')} · "
-                    f"Grau {payload.get('grade', 1)} · "
-                    f"{'Vinculada' if payload.get('bound', False) else 'Negociável'}"
+                    f"{payload.get('rarity', 'Raridade desconhecida')}"
                 )
         lines: list[str] = []
         if xp:
@@ -1043,7 +1048,11 @@ class RoundService(RoadService):
         if crowns:
             lines.append(f"🪙 Coroas · {crowns}")
         for (_, item_id), quantity in sorted(
-            stackables.items(), key=lambda item: (labels.get(item[0][1], item[0][1] or ""), item[0][0])
+            stackables.items(),
+            key=lambda item: (
+                labels.get(item[0][1], item[0][1] or ""),
+                item[0][0],
+            ),
         ):
             lines.append(f"📦 {labels.get(item_id, item_id or 'Recurso')} · {quantity}")
         lines.extend(individual)
