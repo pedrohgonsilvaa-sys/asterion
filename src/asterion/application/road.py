@@ -46,6 +46,7 @@ from asterion.infrastructure.db.models import (
     ExplorationAttempt,
     GameActivity,
     HuntContext,
+    LocationDiscovery,
     MaterialStack,
     PendingItem,
     Quest,
