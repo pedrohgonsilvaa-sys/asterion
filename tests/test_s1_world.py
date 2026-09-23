@@ -1,6 +1,5 @@
-from sqlalchemy import select
-
 import pytest
+from sqlalchemy import select
 
 from asterion.application.s1 import S1Service
 from asterion.application.world import WorldService
