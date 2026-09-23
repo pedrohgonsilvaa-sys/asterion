@@ -8,6 +8,7 @@ from asterion.domain.road import (
     anti_repeat_weight,
     charneca_pool,
     enemy_xp,
+    material_for,
     materialize_equipment,
     road_enemy_stats,
     road_pool,
@@ -67,6 +68,11 @@ def test_charneca_pool_gates_and_weights_are_authoritative():
     assert select_charneca_creature("charneca-stable", 3) == select_charneca_creature(
         "charneca-stable", 3
     )
+
+
+def test_cervo_escoriado_uses_couro_escoriado_in_every_normal_hunt_context():
+    for seed in ("charneca-cervo", "bosque-cervo", "variant-cervo"):
+        assert material_for("cervo_escoriado", seed) == "material.tdo.couro_escoriado"
 
 
 def test_charneca_exploration_respects_level_and_unique_exclusions():
