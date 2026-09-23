@@ -807,6 +807,8 @@ class RoadService:
                 and _draw_int(context.seed, "material-roll", 100) >= 80
                 else 1
                 if context.category == "common"
+                else 1 + _draw_int(context.seed, "uncommon-materials", 2)
+                if context.category == "uncommon"
                 else 3 + _draw_int(context.seed, "elite-materials", 2)
             )
             for ordinal in range(material_count):
@@ -815,10 +817,17 @@ class RoadService:
                 await self._deliver_material(
                     s, c, material, 1, f"activity:{activity.id}:material:{ordinal}"
                 )
-            if context.category == "elite":
+            if context.category == "uncommon":
+                if _draw_int(context.seed, "fragment", 100) < 5:
+                    components.append(
+                        ("fragment", "material.tdo.fragmento_aprimoramento_i", 1, {})
+                    )
+            elif context.category == "elite":
                 components.append(("catalyst", "material.tdo.catalisador_elite_i", 1, {}))
                 if _draw_int(context.seed, "fragment", 100) < 40:
-                    components.append(("fragment", "material.tdo.fragmento_aprimoramento_i", 1, {}))
+                    components.append(
+                        ("fragment", "material.tdo.fragmento_aprimoramento_i", 1, {})
+                    )
             await self._materialize_optional_loot(s, c, context, components)
             for kind, item_id, quantity, *_ in components:
                 if kind in {"catalyst", "fragment"}:
@@ -854,7 +863,12 @@ class RoadService:
                     payload=payload,
                 )
             )
-        await self._ensure(s, Unlock, character_id=c.id, unlock_id=ROUND_FAMILIARITY)
+        await self._ensure(
+            s,
+            Unlock,
+            character_id=c.id,
+            unlock_id=_round_unlock_for(context.local_id),
+        )
         consolidate_level(c)
         return xp
 
