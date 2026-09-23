@@ -359,6 +359,9 @@ class HuntContext(Base):
     enemy_level: Mapped[int] = mapped_column(Integer, nullable=False)
     variant: Mapped[str | None] = mapped_column(String(24))
     seed: Mapped[str] = mapped_column(String(128), nullable=False)
+    local_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="Estrada das Cinzas", server_default=text("'Estrada das Cinzas'")
+    )
     loot_profile: Mapped[str] = mapped_column(String(32), nullable=False, default="hunt")
     result_acknowledged: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
@@ -395,6 +398,9 @@ class HuntRound(Base):
     completed_encounters: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     seed: Mapped[str] = mapped_column(String(128), nullable=False)
+    local_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="Estrada das Cinzas", server_default=text("'Estrada das Cinzas'")
+    )
     prepared_heal: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
