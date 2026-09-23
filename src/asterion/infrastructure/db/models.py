@@ -373,7 +373,8 @@ class HuntRound(Base):
         CheckConstraint("completed_encounters >= 0", name="ck_hunt_round_completed"),
         CheckConstraint("state_version >= 0", name="ck_hunt_round_version"),
         CheckConstraint(
-            "status IN ('preparing','active','completed','cancelled','defeated','ended','interrupted')",
+            "status IN ('preparing','active','completed','cancelled',"
+            "'defeated','ended','interrupted')",
             name="ck_hunt_round_status",
         ),
         Index(
