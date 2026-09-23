@@ -45,7 +45,12 @@ def _force_safe_common(monkeypatch, round_module):
     def safe_combat(*args, **kwargs):
         state = original(*args, **kwargs)
         enemy = state.fighters["enemy"]
-        enemy.stats = Stats(enemy.stats.hp, enemy.stats.attack * 0 + 1, enemy.stats.defense, enemy.stats.agility)
+        enemy.stats = Stats(
+            enemy.stats.hp,
+            enemy.stats.attack * 0 + 1,
+            enemy.stats.defense,
+            enemy.stats.agility,
+        )
         return state
 
     monkeypatch.setattr(round_module, "create_road_combat", safe_combat)
