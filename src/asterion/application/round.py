@@ -44,7 +44,6 @@ from asterion.infrastructure.db.models import (
     HuntContext,
     HuntRound,
     HuntRoundEncounter,
-    PendingItem,
     RewardComponent,
     RewardEvent,
     Unlock,
@@ -200,6 +199,22 @@ class RoundService(RoadService):
                 current.batch_size = batch_size
                 current.state_version += 1
             return await self._round_view(s, c, current)
+
+    async def round_prepare_view(
+        self, actor: int, round_id: UUID, version: int
+    ) -> RoadView | RoundView | None:
+        async with self.sessions.begin() as s:
+            c = await self._character(s, actor)
+            if c is None:
+                return None
+            state = await s.scalar(
+                select(HuntRound)
+                .where(HuntRound.id == round_id, HuntRound.character_id == c.id)
+                .with_for_update()
+            )
+            if state is None:
+                return await self._road_blocking_view(s, c)
+            return await self._round_view(s, c, state, kind="round_prepare")
 
     async def round_consumables(
         self, actor: int, round_id: UUID, version: int
