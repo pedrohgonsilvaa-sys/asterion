@@ -59,7 +59,7 @@ class S1Service:
                 return None
             q = await self._quest(session, c.id)
             world = await self._world(session, c.id)
-            if world is None:
+            if world is None or q is None or q.status != "active":
                 return None
             return await self._view(session, c, q, world, "detail")
 
