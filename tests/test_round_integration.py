@@ -90,6 +90,10 @@ async def test_round_preparation_consumables_and_reconnect_are_persistent(databa
 
     stale = await service.start_round(actor, toggled.round_id, toggled.state_version)
     assert stale.kind == "round_active"
+    stale_prepare = await service.round_prepare_view(
+        actor, toggled.round_id, toggled.state_version
+    )
+    assert stale_prepare.kind == "round_active"
     async with database[1]() as session:
         assert (
             await session.scalar(select(func.count(HuntRound.id)))
