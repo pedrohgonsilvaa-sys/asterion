@@ -464,7 +464,10 @@ class RoadService:
                     )
             elif updated.result == "defeat":
                 activity.status = "failed"
-                c.hp = c.max_hp
+                recovery_id = context.recovery_brazier_id if context is not None else None
+                destination, _, recovery_name = await self._apply_recovery(
+                    s, c, world, recovery_id
+                )
                 if activity.content_id == EXPLORE_CONTENT:
                     attempt = await s.scalar(
                         select(ExplorationAttempt)
@@ -476,19 +479,23 @@ class RoadService:
                         attempt.completed_at = datetime.now(UTC)
                         attempt.progress = {
                             **(attempt.progress or {}),
-                            "receipt_text": "A exploração foi interrompida. Recuperado na Estrada.",
+                            "receipt_text": (
+                                "A exploração foi interrompida. "
+                                f"Recuperado em {recovery_name}."
+                            ),
                             "settled": True,
                         }
                         consolidate_level(c)
-                        return await self._attempt_view(s, c, attempt, attempt.local_id)
+                        return await self._attempt_view(s, c, attempt, destination)
                 consolidate_level(c)
                 return RoadView(
                     "hunt_defeat",
                     c.id,
-                    context.local_id if context is not None else world.location,
+                    destination,
                     activity_id=activity.id,
                     vigor=c.vigor,
                     max_vigor=c.max_vigor,
+                    recovery_brazier=recovery_name,
                 )
             return await self._combat_view(s, c, activity)
 
