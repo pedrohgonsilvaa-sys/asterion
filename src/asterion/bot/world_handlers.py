@@ -5,11 +5,13 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
 from asterion.application.road import RoadService
 from asterion.application.world import WorldService
 from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
+from asterion.bot.inventory_ui import render_inventory
 from asterion.bot.p1_ui import render_p1
 from asterion.bot.road_ui import render_road
 from asterion.bot.world_ui import render_world
@@ -20,6 +22,7 @@ def world_router(
     images: dict[str, str],
     p1: P1Service | None = None,
     road: RoadService | None = None,
+    inventory: InventoryService | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -262,6 +265,34 @@ def world_router(
         view = await road.round_back(query.from_user.id, round_id)
         if view is not None:
             await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data == "inventory:root")
+    async def inventory_root(query: CallbackQuery):
+        await query.answer()
+        if inventory is None or not isinstance(query.message, Message):
+            return
+        view = await inventory.root(query.from_user.id)
+        if view is not None:
+            await present(query.message, render_inventory(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("inventory:category:"))
+    async def inventory_category(query: CallbackQuery):
+        await query.answer()
+        if inventory is None or not isinstance(query.message, Message):
+            return
+        category = (query.data or "").rsplit(":", 1)[-1]
+        view = await inventory.category(query.from_user.id, category)
+        if view is not None:
+            await present(query.message, render_inventory(view), images, edit=True)
+
+    @router.callback_query(F.data == "pending:root")
+    async def pending_root(query: CallbackQuery):
+        await query.answer()
+        if inventory is None or not isinstance(query.message, Message):
+            return
+        view = await inventory.pending(query.from_user.id)
+        if view is not None:
+            await present(query.message, render_inventory(view), images, edit=True)
 
     @router.callback_query(F.data.startswith("road:travel:"))
     async def travel(query: CallbackQuery):
