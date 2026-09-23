@@ -364,6 +364,95 @@ class HuntContext(Base):
     )
 
 
+class HuntRound(Base):
+    """Authoritative Ronda de Caça batch state."""
+
+    __tablename__ = "hunt_rounds"
+    __table_args__ = (
+        CheckConstraint("batch_size IN (5, 10, 20)", name="ck_hunt_round_batch"),
+        CheckConstraint("completed_encounters >= 0", name="ck_hunt_round_completed"),
+        CheckConstraint("state_version >= 0", name="ck_hunt_round_version"),
+        CheckConstraint(
+            "status IN ('preparing','active','completed','cancelled','defeated','ended','interrupted')",
+            name="ck_hunt_round_status",
+        ),
+        Index(
+            "uq_open_hunt_round",
+            "character_id",
+            unique=True,
+            postgresql_where=text("status IN ('preparing','active','interrupted')"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    activity_id: Mapped[UUID | None] = mapped_column(ForeignKey("game_activities.id"), unique=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="preparing")
+    end_reason: Mapped[str | None] = mapped_column(String(32))
+    batch_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    completed_encounters: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    seed: Mapped[str] = mapped_column(String(128), nullable=False)
+    prepared_heal: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    prepared_purify: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    config_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    cancel_requested: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    next_resolution_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result_acknowledged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    elite_engaged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class HuntRoundEncounter(Base):
+    """One persisted materialized encounter within a Ronda batch."""
+
+    __tablename__ = "hunt_round_encounters"
+    __table_args__ = (
+        UniqueConstraint("round_id", "ordinal", name="uq_hunt_round_ordinal"),
+        CheckConstraint("ordinal >= 1", name="ck_hunt_round_encounter_ordinal"),
+        CheckConstraint("enemy_level >= 1", name="ck_hunt_round_enemy_level"),
+        CheckConstraint(
+            "status IN ('materialized','completed','defeated','interrupted','elite_combat')",
+            name="ck_hunt_round_encounter_status",
+        ),
+        CheckConstraint("state_version >= 0", name="ck_hunt_round_encounter_version"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    round_id: Mapped[UUID] = mapped_column(ForeignKey("hunt_rounds.id"), nullable=False)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    activity_id: Mapped[UUID | None] = mapped_column(ForeignKey("game_activities.id"), unique=True)
+    combat_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, unique=True)
+    seed: Mapped[str] = mapped_column(String(160), nullable=False)
+    creature_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    category: Mapped[str] = mapped_column(String(16), nullable=False)
+    enemy_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    variant: Mapped[str | None] = mapped_column(String(24))
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="materialized")
+    state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    combat_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ExplorationAttempt(Base):
     __tablename__ = "exploration_attempts"
     __table_args__ = (
@@ -471,6 +560,19 @@ class RuneStack(Base):
     bound: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+
+
+class ConsumableStack(Base):
+    __tablename__ = "consumable_stacks"
+    __table_args__ = (
+        UniqueConstraint("character_id", "consumable_id", name="uq_character_consumable"),
+        CheckConstraint("quantity >= 0", name="ck_consumable_quantity"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    consumable_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
 
 class PendingItem(Base):
