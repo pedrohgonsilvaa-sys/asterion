@@ -11,6 +11,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.road import (
+    CHARNECA,
+    CHARNECA_ROUND_FAMILIARITY,
     HUNT_CONTENT,
     MATERIAL_LABELS,
     ROAD,
@@ -31,6 +33,7 @@ from asterion.domain.road import (
     RULESET,
     create_road_combat,
     creature_for,
+    select_charneca_creature,
     select_creature,
     select_variant,
 )
@@ -66,6 +69,22 @@ CONSUMABLE_LIMITS = {
     "elite": 2,
     "boss": 3,
 }
+
+
+def _round_unlock_for(location: str) -> str:
+    return ROUND_FAMILIARITY if location == ROAD else CHARNECA_ROUND_FAMILIARITY
+
+
+def _round_creature(location: str, seed: str, level: int):
+    return (
+        select_creature(seed, level)
+        if location == ROAD
+        else select_charneca_creature(seed, level)
+    )
+
+
+def _round_variant_chance(location: str) -> int:
+    return 8 if location == ROAD else 10
 
 
 @dataclass(frozen=True)
@@ -167,7 +186,7 @@ class RoundService(RoadService):
             return None
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
-            if c is None or world is None or world.location != ROAD:
+            if c is None or world is None or world.location not in {ROAD, CHARNECA}:
                 return None
             if not await self._p1_completed(s, c.id):
                 return None
@@ -177,7 +196,7 @@ class RoundService(RoadService):
             if not await s.scalar(
                 select(Unlock).where(
                     Unlock.character_id == c.id,
-                    Unlock.unlock_id == ROUND_FAMILIARITY,
+                    Unlock.unlock_id == _round_unlock_for(world.location),
                 )
             ):
                 return await self._view_for_world(s, c, world)
@@ -197,11 +216,14 @@ class RoundService(RoadService):
                     status="preparing",
                     batch_size=batch_size,
                     seed=uuid4().hex,
+                    local_id=world.location,
                 )
                 s.add(current)
                 await s.flush()
-            elif current.batch_size != batch_size:
+            elif current.batch_size != batch_size or current.local_id != world.location:
                 current.batch_size = batch_size
+                current.local_id = world.location
+                current.seed = uuid4().hex
                 current.state_version += 1
             return await self._round_view(s, c, current)
 
@@ -283,7 +305,7 @@ class RoundService(RoadService):
     ) -> RoadView | RoundView | None:
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
-            if c is None or world is None or world.location != ROAD:
+            if c is None or world is None or world.location not in {ROAD, CHARNECA}:
                 return None
             state = await s.scalar(
                 select(HuntRound)
@@ -292,12 +314,14 @@ class RoundService(RoadService):
             )
             if state is None:
                 return await self._view_for_world(s, c, world)
+            if world.location != state.local_id:
+                return await self._view_for_world(s, c, world)
             if state.status != "preparing" or state.state_version != version:
                 return await self._round_view(s, c, state)
             if not await s.scalar(
                 select(Unlock).where(
                     Unlock.character_id == c.id,
-                    Unlock.unlock_id == ROUND_FAMILIARITY,
+                    Unlock.unlock_id == _round_unlock_for(state.local_id),
                 )
             ):
                 return await self._view_for_world(s, c, world)
@@ -328,6 +352,7 @@ class RoundService(RoadService):
                 "race": c.race,
                 "level_at_start": c.level,
                 "ruleset_version": RULESET,
+                "local_id": state.local_id,
                 "prepared_consumables": {
                     HEAL_CONSUMABLE: bool(state.prepared_heal),
                     PURIFY_CONSUMABLE: bool(state.prepared_purify),
@@ -430,6 +455,7 @@ class RoundService(RoadService):
                     enemy_level=encounter.enemy_level,
                     variant=encounter.variant,
                     seed=encounter.seed,
+                    local_id=state.local_id,
                     loot_profile="hunt",
                 )
             )
@@ -471,7 +497,7 @@ class RoundService(RoadService):
             return RoadView(
                 "hunt_prepare",
                 c.id,
-                ROAD,
+                state.local_id if state is not None else world.location,
                 vigor=c.vigor,
                 max_vigor=c.max_vigor,
                 name=c.name,
@@ -568,9 +594,13 @@ class RoundService(RoadService):
     async def _materialize_next(self, s, c, state, anchor: datetime) -> None:
         ordinal = state.completed_encounters + 1
         seed = f"{state.seed}:encounter:{ordinal}"
-        creature = select_creature(seed, c.level)
+        creature = _round_creature(state.local_id, seed, c.level)
         enemy_level = min(c.level, creature.max_level)
-        variant = select_variant(seed, creature)
+        variant = select_variant(
+            seed,
+            creature,
+            chance_percent=_round_variant_chance(state.local_id),
+        )
         combat_id = uuid4()
         encounter_id = uuid4()
         combat = create_road_combat(
@@ -730,6 +760,7 @@ class RoundService(RoadService):
             enemy_level=encounter.enemy_level,
             variant=encounter.variant,
             seed=encounter.seed,
+            local_id=state.local_id,
             loot_profile="round",
             result_acknowledged=True,
         )
@@ -1162,6 +1193,7 @@ class RoundService(RoadService):
         return RoundView(
             kind=kind,
             character_id=c.id,
+            location=state.local_id,
             round_id=state.id,
             activity_id=state.activity_id,
             encounter_id=encounter_id,
