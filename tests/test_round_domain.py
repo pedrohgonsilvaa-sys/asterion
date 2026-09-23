@@ -5,13 +5,13 @@ from asterion.application.round import RoundService
 from asterion.domain.combat import (
     DotState,
     Effect,
+    act,
     consumable_available,
     use_heal_consumable,
     use_purification_consumable,
 )
 from asterion.domain.combat_math import Stats, dot_damage
 from asterion.domain.road import CREATURES, create_road_combat
-
 
 D = Decimal
 
@@ -57,8 +57,6 @@ def test_heal_consumable_is_22_percent_floor_and_shares_cd2():
 
     advanced = use_heal_consumable(healed)
     assert advanced is healed
-
-    from asterion.domain.combat import act
 
     advanced = act(healed, "attack")
     assert consumable_available(advanced) is True
