@@ -292,6 +292,7 @@ class RoadService:
             ):
                 return None
             world.location = destination
+            world.last_brazier_id = target_brazier
             return await self._view_for_world(s, c, world)
 
     async def start_hunt(self, actor: int) -> RoadView | None:
@@ -343,6 +344,7 @@ class RoadService:
                 player_level=c.level,
             )
             activity, encounter, record = await CombatRepository(s).create(c, HUNT_CONTENT, combat)
+            recovery_brazier_id = await self._select_recovery_brazier(s, c, world)
             s.add(
                 HuntContext(
                     game_activity_id=activity.id,
@@ -353,6 +355,7 @@ class RoadService:
                     variant=variant,
                     seed=seed,
                     local_id=world.location,
+                    recovery_brazier_id=recovery_brazier_id,
                     loot_profile="hunt",
                 )
             )
@@ -730,6 +733,7 @@ class RoadService:
                         variant=variant,
                         seed=seed,
                         local_id=location,
+                        recovery_brazier_id=await self._select_recovery_brazier(s, c, world),
                         loot_profile="exploration_combat",
                     )
                 )
