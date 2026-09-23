@@ -475,6 +475,27 @@ def world_router(
             if view is not None:
                 await present(query.message, render_p1(view), images, edit=True)
 
+    async def map_state(actor: int) -> tuple[set[str], str | None]:
+        known: set[str] = set()
+        if p1 is not None:
+            p1_view = await p1.resume(actor)
+            if p1_view is not None:
+                ids = set(p1_view.known_locations)
+                if "tdo.location.estrada_das_cinzas" in ids:
+                    known.add("Estrada das Cinzas")
+                if "tdo.location.refugio_do_ocaso" in ids:
+                    known.add("Refúgio do Ocaso")
+        current = None
+        if road is not None:
+            road_view = await road.resume(actor)
+            if road_view is not None:
+                current = road_view.location
+        if current is None:
+            world_view = await service.resume(actor)
+            if world_view is not None:
+                current = world_view.location
+        return known, current
+
     @router.callback_query(F.data == "world:map")
     async def map_screen(query: CallbackQuery):
         if await foreground(query):
@@ -483,26 +504,179 @@ def world_router(
         await query.answer()
         if not isinstance(query.message, Message):
             return
-        known: set[str] = set()
-        if p1 is not None:
-            view = await p1.resume(query.from_user.id)
-            if view is not None:
-                ids = set(view.known_locations)
-                if "tdo.location.estrada_das_cinzas" in ids:
-                    known.add("Estrada das Cinzas")
-                if "tdo.location.refugio_do_ocaso" in ids:
-                    known.add("Refúgio do Ocaso")
-        text = "🗺️ Mapa · Mundo\n\n" + "\n".join(f"📍 {name}" for name in sorted(known))
+        known, current = await map_state(query.from_user.id)
+        if not known:
+            text = "🗺️ Mapa\n\nNenhuma Região conhecida."
+            keyboard = [[InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")]]
+        else:
+            current_line = f"🔥 {current} · Local Atual" if current else ""
+            text = (
+                "🗺️ Mapa\n\n"
+                "🌑 Terras do Ocaso · Nv. 1–10\n"
+                f"{current_line}\n\n"
+                "🗺️ Regiões Conhecidas\n\n"
+                "1 🌑 Terras do Ocaso · Nv. 1–10"
+            )
+            keyboard = [
+                [InlineKeyboardButton(text="1", callback_data="world:map:region:tdo")],
+                [InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")],
+            ]
+        await present(
+            query.message,
+            Screen(text, "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+            images,
+            edit=True,
+        )
+
+    @router.callback_query(F.data == "world:map:region:tdo")
+    async def map_region_tdo(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        await query.answer()
+        if not isinstance(query.message, Message):
+            return
+        known, current = await map_state(query.from_user.id)
+        ordered = [
+            ("Estrada das Cinzas", "road"),
+            ("Refúgio do Ocaso", "refuge"),
+        ]
+        visible = [(name, key) for name, key in ordered if name in known]
+        lines = ["🌑 Terras do Ocaso · Nv. 1–10", ""]
+        buttons = []
+        for index, (name, key) in enumerate(visible, start=1):
+            state = "Local Atual" if name == current else "Acessível"
+            icon = "🔥" if name == current else ("🏚️" if key == "refuge" else "📍")
+            lines.append(f"{index} {icon} {name} · {state}")
+            buttons.append(
+                InlineKeyboardButton(
+                    text=str(index),
+                    callback_data=f"world:map:local:{key}",
+                )
+            )
+        keyboard = []
+        if buttons:
+            keyboard.append(buttons)
+        keyboard.append([InlineKeyboardButton(text="← Mapa", callback_data="world:map")])
         await present(
             query.message,
             Screen(
-                text,
+                "\n".join(lines),
                 "map",
-                InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")]
+                InlineKeyboardMarkup(inline_keyboard=keyboard),
+            ),
+            images,
+            edit=True,
+        )
+
+    @router.callback_query(F.data.startswith("world:map:local:"))
+    async def map_local(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        await query.answer()
+        if not isinstance(query.message, Message):
+            return
+        key = (query.data or "").rsplit(":", 1)[-1]
+        name = "Estrada das Cinzas" if key == "road" else "Refúgio do Ocaso"
+        known, current = await map_state(query.from_user.id)
+        if key not in {"road", "refuge"} or name not in known:
+            return
+        is_current = current == name
+        icon = "🔥" if is_current else ("🏚️" if key == "refuge" else "📍")
+        title = f"{icon} {name}" + (" · Local Atual" if is_current else "")
+        lines = [title, "Terras do Ocaso · Nv. 1–10", "", "🔥 Braseiro · Descoberto"]
+        keyboard = []
+        if key == "road":
+            lines.extend(["🧭 Desbravar · Disponível", "🦌 Caçadas · Disponível"])
+            if is_current:
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(text="Desbravar", callback_data="road:explore"),
+                        InlineKeyboardButton(text="Caçadas", callback_data="road:prepare"),
                     ]
-                ),
+                )
+        else:
+            lines.extend(["🚫 Desbravar · Indisponível", "🚫 Caçadas · Indisponível"])
+            if is_current:
+                keyboard.append(
+                    [InlineKeyboardButton(text="Oren Cal", callback_data="s1:oren")]
+                )
+        keyboard.append(
+            [InlineKeyboardButton(text="Travessia dos Braseiros", callback_data="world:travel")]
+        )
+        keyboard.append(
+            [InlineKeyboardButton(text="← Terras do Ocaso", callback_data="world:map:region:tdo")]
+        )
+        await present(
+            query.message,
+            Screen(
+                "\n".join(lines),
+                "map",
+                InlineKeyboardMarkup(inline_keyboard=keyboard),
+            ),
+            images,
+            edit=True,
+        )
+
+    @router.callback_query(F.data == "world:travel")
+    async def world_travel(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        await query.answer()
+        if not isinstance(query.message, Message):
+            return
+        known, current = await map_state(query.from_user.id)
+        if current not in {"Estrada das Cinzas", "Refúgio do Ocaso"}:
+            return
+        current_brazier = (
+            "Braseiro da Estrada"
+            if current == "Estrada das Cinzas"
+            else "Braseiro do Refúgio"
+        )
+        target_name = (
+            "Refúgio do Ocaso"
+            if current == "Estrada das Cinzas"
+            else "Estrada das Cinzas"
+        )
+        target_key = "refuge" if target_name == "Refúgio do Ocaso" else "road"
+        lines = [
+            "🔥 Travessia dos Braseiros",
+            "",
+            f"🔥 Atual · {current_brazier}",
+        ]
+        keyboard = []
+        if target_name in known:
+            target_brazier = (
+                "Braseiro do Refúgio"
+                if target_key == "refuge"
+                else "Braseiro da Estrada"
+            )
+            lines.extend(["", "🗺️ Destinos", "", f"1 🔥 {target_brazier} · {target_name}"])
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        text="1",
+                        callback_data=f"road:travel:{target_key}",
+                    )
+                ]
+            )
+        current_key = "road" if current == "Estrada das Cinzas" else "refuge"
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=f"← {current}",
+                    callback_data=f"world:map:local:{current_key}",
+                )
+            ]
+        )
+        await present(
+            query.message,
+            Screen(
+                "\n".join(lines),
+                "map",
+                InlineKeyboardMarkup(inline_keyboard=keyboard),
             ),
             images,
             edit=True,
