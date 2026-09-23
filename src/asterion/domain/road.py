@@ -285,9 +285,9 @@ def road_pool(player_level: int) -> tuple[Creature, ...]:
 
 def charneca_pool(player_level: int) -> tuple[Creature, ...]:
     return tuple(
-        c
-        for c in CREATURES
-        if c.creature_id in CHARNECA_CREATURE_IDS and player_level >= c.unlock_level
+        creature_for(creature_id)
+        for creature_id in CHARNECA_CREATURE_IDS
+        if player_level >= creature_for(creature_id).unlock_level
     )
 
 
