@@ -411,7 +411,10 @@ def consumable_available(state: Combat) -> bool:
     return player.cooldowns.get(CONSUMABLE_COOLDOWN_KEY, 0) <= player.opportunity
 
 
-def _finish_consumable_turn(state: Combat, action: str, healed: Decimal = D(0)) -> Combat:
+def _finish_consumable_turn(
+    state: Combat, action: str, healed: Decimal | None = None
+) -> Combat:
+    healed = D(0) if healed is None else healed
     player = state.fighters["player"]
     player.last_action = action
     # CD2: unavailable on the next opportunity and available on the following one.
