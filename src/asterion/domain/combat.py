@@ -249,7 +249,7 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
     action = actions[action_id]
     if (
         actor_id == "enemy"
-        and action_id in {"leap", "charge"}
+        and action_id in {"leap", "ocaso_charge"}
         and not state.resolving_prepared
     ):
         state.prepared_action = action_id
