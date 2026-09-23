@@ -385,7 +385,7 @@ class RoadService:
                         attempt.state_version += 1
                         await self._settle_exploration(s, c, attempt)
                     return (
-                        await self._attempt_view(s, c, attempt, ROAD)
+                        await self._attempt_view(s, c, attempt, attempt.local_id)
                         if attempt is not None
                         else await self._combat_view(s, c, activity)
                     )
@@ -412,7 +412,7 @@ class RoadService:
                 return RoadView(
                     "hunt_defeat",
                     c.id,
-                    ROAD,
+                    context.local_id if context is not None else world.location,
                     activity_id=activity.id,
                     vigor=c.vigor,
                     max_vigor=c.max_vigor,
@@ -1489,7 +1489,7 @@ class RoadService:
         return RoadView(
             "hunt_defeat",
             c.id,
-            ROAD,
+            context.local_id,
             activity_id=activity.id,
             vigor=c.vigor,
             max_vigor=c.max_vigor,
@@ -1572,10 +1572,14 @@ class RoadService:
         combat = decode(
             record.snapshot, record.id, activity.ruleset_version, activity.state_version
         )
+        context = await s.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == activity.id)
+        )
+        location = context.local_id if context is not None else ROAD
         return RoadView(
             "combat",
             c.id,
-            ROAD,
+            location,
             activity.id,
             encounter.id,
             record.id,
@@ -1588,14 +1592,22 @@ class RoadService:
         )
 
     async def _view_for_world(self, s, c, world):
-        familiar = bool(await s.scalar(select(Unlock).where(Unlock.character_id == c.id, Unlock.unlock_id == ROUND_FAMILIARITY)))
+        familiar = False
         explore_available = True
-        if world.location == ROAD:
+        if world.location in {ROAD, CHARNECA}:
+            familiar = bool(
+                await s.scalar(
+                    select(Unlock).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == _round_unlock_for(world.location),
+                    )
+                )
+            )
             now = datetime.now(UTC)
             recent = await s.scalar(
                 select(func.count(ExplorationAttempt.id)).where(
                     ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == ROAD,
+                    ExplorationAttempt.local_id == world.location,
                     ExplorationAttempt.created_at >= now - timedelta(minutes=60),
                 )
             ) or 0
@@ -1603,7 +1615,7 @@ class RoadService:
                 select(ExplorationAttempt)
                 .where(
                     ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == ROAD,
+                    ExplorationAttempt.local_id == world.location,
                 )
                 .order_by(ExplorationAttempt.created_at.desc())
                 .limit(1)
@@ -1612,8 +1624,15 @@ class RoadService:
                 recent >= 6
                 or (last is not None and last.created_at > now - timedelta(minutes=5))
             )
+        kind = (
+            "road"
+            if world.location == ROAD
+            else "charneca"
+            if world.location == CHARNECA
+            else "refuge"
+        )
         return RoadView(
-            "road" if world.location == ROAD else "refuge",
+            kind,
             c.id,
             world.location,
             vigor=c.vigor,
@@ -1934,7 +1953,7 @@ class RoadService:
             else:
                 reward_lines.append(f"📦 {labels.get(row.item_id, row.item_id or row.kind)} · {row.quantity}")
         return RoadView(
-            "hunt_victory", c.id, ROAD,
+            "hunt_victory", c.id, context.local_id,
             activity_id=activity.id,
             vigor=c.vigor, max_vigor=c.max_vigor,
             name=c.name, hp=c.hp, max_hp=c.max_hp,
