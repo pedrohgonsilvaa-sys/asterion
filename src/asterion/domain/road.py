@@ -261,6 +261,8 @@ def equipment_rarity(seed: str, category: str, elite_pity: int = 0, legendary_pi
         if elite_pity >= 12:
             return "Épico" if roll < 80 else "Lendário" if roll < 99 else "Mítico"
         bands = ((45, "Comum"), (87, "Raro"), (98, "Épico"), (99.9, "Lendário"), (100, "Mítico"))
+    elif category == "uncommon":
+        bands = ((65, "Comum"), (94, "Raro"), (99.5, "Épico"), (100, "Lendário"))
     else:
         bands = ((78, "Comum"), (97, "Raro"), (99.8, "Épico"), (100, "Lendário"))
     for limit, rarity in bands:
