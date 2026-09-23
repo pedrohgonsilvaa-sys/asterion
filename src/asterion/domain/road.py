@@ -343,6 +343,58 @@ def select_exploration_result(seed: str, player_level: int, recent: tuple[str, .
     return weighted_choice(f"{seed}:category:{category}", eligible_subweights[category])
 
 
+CHARNECA_EXPLORATION_SUBWEIGHTS = {
+    "great_discovery": (("braseiro", 50), ("cripta", 50)),
+    "knowledge": (("pedra_marcada", 60), ("vestigios", 40)),
+    "narrative": (("vento_morto", 65), ("cinzas_nao_assentam", 35)),
+    "combat": (
+        ("peregrino_calcinado", 35),
+        ("aranha_cinza", 35),
+        ("cervo_escoriado", 30),
+    ),
+    "resource": (("erva", 45), ("residuo", 30), ("couro", 25)),
+    "atmospheric": (
+        ("pedras_negras", 34),
+        ("capim_cinza", 33),
+        ("silencio_passaros", 33),
+    ),
+}
+
+
+def select_charneca_exploration_result(
+    seed: str,
+    player_level: int,
+    recent: tuple[str, ...] = (),
+    excluded: tuple[str, ...] = (),
+) -> str:
+    eligible_categories = []
+    eligible_subweights = {}
+    for category, weight in EXPLORATION_CATEGORY_WEIGHTS.items():
+        subweights = CHARNECA_EXPLORATION_SUBWEIGHTS[category]
+        if category == "great_discovery" and player_level < 4:
+            subweights = tuple((key, value) for key, value in subweights if key != "cripta")
+        if category == "combat":
+            subweights = tuple(
+                (key, value)
+                for key, value in subweights
+                if creature_for(key).unlock_level <= player_level
+            )
+        subweights = tuple((key, value) for key, value in subweights if key not in excluded)
+        adjusted = tuple(
+            (key, anti_repeat_weight(value, key, recent))
+            for key, value in subweights
+        )
+        adjusted = tuple((key, value) for key, value in adjusted if value > 0)
+        if adjusted:
+            eligible_categories.append((category, weight))
+            eligible_subweights[category] = adjusted
+    category = weighted_recent_choice(seed, tuple(eligible_categories), recent)
+    return weighted_choice(
+        f"{seed}:category:{category}",
+        eligible_subweights[category],
+    )
+
+
 def select_variant(seed: str, creature: Creature, chance_percent: int = 8) -> str | None:
     if not VARIANT_POOL[creature.creature_id]:
         return None
