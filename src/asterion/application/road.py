@@ -2060,6 +2060,102 @@ def _explore_result(seed: str, player_level: int = 1, recent: tuple[str, ...] = 
     return texts[result]
 
 
+def _explore_result_for_location(
+    location: str,
+    seed: str,
+    player_level: int,
+    recent: tuple[str, ...] = (),
+    excluded: tuple[str, ...] = (),
+) -> tuple[str, str, str]:
+    if location == ROAD:
+        return _explore_result(seed, player_level, recent, excluded)
+
+    result = select_charneca_exploration_result(
+        seed,
+        player_level,
+        recent,
+        excluded,
+    )
+    texts = {
+        "braseiro": (
+            "great_discovery",
+            "explore.tdo.charneca.braseiro",
+            "🔥 Braseiro do Vento Morto",
+        ),
+        "cripta": (
+            "great_discovery",
+            "explore.tdo.charneca.cripta",
+            "🪦 Entrada da Cripta do Ocaso",
+        ),
+        "pedra_marcada": (
+            "knowledge",
+            "explore.tdo.charneca.pedra_marcada",
+            "🪨 Pedra Marcada",
+        ),
+        "vestigios": (
+            "knowledge",
+            "explore.tdo.charneca.vestigios",
+            "📖 Vestígios na Fuligem",
+        ),
+        "vento_morto": (
+            "narrative",
+            "explore.tdo.charneca.vento_morto",
+            "🌫️ Vento Morto",
+        ),
+        "cinzas_nao_assentam": (
+            "narrative",
+            "explore.tdo.charneca.cinzas_nao_assentam",
+            "🌫️ Cinzas que Não Assentam",
+        ),
+        "erva": (
+            "resource",
+            "explore.tdo.charneca.erva",
+            "🌿 Erva Cinzenta",
+        ),
+        "residuo": (
+            "resource",
+            "explore.tdo.charneca.residuo",
+            "💧 Resíduo do Ocaso",
+        ),
+        "couro": (
+            "resource",
+            "explore.tdo.charneca.couro",
+            "📦 Couro Escoriado",
+        ),
+        "pedras_negras": (
+            "atmospheric",
+            "explore.tdo.charneca.pedras_negras",
+            "Pedras Negras",
+        ),
+        "capim_cinza": (
+            "atmospheric",
+            "explore.tdo.charneca.capim_cinza",
+            "Capim Coberto de Cinza",
+        ),
+        "silencio_passaros": (
+            "atmospheric",
+            "explore.tdo.charneca.silencio_passaros",
+            "Silêncio sem Pássaros",
+        ),
+        "peregrino_calcinado": (
+            "combat",
+            "explore.tdo.charneca.combat.peregrino_calcinado",
+            "Um Peregrino Calcinado surge na Charneca.",
+        ),
+        "aranha_cinza": (
+            "combat",
+            "explore.tdo.charneca.combat.aranha_cinza",
+            "Uma Aranha de Cinza surge na Charneca.",
+        ),
+        "cervo_escoriado": (
+            "combat",
+            "explore.tdo.charneca.combat.cervo_escoriado",
+            "Um Cervo Escoriado surge na Charneca.",
+        ),
+    }
+    return texts[result]
+
+
 def _draw_int(seed: str, purpose: str, modulo: int) -> int:
     return int.from_bytes(sha256(f"{seed}:{purpose}".encode()).digest(), "big") % modulo
 
