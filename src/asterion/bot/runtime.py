@@ -43,7 +43,9 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(p1_router(p1, settings.creation_images))
     dispatcher.include_router(s1_router(s1, settings.creation_images))
     dispatcher.include_router(combat_router(prologue, settings.creation_images, world, road))
-    dispatcher.include_router(world_router(world, settings.creation_images, p1, road, inventory, s1))
+    dispatcher.include_router(
+        world_router(world, settings.creation_images, p1, road, inventory, s1)
+    )
     dispatcher.include_router(
         creation_router(
             CreationService(
