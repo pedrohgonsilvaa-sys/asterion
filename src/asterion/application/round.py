@@ -407,6 +407,7 @@ class RoundService(RoadService):
             s.add(activity)
             await s.flush()
             s.add(Encounter(id=encounter.id, game_activity_id=activity.id))
+            await s.flush()
             s.add(
                 CombatRecord(
                     id=encounter.combat_id,
@@ -695,6 +696,7 @@ class RoundService(RoadService):
         s.add(child)
         await s.flush()
         s.add(Encounter(id=encounter.id, game_activity_id=child.id))
+        await s.flush()
         s.add(
             CombatRecord(
                 id=encounter.combat_id,

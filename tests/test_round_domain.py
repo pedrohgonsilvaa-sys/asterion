@@ -52,7 +52,7 @@ def test_heal_consumable_is_22_percent_floor_and_shares_cd2():
     healed = use_heal_consumable(state)
     assert healed.version == before_version + 1
     assert healed.fighters["player"].hp == D("620")
-    assert healed.events[-2].action == "consumable:heal"
+    assert healed.events[-1].action == "consumable:heal"
     assert consumable_available(healed) is False
 
     advanced = use_heal_consumable(healed)
