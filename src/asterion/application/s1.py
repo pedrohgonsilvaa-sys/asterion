@@ -82,7 +82,11 @@ class S1Service:
             if c is None or await self._foreground(session, c.id):
                 return None
             world = await self._world(session, c.id)
-            if world is None or world.location != REFUGE or not await self._p1_completed(session, c.id):
+            if (
+                world is None
+                or world.location != REFUGE
+                or not await self._p1_completed(session, c.id)
+            ):
                 return None
             q = await self._quest(session, c.id)
             available = c.level >= 2 and q is None
