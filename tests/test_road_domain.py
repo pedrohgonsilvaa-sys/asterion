@@ -6,11 +6,14 @@ from asterion.domain.road import (
     CATEGORY,
     CREATURES,
     anti_repeat_weight,
+    charneca_pool,
     enemy_xp,
     materialize_equipment,
     road_enemy_stats,
     road_pool,
     rune_potency,
+    select_charneca_creature,
+    select_charneca_exploration_result,
     select_creature,
     select_variant,
     weighted_recent_choice,
@@ -24,16 +27,57 @@ def test_road_pool_gates_and_weights_are_authoritative():
         "corvo_fuligem",
         "peregrino_calcinado",
     ]
-    assert [c.creature_id for c in road_pool(3)] == [c.creature_id for c in CREATURES]
+    assert [c.creature_id for c in road_pool(3)] == [
+        "dog_cinereo",
+        "corvo_fuligem",
+        "peregrino_calcinado",
+        "alfa_cinereo",
+    ]
     assert sum(c.weight for c in road_pool(1)) == 67
 
 
 def test_road_enemy_regression_vectors():
-    dog, crow, pilgrim, alpha = CREATURES
+    dog, crow, pilgrim, alpha, _, _ = CREATURES
     assert road_enemy_stats(dog, 1).values() == tuple(Decimal(v) for v in (406, 91, 60, 87))
     assert road_enemy_stats(crow, 1).values() == tuple(Decimal(v) for v in (406, 91, 60, 87))
     assert road_enemy_stats(pilgrim, 2).values() == tuple(Decimal(v) for v in (462, 85, 68, 74))
     assert road_enemy_stats(alpha, 3).values() == tuple(Decimal(v) for v in (912, 123, 73, 97))
+
+
+def test_charneca_pool_gates_and_weights_are_authoritative():
+    assert [c.creature_id for c in charneca_pool(3)] == [
+        "peregrino_calcinado",
+        "dog_cinereo",
+        "aranha_cinza",
+    ]
+    assert [c.creature_id for c in charneca_pool(4)] == [
+        "peregrino_calcinado",
+        "dog_cinereo",
+        "aranha_cinza",
+        "cervo_escoriado",
+    ]
+    assert sum(
+        {
+            "peregrino_calcinado": 31,
+            "dog_cinereo": 31,
+            "aranha_cinza": 18,
+        }[creature.creature_id]
+        for creature in charneca_pool(3)
+    ) == 80
+    assert select_charneca_creature("charneca-stable", 3) == select_charneca_creature(
+        "charneca-stable", 3
+    )
+
+
+def test_charneca_exploration_respects_level_and_unique_exclusions():
+    for index in range(100):
+        result = select_charneca_exploration_result(
+            f"charneca-{index}",
+            3,
+            excluded=("braseiro", "pedra_marcada", "vento_morto"),
+        )
+        assert result not in {"cripta", "cervo_escoriado"}
+        assert result not in {"braseiro", "pedra_marcada", "vento_morto"}
 
 
 def test_enemy_xp_and_variant_are_deterministic():
