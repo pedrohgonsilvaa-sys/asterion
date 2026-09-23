@@ -143,10 +143,11 @@ class RoadService:
             if active is not None:
                 return None
             world = await s.scalar(select(WorldState).where(WorldState.character_id == c.id))
-            if world is None or world.location not in {ROAD, REFUGE}:
+            if world is None or world.location not in {ROAD, REFUGE, CHARNECA}:
                 return None
+            kind = "road" if world.location == ROAD else "refuge" if world.location == REFUGE else "charneca"
             return RoadView(
-                "road" if world.location == ROAD else "refuge",
+                kind,
                 c.id,
                 world.location,
                 vigor=c.vigor,
@@ -202,7 +203,12 @@ class RoadService:
     async def start_hunt(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
-            if c is None or world is None or world.location != ROAD or not await self._p1_completed(s, c.id):
+            if (
+                c is None
+                or world is None
+                or world.location not in {ROAD, CHARNECA}
+                or not await self._p1_completed(s, c.id)
+            ):
                 return None
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
@@ -210,8 +216,14 @@ class RoadService:
             await self._retry_blocked_deliveries(s, c)
             if c.delivery_blocked:
                 return await self._view_for_world(s, c, world)
+            hunt_unlock = (
+                HUNT_UNLOCK if world.location == ROAD else CHARNECA_HUNT_UNLOCK
+            )
             if not await s.scalar(
-                select(Unlock).where(Unlock.character_id == c.id, Unlock.unlock_id == HUNT_UNLOCK)
+                select(Unlock).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == hunt_unlock,
+                )
             ):
                 return await self._view_for_world(s, c, world)
             active = await s.scalar(
@@ -226,9 +238,17 @@ class RoadService:
                     return await self._combat_view(s, c, active)
                 return await self._view_for_world(s, c, world)
             seed = uuid4().hex
-            creature = select_creature(seed, c.level)
+            creature = (
+                select_creature(seed, c.level)
+                if world.location == ROAD
+                else select_charneca_creature(seed, c.level)
+            )
             level = min(c.level, creature.max_level)
-            variant = select_variant(seed, creature)
+            variant = select_variant(
+                seed,
+                creature,
+                chance_percent=8 if world.location == ROAD else 10,
+            )
             combat_id = uuid4()
             combat = create_road_combat(
                 combat_id, c.name, c.character_class, c.race, c.hp, creature, level, variant,
@@ -267,15 +287,23 @@ class RoadService:
                 return None
             if not await self._p1_completed(s, c.id):
                 return None
-            if world is None or world.location != ROAD:
+            if world is None or world.location not in {ROAD, CHARNECA}:
                 return None
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
             if c.delivery_blocked:
                 return await self._view_for_world(s, c, world)
-            return RoadView("hunt_prepare", c.id, ROAD, vigor=c.vigor, max_vigor=c.max_vigor,
-                            name=c.name, hp=c.hp, max_hp=c.max_hp)
+            return RoadView(
+                "hunt_prepare",
+                c.id,
+                world.location,
+                vigor=c.vigor,
+                max_vigor=c.max_vigor,
+                name=c.name,
+                hp=c.hp,
+                max_hp=c.max_hp,
+            )
 
     async def action(
         self, actor: int, activity_id: UUID, version: int, action: str
