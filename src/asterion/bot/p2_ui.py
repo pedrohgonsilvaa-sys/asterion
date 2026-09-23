@@ -1,8 +1,6 @@
 """Player-facing P2 — Fuligem sem Fogo screens."""
 # ruff: noqa: E501
 
-from html import escape
-
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.p2 import CHARNECA, REFUGE, ROAD, P2View
@@ -56,8 +54,6 @@ def render_p2(view: P2View) -> Screen:
         )
 
     version = view.state_version
-    p = view.progress or {}
-
     if view.kind == "alda":
         lines = ["🪖 Alda Veyr", "Refúgio do Ocaso · Terras do Ocaso"]
         keyboard: list[list[InlineKeyboardButton]] = []
