@@ -873,8 +873,16 @@ class RoadService:
         return xp
 
     async def _materialize_optional_loot(self, s, c, context, components):
-        equipment_chance = 35 if context.category == "elite" else 8
-        rune_chance = 50 if context.category == "elite" else 5
+        equipment_chance = {
+            "common": 8,
+            "uncommon": 14,
+            "elite": 35,
+        }[context.category]
+        rune_chance_per_thousand = {
+            "common": 5,
+            "uncommon": 15,
+            "elite": 50,
+        }[context.category]
         if _draw_int(context.seed, "equipment", 100) < equipment_chance:
             rarity = equipment_rarity(
                 context.seed, context.category,
@@ -2234,7 +2242,7 @@ def _rarity(seed: str, category: str, purpose: str) -> str:
     else:
         bands = (
             ((90, "Rara"), (99.5, "Épica"), (100, "Lendária"))
-            if category == "common"
+            if category in {"common", "uncommon"}
             else ((80, "Rara"), (98, "Épica"), (100, "Lendária"))
         )
     for limit, rarity in bands:
