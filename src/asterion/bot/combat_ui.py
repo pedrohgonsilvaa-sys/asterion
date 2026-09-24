@@ -10,8 +10,18 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
 from asterion.bot.creation_ui import COPY, Screen
-from asterion.domain.combat import Combat, CombatConsumableOption, CombatEvent, allowed_actions
-from asterion.domain.consumables import definition
+from asterion.domain.combat import (
+    Combat,
+    CombatConsumableOption,
+    CombatEvent,
+    allowed_actions,
+    consumable_effect_options,
+)
+from asterion.domain.consumables import (
+    CONSUMABLE_CATALOG,
+    ConsumableFamily,
+    definition,
+)
 
 
 class CombatCallback(CallbackData, prefix="fight"):
@@ -120,6 +130,62 @@ class CombatConsumableCallback(CallbackData, prefix="cu"):
         return None if self.effect == "-" else self.effect
 
 
+class CombatConsumableFlowCallback(CallbackData, prefix="cf"):
+    activity: str
+    version: str
+    step: str
+    item: str
+    target: str
+    effect: str
+    parent: str
+
+    @classmethod
+    def for_step(
+        cls,
+        activity_id: UUID,
+        version: int,
+        step: str,
+        *,
+        item_id: str | None = None,
+        target_id: str | None = None,
+        effect_id: str | None = None,
+        parent: str | None = None,
+    ):
+        return cls(
+            activity=_uuid_token(activity_id),
+            version=_base36(version),
+            step=step,
+            item=_CONSUMABLE_CALLBACK_KEYS[item_id] if item_id is not None else "-",
+            target=_text_token(target_id) if target_id is not None else "-",
+            effect=_text_token(effect_id) if effect_id is not None else "-",
+            parent={"combat": "c", "items": "i", "targets": "t"}.get(parent, "-"),
+        )
+
+    @property
+    def activity_id(self) -> UUID:
+        return _uuid_from_token(self.activity)
+
+    @property
+    def state_version(self) -> int:
+        return _from_base36(self.version)
+
+    @property
+    def item_id(self) -> str | None:
+        return _CONSUMABLE_CALLBACK_IDS.get(self.item)
+
+    @property
+    def target_id(self) -> str | None:
+        return None if self.target == "-" else _text_from_token(self.target)
+
+    @property
+    def effect_id(self) -> str | None:
+        return None if self.effect == "-" else _text_from_token(self.effect)
+
+    @property
+    def parent_screen(self) -> str | None:
+        return {"c": "combat", "i": "items", "t": "targets"}.get(self.parent)
+
+
 def number(value: Decimal | int) -> str:
     return (
         format(value, "f").rstrip("0").rstrip(".")
@@ -135,6 +201,244 @@ def hp_bar(current: Decimal, maximum: Decimal, *, color: str = "🟩") -> str:
         return color * filled + "⬜" * (10 - filled)
 
 
+def _consumable_item_ids(view: CombatView) -> tuple[str, ...]:
+    available = {option.item_id for option in view.consumable_options}
+    return tuple(item_id for item_id in CONSUMABLE_CATALOG if item_id in available)
+
+
+def _consumable_summary(item_id: str) -> str:
+    item = definition(item_id)
+    if item is None:
+        return ""
+    return {
+        ConsumableFamily.HEALING: "❤️ Cura · 22% HP Máximo",
+        ConsumableFamily.PURIFICATION: "✨ Purificação · 1 Efeito Negativo",
+        ConsumableFamily.ANTIDOTE: "☣️ Antídoto · 1 DoT",
+        ConsumableFamily.PROTECTION: "🔰 Barreira · 12% HP Máximo · 2T",
+        ConsumableFamily.DISPELLER: "✨ Dissipação · 1 Efeito Positivo",
+        ConsumableFamily.WARDING: "🛡️ Resguardo · 2T · 1 Carga",
+    }.get(item.family, "")
+
+
+def _numeric_rows(buttons: list[InlineKeyboardButton]) -> list[list[InlineKeyboardButton]]:
+    return [buttons[index : index + 5] for index in range(0, len(buttons), 5)]
+
+
+def _choice_name_and_state(
+    state: Combat, item_id: str, target_id: str, effect_id: str
+) -> tuple[str, str]:
+    selections = dict(
+        consumable_effect_options(state, item_id, target_id=target_id)
+    )
+    selection = selections.get(effect_id, "")
+    name = _effect_display_name(state, target_id, selection)
+    if selection.startswith("dot:"):
+        dots = state.dot_states.get(target_id, ())
+        selected = next(
+            (
+                dot
+                for index, dot in enumerate(dots)
+                if (dot.instance_id or f"d{index + 1:x}") == effect_id
+            ),
+            None,
+        )
+        if selected is not None and selected.stacks > 1:
+            return name, f"{selected.stacks} Acúmulos · {selected.remaining}T"
+        return name, f"{selected.remaining}T" if selected is not None else ""
+    fighter = state.fighters.get(target_id)
+    effects = fighter.effects if fighter is not None else ()
+    selected = next(
+        (
+            effect
+            for index, effect in enumerate(effects)
+            if (effect.instance_id or f"e{index + 1:x}") == effect_id
+        ),
+        None,
+    )
+    if selected is None:
+        return name, ""
+    if selected.stackable and selected.stacks > 1:
+        return name, f"{selected.stacks} Acúmulos · {selected.remaining}T"
+    return name, f"{selected.remaining}T"
+
+
+def _effect_display_name(state: Combat, target_id: str, selection: str) -> str:
+    if selection.startswith("dot:"):
+        return escape(
+            {
+                "dot:poison": "Veneno",
+                "dot:bleed": "Sangramento",
+                "dot:burn": "Queimadura",
+            }.get(selection, "Dano ao Longo do Tempo")
+        )
+    effect_id = selection.removeprefix("effect:")
+    actions = state.enemy_actions if target_id != "player" else state.player_actions
+    action = actions.get(effect_id)
+    return escape(action.name if action is not None else "Efeito")
+
+
+def _render_consumable_selection(view: CombatView) -> Screen:
+    state = view.combat
+    player = state.fighters["player"]
+    screen = view.consumable_screen
+    rows: list[list[InlineKeyboardButton]] = []
+    lines: list[str] = []
+
+    if screen == "items":
+        lines = ["🧪 Consumíveis", f"Turno {player.opportunity} · <b>{escape(player.name)}</b>", ""]
+        if view.consumable_notice:
+            lines.extend([escape(view.consumable_notice), ""])
+        item_ids = _consumable_item_ids(view)
+        quantities = dict(view.consumable_quantities)
+        item_buttons = []
+        for index, item_id in enumerate(item_ids, start=1):
+            item = definition(item_id)
+            assert item is not None
+            lines.extend(
+                [
+                    f"{index} 🧪 {escape(item.name)} · {quantities.get(item_id, 0)}",
+                    _consumable_summary(item_id),
+                    "",
+                ]
+            )
+            item_buttons.append(
+                InlineKeyboardButton(
+                    text=str(index),
+                    callback_data=CombatConsumableFlowCallback.for_step(
+                        view.activity_id,
+                        state.version,
+                        "i",
+                        item_id=item_id,
+                    ).pack(),
+                )
+            )
+        rows.extend(_numeric_rows(item_buttons))
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="← Combate",
+                    callback_data=CombatConsumableFlowCallback.for_step(
+                        view.activity_id, state.version, "b", parent="combat"
+                    ).pack(),
+                )
+            ]
+        )
+    elif screen == "targets":
+        item_id = view.selected_consumable_id or ""
+        item = definition(item_id)
+        item_name = escape(item.name if item is not None else "Dissipador")
+        lines = [f"✨ {item_name} · Escolha o Alvo", ""]
+        target_counts: dict[str, int] = {}
+        for option in view.consumable_options:
+            if option.item_id == item_id:
+                target_counts[option.target_id] = target_counts.get(option.target_id, 0) + 1
+        target_buttons = []
+        for index, (target_id, count) in enumerate(target_counts.items(), start=1):
+            target = state.fighters.get(target_id)
+            if target is None:
+                continue
+            lines.extend(
+                [
+                    f"{index} 🐺 {escape(target.name)}",
+                    f"Efeitos Removíveis · {count}",
+                    "",
+                ]
+            )
+            target_buttons.append(
+                InlineKeyboardButton(
+                    text=str(index),
+                    callback_data=CombatConsumableFlowCallback.for_step(
+                        view.activity_id,
+                        state.version,
+                        "t",
+                        item_id=item_id,
+                        target_id=target_id,
+                    ).pack(),
+                )
+            )
+        rows.extend(_numeric_rows(target_buttons))
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="← Consumíveis",
+                    callback_data=CombatConsumableFlowCallback.for_step(
+                        view.activity_id,
+                        state.version,
+                        "b",
+                        item_id=item_id,
+                        parent="items",
+                    ).pack(),
+                )
+            ]
+        )
+    else:
+        item_id = view.selected_consumable_id or ""
+        target_id = view.selected_target_id or "player"
+        item = definition(item_id)
+        family = item.family if item is not None else None
+        title = (
+            "✨ Dissipador · Escolha o Efeito"
+            if family == ConsumableFamily.DISPELLER
+            else "☣️ Antídoto · Escolha o DoT"
+            if family == ConsumableFamily.ANTIDOTE
+            else "✨ Purificação · Escolha o Efeito Negativo"
+        )
+        lines = [title, ""]
+        target = state.fighters.get(target_id)
+        if family == ConsumableFamily.DISPELLER and target is not None:
+            lines.extend([f"🐺 {escape(target.name)}", ""])
+        choices = []
+        for option in view.consumable_options:
+            if (
+                option.item_id == item_id
+                and option.target_id == target_id
+                and option.effect_id is not None
+            ):
+                if all(existing.effect_id != option.effect_id for existing in choices):
+                    choices.append(option)
+        effect_buttons = []
+        for index, option in enumerate(choices, start=1):
+            effect_name, state_label = _choice_name_and_state(
+                state, item_id, target_id, option.effect_id or ""
+            )
+            icon = "🟢" if family == ConsumableFamily.DISPELLER else "🔻"
+            detail = f" · {state_label}" if state_label else ""
+            lines.extend([f"{index} {icon} {effect_name}{detail}", ""])
+            effect_buttons.append(
+                InlineKeyboardButton(
+                    text=str(index),
+                    callback_data=CombatConsumableFlowCallback.for_step(
+                        view.activity_id,
+                        state.version,
+                        "e",
+                        item_id=item_id,
+                        target_id=target_id,
+                        effect_id=option.effect_id,
+                        parent=view.selection_parent,
+                    ).pack(),
+                )
+            )
+        rows.extend(_numeric_rows(effect_buttons))
+        back_to_targets = view.selection_parent == "targets"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="← Alvos" if back_to_targets else "← Consumíveis",
+                    callback_data=CombatConsumableFlowCallback.for_step(
+                        view.activity_id,
+                        state.version,
+                        "b",
+                        item_id=item_id,
+                        target_id=target_id if back_to_targets else None,
+                        parent="targets" if back_to_targets else "items",
+                    ).pack(),
+                )
+            ]
+        )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+    return Screen("\n".join(lines).rstrip(), view.context, keyboard, "HTML")
+
+
 def event_line(state: Combat, event: CombatEvent) -> str:
     actor = state.fighters[event.actor]
     actor_name = escape(actor.name)
@@ -146,7 +450,7 @@ def event_line(state: Combat, event: CombatEvent) -> str:
     if event.action == "defend":
         return f"🛡️ <b>{actor_name}</b> usa Defender."
     if event.action == "resguardo:block":
-        effect = _effect_label(state, event.effect_id)
+        effect = _effect_label(state, event.effect_id, target_id=event.target)
         target = escape(state.fighters[event.target].name)
         return f"🛡️ Resguardo bloqueia <b>{effect}</b> em <b>{target}</b>."
     if event.action.startswith("consumable:"):
@@ -187,7 +491,7 @@ def event_line(state: Combat, event: CombatEvent) -> str:
     return line
 
 
-def _effect_label(state: Combat, effect_id: str) -> str:
+def _effect_label(state: Combat, effect_id: str, *, target_id: str) -> str:
     if effect_id.startswith("dot:"):
         return escape(
             {
@@ -197,7 +501,10 @@ def _effect_label(state: Combat, effect_id: str) -> str:
             }.get(effect_id, "DoT")
         )
     action = state.enemy_actions.get(effect_id) or state.player_actions.get(effect_id)
-    return escape(action.name if action is not None else effect_id)
+    if action is not None:
+        return escape(action.name)
+    fallback = "Efeito Negativo" if target_id == "player" else "Efeito Positivo"
+    return escape(fallback)
 
 
 def _consumable_event_line(state: Combat, event: CombatEvent, actor_name: str) -> str:
@@ -205,30 +512,41 @@ def _consumable_event_line(state: Combat, event: CombatEvent, actor_name: str) -
     item = definition(item_id)
     item_name = escape(item.name if item is not None else item_id)
     target_name = escape(state.fighters[event.target].name)
-    family = item.family.value if item is not None else ""
+    family = item.family if item is not None else None
     line = f"🧪 <b>{actor_name}</b> usa <b>{item_name}</b>."
-    if family == "healing":
-        line += f" Recupera <code>{number(event.healed)}</code> HP."
-    elif family == "protection":
-        line += (
-            f" 🔰 Barreira · <code>{number(event.barrier_value)}</code> · <code>2T</code>."
+    if family == ConsumableFamily.HEALING:
+        return f"{line}\n❤️ <b>{target_name}</b> recupera <code>{number(event.healed)}</code> HP."
+    if family == ConsumableFamily.PROTECTION:
+        return f"{line}\n🔰 Barreira · <code>{number(event.barrier_value)}</code> · <code>2T</code>"
+    if family == ConsumableFamily.WARDING:
+        return f"{line}\n🛡️ Resguardo · <code>2T</code> · <code>1 Carga</code>"
+    if family == ConsumableFamily.DISPELLER:
+        removed = _removed_effect_summary(event)
+        return (
+            f"🧪 <b>{actor_name}</b> usa <b>{item_name}</b> em <b>{target_name}</b>.\n"
+            f"✨ <b>{_effect_label(state, event.effect_id, target_id=event.target)}</b> · {removed}"
         )
-    elif family == "warding":
-        line += " 🛡️ Resguardo · <code>2T</code> · <code>1 Carga</code>."
-    elif family == "dispeller":
-        line += (
-            f" em <b>{target_name}</b>. ✨ "
-            f"<b>{_effect_label(state, event.effect_id)}</b> removido."
-        )
-    elif family == "antidote":
-        line += f" ☣️ <b>{_effect_label(state, event.effect_id)}</b> removido."
-    elif family == "purification":
-        line += f" ✨ <b>{_effect_label(state, event.effect_id)}</b> removido."
+    if family == ConsumableFamily.ANTIDOTE:
+        effect = _effect_label(state, event.effect_id, target_id=event.target)
+        return f"{line}\n☣️ <b>{effect}</b> · Removido"
+    if family == ConsumableFamily.PURIFICATION:
+        effect = _effect_label(state, event.effect_id, target_id=event.target)
+        return f"{line}\n✨ <b>{effect}</b> · Removido"
     return line
+
+
+def _removed_effect_summary(event: CombatEvent) -> str:
+    if event.effect_removal_kind == "stack":
+        return "1 Acúmulo Removido"
+    # Legacy snapshots have no removal metadata. Use the existing neutral
+    # player-facing wording without consulting the target's current effects.
+    return "Removido"
 
 
 def render_combat(view: CombatView) -> Screen:
     state = view.combat
+    if view.consumable_screen is not None:
+        return _render_consumable_selection(view)
     player, enemy = state.fighters["player"], state.fighters["enemy"]
     icon = COPY[f"class:{player.character_class}"].split(" ", 1)[0]
     recent = [state.opening_log] + [event_line(state, event) for event in state.events]
@@ -250,17 +568,20 @@ def render_combat(view: CombatView) -> Screen:
         "\n".join(recent[-4:]),
         "",
     ]
+    status_lines = []
     if player.barrier > 0 and player.barrier_remaining > 0:
-        lines.insert(
-            11,
+        status_lines.append(
             f"🔰 Barreira · <code>{number(player.barrier)}</code> · "
-            f"<code>{player.barrier_remaining}T</code>",
+            f"<code>{player.barrier_remaining}T</code>"
         )
     if player.ward_charges > 0 and player.ward_remaining > 0:
-        lines.insert(
-            11,
-            f"🛡️ Resguardo · <code>{player.ward_remaining}T</code> · <code>1 Carga</code>",
+        status_lines.append(
+            f"🛡️ Resguardo · <code>{player.ward_remaining}T</code> · <code>1 Carga</code>"
         )
+    if status_lines:
+        lines[11:11] = status_lines
+    if view.consumable_notice:
+        lines[8:8] = [escape(view.consumable_notice), ""]
     available = allowed_actions(state)
     buttons = []
     for action in available:
@@ -305,19 +626,17 @@ def render_combat(view: CombatView) -> Screen:
     if state.result == "victory" and view.context == "prologue":
         # Mechanical receipt only: no new story scene or Braseiro/Descansar button.
         lines.append("320 XP")
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[buttons]) if buttons else None
+    keyboard_rows = [buttons] if buttons else []
     if view.consumable_options:
-        rows = [buttons] if buttons else []
-        rows.extend(
+        keyboard_rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"🧪 {option.label}",
-                    callback_data=CombatConsumableCallback.for_option(
-                        view.activity_id, state.version, option
+                    text="Consumível",
+                    callback_data=CombatConsumableFlowCallback.for_step(
+                        view.activity_id, state.version, "o"
                     ).pack(),
                 )
             ]
-            for option in view.consumable_options
         )
-        keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows) if keyboard_rows else None
     return Screen("\n".join(lines).rstrip(), view.context, keyboard, parse_mode="HTML")

@@ -128,6 +128,7 @@ class CombatEvent:
     effect_id: str = ""
     barrier_absorbed: Decimal = D(0)
     barrier_value: Decimal = D(0)
+    effect_removal_kind: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -993,6 +994,7 @@ def _finish_consumable_turn(
     *,
     target: str = "player",
     effect_id: str = "",
+    effect_removal_kind: str | None = None,
     barrier_value: Decimal = ZERO,
     barrier_absorbed: Decimal = ZERO,
 ) -> Combat:
@@ -1010,6 +1012,7 @@ def _finish_consumable_turn(
             target,
             healed=healed,
             effect_id=effect_id,
+            effect_removal_kind=effect_removal_kind,
             barrier_absorbed=barrier_absorbed,
             barrier_value=barrier_value,
         )
@@ -1235,6 +1238,7 @@ def use_combat_consumable(
     target = updated.fighters[resolved_target]
     healed = D(0)
     effect_name = ""
+    effect_removal_kind = None
     barrier_value = D(0)
 
     if item.family == ConsumableFamily.HEALING:
@@ -1276,6 +1280,7 @@ def use_combat_consumable(
         )
         if selected is None:
             return state
+        effect_removal_kind = "stack" if selected.stackable else "effect"
         effect_name = _remove_selected_effect(target, effect_id, one_stack=True) or ""
         if not effect_name:
             return state
@@ -1292,6 +1297,7 @@ def use_combat_consumable(
         healed,
         target=resolved_target,
         effect_id=effect_name,
+        effect_removal_kind=effect_removal_kind,
         barrier_value=barrier_value,
     )
 

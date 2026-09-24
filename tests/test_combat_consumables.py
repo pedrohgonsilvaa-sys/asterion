@@ -1,7 +1,7 @@
 from decimal import Decimal
 from uuid import uuid4
 
-from asterion.bot.combat_ui import CombatConsumableCallback
+from asterion.bot.combat_ui import CombatConsumableCallback, event_line
 from asterion.domain.combat import (
     Action,
     CombatConsumableOption,
@@ -554,6 +554,109 @@ def test_consumable_options_use_stable_effect_identity_and_shared_cd2_budget():
         budget_limit=2,
     )
     assert combat_consumable_options(used, ["consumable.heal"], budget_limit=2) == ()
+
+
+def test_dissipator_event_keeps_removal_semantics_after_effect_changes_and_codec():
+    cases = (
+        (False, 1, "effect", "Removido"),
+        (True, 2, "stack", "1 Acúmulo Removido"),
+        (True, 1, "stack", "1 Acúmulo Removido"),
+    )
+    for index, (stackable, stacks, expected_kind, expected_label) in enumerate(cases):
+        state = _combat()
+        state.enemy_actions["rally"] = Action("rally", "Brado de Guerra", D(0))
+        enemy = state.fighters["enemy"]
+        enemy.effects = [
+            Effect(
+                "rally",
+                "attack",
+                D("0.1"),
+                3,
+                enemy.opportunity,
+                kind="buff",
+                stackable=stackable,
+                stacks=stacks,
+                stack_cap=3,
+                stack_orders=list(range(1, stacks + 1)),
+                instance_id=f"selected-{index}",
+            )
+        ]
+
+        used = use_combat_consumable(
+            state,
+            "consumable.dispeller.iii",
+            target_id="enemy",
+            effect_id=f"selected-{index}",
+            budget_limit=3,
+        )
+        event = next(
+            event for event in used.events if event.action == "consumable:consumable.dispeller.iii"
+        )
+        assert event.effect_removal_kind == expected_kind
+        if stackable and stacks == 1:
+            assert not any(effect.id == "rally" for effect in used.fighters["enemy"].effects)
+
+        # Reconstruct as a reconnect does, then reapply the same effect ID
+        # under a new instance identity. The old event must remain unchanged.
+        restored = decode(encode(used), used.id, used.ruleset, used.version)
+        restored.fighters["enemy"].effects.append(
+            Effect(
+                "rally",
+                "attack",
+                D("0.1"),
+                3,
+                restored.fighters["enemy"].opportunity,
+                kind="buff",
+                stackable=stackable,
+                stacks=1,
+                instance_id=f"reapplied-{index}",
+            )
+        )
+        rendered = event_line(restored, event)
+        assert rendered.endswith(f"· {expected_label}")
+        assert rendered == event_line(used, event)
+
+
+def test_legacy_dissipator_event_defaults_to_neutral_label_without_current_state_lookup():
+    state = _combat()
+    state.enemy_actions["rally"] = Action("rally", "Brado de Guerra", D(0))
+    enemy = state.fighters["enemy"]
+    enemy.effects = [
+        Effect(
+            "rally",
+            "attack",
+            D("0.1"),
+            3,
+            enemy.opportunity,
+            kind="buff",
+            instance_id="selected-rally",
+        )
+    ]
+    used = use_combat_consumable(
+        state,
+        "consumable.dispeller.iii",
+        target_id="enemy",
+        effect_id="selected-rally",
+        budget_limit=3,
+    )
+    payload = encode(used)
+    legacy_event = next(
+        item for item in payload["events"]
+        if item["action"] == "consumable:consumable.dispeller.iii"
+    )
+    legacy_event.pop("effect_removal_kind")
+    restored = decode(payload, used.id, used.ruleset, used.version)
+    event = next(
+        event for event in restored.events
+        if event.action == "consumable:consumable.dispeller.iii"
+    )
+    restored.fighters["enemy"].effects.append(
+        Effect("rally", "attack", D("0.1"), 3, 0, kind="buff", instance_id="again")
+    )
+    rendered = event_line(restored, event)
+    assert event.effect_removal_kind is None
+    assert rendered.endswith("· Removido")
+    assert "1 Acúmulo Removido" not in rendered
 
 
 def test_antidote_removes_all_selected_dot_stacks_and_purification_removes_one():

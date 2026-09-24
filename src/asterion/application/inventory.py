@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.consumables import daily_consumable_cycle
+from asterion.domain.consumables import VIGOR_USABLE_AT_OR_BELOW, ConsumableFamily
 from asterion.domain.consumables import definition as consumable_definition
 from asterion.infrastructure.db.models import (
     BlockedDelivery,
     Character,
     ConsumableStack,
     EquipmentItem,
+    GameActivity,
     MaterialStack,
     PendingItem,
     RuneStack,
@@ -62,6 +66,9 @@ class InventoryView:
     pending_count: int = 0
     pending_capacity: int = PENDING_CAPACITY
     blocked_delivery_count: int = 0
+    vigor: int | None = None
+    max_vigor: int = 100
+    vigor_usable: bool = False
 
 
 def consumable_inventory_entry(item_id: str, quantity: int) -> InventoryEntry:
@@ -132,6 +139,49 @@ class InventoryService:
                 rune_slots=counts["runes"],
                 category=category,
                 entries=tuple(entries),
+            )
+
+    async def consumable_detail(self, actor: int, item_id: str) -> InventoryView | None:
+        item = consumable_definition(item_id)
+        if item is None:
+            return None
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                return None
+            counts = await self._counts(session, character.id)
+            quantity = await session.scalar(
+                select(ConsumableStack.quantity).where(
+                    ConsumableStack.character_id == character.id,
+                    ConsumableStack.consumable_id == item_id,
+                )
+            )
+            entry = consumable_inventory_entry(item_id, int(quantity or 0))
+            vigor_usable = False
+            if item.family == ConsumableFamily.VIGOR:
+                active = await session.scalar(
+                    select(GameActivity.id).where(
+                        GameActivity.character_id == character.id,
+                        GameActivity.status == "active",
+                    )
+                )
+                vigor_usable = bool(
+                    entry.quantity > 0
+                    and character.vigor <= VIGOR_USABLE_AT_OR_BELOW
+                    and character.vigor_consumable_cycle
+                    != daily_consumable_cycle(datetime.now(UTC))
+                    and active is None
+                )
+            return InventoryView(
+                kind="inventory_consumable_detail",
+                character_id=character.id,
+                used_slots=sum(counts.values()),
+                consumable_slots=counts["consumables"],
+                category="consumables",
+                entries=(entry,),
+                vigor=character.vigor,
+                max_vigor=character.max_vigor,
+                vigor_usable=vigor_usable,
             )
 
     async def pending(self, actor: int) -> InventoryView | None:

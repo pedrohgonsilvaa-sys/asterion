@@ -9,6 +9,7 @@ from asterion.application.world import WorldService
 from asterion.bot.combat_ui import (
     CombatCallback,
     CombatConsumableCallback,
+    CombatConsumableFlowCallback,
     render_combat,
 )
 from asterion.bot.creation_handlers import present
@@ -100,5 +101,89 @@ def combat_router(
                 await present(query.message, render_road(view), images, edit=True)
                 return
             await present(query.message, render_combat(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("cf:"))
+    async def consumable_flow(query: CallbackQuery):
+        if road is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        try:
+            data = CombatConsumableFlowCallback.unpack(query.data or "")
+            activity_id = data.activity_id
+            item_id = data.item_id
+            target_id = data.target_id
+            effect_id = data.effect_id
+        except (KeyError, ValueError, TypeError):
+            await query.answer()
+            return
+
+        view = None
+        if data.step == "o":
+            view = await road.consumable_selection(
+                query.from_user.id,
+                activity_id,
+                data.state_version,
+                screen="items",
+            )
+        elif data.step == "i" and item_id is not None:
+            view = await road.consumable_selection(
+                query.from_user.id,
+                activity_id,
+                data.state_version,
+                screen="choose_item",
+                item_id=item_id,
+            )
+            option = getattr(view, "ready_consumable_option", None)
+            if option is not None:
+                view = await road.action(
+                    query.from_user.id,
+                    activity_id,
+                    data.state_version,
+                    consumable_id=option.item_id,
+                    target_id=option.target_id,
+                    effect_id=option.effect_id,
+                )
+        elif data.step == "t" and item_id is not None and target_id is not None:
+            view = await road.consumable_selection(
+                query.from_user.id,
+                activity_id,
+                data.state_version,
+                screen="choose_target",
+                item_id=item_id,
+                target_id=target_id,
+            )
+            option = getattr(view, "ready_consumable_option", None)
+            if option is not None:
+                view = await road.action(
+                    query.from_user.id,
+                    activity_id,
+                    data.state_version,
+                    consumable_id=option.item_id,
+                    target_id=option.target_id,
+                    effect_id=option.effect_id,
+                )
+        elif data.step == "e" and item_id is not None and target_id is not None and effect_id:
+            view = await road.action(
+                query.from_user.id,
+                activity_id,
+                data.state_version,
+                consumable_id=item_id,
+                target_id=target_id,
+                effect_id=effect_id,
+            )
+        elif data.step == "b":
+            screen = data.parent_screen or "combat"
+            view = await road.consumable_selection(
+                query.from_user.id,
+                activity_id,
+                data.state_version,
+                screen=screen,
+                item_id=item_id,
+                target_id=target_id,
+            )
+
+        await query.answer()
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
 
     return router

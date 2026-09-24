@@ -1,14 +1,21 @@
 import asyncio
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
 import pytest
+from aiogram import Bot, Dispatcher
 from sqlalchemy import event, select, text
 
 from asterion.application.consumables import ConsumableService
+from asterion.application.prologue import PrologueService
 from asterion.application.round import RoundService
-from asterion.domain.combat import Effect
+from asterion.bot.combat_handlers import combat_router
+from asterion.bot.combat_ui import CombatConsumableFlowCallback, event_line
+from asterion.bot.road_ui import render_road
+from asterion.domain.combat import Action, DotState, Effect
 from asterion.domain.combat_math import Stats
+from asterion.domain.prologue import PROFILE
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
     Character,
@@ -17,6 +24,7 @@ from asterion.infrastructure.db.models import (
     GameActivity,
     HuntContext,
 )
+from tests.test_creation_ui import callback_update
 from tests.test_road_integration import ROAD, _seed_road
 
 
@@ -635,3 +643,297 @@ async def test_postgres_dead_target_callback_does_not_retarget_or_consume(databa
         assert not any(
             event.action.startswith("consumable:") for event in combat.events
         )
+
+
+@pytest.mark.asyncio
+async def test_multidevice_callback_after_menu_open_is_idempotent_and_reconnects(database):
+    actor = 770701
+    service, initial = await _combat(database, actor, {"consumable.heal": 1})
+    prologue = PrologueService(database[1], "ocaso", PROFILE)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(combat_router(prologue, {}, road=service))
+    telegram = Bot("123456:local-test-token")
+    telegram.session.make_request = AsyncMock(return_value=True)
+
+    hud = render_road(initial)
+    open_callback = next(
+        button.callback_data
+        for row in hud.keyboard.inline_keyboard
+        for button in row
+        if button.text == "Consumível"
+    )
+    await dispatcher.feed_raw_update(
+        telegram,
+        callback_update(open_callback, update_id=881, actor=actor),
+    )
+    menu_request = telegram.session.make_request.call_args.args[1]
+    item_callback = menu_request.reply_markup.inline_keyboard[0][0].callback_data
+    item_choice = CombatConsumableFlowCallback.unpack(item_callback)
+    assert item_choice.step == "i"
+    assert item_choice.item_id == "consumable.heal"
+
+    before_use = await service.resume(actor)
+    assert before_use is not None and before_use.combat.version == initial.combat.version
+    assert await _stack_quantity(database, actor, "consumable.heal") == 1
+
+    # Both devices act from the same screen. The first click commits; the other is stale.
+    await dispatcher.feed_raw_update(
+        telegram,
+        callback_update(item_callback, update_id=882, actor=actor),
+    )
+    await dispatcher.feed_raw_update(
+        telegram,
+        callback_update(item_callback, update_id=883, actor=actor),
+    )
+    stale_request = telegram.session.make_request.call_args.args[1]
+    assert "⏳ Consumíveis · Em Recarga" in stale_request.text
+
+    latest = await service.resume(actor)
+    assert latest is not None and latest.kind == "combat"
+    assert latest.combat.consumable_uses == 1
+    assert sum(
+        event.action == "consumable:consumable.heal" for event in latest.combat.events
+    ) == 1
+    assert await _stack_quantity(database, actor, "consumable.heal") == 0
+
+    reconnected = render_road(await service.resume(actor))
+    assert "📜 Registro de Combate · Recentes" in reconnected.text
+    assert reconnected.text.count("usa <b>Poção de Cura</b>") == 1
+    assert not any(
+        button.text == "Consumível"
+        for row in reconnected.keyboard.inline_keyboard
+        for button in row
+    )
+
+
+@pytest.mark.asyncio
+async def test_multi_effect_selections_use_stable_ids_without_consuming_on_navigation(database):
+    actor = 770702
+    item_ids = ("consumable.purification", "consumable.antidote.tdo.i")
+    service, initial = await _combat(database, actor, {item_id: 1 for item_id in item_ids})
+
+    def add_choices(combat):
+        combat.fighters["player"].effects.clear()
+        combat.fighters["player"].effects.extend(
+            [
+                Effect("weak", "attack", Decimal("0.1"), 3, 0, instance_id="e1"),
+                Effect("slow", "defense", Decimal("0.1"), 2, 0, instance_id="e2"),
+            ]
+        )
+        combat.dot_states["player"] = [
+            DotState(
+                "poison",
+                2,
+                2,
+                Decimal("20"),
+                "enemy",
+                stack_snapshots=[Decimal("20"), Decimal("20")],
+                instance_id="d1",
+            ),
+            DotState(
+                "burn",
+                1,
+                2,
+                Decimal("30"),
+                "enemy",
+                stack_snapshots=[Decimal("30")],
+                instance_id="d2",
+            ),
+        ]
+
+    await _save_combat(database, initial, add_choices)
+    current = await service.resume(actor)
+    assert current is not None
+    menu = await service.consumable_selection(
+        actor, current.activity_id, current.combat.version, screen="items"
+    )
+    assert menu is not None and menu.consumable_screen == "items"
+    assert menu.combat.version == current.combat.version
+    assert await _stack_quantities(database, actor, item_ids) == dict.fromkeys(item_ids, 1)
+
+    purification = await service.consumable_selection(
+        actor,
+        current.activity_id,
+        current.combat.version,
+        screen="choose_item",
+        item_id="consumable.purification",
+    )
+    assert purification is not None and purification.consumable_screen == "effects"
+    purification_screen = render_road(purification)
+    purification_choices = [
+        CombatConsumableFlowCallback.unpack(button.callback_data).effect_id
+        for row in purification_screen.keyboard.inline_keyboard
+        for button in row
+        if button.text.isdigit()
+    ]
+    assert purification_choices == ["d1", "d2", "e1", "e2"]
+
+    antidote = await service.consumable_selection(
+        actor,
+        current.activity_id,
+        current.combat.version,
+        screen="choose_item",
+        item_id="consumable.antidote.tdo.i",
+    )
+    assert antidote is not None and antidote.consumable_screen == "effects"
+    antidote_screen = render_road(antidote)
+    antidote_choices = [
+        CombatConsumableFlowCallback.unpack(button.callback_data).effect_id
+        for row in antidote_screen.keyboard.inline_keyboard
+        for button in row
+        if button.text.isdigit()
+    ]
+    assert antidote_choices == ["d1", "d2"]
+    assert await _stack_quantities(database, actor, item_ids) == dict.fromkeys(item_ids, 1)
+    assert (await service.resume(actor)).combat.consumable_uses == 0
+
+
+@pytest.mark.asyncio
+async def test_single_effect_selection_skips_screen_and_stale_callback_is_rejected(database):
+    actor = 770703
+    item_id = "consumable.purification"
+    service, initial = await _combat(database, actor, {item_id: 1})
+
+    def add_single_choices(combat):
+        combat.fighters["player"].effects.clear()
+        combat.fighters["player"].effects.append(
+            Effect("weak", "attack", Decimal("0.1"), 2, 0, instance_id="e1")
+        )
+
+    await _save_combat(database, initial, add_single_choices)
+    current = await service.resume(actor)
+    assert current is not None
+    purification = await service.consumable_selection(
+        actor,
+        current.activity_id,
+        current.combat.version,
+        screen="choose_item",
+        item_id="consumable.purification",
+    )
+    assert purification is not None and purification.ready_consumable_option.effect_id == "e1"
+    assert purification.consumable_screen is None
+
+    await _save_combat(
+        database,
+        current,
+        lambda combat: combat.fighters["player"].effects.clear(),
+    )
+    rejected = await service.action(
+        actor,
+        current.activity_id,
+        current.combat.version,
+        consumable_id="consumable.purification",
+        target_id="player",
+        effect_id="e1",
+    )
+    assert rejected is not None and rejected.combat.consumable_uses == 0
+    assert await _stack_quantity(database, actor, item_id) == 1
+    player = rejected.combat.fighters["player"]
+    assert player.cooldowns.get("consumable", 0) <= player.opportunity
+
+
+@pytest.mark.asyncio
+async def test_single_antidote_choice_skips_redundant_selection(database):
+    actor = 770704
+    item_id = "consumable.antidote.tdo.i"
+    service, initial = await _combat(database, actor, {item_id: 1})
+
+    def add_dot(combat):
+        combat.dot_states["player"] = [
+            DotState(
+                "poison",
+                2,
+                2,
+                Decimal("20"),
+                "enemy",
+                stack_snapshots=[Decimal("20"), Decimal("20")],
+                instance_id="d1",
+            )
+        ]
+
+    await _save_combat(database, initial, add_dot)
+    current = await service.resume(actor)
+    assert current is not None
+    antidote = await service.consumable_selection(
+        actor,
+        current.activity_id,
+        current.combat.version,
+        screen="choose_item",
+        item_id=item_id,
+    )
+    assert antidote is not None and antidote.consumable_screen is None
+    assert antidote.ready_consumable_option.effect_id == "d1"
+    assert await _stack_quantity(database, actor, item_id) == 1
+
+
+@pytest.mark.asyncio
+async def test_postgres_dissipator_event_remains_stable_after_reapplication_and_reconnect(database):
+    actor = 770705
+    item_id = "consumable.dispeller.iii"
+    service, initial = await _combat(database, actor, {item_id: 1})
+
+    def add_buff(combat):
+        combat.enemy_actions["rally"] = Action("rally", "Brado de Guerra", Decimal(0))
+        enemy = combat.fighters["enemy"]
+        enemy.effects = [
+            Effect(
+                "rally",
+                "attack",
+                Decimal("0.1"),
+                3,
+                enemy.opportunity,
+                kind="buff",
+                instance_id="rally-original",
+            )
+        ]
+
+    await _save_combat(database, initial, add_buff)
+    selected = await service.resume(actor)
+    assert selected is not None and selected.kind == "combat"
+    assert any(
+        option.item_id == item_id
+        and option.target_id == "enemy"
+        and option.effect_id == "rally-original"
+        for option in selected.consumable_options
+    )
+
+    used = await service.action(
+        actor,
+        selected.activity_id,
+        selected.combat.version,
+        consumable_id=item_id,
+        target_id="enemy",
+        effect_id="rally-original",
+    )
+    assert used is not None and used.kind == "combat"
+    recorded = next(
+        event for event in used.combat.events if event.action == f"consumable:{item_id}"
+    )
+    assert recorded.effect_removal_kind == "effect"
+    original_line = event_line(used.combat, recorded)
+    assert original_line.endswith("✨ <b>Brado de Guerra</b> · Removido")
+    assert await _stack_quantity(database, actor, item_id) == 0
+
+    def reapply_same_buff(combat):
+        enemy = combat.fighters["enemy"]
+        enemy.effects.append(
+            Effect(
+                "rally",
+                "attack",
+                Decimal("0.1"),
+                3,
+                enemy.opportunity,
+                kind="buff",
+                instance_id="rally-reapplied",
+            )
+        )
+
+    await _save_combat(database, used, reapply_same_buff)
+    reconnected = await service.resume(actor)
+    assert reconnected is not None and reconnected.kind == "combat"
+    persisted_event = next(
+        event for event in reconnected.combat.events if event.action == f"consumable:{item_id}"
+    )
+    assert persisted_event.effect_removal_kind == "effect"
+    assert event_line(reconnected.combat, persisted_event) == original_line
+    assert original_line.endswith("· Removido")

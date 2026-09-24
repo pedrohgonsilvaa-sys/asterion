@@ -289,6 +289,16 @@ def world_router(
         if view is not None:
             await present(query.message, render_inventory(view), images, edit=True)
 
+    @router.callback_query(F.data.startswith("inventory:consumable:"))
+    async def inventory_consumable(query: CallbackQuery):
+        await query.answer()
+        if inventory is None or not isinstance(query.message, Message):
+            return
+        item_id = (query.data or "").removeprefix("inventory:consumable:")
+        view = await inventory.consumable_detail(query.from_user.id, item_id)
+        if view is not None:
+            await present(query.message, render_inventory(view), images, edit=True)
+
     @router.callback_query(F.data.startswith("consumable:vigor:"))
     async def use_vigor(query: CallbackQuery):
         if (
@@ -300,11 +310,18 @@ def world_router(
             return
         item_id = (query.data or "").split(":", maxsplit=2)[-1]
         value = await consumables.use_vigor_potion(query.from_user.id, item_id)
+        view = await inventory.consumable_detail(query.from_user.id, item_id)
         if value is None:
-            await query.answer("Poção de Vigor indisponível.", show_alert=True)
+            current = (
+                f" Vigor · {view.vigor}/{view.max_vigor}."
+                if view is not None and view.vigor is not None
+                else ""
+            )
+            await query.answer(
+                f"Poção de Vigor indisponível.{current}", show_alert=True
+            )
         else:
             await query.answer(f"Vigor recuperado · {value}/100.")
-        view = await inventory.category(query.from_user.id, "consumables")
         if view is not None:
             await present(query.message, render_inventory(view), images, edit=True)
 

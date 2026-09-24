@@ -43,6 +43,14 @@ class CombatView:
     xp: int
     context: str = "prologue"
     consumable_options: tuple[CombatConsumableOption, ...] = ()
+    consumable_screen: str | None = None
+    selected_consumable_id: str | None = None
+    selected_target_id: str | None = None
+    selection_parent: str = "items"
+    consumable_notice: str | None = None
+    consumable_quantities: tuple[tuple[str, int], ...] = ()
+    consumable_budget_limit: int = 0
+    ready_consumable_option: CombatConsumableOption | None = None
 
 
 def view(character: Character, activity: GameActivity, encounter: Encounter, record: CombatRecord):
