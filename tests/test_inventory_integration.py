@@ -85,6 +85,44 @@ async def test_inventory_root_and_categories_reflect_persisted_character_state(d
 
 
 @pytest.mark.asyncio
+async def test_inventory_resolves_catalog_names_and_grades_for_legacy_and_new_stock(database):
+    actor, _ = await _seed_road(database, 773003)
+    sessions = database[1]
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        session.add_all(
+            [
+                ConsumableStack(
+                    character_id=character.id,
+                    consumable_id="consumable.heal",
+                    quantity=4,
+                ),
+                ConsumableStack(
+                    character_id=character.id,
+                    consumable_id="consumable.purification",
+                    quantity=2,
+                ),
+                ConsumableStack(
+                    character_id=character.id,
+                    consumable_id="consumable.protection.vde.ii",
+                    quantity=3,
+                ),
+            ]
+        )
+        await session.commit()
+
+    view = await InventoryService(sessions, "ocaso").category(actor, "consumables")
+    assert view is not None
+    assert [(entry.key, entry.title, entry.quantity, entry.grade) for entry in view.entries] == [
+        ("consumable.heal", "Poção de Cura", 4, 1),
+        ("consumable.protection.vde.ii", "Preparado de Proteção Enredada", 3, 2),
+        ("consumable.purification", "Preparado de Purificação", 2, 1),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_pending_root_lists_real_pending_and_blocked_delivery_state(database):
     actor, _ = await _seed_road(database, 773002)
     sessions = database[1]

@@ -6,6 +6,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.inventory import InventoryEntry, InventoryView
 from asterion.bot.creation_ui import Screen
+from asterion.domain.consumables import grade_label
 
 RARITY_ICON = {
     "Comum": "⚪",
@@ -68,13 +69,9 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
         return lines
 
     if entry.kind == "consumable":
-        category = "Cura" if entry.key == "consumable.heal" else (
-            "Purificação" if entry.key == "consumable.purification" else "Consumível"
-        )
-        return [
-            f"{index} 🧪 {escape(entry.title)} · {entry.quantity}",
-            escape(category),
-        ]
+        grade = f"Grau {grade_label(entry.grade)}" if entry.grade is not None else None
+        metadata = f"Consumível · {grade}" if grade else "Consumível"
+        return [f"{index} 🧪 {escape(entry.title)} · {entry.quantity}", escape(metadata)]
 
     if entry.kind == "material":
         icon, meta = MATERIAL_META.get(entry.key, ("🧱", "Material"))

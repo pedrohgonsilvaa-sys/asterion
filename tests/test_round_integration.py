@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import func, select
@@ -9,10 +10,12 @@ from asterion.application.round import (
     PURIFY_CONSUMABLE,
     RoundService,
 )
+from asterion.domain.combat import DotState
 from asterion.domain.combat_math import Stats
 from asterion.domain.road import CREATURES, ROUND_FAMILIARITY
 from asterion.infrastructure.db.models import (
     Character,
+    CombatRecord,
     ConsumableStack,
     GameActivity,
     HuntRound,
@@ -316,6 +319,75 @@ async def test_common_round_encounter_commits_at_most_one_consumable(database, m
             )
         )
         assert quantity == 2
+
+
+@pytest.mark.asyncio
+async def test_common_round_automatically_consumes_legacy_purification_stock(database, monkeypatch):
+    import asterion.application.round as round_module
+
+    actor, service = await _seed_round(database, 772008)
+    _force_safe_common(monkeypatch, round_module)
+    original = round_module.create_road_combat
+
+    def poisoned_combat(*args, **kwargs):
+        combat = original(*args, **kwargs)
+        combat.fighters["player"].hp = Decimal("1")
+        combat.dot_states["player"] = [
+            DotState(
+                "poison",
+                2,
+                3,
+                Decimal("10000"),
+                "enemy",
+                [Decimal("10000"), Decimal("10000")],
+            )
+        ]
+        return combat
+
+    monkeypatch.setattr(round_module, "create_road_combat", poisoned_combat)
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        session.add(
+            ConsumableStack(
+                character_id=character.id,
+                consumable_id=PURIFY_CONSUMABLE,
+                quantity=2,
+            )
+        )
+        await session.commit()
+
+    prepared = await service.prepare_round(actor, 5)
+    toggled = await service.toggle_round_consumable(
+        actor, prepared.round_id, prepared.state_version, PURIFY_CONSUMABLE
+    )
+    started = await service.start_round(actor, toggled.round_id, toggled.state_version)
+    async with database[1]() as session:
+        state = await session.scalar(select(HuntRound).where(HuntRound.id == started.round_id))
+        state.next_resolution_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+
+    await service.advance_due_rounds()
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        quantity = await session.scalar(
+            select(ConsumableStack.quantity).where(
+                ConsumableStack.character_id == character.id,
+                ConsumableStack.consumable_id == PURIFY_CONSUMABLE,
+            )
+        )
+        encounter = await session.scalar(
+            select(HuntRoundEncounter).where(HuntRoundEncounter.round_id == started.round_id)
+        )
+        record = await session.scalar(
+            select(CombatRecord).where(CombatRecord.encounter_id == encounter.id)
+        )
+        assert quantity == 1
+        assert record is not None
+        assert "consumable:purify" in [event["action"] for event in record.snapshot["events"]]
 
 
 @pytest.mark.asyncio

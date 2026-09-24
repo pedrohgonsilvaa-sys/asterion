@@ -26,6 +26,7 @@ from asterion.domain.combat import (
     use_purification_consumable,
 )
 from asterion.domain.combat_math import dot_damage
+from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
 from asterion.domain.road import (
     ROUND_FAMILIARITY,
     RULESET,
@@ -60,12 +61,7 @@ SAFETY_THRESHOLD = Decimal("0.35")
 RECOVERY_THRESHOLD = Decimal("0.50")
 CRITICAL_THRESHOLD = Decimal("0.30")
 MIN_EFFECTIVE_HEAL = Decimal("0.10")
-CONSUMABLE_LIMITS = {
-    "common": 1,
-    "uncommon": 1,
-    "elite": 2,
-    "boss": 3,
-}
+CONSUMABLE_LIMITS = ENCOUNTER_CONSUMABLE_LIMITS
 
 
 @dataclass(frozen=True)
