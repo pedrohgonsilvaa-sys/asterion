@@ -3,10 +3,10 @@
 
 **Data de consolidação:** 2026-09-22  
 **Escopo:** vertical slice / primeira jornada / Nv.1–10, com saída para Nv.11  
-**Autoridade estrutural:** `ASTERION_GDD_Estrutural_v1.4.5_Fonte_Mestra.md`  
-**Autoridade Visual/UI:** `ASTERION_UI_DECISOES_2026-09-22_FINAL_SYNC_v1.4.5_TDO_v1.0.3.md`  
+**Autoridade estrutural:** `ASTERION_GDD_Estrutural_v1.4.6_Fonte_Mestra.md`  
+**Autoridade Visual/UI:** `ASTERION_UI_DECISOES_2026-09-24_FINAL_SYNC_v1.4.6_TDO_v1.0.3_VALES_v1.0.2.md`  
 
-> Esta Fonte contém **conteúdo regional**, não redefine sistemas globais. Em conflito estrutural, prevalece a Fonte Mestra v1.4.5. Em conflito de apresentação, prevalece a Fonte Visual/UI vigente.
+> Esta Fonte contém **conteúdo regional**, não redefine sistemas globais. Em conflito estrutural, prevalece a Fonte Mestra vigente. Em conflito de apresentação, prevalece a Fonte Visual/UI vigente.
 
 > **Status FINAL:** conteúdo regional fechado para implementação da vertical slice. Esta revisão **v1.0.3** substitui integralmente `v1.0.2 FINAL` e não reabre balanceamento, economia, XP, pools, chances ou narrativa. Integra apenas semânticas de IA já fechadas e sincronização documental com a Fonte Mestra/Visual vigentes.
 
@@ -14,7 +14,7 @@
 
 **Correções v1.0.2:** consolidação implementável de P1 — Vozes na Estrada; sinais fixos da Etapa 2; Cão Cinéreo fixo no encontro roteirizado; recompensa própria do encontro explicitada como zero; derrota/retry/recovery; textos de transição; ordem dos registros permanentes; descoberta do Braseiro do Refúgio; idempotência e fronteiras técnicas de implementação.
 
-**Correções v1.0.3:** prioridade implementável de IA do Corvo de Fuligem, Peregrino Calcinado e Alfa Cinéreo; Caçada em Grupo passa a herdar a referência global de nível do GDD v1.4.5; Receitas especiais de Masmorra permanecem no roll global salvo revelação direta explícita; autoridade documental e Visual/UI sincronizados. Nenhum valor numérico foi alterado.
+**Correções v1.0.3:** prioridade implementável de IA do Corvo de Fuligem, Peregrino Calcinado e Alfa Cinéreo; Caçada em Grupo passa a herdar a referência global de nível da Fonte Mestra vigente; Receitas especiais de Masmorra permanecem no roll global salvo revelação direta explícita; autoridade documental e Visual/UI sincronizados. Nenhum valor numérico foi alterado.
 
 ---
 
@@ -1678,7 +1678,7 @@ Pesos são relativos. Entradas inelegíveis são removidas antes do sorteio e os
 
 Depois de desbloqueada, a criatura permanece no pool. O nível efetivo do encontro é:
 
-Em Solo: `enemy_level = min(player_level, max_enemy_level)`. Em Grupo, nível, unlock mínimo e congelamento do encontro seguem integralmente a política global da Fonte Mestra v1.4.5.
+Em Solo: `enemy_level = min(player_level, max_enemy_level)`. Em Grupo, nível, unlock mínimo e congelamento do encontro seguem integralmente a política global da Fonte Mestra vigente.
 
 sempre respeitando `player_level ≥ unlock_level`.
 
@@ -3064,7 +3064,7 @@ Terras do Ocaso não exige para saída:
 
 # 26. Sincronização com a Fonte Visual/UI
 
-A Fonte `ASTERION_UI_DECISOES_2026-09-22_FINAL_SYNC_v1.4.5_TDO_v1.0.3.md` é a autoridade player-facing vigente para a vertical slice e está sincronizada com a Fonte Mestra v1.4.5 e esta revisão regional.
+A Fonte `ASTERION_UI_DECISOES_2026-09-24_FINAL_SYNC_v1.4.6_TDO_v1.0.3_VALES_v1.0.2.md` é a autoridade player-facing vigente para a vertical slice e está sincronizada com a Fonte Mestra v1.4.6 e esta revisão regional v1.0.3.
 
 As decisões gerais de interface já consolidadas — padrão de Missões, HUD de combate, Menu Principal, Braseiros, Códice, navegação, P1 e apresentação de Equipamentos/Runas — continuam válidas.
 
@@ -3133,6 +3133,6 @@ Ajustes futuros oriundos de testes reais devem ser tratados como:
 
 e não como reabertura informal deste arquivo.
 
-As regras estruturais e semânticas globais necessárias estão incorporadas na Fonte Mestra v1.4.5. A camada de apresentação geral e a apresentação específica de P1 estão cobertas pela Fonte Visual/UI vigente.
+As regras estruturais e semânticas globais necessárias estão incorporadas na Fonte Mestra vigente. A camada de apresentação geral e a apresentação específica de P1 estão cobertas pela Fonte Visual/UI vigente.
 
-Esta Fonte regional pode ser usada como autoridade de conteúdo e regras específicas das Terras do Ocaso em conjunto com a Fonte Mestra v1.4.5 e a sincronização Visual/UI vigente.
+Esta Fonte regional pode ser usada como autoridade de conteúdo e regras específicas das Terras do Ocaso em conjunto com a Fonte Mestra vigente e a sincronização Visual/UI vigente.
