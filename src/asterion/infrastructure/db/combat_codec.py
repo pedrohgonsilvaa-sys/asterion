@@ -46,6 +46,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 value
                 | {
                     "hp": Decimal(value["hp"]),
+                    "barrier": Decimal(value.get("barrier", "0")),
                     "stats": Stats(
                         **{stat: Decimal(number) for stat, number in value["stats"].items()}
                     ),
@@ -77,7 +78,18 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 "order": tuple(payload["order"]),
                 "tutorial": tutorial,
                 "events": [
-                    CombatEvent(**(event | {"healed": Decimal(event["healed"])}))
+                    CombatEvent(
+                        **(
+                            event
+                            | {
+                                "healed": Decimal(event["healed"]),
+                                "barrier_absorbed": Decimal(
+                                    event.get("barrier_absorbed", "0")
+                                ),
+                                "barrier_value": Decimal(event.get("barrier_value", "0")),
+                            }
+                        )
+                    )
                     for event in payload["events"]
                 ],
                 "dot_states": {

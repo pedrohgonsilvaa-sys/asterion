@@ -68,7 +68,9 @@ class ConsumableDefinition:
     recipe: ConsumableRecipe
 
 
-COMBAT_CD_GROUP = "combat_consumables_cd2"
+# Existing combat snapshots persist this cooldown key; catalog metadata keeps
+# using the same key so all combat families resolve through one runtime group.
+COMBAT_CD_GROUP = "consumable"
 VIGOR_RESTORE = 20
 VIGOR_USABLE_AT_OR_BELOW = 80
 VIGOR_MAXIMUM = 100

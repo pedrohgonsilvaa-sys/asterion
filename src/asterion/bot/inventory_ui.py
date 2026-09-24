@@ -142,11 +142,21 @@ def render_inventory(view: InventoryView) -> Screen:
                 if index > 1:
                     lines.append("")
                 lines.extend(_entry_lines(index, entry))
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")]
+        rows = []
+        rows.extend(
+            [
+                InlineKeyboardButton(
+                    text=f"Usar · {entry.title}",
+                    callback_data=f"consumable:vigor:{entry.key}",
+                )
             ]
+            for entry in view.entries
+            if entry.kind == "consumable"
+            and entry.quantity > 0
+            and (entry.payload or {}).get("family") == "vigor"
         )
+        rows.append([InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")])
+        keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
         return Screen("\n".join(lines), "inventory", keyboard, parse_mode="HTML")
 
     lines = [

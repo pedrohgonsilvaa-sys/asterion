@@ -5,6 +5,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from asterion.application.consumables import ConsumableService
 from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
 from asterion.application.road import RoadService
@@ -25,6 +26,7 @@ def world_router(
     road: RoadService | None = None,
     inventory: InventoryService | None = None,
     s1: S1Service | None = None,
+    consumables: ConsumableService | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -284,6 +286,25 @@ def world_router(
             return
         category = (query.data or "").rsplit(":", 1)[-1]
         view = await inventory.category(query.from_user.id, category)
+        if view is not None:
+            await present(query.message, render_inventory(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("consumable:vigor:"))
+    async def use_vigor(query: CallbackQuery):
+        if (
+            consumables is None
+            or inventory is None
+            or not isinstance(query.message, Message)
+        ):
+            await query.answer()
+            return
+        item_id = (query.data or "").split(":", maxsplit=2)[-1]
+        value = await consumables.use_vigor_potion(query.from_user.id, item_id)
+        if value is None:
+            await query.answer("Poção de Vigor indisponível.", show_alert=True)
+        else:
+            await query.answer(f"Vigor recuperado · {value}/100.")
+        view = await inventory.category(query.from_user.id, "consumables")
         if view is not None:
             await present(query.message, render_inventory(view), images, edit=True)
 

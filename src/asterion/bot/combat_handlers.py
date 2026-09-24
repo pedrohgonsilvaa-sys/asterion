@@ -6,7 +6,11 @@ from aiogram.types import CallbackQuery, Message
 from asterion.application.prologue import PrologueService
 from asterion.application.road import RoadService
 from asterion.application.world import WorldService
-from asterion.bot.combat_ui import CombatCallback, render_combat
+from asterion.bot.combat_ui import (
+    CombatCallback,
+    CombatConsumableCallback,
+    render_combat,
+)
 from asterion.bot.creation_handlers import present
 from asterion.bot.road_ui import render_road
 from asterion.bot.world_ui import render_world
@@ -66,5 +70,35 @@ def combat_router(
                 images,
                 edit=True,
             )
+
+    @router.callback_query(F.data.startswith("cu:"))
+    async def consumable(query: CallbackQuery):
+        try:
+            data = CombatConsumableCallback.unpack(query.data or "")
+            activity_id = data.activity_id
+            item_id = data.item_id
+            target_id = data.target_id
+            effect_id = data.effect_id
+        except (KeyError, ValueError, TypeError):
+            await query.answer()
+            return
+        view = (
+            await road.action(
+                query.from_user.id,
+                activity_id,
+                data.state_version,
+                consumable_id=item_id,
+                target_id=target_id,
+                effect_id=effect_id,
+            )
+            if road
+            else None
+        )
+        await query.answer()
+        if view is not None and isinstance(query.message, Message):
+            if hasattr(view, "kind"):
+                await present(query.message, render_road(view), images, edit=True)
+                return
+            await present(query.message, render_combat(view), images, edit=True)
 
     return router

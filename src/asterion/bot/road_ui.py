@@ -323,6 +323,7 @@ def render_road(view: RoadView) -> Screen:
                 "road",
                 0,
                 "road",
+                view.consumable_options,
             )
         )
     if view.kind == "hunt_defeat":

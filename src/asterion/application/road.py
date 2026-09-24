@@ -11,7 +11,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.progression import consolidate_level, level_xp
-from asterion.domain.combat import act
+from asterion.domain.combat import (
+    CombatConsumableOption,
+    act,
+    combat_consumable_options,
+    use_combat_consumable,
+)
+from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
 from asterion.domain.road import (
     EXPLORE_UNLOCK,
     HUNT_UNLOCK,
@@ -40,6 +46,7 @@ from asterion.infrastructure.db.models import (
     Character,
     CodexEntry,
     CodexFragment,
+    ConsumableStack,
     EquipmentItem,
     ExplorationAttempt,
     GameActivity,
@@ -111,6 +118,7 @@ class RoadView:
     explore_available: bool = True
     creature: str | None = None
     variant: str | None = None
+    consumable_options: tuple[CombatConsumableOption, ...] = ()
 
 
 class RoadService:
@@ -270,7 +278,15 @@ class RoadService:
                             name=c.name, hp=c.hp, max_hp=c.max_hp)
 
     async def action(
-        self, actor: int, activity_id: UUID, version: int, action: str
+        self,
+        actor: int,
+        activity_id: UUID,
+        version: int,
+        action: str | None = None,
+        *,
+        consumable_id: str | None = None,
+        target_id: str | None = None,
+        effect_id: str | None = None,
     ) -> RoadView | None:
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
@@ -299,7 +315,41 @@ class RoadService:
             combat = decode(
                 record.snapshot, record.id, activity.ruleset_version, activity.state_version
             )
-            updated = act(combat, action)
+            if consumable_id is None:
+                if action is None:
+                    return await self._combat_view(s, c, activity)
+                updated = act(combat, action)
+            else:
+                context = await s.scalar(
+                    select(HuntContext).where(HuntContext.game_activity_id == activity.id)
+                )
+                budget_limit = (
+                    ENCOUNTER_CONSUMABLE_LIMITS.get(context.category, 0)
+                    if context is not None
+                    else 0
+                )
+                stack = await s.scalar(
+                    select(ConsumableStack)
+                    .where(
+                        ConsumableStack.character_id == c.id,
+                        ConsumableStack.consumable_id == consumable_id,
+                        ConsumableStack.quantity > 0,
+                    )
+                    .with_for_update()
+                )
+                if stack is None:
+                    return await self._combat_view(s, c, activity)
+                before = combat.version
+                updated = use_combat_consumable(
+                    combat,
+                    consumable_id,
+                    target_id=target_id,
+                    effect_id=effect_id,
+                    budget_limit=budget_limit,
+                )
+                if updated.version == before:
+                    return await self._combat_view(s, c, activity)
+                stack.quantity -= 1
             if updated.version == combat.version:
                 return await self._combat_view(s, c, activity)
             activity.state_version = updated.version
@@ -1391,6 +1441,25 @@ class RoadService:
         combat = decode(
             record.snapshot, record.id, activity.ruleset_version, activity.state_version
         )
+        context = await s.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == activity.id)
+        )
+        budget_limit = (
+            ENCOUNTER_CONSUMABLE_LIMITS.get(context.category, 0)
+            if context is not None
+            else 0
+        )
+        stock_ids = tuple(
+            await s.scalars(
+                select(ConsumableStack.consumable_id).where(
+                    ConsumableStack.character_id == c.id,
+                    ConsumableStack.quantity > 0,
+                )
+            )
+        )
+        consumable_options = combat_consumable_options(
+            combat, stock_ids, budget_limit=budget_limit
+        )
         return RoadView(
             "combat",
             c.id,
@@ -1404,6 +1473,7 @@ class RoadService:
             name=c.name,
             hp=c.hp,
             max_hp=c.max_hp,
+            consumable_options=consumable_options,
         )
 
     async def _view_for_world(self, s, c, world):
