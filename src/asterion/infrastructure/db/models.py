@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -8,6 +8,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -102,6 +103,7 @@ class Character(Base):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
     tracked_secondary_quest_id: Mapped[str | None] = mapped_column(String(32))
+    vigor_consumable_cycle: Mapped[date | None] = mapped_column(Date)
 
 
 class Brazier(Base):
