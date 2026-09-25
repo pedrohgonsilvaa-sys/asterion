@@ -742,6 +742,14 @@ def _begin_turn(state: Combat) -> None:
         state.response_window_seen = True
 
 
+def _clear_prepared_action(state: Combat) -> None:
+    state.prepared_action = None
+    state.prepared_source = None
+    state.prepared_target = None
+    state.resolving_prepared = False
+    state.response_window_seen = False
+
+
 def _end_turn(state: Combat) -> None:
     actor = state.fighters[state.order[state.turn_index]]
     for dot in state.dot_states.get(actor.id, []):
@@ -768,6 +776,8 @@ def _end_turn(state: Combat) -> None:
     ]
     if actor.hp == 0 and not state.result:
         state.result = "defeat" if actor.id == "player" else "victory"
+    if state.result:
+        _clear_prepared_action(state)
     for effect in actor.effects:
         if actor.opportunity > effect.applied_opportunity:
             effect.remaining -= 1
@@ -811,6 +821,7 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
                 _deal_damage(actor, recoil)
         if actor.hp == 0:
             state.result = "defeat" if actor_id == "player" else "victory"
+            _clear_prepared_action(state)
             return
     actions = state.player_actions if actor_id == "player" else state.enemy_actions
     action = actions[action_id]
@@ -893,7 +904,7 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
             if had_ward and not applied and target.ward_charges == 0:
                 ward_blocked.append(chosen)
     actor.last_action = action_id
-    if action.blocked_opportunities:
+    if action.blocked_opportunities and not state.resolving_prepared:
         actor.cooldowns[action_id] = actor.opportunity + action.blocked_opportunities + 1
     state.events.append(
         CombatEvent(
@@ -922,6 +933,7 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
         )
     if target.hp == 0:
         state.result = "victory" if actor_id == "player" else "defeat"
+        _clear_prepared_action(state)
     state.resolving_prepared = False
 
 

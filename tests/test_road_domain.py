@@ -1,7 +1,7 @@
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from asterion.domain.combat import act, allowed_actions
+from asterion.domain.combat import DotState, act, allowed_actions
 from asterion.domain.road import (
     CATEGORY,
     CREATURES,
@@ -111,21 +111,113 @@ def test_road_combat_has_normal_actions_and_no_tutorial():
     assert {"attack", "defend", "art"}.issubset(set(allowed_actions(state)))
 
 
-def test_prepared_alpha_resolves_once_after_response_window():
+def prepared_alpha():
     from asterion.domain.road import create_road_combat
 
     state = create_road_combat(
         UUID(int=7), "Heroa", "sentinela", "remanescente", Decimal(702), CREATURES[3], 3, None
     )
-    # Advance until the deterministic AI prepares its leap, then provide the response.
-    for _ in range(8):
-        actions = allowed_actions(state)
-        if not actions:
-            break
-        state = act(state, "defend" if "defend" in actions else actions[0])
-        if state.prepared_action:
-            break
-    assert state.prepared_action in {None, "leap"}
+    state.fighters["enemy"].cooldowns["rend"] = 99
+    state.fighters["enemy"].hp = Decimal("10000")
+    state = act(state, "attack")
+    assert state.prepared_action == "leap"
+    return state
+
+
+def assert_prepared_action_cleared(state):
+    assert state.prepared_action is None
+    assert state.prepared_source is None
+    assert state.prepared_target is None
+    assert not state.resolving_prepared
+    assert not state.response_window_seen
+
+
+def test_prepared_action_commits_cooldown_once_and_expires_by_enemy_opportunity():
+    state = prepared_alpha()
+    enemy = state.fighters["enemy"]
+    preparation_opportunity = enemy.opportunity
+    committed_cooldown = enemy.cooldowns["leap"]
+
+    assert committed_cooldown == preparation_opportunity + 4
+
+    state = act(state, "defend")
+    enemy = state.fighters["enemy"]
+    assert enemy.opportunity == preparation_opportunity + 1
+    assert enemy.cooldowns["leap"] == committed_cooldown
+    assert [event.action for event in state.events].count("leap") == 1
+
+    for opportunity in range(enemy.opportunity + 1, committed_cooldown):
+        state = act(state, "attack")
+        assert state.fighters["enemy"].opportunity == opportunity
+        assert state.events[-1].action == "bite"
+
+    state = act(state, "attack")
+    assert state.fighters["enemy"].opportunity == committed_cooldown
+    assert state.prepared_action == "leap"
+    assert [event.action for event in state.events].count("prepare:leap") == 2
+
+
+def test_prepared_action_snapshot_reconnect_preserves_committed_cooldown():
+    from asterion.infrastructure.db.combat_codec import decode, encode
+
+    state = prepared_alpha()
+    committed_cooldown = state.fighters["enemy"].cooldowns["leap"]
+    restored = decode(encode(state), state.id, state.ruleset, state.version)
+
+    assert restored == state
+    resolved = act(restored, "defend")
+    assert resolved.fighters["enemy"].cooldowns["leap"] == committed_cooldown
+    assert [event.action for event in resolved.events].count("leap") == 1
+
+
+def test_prepared_action_clears_telegraph_when_source_is_defeated_before_resolution():
+    state = prepared_alpha()
+    committed_cooldown = state.fighters["enemy"].cooldowns["leap"]
+    state.fighters["enemy"].hp = Decimal(1)
+
+    result = act(state, "attack")
+
+    assert result.result == "victory"
+    assert_prepared_action_cleared(result)
+    assert result.fighters["enemy"].cooldowns["leap"] == committed_cooldown
+    assert [event.action for event in result.events].count("leap") == 0
+
+
+def test_prepared_action_clears_telegraph_when_target_is_defeated_before_resolution():
+    state = prepared_alpha()
+    committed_cooldown = state.fighters["enemy"].cooldowns["leap"]
+    state.fighters["player"].hp = Decimal(1)
+    state.dot_states["player"] = [
+        DotState(
+            "burn",
+            1,
+            1,
+            Decimal("10000"),
+            "enemy",
+            [Decimal("10000")],
+        )
+    ]
+
+    result = act(state, "attack")
+
+    assert result.result == "defeat"
+    assert_prepared_action_cleared(result)
+    assert result.fighters["enemy"].cooldowns["leap"] == committed_cooldown
+    assert [event.action for event in result.events].count("leap") == 0
+
+
+def test_prepared_action_clears_resolving_state_when_resolution_ends_combat():
+    state = prepared_alpha()
+    committed_cooldown = state.fighters["enemy"].cooldowns["leap"]
+    state.fighters["player"].hp = Decimal(1)
+    state.dot_states["player"] = []
+
+    result = act(state, "defend")
+
+    assert result.result == "defeat"
+    assert_prepared_action_cleared(result)
+    assert result.fighters["enemy"].cooldowns["leap"] == committed_cooldown
+    assert [event.action for event in result.events].count("leap") == 1
 
 
 def test_all_class_race_pairs_have_a_legal_victory_path():
