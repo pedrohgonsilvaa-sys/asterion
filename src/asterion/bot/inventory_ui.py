@@ -1,6 +1,7 @@
 """Telegram rendering for Inventory and Pending read models."""
 
 from html import escape
+from uuid import UUID
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -20,9 +21,22 @@ RARITY_ICON = {
     "legendary": "🟠",
     "mythic": "🔴",
 }
+RARITY_LABEL = {
+    "comum": "Comum",
+    "common": "Comum",
+    "raro": "Raro",
+    "rare": "Raro",
+    "épico": "Épico",
+    "epic": "Épico",
+    "lendário": "Lendário",
+    "legendary": "Lendário",
+    "mítico": "Mítico",
+    "mythic": "Mítico",
+}
 
 SLOT_ICON = {
     "main_hand": "🗡️",
+    "2H": "🗡️",
     "off_hand": "⚔️",
     "head": "🪖",
     "torso": "🥋",
@@ -38,6 +52,27 @@ SLOT_ICON = {
     "Pés": "🥾",
     "Acessório": "💍",
     "Artefato": "🧿",
+}
+SLOT_LABEL = {
+    "main_hand": "Arma Principal",
+    "2H": "Arma Principal",
+    "off_hand": "Arma Secundária",
+    "head": "Cabeça",
+    "torso": "Torso",
+    "hands": "Mãos",
+    "feet": "Pés",
+    "accessory": "Acessório",
+    "artifact": "Artefato",
+    "Principal": "Arma Principal",
+    "Arma Principal": "Arma Principal",
+    "Secundária": "Arma Secundária",
+    "Arma Secundária": "Arma Secundária",
+    "Cabeça": "Cabeça",
+    "Torso": "Torso",
+    "Mãos": "Mãos",
+    "Pés": "Pés",
+    "Acessório": "Acessório",
+    "Artefato": "Artefato",
 }
 
 MATERIAL_META = {
@@ -110,7 +145,10 @@ CONSUMABLE_DETAILS = {
 def _rarity(entry: InventoryEntry) -> str:
     if not entry.rarity:
         return ""
-    return f"{RARITY_ICON.get(entry.rarity, '⚪')} {escape(entry.rarity)}"
+    label = RARITY_LABEL.get(entry.rarity.casefold())
+    if label is None:
+        return "⚪ Equipamento"
+    return f"{RARITY_ICON[label]} {label}"
 
 
 def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
@@ -118,11 +156,20 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
         enhancement = int((entry.payload or {}).get("enhancement", 0))
         icon = SLOT_ICON.get(entry.slot or "", "🛡️")
         lines = [f"{index} {icon} {escape(entry.title)} · +{enhancement}"]
-        meta = " · ".join(part for part in (_rarity(entry), escape(entry.slot or "")) if part)
+        meta = " · ".join(
+            part
+            for part in (
+                _rarity(entry),
+                escape(SLOT_LABEL.get(entry.slot or "", entry.slot or "")),
+            )
+            if part
+        )
         if meta:
             lines.append(meta)
         if entry.bound:
             lines.append("🔗 Vinculado")
+        if entry.equipped:
+            lines.append("✅ Equipado")
         return lines
 
     if entry.kind == "consumable":
@@ -174,7 +221,7 @@ def render_inventory(view: InventoryView) -> Screen:
                     InlineKeyboardButton(text="3", callback_data="inventory:category:materials"),
                     InlineKeyboardButton(text="4", callback_data="inventory:category:runes"),
                 ],
-                [InlineKeyboardButton(text="← Voltar", callback_data="menu:back")],
+                [InlineKeyboardButton(text="← Personagem", callback_data="character:root")],
             ]
         )
         return Screen(text, "inventory", keyboard)
@@ -199,6 +246,20 @@ def render_inventory(view: InventoryView) -> Screen:
                 if index > 1:
                     lines.append("")
                 lines.extend(_entry_lines(index, entry))
+        equipment_buttons = []
+        if view.category == "equipment":
+            for index, entry in enumerate(view.entries, start=1):
+                if entry.kind != "equipment":
+                    continue
+                try:
+                    item_id = UUID(entry.key)
+                except (ValueError, TypeError, AttributeError):
+                    continue
+                equipment_buttons.append(
+                    InlineKeyboardButton(
+                        text=str(index), callback_data=f"eq:v:{item_id.hex}"
+                    )
+                )
         consumable_buttons = [
             InlineKeyboardButton(
                 text=str(index),
@@ -208,9 +269,13 @@ def render_inventory(view: InventoryView) -> Screen:
             if entry.kind == "consumable" and entry.payload is not None
         ]
         rows = [
+            equipment_buttons[offset : offset + 5]
+            for offset in range(0, len(equipment_buttons), 5)
+        ]
+        rows.extend(
             consumable_buttons[index : index + 5]
             for index in range(0, len(consumable_buttons), 5)
-        ]
+        )
         rows.append([InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")])
         keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
         return Screen("\n".join(lines), "inventory", keyboard, parse_mode="HTML")

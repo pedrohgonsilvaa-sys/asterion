@@ -40,6 +40,7 @@ def test_inventory_root_uses_official_categories_and_real_callbacks():
     assert "inventory:category:consumables" in callbacks
     assert "inventory:category:materials" in callbacks
     assert "inventory:category:runes" in callbacks
+    assert callbacks[-1] == "character:root"
     assert all(callback != "menu:noop" for callback in callbacks)
 
 
