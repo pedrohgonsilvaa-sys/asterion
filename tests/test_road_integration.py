@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import delete, func, select
 
+from asterion.application.equipment import equipment_instance_payload
 from asterion.application.progression import consolidate_level, level_xp
 from asterion.application.road import REFUGE, ROAD, RoadService
 from asterion.domain.combat import allowed_actions
@@ -413,7 +414,9 @@ async def test_inventory_slots_pending_cap_and_overflow_are_auditable(database):
 async def test_full_inventory_and_pending_hold_concrete_equipment_without_loss(database):
     actor, service = await _seed_road(database, 771109)
     await service.travel(actor, ROAD)
-    payload = materialize_equipment("blocked-equipment", "Raro", 1)
+    _, payload = equipment_instance_payload(
+        materialize_equipment("blocked-equipment", "Raro", 1)
+    )
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         for index in range(60):

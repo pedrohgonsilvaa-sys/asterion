@@ -15,6 +15,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    PrimaryKeyConstraint,
     String,
     Text,
     UniqueConstraint,
@@ -25,6 +26,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from asterion.domain.equipment import EQUIPMENT_SLOT_VALUES
 from asterion.infrastructure.db.base import Base
 
 
@@ -74,6 +76,10 @@ class Character(Base):
             "vigor BETWEEN 0 AND max_vigor AND max_vigor = 100", name="ck_character_vigor"
         ),
         CheckConstraint("crowns >= 0", name="ck_character_crowns"),
+        CheckConstraint(
+            "combat_configuration_version >= 0",
+            name="ck_character_combat_configuration_version",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -104,6 +110,9 @@ class Character(Base):
     )
     tracked_secondary_quest_id: Mapped[str | None] = mapped_column(String(32))
     vigor_consumable_cycle: Mapped[date | None] = mapped_column(Date)
+    combat_configuration_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
 
 class Brazier(Base):
@@ -544,6 +553,26 @@ class EquipmentItem(Base):
     )
     payload: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+
+
+class CharacterEquipmentSlot(Base):
+    __tablename__ = "character_equipment_slots"
+    __table_args__ = (
+        PrimaryKeyConstraint("character_id", "slot", name="pk_character_equipment_slots"),
+        UniqueConstraint("equipment_item_id", name="uq_equipment_slot_item"),
+        CheckConstraint(
+            "slot IN (" + ", ".join(f"'{slot}'" for slot in EQUIPMENT_SLOT_VALUES) + ")",
+            name="ck_character_equipment_slots_slot",
+        ),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    slot: Mapped[str] = mapped_column(String(24), nullable=False)
+    equipment_item_id: Mapped[UUID] = mapped_column(
+        ForeignKey("equipment_items.id", ondelete="RESTRICT"), nullable=False
     )
 
 

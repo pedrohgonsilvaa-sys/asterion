@@ -12,9 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from asterion.application.consumables import daily_consumable_cycle
 from asterion.domain.consumables import VIGOR_USABLE_AT_OR_BELOW, ConsumableFamily
 from asterion.domain.consumables import definition as consumable_definition
+from asterion.domain.equipment import assignment_for_item_slot
 from asterion.infrastructure.db.models import (
     BlockedDelivery,
     Character,
+    CharacterEquipmentSlot,
     ConsumableStack,
     EquipmentItem,
     GameActivity,
@@ -49,6 +51,11 @@ class InventoryEntry:
     grade: int | None = None
     bound: bool = False
     payload: dict | None = None
+    equipped_slot: str | None = None
+
+    @property
+    def equipped(self) -> bool:
+        return self.equipped_slot is not None
 
 
 @dataclass(frozen=True)
@@ -69,6 +76,7 @@ class InventoryView:
     vigor: int | None = None
     max_vigor: int = 100
     vigor_usable: bool = False
+    secondary_blocked_by_two_handed: bool = False
 
 
 def consumable_inventory_entry(item_id: str, quantity: int) -> InventoryEntry:
@@ -129,6 +137,12 @@ class InventoryService:
                 return None
             counts = await self._counts(session, character.id)
             entries = await self._entries(session, character.id, category)
+            secondary_blocked = any(
+                entry.equipped_slot == "Principal"
+                and (assignment := assignment_for_item_slot(entry.slot or "")) is not None
+                and assignment.two_handed
+                for entry in entries
+            )
             return InventoryView(
                 kind="inventory_category",
                 character_id=character.id,
@@ -139,6 +153,7 @@ class InventoryService:
                 rune_slots=counts["runes"],
                 category=category,
                 entries=tuple(entries),
+                secondary_blocked_by_two_handed=secondary_blocked,
             )
 
     async def consumable_detail(self, actor: int, item_id: str) -> InventoryView | None:
@@ -270,6 +285,17 @@ class InventoryService:
                     .order_by(EquipmentItem.item_name, EquipmentItem.id)
                 )
             ).all()
+            equipped_slots = {
+                equipment_item_id: slot
+                for slot, equipment_item_id in (
+                    await session.execute(
+                        select(
+                            CharacterEquipmentSlot.slot,
+                            CharacterEquipmentSlot.equipment_item_id,
+                        ).where(CharacterEquipmentSlot.character_id == character_id)
+                    )
+                ).all()
+            }
             return [
                 InventoryEntry(
                     kind="equipment",
@@ -280,6 +306,7 @@ class InventoryService:
                     item_level=row.item_level,
                     bound=row.bound,
                     payload=dict(row.payload or {}),
+                    equipped_slot=equipped_slots.get(row.id),
                 )
                 for row in rows
             ]

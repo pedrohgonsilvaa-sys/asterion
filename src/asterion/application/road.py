@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.equipment import equipment_instance_payload
 from asterion.application.progression import consolidate_level, level_xp
 from asterion.domain.combat import (
     CombatConsumableOption,
@@ -970,9 +971,11 @@ class RoadService:
                 if rarity in {"Lendário", "Mítico"}:
                     c.elite_legendary_pity = 0
             item = materialize_equipment(context.seed, rarity, context.enemy_level)
+            item_instance_id, item = equipment_instance_payload(item)
             if await self._inventory_slots(s, c.id) < 60:
                 s.add(
                     EquipmentItem(
+                        id=item_instance_id,
                         character_id=c.id,
                         source_key=f"activity:{context.game_activity_id}:equipment",
                         item_name=item["item_name"],
@@ -1827,6 +1830,8 @@ class RoadService:
         return int(equipment + materials + runes)
 
     async def _pending(self, s, character_id, source_key, kind, payload, quantity=1):
+        if kind == "equipment":
+            _, payload = equipment_instance_payload(payload)
         hold = await s.scalar(
             select(BlockedDelivery)
             .where(
@@ -1902,9 +1907,11 @@ class RoadService:
                 if remaining == 0:
                     self._resolve_delivery(hold)
             elif hold.kind == "equipment":
+                item_instance_id, payload = equipment_instance_payload(payload)
                 if await self._inventory_slots(s, c.id) < 60:
                     s.add(
                         EquipmentItem(
+                            id=item_instance_id,
                             character_id=c.id,
                             source_key=hold.source_key,
                             item_name=payload["item_name"],
