@@ -11,7 +11,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.equipment import equipment_instance_payload
-from asterion.application.progression import consolidate_level, level_xp
+from asterion.application.equipment_configuration import (
+    load_equipment_configuration,
+    reconcile_character_hp,
+)
+from asterion.application.progression import consolidate_character_level, level_xp
 from asterion.domain.combat import (
     CombatConsumableOption,
     act,
@@ -23,6 +27,7 @@ from asterion.domain.consumables import (
     ConsumableFamily,
 )
 from asterion.domain.consumables import definition as consumable_definition
+from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.road import (
     EXPLORE_UNLOCK,
     HUNT_UNLOCK,
@@ -243,9 +248,12 @@ class RoadService:
             level = min(c.level, creature.max_level)
             variant = select_variant(seed, creature)
             combat_id = uuid4()
+            equipment_configuration = await load_equipment_configuration(s, c)
+            reconcile_character_hp(c, equipment_configuration)
             combat = create_road_combat(
                 combat_id, c.name, c.character_class, c.race, c.hp, creature, level, variant,
                 player_level=c.level,
+                equipment_configuration=equipment_configuration,
             )
             activity, encounter, record = await CombatRepository(s).create(c, HUNT_CONTENT, combat)
             s.add(
@@ -431,9 +439,9 @@ class RoadService:
                             "receipt_text": "A exploração foi interrompida. Recuperado na Estrada.",
                             "settled": True,
                         }
-                        consolidate_level(c)
+                        await consolidate_character_level(s, c)
                         return await self._attempt_view(s, c, attempt, ROAD)
-                consolidate_level(c)
+                await consolidate_character_level(s, c)
                 return RoadView(
                     "hunt_defeat",
                     c.id,
@@ -786,9 +794,12 @@ class RoadService:
                 creature = creature_for(creature_id)
                 level = min(c.level, creature.max_level)
                 variant = select_variant(seed, creature)
+                equipment_configuration = await load_equipment_configuration(s, c)
+                reconcile_character_hp(c, equipment_configuration)
                 combat = create_road_combat(
                     uuid4(), c.name, c.character_class, c.race, c.hp, creature, level, variant,
                     player_level=c.level,
+                    equipment_configuration=equipment_configuration,
                 )
                 activity, encounter, _ = await CombatRepository(s).create(
                     c, EXPLORE_CONTENT, combat
@@ -867,7 +878,14 @@ class RoadService:
             return RoadView("explore_prepare", c.id, ROAD, vigor=c.vigor, max_vigor=c.max_vigor, name=c.name, hp=c.hp, max_hp=c.max_hp)
 
     async def _settle_hunt(
-        self, s, c, activity, encounter_id, bestiary_evidence_ids=frozenset()
+        self,
+        s,
+        c,
+        activity,
+        encounter_id,
+        bestiary_evidence_ids=frozenset(),
+        *,
+        equipment_configuration: EquipmentConfigurationSnapshot | None = None,
     ):
         context = await s.scalar(
             select(HuntContext).where(HuntContext.game_activity_id == activity.id).with_for_update()
@@ -951,7 +969,7 @@ class RoadService:
                 )
             )
         await self._ensure(s, Unlock, character_id=c.id, unlock_id=ROUND_FAMILIARITY)
-        consolidate_level(c)
+        await consolidate_character_level(s, c, equipment_configuration)
         return xp
 
     async def _materialize_optional_loot(self, s, c, context, components):
@@ -1124,7 +1142,7 @@ class RoadService:
                     "settled": True,
                 }
                 attempt.completed_at = attempt.completed_at or datetime.now(UTC)
-                consolidate_level(c)
+                await consolidate_character_level(s, c)
             return
         if attempt.category == "resource":
             receipt_lines = [base_text]
@@ -1154,7 +1172,7 @@ class RoadService:
                 "settled": True,
             }
             attempt.completed_at = attempt.completed_at or datetime.now(UTC)
-            consolidate_level(c)
+            await consolidate_character_level(s, c)
             return
         receipt_lines = [base_text]
         if attempt.result_id == "explore.tdo.estrada.marco_viajantes":
@@ -1234,7 +1252,7 @@ class RoadService:
             "settled": True,
         }
         attempt.completed_at = attempt.completed_at or datetime.now(UTC)
-        consolidate_level(c)
+        await consolidate_character_level(s, c)
 
     async def _bestiary(
         self,
@@ -1601,9 +1619,9 @@ class RoadService:
                     "receipt_text": "A exploração expirou por inatividade. Recuperado na Estrada.",
                     "settled": True,
                 }
-                consolidate_level(c)
+                await consolidate_character_level(s, c)
                 return await self._attempt_view(s, c, attempt, ROAD)
-        consolidate_level(c)
+        await consolidate_character_level(s, c)
         return RoadView(
             "hunt_defeat",
             c.id,

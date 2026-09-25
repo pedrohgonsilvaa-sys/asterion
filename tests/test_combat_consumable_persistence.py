@@ -301,7 +301,9 @@ async def test_failed_combat_snapshot_write_rolls_back_stock_and_character(datab
         character = await session.scalar(
             select(Character).where(Character.telegram_id == actor)
         )
-        assert character is not None and character.hp == Decimal(500)
+        # Starting this new combat reconciles legacy max HP while preserving
+        # the old current-HP ratio (500/702 of the new racial max HP).
+        assert character is not None and character.hp == Decimal(507)
 
 
 @pytest.mark.asyncio

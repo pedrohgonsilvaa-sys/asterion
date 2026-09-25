@@ -2,7 +2,12 @@
 
 from decimal import ROUND_HALF_UP, Decimal
 
+from asterion.application.equipment_configuration import load_equipment_configuration
 from asterion.domain.combat_math import resolve_combat_stats
+from asterion.domain.equipment_stats import (
+    EquipmentConfigurationSnapshot,
+    EquipmentStatContribution,
+)
 
 
 def level_xp(level: int) -> int:
@@ -11,7 +16,9 @@ def level_xp(level: int) -> int:
     return int(value.quantize(Decimal("1E2"), rounding=ROUND_HALF_UP))
 
 
-def consolidate_level(character) -> int:
+def consolidate_level(
+    character, equipment: EquipmentStatContribution | None = None
+) -> int:
     """Consolidate all earned XP at a valid activity boundary.
 
     XP is stored as progress inside the current level.  Level 60 is a hard
@@ -23,7 +30,7 @@ def consolidate_level(character) -> int:
         character.xp -= level_xp(character.level)
         character.level += 1
         character.max_hp = resolve_combat_stats(
-            character.character_class, character.level, character.race
+            character.character_class, character.level, character.race, equipment
         ).hp
         character.hp = min(character.hp, character.max_hp)
         advanced += 1
@@ -31,3 +38,15 @@ def consolidate_level(character) -> int:
         character.level = 60
         character.xp = 0
     return advanced
+
+
+async def consolidate_character_level(
+    session,
+    character,
+    equipment_configuration: EquipmentConfigurationSnapshot | None = None,
+) -> int:
+    """Progress using the authoritative equipped configuration inside the caller transaction."""
+    configuration = equipment_configuration or await load_equipment_configuration(
+        session, character
+    )
+    return consolidate_level(character, configuration.contribution())

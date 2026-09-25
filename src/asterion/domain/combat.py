@@ -184,6 +184,7 @@ class Combat:
     blocked_application_events: list[str] = field(default_factory=list)
     consumable_uses: int = 0
     evasion_streaks: dict[str, int] = field(default_factory=dict)
+    configuration_snapshot: dict | None = None
 
     @property
     def tutorial_stage(self) -> str:

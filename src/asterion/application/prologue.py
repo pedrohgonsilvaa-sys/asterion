@@ -6,6 +6,10 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.equipment_configuration import (
+    load_equipment_configuration,
+    reconcile_character_hp,
+)
 from asterion.domain.combat import Combat, CombatConsumableOption, act
 from asterion.domain.creation import PROLOGUE
 from asterion.domain.creation import RULESET as CHARACTER_RULESET
@@ -113,12 +117,17 @@ class PrologueService:
                     CHARACTER_RULESET
                 }:
                     raise ValueError("Character has not been migrated to the supported ruleset")
+                equipment_configuration = await load_equipment_configuration(
+                    session, character
+                )
+                reconcile_character_hp(character, equipment_configuration)
                 state = self.profile.create(
                     uuid4(),
                     character.name,
                     character.character_class,
                     character.race,
                     character.hp,
+                    equipment_configuration,
                 )
                 activity, encounter, record = await repo.create(character, CONTENT_ID, state)
                 await self._ensure_tutorial_bestiary(session, character)
