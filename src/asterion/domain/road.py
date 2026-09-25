@@ -15,6 +15,7 @@ from asterion.domain.combat_math import (
     growth,
     resolve_combat_stats,
 )
+from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.prologue import first_art
 
 D = Decimal
@@ -348,9 +349,18 @@ def create_road_combat(
     level: int,
     variant: str | None,
     player_level: int | None = None,
+    equipment_configuration: EquipmentConfigurationSnapshot | None = None,
+    ruleset_version: str | None = None,
 ) -> Combat:
     player_level = level if player_level is None else player_level
-    player_stats = resolve_combat_stats(character_class, player_level, race)
+    runtime_ruleset = ruleset_version or RULESET
+    equipment = equipment_configuration
+    player_stats = resolve_combat_stats(
+        character_class,
+        player_level,
+        race,
+        equipment.contribution() if equipment is not None else None,
+    )
     enemy = road_enemy_stats(creature, level, variant)
     actions = {
         key: Action(key, label, coefficient, cooldown, debuff, duration)
@@ -359,7 +369,7 @@ def create_road_combat(
     return start_combat(
         Combat(
             combat_id,
-            RULESET,
+            runtime_ruleset,
             fighters={
                 "player": Fighter("player", name, player_level, player_stats, hp, race, character_class),
                 "enemy": Fighter("enemy", creature.name, level, enemy, enemy.hp),
@@ -374,5 +384,8 @@ def create_road_combat(
             flavor="A Estrada guarda ameaças entre as cinzas.",
             opening_log=f"🦌 {creature.name} surge entre a fuligem.",
             variant=variant,
+            configuration_snapshot=(
+                equipment.to_data(runtime_ruleset) if equipment is not None else None
+            ),
         )
     )

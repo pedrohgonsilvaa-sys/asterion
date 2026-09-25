@@ -13,6 +13,7 @@ from asterion.domain.combat_math import (
     enemy_stats,
     resolve_combat_stats,
 )
+from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 
 D = Decimal
 RULESET = CURRENT_COMBAT_RULESET
@@ -61,8 +62,16 @@ class PrologueProfile:
         character_class: str,
         race: str,
         hp: Decimal,
+        equipment_configuration: EquipmentConfigurationSnapshot | None = None,
     ) -> Combat:
-        stats = resolve_combat_stats(character_class, 1, race)
+        stats = resolve_combat_stats(
+            character_class,
+            1,
+            race,
+            equipment_configuration.contribution()
+            if equipment_configuration is not None
+            else None,
+        )
         state = Combat(
             combat_id,
             RULESET,
@@ -85,6 +94,11 @@ class PrologueProfile:
                 "faminta avança para impedir sua passagem."
             ),
             opening_log="🐺 Cão Cinéreo bloqueia o caminho.",
+            configuration_snapshot=(
+                equipment_configuration.to_data(RULESET)
+                if equipment_configuration is not None
+                else None
+            ),
         )
         return start_combat(state)
 
@@ -101,9 +115,21 @@ P1_FLAVOR = (
 
 
 def p1_combat_profile(
-    combat_id: UUID, name: str, character_class: str, race: str, hp: Decimal
+    combat_id: UUID,
+    name: str,
+    character_class: str,
+    race: str,
+    hp: Decimal,
+    equipment_configuration: EquipmentConfigurationSnapshot | None = None,
 ) -> Combat:
-    stats = resolve_combat_stats(character_class, 1, race)
+    stats = resolve_combat_stats(
+        character_class,
+        1,
+        race,
+        equipment_configuration.contribution()
+        if equipment_configuration is not None
+        else None,
+    )
     state = Combat(
         combat_id,
         RULESET,
@@ -129,5 +155,10 @@ def p1_combat_profile(
         tutorial=None,
         flavor=P1_FLAVOR,
         opening_log="🐺 Cão Cinéreo bloqueia o caminho.",
+        configuration_snapshot=(
+            equipment_configuration.to_data(RULESET)
+            if equipment_configuration is not None
+            else None
+        ),
     )
     return start_combat(state)

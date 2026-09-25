@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from asterion.application.progression import consolidate_level
+from asterion.application.progression import consolidate_character_level
 from asterion.infrastructure.db.models import (
     Character,
     CodexEntry,
@@ -283,7 +283,7 @@ class S1Service:
             q.progress = progress
             if c.tracked_secondary_quest_id == S1_ID:
                 c.tracked_secondary_quest_id = None
-            consolidate_level(c)
+            await consolidate_character_level(session, c)
             return await self._view(session, c, q, world, "completed")
 
     async def abandon(self, actor: int, version: int) -> S1View | None:

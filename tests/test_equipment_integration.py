@@ -1,4 +1,5 @@
 import asyncio
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
@@ -13,8 +14,11 @@ from asterion.application.equipment import (
     EquipmentService,
 )
 from asterion.application.inventory import InventoryService
+from asterion.application.progression import consolidate_character_level, level_xp
 from asterion.application.road import ROAD
+from asterion.domain.combat_math import resolve_combat_stats
 from asterion.domain.equipment import EquipmentSlot
+from asterion.domain.equipment_stats import EquipmentStatContribution
 from asterion.domain.road import materialize_equipment
 from asterion.infrastructure.db.models import (
     Account,
@@ -31,6 +35,12 @@ from tests.test_road_integration import _seed_road
 
 async def _seed_actor(database, actor: int):
     await _seed_road(database, actor=actor)
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        suffix = "".join(chr(ord("a") + int(digit)) for digit in str(actor))
+        character.name = f"H{suffix}"
     async with database[1]() as session:
         character_id = await session.scalar(
             select(Character.id).where(Character.telegram_id == actor)
@@ -72,8 +82,21 @@ async def _add_item(
     *,
     rarity: str = "Comum",
     item_level: int = 1,
+    payload: dict | None = None,
 ):
     item_id = uuid4()
+    core_attribute = {
+        "Principal": "ATQ",
+        "2H": "ATQ",
+        "Arma Principal": "ATQ",
+        "Secundária": "ATQ",
+        "Cabeça": "HP",
+        "Torso": "HP",
+        "Mãos": "ATQ",
+        "Pés": "HP",
+        "Acessório": "HP",
+        "Artefato": "HP",
+    }[slot]
     async with database[1].begin() as session:
         session.add(
             EquipmentItem(
@@ -85,7 +108,14 @@ async def _add_item(
                 slot=slot,
                 item_level=item_level,
                 bound=False,
-                payload={"slot": slot, "enhancement": 0},
+                payload=payload or {
+                    "slot": slot,
+                    "core": {core_attribute: 10},
+                    "secondaries": [],
+                    "enhancement": 0,
+                    "rune": None,
+                    "enchantment": None,
+                },
             )
         )
     return item_id
@@ -171,6 +201,276 @@ async def test_equip_replace_noops_unequip_and_configuration_version(database):
     assert removed is not None and removed.changed and removed.combat_configuration_version == 3
     version, slots = await _equipment_state(database, actor)
     assert version == 3 and slots == {}
+
+
+@pytest.mark.asyncio
+async def test_equipment_hp_changes_preserve_percentage_and_never_revive(database):
+    actor = 907120
+    character_id = await _seed_actor(database, actor)
+    base_hp = resolve_combat_stats("sentinela", 1, "remanescente").hp
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        character.max_hp = base_hp
+        character.hp = base_hp / Decimal(2)
+    item_id = await _add_item(
+        database,
+        character_id,
+        "equip:hp-preserve",
+        "Torso",
+        payload={
+            "slot": "Torso",
+            "core": {"HP": 100},
+            "secondaries": [],
+            "enhancement": 0,
+            "rune": None,
+            "enchantment": None,
+        },
+    )
+    service = EquipmentService(database[1], "ocaso")
+    result = await service.equip_item(actor, item_id)
+    assert result is not None and result.changed
+    equipped_max = resolve_combat_stats(
+        "sentinela",
+        1,
+        "remanescente",
+        EquipmentStatContribution(hp=Decimal(100)),
+    ).hp
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character.max_hp == equipped_max
+        assert character.hp == Decimal(407)
+    unchanged = await service.equip_item(actor, item_id, expected_configuration_version=1)
+    assert unchanged is not None and unchanged.status == EquipmentMutationStatus.ALREADY_EQUIPPED
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert (character.hp, character.max_hp, character.combat_configuration_version) == (
+            Decimal(407), equipped_max, 1
+        )
+
+    removed = await service.unequip_slot(
+        actor, "Torso", expected_configuration_version=1
+    )
+    assert removed is not None and removed.changed
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character.max_hp == base_hp
+        assert character.hp == Decimal(356)
+
+    dead_actor = 907121
+    dead_character_id = await _seed_actor(database, dead_actor)
+    dead_item = await _add_item(
+        database,
+        dead_character_id,
+        "equip:hp-dead",
+        "Torso",
+        payload={
+            "slot": "Torso",
+            "core": {"HP": 100},
+            "secondaries": [],
+            "enhancement": 0,
+            "rune": None,
+            "enchantment": None,
+        },
+    )
+    async with database[1].begin() as session:
+        dead = await session.scalar(
+            select(Character).where(Character.telegram_id == dead_actor)
+        )
+        dead.max_hp = base_hp
+        dead.hp = 0
+    await EquipmentService(database[1], "ocaso").equip_item(dead_actor, dead_item)
+    async with database[1]() as session:
+        dead = await session.scalar(
+            select(Character).where(Character.telegram_id == dead_actor)
+        )
+        assert dead.hp == 0 and dead.max_hp == equipped_max
+
+    legacy_actor = 907124
+    legacy_character_id = await _seed_actor(database, legacy_actor)
+    legacy_head = await _add_item(
+        database, legacy_character_id, "equip:legacy-hp", "Cabeça"
+    )
+    new_weapon = await _add_item(
+        database, legacy_character_id, "equip:legacy-hp-mutation", "Principal"
+    )
+    async with database[1].begin() as session:
+        legacy = await session.scalar(
+            select(Character).where(Character.telegram_id == legacy_actor)
+        )
+        legacy.max_hp = base_hp
+        legacy.hp = base_hp / Decimal(2)
+        legacy.combat_configuration_version = 1
+        session.add(
+            CharacterEquipmentSlot(
+                character_id=legacy_character_id,
+                slot=EquipmentSlot.CABECA.value,
+                equipment_item_id=legacy_head,
+            )
+        )
+    legacy_result = await EquipmentService(database[1], "ocaso").equip_item(
+        legacy_actor, new_weapon, expected_configuration_version=1
+    )
+    assert legacy_result is not None and legacy_result.changed
+    expected_legacy_stats = resolve_combat_stats(
+        "sentinela", 1, "remanescente", EquipmentStatContribution(hp=Decimal(10))
+    )
+    async with database[1]() as session:
+        legacy = await session.scalar(
+            select(Character).where(Character.telegram_id == legacy_actor)
+        )
+        assert legacy.max_hp == expected_legacy_stats.hp
+        assert legacy.hp == Decimal(361)
+
+
+@pytest.mark.asyncio
+async def test_full_hp_equipping_and_non_hp_mutation_preserve_current_health(
+    database, monkeypatch
+):
+    actor = 907125
+    character_id = await _seed_actor(database, actor)
+    base_stats = resolve_combat_stats("sentinela", 1, "remanescente")
+    item_id = await _add_item(
+        database,
+        character_id,
+        "equip:hp-full",
+        "Torso",
+        payload={
+            "slot": "Torso",
+            "core": {"HP": 100},
+            "secondaries": [],
+            "enhancement": 0,
+            "rune": None,
+            "enchantment": None,
+        },
+    )
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        character.max_hp = base_stats.hp
+        character.hp = base_stats.hp
+    result = await EquipmentService(database[1], "ocaso").equip_item(actor, item_id)
+    expected = resolve_combat_stats(
+        "sentinela", 1, "remanescente", EquipmentStatContribution(hp=Decimal(100))
+    )
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert result is not None and result.changed
+        assert character.hp == Decimal(814)
+        assert character.max_hp == expected.hp
+
+    no_hp_actor = 907126
+    no_hp_character_id = await _seed_actor(database, no_hp_actor)
+    weapon_id = await _add_item(
+        database, no_hp_character_id, "equip:no-hp", "Principal"
+    )
+    torso_id = await _add_item(
+        database,
+        no_hp_character_id,
+        "equip:hp-rollback",
+        "Torso",
+        payload={
+            "slot": "Torso",
+            "core": {"HP": 100},
+            "secondaries": [],
+            "enhancement": 0,
+            "rune": None,
+            "enchantment": None,
+        },
+    )
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == no_hp_actor)
+        )
+        character.max_hp = base_stats.hp
+        character.hp = Decimal(333)
+    service = EquipmentService(database[1], "ocaso")
+    await service.equip_item(no_hp_actor, weapon_id)
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == no_hp_actor)
+        )
+        assert (character.hp, character.max_hp) == (Decimal(333), base_stats.hp)
+        state_before_failure = (
+            character.hp,
+            character.max_hp,
+            character.combat_configuration_version,
+        )
+
+    async def fail_after_hp_reconciliation(*args, **kwargs):
+        raise RuntimeError("injected equipment slot write failure")
+
+    monkeypatch.setattr(
+        EquipmentService,
+        "_write_equipped",
+        staticmethod(fail_after_hp_reconciliation),
+    )
+    with pytest.raises(RuntimeError, match="injected equipment slot write failure"):
+        await service.equip_item(no_hp_actor, torso_id)
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == no_hp_actor)
+        )
+        slots = (
+            await session.scalars(
+                select(CharacterEquipmentSlot).where(
+                    CharacterEquipmentSlot.character_id == character.id
+                )
+            )
+        ).all()
+        assert (
+            character.hp,
+            character.max_hp,
+            character.combat_configuration_version,
+        ) == state_before_failure
+        assert len(slots) == 1 and slots[0].equipment_item_id == weapon_id
+
+
+@pytest.mark.asyncio
+async def test_level_consolidation_uses_current_equipped_contribution(database):
+    actor = 907127
+    character_id = await _seed_actor(database, actor)
+    item_id = await _add_item(
+        database,
+        character_id,
+        "equip:progression-hp",
+        "Cabeça",
+        payload={
+            "slot": "Cabeça",
+            "core": {"HP": 10},
+            "secondaries": [],
+            "enhancement": 0,
+            "rune": None,
+            "enchantment": None,
+        },
+    )
+    await EquipmentService(database[1], "ocaso").equip_item(actor, item_id)
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor).with_for_update()
+        )
+        character.xp = level_xp(1)
+        character.hp = Decimal(500)
+        assert await consolidate_character_level(session, character) == 1
+        assert character.level == 2
+        expected = resolve_combat_stats(
+            character.character_class,
+            character.level,
+            character.race,
+            EquipmentStatContribution(hp=Decimal(10)),
+        )
+        assert character.max_hp == expected.hp
+        assert character.hp == Decimal(500)
 
 
 @pytest.mark.asyncio
@@ -336,6 +636,81 @@ async def test_active_foreground_activity_blocks_equipment_mutation(database):
         await EquipmentService(database[1], "ocaso").equip_item(actor, item_id)
     assert raised.value.blocker.kind == "foreground_activity"
     assert (await _equipment_state(database, actor)) == (0, {})
+
+
+@pytest.mark.asyncio
+async def test_road_freezes_equipment_reconciles_legacy_hp_and_reconnects_from_snapshot(database):
+    actor = 907122
+    _, road = await _seed_road(database, actor=actor)
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        character_id = character.id
+        character_class = character.character_class
+        race = character.race
+        level = character.level
+        base_stats = resolve_combat_stats(
+            character.character_class, character.level, character.race
+        )
+        character.max_hp = base_stats.hp
+        character.hp = base_stats.hp / Decimal(2)
+        item = EquipmentItem(
+            character_id=character_id,
+            source_key="equip:legacy-hp-before-stats",
+            item_name="Legacy HP item",
+            rarity="Comum",
+            slot="Torso",
+            item_level=1,
+            bound=False,
+            payload={
+                "slot": "Torso",
+                "core": {"HP": 10},
+                "secondaries": [],
+                "enhancement": 0,
+                "rune": None,
+                "enchantment": None,
+            },
+        )
+        session.add(item)
+        await session.flush()
+        character.combat_configuration_version = 1
+        session.add(
+            CharacterEquipmentSlot(
+                character_id=character_id,
+                slot=EquipmentSlot.TORSO.value,
+                equipment_item_id=item.id,
+            )
+        )
+        item_id = item.id
+
+    await road.travel(actor, ROAD)
+    combat_view = await road.start_hunt(actor)
+    assert combat_view is not None and combat_view.kind == "combat"
+    combat = combat_view.combat
+    assert combat.configuration_snapshot["combat_configuration_version"] == 1
+    assert combat.configuration_snapshot["equipment"][0]["item_instance_id"] == str(item_id)
+    expected_stats = resolve_combat_stats(
+        character_class,
+        level,
+        race,
+        EquipmentStatContribution(hp=Decimal(10)),
+    )
+    assert combat.fighters["player"].stats == expected_stats
+
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character.max_hp == expected_stats.hp
+        assert character.hp == Decimal(361)
+        item = await session.scalar(select(EquipmentItem).where(EquipmentItem.id == item_id))
+        item.payload = item.payload | {"core": {"HP": 999}}
+
+    resumed = await road.resume(actor)
+    assert resumed is not None and resumed.kind == "combat"
+    assert resumed.combat.configuration_snapshot == combat.configuration_snapshot
+    assert resumed.combat.fighters["player"].stats == combat.fighters["player"].stats
 
 
 @pytest.mark.asyncio
@@ -548,6 +923,10 @@ async def test_postgres_equipment_lock_first_serializes_road_activity_start(
         activity = await asyncio.wait_for(activity_task, timeout=5)
         assert result is not None and result.changed
         assert activity is not None and activity.kind == "combat"
+        snapshot = activity.combat.configuration_snapshot
+        assert snapshot["combat_configuration_version"] == 1
+        assert snapshot["equipment"][0]["item_instance_id"] == str(item_id)
+        assert activity.combat.fighters["player"].stats.hp == activity.max_hp
         version, slots = await _equipment_state(database, actor)
         assert version == 1 and slots == {EquipmentSlot.TORSO.value: item_id}
         with pytest.raises(CombatConfigurationLocked):

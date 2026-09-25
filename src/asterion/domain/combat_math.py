@@ -5,6 +5,8 @@ from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal, localcontext
 from hashlib import sha256
 from uuid import UUID
 
+from asterion.domain.equipment_stats import EquipmentStatContribution
+
 D = Decimal
 ZERO = D(0)
 PRECISION = 50
@@ -108,9 +110,26 @@ def racial_stats(stats: CombatStats, race: str) -> CombatStats:
         return stats
 
 
-def resolve_combat_stats(character_class: str, level: int, race: str) -> CombatStats:
-    """Resolve existing static class/level stats and final static race modifiers."""
-    return racial_stats(class_stats(character_class, level), race)
+def resolve_combat_stats(
+    character_class: str,
+    level: int,
+    race: str,
+    equipment: EquipmentStatContribution | None = None,
+) -> CombatStats:
+    """Resolve class, materialized equipment bonuses, then final static race modifiers."""
+    base = class_stats(character_class, level)
+    equipment = equipment or EquipmentStatContribution()
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        composed = CombatStats(
+            *(
+                left + right
+                for left, right in zip(
+                    base.combat_values(), equipment.values(), strict=True
+                )
+            )
+        )
+    return racial_stats(composed, race)
 
 
 def neutral_stats(level: int) -> CombatStats:

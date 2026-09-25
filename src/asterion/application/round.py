@@ -10,6 +10,10 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.equipment_configuration import (
+    load_equipment_configuration,
+    reconcile_character_hp,
+)
 from asterion.application.road import (
     HUNT_CONTENT,
     MATERIAL_LABELS,
@@ -28,6 +32,10 @@ from asterion.domain.combat import (
 )
 from asterion.domain.combat_math import dot_damage
 from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
+from asterion.domain.equipment_stats import (
+    EquipmentConfigurationSnapshot,
+    equipment_configuration_from_data,
+)
 from asterion.domain.road import (
     ROUND_FAMILIARITY,
     RULESET,
@@ -63,6 +71,15 @@ RECOVERY_THRESHOLD = Decimal("0.50")
 CRITICAL_THRESHOLD = Decimal("0.30")
 MIN_EFFECTIVE_HEAL = Decimal("0.10")
 CONSUMABLE_LIMITS = ENCOUNTER_CONSUMABLE_LIMITS
+
+
+def _encounter_ruleset(snapshot: dict) -> str:
+    configuration = snapshot.get("configuration_snapshot")
+    if isinstance(configuration, dict):
+        ruleset = configuration.get("ruleset_version")
+        if isinstance(ruleset, str) and ruleset:
+            return ruleset
+    return RULESET
 
 
 @dataclass(frozen=True)
@@ -305,6 +322,8 @@ class RoundService(RoadService):
             )
             if active is not None:
                 return await self._road_blocking_view(s, c)
+            equipment_configuration = await load_equipment_configuration(s, c)
+            reconcile_character_hp(c, equipment_configuration)
             now = datetime.now(UTC)
             activity = GameActivity(
                 id=uuid4(),
@@ -325,6 +344,7 @@ class RoundService(RoadService):
                 "race": c.race,
                 "level_at_start": c.level,
                 "ruleset_version": RULESET,
+                "combat_configuration": equipment_configuration.to_data(RULESET),
                 "prepared_consumables": {
                     HEAL_CONSUMABLE: bool(state.prepared_heal),
                     PURIFY_CONSUMABLE: bool(state.prepared_purify),
@@ -414,7 +434,7 @@ class RoundService(RoadService):
                 content_id=HUNT_CONTENT,
                 status="active",
                 state_version=encounter.state_version,
-                ruleset_version=RULESET,
+                ruleset_version=_encounter_ruleset(encounter.combat_snapshot),
                 last_valid_action_at=now,
             )
             s.add(activity)
@@ -580,16 +600,32 @@ class RoundService(RoadService):
         variant = select_variant(seed, creature)
         combat_id = uuid4()
         encounter_id = uuid4()
+        round_configuration = state.config_snapshot or {}
+        raw_combat_configuration = round_configuration.get("combat_configuration")
+        if isinstance(raw_combat_configuration, dict):
+            equipment_configuration = equipment_configuration_from_data(
+                raw_combat_configuration
+            )
+            encounter_ruleset = str(
+                raw_combat_configuration.get("ruleset_version", RULESET)
+            )
+        else:
+            # Legacy Ronda snapshots did not contain item state. Never add current
+            # equipment retroactively to an already-started batch.
+            equipment_configuration = None
+            encounter_ruleset = str(round_configuration.get("ruleset_version", RULESET))
         combat = create_road_combat(
             combat_id,
             c.name,
-            c.character_class,
-            c.race,
+            str(round_configuration.get("character_class", c.character_class)),
+            str(round_configuration.get("race", c.race)),
             c.hp,
             creature,
             enemy_level,
             variant,
             player_level=c.level,
+            equipment_configuration=equipment_configuration,
+            ruleset_version=encounter_ruleset,
         )
         encounter = HuntRoundEncounter(
             id=encounter_id,
@@ -640,7 +676,7 @@ class RoundService(RoadService):
         combat = decode(
             encounter.combat_snapshot,
             encounter.combat_id,
-            RULESET,
+            _encounter_ruleset(encounter.combat_snapshot),
             encounter.state_version,
         )
         steps = 0
@@ -715,7 +751,7 @@ class RoundService(RoadService):
             content_id=ROUND_ENCOUNTER_CONTENT,
             status="completed" if combat.result == "victory" else "failed",
             state_version=combat.version,
-            ruleset_version=RULESET,
+            ruleset_version=combat.ruleset,
             last_valid_action_at=datetime.now(UTC),
         )
         s.add(child)
@@ -753,7 +789,20 @@ class RoundService(RoadService):
             return
 
         encounter.status = "completed"
-        await self._settle_hunt(s, c, child, encounter.id, evidence)
+        raw_configuration = (state.config_snapshot or {}).get("combat_configuration")
+        frozen_configuration = (
+            equipment_configuration_from_data(raw_configuration)
+            if isinstance(raw_configuration, dict)
+            else EquipmentConfigurationSnapshot(0)
+        )
+        await self._settle_hunt(
+            s,
+            c,
+            child,
+            encounter.id,
+            evidence,
+            equipment_configuration=frozen_configuration,
+        )
         state.completed_encounters += 1
         state.next_resolution_at = None
         state.state_version += 1
@@ -1154,7 +1203,7 @@ class RoundService(RoadService):
             combat = decode(
                 encounter.combat_snapshot,
                 encounter.combat_id,
-                RULESET,
+                _encounter_ruleset(encounter.combat_snapshot),
                 encounter.state_version,
             )
             flavor = combat.flavor

@@ -6,6 +6,10 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.equipment_configuration import (
+    load_equipment_configuration,
+    reconcile_character_hp,
+)
 from asterion.domain.combat import Combat, act
 from asterion.domain.creation import RULESET as CHARACTER_RULESET
 from asterion.domain.prologue import P1_CONTENT_ID, p1_combat_profile
@@ -74,10 +78,19 @@ class P1Service:
             elif signal == "sulcos" and p.get("pegadas") and not p.get("sulcos"):
                 p["sulcos"] = True
                 q.step = 3
+                equipment_configuration = await load_equipment_configuration(s, c)
+                reconcile_character_hp(c, equipment_configuration)
                 await CombatRepository(s).create(
                     c,
                     P1_CONTENT_ID,
-                    p1_combat_profile(uuid4(), c.name, c.character_class, c.race, c.hp),
+                    p1_combat_profile(
+                        uuid4(),
+                        c.name,
+                        c.character_class,
+                        c.race,
+                        c.hp,
+                        equipment_configuration,
+                    ),
                 )
             else:
                 return await self._view(s, c, q)
@@ -149,10 +162,19 @@ class P1Service:
             c, q = await self._locked(s, actor)
             if not self._valid(c, q, version, 3) or not (q.progress or {}).get("defeat"):
                 return await self._view(s, c, q)
+            equipment_configuration = await load_equipment_configuration(s, c)
+            reconcile_character_hp(c, equipment_configuration)
             await CombatRepository(s).create(
                 c,
                 P1_CONTENT_ID,
-                p1_combat_profile(uuid4(), c.name, c.character_class, c.race, c.hp),
+                p1_combat_profile(
+                    uuid4(),
+                    c.name,
+                    c.character_class,
+                    c.race,
+                    c.hp,
+                    equipment_configuration,
+                ),
             )
             p = dict(q.progress or {})
             p.update(defeat=False, recovery=False)

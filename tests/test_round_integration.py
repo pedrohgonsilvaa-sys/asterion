@@ -1,9 +1,13 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
 
+from asterion.application.combat_configuration_guard import CombatConfigurationLocked
+from asterion.application.equipment import EquipmentService
+from asterion.application.progression import level_xp
 from asterion.application.road import ROAD
 from asterion.application.round import (
     HEAL_CONSUMABLE,
@@ -11,12 +15,14 @@ from asterion.application.round import (
     RoundService,
 )
 from asterion.domain.combat import DotState
-from asterion.domain.combat_math import Stats
+from asterion.domain.combat_math import Stats, resolve_combat_stats
+from asterion.domain.equipment_stats import equipment_configuration_from_data
 from asterion.domain.road import CREATURES, ROUND_FAMILIARITY
 from asterion.infrastructure.db.models import (
     Character,
     CombatRecord,
     ConsumableStack,
+    EquipmentItem,
     GameActivity,
     HuntRound,
     HuntRoundEncounter,
@@ -168,6 +174,138 @@ async def test_round_resolves_due_encounter_once_and_charges_two_vigor(database,
 
 
 @pytest.mark.asyncio
+async def test_round_freezes_equipment_across_encounters_and_keeps_new_level(database, monkeypatch):
+    import asterion.application.round as round_module
+
+    actor, service = await _seed_round(database, 772021)
+    _force_safe_common(monkeypatch, round_module)
+    item_id = uuid4()
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        session.add(
+            EquipmentItem(
+                id=item_id,
+                character_id=character.id,
+                source_key="round:frozen-equipment",
+                item_name="Frozen torso",
+                rarity="Comum",
+                slot="Torso",
+                item_level=1,
+                bound=False,
+                payload={
+                    "slot": "Torso",
+                    "core": {"HP": 10},
+                    "secondaries": [],
+                    "enhancement": 0,
+                    "rune": None,
+                    "enchantment": None,
+                },
+            )
+        )
+    equipped = await EquipmentService(database[1], "ocaso").equip_item(actor, item_id)
+    assert equipped is not None and equipped.combat_configuration_version == 1
+    prepared = await service.prepare_round(actor, 5)
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        character.xp = level_xp(1) - 1
+    started = await service.start_round(actor, prepared.round_id, prepared.state_version)
+    assert started.kind == "round_active"
+
+    async with database[1].begin() as session:
+        state = await session.scalar(select(HuntRound).where(HuntRound.id == started.round_id))
+        first = await session.scalar(
+            select(HuntRoundEncounter).where(
+                HuntRoundEncounter.round_id == state.id,
+                HuntRoundEncounter.ordinal == 1,
+            )
+        )
+        frozen = equipment_configuration_from_data(
+            state.config_snapshot["combat_configuration"]
+        )
+        assert frozen.combat_configuration_version == 1
+        assert [item.item_instance_id for item in frozen.items] == [str(item_id)]
+        assert first.combat_snapshot["configuration_snapshot"] == (
+            state.config_snapshot["combat_configuration"]
+        )
+        state.next_resolution_at = datetime.now(UTC) - timedelta(seconds=1)
+        character = await session.scalar(
+            select(Character).where(Character.id == state.character_id)
+        )
+        character.xp = level_xp(1) - 1
+        item = await session.scalar(select(EquipmentItem).where(EquipmentItem.id == item_id))
+        item.payload = item.payload | {"core": {"HP": 999}}
+
+    async def unexpected_live_configuration_load(*args, **kwargs):
+        raise AssertionError("Ronda must use its frozen equipment configuration")
+
+    monkeypatch.setattr(
+        round_module, "load_equipment_configuration", unexpected_live_configuration_load
+    )
+
+    assert await service.advance_due_rounds() == 1
+    async with database[1]() as session:
+        state = await session.scalar(select(HuntRound).where(HuntRound.id == started.round_id))
+        encounters = (
+            await session.scalars(
+                select(HuntRoundEncounter)
+                .where(HuntRoundEncounter.round_id == state.id)
+                .order_by(HuntRoundEncounter.ordinal)
+            )
+        ).all()
+        assert [encounter.ordinal for encounter in encounters] == [1, 2]
+        second = encounters[1]
+        assert second.combat_snapshot["configuration_snapshot"] == (
+            state.config_snapshot["combat_configuration"]
+        )
+        player = second.combat_snapshot["fighters"]["player"]
+        assert player["level"] == 2
+        expected_stats = resolve_combat_stats(
+            "sentinela", 2, "remanescente", frozen.contribution()
+        )
+        assert Decimal(player["stats"]["hp"]) == expected_stats.hp
+        assert Decimal(player["stats"]["attack"]) == expected_stats.attack
+        character = await session.scalar(
+            select(Character).where(Character.id == state.character_id)
+        )
+        assert character.level == 2
+        assert character.max_hp == expected_stats.hp
+
+    reconnected = await service.resume(actor)
+    assert reconnected.kind == "round_active"
+    assert reconnected.encounter_id == second.id
+
+    async with database[1].begin() as session:
+        character_row = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        blocked = EquipmentItem(
+            character_id=character_row.id,
+            source_key="round:blocked-mutation",
+            item_name="Blocked head",
+            rarity="Comum",
+            slot="Cabeça",
+            item_level=1,
+            bound=False,
+            payload={
+                "slot": "Cabeça",
+                "core": {"HP": 10},
+                "secondaries": [],
+                "enhancement": 0,
+                "rune": None,
+                "enchantment": None,
+            },
+        )
+        session.add(blocked)
+        blocked_id = blocked.id
+    with pytest.raises(CombatConfigurationLocked):
+        await EquipmentService(database[1], "ocaso").equip_item(actor, blocked_id)
+
+
+@pytest.mark.asyncio
 async def test_cancel_during_materialized_encounter_waits_for_boundary(database, monkeypatch):
     import asterion.application.round as round_module
 
@@ -237,6 +375,33 @@ async def test_elite_interrupts_before_auto_combat_and_reuses_encounter_id(datab
     import asterion.application.round as round_module
 
     actor, service = await _seed_round(database, 772005)
+    item_id = uuid4()
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        session.add(
+            EquipmentItem(
+                id=item_id,
+                character_id=character.id,
+                source_key="round:elite-frozen-equipment",
+                item_name="Frozen torso",
+                rarity="Comum",
+                slot="Torso",
+                item_level=1,
+                bound=False,
+                payload={
+                    "slot": "Torso",
+                    "core": {"HP": 10},
+                    "secondaries": [],
+                    "enhancement": 0,
+                    "rune": None,
+                    "enchantment": None,
+                },
+            )
+        )
+    equipped = await EquipmentService(database[1], "ocaso").equip_item(actor, item_id)
+    assert equipped is not None and equipped.combat_configuration_version == 1
     monkeypatch.setattr(round_module, "select_creature", lambda seed, level: CREATURES[3])
     prepared = await service.prepare_round(actor, 5)
     interrupted = await service.start_round(actor, prepared.round_id, prepared.state_version)
@@ -245,6 +410,26 @@ async def test_elite_interrupts_before_auto_combat_and_reuses_encounter_id(datab
     assert interrupted.completed_encounters == 0
     assert interrupted.creature == "Alfa Cinéreo"
     persisted_encounter_id = interrupted.encounter_id
+
+    async with database[1].begin() as session:
+        state = await session.scalar(
+            select(HuntRound).where(HuntRound.id == interrupted.round_id)
+        )
+        encounter = await session.scalar(
+            select(HuntRoundEncounter).where(HuntRoundEncounter.id == persisted_encounter_id)
+        )
+        frozen_data = state.config_snapshot["combat_configuration"]
+        assert frozen_data["equipment"][0]["item_instance_id"] == str(item_id)
+        assert encounter.combat_snapshot["configuration_snapshot"] == frozen_data
+        item = await session.scalar(select(EquipmentItem).where(EquipmentItem.id == item_id))
+        item.payload = item.payload | {"core": {"HP": 999}}
+
+    async def unexpected_live_configuration_load(*args, **kwargs):
+        raise AssertionError("Elite resume must use its materialized combat snapshot")
+
+    monkeypatch.setattr(
+        round_module, "load_equipment_configuration", unexpected_live_configuration_load
+    )
 
     reopened = await service.resume(actor)
     assert reopened.kind == "round_interrupted"
@@ -255,6 +440,27 @@ async def test_elite_interrupts_before_auto_combat_and_reuses_encounter_id(datab
     )
     assert combat.kind == "combat"
     assert combat.encounter_id == persisted_encounter_id
+    frozen_configuration = equipment_configuration_from_data(frozen_data)
+    expected_stats = resolve_combat_stats(
+        "sentinela", 1, "remanescente", frozen_configuration.contribution()
+    )
+    player = combat.combat.fighters["player"]
+    assert player.stats == expected_stats
+    assert combat.combat.configuration_snapshot == frozen_data
+    assert player.stats.hp < resolve_combat_stats(
+        "sentinela",
+        1,
+        "remanescente",
+        equipment_configuration_from_data(
+            frozen_data
+            | {
+                "equipment": [
+                    frozen_data["equipment"][0]
+                    | {"core": {"HP": "999"}}
+                ]
+            }
+        ).contribution(),
+    ).hp
 
     stale = await service.engage_round_elite(
         actor, interrupted.round_id, interrupted.state_version

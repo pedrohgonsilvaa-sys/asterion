@@ -12,6 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from asterion.application.combat_configuration_guard import (
     lock_for_combat_configuration_mutation,
 )
+from asterion.application.equipment_configuration import (
+    build_equipment_configuration,
+    hp_after_equipment_change,
+    reconcile_character_hp,
+    resolve_character_combat_stats,
+)
 from asterion.domain.equipment import (
     EquipmentSlot,
     assign_equipment_instance_id,
@@ -162,8 +168,28 @@ class EquipmentService:
                     character.combat_configuration_version,
                 )
 
+            try:
+                current_configuration = build_equipment_configuration(
+                    character,
+                    [(slot, equipped_items[item_id]) for slot, item_id in current.items()],
+                    version=character.combat_configuration_version,
+                )
+                reconcile_character_hp(character, current_configuration)
+                configuration = build_equipment_configuration(
+                    character,
+                    [(slot, final_items[item_id]) for slot, item_id in final.items()],
+                    version=character.combat_configuration_version + 1,
+                )
+                new_stats = resolve_character_combat_stats(character, configuration)
+                new_hp = hp_after_equipment_change(character, new_stats.hp)
+            except ValueError as exc:
+                raise EquipmentMutationRejected(
+                    EquipmentMutationCode.INVALID_CURRENT_CONFIGURATION
+                ) from exc
             await self._write_equipped(session, character.id, rows, current, final)
             character.combat_configuration_version += 1
+            character.max_hp = new_stats.hp
+            character.hp = new_hp
             await session.flush()
             return EquipmentMutationResult(
                 EquipmentMutationStatus.CHANGED,
@@ -212,8 +238,28 @@ class EquipmentService:
 
             final = dict(current)
             del final[target]
+            try:
+                current_configuration = build_equipment_configuration(
+                    character,
+                    [(slot, equipped_items[item_id]) for slot, item_id in current.items()],
+                    version=character.combat_configuration_version,
+                )
+                reconcile_character_hp(character, current_configuration)
+                configuration = build_equipment_configuration(
+                    character,
+                    [(slot, equipped_items[item_id]) for slot, item_id in final.items()],
+                    version=character.combat_configuration_version + 1,
+                )
+                new_stats = resolve_character_combat_stats(character, configuration)
+                new_hp = hp_after_equipment_change(character, new_stats.hp)
+            except ValueError as exc:
+                raise EquipmentMutationRejected(
+                    EquipmentMutationCode.INVALID_CURRENT_CONFIGURATION
+                ) from exc
             await self._write_equipped(session, character.id, rows, current, final)
             character.combat_configuration_version += 1
+            character.max_hp = new_stats.hp
+            character.hp = new_hp
             await session.flush()
             return EquipmentMutationResult(
                 EquipmentMutationStatus.CHANGED,
