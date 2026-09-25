@@ -73,7 +73,7 @@ def render_world(view: WorldView) -> Screen:
     )
     labels = [
         ("Aventura", "world:adventure"),
-        ("Personagem", "menu:noop"),
+        ("Personagem", "character:root"),
         ("Guilda", "menu:noop"),
         ("Mercado", "menu:noop"),
         ("Códice", "menu:noop"),
