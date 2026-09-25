@@ -367,7 +367,17 @@ class RoundService(RoadService):
         self, actor: int, round_id: UUID, version: int
     ) -> RoadView | RoundView | None:
         async with self.sessions.begin() as s:
-            c = await self._character(s, actor)
+            # Serialize the transition from the interrupted Ronda blocker to its
+            # Elite foreground combat with configuration mutations and other
+            # activity starts. Keep Character first, like start_round/_locked_world.
+            c = await s.scalar(
+                select(Character)
+                .where(
+                    Character.telegram_id == actor,
+                    Character.server_id == self.server_id,
+                )
+                .with_for_update()
+            )
             if c is None:
                 return None
             state = await s.scalar(
