@@ -8,14 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.domain.combat import Combat, CombatConsumableOption, act
 from asterion.domain.creation import PROLOGUE
+from asterion.domain.creation import RULESET as CHARACTER_RULESET
 from asterion.domain.prologue import (
     COMBAT_STAGE,
     CONTENT_ID,
     FAILED_STAGE,
-    LEGACY_RULESET,
     POST_COMBAT_STAGE,
     REWARD_XP,
-    RULESET,
+    SUPPORTED_COMBAT_RULESETS,
     PrologueProfile,
 )
 from asterion.infrastructure.db.combat_codec import decode, encode
@@ -109,7 +109,9 @@ class PrologueService:
             if activity is None:
                 if not enter or character.stage != PROLOGUE or character.level != 1:
                     return None
-                if character.ruleset_version not in {RULESET, LEGACY_RULESET}:
+                if character.ruleset_version not in SUPPORTED_COMBAT_RULESETS | {
+                    CHARACTER_RULESET
+                }:
                     raise ValueError("Character has not been migrated to the supported ruleset")
                 state = self.profile.create(
                     uuid4(),
@@ -133,7 +135,7 @@ class PrologueService:
                 or activity.status != "active"
             ):
                 return current
-            if activity.ruleset_version not in {RULESET, LEGACY_RULESET}:
+            if activity.ruleset_version not in SUPPORTED_COMBAT_RULESETS:
                 raise ValueError(
                     "Unsupported combat ruleset; existing snapshots cannot be rebalanced"
                 )
@@ -147,7 +149,7 @@ class PrologueService:
                 await repo.grant(character, activity, REWARD_XP)
                 activity.status = "completed"
                 character.stage = POST_COMBAT_STAGE
-                character.ruleset_version = RULESET
+                character.ruleset_version = CHARACTER_RULESET
                 session.add(Brazier(character_id=character.id, brazier_id="tdo.brazier.estrada"))
                 session.add(
                     WorldState(

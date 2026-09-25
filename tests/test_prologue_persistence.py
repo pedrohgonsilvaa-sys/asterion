@@ -97,6 +97,36 @@ async def test_enter_creates_stable_activity_encounter_and_combat(prologue, data
         assert activity.content_id == CONTENT_ID and activity.status == "active"
 
 
+async def test_evasion_streak_is_persisted_and_restored_on_combat_reconnect(
+    prologue, database
+):
+    await character(database)
+    view = await prologue.enter(1)
+    async with database[1].begin() as session:
+        record = await session.scalar(select(CombatRecord))
+        snapshot = dict(record.snapshot)
+        fighters = {key: dict(value) for key, value in snapshot["fighters"].items()}
+        enemy = dict(fighters["enemy"])
+        stats = dict(enemy["stats"])
+        stats["hp"] = "100000"
+        stats["evasion"] = "100"
+        enemy["stats"] = stats
+        enemy["hp"] = "100000"
+        fighters["enemy"] = enemy
+        snapshot["fighters"] = fighters
+        record.snapshot = snapshot
+
+    updated = await prologue.action(1, view.activity_id, view.combat.version, "attack")
+    player_event = next(event for event in updated.combat.events if event.actor == "player")
+    assert player_event.dodged
+    assert updated.combat.evasion_streaks.get("enemy") == 1
+
+    resumed = await prologue.resume(1)
+    assert resumed is not None
+    assert resumed.combat.evasion_streaks.get("enemy") == 1
+    assert resumed.combat.rng_cursor == updated.combat.rng_cursor
+
+
 async def test_new_tutorial_records_dog_knowledge_without_observation_xp(prologue, database):
     await character(database)
     await prologue.enter(1)

@@ -5,20 +5,28 @@ from decimal import Decimal
 from uuid import UUID
 
 from asterion.domain.combat import Action, Combat, Fighter, Tutorial, start_combat
-from asterion.domain.combat_math import Stats, class_stats, enemy_stats, racial_stats
+from asterion.domain.combat_math import (
+    CURRENT_COMBAT_RULESET,
+    SUPPORTED_LEGACY_COMBAT_RULESETS,
+    CombatStats,
+    StatMultipliers,
+    enemy_stats,
+    resolve_combat_stats,
+)
 
 D = Decimal
-RULESET = "gdd-1.4.3-baseline-1.0"
+RULESET = CURRENT_COMBAT_RULESET
 LEGACY_RULESET = "gdd-1.4.2-baseline-1.0"
+SUPPORTED_COMBAT_RULESETS = frozenset({RULESET, *SUPPORTED_LEGACY_COMBAT_RULESETS})
 CONTENT_ID = "prologue_first_combat"
 COMBAT_STAGE = "cinzas_na_estrada:first_combat"
 POST_COMBAT_STAGE = "cinzas_na_estrada:ready_for_first_brazier"
 FAILED_STAGE = "cinzas_na_estrada:first_combat_defeat"
 REWARD_XP = 320
 LEVEL_TWO_XP = 4800
-CATEGORY_COMMON = Stats(D("0.70"), D("0.82"), D("0.90"), D("0.95"))
-PREDATOR = Stats(D("0.90"), D("1.10"), D("0.90"), D("1.20"))
-PROLOGUE_MULTIPLIERS = Stats(D("0.60"), D("0.55"), D("0.75"), D("0.65"))
+CATEGORY_COMMON = StatMultipliers(D("0.70"), D("0.82"), D("0.90"), D("0.95"))
+PREDATOR = StatMultipliers(D("0.90"), D("1.10"), D("0.90"), D("1.20"))
+PROLOGUE_MULTIPLIERS = StatMultipliers(D("0.60"), D("0.55"), D("0.75"), D("0.65"))
 FIRST_ARTS = {
     "sentinela": ("🗡️ Golpe de Guarda", "1.10"),
     "errante": ("🗡️ Corte Veloz", "1.15"),
@@ -43,7 +51,7 @@ def first_art(character_class: str, blocked_opportunities: int) -> Action:
 
 @dataclass(frozen=True)
 class PrologueProfile:
-    enemy: Stats
+    enemy: CombatStats
     art_blocked_opportunities: int
 
     def create(
@@ -54,7 +62,7 @@ class PrologueProfile:
         race: str,
         hp: Decimal,
     ) -> Combat:
-        stats = racial_stats(class_stats(character_class, 1), race)
+        stats = resolve_combat_stats(character_class, 1, race)
         state = Combat(
             combat_id,
             RULESET,
@@ -95,7 +103,7 @@ P1_FLAVOR = (
 def p1_combat_profile(
     combat_id: UUID, name: str, character_class: str, race: str, hp: Decimal
 ) -> Combat:
-    stats = racial_stats(class_stats(character_class, 1), race)
+    stats = resolve_combat_stats(character_class, 1, race)
     state = Combat(
         combat_id,
         RULESET,

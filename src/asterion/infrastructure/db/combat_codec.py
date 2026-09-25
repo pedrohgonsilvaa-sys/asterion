@@ -5,7 +5,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from asterion.domain.combat import Action, Combat, CombatEvent, DotState, Effect, Fighter, Tutorial
-from asterion.domain.combat_math import Stats
+from asterion.domain.combat_math import CombatStats
 
 
 def _json_value(value):
@@ -47,7 +47,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 | {
                     "hp": Decimal(value["hp"]),
                     "barrier": Decimal(value.get("barrier", "0")),
-                    "stats": Stats(
+                    "stats": CombatStats(
                         **{stat: Decimal(number) for stat, number in value["stats"].items()}
                     ),
                     "effects": [

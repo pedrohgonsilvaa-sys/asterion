@@ -9,6 +9,7 @@ D = Decimal
 ZERO = D(0)
 PRECISION = 50
 STAT_NAMES = ("hp", "attack", "defense", "agility")
+COMBAT_STAT_NAMES = STAT_NAMES + ("per", "crit", "evasion", "block")
 CLASS_60 = {
     "sentinela": (2808, 368, 324, 276),
     "errante": (2470, 424, 282, 330),
@@ -20,7 +21,28 @@ CLASS_60 = {
 
 
 @dataclass(frozen=True)
-class Stats:
+class CombatStats:
+    hp: Decimal
+    attack: Decimal
+    defense: Decimal
+    agility: Decimal
+    # Secondary combat attributes are percentage points, not fractions.
+    per: Decimal = ZERO
+    crit: Decimal = D(5)
+    evasion: Decimal = ZERO
+    block: Decimal = ZERO
+
+    def values(self) -> tuple[Decimal, ...]:
+        return self.hp, self.attack, self.defense, self.agility
+
+    def combat_values(self) -> tuple[Decimal, ...]:
+        return self.values() + (self.per, self.crit, self.evasion, self.block)
+
+
+@dataclass(frozen=True)
+class StatMultipliers:
+    """Multiplicative enemy vectors; neutral factors are 1, unlike CombatStats."""
+
     hp: Decimal
     attack: Decimal
     defense: Decimal
@@ -28,6 +50,17 @@ class Stats:
 
     def values(self) -> tuple[Decimal, ...]:
         return self.hp, self.attack, self.defense, self.agility
+
+
+# Kept as a source-compatible domain name for existing callers and snapshots.
+Stats = CombatStats
+
+
+LEGACY_COMBAT_RULESET = "gdd-1.4.3-baseline-1.0"
+CURRENT_COMBAT_RULESET = "gdd-1.4.6-baseline-1.0"
+SUPPORTED_LEGACY_COMBAT_RULESETS = frozenset(
+    {LEGACY_COMBAT_RULESET, "gdd-1.4.2-baseline-1.0"}
+)
 
 
 def growth(level: int) -> Decimal:
@@ -38,10 +71,10 @@ def growth(level: int) -> Decimal:
         return D(4) ** (D(level - 60) / D(59))
 
 
-def class_stats(character_class: str, level: int) -> Stats:
+def class_stats(character_class: str, level: int) -> CombatStats:
     with localcontext() as ctx:
         ctx.prec = PRECISION
-        return Stats(
+        return CombatStats(
             *(
                 D(value * growth(level)).quantize(D(1), rounding=ROUND_HALF_UP)
                 for value in CLASS_60[character_class]
@@ -49,22 +82,42 @@ def class_stats(character_class: str, level: int) -> Stats:
         )
 
 
-def racial_stats(stats: Stats, race: str) -> Stats:
+def racial_stats(stats: CombatStats, race: str) -> CombatStats:
     # No new global racial rounding rule: composition retains fractional values.
     with localcontext() as ctx:
         ctx.prec = PRECISION
         if race == "remanescente":
-            return Stats(*(value * D("1.015") for value in stats.values()))
+            return CombatStats(
+                *(value * D("1.015") for value in stats.values()),
+                stats.per,
+                stats.crit,
+                stats.evasion,
+                stats.block,
+            )
         if race == "alvorano":
-            return Stats(stats.hp, stats.attack, stats.defense, stats.agility * D("1.05"))
+            return CombatStats(
+                stats.hp,
+                stats.attack,
+                stats.defense,
+                stats.agility * D("1.05"),
+                stats.per,
+                stats.crit,
+                stats.evasion,
+                stats.block,
+            )
         return stats
 
 
-def neutral_stats(level: int) -> Stats:
+def resolve_combat_stats(character_class: str, level: int, race: str) -> CombatStats:
+    """Resolve existing static class/level stats and final static race modifiers."""
+    return racial_stats(class_stats(character_class, level), race)
+
+
+def neutral_stats(level: int) -> CombatStats:
     with localcontext() as ctx:
         ctx.prec = PRECISION
         # Exact rational representations of the repeating decimals in the source.
-        return Stats(
+        return CombatStats(
             *(
                 value * growth(level)
                 for value in (
@@ -77,7 +130,7 @@ def neutral_stats(level: int) -> Stats:
         )
 
 
-def enemy_stats(level: int, *multipliers: Stats) -> Stats:
+def enemy_stats(level: int, *multipliers: StatMultipliers) -> CombatStats:
     with localcontext() as ctx:
         ctx.prec = PRECISION
         values = list(neutral_stats(level).values())
@@ -90,7 +143,30 @@ def enemy_stats(level: int, *multipliers: Stats) -> Stats:
                     strict=True,
                 )
             ]
-        return Stats(*(value.quantize(D(1), rounding=ROUND_HALF_UP) for value in values))
+        return CombatStats(*(value.quantize(D(1), rounding=ROUND_HALF_UP) for value in values))
+
+
+def effective_defense(defense: Decimal, per: Decimal = ZERO) -> Decimal:
+    """Apply attacker PER in percentage points before natural DEF mitigation."""
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        penetration = min(D(30), max(ZERO, per))
+        return max(ZERO, defense) * (D(1) - penetration / D(100))
+
+
+def combine_active_mitigation(*reductions: Decimal) -> Decimal:
+    """Combine active reductions multiplicatively, capped separately from DEF."""
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        remaining = D(1)
+        for reduction in reductions:
+            remaining *= D(1) - min(D(1), max(ZERO, reduction))
+        return min(D("0.65"), max(ZERO, D(1) - remaining))
+
+
+def chance_from_percentage_points(value: Decimal) -> Decimal:
+    """Convert a percentage-point chance to a probability in [0, 1]."""
+    return min(D(100), max(ZERO, value)) / D(100)
 
 
 def defense_reduction(defense: Decimal, attacker_level: int) -> Decimal:
@@ -107,6 +183,7 @@ def direct_damage(
     *,
     critical: bool = False,
     mitigation: Decimal = ZERO,
+    penetration: Decimal = ZERO,
     explicitly_zero: bool = False,
 ) -> int:
     if explicitly_zero:
@@ -116,7 +193,13 @@ def direct_damage(
         raw = attack * coefficient
         if critical:
             raw *= D("1.5")
-        value = raw * (D(1) - defense_reduction(defense, attacker_level)) * (D(1) - mitigation)
+        effective = effective_defense(defense, penetration)
+        active_mitigation = min(D("0.65"), max(ZERO, mitigation))
+        value = (
+            raw
+            * (D(1) - defense_reduction(effective, attacker_level))
+            * (D(1) - active_mitigation)
+        )
         return max(1, int(value.to_integral_value(rounding=ROUND_FLOOR)))
 
 
@@ -125,6 +208,8 @@ def dot_damage(
     coefficient: Decimal,
     defense: Decimal,
     attacker_level: int,
+    *,
+    penetration: Decimal = ZERO,
 ) -> int:
     """Official DoT tick: ATQ snapshot(s), no crit, using 50% effective normal DEF."""
     if not snapshots:
@@ -132,7 +217,8 @@ def dot_damage(
     with localcontext() as ctx:
         ctx.prec = PRECISION
         raw = sum((snapshot * coefficient for snapshot in snapshots), ZERO)
-        value = raw * (D(1) - defense_reduction(defense * D("0.50"), attacker_level))
+        effective = effective_defense(defense, penetration)
+        value = raw * (D(1) - defense_reduction(effective * D("0.50"), attacker_level))
         return max(1, int(value.to_integral_value(rounding=ROUND_FLOOR)))
 
 

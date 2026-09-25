@@ -6,9 +6,12 @@ from decimal import ROUND_FLOOR, Decimal, localcontext
 from uuid import UUID
 
 from asterion.domain.combat_math import (
+    CURRENT_COMBAT_RULESET,
     PRECISION,
     CombatRng,
-    Stats,
+    CombatStats,
+    chance_from_percentage_points,
+    combine_active_mitigation,
     direct_damage,
     dot_damage,
     stable_priority,
@@ -17,6 +20,7 @@ from asterion.domain.consumables import ConsumableFamily, UseContext, definition
 
 D = Decimal
 ZERO = D(0)
+PERCENT_POINT_STATS = frozenset({"per", "crit", "evasion", "block"})
 
 
 @dataclass
@@ -78,7 +82,7 @@ class Fighter:
     id: str
     name: str
     level: int
-    stats: Stats
+    stats: CombatStats
     hp: Decimal
     race: str = ""
     character_class: str = ""
@@ -97,6 +101,10 @@ class Fighter:
 
     def stat(self, name: str) -> Decimal:
         value = getattr(self.stats, name)
+        # These attributes use percentage points; the existing Effect magnitude
+        # contract is multiplicative and must not be applied to them implicitly.
+        if name in PERCENT_POINT_STATS:
+            return value
         for effect in self.effects:
             if effect.stat == name:
                 modifier = (
@@ -129,6 +137,8 @@ class CombatEvent:
     barrier_absorbed: Decimal = D(0)
     barrier_value: Decimal = D(0)
     effect_removal_kind: str | None = None
+    dodged: bool = False
+    blocked: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,6 +183,7 @@ class Combat:
     application_sequence: int = 0
     blocked_application_events: list[str] = field(default_factory=list)
     consumable_uses: int = 0
+    evasion_streaks: dict[str, int] = field(default_factory=dict)
 
     @property
     def tutorial_stage(self) -> str:
@@ -768,6 +779,11 @@ def _end_turn(state: Combat) -> None:
             coefficient,
             actor.stat("defense"),
             attacker_level,
+            penetration=(
+                source.stat("per")
+                if source is not None and state.ruleset == CURRENT_COMBAT_RULESET
+                else ZERO
+            ),
         )
         _deal_damage(actor, damage)
         dot.remaining -= 1
@@ -836,12 +852,75 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
             CombatEvent(len(state.events), state.round, actor_id, f"prepare:{action_id}")
         )
         return
+    current_ruleset = state.ruleset == CURRENT_COMBAT_RULESET
+    direct_eligible = action.coefficient > ZERO
+    dodged = False
+    if current_ruleset and direct_eligible:
+        streak = state.evasion_streaks.get(target.id, 0)
+        if streak >= 2:
+            # The anti-sequence guarantee is spent by the next eligible attack.
+            state.evasion_streaks[target.id] = 0
+        else:
+            evasion_chance = chance_from_percentage_points(target.stat("evasion"))
+            if evasion_chance > ZERO:
+                rng = CombatRng(state.id, state.rng_cursor)
+                dodged = rng.chance(
+                    evasion_chance,
+                    f"evasion:{actor_id}:{action_id}:{target.id}",
+                )
+                state.rng_cursor = rng.cursor
+            if dodged:
+                state.evasion_streaks[target.id] = streak + 1
+            else:
+                state.evasion_streaks[target.id] = 0
+
+    if dodged:
+        actor.last_action = action_id
+        if action.blocked_opportunities and not state.resolving_prepared:
+            actor.cooldowns[action_id] = actor.opportunity + action.blocked_opportunities + 1
+        state.events.append(
+            CombatEvent(
+                len(state.events),
+                state.round,
+                actor_id,
+                action_id,
+                target.id,
+                dodged=True,
+            )
+        )
+        state.resolving_prepared = False
+        return
+
     rng = CombatRng(state.id, state.rng_cursor)
-    critical = rng.chance(D("0.05"), f"critical:{actor_id}:{action_id}")
-    state.rng_cursor = rng.cursor
-    mitigation = D(0)
+    critical = False
+    if direct_eligible:
+        crit_chance = (
+            chance_from_percentage_points(actor.stat("crit"))
+            if current_ruleset
+            else D("0.05")
+        )
+        if crit_chance > ZERO:
+            crit_purpose = (
+                f"critical:{actor_id}:{action_id}:{target.id}"
+                if current_ruleset
+                else f"critical:{actor_id}:{action_id}"
+            )
+            critical = rng.chance(crit_chance, crit_purpose)
+    mitigation_parts = []
     if target.defending:
-        mitigation = D("0.52") if target.race == "cinereo" else D("0.45")
+        mitigation_parts.append(D("0.52") if target.race == "cinereo" else D("0.45"))
+    blocked = False
+    if current_ruleset and direct_eligible:
+        block_chance = chance_from_percentage_points(target.stat("block"))
+        if block_chance > ZERO:
+            blocked = rng.chance(
+                block_chance,
+                f"block:{actor_id}:{action_id}:{target.id}",
+            )
+        if blocked:
+            mitigation_parts.append(D("0.35"))
+    state.rng_cursor = rng.cursor
+    mitigation = combine_active_mitigation(*mitigation_parts)
     damage = direct_damage(
         actor.stat("attack"),
         action.coefficient,
@@ -849,6 +928,7 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
         actor.level,
         critical=critical,
         mitigation=mitigation,
+        penetration=actor.stat("per") if current_ruleset else ZERO,
     )
     actual_damage, barrier_absorbed = _deal_damage(target, damage)
     healed = D(0)
@@ -918,6 +998,7 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
             healed,
             action.id if status_applied else "",
             barrier_absorbed=barrier_absorbed,
+            blocked=blocked,
         )
     )
     for effect_id in ward_blocked:

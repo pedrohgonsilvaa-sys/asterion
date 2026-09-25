@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from asterion.domain.combat_math import class_stats, racial_stats
+from asterion.domain.combat_math import resolve_combat_stats
 from asterion.domain.creation import (
     PROLOGUE,
     RULESET,
@@ -184,7 +184,7 @@ class CreationService:
         allowed = await self._name_allowed(session, state.name)
         character_id = None
         if allowed:
-            stats = racial_stats(class_stats(state.character_class, 1), state.race)
+            stats = resolve_combat_stats(state.character_class, 1, state.race)
             # Unique index arbitrates players racing for the same name. DO NOTHING
             # keeps the transaction usable to persist the loser's editable name page.
             character_id = await session.scalar(

@@ -1,4 +1,5 @@
 import asyncio
+from copy import deepcopy
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
@@ -19,6 +20,7 @@ from asterion.infrastructure.db.models import (
     Achievement,
     Brazier,
     Character,
+    CombatRecord,
     GameActivity,
     Quest,
     WorldState,
@@ -184,7 +186,13 @@ async def test_menu_without_p1_is_inconsistent(database):
     assert await WorldService(database[1], "ocaso").resume(1) is None
 
 
-async def test_active_legacy_combat_keeps_v142_snapshot_until_safe_boundary(database):
+@pytest.mark.parametrize(
+    "legacy_ruleset",
+    ("gdd-1.4.2-baseline-1.0", "gdd-1.4.3-baseline-1.0"),
+)
+async def test_active_legacy_combat_keeps_its_ruleset_until_safe_boundary(
+    database, legacy_ruleset
+):
     await character(database)
     service = PrologueService(database[1], "ocaso", PROFILE)
     view = await service.enter(1)
@@ -193,11 +201,24 @@ async def test_active_legacy_combat_keeps_v142_snapshot_until_safe_boundary(data
             select(GameActivity).where(GameActivity.id == view.activity_id)
         )
         row = await session.scalar(select(Character).where(Character.telegram_id == 1))
-        activity.ruleset_version = "gdd-1.4.2-baseline-1.0"
-        row.ruleset_version = "gdd-1.4.2-baseline-1.0"
+        record = await session.scalar(select(CombatRecord))
+        activity.ruleset_version = legacy_ruleset
+        row.ruleset_version = legacy_ruleset
+        legacy_snapshot = deepcopy(record.snapshot)
+        legacy_snapshot.pop("evasion_streaks", None)
+        for fighter in legacy_snapshot["fighters"].values():
+            for stat in ("per", "crit", "evasion", "block"):
+                fighter["stats"].pop(stat, None)
+        for event in legacy_snapshot["events"]:
+            event.pop("dodged", None)
+            event.pop("blocked", None)
+        record.snapshot = legacy_snapshot
     resumed = await service.resume(1)
     assert resumed is not None
-    assert resumed.combat.ruleset == "gdd-1.4.2-baseline-1.0"
+    assert resumed.combat.ruleset == legacy_ruleset
+    async with database[1]() as session:
+        record = await session.scalar(select(CombatRecord))
+        assert record.snapshot == legacy_snapshot
     for action in ("attack", "defend", "art"):
         resumed = await service.action(1, resumed.activity_id, resumed.combat.version, action)
     for _ in range(30):
@@ -209,7 +230,7 @@ async def test_active_legacy_combat_keeps_v142_snapshot_until_safe_boundary(data
             select(GameActivity).where(GameActivity.id == view.activity_id)
         )
         row = await session.scalar(select(Character).where(Character.telegram_id == 1))
-        assert activity.ruleset_version == "gdd-1.4.2-baseline-1.0"
+        assert activity.ruleset_version == legacy_ruleset
         assert row.ruleset_version == "gdd-1.4.3-baseline-1.0"
 
 

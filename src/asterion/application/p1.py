@@ -7,7 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.domain.combat import Combat, act
-from asterion.domain.prologue import P1_CONTENT_ID, RULESET, p1_combat_profile
+from asterion.domain.creation import RULESET as CHARACTER_RULESET
+from asterion.domain.prologue import P1_CONTENT_ID, p1_combat_profile
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
@@ -129,7 +130,7 @@ class P1Service:
                 a.status = "completed"
                 q.step = 4
                 p.update(arrival=True, defeat=False)
-                c.ruleset_version = RULESET
+                c.ruleset_version = CHARACTER_RULESET
             elif updated.result == "defeat":
                 a.status = "failed"
                 q.step = 3
