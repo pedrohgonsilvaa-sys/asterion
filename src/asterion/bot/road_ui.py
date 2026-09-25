@@ -322,7 +322,16 @@ def render_road(view: RoadView) -> Screen:
                 view.combat,
                 "road",
                 0,
-                "road",
+                context="road",
+                consumable_options=view.consumable_options,
+                consumable_screen=view.consumable_screen,
+                selected_consumable_id=view.selected_consumable_id,
+                selected_target_id=view.selected_target_id,
+                selection_parent=view.selection_parent,
+                consumable_notice=view.consumable_notice,
+                consumable_quantities=view.consumable_quantities,
+                consumable_budget_limit=view.consumable_budget_limit,
+                ready_consumable_option=view.ready_consumable_option,
             )
         )
     if view.kind == "hunt_defeat":

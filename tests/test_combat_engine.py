@@ -166,12 +166,16 @@ def test_racial_duration_and_magnitude_are_target_owned_and_reproducible():
 def test_velado_excludes_ineligible_effects_and_one_turn_effects():
     state = battle(race="velado")
     target = state.fighters["player"]
-    for eligible, duration in ((False, 2), (True, 1)):
+    for effect_id, eligible, duration in (
+        ("ineligible", False, 2),
+        ("one-turn", True, 1),
+    ):
         apply_effect(
             state,
             target,
-            Effect("test", "attack", D("0.1"), duration, 0, duration_eligible=eligible),
+            Effect(effect_id, "attack", D("0.1"), duration, 0, duration_eligible=eligible),
         )
+        assert target.effects[-1].id == effect_id
         assert target.effects[-1].remaining == duration
     assert state.rng_cursor == 0
 

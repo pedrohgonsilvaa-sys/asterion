@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import ROUND_FLOOR, Decimal
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -22,10 +22,12 @@ from asterion.domain.combat import (
     act,
     allowed_actions,
     consumable_available,
+    effective_heal_amount,
     use_heal_consumable,
     use_purification_consumable,
 )
 from asterion.domain.combat_math import dot_damage
+from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
 from asterion.domain.road import (
     ROUND_FAMILIARITY,
     RULESET,
@@ -60,12 +62,7 @@ SAFETY_THRESHOLD = Decimal("0.35")
 RECOVERY_THRESHOLD = Decimal("0.50")
 CRITICAL_THRESHOLD = Decimal("0.30")
 MIN_EFFECTIVE_HEAL = Decimal("0.10")
-CONSUMABLE_LIMITS = {
-    "common": 1,
-    "uncommon": 1,
-    "elite": 2,
-    "boss": 3,
-}
+CONSUMABLE_LIMITS = ENCOUNTER_CONSUMABLE_LIMITS
 
 
 @dataclass(frozen=True)
@@ -838,15 +835,7 @@ class RoundService(RoadService):
         return ("action", actions[0])
 
     def _effective_heal(self, combat) -> Decimal:
-        player = combat.fighters["player"]
-        multiplier = Decimal(1)
-        for effect in player.effects:
-            if effect.kind == "debuff" and effect.removable and effect.stat == "healing_received":
-                multiplier *= max(Decimal(0), Decimal(1) - effect.magnitude)
-        nominal = (player.stats.hp * Decimal("0.22") * multiplier).to_integral_value(
-            rounding=ROUND_FLOOR
-        )
-        return min(max(Decimal(0), nominal), player.stats.hp - player.hp)
+        return effective_heal_amount(combat)
 
     def _dot_metrics(self, combat, dot) -> tuple[Decimal, Decimal, Decimal]:
         coefficient = {

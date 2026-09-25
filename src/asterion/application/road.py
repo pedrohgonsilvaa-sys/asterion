@@ -1,7 +1,7 @@
 """Application services for the post-P1 Road hunt and exploration loop."""
 # ruff: noqa: E501
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal
 from hashlib import sha256
@@ -11,7 +11,17 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.progression import consolidate_level, level_xp
-from asterion.domain.combat import act
+from asterion.domain.combat import (
+    CombatConsumableOption,
+    act,
+    combat_consumable_options,
+    use_combat_consumable,
+)
+from asterion.domain.consumables import (
+    ENCOUNTER_CONSUMABLE_LIMITS,
+    ConsumableFamily,
+)
+from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.road import (
     EXPLORE_UNLOCK,
     HUNT_UNLOCK,
@@ -40,6 +50,7 @@ from asterion.infrastructure.db.models import (
     Character,
     CodexEntry,
     CodexFragment,
+    ConsumableStack,
     EquipmentItem,
     ExplorationAttempt,
     GameActivity,
@@ -111,6 +122,15 @@ class RoadView:
     explore_available: bool = True
     creature: str | None = None
     variant: str | None = None
+    consumable_options: tuple[CombatConsumableOption, ...] = ()
+    consumable_screen: str | None = None
+    selected_consumable_id: str | None = None
+    selected_target_id: str | None = None
+    selection_parent: str = "items"
+    consumable_notice: str | None = None
+    consumable_quantities: tuple[tuple[str, int], ...] = ()
+    consumable_budget_limit: int = 0
+    ready_consumable_option: CombatConsumableOption | None = None
 
 
 class RoadService:
@@ -270,7 +290,15 @@ class RoadService:
                             name=c.name, hp=c.hp, max_hp=c.max_hp)
 
     async def action(
-        self, actor: int, activity_id: UUID, version: int, action: str
+        self,
+        actor: int,
+        activity_id: UUID,
+        version: int,
+        action: str | None = None,
+        *,
+        consumable_id: str | None = None,
+        target_id: str | None = None,
+        effect_id: str | None = None,
     ) -> RoadView | None:
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
@@ -294,12 +322,63 @@ class RoadService:
             if self._expired(activity):
                 return await self._expire_activity(s, c, activity)
             if activity.state_version != version:
-                return await self._combat_view(s, c, activity)
+                current = await self._combat_view(s, c, activity)
+                if consumable_id is not None:
+                    return replace(
+                        current,
+                        consumable_notice=self._consumable_rejection_notice(
+                            current.combat, current.consumable_budget_limit
+                        ),
+                    )
+                return current
             encounter, record = await CombatRepository(s).combat(activity)
             combat = decode(
                 record.snapshot, record.id, activity.ruleset_version, activity.state_version
             )
-            updated = act(combat, action)
+            if consumable_id is None:
+                if action is None:
+                    return await self._combat_view(s, c, activity)
+                updated = act(combat, action)
+            else:
+                context = await s.scalar(
+                    select(HuntContext).where(HuntContext.game_activity_id == activity.id)
+                )
+                budget_limit = (
+                    ENCOUNTER_CONSUMABLE_LIMITS.get(context.category, 0)
+                    if context is not None
+                    else 0
+                )
+                stack = await s.scalar(
+                    select(ConsumableStack)
+                    .where(
+                        ConsumableStack.character_id == c.id,
+                        ConsumableStack.consumable_id == consumable_id,
+                        ConsumableStack.quantity > 0,
+                    )
+                    .with_for_update()
+                )
+                if stack is None:
+                    return replace(
+                        await self._combat_view(s, c, activity),
+                        consumable_notice="⚠️ Consumível · Não está mais disponível.",
+                    )
+                before = combat.version
+                updated = use_combat_consumable(
+                    combat,
+                    consumable_id,
+                    target_id=target_id,
+                    effect_id=effect_id,
+                    budget_limit=budget_limit,
+                )
+                if updated.version == before:
+                    current = await self._combat_view(s, c, activity)
+                    notice = self._consumable_rejection_notice(current.combat, budget_limit)
+                    return replace(
+                        current,
+                        consumable_notice=notice
+                        or "⚠️ Consumível · Não está mais disponível.",
+                    )
+                stack.quantity -= 1
             if updated.version == combat.version:
                 return await self._combat_view(s, c, activity)
             activity.state_version = updated.version
@@ -363,6 +442,182 @@ class RoadService:
                     max_vigor=c.max_vigor,
                 )
             return await self._combat_view(s, c, activity)
+
+    async def consumable_selection(
+        self,
+        actor: int,
+        activity_id: UUID,
+        version: int,
+        *,
+        screen: str = "items",
+        item_id: str | None = None,
+        target_id: str | None = None,
+        parent: str = "items",
+    ) -> RoadView | None:
+        """Rebuild a read-only Consumable choice screen from current combat state."""
+        async with self.sessions.begin() as s:
+            c, world = await self._locked_world(s, actor)
+            if c is None or not await self._p1_completed(s, c.id):
+                return None
+            activity = await s.scalar(
+                select(GameActivity)
+                .where(
+                    GameActivity.id == activity_id,
+                    GameActivity.character_id == c.id,
+                    GameActivity.content_id.in_((HUNT_CONTENT, EXPLORE_CONTENT)),
+                )
+                .with_for_update()
+            )
+            if activity is None:
+                return None
+            if activity.status != "active":
+                return await self._result_view_for_activity(s, c, activity, world)
+            if self._expired(activity):
+                return await self._expire_activity(s, c, activity)
+
+            current = await self._combat_view(s, c, activity)
+            if activity.state_version != version:
+                return replace(
+                    current,
+                    consumable_notice=self._consumable_rejection_notice(
+                        current.combat, current.consumable_budget_limit
+                    ),
+                )
+            if screen == "combat":
+                return current
+            if screen == "items":
+                return (
+                    replace(current, consumable_screen="items")
+                    if current.consumable_options
+                    else current
+                )
+
+            item = consumable_definition(item_id or "")
+            item_options = tuple(
+                option
+                for option in current.consumable_options
+                if option.item_id == item_id
+            )
+            if item is None or not item_options:
+                if current.consumable_options:
+                    return replace(
+                        current,
+                        consumable_screen="items",
+                        consumable_notice="⚠️ Consumível · Não está mais disponível.",
+                    )
+                return current
+
+            if screen == "choose_item":
+                if item.family == ConsumableFamily.DISPELLER:
+                    target_ids = tuple(dict.fromkeys(option.target_id for option in item_options))
+                    if len(target_ids) > 1:
+                        return replace(
+                            current,
+                            consumable_screen="targets",
+                            selected_consumable_id=item.id,
+                            selection_parent="items",
+                        )
+                    target_id = target_ids[0] if target_ids else None
+                    parent = "items"
+                else:
+                    target_id = "player"
+                    parent = "items"
+                selected = tuple(
+                    option for option in item_options if option.target_id == target_id
+                )
+                return self._selection_after_target(
+                    current, item, target_id, selected, parent=parent
+                )
+
+            if screen == "choose_target" and item.family == ConsumableFamily.DISPELLER:
+                selected = tuple(
+                    option for option in item_options if option.target_id == target_id
+                )
+                if not selected:
+                    return replace(
+                        current,
+                        consumable_screen="items" if current.consumable_options else None,
+                        consumable_notice="⚠️ Dissipador · Sem Alvo Válido",
+                    )
+                return self._selection_after_target(
+                    current, item, target_id, selected, parent="targets"
+                )
+
+            if screen == "targets" and item.family == ConsumableFamily.DISPELLER:
+                target_ids = tuple(dict.fromkeys(option.target_id for option in item_options))
+                if len(target_ids) > 1:
+                    return replace(
+                        current,
+                        consumable_screen="targets",
+                        selected_consumable_id=item.id,
+                        selection_parent="items",
+                    )
+                return replace(
+                    current,
+                    consumable_screen="items",
+                    consumable_notice=(
+                        "⚠️ Dissipador · Sem Alvo Válido" if not target_ids else None
+                    ),
+                )
+
+            if screen == "effects" and target_id is not None:
+                selected = tuple(
+                    option
+                    for option in item_options
+                    if option.target_id == target_id and option.effect_id is not None
+                )
+                if len(selected) > 1:
+                    return replace(
+                        current,
+                        consumable_screen="effects",
+                        selected_consumable_id=item.id,
+                        selected_target_id=target_id,
+                        selection_parent=parent,
+                    )
+                return replace(
+                    current,
+                    consumable_screen="items",
+                    consumable_notice=(
+                        "⚠️ Dissipador · Sem Efeito Removível"
+                        if item.family == ConsumableFamily.DISPELLER and not selected
+                        else "⚠️ Consumível · Não está mais disponível."
+                        if not selected
+                        else None
+                    ),
+                )
+
+            return replace(
+                current,
+                consumable_screen="items",
+                consumable_notice="⚠️ Consumível · Não está mais disponível.",
+            )
+
+    @staticmethod
+    def _selection_after_target(current, item, target_id, selected, *, parent):
+        if not selected:
+            return replace(
+                current,
+                consumable_screen="items" if current.consumable_options else None,
+                consumable_notice="⚠️ Consumível · Não está mais disponível.",
+            )
+        if len(selected) == 1:
+            return replace(current, ready_consumable_option=selected[0])
+        return replace(
+            current,
+            consumable_screen="effects",
+            selected_consumable_id=item.id,
+            selected_target_id=target_id,
+            selection_parent=parent,
+        )
+
+    @staticmethod
+    def _consumable_rejection_notice(combat, budget_limit):
+        player = combat.fighters["player"]
+        if player.cooldowns.get("consumable", 0) > player.opportunity:
+            return "⏳ Consumíveis · Em Recarga"
+        if budget_limit and combat.consumable_uses >= budget_limit:
+            return "🔒 Consumíveis · Limite Atingido"
+        return None
 
     async def retry_hunt(self, actor: int) -> RoadView | None:
         return await self.prepare_hunt(actor)
@@ -1391,6 +1646,28 @@ class RoadService:
         combat = decode(
             record.snapshot, record.id, activity.ruleset_version, activity.state_version
         )
+        context = await s.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == activity.id)
+        )
+        budget_limit = (
+            ENCOUNTER_CONSUMABLE_LIMITS.get(context.category, 0)
+            if context is not None
+            else 0
+        )
+        stock = (
+            await s.scalars(
+                select(ConsumableStack)
+                .where(
+                    ConsumableStack.character_id == c.id,
+                    ConsumableStack.quantity > 0,
+                )
+                .order_by(ConsumableStack.consumable_id)
+            )
+        ).all()
+        stock_ids = tuple(row.consumable_id for row in stock)
+        consumable_options = combat_consumable_options(
+            combat, stock_ids, budget_limit=budget_limit
+        )
         return RoadView(
             "combat",
             c.id,
@@ -1404,6 +1681,11 @@ class RoadService:
             name=c.name,
             hp=c.hp,
             max_hp=c.max_hp,
+            consumable_options=consumable_options,
+            consumable_quantities=tuple(
+                (row.consumable_id, row.quantity) for row in stock
+            ),
+            consumable_budget_limit=budget_limit,
         )
 
     async def _view_for_world(self, s, c, world):

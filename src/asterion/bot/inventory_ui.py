@@ -6,6 +6,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.inventory import InventoryEntry, InventoryView
 from asterion.bot.creation_ui import Screen
+from asterion.domain.consumables import grade_label
 
 RARITY_ICON = {
     "Comum": "⚪",
@@ -48,6 +49,63 @@ MATERIAL_META = {
     "material.tdo.fragmento_aprimoramento_i": ("🪨", "Recurso Especial · Grau I"),
 }
 
+CONSUMABLE_FAMILY_LABELS = {
+    "healing": "Cura",
+    "purification": "Purificação",
+    "antidote": "Antídoto",
+    "vigor": "Vigor",
+    "protection": "Proteção",
+    "dispeller": "Dissipador",
+    "warding": "Resguardo",
+}
+
+CONSUMABLE_DETAILS = {
+    "healing": (
+        "❤️ Cura · 22% HP Máximo",
+        "🎯 Alvo · Próprio",
+        "⚔️ Uso · Somente em Combate PvE",
+    ),
+    "purification": (
+        "✨ Purificação · 1 Efeito Negativo",
+        "🎯 Alvo · Próprio",
+        "⚔️ Uso · Somente em Combate PvE",
+    ),
+    "antidote": (
+        "☣️ Antídoto · 1 DoT",
+        "🎯 Alvo · Próprio",
+        "⚔️ Uso · Somente em Combate PvE",
+    ),
+    "vigor": (
+        "⚡ Vigor · +20",
+        "🎯 Alvo · Próprio",
+        "🌙 Uso · Fora de Combate",
+    ),
+    "protection": (
+        "🔰 Barreira · 12% do HP Máximo",
+        "⏳ Duração · 2T",
+        "🎯 Alvo · Próprio",
+        "⚔️ Uso · Somente em Combate PvE",
+    ),
+    "dispeller": (
+        "✨ Dissipação · 1 Efeito Positivo Removível",
+        "🎯 Alvo · 1 Inimigo",
+        (
+            "ℹ️ Efeitos acumuláveis perdem 1 Acúmulo. "
+            "Efeitos protegidos ou não removíveis não são opções válidas."
+        ),
+        "⚔️ Uso · Somente em Combate PvE",
+    ),
+    "warding": (
+        "🛡️ Resguardo · 2T · 1 Carga",
+        "Bloqueia a primeira aplicação elegível de Efeito Negativo removível.",
+        (
+            "ℹ️ O Dano Direto associado continua normalmente. Não bloqueia Controle Rígido, fases, "
+            "mecânicas fixas ou efeitos protegidos."
+        ),
+        "⚔️ Uso · Somente em Combate PvE",
+    ),
+}
+
 
 def _rarity(entry: InventoryEntry) -> str:
     if not entry.rarity:
@@ -68,13 +126,9 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
         return lines
 
     if entry.kind == "consumable":
-        category = "Cura" if entry.key == "consumable.heal" else (
-            "Purificação" if entry.key == "consumable.purification" else "Consumível"
-        )
-        return [
-            f"{index} 🧪 {escape(entry.title)} · {entry.quantity}",
-            escape(category),
-        ]
+        grade = f"Grau {grade_label(entry.grade)}" if entry.grade is not None else None
+        metadata = f"Consumível · {grade}" if grade else "Consumível"
+        return [f"{index} 🧪 {escape(entry.title)} · {entry.quantity}", escape(metadata)]
 
     if entry.kind == "material":
         icon, meta = MATERIAL_META.get(entry.key, ("🧱", "Material"))
@@ -145,12 +199,54 @@ def render_inventory(view: InventoryView) -> Screen:
                 if index > 1:
                     lines.append("")
                 lines.extend(_entry_lines(index, entry))
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")]
+        consumable_buttons = [
+            InlineKeyboardButton(
+                text=str(index),
+                callback_data=f"inventory:consumable:{entry.key}",
+            )
+            for index, entry in enumerate(view.entries, start=1)
+            if entry.kind == "consumable" and entry.payload is not None
+        ]
+        rows = [
+            consumable_buttons[index : index + 5]
+            for index in range(0, len(consumable_buttons), 5)
+        ]
+        rows.append([InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")])
+        keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+        return Screen("\n".join(lines), "inventory", keyboard, parse_mode="HTML")
+
+    if view.kind == "inventory_consumable_detail" and view.entries:
+        entry = view.entries[0]
+        family = (entry.payload or {}).get("family", "")
+        label = CONSUMABLE_FAMILY_LABELS.get(family, "Consumível")
+        grade = grade_label(entry.grade) if entry.grade is not None else "?"
+        lines = [
+            f"🧪 {escape(entry.title)} · Grau {grade}",
+            f"Consumível · {escape(label)}",
+            "",
+            f"🎒 Quantidade · {entry.quantity}",
+            "",
+            *CONSUMABLE_DETAILS.get(family, ()),
+        ]
+        rows = []
+        if family == "vigor" and view.vigor_usable and entry.quantity > 0:
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text="Usar",
+                        callback_data=f"consumable:vigor:{entry.key}",
+                    )
+                ]
+            )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="← Consumíveis",
+                    callback_data="inventory:category:consumables",
+                )
             ]
         )
-        return Screen("\n".join(lines), "inventory", keyboard, parse_mode="HTML")
+        return Screen("\n".join(lines), "inventory", InlineKeyboardMarkup(inline_keyboard=rows))
 
     lines = [
         "📦 Entregas Pendentes",

@@ -1,7 +1,12 @@
 from uuid import uuid4
 
-from asterion.application.inventory import InventoryEntry, InventoryView
+from asterion.application.inventory import (
+    InventoryEntry,
+    InventoryView,
+    consumable_inventory_entry,
+)
 from asterion.bot.inventory_ui import render_inventory
+from asterion.domain.consumables import CONSUMABLE_CATALOG, grade_label
 
 
 def _callbacks(screen):
@@ -88,3 +93,147 @@ def test_pending_root_is_real_read_model_without_placeholder_actions():
     callbacks = _callbacks(screen)
     assert callbacks == ["inventory:root", "menu:back"]
     assert "menu:noop" not in callbacks
+
+
+def test_consumable_inventory_is_catalog_driven_and_callbacks_keep_stable_ids():
+    entries = tuple(
+        consumable_inventory_entry(item_id, index)
+        for index, item_id in enumerate(CONSUMABLE_CATALOG, start=1)
+    )
+    screen = render_inventory(
+        InventoryView(
+            "inventory_category",
+            uuid4(),
+            used_slots=len(entries),
+            category="consumables",
+            entries=entries,
+        )
+    )
+    assert "1 🧪 Poção de Cura · 1" in screen.text
+    assert "Consumível · Grau I" in screen.text
+    assert "Preparado de Proteção Enredada · 9" in screen.text
+    assert "Consumível · Grau II" in screen.text
+    assert "Consumível · Proteção" not in screen.text
+    assert not any(
+        button.text.startswith("Usar")
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+    )
+    callbacks = _callbacks(screen)
+    for item_id in CONSUMABLE_CATALOG:
+        assert f"inventory:consumable:{item_id}" in callbacks
+    assert all(len(value.encode("utf-8")) <= 64 for value in callbacks)
+
+
+def test_protection_detail_matches_player_facing_source_without_floor():
+    item_id = "consumable.protection.vde.ii"
+    screen = render_inventory(
+        InventoryView(
+            "inventory_consumable_detail",
+            uuid4(),
+            used_slots=1,
+            entries=(consumable_inventory_entry(item_id, 4),),
+        )
+    )
+    assert "🧪 Preparado de Proteção Enredada · Grau II" in screen.text
+    assert "Consumível · Proteção" in screen.text
+    assert "🎒 Quantidade · 4" in screen.text
+    assert "🔰 Barreira · 12% do HP Máximo" in screen.text
+    assert "⏳ Duração · 2T" in screen.text
+    assert "🎯 Alvo · Próprio" in screen.text
+    assert "⚔️ Uso · Somente em Combate PvE" in screen.text
+    assert "floor(" not in screen.text
+    assert "Usar" not in [button.text for row in screen.keyboard.inline_keyboard for button in row]
+    assert _callbacks(screen) == ["inventory:category:consumables"]
+
+
+def test_all_seven_families_resolve_names_grades_and_context_in_details():
+    expected_family_lines = {
+        "healing": "Consumível · Cura",
+        "purification": "Consumível · Purificação",
+        "antidote": "Consumível · Antídoto",
+        "vigor": "Consumível · Vigor",
+        "protection": "Consumível · Proteção",
+        "dispeller": "Consumível · Dissipador",
+        "warding": "Consumível · Resguardo",
+    }
+    families = set()
+    for item_id, item in CONSUMABLE_CATALOG.items():
+        families.add(item.family.value)
+        screen = render_inventory(
+            InventoryView(
+                "inventory_consumable_detail",
+                uuid4(),
+                used_slots=1,
+                entries=(consumable_inventory_entry(item_id, 2),),
+            )
+        )
+        assert f"🧪 {item.name} · Grau {grade_label(item.grade)}" in screen.text
+        assert expected_family_lines[item.family.value] in screen.text
+        assert "🎒 Quantidade · 2" in screen.text
+        assert "consumable." not in screen.text
+        assert not any(
+            button.text == "Usar"
+            for row in screen.keyboard.inline_keyboard
+            for button in row
+        )
+    assert families == set(expected_family_lines)
+
+
+def test_vigor_detail_only_exposes_use_when_backend_marks_it_available():
+    entry = consumable_inventory_entry("consumable.vigor.tdo.i", 1)
+    usable = render_inventory(
+        InventoryView(
+            "inventory_consumable_detail",
+            uuid4(),
+            used_slots=1,
+            entries=(entry,),
+            vigor=60,
+            vigor_usable=True,
+        )
+    )
+    assert "🧪 Poção de Vigor · Grau I" in usable.text
+    assert "Consumível · Vigor" in usable.text
+    assert "⚡ Vigor · +20" in usable.text
+    assert "🌙 Uso · Fora de Combate" in usable.text
+    assert [button.text for row in usable.keyboard.inline_keyboard for button in row] == [
+        "Usar",
+        "← Consumíveis",
+    ]
+    assert _callbacks(usable)[0] == "consumable:vigor:consumable.vigor.tdo.i"
+
+    unavailable = render_inventory(
+        InventoryView(
+            "inventory_consumable_detail",
+            uuid4(),
+            used_slots=1,
+            entries=(entry,),
+            vigor=90,
+            vigor_usable=False,
+        )
+    )
+    assert [button.text for row in unavailable.keyboard.inline_keyboard for button in row] == [
+        "← Consumíveis"
+    ]
+
+
+def test_unknown_legacy_consumable_does_not_break_inventory_renderer():
+    screen = render_inventory(
+        InventoryView(
+            "inventory_category",
+            uuid4(),
+            used_slots=1,
+            category="consumables",
+            entries=(
+                InventoryEntry(
+                    kind="consumable",
+                    key="legacy.unknown",
+                    title="legacy.unknown",
+                    quantity=2,
+                ),
+            ),
+        )
+    )
+    assert "1 🧪 legacy.unknown · 2" in screen.text
+    assert "Consumível" in screen.text
+    assert _callbacks(screen) == ["inventory:root"]

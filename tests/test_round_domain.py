@@ -1,3 +1,4 @@
+import asyncio
 from decimal import Decimal
 from uuid import uuid4
 
@@ -7,6 +8,7 @@ from asterion.domain.combat import (
     Effect,
     act,
     consumable_available,
+    effective_heal_amount,
     use_heal_consumable,
     use_purification_consumable,
 )
@@ -60,6 +62,37 @@ def test_heal_consumable_is_22_percent_floor_and_shares_cd2():
 
     advanced = act(healed, "attack")
     assert consumable_available(advanced) is True
+
+
+def test_round_heal_estimate_and_manual_heal_share_burn_modifier():
+    state = _combat()
+    state.dot_states["player"] = [
+        DotState(
+            "burn", 2, 2, D("100"), "enemy", [D("100"), D("120")], stack_cap=2
+        )
+    ]
+    service = _service()
+    assert service._effective_heal(state) == D("198")
+    assert service._effective_heal(state) == effective_heal_amount(state)
+
+    class FakeSession:
+        async def scalar(self, _statement):
+            return 1
+
+    selected = asyncio.run(
+        service._choose_round_action(
+            FakeSession(),
+            type("Character", (), {"id": uuid4()})(),
+            type("Round", (), {"prepared_heal": True, "prepared_purify": False})(),
+            state,
+            consumable_uses=0,
+            consumable_limit=1,
+        )
+    )
+    assert selected == ("heal", None)
+
+    healed = use_heal_consumable(state)
+    assert healed.events[-1].healed == D("198")
 
 
 def test_purification_removes_only_oldest_dot_stack():

@@ -5,6 +5,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from asterion.application.consumables import ConsumableService
 from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
 from asterion.application.road import RoadService
@@ -25,6 +26,7 @@ def world_router(
     road: RoadService | None = None,
     inventory: InventoryService | None = None,
     s1: S1Service | None = None,
+    consumables: ConsumableService | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -284,6 +286,42 @@ def world_router(
             return
         category = (query.data or "").rsplit(":", 1)[-1]
         view = await inventory.category(query.from_user.id, category)
+        if view is not None:
+            await present(query.message, render_inventory(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("inventory:consumable:"))
+    async def inventory_consumable(query: CallbackQuery):
+        await query.answer()
+        if inventory is None or not isinstance(query.message, Message):
+            return
+        item_id = (query.data or "").removeprefix("inventory:consumable:")
+        view = await inventory.consumable_detail(query.from_user.id, item_id)
+        if view is not None:
+            await present(query.message, render_inventory(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("consumable:vigor:"))
+    async def use_vigor(query: CallbackQuery):
+        if (
+            consumables is None
+            or inventory is None
+            or not isinstance(query.message, Message)
+        ):
+            await query.answer()
+            return
+        item_id = (query.data or "").split(":", maxsplit=2)[-1]
+        value = await consumables.use_vigor_potion(query.from_user.id, item_id)
+        view = await inventory.consumable_detail(query.from_user.id, item_id)
+        if value is None:
+            current = (
+                f" Vigor · {view.vigor}/{view.max_vigor}."
+                if view is not None and view.vigor is not None
+                else ""
+            )
+            await query.answer(
+                f"Poção de Vigor indisponível.{current}", show_alert=True
+            )
+        else:
+            await query.answer(f"Vigor recuperado · {value}/100.")
         if view is not None:
             await present(query.message, render_inventory(view), images, edit=True)
 

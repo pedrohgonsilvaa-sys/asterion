@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from asterion.domain.combat import Combat, act
+from asterion.domain.combat import Combat, CombatConsumableOption, act
 from asterion.domain.creation import PROLOGUE
 from asterion.domain.prologue import (
     COMBAT_STAGE,
@@ -42,6 +42,15 @@ class CombatView:
     stage: str
     xp: int
     context: str = "prologue"
+    consumable_options: tuple[CombatConsumableOption, ...] = ()
+    consumable_screen: str | None = None
+    selected_consumable_id: str | None = None
+    selected_target_id: str | None = None
+    selection_parent: str = "items"
+    consumable_notice: str | None = None
+    consumable_quantities: tuple[tuple[str, int], ...] = ()
+    consumable_budget_limit: int = 0
+    ready_consumable_option: CombatConsumableOption | None = None
 
 
 def view(character: Character, activity: GameActivity, encounter: Encounter, record: CombatRecord):
