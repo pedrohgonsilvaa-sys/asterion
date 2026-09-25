@@ -1,11 +1,26 @@
 from copy import deepcopy
+from dataclasses import replace
 from decimal import Decimal
 from uuid import UUID
 
 import pytest
 
-from asterion.domain.combat import Effect, act, allowed_actions, apply_effect, initiative
-from asterion.domain.combat_math import Stats
+from asterion.domain.combat import (
+    Effect,
+    _perform,
+    act,
+    allowed_actions,
+    apply_effect,
+    initiative,
+)
+from asterion.domain.combat_math import (
+    CURRENT_COMBAT_RULESET,
+    LEGACY_COMBAT_RULESET,
+    CombatRng,
+    Stats,
+    direct_damage,
+    resolve_combat_stats,
+)
 from asterion.domain.creation import CLASSES, RACES
 from asterion.domain.prologue import FIRST_ARTS, PROFILE, first_art
 from asterion.infrastructure.db.combat_codec import decode, encode
@@ -15,9 +30,7 @@ COMBAT_ID = UUID("f77365ce-14b2-467f-bcd4-395ac6e8f3a5")
 
 
 def battle(cls="sentinela", race="velado", combat_id=COMBAT_ID):
-    from asterion.domain.combat_math import class_stats, racial_stats
-
-    stats = racial_stats(class_stats(cls, 1), race)
+    stats = resolve_combat_stats(cls, 1, race)
     return PROFILE.create(combat_id, "Luiken", cls, race, stats.hp)
 
 
@@ -224,3 +237,217 @@ def test_forged_actions_do_not_advance_rng_hp_version_or_tutorial():
     state = battle()
     for action in ("art", "bite", "charge", "reward", "attack:99999", "", "defend:2"):
         assert act(state, action) is state
+
+
+def test_current_ruleset_uses_total_crit_percentage_points():
+    state = battle(race="velado")
+    actor = state.fighters["player"]
+    target = state.fighters["enemy"]
+    actor.stats = replace(actor.stats, attack=D(100), crit=D(100))
+    target.stats = replace(target.stats, defense=D(0), evasion=D(0), block=D(0))
+    target.hp = D(1000)
+
+    _perform(state, "player", "attack")
+
+    event = state.events[-1]
+    assert state.ruleset == CURRENT_COMBAT_RULESET
+    assert event.critical and event.damage == 150
+    assert state.rng_cursor == 1
+
+
+def test_percent_point_attributes_do_not_inherit_multiplicative_effect_semantics():
+    state = battle()
+    player = state.fighters["player"]
+    player.stats = replace(player.stats, per=D(10))
+    player.effects.append(Effect("per-effect", "per", D("0.5"), 2, player.opportunity))
+    assert player.stat("per") == D(10)
+
+
+def test_dodge_stops_hit_before_crit_block_barrier_or_hp():
+    state = battle()
+    actor = state.fighters["player"]
+    target = state.fighters["enemy"]
+    actor.stats = replace(actor.stats, attack=D(100), crit=D(100))
+    target.stats = replace(
+        target.stats, defense=D(0), evasion=D(100), block=D(100)
+    )
+    target.hp = D(1000)
+    target.barrier = D(100)
+    target.barrier_remaining = 2
+    starting_hp, starting_barrier = target.hp, target.barrier
+
+    _perform(state, "player", "attack")
+
+    event = state.events[-1]
+    assert event.dodged and not event.critical and not event.blocked
+    assert event.damage == 0
+    assert target.hp == starting_hp and target.barrier == starting_barrier
+    assert state.rng_cursor == 1
+    assert state.evasion_streaks == {"enemy": 1}
+
+
+def test_failed_dodge_roll_continues_to_crit_pipeline():
+    state = battle(combat_id=UUID(int=0))
+    actor = state.fighters["player"]
+    target = state.fighters["enemy"]
+    actor.stats = replace(actor.stats, attack=D(100), crit=D(0))
+    target.stats = replace(target.stats, defense=D(0), evasion=D(50), block=D(0))
+    target.hp = D(1000)
+    state.rng_cursor = 0
+
+    _perform(state, "player", "attack")
+
+    event = state.events[-1]
+    assert not event.dodged and not event.critical and event.damage == 100
+    assert target.hp == D(900)
+    assert state.rng_cursor == 1
+
+
+def test_zero_crit_chance_does_not_consume_a_crit_draw():
+    state = battle()
+    state.fighters["player"].stats = replace(
+        state.fighters["player"].stats, attack=D(100), crit=D(0)
+    )
+    state.fighters["enemy"].stats = replace(
+        state.fighters["enemy"].stats, defense=D(0), evasion=D(0), block=D(0)
+    )
+
+    _perform(state, "player", "attack")
+
+    assert not state.events[-1].critical
+    assert state.rng_cursor == 0
+
+
+def test_two_consecutive_dodges_force_next_eligible_attack_to_hit_and_reset_streak():
+    state = battle()
+    state.tutorial = None
+    player = state.fighters["player"]
+    enemy = state.fighters["enemy"]
+    player.stats = replace(player.stats, attack=D(10), crit=D(0))
+    enemy.stats = replace(enemy.stats, hp=D(100000), defense=D(0), evasion=D(100))
+    enemy.hp = D(100000)
+
+    outcomes = []
+    for _ in range(4):
+        previous_count = len(state.events)
+        state = act(state, "attack")
+        player_event = next(
+            event for event in state.events[previous_count:] if event.actor == "player"
+        )
+        outcomes.append(player_event.dodged)
+
+    assert outcomes == [True, True, False, True]
+    assert state.evasion_streaks["enemy"] == 1
+
+
+def test_dodge_streak_and_future_rng_survive_snapshot_reconnect():
+    state = battle()
+    state.tutorial = None
+    state.fighters["enemy"].stats = replace(
+        state.fighters["enemy"].stats, hp=D(100000), defense=D(0), evasion=D(100)
+    )
+    state.fighters["enemy"].hp = D(100000)
+    state.fighters["player"].stats = replace(
+        state.fighters["player"].stats, attack=D(10), crit=D(0)
+    )
+    state = act(state, "attack")
+    assert state.evasion_streaks["enemy"] == 1
+
+    restored = decode(encode(state), state.id, state.ruleset, state.version)
+    assert restored.evasion_streaks.get("enemy") == 1
+    expected, actual = act(state, "attack"), act(restored, "attack")
+    assert actual == expected
+    assert actual.evasion_streaks["enemy"] == 2
+    previous_count = len(expected.events)
+    expected, actual = act(expected, "attack"), act(actual, "attack")
+    assert actual == expected
+    forced_hit = next(
+        event
+        for event in actual.events[previous_count:]
+        if event.actor == "player"
+    )
+    assert not forced_hit.dodged and actual.evasion_streaks["enemy"] == 0
+
+
+def test_block_combines_with_cinereo_defender_before_barrier():
+    state = battle()
+    actor = state.fighters["player"]
+    target = state.fighters["enemy"]
+    actor.stats = replace(actor.stats, attack=D(100), crit=D(0), per=D(0))
+    target.stats = replace(target.stats, defense=D(0), evasion=D(0), block=D(100))
+    target.race = "cinereo"
+    target.defending = True
+    target.hp = D(1000)
+    target.barrier = D(100)
+    target.barrier_remaining = 2
+
+    _perform(state, "player", "attack")
+
+    event = state.events[-1]
+    assert event.blocked and not event.dodged and not event.critical
+    assert event.damage == 35  # (52% × 35%) compounds to 65% capped mitigation.
+    assert target.barrier == D(65) and target.hp == D(1000)
+    assert state.rng_cursor == 1
+
+
+def test_legacy_ruleset_ignores_new_secondary_attributes_and_keeps_legacy_crit_draw():
+    state = battle()
+    state.ruleset = LEGACY_COMBAT_RULESET
+    actor = state.fighters["player"]
+    target = state.fighters["enemy"]
+    actor.stats = replace(actor.stats, attack=D(100), per=D(30), crit=D(100))
+    target.stats = replace(target.stats, defense=D(100), evasion=D(100), block=D(100))
+    target.hp = D(1000)
+    expected_crit = CombatRng(state.id, state.rng_cursor).chance(
+        D("0.05"), "critical:player:attack"
+    )
+    expected_damage = direct_damage(D(100), D(1), D(100), 1, critical=expected_crit)
+
+    _perform(state, "player", "attack")
+
+    event = state.events[-1]
+    assert not event.dodged and not event.blocked
+    assert event.critical is expected_crit and event.damage == expected_damage
+    assert state.rng_cursor == 1
+
+
+def test_four_stat_legacy_snapshot_decodes_without_changing_source_payload():
+    state = battle()
+    payload = encode(state)
+    payload.pop("evasion_streaks", None)
+    for fighter in payload["fighters"].values():
+        for stat in ("per", "crit", "evasion", "block"):
+            fighter["stats"].pop(stat)
+    for event in payload["events"]:
+        event.pop("dodged", None)
+        event.pop("blocked", None)
+    original = deepcopy(payload)
+
+    restored = decode(payload, state.id, LEGACY_COMBAT_RULESET, state.version)
+
+    assert payload == original
+    assert restored.evasion_streaks == {}
+    assert all(
+        (fighter.stats.per, fighter.stats.crit, fighter.stats.evasion, fighter.stats.block)
+        == (D(0), D(5), D(0), D(0))
+        for fighter in restored.fighters.values()
+    )
+
+
+def test_extended_stats_and_evasion_state_roundtrip_losslessly_as_decimal_text():
+    state = battle()
+    player = state.fighters["player"]
+    player.stats = replace(
+        player.stats,
+        per=D("12.25"),
+        crit=D("7.75"),
+        evasion=D("1.25"),
+        block=D("2.50"),
+    )
+    state.evasion_streaks = {"player": 2}
+    payload = encode(state)
+
+    assert payload["fighters"]["player"]["stats"]["per"] == "12.25"
+    assert payload["fighters"]["player"]["stats"]["crit"] == "7.75"
+    restored = decode(payload, state.id, state.ruleset, state.version)
+    assert encode(restored) == payload

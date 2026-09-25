@@ -7,11 +7,18 @@ from hashlib import sha256
 from uuid import UUID
 
 from asterion.domain.combat import Action, Combat, Fighter, start_combat
-from asterion.domain.combat_math import Stats, class_stats, enemy_stats, growth, racial_stats
+from asterion.domain.combat_math import (
+    CURRENT_COMBAT_RULESET,
+    CombatStats,
+    StatMultipliers,
+    enemy_stats,
+    growth,
+    resolve_combat_stats,
+)
 from asterion.domain.prologue import first_art
 
 D = Decimal
-RULESET = "gdd-1.4.3-baseline-1.0"
+RULESET = CURRENT_COMBAT_RULESET
 ROAD_LOCATION = "tdo.location.estrada_das_cinzas"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 HUNT_UNLOCK = "hunt_manual.estrada_das_cinzas"
@@ -53,12 +60,12 @@ def weighted_recent_choice(seed: str, entries: tuple[tuple[str, int], ...], rece
     return weighted_choice(seed, eligible)
 
 CATEGORY = {
-    "common": Stats(D("0.70"), D("0.82"), D("0.90"), D("0.95")),
-    "elite": Stats(D("1.50"), D("1.05"), D("1.05"), D("1.02")),
+    "common": StatMultipliers(D("0.70"), D("0.82"), D("0.90"), D("0.95")),
+    "elite": StatMultipliers(D("1.50"), D("1.05"), D("1.05"), D("1.02")),
 }
 ARCHETYPE = {
-    "balanced": Stats(D(1), D(1), D(1), D(1)),
-    "predator": Stats(D("0.90"), D("1.10"), D("0.90"), D("1.20")),
+    "balanced": StatMultipliers(D(1), D(1), D(1), D(1)),
+    "predator": StatMultipliers(D("0.90"), D("1.10"), D("0.90"), D("1.20")),
 }
 
 
@@ -133,11 +140,11 @@ CREATURES = (
 )
 
 VARIANTS = {
-    "furious": Stats(D(1), D("1.08"), D("0.92"), D(1)),
-    "resistant": Stats(D(1), D("0.94"), D("1.10"), D(1)),
-    "agile": Stats(D("0.93"), D(1), D(1), D("1.12")),
-    "hemorrhagic": Stats(D(1), D("0.95"), D(1), D(1)),
-    "venomous": Stats(D("0.95"), D(1), D(1), D(1)),
+    "furious": StatMultipliers(D(1), D("1.08"), D("0.92"), D(1)),
+    "resistant": StatMultipliers(D(1), D("0.94"), D("1.10"), D(1)),
+    "agile": StatMultipliers(D("0.93"), D(1), D(1), D("1.12")),
+    "hemorrhagic": StatMultipliers(D(1), D("0.95"), D(1), D(1)),
+    "venomous": StatMultipliers(D("0.95"), D(1), D(1), D(1)),
 }
 VARIANT_POOL = {
     "dog_cinereo": ("furious", "agile"),
@@ -277,7 +284,7 @@ def select_variant(seed: str, creature: Creature) -> str | None:
     return VARIANT_POOL[creature.creature_id][family % len(VARIANT_POOL[creature.creature_id])]
 
 
-def road_enemy_stats(creature: Creature, level: int, variant: str | None = None) -> Stats:
+def road_enemy_stats(creature: Creature, level: int, variant: str | None = None) -> CombatStats:
     factors = [CATEGORY[creature.category], ARCHETYPE[creature.archetype]]
     if variant:
         factors.append(VARIANTS[variant])
@@ -343,7 +350,7 @@ def create_road_combat(
     player_level: int | None = None,
 ) -> Combat:
     player_level = level if player_level is None else player_level
-    player_stats = racial_stats(class_stats(character_class, player_level), race)
+    player_stats = resolve_combat_stats(character_class, player_level, race)
     enemy = road_enemy_stats(creature, level, variant)
     actions = {
         key: Action(key, label, coefficient, cooldown, debuff, duration)

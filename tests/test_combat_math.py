@@ -5,14 +5,18 @@ import pytest
 
 from asterion.domain.combat_math import (
     CombatRng,
-    Stats,
+    StatMultipliers,
     class_stats,
+    combine_active_mitigation,
     defense_reduction,
     direct_damage,
+    dot_damage,
+    effective_defense,
     enemy_stats,
     growth,
     neutral_stats,
     racial_stats,
+    resolve_combat_stats,
     stable_priority,
 )
 
@@ -57,7 +61,7 @@ def test_k_level_and_enemy_composition_have_no_intermediate_rounding():
         ctx.prec = 50
         assert abs(k.hp - D(7735) / 12) < D("1e-46")
     # Synthetic multiplier proves K is composed before the one final rounding.
-    result = enemy_stats(1, Stats(D(1), D(1), D("0.5"), D(1)))
+    result = enemy_stats(1, StatMultipliers(D(1), D(1), D("0.5"), D(1)))
     assert result.defense == 37
 
 
@@ -79,6 +83,50 @@ def test_racial_stats_preserve_fractional_composition():
     stats = racial_stats(class_stats("sentinela", 1), "remanescente")
     assert stats.values() == (D("712.530"), D("93.380"), D("82.215"), D("70.035"))
     assert racial_stats(class_stats("errante", 1), "alvorano").agility == D("87.15")
+
+
+@pytest.mark.parametrize(
+    "cls", ["sentinela", "errante", "vigia", "tecelao", "oraculo", "luminar"]
+)
+def test_central_resolver_preserves_level_one_and_level_sixty_class_curves(cls):
+    level_one = resolve_combat_stats(cls, 1, "velado")
+    level_sixty = resolve_combat_stats(cls, 60, "velado")
+    assert level_one.values() == class_stats(cls, 1).values()
+    assert level_sixty.values() == class_stats(cls, 60).values()
+    assert (level_one.per, level_one.crit, level_one.evasion, level_one.block) == (
+        D(0), D(5), D(0), D(0)
+    )
+
+
+def test_central_resolver_applies_static_race_modifiers_only_to_four_base_stats():
+    remanescente = resolve_combat_stats("sentinela", 1, "remanescente")
+    alvorano = resolve_combat_stats("errante", 1, "alvorano")
+    assert remanescente.values() == (D("712.530"), D("93.380"), D("82.215"), D("70.035"))
+    assert (remanescente.per, remanescente.crit, remanescente.evasion, remanescente.block) == (
+        D(0), D(5), D(0), D(0)
+    )
+    assert alvorano.agility == D("87.15")
+    assert (alvorano.per, alvorano.crit, alvorano.evasion, alvorano.block) == (
+        D(0), D(5), D(0), D(0)
+    )
+
+
+def test_per_reduces_defense_before_normal_formula_and_caps_at_thirty_points():
+    assert effective_defense(D(100), D(30)) == D(70)
+    assert effective_defense(D(100), D(60)) == D(70)
+    assert effective_defense(D(-100), D(30)) == D(0)
+    assert direct_damage(D(100), D(1), D(100), 1, penetration=D(30)) == 60
+    assert direct_damage(D(100), D(1), D(100), 1, penetration=D(50)) == 60
+
+
+def test_dot_uses_half_of_per_adjusted_effective_defense_once():
+    assert dot_damage([D(100)], D("0.50"), D(100), 1, penetration=D(30)) == 37
+    assert dot_damage([D(100)], D("0.50"), D(100), 1) == 33
+
+
+def test_active_mitigation_is_multiplicative_and_has_separate_sixty_five_cap():
+    assert combine_active_mitigation(D("0.45"), D("0.35")) == D("0.6425")
+    assert combine_active_mitigation(D("0.52"), D("0.35")) == D("0.65")
 
 
 def test_defense_formula_and_single_final_floor():

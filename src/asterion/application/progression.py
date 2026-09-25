@@ -2,7 +2,7 @@
 
 from decimal import ROUND_HALF_UP, Decimal
 
-from asterion.domain.combat_math import class_stats, racial_stats
+from asterion.domain.combat_math import resolve_combat_stats
 
 
 def level_xp(level: int) -> int:
@@ -22,8 +22,8 @@ def consolidate_level(character) -> int:
     while character.level < 60 and character.xp >= level_xp(character.level):
         character.xp -= level_xp(character.level)
         character.level += 1
-        character.max_hp = racial_stats(
-            class_stats(character.character_class, character.level), character.race
+        character.max_hp = resolve_combat_stats(
+            character.character_class, character.level, character.race
         ).hp
         character.hp = min(character.hp, character.max_hp)
         advanced += 1
