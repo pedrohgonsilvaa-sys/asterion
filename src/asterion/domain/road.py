@@ -62,11 +62,17 @@ def weighted_recent_choice(seed: str, entries: tuple[tuple[str, int], ...], rece
 
 CATEGORY = {
     "common": StatMultipliers(D("0.70"), D("0.82"), D("0.90"), D("0.95")),
+    "uncommon": StatMultipliers(D("0.85"), D("0.90"), D("0.95"), D("1.00")),
     "elite": StatMultipliers(D("1.50"), D("1.05"), D("1.05"), D("1.02")),
+    "boss": StatMultipliers(D("2.20"), D("1.10"), D("1.10"), D("1.00")),
 }
 ARCHETYPE = {
     "balanced": StatMultipliers(D(1), D(1), D(1), D(1)),
+    "brute": StatMultipliers(D("1.15"), D("1.12"), D("0.95"), D("0.85")),
     "predator": StatMultipliers(D("0.90"), D("1.10"), D("0.90"), D("1.20")),
+    "armored": StatMultipliers(D("1.10"), D("0.88"), D("1.20"), D("0.85")),
+    "caster": StatMultipliers(D("0.85"), D("1.15"), D("0.88"), D("1.00")),
+    "controller": StatMultipliers(D("0.95"), D("0.90"), D("1.00"), D("1.10")),
 }
 
 
@@ -80,7 +86,9 @@ class Creature:
     max_level: int
     weight: int
     ai: tuple[str, ...]
-    actions: tuple[tuple[str, str, Decimal, int, Decimal, int], ...]
+    actions: tuple[tuple, ...]
+    ai_priority: tuple[str, ...] = ()
+    damage_taken_modifiers: tuple[tuple[str, Decimal], ...] = ()
 
 
 CREATURES = (
@@ -134,11 +142,29 @@ CREATURES = (
         ("rend", "rend", "leap", "bite"),
         (
             ("bite", "Mordida Alfa", D("1.00"), 0, D(0), 0),
-            ("rend", "Investida Rasgante", D("0.90"), 1, D(0), 0),
-            ("leap", "Salto Predatório", D("1.60"), 3, D(0), 0),
+            ("rend", "Investida Rasgante", D("0.90"), 1, D(0), 0, "bleed", 1, False),
+            ("leap", "Salto Predatório", D("1.60"), 3, D(0), 0, None, 0, True),
         ),
     ),
 )
+
+SPIDER = Creature(
+    "aranha_cinza",
+    "Aranha de Cinza",
+    "uncommon",
+    "controller",
+    3,
+    6,
+    0,
+    ("toxic_bite", "bite"),
+    (
+        ("toxic_bite", "Picada Tóxica", D("0.80"), 0, D(0), 0, "poison", 1, False, 2),
+        ("bite", "Mordida", D("0.95"), 0, D(0), 0),
+    ),
+    ai_priority=("toxic_bite", "bite"),
+    damage_taken_modifiers=(("burn", D("1.10")), ("poison", D("0.90"))),
+)
+CREATURE_CATALOG = (*CREATURES, SPIDER)
 
 VARIANTS = {
     "furious": StatMultipliers(D(1), D("1.08"), D("0.92"), D(1)),
@@ -152,6 +178,7 @@ VARIANT_POOL = {
     "corvo_fuligem": ("agile", "furious"),
     "peregrino_calcinado": ("furious", "resistant", "hemorrhagic"),
     "alfa_cinereo": (),
+    "aranha_cinza": ("venomous", "agile"),
 }
 
 EQUIPMENT_CATALOG = (
@@ -217,20 +244,57 @@ def equipment_rarity(seed: str, category: str, elite_pity: int = 0, legendary_pi
         if elite_pity >= 12:
             return "Épico" if roll < 80 else "Lendário" if roll < 99 else "Mítico"
         bands = ((45, "Comum"), (87, "Raro"), (98, "Épico"), (99.9, "Lendário"), (100, "Mítico"))
-    else:
+    elif category == "common":
         bands = ((78, "Comum"), (97, "Raro"), (99.8, "Épico"), (100, "Lendário"))
+    else:
+        raise ValueError(f"equipment rarity is not configured for category {category!r}")
     for limit, rarity in bands:
         if roll < limit:
             return rarity
     return bands[-1][1]
 
 
+@dataclass(frozen=True)
+class HuntLocationProfile:
+    local_id: str
+    label: str
+    creature_weights: tuple[tuple[str, int], ...]
+    variant_chance: int
+    hunt_unlock: str
+    round_familiarity: str
+
+
+ROAD_PROFILE = HuntLocationProfile(
+    local_id=ROAD_LOCATION,
+    label="Estrada das Cinzas",
+    creature_weights=(
+        ("dog_cinereo", 34),
+        ("corvo_fuligem", 33),
+        ("peregrino_calcinado", 30),
+        ("alfa_cinereo", 3),
+    ),
+    variant_chance=8,
+    hunt_unlock=HUNT_UNLOCK,
+    round_familiarity=ROUND_FAMILIARITY,
+)
+
+
 def creature_for(creature_id: str) -> Creature:
-    return next(c for c in CREATURES if c.creature_id == creature_id)
+    return next(c for c in CREATURE_CATALOG if c.creature_id == creature_id)
+
+
+def hunt_pool(
+    player_level: int, profile: HuntLocationProfile = ROAD_PROFILE
+) -> tuple[Creature, ...]:
+    return tuple(
+        creature_for(creature_id)
+        for creature_id, _ in profile.creature_weights
+        if player_level >= creature_for(creature_id).unlock_level
+    )
 
 
 def road_pool(player_level: int) -> tuple[Creature, ...]:
-    return tuple(c for c in CREATURES if player_level >= c.unlock_level)
+    return hunt_pool(player_level, ROAD_PROFILE)
 
 
 def weighted_choice(seed: str, entries: tuple[tuple[str, int], ...]) -> str:
@@ -243,9 +307,17 @@ def weighted_choice(seed: str, entries: tuple[tuple[str, int], ...]) -> str:
     return entries[-1][0]
 
 
-def select_creature(seed: str, player_level: int) -> Creature:
-    pool = road_pool(player_level)
-    return creature_for(weighted_choice(seed, tuple((c.creature_id, c.weight) for c in pool)))
+def select_creature(
+    seed: str, player_level: int, profile: HuntLocationProfile = ROAD_PROFILE
+) -> Creature:
+    eligible = tuple(
+        (creature_id, weight)
+        for creature_id, weight in profile.creature_weights
+        if player_level >= creature_for(creature_id).unlock_level
+    )
+    if not eligible:
+        raise ValueError(f"no eligible creatures for {profile.local_id} at level {player_level}")
+    return creature_for(weighted_choice(seed, eligible))
 
 
 def select_exploration_result(seed: str, player_level: int, recent: tuple[str, ...] = (), excluded: tuple[str, ...] = ()) -> str:
@@ -275,11 +347,15 @@ def select_exploration_result(seed: str, player_level: int, recent: tuple[str, .
     return weighted_choice(f"{seed}:category:{category}", eligible_subweights[category])
 
 
-def select_variant(seed: str, creature: Creature) -> str | None:
+def select_variant(
+    seed: str,
+    creature: Creature,
+    profile: HuntLocationProfile = ROAD_PROFILE,
+) -> str | None:
     if not VARIANT_POOL[creature.creature_id]:
         return None
     chance = int.from_bytes(sha256(f"{seed}:variant.chance".encode()).digest(), "big") % 100
-    if chance >= 8:
+    if chance >= profile.variant_chance:
         return None
     family = int.from_bytes(sha256(f"{seed}:variant.family".encode()).digest(), "big")
     return VARIANT_POOL[creature.creature_id][family % len(VARIANT_POOL[creature.creature_id])]
@@ -307,7 +383,12 @@ def enemy_xp(
             D("1E2"), rounding="ROUND_HALF_EVEN"
         )
         h = D("0.905903") + D("0.094097") * level
-        category_factor = D("1") if category == "common" else D("2.75")
+        category_factor = {
+            "common": D("1.00"),
+            "uncommon": D("1.35"),
+            "elite": D("2.75"),
+            "boss": D("6.00"),
+        }[category]
         delta = level - (level if player_level is None else player_level)
         level_factor = (
             D("1.10") if delta >= 5 else D("1.05") if delta >= 3 else
@@ -325,7 +406,12 @@ def enemy_xp(
 
 def crowns(level: int, category: str) -> int:
     value = D(100) + D(15) * level
-    factor = D("0.05") if category == "common" else D("0.25")
+    factor = {
+        "common": D("0.05"),
+        "uncommon": D("0.08"),
+        "elite": D("0.25"),
+        "boss": D("0.60"),
+    }[category]
     return int(((value * factor) / 10).quantize(D(1), rounding="ROUND_HALF_EVEN") * 10)
 
 
@@ -352,6 +438,38 @@ def create_road_combat(
     equipment_configuration: EquipmentConfigurationSnapshot | None = None,
     ruleset_version: str | None = None,
 ) -> Combat:
+    return create_creature_combat(
+        combat_id,
+        name,
+        character_class,
+        race,
+        hp,
+        creature,
+        level,
+        variant,
+        player_level=player_level,
+        equipment_configuration=equipment_configuration,
+        ruleset_version=ruleset_version,
+        flavor="A Estrada guarda ameaças entre as cinzas.",
+        opening_log=f"🦌 {creature.name} surge entre a fuligem.",
+    )
+
+
+def create_creature_combat(
+    combat_id: UUID,
+    name: str,
+    character_class: str,
+    race: str,
+    hp: Decimal,
+    creature: Creature,
+    level: int,
+    variant: str | None,
+    player_level: int | None = None,
+    equipment_configuration: EquipmentConfigurationSnapshot | None = None,
+    ruleset_version: str | None = None,
+    flavor: str = "",
+    opening_log: str = "",
+) -> Combat:
     player_level = level if player_level is None else player_level
     runtime_ruleset = ruleset_version or RULESET
     equipment = equipment_configuration
@@ -362,17 +480,39 @@ def create_road_combat(
         equipment.contribution() if equipment is not None else None,
     )
     enemy = road_enemy_stats(creature, level, variant)
-    actions = {
-        key: Action(key, label, coefficient, cooldown, debuff, duration)
-        for key, label, coefficient, cooldown, debuff, duration in creature.actions
-    }
+    actions = {}
+    for specification in creature.actions:
+        key, label, coefficient, blocked_opportunities, debuff, duration = specification[:6]
+        native_dot_kind = specification[6] if len(specification) > 6 else None
+        native_dot_stacks = specification[7] if len(specification) > 7 else 0
+        prepared = specification[8] if len(specification) > 8 else False
+        canonical_cooldown = specification[9] if len(specification) > 9 else None
+        actions[key] = Action(
+            key,
+            label,
+            coefficient,
+            blocked_opportunities,
+            debuff,
+            duration,
+            native_dot_kind,
+            native_dot_stacks,
+            prepared,
+            canonical_cooldown,
+        )
     return start_combat(
         Combat(
             combat_id,
             runtime_ruleset,
             fighters={
                 "player": Fighter("player", name, player_level, player_stats, hp, race, character_class),
-                "enemy": Fighter("enemy", creature.name, level, enemy, enemy.hp),
+                "enemy": Fighter(
+                    "enemy",
+                    creature.name,
+                    level,
+                    enemy,
+                    enemy.hp,
+                    damage_taken_modifiers=dict(creature.damage_taken_modifiers),
+                ),
             },
             player_actions={
                 "attack": Action("attack", "⚔️ Atacar", D(1)),
@@ -381,9 +521,10 @@ def create_road_combat(
             enemy_actions=actions,
             ai_cycle=creature.ai,
             tutorial=None,
-            flavor="A Estrada guarda ameaças entre as cinzas.",
-            opening_log=f"🦌 {creature.name} surge entre a fuligem.",
+            flavor=flavor,
+            opening_log=opening_log,
             variant=variant,
+            ai_priority=creature.ai_priority,
             configuration_snapshot=(
                 equipment.to_data(runtime_ruleset) if equipment is not None else None
             ),

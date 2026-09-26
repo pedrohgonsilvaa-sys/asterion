@@ -31,6 +31,8 @@ from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.road import (
     EXPLORE_UNLOCK,
     HUNT_UNLOCK,
+    ROAD_LOCATION,
+    ROAD_PROFILE,
     ROUND_FAMILIARITY,
     RULESET,
     create_road_combat,
@@ -244,9 +246,9 @@ class RoadService:
                     return await self._combat_view(s, c, active)
                 return await self._view_for_world(s, c, world)
             seed = uuid4().hex
-            creature = select_creature(seed, c.level)
+            creature = select_creature(seed, c.level, profile=ROAD_PROFILE)
             level = min(c.level, creature.max_level)
-            variant = select_variant(seed, creature)
+            variant = select_variant(seed, creature, profile=ROAD_PROFILE)
             combat_id = uuid4()
             equipment_configuration = await load_equipment_configuration(s, c)
             reconcile_character_hp(c, equipment_configuration)
@@ -260,6 +262,7 @@ class RoadService:
                 HuntContext(
                     game_activity_id=activity.id,
                     character_id=c.id,
+                    local_id=ROAD_LOCATION,
                     creature_id=creature.creature_id,
                     category=creature.category,
                     enemy_level=level,
@@ -793,7 +796,7 @@ class RoadService:
                 creature_id = result_id.rsplit(".", 1)[-1]
                 creature = creature_for(creature_id)
                 level = min(c.level, creature.max_level)
-                variant = select_variant(seed, creature)
+                variant = select_variant(seed, creature, profile=ROAD_PROFILE)
                 equipment_configuration = await load_equipment_configuration(s, c)
                 reconcile_character_hp(c, equipment_configuration)
                 combat = create_road_combat(
@@ -810,6 +813,7 @@ class RoadService:
                     HuntContext(
                         game_activity_id=activity.id,
                         character_id=c.id,
+                        local_id=ROAD_LOCATION,
                         creature_id=creature.creature_id,
                         category=creature.category,
                         enemy_level=level,
@@ -892,6 +896,10 @@ class RoadService:
         )
         if context is None:
             return 0
+        if context.category not in {"common", "elite"}:
+            raise ValueError(
+                f"Road hunt settlement is not configured for {context.category!r}"
+            )
         event = await s.scalar(
             select(RewardEvent)
             .where(
@@ -2229,6 +2237,8 @@ def _remaining(available_at, now) -> str:
 
 
 def _rarity(seed: str, category: str, purpose: str) -> str:
+    if category not in {"common", "elite"}:
+        raise ValueError(f"Road loot rarity is not configured for {category!r}")
     roll = _draw_int(seed, purpose + ":rarity", 10000) / 100
     if purpose == "equipment":
         bands = (

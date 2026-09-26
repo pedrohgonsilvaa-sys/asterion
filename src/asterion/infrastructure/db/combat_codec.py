@@ -54,6 +54,12 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                         Effect(**(effect | {"magnitude": Decimal(effect["magnitude"])}))
                         for effect in value["effects"]
                     ],
+                    "damage_taken_modifiers": {
+                        kind: Decimal(modifier)
+                        for kind, modifier in value.get(
+                            "damage_taken_modifiers", {}
+                        ).items()
+                    },
                 }
             )
         )
@@ -75,6 +81,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     key: action(value) for key, value in payload["enemy_actions"].items()
                 },
                 "ai_cycle": tuple(payload["ai_cycle"]),
+                "ai_priority": tuple(payload.get("ai_priority", ())),
                 "order": tuple(payload["order"]),
                 "tutorial": tutorial,
                 "events": [

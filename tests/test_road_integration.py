@@ -135,6 +135,11 @@ async def test_road_travel_and_hunt_reconnect_are_persistent(database):
         combat.combat_id,
     )
     assert set(allowed_actions(resumed.combat)) >= {"attack", "defend", "art"}
+    async with database[1]() as session:
+        context = await session.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == combat.activity_id)
+        )
+        assert context.local_id == "tdo.location.estrada_das_cinzas"
 
 
 @pytest.mark.asyncio
@@ -520,6 +525,7 @@ async def test_hunt_receipt_persists_equipment_rune_and_bestiary_details(databas
         session.add(HuntContext(
             game_activity_id=activity.id,
             character_id=character.id,
+            local_id="tdo.location.estrada_das_cinzas",
             creature_id="dog_cinereo",
             category="common",
             enemy_level=1,

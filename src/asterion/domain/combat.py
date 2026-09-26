@@ -75,6 +75,12 @@ class Action:
     blocked_opportunities: int = 0
     attack_debuff: Decimal = D(0)
     duration: int = 0
+    native_dot_kind: str | None = None
+    native_dot_stacks: int = 0
+    prepared: bool | None = None
+    # Explicit canonical cooldowns coexist with the legacy blocked-opportunity
+    # encoding so existing combat snapshots keep their exact timing.
+    cooldown: int | None = None
 
 
 @dataclass
@@ -98,6 +104,7 @@ class Fighter:
     ward_remaining: int = 0
     ward_charges: int = 0
     ward_applied_opportunity: int = 0
+    damage_taken_modifiers: dict[str, Decimal] = field(default_factory=dict)
 
     def stat(self, name: str) -> Decimal:
         value = getattr(self.stats, name)
@@ -185,6 +192,7 @@ class Combat:
     consumable_uses: int = 0
     evasion_streaks: dict[str, int] = field(default_factory=dict)
     configuration_snapshot: dict | None = None
+    ai_priority: tuple[str, ...] = ()
 
     @property
     def tutorial_stage(self) -> str:
@@ -246,6 +254,7 @@ _RESGUARDO_DEFAULT_STATS = frozenset(
     }
 )
 _DOT_STACK_CAPS = {"poison": 3, "bleed": 3, "burn": 2}
+_DOT_DURATIONS = {"poison": 3, "bleed": 2, "burn": 2}
 
 
 def dissipatable(effect: Effect) -> bool:
@@ -762,6 +771,12 @@ def _clear_prepared_action(state: Combat) -> None:
     state.response_window_seen = False
 
 
+def _cooldown_deadline(actor: Fighter, action: Action) -> int:
+    if action.cooldown is not None:
+        return actor.opportunity + action.cooldown
+    return actor.opportunity + action.blocked_opportunities + 1
+
+
 def _end_turn(state: Combat) -> None:
     actor = state.fighters[state.order[state.turn_index]]
     for dot in state.dot_states.get(actor.id, []):
@@ -786,6 +801,16 @@ def _end_turn(state: Combat) -> None:
                 else ZERO
             ),
         )
+        modifier = actor.damage_taken_modifiers.get(dot.kind, D(1))
+        if modifier != D(1) and damage > 0:
+            damage = max(
+                1,
+                int(
+                    (D(damage) * modifier).to_integral_value(
+                        rounding=ROUND_FLOOR
+                    )
+                ),
+            )
         _deal_damage(actor, damage)
         dot.remaining -= 1
     state.dot_states[actor.id] = [
@@ -842,13 +867,16 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
             return
     actions = state.player_actions if actor_id == "player" else state.enemy_actions
     action = actions[action_id]
-    if actor_id == "enemy" and action_id == "leap" and not state.resolving_prepared:
+    prepared = action.prepared is True or (
+        action.prepared is None and action_id == "leap"
+    )
+    if actor_id == "enemy" and prepared and not state.resolving_prepared:
         state.prepared_action = action_id
         state.prepared_source = actor_id
         state.prepared_target = target.id
         state.response_window_seen = False
         actor.last_action = f"prepare:{action_id}"
-        actor.cooldowns[action_id] = actor.opportunity + action.blocked_opportunities + 1
+        actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
         state.events.append(
             CombatEvent(len(state.events), state.round, actor_id, f"prepare:{action_id}")
         )
@@ -877,8 +905,8 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
 
     if dodged:
         actor.last_action = action_id
-        if action.blocked_opportunities and not state.resolving_prepared:
-            actor.cooldowns[action_id] = actor.opportunity + action.blocked_opportunities + 1
+        if (action.cooldown or action.blocked_opportunities) and not state.resolving_prepared:
+            actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
         state.events.append(
             CombatEvent(
                 len(state.events),
@@ -959,15 +987,23 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
         )
         if had_ward and not status_applied and target.ward_charges == 0:
             ward_blocked.append(action.id)
-    # Variant riders are attached only to real direct offensive hits.  Native
-    # bleed from Investida Rasgante occupies the same per-action slot.
-    if actor_id == "enemy" and damage > 0 and target.hp > 0:
+    # Native DoTs and variant riders are attached only to real direct hits.
+    # Legacy Rend snapshots had no metadata and retain their historical bleed.
+    if damage > 0 and target.hp > 0:
         rider = (
             "bleed" if state.variant == "hemorrhagic"
             else "poison" if state.variant == "venomous" else None
-        )
-        native = "bleed" if action_id == "rend" else None
-        chosen = native or rider
+        ) if actor_id == "enemy" else None
+        native_kind = action.native_dot_kind
+        native_stacks = action.native_dot_stacks
+        if (
+            actor_id == "enemy"
+            and native_kind is None
+            and native_stacks == 0
+            and action_id == "rend"
+        ):
+            native_kind, native_stacks = "bleed", 1
+        chosen = native_kind or rider
         if chosen:
             snapshot = actor.stat("attack")
             had_ward = target.ward_charges > 0 and target.ward_remaining > 0
@@ -975,9 +1011,9 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
                 state,
                 target,
                 kind=chosen,
-                snapshots=[snapshot],
+                snapshots=[snapshot] * (native_stacks if native_kind else 1),
                 source=actor.id,
-                duration=3 if chosen == "poison" else 2,
+                duration=_DOT_DURATIONS[chosen],
                 application_event=(
                     f"{state.id.hex}:{state.version}:{len(state.events)}:dot:{chosen}"
                 ),
@@ -985,8 +1021,8 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
             if had_ward and not applied and target.ward_charges == 0:
                 ward_blocked.append(chosen)
     actor.last_action = action_id
-    if action.blocked_opportunities and not state.resolving_prepared:
-        actor.cooldowns[action_id] = actor.opportunity + action.blocked_opportunities + 1
+    if (action.cooldown or action.blocked_opportunities) and not state.resolving_prepared:
+        actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
     state.events.append(
         CombatEvent(
             len(state.events),
@@ -1033,6 +1069,10 @@ def _enemy_action(state: Combat) -> str:
     if state.prepared_action is not None:
         return "hold"
     enemy = state.fighters["enemy"]
+    if state.ai_priority:
+        for action in state.ai_priority:
+            if enemy.cooldowns.get(action, 0) <= enemy.opportunity:
+                return action
     # Alfa Cinéreo uses content priority rather than a positional cycle.
     if {"rend", "leap", "bite"}.issubset(state.enemy_actions):
         bleed_count = next(
