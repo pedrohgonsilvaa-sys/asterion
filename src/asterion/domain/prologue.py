@@ -22,6 +22,7 @@ SUPPORTED_COMBAT_RULESETS = frozenset({RULESET, *SUPPORTED_LEGACY_COMBAT_RULESET
 CONTENT_ID = "prologue_first_combat"
 COMBAT_STAGE = "cinzas_na_estrada:first_combat"
 POST_COMBAT_STAGE = "cinzas_na_estrada:ready_for_first_brazier"
+# Persisted only by pre-v1.4.7 builds; recognized for one-time recovery.
 FAILED_STAGE = "cinzas_na_estrada:first_combat_defeat"
 REWARD_XP = 320
 LEVEL_TWO_XP = 4800

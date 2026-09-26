@@ -9,6 +9,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.methods import EditMessageText
 
 from asterion.application.prologue import CombatView, PrologueService
+from asterion.application.world import WorldService
 from asterion.bot.combat_handlers import combat_router
 from asterion.bot.combat_ui import (
     CombatCallback,
@@ -22,7 +23,7 @@ from asterion.domain.combat import Action, CombatEvent, Effect, combat_consumabl
 from asterion.domain.prologue import PROFILE
 from asterion.domain.road import CREATURES, create_road_combat
 from tests.test_creation_ui import callback_update, message_update
-from tests.test_prologue_persistence import character
+from tests.test_prologue_persistence import character, prepare_defeat_snapshot
 
 
 @pytest.fixture
@@ -127,6 +128,42 @@ async def test_real_dispatcher_enters_and_executes_backend_actions(database, tel
     ).pack()
     await dispatcher.feed_raw_update(telegram, callback_update(callback, update_id=3, actor=1))
     assert (await service.resume(1)).combat.version == entered.combat.version + 1
+
+
+async def test_prologue_defeat_render_has_no_xp_receipt_or_retry(prologue, database):
+    await character(database)
+    initial = await prologue.enter(1)
+    await prepare_defeat_snapshot(prologue, initial, database)
+    defeated = await prologue.action(1, initial.activity_id, initial.combat.version, "attack")
+    screen = render_combat(defeated)
+    assert defeated.combat.result == "defeat"
+    assert "320 XP" not in screen.text
+    assert screen.keyboard is None
+    assert "Tentar Novamente" not in screen.text
+
+
+async def test_terminal_prologue_defeat_dispatches_to_existing_brazier(
+    database, telegram
+):
+    await character(database)
+    service = PrologueService(database[1], "ocaso", PROFILE)
+    initial = await service.enter(1)
+    await prepare_defeat_snapshot(service, initial, database)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(combat_router(service, {}, WorldService(database[1], "ocaso")))
+
+    callback = CombatCallback(
+        activity=initial.activity_id.hex,
+        version=initial.combat.version,
+        action="attack",
+    ).pack()
+    await dispatcher.feed_raw_update(telegram, callback_update(callback, actor=1))
+
+    sent = telegram.session.make_request.call_args.args[1]
+    assert "🔥 Braseiro · Descoberto" in sent.text
+    assert [button.text for row in sent.reply_markup.inline_keyboard for button in row] == [
+        "Descansar"
+    ]
 
 
 async def test_start_mid_combat_reconstructs_combat_instead_of_intro(database, telegram):

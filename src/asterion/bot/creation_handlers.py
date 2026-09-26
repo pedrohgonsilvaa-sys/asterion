@@ -112,6 +112,10 @@ def creation_router(
         if prologue is not None:
             view = await prologue.resume(actor)
             if view is not None:
+                if world is not None:
+                    world_view = await world.resume(actor)
+                    if world_view is not None:
+                        return render_world(world_view)
                 return render_combat(view)
         return render(state)
 
