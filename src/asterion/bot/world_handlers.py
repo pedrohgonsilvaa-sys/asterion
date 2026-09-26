@@ -8,9 +8,11 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from asterion.application.consumables import ConsumableService
 from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
+from asterion.application.prologue import PrologueService
 from asterion.application.road import RoadService
 from asterion.application.s1 import S1Service
 from asterion.application.world import WorldService
+from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
 from asterion.bot.inventory_ui import render_inventory
@@ -27,10 +29,23 @@ def world_router(
     inventory: InventoryService | None = None,
     s1: S1Service | None = None,
     consumables: ConsumableService | None = None,
+    prologue: PrologueService | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
     router.callback_query.filter(F.message.chat.type == "private")
+
+    async def resume_world_or_prologue(actor: int) -> Screen | None:
+        view = await service.resume(actor)
+        if view is not None:
+            return render_world(view)
+        if prologue is None:
+            return None
+        combat_view = await prologue.resume(actor)
+        view = await service.resume(actor)
+        if view is not None:
+            return render_world(view)
+        return render_combat(combat_view) if combat_view is not None else None
 
     async def show(message: Message):
         road_view = await road.resume(message.from_user.id) if road and message.from_user else None
@@ -41,9 +56,13 @@ def world_router(
         if p1_view is not None and p1_view.combat is not None:
             await present(message, render_p1(p1_view), images)
             return
-        view = await service.resume(message.from_user.id) if message.from_user else None
-        if view:
-            await present(message, render_world(view), images)
+        screen = (
+            await resume_world_or_prologue(message.from_user.id)
+            if message.from_user
+            else None
+        )
+        if screen:
+            await present(message, screen, images)
 
     async def show_menu(query: CallbackQuery):
         road_view = await road.resume(query.from_user.id) if road else None
@@ -62,9 +81,9 @@ def world_router(
         ):
             await present(query.message, render_p1(p1_view), images, edit=True)
             return
-        view = await service.resume(query.from_user.id)
-        if view is not None and isinstance(query.message, Message):
-            await present(query.message, render_world(view), images, edit=True)
+        screen = await resume_world_or_prologue(query.from_user.id)
+        if screen is not None and isinstance(query.message, Message):
+            await present(query.message, screen, images, edit=True)
 
     async def foreground(query: CallbackQuery) -> bool:
         road_view = await road.resume(query.from_user.id) if road else None

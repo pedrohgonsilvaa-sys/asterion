@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 from decimal import Decimal
 from uuid import uuid4
 
@@ -7,9 +8,12 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from asterion.application.prologue import PrologueService
+from asterion.application.world import WorldService
 from asterion.domain.creation import PROLOGUE
+from asterion.domain.creation import RULESET as CHARACTER_RULESET
 from asterion.domain.prologue import (
     CONTENT_ID,
+    FAILED_STAGE,
     LEVEL_TWO_XP,
     POST_COMBAT_STAGE,
     PROFILE,
@@ -18,13 +22,18 @@ from asterion.domain.prologue import (
 )
 from asterion.infrastructure.db.models import (
     Account,
+    Achievement,
     BestiaryEntry,
     BestiaryEvidence,
+    Brazier,
     Character,
     CombatRecord,
     Encounter,
     GameActivity,
+    LocationDiscovery,
+    Quest,
     RewardGrant,
+    WorldState,
 )
 
 
@@ -80,6 +89,54 @@ async def win(service, view):
         view = await service.action(1, view.activity_id, view.combat.version, action)
     assert view.combat.result == "victory"
     return view
+
+
+async def prepare_defeat_snapshot(service, view, database):
+    from asterion.infrastructure.db.combat_codec import decode, encode
+
+    async with database[1].begin() as session:
+        activity = await session.get(GameActivity, view.activity_id)
+        record = await session.scalar(select(CombatRecord))
+        state = decode(
+            record.snapshot, record.id, activity.ruleset_version, activity.state_version
+        )
+        player = state.fighters["player"]
+        player.hp = Decimal(1)
+        player.stats = replace(player.stats, evasion=Decimal(0), block=Decimal(0))
+        player.effects.clear()
+        player.barrier = Decimal(0)
+        player.barrier_remaining = 0
+        state.fighters["enemy"].hp = Decimal(100_000)
+        state.used_attack = state.used_defend = state.used_art = True
+        state.order = ("player", "enemy")
+        state.turn_index = 0
+        state.pending_response = None
+        state.result = None
+        state.dot_states.clear()
+        record.snapshot = encode(state)
+
+
+async def lose(service, view, database):
+    await prepare_defeat_snapshot(service, view, database)
+    return await service.action(1, view.activity_id, view.combat.version, "attack")
+
+
+async def mark_legacy_defeat(view, database):
+    from asterion.infrastructure.db.combat_codec import decode, encode
+
+    async with database[1].begin() as session:
+        activity = await session.get(GameActivity, view.activity_id)
+        activity.status = "failed"
+        row = await session.get(Character, activity.character_id)
+        row.stage = FAILED_STAGE
+        row.hp = Decimal(0)
+        record = await session.scalar(select(CombatRecord))
+        state = decode(
+            record.snapshot, record.id, activity.ruleset_version, activity.state_version
+        )
+        state.result = "defeat"
+        state.fighters["player"].hp = Decimal(0)
+        record.snapshot = encode(state)
 
 
 async def test_enter_creates_stable_activity_encounter_and_combat(prologue, database):
@@ -231,6 +288,9 @@ async def test_victory_grants_exactly_once_and_persists_hp(prologue, database):
         assert activity.status == "completed"
         assert grant.xp == 320 and grant.character_id == stored.id
         assert await session.scalar(select(func.count()).select_from(RewardGrant)) == 1
+        assert await session.scalar(select(func.count()).select_from(Brazier)) == 1
+        assert await session.scalar(select(func.count()).select_from(WorldState)) == 1
+        assert await session.scalar(select(func.count()).select_from(LocationDiscovery)) == 1
         # Schema contains no loot, currency, material, vigor or bestiary bonus grant.
         assert set(RewardGrant.__table__.columns.keys()) == {
             "game_activity_id",
@@ -275,6 +335,120 @@ async def test_concurrent_reward_attempt_has_single_grant(prologue, database):
     async with database[1]() as session:
         assert await session.scalar(select(func.count()).select_from(RewardGrant)) == 1
         assert (await session.scalar(select(Character))).xp == 320
+
+
+async def test_defeat_completes_prologue_without_reward_and_reaches_brazier(
+    prologue, database
+):
+    await character(database)
+    defeated = await lose(prologue, await prologue.enter(1), database)
+
+    assert defeated.combat.result == "defeat"
+    assert defeated.stage == POST_COMBAT_STAGE
+    assert defeated.xp == 0
+    brazier = await WorldService(database[1], "ocaso").resume(1)
+    assert brazier is not None and brazier.kind == "brazier"
+
+    async with database[1]() as session:
+        stored = await session.scalar(select(Character))
+        activity = await session.scalar(select(GameActivity))
+        assert activity.status == "completed"
+        assert stored.stage == POST_COMBAT_STAGE
+        assert stored.ruleset_version == CHARACTER_RULESET
+        assert stored.xp == 0
+        assert stored.hp == 0
+        assert await session.scalar(select(func.count()).select_from(RewardGrant)) == 0
+        assert await session.scalar(select(func.count()).select_from(Brazier)) == 1
+        world = await session.scalar(select(WorldState))
+        assert (world.region, world.location) == ("Terras do Ocaso", "Estrada das Cinzas")
+        discovery = await session.scalar(select(LocationDiscovery))
+        assert discovery.location_id == "tdo.location.estrada_das_cinzas"
+
+
+async def test_defeat_reconnects_and_duplicate_callbacks_do_not_recreate_or_reward(
+    prologue, database
+):
+    await character(database)
+    initial = await prologue.enter(1)
+    defeated = await lose(prologue, initial, database)
+    stale_callbacks, *resumed = await asyncio.gather(
+        prologue.action(1, initial.activity_id, initial.combat.version, "attack"),
+        *(PrologueService(database[1], "ocaso", PROFILE).resume(1) for _ in range(4)),
+    )
+    assert stale_callbacks == defeated
+    assert all(item == defeated for item in resumed)
+    assert (await WorldService(database[1], "ocaso").resume(1)).kind == "brazier"
+    async with database[1]() as session:
+        assert await session.scalar(select(func.count()).select_from(GameActivity)) == 1
+        assert await session.scalar(select(func.count()).select_from(Encounter)) == 1
+        assert await session.scalar(select(func.count()).select_from(Brazier)) == 1
+        assert await session.scalar(select(func.count()).select_from(WorldState)) == 1
+        assert await session.scalar(select(func.count()).select_from(LocationDiscovery)) == 1
+        assert await session.scalar(select(func.count()).select_from(RewardGrant)) == 0
+
+
+async def test_legacy_failed_prologue_is_reconciled_once_without_xp(prologue, database):
+    await character(database)
+    initial = await prologue.enter(1)
+    await mark_legacy_defeat(initial, database)
+
+    recovered, *repeated = await asyncio.gather(
+        prologue.resume(1),
+        *(PrologueService(database[1], "ocaso", PROFILE).resume(1) for _ in range(4)),
+    )
+    assert recovered.combat.result == "defeat"
+    assert recovered.stage == POST_COMBAT_STAGE
+    assert all(item == recovered for item in repeated)
+    assert (await WorldService(database[1], "ocaso").resume(1)).kind == "brazier"
+    async with database[1]() as session:
+        stored = await session.scalar(select(Character))
+        activity = await session.scalar(select(GameActivity))
+        assert activity.status == "completed"
+        assert stored.stage == POST_COMBAT_STAGE
+        assert stored.ruleset_version == CHARACTER_RULESET
+        assert stored.xp == 0 and stored.hp == 0
+        assert await session.scalar(select(func.count()).select_from(RewardGrant)) == 0
+        assert await session.scalar(select(func.count()).select_from(Brazier)) == 1
+        assert await session.scalar(select(func.count()).select_from(WorldState)) == 1
+        assert await session.scalar(select(func.count()).select_from(LocationDiscovery)) == 1
+
+
+async def test_rest_after_prologue_defeat_restores_hp_and_starts_p1(prologue, database):
+    await character(database)
+    defeated = await lose(prologue, await prologue.enter(1), database)
+    assert defeated.combat.fighters["player"].hp == 0
+    world = WorldService(database[1], "ocaso")
+    menu = await world.rest(1)
+    assert menu is not None and menu.kind == "menu"
+    assert (await world.resume(1)).kind == "menu"
+
+    async with database[1]() as session:
+        stored = await session.scalar(select(Character))
+        quest = await session.scalar(select(Quest))
+        achievement = await session.scalar(select(Achievement))
+        assert stored.hp == stored.max_hp
+        assert stored.stage == "menu:ready"
+        assert stored.xp == 0
+        assert quest.quest_id == "P1" and quest.status == "active"
+        assert achievement.achievement_id == "feat.tdo.cinzas_na_estrada"
+        assert await session.scalar(select(func.count()).select_from(RewardGrant)) == 0
+
+
+async def test_only_exact_legacy_failed_defeat_is_reconciled(prologue, database):
+    await character(database)
+    initial = await prologue.enter(1)
+    await mark_legacy_defeat(initial, database)
+    async with database[1].begin() as session:
+        record = await session.scalar(select(CombatRecord))
+        snapshot = dict(record.snapshot)
+        snapshot["result"] = "victory"
+        record.snapshot = snapshot
+
+    unchanged = await prologue.resume(1)
+    assert unchanged.stage == FAILED_STAGE
+    async with database[1]() as session:
+        assert (await session.scalar(select(GameActivity))).status == "failed"
+        assert (await session.scalar(select(Character))).stage == FAILED_STAGE
 
 
 async def test_incompatible_foreground_blocks_first_combat(prologue, database):

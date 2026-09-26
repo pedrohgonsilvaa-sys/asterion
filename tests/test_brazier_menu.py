@@ -26,7 +26,7 @@ from asterion.infrastructure.db.models import (
     WorldState,
 )
 from tests.test_creation_ui import callback_update, message_update
-from tests.test_prologue_persistence import character, win
+from tests.test_prologue_persistence import character, mark_legacy_defeat, win
 
 
 def world_view(**changes):
@@ -261,6 +261,35 @@ async def test_dispatcher_start_and_menu_recover_brazier_then_menu(database):
     await dispatcher.feed_raw_update(bot, message_update("/start", actor=1, update_id=3))
     sent = bot.session.make_request.call_args.args[1]
     assert "🌑 Asterion" in sent.text and "Vozes na Estrada" in sent.text
+
+
+async def test_start_and_menu_reconcile_legacy_prologue_defeat(database):
+    await character(database)
+    prologue = PrologueService(database[1], "ocaso", PROFILE)
+    initial = await prologue.enter(1)
+    await mark_legacy_defeat(initial, database)
+
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(return_value=True)
+    dispatcher = Dispatcher(disable_fsm=True)
+    world = WorldService(database[1], "ocaso")
+    dispatcher.include_router(world_router(world, {}, prologue=prologue))
+    dispatcher.include_router(
+        creation_router(
+            CreationService(database[1], "ocaso"), {}, prologue=prologue, world=world
+        )
+    )
+
+    await dispatcher.feed_raw_update(bot, message_update("/start", actor=1))
+    sent = bot.session.make_request.call_args.args[1]
+    assert "🔥 Braseiro · Descoberto" in sent.text
+    assert "320 XP" not in sent.text
+    await dispatcher.feed_raw_update(bot, message_update("/menu", actor=1, update_id=2))
+    sent = bot.session.make_request.call_args.args[1]
+    assert "🔥 Braseiro · Descoberto" in sent.text
+
+    async with database[1]() as session:
+        assert (await session.scalar(select(GameActivity))).status == "completed"
 
 
 async def test_telegram_failure_after_rest_commit_recovers_menu(database):

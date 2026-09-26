@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.equipment_configuration import (
@@ -140,6 +141,16 @@ class PrologueService:
             current = view(character, activity, encounter, record)
             if (
                 intent is None
+                and activity.status == "failed"
+                and character.stage == FAILED_STAGE
+                and activity.ruleset_version in SUPPORTED_COMBAT_RULESETS
+                and current.combat.result == "defeat"
+            ):
+                # Reconcile only the provable pre-v1.4.7 tutorial softlock.
+                await self._complete_prologue_after_combat(session, character, activity)
+                return view(character, activity, encounter, record)
+            if (
+                intent is None
                 or intent[:2] != (activity.id, activity.state_version)
                 or activity.status != "active"
             ):
@@ -156,27 +167,44 @@ class PrologueService:
             character.hp = updated.fighters["player"].hp
             if updated.result == "victory":
                 await repo.grant(character, activity, REWARD_XP)
-                activity.status = "completed"
-                character.stage = POST_COMBAT_STAGE
-                character.ruleset_version = CHARACTER_RULESET
-                session.add(Brazier(character_id=character.id, brazier_id="tdo.brazier.estrada"))
-                session.add(
-                    WorldState(
-                        character_id=character.id,
-                        region="Terras do Ocaso",
-                        location="Estrada das Cinzas",
-                    )
-                )
-                session.add(
-                    LocationDiscovery(
-                        character_id=character.id,
-                        location_id="tdo.location.estrada_das_cinzas",
-                    )
-                )
+                await self._complete_prologue_after_combat(session, character, activity)
             elif updated.result == "defeat":
-                activity.status = "failed"
-                character.stage = FAILED_STAGE
+                await self._complete_prologue_after_combat(session, character, activity)
             return view(character, activity, encounter, record)
+
+    async def _complete_prologue_after_combat(
+        self, session: AsyncSession, character: Character, activity: GameActivity
+    ) -> None:
+        """Converge valid tutorial results on the first brazier boundary."""
+        activity.status = "completed"
+        character.stage = POST_COMBAT_STAGE
+        character.ruleset_version = CHARACTER_RULESET
+
+        await session.execute(
+            pg_insert(Brazier)
+            .values(character_id=character.id, brazier_id="tdo.brazier.estrada")
+            .on_conflict_do_nothing()
+        )
+        await session.execute(
+            pg_insert(WorldState)
+            .values(
+                character_id=character.id,
+                region="Terras do Ocaso",
+                location="Estrada das Cinzas",
+            )
+            .on_conflict_do_update(
+                index_elements=[WorldState.character_id],
+                set_={"region": "Terras do Ocaso", "location": "Estrada das Cinzas"},
+            )
+        )
+        await session.execute(
+            pg_insert(LocationDiscovery)
+            .values(
+                character_id=character.id,
+                location_id="tdo.location.estrada_das_cinzas",
+            )
+            .on_conflict_do_nothing()
+        )
 
     async def _ensure_tutorial_bestiary(self, session, character) -> None:
         """Record the tutorial Cão observation without granting observation XP."""
