@@ -48,7 +48,7 @@ async def _seed_round(database, actor: int, *, vigor: int = 100):
 
 def _force_safe_common(monkeypatch, round_module):
     """Keep scheduler/economy tests independent from combat-survival variance."""
-    monkeypatch.setattr(round_module, "select_creature", lambda seed, level: CREATURES[0])
+    monkeypatch.setattr(round_module, "select_creature", lambda seed, level, **kwargs: CREATURES[0])
     original = round_module.create_road_combat
 
     def safe_combat(*args, **kwargs):
@@ -70,7 +70,7 @@ async def test_round_preparation_consumables_and_reconnect_are_persistent(databa
     import asterion.application.round as round_module
 
     actor, service = await _seed_round(database, 772001)
-    monkeypatch.setattr(round_module, "select_creature", lambda seed, level: CREATURES[0])
+    monkeypatch.setattr(round_module, "select_creature", lambda seed, level, **kwargs: CREATURES[0])
 
     async with database[1]() as session:
         character = await session.scalar(
@@ -217,6 +217,7 @@ async def test_round_freezes_equipment_across_encounters_and_keeps_new_level(dat
 
     async with database[1].begin() as session:
         state = await session.scalar(select(HuntRound).where(HuntRound.id == started.round_id))
+        assert state.config_snapshot["local_id"] == "tdo.location.estrada_das_cinzas"
         first = await session.scalar(
             select(HuntRoundEncounter).where(
                 HuntRoundEncounter.round_id == state.id,
@@ -310,7 +311,7 @@ async def test_cancel_during_materialized_encounter_waits_for_boundary(database,
     import asterion.application.round as round_module
 
     actor, service = await _seed_round(database, 772003)
-    monkeypatch.setattr(round_module, "select_creature", lambda seed, level: CREATURES[0])
+    monkeypatch.setattr(round_module, "select_creature", lambda seed, level, **kwargs: CREATURES[0])
     prepared = await service.prepare_round(actor, 10)
     started = await service.start_round(actor, prepared.round_id, prepared.state_version)
 
@@ -402,7 +403,7 @@ async def test_elite_interrupts_before_auto_combat_and_reuses_encounter_id(datab
         )
     equipped = await EquipmentService(database[1], "ocaso").equip_item(actor, item_id)
     assert equipped is not None and equipped.combat_configuration_version == 1
-    monkeypatch.setattr(round_module, "select_creature", lambda seed, level: CREATURES[3])
+    monkeypatch.setattr(round_module, "select_creature", lambda seed, level, **kwargs: CREATURES[3])
     prepared = await service.prepare_round(actor, 5)
     interrupted = await service.start_round(actor, prepared.round_id, prepared.state_version)
 
@@ -601,7 +602,7 @@ async def test_terminal_round_result_acknowledges_without_restarting_batch(datab
     import asterion.application.round as round_module
 
     actor, service = await _seed_round(database, 772006, vigor=0)
-    monkeypatch.setattr(round_module, "select_creature", lambda seed, level: CREATURES[0])
+    monkeypatch.setattr(round_module, "select_creature", lambda seed, level, **kwargs: CREATURES[0])
     prepared = await service.prepare_round(actor, 5)
     result = await service.start_round(actor, prepared.round_id, prepared.state_version)
     assert result.kind == "round_ended"

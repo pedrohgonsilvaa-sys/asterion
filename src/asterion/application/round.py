@@ -37,6 +37,8 @@ from asterion.domain.equipment_stats import (
     equipment_configuration_from_data,
 )
 from asterion.domain.road import (
+    ROAD_LOCATION,
+    ROAD_PROFILE,
     ROUND_FAMILIARITY,
     RULESET,
     create_road_combat,
@@ -340,6 +342,7 @@ class RoundService(RoadService):
             state.status = "active"
             state.started_at = now
             state.config_snapshot = {
+                "local_id": ROAD_LOCATION,
                 "character_class": c.character_class,
                 "race": c.race,
                 "level_at_start": c.level,
@@ -452,6 +455,7 @@ class RoundService(RoadService):
                 HuntContext(
                     game_activity_id=activity.id,
                     character_id=c.id,
+                    local_id=str((state.config_snapshot or {}).get("local_id", ROAD_LOCATION)),
                     creature_id=encounter.creature_id,
                     category=encounter.category,
                     enemy_level=encounter.enemy_level,
@@ -595,9 +599,9 @@ class RoundService(RoadService):
     async def _materialize_next(self, s, c, state, anchor: datetime) -> None:
         ordinal = state.completed_encounters + 1
         seed = f"{state.seed}:encounter:{ordinal}"
-        creature = select_creature(seed, c.level)
+        creature = select_creature(seed, c.level, profile=ROAD_PROFILE)
         enemy_level = min(c.level, creature.max_level)
-        variant = select_variant(seed, creature)
+        variant = select_variant(seed, creature, profile=ROAD_PROFILE)
         combat_id = uuid4()
         encounter_id = uuid4()
         round_configuration = state.config_snapshot or {}
@@ -768,6 +772,7 @@ class RoundService(RoadService):
         context = HuntContext(
             game_activity_id=child.id,
             character_id=c.id,
+            local_id=str((state.config_snapshot or {}).get("local_id", ROAD_LOCATION)),
             creature_id=encounter.creature_id,
             category=encounter.category,
             enemy_level=encounter.enemy_level,

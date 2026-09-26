@@ -365,6 +365,7 @@ class HuntContext(Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     game_activity_id: Mapped[UUID] = mapped_column(ForeignKey("game_activities.id"), nullable=False)
     character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    local_id: Mapped[str] = mapped_column(String(64), nullable=False)
     creature_id: Mapped[str] = mapped_column(String(64), nullable=False)
     category: Mapped[str] = mapped_column(String(16), nullable=False)
     enemy_level: Mapped[int] = mapped_column(Integer, nullable=False)
