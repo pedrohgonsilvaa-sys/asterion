@@ -3,7 +3,7 @@
 
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from decimal import ROUND_HALF_EVEN, Decimal
+from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal
 from hashlib import sha256
 from uuid import UUID, uuid4
 
@@ -16,7 +16,7 @@ from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     reconcile_character_hp,
 )
-from asterion.application.progression import consolidate_character_level
+from asterion.application.progression import consolidate_character_level, level_xp
 from asterion.domain.combat import (
     CombatConsumableOption,
     act,
@@ -30,17 +30,20 @@ from asterion.domain.consumables import (
 from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.road import (
-    EXPLORE_UNLOCK,
-    HUNT_UNLOCK,
+    CHARNECA_BRAZIER,
+    CHARNECA_LOCATION,
+    CHARNECA_ROUTE_UNLOCK,
+    EXPLORATION_PROFILES,
+    ROAD_EXPLORATION_PROFILE,
     ROAD_LOCATION,
-    ROAD_PROFILE,
-    ROUND_FAMILIARITY,
     RULESET,
     create_road_combat,
     creature_for,
     crowns,
     enemy_xp,
     equipment_rarity,
+    hunt_profile_for_local_id,
+    hunt_profile_for_location,
     material_for,
     materialize_equipment,
     rune_potency,
@@ -76,9 +79,15 @@ from asterion.infrastructure.db.models import (
 
 ROAD = "Estrada das Cinzas"
 REFUGE = "Refúgio do Ocaso"
+CHARNECA = "Charneca da Fuligem"
 REGION = "Terras do Ocaso"
+P2_QUEST_ID = "P2"
+CHARNECA_ROUTE_ENDPOINTS = frozenset((REFUGE, CHARNECA))
 HUNT_CONTENT = "road_manual_hunt"
 EXPLORE_CONTENT = "road_exploration"
+CHARNECA_DUNGEON_UNLOCK = "dungeon.tdo.cripta_ocaso"
+CHARNECA_KNOWN_PATH_UNLOCK = "known_path.tdo.cripta_ocaso"
+CHARNECA_MARKS_CODEX_ENTRY = "codex.mystery.marcas_na_fuligem"
 
 VARIANT_LABELS = {
     "furious": "Furioso",
@@ -135,6 +144,22 @@ class RoadView:
     ready_consumable_option: CombatConsumableOption | None = None
 
 
+def _exploration_local_id(profile) -> str:
+    # Keep historical Road ExplorationAttempt.local_id rows query-compatible.
+    return ROAD if profile.local_id == ROAD_LOCATION else profile.local_id
+
+
+def _location_label(local_id: str | None) -> str:
+    profile = hunt_profile_for_local_id(local_id)
+    return profile.label
+
+
+def _grade_fragment_for_level(level: int) -> str:
+    if 1 <= level <= 10:
+        return "material.tdo.fragmento_aprimoramento_i"
+    raise ValueError(f"no global fragment grade configured for level {level}")
+
+
 class RoadService:
     def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
         self.sessions, self.server_id = sessions, server_id
@@ -144,8 +169,6 @@ class RoadService:
         async with self.sessions.begin() as s:
             c = await self._character(s, actor)
             if c is None:
-                return None
-            if not await self._p1_completed(s, c.id):
                 return None
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
@@ -158,10 +181,15 @@ class RoadService:
             if active is not None:
                 return None
             world = await s.scalar(select(WorldState).where(WorldState.character_id == c.id))
-            if world is None or world.location not in {ROAD, REFUGE}:
+            if world is None or world.location not in {ROAD, REFUGE, CHARNECA}:
+                return None
+            if world.location == CHARNECA:
+                if not await self._p2_completed(s, c.id):
+                    return None
+            elif not await self._p1_completed(s, c.id):
                 return None
             return RoadView(
-                "road" if world.location == ROAD else "refuge",
+                "road" if world.location == ROAD else "charneca" if world.location == CHARNECA else "refuge",
                 c.id,
                 world.location,
                 vigor=c.vigor,
@@ -174,10 +202,41 @@ class RoadService:
             if (
                 c is None
                 or world is None
-                or destination not in {ROAD, REFUGE}
-                or not await self._p1_completed(s, c.id)
-                or world.location not in {ROAD, REFUGE}
+                or destination not in {ROAD, REFUGE, CHARNECA}
+                or world.location not in {ROAD, REFUGE, CHARNECA}
+                or destination == world.location
             ):
+                return None
+            if await s.scalar(
+                select(Quest).where(
+                    Quest.character_id == c.id,
+                    Quest.quest_id == P2_QUEST_ID,
+                    Quest.status == "active",
+                )
+            ):
+                return None
+            overland = {world.location, destination} == CHARNECA_ROUTE_ENDPOINTS
+            if world.location == CHARNECA or destination == CHARNECA:
+                if not overland:
+                    return None
+                if not await self._p2_completed(s, c.id):
+                    return None
+                if not await s.scalar(
+                    select(Unlock).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == CHARNECA_ROUTE_UNLOCK,
+                    )
+                ):
+                    return None
+                if await s.scalar(
+                    select(Quest).where(
+                        Quest.character_id == c.id,
+                        Quest.quest_id == P2_QUEST_ID,
+                        Quest.status == "active",
+                    )
+                ):
+                    return None
+            elif not await self._p1_completed(s, c.id):
                 return None
             active = await s.scalar(
                 select(GameActivity).where(
@@ -193,41 +252,45 @@ class RoadService:
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
-            source_brazier = (
-                "tdo.brazier.estrada"
-                if world.location == ROAD
-                else "tdo.brazier.refugio_do_ocaso"
-            )
-            target_brazier = (
-                "tdo.brazier.estrada" if destination == ROAD else "tdo.brazier.refugio_do_ocaso"
-            )
-            if not await s.scalar(
-                select(Brazier).where(
-                    Brazier.character_id == c.id, Brazier.brazier_id == source_brazier
+            if not overland:
+                source_brazier = (
+                    "tdo.brazier.estrada"
+                    if world.location == ROAD
+                    else "tdo.brazier.refugio_do_ocaso"
                 )
-            ) or not await s.scalar(
-                select(Brazier).where(
-                    Brazier.character_id == c.id, Brazier.brazier_id == target_brazier
+                target_brazier = (
+                    "tdo.brazier.estrada"
+                    if destination == ROAD
+                    else "tdo.brazier.refugio_do_ocaso"
                 )
-            ):
-                return None
+                if not await s.scalar(
+                    select(Brazier).where(
+                        Brazier.character_id == c.id,
+                        Brazier.brazier_id == source_brazier,
+                    )
+                ) or not await s.scalar(
+                    select(Brazier).where(
+                        Brazier.character_id == c.id,
+                        Brazier.brazier_id == target_brazier,
+                    )
+                ):
+                    return None
             world.location = destination
             return await self._view_for_world(s, c, world)
 
     async def start_hunt(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
-            if c is None or world is None or world.location != ROAD or not await self._p1_completed(s, c.id):
+            if c is None or world is None:
                 return None
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
+            profile = await self._available_local_profile(s, c, world, "hunt")
+            if profile is None:
+                return None
             await self._retry_blocked_deliveries(s, c)
             if c.delivery_blocked:
-                return await self._view_for_world(s, c, world)
-            if not await s.scalar(
-                select(Unlock).where(Unlock.character_id == c.id, Unlock.unlock_id == HUNT_UNLOCK)
-            ):
                 return await self._view_for_world(s, c, world)
             active = await s.scalar(
                 select(GameActivity)
@@ -241,9 +304,9 @@ class RoadService:
                     return await self._combat_view(s, c, active)
                 return await self._view_for_world(s, c, world)
             seed = uuid4().hex
-            creature = select_creature(seed, c.level, profile=ROAD_PROFILE)
+            creature = select_creature(seed, c.level, profile=profile)
             level = min(c.level, creature.max_level)
-            variant = select_variant(seed, creature, profile=ROAD_PROFILE)
+            variant = select_variant(seed, creature, profile=profile)
             combat_id = uuid4()
             equipment_configuration = await load_equipment_configuration(s, c)
             reconcile_character_hp(c, equipment_configuration)
@@ -251,13 +314,14 @@ class RoadService:
                 combat_id, c.name, c.character_class, c.race, c.hp, creature, level, variant,
                 player_level=c.level,
                 equipment_configuration=equipment_configuration,
+                location_label=profile.label,
             )
             activity, encounter, record = await CombatRepository(s).create(c, HUNT_CONTENT, combat)
             s.add(
                 HuntContext(
                     game_activity_id=activity.id,
                     character_id=c.id,
-                    local_id=ROAD_LOCATION,
+                    local_id=profile.local_id,
                     creature_id=creature.creature_id,
                     category=creature.category,
                     enemy_level=level,
@@ -276,24 +340,26 @@ class RoadService:
                 observation_level=level,
                 observation_category=creature.category,
             )
+            await self._record_charneca_habitat(
+                s, c.id, creature.creature_id, profile
+            )
             await s.flush()
             return await self._combat_view(s, c, activity)
 
     async def prepare_hunt(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
-            if c is None:
+            if c is None or world is None:
                 return None
-            if not await self._p1_completed(s, c.id):
-                return None
-            if world is None or world.location != ROAD:
+            profile = await self._available_local_profile(s, c, world, "hunt")
+            if profile is None:
                 return None
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
             if c.delivery_blocked:
                 return await self._view_for_world(s, c, world)
-            return RoadView("hunt_prepare", c.id, ROAD, vigor=c.vigor, max_vigor=c.max_vigor,
+            return RoadView("hunt_prepare", c.id, profile.label, vigor=c.vigor, max_vigor=c.max_vigor,
                             name=c.name, hp=c.hp, max_hp=c.max_hp)
 
     async def action(
@@ -416,7 +482,7 @@ class RoadService:
                         attempt.state_version += 1
                         await self._settle_exploration(s, c, attempt)
                     return (
-                        await self._attempt_view(s, c, attempt, ROAD)
+                        await self._attempt_view(s, c, attempt)
                         if attempt is not None
                         else await self._combat_view(s, c, activity)
                     )
@@ -434,16 +500,19 @@ class RoadService:
                         attempt.completed_at = datetime.now(UTC)
                         attempt.progress = {
                             **(attempt.progress or {}),
-                            "receipt_text": "A exploração foi interrompida. Recuperado na Estrada.",
+                            "receipt_text": (
+                                "A exploração foi interrompida. Recuperado em "
+                                f"{_location_label(attempt.local_id)}."
+                            ),
                             "settled": True,
                         }
                         await consolidate_character_level(s, c)
-                        return await self._attempt_view(s, c, attempt, ROAD)
+                        return await self._attempt_view(s, c, attempt)
                 await consolidate_character_level(s, c)
                 return RoadView(
                     "hunt_defeat",
                     c.id,
-                    ROAD,
+                    _location_label(context.local_id if context else None),
                     activity_id=activity.id,
                     vigor=c.vigor,
                     max_vigor=c.max_vigor,
@@ -692,24 +761,18 @@ class RoadService:
     async def explore(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
-            if (
-                c is None
-                or world is None
-                or world.location != ROAD
-                or not await self._p1_completed(s, c.id)
-            ):
+            if c is None or world is None:
                 return None
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
+            hunt_profile = await self._available_local_profile(s, c, world, "explore")
+            if hunt_profile is None:
+                return None
+            explore_profile = EXPLORATION_PROFILES[hunt_profile.local_id]
+            attempt_local_id = _exploration_local_id(hunt_profile)
             await self._retry_blocked_deliveries(s, c)
             if c.delivery_blocked:
-                return await self._view_for_world(s, c, world)
-            if not await s.scalar(
-                select(Unlock).where(
-                    Unlock.character_id == c.id, Unlock.unlock_id == EXPLORE_UNLOCK
-                )
-            ):
                 return await self._view_for_world(s, c, world)
             active = await s.scalar(
                 select(GameActivity).where(
@@ -728,55 +791,56 @@ class RoadService:
                 attempt = await s.scalar(
                     select(ExplorationAttempt).where(ExplorationAttempt.activity_id == active.id)
                 )
-                return await self._combat_view(s, c, active) if attempt and attempt.status == "active" else await self._attempt_view(s, c, attempt, ROAD)
+                return await self._combat_view(s, c, active) if attempt and attempt.status == "active" else await self._attempt_view(s, c, attempt)
             now = datetime.now(UTC)
             recent = await s.scalar(
                 select(func.count(ExplorationAttempt.id)).where(
                     ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == ROAD,
+                    ExplorationAttempt.local_id == attempt_local_id,
                     ExplorationAttempt.created_at >= now - timedelta(minutes=60),
                 )
-            )
+            ) or 0
             last = await s.scalar(
                 select(ExplorationAttempt)
-                .where(ExplorationAttempt.character_id == c.id, ExplorationAttempt.local_id == ROAD)
+                .where(ExplorationAttempt.character_id == c.id, ExplorationAttempt.local_id == attempt_local_id)
                 .order_by(ExplorationAttempt.created_at.desc())
                 .limit(1)
             )
             if recent >= 6:
                 sixth = await s.scalar(select(ExplorationAttempt).where(
                     ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == ROAD,
+                    ExplorationAttempt.local_id == attempt_local_id,
                     ExplorationAttempt.created_at >= now - timedelta(minutes=60),
                 ).order_by(ExplorationAttempt.created_at.desc()).offset(5).limit(1))
-                return self._explore_limit_view(c, recent, last, now, sixth)
+                return self._explore_limit_view(c, recent, last, now, sixth, hunt_profile.label)
             if last and last.created_at and last.created_at > now - timedelta(minutes=5):
-                return self._explore_limit_view(c, recent, last, now)
+                return self._explore_limit_view(c, recent, last, now, location=hunt_profile.label)
             seed = uuid4().hex
             recent_rows = (await s.scalars(
                 select(ExplorationAttempt.result_id)
-                .where(ExplorationAttempt.character_id == c.id, ExplorationAttempt.local_id == ROAD)
+                .where(ExplorationAttempt.character_id == c.id, ExplorationAttempt.local_id == attempt_local_id)
                 .order_by(ExplorationAttempt.created_at.desc()).limit(3)
             )).all()
+            unique_result_ids = tuple(
+                item.result_id for item in explore_profile.results if item.unique
+            )
             resolved_unique = tuple(
                 (await s.scalars(select(ExplorationAttempt.result_id).where(
                     ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == ROAD,
+                    ExplorationAttempt.local_id == attempt_local_id,
                     ExplorationAttempt.status == "completed",
-                    ExplorationAttempt.result_id.in_((
-                        "explore.tdo.estrada.marco_viajantes",
-                        "explore.tdo.estrada.luzes",
-                    )),
+                    ExplorationAttempt.result_id.in_(unique_result_ids),
                 ))).all()
             )
             result = _explore_result(
                 seed, c.level, tuple(str(item).rsplit(".", 1)[-1] for item in recent_rows),
-                tuple(str(item).rsplit(".", 1)[-1] for item in resolved_unique),
+                tuple(str(item) for item in resolved_unique),
+                explore_profile,
             )
             category, result_id, result_text = result
             attempt = ExplorationAttempt(
                 character_id=c.id,
-                local_id=ROAD,
+                local_id=attempt_local_id,
                 ruleset_version=RULESET,
                 seed=seed,
                 category=category,
@@ -788,16 +852,20 @@ class RoadService:
             s.add(attempt)
             await s.flush()
             if category == "combat":
-                creature_id = result_id.rsplit(".", 1)[-1]
+                result_key = result_id.rsplit(".", 1)[-1]
+                creature_id = explore_profile.result(result_key).creature_id
+                if creature_id is None:
+                    raise RuntimeError(f"combat exploration result {result_id!r} has no creature")
                 creature = creature_for(creature_id)
                 level = min(c.level, creature.max_level)
-                variant = select_variant(seed, creature, profile=ROAD_PROFILE)
+                variant = select_variant(seed, creature, profile=hunt_profile)
                 equipment_configuration = await load_equipment_configuration(s, c)
                 reconcile_character_hp(c, equipment_configuration)
                 combat = create_road_combat(
                     uuid4(), c.name, c.character_class, c.race, c.hp, creature, level, variant,
                     player_level=c.level,
                     equipment_configuration=equipment_configuration,
+                    location_label=hunt_profile.label,
                 )
                 activity, encounter, _ = await CombatRepository(s).create(
                     c, EXPLORE_CONTENT, combat
@@ -808,7 +876,7 @@ class RoadService:
                     HuntContext(
                         game_activity_id=activity.id,
                         character_id=c.id,
-                        local_id=ROAD_LOCATION,
+                        local_id=hunt_profile.local_id,
                         creature_id=creature.creature_id,
                         category=creature.category,
                         enemy_level=level,
@@ -824,18 +892,21 @@ class RoadService:
                     observation_level=level,
                     observation_category=creature.category,
                 )
+                await self._record_charneca_habitat(s, c.id, creature_id, hunt_profile)
                 await s.flush()
                 return await self._combat_view(s, c, activity)
             await self._settle_exploration(s, c, attempt)
-            return await self._attempt_view(s, c, attempt, ROAD)
+            return await self._attempt_view(s, c, attempt)
 
     async def prepare_explore(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
-            if c is None or world is None or world.location != ROAD:
+            if c is None or world is None:
                 return None
-            if not await self._p1_completed(s, c.id):
+            hunt_profile = await self._available_local_profile(s, c, world, "explore")
+            if hunt_profile is None:
                 return None
+            attempt_local_id = _exploration_local_id(hunt_profile)
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
@@ -853,28 +924,28 @@ class RoadService:
                     attempt = await s.scalar(
                         select(ExplorationAttempt).where(ExplorationAttempt.activity_id == active.id)
                     )
-                    return await self._combat_view(s, c, active) if attempt and attempt.status == "active" else await self._attempt_view(s, c, attempt, ROAD)
+                    return await self._combat_view(s, c, active) if attempt and attempt.status == "active" else await self._attempt_view(s, c, attempt)
                 return None
             now = datetime.now(UTC)
             recent = await s.scalar(select(func.count(ExplorationAttempt.id)).where(
                 ExplorationAttempt.character_id == c.id,
-                ExplorationAttempt.local_id == ROAD,
+                ExplorationAttempt.local_id == attempt_local_id,
                 ExplorationAttempt.created_at >= now - timedelta(minutes=60),
             )) or 0
             last = await s.scalar(select(ExplorationAttempt).where(
                 ExplorationAttempt.character_id == c.id,
-                ExplorationAttempt.local_id == ROAD,
+                ExplorationAttempt.local_id == attempt_local_id,
             ).order_by(ExplorationAttempt.created_at.desc()).limit(1))
             if recent >= 6:
                 sixth = await s.scalar(select(ExplorationAttempt).where(
                     ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == ROAD,
+                    ExplorationAttempt.local_id == attempt_local_id,
                     ExplorationAttempt.created_at >= now - timedelta(minutes=60),
                 ).order_by(ExplorationAttempt.created_at.desc()).offset(5).limit(1))
-                return self._explore_limit_view(c, recent, last, now, sixth)
+                return self._explore_limit_view(c, recent, last, now, sixth, hunt_profile.label)
             if last and last.created_at and last.created_at > now - timedelta(minutes=5):
-                return self._explore_limit_view(c, recent, last, now)
-            return RoadView("explore_prepare", c.id, ROAD, vigor=c.vigor, max_vigor=c.max_vigor, name=c.name, hp=c.hp, max_hp=c.max_hp)
+                return self._explore_limit_view(c, recent, last, now, location=hunt_profile.label)
+            return RoadView("explore_prepare", c.id, hunt_profile.label, vigor=c.vigor, max_vigor=c.max_vigor, name=c.name, hp=c.hp, max_hp=c.max_hp)
 
     async def _settle_hunt(
         self,
@@ -891,9 +962,9 @@ class RoadService:
         )
         if context is None:
             return 0
-        if context.category not in {"common", "elite"}:
+        if context.category not in {"common", "uncommon", "elite"}:
             raise ValueError(
-                f"Road hunt settlement is not configured for {context.category!r}"
+                f"Hunt settlement is not configured for {context.category!r}"
             )
         event = await s.scalar(
             select(RewardEvent)
@@ -924,10 +995,20 @@ class RoadService:
                 and _draw_int(context.seed, "material-roll", 100) >= 80
                 else 1
                 if context.category == "common"
+                else 1 + _draw_int(context.seed, "uncommon-materials", 2)
+                if context.category == "uncommon"
                 else 3 + _draw_int(context.seed, "elite-materials", 2)
             )
             for ordinal in range(material_count):
-                material = material_for(context.creature_id, f"{context.seed}:material:{ordinal}")
+                # Keep the historical Common/Road ordinal-zero seed stable.
+                # Uncommon has multiple independent units and therefore gets
+                # an explicit ordinal in each sub-roll.
+                material_seed = (
+                    context.seed
+                    if context.category == "common" and ordinal == 0
+                    else f"{context.seed}:material:{ordinal}"
+                )
+                material = material_for(context.creature_id, material_seed)
                 components.append(("material", material, 1, {"material_id": material, "bound": False}))
                 await self._deliver_material(
                     s, c, material, 1, f"activity:{activity.id}:material:{ordinal}"
@@ -935,7 +1016,9 @@ class RoadService:
             if context.category == "elite":
                 components.append(("catalyst", "material.tdo.catalisador_elite_i", 1, {}))
                 if _draw_int(context.seed, "fragment", 100) < 40:
-                    components.append(("fragment", "material.tdo.fragmento_aprimoramento_i", 1, {}))
+                    components.append(("fragment", _grade_fragment_for_level(context.enemy_level), 1, {}))
+            elif context.category == "uncommon" and _draw_int(context.seed, "fragment", 100) < 5:
+                components.append(("fragment", _grade_fragment_for_level(context.enemy_level), 1, {}))
             await self._materialize_optional_loot(s, c, context, components)
             for kind, item_id, quantity, *_ in components:
                 if kind in {"catalyst", "fragment"}:
@@ -971,13 +1054,19 @@ class RoadService:
                     payload=payload,
                 )
             )
-        await self._ensure(s, Unlock, character_id=c.id, unlock_id=ROUND_FAMILIARITY)
+        profile = hunt_profile_for_local_id(context.local_id)
+        await self._ensure(
+            s,
+            Unlock,
+            character_id=c.id,
+            unlock_id=profile.round_familiarity,
+        )
         await consolidate_character_level(s, c, equipment_configuration)
         return xp
 
     async def _materialize_optional_loot(self, s, c, context, components):
-        equipment_chance = 35 if context.category == "elite" else 8
-        rune_chance = 50 if context.category == "elite" else 5
+        equipment_chance = {"common": 8, "uncommon": 14, "elite": 35}[context.category]
+        rune_chance = {"common": 5, "uncommon": 15, "elite": 50}[context.category]
         if _draw_int(context.seed, "equipment", 100) < equipment_chance:
             rarity = equipment_rarity(
                 context.seed, context.category,
@@ -1079,6 +1168,9 @@ class RoadService:
         if (attempt.progress or {}).get("settled"):
             return
         base_text = (attempt.progress or {}).get("result_text", "")
+        if attempt.local_id == CHARNECA_LOCATION:
+            await self._settle_charneca_exploration(s, c, attempt, base_text)
+            return
         if attempt.category == "combat" and attempt.activity_id is not None:
             context = await s.scalar(
                 select(HuntContext).where(HuntContext.game_activity_id == attempt.activity_id)
@@ -1257,6 +1349,238 @@ class RoadService:
         attempt.completed_at = attempt.completed_at or datetime.now(UTC)
         await consolidate_character_level(s, c)
 
+    async def _settle_charneca_exploration(self, s, c, attempt, base_text: str):
+        source_id = f"explore:{attempt.id}"
+        existing = await s.scalar(
+            select(RewardEvent)
+            .where(
+                RewardEvent.character_id == c.id,
+                RewardEvent.source_id == source_id,
+            )
+            .with_for_update()
+        )
+        if existing is not None:
+            return
+        event = RewardEvent(character_id=c.id, source_id=source_id)
+        s.add(event)
+        await s.flush()
+        components: list[tuple[str, str | None, int, dict]] = []
+        receipt_lines = [base_text]
+        should_consolidate = False
+
+        if attempt.category == "combat" and attempt.activity_id is not None:
+            context = await s.scalar(
+                select(HuntContext)
+                .where(HuntContext.game_activity_id == attempt.activity_id)
+                .with_for_update()
+            )
+            if context is None:
+                raise RuntimeError("Charneca exploration combat is missing HuntContext")
+            enough = c.vigor >= 4
+            xp = enemy_xp(
+                context.enemy_level,
+                context.category,
+                Decimal(1) if enough else Decimal("0.25"),
+                player_level=c.level,
+            )
+            c.xp += xp
+            components.append(("xp", None, xp, {}))
+            receipt_lines.append(f"✨ XP · {xp}")
+            if enough:
+                c.vigor -= 4
+                crowns_award = int(
+                    ((Decimal(100 + 15 * context.enemy_level) * Decimal("0.15")) / 10)
+                    .quantize(Decimal(1), rounding=ROUND_HALF_EVEN)
+                    * 10
+                )
+                c.crowns += crowns_award
+                components.append(("crowns", None, crowns_award, {}))
+                receipt_lines.append(f"🪙 Coroas · {crowns_award}")
+                units = 1 + int(
+                    _draw_int(attempt.seed, "exploration-material-extra", 100) < 20
+                )
+                for ordinal in range(units):
+                    material = material_for(
+                        context.creature_id,
+                        f"{attempt.seed}:exploration-material:{ordinal}",
+                    )
+                    components.append(("material", material, 1, {"material_id": material}))
+                    receipt_lines.append(
+                        f"📦 {MATERIAL_LABELS.get(material, material)} · 1"
+                    )
+                    await self._deliver_material(
+                        s,
+                        c,
+                        material,
+                        1,
+                        f"explore:{attempt.id}:material:{ordinal}",
+                    )
+            bestiary_update = await self._bestiary(
+                s, c.id, context.creature_id, victory=True
+            )
+            if bestiary_update is not None:
+                components.append(
+                    ("bestiary", context.creature_id, 1, bestiary_update)
+                )
+                receipt_lines.append(
+                    f"📖 Bestiário · {bestiary_update['creature_name']} · "
+                    f"{bestiary_update['stage_label']}"
+                )
+            should_consolidate = True
+
+        elif attempt.category == "resource":
+            if c.vigor >= 4:
+                c.vigor -= 4
+                crowns_award = int(
+                    ((Decimal(100 + 15 * c.level) * Decimal("0.10")) / 10)
+                    .quantize(Decimal(1), rounding=ROUND_HALF_EVEN)
+                    * 10
+                )
+                c.crowns += crowns_award
+                components.append(("crowns", None, crowns_award, {}))
+                receipt_lines.append(f"🪙 Coroas · {crowns_award}")
+                material_id = {
+                    "explore.tdo.charneca.erva": "material.tdo.erva_cinzenta",
+                    "explore.tdo.charneca.residuo": "material.tdo.residuo_ocaso",
+                    "explore.tdo.charneca.couro": "material.tdo.couro_escoriado",
+                }.get(attempt.result_id)
+                if material_id is None:
+                    raise RuntimeError(
+                        f"unknown Charneca resource result {attempt.result_id!r}"
+                    )
+                components.append(("material", material_id, 1, {"material_id": material_id}))
+                receipt_lines.append(
+                    f"📦 {MATERIAL_LABELS.get(material_id, material_id)} · 1"
+                )
+                await self._deliver_material(
+                    s, c, material_id, 1, f"explore:{attempt.id}:resource"
+                )
+
+        elif attempt.result_id == "explore.tdo.charneca.braseiro":
+            xp = _fixed_percent_xp(4, "0.08")
+            c.xp += xp
+            await self._ensure(
+                s,
+                Brazier,
+                character_id=c.id,
+                brazier_id=CHARNECA_BRAZIER,
+            )
+            components.extend(
+                (
+                    ("xp", None, xp, {"reference_level": 4, "fixed_percent": "0.08"}),
+                    ("brazier", CHARNECA_BRAZIER, 1, {}),
+                )
+            )
+            receipt_lines.append(f"✨ XP · {xp}")
+            should_consolidate = True
+
+        elif attempt.result_id == "explore.tdo.charneca.cripta":
+            xp = _fixed_percent_xp(4, "0.08")
+            c.xp += xp
+            for unlock_id in (CHARNECA_DUNGEON_UNLOCK, CHARNECA_KNOWN_PATH_UNLOCK):
+                await self._ensure(
+                    s, Unlock, character_id=c.id, unlock_id=unlock_id
+                )
+                components.append(("unlock", unlock_id, 1, {}))
+            components.append(
+                ("xp", None, xp, {"reference_level": 4, "fixed_percent": "0.08"})
+            )
+            receipt_lines.append(f"✨ XP · {xp}")
+            should_consolidate = True
+
+        elif attempt.result_id == "explore.tdo.charneca.pedra_marcada":
+            xp = _fixed_percent_xp(4, "0.025")
+            c.xp += xp
+            await self._ensure(
+                s,
+                CodexEntry,
+                character_id=c.id,
+                entry_id=CHARNECA_MARKS_CODEX_ENTRY,
+            )
+            components.append(
+                ("xp", None, xp, {"reference_level": 4, "fixed_percent": "0.025"})
+            )
+            components.append(("codex", CHARNECA_MARKS_CODEX_ENTRY, 1, {}))
+            receipt_lines.append(f"✨ XP · {xp}")
+            should_consolidate = True
+
+        elif attempt.result_id == "explore.tdo.charneca.vestigios_fuligem":
+            creatures = ("aranha_cinza", "cervo_escoriado", "peregrino_calcinado")
+            identifiable = []
+            without_habitat = []
+            habitat_id = f"habitat:{CHARNECA_LOCATION}"
+            for creature_id in creatures:
+                profile = creature_for(creature_id)
+                entry = await s.scalar(
+                    select(BestiaryEntry).where(
+                        BestiaryEntry.character_id == c.id,
+                        BestiaryEntry.creature_id == creature_id,
+                    )
+                )
+                if entry is None or c.level < profile.unlock_level:
+                    continue
+                identifiable.append(creature_id)
+                habitat = await s.scalar(
+                    select(BestiaryEvidence).where(
+                        BestiaryEvidence.character_id == c.id,
+                        BestiaryEvidence.creature_id == creature_id,
+                        BestiaryEvidence.evidence_id == habitat_id,
+                    )
+                )
+                if habitat is None:
+                    without_habitat.append(creature_id)
+            eligible = without_habitat or identifiable
+            if eligible:
+                creature_id = eligible[_draw_int(attempt.seed, "habitat", len(eligible))]
+                entry = await s.scalar(
+                    select(BestiaryEntry)
+                    .where(
+                        BestiaryEntry.character_id == c.id,
+                        BestiaryEntry.creature_id == creature_id,
+                    )
+                    .with_for_update()
+                )
+                if entry is not None and creature_id in without_habitat:
+                    added = await self._add_bestiary_evidence(
+                        s,
+                        entry,
+                        c.id,
+                        creature_id,
+                        habitat_id,
+                        "habitat",
+                        3,
+                    )
+                    if added:
+                        components.append(("bestiary_habitat", creature_id, 3, {}))
+
+        elif attempt.category == "narrative" and attempt.result_id == "explore.tdo.charneca.vento_morto":
+            xp = _fixed_percent_xp(4, "0.025")
+            c.xp += xp
+            components.append(
+                ("xp", None, xp, {"reference_level": 4, "fixed_percent": "0.025"})
+            )
+            receipt_lines.append(f"✨ XP · {xp}")
+            should_consolidate = True
+
+        for kind, item_id, quantity, payload in components:
+            s.add(
+                RewardComponent(
+                    reward_event_id=event.id,
+                    kind=kind,
+                    item_id=item_id,
+                    quantity=quantity,
+                    payload=payload,
+                )
+            )
+        attempt.progress = {
+            **(attempt.progress or {}),
+            "receipt_text": "\n\n".join(receipt_lines),
+            "settled": True,
+        }
+        attempt.completed_at = attempt.completed_at or datetime.now(UTC)
+        if should_consolidate:
+            await consolidate_character_level(s, c)
+
     async def _bestiary(
         self,
         s,
@@ -1311,6 +1635,59 @@ class RoadService:
             )
         )
 
+    async def _p2_completed(self, s, character_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Quest).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == P2_QUEST_ID,
+                    Quest.status == "completed",
+                )
+            )
+        )
+
+    async def _available_local_profile(self, s, c, world, activity_kind: str):
+        profile = hunt_profile_for_location(world.location) if world is not None else None
+        if profile is None:
+            return None
+        if profile.local_id == ROAD_LOCATION:
+            if not await self._p1_completed(s, c.id):
+                return None
+        elif not await self._p2_completed(s, c.id):
+            return None
+        unlock_id = profile.hunt_unlock if activity_kind == "hunt" else profile.explore_unlock
+        if not await s.scalar(
+            select(Unlock).where(
+                Unlock.character_id == c.id,
+                Unlock.unlock_id == unlock_id,
+            )
+        ):
+            return None
+        return profile
+
+    async def _record_charneca_habitat(self, s, character_id, creature_id, profile):
+        if profile.local_id != CHARNECA_LOCATION:
+            return False
+        entry = await s.scalar(
+            select(BestiaryEntry)
+            .where(
+                BestiaryEntry.character_id == character_id,
+                BestiaryEntry.creature_id == creature_id,
+            )
+            .with_for_update()
+        )
+        if entry is None:
+            return False
+        return await self._add_bestiary_evidence(
+            s,
+            entry,
+            character_id,
+            creature_id,
+            f"habitat:{CHARNECA_LOCATION}",
+            "habitat",
+            3,
+        )
+
     async def _road_blocking_view(self, s, c):
         """Return the authoritative Road foreground/result before new callbacks run."""
         active = await s.scalar(
@@ -1332,7 +1709,7 @@ class RoadService:
             )
             if attempt is None or attempt.status == "active":
                 return await self._combat_view(s, c, active)
-            return await self._attempt_view(s, c, attempt, ROAD)
+            return await self._attempt_view(s, c, attempt)
 
         attempt = await s.scalar(
             select(ExplorationAttempt)
@@ -1346,7 +1723,7 @@ class RoadService:
             .with_for_update()
         )
         if attempt is not None:
-            return await self._attempt_view(s, c, attempt, ROAD)
+            return await self._attempt_view(s, c, attempt)
 
         context = await s.scalar(
             select(HuntContext)
@@ -1373,7 +1750,7 @@ class RoadService:
         return RoadView(
             "hunt_defeat",
             c.id,
-            ROAD,
+            _location_label(context.local_id),
             activity_id=activity.id,
             vigor=c.vigor,
             max_vigor=c.max_vigor,
@@ -1405,16 +1782,22 @@ class RoadService:
                 attempt.completed_at = datetime.now(UTC)
                 attempt.progress = {
                     **(attempt.progress or {}),
-                    "receipt_text": "A exploração expirou por inatividade. Recuperado na Estrada.",
+                    "receipt_text": (
+                        "A exploração expirou por inatividade. Recuperado em "
+                        f"{_location_label(attempt.local_id)}."
+                    ),
                     "settled": True,
                 }
                 await consolidate_character_level(s, c)
-                return await self._attempt_view(s, c, attempt, ROAD)
+                return await self._attempt_view(s, c, attempt)
+        context = await s.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == activity.id)
+        )
         await consolidate_character_level(s, c)
         return RoadView(
             "hunt_defeat",
             c.id,
-            ROAD,
+            _location_label(context.local_id if context is not None else None),
             activity_id=activity.id,
             vigor=c.vigor,
             max_vigor=c.max_vigor,
@@ -1438,7 +1821,7 @@ class RoadService:
                     return RoadView(
                         "hunt_defeat",
                         c.id,
-                        ROAD,
+                        _location_label(context.local_id if context is not None else None),
                         activity_id=activity.id,
                         vigor=c.vigor,
                         max_vigor=c.max_vigor,
@@ -1448,7 +1831,7 @@ class RoadService:
                 select(ExplorationAttempt).where(ExplorationAttempt.activity_id == activity.id)
             )
             if attempt is not None and not attempt.result_acknowledged:
-                return await self._attempt_view(s, c, attempt, ROAD)
+                return await self._attempt_view(s, c, attempt)
         return await self._view_for_world(s, c, world) if world is not None else None
 
     async def _combat_view(self, s, c, activity):
@@ -1481,7 +1864,7 @@ class RoadService:
         return RoadView(
             "combat",
             c.id,
-            ROAD,
+            _location_label(context.local_id if context is not None else None),
             activity.id,
             encounter.id,
             record.id,
@@ -1499,14 +1882,24 @@ class RoadService:
         )
 
     async def _view_for_world(self, s, c, world):
-        familiar = bool(await s.scalar(select(Unlock).where(Unlock.character_id == c.id, Unlock.unlock_id == ROUND_FAMILIARITY)))
+        hunt_profile = hunt_profile_for_location(world.location)
+        familiar = bool(
+            hunt_profile
+            and await s.scalar(
+                select(Unlock).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == hunt_profile.round_familiarity,
+                )
+            )
+        )
         explore_available = True
-        if world.location == ROAD:
+        if hunt_profile is not None:
             now = datetime.now(UTC)
+            attempt_local_id = _exploration_local_id(hunt_profile)
             recent = await s.scalar(
                 select(func.count(ExplorationAttempt.id)).where(
                     ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == ROAD,
+                    ExplorationAttempt.local_id == attempt_local_id,
                     ExplorationAttempt.created_at >= now - timedelta(minutes=60),
                 )
             ) or 0
@@ -1514,7 +1907,7 @@ class RoadService:
                 select(ExplorationAttempt)
                 .where(
                     ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == ROAD,
+                    ExplorationAttempt.local_id == attempt_local_id,
                 )
                 .order_by(ExplorationAttempt.created_at.desc())
                 .limit(1)
@@ -1524,7 +1917,7 @@ class RoadService:
                 or (last is not None and last.created_at > now - timedelta(minutes=5))
             )
         return RoadView(
-            "road" if world.location == ROAD else "refuge",
+            "road" if world.location == ROAD else "charneca" if world.location == CHARNECA else "refuge",
             c.id,
             world.location,
             vigor=c.vigor,
@@ -1875,7 +2268,7 @@ class RoadService:
             else:
                 reward_lines.append(f"📦 {labels.get(row.item_id, row.item_id or row.kind)} · {row.quantity}")
         return RoadView(
-            "hunt_victory", c.id, ROAD,
+            "hunt_victory", c.id, _location_label(context.local_id),
             activity_id=activity.id,
             vigor=c.vigor, max_vigor=c.max_vigor,
             name=c.name, hp=c.hp, max_hp=c.max_hp,
@@ -1884,15 +2277,15 @@ class RoadService:
             variant=VARIANT_LABELS.get(context.variant, context.variant),
         )
 
-    def _explore_limit_view(self, c, recent, last, now, sixth=None):
+    def _explore_limit_view(self, c, recent, last, now, sixth=None, location=ROAD):
         if recent >= 6:
             attempts = [sixth.created_at + timedelta(minutes=60)] if sixth and sixth.created_at else []
             available_at = min(attempts) if attempts else now
-            return RoadView("explore_limit", c.id, ROAD, vigor=c.vigor, max_vigor=c.max_vigor,
+            return RoadView("explore_limit", c.id, location, vigor=c.vigor, max_vigor=c.max_vigor,
                             name=c.name, hp=c.hp, max_hp=c.max_hp,
                             result_text=_remaining(available_at, now))
         available_at = last.created_at + timedelta(minutes=5)
-        return RoadView("explore_cooldown", c.id, ROAD, vigor=c.vigor, max_vigor=c.max_vigor,
+        return RoadView("explore_cooldown", c.id, location, vigor=c.vigor, max_vigor=c.max_vigor,
                         name=c.name, hp=c.hp, max_hp=c.max_hp,
                         result_text=_remaining(available_at, now))
 
@@ -1900,10 +2293,11 @@ class RoadService:
         if attempt is None or attempt.status == "active":
             return False
         now = datetime.now(UTC)
+        local_id = attempt.local_id
         recent = await s.scalar(
             select(func.count(ExplorationAttempt.id)).where(
                 ExplorationAttempt.character_id == c.id,
-                ExplorationAttempt.local_id == ROAD,
+                ExplorationAttempt.local_id == local_id,
                 ExplorationAttempt.created_at >= now - timedelta(minutes=60),
             )
         ) or 0
@@ -1913,7 +2307,7 @@ class RoadService:
             select(ExplorationAttempt)
             .where(
                 ExplorationAttempt.character_id == c.id,
-                ExplorationAttempt.local_id == ROAD,
+                ExplorationAttempt.local_id == local_id,
             )
             .order_by(ExplorationAttempt.created_at.desc(), ExplorationAttempt.id.desc())
             .limit(1)
@@ -1924,7 +2318,8 @@ class RoadService:
             and last.created_at > now - timedelta(minutes=5)
         )
 
-    async def _attempt_view(self, s, c, attempt, location, text=None):
+    async def _attempt_view(self, s, c, attempt, location=None, text=None):
+        location = location or _location_label(attempt.local_id if attempt else ROAD)
         persisted = (attempt.progress or {}).get("receipt_text") or (attempt.progress or {}).get("result_text")
         return RoadView(
             "exploration",
@@ -1940,90 +2335,30 @@ class RoadService:
         )
 
 
-def _explore_result(seed: str, player_level: int = 1, recent: tuple[str, ...] = (), excluded: tuple[str, ...] = ()) -> tuple[str, str, str]:
-    result = select_exploration_result(seed, player_level, recent, excluded)
-    texts = {
-        "marco_viajantes": (
-            "great_discovery",
-            "explore.tdo.estrada.marco_viajantes",
-            "Um marco de pedra inclina-se à margem da estrada. Marcas gastas ao redor mostram que viajantes paravam aqui muito antes das passagens mais recentes.",
-        ),
-        "rastros_cinereos": (
-            "knowledge",
-            "explore.tdo.estrada.rastros_cinereos",
-            "Marcas interrompidas atravessam a fuligem e desaparecem alguns passos adiante. Há sinais suficientes para reconhecer que alguma criatura utiliza esta rota.",
-        ),
-        "sinais_margem": (
-            "knowledge",
-            "explore.tdo.estrada.sinais_margem",
-            "Pedras movidas, tecido preso aos espinhos e cinza revolvida mostram que viajantes ainda usam as margens da Estrada para descansar ou passar despercebidos.",
-        ),
-        "luzes": (
-            "narrative",
-            "explore.tdo.estrada.luzes",
-            "Uma luz pálida surge entre as pedras por alguns instantes. Não há chama nem calor suficiente para explicá-la; quando você se aproxima, ela já desapareceu.",
-        ),
-        "vozes_vento": (
-            "narrative",
-            "explore.tdo.estrada.vozes_vento",
-            "O vento atravessa a estrada e traz um som que lembra uma voz distante. Quando você tenta segui-lo, resta apenas o ruído da cinza contra a pedra.",
-        ),
-        "cinza_pegadas": (
-            "atmospheric",
-            "explore.tdo.estrada.cinza_pegadas",
-            "Uma rajada atravessa a Estrada. Em poucos instantes, a cinza cobre marcas antigas até não restar indicação de quem passou por ali.",
-        ),
-        "carroca": (
-            "atmospheric",
-            "explore.tdo.estrada.carroca",
-            "A estrutura apodrecida de uma carroça repousa fora da estrada. As rodas desapareceram há muito; o restante já não guarda nada de valor.",
-        ),
-        "fogueira": (
-            "atmospheric",
-            "explore.tdo.estrada.fogueira",
-            "Pedras enegrecidas cercam uma fogueira antiga. A cinza está fria e nenhum sinal recente indica quem a acendeu.",
-        ),
-        "ferro": (
-            "resource",
-            "explore.tdo.estrada.ferro",
-            "Entre pedras partidas, um veio escuro de metal aflora sob a fuligem. Há material suficiente para ser recolhido.",
-        ),
-        "couro": (
-            "resource",
-            "explore.tdo.estrada.couro",
-            "Entre restos secos à margem da estrada, uma porção de couro ainda aproveitável resistiu à cinza e ao tempo.",
-        ),
-        "erva": (
-            "resource",
-            "explore.tdo.estrada.erva",
-            "Folhas acinzentadas crescem entre rachaduras protegidas do vento. Algumas ainda podem ser colhidas.",
-        ),
-        "residuo": (
-            "resource",
-            "explore.tdo.estrada.residuo",
-            "Um depósito escuro se acumulou entre as pedras. A substância é fina, mas distinta da fuligem comum da Estrada.",
-        ),
-        "dog_cinereo": (
-            "combat",
-            "explore.tdo.estrada.combat.dog_cinereo",
-            "Um Cão Cinéreo surge entre as cinzas.",
-        ),
-        "corvo_fuligem": (
-            "combat",
-            "explore.tdo.estrada.combat.corvo_fuligem",
-            "Um Corvo de Fuligem desce sobre a estrada.",
-        ),
-        "peregrino_calcinado": (
-            "combat",
-            "explore.tdo.estrada.combat.peregrino_calcinado",
-            "Um Peregrino Calcinado bloqueia a passagem.",
-        ),
-    }
-    return texts[result]
+def _explore_result(
+    seed: str,
+    player_level: int = 1,
+    recent: tuple[str, ...] = (),
+    excluded: tuple[str, ...] = (),
+    profile=ROAD_EXPLORATION_PROFILE,
+) -> tuple[str, str, str]:
+    key = select_exploration_result(
+        seed, player_level, recent, excluded, profile=profile
+    )
+    result = profile.result(key)
+    return result.category, result.result_id, result.text
 
 
 def _draw_int(seed: str, purpose: str, modulo: int) -> int:
     return int.from_bytes(sha256(f"{seed}:{purpose}".encode()).digest(), "big") % modulo
+
+
+def _fixed_percent_xp(reference_level: int, percent: str) -> int:
+    return int(
+        (Decimal(level_xp(reference_level)) * Decimal(percent)).quantize(
+            Decimal(1), rounding=ROUND_HALF_UP
+        )
+    )
 
 
 def _repeat_bkp(wins: int, elite: bool) -> int:
@@ -2044,8 +2379,8 @@ def _remaining(available_at, now) -> str:
 
 
 def _rarity(seed: str, category: str, purpose: str) -> str:
-    if category not in {"common", "elite"}:
-        raise ValueError(f"Road loot rarity is not configured for {category!r}")
+    if category not in {"common", "uncommon", "elite"}:
+        raise ValueError(f"Hunt loot rarity is not configured for {category!r}")
     roll = _draw_int(seed, purpose + ":rarity", 10000) / 100
     if purpose == "equipment":
         bands = (
@@ -2056,6 +2391,8 @@ def _rarity(seed: str, category: str, purpose: str) -> str:
                 (100, "Lendário"),
             )
             if category == "common"
+            else ((65, "Comum"), (94, "Raro"), (99.5, "Épico"), (100, "Lendário"))
+            if category == "uncommon"
             else (
                 (45, "Comum"),
                 (87, "Raro"),
@@ -2067,7 +2404,7 @@ def _rarity(seed: str, category: str, purpose: str) -> str:
     else:
         bands = (
             ((90, "Rara"), (99.5, "Épica"), (100, "Lendária"))
-            if category == "common"
+            if category in {"common", "uncommon"}
             else ((80, "Rara"), (98, "Épica"), (100, "Lendária"))
         )
     for limit, rarity in bands:

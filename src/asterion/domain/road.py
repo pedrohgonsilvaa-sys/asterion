@@ -21,10 +21,16 @@ from asterion.domain.prologue import first_art
 D = Decimal
 RULESET = CURRENT_COMBAT_RULESET
 ROAD_LOCATION = "tdo.location.estrada_das_cinzas"
+CHARNECA_LOCATION = "tdo.location.charneca_da_fuligem"
 ROAD_BRAZIER = "tdo.brazier.estrada"
+CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
 HUNT_UNLOCK = "hunt_manual.estrada_das_cinzas"
 EXPLORE_UNLOCK = "explore.estrada_das_cinzas"
 ROUND_FAMILIARITY = "hunt_round.estrada_das_cinzas"
+CHARNECA_HUNT_UNLOCK = "hunt_manual.charneca_da_fuligem"
+CHARNECA_EXPLORE_UNLOCK = "explore.charneca_da_fuligem"
+CHARNECA_ROUND_FAMILIARITY = "hunt_round.charneca_da_fuligem"
+CHARNECA_ROUTE_UNLOCK = "route.tdo.refugio_charneca"
 EXPLORATION_CATEGORY_WEIGHTS = {
     "great_discovery": 8,
     "knowledge": 22,
@@ -148,6 +154,21 @@ CREATURES = (
     ),
 )
 
+CERVO = Creature(
+    "cervo_escoriado",
+    "Cervo Escoriado",
+    "common",
+    "brute",
+    4,
+    7,
+    0,
+    ("antler_gore", "ocaso_charge"),
+    (
+        ("antler_gore", "Chifrada", D("1.05"), 0, D(0), 0),
+        ("ocaso_charge", "Carga do Ocaso", D("1.60"), 0, D(0), 0, None, 0, True),
+    ),
+)
+
 SPIDER = Creature(
     "aranha_cinza",
     "Aranha de Cinza",
@@ -164,7 +185,7 @@ SPIDER = Creature(
     ai_priority=("toxic_bite", "bite"),
     damage_taken_modifiers=(("burn", D("1.10")), ("poison", D("0.90"))),
 )
-CREATURE_CATALOG = (*CREATURES, SPIDER)
+CREATURE_CATALOG = (*CREATURES, SPIDER, CERVO)
 
 VARIANTS = {
     "furious": StatMultipliers(D(1), D("1.08"), D("0.92"), D(1)),
@@ -179,6 +200,7 @@ VARIANT_POOL = {
     "peregrino_calcinado": ("furious", "resistant", "hemorrhagic"),
     "alfa_cinereo": (),
     "aranha_cinza": ("venomous", "agile"),
+    "cervo_escoriado": ("furious", "resistant"),
 }
 
 EQUIPMENT_CATALOG = (
@@ -246,6 +268,8 @@ def equipment_rarity(seed: str, category: str, elite_pity: int = 0, legendary_pi
         bands = ((45, "Comum"), (87, "Raro"), (98, "Épico"), (99.9, "Lendário"), (100, "Mítico"))
     elif category == "common":
         bands = ((78, "Comum"), (97, "Raro"), (99.8, "Épico"), (100, "Lendário"))
+    elif category == "uncommon":
+        bands = ((65, "Comum"), (94, "Raro"), (99.5, "Épico"), (100, "Lendário"))
     else:
         raise ValueError(f"equipment rarity is not configured for category {category!r}")
     for limit, rarity in bands:
@@ -262,6 +286,7 @@ class HuntLocationProfile:
     variant_chance: int
     hunt_unlock: str
     round_familiarity: str
+    explore_unlock: str = EXPLORE_UNLOCK
 
 
 ROAD_PROFILE = HuntLocationProfile(
@@ -277,6 +302,112 @@ ROAD_PROFILE = HuntLocationProfile(
     hunt_unlock=HUNT_UNLOCK,
     round_familiarity=ROUND_FAMILIARITY,
 )
+
+CHARNECA_PROFILE = HuntLocationProfile(
+    local_id=CHARNECA_LOCATION,
+    label="Charneca da Fuligem",
+    creature_weights=(
+        ("peregrino_calcinado", 31),
+        ("dog_cinereo", 31),
+        ("aranha_cinza", 18),
+        ("cervo_escoriado", 20),
+    ),
+    variant_chance=10,
+    hunt_unlock=CHARNECA_HUNT_UNLOCK,
+    round_familiarity=CHARNECA_ROUND_FAMILIARITY,
+    explore_unlock=CHARNECA_EXPLORE_UNLOCK,
+)
+
+
+@dataclass(frozen=True)
+class ExplorationResultDefinition:
+    key: str
+    category: str
+    result_id: str
+    weight: int
+    text: str
+    min_level: int = 1
+    creature_id: str | None = None
+    unique: bool = False
+
+
+@dataclass(frozen=True)
+class ExplorationLocationProfile:
+    local_id: str
+    category_weights: tuple[tuple[str, int], ...]
+    results: tuple[ExplorationResultDefinition, ...]
+
+    def result(self, key: str) -> ExplorationResultDefinition:
+        return next(result for result in self.results if result.key == key)
+
+
+ROAD_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=ROAD_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("marco_viajantes", "great_discovery", "explore.tdo.estrada.marco_viajantes", 100, "Um marco de pedra inclina-se à margem da estrada. Marcas gastas ao redor mostram que viajantes paravam aqui muito antes das passagens mais recentes.", unique=True),
+        ExplorationResultDefinition("rastros_cinereos", "knowledge", "explore.tdo.estrada.rastros_cinereos", 60, "Marcas interrompidas atravessam a fuligem e desaparecem alguns passos adiante. Há sinais suficientes para reconhecer que alguma criatura utiliza esta rota."),
+        ExplorationResultDefinition("sinais_margem", "knowledge", "explore.tdo.estrada.sinais_margem", 40, "Pedras movidas, tecido preso aos espinhos e cinza revolvida mostram que viajantes ainda usam as margens da Estrada para descansar ou passar despercebidos."),
+        ExplorationResultDefinition("luzes", "narrative", "explore.tdo.estrada.luzes", 70, "Uma luz pálida surge entre as pedras por alguns instantes. Não há chama nem calor suficiente para explicá-la; quando você se aproxima, ela já desapareceu.", unique=True),
+        ExplorationResultDefinition("vozes_vento", "narrative", "explore.tdo.estrada.vozes_vento", 30, "O vento atravessa a estrada e traz um som que lembra uma voz distante. Quando você tenta segui-lo, resta apenas o ruído da cinza contra a pedra."),
+        ExplorationResultDefinition("dog_cinereo", "combat", "explore.tdo.estrada.combat.dog_cinereo", 40, "Um Cão Cinéreo surge entre as cinzas.", creature_id="dog_cinereo"),
+        ExplorationResultDefinition("corvo_fuligem", "combat", "explore.tdo.estrada.combat.corvo_fuligem", 35, "Um Corvo de Fuligem desce sobre a estrada.", creature_id="corvo_fuligem"),
+        ExplorationResultDefinition("peregrino_calcinado", "combat", "explore.tdo.estrada.combat.peregrino_calcinado", 25, "Um Peregrino Calcinado bloqueia a passagem.", creature_id="peregrino_calcinado"),
+        ExplorationResultDefinition("cinza_pegadas", "atmospheric", "explore.tdo.estrada.cinza_pegadas", 34, "Uma rajada atravessa a Estrada. Em poucos instantes, a cinza cobre marcas antigas até não restar indicação de quem passou por ali."),
+        ExplorationResultDefinition("carroca", "atmospheric", "explore.tdo.estrada.carroca", 33, "A estrutura apodrecida de uma carroça repousa fora da estrada. As rodas desapareceram há muito; o restante já não guarda nada de valor."),
+        ExplorationResultDefinition("fogueira", "atmospheric", "explore.tdo.estrada.fogueira", 33, "Pedras enegrecidas cercam uma fogueira antiga. A cinza está fria e nenhum sinal recente indica quem a acendeu."),
+        ExplorationResultDefinition("ferro", "resource", "explore.tdo.estrada.ferro", 30, "Entre pedras partidas, um veio escuro de metal aflora sob a fuligem. Há material suficiente para ser recolhido."),
+        ExplorationResultDefinition("couro", "resource", "explore.tdo.estrada.couro", 30, "Entre restos secos à margem da estrada, uma porção de couro ainda aproveitável resistiu à cinza e ao tempo."),
+        ExplorationResultDefinition("erva", "resource", "explore.tdo.estrada.erva", 20, "Folhas acinzentadas crescem entre rachaduras protegidas do vento. Algumas ainda podem ser colhidas."),
+        ExplorationResultDefinition("residuo", "resource", "explore.tdo.estrada.residuo", 20, "Um depósito escuro se acumulou entre as pedras. A substância é fina, mas distinta da fuligem comum da Estrada."),
+    ),
+)
+
+CHARNECA_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=CHARNECA_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("braseiro", "great_discovery", "explore.tdo.charneca.braseiro", 50, "Braseiro do Vento Morto encontrado.", min_level=4, unique=True),
+        ExplorationResultDefinition("cripta", "great_discovery", "explore.tdo.charneca.cripta", 50, "Entrada da Cripta do Ocaso encontrada.", min_level=4, unique=True),
+        ExplorationResultDefinition("pedra_marcada", "knowledge", "explore.tdo.charneca.pedra_marcada", 60, "A Pedra Marcada foi examinada.", unique=True),
+        ExplorationResultDefinition("vestigios_fuligem", "knowledge", "explore.tdo.charneca.vestigios_fuligem", 40, "Vestígios de criaturas foram observados na fuligem."),
+        ExplorationResultDefinition("vento_morto", "narrative", "explore.tdo.charneca.vento_morto", 65, "Uma área identificada como Vento Morto foi observada." , unique=True),
+        ExplorationResultDefinition("cinzas_nao_assentam", "narrative", "explore.tdo.charneca.cinzas_nao_assentam", 35, "As cinzas não assentam sobre o terreno."),
+        ExplorationResultDefinition("peregrino_calcinado", "combat", "explore.tdo.charneca.combat.peregrino_calcinado", 35, "Um Peregrino Calcinado surge na Charneca.", creature_id="peregrino_calcinado"),
+        ExplorationResultDefinition("aranha_cinza", "combat", "explore.tdo.charneca.combat.aranha_cinza", 35, "Uma Aranha de Cinza surge na Charneca.", min_level=3, creature_id="aranha_cinza"),
+        ExplorationResultDefinition("cervo_escoriado", "combat", "explore.tdo.charneca.combat.cervo_escoriado", 30, "Um Cervo Escoriado surge na Charneca.", min_level=4, creature_id="cervo_escoriado"),
+        ExplorationResultDefinition("erva", "resource", "explore.tdo.charneca.erva", 45, "Erva Cinzenta pode ser recolhida na Charneca."),
+        ExplorationResultDefinition("residuo", "resource", "explore.tdo.charneca.residuo", 30, "Resíduo do Ocaso pode ser recolhido na Charneca."),
+        ExplorationResultDefinition("couro", "resource", "explore.tdo.charneca.couro", 25, "Couro Escoriado pode ser recolhido na Charneca."),
+        ExplorationResultDefinition("pedras_negras", "atmospheric", "explore.tdo.charneca.pedras_negras", 34, "Pedras negras cobrem parte do terreno."),
+        ExplorationResultDefinition("capim_coberto_cinza", "atmospheric", "explore.tdo.charneca.capim_coberto_cinza", 33, "Capim coberto de cinza foi observado."),
+        ExplorationResultDefinition("silencio_sem_passaros", "atmospheric", "explore.tdo.charneca.silencio_sem_passaros", 33, "Nenhum pássaro foi ouvido na área."),
+    ),
+)
+
+EXPLORATION_PROFILES = {
+    ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
+    CHARNECA_LOCATION: CHARNECA_EXPLORATION_PROFILE,
+}
+
+HUNT_PROFILES = {
+    ROAD_LOCATION: ROAD_PROFILE,
+    CHARNECA_LOCATION: CHARNECA_PROFILE,
+}
+HUNT_PROFILES_BY_LABEL = {
+    profile.label: profile for profile in HUNT_PROFILES.values()
+}
+
+
+def hunt_profile_for_location(location: str) -> HuntLocationProfile | None:
+    return HUNT_PROFILES_BY_LABEL.get(location)
+
+
+def hunt_profile_for_local_id(local_id: str | None) -> HuntLocationProfile:
+    # Pre-PR-C round snapshots with no local_id are historical Road batches.
+    if local_id in {None, ROAD_LOCATION, "Estrada das Cinzas"}:
+        return ROAD_PROFILE
+    return HUNT_PROFILES[local_id]
 
 
 def creature_for(creature_id: str) -> Creature:
@@ -320,26 +451,34 @@ def select_creature(
     return creature_for(weighted_choice(seed, eligible))
 
 
-def select_exploration_result(seed: str, player_level: int, recent: tuple[str, ...] = (), excluded: tuple[str, ...] = ()) -> str:
+def select_exploration_result(
+    seed: str,
+    player_level: int,
+    recent: tuple[str, ...] = (),
+    excluded: tuple[str, ...] = (),
+    profile: ExplorationLocationProfile = ROAD_EXPLORATION_PROFILE,
+) -> str:
+    """Select one eligible local result, filtering level gates before the draw."""
     eligible_categories = []
     eligible_subweights = {}
-    for category, weight in EXPLORATION_CATEGORY_WEIGHTS.items():
-        subweights = EXPLORATION_SUBWEIGHTS[category]
-        if category == "combat":
-            subweights = tuple(
-                (key, value) for key, value in subweights
-                if creature_for(key).unlock_level <= player_level
-            )
-        subweights = tuple((key, value) for key, value in subweights if key not in excluded)
-        # Apply anti-repeat to the *subresults* before deciding whether this
-        # category remains eligible.  In particular, a category with one
-        # eligible result cannot fall back to its base weight when that result
-        # is the immediately previous result.
-        adjusted = tuple(
-            (key, anti_repeat_weight(weight, key, recent))
-            for key, weight in subweights
+    excluded_set = set(excluded)
+    for category, weight in profile.category_weights:
+        results = tuple(
+            result
+            for result in profile.results
+            if result.category == category
+            and player_level >= result.min_level
+            and (result.creature_id is None or player_level >= creature_for(result.creature_id).unlock_level)
+            and result.key not in excluded_set
+            and result.result_id not in excluded_set
         )
-        adjusted = tuple((key, weight) for key, weight in adjusted if weight > 0)
+        # Apply the result-specific repeat penalty before keeping its parent
+        # category eligible. An exhausted unique result never gets selected.
+        adjusted = tuple(
+            (result.key, anti_repeat_weight(result.weight, result.key, recent))
+            for result in results
+        )
+        adjusted = tuple((key, value) for key, value in adjusted if value > 0)
         if adjusted:
             eligible_categories.append((category, weight))
             eligible_subweights[category] = adjusted
@@ -415,14 +554,27 @@ def crowns(level: int, category: str) -> int:
     return int(((value * factor) / 10).quantize(D(1), rounding="ROUND_HALF_EVEN") * 10)
 
 
+MATERIAL_POOLS = {
+    "dog_cinereo": (("material.tdo.couro_escoriado", 100),),
+    "alfa_cinereo": (("material.tdo.couro_escoriado", 100),),
+    "corvo_fuligem": (("material.tdo.residuo_ocaso", 100),),
+    "peregrino_calcinado": (
+        ("material.tdo.ferro_de_fuligem", 1),
+        ("material.tdo.erva_cinzenta", 1),
+    ),
+    "aranha_cinza": (
+        ("material.tdo.erva_cinzenta", 50),
+        ("material.tdo.residuo_ocaso", 50),
+    ),
+    "cervo_escoriado": (("material.tdo.couro_escoriado", 100),),
+}
+
+
 def material_for(creature_id: str, seed: str) -> str:
-    if creature_id in {"dog_cinereo", "alfa_cinereo"}:
-        return "material.tdo.couro_escoriado"
-    if creature_id == "corvo_fuligem":
-        return "material.tdo.residuo_ocaso"
-    return weighted_choice(
-        seed, (("material.tdo.ferro_de_fuligem", 1), ("material.tdo.erva_cinzenta", 1))
-    )
+    pool = MATERIAL_POOLS.get(creature_id)
+    if pool is None:
+        raise ValueError(f"no creature material pool configured for {creature_id!r}")
+    return weighted_choice(seed, pool)
 
 
 def create_road_combat(
@@ -437,7 +589,18 @@ def create_road_combat(
     player_level: int | None = None,
     equipment_configuration: EquipmentConfigurationSnapshot | None = None,
     ruleset_version: str | None = None,
+    location_label: str = "Estrada das Cinzas",
 ) -> Combat:
+    flavor = (
+        "A Estrada guarda ameaças entre as cinzas."
+        if location_label == "Estrada das Cinzas"
+        else f"A {location_label} guarda ameaças entre as cinzas."
+    )
+    opening_log = (
+        f"🦌 {creature.name} surge entre a fuligem."
+        if location_label == "Estrada das Cinzas"
+        else f"🦌 {creature.name} surge na região."
+    )
     return create_creature_combat(
         combat_id,
         name,
@@ -450,8 +613,8 @@ def create_road_combat(
         player_level=player_level,
         equipment_configuration=equipment_configuration,
         ruleset_version=ruleset_version,
-        flavor="A Estrada guarda ameaças entre as cinzas.",
-        opening_log=f"🦌 {creature.name} surge entre a fuligem.",
+        flavor=flavor,
+        opening_log=opening_log,
     )
 
 
