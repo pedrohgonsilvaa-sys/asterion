@@ -250,6 +250,24 @@ async def test_p2_callbacks_run_mission_and_route_combat_hud(database, monkeypat
 
 
 @pytest.mark.asyncio
+async def test_malformed_p2_combat_activity_id_is_answered_without_action():
+    p2 = AsyncMock(spec=P2Service)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        combat_router(AsyncMock(spec=PrologueService), {}, p2=p2)
+    )
+    bot = _telegram()
+
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update("p2fight:not-a-uuid:0:attack", update_id=984060, actor=984060),
+    )
+
+    p2.action.assert_not_awaited()
+    assert _last_method(bot).__class__.__name__ == "AnswerCallbackQuery"
+
+
+@pytest.mark.asyncio
 async def test_p2_defeat_retry_ui_keeps_consumable_stock_and_resets_only_encounter_budget(
     database, monkeypatch
 ):
@@ -510,6 +528,46 @@ async def test_menu_start_and_missions_reconstruct_p2_without_exposing_normal_ch
         callback_update("world:principal", update_id=984043, actor=actor),
     )
     assert "Examinar Pontos de Fuligem · 1/3" in _last_method(bot).text
+
+
+@pytest.mark.asyncio
+async def test_menu_during_active_p2_combat_reconstructs_same_foreground(database):
+    actor = 984061
+    _, p2_service = await _seed(database, actor)
+    initial = await _start_combat(p2_service, actor)
+    assert initial.combat is not None
+
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        world_router(
+            AsyncMock(spec=WorldService),
+            {},
+            road=RoadService(database[1], "ocaso"),
+            p2=p2_service,
+        )
+    )
+    bot = _telegram()
+    await dispatcher.feed_raw_update(
+        bot, message_update("/menu", update_id=984062, actor=actor)
+    )
+
+    menu_method = _last_method(bot)
+    assert "📜 Registro de Combate · Recentes" in menu_method.text
+    assert "Aranha de Cinza" in menu_method.text
+    assert "Examinar Pontos de Fuligem" not in menu_method.text
+    assert any(
+        button.text == "Atacar"
+        for row in menu_method.reply_markup.inline_keyboard
+        for button in row
+    )
+
+    resumed = await P2Service(database[1], "ocaso").resume(actor)
+    assert resumed is not None and resumed.kind == "combat"
+    assert resumed.activity_id == initial.activity_id
+    assert resumed.encounter_id == initial.encounter_id
+    assert resumed.combat_id == initial.combat_id
+    assert resumed.combat is not None
+    assert resumed.combat.version == initial.combat.version
 
 
 @pytest.mark.asyncio

@@ -83,12 +83,13 @@ def combat_router(
             return
         try:
             data = P2CombatCallback.unpack(query.data or "")
-        except (KeyError, ValueError, TypeError):
+            activity_id = data.activity_id
+        except (KeyError, TypeError, ValueError):
             await query.answer()
             return
         view = await p2.action(
             query.from_user.id,
-            data.activity_id,
+            activity_id,
             data.version,
             data.action,
         )
