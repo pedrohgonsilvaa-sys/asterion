@@ -3,19 +3,20 @@
 
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_EVEN, Decimal
 from hashlib import sha256
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.bestiary import BESTIARY_STAGE_LABELS, BestiaryRecorder
 from asterion.application.equipment import equipment_instance_payload
 from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     reconcile_character_hp,
 )
-from asterion.application.progression import consolidate_character_level, level_xp
+from asterion.application.progression import consolidate_character_level
 from asterion.domain.combat import (
     CombatConsumableOption,
     act,
@@ -98,13 +99,6 @@ MATERIAL_LABELS = {
     "material.tdo.erva_cinzenta": "Erva Cinzenta",
     "material.tdo.residuo_ocaso": "Resíduo do Ocaso",
 }
-BESTIARY_STAGE_LABELS = {
-    "observed": "Observado",
-    "known": "Conhecido",
-    "studied": "Estudado",
-    "dominated": "Dominado",
-}
-
 
 @dataclass(frozen=True)
 class RoadView:
@@ -144,6 +138,7 @@ class RoadView:
 class RoadService:
     def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
         self.sessions, self.server_id = sessions, server_id
+        self.bestiary = BestiaryRecorder()
 
     async def resume(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
@@ -1270,254 +1265,40 @@ class RoadService:
         *,
         victory=False,
         evidence_id=None,
+        evidence_category=None,
+        evidence_points=0,
         variant=None,
         elite=False,
         grant_observation_xp=False,
         observation_level=None,
         observation_category="common",
     ):
-        before_evidence_ids = set(
-            (
-                await s.scalars(
-                    select(BestiaryEvidence.evidence_id).where(
-                        BestiaryEvidence.character_id == character_id,
-                        BestiaryEvidence.creature_id == creature_id,
-                    )
-                )
-            ).all()
+        return await self.bestiary.record(
+            s,
+            character_id,
+            creature_id,
+            victory=victory,
+            evidence_id=evidence_id,
+            evidence_category=evidence_category,
+            evidence_points=evidence_points,
+            variant=variant,
+            elite=elite,
+            grant_observation_xp=grant_observation_xp,
+            observation_level=observation_level,
+            observation_category=observation_category,
         )
-        first_observation_new = "first_observation" not in before_evidence_ids
-        entry = await s.scalar(
-            select(BestiaryEntry)
-            .where(
-                BestiaryEntry.character_id == character_id, BestiaryEntry.creature_id == creature_id
-            )
-            .with_for_update()
-        )
-        if entry is None:
-            entry = BestiaryEntry(
-                character_id=character_id, creature_id=creature_id, bkp=0, wins=1 if victory else 0
-            )
-            s.add(entry)
-            previous_stage = None
-        elif victory:
-            previous_stage = entry.stage
-            entry.wins += 1
-        else:
-            previous_stage = entry.stage
-        for evidence, category in (
-            ("first_observation", "observation"),
-            ("first_combat", "combat"),
-        ):
-            exists = await s.scalar(select(BestiaryEvidence).where(
-                BestiaryEvidence.character_id == character_id,
-                BestiaryEvidence.creature_id == creature_id,
-                BestiaryEvidence.evidence_id == evidence,
-            ))
-            if exists is None:
-                s.add(BestiaryEvidence(character_id=character_id, creature_id=creature_id, evidence_id=evidence, category=category))
-                entry.bkp += 4 if evidence == "first_observation" else 3
-        if first_observation_new and grant_observation_xp and observation_level is not None:
-            await self._grant_observation_xp(s, character_id, creature_id, observation_level)
-        if evidence_id:
-            await self._add_bestiary_evidence(s, entry, character_id, creature_id, evidence_id, evidence_id)
-        if variant:
-            await self._add_bestiary_evidence(s, entry, character_id, creature_id, f"variant:{variant}", "variant", 8)
-            if victory:
-                await self._add_bestiary_evidence(
-                    s, entry, character_id, creature_id,
-                    f"variant_victory:{variant}", "variant_victory", 6,
-                )
-        if elite:
-            await self._add_bestiary_evidence(s, entry, character_id, creature_id, "elite", "elite", 8)
-            if victory:
-                await self._add_bestiary_evidence(
-                    s, entry, character_id, creature_id, "elite_victory", "elite_victory", 6,
-                )
-        if victory:
-            first_victory = await s.scalar(select(BestiaryEvidence).where(
-                BestiaryEvidence.character_id == character_id,
-                BestiaryEvidence.creature_id == creature_id,
-                BestiaryEvidence.evidence_id == "first_victory",
-            ))
-            if first_victory is None:
-                s.add(BestiaryEvidence(character_id=character_id, creature_id=creature_id, evidence_id="first_victory", category="victory"))
-                entry.bkp += 5
-                if creature_id == "alfa_cinereo":
-                    await self._grant_alpha_victory_xp(s, character_id, creature_id)
-            else:
-                entry.bkp += _repeat_bkp(entry.wins, elite)
-        categories = {
-            row
-            for row in (await s.scalars(select(BestiaryEvidence.category).where(
-                BestiaryEvidence.character_id == character_id,
-                BestiaryEvidence.creature_id == creature_id,
-            ))).all()
-        }
-        evidence_ids = {
-            row
-            for row in (await s.scalars(select(BestiaryEvidence.evidence_id).where(
-                BestiaryEvidence.character_id == character_id,
-                BestiaryEvidence.creature_id == creature_id,
-            ))).all()
-        }
-        if elite:
-            if creature_id == "alfa_cinereo":
-                special = {"first_victory", "mechanic:bleed", "mechanic:prepared_leap"}.issubset(evidence_ids)
-            else:
-                special = bool({"elite_victory", "mechanic"} & categories)
-            entry.stage = (
-                "dominated"
-                if entry.bkp >= 45 and entry.wins >= 1 and special
-                else "studied"
-                if entry.bkp >= 25
-                else "known"
-                if entry.bkp >= 10
-                else "observed"
-            )
-        else:
-            entry.stage = (
-                "dominated"
-                if entry.bkp >= 60 and len(categories) >= 3
-                else "studied"
-                if entry.bkp >= 30 and len(categories) >= 2
-                else "known"
-                if entry.bkp >= 10
-                else "observed"
-            )
-        new_evidence_ids = evidence_ids - before_evidence_ids
-        if (previous_stage is not None and previous_stage != entry.stage) or (
-            victory and new_evidence_ids
-        ):
-            return {
-                "creature_id": creature_id,
-                "creature_name": creature_for(creature_id).name,
-                "stage": entry.stage,
-                "stage_label": BESTIARY_STAGE_LABELS[entry.stage],
-            }
-        return None
-
-    async def _grant_observation_xp(self, s, character_id, creature_id, reference_level):
-        source_id = f"bestiary:observation:{character_id}:{creature_id}"
-        event = await s.scalar(
-            select(RewardEvent)
-            .where(
-                RewardEvent.character_id == character_id,
-                RewardEvent.source_id == source_id,
-            )
-            .with_for_update()
-        )
-        if event is not None:
-            return 0
-        xp = int(
-            (Decimal(level_xp(reference_level)) * Decimal("0.01")).quantize(
-                Decimal(1), rounding=ROUND_HALF_UP
-            )
-        )
-        event = RewardEvent(character_id=character_id, source_id=source_id)
-        s.add(event)
-        await s.flush()
-        s.add(
-            RewardComponent(
-                reward_event_id=event.id,
-                kind="bestiary_observation_xp",
-                item_id=creature_id,
-                quantity=xp,
-                payload={"reference_level": reference_level, "fixed_percent": "0.01"},
-            )
-        )
-        character = await s.scalar(
-            select(Character).where(Character.id == character_id).with_for_update()
-        )
-        if character is not None:
-            character.xp += xp
-        return xp
-
-    async def _grant_alpha_victory_xp(self, s, character_id, creature_id):
-        source_id = f"bestiary:first_victory:{character_id}:{creature_id}"
-        event = await s.scalar(
-            select(RewardEvent)
-            .where(
-                RewardEvent.character_id == character_id,
-                RewardEvent.source_id == source_id,
-            )
-            .with_for_update()
-        )
-        if event is not None:
-            return False
-        event = RewardEvent(character_id=character_id, source_id=source_id)
-        s.add(event)
-        await s.flush()
-        s.add(
-            RewardComponent(
-                reward_event_id=event.id,
-                kind="bestiary_first_victory_xp",
-                item_id=creature_id,
-                quantity=198,
-                payload={"reference_level": 3, "milestone": "first_major_victory"},
-            )
-        )
-        character = await s.scalar(
-            select(Character).where(Character.id == character_id).with_for_update()
-        )
-        if character is not None:
-            character.xp += 198
-        return True
-
-    async def _add_bestiary_evidence(self, s, entry, character_id, creature_id, evidence_id, category, points=0):
-        exists = await s.scalar(select(BestiaryEvidence).where(
-            BestiaryEvidence.character_id == character_id,
-            BestiaryEvidence.creature_id == creature_id,
-            BestiaryEvidence.evidence_id == evidence_id,
-        ))
-        if exists is None:
-            s.add(BestiaryEvidence(character_id=character_id, creature_id=creature_id, evidence_id=evidence_id, category=category))
-            entry.bkp += points
-            return True
-        return False
 
     async def _record_bestiary_combat_events(self, s, character_id, context, combat):
-        entry = await s.scalar(select(BestiaryEntry).where(
-            BestiaryEntry.character_id == character_id,
-            BestiaryEntry.creature_id == context.creature_id,
-        ).with_for_update())
-        if entry is None:
-            return set()
-        new_evidence_ids = set()
-        for event in combat.events:
-            if event.actor != "enemy":
-                continue
-            action_id = event.action.removeprefix("prepare:")
-            if await self._add_bestiary_evidence(
-                s, entry, character_id, context.creature_id,
-                f"action:{action_id}", "behavior", 4,
-            ):
-                new_evidence_ids.add(f"action:{action_id}")
-            if event.action == "prepare:leap":
-                if await self._add_bestiary_evidence(
-                    s, entry, character_id, context.creature_id,
-                    "mechanic:prepared_leap", "mechanic", 5,
-                ):
-                    new_evidence_ids.add("mechanic:prepared_leap")
-            if event.action == "rend":
-                if await self._add_bestiary_evidence(
-                    s, entry, character_id, context.creature_id,
-                    "mechanic:bleed", "mechanic", 5,
-                ):
-                    new_evidence_ids.add("mechanic:bleed")
-            if combat.variant == "hemorrhagic" and event.actor == "enemy" and event.damage > 0:
-                if await self._add_bestiary_evidence(
-                    s, entry, character_id, context.creature_id,
-                    "mechanic:hemorrhage", "mechanic", 5,
-                ):
-                    new_evidence_ids.add("mechanic:hemorrhage")
-            if combat.variant == "venomous" and event.actor == "enemy" and event.damage > 0:
-                if await self._add_bestiary_evidence(
-                    s, entry, character_id, context.creature_id,
-                    "mechanic:poison", "mechanic", 5,
-                ):
-                    new_evidence_ids.add("mechanic:poison")
-        return new_evidence_ids
+        return await self.bestiary.record_combat_events(
+            s, character_id, context.creature_id, context.variant, combat
+        )
+
+    async def _add_bestiary_evidence(
+        self, s, entry, character_id, creature_id, evidence_id, category, points=0
+    ):
+        return await self.bestiary.add_evidence(
+            s, entry, character_id, creature_id, evidence_id, category, points
+        )
 
     async def _p1_completed(self, s, character_id) -> bool:
         return bool(
@@ -1782,7 +1563,31 @@ class RoadService:
             return True
         return False
 
-    async def _deliver_material(self, s, c, material_id: str, quantity: int, source_key: str) -> None:
+    async def deliver_material(
+        self,
+        s,
+        c,
+        material_id: str,
+        quantity: int,
+        source_key: str,
+        *,
+        bound: bool = False,
+    ) -> None:
+        """Share the existing Inventory/Pending/Blocked material policy."""
+        await self._deliver_material(
+            s, c, material_id, quantity, source_key, bound=bound
+        )
+
+    async def _deliver_material(
+        self,
+        s,
+        c,
+        material_id: str,
+        quantity: int,
+        source_key: str,
+        *,
+        bound: bool = False,
+    ) -> None:
         existing_delivery = await s.scalar(
             select(BlockedDelivery)
             .where(
@@ -1804,14 +1609,16 @@ class RoadService:
             .with_for_update()
         ) is not None:
             return
-        remaining = await self._deliver_material_to_inventory(s, c, material_id, quantity, False)
+        remaining = await self._deliver_material_to_inventory(
+            s, c, material_id, quantity, bound
+        )
         if remaining:
             await self._pending(
                 s,
                 c.id,
                 source_key,
                 "material",
-                {"material_id": material_id, "bound": False},
+                {"material_id": material_id, "bound": bound},
                 remaining,
             )
 
