@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from asterion.application.consumables import ConsumableService
 from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
+from asterion.application.p2 import CHARNECA, P2Service
 from asterion.application.prologue import PrologueService
 from asterion.application.road import RoadService
 from asterion.application.s1 import S1Service
@@ -17,6 +18,7 @@ from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
 from asterion.bot.inventory_ui import render_inventory
 from asterion.bot.p1_ui import render_p1
+from asterion.bot.p2_ui import render_p2, render_p2_mission_detail
 from asterion.bot.road_ui import render_road
 from asterion.bot.world_ui import render_world
 
@@ -30,6 +32,7 @@ def world_router(
     s1: S1Service | None = None,
     consumables: ConsumableService | None = None,
     prologue: PrologueService | None = None,
+    p2: P2Service | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -48,6 +51,14 @@ def world_router(
         return render_combat(combat_view) if combat_view is not None else None
 
     async def show(message: Message):
+        p2_view = await p2.resume(message.from_user.id) if p2 and message.from_user else None
+        if (
+            p2_view is not None
+            and p2_view.status == "active"
+            and p2_view.kind == "combat"
+        ):
+            await present(message, render_p2(p2_view), images)
+            return
         road_view = await road.resume(message.from_user.id) if road and message.from_user else None
         if road_view is not None:
             await present(message, render_road(road_view), images)
@@ -55,6 +66,13 @@ def world_router(
         p1_view = await p1.resume(message.from_user.id) if p1 and message.from_user else None
         if p1_view is not None and p1_view.combat is not None:
             await present(message, render_p1(p1_view), images)
+            return
+        if (
+            p2_view is not None
+            and p2_view.status == "active"
+            and p2_view.location == CHARNECA
+        ):
+            await present(message, render_p2(p2_view), images)
             return
         screen = (
             await resume_world_or_prologue(message.from_user.id)
@@ -65,6 +83,15 @@ def world_router(
             await present(message, screen, images)
 
     async def show_menu(query: CallbackQuery):
+        p2_view = await p2.resume(query.from_user.id) if p2 else None
+        if (
+            p2_view is not None
+            and p2_view.status == "active"
+            and p2_view.kind == "combat"
+            and isinstance(query.message, Message)
+        ):
+            await present(query.message, render_p2(p2_view), images, edit=True)
+            return
         road_view = await road.resume(query.from_user.id) if road else None
         if (
             road_view is not None
@@ -81,11 +108,28 @@ def world_router(
         ):
             await present(query.message, render_p1(p1_view), images, edit=True)
             return
+        if (
+            p2_view is not None
+            and p2_view.status == "active"
+            and p2_view.location == CHARNECA
+            and isinstance(query.message, Message)
+        ):
+            await present(query.message, render_p2(p2_view), images, edit=True)
+            return
         screen = await resume_world_or_prologue(query.from_user.id)
         if screen is not None and isinstance(query.message, Message):
             await present(query.message, screen, images, edit=True)
 
     async def foreground(query: CallbackQuery) -> bool:
+        p2_view = await p2.resume(query.from_user.id) if p2 else None
+        if (
+            p2_view is not None
+            and p2_view.status == "active"
+            and p2_view.kind == "combat"
+            and isinstance(query.message, Message)
+        ):
+            await present(query.message, render_p2(p2_view), images, edit=True)
+            return True
         road_view = await road.resume(query.from_user.id) if road else None
         if (
             road_view is not None
@@ -413,6 +457,7 @@ def world_router(
         if not isinstance(query.message, Message):
             return
         p1_view = await p1.resume(query.from_user.id) if p1 else None
+        p2_view = await p2.resume(query.from_user.id) if p2 else None
         s1_view = await s1.resume(query.from_user.id) if s1 else None
         text = "📜 Missões\n\nObjetivos, promessas e caminhos ainda inacabados acompanham sua jornada por Asterion."
         keyboard = []
@@ -420,6 +465,14 @@ def world_router(
             text += (
                 "\n\n🔥 Missão Principal\n\n"
                 "📜 Vozes na Estrada · Em Andamento\nTerras do Ocaso · Nv. 1–10"
+            )
+            keyboard.append(
+                [InlineKeyboardButton(text="Principal", callback_data="world:principal")]
+            )
+        elif p2_view is not None and p2_view.status == "active":
+            text += (
+                "\n\n🔥 Missão Principal\n\n"
+                "📜 Fuligem sem Fogo · Em Andamento\nTerras do Ocaso · Nv. 3+"
             )
             keyboard.append(
                 [InlineKeyboardButton(text="Principal", callback_data="world:principal")]
@@ -440,6 +493,30 @@ def world_router(
             edit=True,
         )
 
+    @router.callback_query(F.data == "world:oren")
+    async def oren_npc(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        await query.answer()
+        if not isinstance(query.message, Message):
+            return
+        p2_view = await p2.resume(query.from_user.id) if p2 else None
+        if (
+            p2_view is not None
+            and p2_view.status == "active"
+            and p2_view.step == 5
+        ):
+            view = await p2.oren(query.from_user.id, p2_view.state_version)
+            if view is not None:
+                await present(query.message, render_p2(view), images, edit=True)
+            return
+        view = await s1.oren(query.from_user.id) if s1 else None
+        if view is not None:
+            from asterion.bot.s1_ui import render_s1
+
+            await present(query.message, render_s1(view), images, edit=True)
+
     @router.callback_query(F.data == "world:principal")
     async def principal(query: CallbackQuery):
         if await foreground(query):
@@ -449,6 +526,18 @@ def world_router(
         if not isinstance(query.message, Message):
             return
         p1_view = await p1.resume(query.from_user.id) if p1 else None
+        if p1_view is not None and p1_view.status == "active":
+            await _present_p1_principal(query, p1_view)
+            return
+        p2_view = await p2.resume(query.from_user.id) if p2 else None
+        if p2_view is not None and p2_view.status == "active":
+            await present(
+                query.message,
+                render_p2_mission_detail(p2_view),
+                images,
+                edit=True,
+            )
+            return
         if p1_view is None or p1_view.status != "active":
             await present(
                 query.message,
@@ -468,6 +557,9 @@ def world_router(
                 images,
                 edit=True,
             )
+            return
+    async def _present_p1_principal(query: CallbackQuery, p1_view) -> None:
+        if not isinstance(query.message, Message):
             return
         progress = p1_view.progress or {}
         if p1_view.step == 1:
@@ -527,6 +619,11 @@ def world_router(
             await query.answer()
             return
         await query.answer()
+        if isinstance(query.message, Message) and p2 is not None:
+            p2_view = await p2.resume(query.from_user.id)
+            if p2_view is not None and p2_view.status == "active":
+                await present(query.message, render_p2(p2_view), images, edit=True)
+                return
         if isinstance(query.message, Message) and p1 is not None:
             view = await p1.resume(query.from_user.id)
             if view is not None:
@@ -551,6 +648,9 @@ def world_router(
             world_view = await service.resume(actor)
             if world_view is not None:
                 current = world_view.location
+        if current == CHARNECA:
+            # The regional map screen is intentionally withheld in this PR.
+            current = None
         return known, current
 
     @router.callback_query(F.data == "world:map")
@@ -657,7 +757,10 @@ def world_router(
             lines.extend(["🚫 Desbravar · Indisponível", "🚫 Caçadas · Indisponível"])
             if is_current:
                 keyboard.append(
-                    [InlineKeyboardButton(text="Oren Cal", callback_data="s1:oren")]
+                    [InlineKeyboardButton(text="Oren Cal", callback_data="world:oren")]
+                )
+                keyboard.append(
+                    [InlineKeyboardButton(text="Alda Veyr", callback_data="p2:alda")]
                 )
         keyboard.append(
             [InlineKeyboardButton(text="Travessia dos Braseiros", callback_data="world:travel")]

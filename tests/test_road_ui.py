@@ -62,4 +62,4 @@ def test_refuge_keeps_oren_accessible_after_p1():
         for button in row
     ]
     assert "Oren Cal" in labels
-    assert "s1:oren" in callbacks
+    assert "world:oren" in callbacks
