@@ -38,11 +38,11 @@ from asterion.domain.equipment_stats import (
 )
 from asterion.domain.road import (
     ROAD_LOCATION,
-    ROAD_PROFILE,
-    ROUND_FAMILIARITY,
     RULESET,
     create_road_combat,
     creature_for,
+    hunt_profile_for_local_id,
+    hunt_profile_for_location,
     select_creature,
     select_variant,
 )
@@ -124,6 +124,17 @@ class RoundService(RoadService):
     def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
         super().__init__(sessions, server_id)
 
+    async def _round_profile(self, s, c, world):
+        profile = hunt_profile_for_location(world.location) if world is not None else None
+        if profile is None:
+            return None
+        if profile.local_id == ROAD_LOCATION:
+            if not await self._p1_completed(s, c.id):
+                return None
+        elif not await self._p2_completed(s, c.id):
+            return None
+        return profile
+
     async def _inventory_slots(self, s, character_id):
         base = await super()._inventory_slots(s, character_id)
         consumables = await s.scalar(
@@ -183,9 +194,10 @@ class RoundService(RoadService):
             return None
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
-            if c is None or world is None or world.location != ROAD:
+            if c is None or world is None:
                 return None
-            if not await self._p1_completed(s, c.id):
+            profile = await self._round_profile(s, c, world)
+            if profile is None:
                 return None
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
@@ -193,7 +205,7 @@ class RoundService(RoadService):
             if not await s.scalar(
                 select(Unlock).where(
                     Unlock.character_id == c.id,
-                    Unlock.unlock_id == ROUND_FAMILIARITY,
+                    Unlock.unlock_id == profile.round_familiarity,
                 )
             ):
                 return await self._view_for_world(s, c, world)
@@ -213,11 +225,18 @@ class RoundService(RoadService):
                     status="preparing",
                     batch_size=batch_size,
                     seed=uuid4().hex,
+                    config_snapshot={"local_id": profile.local_id},
                 )
                 s.add(current)
                 await s.flush()
             elif current.batch_size != batch_size:
                 current.batch_size = batch_size
+                current.state_version += 1
+            if (current.config_snapshot or {}).get("local_id") != profile.local_id:
+                current.config_snapshot = {
+                    **(current.config_snapshot or {}),
+                    "local_id": profile.local_id,
+                }
                 current.state_version += 1
             return await self._round_view(s, c, current)
 
@@ -299,7 +318,10 @@ class RoundService(RoadService):
     ) -> RoadView | RoundView | None:
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
-            if c is None or world is None or world.location != ROAD:
+            if c is None or world is None:
+                return None
+            profile = await self._round_profile(s, c, world)
+            if profile is None:
                 return None
             state = await s.scalar(
                 select(HuntRound)
@@ -313,7 +335,7 @@ class RoundService(RoadService):
             if not await s.scalar(
                 select(Unlock).where(
                     Unlock.character_id == c.id,
-                    Unlock.unlock_id == ROUND_FAMILIARITY,
+                    Unlock.unlock_id == profile.round_familiarity,
                 )
             ):
                 return await self._view_for_world(s, c, world)
@@ -342,7 +364,7 @@ class RoundService(RoadService):
             state.status = "active"
             state.started_at = now
             state.config_snapshot = {
-                "local_id": ROAD_LOCATION,
+                "local_id": profile.local_id,
                 "character_class": c.character_class,
                 "race": c.race,
                 "level_at_start": c.level,
@@ -499,10 +521,11 @@ class RoundService(RoadService):
             blocking = await super()._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
+            location = world.location
             return RoadView(
                 "hunt_prepare",
                 c.id,
-                ROAD,
+                location,
                 vigor=c.vigor,
                 max_vigor=c.max_vigor,
                 name=c.name,
@@ -599,12 +622,14 @@ class RoundService(RoadService):
     async def _materialize_next(self, s, c, state, anchor: datetime) -> None:
         ordinal = state.completed_encounters + 1
         seed = f"{state.seed}:encounter:{ordinal}"
-        creature = select_creature(seed, c.level, profile=ROAD_PROFILE)
+        round_configuration = state.config_snapshot or {}
+        local_id = round_configuration.get("local_id")
+        profile = hunt_profile_for_local_id(local_id)
+        creature = select_creature(seed, c.level, profile=profile)
         enemy_level = min(c.level, creature.max_level)
-        variant = select_variant(seed, creature, profile=ROAD_PROFILE)
+        variant = select_variant(seed, creature, profile=profile)
         combat_id = uuid4()
         encounter_id = uuid4()
-        round_configuration = state.config_snapshot or {}
         raw_combat_configuration = round_configuration.get("combat_configuration")
         if isinstance(raw_combat_configuration, dict):
             equipment_configuration = equipment_configuration_from_data(
@@ -630,6 +655,7 @@ class RoundService(RoadService):
             player_level=c.level,
             equipment_configuration=equipment_configuration,
             ruleset_version=encounter_ruleset,
+            location_label=profile.label,
         )
         encounter = HuntRoundEncounter(
             id=encounter_id,
@@ -1215,6 +1241,9 @@ class RoundService(RoadService):
         return RoundView(
             kind=kind,
             character_id=c.id,
+            location=hunt_profile_for_local_id(
+                (state.config_snapshot or {}).get("local_id")
+            ).label,
             round_id=state.id,
             activity_id=state.activity_id,
             encounter_id=encounter_id,
