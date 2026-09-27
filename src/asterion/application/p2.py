@@ -1,9 +1,6 @@
-"""Internal application flow for P2: Fuligem sem Fogo.
+"""Authoritative P2 quest flow and scripted encounter settlement."""
 
-This service is intentionally not wired into the Telegram runtime yet.
-"""
-
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -24,7 +21,11 @@ from asterion.domain.combat import (
     combat_consumable_options,
     use_combat_consumable,
 )
-from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
+from asterion.domain.consumables import (
+    ENCOUNTER_CONSUMABLE_LIMITS,
+    ConsumableFamily,
+)
+from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.road import RULESET, SPIDER, create_creature_combat, enemy_xp
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
@@ -93,6 +94,12 @@ class P2View:
     consumable_options: tuple[CombatConsumableOption, ...] = ()
     consumable_quantities: tuple[tuple[str, int], ...] = ()
     consumable_budget_limit: int = 0
+    consumable_screen: str | None = None
+    selected_consumable_id: str | None = None
+    selected_target_id: str | None = None
+    selection_parent: str = "items"
+    consumable_notice: str | None = None
+    ready_consumable_option: CombatConsumableOption | None = None
 
 
 class P2Service:
@@ -351,6 +358,194 @@ class P2Service:
             quest.progress = progress
             quest.state_version += 1
             return await self._view(session, character, quest, world)
+
+    async def consumable_selection(
+        self,
+        actor: int,
+        activity_id: UUID,
+        version: int,
+        *,
+        screen: str = "items",
+        item_id: str | None = None,
+        target_id: str | None = None,
+        parent: str = "items",
+    ) -> P2View | None:
+        """Rebuild the shared combat Consumable chooser without persisting UI state."""
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None or quest is None:
+                return None
+            activity = await session.scalar(
+                select(GameActivity)
+                .where(
+                    GameActivity.id == activity_id,
+                    GameActivity.character_id == character.id,
+                    GameActivity.content_id == P2_COMBAT_CONTENT_ID,
+                )
+                .with_for_update()
+            )
+            if activity is None:
+                return None
+            current = await self._view(session, character, quest, world)
+            foreground = await self._foreground(session, character.id)
+            if (
+                quest.status != "active"
+                or quest.step != 3
+                or activity.status != "active"
+                or foreground is None
+                or foreground.id != activity.id
+            ):
+                return current
+            if activity.state_version != version:
+                return replace(
+                    current,
+                    consumable_notice=self._consumable_rejection_notice(
+                        current.combat, current.consumable_budget_limit
+                    ),
+                )
+            if screen == "combat":
+                return current
+            if screen == "items":
+                return (
+                    replace(current, consumable_screen="items")
+                    if current.consumable_options
+                    else current
+                )
+
+            item = consumable_definition(item_id or "")
+            item_options = tuple(
+                option
+                for option in current.consumable_options
+                if option.item_id == item_id
+            )
+            if item is None or not item_options:
+                if current.consumable_options:
+                    return replace(
+                        current,
+                        consumable_screen="items",
+                        consumable_notice="⚠️ Consumível · Não está mais disponível.",
+                    )
+                return current
+
+            if screen == "choose_item":
+                if item.family == ConsumableFamily.DISPELLER:
+                    target_ids = tuple(
+                        dict.fromkeys(option.target_id for option in item_options)
+                    )
+                    if len(target_ids) > 1:
+                        return replace(
+                            current,
+                            consumable_screen="targets",
+                            selected_consumable_id=item.id,
+                            selection_parent="items",
+                        )
+                    target_id = target_ids[0] if target_ids else None
+                    parent = "items"
+                else:
+                    target_id = "player"
+                    parent = "items"
+                selected = tuple(
+                    option for option in item_options if option.target_id == target_id
+                )
+                return self._selection_after_target(
+                    current, item, target_id, selected, parent=parent
+                )
+
+            if screen == "choose_target" and item.family == ConsumableFamily.DISPELLER:
+                selected = tuple(
+                    option for option in item_options if option.target_id == target_id
+                )
+                if not selected:
+                    return replace(
+                        current,
+                        consumable_screen=(
+                            "items" if current.consumable_options else None
+                        ),
+                        consumable_notice="⚠️ Dissipador · Sem Alvo Válido",
+                    )
+                return self._selection_after_target(
+                    current, item, target_id, selected, parent="targets"
+                )
+
+            if screen == "targets" and item.family == ConsumableFamily.DISPELLER:
+                target_ids = tuple(
+                    dict.fromkeys(option.target_id for option in item_options)
+                )
+                if len(target_ids) > 1:
+                    return replace(
+                        current,
+                        consumable_screen="targets",
+                        selected_consumable_id=item.id,
+                        selection_parent="items",
+                    )
+                return replace(
+                    current,
+                    consumable_screen="items",
+                    consumable_notice=(
+                        "⚠️ Dissipador · Sem Alvo Válido" if not target_ids else None
+                    ),
+                )
+
+            if screen == "effects" and target_id is not None:
+                selected = tuple(
+                    option
+                    for option in item_options
+                    if option.target_id == target_id and option.effect_id is not None
+                )
+                if len(selected) > 1:
+                    return replace(
+                        current,
+                        consumable_screen="effects",
+                        selected_consumable_id=item.id,
+                        selected_target_id=target_id,
+                        selection_parent=parent,
+                    )
+                return replace(
+                    current,
+                    consumable_screen="items",
+                    consumable_notice=(
+                        "⚠️ Dissipador · Sem Efeito Removível"
+                        if item.family == ConsumableFamily.DISPELLER and not selected
+                        else "⚠️ Consumível · Não está mais disponível."
+                        if not selected
+                        else None
+                    ),
+                )
+
+            return replace(
+                current,
+                consumable_screen="items",
+                consumable_notice="⚠️ Consumível · Não está mais disponível.",
+            )
+
+    @staticmethod
+    def _selection_after_target(current, item, target_id, selected, *, parent):
+        if not selected:
+            return replace(
+                current,
+                consumable_screen=("items" if current.consumable_options else None),
+                consumable_notice="⚠️ Consumível · Não está mais disponível.",
+            )
+        if len(selected) == 1:
+            return replace(current, ready_consumable_option=selected[0])
+        return replace(
+            current,
+            consumable_screen="effects",
+            selected_consumable_id=item.id,
+            selected_target_id=target_id,
+            selection_parent=parent,
+        )
+
+    @staticmethod
+    def _consumable_rejection_notice(combat, budget_limit):
+        if combat is None:
+            return None
+        player = combat.fighters["player"]
+        if player.cooldowns.get("consumable", 0) > player.opportunity:
+            return "⏳ Consumíveis · Em Recarga"
+        if budget_limit and combat.consumable_uses >= budget_limit:
+            return "🔒 Consumíveis · Limite Atingido"
+        return None
 
     async def return_to_charneca(
         self, actor: int, version: int
