@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import func, select
 
+from asterion.application.bestiary import BestiaryRecorder
 from asterion.application.p2 import (
     ASH_POINT_IDS,
     CHARNECA_LOCATION_ID,
@@ -391,14 +392,41 @@ async def test_p2_defeat_recovers_then_retry_reuses_spider_without_observation_x
         session.add(
             ConsumableStack(
                 character_id=character_id,
-                consumable_id="consumable.erva_cinzenta",
+                consumable_id="consumable.protection.vde.ii",
                 quantity=2,
             )
         )
         await session.commit()
     monkeypatch.setattr(p2_module, "act", _finish_with("defeat"))
+    active = await P2Service(database[1], "ocaso").resume(actor)
+    assert active.consumable_budget_limit == 1
+    assert ("consumable.protection.vde.ii", 2) in active.consumable_quantities
+    assert any(
+        option.item_id == "consumable.protection.vde.ii"
+        for option in active.consumable_options
+    )
+    used = await service.action(
+        actor,
+        combat.activity_id,
+        combat.activity_state_version,
+        consumable_id="consumable.protection.vde.ii",
+    )
+    assert used is not None and used.activity_status == "active"
+    assert used.combat.consumable_uses == 1
+    assert used.activity_state_version == combat.activity_state_version + 1
+    reconnected = await P2Service(database[1], "ocaso").resume(actor)
+    assert reconnected.activity_id == combat.activity_id
+    assert reconnected.combat.consumable_uses == 1
+    assert ("consumable.protection.vde.ii", 1) in reconnected.consumable_quantities
+    stale = await service.action(
+        actor,
+        combat.activity_id,
+        combat.activity_state_version,
+        consumable_id="consumable.protection.vde.ii",
+    )
+    assert stale.activity_state_version == used.activity_state_version
     defeated = await service.action(
-        actor, combat.activity_id, combat.activity_state_version, "attack"
+        actor, combat.activity_id, used.activity_state_version, "attack"
     )
     assert defeated is not None and defeated.step == 3
     assert defeated.kind == "recovery" and defeated.location == "Refúgio do Ocaso"
@@ -415,10 +443,10 @@ async def test_p2_defeat_recovers_then_retry_reuses_spider_without_observation_x
         consumable = await session.scalar(
             select(ConsumableStack).where(
                 ConsumableStack.character_id == character_id,
-                ConsumableStack.consumable_id == "consumable.erva_cinzenta",
+                ConsumableStack.consumable_id == "consumable.protection.vde.ii",
             )
         )
-        assert consumable.quantity == 2
+        assert consumable.quantity == 1
         assert await session.scalar(
             select(func.count(RewardEvent.id)).where(
                 RewardEvent.character_id == character_id,
@@ -449,6 +477,13 @@ async def test_p2_defeat_recovers_then_retry_reuses_spider_without_observation_x
     assert retried.combat.fighters["enemy"].name == SPIDER.name
     assert retried.combat.fighters["enemy"].level == 3
     assert retried.combat.variant is None
+    assert retried.combat.consumable_uses == 0
+    assert retried.consumable_budget_limit == 1
+    assert ("consumable.protection.vde.ii", 1) in retried.consumable_quantities
+    assert any(
+        option.item_id == "consumable.protection.vde.ii"
+        for option in retried.consumable_options
+    )
     repeated = await service.return_to_charneca(actor, defeated.state_version)
     assert repeated is not None
     assert repeated.activity_id == retried.activity_id
@@ -472,6 +507,207 @@ async def test_p2_defeat_recovers_then_retry_reuses_spider_without_observation_x
         character = await session.get(Character, character_id)
         assert character.vigor == 77
         assert character.xp == 26
+
+
+@pytest.mark.asyncio
+async def test_p2_consumable_budget_is_shared_across_items(database, monkeypatch):
+    import asterion.application.p2 as p2_module
+
+    actor = 881014
+    character_id, service = await _seed(database, actor)
+    combat = await _start_combat(service, actor)
+    async with database[1]() as session:
+        session.add_all(
+            [
+                ConsumableStack(
+                    character_id=character_id,
+                    consumable_id="consumable.protection.vde.ii",
+                    quantity=1,
+                ),
+                ConsumableStack(
+                    character_id=character_id,
+                    consumable_id="consumable.warding.iv",
+                    quantity=1,
+                ),
+            ]
+        )
+        await session.commit()
+
+    used = await service.action(
+        actor,
+        combat.activity_id,
+        combat.activity_state_version,
+        consumable_id="consumable.protection.vde.ii",
+    )
+    assert used.combat.consumable_uses == 1
+
+    def next_player_opportunity(state, action):
+        updated = deepcopy(state)
+        updated.version += 1
+        player = updated.fighters["player"]
+        player.opportunity = player.cooldowns["consumable"]
+        updated.order = ("player", "enemy")
+        updated.turn_index = 0
+        return updated
+
+    monkeypatch.setattr(p2_module, "act", next_player_opportunity)
+    ready = await service.action(
+        actor, used.activity_id, used.activity_state_version, "attack"
+    )
+    player = ready.combat.fighters["player"]
+    assert ready.combat.order[ready.combat.turn_index] == "player"
+    assert player.cooldowns["consumable"] <= player.opportunity
+    assert ready.combat.consumable_uses == 1
+    assert ready.consumable_budget_limit == 1
+    assert ready.consumable_options == ()
+
+    rejected = await service.action(
+        actor,
+        ready.activity_id,
+        ready.activity_state_version,
+        consumable_id="consumable.warding.iv",
+    )
+    assert rejected.activity_state_version == ready.activity_state_version
+    assert rejected.combat.consumable_uses == 1
+    async with database[1]() as session:
+        stacks = (
+            await session.scalars(
+                select(ConsumableStack).where(
+                    ConsumableStack.character_id == character_id
+                )
+            )
+        ).all()
+        assert {row.consumable_id: row.quantity for row in stacks} == {
+            "consumable.protection.vde.ii": 0,
+            "consumable.warding.iv": 1,
+        }
+
+
+@pytest.mark.asyncio
+async def test_p2_invalid_missing_and_noncombat_consumables_do_not_decrement(
+    database,
+):
+    actor = 881015
+    character_id, service = await _seed(database, actor)
+    combat = await _start_combat(service, actor)
+    async with database[1]() as session:
+        session.add_all(
+            [
+                ConsumableStack(
+                    character_id=character_id,
+                    consumable_id="consumable.protection.vde.ii",
+                    quantity=1,
+                ),
+                ConsumableStack(
+                    character_id=character_id,
+                    consumable_id="consumable.vigor.tdo.i",
+                    quantity=1,
+                ),
+            ]
+        )
+        await session.commit()
+
+    active = await P2Service(database[1], "ocaso").resume(actor)
+    assert "consumable.vigor.tdo.i" not in {
+        option.item_id for option in active.consumable_options
+    }
+    invalid_target = await service.action(
+        actor,
+        combat.activity_id,
+        combat.activity_state_version,
+        consumable_id="consumable.protection.vde.ii",
+        target_id="enemy",
+    )
+    assert invalid_target.activity_state_version == combat.activity_state_version
+    missing = await service.action(
+        actor,
+        combat.activity_id,
+        combat.activity_state_version,
+        consumable_id="consumable.missing",
+    )
+    assert missing.activity_state_version == combat.activity_state_version
+    noncombat = await service.action(
+        actor,
+        combat.activity_id,
+        combat.activity_state_version,
+        consumable_id="consumable.vigor.tdo.i",
+    )
+    assert noncombat.activity_state_version == combat.activity_state_version
+    async with database[1]() as session:
+        stacks = (
+            await session.scalars(
+                select(ConsumableStack).where(
+                    ConsumableStack.character_id == character_id
+                )
+            )
+        ).all()
+        assert {row.consumable_id: row.quantity for row in stacks} == {
+            "consumable.protection.vde.ii": 1,
+            "consumable.vigor.tdo.i": 1,
+        }
+
+
+@pytest.mark.asyncio
+async def test_bestiary_repeat_bkp_respects_rare_common_and_elite_profiles(database):
+    actor = 881016
+    character_id, _ = await _seed(database, actor)
+    recorder = BestiaryRecorder()
+
+    async def record_wins(session, creature_id, category, elite, count, milestones):
+        snapshots = {}
+        for wins in range(1, count + 1):
+            await recorder.record(
+                session,
+                character_id,
+                creature_id,
+                victory=True,
+                elite=elite,
+                observation_category=category,
+            )
+            if wins in milestones:
+                entry = await session.scalar(
+                    select(BestiaryEntry).where(
+                        BestiaryEntry.character_id == character_id,
+                        BestiaryEntry.creature_id == creature_id,
+                    )
+                )
+                snapshots[wins] = entry.bkp
+        return snapshots
+
+    async with database[1].begin() as session:
+        rare = await record_wins(
+            session,
+            SPIDER.creature_id,
+            "uncommon",
+            False,
+            40,
+            {1, 2, 3, 4, 5, 6, 10, 15, 25, 40},
+        )
+        assert [rare[wins] - rare[wins - 1] for wins in range(2, 6)] == [
+            2,
+            2,
+            2,
+            2,
+        ]
+        assert all(
+            rare[wins] == rare[5] for wins in (6, 10, 15, 25, 40)
+        )
+
+        common = await record_wins(
+            session, "dog_cinereo", "common", False, 15, {5, 6, 14, 15}
+        )
+        assert common[6] - common[5] == 1
+        assert common[15] - common[14] == 3
+
+        elite = await record_wins(
+            session, "alfa_cinereo", "elite", True, 5, {1, 2, 3, 4, 5}
+        )
+        assert [elite[wins] - elite[wins - 1] for wins in range(2, 6)] == [
+            3,
+            2,
+            1,
+            1,
+        ]
 
 
 @pytest.mark.asyncio

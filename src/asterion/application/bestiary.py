@@ -135,7 +135,9 @@ class BestiaryRecorder:
                         session, character_id, creature_id
                     )
             else:
-                entry.bkp += _repeat_bkp(entry.wins, elite)
+                entry.bkp += _repeat_bkp(
+                    entry.wins, elite, observation_category
+                )
 
         categories = set(
             (
@@ -362,9 +364,11 @@ class BestiaryRecorder:
         return True
 
 
-def _repeat_bkp(wins: int, elite: bool) -> int:
+def _repeat_bkp(wins: int, elite: bool, observation_category: str) -> int:
     if elite:
         return 3 if wins == 2 else 2 if wins == 3 else 1 if 4 <= wins <= 5 else 0
+    if observation_category in {"uncommon", "rare"}:
+        return 2 if 2 <= wins <= 5 else 0
     if 2 <= wins <= 5:
         return 2
     if 6 <= wins <= 10:

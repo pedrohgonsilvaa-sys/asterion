@@ -17,7 +17,14 @@ from asterion.application.equipment_configuration import (
 )
 from asterion.application.progression import consolidate_character_level
 from asterion.application.road import REFUGE, REGION, RoadService
-from asterion.domain.combat import Combat, act
+from asterion.domain.combat import (
+    Combat,
+    CombatConsumableOption,
+    act,
+    combat_consumable_options,
+    use_combat_consumable,
+)
+from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
 from asterion.domain.road import RULESET, SPIDER, create_creature_combat, enemy_xp
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
@@ -25,6 +32,7 @@ from asterion.infrastructure.db.models import (
     Character,
     CodexEntry,
     CombatRecord,
+    ConsumableStack,
     Encounter,
     GameActivity,
     LocationDiscovery,
@@ -82,6 +90,9 @@ class P2View:
     result_state: str | None = None
     rewarded: bool = False
     blocked_by_foreground: bool = False
+    consumable_options: tuple[CombatConsumableOption, ...] = ()
+    consumable_quantities: tuple[tuple[str, int], ...] = ()
+    consumable_budget_limit: int = 0
 
 
 class P2Service:
@@ -208,7 +219,11 @@ class P2Service:
         actor: int,
         activity_id: UUID,
         version: int,
-        action: str,
+        action: str | None = None,
+        *,
+        consumable_id: str | None = None,
+        target_id: str | None = None,
+        effect_id: str | None = None,
     ) -> P2View | None:
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor)
@@ -237,6 +252,8 @@ class P2Service:
             foreground = await self._foreground(session, character.id)
             if foreground is None or foreground.id != activity.id:
                 return await self._view(session, character, quest, world)
+            if (action is None) == (consumable_id is None):
+                return await self._view(session, character, quest, world)
 
             _, record = await CombatRepository(session).combat(activity)
             combat = decode(
@@ -245,9 +262,35 @@ class P2Service:
                 activity.ruleset_version,
                 activity.state_version,
             )
-            updated = act(combat, action)
+            stack = None
+            if consumable_id is None:
+                updated = act(combat, action)
+            else:
+                stack = await session.scalar(
+                    select(ConsumableStack)
+                    .where(
+                        ConsumableStack.character_id == character.id,
+                        ConsumableStack.consumable_id == consumable_id,
+                        ConsumableStack.quantity > 0,
+                    )
+                    .with_for_update()
+                )
+                if stack is None:
+                    return await self._view(session, character, quest, world)
+                budget_limit = ENCOUNTER_CONSUMABLE_LIMITS.get(
+                    SPIDER.category, 0
+                )
+                updated = use_combat_consumable(
+                    combat,
+                    consumable_id,
+                    target_id=target_id,
+                    effect_id=effect_id,
+                    budget_limit=budget_limit,
+                )
             if updated.version == combat.version:
                 return await self._view(session, character, quest, world)
+            if stack is not None:
+                stack.quantity -= 1
 
             activity.state_version = updated.version
             activity.last_valid_action_at = datetime.now(UTC)
@@ -737,6 +780,37 @@ class P2Service:
                     activity.state_version,
                 )
 
+        consumable_options = ()
+        consumable_quantities = ()
+        consumable_budget_limit = 0
+        if (
+            activity is not None
+            and activity.status == "active"
+            and combat is not None
+        ):
+            consumable_budget_limit = ENCOUNTER_CONSUMABLE_LIMITS.get(
+                SPIDER.category, 0
+            )
+            stock = (
+                await session.scalars(
+                    select(ConsumableStack)
+                    .where(
+                        ConsumableStack.character_id == character.id,
+                        ConsumableStack.quantity > 0,
+                    )
+                    .order_by(ConsumableStack.consumable_id)
+                )
+            ).all()
+            stock_ids = tuple(row.consumable_id for row in stock)
+            consumable_quantities = tuple(
+                (row.consumable_id, row.quantity) for row in stock
+            )
+            consumable_options = combat_consumable_options(
+                combat,
+                stock_ids,
+                budget_limit=consumable_budget_limit,
+            )
+
         foreground = await session.scalar(
             select(GameActivity.id).where(
                 GameActivity.character_id == character.id,
@@ -811,6 +885,9 @@ class P2Service:
             result_state=result_state,
             rewarded=rewarded,
             blocked_by_foreground=blocked_by_foreground,
+            consumable_options=consumable_options,
+            consumable_quantities=consumable_quantities,
+            consumable_budget_limit=consumable_budget_limit,
         )
 
     def _valid(self, quest, version, *, step=None):
