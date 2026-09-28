@@ -6,16 +6,26 @@ from sqlalchemy import select
 
 from asterion.application.creation import CreationService
 from asterion.application.prologue import PrologueService
-from asterion.application.road import RoadService
+from asterion.application.road import CHARNECA, RoadService
 from asterion.application.world import WorldService
 from asterion.bot.combat_handlers import combat_router
-from asterion.bot.combat_ui import CombatConsumableFlowCallback, S2CombatCallback
+from asterion.bot.combat_ui import (
+    CombatCallback,
+    CombatConsumableFlowCallback,
+    S2CombatCallback,
+)
 from asterion.bot.creation_handlers import creation_router
 from asterion.bot.s2_handlers import s2_router
 from asterion.bot.s2_ui import render_s2
 from asterion.bot.world_handlers import world_router
 from asterion.domain.prologue import PROFILE
-from asterion.infrastructure.db.models import ConsumableStack, GameActivity
+from asterion.infrastructure.db.models import (
+    ConsumableStack,
+    GameActivity,
+    Quest,
+    Unlock,
+    WorldState,
+)
 from tests.test_creation_ui import callback_update, message_update
 from tests.test_s2_integration import _seed_s2, _start_scripted_combat
 
@@ -114,6 +124,143 @@ async def test_s2_combat_callback_and_start_menu_reconnect_same_foreground(datab
             )
         ).all()
         assert [row.id for row in active] == [combat.activity_id]
+
+
+@pytest.mark.asyncio
+async def test_start_reconstructs_road_combat_before_narrative_s2(database):
+    actor = 997210
+    character_id, s2 = await _seed_s2(database, actor)
+    accepted = await s2.accept(actor)
+    async with database[1].begin() as session:
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character_id)
+        )
+        world.location = CHARNECA
+        session.add(
+            Unlock(
+                character_id=character_id,
+                unlock_id="hunt_manual.charneca_da_fuligem",
+            )
+        )
+
+    road = RoadService(database[1], "ocaso")
+    combat = await road.start_hunt(actor)
+    assert combat is not None and combat.kind == "combat"
+    expected_ids = (
+        combat.activity_id,
+        combat.encounter_id,
+        combat.combat_id,
+    )
+    s2_before = await s2.resume(actor)
+    assert s2_before is not None and s2_before.status == "active"
+    assert s2_before.kind == "detail" and s2_before.step == accepted.step == 1
+
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        creation_router(
+            CreationService(database[1], "ocaso"),
+            {},
+            road=road,
+            s2=s2,
+        )
+    )
+    bot = _telegram()
+    await dispatcher.feed_raw_update(
+        bot,
+        _command_update("/start", update_id=997211, actor=actor),
+    )
+
+    start_screen = _last_method(bot)
+    assert "Os Nomes Esquecidos · Em Andamento" not in start_screen.text
+    assert "Turno" in start_screen.text
+    road_callbacks = [
+        button.callback_data
+        for row in start_screen.reply_markup.inline_keyboard
+        for button in row
+        if button.callback_data and button.callback_data.startswith("fight:")
+    ]
+    assert road_callbacks
+    assert any(
+        (callback := CombatCallback.unpack(data)).activity_id == combat.activity_id
+        and callback.version == combat.combat.version
+        for data in road_callbacks
+    )
+    after = await road.resume(actor)
+    assert after is not None
+    assert (after.activity_id, after.encounter_id, after.combat_id) == expected_ids
+    s2_after = await s2.resume(actor)
+    assert s2_after is not None
+    assert (s2_after.status, s2_after.step, s2_after.progress) == (
+        s2_before.status,
+        s2_before.step,
+        s2_before.progress,
+    )
+    assert s2_after.state_version == s2_before.state_version
+    async with database[1]() as session:
+        active = (
+            await session.scalars(
+                select(GameActivity).where(
+                    GameActivity.character_id == character_id,
+                    GameActivity.status == "active",
+                )
+            )
+        ).all()
+        quest = await session.scalar(
+            select(Quest).where(
+                Quest.character_id == character_id,
+                Quest.quest_id == "S2",
+            )
+        )
+        assert [activity.id for activity in active] == [combat.activity_id]
+        assert quest is not None and quest.status == "active" and quest.step == 1
+
+
+@pytest.mark.asyncio
+async def test_start_keeps_narrative_s2_visible_without_road_foreground(database):
+    actor = 997212
+    character_id, s2 = await _seed_s2(database, actor)
+    accepted = await s2.accept(actor)
+    async with database[1].begin() as session:
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character_id)
+        )
+        world.location = CHARNECA
+
+    road = RoadService(database[1], "ocaso")
+    before = await s2.resume(actor)
+    assert before is not None and before.status == "active" and before.step == 1
+    assert await road.resume(actor) is not None
+    async with database[1]() as session:
+        assert await session.scalar(
+            select(GameActivity.id).where(
+                GameActivity.character_id == character_id,
+                GameActivity.status == "active",
+            )
+        ) is None
+
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        creation_router(
+            CreationService(database[1], "ocaso"),
+            {},
+            road=road,
+            s2=s2,
+        )
+    )
+    bot = _telegram()
+    await dispatcher.feed_raw_update(
+        bot,
+        _command_update("/start", update_id=997213, actor=actor),
+    )
+    assert _last_method(bot).text == render_s2(before).text
+    after = await s2.resume(actor)
+    assert after is not None
+    assert (after.status, after.step, after.progress, after.state_version) == (
+        before.status,
+        accepted.step,
+        before.progress,
+        before.state_version,
+    )
 
 
 @pytest.mark.asyncio

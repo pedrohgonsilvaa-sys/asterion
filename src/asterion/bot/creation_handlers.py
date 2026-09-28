@@ -113,14 +113,22 @@ def creation_router(
                 return render_p1(p1_view)
         if p2_view is not None and p2_view.status == "active":
             return render_p2(p2_view)
-        if s2_view is not None and s2_view.status == "active":
-            return render_s2(s2_view)
+        road_view = None
         if road is not None:
             road_view = await road.resume(actor)
-            if road_view is not None:
+            if road_view is not None and (
+                road_view.kind in {"combat", "exploration", "hunt_victory", "hunt_defeat"}
+                or road_view.kind.startswith("round_")
+            ):
                 from asterion.bot.road_ui import render_road
 
                 return render_road(road_view)
+        if s2_view is not None and s2_view.status == "active":
+            return render_s2(s2_view)
+        if road_view is not None:
+            from asterion.bot.road_ui import render_road
+
+            return render_road(road_view)
         if world is not None:
             world_view = await world.resume(actor)
             if world_view is not None:
