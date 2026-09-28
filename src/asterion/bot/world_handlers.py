@@ -182,6 +182,40 @@ def world_router(
             return True
         return False
 
+    def exploration_callback_attempt_id(query: CallbackQuery) -> UUID | None:
+        data = query.data or ""
+        parts = data.split(":")
+        if len(parts) == 3 and tuple(parts[:2]) in {
+            ("road", "local"),
+            ("road", "explore"),
+        }:
+            raw_id = parts[2]
+        elif len(parts) == 4 and parts[:2] == ["road", "route"]:
+            raw_id = parts[3]
+        else:
+            return None
+        try:
+            return UUID(raw_id)
+        except (TypeError, ValueError):
+            return None
+
+    def exploration_route_matches(view, query: CallbackQuery) -> bool:
+        data = query.data or ""
+        if data.startswith("road:local:") or data.startswith("road:explore:"):
+            return True
+        destination = data.rsplit(":", 2)[1] if data.count(":") == 3 else ""
+        return bool(
+            view.route_available
+            and (
+                (view.location == CHARNECA
+                 and view.recovery_location == REFUGE
+                 and destination == "charneca")
+                or (view.location == BOSQUE
+                    and view.recovery_location == CHARNECA
+                    and destination == "bosque")
+            )
+        )
+
     async def foreground(query: CallbackQuery) -> bool:
         p2_view = await p2.resume(query.from_user.id) if p2 else None
         if (
@@ -211,9 +245,20 @@ def world_router(
             await present(query.message, render_p3(p3_view), images, edit=True)
             return True
         road_view = await road.resume(query.from_user.id) if road else None
+        if road_view is not None and road_view.kind == "exploration":
+            callback_attempt_id = exploration_callback_attempt_id(query)
+            if (
+                callback_attempt_id == road_view.attempt_id
+                and exploration_route_matches(road_view, query)
+                and isinstance(query.message, Message)
+            ):
+                return False
+            if isinstance(query.message, Message):
+                await present(query.message, render_road(road_view), images, edit=True)
+                return True
         if (
             road_view is not None
-            and (road_view.kind in {"combat", "exploration"} or road_view.kind.startswith("round_"))
+            and (road_view.kind == "combat" or road_view.kind.startswith("round_"))
             and isinstance(query.message, Message)
         ):
             await present(query.message, render_road(road_view), images, edit=True)
@@ -304,10 +349,30 @@ def world_router(
                 view = await road.acknowledge_defeat(query.from_user.id)
             elif view is not None and view.kind == "hunt_victory":
                 view = await road.acknowledge_result(query.from_user.id)
-            elif view is not None and view.kind == "exploration":
-                view = await road.acknowledge_result(query.from_user.id)
             if view is not None:
                 await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data.regexp(r"^road:local:[0-9a-fA-F]{32}$"))
+    async def road_local_after_exploration(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        attempt_id = exploration_callback_attempt_id(query)
+        current = await road.resume(query.from_user.id)
+        if (
+            attempt_id is None
+            or current is None
+            or current.kind != "exploration"
+            or current.attempt_id != attempt_id
+        ):
+            await restore_context(query)
+            return
+        view = await road.acknowledge_result(query.from_user.id, attempt_id)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
 
     @router.callback_query(F.data == "road:explore")
     async def explore_prepare(query: CallbackQuery):
@@ -316,12 +381,30 @@ def world_router(
             return
         await query.answer()
         if road is not None and isinstance(query.message, Message):
-            current = await road.resume(query.from_user.id)
-            if current is not None and current.kind == "exploration" and current.retry_available:
-                await road.acknowledge_result(query.from_user.id)
             view = await road.prepare_explore(query.from_user.id)
             if view is not None:
                 await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data.regexp(r"^road:explore:[0-9a-fA-F]{32}$"))
+    async def explore_retry(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        attempt_id = exploration_callback_attempt_id(query)
+        current = await road.resume(query.from_user.id)
+        if (
+            attempt_id is not None
+            and current is not None
+            and current.kind == "exploration"
+            and current.attempt_id == attempt_id
+        ):
+            await road.acknowledge_result(query.from_user.id, attempt_id)
+        view = await road.prepare_explore(query.from_user.id)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
 
     @router.callback_query(F.data == "road:explore:start")
     async def explore(query: CallbackQuery):
@@ -550,15 +633,32 @@ def world_router(
         await query.answer()
         if road is None or not isinstance(query.message, Message):
             return
+        route_parts = (query.data or "").split(":")
+        route_key = ":".join(route_parts[:3])
         destination = {
             "road:route:charneca": CHARNECA,
             "road:route:refuge": REFUGE,
             "road:route:bosque": BOSQUE,
-        }.get(query.data or "")
+        }.get(route_key)
+        route_attempt_id = exploration_callback_attempt_id(query)
+        route_has_attempt_id = len(route_parts) == 4
+        if len(route_parts) not in {3, 4}:
+            await restore_context(query)
+            return
+        if route_has_attempt_id and route_attempt_id is None:
+            await restore_context(query)
+            return
         if destination is None:
             await restore_context(query)
             return
         current = await road.resume(query.from_user.id)
+        if route_has_attempt_id and (
+            current is None
+            or current.kind != "exploration"
+            or current.attempt_id != route_attempt_id
+        ):
+            await restore_context(query)
+            return
         if current is not None:
             if (
                 current.kind == "hunt_defeat"
@@ -572,8 +672,9 @@ def world_router(
                 and current.location == CHARNECA
                 and current.recovery_location == REFUGE
                 and destination == CHARNECA
+                and current.attempt_id == route_attempt_id
             ):
-                await road.acknowledge_result(query.from_user.id)
+                await road.acknowledge_result(query.from_user.id, route_attempt_id)
             elif (
                 current.kind == "round_defeated"
                 and current.location == CHARNECA
@@ -594,8 +695,9 @@ def world_router(
                 and current.location == BOSQUE
                 and current.recovery_location == CHARNECA
                 and destination == BOSQUE
+                and current.attempt_id == route_attempt_id
             ):
-                await road.acknowledge_result(query.from_user.id)
+                await road.acknowledge_result(query.from_user.id, route_attempt_id)
             elif (
                 current.kind == "round_defeated"
                 and current.location == BOSQUE

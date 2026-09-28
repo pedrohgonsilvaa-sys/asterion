@@ -48,22 +48,34 @@ def _location_copy(location: str) -> tuple[str, str]:
 
 
 def _recovery_route(view) -> InlineKeyboardButton | None:
+    attempt_suffix = (
+        f":{view.attempt_id.hex}"
+        if view.kind == "exploration" and view.attempt_id is not None
+        else ""
+    )
     if not view.route_available:
         return None
     if view.location == CHARNECA and view.recovery_location == REFUGE:
         return InlineKeyboardButton(
-            text="Retornar à Charneca", callback_data="road:route:charneca"
+            text="Retornar à Charneca",
+            callback_data=f"road:route:charneca{attempt_suffix}",
         )
     if view.location == BOSQUE and view.recovery_location == CHARNECA:
         return InlineKeyboardButton(
-            text="Retornar ao Bosque", callback_data="road:route:bosque"
+            text="Retornar ao Bosque",
+            callback_data=f"road:route:bosque{attempt_suffix}",
         )
     return None
 
 
-def _local_return(location: str) -> InlineKeyboardButton:
+def _local_return(location: str, attempt_id=None) -> InlineKeyboardButton:
+    callback_data = (
+        f"road:local:{attempt_id.hex}"
+        if attempt_id is not None
+        else "road:local"
+    )
     return InlineKeyboardButton(
-        text=f"← {location}", callback_data="road:local"
+        text=f"← {location}", callback_data=callback_data
     )
 
 
@@ -473,8 +485,19 @@ def render_road(view: RoadView) -> Screen:
         if route_button is not None:
             buttons.append([route_button])
         elif view.retry_available and view.recovery_brazier is None:
-            buttons.append([InlineKeyboardButton(text="Desbravar Novamente", callback_data="road:explore")])
-        buttons.append([_local_return(view.recovery_location or view.location)])
+            buttons.append([
+                InlineKeyboardButton(
+                    text="Desbravar Novamente",
+                    callback_data=f"road:explore:{view.attempt_id.hex}",
+                )
+            ])
+        buttons.append(
+            [
+                _local_return(
+                    view.recovery_location or view.location, view.attempt_id
+                )
+            ]
+        )
         return Screen(
             text, "exploration", InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML"
         )
