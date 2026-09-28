@@ -12,6 +12,7 @@ from asterion.application.p2 import CHARNECA, P2Service
 from asterion.application.prologue import PrologueService
 from asterion.application.road import REFUGE, ROAD, RoadService
 from asterion.application.s1 import S1Service
+from asterion.application.s2 import S2Service
 from asterion.application.world import WorldService
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_handlers import present
@@ -20,6 +21,7 @@ from asterion.bot.inventory_ui import render_inventory
 from asterion.bot.p1_ui import render_p1
 from asterion.bot.p2_ui import render_p2, render_p2_mission_detail
 from asterion.bot.road_ui import render_road
+from asterion.bot.s2_ui import render_s2
 from asterion.bot.world_ui import render_world
 
 
@@ -33,6 +35,7 @@ def world_router(
     consumables: ConsumableService | None = None,
     prologue: PrologueService | None = None,
     p2: P2Service | None = None,
+    s2: S2Service | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -58,6 +61,10 @@ def world_router(
             and p2_view.kind == "combat"
         ):
             await present(message, render_p2(p2_view), images)
+            return
+        s2_view = await s2.resume(message.from_user.id) if s2 and message.from_user else None
+        if s2_view is not None and s2_view.status == "active" and s2_view.kind == "combat":
+            await present(message, render_s2(s2_view), images)
             return
         road_view = await road.resume(message.from_user.id) if road and message.from_user else None
         if road_view is not None:
@@ -92,6 +99,15 @@ def world_router(
         ):
             await present(query.message, render_p2(p2_view), images, edit=True)
             return
+        s2_view = await s2.resume(query.from_user.id) if s2 else None
+        if (
+            s2_view is not None
+            and s2_view.status == "active"
+            and s2_view.kind == "combat"
+            and isinstance(query.message, Message)
+        ):
+            await present(query.message, render_s2(s2_view), images, edit=True)
+            return
         road_view = await road.resume(query.from_user.id) if road else None
         if (
             road_view is not None
@@ -120,6 +136,18 @@ def world_router(
         if screen is not None and isinstance(query.message, Message):
             await present(query.message, screen, images, edit=True)
 
+    async def s2_combat_foreground(query: CallbackQuery) -> bool:
+        view = await s2.resume(query.from_user.id) if s2 is not None else None
+        if (
+            view is not None
+            and view.status == "active"
+            and view.kind == "combat"
+            and isinstance(query.message, Message)
+        ):
+            await present(query.message, render_s2(view), images, edit=True)
+            return True
+        return False
+
     async def foreground(query: CallbackQuery) -> bool:
         p2_view = await p2.resume(query.from_user.id) if p2 else None
         if (
@@ -129,6 +157,15 @@ def world_router(
             and isinstance(query.message, Message)
         ):
             await present(query.message, render_p2(p2_view), images, edit=True)
+            return True
+        s2_view = await s2.resume(query.from_user.id) if s2 else None
+        if (
+            s2_view is not None
+            and s2_view.status == "active"
+            and s2_view.kind == "combat"
+            and isinstance(query.message, Message)
+        ):
+            await present(query.message, render_s2(s2_view), images, edit=True)
             return True
         road_view = await road.resume(query.from_user.id) if road else None
         if (
@@ -150,6 +187,10 @@ def world_router(
         p2_view = await p2.resume(query.from_user.id) if p2 is not None else None
         if p2_view is not None and p2_view.status == "active":
             await present(query.message, render_p2(p2_view), images, edit=True)
+            return
+        s2_view = await s2.resume(query.from_user.id) if s2 is not None else None
+        if s2_view is not None and s2_view.status == "active":
+            await present(query.message, render_s2(s2_view), images, edit=True)
             return
         road_view = await road.resume(query.from_user.id) if road is not None else None
         if road_view is not None:
@@ -175,6 +216,9 @@ def world_router(
 
     @router.callback_query(F.data == "road:hunt")
     async def hunt(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is not None and isinstance(query.message, Message):
             view = await road.start_hunt(query.from_user.id)
@@ -183,6 +227,9 @@ def world_router(
 
     @router.callback_query(F.data == "road:prepare")
     async def hunt_prepare(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is not None and isinstance(query.message, Message):
             current = await road.resume(query.from_user.id)
@@ -197,6 +244,9 @@ def world_router(
 
     @router.callback_query(F.data == "road:local")
     async def road_local(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is not None and isinstance(query.message, Message):
             view = await road.resume(query.from_user.id)
@@ -211,6 +261,9 @@ def world_router(
 
     @router.callback_query(F.data == "road:explore")
     async def explore_prepare(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is not None and isinstance(query.message, Message):
             current = await road.resume(query.from_user.id)
@@ -222,6 +275,9 @@ def world_router(
 
     @router.callback_query(F.data == "road:explore:start")
     async def explore(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is not None and isinstance(query.message, Message):
             view = await road.explore(query.from_user.id)
@@ -230,6 +286,9 @@ def world_router(
 
     @router.callback_query(F.data.startswith("road:round:new:"))
     async def round_prepare(query: CallbackQuery):
+        if await s2_combat_foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is None or not isinstance(query.message, Message):
             return
@@ -243,6 +302,9 @@ def world_router(
 
     @router.callback_query(F.data.startswith("road:round:prepare:view:"))
     async def round_prepare_view(query: CallbackQuery):
+        if await s2_combat_foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is None or not isinstance(query.message, Message):
             return
@@ -257,6 +319,9 @@ def world_router(
 
     @router.callback_query(F.data.startswith("road:round:cons:"))
     async def round_consumables(query: CallbackQuery):
+        if await s2_combat_foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is None or not isinstance(query.message, Message):
             return
@@ -271,6 +336,9 @@ def world_router(
 
     @router.callback_query(F.data.startswith("road:round:toggle:"))
     async def round_toggle_consumable(query: CallbackQuery):
+        if await s2_combat_foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is None or not isinstance(query.message, Message):
             return
@@ -294,6 +362,9 @@ def world_router(
 
     @router.callback_query(F.data.startswith("road:round:start:"))
     async def round_start(query: CallbackQuery):
+        if await s2_combat_foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is None or not isinstance(query.message, Message):
             return
@@ -308,6 +379,9 @@ def world_router(
 
     @router.callback_query(F.data.startswith("road:round:cancel:"))
     async def round_cancel(query: CallbackQuery):
+        if await s2_combat_foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is None or not isinstance(query.message, Message):
             return
@@ -322,6 +396,9 @@ def world_router(
 
     @router.callback_query(F.data.startswith("road:round:elite:"))
     async def round_elite(query: CallbackQuery):
+        if await s2_combat_foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is None or not isinstance(query.message, Message):
             return
@@ -336,6 +413,9 @@ def world_router(
 
     @router.callback_query(F.data.startswith("road:round:back:"))
     async def round_back(query: CallbackQuery):
+        if await s2_combat_foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is None or not isinstance(query.message, Message):
             return
@@ -414,6 +494,9 @@ def world_router(
 
     @router.callback_query(F.data.startswith("road:route:"))
     async def overland_route(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is None or not isinstance(query.message, Message):
             return
@@ -447,12 +530,19 @@ def world_router(
                 await road.round_back(query.from_user.id, current.round_id)
         view = await road.travel_route(query.from_user.id, destination)
         if view is not None:
+            s2_view = await s2.resume(query.from_user.id) if s2 is not None else None
+            if s2_view is not None and s2_view.status == "active":
+                await present(query.message, render_s2(s2_view), images, edit=True)
+                return
             await present(query.message, render_road(view), images, edit=True)
         else:
             await restore_context(query)
 
     @router.callback_query(F.data.startswith("road:travel:"))
     async def travel(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
         await query.answer()
         if road is None or not isinstance(query.message, Message):
             return
@@ -528,6 +618,9 @@ def world_router(
         p1_view = await p1.resume(query.from_user.id) if p1 else None
         p2_view = await p2.resume(query.from_user.id) if p2 else None
         s1_view = await s1.resume(query.from_user.id) if s1 else None
+        s2_view = await s2.resume(query.from_user.id) if s2 else None
+        if s2_view is None and s2 is not None:
+            s2_view = await s2.offer(query.from_user.id)
         text = "📜 Missões\n\nObjetivos, promessas e caminhos ainda inacabados acompanham sua jornada por Asterion."
         keyboard = []
         if p1_view is not None and p1_view.status == "active":
@@ -546,12 +639,29 @@ def world_router(
             keyboard.append(
                 [InlineKeyboardButton(text="Principal", callback_data="world:principal")]
             )
+        secondary_lines = []
+        secondary_buttons = []
         if s1_view is not None and s1_view.status == "active":
-            text += (
-                "\n\n📖 Missões Secundárias\n\n"
-                "1 🕯️ Luzes sob as Cinzas · Em Andamento"
+            secondary_lines.append("🕯️ Luzes sob as Cinzas · Em Andamento")
+            secondary_buttons.append([InlineKeyboardButton(text="Luzes sob as Cinzas", callback_data="s1:detail")])
+        if s2_view is not None:
+            if s2_view.status == "active":
+                secondary_lines.append("📖 Os Nomes Esquecidos · Em Andamento")
+                secondary_buttons.append([InlineKeyboardButton(text="Os Nomes Esquecidos", callback_data="s2:detail")])
+            elif s2_view.status == "completed":
+                secondary_lines.append("✅ Os Nomes Esquecidos · Concluída")
+                secondary_buttons.append([InlineKeyboardButton(text="Os Nomes Esquecidos", callback_data="s2:detail")])
+            elif s2_view.reacceptable:
+                secondary_lines.append("📖 Os Nomes Esquecidos · Disponível para reaceite")
+                secondary_buttons.append([InlineKeyboardButton(text="Os Nomes Esquecidos", callback_data="s2:offer")])
+            elif s2_view.available:
+                secondary_lines.append("📖 Os Nomes Esquecidos · Disponível")
+                secondary_buttons.append([InlineKeyboardButton(text="Os Nomes Esquecidos", callback_data="s2:offer")])
+        if secondary_lines:
+            text += "\n\n📖 Missões Secundárias\n\n" + "\n".join(
+                f"{index} {line}" for index, line in enumerate(secondary_lines, start=1)
             )
-            keyboard.append([InlineKeyboardButton(text="1", callback_data="s1:detail")])
+            keyboard.extend(secondary_buttons)
         keyboard.append(
             [InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")]
         )
@@ -580,11 +690,41 @@ def world_router(
             if view is not None:
                 await present(query.message, render_p2(view), images, edit=True)
             return
+        s2_view = await s2.oren(query.from_user.id) if s2 else None
         view = await s1.oren(query.from_user.id) if s1 else None
         if view is not None:
             from asterion.bot.s1_ui import render_s1
 
-            await present(query.message, render_s1(view), images, edit=True)
+            screen = render_s1(view)
+        elif s2_view is not None:
+            screen = render_s2(s2_view)
+        else:
+            return
+        if s2_view is not None and view is not None:
+            from aiogram.types import InlineKeyboardMarkup
+
+            rows = list(screen.keyboard.inline_keyboard) if screen.keyboard else []
+            if s2_view.status == "active":
+                if s2_view.step == 6:
+                    s2_action = f"s2:{s2_view.state_version}:complete"
+                    s2_label = "Entregar o fragmento a Oren"
+                else:
+                    s2_action = "s2:objective"
+                    s2_label = "Ver Os Nomes Esquecidos"
+                rows.append([InlineKeyboardButton(text=s2_label, callback_data=s2_action)])
+            elif s2_view.status == "completed":
+                rows.append([InlineKeyboardButton(text="Os Nomes Esquecidos · Concluída", callback_data="s2:detail")])
+            elif s2_view.reacceptable or s2_view.available:
+                rows.append([InlineKeyboardButton(text="Os Nomes Esquecidos", callback_data="s2:offer")])
+            text = screen.text + "\n\n📖 Os Nomes Esquecidos · " + (
+                "Em Andamento" if s2_view.status == "active" else
+                "Concluída" if s2_view.status == "completed" else
+                "Disponível para reaceite" if s2_view.reacceptable else
+                "Disponível" if s2_view.available else
+                "Indisponível no momento"
+            )
+            screen = Screen(text, screen.image_key, InlineKeyboardMarkup(inline_keyboard=rows), parse_mode=screen.parse_mode)
+        await present(query.message, screen, images, edit=True)
 
     @router.callback_query(F.data == "world:principal")
     async def principal(query: CallbackQuery):

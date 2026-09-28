@@ -1742,6 +1742,10 @@ class RoadService:
             return None
         return profile
 
+    async def recover_normal_pve_defeat(self, s, c, local_id, world=None):
+        """Apply the shared regional recovery rule to a normal PvE defeat."""
+        return await self._recover_normal_pve_defeat(s, c, local_id, world)
+
     async def _recover_normal_pve_defeat(self, s, c, local_id, world=None):
         """Apply only the regional destination rule for normal Charneca PvE defeats."""
         c.hp = c.max_hp
