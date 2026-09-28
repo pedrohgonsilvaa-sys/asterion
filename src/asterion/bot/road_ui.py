@@ -7,7 +7,7 @@ from html import escape
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
-from asterion.application.road import ROAD, RoadView
+from asterion.application.road import CHARNECA, REFUGE, ROAD, RoadView
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 
@@ -40,15 +40,35 @@ def _reward_block(view) -> str:
     return "\n\n🎁 Recompensas\n\n" + "\n".join(view.reward_lines)
 
 
+def _location_copy(location: str) -> tuple[str, str]:
+    if location == CHARNECA:
+        return "🌑 Charneca da Fuligem", "Terras do Ocaso · Nv. 3–5"
+    if location == REFUGE:
+        return "🔥 Refúgio do Ocaso", "Terras do Ocaso · Nv. 1–10"
+    return "🔥 Estrada das Cinzas", "Terras do Ocaso · Nv. 1–10"
+
+
+def _local_return(location: str) -> InlineKeyboardButton:
+    return InlineKeyboardButton(
+        text=f"← {location}", callback_data="road:local"
+    )
+
+
 def _round_screen(view) -> Screen | None:
     if not getattr(view, "kind", "").startswith("round_"):
         return None
     token = _round_token(view)
+    if view.location == CHARNECA:
+        place = "🌑 Charneca da Fuligem\nTerras do Ocaso · Nv. 3–5"
+        local_line = "Charneca da Fuligem · Terras do Ocaso"
+    else:
+        # Preserve the established Estrada copy while using the Round snapshot.
+        place = "Estrada das Cinzas\nTerras do Ocaso · Nv. 1–10"
+        local_line = "Estrada das Cinzas · Terras do Ocaso"
     if view.kind == "round_prepare":
         text = (
             "🏕️ Ronda de Caça\n"
-            "Estrada das Cinzas\n"
-            "Terras do Ocaso · Nv. 1–10\n\n"
+            f"{place}\n\n"
             f"❤️ HP · <code>{view.hp} / {view.max_hp}</code>\n"
             f"⚡ Vigor · <code>{view.vigor} / {view.max_vigor}</code>\n\n"
             f"🎯 Ronda · {view.batch_size} Encontros\n"
@@ -79,7 +99,7 @@ def _round_screen(view) -> Screen | None:
     if view.kind == "round_consumables":
         lines = [
             "🧪 Consumíveis da Ronda",
-            "Estrada das Cinzas · Terras do Ocaso",
+            f"{view.location} · Terras do Ocaso",
             "",
         ]
         buttons = []
@@ -152,7 +172,7 @@ def _round_screen(view) -> Screen | None:
     if view.kind == "round_active":
         text = (
             "🏕️ Ronda de Caça · Andamento\n"
-            "Estrada das Cinzas · Terras do Ocaso\n\n"
+            f"{local_line}\n\n"
             f"⚔️ Encontros · {view.completed_encounters}/{view.batch_size}\n\n"
             f"❤️ HP · {view.hp}\n"
             f"⚡ Vigor · {view.vigor}\n\n"
@@ -180,7 +200,7 @@ def _round_screen(view) -> Screen | None:
         flavor = f"\n\n{escape(view.result_text)}" if view.result_text else ""
         text = (
             "🏕️ Ronda de Caça · Interrompida\n"
-            "Estrada das Cinzas · Terras do Ocaso\n\n"
+            f"{local_line}\n\n"
             f"⚔️ Encontros · {view.completed_encounters}/{view.batch_size}\n"
             "⚠️ Motivo · Elite Encontrado\n\n"
             f"🐺 {creature} · Nv. {view.enemy_level}"
@@ -204,7 +224,7 @@ def _round_screen(view) -> Screen | None:
     if view.kind == "round_completed":
         text = (
             "🏆 Ronda de Caça · Concluída\n"
-            "Estrada das Cinzas · Terras do Ocaso\n\n"
+            f"{view.location} · Terras do Ocaso\n\n"
             f"⚔️ Encontros · {view.completed_encounters}/{view.batch_size}"
             f"{_reward_block(view)}"
         )
@@ -214,9 +234,7 @@ def _round_screen(view) -> Screen | None:
             InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        InlineKeyboardButton(
-                            text="← Caçada", callback_data=f"road:round:back:{token}"
-                        )
+                        InlineKeyboardButton(text="← Caçada", callback_data=f"road:round:back:{token}")
                     ]
                 ]
             ),
@@ -224,7 +242,7 @@ def _round_screen(view) -> Screen | None:
     if view.kind == "round_cancelled":
         text = (
             "🏕️ Ronda de Caça · Cancelada\n"
-            "Estrada das Cinzas · Terras do Ocaso\n\n"
+            f"{view.location} · Terras do Ocaso\n\n"
             f"⚔️ Encontros · {view.completed_encounters}/{view.batch_size}\n\n"
             "✅ A Ronda foi encerrada. Os encontros já concluídos permanecem registrados."
             f"{_reward_block(view)}"
@@ -235,34 +253,33 @@ def _round_screen(view) -> Screen | None:
             InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        InlineKeyboardButton(
-                            text="← Caçada", callback_data=f"road:round:back:{token}"
-                        )
+                        InlineKeyboardButton(text="← Caçada", callback_data=f"road:round:back:{token}")
                     ]
                 ]
             ),
         )
     if view.kind == "round_defeated":
+        recovery = (
+            f"🔥 {view.recovery_brazier}\n"
+            f"{view.recovery_location} · Terras do Ocaso\n\n"
+            if view.recovery_brazier and view.recovery_location
+            else "🔥 Braseiro da Estrada\nEstrada das Cinzas · Terras do Ocaso\n\n"
+        )
         text = (
             "💀 Ronda de Caça · Derrota\n\n"
-            "🔥 Braseiro da Estrada\n"
-            "Estrada das Cinzas · Terras do Ocaso\n\n"
+            f"{recovery}"
             f"⚔️ Encontros · {view.completed_encounters}/{view.batch_size}\n"
             "❤️ HP · Restaurado"
             f"{_reward_block(view)}"
         )
+        keyboard = []
+        if view.route_available:
+            keyboard.append([InlineKeyboardButton(text="Retornar à Charneca", callback_data="road:route:charneca")])
+        keyboard.append([InlineKeyboardButton(text="← Caçada", callback_data=f"road:round:back:{token}")])
         return Screen(
             text,
-            "brazier_estrada",
-            InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="← Caçada", callback_data=f"road:round:back:{token}"
-                        )
-                    ]
-                ]
-            ),
+            "brazier_estrada" if view.recovery_location in {None, ROAD} else "road_defeat",
+            InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
     if view.kind == "round_ended":
         reason = ""
@@ -279,7 +296,7 @@ def _round_screen(view) -> Screen | None:
             reason = "\n".join(parts)
         text = (
             "🏕️ Ronda de Caça · Encerrada\n"
-            "Estrada das Cinzas · Terras do Ocaso\n\n"
+            f"{view.location} · Terras do Ocaso\n\n"
             f"⚔️ Encontros · {view.completed_encounters}/{view.batch_size}\n\n"
             f"{reason}"
             f"{_reward_block(view)}"
@@ -335,29 +352,48 @@ def render_road(view: RoadView) -> Screen:
             )
         )
     if view.kind == "hunt_defeat":
-        text = (
-            "💀 Derrota\n\n🔥 Braseiro da Estrada\nEstrada das Cinzas · Terras do Ocaso\n\n"
-            "❤️ HP · Restaurado\n\n🦌 Caçada · Encerrada"
-        )
-        keyboard = [
-            [InlineKeyboardButton(text="Caçar Novamente", callback_data="road:prepare")],
-            [InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")],
-        ]
+        if view.recovery_brazier and view.recovery_location:
+            text = (
+                "💀 Caçada · Derrota\n\n"
+                f"🔥 {view.recovery_brazier}\n"
+                f"{view.recovery_location} · Terras do Ocaso\n\n"
+                "❤️ HP · Restaurado\n\n🦌 Caçada · Encerrada"
+            )
+            keyboard = []
+            if view.route_available:
+                keyboard.append([InlineKeyboardButton(text="Retornar à Charneca", callback_data="road:route:charneca")])
+            keyboard.append([InlineKeyboardButton(text=f"← {view.recovery_location}", callback_data="road:local")])
+        else:
+            text = (
+                "💀 Derrota\n\n🔥 Braseiro da Estrada\nEstrada das Cinzas · Terras do Ocaso\n\n"
+                "❤️ HP · Restaurado\n\n🦌 Caçada · Encerrada"
+            )
+            keyboard = [
+                [InlineKeyboardButton(text="Caçar Novamente", callback_data="road:prepare")],
+                [InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")],
+            ]
         return Screen(text, "road_defeat", InlineKeyboardMarkup(inline_keyboard=keyboard))
     if view.kind == "hunt_prepare":
+        if view.location == CHARNECA:
+            local_block = "🌑 Charneca da Fuligem · Local Atual\nTerras do Ocaso · Nv. 3–5"
+        else:
+            local_block = "🔥 Estrada das Cinzas\nTerras do Ocaso · Nv. 1–10"
         text = (
-            "🦌 Caçada\n\n🔥 Estrada das Cinzas\nTerras do Ocaso · Nv. 1–10\n\n"
+            "🦌 Caçada\n\n"
+            f"{local_block}\n\n"
             f"👤 {escape(view.name or 'Personagem')}\n❤️ <code>{view.hp} / {view.max_hp}</code>\n"
             f"⚡ Vigor · <code>{view.vigor} / {view.max_vigor}</code>\n\n👤 Grupo\n⚔️ Escolha o formato da Caçada."
         )
         keyboard = [
             [InlineKeyboardButton(text="[1] Solo", callback_data="road:hunt")],
             [InlineKeyboardButton(text="[2] Grupo", callback_data="road:unavailable:group")],
-            [InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")],
+            [_local_return(view.location)],
         ]
         return Screen(text, "hunt_prepare", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
     if view.kind == "hunt_victory":
         text = "🏆 Vitória\n\n🦌 Caçada concluída"
+        if view.location == CHARNECA:
+            text += f"\n\n🌑 {CHARNECA}"
         if view.creature:
             text += f"\n🐾 {escape(view.creature)}"
         if view.variant:
@@ -366,53 +402,71 @@ def render_road(view: RoadView) -> Screen:
             text += "\n\n" + "\n".join(view.reward_lines)
         keyboard = [
             [InlineKeyboardButton(text="Caçar Novamente", callback_data="road:prepare")],
-            [InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")],
+            [_local_return(view.location)],
         ]
         return Screen(text, "road_victory", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
     if view.kind == "exploration":
-        text = f"🧭 Desbravar\n\n🔥 Estrada das Cinzas\nTerras do Ocaso · Nv. 1–10\n\n{escape(view.result_text or '')}"
-        buttons = [
-            [InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")],
-        ]
-        if view.retry_available:
-            buttons.insert(0, [InlineKeyboardButton(text="Desbravar Novamente", callback_data="road:explore")])
+        title, subtitle = _location_copy(view.location)
+        if view.recovery_brazier and view.recovery_location:
+            text = (
+                "💀 Desbravar · Derrota\n\n"
+                f"🔥 {view.recovery_brazier}\n"
+                f"{view.recovery_location} · Terras do Ocaso\n"
+                "❤️ HP · Restaurado\n\n"
+                f"{escape(view.result_text or 'A exploração foi interrompida.')}"
+            )
+        else:
+            text = f"🧭 Desbravar\n\n{title}\n{subtitle}\n\n{escape(view.result_text or '')}"
+            if view.result_id == "explore.tdo.charneca.braseiro":
+                text += "\n\n🔥 Braseiro do Vento Morto · Descoberto"
+            elif view.result_id == "explore.tdo.charneca.cripta":
+                text += "\n\n🏰 Cripta do Ocaso · Descoberta\n🧭 Caminho Conhecido"
+        buttons = []
+        if view.recovery_location == REFUGE and view.route_available:
+            buttons.append([InlineKeyboardButton(text="Retornar à Charneca", callback_data="road:route:charneca")])
+        elif view.retry_available and view.recovery_brazier is None:
+            buttons.append([InlineKeyboardButton(text="Desbravar Novamente", callback_data="road:explore")])
+        buttons.append([_local_return(view.recovery_location or view.location)])
         return Screen(
             text, "exploration", InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML"
         )
     if view.kind == "explore_prepare":
+        title, subtitle = _location_copy(view.location)
         text = (
-            "🧭 Desbravar\n\n🔥 Estrada das Cinzas · Local Atual\n"
-            "Terras do Ocaso · Nv. 1–10\n\n👤 Solo\n"
+            "🧭 Desbravar\n\n"
+            f"{title} · Local Atual\n{subtitle}\n\n👤 Solo\n"
             f"❤️ <code>{view.hp} / {view.max_hp}</code>\n"
             f"⚡ 4 Vigor quando a economia for concedida · <code>{view.vigor} / {view.max_vigor}</code>"
         )
         keyboard = [
             [InlineKeyboardButton(text="Desbravar", callback_data="road:explore:start")],
-            [InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")],
+            [_local_return(view.location)],
         ]
         return Screen(text, "explore_prepare", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
     if view.kind == "explore_cooldown":
+        location_line = "🌑 Charneca da Fuligem\n\n" if view.location == CHARNECA else ""
         text = (
-            "🧭 Desbravar\n\n"
+            f"🧭 Desbravar\n\n{location_line}"
             "⏳ Desbravar · Disponível em "
             f"<code>{escape(view.result_text or '00:00')}</code>"
         )
         return Screen(
             text,
             "explore_cooldown",
-            InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")]]),
+            InlineKeyboardMarkup(inline_keyboard=[[_local_return(view.location)]]),
             parse_mode="HTML",
         )
     if view.kind == "explore_limit":
+        location_line = "🌑 Charneca da Fuligem\n\n" if view.location == CHARNECA else ""
         text = (
-            "🧭 Desbravar\n\n"
+            f"🧭 Desbravar\n\n{location_line}"
             "🔒 Desbravar · Limite recente atingido\n"
             f"⏳ Disponível em · <code>{escape(view.result_text or '00:00')}</code>"
         )
         return Screen(
             text,
             "explore_limit",
-            InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")]]),
+            InlineKeyboardMarkup(inline_keyboard=[[_local_return(view.location)]]),
             parse_mode="HTML",
         )
     if view.location == ROAD:
@@ -450,23 +504,83 @@ def render_road(view: RoadView) -> Screen:
                 if view.familiar
                 else []
             ),
-            [
-                InlineKeyboardButton(
-                    text="Travessia dos Braseiros", callback_data="road:travel:refuge"
-                )
-            ],
+            *(
+                [[InlineKeyboardButton(text="Travessia dos Braseiros", callback_data="world:travel")]]
+                if view.brazier_id and view.brazier_destinations
+                else []
+            ),
             [InlineKeyboardButton(text="← Terras do Ocaso", callback_data="menu:back")],
         ]
-    else:
+    elif view.location == CHARNECA:
+        round_line = (
+            "1 🏕️ Ronda · 5 Encontros\n"
+            "2 🏕️ Ronda · 10 Encontros\n"
+            "3 🏕️ Ronda · 20 Encontros"
+            if view.familiar
+            else "🔒 Ronda de Caça · Vença uma Caçada neste Local"
+        )
+        brazier_line = (
+            "🔥 Braseiro · Descoberto"
+            if view.brazier_id is not None
+            else "🔥 Braseiro · Não descoberto"
+        )
+        text = (
+            "🌑 Charneca da Fuligem · Local Atual\nTerras do Ocaso · Nv. 3–5\n\n"
+            f"{brazier_line}\n"
+            + (
+                "🧭 Desbravar · Disponível\n"
+                if view.explore_available
+                else "⏳ Desbravar · Em recarga\n"
+            )
+            + "🦌 Caçada · Disponível\n\n"
+            + round_line
+        )
+        keyboard = [
+            [InlineKeyboardButton(text="Caçar", callback_data="road:prepare")],
+            *(
+                [[InlineKeyboardButton(text="Desbravar", callback_data="road:explore")]]
+                if view.explore_available
+                else []
+            ),
+            *(
+                [[
+                    InlineKeyboardButton(text="1", callback_data="road:round:new:5"),
+                    InlineKeyboardButton(text="2", callback_data="road:round:new:10"),
+                    InlineKeyboardButton(text="3", callback_data="road:round:new:20"),
+                ]]
+                if view.familiar
+                else []
+            ),
+            *(
+                [[InlineKeyboardButton(text="Retornar ao Refúgio", callback_data="road:route:refuge")]]
+                if view.route_available
+                else []
+            ),
+            *(
+                [[InlineKeyboardButton(text="Travessia dos Braseiros", callback_data="world:travel")]]
+                if view.brazier_id and view.brazier_destinations
+                else []
+            ),
+            [InlineKeyboardButton(text="← Terras do Ocaso", callback_data="menu:back")],
+        ]
+    elif view.location == REFUGE:
         text = "🔥 Braseiro do Refúgio\nRefúgio do Ocaso · Terras do Ocaso"
         keyboard = [
             [InlineKeyboardButton(text="Alda Veyr", callback_data="p2:alda")],
             [InlineKeyboardButton(text="Oren Cal", callback_data="world:oren")],
-            [
-                InlineKeyboardButton(
-                    text="Travessia dos Braseiros", callback_data="road:travel:road"
-                )
-            ],
+            *(
+                [[InlineKeyboardButton(text="Seguir para a Charneca", callback_data="road:route:charneca")]]
+                if view.route_available
+                else []
+            ),
+            *(
+                [[InlineKeyboardButton(text="Travessia dos Braseiros", callback_data="world:travel")]]
+                if view.brazier_id and view.brazier_destinations
+                else []
+            ),
             [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
         ]
+    else:
+        text = "Local indisponível."
+        keyboard = [[InlineKeyboardButton(text="← Menu", callback_data="menu:back")]]
     return Screen(text, "road", InlineKeyboardMarkup(inline_keyboard=keyboard))

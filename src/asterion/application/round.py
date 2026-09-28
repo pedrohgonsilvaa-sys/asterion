@@ -15,8 +15,10 @@ from asterion.application.equipment_configuration import (
     reconcile_character_hp,
 )
 from asterion.application.road import (
+    CHARNECA,
     HUNT_CONTENT,
     MATERIAL_LABELS,
+    REFUGE,
     ROAD,
     VARIANT_LABELS,
     RoadService,
@@ -37,6 +39,7 @@ from asterion.domain.equipment_stats import (
     equipment_configuration_from_data,
 )
 from asterion.domain.road import (
+    CHARNECA_LOCATION,
     ROAD_LOCATION,
     RULESET,
     create_road_combat,
@@ -116,6 +119,9 @@ class RoundView:
     result_text: str | None = None
     inventory_blocked: bool = False
     pending_blocked: bool = False
+    recovery_brazier: str | None = None
+    recovery_location: str | None = None
+    route_available: bool = False
 
 
 class RoundService(RoadService):
@@ -177,6 +183,8 @@ class RoundService(RoadService):
     async def _road_blocking_view(self, s, c):
         round_state = await self._open_round(s, c.id, lock=True)
         if round_state is not None:
+            if round_state.status == "preparing":
+                return await self._round_view(s, c, round_state)
             if round_state.status == "active":
                 await self._advance_round_locked(s, c, round_state, datetime.now(UTC))
                 if round_state.status != "active":
@@ -521,6 +529,8 @@ class RoundService(RoadService):
             blocking = await super()._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
+            if world.location in {REFUGE, CHARNECA}:
+                return await self._view_for_world(s, c, world)
             location = world.location
             return RoadView(
                 "hunt_prepare",
@@ -814,7 +824,16 @@ class RoundService(RoadService):
 
         if combat.result == "defeat":
             encounter.status = "defeated"
-            c.hp = c.max_hp
+            local_id = str((state.config_snapshot or {}).get("local_id", ROAD_LOCATION))
+            recovery_brazier, recovery_location = await self._recover_normal_pve_defeat(
+                s, c, local_id
+            )
+            if recovery_brazier is not None:
+                state.config_snapshot = {
+                    **(state.config_snapshot or {}),
+                    "recovery_brazier": recovery_brazier,
+                    "recovery_location": recovery_location,
+                }
             state.next_resolution_at = None
             await self._finish_round(s, state, "defeated")
             return
@@ -1219,6 +1238,13 @@ class RoundService(RoadService):
         if state.end_reason in {"inventory", "pending", "inventory_pending"}:
             inventory_blocked = state.end_reason in {"inventory", "inventory_pending"}
             pending_blocked = state.end_reason in {"pending", "inventory_pending"}
+        recovery_brazier = (state.config_snapshot or {}).get("recovery_brazier")
+        recovery_location = (state.config_snapshot or {}).get("recovery_location")
+        route_available = bool(
+            recovery_brazier is not None
+            and recovery_location == REFUGE
+            and (state.config_snapshot or {}).get("local_id") == CHARNECA_LOCATION
+        )
         flavor = None
         creature_name = None
         enemy_level = 0
@@ -1270,4 +1296,7 @@ class RoundService(RoadService):
             result_text=flavor,
             inventory_blocked=inventory_blocked,
             pending_blocked=pending_blocked,
+            recovery_brazier=recovery_brazier,
+            recovery_location=recovery_location,
+            route_available=route_available,
         )

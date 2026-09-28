@@ -1,4 +1,5 @@
 from collections import deque
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -14,6 +15,7 @@ from asterion.application.road import (
     EXPLORE_CONTENT,
     HUNT_CONTENT,
     REFUGE,
+    ROAD,
     RoadService,
 )
 from asterion.application.round import RoundService
@@ -42,12 +44,14 @@ from asterion.infrastructure.db.models import (
     Brazier,
     Character,
     CodexEntry,
+    ConsumableStack,
     EquipmentItem,
     ExplorationAttempt,
     GameActivity,
     HuntContext,
     HuntRound,
     HuntRoundEncounter,
+    LocationDiscovery,
     MaterialStack,
     Quest,
     RewardComponent,
@@ -62,11 +66,13 @@ async def _seed_charneca(
     database,
     *,
     actor: int,
+    name: str = "Heroa",
     level: int = 4,
     vigor: int = 100,
     location: str = REFUGE,
     round_familiarity: bool = False,
     road_familiarity: bool = False,
+    permanent_braziers: tuple[str, ...] = (),
 ) -> RoadService:
     _, sessions = database
     character_id = uuid4()
@@ -77,7 +83,7 @@ async def _seed_charneca(
                 id=character_id,
                 telegram_id=actor,
                 server_id="ocaso",
-                name="Heroa",
+                name=name,
                 race="remanescente",
                 character_class="sentinela",
                 stage="menu:ready",
@@ -91,8 +97,17 @@ async def _seed_charneca(
                 crowns=0,
             )
         )
+        await session.flush()
         session.add_all(
             [
+                Quest(
+                    character_id=character_id,
+                    quest_id="P1",
+                    title="Vozes na Estrada",
+                    status="completed",
+                    step=7,
+                    content_version="tdo-1.0.2",
+                ),
                 Quest(
                     character_id=character_id,
                     quest_id="P2",
@@ -119,7 +134,23 @@ async def _seed_charneca(
                     character_id=character_id,
                     unlock_id="explore.charneca_da_fuligem",
                 ),
+                LocationDiscovery(
+                    character_id=character_id,
+                    location_id="tdo.location.estrada_das_cinzas",
+                ),
+                LocationDiscovery(
+                    character_id=character_id,
+                    location_id="tdo.location.refugio_do_ocaso",
+                ),
+                LocationDiscovery(
+                    character_id=character_id,
+                    location_id=CHARNECA_LOCATION,
+                ),
             ]
+        )
+        session.add_all(
+            Brazier(character_id=character_id, brazier_id=brazier_id)
+            for brazier_id in permanent_braziers
         )
         if round_familiarity:
             session.add(
@@ -340,6 +371,441 @@ async def test_charneca_overland_route_and_hunt_freeze_local(database, monkeypat
                 HuntContext.local_id == "tdo.location.estrada_das_cinzas",
             )
         ) == 0
+
+
+@pytest.mark.asyncio
+async def test_overland_and_brazier_travel_are_distinct_and_free(database):
+    actor = 880311
+    service = await _seed_charneca(
+        database,
+        actor=actor,
+        location=REFUGE,
+        permanent_braziers=(
+            "tdo.brazier.estrada",
+            "tdo.brazier.refugio_do_ocaso",
+            "tdo.brazier.vento_morto",
+        ),
+    )
+
+    charneca = await service.travel_route(actor, CHARNECA)
+    assert charneca is not None and charneca.location == CHARNECA
+    assert charneca.brazier_id == "tdo.brazier.vento_morto"
+    assert {destination[1] for destination in charneca.brazier_destinations} == {
+        "Braseiro da Estrada",
+        "Braseiro do Refúgio",
+    }
+
+    refuge = await service.travel_brazier(actor, "tdo.brazier.refugio_do_ocaso")
+    assert refuge is not None and refuge.location == REFUGE
+    assert refuge.brazier_id == "tdo.brazier.refugio_do_ocaso"
+    assert {
+        destination[0] for destination in refuge.brazier_destinations
+    } == {"tdo.brazier.estrada", "tdo.brazier.vento_morto"}
+
+    back_by_route = await service.travel_route(actor, CHARNECA)
+    assert back_by_route is not None and back_by_route.location == CHARNECA
+    refuge_again = await service.travel_route(actor, REFUGE)
+    assert refuge_again is not None and refuge_again.location == REFUGE
+    assert await service.travel_route(actor, ROAD) is None
+    assert await service.travel_brazier(actor, "tdo.brazier.not_discovered") is None
+
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character.id
+            )
+        ) == 0
+        assert await session.scalar(
+            select(func.count(GameActivity.id)).where(
+                GameActivity.character_id == character.id
+            )
+        ) == 0
+        p2 = await session.scalar(
+            select(Quest).where(
+                Quest.character_id == character.id,
+                Quest.quest_id == "P2",
+            )
+        )
+        p2.status = "active"
+        await session.commit()
+    assert await service.travel_route(actor, CHARNECA) is None
+
+
+def _forced_defeat(combat, _action):
+    updated = deepcopy(combat)
+    updated.version += 1
+    updated.result = "defeat"
+    updated.fighters["player"].hp = Decimal(0)
+    return updated
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("has_vento", "expected_location", "expected_brazier"),
+    (
+        (False, REFUGE, "Braseiro do Refúgio"),
+        (True, CHARNECA, "Braseiro do Vento Morto"),
+    ),
+)
+async def test_charneca_hunt_defeat_recovers_at_discovered_brazier_and_persists(
+    database, monkeypatch, has_vento, expected_location, expected_brazier
+):
+    actor = 880312 if has_vento else 880313
+    service = await _seed_charneca(
+        database,
+        actor=actor,
+        location=CHARNECA,
+        permanent_braziers=(
+            ("tdo.brazier.vento_morto",) if has_vento else ()
+        ),
+    )
+    monkeypatch.setattr(
+        road_application, "select_creature", lambda _seed, _level, profile: SPIDER
+    )
+    monkeypatch.setattr(
+        road_application, "select_variant", lambda _seed, _creature, profile: None
+    )
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        character.hp = Decimal("500")
+        session.add_all(
+            [
+                ConsumableStack(
+                    character_id=character.id,
+                    consumable_id="consumable.heal",
+                    quantity=2,
+                )
+            ]
+        )
+        await session.commit()
+
+    encounter = await service.start_hunt(actor)
+    assert encounter is not None and encounter.kind == "combat"
+
+    heal = await service.action(
+        actor,
+        encounter.activity_id,
+        encounter.combat.version,
+        consumable_id="consumable.heal",
+    )
+    assert heal is not None and heal.kind == "combat"
+    assert dict(heal.consumable_quantities)["consumable.heal"] == 1
+    monkeypatch.setattr(road_application, "act", _forced_defeat)
+    defeat = await service.action(
+        actor,
+        encounter.activity_id,
+        heal.combat.version,
+        "attack",
+    )
+    assert defeat is not None and defeat.kind == "hunt_defeat"
+    assert defeat.location == CHARNECA
+    assert defeat.recovery_location == expected_location
+    assert defeat.recovery_brazier == expected_brazier
+    assert defeat.route_available is (expected_location == REFUGE)
+
+    reconnected = await service.resume(actor)
+    assert reconnected is not None and reconnected.kind == "hunt_defeat"
+    assert reconnected.activity_id == encounter.activity_id
+    assert reconnected.recovery_location == expected_location
+    assert reconnected.recovery_brazier == expected_brazier
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character.id)
+        )
+        activity = await session.get(GameActivity, encounter.activity_id)
+        stack = await session.scalar(
+            select(ConsumableStack).where(
+                ConsumableStack.character_id == character.id,
+                ConsumableStack.consumable_id == "consumable.heal",
+            )
+        )
+        assert world.location == expected_location
+        assert character.hp == character.max_hp
+        assert character.vigor == 100
+        assert stack.quantity == 1
+        assert activity.status == "failed"
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == f"hunt:{encounter.activity_id}",
+            )
+        ) == 0
+
+
+@pytest.mark.asyncio
+async def test_charneca_exploration_defeat_keeps_failed_attempt_and_recovery(database, monkeypatch):
+    actor = 880314
+    service = await _seed_charneca(database, actor=actor, location=CHARNECA)
+    monkeypatch.setattr(
+        road_application,
+        "_explore_result",
+        lambda *_args, **_kwargs: (
+            "combat",
+            "explore.tdo.charneca.combat.aranha_cinza",
+            "Aranha de Cinza.",
+        ),
+    )
+    monkeypatch.setattr(
+        road_application, "select_variant", lambda _seed, _creature, profile: None
+    )
+    encounter = await service.explore(actor)
+    assert encounter is not None and encounter.kind == "combat"
+    assert encounter.location == CHARNECA
+    monkeypatch.setattr(road_application, "act", _forced_defeat)
+    defeat = await service.action(
+        actor,
+        encounter.activity_id,
+        encounter.combat.version,
+        "attack",
+    )
+    assert defeat is not None and defeat.kind == "exploration"
+    assert defeat.result_id == "explore.tdo.charneca.combat.aranha_cinza"
+    assert defeat.recovery_brazier == "Braseiro do Refúgio"
+    assert defeat.recovery_location == REFUGE
+    reconnected = await service.resume(actor)
+    assert reconnected is not None and reconnected.attempt_id == defeat.attempt_id
+    assert reconnected.recovery_location == REFUGE
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        attempt = await session.get(ExplorationAttempt, defeat.attempt_id)
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character.id)
+        )
+        assert attempt.status == "failed"
+        assert attempt.progress["settled"] is True
+        assert attempt.progress["recovery_brazier"] == "Braseiro do Refúgio"
+        assert world.location == REFUGE
+        assert character.hp == character.max_hp
+
+
+@pytest.mark.asyncio
+async def test_charneca_round_defeat_recovers_without_restarting_and_preparing_resumes(
+    database, monkeypatch
+):
+    actor = 880315
+    await _seed_charneca(
+        database,
+        actor=actor,
+        location=CHARNECA,
+        round_familiarity=True,
+    )
+    rounds = RoundService(database[1], "ocaso")
+    monkeypatch.setattr(
+        round_application,
+        "select_creature",
+        lambda _seed, _level, **_kwargs: SPIDER,
+    )
+    monkeypatch.setattr(
+        round_application,
+        "select_variant",
+        lambda _seed, _creature, **_kwargs: None,
+    )
+
+    preparing = await rounds.prepare_round(actor, 5)
+    assert preparing.kind == "round_prepare"
+    resumed_preparing = await RoundService(database[1], "ocaso").resume(actor)
+    assert resumed_preparing.kind == "round_prepare"
+    assert resumed_preparing.round_id == preparing.round_id
+    assert resumed_preparing.state_version == preparing.state_version
+    async with database[1]() as session:
+        assert await session.scalar(select(func.count(HuntRound.id))) == 1
+        state = await session.get(HuntRound, preparing.round_id)
+        assert state.config_snapshot["local_id"] == CHARNECA_LOCATION
+
+    started = await rounds.start_round(actor, preparing.round_id, preparing.state_version)
+    assert started.kind == "round_active"
+    monkeypatch.setattr(round_application, "act", _forced_defeat)
+    async with database[1]() as session:
+        state = await session.get(HuntRound, started.round_id)
+        state.next_resolution_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+    assert await rounds.advance_due_rounds() == 1
+
+    defeated = await RoundService(database[1], "ocaso").resume(actor)
+    assert defeated.kind == "round_defeated"
+    assert defeated.round_id == started.round_id
+    assert defeated.recovery_brazier == "Braseiro do Refúgio"
+    assert defeated.recovery_location == REFUGE
+    assert defeated.route_available is True
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        state = await session.get(HuntRound, started.round_id)
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character.id)
+        )
+        encounters = (
+            await session.scalars(
+                select(HuntRoundEncounter).where(
+                    HuntRoundEncounter.round_id == state.id
+                )
+            )
+        ).all()
+        assert state.status == "defeated"
+        assert state.config_snapshot["recovery_location"] == REFUGE
+        assert world.location == REFUGE
+        assert character.hp == character.max_hp
+        assert len(encounters) == 1
+        assert encounters[0].status == "defeated"
+
+
+@pytest.mark.asyncio
+async def test_charneca_round_defeat_after_vento_keeps_prior_rewards_and_location(
+    database, monkeypatch
+):
+    actor = 880316
+    await _seed_charneca(
+        database,
+        actor=actor,
+        location=CHARNECA,
+        round_familiarity=True,
+        permanent_braziers=("tdo.brazier.vento_morto",),
+    )
+    rounds = RoundService(database[1], "ocaso")
+    monkeypatch.setattr(
+        round_application,
+        "select_creature",
+        lambda _seed, _level, **_kwargs: SPIDER,
+    )
+    monkeypatch.setattr(
+        round_application,
+        "select_variant",
+        lambda _seed, _creature, **_kwargs: None,
+    )
+    outcomes = iter(("victory", "defeat"))
+
+    def resolve_outcome(combat, _action):
+        updated = deepcopy(combat)
+        updated.version += 1
+        updated.result = next(outcomes)
+        if updated.result == "victory":
+            updated.fighters["enemy"].hp = Decimal(0)
+        else:
+            updated.fighters["player"].hp = Decimal(0)
+        return updated
+
+    monkeypatch.setattr(round_application, "act", resolve_outcome)
+    prepared = await rounds.prepare_round(actor, 5)
+    started = await rounds.start_round(actor, prepared.round_id, prepared.state_version)
+    async with database[1]() as session:
+        state = await session.get(HuntRound, started.round_id)
+        state.next_resolution_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+
+    assert await rounds.advance_due_rounds() == 1
+    after_victory = await rounds.resume(actor)
+    assert after_victory.kind == "round_active"
+    assert after_victory.completed_encounters == 1
+    async with database[1]() as session:
+        first_encounter = await session.scalar(
+            select(HuntRoundEncounter).where(
+                HuntRoundEncounter.round_id == started.round_id,
+                HuntRoundEncounter.ordinal == 1,
+            )
+        )
+        assert first_encounter.status == "completed"
+        first_activity_id = first_encounter.activity_id
+        assert first_activity_id is not None
+        first_reward_count = await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.source_id == f"activity:{first_activity_id}"
+            )
+        )
+        assert first_reward_count == 1
+        state = await session.get(HuntRound, started.round_id)
+        state.next_resolution_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+
+    assert await rounds.advance_due_rounds() == 1
+    defeated = await RoundService(database[1], "ocaso").resume(actor)
+    assert defeated.kind == "round_defeated"
+    assert defeated.round_id == started.round_id
+    assert defeated.recovery_brazier == "Braseiro do Vento Morto"
+    assert defeated.recovery_location == CHARNECA
+    assert defeated.route_available is False
+
+    reconnected = await RoundService(database[1], "ocaso").resume(actor)
+    assert reconnected.kind == "round_defeated"
+    assert reconnected.round_id == started.round_id
+    assert reconnected.recovery_brazier == "Braseiro do Vento Morto"
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character.id)
+        )
+        state = await session.get(HuntRound, started.round_id)
+        encounters = (
+            await session.scalars(
+                select(HuntRoundEncounter)
+                .where(HuntRoundEncounter.round_id == state.id)
+                .order_by(HuntRoundEncounter.ordinal)
+            )
+        ).all()
+        assert state.status == "defeated"
+        assert world.location == CHARNECA
+        assert character.hp == character.max_hp
+        assert len(encounters) == 2
+        assert encounters[0].status == "completed"
+        assert encounters[1].status == "defeated"
+        assert await session.scalar(
+            select(func.count(HuntRound.id)).where(
+                HuntRound.character_id == character.id
+            )
+        ) == 1
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.source_id == f"activity:{first_activity_id}"
+            )
+        ) == first_reward_count
+        reward_count_before_ack = await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character.id
+            )
+        )
+
+    back = await rounds.round_back(actor, started.round_id)
+    assert back.kind == "charneca"
+    repeated_back = await rounds.round_back(actor, started.round_id)
+    assert repeated_back.kind == "charneca"
+    after_ack = await RoundService(database[1], "ocaso").resume(actor)
+    assert after_ack.kind == "charneca"
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character.id)
+        )
+        assert world.location == CHARNECA
+        assert character.hp == character.max_hp
+        assert await session.scalar(
+            select(func.count(HuntRound.id)).where(
+                HuntRound.character_id == character.id
+            )
+        ) == 1
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.source_id == f"activity:{first_activity_id}"
+            )
+        ) == first_reward_count
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character.id
+            )
+        ) == reward_count_before_ack
 
 
 @pytest.mark.asyncio
