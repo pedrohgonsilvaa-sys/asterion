@@ -10,7 +10,7 @@ from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import CHARNECA, P2Service
 from asterion.application.prologue import PrologueService
-from asterion.application.road import RoadService
+from asterion.application.road import REFUGE, ROAD, RoadService
 from asterion.application.s1 import S1Service
 from asterion.application.world import WorldService
 from asterion.bot.combat_ui import render_combat
@@ -143,6 +143,21 @@ def world_router(
             await present(query.message, render_p1(view), images, edit=True)
             return True
         return False
+
+    async def restore_context(query: CallbackQuery):
+        if not isinstance(query.message, Message):
+            return
+        p2_view = await p2.resume(query.from_user.id) if p2 is not None else None
+        if p2_view is not None and p2_view.status == "active":
+            await present(query.message, render_p2(p2_view), images, edit=True)
+            return
+        road_view = await road.resume(query.from_user.id) if road is not None else None
+        if road_view is not None:
+            await present(query.message, render_road(road_view), images, edit=True)
+            return
+        screen = await resume_world_or_prologue(query.from_user.id)
+        if screen is not None:
+            await present(query.message, screen, images, edit=True)
 
     @router.message(Command("menu"))
     async def menu(message: Message):
@@ -397,16 +412,70 @@ def world_router(
         if view is not None:
             await present(query.message, render_inventory(view), images, edit=True)
 
+    @router.callback_query(F.data.startswith("road:route:"))
+    async def overland_route(query: CallbackQuery):
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        destination = {"road:route:charneca": CHARNECA, "road:route:refuge": REFUGE}.get(query.data or "")
+        if destination is None:
+            await restore_context(query)
+            return
+        current = await road.resume(query.from_user.id)
+        if current is not None:
+            if (
+                current.kind == "hunt_defeat"
+                and current.location == CHARNECA
+                and current.recovery_location == REFUGE
+                and destination == CHARNECA
+            ):
+                await road.acknowledge_defeat(query.from_user.id)
+            elif (
+                current.kind == "exploration"
+                and current.location == CHARNECA
+                and current.recovery_location == REFUGE
+                and destination == CHARNECA
+            ):
+                await road.acknowledge_result(query.from_user.id)
+            elif (
+                current.kind == "round_defeated"
+                and current.location == CHARNECA
+                and current.recovery_location == REFUGE
+                and destination == CHARNECA
+                and current.round_id is not None
+            ):
+                await road.round_back(query.from_user.id, current.round_id)
+        view = await road.travel_route(query.from_user.id, destination)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+        else:
+            await restore_context(query)
+
     @router.callback_query(F.data.startswith("road:travel:"))
     async def travel(query: CallbackQuery):
         await query.answer()
-        if road is not None and isinstance(query.message, Message):
-            destination = (
-                "Estrada das Cinzas" if query.data.endswith("road") else "Refúgio do Ocaso"
-            )
-            view = await road.travel(query.from_user.id, destination)
-            if view is not None:
-                await present(query.message, render_road(view), images, edit=True)
+        if road is None or not isinstance(query.message, Message):
+            return
+        token = (query.data or "").removeprefix("road:travel:")
+        if token.startswith("brazier:"):
+            token = token.removeprefix("brazier:")
+        destinations = {
+            "estrada": "tdo.brazier.estrada",
+            "refugio_do_ocaso": "tdo.brazier.refugio_do_ocaso",
+            "vento_morto": "tdo.brazier.vento_morto",
+            # Existing callbacks continue to mean a permanent-Brazier destination.
+            "road": "tdo.brazier.estrada",
+            "refuge": "tdo.brazier.refugio_do_ocaso",
+        }
+        brazier_id = destinations.get(token)
+        if brazier_id is None:
+            await restore_context(query)
+            return
+        view = await road.travel_brazier(query.from_user.id, brazier_id)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+        else:
+            await restore_context(query)
 
     @router.callback_query(F.data.startswith("road:unavailable:"))
     async def road_unavailable(query: CallbackQuery):
@@ -629,7 +698,7 @@ def world_router(
             if view is not None:
                 await present(query.message, render_p1(view), images, edit=True)
 
-    async def map_state(actor: int) -> tuple[set[str], str | None]:
+    async def map_state(actor: int):
         known: set[str] = set()
         if p1 is not None:
             p1_view = await p1.resume(actor)
@@ -639,19 +708,24 @@ def world_router(
                     known.add("Estrada das Cinzas")
                 if "tdo.location.refugio_do_ocaso" in ids:
                     known.add("Refúgio do Ocaso")
+                if "tdo.location.charneca_da_fuligem" in ids:
+                    known.add(CHARNECA)
+        p2_view = await p2.resume(actor) if p2 is not None else None
+        if p2_view is not None and p2_view.status == "active" and p2_view.location == CHARNECA:
+            known.add(CHARNECA)
         current = None
+        road_view = None
         if road is not None:
             road_view = await road.resume(actor)
             if road_view is not None:
-                current = road_view.location
+                current = getattr(road_view, "recovery_location", None) or road_view.location
+        if current is None and p2_view is not None and p2_view.status == "active":
+            current = p2_view.location
         if current is None:
             world_view = await service.resume(actor)
             if world_view is not None:
                 current = world_view.location
-        if current == CHARNECA:
-            # The regional map screen is intentionally withheld in this PR.
-            current = None
-        return known, current
+        return known, current, road_view, p2_view
 
     @router.callback_query(F.data == "world:map")
     async def map_screen(query: CallbackQuery):
@@ -661,12 +735,13 @@ def world_router(
         await query.answer()
         if not isinstance(query.message, Message):
             return
-        known, current = await map_state(query.from_user.id)
+        known, current, _, _ = await map_state(query.from_user.id)
         if not known:
             text = "🗺️ Mapa\n\nNenhuma Região conhecida."
             keyboard = [[InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")]]
         else:
-            current_line = f"🔥 {current} · Local Atual" if current else ""
+            current_icon = "🌑" if current == CHARNECA else "🔥"
+            current_line = f"{current_icon} {current} · Local Atual" if current else ""
             text = (
                 "🗺️ Mapa\n\n"
                 "🌑 Terras do Ocaso · Nv. 1–10\n"
@@ -693,17 +768,18 @@ def world_router(
         await query.answer()
         if not isinstance(query.message, Message):
             return
-        known, current = await map_state(query.from_user.id)
+        known, current, _, _ = await map_state(query.from_user.id)
         ordered = [
             ("Estrada das Cinzas", "road"),
             ("Refúgio do Ocaso", "refuge"),
+            (CHARNECA, "charneca"),
         ]
         visible = [(name, key) for name, key in ordered if name in known]
         lines = ["🌑 Terras do Ocaso · Nv. 1–10", ""]
         buttons = []
         for index, (name, key) in enumerate(visible, start=1):
             state = "Local Atual" if name == current else "Acessível"
-            icon = "🔥" if name == current else ("🏚️" if key == "refuge" else "📍")
+            icon = "🌑" if key == "charneca" else "🔥" if name == current else ("🏚️" if key == "refuge" else "📍")
             lines.append(f"{index} {icon} {name} · {state}")
             buttons.append(
                 InlineKeyboardButton(
@@ -735,14 +811,77 @@ def world_router(
         if not isinstance(query.message, Message):
             return
         key = (query.data or "").rsplit(":", 1)[-1]
-        name = "Estrada das Cinzas" if key == "road" else "Refúgio do Ocaso"
-        known, current = await map_state(query.from_user.id)
-        if key not in {"road", "refuge"} or name not in known:
+        names = {"road": ROAD, "refuge": REFUGE, "charneca": CHARNECA}
+        name = names.get(key)
+        if name is None:
             return
-        is_current = current == name
-        icon = "🔥" if is_current else ("🏚️" if key == "refuge" else "📍")
+        known, current, road_view, p2_view = await map_state(query.from_user.id)
+        if name not in known:
+            return
+        if key == "charneca" and p2_view is not None and p2_view.status == "active":
+            await present(query.message, render_p2(p2_view), images, edit=True)
+            return
+        local_kinds = {"road", "refuge", "charneca"}
+        is_current = name == current
+        if is_current:
+            if road_view is not None and road_view.kind not in local_kinds:
+                screen = render_road(road_view)
+                rows = list(screen.keyboard.inline_keyboard) if screen.keyboard else []
+                rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text="← Terras do Ocaso",
+                            callback_data="world:map:region:tdo",
+                        )
+                    ]
+                )
+                await present(
+                    query.message,
+                    Screen(
+                        screen.text,
+                        screen.image_key,
+                        InlineKeyboardMarkup(inline_keyboard=rows),
+                        parse_mode=screen.parse_mode,
+                    ),
+                    images,
+                    edit=True,
+                )
+                return
+        if key == "charneca" and current == CHARNECA and road_view is not None and road_view.kind == "charneca":
+            screen = render_road(road_view)
+            rows = list(screen.keyboard.inline_keyboard) if screen.keyboard else []
+            if rows and rows[-1] and rows[-1][-1].callback_data == "menu:back":
+                rows[-1] = [InlineKeyboardButton(text="← Terras do Ocaso", callback_data="world:map:region:tdo")]
+            else:
+                rows.append([InlineKeyboardButton(text="← Terras do Ocaso", callback_data="world:map:region:tdo")])
+            await present(
+                query.message,
+                Screen(screen.text, screen.image_key, InlineKeyboardMarkup(inline_keyboard=rows), parse_mode=screen.parse_mode),
+                images,
+                edit=True,
+            )
+            return
+        icon = "🌑" if key == "charneca" else "🔥" if is_current else ("🏚️" if key == "refuge" else "📍")
         title = f"{icon} {name}" + (" · Local Atual" if is_current else "")
-        lines = [title, "Terras do Ocaso · Nv. 1–10", "", "🔥 Braseiro · Descoberto"]
+        level_band = "Nv. 3–5" if key == "charneca" else "Nv. 1–10"
+        local_brazier = road_view.brazier_label if is_current and road_view is not None else None
+        if key == "charneca" and local_brazier is None and road_view is not None:
+            local_brazier = next(
+                (
+                    label
+                    for _, label, destination_location in road_view.brazier_destinations
+                    if destination_location == CHARNECA
+                ),
+                None,
+            )
+        brazier_line = (
+            f"🔥 {local_brazier} · Descoberto"
+            if local_brazier
+            else "🔥 Braseiro · Não descoberto"
+            if key == "charneca"
+            else "🔥 Braseiro · Descoberto"
+        )
+        lines = [title, f"Terras do Ocaso · {level_band}", "", brazier_line]
         keyboard = []
         if key == "road":
             lines.extend(["🧭 Desbravar · Disponível", "🦌 Caçadas · Disponível"])
@@ -753,7 +892,7 @@ def world_router(
                         InlineKeyboardButton(text="Caçadas", callback_data="road:prepare"),
                     ]
                 )
-        else:
+        elif key == "refuge":
             lines.extend(["🚫 Desbravar · Indisponível", "🚫 Caçadas · Indisponível"])
             if is_current:
                 keyboard.append(
@@ -762,9 +901,25 @@ def world_router(
                 keyboard.append(
                     [InlineKeyboardButton(text="Alda Veyr", callback_data="p2:alda")]
                 )
-        keyboard.append(
-            [InlineKeyboardButton(text="Travessia dos Braseiros", callback_data="world:travel")]
-        )
+                if road_view is not None and road_view.route_available:
+                    keyboard.append([InlineKeyboardButton(text="Seguir para a Charneca", callback_data="road:route:charneca")])
+        else:
+            if is_current and road_view is not None and road_view.kind == "charneca":
+                lines.extend([
+                    "🧭 Desbravar · Disponível conforme gates",
+                    "🦌 Caçadas · Disponível conforme nível e pool",
+                    "🔒 Ronda de Caça · Vença uma Caçada neste Local"
+                    if not road_view.familiar
+                    else "🏕️ Ronda de Caça · Disponível",
+                ])
+                keyboard.append([InlineKeyboardButton(text="Desbravar", callback_data="road:explore"), InlineKeyboardButton(text="Caçadas", callback_data="road:prepare")])
+                if road_view.route_available:
+                    keyboard.append([InlineKeyboardButton(text="Retornar ao Refúgio", callback_data="road:route:refuge")])
+            elif current == REFUGE and road_view is not None and road_view.route_available:
+                lines.extend(["🧭 Desbravar · Disponível conforme gates", "🦌 Caçadas · Disponível conforme nível e pool"])
+                keyboard.append([InlineKeyboardButton(text="Seguir para a Charneca", callback_data="road:route:charneca")])
+        if is_current and road_view is not None and road_view.brazier_id and road_view.brazier_destinations:
+            keyboard.append([InlineKeyboardButton(text="Travessia dos Braseiros", callback_data="world:travel")])
         keyboard.append(
             [InlineKeyboardButton(text="← Terras do Ocaso", callback_data="world:map:region:tdo")]
         )
@@ -787,47 +942,27 @@ def world_router(
         await query.answer()
         if not isinstance(query.message, Message):
             return
-        known, current = await map_state(query.from_user.id)
-        if current not in {"Estrada das Cinzas", "Refúgio do Ocaso"}:
+        _, current, road_view, _ = await map_state(query.from_user.id)
+        if road_view is None or road_view.location != current or not road_view.brazier_id:
             return
-        current_brazier = (
-            "Braseiro da Estrada"
-            if current == "Estrada das Cinzas"
-            else "Braseiro do Refúgio"
-        )
-        target_name = (
-            "Refúgio do Ocaso"
-            if current == "Estrada das Cinzas"
-            else "Estrada das Cinzas"
-        )
-        target_key = "refuge" if target_name == "Refúgio do Ocaso" else "road"
         lines = [
             "🔥 Travessia dos Braseiros",
             "",
-            f"🔥 Atual · {current_brazier}",
+            f"🔥 Atual · {road_view.brazier_label}",
         ]
         keyboard = []
-        if target_name in known:
-            target_brazier = (
-                "Braseiro do Refúgio"
-                if target_key == "refuge"
-                else "Braseiro da Estrada"
-            )
-            lines.extend(["", "🗺️ Destinos", "", f"1 🔥 {target_brazier} · {target_name}"])
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        text="1",
-                        callback_data=f"road:travel:{target_key}",
-                    )
-                ]
-            )
-        current_key = "road" if current == "Estrada das Cinzas" else "refuge"
+        if road_view.brazier_destinations:
+            lines.extend(["", "🗺️ Destinos"])
+            for index, (brazier_id, label, location) in enumerate(road_view.brazier_destinations, start=1):
+                lines.extend(["", f"{index} 🔥 {label} · {location}"])
+                brazier_key = brazier_id.removeprefix("tdo.brazier.")
+                keyboard.append([InlineKeyboardButton(text=str(index), callback_data=f"road:travel:brazier:{brazier_key}")])
+        current_key = {ROAD: "road", REFUGE: "refuge", CHARNECA: "charneca"}.get(current)
         keyboard.append(
             [
                 InlineKeyboardButton(
                     text=f"← {current}",
-                    callback_data=f"world:map:local:{current_key}",
+                    callback_data=f"world:map:local:{current_key}" if current_key else "world:map:region:tdo",
                 )
             ]
         )

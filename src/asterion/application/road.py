@@ -83,6 +83,16 @@ CHARNECA = "Charneca da Fuligem"
 REGION = "Terras do Ocaso"
 P2_QUEST_ID = "P2"
 CHARNECA_ROUTE_ENDPOINTS = frozenset((REFUGE, CHARNECA))
+BRAZIER_FOR_LOCATION = {
+    ROAD: "tdo.brazier.estrada",
+    REFUGE: "tdo.brazier.refugio_do_ocaso",
+    CHARNECA: CHARNECA_BRAZIER,
+}
+BRAZIER_DETAILS = {
+    "tdo.brazier.estrada": (ROAD, "Braseiro da Estrada"),
+    "tdo.brazier.refugio_do_ocaso": (REFUGE, "Braseiro do Refúgio"),
+    CHARNECA_BRAZIER: (CHARNECA, "Braseiro do Vento Morto"),
+}
 HUNT_CONTENT = "road_manual_hunt"
 EXPLORE_CONTENT = "road_exploration"
 CHARNECA_DUNGEON_UNLOCK = "dungeon.tdo.cripta_ocaso"
@@ -142,6 +152,12 @@ class RoadView:
     consumable_quantities: tuple[tuple[str, int], ...] = ()
     consumable_budget_limit: int = 0
     ready_consumable_option: CombatConsumableOption | None = None
+    route_available: bool = False
+    brazier_id: str | None = None
+    brazier_label: str | None = None
+    brazier_destinations: tuple[tuple[str, str, str], ...] = ()
+    recovery_brazier: str | None = None
+    recovery_location: str | None = None
 
 
 def _exploration_local_id(profile) -> str:
@@ -188,36 +204,70 @@ class RoadService:
                     return None
             elif not await self._p1_completed(s, c.id):
                 return None
-            return RoadView(
-                "road" if world.location == ROAD else "charneca" if world.location == CHARNECA else "refuge",
-                c.id,
-                world.location,
-                vigor=c.vigor,
-                max_vigor=c.max_vigor,
-            )
+            return await self._view_for_world(s, c, world)
 
     async def travel(self, actor: int, destination: str) -> RoadView | None:
+        """Compatibility entry point; route and brazier travel stay distinct."""
+        if destination not in BRAZIER_FOR_LOCATION:
+            return None
+        async with self.sessions() as s:
+            c = await self._character(s, actor)
+            world = (
+                await s.scalar(
+                    select(WorldState).where(WorldState.character_id == c.id)
+                )
+                if c is not None
+                else None
+            )
+            current = world.location if world is not None else None
+        if current is None:
+            return None
+        if {current, destination} == CHARNECA_ROUTE_ENDPOINTS:
+            return await self.travel_route(actor, destination)
+        return await self.travel_brazier(actor, BRAZIER_FOR_LOCATION[destination])
+
+    async def travel_route(self, actor: int, destination: str) -> RoadView | None:
+        """Use the free, post-P2 Refuge/Charneca overland connection."""
+        if destination not in CHARNECA_ROUTE_ENDPOINTS:
+            return None
+        return await self._travel(actor, destination, mode="route")
+
+    async def travel_brazier(self, actor: int, brazier_id: str) -> RoadView | None:
+        """Travel only between permanent Braziers already discovered by the character."""
+        detail = BRAZIER_DETAILS.get(brazier_id)
+        if detail is None:
+            return None
+        return await self._travel(actor, detail[0], mode="brazier", brazier_id=brazier_id)
+
+    async def _travel(
+        self,
+        actor: int,
+        destination: str,
+        *,
+        mode: str,
+        brazier_id: str | None = None,
+    ) -> RoadView | None:
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
             if (
                 c is None
                 or world is None
-                or destination not in {ROAD, REFUGE, CHARNECA}
+                or destination not in BRAZIER_FOR_LOCATION
                 or world.location not in {ROAD, REFUGE, CHARNECA}
                 or destination == world.location
             ):
                 return None
-            if await s.scalar(
+            active_p2 = await s.scalar(
                 select(Quest).where(
                     Quest.character_id == c.id,
                     Quest.quest_id == P2_QUEST_ID,
                     Quest.status == "active",
                 )
-            ):
+            )
+            if active_p2 is not None:
                 return None
-            overland = {world.location, destination} == CHARNECA_ROUTE_ENDPOINTS
-            if world.location == CHARNECA or destination == CHARNECA:
-                if not overland:
+            if mode == "route":
+                if {world.location, destination} != CHARNECA_ROUTE_ENDPOINTS:
                     return None
                 if not await self._p2_completed(s, c.id):
                     return None
@@ -236,7 +286,40 @@ class RoadService:
                     )
                 ):
                     return None
-            elif not await self._p1_completed(s, c.id):
+            elif mode == "brazier":
+                if brazier_id not in BRAZIER_DETAILS:
+                    return None
+                source_brazier = BRAZIER_FOR_LOCATION.get(world.location)
+                if source_brazier is None or source_brazier == brazier_id:
+                    return None
+                if world.location == CHARNECA or destination == CHARNECA:
+                    if (
+                        not await self._p2_completed(s, c.id)
+                        or not await s.scalar(
+                            select(Unlock).where(
+                                Unlock.character_id == c.id,
+                                Unlock.unlock_id == CHARNECA_ROUTE_UNLOCK,
+                            )
+                        )
+                    ):
+                        return None
+                elif not await self._p1_completed(s, c.id):
+                    return None
+                source_known = await s.scalar(
+                    select(Brazier).where(
+                        Brazier.character_id == c.id,
+                        Brazier.brazier_id == source_brazier,
+                    )
+                )
+                target_known = await s.scalar(
+                    select(Brazier).where(
+                        Brazier.character_id == c.id,
+                        Brazier.brazier_id == brazier_id,
+                    )
+                )
+                if source_known is None or target_known is None:
+                    return None
+            else:
                 return None
             active = await s.scalar(
                 select(GameActivity).where(
@@ -252,29 +335,6 @@ class RoadService:
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
-            if not overland:
-                source_brazier = (
-                    "tdo.brazier.estrada"
-                    if world.location == ROAD
-                    else "tdo.brazier.refugio_do_ocaso"
-                )
-                target_brazier = (
-                    "tdo.brazier.estrada"
-                    if destination == ROAD
-                    else "tdo.brazier.refugio_do_ocaso"
-                )
-                if not await s.scalar(
-                    select(Brazier).where(
-                        Brazier.character_id == c.id,
-                        Brazier.brazier_id == source_brazier,
-                    )
-                ) or not await s.scalar(
-                    select(Brazier).where(
-                        Brazier.character_id == c.id,
-                        Brazier.brazier_id == target_brazier,
-                    )
-                ):
-                    return None
             world.location = destination
             return await self._view_for_world(s, c, world)
 
@@ -488,7 +548,12 @@ class RoadService:
                     )
             elif updated.result == "defeat":
                 activity.status = "failed"
-                c.hp = c.max_hp
+                recovery_brazier, recovery_location = await self._recover_normal_pve_defeat(
+                    s,
+                    c,
+                    context.local_id if context is not None else None,
+                    world,
+                )
                 if activity.content_id == EXPLORE_CONTENT:
                     attempt = await s.scalar(
                         select(ExplorationAttempt)
@@ -500,9 +565,14 @@ class RoadService:
                         attempt.completed_at = datetime.now(UTC)
                         attempt.progress = {
                             **(attempt.progress or {}),
-                            "receipt_text": (
-                                "A exploração foi interrompida. Recuperado em "
-                                f"{_location_label(attempt.local_id)}."
+                            "receipt_text": "A exploração foi interrompida.",
+                            **(
+                                {
+                                    "recovery_brazier": recovery_brazier,
+                                    "recovery_location": recovery_location,
+                                }
+                                if recovery_brazier is not None
+                                else {}
                             ),
                             "settled": True,
                         }
@@ -516,6 +586,13 @@ class RoadService:
                     activity_id=activity.id,
                     vigor=c.vigor,
                     max_vigor=c.max_vigor,
+                    recovery_brazier=recovery_brazier,
+                    recovery_location=recovery_location,
+                    route_available=(
+                        context is not None
+                        and context.local_id == CHARNECA_LOCATION
+                        and recovery_location == REFUGE
+                    ),
                 )
             return await self._combat_view(s, c, activity)
 
@@ -1665,6 +1742,32 @@ class RoadService:
             return None
         return profile
 
+    async def _recover_normal_pve_defeat(self, s, c, local_id, world=None):
+        """Apply only the regional destination rule for normal Charneca PvE defeats."""
+        c.hp = c.max_hp
+        if local_id != CHARNECA_LOCATION:
+            return None, None
+        if world is None:
+            world = await s.scalar(
+                select(WorldState)
+                .where(WorldState.character_id == c.id)
+                .with_for_update()
+            )
+        vento = await s.scalar(
+            select(Brazier).where(
+                Brazier.character_id == c.id,
+                Brazier.brazier_id == CHARNECA_BRAZIER,
+            )
+        )
+        recovery_location = CHARNECA if vento is not None else REFUGE
+        if world is not None:
+            world.region = REGION
+            world.location = recovery_location
+        return (
+            BRAZIER_DETAILS[CHARNECA_BRAZIER if vento is not None else BRAZIER_FOR_LOCATION[REFUGE]][1],
+            recovery_location,
+        )
+
     async def _record_charneca_habitat(self, s, character_id, creature_id, profile):
         if profile.local_id != CHARNECA_LOCATION:
             return False
@@ -1747,13 +1850,40 @@ class RoadService:
             return None
         if activity.status == "completed":
             return await self._hunt_victory_view(s, c, activity)
+        return await self._hunt_defeat_view(s, c, activity, context)
+
+    async def _hunt_defeat_view(self, s, c, activity, context=None):
+        if context is None:
+            context = await s.scalar(
+                select(HuntContext).where(HuntContext.game_activity_id == activity.id)
+            )
+        recovery_brazier = recovery_location = None
+        if context is not None and context.local_id == CHARNECA_LOCATION:
+            world = await s.scalar(
+                select(WorldState).where(WorldState.character_id == c.id)
+            )
+            if world is not None and world.location in {REFUGE, CHARNECA}:
+                recovery_location = world.location
+                brazier_id = (
+                    CHARNECA_BRAZIER
+                    if world.location == CHARNECA
+                    else BRAZIER_FOR_LOCATION[REFUGE]
+                )
+                recovery_brazier = BRAZIER_DETAILS[brazier_id][1]
         return RoadView(
             "hunt_defeat",
             c.id,
-            _location_label(context.local_id),
+            _location_label(context.local_id if context is not None else None),
             activity_id=activity.id,
             vigor=c.vigor,
             max_vigor=c.max_vigor,
+            recovery_brazier=recovery_brazier,
+            recovery_location=recovery_location,
+            route_available=(
+                context is not None
+                and context.local_id == CHARNECA_LOCATION
+                and recovery_location == REFUGE
+            ),
         )
 
     @staticmethod
@@ -1770,7 +1900,14 @@ class RoadService:
             return await self._result_view_for_activity(s, c, activity, world)
         activity.status = "failed"
         activity.last_valid_action_at = datetime.now(UTC)
-        c.hp = c.max_hp
+        context = await s.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == activity.id)
+        )
+        recovery_brazier, recovery_location = await self._recover_normal_pve_defeat(
+            s,
+            c,
+            context.local_id if context is not None else None,
+        )
         if activity.content_id == EXPLORE_CONTENT:
             attempt = await s.scalar(
                 select(ExplorationAttempt)
@@ -1782,26 +1919,21 @@ class RoadService:
                 attempt.completed_at = datetime.now(UTC)
                 attempt.progress = {
                     **(attempt.progress or {}),
-                    "receipt_text": (
-                        "A exploração expirou por inatividade. Recuperado em "
-                        f"{_location_label(attempt.local_id)}."
+                    "receipt_text": "A exploração expirou por inatividade.",
+                    **(
+                        {
+                            "recovery_brazier": recovery_brazier,
+                            "recovery_location": recovery_location,
+                        }
+                        if recovery_brazier is not None
+                        else {}
                     ),
                     "settled": True,
                 }
                 await consolidate_character_level(s, c)
                 return await self._attempt_view(s, c, attempt)
-        context = await s.scalar(
-            select(HuntContext).where(HuntContext.game_activity_id == activity.id)
-        )
         await consolidate_character_level(s, c)
-        return RoadView(
-            "hunt_defeat",
-            c.id,
-            _location_label(context.local_id if context is not None else None),
-            activity_id=activity.id,
-            vigor=c.vigor,
-            max_vigor=c.max_vigor,
-        )
+        return await self._hunt_defeat_view(s, c, activity, context)
 
     async def _result_view_for_activity(self, s, c, activity, world):
         if activity.content_id == HUNT_CONTENT:
@@ -1818,14 +1950,7 @@ class RoadService:
                     .with_for_update()
                 )
                 if context is not None and not context.result_acknowledged:
-                    return RoadView(
-                        "hunt_defeat",
-                        c.id,
-                        _location_label(context.local_id if context is not None else None),
-                        activity_id=activity.id,
-                        vigor=c.vigor,
-                        max_vigor=c.max_vigor,
-                    )
+                    return await self._hunt_defeat_view(s, c, activity, context)
         elif activity.content_id == EXPLORE_CONTENT:
             attempt = await s.scalar(
                 select(ExplorationAttempt).where(ExplorationAttempt.activity_id == activity.id)
@@ -1916,6 +2041,36 @@ class RoadService:
                 recent >= 6
                 or (last is not None and last.created_at > now - timedelta(minutes=5))
             )
+        known_brazier_ids = set(
+            (
+                await s.scalars(
+                    select(Brazier.brazier_id).where(Brazier.character_id == c.id)
+                )
+            ).all()
+        )
+        current_brazier = BRAZIER_FOR_LOCATION.get(world.location)
+        brazier_id = (
+            current_brazier if current_brazier in known_brazier_ids else None
+        )
+        brazier_label = (
+            BRAZIER_DETAILS[brazier_id][1] if brazier_id is not None else None
+        )
+        brazier_destinations = tuple(
+            (candidate_id, label, location)
+            for candidate_id, (location, label) in BRAZIER_DETAILS.items()
+            if candidate_id in known_brazier_ids
+            and location != world.location
+        )
+        route_available = bool(
+            world.location in CHARNECA_ROUTE_ENDPOINTS
+            and await self._p2_completed(s, c.id)
+            and await s.scalar(
+                select(Unlock).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == CHARNECA_ROUTE_UNLOCK,
+                )
+            )
+        )
         return RoadView(
             "road" if world.location == ROAD else "charneca" if world.location == CHARNECA else "refuge",
             c.id,
@@ -1927,6 +2082,10 @@ class RoadService:
             max_hp=c.max_hp,
             familiar=familiar,
             explore_available=explore_available,
+            route_available=route_available,
+            brazier_id=brazier_id,
+            brazier_label=brazier_label,
+            brazier_destinations=brazier_destinations,
         )
 
     async def _locked_world(self, s, actor):
@@ -2332,6 +2491,12 @@ class RoadService:
             vigor=c.vigor,
             max_vigor=c.max_vigor,
             retry_available=await self._explore_retry_available(s, c, attempt),
+            recovery_brazier=(attempt.progress or {}).get("recovery_brazier"),
+            recovery_location=(attempt.progress or {}).get("recovery_location"),
+            route_available=(
+                attempt.local_id == CHARNECA_LOCATION
+                and (attempt.progress or {}).get("recovery_location") == REFUGE
+            ),
         )
 
 
