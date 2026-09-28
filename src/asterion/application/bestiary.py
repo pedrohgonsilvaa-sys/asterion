@@ -134,6 +134,10 @@ class BestiaryRecorder:
                     await self._grant_alpha_victory_xp(
                         session, character_id, creature_id
                     )
+                elif creature_id == "viuva_fuligem":
+                    await self._grant_regional_victory_xp(
+                        session, character_id, creature_id, reference_level=6
+                    )
             else:
                 entry.bkp += _repeat_bkp(
                     entry.wins, elite, observation_category
@@ -262,6 +266,19 @@ class BestiaryRecorder:
                     "mechanic:poison", "mechanic", 5,
                 ):
                     new_evidence_ids.add("mechanic:poison")
+            if creature_id == "viuva_fuligem":
+                if action_id == "widow_sting" and event.damage > 0:
+                    if await self.add_evidence(
+                        session, entry, character_id, creature_id,
+                        "mechanic:poison", "mechanic", 5,
+                    ):
+                        new_evidence_ids.add("mechanic:poison")
+                if action_id == "soot_web" and event.effect_id == "soot_web":
+                    if await self.add_evidence(
+                        session, entry, character_id, creature_id,
+                        "mechanic:agility_reduction", "mechanic", 5,
+                    ):
+                        new_evidence_ids.add("mechanic:agility_reduction")
         return new_evidence_ids
 
     async def add_evidence(
@@ -361,6 +378,44 @@ class BestiaryRecorder:
         )
         if character is not None:
             character.xp += 198
+        return True
+
+    async def _grant_regional_victory_xp(
+        self, session, character_id, creature_id, *, reference_level
+    ):
+        source_id = f"bestiary:first_victory:{character_id}:{creature_id}"
+        event = await session.scalar(
+            select(RewardEvent)
+            .where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == source_id,
+            )
+            .with_for_update()
+        )
+        if event is not None:
+            return False
+        xp = int(
+            (Decimal(level_xp(reference_level)) * Decimal("0.06")).quantize(
+                Decimal(1), rounding=ROUND_HALF_UP
+            )
+        )
+        event = RewardEvent(character_id=character_id, source_id=source_id)
+        session.add(event)
+        await session.flush()
+        session.add(
+            RewardComponent(
+                reward_event_id=event.id,
+                kind="bestiary_first_victory_xp",
+                item_id=creature_id,
+                quantity=xp,
+                payload={"reference_level": reference_level, "fixed_percent": "0.06"},
+            )
+        )
+        character = await session.scalar(
+            select(Character).where(Character.id == character_id).with_for_update()
+        )
+        if character is not None:
+            character.xp += xp
         return True
 
 

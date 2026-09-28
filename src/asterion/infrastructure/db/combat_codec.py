@@ -35,6 +35,9 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 | {
                     "coefficient": Decimal(value["coefficient"]),
                     "attack_debuff": Decimal(value["attack_debuff"]),
+                    "per_bonus_if_target_poisoned": Decimal(
+                        value.get("per_bonus_if_target_poisoned", "0")
+                    ),
                 }
             )
         )
