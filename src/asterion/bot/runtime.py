@@ -10,6 +10,7 @@ from asterion.application.equipment_view import EquipmentViewService
 from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import P2Service
+from asterion.application.p3 import P3Service
 from asterion.application.prologue import PrologueService
 from asterion.application.round import RoundService
 from asterion.application.s1 import S1Service
@@ -20,6 +21,7 @@ from asterion.bot.creation_handlers import creation_router
 from asterion.bot.equipment_handlers import equipment_router
 from asterion.bot.p1_handlers import p1_router
 from asterion.bot.p2_handlers import p2_router
+from asterion.bot.p3_handlers import p3_router
 from asterion.bot.s1_handlers import s1_router
 from asterion.bot.s2_handlers import s2_router
 from asterion.bot.world_handlers import world_router
@@ -53,12 +55,16 @@ def get_bot_runtime() -> BotRuntime:
     consumables = ConsumableService(SessionFactory, settings.server_id)
     s1 = S1Service(SessionFactory, settings.server_id)
     s2 = S2Service(SessionFactory, settings.server_id)
+    p3 = P3Service(SessionFactory, settings.server_id)
     dispatcher.include_router(p2_router(p2, settings.creation_images))
     dispatcher.include_router(p1_router(p1, settings.creation_images))
     dispatcher.include_router(s1_router(s1, settings.creation_images))
     dispatcher.include_router(s2_router(s2, settings.creation_images))
+    dispatcher.include_router(p3_router(p3, settings.creation_images))
     dispatcher.include_router(
-        combat_router(prologue, settings.creation_images, world, road, p2=p2, s2=s2)
+        combat_router(
+            prologue, settings.creation_images, world, road, p2=p2, s2=s2, p3=p3
+        )
     )
     dispatcher.include_router(
         equipment_router(
@@ -82,6 +88,7 @@ def get_bot_runtime() -> BotRuntime:
             prologue=prologue,
             p2=p2,
             s2=s2,
+            p3=p3,
         )
     )
     dispatcher.include_router(
@@ -98,6 +105,7 @@ def get_bot_runtime() -> BotRuntime:
             road,
             p2=p2,
             s2=s2,
+            p3=p3,
         )
     )
     return BotRuntime(

@@ -136,6 +136,42 @@ def test_forced_rare_equipment_uses_normal_slot_budget_and_bound_flag():
     assert len(first["secondaries"]) == 1
 
 
+def test_each_p3_reward_option_uses_its_normal_rare_slot_budget():
+    options = (
+        ("Véu do Bosque", "Cabeça", {"HP", "DEF"}),
+        ("Selo do Galho Morto", "Acessório", {"HP", "ATQ", "AGI"}),
+        ("Relicário da Cinza Verde", "Artefato", {"HP", "ATQ", "DEF", "AGI"}),
+    )
+    for index, (name, slot, expected_core) in enumerate(options):
+        seed = f"p3:reward:character:{index}"
+        item = materialize_equipment(
+            seed,
+            "Raro",
+            5,
+            forced_name=name,
+            forced_slot=slot,
+            bound=True,
+        )
+        assert item == materialize_equipment(
+            seed,
+            "Raro",
+            5,
+            forced_name=name,
+            forced_slot=slot,
+            bound=True,
+        )
+        assert (item["item_name"], item["slot"], item["rarity"], item["item_level"]) == (
+            name,
+            slot,
+            "Raro",
+            5,
+        )
+        assert set(item["core"]) == expected_core
+        assert len(item["secondaries"]) == 1
+        assert item["enhancement"] == 0 and item["bound"] is True
+        assert item["rune"] is None and item["enchantment"] is None
+
+
 def test_widow_bote_gets_ten_per_only_while_target_has_poison(monkeypatch):
     from asterion.domain import combat as combat_domain
 

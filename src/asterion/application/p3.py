@@ -1,0 +1,975 @@
+"""Authoritative P3 mission flow composed from the shared Quest/combat/reward systems."""
+
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from asterion.application.bestiary import BestiaryRecorder
+from asterion.application.equipment_configuration import (
+    load_equipment_configuration,
+    reconcile_character_hp,
+)
+from asterion.application.progression import consolidate_character_level
+from asterion.application.road import (
+    BOSQUE,
+    BOSQUE_ROUTE_UNLOCK,
+    CHARNECA,
+    P2_QUEST_ID,
+    REFUGE,
+    REGION,
+    RoadService,
+)
+from asterion.domain.combat import (
+    Combat,
+    CombatConsumableOption,
+    act,
+    combat_consumable_options,
+    use_combat_consumable,
+)
+from asterion.domain.consumables import (
+    ENCOUNTER_CONSUMABLE_LIMITS,
+    ConsumableFamily,
+)
+from asterion.domain.consumables import definition as consumable_definition
+from asterion.domain.road import (
+    BOSQUE_LOCATION,
+    CERVO,
+    RULESET,
+    create_creature_combat,
+    enemy_xp,
+    materialize_equipment,
+)
+from asterion.infrastructure.db.combat_codec import decode, encode
+from asterion.infrastructure.db.combat_repository import CombatRepository
+from asterion.infrastructure.db.models import (
+    Character,
+    CodexEntry,
+    CodexFragment,
+    CombatRecord,
+    ConsumableStack,
+    Encounter,
+    EquipmentItem,
+    GameActivity,
+    LocationDiscovery,
+    Quest,
+    RewardComponent,
+    RewardEvent,
+    Unlock,
+    WorldState,
+)
+
+P3_ID = "P3"
+P3_TITLE = "Sob Galhos Calcinados"
+P3_VERSION = "tdo-1.0.10"
+P3_COMBAT_CONTENT_ID = "p3_scripted_cervo_escoriado"
+P3_REWARD_SOURCE = "p3.sob_galhos_calcinados"
+P3_FRAGMENTS = ("p3.fragment.1", "p3.fragment.2", "p3.fragment.3")
+P3_LOCATION_ID = BOSQUE_LOCATION
+P3_ROUTE_UNLOCK = BOSQUE_ROUTE_UNLOCK
+P3_CODEX_OLD_ASTERIANS = "codex.history.antigos_asterianos"
+P3_CODEX_FRAGMENT = "p3.bosque.fragmento_entalhado"
+P3_MARKS_FRAGMENT = "p3.bosque.associacao_arquitetonica"
+
+P3_REWARD_CHOICES = {
+    "veil": ("Véu do Bosque", "Cabeça"),
+    "seal": ("Selo do Galho Morto", "Acessório"),
+    "reliquary": ("Relicário da Cinza Verde", "Artefato"),
+}
+
+
+@dataclass(frozen=True)
+class P3View:
+    character_id: UUID
+    kind: str
+    status: str | None
+    step: int | None
+    state_version: int
+    progress: dict
+    location: str
+    level: int
+    available: bool = False
+    context: str = "p3"
+    combat: Combat | None = None
+    activity_id: UUID | None = None
+    activity_state_version: int | None = None
+    activity_status: str | None = None
+    encounter_id: UUID | None = None
+    combat_id: UUID | None = None
+    consumable_options: tuple[CombatConsumableOption, ...] = ()
+    consumable_quantities: tuple[tuple[str, int], ...] = ()
+    consumable_budget_limit: int = 0
+    consumable_screen: str | None = None
+    selected_consumable_id: str | None = None
+    selected_target_id: str | None = None
+    selection_parent: str = "items"
+    consumable_notice: str | None = None
+    ready_consumable_option: CombatConsumableOption | None = None
+    xp: int = 0
+
+
+class P3Service:
+    """Quest-specific P3 flow; combat, delivery, bestiary and progression stay shared."""
+
+    def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
+        self.sessions = sessions
+        self.server_id = server_id
+        self.bestiary = BestiaryRecorder()
+        self.road = RoadService(sessions, server_id)
+
+    async def oren(self, actor: int) -> P3View | None:
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                return None
+            quest = await self._quest(session, character.id)
+            world = await self._world(session, character.id)
+            if not self._at(world, REFUGE) or await self._foreground(session, character.id):
+                return None
+            return await self._view(session, character, quest, world, "oren")
+
+    async def offer(self, actor: int) -> P3View | None:
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                return None
+            quest = await self._quest(session, character.id)
+            world = await self._world(session, character.id)
+            if quest is not None:
+                return await self._view(session, character, quest, world)
+            available = (
+                self._at(world, REFUGE)
+                and not await self._foreground(session, character.id)
+                and await self._eligible(session, character)
+            )
+            return await self._view(
+                session, character, None, world, "offer" if available else "unavailable"
+            )
+
+    async def resume(self, actor: int) -> P3View | None:
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                return None
+            quest = await self._quest(session, character.id)
+            if quest is None:
+                return None
+            world = await self._world(session, character.id)
+            return await self._view(session, character, quest, world)
+
+    async def objective(self, actor: int) -> P3View | None:
+        return await self.resume(actor)
+
+    async def accept(self, actor: int, version: int = 0) -> P3View | None:
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None:
+                return None
+            if quest is not None or version != 0 or not self._at(world, REFUGE):
+                return await self._view(session, character, quest, world)
+            if await self._foreground(session, character.id) or not await self._eligible(
+                session, character
+            ):
+                return await self._view(session, character, quest, world)
+            quest = Quest(
+                character_id=character.id,
+                quest_id=P3_ID,
+                title=P3_TITLE,
+                status="active",
+                step=1,
+                content_version=P3_VERSION,
+                state_version=0,
+                progress={"fragments": []},
+            )
+            session.add(quest)
+            await session.flush()
+            return await self._view(session, character, quest, world)
+
+    async def mission_route(self, actor: int, version: int, destination: str) -> P3View | None:
+        """Move only along the explicit P3 mission path; all travel remains free."""
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None or quest is None or world is None:
+                return None
+            if not self._valid(quest, version) or await self._foreground(session, character.id):
+                return await self._view(session, character, quest, world)
+            progress = dict(quest.progress or {})
+            step = quest.step
+            current = world.location
+            allowed = False
+            if step == 1 and current == REFUGE and destination == CHARNECA:
+                allowed = await self._has_unlock(
+                    session, character.id, "route.tdo.refugio_charneca"
+                )
+            elif step == 3 and progress.get("awaiting_retry"):
+                if current == REFUGE and destination == CHARNECA:
+                    allowed = await self._has_unlock(
+                        session, character.id, "route.tdo.refugio_charneca"
+                    )
+                elif current == CHARNECA and destination == BOSQUE:
+                    allowed = await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK)
+                elif current == BOSQUE and destination == CHARNECA:
+                    allowed = await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK)
+            elif step == 5:
+                if current == BOSQUE and destination == CHARNECA:
+                    allowed = await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK)
+                elif current == CHARNECA and destination == REFUGE:
+                    allowed = await self._has_unlock(
+                        session, character.id, "route.tdo.refugio_charneca"
+                    )
+            if not allowed:
+                return await self._view(session, character, quest, world)
+            world.region = REGION
+            world.location = destination
+            quest.state_version += 1
+            return await self._view(session, character, quest, world)
+
+    async def enter_bosque(self, actor: int, version: int) -> P3View | None:
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None or quest is None or world is None:
+                return None
+            progress = dict(quest.progress or {})
+            first_entry = quest.step == 1 and not progress.get("bosque_entered")
+            retry_return = quest.step == 3 and progress.get("awaiting_retry")
+            if (
+                not self._valid(quest, version)
+                or not self._at(world, CHARNECA)
+                or not (first_entry or retry_return)
+                or await self._foreground(session, character.id)
+            ):
+                return await self._view(session, character, quest, world)
+            if first_entry:
+                await self._ensure(
+                    session,
+                    LocationDiscovery,
+                    character_id=character.id,
+                    location_id=P3_LOCATION_ID,
+                )
+                await self._ensure(
+                    session,
+                    Unlock,
+                    character_id=character.id,
+                    unlock_id=P3_ROUTE_UNLOCK,
+                )
+                world.region = REGION
+                world.location = BOSQUE
+                progress.update(bosque_entered=True, fragments=[])
+                quest.step = 2
+            else:
+                if not await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK):
+                    return await self._view(session, character, quest, world)
+                world.region = REGION
+                world.location = BOSQUE
+            quest.progress = progress
+            quest.state_version += 1
+            return await self._view(session, character, quest, world)
+
+    async def examine_fragment(self, actor: int, fragment_id: str, version: int) -> P3View | None:
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None or quest is None:
+                return None
+            if (
+                not self._valid(quest, version, step=2)
+                or not self._at(world, BOSQUE)
+                or fragment_id not in P3_FRAGMENTS
+                or await self._foreground(session, character.id)
+            ):
+                return await self._view(session, character, quest, world)
+            progress = dict(quest.progress or {})
+            found = set(progress.get("fragments", ()))
+            if fragment_id in found:
+                return await self._view(session, character, quest, world)
+            found.add(fragment_id)
+            progress["fragments"] = [item for item in P3_FRAGMENTS if item in found]
+            if len(found) == len(P3_FRAGMENTS):
+                quest.step = 3
+                progress.update(awaiting_retry=False, combat_result=None)
+                quest.progress = progress
+                await self._materialize_combat(session, character, quest)
+            else:
+                quest.progress = progress
+            quest.state_version += 1
+            return await self._view(session, character, quest, world)
+
+    async def retry(self, actor: int, version: int) -> P3View | None:
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None or quest is None:
+                return None
+            progress = dict(quest.progress or {})
+            if (
+                not self._valid(quest, version, step=3)
+                or not progress.get("awaiting_retry")
+                or not self._at(world, BOSQUE)
+                or await self._foreground(session, character.id)
+            ):
+                return await self._view(session, character, quest, world)
+            progress.update(awaiting_retry=False, combat_pending=False)
+            quest.progress = progress
+            activity = await self._materialize_combat(session, character, quest)
+            if activity is None:
+                progress["awaiting_retry"] = True
+                quest.progress = progress
+                return await self._view(session, character, quest, world)
+            quest.state_version += 1
+            return await self._view(session, character, quest, world)
+
+    async def action(
+        self,
+        actor: int,
+        activity_id: UUID,
+        version: int,
+        action: str | None = None,
+        *,
+        consumable_id: str | None = None,
+        target_id: str | None = None,
+        effect_id: str | None = None,
+    ) -> P3View | None:
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None:
+                return None
+            activity = await session.scalar(
+                select(GameActivity)
+                .where(
+                    GameActivity.id == activity_id,
+                    GameActivity.character_id == character.id,
+                    GameActivity.content_id == P3_COMBAT_CONTENT_ID,
+                )
+                .with_for_update()
+            )
+            if activity is None or quest is None:
+                return None
+            current = await self._view(session, character, quest, world)
+            foreground = await self._foreground(session, character.id)
+            if (
+                quest.status != "active"
+                or quest.content_version != P3_VERSION
+                or quest.step != 3
+                or activity.status != "active"
+                or activity.state_version != version
+                or foreground is None
+                or foreground.id != activity.id
+                or not self._at(world, BOSQUE)
+                or (action is None) == (consumable_id is None)
+            ):
+                return current
+            _, record = await CombatRepository(session).combat(activity)
+            combat = decode(
+                record.snapshot, record.id, activity.ruleset_version, activity.state_version
+            )
+            if consumable_id is None:
+                updated = act(combat, action)
+            else:
+                stack = await session.scalar(
+                    select(ConsumableStack)
+                    .where(
+                        ConsumableStack.character_id == character.id,
+                        ConsumableStack.consumable_id == consumable_id,
+                        ConsumableStack.quantity > 0,
+                    )
+                    .with_for_update()
+                )
+                if stack is None:
+                    return replace(
+                        current, consumable_notice="⚠️ Consumível · Não está mais disponível."
+                    )
+                updated = use_combat_consumable(
+                    combat,
+                    consumable_id,
+                    target_id=target_id,
+                    effect_id=effect_id,
+                    budget_limit=ENCOUNTER_CONSUMABLE_LIMITS.get(CERVO.category, 0),
+                )
+                if updated.version == combat.version:
+                    return replace(
+                        current, consumable_notice="⚠️ Consumível · Não está mais disponível."
+                    )
+                stack.quantity -= 1
+            if updated.version == combat.version:
+                return current
+            activity.state_version = updated.version
+            activity.last_valid_action_at = datetime.now(UTC)
+            record.snapshot = encode(updated)
+            character.hp = updated.fighters["player"].hp
+            await self.bestiary.record_combat_events(
+                session, character.id, CERVO.creature_id, None, updated
+            )
+            progress = dict(quest.progress or {})
+            if updated.result == "victory":
+                activity.status = "completed"
+                await self._grant_enemy_xp(session, character, activity)
+                await self.bestiary.record(
+                    session,
+                    character.id,
+                    CERVO.creature_id,
+                    victory=True,
+                    observation_category="common",
+                )
+                await self._normalize_character_hp(session, character)
+                quest.step = 4
+                progress.update(combat_result="victory", awaiting_retry=False)
+            elif updated.result == "defeat":
+                activity.status = "failed"
+                await self.bestiary.record(
+                    session, character.id, CERVO.creature_id, observation_category="common"
+                )
+                recovery_brazier, recovery_location = await self.road.recover_normal_pve_defeat(
+                    session, character, BOSQUE_LOCATION, world
+                )
+                progress.update(
+                    combat_result="defeat",
+                    awaiting_retry=True,
+                    defeat_activity_id=str(activity.id),
+                    recovery_brazier=recovery_brazier,
+                    recovery_location=recovery_location,
+                )
+            quest.progress = progress
+            quest.state_version += 1
+            return await self._view(session, character, quest, world)
+
+    async def consumable_selection(
+        self,
+        actor: int,
+        activity_id: UUID,
+        version: int,
+        *,
+        screen: str = "items",
+        item_id: str | None = None,
+        target_id: str | None = None,
+        parent: str = "items",
+    ) -> P3View | None:
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None or quest is None:
+                return None
+            activity = await session.scalar(
+                select(GameActivity)
+                .where(
+                    GameActivity.id == activity_id,
+                    GameActivity.character_id == character.id,
+                    GameActivity.content_id == P3_COMBAT_CONTENT_ID,
+                )
+                .with_for_update()
+            )
+            if activity is None:
+                return None
+            current = await self._view(session, character, quest, world)
+            foreground = await self._foreground(session, character.id)
+            if (
+                quest.status != "active"
+                or quest.step != 3
+                or activity.status != "active"
+                or foreground is None
+                or foreground.id != activity.id
+            ):
+                return current
+            if activity.state_version != version:
+                return replace(current, consumable_notice="⚠️ O combate foi atualizado.")
+            if screen == "combat":
+                return current
+            if screen == "items":
+                return (
+                    replace(current, consumable_screen="items")
+                    if current.consumable_options
+                    else current
+                )
+            item = consumable_definition(item_id or "")
+            options = tuple(
+                option for option in current.consumable_options if option.item_id == item_id
+            )
+            if item is None or not options:
+                return replace(
+                    current,
+                    consumable_screen=None,
+                    consumable_notice="⚠️ Consumível · Não está mais disponível.",
+                )
+            if screen == "choose_item":
+                targets = tuple(dict.fromkeys(option.target_id for option in options))
+                if item.family == ConsumableFamily.DISPELLER and len(targets) > 1:
+                    return replace(
+                        current, consumable_screen="targets", selected_consumable_id=item.id
+                    )
+                target_id = (
+                    targets[0]
+                    if item.family == ConsumableFamily.DISPELLER and targets
+                    else "player"
+                )
+                selected = tuple(option for option in options if option.target_id == target_id)
+                return self._selection_after_target(
+                    current, item, target_id, selected, parent="items"
+                )
+            if screen == "choose_target" and item.family == ConsumableFamily.DISPELLER:
+                selected = tuple(option for option in options if option.target_id == target_id)
+                if not selected:
+                    return replace(
+                        current,
+                        consumable_screen="items",
+                        consumable_notice="⚠️ Dissipador · Sem Alvo Válido",
+                    )
+                return self._selection_after_target(
+                    current, item, target_id, selected, parent="targets"
+                )
+            if screen == "targets" and item.family == ConsumableFamily.DISPELLER:
+                targets = tuple(dict.fromkeys(option.target_id for option in options))
+                return replace(
+                    current,
+                    consumable_screen="targets" if len(targets) > 1 else "items",
+                    selected_consumable_id=item.id if len(targets) > 1 else None,
+                )
+            if screen == "effects" and target_id is not None:
+                selected = tuple(
+                    option
+                    for option in options
+                    if option.target_id == target_id and option.effect_id is not None
+                )
+                if len(selected) == 1:
+                    return replace(current, ready_consumable_option=selected[0])
+                return replace(
+                    current,
+                    consumable_screen="effects",
+                    selected_consumable_id=item.id,
+                    selected_target_id=target_id,
+                    selection_parent=parent,
+                )
+            return replace(
+                current,
+                consumable_screen="items",
+                consumable_notice="⚠️ Consumível · Não está mais disponível.",
+            )
+
+    @staticmethod
+    def _selection_after_target(current, item, target_id, selected, *, parent):
+        if len(selected) == 1:
+            return replace(current, ready_consumable_option=selected[0])
+        if not selected:
+            return replace(
+                current,
+                consumable_screen="items",
+                consumable_notice="⚠️ Consumível · Não está mais disponível.",
+            )
+        return replace(
+            current,
+            consumable_screen="effects",
+            selected_consumable_id=item.id,
+            selected_target_id=target_id,
+            selection_parent=parent,
+        )
+
+    async def examine_carved_fragment(self, actor: int, version: int) -> P3View | None:
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None or quest is None:
+                return None
+            progress = dict(quest.progress or {})
+            if (
+                not self._valid(quest, version, step=4)
+                or not self._at(world, BOSQUE)
+                or progress.get("combat_result") != "victory"
+                or progress.get("carved_fragment_examined")
+                or await self._foreground(session, character.id)
+            ):
+                return await self._view(session, character, quest, world)
+            progress["carved_fragment_examined"] = True
+            quest.progress = progress
+            quest.step = 5
+            quest.state_version += 1
+            return await self._view(session, character, quest, world)
+
+    async def talk_to_oren(self, actor: int, version: int) -> P3View | None:
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None or quest is None:
+                return None
+            if (
+                not self._valid(quest, version, step=5)
+                or not self._at(world, REFUGE)
+                or not (quest.progress or {}).get("carved_fragment_examined")
+                or await self._foreground(session, character.id)
+            ):
+                return await self._view(session, character, quest, world)
+            quest.step = 6
+            quest.state_version += 1
+            return await self._view(session, character, quest, world)
+
+    async def choose_reward(self, actor: int, version: int, choice: str) -> P3View | None:
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None or quest is None:
+                return None
+            if quest.status == "completed":
+                return await self._view(session, character, quest, world)
+            if (
+                not self._valid(quest, version, step=6)
+                or not self._at(world, REFUGE)
+                or choice not in P3_REWARD_CHOICES
+                or await self._foreground(session, character.id)
+            ):
+                return await self._view(session, character, quest, world)
+            source = P3_REWARD_SOURCE
+            event = await session.scalar(
+                select(RewardEvent)
+                .where(RewardEvent.character_id == character.id, RewardEvent.source_id == source)
+                .with_for_update()
+            )
+            if event is None:
+                name, slot = P3_REWARD_CHOICES[choice]
+                seed = f"{P3_REWARD_SOURCE}:{character.id}:{choice}"
+                payload = materialize_equipment(
+                    seed,
+                    "Raro",
+                    5,
+                    forced_name=name,
+                    forced_slot=slot,
+                    bound=True,
+                )
+                event = RewardEvent(character_id=character.id, source_id=source)
+                session.add(event)
+                await session.flush()
+                character.xp += 4400
+                character.crowns += 180
+                session.add_all(
+                    (
+                        RewardComponent(
+                            reward_event_id=event.id, kind="xp", item_id=None, quantity=4400
+                        ),
+                        RewardComponent(
+                            reward_event_id=event.id, kind="crowns", item_id=None, quantity=180
+                        ),
+                        RewardComponent(
+                            reward_event_id=event.id,
+                            kind="equipment",
+                            item_id=None,
+                            quantity=1,
+                            payload=payload,
+                        ),
+                    )
+                )
+                source_key = f"{source}:equipment:{choice}"
+                if await self.road._inventory_slots(session, character.id) < 60:
+                    from asterion.application.equipment import equipment_instance_payload
+
+                    item_id, payload = equipment_instance_payload(payload)
+                    session.add(
+                        EquipmentItem(
+                            id=item_id,
+                            character_id=character.id,
+                            source_key=source_key,
+                            item_name=payload["item_name"],
+                            rarity=payload["rarity"],
+                            slot=payload["slot"],
+                            item_level=payload["item_level"],
+                            bound=True,
+                            payload=payload,
+                        )
+                    )
+                else:
+                    await self.road._pending(
+                        session, character.id, source_key, "equipment", payload
+                    )
+            await self._ensure(
+                session, CodexEntry, character_id=character.id, entry_id=P3_CODEX_OLD_ASTERIANS
+            )
+            await self._ensure(
+                session,
+                CodexFragment,
+                character_id=character.id,
+                entry_id=P3_CODEX_OLD_ASTERIANS,
+                fragment_id=P3_CODEX_FRAGMENT,
+            )
+            await self._ensure(
+                session,
+                CodexEntry,
+                character_id=character.id,
+                entry_id="codex.mystery.marcas_na_fuligem",
+            )
+            await self._ensure(
+                session,
+                CodexFragment,
+                character_id=character.id,
+                entry_id="codex.mystery.marcas_na_fuligem",
+                fragment_id=P3_MARKS_FRAGMENT,
+            )
+            await self._ensure(
+                session, LocationDiscovery, character_id=character.id, location_id=P3_LOCATION_ID
+            )
+            await self._ensure(
+                session, Unlock, character_id=character.id, unlock_id=P3_ROUTE_UNLOCK
+            )
+            await self._ensure(
+                session, Unlock, character_id=character.id, unlock_id="hunt_manual.bosque_calcinado"
+            )
+            await self._ensure(
+                session, Unlock, character_id=character.id, unlock_id="explore.bosque_calcinado"
+            )
+            await self._normalize_character_hp(session, character)
+            progress = dict(quest.progress or {})
+            progress.update(completed=True, selected_reward=choice)
+            quest.progress = progress
+            quest.status = "completed"
+            quest.state_version += 1
+            return await self._view(session, character, quest, world)
+
+    async def _materialize_combat(self, session, character, quest):
+        if not self._at(await self._world(session, character.id), BOSQUE):
+            return None
+        foreground = await self._foreground(session, character.id)
+        if foreground is not None:
+            progress = quest.progress or {}
+            if foreground.content_id == P3_COMBAT_CONTENT_ID and str(foreground.id) == progress.get(
+                "combat_activity_id"
+            ):
+                return foreground
+            return None
+        configuration = await load_equipment_configuration(session, character)
+        reconcile_character_hp(character, configuration)
+        mission_cervo = replace(CERVO, ai=("ocaso_charge", "antler_gore"))
+        combat = create_creature_combat(
+            uuid4(),
+            character.name,
+            character.character_class,
+            character.race,
+            character.hp,
+            mission_cervo,
+            5,
+            None,
+            player_level=character.level,
+            equipment_configuration=configuration,
+            ruleset_version=RULESET,
+            flavor="Entre as raízes, um Cervo Escoriado prepara uma investida.",
+            opening_log="🦌 Cervo Escoriado · Nv.5 bloqueia o caminho entre os galhos.",
+        )
+        activity, _, _ = await CombatRepository(session).create(
+            character, P3_COMBAT_CONTENT_ID, combat
+        )
+        progress = dict(quest.progress or {})
+        progress.update(
+            combat_activity_id=str(activity.id), combat_result=None, awaiting_retry=False
+        )
+        quest.progress = progress
+        await session.flush()
+        return activity
+
+    async def _grant_enemy_xp(self, session, character, activity) -> int:
+        source_id = f"{P3_REWARD_SOURCE}:enemy-xp:{activity.id}"
+        existing = await session.scalar(
+            select(RewardEvent)
+            .where(RewardEvent.character_id == character.id, RewardEvent.source_id == source_id)
+            .with_for_update()
+        )
+        if existing is not None:
+            return 0
+        amount = enemy_xp(5, "common", player_level=character.level)
+        event = RewardEvent(character_id=character.id, source_id=source_id)
+        session.add(event)
+        await session.flush()
+        session.add(
+            RewardComponent(
+                reward_event_id=event.id,
+                kind="enemy_xp",
+                item_id=CERVO.creature_id,
+                quantity=amount,
+                payload={"enemy_level": 5, "category": "common", "observation_context": "P3"},
+            )
+        )
+        character.xp += amount
+        return amount
+
+    async def _normalize_character_hp(self, session, character):
+        configuration = await load_equipment_configuration(session, character)
+        reconcile_character_hp(character, configuration)
+        await consolidate_character_level(session, character, configuration)
+        reconcile_character_hp(character, configuration)
+
+    async def _view(self, session, character, quest, world, requested_kind=None):
+        progress = dict(quest.progress or {}) if quest else {}
+        activity = None
+        encounter_id = combat_id = None
+        combat = None
+        activity_status = activity_version = None
+        stored = progress.get("combat_activity_id")
+        try:
+            stored_id = UUID(stored) if stored else None
+        except (TypeError, ValueError):
+            stored_id = None
+        if stored_id is not None:
+            activity = await session.scalar(
+                select(GameActivity).where(
+                    GameActivity.id == stored_id,
+                    GameActivity.character_id == character.id,
+                    GameActivity.content_id == P3_COMBAT_CONTENT_ID,
+                )
+            )
+            if activity is not None:
+                activity_status = activity.status
+                activity_version = activity.state_version
+                row = (
+                    await session.execute(
+                        select(Encounter, CombatRecord)
+                        .join(CombatRecord)
+                        .where(Encounter.game_activity_id == activity.id)
+                    )
+                ).one_or_none()
+                if row is not None:
+                    encounter, record = row
+                    encounter_id, combat_id = encounter.id, record.id
+                    if activity.status == "active":
+                        combat = decode(
+                            record.snapshot,
+                            record.id,
+                            activity.ruleset_version,
+                            activity.state_version,
+                        )
+        status = quest.status if quest else "unaccepted"
+        step = quest.step if quest else 1
+        state_version = quest.state_version if quest else 0
+        available = quest is None and await self._eligible(session, character)
+        if requested_kind is not None:
+            kind = requested_kind
+        elif quest is None:
+            kind = "offer" if available else "unavailable"
+        elif quest.status == "completed":
+            kind = "completed"
+        elif combat is not None:
+            kind = "combat"
+        elif step == 1:
+            kind = "travel"
+        elif step == 2:
+            kind = "fragments"
+        elif step == 3 and progress.get("awaiting_retry"):
+            kind = "recovery"
+        elif step == 3:
+            kind = "combat_pending"
+        elif step == 4:
+            kind = "carved"
+        elif step == 5:
+            kind = "return"
+        else:
+            kind = "choice"
+        options: tuple[CombatConsumableOption, ...] = ()
+        quantities: tuple[tuple[str, int], ...] = ()
+        budget = 0
+        if activity is not None and activity.status == "active" and combat is not None:
+            budget = ENCOUNTER_CONSUMABLE_LIMITS.get(CERVO.category, 0)
+            stock = (
+                await session.scalars(
+                    select(ConsumableStack)
+                    .where(
+                        ConsumableStack.character_id == character.id, ConsumableStack.quantity > 0
+                    )
+                    .order_by(ConsumableStack.consumable_id)
+                )
+            ).all()
+            quantities = tuple((row.consumable_id, row.quantity) for row in stock)
+            options = combat_consumable_options(
+                combat, tuple(row.consumable_id for row in stock), budget_limit=budget
+            )
+        return P3View(
+            character_id=character.id,
+            kind=kind,
+            status=status,
+            step=step,
+            state_version=state_version,
+            progress=progress,
+            location=world.location if world else "",
+            level=character.level,
+            available=available,
+            combat=combat,
+            activity_id=activity.id if activity else None,
+            activity_state_version=activity_version,
+            activity_status=activity_status,
+            encounter_id=encounter_id,
+            combat_id=combat_id,
+            consumable_options=options,
+            consumable_quantities=quantities,
+            consumable_budget_limit=budget,
+            xp=character.xp,
+        )
+
+    async def _eligible(self, session, character):
+        completed = await session.scalar(
+            select(Quest.id).where(
+                Quest.character_id == character.id,
+                Quest.quest_id == P2_QUEST_ID,
+                Quest.status == "completed",
+            )
+        )
+        return bool(completed and character.level >= 5)
+
+    async def _locked_state(self, session, actor):
+        character = await session.scalar(
+            select(Character)
+            .where(Character.telegram_id == actor, Character.server_id == self.server_id)
+            .with_for_update()
+        )
+        if character is None:
+            return None, None, None
+        quest = await session.scalar(
+            select(Quest)
+            .where(Quest.character_id == character.id, Quest.quest_id == P3_ID)
+            .with_for_update()
+        )
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character.id).with_for_update()
+        )
+        return character, quest, world
+
+    async def _character(self, session, actor):
+        return await session.scalar(
+            select(Character).where(
+                Character.telegram_id == actor, Character.server_id == self.server_id
+            )
+        )
+
+    async def _quest(self, session, character_id):
+        return await session.scalar(
+            select(Quest).where(Quest.character_id == character_id, Quest.quest_id == P3_ID)
+        )
+
+    async def _world(self, session, character_id):
+        return await session.scalar(
+            select(WorldState).where(WorldState.character_id == character_id)
+        )
+
+    async def _foreground(self, session, character_id):
+        return await session.scalar(
+            select(GameActivity).where(
+                GameActivity.character_id == character_id, GameActivity.status == "active"
+            )
+        )
+
+    async def _has_unlock(self, session, character_id, unlock_id):
+        return bool(
+            await session.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == character_id, Unlock.unlock_id == unlock_id
+                )
+            )
+        )
+
+    async def _ensure(self, session, model, **values):
+        row = await session.scalar(select(model).filter_by(**values).with_for_update())
+        if row is not None:
+            return row
+        row = model(**values)
+        session.add(row)
+        await session.flush()
+        return row
+
+    @staticmethod
+    def _valid(quest, version, *, step=None):
+        return bool(
+            quest is not None
+            and quest.status == "active"
+            and quest.content_version == P3_VERSION
+            and quest.state_version == version
+            and (step is None or quest.step == step)
+        )
+
+    @staticmethod
+    def _at(world, location):
+        return bool(world is not None and world.region == REGION and world.location == location)

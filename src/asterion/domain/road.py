@@ -381,6 +381,12 @@ ROAD_PROFILE = HuntLocationProfile(
     round_familiarity=ROUND_FAMILIARITY,
 )
 
+LOCATION_LEVEL_BANDS = {
+    "Estrada das Cinzas": (1, 10),
+    "Charneca da Fuligem": (3, 5),
+    "Bosque Calcinado": (5, 8),
+}
+
 CHARNECA_PROFILE = HuntLocationProfile(
     local_id=CHARNECA_LOCATION,
     label="Charneca da Fuligem",

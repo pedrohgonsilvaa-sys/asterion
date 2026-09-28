@@ -163,6 +163,7 @@ class RoadView:
     consumable_budget_limit: int = 0
     ready_consumable_option: CombatConsumableOption | None = None
     route_available: bool = False
+    route_destinations: tuple[str, ...] = ()
     brazier_id: str | None = None
     brazier_label: str | None = None
     brazier_destinations: tuple[tuple[str, str, str], ...] = ()
@@ -237,7 +238,10 @@ class RoadService:
             return None
         if any({current, destination} == pair for pair in OVERLAND_ROUTE_PAIRS):
             return await self.travel_route(actor, destination)
-        return await self.travel_brazier(actor, BRAZIER_FOR_LOCATION[destination])
+        brazier_id = BRAZIER_FOR_LOCATION.get(destination)
+        if brazier_id is None:
+            return None
+        return await self.travel_brazier(actor, brazier_id)
 
     async def travel_route(self, actor: int, destination: str) -> RoadView | None:
         """Use the free, post-P2 Refuge/Charneca overland connection."""
@@ -2336,23 +2340,43 @@ class RoadService:
             if candidate_id in known_brazier_ids
             and location != world.location
         )
-        route_available = False
-        if world.location in CHARNECA_ROUTE_ENDPOINTS:
-            route_available = bool(
-                await self._p2_completed(s, c.id)
-                and await s.scalar(select(Unlock).where(
-                    Unlock.character_id == c.id,
-                    Unlock.unlock_id == CHARNECA_ROUTE_UNLOCK,
-                ))
+        active_p3 = await s.scalar(
+            select(Quest.id).where(
+                Quest.character_id == c.id,
+                Quest.quest_id == P3_QUEST_ID,
+                Quest.status == "active",
             )
-        elif world.location in BOSQUE_ROUTE_ENDPOINTS:
-            route_available = bool(
-                await self._p3_completed(s, c.id)
-                and await s.scalar(select(Unlock).where(
-                    Unlock.character_id == c.id,
-                    Unlock.unlock_id == BOSQUE_ROUTE_UNLOCK,
-                ))
-            )
+        )
+        if active_p3:
+            brazier_id = None
+            brazier_label = None
+            brazier_destinations = ()
+        route_destinations: list[str] = []
+        charneca_route_known = bool(
+            await self._p2_completed(s, c.id)
+            and await s.scalar(select(Unlock.id).where(
+                Unlock.character_id == c.id,
+                Unlock.unlock_id == CHARNECA_ROUTE_UNLOCK,
+            ))
+        )
+        bosque_route_known = bool(
+            await self._p3_completed(s, c.id)
+            and await s.scalar(select(Unlock.id).where(
+                Unlock.character_id == c.id,
+                Unlock.unlock_id == BOSQUE_ROUTE_UNLOCK,
+            ))
+        )
+        if not active_p3:
+            if world.location == REFUGE and charneca_route_known:
+                route_destinations.append(CHARNECA)
+            elif world.location == CHARNECA:
+                if charneca_route_known:
+                    route_destinations.append(REFUGE)
+                if bosque_route_known:
+                    route_destinations.append(BOSQUE)
+            elif world.location == BOSQUE and bosque_route_known:
+                route_destinations.append(CHARNECA)
+        route_available = bool(route_destinations)
         return RoadView(
             (
                 "road" if world.location == ROAD
@@ -2370,6 +2394,7 @@ class RoadService:
             familiar=familiar,
             explore_available=explore_available,
             route_available=route_available,
+            route_destinations=tuple(route_destinations),
             brazier_id=brazier_id,
             brazier_label=brazier_label,
             brazier_destinations=brazier_destinations,

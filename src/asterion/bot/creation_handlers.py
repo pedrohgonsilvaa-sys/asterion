@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message, 
 from asterion.application.creation import CreationService
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import P2Service
+from asterion.application.p3 import P3Service
 from asterion.application.prologue import PrologueService
 from asterion.application.road import RoadService
 from asterion.application.s2 import S2Service
@@ -18,6 +19,7 @@ from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import CreationCallback, Screen, render
 from asterion.bot.p1_ui import render_p1
 from asterion.bot.p2_ui import render_p2
+from asterion.bot.p3_ui import render_p3
 from asterion.bot.s2_ui import render_s2
 from asterion.bot.world_ui import render_world
 
@@ -95,6 +97,7 @@ def creation_router(
     road: RoadService | None = None,
     p2: P2Service | None = None,
     s2: S2Service | None = None,
+    p3: P3Service | None = None,
 ) -> Router:
     router = Router(name="character_creation")
     router.message.filter(F.chat.type == "private")
@@ -107,6 +110,9 @@ def creation_router(
         s2_view = await s2.resume(actor) if s2 is not None else None
         if s2_view is not None and s2_view.status == "active" and s2_view.kind == "combat":
             return render_s2(s2_view)
+        p3_view = await p3.resume(actor) if p3 is not None else None
+        if p3_view is not None and p3_view.status == "active" and p3_view.kind == "combat":
+            return render_p3(p3_view)
         if p1 is not None:
             p1_view = await p1.resume(actor)
             if p1_view is not None and (p1_view.status == "active" or p1_view.combat is not None):
@@ -123,6 +129,8 @@ def creation_router(
                 from asterion.bot.road_ui import render_road
 
                 return render_road(road_view)
+        if p3_view is not None and p3_view.status == "active":
+            return render_p3(p3_view)
         if s2_view is not None and s2_view.status == "active":
             return render_s2(s2_view)
         if road_view is not None:

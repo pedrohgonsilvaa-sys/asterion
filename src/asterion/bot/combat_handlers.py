@@ -4,6 +4,7 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
 from asterion.application.p2 import P2Service
+from asterion.application.p3 import P3Service
 from asterion.application.prologue import PrologueService
 from asterion.application.road import RoadService
 from asterion.application.s2 import S2Service
@@ -13,11 +14,13 @@ from asterion.bot.combat_ui import (
     CombatConsumableCallback,
     CombatConsumableFlowCallback,
     P2CombatCallback,
+    P3CombatCallback,
     S2CombatCallback,
     render_combat,
 )
 from asterion.bot.creation_handlers import present
 from asterion.bot.p2_ui import render_p2
+from asterion.bot.p3_ui import render_p3
 from asterion.bot.road_ui import render_road
 from asterion.bot.s2_ui import render_s2
 from asterion.bot.world_ui import render_world
@@ -30,6 +33,7 @@ def combat_router(
     road: RoadService | None = None,
     p2: P2Service | None = None,
     s2: S2Service | None = None,
+    p3: P3Service | None = None,
 ) -> Router:
     router = Router(name="foreground_combat")
     router.callback_query.filter(F.message.chat.type == "private")
@@ -65,6 +69,15 @@ def combat_router(
                 target_id=target_id,
                 effect_id=effect_id,
             )
+        if view is None and p3 is not None:
+            view = await p3.action(
+                actor,
+                activity_id,
+                version,
+                consumable_id=item_id,
+                target_id=target_id,
+                effect_id=effect_id,
+            )
         return view
 
     async def consumable_selection(actor, activity_id, version, **kwargs):
@@ -81,6 +94,10 @@ def combat_router(
             view = await p2.consumable_selection(
                 actor, activity_id, version, **kwargs
             )
+        if view is None and p3 is not None:
+            view = await p3.consumable_selection(
+                actor, activity_id, version, **kwargs
+            )
         return view
 
     def render_service_view(view):
@@ -88,6 +105,8 @@ def combat_router(
             return render_s2(view)
         if getattr(view, "context", None) == "p2":
             return render_p2(view)
+        if getattr(view, "context", None) == "p3":
+            return render_p3(view)
         if hasattr(view, "kind"):
             return render_road(view)
         return render_combat(view)
@@ -180,6 +199,27 @@ def combat_router(
         if view is not None and isinstance(query.message, Message):
             await present(query.message, render_s2(view), images, edit=True)
 
+    @router.callback_query(F.data.startswith("p3fight:"))
+    async def p3_action(query: CallbackQuery):
+        if p3 is None:
+            await query.answer()
+            return
+        try:
+            data = P3CombatCallback.unpack(query.data or "")
+            activity_id = data.activity_id
+        except (KeyError, TypeError, ValueError):
+            await query.answer()
+            return
+        view = await p3.action(
+            query.from_user.id,
+            activity_id,
+            data.version,
+            data.action,
+        )
+        await query.answer()
+        if view is not None and isinstance(query.message, Message):
+            await present(query.message, render_p3(view), images, edit=True)
+
     @router.callback_query(F.data.startswith("cu:"))
     async def consumable(query: CallbackQuery):
         try:
@@ -205,7 +245,10 @@ def combat_router(
 
     @router.callback_query(F.data.startswith("cf:"))
     async def consumable_flow(query: CallbackQuery):
-        if (road is None and p2 is None and s2 is None) or not isinstance(query.message, Message):
+        if (
+            (road is None and p2 is None and s2 is None and p3 is None)
+            or not isinstance(query.message, Message)
+        ):
             await query.answer()
             return
         try:
