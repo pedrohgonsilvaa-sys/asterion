@@ -3225,11 +3225,11 @@ Terras do Ocaso não exige para saída:
 
 # 26. Sincronização com a Fonte Visual/UI
 
-A Fonte `ASTERION_UI_DECISOES_2026-09-26_FINAL_SYNC_v1.4.7_TDO_v1.0.7_VALES_v1.0.2.md` é a autoridade player-facing vigente para a vertical slice e está sincronizada com a Fonte Mestra v1.4.7 e esta revisão regional v1.0.7.
+A Fonte `ASTERION_UI_DECISOES_2026-09-27_FINAL_SYNC_v1.4.7_TDO_v1.0.8_VALES_v1.0.2.md` é a autoridade player-facing vigente para a vertical slice e está sincronizada com a Fonte Mestra v1.4.7 e esta revisão regional v1.0.8.
 
 As decisões gerais de interface já consolidadas — padrão de Missões, HUD de combate, Menu Principal, Braseiros, Códice, navegação, P1 e apresentação de Equipamentos/Runas — continuam válidas.
 
-A camada específica de P1 — sinais da Estrada, transições, Alda/Oren, ativação do Braseiro do Refúgio, conclusão, recovery e reconnect — já está consolidada na Fonte Visual/UI vigente. Não existe pendência player-facing de P1 conhecida nesta revisão. A seção 60 da Fonte Visual/UI consolida P2, Charneca da Fuligem e sua rota terrestre conforme as regras regionais desta v1.0.7.
+A camada específica de P1 — sinais da Estrada, transições, Alda/Oren, ativação do Braseiro do Refúgio, conclusão, recovery e reconnect — já está consolidada na Fonte Visual/UI vigente. Não existe pendência player-facing de P1 conhecida nesta revisão. A seção 60 da Fonte Visual/UI consolida P2, Charneca da Fuligem e sua rota terrestre conforme as regras regionais desta v1.0.8.
 
 As faixas já sincronizadas permanecem:
 
@@ -3274,7 +3274,7 @@ Não existe bloco regional conhecido aguardando migração textual.
 
 # 28. Autoridade e manutenção
 
-Este arquivo é a **Fonte oficial de Conteúdo das Terras do Ocaso v1.0.7 FINAL**.
+Este arquivo é a **Fonte oficial de Conteúdo das Terras do Ocaso v1.0.8 FINAL**.
 
 Hierarquia:
 

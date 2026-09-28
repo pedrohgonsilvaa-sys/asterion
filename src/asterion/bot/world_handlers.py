@@ -821,6 +821,13 @@ def world_router(
         if key == "charneca" and p2_view is not None and p2_view.status == "active":
             await present(query.message, render_p2(p2_view), images, edit=True)
             return
+        brazier_travel_available = bool(
+            road_view is not None
+            and road_view.location == current
+            and road_view.brazier_id
+            and road_view.brazier_destinations
+            and not (p2_view is not None and p2_view.status == "active")
+        )
         local_kinds = {"road", "refuge", "charneca"}
         is_current = name == current
         if is_current:
@@ -918,7 +925,7 @@ def world_router(
             elif current == REFUGE and road_view is not None and road_view.route_available:
                 lines.extend(["🧭 Desbravar · Disponível conforme gates", "🦌 Caçadas · Disponível conforme nível e pool"])
                 keyboard.append([InlineKeyboardButton(text="Seguir para a Charneca", callback_data="road:route:charneca")])
-        if is_current and road_view is not None and road_view.brazier_id and road_view.brazier_destinations:
+        if brazier_travel_available:
             keyboard.append([InlineKeyboardButton(text="Travessia dos Braseiros", callback_data="world:travel")])
         keyboard.append(
             [InlineKeyboardButton(text="← Terras do Ocaso", callback_data="world:map:region:tdo")]

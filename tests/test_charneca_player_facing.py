@@ -15,6 +15,7 @@ from asterion.infrastructure.db.models import (
     Character,
     HuntRound,
     LocationDiscovery,
+    Quest,
     WorldState,
 )
 from tests.test_charneca_content import _seed_charneca
@@ -339,3 +340,123 @@ async def test_brazier_travel_lists_only_known_destinations_and_keeps_route_dist
         assert await session.scalar(
             select(HuntRound.id).where(HuntRound.character_id == character.id)
         ) is None
+
+
+@pytest.mark.asyncio
+async def test_remote_known_local_offers_travel_only_when_authoritatively_available(
+    database,
+):
+    actor = 880418
+    road = await _seed_charneca(
+        database,
+        actor=actor,
+        name="Viaja",
+        location="Refúgio do Ocaso",
+        permanent_braziers=(
+            "tdo.brazier.estrada",
+            "tdo.brazier.refugio_do_ocaso",
+            "tdo.brazier.vento_morto",
+        ),
+    )
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        world_router(
+            WorldService(database[1], "ocaso"),
+            {},
+            p1=P1Service(database[1], "ocaso"),
+            road=road,
+            p2=P2Service(database[1], "ocaso"),
+        )
+    )
+    bot = _telegram()
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update("world:map:local:road", update_id=880418, actor=actor),
+    )
+    remote = _last_method(bot)
+    assert "Local Atual" not in remote.text
+    assert "world:travel" in _callbacks(remote)
+
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update("world:travel", update_id=880419, actor=actor),
+    )
+    travel = _last_method(bot)
+    assert "Travessia dos Braseiros" in _text(travel)
+    assert "Braseiro do Refúgio" in _text(travel)
+    assert any(value.startswith("road:travel:") for value in _callbacks(travel))
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character.id)
+        )
+        assert world.location == "Refúgio do Ocaso"
+
+    unavailable_actor = 880420
+    unavailable_road = await _seed_charneca(
+        database,
+        actor=unavailable_actor,
+        name="Nuvem",
+        location="Refúgio do Ocaso",
+        permanent_braziers=("tdo.brazier.refugio_do_ocaso",),
+    )
+    unavailable_dispatcher = Dispatcher(disable_fsm=True)
+    unavailable_dispatcher.include_router(
+        world_router(
+            WorldService(database[1], "ocaso"),
+            {},
+            p1=P1Service(database[1], "ocaso"),
+            road=unavailable_road,
+            p2=P2Service(database[1], "ocaso"),
+        )
+    )
+    await unavailable_dispatcher.feed_raw_update(
+        bot,
+        callback_update(
+            "world:map:local:road", update_id=880421, actor=unavailable_actor
+        ),
+    )
+    unavailable = _last_method(bot)
+    assert "world:travel" not in _callbacks(unavailable)
+
+    p2_actor = 880422
+    p2_road = await _seed_charneca(
+        database,
+        actor=p2_actor,
+        name="Brasa",
+        location="Refúgio do Ocaso",
+        permanent_braziers=(
+            "tdo.brazier.estrada",
+            "tdo.brazier.refugio_do_ocaso",
+        ),
+    )
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == p2_actor)
+        )
+        quest = await session.scalar(
+            select(Quest).where(
+                Quest.character_id == character.id,
+                Quest.quest_id == "P2",
+            )
+        )
+        quest.status = "active"
+        await session.commit()
+    p2_dispatcher = Dispatcher(disable_fsm=True)
+    p2_dispatcher.include_router(
+        world_router(
+            WorldService(database[1], "ocaso"),
+            {},
+            p1=P1Service(database[1], "ocaso"),
+            road=p2_road,
+            p2=P2Service(database[1], "ocaso"),
+        )
+    )
+    await p2_dispatcher.feed_raw_update(
+        bot,
+        callback_update("world:map:local:road", update_id=880423, actor=p2_actor),
+    )
+    during_p2 = _last_method(bot)
+    assert "world:travel" not in _callbacks(during_p2)

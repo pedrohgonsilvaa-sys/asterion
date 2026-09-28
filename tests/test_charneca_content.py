@@ -661,6 +661,154 @@ async def test_charneca_round_defeat_recovers_without_restarting_and_preparing_r
 
 
 @pytest.mark.asyncio
+async def test_charneca_round_defeat_after_vento_keeps_prior_rewards_and_location(
+    database, monkeypatch
+):
+    actor = 880316
+    await _seed_charneca(
+        database,
+        actor=actor,
+        location=CHARNECA,
+        round_familiarity=True,
+        permanent_braziers=("tdo.brazier.vento_morto",),
+    )
+    rounds = RoundService(database[1], "ocaso")
+    monkeypatch.setattr(
+        round_application,
+        "select_creature",
+        lambda _seed, _level, **_kwargs: SPIDER,
+    )
+    monkeypatch.setattr(
+        round_application,
+        "select_variant",
+        lambda _seed, _creature, **_kwargs: None,
+    )
+    outcomes = iter(("victory", "defeat"))
+
+    def resolve_outcome(combat, _action):
+        updated = deepcopy(combat)
+        updated.version += 1
+        updated.result = next(outcomes)
+        if updated.result == "victory":
+            updated.fighters["enemy"].hp = Decimal(0)
+        else:
+            updated.fighters["player"].hp = Decimal(0)
+        return updated
+
+    monkeypatch.setattr(round_application, "act", resolve_outcome)
+    prepared = await rounds.prepare_round(actor, 5)
+    started = await rounds.start_round(actor, prepared.round_id, prepared.state_version)
+    async with database[1]() as session:
+        state = await session.get(HuntRound, started.round_id)
+        state.next_resolution_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+
+    assert await rounds.advance_due_rounds() == 1
+    after_victory = await rounds.resume(actor)
+    assert after_victory.kind == "round_active"
+    assert after_victory.completed_encounters == 1
+    async with database[1]() as session:
+        first_encounter = await session.scalar(
+            select(HuntRoundEncounter).where(
+                HuntRoundEncounter.round_id == started.round_id,
+                HuntRoundEncounter.ordinal == 1,
+            )
+        )
+        assert first_encounter.status == "completed"
+        first_activity_id = first_encounter.activity_id
+        assert first_activity_id is not None
+        first_reward_count = await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.source_id == f"activity:{first_activity_id}"
+            )
+        )
+        assert first_reward_count == 1
+        state = await session.get(HuntRound, started.round_id)
+        state.next_resolution_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+
+    assert await rounds.advance_due_rounds() == 1
+    defeated = await RoundService(database[1], "ocaso").resume(actor)
+    assert defeated.kind == "round_defeated"
+    assert defeated.round_id == started.round_id
+    assert defeated.recovery_brazier == "Braseiro do Vento Morto"
+    assert defeated.recovery_location == CHARNECA
+    assert defeated.route_available is False
+
+    reconnected = await RoundService(database[1], "ocaso").resume(actor)
+    assert reconnected.kind == "round_defeated"
+    assert reconnected.round_id == started.round_id
+    assert reconnected.recovery_brazier == "Braseiro do Vento Morto"
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character.id)
+        )
+        state = await session.get(HuntRound, started.round_id)
+        encounters = (
+            await session.scalars(
+                select(HuntRoundEncounter)
+                .where(HuntRoundEncounter.round_id == state.id)
+                .order_by(HuntRoundEncounter.ordinal)
+            )
+        ).all()
+        assert state.status == "defeated"
+        assert world.location == CHARNECA
+        assert character.hp == character.max_hp
+        assert len(encounters) == 2
+        assert encounters[0].status == "completed"
+        assert encounters[1].status == "defeated"
+        assert await session.scalar(
+            select(func.count(HuntRound.id)).where(
+                HuntRound.character_id == character.id
+            )
+        ) == 1
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.source_id == f"activity:{first_activity_id}"
+            )
+        ) == first_reward_count
+        reward_count_before_ack = await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character.id
+            )
+        )
+
+    back = await rounds.round_back(actor, started.round_id)
+    assert back.kind == "charneca"
+    repeated_back = await rounds.round_back(actor, started.round_id)
+    assert repeated_back.kind == "charneca"
+    after_ack = await RoundService(database[1], "ocaso").resume(actor)
+    assert after_ack.kind == "charneca"
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character.id)
+        )
+        assert world.location == CHARNECA
+        assert character.hp == character.max_hp
+        assert await session.scalar(
+            select(func.count(HuntRound.id)).where(
+                HuntRound.character_id == character.id
+            )
+        ) == 1
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.source_id == f"activity:{first_activity_id}"
+            )
+        ) == first_reward_count
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character.id
+            )
+        ) == reward_count_before_ack
+
+
+@pytest.mark.asyncio
 async def test_charneca_round_requires_local_manual_familiarity_and_freezes_local(
     database, monkeypatch
 ):
