@@ -54,6 +54,16 @@ class P2CombatCallback(CallbackData, prefix="p2fight"):
         return UUID(hex=self.activity)
 
 
+class S2CombatCallback(CallbackData, prefix="s2fight"):
+    activity: str
+    version: int
+    action: str
+
+    @property
+    def activity_id(self) -> UUID:
+        return UUID(hex=self.activity)
+
+
 _CONSUMABLE_CALLBACK_KEYS = {
     "consumable.heal": "H",
     "consumable.purification": "P",
@@ -627,6 +637,8 @@ def render_combat(view: CombatView) -> Screen:
                     if view.context == "p1"
                     else P2CombatCallback
                     if view.context == "p2"
+                    else S2CombatCallback
+                    if view.context == "s2"
                     else CombatCallback
                 )(
                     activity=view.activity_id.hex,
