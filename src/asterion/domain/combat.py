@@ -83,6 +83,9 @@ class Action:
     cooldown: int | None = None
     effect_stat: str | None = None
     per_bonus_if_target_poisoned: Decimal = D(0)
+    self_barrier_coefficient: Decimal = D(0)
+    self_barrier_duration: int = 0
+    skip_if_barrier_active: bool = False
 
 
 @dataclass
@@ -883,6 +886,29 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
             CombatEvent(len(state.events), state.round, actor_id, f"prepare:{action_id}")
         )
         return
+    if action.self_barrier_coefficient > ZERO:
+        value = (actor.stat("attack") * action.self_barrier_coefficient).to_integral_value(
+            rounding=ROUND_FLOOR
+        )
+        actor.barrier = max(ZERO, value)
+        actor.barrier_remaining = max(0, action.self_barrier_duration)
+        actor.barrier_applied_opportunity = actor.opportunity
+        actor.barrier_source = f"{actor_id}:{action.id}"
+        actor.last_action = action_id
+        if (action.cooldown or action.blocked_opportunities) and not state.resolving_prepared:
+            actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
+        state.events.append(
+            CombatEvent(
+                len(state.events),
+                state.round,
+                actor_id,
+                action_id,
+                actor_id,
+                barrier_value=actor.barrier,
+            )
+        )
+        state.resolving_prepared = False
+        return
     current_ruleset = state.ruleset == CURRENT_COMBAT_RULESET
     direct_eligible = action.coefficient > ZERO
     dodged = False
@@ -1079,9 +1105,19 @@ def _enemy_action(state: Combat) -> str:
     if state.prepared_action is not None:
         return "hold"
     enemy = state.fighters["enemy"]
+    def ready(action_id: str) -> bool:
+        action = state.enemy_actions.get(action_id)
+        if action is None or enemy.cooldowns.get(action_id, 0) > enemy.opportunity:
+            return False
+        return not (
+            action.skip_if_barrier_active
+            and enemy.barrier > ZERO
+            and enemy.barrier_remaining > 0
+        )
+
     if state.ai_priority:
         for action in state.ai_priority:
-            if enemy.cooldowns.get(action, 0) <= enemy.opportunity:
+            if ready(action):
                 return action
     # Alfa Cinéreo uses content priority rather than a positional cycle.
     if {"rend", "leap", "bite"}.issubset(state.enemy_actions):
@@ -1089,17 +1125,17 @@ def _enemy_action(state: Combat) -> str:
             (dot.stacks for dot in state.dot_states.get("player", []) if dot.kind == "bleed"),
             0,
         )
-        if enemy.cooldowns.get("rend", 0) <= enemy.opportunity and bleed_count == 0:
+        if ready("rend") and bleed_count == 0:
             return "rend"
-        if enemy.cooldowns.get("leap", 0) <= enemy.opportunity:
+        if ready("leap"):
             return "leap"
-        if enemy.cooldowns.get("rend", 0) <= enemy.opportunity and bleed_count < 3:
+        if ready("rend") and bleed_count < 3:
             return "rend"
         return "bite"
     for _ in range(len(state.ai_cycle)):
         action = state.ai_cycle[state.ai_position]
         state.ai_position = (state.ai_position + 1) % len(state.ai_cycle)
-        if enemy.cooldowns.get(action, 0) <= enemy.opportunity:
+        if ready(action):
             return action
     return state.ai_cycle[state.ai_position]
 

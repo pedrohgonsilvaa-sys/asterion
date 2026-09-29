@@ -39,6 +39,9 @@ from asterion.domain.road import (
     EXPLORATION_PROFILES,
     ROAD_EXPLORATION_PROFILE,
     ROAD_LOCATION,
+    RUINS_BRAZIER,
+    RUINS_LOCATION,
+    RUINS_ROUTE_UNLOCK,
     RULESET,
     create_road_combat,
     creature_for,
@@ -70,6 +73,7 @@ from asterion.infrastructure.db.models import (
     ExplorationAttempt,
     GameActivity,
     HuntContext,
+    LocationDiscovery,
     MaterialStack,
     PendingItem,
     Quest,
@@ -84,24 +88,29 @@ ROAD = "Estrada das Cinzas"
 REFUGE = "Refúgio do Ocaso"
 CHARNECA = "Charneca da Fuligem"
 BOSQUE = "Bosque Calcinado"
+RUINS = "Ruínas do Vigia"
 REGION = "Terras do Ocaso"
 P2_QUEST_ID = "P2"
 P3_QUEST_ID = "P3"
+P4_QUEST_ID = "P4"
 CHARNECA_ROUTE_ENDPOINTS = frozenset((REFUGE, CHARNECA))
 BOSQUE_ROUTE_ENDPOINTS = frozenset((CHARNECA, BOSQUE))
-OVERLAND_ROUTE_PAIRS = (CHARNECA_ROUTE_ENDPOINTS, BOSQUE_ROUTE_ENDPOINTS)
-TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE))
+BOSQUE_RUINS_ROUTE_ENDPOINTS = frozenset((BOSQUE, RUINS))
+OVERLAND_ROUTE_PAIRS = (CHARNECA_ROUTE_ENDPOINTS, BOSQUE_ROUTE_ENDPOINTS, BOSQUE_RUINS_ROUTE_ENDPOINTS)
+TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS))
 BRAZIER_FOR_LOCATION = {
     ROAD: "tdo.brazier.estrada",
     REFUGE: "tdo.brazier.refugio_do_ocaso",
     CHARNECA: CHARNECA_BRAZIER,
     BOSQUE: BOSQUE_BRAZIER,
+    RUINS: RUINS_BRAZIER,
 }
 BRAZIER_DETAILS = {
     "tdo.brazier.estrada": (ROAD, "Braseiro da Estrada"),
     "tdo.brazier.refugio_do_ocaso": (REFUGE, "Braseiro do Refúgio"),
     CHARNECA_BRAZIER: (CHARNECA, "Braseiro do Vento Morto"),
     BOSQUE_BRAZIER: (BOSQUE, "Braseiro dos Galhos Mortos"),
+    RUINS_BRAZIER: (RUINS, "Braseiro do Poente"),
 }
 HUNT_CONTENT = "road_manual_hunt"
 EXPLORE_CONTENT = "road_exploration"
@@ -216,6 +225,11 @@ class RoadService:
             elif world.location == BOSQUE:
                 if not await self._p3_completed(s, c.id):
                     return None
+            elif world.location == RUINS:
+                if c.level < 8 or not await self._p4_completed(s, c.id):
+                    return None
+                if not await self._has_location(s, c.id, RUINS_LOCATION):
+                    return None
             elif not await self._p1_completed(s, c.id):
                 return None
             return await self._view_for_world(s, c, world)
@@ -292,6 +306,15 @@ class RoadService:
             )
             if active_p3 is not None:
                 return None
+            active_p4 = await s.scalar(
+                select(Quest).where(
+                    Quest.character_id == c.id,
+                    Quest.quest_id == P4_QUEST_ID,
+                    Quest.status == "active",
+                )
+            )
+            if active_p4 is not None and mode == "brazier":
+                return None
             if mode == "route":
                 pair = next(
                     (candidate for candidate in OVERLAND_ROUTE_PAIRS if {world.location, destination} == candidate),
@@ -299,15 +322,23 @@ class RoadService:
                 )
                 if pair is None:
                     return None
-                route_gate = (
-                    (self._p2_completed(s, c.id), CHARNECA_ROUTE_UNLOCK)
-                    if pair == CHARNECA_ROUTE_ENDPOINTS
-                    else (self._p3_completed(s, c.id), BOSQUE_ROUTE_UNLOCK)
-                )
-                if not await route_gate[0] or not await s.scalar(
+                if pair == CHARNECA_ROUTE_ENDPOINTS:
+                    gate_ok = await self._p2_completed(s, c.id)
+                    route_unlock = CHARNECA_ROUTE_UNLOCK
+                elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
+                    gate_ok = (
+                        await self._p4_completed(s, c.id)
+                        and c.level >= 8
+                        and await self._has_location(s, c.id, RUINS_LOCATION)
+                    )
+                    route_unlock = RUINS_ROUTE_UNLOCK
+                else:
+                    gate_ok = await self._p3_completed(s, c.id)
+                    route_unlock = BOSQUE_ROUTE_UNLOCK
+                if not gate_ok or not await s.scalar(
                     select(Unlock).where(
                         Unlock.character_id == c.id,
-                        Unlock.unlock_id == route_gate[1],
+                        Unlock.unlock_id == route_unlock,
                     )
                 ):
                     return None
@@ -330,6 +361,13 @@ class RoadService:
                         return None
                 if world.location == BOSQUE or destination == BOSQUE:
                     if not await self._p3_completed(s, c.id):
+                        return None
+                if world.location == RUINS or destination == RUINS:
+                    if (
+                        c.level < 8
+                        or not await self._p4_completed(s, c.id)
+                        or not await self._has_location(s, c.id, RUINS_LOCATION)
+                    ):
                         return None
                 elif not await self._p1_completed(s, c.id):
                     return None
@@ -621,6 +659,7 @@ class RoadService:
                         and (
                             (context.local_id == CHARNECA_LOCATION and recovery_location == REFUGE)
                             or (context.local_id == BOSQUE_LOCATION and recovery_location == CHARNECA)
+                            or (context.local_id == RUINS_LOCATION and recovery_location in {BOSQUE, CHARNECA, REFUGE})
                         )
                     ),
                 )
@@ -1303,6 +1342,9 @@ class RoadService:
         if attempt.local_id == BOSQUE_LOCATION:
             await self._settle_bosque_exploration(s, c, attempt, base_text)
             return
+        if attempt.local_id == RUINS_LOCATION:
+            await self._settle_ruins_exploration(s, c, attempt, base_text)
+            return
         if attempt.category == "combat" and attempt.activity_id is not None:
             context = await s.scalar(
                 select(HuntContext).where(HuntContext.game_activity_id == attempt.activity_id)
@@ -1926,6 +1968,136 @@ class RoadService:
         if should_consolidate:
             await consolidate_character_level(s, c)
 
+    async def _settle_ruins_exploration(self, s, c, attempt, base_text: str) -> None:
+        if (attempt.progress or {}).get("settled"):
+            return
+        source_id = f"explore:{attempt.id}"
+        event = await s.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == c.id,
+                RewardEvent.source_id == source_id,
+            ).with_for_update()
+        )
+        if event is not None:
+            return
+        event = RewardEvent(character_id=c.id, source_id=source_id)
+        s.add(event)
+        await s.flush()
+        components: list[tuple[str, str | None, int, dict]] = []
+        lines = [base_text]
+        consolidate = False
+        result_id = attempt.result_id
+
+        if attempt.category == "combat" and attempt.activity_id is not None:
+            context = await s.scalar(
+                select(HuntContext).where(
+                    HuntContext.game_activity_id == attempt.activity_id
+                ).with_for_update()
+            )
+            if context is None:
+                raise RuntimeError("Ruins exploration combat is missing HuntContext")
+            enough = c.vigor >= 4
+            xp = enemy_xp(
+                context.enemy_level,
+                context.category,
+                Decimal(1) if enough else Decimal("0.25"),
+                player_level=c.level,
+            )
+            c.xp += xp
+            components.append(("xp", None, xp, {}))
+            lines.append(f"✨ XP · {xp}")
+            if enough:
+                c.vigor -= 4
+                award = int(
+                    ((Decimal(100 + 15 * context.enemy_level) * Decimal("0.15")) / 10)
+                    .quantize(Decimal(1), rounding=ROUND_HALF_EVEN) * 10
+                )
+                c.crowns += award
+                components.append(("crowns", None, award, {}))
+                lines.append(f"🪙 Coroas · {award}")
+                units = 1 + int(
+                    _draw_int(attempt.seed, "exploration-material-extra", 100) < 20
+                )
+                for ordinal in range(units):
+                    material_id = material_for(
+                        context.creature_id,
+                        f"{attempt.seed}:exploration-material:{ordinal}",
+                    )
+                    components.append(("material", material_id, 1, {"material_id": material_id}))
+                    lines.append(f"📦 {MATERIAL_LABELS.get(material_id, material_id)} · 1")
+                    await self._deliver_material(
+                        s, c, material_id, 1, f"explore:{attempt.id}:material:{ordinal}"
+                    )
+            bestiary = await self._bestiary(
+                s,
+                c.id,
+                context.creature_id,
+                victory=True,
+                elite=context.category == "elite",
+                observation_category=context.category,
+            )
+            if bestiary is not None:
+                components.append(("bestiary", context.creature_id, 1, bestiary))
+                lines.append(f"📖 Bestiário · {bestiary['creature_name']} · {bestiary['stage_label']}")
+            consolidate = True
+        elif attempt.category == "resource":
+            materials = {
+                "explore.tdo.ruinas.ferro": "material.tdo.ferro_de_fuligem",
+                "explore.tdo.ruinas.residuo": "material.tdo.residuo_ocaso",
+                "explore.tdo.ruinas.erva": "material.tdo.erva_cinzenta",
+                "explore.tdo.ruinas.couro": "material.tdo.couro_escoriado",
+            }
+            material_id = materials.get(result_id)
+            if material_id is None:
+                raise RuntimeError(f"unknown Ruins resource result {result_id!r}")
+            if c.vigor >= 4:
+                c.vigor -= 4
+                award = int(
+                    ((Decimal(100 + 15 * c.level) * Decimal("0.10")) / 10)
+                    .quantize(Decimal(1), rounding=ROUND_HALF_EVEN) * 10
+                )
+                c.crowns += award
+                components.extend((("crowns", None, award, {}), ("material", material_id, 1, {"material_id": material_id})))
+                lines.extend((f"🪙 Coroas · {award}", f"📦 {MATERIAL_LABELS[material_id]} · 1"))
+                await self._deliver_material(s, c, material_id, 1, f"explore:{attempt.id}:resource")
+        elif result_id in {"explore.tdo.ruinas.braseiro", "explore.tdo.ruinas.galerias"}:
+            xp = _fixed_percent_xp(9, "0.08")
+            c.xp += xp
+            components.append(("xp", None, xp, {"reference_level": 9, "fixed_percent": "0.08"}))
+            if result_id == "explore.tdo.ruinas.braseiro":
+                await self._ensure(s, Brazier, character_id=c.id, brazier_id=RUINS_BRAZIER)
+                components.append(("brazier", RUINS_BRAZIER, 1, {}))
+            else:
+                for unlock_id in ("dungeon.tdo.galerias_vigia", "known_path.tdo.galerias_vigia"):
+                    await self._ensure(s, Unlock, character_id=c.id, unlock_id=unlock_id)
+                    components.append(("unlock", unlock_id, 1, {}))
+            lines.append(f"✨ XP · {xp}")
+            consolidate = True
+        elif result_id in {
+            "explore.tdo.ruinas.estruturas_guarda",
+            "explore.tdo.ruinas.ocupacao_posterior",
+        }:
+            xp = _fixed_percent_xp(9, "0.025")
+            c.xp += xp
+            codex_id = "codex.history.antigos_asterianos"
+            fragment_id = (
+                "codex.fragment.ruinas.estruturas_guarda"
+                if result_id.endswith("estruturas_guarda")
+                else "codex.fragment.ruinas.ocupacao_posterior"
+            )
+            await self._ensure(s, CodexEntry, character_id=c.id, entry_id=codex_id)
+            await self._ensure(s, CodexFragment, character_id=c.id, entry_id=codex_id, fragment_id=fragment_id)
+            components.extend((("xp", None, xp, {"reference_level": 9, "fixed_percent": "0.025"}), ("codex", codex_id, 1, {})))
+            lines.append(f"✨ XP · {xp}")
+            consolidate = True
+
+        for kind, item_id, quantity, payload in components:
+            s.add(RewardComponent(reward_event_id=event.id, kind=kind, item_id=item_id, quantity=quantity, payload=payload))
+        attempt.progress = {**(attempt.progress or {}), "receipt_text": "\n\n".join(lines), "settled": True}
+        attempt.completed_at = attempt.completed_at or datetime.now(UTC)
+        if consolidate:
+            await consolidate_character_level(s, c)
+
     async def _bestiary(
         self,
         s,
@@ -2002,6 +2174,27 @@ class RoadService:
             )
         )
 
+    async def _p4_completed(self, s, character_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Quest).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == P4_QUEST_ID,
+                    Quest.status == "completed",
+                )
+            )
+        )
+
+    async def _has_location(self, s, character_id, location_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(LocationDiscovery.id).where(
+                    LocationDiscovery.character_id == character_id,
+                    LocationDiscovery.location_id == location_id,
+                )
+            )
+        )
+
     async def _available_local_profile(self, s, c, world, activity_kind: str):
         profile = hunt_profile_for_location(world.location) if world is not None else None
         if profile is None:
@@ -2013,6 +2206,11 @@ class RoadService:
             return None
         elif profile.local_id == BOSQUE_LOCATION and not await self._p3_completed(s, c.id):
             return None
+        elif profile.local_id == RUINS_LOCATION:
+            if c.level < 8 or not await self._p4_completed(s, c.id):
+                return None
+            if not await self._has_location(s, c.id, RUINS_LOCATION):
+                return None
         unlock_id = profile.hunt_unlock if activity_kind == "hunt" else profile.explore_unlock
         if not await s.scalar(
             select(Unlock).where(
@@ -2028,9 +2226,9 @@ class RoadService:
         return await self._recover_normal_pve_defeat(s, c, local_id, world)
 
     async def _recover_normal_pve_defeat(self, s, c, local_id, world=None):
-        """Apply the regional destination rule for normal Charneca/Bosque PvE defeats."""
+        """Apply the regional destination rule for normal open-world PvE defeats."""
         c.hp = c.max_hp
-        if local_id not in {CHARNECA_LOCATION, BOSQUE_LOCATION}:
+        if local_id not in {CHARNECA_LOCATION, BOSQUE_LOCATION, RUINS_LOCATION}:
             return None, None
         if world is None:
             world = await s.scalar(
@@ -2038,7 +2236,33 @@ class RoadService:
                 .where(WorldState.character_id == c.id)
                 .with_for_update()
             )
-        if local_id == BOSQUE_LOCATION:
+        if local_id == RUINS_LOCATION:
+            poente = await s.scalar(
+                select(Brazier).where(
+                    Brazier.character_id == c.id,
+                    Brazier.brazier_id == RUINS_BRAZIER,
+                )
+            )
+            galhos = await s.scalar(
+                select(Brazier).where(
+                    Brazier.character_id == c.id,
+                    Brazier.brazier_id == BOSQUE_BRAZIER,
+                )
+            )
+            vento = await s.scalar(
+                select(Brazier).where(
+                    Brazier.character_id == c.id,
+                    Brazier.brazier_id == CHARNECA_BRAZIER,
+                )
+            )
+            brazier_id = (
+                RUINS_BRAZIER if poente is not None
+                else BOSQUE_BRAZIER if galhos is not None
+                else CHARNECA_BRAZIER if vento is not None
+                else BRAZIER_FOR_LOCATION[REFUGE]
+            )
+            recovery_location = BRAZIER_DETAILS[brazier_id][0]
+        elif local_id == BOSQUE_LOCATION:
             galhos = await s.scalar(
                 select(Brazier).where(
                     Brazier.character_id == c.id,
@@ -2072,7 +2296,7 @@ class RoadService:
         return BRAZIER_DETAILS[brazier_id][1], recovery_location
 
     async def _record_charneca_habitat(self, s, character_id, creature_id, profile):
-        if profile.local_id not in {CHARNECA_LOCATION, BOSQUE_LOCATION}:
+        if profile.local_id not in {CHARNECA_LOCATION, BOSQUE_LOCATION, RUINS_LOCATION}:
             return False
         entry = await s.scalar(
             select(BestiaryEntry)
@@ -2161,11 +2385,11 @@ class RoadService:
                 select(HuntContext).where(HuntContext.game_activity_id == activity.id)
             )
         recovery_brazier = recovery_location = None
-        if context is not None and context.local_id in {CHARNECA_LOCATION, BOSQUE_LOCATION}:
+        if context is not None and context.local_id in {CHARNECA_LOCATION, BOSQUE_LOCATION, RUINS_LOCATION}:
             world = await s.scalar(
                 select(WorldState).where(WorldState.character_id == c.id)
             )
-            if world is not None and world.location in {REFUGE, CHARNECA, BOSQUE}:
+            if world is not None and world.location in {REFUGE, CHARNECA, BOSQUE, RUINS}:
                 recovery_location = world.location
                 brazier_id = BRAZIER_FOR_LOCATION[world.location]
                 recovery_brazier = BRAZIER_DETAILS[brazier_id][1]
@@ -2183,6 +2407,7 @@ class RoadService:
                 and (
                     (context.local_id == CHARNECA_LOCATION and recovery_location == REFUGE)
                     or (context.local_id == BOSQUE_LOCATION and recovery_location == CHARNECA)
+                    or (context.local_id == RUINS_LOCATION and recovery_location in {BOSQUE, CHARNECA, REFUGE})
                 )
             ),
         )
@@ -2369,7 +2594,14 @@ class RoadService:
                 Quest.status == "active",
             )
         )
-        if active_p3:
+        active_p4 = await s.scalar(
+            select(Quest.id).where(
+                Quest.character_id == c.id,
+                Quest.quest_id == P4_QUEST_ID,
+                Quest.status == "active",
+            )
+        )
+        if active_p3 or active_p4:
             brazier_id = None
             brazier_label = None
             brazier_destinations = ()
@@ -2388,6 +2620,15 @@ class RoadService:
                 Unlock.unlock_id == BOSQUE_ROUTE_UNLOCK,
             ))
         )
+        ruins_route_known = bool(
+            c.level >= 8
+            and await self._p4_completed(s, c.id)
+            and await self._has_location(s, c.id, RUINS_LOCATION)
+            and await s.scalar(select(Unlock.id).where(
+                Unlock.character_id == c.id,
+                Unlock.unlock_id == RUINS_ROUTE_UNLOCK,
+            ))
+        )
         if not active_p3:
             if world.location == REFUGE and charneca_route_known:
                 route_destinations.append(CHARNECA)
@@ -2398,12 +2639,17 @@ class RoadService:
                     route_destinations.append(BOSQUE)
             elif world.location == BOSQUE and bosque_route_known:
                 route_destinations.append(CHARNECA)
+                if ruins_route_known and not active_p4:
+                    route_destinations.append(RUINS)
+            elif world.location == RUINS and ruins_route_known and not active_p4:
+                route_destinations.append(BOSQUE)
         route_available = bool(route_destinations)
         return RoadView(
             (
                 "road" if world.location == ROAD
                 else "charneca" if world.location == CHARNECA
                 else "bosque" if world.location == BOSQUE
+                else "ruinas" if world.location == RUINS
                 else "refuge"
             ),
             c.id,
@@ -2830,6 +3076,10 @@ class RoadService:
             route_available=(
                 attempt.local_id == CHARNECA_LOCATION
                 and (attempt.progress or {}).get("recovery_location") == REFUGE
+                or attempt.local_id == BOSQUE_LOCATION
+                and (attempt.progress or {}).get("recovery_location") == CHARNECA
+                or attempt.local_id == RUINS_LOCATION
+                and (attempt.progress or {}).get("recovery_location") in {BOSQUE, CHARNECA, REFUGE}
             ),
         )
 

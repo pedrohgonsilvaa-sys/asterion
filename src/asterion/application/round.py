@@ -15,11 +15,13 @@ from asterion.application.equipment_configuration import (
     reconcile_character_hp,
 )
 from asterion.application.road import (
+    BOSQUE,
     CHARNECA,
     HUNT_CONTENT,
     MATERIAL_LABELS,
     REFUGE,
     ROAD,
+    RUINS,
     VARIANT_LABELS,
     RoadService,
     RoadView,
@@ -42,6 +44,7 @@ from asterion.domain.road import (
     BOSQUE_LOCATION,
     CHARNECA_LOCATION,
     ROAD_LOCATION,
+    RUINS_LOCATION,
     RULESET,
     create_road_combat,
     creature_for,
@@ -142,6 +145,11 @@ class RoundService(RoadService):
             return None
         elif profile.local_id == BOSQUE_LOCATION and not await self._p3_completed(s, c.id):
             return None
+        elif profile.local_id == RUINS_LOCATION:
+            if c.level < 8 or not await self._p4_completed(s, c.id):
+                return None
+            if not await self._has_location(s, c.id, RUINS_LOCATION):
+                return None
         return profile
 
     async def _inventory_slots(self, s, character_id):
@@ -532,7 +540,7 @@ class RoundService(RoadService):
             blocking = await super()._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
-            if world.location in {REFUGE, CHARNECA, "Bosque Calcinado"}:
+            if world.location in {REFUGE, CHARNECA, BOSQUE, RUINS}:
                 return await self._view_for_world(s, c, world)
             location = world.location
             return RoadView(
@@ -1248,8 +1256,21 @@ class RoundService(RoadService):
         recovery_location = (state.config_snapshot or {}).get("recovery_location")
         route_available = bool(
             recovery_brazier is not None
-            and recovery_location == REFUGE
-            and (state.config_snapshot or {}).get("local_id") == CHARNECA_LOCATION
+            and (
+                (
+                    (state.config_snapshot or {}).get("local_id") == CHARNECA_LOCATION
+                    and recovery_location == REFUGE
+                )
+                or (
+                    (state.config_snapshot or {}).get("local_id") == BOSQUE_LOCATION
+                    and recovery_location == "Charneca da Fuligem"
+                )
+                or (
+                    (state.config_snapshot or {}).get("local_id") == RUINS_LOCATION
+                    and recovery_location
+                    in {"Bosque Calcinado", "Charneca da Fuligem", REFUGE}
+                )
+            )
         )
         flavor = None
         creature_name = None

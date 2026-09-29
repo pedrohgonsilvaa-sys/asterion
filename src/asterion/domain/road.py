@@ -23,9 +23,11 @@ RULESET = CURRENT_COMBAT_RULESET
 ROAD_LOCATION = "tdo.location.estrada_das_cinzas"
 CHARNECA_LOCATION = "tdo.location.charneca_da_fuligem"
 BOSQUE_LOCATION = "tdo.location.bosque_calcinado"
+RUINS_LOCATION = "tdo.location.ruinas_do_vigia"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
 BOSQUE_BRAZIER = "tdo.brazier.galhos_mortos"
+RUINS_BRAZIER = "tdo.brazier.poente"
 HUNT_UNLOCK = "hunt_manual.estrada_das_cinzas"
 EXPLORE_UNLOCK = "explore.estrada_das_cinzas"
 ROUND_FAMILIARITY = "hunt_round.estrada_das_cinzas"
@@ -37,6 +39,10 @@ BOSQUE_HUNT_UNLOCK = "hunt_manual.bosque_calcinado"
 BOSQUE_EXPLORE_UNLOCK = "explore.bosque_calcinado"
 BOSQUE_ROUND_FAMILIARITY = "hunt_round.bosque_calcinado"
 BOSQUE_ROUTE_UNLOCK = "route.tdo.charneca_bosque"
+RUINS_HUNT_UNLOCK = "hunt_manual.ruinas_do_vigia"
+RUINS_EXPLORE_UNLOCK = "explore.ruinas_do_vigia"
+RUINS_ROUND_FAMILIARITY = "hunt_round.ruinas_do_vigia"
+RUINS_ROUTE_UNLOCK = "route.tdo.bosque_ruinas"
 EXPLORATION_CATEGORY_WEIGHTS = {
     "great_discovery": 8,
     "knowledge": 22,
@@ -241,6 +247,38 @@ WIDOW = Creature(
 
 CREATURE_CATALOG = (*CREATURES, SPIDER, CERVO, GHOUL, MOTH, WIDOW)
 
+VIGIA = Creature(
+    "vigia_rachado", "Vigia Rachado", "common", "armored", 7, 10, 0,
+    ("golpe_pedra",),
+    (
+        ("golpe_pedra", "Golpe de Pedra", D("1.00"), 0, D(0), 0),
+        ("guarda_rachada", "Guarda Rachada", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.70"), 2),
+    ),
+    ai_priority=("guarda_rachada",),
+)
+FACELESS_CUSTODIAN = Creature(
+    "custodio_sem_rosto", "Custódio Sem Rosto", "uncommon", "controller", 8, 10, 0,
+    ("marca_peso", "protecao_antiga", "impacto", "defend"),
+    (
+        ("marca_peso", "Marca do Peso", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "agility"),
+        ("protecao_antiga", "Proteção Antiga", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.80"), 2),
+        ("impacto", "Impacto", D("1.20"), 0, D(0), 0, None, 0, False, 3),
+    ),
+    ai_priority=("protecao_antiga", "marca_peso", "impacto"),
+)
+SUNSET_CUSTODIAN = Creature(
+    "custodio_poente", "Custódio do Poente", "elite", "armored", 9, 10, 0,
+    ("golpe_custodio",),
+    (
+        ("golpe_custodio", "Golpe do Custódio", D("1.00"), 0, D(0), 0),
+        ("guarda_poente", "Guarda do Poente", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.90"), 2, True),
+        ("marca_poente", "Marca do Poente", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+        ("queda_poente", "Queda do Poente", D("1.70"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("marca_poente", "guarda_poente", "queda_poente"),
+)
+CREATURE_CATALOG = (*CREATURE_CATALOG, VIGIA, FACELESS_CUSTODIAN, SUNSET_CUSTODIAN)
+
 VARIANTS = {
     "furious": StatMultipliers(D(1), D("1.08"), D("0.92"), D(1)),
     "resistant": StatMultipliers(D(1), D("0.94"), D("1.10"), D(1)),
@@ -258,6 +296,9 @@ VARIANT_POOL = {
     "carnical_fuligem": ("hemorrhagic", "resistant"),
     "mariposa_brasa": ("agile", "furious"),
     "viuva_fuligem": (),
+    "vigia_rachado": ("resistant", "furious"),
+    "custodio_sem_rosto": ("resistant", "agile"),
+    "custodio_poente": (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -385,6 +426,7 @@ LOCATION_LEVEL_BANDS = {
     "Estrada das Cinzas": (1, 10),
     "Charneca da Fuligem": (3, 5),
     "Bosque Calcinado": (5, 8),
+    "Ruínas do Vigia": (8, 10),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -417,6 +459,16 @@ BOSQUE_PROFILE = HuntLocationProfile(
     hunt_unlock=BOSQUE_HUNT_UNLOCK,
     round_familiarity=BOSQUE_ROUND_FAMILIARITY,
     explore_unlock=BOSQUE_EXPLORE_UNLOCK,
+)
+
+RUINS_PROFILE = HuntLocationProfile(
+    local_id=RUINS_LOCATION,
+    label="Ruínas do Vigia",
+    creature_weights=(("carnical_fuligem", 25), ("vigia_rachado", 32), ("mariposa_brasa", 20), ("custodio_sem_rosto", 20), ("custodio_poente", 3)),
+    variant_chance=15,
+    hunt_unlock=RUINS_HUNT_UNLOCK,
+    round_familiarity=RUINS_ROUND_FAMILIARITY,
+    explore_unlock=RUINS_EXPLORE_UNLOCK,
 )
 
 
@@ -509,16 +561,43 @@ BOSQUE_EXPLORATION_PROFILE = ExplorationLocationProfile(
     ),
 )
 
+RUINS_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=RUINS_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("braseiro_poente", "great_discovery", "explore.tdo.ruinas.braseiro", 50, "Braseiro do Poente encontrado.", unique=True),
+        ExplorationResultDefinition("galerias_vigia", "great_discovery", "explore.tdo.ruinas.galerias", 50, "A entrada das Galerias do Vigia foi descoberta.", min_level=8, unique=True),
+        ExplorationResultDefinition("estruturas_guarda", "knowledge", "explore.tdo.ruinas.estruturas_guarda", 40, "Estruturas de guarda foram registradas.", unique=True),
+        ExplorationResultDefinition("ocupacao_posterior", "knowledge", "explore.tdo.ruinas.ocupacao_posterior", 40, "Sinais de ocupação posterior foram encontrados.", unique=True),
+        ExplorationResultDefinition("marcas_patrulha", "knowledge", "explore.tdo.ruinas.marcas_patrulha", 20, "Marcas de patrulha foram observadas."),
+        ExplorationResultDefinition("passos_ninguem", "narrative", "explore.tdo.ruinas.passos_ninguem", 50, "Passos onde Ninguém Passa."),
+        ExplorationResultDefinition("pedra_vigilia", "narrative", "explore.tdo.ruinas.pedra_vigilia", 50, "Pedra ainda em Vigília."),
+        ExplorationResultDefinition("vigia_rachado", "combat", "explore.tdo.ruinas.combat.vigia_rachado", 35, "Um Vigia Rachado bloqueia o caminho.", creature_id="vigia_rachado"),
+        ExplorationResultDefinition("custodio_sem_rosto", "combat", "explore.tdo.ruinas.combat.custodio_sem_rosto", 30, "Um Custódio Sem Rosto se aproxima.", creature_id="custodio_sem_rosto"),
+        ExplorationResultDefinition("carnical_fuligem", "combat", "explore.tdo.ruinas.combat.carnical_fuligem", 20, "Um Carniçal de Fuligem surge nas Ruínas.", creature_id="carnical_fuligem"),
+        ExplorationResultDefinition("mariposa_brasa", "combat", "explore.tdo.ruinas.combat.mariposa_brasa", 15, "Uma Mariposa de Brasa cruza as Ruínas.", min_level=8, creature_id="mariposa_brasa"),
+        ExplorationResultDefinition("ferro", "resource", "explore.tdo.ruinas.ferro", 45, "Ferro de Fuligem pode ser recolhido nas Ruínas."),
+        ExplorationResultDefinition("residuo", "resource", "explore.tdo.ruinas.residuo", 35, "Resíduo do Ocaso pode ser recolhido nas Ruínas."),
+        ExplorationResultDefinition("erva", "resource", "explore.tdo.ruinas.erva", 10, "Erva Cinzenta pode ser recolhida nas Ruínas."),
+        ExplorationResultDefinition("couro", "resource", "explore.tdo.ruinas.couro", 10, "Couro Escoriado pode ser recolhido nas Ruínas."),
+        ExplorationResultDefinition("porta_fechada", "atmospheric", "explore.tdo.ruinas.porta_nao_abre", 34, "Uma porta não se abre."),
+        ExplorationResultDefinition("estatua", "atmospheric", "explore.tdo.ruinas.estatua_sem_rosto", 33, "Uma estátua sem rosto permanece entre as pedras."),
+        ExplorationResultDefinition("eco_pedra", "atmospheric", "explore.tdo.ruinas.eco_sob_pedra", 33, "Um eco ressoa sob a pedra."),
+    ),
+)
+
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
     CHARNECA_LOCATION: CHARNECA_EXPLORATION_PROFILE,
     BOSQUE_LOCATION: BOSQUE_EXPLORATION_PROFILE,
+    RUINS_LOCATION: RUINS_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
     ROAD_LOCATION: ROAD_PROFILE,
     CHARNECA_LOCATION: CHARNECA_PROFILE,
     BOSQUE_LOCATION: BOSQUE_PROFILE,
+    RUINS_LOCATION: RUINS_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -705,6 +784,9 @@ MATERIAL_POOLS = {
         ("material.tdo.erva_cinzenta", 50),
         ("material.tdo.residuo_ocaso", 50),
     ),
+    "vigia_rachado": (("material.tdo.ferro_de_fuligem", 50), ("material.tdo.residuo_ocaso", 50)),
+    "custodio_sem_rosto": (("material.tdo.ferro_de_fuligem", 50), ("material.tdo.residuo_ocaso", 50)),
+    "custodio_poente": (("material.tdo.ferro_de_fuligem", 50), ("material.tdo.residuo_ocaso", 50)),
 }
 
 
@@ -790,6 +872,9 @@ def create_creature_combat(
         canonical_cooldown = specification[9] if len(specification) > 9 else None
         effect_stat = specification[10] if len(specification) > 10 else None
         poison_per_bonus = specification[11] if len(specification) > 11 else D(0)
+        self_barrier_coefficient = specification[12] if len(specification) > 12 else D(0)
+        self_barrier_duration = specification[13] if len(specification) > 13 else 0
+        skip_if_barrier_active = specification[14] if len(specification) > 14 else False
         actions[key] = Action(
             key,
             label,
@@ -803,6 +888,9 @@ def create_creature_combat(
             canonical_cooldown,
             effect_stat,
             poison_per_bonus,
+            self_barrier_coefficient,
+            self_barrier_duration,
+            skip_if_barrier_active,
         )
     return start_combat(
         Combat(
