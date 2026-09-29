@@ -74,6 +74,26 @@ class P3CombatCallback(CallbackData, prefix="p3fight"):
         return UUID(hex=self.activity)
 
 
+class S3CombatCallback(CallbackData, prefix="s3fight"):
+    activity: str
+    version: int
+    action: str
+
+    @property
+    def activity_id(self) -> UUID:
+        return UUID(hex=self.activity)
+
+
+class P4CombatCallback(CallbackData, prefix="p4fight"):
+    activity: str
+    version: int
+    action: str
+
+    @property
+    def activity_id(self) -> UUID:
+        return UUID(hex=self.activity)
+
+
 _CONSUMABLE_CALLBACK_KEYS = {
     "consumable.heal": "H",
     "consumable.purification": "P",
@@ -487,6 +507,12 @@ def event_line(state: Combat, event: CombatEvent) -> str:
         return _consumable_event_line(state, event, actor_name)
     actions = state.player_actions if event.actor == "player" else state.enemy_actions
     action = actions[event.action]
+    if event.barrier_value:
+        return (
+            f"🛡️ <b>{actor_name}</b> ergue <b>{escape(action.name)}</b>. "
+            f"Barreira · <code>{number(event.barrier_value)}</code> · "
+            f"<code>{action.self_barrier_duration}T</code>."
+        )
     label = action.name.split(" ", 1)[-1] if event.actor == "player" else action.name
     target = state.fighters["enemy" if event.actor == "player" else "player"]
     emoji = (
@@ -512,8 +538,11 @@ def event_line(state: Combat, event: CombatEvent) -> str:
         line += f" Cura <code>{number(event.healed)}</code>."
     if event.effect_id:
         effect = actions[event.action]
+        stat_label = {"attack": "ATQ", "defense": "DEF", "agility": "AGI"}.get(
+            effect.effect_stat or "attack", effect.effect_stat or "ATQ"
+        )
         line += (
-            f" Reduz ATQ em <code>{number(effect.attack_debuff * 100)}%</code> por "
+            f" Reduz {stat_label} em <code>{number(effect.attack_debuff * 100)}%</code> por "
             f"<code>{effect.duration}T</code>."
         )
     if event.barrier_absorbed:
@@ -599,6 +628,11 @@ def render_combat(view: CombatView) -> Screen:
         "",
     ]
     status_lines = []
+    if enemy.barrier > 0 and enemy.barrier_remaining > 0:
+        status_lines.append(
+            f"🛡️ Barreira de {escape(enemy.name)} · <code>{number(enemy.barrier)}</code> · "
+            f"<code>{enemy.barrier_remaining}T</code>"
+        )
     if player.barrier > 0 and player.barrier_remaining > 0:
         status_lines.append(
             f"🔰 Barreira · <code>{number(player.barrier)}</code> · "
@@ -651,6 +685,10 @@ def render_combat(view: CombatView) -> Screen:
                     if view.context == "s2"
                     else P3CombatCallback
                     if view.context == "p3"
+                    else S3CombatCallback
+                    if view.context == "s3"
+                    else P4CombatCallback
+                    if view.context == "p4"
                     else CombatCallback
                 )(
                     activity=view.activity_id.hex,

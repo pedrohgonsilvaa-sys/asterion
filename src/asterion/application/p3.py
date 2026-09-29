@@ -72,6 +72,9 @@ P3_ROUTE_UNLOCK = BOSQUE_ROUTE_UNLOCK
 P3_CODEX_OLD_ASTERIANS = "codex.history.antigos_asterianos"
 P3_CODEX_FRAGMENT = "p3.bosque.fragmento_entalhado"
 P3_MARKS_FRAGMENT = "p3.bosque.associacao_arquitetonica"
+S3_ID = "S3"
+CHARNECA_LOCATION = "tdo.location.charneca_da_fuligem"
+CHARNECA_ROUTE_UNLOCK = "route.tdo.refugio_charneca"
 
 P3_REWARD_CHOICES = {
     "veil": ("Véu do Bosque", "Cabeça"),
@@ -225,6 +228,36 @@ class P3Service:
             world.location = destination
             quest.state_version += 1
             return await self._view(session, character, quest, world)
+
+    async def s3_campaign_route(self, actor: int, s3_version: int, destination: str) -> bool:
+        """Move one adjacent step on the existing campaign route for an active S3 retry."""
+        async with self.sessions.begin() as session:
+            character, p3, world = await self._locked_state(session, actor)
+            if character is None or p3 is None or world is None:
+                return False
+            s3 = await session.scalar(
+                select(Quest)
+                .where(Quest.character_id == character.id, Quest.quest_id == S3_ID)
+                .with_for_update()
+            )
+            if (
+                p3.status != "active" or s3 is None or s3.status != "active"
+                or s3.content_version != "tdo-1.0.11"
+                or s3.state_version != s3_version
+                or await self._foreground(session, character.id)
+            ):
+                return False
+            allowed = False
+            if {world.location, destination} == {REFUGE, CHARNECA}:
+                allowed = await self._has_unlock(session, character.id, CHARNECA_ROUTE_UNLOCK)
+            elif {world.location, destination} == {CHARNECA, BOSQUE}:
+                allowed = await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK)
+            if not allowed:
+                return False
+            world.region = REGION
+            world.location = destination
+            s3.state_version += 1
+            return True
 
     async def enter_bosque(self, actor: int, version: int) -> P3View | None:
         async with self.sessions.begin() as session:
