@@ -228,4 +228,3 @@ async def test_p4_combat_callback_menu_and_start_reconnect_same_activity(databas
         resumed.combat_id,
         resumed.activity_state_version,
     ) == expected
-
