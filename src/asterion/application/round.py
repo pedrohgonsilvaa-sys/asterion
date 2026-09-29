@@ -39,6 +39,7 @@ from asterion.domain.equipment_stats import (
     equipment_configuration_from_data,
 )
 from asterion.domain.road import (
+    BOSQUE_LOCATION,
     CHARNECA_LOCATION,
     ROAD_LOCATION,
     RULESET,
@@ -137,7 +138,9 @@ class RoundService(RoadService):
         if profile.local_id == ROAD_LOCATION:
             if not await self._p1_completed(s, c.id):
                 return None
-        elif not await self._p2_completed(s, c.id):
+        elif profile.local_id == CHARNECA_LOCATION and not await self._p2_completed(s, c.id):
+            return None
+        elif profile.local_id == BOSQUE_LOCATION and not await self._p3_completed(s, c.id):
             return None
         return profile
 
@@ -529,7 +532,7 @@ class RoundService(RoadService):
             blocking = await super()._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
-            if world.location in {REFUGE, CHARNECA}:
+            if world.location in {REFUGE, CHARNECA, "Bosque Calcinado"}:
                 return await self._view_for_world(s, c, world)
             location = world.location
             return RoadView(
@@ -691,6 +694,9 @@ class RoundService(RoadService):
             grant_observation_xp=True,
             observation_level=enemy_level,
             observation_category=creature.category,
+        )
+        await self._record_charneca_habitat(
+            s, c.id, creature.creature_id, profile
         )
         if creature.category == "elite":
             encounter.status = "interrupted"

@@ -22,8 +22,10 @@ D = Decimal
 RULESET = CURRENT_COMBAT_RULESET
 ROAD_LOCATION = "tdo.location.estrada_das_cinzas"
 CHARNECA_LOCATION = "tdo.location.charneca_da_fuligem"
+BOSQUE_LOCATION = "tdo.location.bosque_calcinado"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
+BOSQUE_BRAZIER = "tdo.brazier.galhos_mortos"
 HUNT_UNLOCK = "hunt_manual.estrada_das_cinzas"
 EXPLORE_UNLOCK = "explore.estrada_das_cinzas"
 ROUND_FAMILIARITY = "hunt_round.estrada_das_cinzas"
@@ -31,6 +33,10 @@ CHARNECA_HUNT_UNLOCK = "hunt_manual.charneca_da_fuligem"
 CHARNECA_EXPLORE_UNLOCK = "explore.charneca_da_fuligem"
 CHARNECA_ROUND_FAMILIARITY = "hunt_round.charneca_da_fuligem"
 CHARNECA_ROUTE_UNLOCK = "route.tdo.refugio_charneca"
+BOSQUE_HUNT_UNLOCK = "hunt_manual.bosque_calcinado"
+BOSQUE_EXPLORE_UNLOCK = "explore.bosque_calcinado"
+BOSQUE_ROUND_FAMILIARITY = "hunt_round.bosque_calcinado"
+BOSQUE_ROUTE_UNLOCK = "route.tdo.charneca_bosque"
 EXPLORATION_CATEGORY_WEIGHTS = {
     "great_discovery": 8,
     "knowledge": 22,
@@ -185,7 +191,55 @@ SPIDER = Creature(
     ai_priority=("toxic_bite", "bite"),
     damage_taken_modifiers=(("burn", D("1.10")), ("poison", D("0.90"))),
 )
-CREATURE_CATALOG = (*CREATURES, SPIDER, CERVO)
+GHOUL = Creature(
+    "carnical_fuligem",
+    "Carniçal de Fuligem",
+    "common",
+    "brute",
+    5,
+    8,
+    0,
+    ("rend", "charge", "rend", "defend"),
+    (
+        ("rend", "Dilacerar", D("0.90"), 0, D(0), 0, "bleed", 1, False, 2),
+        ("charge", "Arrancada", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+    ),
+    damage_taken_modifiers=(("burn", D("1.10")), ("bleed", D("0.90"))),
+)
+
+MOTH = Creature(
+    "mariposa_brasa",
+    "Mariposa de Brasa",
+    "uncommon",
+    "caster",
+    6,
+    9,
+    0,
+    ("incandescent_touch", "ash_flash", "incandescent_touch", "defend"),
+    (
+        ("incandescent_touch", "Toque Incandescente", D("0.80"), 0, D(0), 0, "burn", 1, False, 2),
+        ("ash_flash", "Clarão de Cinzas", D("1.20"), 0, D(0), 0, None, 0, False, 3),
+    ),
+    damage_taken_modifiers=(("burn", D("0.90")),),
+)
+
+WIDOW = Creature(
+    "viuva_fuligem",
+    "Viúva da Fuligem",
+    "elite",
+    "controller",
+    6,
+    7,
+    0,
+    ("widow_sting", "soot_web", "widow_pounce", "widow_sting", "defend"),
+    (
+        ("widow_sting", "Picada da Viúva", D("0.80"), 0, D(0), 0, "poison", 1, False, 2),
+        ("soot_web", "Teia de Fuligem", D("0.75"), 0, D(0), 2, None, 0, False, 3, "agility"),
+        ("widow_pounce", "Bote da Viúva", D("1.30"), 0, D(0), 0, None, 0, False, 3, None, D(10)),
+    ),
+)
+
+CREATURE_CATALOG = (*CREATURES, SPIDER, CERVO, GHOUL, MOTH, WIDOW)
 
 VARIANTS = {
     "furious": StatMultipliers(D(1), D("1.08"), D("0.92"), D(1)),
@@ -201,6 +255,9 @@ VARIANT_POOL = {
     "alfa_cinereo": (),
     "aranha_cinza": ("venomous", "agile"),
     "cervo_escoriado": ("furious", "resistant"),
+    "carnical_fuligem": ("hemorrhagic", "resistant"),
+    "mariposa_brasa": ("agile", "furious"),
+    "viuva_fuligem": (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -223,12 +280,33 @@ RARITY_MULT = {"Comum": D("1"), "Raro": D("1.07"), "Épico": D("1.15"), "Lendár
 def _stable_draw(seed: str, purpose: str, modulo: int) -> int:
     return int.from_bytes(sha256(f"{seed}:{purpose}".encode()).digest(), "big") % modulo
 
-def materialize_equipment(seed: str, rarity: str, level: int) -> dict:
+def materialize_equipment(
+    seed: str,
+    rarity: str,
+    level: int,
+    *,
+    forced_name: str | None = None,
+    forced_slot: str | None = None,
+    bound: bool = False,
+) -> dict:
     eligible = tuple((name, slot) for name, slot in EQUIPMENT_CATALOG if not (rarity == "Mítico" and slot == "Torso"))
-    groups = tuple(sorted({"Principal" if slot == "2H" else slot for _, slot in eligible}))
-    group = groups[_stable_draw(seed, "equipment.group", len(groups))]
-    templates = tuple(item for item in eligible if item[1] == group or (group == "Principal" and item[1] == "2H"))
-    name, slot = templates[_stable_draw(seed, "equipment.template", len(templates))]
+    if forced_slot is not None:
+        if forced_slot not in {slot for _, slot in eligible}:
+            raise ValueError(f"unknown forced equipment slot {forced_slot!r}")
+        slot = forced_slot
+        if forced_name is None:
+            templates = tuple(item for item in eligible if item[1] == slot)
+            name = templates[_stable_draw(seed, "equipment.template", len(templates))][0]
+        else:
+            name = forced_name
+    else:
+        groups = tuple(sorted({"Principal" if slot == "2H" else slot for _, slot in eligible}))
+        group = groups[_stable_draw(seed, "equipment.group", len(groups))]
+        templates = tuple(item for item in eligible if item[1] == group or (group == "Principal" and item[1] == "2H"))
+        if forced_name is None:
+            name, slot = templates[_stable_draw(seed, "equipment.template", len(templates))]
+        else:
+            name, slot = forced_name, templates[0][1]
     count = RARITY_SECONDARIES[rarity]
     pools = {"Principal": ("ATQ", "AGI", "PER", "CRIT"), "2H": ("ATQ", "AGI", "PER", "CRIT"), "Secundária": ("ATQ", "DEF", "PER", "CRIT", "Bloqueio"), "Cabeça": ("HP", "DEF", "PER", "CRIT"), "Torso": ("HP", "DEF", "Bloqueio"), "Mãos": ("ATQ", "AGI", "PER", "CRIT"), "Pés": ("HP", "DEF", "AGI", "Esquiva"), "Acessório": ("HP", "ATQ", "AGI", "PER", "CRIT", "Esquiva"), "Artefato": ("HP", "ATQ", "DEF", "PER", "CRIT", "Bloqueio")}
     pool = list(pools[slot])
@@ -252,7 +330,7 @@ def materialize_equipment(seed: str, rarity: str, level: int) -> dict:
         else:
             value = raw.quantize(D(1), rounding=ROUND_HALF_UP)
         secondaries.append({"attribute": attribute, "value": str(value)})
-    return {"item_name": name, "slot": slot, "item_level": level, "rarity": rarity, "core": core, "secondaries": secondaries, "enhancement": 0, "rune": None, "enchantment": None, "bound": False}
+    return {"item_name": name, "slot": slot, "item_level": level, "rarity": rarity, "core": core, "secondaries": secondaries, "enhancement": 0, "rune": None, "enchantment": None, "bound": bound}
 
 def rune_potency(family: str, rarity: str) -> str:
     stat = dict(RUNE_FAMILIES)[family]
@@ -303,6 +381,12 @@ ROAD_PROFILE = HuntLocationProfile(
     round_familiarity=ROUND_FAMILIARITY,
 )
 
+LOCATION_LEVEL_BANDS = {
+    "Estrada das Cinzas": (1, 10),
+    "Charneca da Fuligem": (3, 5),
+    "Bosque Calcinado": (5, 8),
+}
+
 CHARNECA_PROFILE = HuntLocationProfile(
     local_id=CHARNECA_LOCATION,
     label="Charneca da Fuligem",
@@ -316,6 +400,23 @@ CHARNECA_PROFILE = HuntLocationProfile(
     hunt_unlock=CHARNECA_HUNT_UNLOCK,
     round_familiarity=CHARNECA_ROUND_FAMILIARITY,
     explore_unlock=CHARNECA_EXPLORE_UNLOCK,
+)
+
+BOSQUE_LOCATION_LABEL = "Bosque Calcinado"
+BOSQUE_PROFILE = HuntLocationProfile(
+    local_id=BOSQUE_LOCATION,
+    label=BOSQUE_LOCATION_LABEL,
+    creature_weights=(
+        ("cervo_escoriado", 27),
+        ("carnical_fuligem", 30),
+        ("aranha_cinza", 20),
+        ("mariposa_brasa", 20),
+        ("viuva_fuligem", 3),
+    ),
+    variant_chance=12,
+    hunt_unlock=BOSQUE_HUNT_UNLOCK,
+    round_familiarity=BOSQUE_ROUND_FAMILIARITY,
+    explore_unlock=BOSQUE_EXPLORE_UNLOCK,
 )
 
 
@@ -385,14 +486,39 @@ CHARNECA_EXPLORATION_PROFILE = ExplorationLocationProfile(
     ),
 )
 
+BOSQUE_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=BOSQUE_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("braseiro", "great_discovery", "explore.tdo.bosque.braseiro", 50, "Braseiro dos Galhos Mortos encontrado.", min_level=6, unique=True),
+        ExplorationResultDefinition("estrutura_enterrada", "great_discovery", "explore.tdo.bosque.estrutura_enterrada", 50, "Uma estrutura enterrada foi encontrada sob as raízes.", min_level=6, unique=True),
+        ExplorationResultDefinition("caminho_ocidental", "knowledge", "explore.tdo.bosque.caminho_ocidental", 60, "O Caminho Ocidental foi reconhecido entre as árvores.", unique=True),
+        ExplorationResultDefinition("rastros_galhos", "knowledge", "explore.tdo.bosque.rastros_galhos", 40, "Rastros entre os galhos indicam a passagem de criaturas conhecidas."),
+        ExplorationResultDefinition("arvores_fumegam", "narrative", "explore.tdo.bosque.arvores_fumegam", 55, "Árvores que Ainda Fumegam."),
+        ExplorationResultDefinition("cinzas_raizes", "narrative", "explore.tdo.bosque.cinzas_raizes", 45, "Cinzas sob as Raízes."),
+        ExplorationResultDefinition("cervo_escoriado", "combat", "explore.tdo.bosque.combat.cervo_escoriado", 25, "Um Cervo Escoriado surge entre as raízes.", creature_id="cervo_escoriado"),
+        ExplorationResultDefinition("carnical_fuligem", "combat", "explore.tdo.bosque.combat.carnical_fuligem", 30, "Um Carniçal de Fuligem bloqueia o caminho.", creature_id="carnical_fuligem"),
+        ExplorationResultDefinition("aranha_cinza", "combat", "explore.tdo.bosque.combat.aranha_cinza", 20, "Uma Aranha de Cinza desce dos galhos.", creature_id="aranha_cinza"),
+        ExplorationResultDefinition("mariposa_brasa", "combat", "explore.tdo.bosque.combat.mariposa_brasa", 25, "Uma Mariposa de Brasa se aproxima.", min_level=6, creature_id="mariposa_brasa"),
+        ExplorationResultDefinition("couro", "resource", "explore.tdo.bosque.couro", 35, "Couro Escoriado pode ser recolhido no Bosque."),
+        ExplorationResultDefinition("erva", "resource", "explore.tdo.bosque.erva", 30, "Erva Cinzenta pode ser recolhida no Bosque."),
+        ExplorationResultDefinition("residuo", "resource", "explore.tdo.bosque.residuo", 35, "Resíduo do Ocaso pode ser recolhido no Bosque."),
+        ExplorationResultDefinition("troncos_ocos", "atmospheric", "explore.tdo.bosque.troncos_ocos", 34, "Troncos ocos atravessam a camada de cinza."),
+        ExplorationResultDefinition("brasa_casca", "atmospheric", "explore.tdo.bosque.brasa_casca", 33, "Uma brasa permanece sob a casca escurecida."),
+        ExplorationResultDefinition("som_galhos", "atmospheric", "explore.tdo.bosque.som_galhos", 33, "Um som distante atravessa os galhos."),
+    ),
+)
+
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
     CHARNECA_LOCATION: CHARNECA_EXPLORATION_PROFILE,
+    BOSQUE_LOCATION: BOSQUE_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
     ROAD_LOCATION: ROAD_PROFILE,
     CHARNECA_LOCATION: CHARNECA_PROFILE,
+    BOSQUE_LOCATION: BOSQUE_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -567,6 +693,18 @@ MATERIAL_POOLS = {
         ("material.tdo.residuo_ocaso", 50),
     ),
     "cervo_escoriado": (("material.tdo.couro_escoriado", 100),),
+    "carnical_fuligem": (
+        ("material.tdo.ferro_de_fuligem", 50),
+        ("material.tdo.residuo_ocaso", 50),
+    ),
+    "mariposa_brasa": (
+        ("material.tdo.erva_cinzenta", 50),
+        ("material.tdo.residuo_ocaso", 50),
+    ),
+    "viuva_fuligem": (
+        ("material.tdo.erva_cinzenta", 50),
+        ("material.tdo.residuo_ocaso", 50),
+    ),
 }
 
 
@@ -650,6 +788,8 @@ def create_creature_combat(
         native_dot_stacks = specification[7] if len(specification) > 7 else 0
         prepared = specification[8] if len(specification) > 8 else False
         canonical_cooldown = specification[9] if len(specification) > 9 else None
+        effect_stat = specification[10] if len(specification) > 10 else None
+        poison_per_bonus = specification[11] if len(specification) > 11 else D(0)
         actions[key] = Action(
             key,
             label,
@@ -661,6 +801,8 @@ def create_creature_combat(
             native_dot_stacks,
             prepared,
             canonical_cooldown,
+            effect_stat,
+            poison_per_bonus,
         )
     return start_combat(
         Combat(

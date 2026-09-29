@@ -81,6 +81,8 @@ class Action:
     # Explicit canonical cooldowns coexist with the legacy blocked-opportunity
     # encoding so existing combat snapshots keep their exact timing.
     cooldown: int | None = None
+    effect_stat: str | None = None
+    per_bonus_if_target_poisoned: Decimal = D(0)
 
 
 @dataclass
@@ -957,7 +959,15 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
         actor.level,
         critical=critical,
         mitigation=mitigation,
-        penetration=actor.stat("per") if current_ruleset else ZERO,
+        penetration=(actor.stat("per") if current_ruleset else ZERO)
+        + (
+            action.per_bonus_if_target_poisoned
+            if any(
+                dot.kind == "poison" and dot.stacks > 0 and dot.remaining > 0
+                for dot in state.dot_states.get(target.id, ())
+            )
+            else ZERO
+        ),
     )
     actual_damage, barrier_absorbed = _deal_damage(target, damage)
     healed = D(0)
@@ -976,7 +986,7 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
             target,
             Effect(
                 id=action.id,
-                stat="attack",
+                stat=action.effect_stat or "attack",
                 magnitude=action.attack_debuff,
                 remaining=action.duration,
                 applied_opportunity=target.opportunity,
