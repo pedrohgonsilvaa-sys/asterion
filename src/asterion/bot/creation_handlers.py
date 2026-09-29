@@ -11,16 +11,20 @@ from asterion.application.creation import CreationService
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import P2Service
 from asterion.application.p3 import P3Service
+from asterion.application.p4 import P4Service
 from asterion.application.prologue import PrologueService
 from asterion.application.road import RoadService
 from asterion.application.s2 import S2Service
+from asterion.application.s3 import S3Service
 from asterion.application.world import WorldService
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import CreationCallback, Screen, render
 from asterion.bot.p1_ui import render_p1
 from asterion.bot.p2_ui import render_p2
 from asterion.bot.p3_ui import render_p3
+from asterion.bot.p4_ui import render_p4
 from asterion.bot.s2_ui import render_s2
+from asterion.bot.s3_ui import render_s3
 from asterion.bot.world_ui import render_world
 
 
@@ -98,6 +102,8 @@ def creation_router(
     p2: P2Service | None = None,
     s2: S2Service | None = None,
     p3: P3Service | None = None,
+    s3: S3Service | None = None,
+    p4: P4Service | None = None,
 ) -> Router:
     router = Router(name="character_creation")
     router.message.filter(F.chat.type == "private")
@@ -107,6 +113,12 @@ def creation_router(
         p2_view = await p2.resume(actor) if p2 is not None else None
         if p2_view is not None and p2_view.status == "active" and p2_view.kind == "combat":
             return render_p2(p2_view)
+        p4_view = await p4.resume(actor) if p4 is not None else None
+        if p4_view is not None and p4_view.status == "active" and p4_view.kind == "combat":
+            return render_p4(p4_view)
+        s3_view = await s3.resume(actor) if s3 is not None else None
+        if s3_view is not None and s3_view.status == "active" and s3_view.kind == "combat":
+            return render_s3(s3_view)
         s2_view = await s2.resume(actor) if s2 is not None else None
         if s2_view is not None and s2_view.status == "active" and s2_view.kind == "combat":
             return render_s2(s2_view)
@@ -131,6 +143,10 @@ def creation_router(
                 return render_road(road_view)
         if p3_view is not None and p3_view.status == "active":
             return render_p3(p3_view)
+        if p4_view is not None and p4_view.status == "active":
+            return render_p4(p4_view)
+        if s3_view is not None and s3_view.status == "active":
+            return render_s3(s3_view)
         if s2_view is not None and s2_view.status == "active":
             return render_s2(s2_view)
         if road_view is not None:

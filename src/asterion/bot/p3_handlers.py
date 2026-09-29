@@ -5,11 +5,15 @@ from aiogram.types import CallbackQuery, Message
 
 from asterion.application.p3 import P3_FRAGMENTS, P3Service
 from asterion.application.road import CHARNECA, REFUGE
+from asterion.application.s3 import S3Service
 from asterion.bot.creation_handlers import present
 from asterion.bot.p3_ui import render_p3
+from asterion.bot.s3_ui import render_s3
 
 
-def p3_router(service: P3Service, images: dict[str, str]) -> Router:
+def p3_router(
+    service: P3Service, images: dict[str, str], *, s3: S3Service | None = None
+) -> Router:
     router = Router(name="p3")
     router.callback_query.filter(F.message.chat.type == "private")
 
@@ -27,6 +31,25 @@ def p3_router(service: P3Service, images: dict[str, str]) -> Router:
             view = await service.resume(actor)
             if view is None:
                 view = await service.oren(actor)
+        elif len(parts) == 4 and parts[1] == "s3route":
+            try:
+                s3_version = int(parts[2])
+            except ValueError:
+                s3_version = None
+            destination = {
+                "refuge": REFUGE,
+                "charneca": CHARNECA,
+                "bosque": "Bosque Calcinado",
+            }.get(parts[3])
+            if s3_version is not None and destination is not None:
+                await service.s3_campaign_route(actor, s3_version, destination)
+                s3_view = await s3.resume(actor) if s3 is not None else None
+                if s3_view is not None:
+                    await query.answer()
+                    if isinstance(query.message, Message):
+                        await present(query.message, render_s3(s3_view), images, edit=True)
+                    return
+                view = await service.resume(actor)
         elif len(parts) >= 3:
             try:
                 version = int(parts[1])

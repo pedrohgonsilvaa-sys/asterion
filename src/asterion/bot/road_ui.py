@@ -7,7 +7,7 @@ from html import escape
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
-from asterion.application.road import BOSQUE, CHARNECA, REFUGE, ROAD, RoadView
+from asterion.application.road import BOSQUE, CHARNECA, REFUGE, ROAD, RUINS, RoadView
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 from asterion.domain.road import LOCATION_LEVEL_BANDS
@@ -42,7 +42,7 @@ def _reward_block(view) -> str:
 
 
 def _location_copy(location: str) -> tuple[str, str]:
-    icon = "🌑" if location == CHARNECA else "🌲" if location == BOSQUE else "🔥"
+    icon = "🌑" if location == CHARNECA else "🌲" if location == BOSQUE else "🪨" if location == RUINS else "🔥"
     low, high = LOCATION_LEVEL_BANDS.get(location, (1, 10))
     return f"{icon} {location}", f"Terras do Ocaso · Nv. {low}–{high}"
 
@@ -65,7 +65,31 @@ def _recovery_route(view) -> InlineKeyboardButton | None:
             text="Retornar ao Bosque",
             callback_data=f"road:route:bosque{attempt_suffix}",
         )
+    if view.location == RUINS and view.recovery_location in {BOSQUE, CHARNECA, REFUGE}:
+        next_location = {
+            BOSQUE: RUINS,
+            CHARNECA: BOSQUE,
+            REFUGE: CHARNECA,
+        }[view.recovery_location]
+        label = {
+            RUINS: "Retornar às Ruínas",
+            BOSQUE: "Retornar ao Bosque",
+            CHARNECA: "Seguir para a Charneca",
+        }[next_location]
+        return InlineKeyboardButton(
+            text=label,
+            callback_data=f"road:route:{_route_key(next_location)}{attempt_suffix}",
+        )
     return None
+
+
+def _route_key(location: str) -> str:
+    return {
+        REFUGE: "refuge",
+        CHARNECA: "charneca",
+        BOSQUE: "bosque",
+        RUINS: "ruinas",
+    }[location]
 
 
 def _local_return(location: str, attempt_id=None) -> InlineKeyboardButton:
@@ -85,6 +109,8 @@ def _route_button(destination: str, current: str) -> InlineKeyboardButton:
         (CHARNECA, REFUGE): ("Retornar ao Refúgio", "road:route:refuge"),
         (CHARNECA, BOSQUE): ("Seguir para o Bosque", "road:route:bosque"),
         (BOSQUE, CHARNECA): ("Retornar à Charneca", "road:route:charneca"),
+        (BOSQUE, RUINS): ("Seguir para as Ruínas", "road:route:ruinas"),
+        (RUINS, BOSQUE): ("Retornar ao Bosque", "road:route:bosque"),
     }
     label, callback = labels[(current, destination)]
     return InlineKeyboardButton(text=label, callback_data=callback)
@@ -102,6 +128,8 @@ def _route_destinations(view: RoadView) -> tuple[str, ...]:
         return (REFUGE,)
     if view.location == BOSQUE:
         return (CHARNECA,)
+    if view.location == RUINS:
+        return (BOSQUE,)
     return ()
 
 
@@ -115,6 +143,9 @@ def _round_screen(view) -> Screen | None:
     elif view.location == BOSQUE:
         place = "🌲 Bosque Calcinado\nTerras do Ocaso · Nv. 5–8"
         local_line = "Bosque Calcinado · Terras do Ocaso"
+    elif view.location == RUINS:
+        place = "🪨 Ruínas do Vigia\nTerras do Ocaso · Nv. 8–10"
+        local_line = "Ruínas do Vigia · Terras do Ocaso"
     else:
         # Preserve the established Estrada copy while using the Round snapshot.
         place = "Estrada das Cinzas\nTerras do Ocaso · Nv. 1–10"
@@ -447,7 +478,7 @@ def render_road(view: RoadView) -> Screen:
         return Screen(text, "hunt_prepare", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
     if view.kind == "hunt_victory":
         text = "🏆 Vitória\n\n🦌 Caçada concluída"
-        if view.location in {CHARNECA, BOSQUE}:
+        if view.location in {CHARNECA, BOSQUE, RUINS}:
             text += f"\n\n{_location_copy(view.location)[0]}"
         if view.creature:
             text += f"\n🐾 {escape(view.creature)}"
@@ -582,7 +613,7 @@ def render_road(view: RoadView) -> Screen:
             ),
             [InlineKeyboardButton(text="← Terras do Ocaso", callback_data="menu:back")],
         ]
-    elif view.location in {CHARNECA, BOSQUE}:
+    elif view.location in {CHARNECA, BOSQUE, RUINS}:
         round_line = (
             "1 🏕️ Ronda · 5 Encontros\n"
             "2 🏕️ Ronda · 10 Encontros\n"
