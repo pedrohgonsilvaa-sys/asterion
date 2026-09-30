@@ -40,6 +40,20 @@ SENTINEL_ART_LEVELS = {
     SENTINEL_ART_IDS["impacto_resoluto"]: 9,
 }
 
+ERRANTE_ART_IDS = {
+    "corte_veloz": FIRST_CLASS_ART_IDS["errante"],
+    "ferida_profunda": "class_art.errante.ferida_profunda",
+    "passo_velado": "class_art.errante.passo_velado",
+    "golpe_oportuno": "class_art.errante.golpe_oportuno",
+}
+
+ERRANTE_ART_LEVELS = {
+    ERRANTE_ART_IDS["corte_veloz"]: 1,
+    ERRANTE_ART_IDS["ferida_profunda"]: 4,
+    ERRANTE_ART_IDS["passo_velado"]: 7,
+    ERRANTE_ART_IDS["golpe_oportuno"]: 9,
+}
+
 
 ACTIVE_ART_DEFINITIONS = {
     art_id: ActiveArtDefinition(art_id, character_class, 1)
@@ -49,6 +63,12 @@ ACTIVE_ART_DEFINITIONS.update(
     {
         art_id: ActiveArtDefinition(art_id, "sentinela", min_level)
         for art_id, min_level in SENTINEL_ART_LEVELS.items()
+    }
+)
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        art_id: ActiveArtDefinition(art_id, "errante", min_level)
+        for art_id, min_level in ERRANTE_ART_LEVELS.items()
     }
 )
 

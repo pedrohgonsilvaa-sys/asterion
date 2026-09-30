@@ -31,6 +31,7 @@ class Effect:
     remaining: int
     applied_opportunity: int
     kind: str = "debuff"
+    stat_modifier_mode: str = "multiplicative"
     removable: bool = True
     duration_eligible: bool = True
     protected: bool = False
@@ -91,10 +92,16 @@ class Action:
     self_effect_magnitude: Decimal = ZERO
     self_effect_duration: int = 0
     self_effect_id: str | None = None
+    self_effect_kind: str = "debuff"
+    self_effect_modifier_mode: str = "multiplicative"
     target_mode: str = "opponent"
     heal_coefficient: Decimal = ZERO
     target_barrier_coefficient: Decimal = ZERO
     target_barrier_duration: int = 0
+    next_direct_crit_bonus: Decimal = ZERO
+    next_direct_crit_duration: int = 0
+    next_direct_crit_effect_id: str | None = None
+    crit_bonus_if_target_debuffed: Decimal = ZERO
 
 
 @dataclass
@@ -119,6 +126,9 @@ class Fighter:
     ward_charges: int = 0
     ward_applied_opportunity: int = 0
     damage_taken_modifiers: dict[str, Decimal] = field(default_factory=dict)
+    next_direct_crit_bonus: Decimal = ZERO
+    next_direct_crit_expires_opportunity: int | None = None
+    next_direct_crit_effect_id: str = ""
     retaliation_charges: int = 0
     retaliation_remaining: int = 0
     retaliation_applied_opportunity: int = 0
@@ -137,6 +147,10 @@ class Fighter:
         # These attributes use percentage points; the existing Effect magnitude
         # contract is multiplicative and must not be applied to them implicitly.
         if name in PERCENT_POINT_STATS:
+            for effect in self.effects:
+                if effect.stat == name and effect.stat_modifier_mode == "percentage_points":
+                    direction = -1 if effect.kind == "debuff" else 1
+                    value += effect.magnitude * max(0, effect.stacks) * direction
             return value
         for effect in self.effects:
             if effect.stat == name:
@@ -192,6 +206,12 @@ class CombatEvent:
     retaliation_remaining: int = 0
     internal: bool = False
     action_instance_id: str = ""
+    actor_effect_ids: tuple[str, ...] = ()
+    prepared_action_instance_id: str = ""
+    response_to_prepared_action_instance_id: str = ""
+    dot_kind: str = ""
+    dot_application_event_id: str = ""
+    dot_source_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,6 +249,7 @@ class Combat:
     prepared_action: str | None = None
     prepared_source: str | None = None
     prepared_target: str | None = None
+    prepared_action_instance_id: str | None = None
     resolving_prepared: bool = False
     response_window_seen: bool = False
     variant: str | None = None
@@ -958,6 +979,7 @@ def _clear_prepared_action(state: Combat) -> None:
     state.prepared_action = None
     state.prepared_source = None
     state.prepared_target = None
+    state.prepared_action_instance_id = None
     state.resolving_prepared = False
     state.response_window_seen = False
 
@@ -1172,7 +1194,26 @@ def _end_turn(state: Combat) -> None:
                     )
                 ),
             )
-        _deal_damage(actor, damage)
+        actual_damage, barrier_absorbed = _deal_damage(actor, damage)
+        source_actor = source.id if source is not None else dot.source
+        state.mechanic_events.append(
+            CombatEvent(
+                len(state.mechanic_events),
+                state.round,
+                source_key or source_actor,
+                f"dot:{dot.kind}:tick",
+                actor.id,
+                int(actual_damage),
+                actor_entity_id=source_actor,
+                calculated_damage=int(damage),
+                effective_damage=int(actual_damage),
+                barrier_absorbed=barrier_absorbed,
+                internal=True,
+                dot_kind=dot.kind,
+                dot_application_event_id=dot.application_event,
+                dot_source_id=dot.source,
+            )
+        )
         dot.remaining -= 1
     state.dot_states[actor.id] = [
         dot for dot in state.dot_states.get(actor.id, []) if dot.remaining > 0
@@ -1182,6 +1223,13 @@ def _end_turn(state: Combat) -> None:
         if actor.opportunity > effect.applied_opportunity:
             effect.remaining -= 1
     actor.effects = [effect for effect in actor.effects if effect.remaining > 0]
+    if (
+        actor.next_direct_crit_expires_opportunity is not None
+        and actor.opportunity > actor.next_direct_crit_expires_opportunity
+    ):
+        actor.next_direct_crit_bonus = ZERO
+        actor.next_direct_crit_expires_opportunity = None
+        actor.next_direct_crit_effect_id = ""
     if actor.opportunity > actor.barrier_applied_opportunity and actor.barrier_remaining > 0:
         actor.barrier_remaining -= 1
         if actor.barrier_remaining == 0:
@@ -1281,6 +1329,9 @@ def _perform(
         state.prepared_action = action_id
         state.prepared_source = actor_id
         state.prepared_target = state.fighters[target_keys[0]].id
+        state.prepared_action_instance_id = (
+            f"{state.id.hex}:{state.version}:{len(state.events)}:{actor.id}:{action_id}:prepared"
+        )
         state.response_window_seen = False
         actor.last_action = f"prepare:{action_id}"
         actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
@@ -1291,6 +1342,8 @@ def _perform(
                 actor_id,
                 f"prepare:{action_id}",
                 actor_entity_id=actor.id,
+                action_instance_id=state.prepared_action_instance_id,
+                prepared_action_instance_id=state.prepared_action_instance_id,
             )
         )
         return True
@@ -1328,6 +1381,27 @@ def _perform(
     action_instance_id = (
         f"{state.id.hex}:{state.version}:{len(state.events)}:{actor.id}:{action_id}"
     )
+    prepared_action_instance_id = (
+        state.prepared_action_instance_id if state.resolving_prepared else ""
+    )
+    response_to_prepared_action_instance_id = (
+        state.prepared_action_instance_id
+        if actor_id == "player"
+        and state.prepared_action is not None
+        and state.response_window_seen
+        and state.prepared_target == actor.id
+        else ""
+    )
+    active_actor_effect_ids = {
+        effect.id for effect in actor.effects if effect.remaining > 0
+    }
+    if (
+        actor.next_direct_crit_effect_id
+        and actor.next_direct_crit_expires_opportunity is not None
+        and actor.opportunity <= actor.next_direct_crit_expires_opportunity
+    ):
+        active_actor_effect_ids.add(actor.next_direct_crit_effect_id)
+    actor_effect_ids = tuple(sorted(active_actor_effect_ids))
     retaliation_context = _consume_retaliation(state, actor_id, actor, action)
     retaliation_used = bool(retaliation_context.get("used"))
     retaliation_source_type = str(retaliation_context.get("source_type", ""))
@@ -1407,8 +1481,24 @@ def _perform(
         rng = CombatRng(state.id, state.rng_cursor)
         critical = False
         if direct_eligible:
+            target_debuff_bonus = (
+                action.crit_bonus_if_target_debuffed
+                if any(
+                    effect.kind == "debuff" and effect.remaining > 0
+                    for effect in target.effects
+                )
+                else ZERO
+            )
+            next_direct_bonus = (
+                actor.next_direct_crit_bonus
+                if actor.next_direct_crit_expires_opportunity is not None
+                and actor.opportunity <= actor.next_direct_crit_expires_opportunity
+                else ZERO
+            )
             crit_chance = (
-                chance_from_percentage_points(actor.stat("crit"))
+                chance_from_percentage_points(
+                    actor.stat("crit") + target_debuff_bonus + next_direct_bonus
+                )
                 if current_ruleset
                 else D("0.05")
             )
@@ -1484,6 +1574,8 @@ def _perform(
         total_vamp_damage += actual_damage
         ward_blocked: list[str] = []
         status_applied = False
+        dot_application_event_id = ""
+        dot_application_kind = ""
         if action.attack_debuff and target.hp > 0:
             had_ward = target.ward_charges > 0 and target.ward_remaining > 0
             applied_effect_id = action.effect_id or action.id
@@ -1527,6 +1619,10 @@ def _perform(
             if chosen:
                 snapshot = actor.stat("attack")
                 had_ward = target.ward_charges > 0 and target.ward_remaining > 0
+                candidate_application_event_id = (
+                    f"{state.id.hex}:{state.version}:{len(state.events)}:dot:"
+                    f"{chosen}:{target.id}"
+                )
                 applied = apply_dot_stacks(
                     state,
                     target,
@@ -1534,11 +1630,11 @@ def _perform(
                     snapshots=[snapshot] * (native_stacks if native_kind else 1),
                     source=actor.id,
                     duration=_DOT_DURATIONS[chosen],
-                    application_event=(
-                        f"{state.id.hex}:{state.version}:{len(state.events)}:dot:"
-                        f"{chosen}:{target.id}"
-                    ),
+                    application_event=candidate_application_event_id,
                 )
+                if applied:
+                    dot_application_event_id = candidate_application_event_id
+                    dot_application_kind = chosen
                 if had_ward and not applied and target.ward_charges == 0:
                     ward_blocked.append(chosen)
 
@@ -1591,6 +1687,11 @@ def _perform(
                 target_barrier_source=target_barrier_source,
                 prepared_resolution=prepared_resolution,
                 target_effect_ids=target_effect_ids,
+                actor_effect_ids=actor_effect_ids,
+                prepared_action_instance_id=prepared_action_instance_id,
+                response_to_prepared_action_instance_id=response_to_prepared_action_instance_id,
+                dot_kind=dot_application_kind,
+                dot_application_event_id=dot_application_event_id,
                 retaliation_valid=retaliation_valid,
                 retaliation_used=retaliation_used,
                 retaliation_activation_id=str(
@@ -1672,8 +1773,20 @@ def _perform(
     actor.last_action = action_id
     if (action.cooldown or action.blocked_opportunities) and not state.resolving_prepared:
         actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
+    if action.next_direct_crit_bonus > ZERO:
+        actor.next_direct_crit_bonus = action.next_direct_crit_bonus
+        actor.next_direct_crit_expires_opportunity = (
+            actor.opportunity + max(1, action.next_direct_crit_duration)
+        )
+        actor.next_direct_crit_effect_id = action.next_direct_crit_effect_id or ""
+    if direct_eligible and actor.next_direct_crit_expires_opportunity is not None:
+        actor.next_direct_crit_bonus = ZERO
+        actor.next_direct_crit_expires_opportunity = None
+        actor.next_direct_crit_effect_id = ""
     _retaliation_action_resolved(state, actor_id, actor, retaliation_context)
     _refresh_result(state)
+    if prepared_resolution:
+        state.prepared_action_instance_id = None
     state.resolving_prepared = False
     return True
 
@@ -1681,7 +1794,7 @@ def _apply_action_self_effect(state: Combat, actor: Fighter, action: Action) -> 
     if (
         not action.self_effect_id
         or not action.self_effect_stat
-        or action.self_effect_magnitude <= ZERO
+        or action.self_effect_magnitude < ZERO
         or action.self_effect_duration <= 0
     ):
         return False
@@ -1694,6 +1807,8 @@ def _apply_action_self_effect(state: Combat, actor: Fighter, action: Action) -> 
             magnitude=action.self_effect_magnitude,
             remaining=action.self_effect_duration,
             applied_opportunity=actor.opportunity,
+            kind=action.self_effect_kind,
+            stat_modifier_mode=action.self_effect_modifier_mode,
         ),
         application_event=(
             f"{state.id.hex}:{state.version}:{len(state.events)}:self-effect:{action.self_effect_id}"

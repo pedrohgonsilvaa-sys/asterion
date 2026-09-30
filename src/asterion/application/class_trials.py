@@ -17,13 +17,17 @@ from asterion.application.equipment_configuration import (
 )
 from asterion.domain.class_trials import (
     CLASS_PATHS,
+    ERRANTE_TRIAL_ID,
     SENTINEL_TRIAL_ID,
     TRIAL_COMPLETED_UNLOCK,
     TRIAL_CONTENT_PREFIX,
     TRIAL_IDS_BY_CLASS,
     TrialCombatEvent,
     TrialStageDefinition,
+    create_errante_trial_combat,
     create_sentinel_trial_combat,
+    errante_conditions_for_event,
+    errante_stage_definition,
     fresh_attempt_state,
     reset_trial_combat,
     sentinel_conditions_for_event,
@@ -170,18 +174,21 @@ class ClassTrialService:
                 return await self._view(session, character, state, world, foreground)
 
             sentinel = state.trial_id == SENTINEL_TRIAL_ID
+            errante = state.trial_id == ERRANTE_TRIAL_ID
+            uses_shared_combat = sentinel or errante
+            stage_builder = sentinel_stage_definition if sentinel else errante_stage_definition
             active_art_configuration = None
-            if sentinel:
+            if uses_shared_combat:
                 active_art_configuration = await load_active_art_configuration(
                     session, character
                 )
                 selected_arts = active_art_configuration.art_ids
-                canonical_attempt = sentinel_stage_definition(
+                canonical_attempt = stage_builder(
                     state.current_stage, allowed_art_ids=selected_arts
                 )
                 if definition is not None and definition.to_data() != canonical_attempt.to_data():
                     return await self._view(session, character, state, world, foreground)
-                canonical_plan = sentinel_stage_definition(state.current_stage)
+                canonical_plan = stage_builder(state.current_stage)
                 stored_definition = (
                     TrialStageDefinition.from_data(state.stage_definition)
                     if state.stage_definition is not None
@@ -226,7 +233,7 @@ class ClassTrialService:
             state.attempt_state = fresh_attempt_state(
                 stored_definition, Decimal(character.max_hp)
             )
-            if sentinel:
+            if uses_shared_combat:
                 state.attempt_state["active_arts"] = [
                     entry.to_data() for entry in active_art_configuration.slots
                 ]
@@ -235,8 +242,8 @@ class ClassTrialService:
                 state.attempt_state["equipped_art_ids"] = list(selected_arts)
             state.state_version += 1
             state.context = "circle"
-            if sentinel:
-                attempt_definition = sentinel_stage_definition(
+            if uses_shared_combat:
+                attempt_definition = stage_builder(
                     state.current_stage, allowed_art_ids=selected_arts
                 )
                 configuration = await load_equipment_configuration(session, character)
@@ -249,7 +256,11 @@ class ClassTrialService:
                     race=character.race,
                     character_class=character.character_class,
                 )
-                combat = create_sentinel_trial_combat(player, attempt_definition)
+                combat = (
+                    create_sentinel_trial_combat(player, attempt_definition)
+                    if sentinel
+                    else create_errante_trial_combat(player, attempt_definition)
+                )
                 combat.configuration_snapshot = (
                     configuration.to_data(CURRENT_COMBAT_RULESET)
                     | active_art_configuration.to_data()
@@ -273,12 +284,20 @@ class ClassTrialService:
                 state.attempt_state["combat_id"] = str(combat.id)
                 state.attempt_state["encounter_id"] = str(encounter.id)
                 self._sync_attempt_combat(state.attempt_state, stored_definition, combat)
-                for combat_event in combat.events:
-                    self._append_sentinel_event(
-                        state.attempt_state,
-                        stored_definition,
-                        trial_event_from_combat_event(combat, combat_event),
-                    )
+                if sentinel:
+                    for combat_event in combat.events:
+                        self._append_sentinel_event(
+                            state.attempt_state,
+                            stored_definition,
+                            trial_event_from_combat_event(combat, combat_event),
+                        )
+                elif errante:
+                    for combat_event in combat.events + combat.mechanic_events:
+                        self._append_errante_event(
+                            state.attempt_state,
+                            stored_definition,
+                            trial_event_from_combat_event(combat, combat_event),
+                        )
             await session.flush()
             return await self._view(session, character, state, world, activity)
 
@@ -300,8 +319,8 @@ class ClassTrialService:
             foreground = await self._foreground(session, character.id)
             if not self._owns_attempt(state, activity, foreground, attempt_id):
                 return await self._view(session, character, state, world, foreground)
-            if state.trial_id == SENTINEL_TRIAL_ID:
-                # Sentinela pedagogy is derived only from the persisted shared-engine log.
+            if state.trial_id in {SENTINEL_TRIAL_ID, ERRANTE_TRIAL_ID}:
+                # Implemented Class Trials derive pedagogy only from the shared-engine log.
                 return await self._view(session, character, state, world, activity)
             attempt = dict(state.attempt_state or {})
             processed = set(attempt.get("processed_event_ids", ()))
@@ -421,7 +440,7 @@ class ClassTrialService:
             foreground = await self._foreground(session, character.id)
             if (
                 state is None
-                or state.trial_id != SENTINEL_TRIAL_ID
+                or state.trial_id not in {SENTINEL_TRIAL_ID, ERRANTE_TRIAL_ID}
                 or not self._owns_attempt(state, activity, foreground, attempt_id)
                 or activity.state_version != combat_version
                 or action_id.startswith("consumable:")
@@ -466,12 +485,26 @@ class ClassTrialService:
                 if isinstance(entry, dict) and "art_id" in entry
             ]
             self._sync_attempt_combat(attempt, definition, updated)
-            for combat_event in updated.events[len(combat.events) :]:
-                self._append_sentinel_event(
-                    attempt,
-                    definition,
-                    trial_event_from_combat_event(updated, combat_event),
-                )
+            if state.trial_id == SENTINEL_TRIAL_ID:
+                for combat_event in updated.events[len(combat.events) :]:
+                    self._append_sentinel_event(
+                        attempt,
+                        definition,
+                        trial_event_from_combat_event(updated, combat_event),
+                    )
+            else:
+                for combat_event in updated.events[len(combat.events) :]:
+                    self._append_errante_event(
+                        attempt,
+                        definition,
+                        trial_event_from_combat_event(updated, combat_event),
+                    )
+                for combat_event in updated.mechanic_events[len(combat.mechanic_events) :]:
+                    self._append_errante_event(
+                        attempt,
+                        definition,
+                        trial_event_from_combat_event(updated, combat_event),
+                    )
 
             activity.state_version = updated.version
             activity.last_valid_action_at = datetime.now(UTC)
@@ -521,6 +554,11 @@ class ClassTrialService:
                     "ward_charges": fighter.ward_charges,
                     "ward_remaining": fighter.ward_remaining,
                     "opportunity": fighter.opportunity,
+                    "next_direct_crit": {
+                        "bonus": str(fighter.next_direct_crit_bonus),
+                        "expires_opportunity": fighter.next_direct_crit_expires_opportunity,
+                        "effect_id": fighter.next_direct_crit_effect_id,
+                    },
                     "retaliation": {
                         "charges": fighter.retaliation_charges,
                         "remaining_T": fighter.retaliation_remaining,
@@ -596,6 +634,58 @@ class ClassTrialService:
                 "retaliation_source_event_id": event.retaliation_source_event_id,
                 "retaliation_source_actor_id": event.retaliation_source_actor_id,
                 "dodged": event.dodged,
+            }
+        )
+
+    @staticmethod
+    def _append_errante_event(
+        attempt: dict,
+        definition: TrialStageDefinition,
+        event: TrialCombatEvent,
+    ) -> None:
+        processed = set(attempt.get("processed_event_ids", ()))
+        if event.event_id in processed:
+            return
+        entity_ids = {entity.entity_id for entity in definition.entities}
+        if event.actor_id not in entity_ids | {"player"} or not set(event.target_ids).issubset(
+            entity_ids | {"player"}
+        ):
+            return
+        context = dict(attempt.get("pedagogic_context", {}))
+        conditions, context = errante_conditions_for_event(
+            definition.stage, event, context
+        )
+        if not set(conditions).issubset(set(definition.required_conditions)):
+            return
+        processed.add(event.event_id)
+        attempt["processed_event_ids"] = sorted(processed)
+        attempt["pedagogic_context"] = context
+        progress = set(attempt.get("pedagogic_conditions", ()))
+        progress.update(conditions)
+        attempt["pedagogic_conditions"] = sorted(progress)
+        attempt.setdefault("events", []).append(
+            {
+                "event_id": event.event_id,
+                "event_type": event.event_type,
+                "actor_id": event.actor_id,
+                "target_ids": list(event.target_ids),
+                "action_id": event.action_id,
+                "action_instance_id": event.action_instance_id,
+                "prepared_action_instance_id": event.prepared_action_instance_id,
+                "response_to_prepared_action_instance_id": (
+                    event.response_to_prepared_action_instance_id
+                ),
+                "actor_effect_ids": list(event.actor_effect_ids),
+                "dot_kind": event.dot_kind,
+                "dot_application_event_id": event.dot_application_event_id,
+                "dot_source_id": event.dot_source_id,
+                "conditions": list(conditions),
+                "calculated_damage": str(event.calculated_damage),
+                "effective_damage": str(event.effective_damage),
+                "effect_applied": event.effect_applied,
+                "actor_effect_id": event.actor_effect_id,
+                "target_effect_ids": list(event.target_effect_ids),
+                "data": ClassTrialService._json_safe(dict(event.data or {})),
             }
         )
 
@@ -725,7 +815,7 @@ class ClassTrialService:
             ) or state.state_version != version:
                 return await self._view(session, character, state, world, foreground)
 
-            if state.trial_id == SENTINEL_TRIAL_ID:
+            if state.trial_id in {SENTINEL_TRIAL_ID, ERRANTE_TRIAL_ID}:
                 row = await session.execute(
                     select(Encounter, CombatRecord)
                     .join(CombatRecord, CombatRecord.encounter_id == Encounter.id)

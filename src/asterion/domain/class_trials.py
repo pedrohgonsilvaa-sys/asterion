@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
-from asterion.domain.arts import SENTINEL_ART_IDS
+from asterion.domain.arts import ERRANTE_ART_IDS, SENTINEL_ART_IDS
 from asterion.domain.combat import Action, Combat, CombatEvent, Fighter
 from asterion.domain.combat_math import CURRENT_COMBAT_RULESET, CombatStats
 
@@ -43,6 +43,26 @@ SENTINEL_ENTITY_IDS = {
     2: "trial_entity.sentinela.blindado",
     3: "trial_entity.sentinela.revidar",
 }
+ERRANTE_TRIAL_ID = TRIAL_IDS_BY_CLASS["errante"]
+ERRANTE_CONDITION_IDS = {
+    1: "errante.stage_1.bleed_tick",
+    2: "errante.stage_2.prepared_response_hit",
+    3: "errante.stage_3.exposed_opportunity",
+}
+ERRANTE_ENTITY_IDS = {
+    1: "trial_entity.errante.primeiro_corte",
+    2: "trial_entity.errante.passo",
+    3: "trial_entity.errante.brecha",
+}
+ERRANTE_TRAINING_CUT_ACTION_ID = "trial.errante.corte_de_treino"
+ERRANTE_SHORT_CUT_ACTION_ID = "trial.errante.corte_curto"
+ERRANTE_PREPARED_ACTION_ID = "trial.errante.golpe_de_ruptura_treino"
+ERRANTE_STAGE_3_CUT_A_ACTION_ID = "trial.errante.corte_treino_a"
+ERRANTE_STAGE_3_CUT_B_ACTION_ID = "trial.errante.corte_treino_b"
+ERRANTE_EXPOSE_ACTION_ID = "trial.errante.exposto"
+ERRANTE_EXPOSED_EFFECT_ID = "errante.exposto"
+ERRANTE_STEP_EVASION_EFFECT_ID = "errante.passo_velado.evasao"
+ERRANTE_STEP_WINDOW_EFFECT_ID = "errante.passo_velado.janela_ofensiva"
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,6 +311,176 @@ def create_sentinel_trial_combat(
     )
 
 
+def errante_stage_definition(
+    stage: int, *, allowed_art_ids: tuple[str, ...] = ()
+) -> TrialStageDefinition:
+    """Return a frozen, trial-only Errante template with persisted Art slots."""
+    if stage not in ERRANTE_ENTITY_IDS:
+        raise ValueError("Errante has three documented trial stages.")
+    if len(allowed_art_ids) > 3 or not set(allowed_art_ids).issubset(
+        set(ERRANTE_ART_IDS.values())
+    ):
+        raise ValueError("Errante trials accept at most three valid equipped Arts.")
+
+    stage_values = {
+        1: (
+            Decimal("580"), Decimal("95"), Decimal("85"), Decimal("90"),
+            (ERRANTE_TRAINING_CUT_ACTION_ID,),
+        ),
+        2: (
+            Decimal("620"), Decimal("105"), Decimal("85"), Decimal("90"),
+            (ERRANTE_SHORT_CUT_ACTION_ID, ERRANTE_PREPARED_ACTION_ID),
+        ),
+        3: (
+            Decimal("620"), Decimal("100"), Decimal("90"), Decimal("95"),
+            (ERRANTE_STAGE_3_CUT_A_ACTION_ID,
+             ERRANTE_STAGE_3_CUT_B_ACTION_ID,
+             ERRANTE_EXPOSE_ACTION_ID),
+        ),
+    }
+    hp, attack, defense, agility, action_ids = stage_values[stage]
+    entity = TrialEntityDefinition(
+        entity_id=ERRANTE_ENTITY_IDS[stage],
+        team="hostile",
+        turn_policy="active",
+        max_hp=hp,
+        stats={"attack": attack, "defense": defense, "agility": agility},
+        action_ids=action_ids,
+    )
+    return TrialStageDefinition(
+        stage=stage,
+        entities=(entity,),
+        required_conditions=(ERRANTE_CONDITION_IDS[stage],),
+        allowed_art_ids=tuple(allowed_art_ids),
+    )
+
+
+def errante_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action]:
+    """Build only the Errante Arts recorded in the persisted active slots."""
+    if len(allowed_art_ids) > 3 or len(set(allowed_art_ids)) != len(allowed_art_ids):
+        raise ValueError("Errante combat configuration accepts at most three unique Arts.")
+    if not set(allowed_art_ids).issubset(set(ERRANTE_ART_IDS.values())):
+        raise ValueError("Unknown Errante Art in trial combat configuration.")
+    definitions = {
+        ERRANTE_ART_IDS["corte_veloz"]: Action(
+            ERRANTE_ART_IDS["corte_veloz"], "Corte Veloz", Decimal("1.15"),
+            cooldown=2,
+        ),
+        ERRANTE_ART_IDS["ferida_profunda"]: Action(
+            ERRANTE_ART_IDS["ferida_profunda"], "Ferida Profunda", Decimal("0.90"),
+            native_dot_kind="bleed", native_dot_stacks=1, cooldown=2,
+        ),
+        ERRANTE_ART_IDS["passo_velado"]: Action(
+            ERRANTE_ART_IDS["passo_velado"], "Passo Velado", Decimal(0),
+            cooldown=4,
+            self_effect_stat="evasion",
+            self_effect_magnitude=Decimal("15"),
+            self_effect_kind="buff",
+            self_effect_modifier_mode="percentage_points",
+            self_effect_duration=1,
+            self_effect_id=ERRANTE_STEP_EVASION_EFFECT_ID,
+            next_direct_crit_bonus=Decimal("10"),
+            next_direct_crit_duration=2,
+            next_direct_crit_effect_id=ERRANTE_STEP_WINDOW_EFFECT_ID,
+            target_mode="self",
+        ),
+        ERRANTE_ART_IDS["golpe_oportuno"]: Action(
+            ERRANTE_ART_IDS["golpe_oportuno"], "Golpe Oportuno", Decimal("1.25"),
+            cooldown=3, crit_bonus_if_target_debuffed=Decimal("15"),
+        ),
+    }
+    return {
+        "attack": Action("attack", "Ataque Básico", Decimal(1)),
+        **{art_id: definitions[art_id] for art_id in allowed_art_ids},
+    }
+
+
+def errante_enemy_actions(stage: int) -> dict[str, Action]:
+    """Return deterministic Errante Echo actions for the current training stage."""
+    if stage == 1:
+        return {
+            ERRANTE_TRAINING_CUT_ACTION_ID: Action(
+                ERRANTE_TRAINING_CUT_ACTION_ID,
+                "Corte de Treino",
+                Decimal("1.00"),
+            )
+        }
+    if stage == 2:
+        return {
+            ERRANTE_SHORT_CUT_ACTION_ID: Action(
+                ERRANTE_SHORT_CUT_ACTION_ID,
+                "Corte Curto",
+                Decimal("0.95"),
+            ),
+            ERRANTE_PREPARED_ACTION_ID: Action(
+                ERRANTE_PREPARED_ACTION_ID,
+                "Golpe de Ruptura de Treino",
+                Decimal("1.65"),
+                prepared=True,
+            ),
+        }
+    if stage == 3:
+        return {
+            ERRANTE_STAGE_3_CUT_A_ACTION_ID: Action(
+                ERRANTE_STAGE_3_CUT_A_ACTION_ID,
+                "Corte de Treino",
+                Decimal("0.95"),
+            ),
+            ERRANTE_STAGE_3_CUT_B_ACTION_ID: Action(
+                ERRANTE_STAGE_3_CUT_B_ACTION_ID,
+                "Corte de Treino",
+                Decimal("0.95"),
+            ),
+            ERRANTE_EXPOSE_ACTION_ID: Action(
+                ERRANTE_EXPOSE_ACTION_ID,
+                "Exposto",
+                Decimal(0),
+                self_effect_stat="defense",
+                self_effect_magnitude=Decimal(0),
+                self_effect_duration=1,
+                self_effect_id=ERRANTE_EXPOSED_EFFECT_ID,
+                target_mode="self",
+            ),
+        }
+    raise ValueError("Errante has three documented trial stages.")
+
+
+def create_errante_trial_combat(
+    player: Fighter, definition: TrialStageDefinition
+) -> Combat:
+    """Materialize the stage Echo and only the persisted equipped Errante Arts."""
+    canonical = errante_stage_definition(
+        definition.stage, allowed_art_ids=definition.allowed_art_ids
+    )
+    if canonical.to_data() != definition.to_data():
+        raise ValueError("Errante trial parameters must match the persisted stage plan.")
+    entity = definition.entities[0]
+    enemy = Fighter(
+        id=entity.entity_id,
+        name={1: "Eco do Primeiro Corte", 2: "Eco do Passo", 3: "Eco da Brecha"}[
+            definition.stage
+        ],
+        level=10,
+        stats=CombatStats(
+            entity.max_hp,
+            entity.stats["attack"],
+            entity.stats["defense"],
+            entity.stats["agility"],
+        ),
+        hp=entity.max_hp,
+    )
+    return Combat(
+        id=uuid4(),
+        ruleset=CURRENT_COMBAT_RULESET,
+        fighters={"player": player, "enemy": enemy},
+        player_actions=errante_player_actions(definition.allowed_art_ids),
+        enemy_actions=errante_enemy_actions(definition.stage),
+        ai_cycle=entity.action_ids,
+        variant=None,
+        external_consumables_allowed=False,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class TrialCombatEvent:
     """Server-observed combat facts used by deterministic pedagogy evaluators."""
@@ -323,6 +513,12 @@ class TrialCombatEvent:
     retaliation_source_event_id: str = ""
     retaliation_source_actor_id: str = ""
     dodged: bool = False
+    actor_effect_ids: tuple[str, ...] = ()
+    prepared_action_instance_id: str = ""
+    response_to_prepared_action_instance_id: str = ""
+    dot_kind: str = ""
+    dot_application_event_id: str = ""
+    dot_source_id: str = ""
 
     def __post_init__(self) -> None:
         if not self.event_id or len(self.event_id) > 128:
@@ -358,16 +554,30 @@ def trial_event_from_combat_event(
         actor = combat.fighters[event.actor].id if event.actor in combat.fighters else event.actor
     action_id = event.action
     event_type = "combat_action"
+    if event.internal and event.dot_kind and action_id.startswith("dot:"):
+        event_type = "dot_tick"
     if action_id.startswith("prepare:"):
         action_id = action_id.removeprefix("prepare:")
         event_type = "prepared_action"
     return TrialCombatEvent(
-        event_id=f"{combat.id.hex}:{event.sequence}",
+        event_id=(
+            f"{combat.id.hex}:mechanic:{event.sequence}"
+            if event.internal
+            else f"{combat.id.hex}:{event.sequence}"
+        ),
         event_type=event_type,
         actor_id=actor,
         target_ids=(event.target,) if event.target else (),
         action_id=action_id,
         action_instance_id=event.action_instance_id,
+        actor_effect_ids=event.actor_effect_ids,
+        prepared_action_instance_id=event.prepared_action_instance_id,
+        response_to_prepared_action_instance_id=(
+            event.response_to_prepared_action_instance_id
+        ),
+        dot_kind=event.dot_kind,
+        dot_application_event_id=event.dot_application_event_id,
+        dot_source_id=event.dot_source_id,
         calculated_damage=Decimal(event.calculated_damage),
         effective_damage=Decimal(event.effective_damage),
         barrier_absorbed=event.barrier_absorbed,
@@ -437,6 +647,91 @@ def sentinel_conditions_for_event(
     return ()
 
 
+def errante_conditions_for_event(
+    stage: int,
+    event: TrialCombatEvent,
+    context: Mapping[str, Any] | None = None,
+) -> tuple[tuple[str, ...], dict[str, Any]]:
+    """Interpret persisted engine facts and return updated Errante trial context."""
+    current = deepcopy(dict(context or {}))
+    echo_id = ERRANTE_ENTITY_IDS.get(stage)
+    condition = ERRANTE_CONDITION_IDS.get(stage)
+    if echo_id is None or condition is None:
+        return (), current
+
+    if stage == 1:
+        applications = set(current.get("bleed_application_event_ids", ()))
+        if (
+            event.event_type == "combat_action"
+            and event.actor_id == "player"
+            and event.action_id == ERRANTE_ART_IDS["ferida_profunda"]
+            and event.target_ids == (echo_id,)
+            and event.dot_kind == "bleed"
+            and event.dot_application_event_id
+        ):
+            applications.add(event.dot_application_event_id)
+            current["bleed_application_event_ids"] = sorted(applications)
+        if (
+            event.event_type == "dot_tick"
+            and event.actor_id == "player"
+            and event.dot_source_id == "player"
+            and event.dot_kind == "bleed"
+            and event.target_ids == (echo_id,)
+            and event.dot_application_event_id in applications
+        ):
+            return (condition,), current
+
+    elif stage == 2:
+        prepared_ids = set(current.get("prepared_attack_instance_ids", ()))
+        if (
+            event.event_type == "prepared_action"
+            and event.actor_id == echo_id
+            and event.action_id == ERRANTE_PREPARED_ACTION_ID
+            and event.prepared_action_instance_id
+        ):
+            prepared_ids.add(event.prepared_action_instance_id)
+            current["prepared_attack_instance_ids"] = sorted(prepared_ids)
+        if (
+            event.event_type == "combat_action"
+            and event.actor_id == "player"
+            and event.action_id == ERRANTE_ART_IDS["passo_velado"]
+            and event.target_ids == ("player",)
+            and event.response_to_prepared_action_instance_id in prepared_ids
+            and event.actor_effect_id == ERRANTE_STEP_EVASION_EFFECT_ID
+            and event.action_instance_id
+        ):
+            current["passo_window_action_instance_id"] = event.action_instance_id
+            current["passo_window_prepared_action_instance_id"] = (
+                event.response_to_prepared_action_instance_id
+            )
+        window_action_id = current.get("passo_window_action_instance_id")
+        if (
+            event.event_type == "combat_action"
+            and event.actor_id == "player"
+            and event.action_id in {"attack", *ERRANTE_ART_IDS.values()}
+            and event.action_instance_id != window_action_id
+            and bool(window_action_id)
+            and event.target_ids == (echo_id,)
+            and event.effective_damage > 0
+            and ERRANTE_STEP_WINDOW_EFFECT_ID in event.actor_effect_ids
+        ):
+            current.pop("passo_window_action_instance_id", None)
+            current.pop("passo_window_prepared_action_instance_id", None)
+            return (condition,), current
+
+    elif stage == 3:
+        if (
+            event.event_type == "combat_action"
+            and event.actor_id == "player"
+            and event.action_id == ERRANTE_ART_IDS["golpe_oportuno"]
+            and event.target_ids == (echo_id,)
+            and ERRANTE_EXPOSED_EFFECT_ID in event.target_effect_ids
+        ):
+            return (condition,), current
+
+    return (), current
+
+
 def fresh_attempt_state(
     definition: TrialStageDefinition, player_hp: Decimal
 ) -> dict[str, Any]:
@@ -462,6 +757,7 @@ def fresh_attempt_state(
             for entity in definition.entities
         },
         "pedagogic_conditions": [],
+        "pedagogic_context": {},
         "processed_event_ids": [],
         "events": [],
         "external_consumables_used": 0,
@@ -512,6 +808,7 @@ def reset_trial_combat(
     result.prepared_action = None
     result.prepared_source = None
     result.prepared_target = None
+    result.prepared_action_instance_id = None
     result.resolving_prepared = False
     result.response_window_seen = False
     result.variant = None
@@ -544,6 +841,9 @@ def reset_trial_combat(
         fighter.retaliation_charges = 0
         fighter.retaliation_remaining = 0
         fighter.retaliation_applied_opportunity = 0
+        fighter.next_direct_crit_bonus = Decimal(0)
+        fighter.next_direct_crit_expires_opportunity = None
+        fighter.next_direct_crit_effect_id = ""
         fighter.retaliation_activation_id = ""
         fighter.retaliation_source_type = ""
         fighter.retaliation_source_event_id = ""
