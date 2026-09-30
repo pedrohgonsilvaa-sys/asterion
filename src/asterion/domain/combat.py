@@ -1,7 +1,7 @@
 """Reusable deterministic duel engine. Inputs and outputs are pure domain snapshots."""
 
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import ROUND_FLOOR, Decimal, localcontext
 from uuid import UUID
 
@@ -91,6 +91,10 @@ class Action:
     self_effect_magnitude: Decimal = ZERO
     self_effect_duration: int = 0
     self_effect_id: str | None = None
+    target_mode: str = "opponent"
+    heal_coefficient: Decimal = ZERO
+    target_barrier_coefficient: Decimal = ZERO
+    target_barrier_duration: int = 0
 
 
 @dataclass
@@ -123,6 +127,10 @@ class Fighter:
     retaliation_source_event_id: str = ""
     retaliation_source_actor_id: str = ""
     retaliation_duration_bonus: int = 0
+    side: str = ""
+    takes_turn: bool = True
+    defeat_on_zero: bool | None = None
+    required_for_victory: bool | None = None
 
     def stat(self, name: str) -> Decimal:
         value = getattr(self.stats, name)
@@ -183,6 +191,7 @@ class CombatEvent:
     retaliation_source_actor_id: str = ""
     retaliation_remaining: int = 0
     internal: bool = False
+    action_instance_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,10 +255,144 @@ class Combat:
         return "basics"
 
 
+TARGET_MODES = frozenset({"opponent", "ally", "self", "all_opponents", "all_allies"})
+
+
+def _fighter_side(state: Combat, key: str) -> str:
+    fighter = state.fighters[key]
+    return fighter.side or ("player" if key == "player" else "enemy")
+
+
+def _fighter_defeat_on_zero(state: Combat, key: str) -> bool:
+    value = state.fighters[key].defeat_on_zero
+    return key == "player" if value is None else value
+
+
+def _fighter_required_for_victory(state: Combat, key: str) -> bool:
+    value = state.fighters[key].required_for_victory
+    return _fighter_side(state, key) == "enemy" if value is None else value
+
+
+def _resolve_fighter_key(state: Combat, target_id: str | None) -> str | None:
+    if target_id is None:
+        return None
+    if target_id in state.fighters:
+        return target_id
+    matches = [key for key, fighter in state.fighters.items() if fighter.id == target_id]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _action_is_pure_self(action: Action) -> bool:
+    return bool(
+        action.coefficient <= ZERO
+        and action.attack_debuff <= ZERO
+        and action.native_dot_stacks <= 0
+        and action.heal_coefficient <= ZERO
+        and action.target_barrier_coefficient <= ZERO
+        and (
+            action.self_barrier_coefficient > ZERO
+            or (
+                action.self_effect_id
+                and action.self_effect_stat
+                and action.self_effect_magnitude > ZERO
+                and action.self_effect_duration > 0
+            )
+        )
+    )
+
+
+def _resolve_action_targets(
+    state: Combat,
+    actor_key: str,
+    action: Action,
+    requested_target: str | None = None,
+) -> tuple[str, ...]:
+    if actor_key not in state.fighters or state.fighters[actor_key].hp <= 0:
+        return ()
+    if action.target_mode not in TARGET_MODES:
+        return ()
+    if _action_is_pure_self(action) or action.target_mode == "self":
+        return (actor_key,)
+
+    actor_side = _fighter_side(state, actor_key)
+    wants_allies = action.target_mode in {"ally", "all_allies"}
+    candidates = [
+        key
+        for key, fighter in state.fighters.items()
+        if fighter.hp > 0
+        and ((_fighter_side(state, key) == actor_side) == wants_allies)
+    ]
+    candidates.sort(key=lambda key: (state.fighters[key].id, key))
+    if action.target_mode in {"all_opponents", "all_allies"}:
+        return tuple(candidates)
+
+    requested_key = _resolve_fighter_key(state, requested_target)
+    if requested_key is not None:
+        return (requested_key,) if requested_key in candidates else ()
+    if len(candidates) == 1:
+        return (candidates[0],)
+    if actor_key != "player" and "player" in candidates:
+        return ("player",)
+    return ()
+
+
+def action_target_ids(
+    state: Combat, action_id: str, *, actor_key: str = "player"
+) -> tuple[str, ...]:
+    """Return deterministic, alive target entity IDs selectable for one action."""
+    actions = state.player_actions if actor_key == "player" else state.enemy_actions
+    action = actions.get(action_id)
+    if action is None:
+        return ()
+    if (
+        action.target_mode in {"all_opponents", "all_allies", "self"}
+        or _action_is_pure_self(action)
+    ):
+        keys = _resolve_action_targets(state, actor_key, action)
+    else:
+        actor_side = _fighter_side(state, actor_key)
+        wants_allies = action.target_mode == "ally"
+        keys = tuple(
+            sorted(
+                (
+                    key
+                    for key, fighter in state.fighters.items()
+                    if fighter.hp > 0
+                    and ((_fighter_side(state, key) == actor_side) == wants_allies)
+                ),
+                key=lambda key: (state.fighters[key].id, key),
+            )
+        )
+    return tuple(state.fighters[key].id for key in keys)
+
+
+def _refresh_result(state: Combat) -> None:
+    if any(
+        fighter.hp <= 0 and _fighter_defeat_on_zero(state, key)
+        for key, fighter in state.fighters.items()
+    ):
+        state.result = "defeat"
+        _clear_prepared_action(state)
+        return
+    required_enemies = [
+        key
+        for key, fighter in state.fighters.items()
+        if _fighter_side(state, key) == "enemy"
+        and _fighter_required_for_victory(state, key)
+    ]
+    if required_enemies and all(state.fighters[key].hp <= 0 for key in required_enemies):
+        state.result = "victory"
+        _clear_prepared_action(state)
+
+
 def initiative(state: Combat) -> tuple[str, ...]:
     return tuple(
         sorted(
-            state.fighters,
+            (
+                key
+                for key, fighter in state.fighters.items()
+                if fighter.hp > 0 and fighter.takes_turn
+            ),
             key=lambda key: (
                 -state.fighters[key].stat("agility"),
                 -stable_priority(state.id, key),
@@ -801,10 +944,13 @@ def _deal_damage(target: Fighter, amount: Decimal | int) -> tuple[Decimal, Decim
 
 
 def _begin_turn(state: Combat) -> None:
-    actor = state.fighters[state.order[state.turn_index]]
+    if state.result or not state.order:
+        return
+    actor_key = state.order[state.turn_index]
+    actor = state.fighters[actor_key]
     actor.opportunity += 1
     actor.defending = False
-    if actor.id == "player" and state.prepared_action is not None:
+    if actor_key == "player" and state.prepared_action is not None:
         state.response_window_seen = True
 
 
@@ -971,8 +1117,28 @@ def _retaliation_action_resolved(
     )
 
 
+def _advance_turn_cursor(state: Combat) -> None:
+    if state.result:
+        return
+    while True:
+        state.turn_index += 1
+        if state.turn_index >= len(state.order):
+            state.round += 1
+            state.order = initiative(state)
+            state.turn_index = 0
+            if not state.order:
+                return
+        actor = state.fighters[state.order[state.turn_index]]
+        if actor.hp > 0 and actor.takes_turn:
+            break
+    _begin_turn(state)
+
+
 def _end_turn(state: Combat) -> None:
-    actor = state.fighters[state.order[state.turn_index]]
+    if not state.order:
+        return
+    actor_key = state.order[state.turn_index]
+    actor = state.fighters[actor_key]
     for dot in state.dot_states.get(actor.id, []):
         coefficient = (
             D("0.12")
@@ -982,7 +1148,8 @@ def _end_turn(state: Combat) -> None:
             else D("0.10")
         )
         snapshots = dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks
-        source = state.fighters.get(dot.source)
+        source_key = _resolve_fighter_key(state, dot.source)
+        source = state.fighters.get(source_key) if source_key is not None else None
         attacker_level = source.level if source is not None else actor.level
         damage = dot_damage(
             snapshots,
@@ -1010,10 +1177,7 @@ def _end_turn(state: Combat) -> None:
     state.dot_states[actor.id] = [
         dot for dot in state.dot_states.get(actor.id, []) if dot.remaining > 0
     ]
-    if actor.hp == 0 and not state.result:
-        state.result = "defeat" if actor.id == "player" else "victory"
-    if state.result:
-        _clear_prepared_action(state)
+    _refresh_result(state)
     for effect in actor.effects:
         if actor.opportunity > effect.applied_opportunity:
             effect.remaining -= 1
@@ -1040,7 +1204,7 @@ def _end_turn(state: Combat) -> None:
             _clear_retaliation(actor)
             _retaliation_event(
                 state,
-                actor_key=state.order[state.turn_index],
+                actor_key=actor_key,
                 target_id=actor.id,
                 kind="expired",
                 activation_id=activation_id,
@@ -1049,12 +1213,8 @@ def _end_turn(state: Combat) -> None:
                 source_actor_id=source_actor_id,
                 remaining=0,
             )
-    state.turn_index += 1
-    if state.turn_index == len(state.order):
-        state.round += 1
-        state.order = initiative(state)
-        state.turn_index = 0
-    _begin_turn(state)
+    if not state.result:
+        _advance_turn_cursor(state)
 
 
 def _perform(state: Combat, actor_id: str, action_id: str) -> None:
