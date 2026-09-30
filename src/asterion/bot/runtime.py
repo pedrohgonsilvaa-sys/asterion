@@ -3,6 +3,7 @@ from functools import lru_cache
 
 from aiogram import Bot, Dispatcher
 
+from asterion.application.class_trials import ClassTrialService
 from asterion.application.consumables import ConsumableService
 from asterion.application.creation import CreationService
 from asterion.application.equipment import EquipmentService
@@ -18,6 +19,7 @@ from asterion.application.s1 import S1Service
 from asterion.application.s2 import S2Service
 from asterion.application.s3 import S3Service
 from asterion.application.world import WorldService
+from asterion.bot.class_trial_handlers import class_trial_router
 from asterion.bot.combat_handlers import combat_router
 from asterion.bot.creation_handlers import creation_router
 from asterion.bot.equipment_handlers import equipment_router
@@ -62,6 +64,7 @@ def get_bot_runtime() -> BotRuntime:
     p3 = P3Service(SessionFactory, settings.server_id)
     s3 = S3Service(SessionFactory, settings.server_id)
     p4 = P4Service(SessionFactory, settings.server_id)
+    class_trials = ClassTrialService(SessionFactory, settings.server_id)
     dispatcher.include_router(p2_router(p2, settings.creation_images, s3=s3, p4=p4))
     dispatcher.include_router(p1_router(p1, settings.creation_images))
     dispatcher.include_router(s1_router(s1, settings.creation_images))
@@ -69,6 +72,7 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(p3_router(p3, settings.creation_images, s3=s3))
     dispatcher.include_router(s3_router(s3, settings.creation_images))
     dispatcher.include_router(p4_router(p4, settings.creation_images))
+    dispatcher.include_router(class_trial_router(class_trials, settings.creation_images))
     dispatcher.include_router(
         combat_router(
             prologue, settings.creation_images, world, road, p2=p2, s2=s2, p3=p3,
@@ -100,6 +104,7 @@ def get_bot_runtime() -> BotRuntime:
             p3=p3,
             s3=s3,
             p4=p4,
+            class_trials=class_trials,
         )
     )
     dispatcher.include_router(
@@ -119,6 +124,7 @@ def get_bot_runtime() -> BotRuntime:
             p3=p3,
             s3=s3,
             p4=p4,
+            class_trials=class_trials,
         )
     )
     return BotRuntime(

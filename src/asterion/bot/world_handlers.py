@@ -5,6 +5,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from asterion.application.class_trials import ClassTrialService
 from asterion.application.consumables import ConsumableService
 from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
@@ -17,6 +18,7 @@ from asterion.application.s1 import S1Service
 from asterion.application.s2 import S2Service
 from asterion.application.s3 import S3Service
 from asterion.application.world import WorldService
+from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
@@ -45,6 +47,7 @@ def world_router(
     p3: P3Service | None = None,
     s3: S3Service | None = None,
     p4: P4Service | None = None,
+    class_trials: ClassTrialService | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -70,6 +73,18 @@ def world_router(
             and p2_view.kind == "combat"
         ):
             await present(message, render_p2(p2_view), images)
+            return
+        trial_view = (
+            await class_trials.resume(message.from_user.id)
+            if class_trials and message.from_user
+            else None
+        )
+        if trial_view is not None and trial_view.kind == "active":
+            await present(
+                message,
+                await render_class_trial_view(class_trials, message.from_user.id, trial_view),
+                images,
+            )
             return
         p4_view = await p4.resume(message.from_user.id) if p4 and message.from_user else None
         if p4_view is not None and p4_view.status == "active" and p4_view.kind == "combat":
@@ -119,6 +134,19 @@ def world_router(
             and isinstance(query.message, Message)
         ):
             await present(query.message, render_p2(p2_view), images, edit=True)
+            return
+        trial_view = await class_trials.resume(query.from_user.id) if class_trials else None
+        if (
+            trial_view is not None
+            and trial_view.kind == "active"
+            and isinstance(query.message, Message)
+        ):
+            await present(
+                query.message,
+                await render_class_trial_view(class_trials, query.from_user.id, trial_view),
+                images,
+                edit=True,
+            )
             return
         p4_view = await p4.resume(query.from_user.id) if p4 else None
         if (
@@ -267,6 +295,19 @@ def world_router(
             and isinstance(query.message, Message)
         ):
             await present(query.message, render_p2(p2_view), images, edit=True)
+            return True
+        trial_view = await class_trials.resume(query.from_user.id) if class_trials else None
+        if (
+            trial_view is not None
+            and trial_view.kind == "active"
+            and isinstance(query.message, Message)
+        ):
+            await present(
+                query.message,
+                await render_class_trial_view(class_trials, query.from_user.id, trial_view),
+                images,
+                edit=True,
+            )
             return True
         s2_view = await s2.resume(query.from_user.id) if s2 else None
         if (
