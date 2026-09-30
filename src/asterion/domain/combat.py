@@ -1701,7 +1701,7 @@ def _apply_action_self_effect(state: Combat, actor: Fighter, action: Action) -> 
     )
 
 
-def _enemy_action(state: Combat, actor_key: str) -> str:
+def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
     if state.pending_response is not None:
         action = state.pending_response
         state.pending_response = None
