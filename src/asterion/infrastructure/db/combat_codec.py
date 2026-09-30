@@ -4,7 +4,16 @@ from dataclasses import asdict
 from decimal import Decimal
 from uuid import UUID
 
-from asterion.domain.combat import Action, Combat, CombatEvent, DotState, Effect, Fighter, Tutorial
+from asterion.domain.combat import (
+    Action,
+    ActionEffect,
+    Combat,
+    CombatEvent,
+    DotState,
+    Effect,
+    Fighter,
+    Tutorial,
+)
 from asterion.domain.combat_math import CombatStats
 
 
@@ -56,6 +65,36 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "crit_bonus_if_target_debuffed": Decimal(
                         value.get("crit_bonus_if_target_debuffed", "0")
                     ),
+                    "self_effects": tuple(
+                        ActionEffect(
+                            **(effect | {"magnitude": Decimal(effect["magnitude"])})
+                        )
+                        for effect in value.get("self_effects", ())
+                    ),
+                    "self_state_tags_after": (
+                        tuple(value["self_state_tags_after"])
+                        if value.get("self_state_tags_after") is not None
+                        else None
+                    ),
+                    "chain_power_bonus": Decimal(value.get("chain_power_bonus", "0")),
+                    "chain_power_bonus_damage": (
+                        Decimal(value["chain_power_bonus_damage"])
+                        if value.get("chain_power_bonus_damage") is not None
+                        else None
+                    ),
+                    "chain_power_bonus_healing": (
+                        Decimal(value["chain_power_bonus_healing"])
+                        if value.get("chain_power_bonus_healing") is not None
+                        else None
+                    ),
+                    "chain_power_bonus_barrier": (
+                        Decimal(value["chain_power_bonus_barrier"])
+                        if value.get("chain_power_bonus_barrier") is not None
+                        else None
+                    ),
+                    "prepares_chain_duration": int(
+                        value.get("prepares_chain_duration", 2)
+                    ),
                 }
             )
         )
@@ -68,6 +107,18 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 | {
                     "hp": Decimal(value["hp"]),
                     "barrier": Decimal(value.get("barrier", "0")),
+                    "protection_reduction_per_layer": Decimal(
+                        value.get("protection_reduction_per_layer", "0")
+                    ),
+                    "protection_layers": int(value.get("protection_layers", 0)),
+                    "training_state_tags": tuple(value.get("training_state_tags", ())),
+                    "tagged_direct_damage_reductions": {
+                        tag: Decimal(reduction)
+                        for tag, reduction in value.get(
+                            "tagged_direct_damage_reductions", {}
+                        ).items()
+                    },
+                    "action_chains": value.get("action_chains", {}),
                     "next_direct_crit_bonus": Decimal(
                         value.get("next_direct_crit_bonus", "0")
                     ),
@@ -99,10 +150,24 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "healed": Decimal(event["healed"]),
                     "barrier_absorbed": Decimal(event.get("barrier_absorbed", "0")),
                     "barrier_value": Decimal(event.get("barrier_value", "0")),
+                    "power_multiplier": Decimal(event.get("power_multiplier", "1")),
+                    "damage_power_multiplier": Decimal(
+                        event.get("damage_power_multiplier", "1")
+                    ),
+                    "healing_power_multiplier": Decimal(
+                        event.get("healing_power_multiplier", "1")
+                    ),
+                    "barrier_power_multiplier": Decimal(
+                        event.get("barrier_power_multiplier", "1")
+                    ),
                     "calculated_damage": int(event.get("calculated_damage", 0)),
                     "effective_damage": int(event.get("effective_damage", 0)),
                     "target_effect_ids": tuple(event.get("target_effect_ids", ())),
                     "actor_effect_ids": tuple(event.get("actor_effect_ids", ())),
+                    "target_state_tags": tuple(event.get("target_state_tags", ())),
+                    "target_effect_application_event_ids": tuple(
+                        event.get("target_effect_application_event_ids", ())
+                    ),
                 }
             )
         )

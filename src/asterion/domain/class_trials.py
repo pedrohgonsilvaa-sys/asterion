@@ -2,13 +2,18 @@
 
 from collections.abc import Mapping
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
-from asterion.domain.arts import ERRANTE_ART_IDS, SENTINEL_ART_IDS
-from asterion.domain.combat import Action, Combat, CombatEvent, Fighter
+from asterion.domain.arts import (
+    ERRANTE_ART_IDS,
+    SENTINEL_ART_IDS,
+    TECELAO_ART_IDS,
+    VIGIA_ART_IDS,
+)
+from asterion.domain.combat import Action, ActionEffect, Combat, CombatEvent, Fighter
 from asterion.domain.combat_math import CURRENT_COMBAT_RULESET, CombatStats
 
 TRIAL_IDS_BY_CLASS = {
@@ -63,6 +68,44 @@ ERRANTE_EXPOSE_ACTION_ID = "trial.errante.exposto"
 ERRANTE_EXPOSED_EFFECT_ID = "errante.exposto"
 ERRANTE_STEP_EVASION_EFFECT_ID = "errante.passo_velado.evasao"
 ERRANTE_STEP_WINDOW_EFFECT_ID = "errante.passo_velado.janela_ofensiva"
+VIGIA_TRIAL_ID = TRIAL_IDS_BY_CLASS["vigia"]
+VIGIA_CONDITION_IDS = {
+    1: "vigia.stage_1.marked_window_hit",
+    2: "vigia.stage_2.layers_removed",
+    3: "vigia.stage_3.exposed_art_hit",
+}
+VIGIA_ENTITY_IDS = {
+    1: "trial_entity.vigia.marca",
+    2: "trial_entity.vigia.camadas",
+    3: "trial_entity.vigia.momento",
+}
+VIGIA_MARK_EFFECT_ID = "vigia.marca_da_presa"
+VIGIA_EYE_PER_EFFECT_ID = "vigia.olho_da_vigilia.per"
+VIGIA_EYE_CRIT_EFFECT_ID = "vigia.olho_da_vigilia.crit"
+VIGIA_PROTECTED_TAG = "vigia.protegido"
+VIGIA_EXPOSED_TAG = "vigia.exposto"
+TECELAO_TRIAL_ID = TRIAL_IDS_BY_CLASS["tecelao"]
+TECELAO_CONDITION_IDS = {
+    1: ("tecelao.stage_1.burn_applied",),
+    2: ("tecelao.stage_2.multi_target_rupture",),
+    3: ("tecelao.stage_3.thread_consumed_twice", "tecelao.stage_3.barrier_absorbed"),
+}
+TECELAO_ENTITY_IDS = {
+    1: (
+        "trial_entity.tecelao.acender.principal",
+        "trial_entity.tecelao.acender.manifestacao_1",
+        "trial_entity.tecelao.acender.manifestacao_2",
+    ),
+    2: (
+        "trial_entity.tecelao.romper.1",
+        "trial_entity.tecelao.romper.2",
+        "trial_entity.tecelao.romper.3",
+    ),
+    3: ("trial_entity.tecelao.entrelacar",),
+}
+TECELAO_THREAD_KEY = "trama_encadeada"
+TECELAO_THREAD_BASE_POWER_BONUS = Decimal("0.10")
+TECELAO_THREAD_BASE_DURATION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +120,11 @@ class TrialEntityDefinition:
     action_ids: tuple[str, ...] = ()
     required_to_survive: bool = False
     variant: None = None
+    protection_layers: int = 0
+    protection_reduction_per_layer: Decimal = Decimal(0)
+    initial_state_tags: tuple[str, ...] = ()
+    tagged_direct_damage_reductions: Mapping[str, Decimal] = field(default_factory=dict)
+    action_cycle: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.entity_id.startswith(TRIAL_ENTITY_PREFIX) or len(self.entity_id) > 96:
@@ -89,6 +137,12 @@ class TrialEntityDefinition:
             raise ValueError("Class Trial entity combat values must be non-negative.")
         if self.variant is not None:
             raise ValueError("Class Trial entities never have a Variant.")
+        if self.protection_layers < 0 or self.protection_reduction_per_layer < 0:
+            raise ValueError("Training protection layers cannot be negative.")
+        if any(not tag for tag in self.initial_state_tags):
+            raise ValueError("Training state tags must be non-empty.")
+        if any(value < 0 or value > 1 for value in self.tagged_direct_damage_reductions.values()):
+            raise ValueError("Training direct damage reductions must be between zero and one.")
         if self.turn_policy == "passive" and self.action_ids:
             raise ValueError("Passive Class Trial entities cannot have actions.")
         if self.team == "ally" and self.turn_policy != "passive":
@@ -99,6 +153,8 @@ class TrialEntityDefinition:
             raise ValueError("Only allied entities may be required to survive.")
         if len(set(self.action_ids)) != len(self.action_ids):
             raise ValueError("Class Trial entity action ids must be unique.")
+        if self.action_cycle and not set(self.action_cycle).issubset(self.action_ids):
+            raise ValueError("Training action cycles must use declared entity actions.")
 
     def to_data(self) -> dict[str, Any]:
         return {
@@ -110,6 +166,14 @@ class TrialEntityDefinition:
             "action_ids": list(self.action_ids),
             "required_to_survive": self.required_to_survive,
             "variant": None,
+            "protection_layers": self.protection_layers,
+            "protection_reduction_per_layer": str(self.protection_reduction_per_layer),
+            "initial_state_tags": list(self.initial_state_tags),
+            "tagged_direct_damage_reductions": {
+                key: str(value)
+                for key, value in self.tagged_direct_damage_reductions.items()
+            },
+            "action_cycle": list(self.action_cycle),
         }
 
     @classmethod
@@ -125,6 +189,16 @@ class TrialEntityDefinition:
             action_ids=tuple(data.get("action_ids", ())),
             required_to_survive=bool(data.get("required_to_survive", False)),
             variant=None,
+            protection_layers=int(data.get("protection_layers", 0)),
+            protection_reduction_per_layer=Decimal(
+                str(data.get("protection_reduction_per_layer", "0"))
+            ),
+            initial_state_tags=tuple(data.get("initial_state_tags", ())),
+            tagged_direct_damage_reductions={
+                key: Decimal(str(value))
+                for key, value in data.get("tagged_direct_damage_reductions", {}).items()
+            },
+            action_cycle=tuple(data.get("action_cycle", ())),
         )
 
 
@@ -481,6 +555,323 @@ def create_errante_trial_combat(
     )
 
 
+def vigia_stage_definition(
+    stage: int, *, allowed_art_ids: tuple[str, ...] = ()
+) -> TrialStageDefinition:
+    """Return the frozen Nv.10 Vigia training stage from TDO v1.0.12."""
+    if stage not in VIGIA_ENTITY_IDS:
+        raise ValueError("Vigia has three documented trial stages.")
+    if len(allowed_art_ids) > 3 or not set(allowed_art_ids).issubset(
+        set(VIGIA_ART_IDS.values())
+    ):
+        raise ValueError("Vigia trials accept at most three valid equipped Arts.")
+    values = {
+        1: (Decimal("600"), Decimal("95"), Decimal("125"), Decimal("85"),
+            ("trial.vigia.disparo_treino",)),
+        2: (Decimal("650"), Decimal("90"), Decimal("90"), Decimal("85"),
+            ("trial.vigia.disparo_treino",)),
+        3: (Decimal("650"), Decimal("100"), Decimal("90"), Decimal("90"),
+            ("trial.vigia.disparo_protegido", "trial.vigia.disparo_exposto")),
+    }
+    hp, attack, defense, agility, action_ids = values[stage]
+    entity = TrialEntityDefinition(
+        entity_id=VIGIA_ENTITY_IDS[stage],
+        team="hostile",
+        turn_policy="active",
+        max_hp=hp,
+        stats={"attack": attack, "defense": defense, "agility": agility},
+        action_ids=action_ids,
+        protection_layers=3 if stage == 2 else 0,
+        protection_reduction_per_layer=Decimal("0.12") if stage == 2 else Decimal(0),
+        initial_state_tags=(VIGIA_PROTECTED_TAG,) if stage == 3 else (),
+        tagged_direct_damage_reductions=(
+            {VIGIA_PROTECTED_TAG: Decimal("0.25")} if stage == 3 else {}
+        ),
+        action_cycle=(
+            ("trial.vigia.disparo_protegido", "trial.vigia.disparo_exposto")
+            if stage == 3 else ()
+        ),
+    )
+    return TrialStageDefinition(
+        stage=stage,
+        entities=(entity,),
+        required_conditions=(VIGIA_CONDITION_IDS[stage],),
+        allowed_art_ids=tuple(allowed_art_ids),
+    )
+
+
+def vigia_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action]:
+    if len(allowed_art_ids) > 3 or len(set(allowed_art_ids)) != len(allowed_art_ids):
+        raise ValueError("Vigia combat configuration accepts at most three unique Arts.")
+    if not set(allowed_art_ids).issubset(set(VIGIA_ART_IDS.values())):
+        raise ValueError("Unknown Vigia Art in trial combat configuration.")
+    definitions = {
+        VIGIA_ART_IDS["disparo_preciso"]: Action(
+            VIGIA_ART_IDS["disparo_preciso"], "Disparo Preciso", Decimal("1.15"), cooldown=2
+        ),
+        VIGIA_ART_IDS["marca_da_presa"]: Action(
+            VIGIA_ART_IDS["marca_da_presa"], "Marca da Presa", Decimal("0.85"),
+            attack_debuff=Decimal("0.08"), duration=2, cooldown=3,
+            effect_stat="defense", effect_id=VIGIA_MARK_EFFECT_ID,
+        ),
+        VIGIA_ART_IDS["saraivada"]: Action(
+            VIGIA_ART_IDS["saraivada"], "Saraivada", Decimal("0.40"),
+            cooldown=3, hit_count=3,
+        ),
+        VIGIA_ART_IDS["olho_da_vigilia"]: Action(
+            VIGIA_ART_IDS["olho_da_vigilia"], "Olho da Vigília", Decimal(0),
+            cooldown=4, target_mode="self",
+            self_effects=(
+                ActionEffect(
+                    VIGIA_EYE_PER_EFFECT_ID,
+                    "per",
+                    Decimal("12"),
+                    2,
+                    kind="buff",
+                    stat_modifier_mode="percentage_points",
+                ),
+                ActionEffect(
+                    VIGIA_EYE_CRIT_EFFECT_ID,
+                    "crit",
+                    Decimal("8"),
+                    2,
+                    kind="buff",
+                    stat_modifier_mode="percentage_points",
+                ),
+            ),
+        ),
+    }
+    return {
+        "attack": Action("attack", "Ataque Básico", Decimal(1)),
+        **{art_id: definitions[art_id] for art_id in allowed_art_ids},
+    }
+
+
+def vigia_enemy_actions(stage: int) -> dict[str, Action]:
+    if stage in {1, 2}:
+        return {
+            "trial.vigia.disparo_treino": Action(
+                "trial.vigia.disparo_treino", "Disparo de Treino", Decimal("0.95")
+            )
+        }
+    if stage == 3:
+        return {
+            "trial.vigia.disparo_protegido": Action(
+                "trial.vigia.disparo_protegido", "Disparo de Treino", Decimal("1.00"),
+                self_state_tags_after=(VIGIA_EXPOSED_TAG,),
+            ),
+            "trial.vigia.disparo_exposto": Action(
+                "trial.vigia.disparo_exposto", "Disparo de Treino", Decimal("1.00"),
+                self_state_tags_after=(VIGIA_PROTECTED_TAG,),
+            ),
+        }
+    raise ValueError("Vigia has three documented trial stages.")
+
+
+def create_vigia_trial_combat(
+    player: Fighter, definition: TrialStageDefinition
+) -> Combat:
+    canonical = vigia_stage_definition(
+        definition.stage, allowed_art_ids=definition.allowed_art_ids
+    )
+    if canonical.to_data() != definition.to_data():
+        raise ValueError("Vigia trial parameters must match the authoritative stage plan.")
+    entity = definition.entities[0]
+    enemy = Fighter(
+        id=entity.entity_id,
+        name={1: "Eco da Marca", 2: "Eco das Camadas", 3: "Eco do Momento"}[definition.stage],
+        level=10,
+        stats=CombatStats(
+            entity.max_hp,
+            entity.stats["attack"],
+            entity.stats["defense"],
+            entity.stats["agility"],
+        ),
+        hp=entity.max_hp,
+        protection_layers=entity.protection_layers,
+        protection_reduction_per_layer=entity.protection_reduction_per_layer,
+        training_state_tags=entity.initial_state_tags,
+        tagged_direct_damage_reductions=dict(entity.tagged_direct_damage_reductions),
+    )
+    return Combat(
+        id=uuid4(),
+        ruleset=CURRENT_COMBAT_RULESET,
+        fighters={"player": player, "enemy": enemy},
+        player_actions=vigia_player_actions(definition.allowed_art_ids),
+        enemy_actions=vigia_enemy_actions(definition.stage),
+        ai_cycle=entity.action_cycle or entity.action_ids,
+        variant=None,
+        external_consumables_allowed=False,
+    )
+
+
+def tecelao_stage_definition(
+    stage: int, *, allowed_art_ids: tuple[str, ...] = ()
+) -> TrialStageDefinition:
+    """Return the frozen Nv.10 Tecelão training stage from TDO v1.0.12."""
+    if stage not in TECELAO_ENTITY_IDS:
+        raise ValueError("Tecelão has three documented trial stages.")
+    if len(allowed_art_ids) > 3 or not set(allowed_art_ids).issubset(
+        set(TECELAO_ART_IDS.values())
+    ):
+        raise ValueError("Tecelão trials accept at most three valid equipped Arts.")
+    if stage == 1:
+        specs = (
+            (TECELAO_ENTITY_IDS[1][0], "hostile", "active", Decimal("560"),
+             Decimal("95"), Decimal("90"), Decimal("85"), ("trial.tecelao.fio_de_treino",)),
+            (TECELAO_ENTITY_IDS[1][1], "hostile", "passive", Decimal("180"),
+             Decimal("0"), Decimal("70"), Decimal("0"), ()),
+            (TECELAO_ENTITY_IDS[1][2], "hostile", "passive", Decimal("180"),
+             Decimal("0"), Decimal("70"), Decimal("0"), ()),
+        )
+    elif stage == 2:
+        specs = tuple(
+            (entity_id, "hostile", "active", Decimal("230"), Decimal("55"),
+             Decimal("65"), Decimal("80"), ("trial.tecelao.pulso_menor",))
+            for entity_id in TECELAO_ENTITY_IDS[2]
+        )
+    else:
+        specs = (
+            (TECELAO_ENTITY_IDS[3][0], "hostile", "active", Decimal("680"),
+             Decimal("100"), Decimal("90"), Decimal("90"),
+             ("trial.tecelao.fio_de_pressao", "trial.tecelao.ruptura_anunciada")),
+        )
+    entities = tuple(
+        TrialEntityDefinition(
+            entity_id=entity_id,
+            team=team,
+            turn_policy=turn_policy,
+            max_hp=hp,
+            stats={"attack": attack, "defense": defense, "agility": agility},
+            action_ids=action_ids,
+            action_cycle=(
+                ("trial.tecelao.fio_de_pressao", "trial.tecelao.fio_de_pressao",
+                 "trial.tecelao.ruptura_anunciada")
+                if stage == 3 and entity_id == TECELAO_ENTITY_IDS[3][0]
+                else ()
+            ),
+        )
+        for entity_id, team, turn_policy, hp, attack, defense, agility, action_ids in specs
+    )
+    conditions = TECELAO_CONDITION_IDS[stage]
+    return TrialStageDefinition(
+        stage=stage,
+        entities=entities,
+        required_conditions=conditions,
+        allowed_art_ids=tuple(allowed_art_ids),
+    )
+
+
+def tecelao_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action]:
+    if len(allowed_art_ids) > 3 or len(set(allowed_art_ids)) != len(allowed_art_ids):
+        raise ValueError("Tecelão combat configuration accepts at most three unique Arts.")
+    if not set(allowed_art_ids).issubset(set(TECELAO_ART_IDS.values())):
+        raise ValueError("Unknown Tecelão Art in trial combat configuration.")
+    definitions = {
+        TECELAO_ART_IDS["fio_cortante"]: Action(
+            TECELAO_ART_IDS["fio_cortante"], "Fio Cortante", Decimal("1.20"), cooldown=2,
+            prepares_chain=TECELAO_THREAD_KEY,
+            consumes_chain=TECELAO_THREAD_KEY,
+            chain_power_bonus=TECELAO_THREAD_BASE_POWER_BONUS,
+            prepares_chain_duration=TECELAO_THREAD_BASE_DURATION,
+        ),
+        TECELAO_ART_IDS["chama_tecida"]: Action(
+            TECELAO_ART_IDS["chama_tecida"], "Chama Tecida", Decimal("0.85"),
+            cooldown=2, native_dot_kind="burn", native_dot_stacks=1,
+            prepares_chain=TECELAO_THREAD_KEY,
+            consumes_chain=TECELAO_THREAD_KEY,
+            chain_power_bonus=TECELAO_THREAD_BASE_POWER_BONUS,
+            prepares_chain_duration=TECELAO_THREAD_BASE_DURATION,
+        ),
+        TECELAO_ART_IDS["ruptura_da_trama"]: Action(
+            TECELAO_ART_IDS["ruptura_da_trama"], "Ruptura da Trama", Decimal("0.80"),
+            cooldown=3, target_mode="all_opponents",
+            prepares_chain=TECELAO_THREAD_KEY,
+            consumes_chain=TECELAO_THREAD_KEY,
+            chain_power_bonus=TECELAO_THREAD_BASE_POWER_BONUS,
+            prepares_chain_duration=TECELAO_THREAD_BASE_DURATION,
+        ),
+        TECELAO_ART_IDS["veu_entrelacado"]: Action(
+            TECELAO_ART_IDS["veu_entrelacado"], "Véu Entrelaçado", Decimal(0),
+            cooldown=3, target_mode="self", self_barrier_coefficient=Decimal("0.90"),
+            self_barrier_duration=2, prepares_chain=TECELAO_THREAD_KEY,
+            consumes_chain=TECELAO_THREAD_KEY,
+            chain_power_bonus=TECELAO_THREAD_BASE_POWER_BONUS,
+            prepares_chain_duration=TECELAO_THREAD_BASE_DURATION,
+        ),
+    }
+    return {
+        "attack": Action("attack", "Ataque Básico", Decimal(1)),
+        **{art_id: definitions[art_id] for art_id in allowed_art_ids},
+    }
+
+
+def tecelao_enemy_actions() -> dict[str, Action]:
+    return {
+        "trial.tecelao.fio_de_treino": Action(
+            "trial.tecelao.fio_de_treino", "Fio de Treino", Decimal("0.95")
+        ),
+        "trial.tecelao.pulso_menor": Action(
+            "trial.tecelao.pulso_menor", "Pulso Menor", Decimal("0.80")
+        ),
+        "trial.tecelao.fio_de_pressao": Action(
+            "trial.tecelao.fio_de_pressao", "Fio de Pressão", Decimal("0.95")
+        ),
+        "trial.tecelao.ruptura_anunciada": Action(
+            "trial.tecelao.ruptura_anunciada", "Ruptura Anunciada", Decimal("1.60"),
+            prepared=True,
+        ),
+    }
+
+
+def create_tecelao_trial_combat(
+    player: Fighter, definition: TrialStageDefinition
+) -> Combat:
+    canonical = tecelao_stage_definition(
+        definition.stage, allowed_art_ids=definition.allowed_art_ids
+    )
+    if canonical.to_data() != definition.to_data():
+        raise ValueError("Tecelão trial parameters must match the authoritative stage plan.")
+    fighters = {"player": player}
+    names = {
+        1: ("Eco Principal", "Manifestação Menor", "Manifestação Menor"),
+        2: ("Eco Menor", "Eco Menor", "Eco Menor"),
+        3: ("Eco Entrelaçado",),
+    }[definition.stage]
+    for entity, name in zip(definition.entities, names, strict=True):
+        fighters[entity.entity_id] = Fighter(
+            id=entity.entity_id,
+            name=name,
+            level=10,
+            stats=CombatStats(
+                entity.max_hp,
+                entity.stats["attack"],
+                entity.stats["defense"],
+                entity.stats["agility"],
+            ),
+            hp=entity.max_hp,
+            side="enemy",
+            takes_turn=entity.turn_policy == "active",
+            required_for_victory=True,
+        )
+    cycle = tuple(
+        action_id
+        for entity in definition.entities
+        if entity.turn_policy == "active"
+        for action_id in (entity.action_cycle or entity.action_ids)
+    )
+    return Combat(
+        id=uuid4(),
+        ruleset=CURRENT_COMBAT_RULESET,
+        fighters=fighters,
+        player_actions=tecelao_player_actions(definition.allowed_art_ids),
+        enemy_actions=tecelao_enemy_actions(),
+        ai_cycle=cycle,
+        variant=None,
+        external_consumables_allowed=False,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class TrialCombatEvent:
     """Server-observed combat facts used by deterministic pedagogy evaluators."""
@@ -519,6 +910,30 @@ class TrialCombatEvent:
     dot_kind: str = ""
     dot_application_event_id: str = ""
     dot_source_id: str = ""
+    hit_index: int = 1
+    hit_count: int = 1
+    protection_layers_before: int = 0
+    protection_layers_after: int = 0
+    target_state_tags: tuple[str, ...] = ()
+    target_effect_application_event_ids: tuple[str, ...] = ()
+    applied_effect_id: str = ""
+    effect_application_event_id: str = ""
+    chain_state_before: str = ""
+    chain_state_after: str = ""
+    chain_prepared_by_action_id: str = ""
+    chain_consumed: bool = False
+    chain_empowered: bool = False
+    empowered_by_action_instance_id: str = ""
+    chain_prepared_by_action_instance_id: str = ""
+    chain_consumed_by_action_instance_id: str = ""
+    chain_window_before: int = 0
+    chain_window_after: int = 0
+    power_component: str = ""
+    power_multiplier: Decimal = Decimal(1)
+    damage_power_multiplier: Decimal = Decimal(1)
+    healing_power_multiplier: Decimal = Decimal(1)
+    barrier_power_multiplier: Decimal = Decimal(1)
+    trigger_scope: str = "per_action"
 
     def __post_init__(self) -> None:
         if not self.event_id or len(self.event_id) > 128:
@@ -536,6 +951,13 @@ class TrialCombatEvent:
             self.defender_prevented_damage,
         ) < 0:
             raise ValueError("Class Trial combat damage facts cannot be negative.")
+        if min(
+            self.power_multiplier,
+            self.damage_power_multiplier,
+            self.healing_power_multiplier,
+            self.barrier_power_multiplier,
+        ) < 0:
+            raise ValueError("Class Trial power multipliers cannot be negative.")
         if any(value < 0 for value in (self.entity_hp or {}).values()):
             raise ValueError("Training entity HP cannot be negative.")
         if any(
@@ -556,6 +978,8 @@ def trial_event_from_combat_event(
     event_type = "combat_action"
     if event.internal and event.dot_kind and action_id.startswith("dot:"):
         event_type = "dot_tick"
+    elif event.action == "chain:expired":
+        event_type = "chain_expired"
     if action_id.startswith("prepare:"):
         action_id = action_id.removeprefix("prepare:")
         event_type = "prepared_action"
@@ -578,6 +1002,34 @@ def trial_event_from_combat_event(
         dot_kind=event.dot_kind,
         dot_application_event_id=event.dot_application_event_id,
         dot_source_id=event.dot_source_id,
+        hit_index=event.hit_index,
+        hit_count=event.hit_count,
+        protection_layers_before=event.protection_layers_before,
+        protection_layers_after=event.protection_layers_after,
+        target_state_tags=event.target_state_tags,
+        target_effect_application_event_ids=event.target_effect_application_event_ids,
+        applied_effect_id=event.effect_id,
+        effect_application_event_id=event.effect_application_event_id,
+        chain_state_before=event.chain_state_before,
+        chain_state_after=event.chain_state_after,
+        chain_prepared_by_action_id=event.chain_prepared_by_action_id,
+        chain_consumed=event.chain_consumed,
+        chain_empowered=event.chain_empowered,
+        empowered_by_action_instance_id=event.empowered_by_action_instance_id,
+        chain_prepared_by_action_instance_id=(
+            event.chain_prepared_by_action_instance_id
+        ),
+        chain_consumed_by_action_instance_id=(
+            event.chain_consumed_by_action_instance_id
+        ),
+        chain_window_before=event.chain_window_before,
+        chain_window_after=event.chain_window_after,
+        power_component=event.power_component,
+        power_multiplier=event.power_multiplier,
+        damage_power_multiplier=event.damage_power_multiplier,
+        healing_power_multiplier=event.healing_power_multiplier,
+        barrier_power_multiplier=event.barrier_power_multiplier,
+        trigger_scope=event.trigger_scope,
         calculated_damage=Decimal(event.calculated_damage),
         effective_damage=Decimal(event.effective_damage),
         barrier_absorbed=event.barrier_absorbed,
@@ -732,6 +1184,137 @@ def errante_conditions_for_event(
     return (), current
 
 
+def vigia_conditions_for_event(
+    stage: int,
+    event: TrialCombatEvent,
+    context: Mapping[str, Any] | None = None,
+) -> tuple[tuple[str, ...], dict[str, Any]]:
+    """Evaluate Vigia pedagogy from combat facts captured at resolution time."""
+    current = deepcopy(dict(context or {}))
+    echo_id = VIGIA_ENTITY_IDS.get(stage)
+    condition = VIGIA_CONDITION_IDS.get(stage)
+    if echo_id is None or condition is None or event.event_type != "combat_action":
+        return (), current
+    conditions: list[str] = []
+    if stage == 1:
+        mark_application = current.get("mark_application_event_id")
+        if (
+            event.actor_id == "player"
+            and event.action_id == VIGIA_ART_IDS["marca_da_presa"]
+            and event.target_ids == (echo_id,)
+            and event.effect_applied
+            and event.applied_effect_id == VIGIA_MARK_EFFECT_ID
+            and event.effect_application_event_id
+        ):
+            current["mark_application_event_id"] = event.effect_application_event_id
+            mark_application = event.effect_application_event_id
+        if (
+            event.actor_id == "player"
+            and event.action_id in {"attack", *VIGIA_ART_IDS.values()}
+            and event.action_id != VIGIA_ART_IDS["olho_da_vigilia"]
+            and event.target_ids == (echo_id,)
+            and event.effective_damage > 0
+            and VIGIA_MARK_EFFECT_ID in event.target_effect_ids
+            and mark_application in event.target_effect_application_event_ids
+        ):
+            conditions.append(condition)
+    elif stage == 2:
+        if (
+            event.actor_id == "player"
+            and event.target_ids == (echo_id,)
+            and not event.dodged
+            and event.protection_layers_before > 0
+            and event.protection_layers_after == 0
+        ):
+            conditions.append(condition)
+    elif stage == 3:
+        if (
+            event.actor_id == "player"
+            and event.action_id in set(VIGIA_ART_IDS.values())
+            - {VIGIA_ART_IDS["olho_da_vigilia"]}
+            and event.target_ids == (echo_id,)
+            and event.effective_damage > 0
+            and VIGIA_EXPOSED_TAG in event.target_state_tags
+            and VIGIA_EYE_PER_EFFECT_ID in event.actor_effect_ids
+            and VIGIA_EYE_CRIT_EFFECT_ID in event.actor_effect_ids
+        ):
+            conditions.append(condition)
+    return tuple(conditions), current
+
+
+def tecelao_conditions_for_event(
+    stage: int,
+    event: TrialCombatEvent,
+    context: Mapping[str, Any] | None = None,
+) -> tuple[tuple[str, ...], dict[str, Any]]:
+    """Evaluate Tecelão pedagogy from correlated, server-observed combat events."""
+    current = deepcopy(dict(context or {}))
+    conditions: list[str] = []
+    entity_ids = set(TECELAO_ENTITY_IDS.get(stage, ()))
+    if not entity_ids:
+        return (), current
+    if stage == 1:
+        principal_id = TECELAO_ENTITY_IDS[1][0]
+        if (
+            event.event_type == "combat_action"
+            and event.actor_id == "player"
+            and event.action_id == TECELAO_ART_IDS["chama_tecida"]
+            and event.target_ids == (principal_id,)
+            and event.dot_kind == "burn"
+            and event.dot_application_event_id
+        ):
+            conditions.append(TECELAO_CONDITION_IDS[1][0])
+    elif stage == 2:
+        if (
+            event.event_type == "combat_action"
+            and event.actor_id == "player"
+            and event.action_id == TECELAO_ART_IDS["ruptura_da_trama"]
+            and event.action_instance_id
+            and event.target_ids
+            and event.target_ids[0] in entity_ids
+            and event.effective_damage > 0
+            and not event.dodged
+        ):
+            by_action = dict(current.get("ruptura_targets_by_action", {}))
+            targets = set(by_action.get(event.action_instance_id, ()))
+            targets.add(event.target_ids[0])
+            by_action[event.action_instance_id] = sorted(targets)
+            current["ruptura_targets_by_action"] = by_action
+            if len(targets) >= 2 and not current.get("ruptura_condition_satisfied"):
+                current["ruptura_condition_satisfied"] = True
+                conditions.append(TECELAO_CONDITION_IDS[2][0])
+    elif stage == 3:
+        if (
+            event.event_type == "combat_action"
+            and event.actor_id == "player"
+            and event.chain_consumed
+            and event.chain_empowered
+            and event.action_id in set(TECELAO_ART_IDS.values())
+            and event.chain_prepared_by_action_id
+            and event.chain_prepared_by_action_id != event.action_id
+            and event.power_multiplier == TECELAO_THREAD_BASE_POWER_BONUS + Decimal(1)
+            and event.action_instance_id
+        ):
+            consumed = set(current.get("empowered_action_instance_ids", ()))
+            consumed.add(event.action_instance_id)
+            current["empowered_action_instance_ids"] = sorted(consumed)
+            if len(consumed) >= 2 and not current.get("thread_condition_satisfied"):
+                current["thread_condition_satisfied"] = True
+                conditions.append(TECELAO_CONDITION_IDS[3][0])
+        if (
+            event.event_type == "combat_action"
+            and event.actor_id in {TECELAO_ENTITY_IDS[3][0]}
+            and event.action_id == "trial.tecelao.ruptura_anunciada"
+            and event.prepared_resolution
+            and event.target_ids == ("player",)
+            and event.barrier_absorbed >= 1
+            and event.target_barrier_source
+            == f"player:{TECELAO_ART_IDS['veu_entrelacado']}"
+        ):
+            conditions.append(TECELAO_CONDITION_IDS[3][1])
+    return tuple(dict.fromkeys(conditions)), current
+
+
 def fresh_attempt_state(
     definition: TrialStageDefinition, player_hp: Decimal
 ) -> dict[str, Any]:
@@ -848,6 +1431,21 @@ def reset_trial_combat(
         fighter.retaliation_source_type = ""
         fighter.retaliation_source_event_id = ""
         fighter.retaliation_source_actor_id = ""
+        fighter.protection_layers = (
+            entity_by_id[fighter.id].protection_layers if key != "player" else 0
+        )
+        fighter.protection_reduction_per_layer = (
+            entity_by_id[fighter.id].protection_reduction_per_layer
+            if key != "player" else Decimal(0)
+        )
+        fighter.training_state_tags = (
+            entity_by_id[fighter.id].initial_state_tags if key != "player" else ()
+        )
+        fighter.tagged_direct_damage_reductions = (
+            dict(entity_by_id[fighter.id].tagged_direct_damage_reductions)
+            if key != "player" else {}
+        )
+        fighter.action_chains = {}
         if key == "player":
             fighter.hp = player_hp
         else:

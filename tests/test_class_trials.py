@@ -9,6 +9,7 @@ from asterion.application.combat_configuration_guard import (
     CombatConfigurationLocked,
     lock_for_combat_configuration_mutation,
 )
+from asterion.domain.arts import TECELAO_ART_IDS, VIGIA_ART_IDS
 from asterion.domain.class_trials import (
     CLASS_PATHS,
     TRIAL_COMPLETED_UNLOCK,
@@ -23,6 +24,7 @@ from asterion.infrastructure.db.models import (
     Account,
     BestiaryEntry,
     Character,
+    CharacterActiveArtSlot,
     ClassTrialState,
     CodexEntry,
     ConsumableStack,
@@ -46,7 +48,8 @@ async def _seed_trial(
     *,
     level: int = 10,
     location: str = REFUGE,
-    character_class: str = "vigia",
+    character_class: str = "luminar",
+    active_art_ids: tuple[str, ...] = (),
 ):
     _, sessions = database
     character_id = uuid4()
@@ -71,6 +74,14 @@ async def _seed_trial(
                 max_vigor=100,
                 crowns=23,
             )
+        )
+        session.add_all(
+            CharacterActiveArtSlot(
+                character_id=character_id,
+                slot=slot,
+                art_id=art_id,
+            )
+            for slot, art_id in enumerate(active_art_ids, start=1)
         )
         session.add(
             WorldState(character_id=character_id, region=REGION, location=location)
@@ -113,7 +124,7 @@ def _plan(stage: int, *, conditions=("demonstration.complete",)) -> TrialStageDe
 
 
 def _combat(plan: TrialStageDefinition) -> Combat:
-    stats = resolve_combat_stats("vigia", 10, "remanescente")
+    stats = resolve_combat_stats("luminar", 10, "remanescente")
     fighters = {
         "player": Fighter(
             "player",
@@ -122,7 +133,7 @@ def _combat(plan: TrialStageDefinition) -> Combat:
             stats,
             Decimal("1"),
             race="remanescente",
-            character_class="vigia",
+            character_class="luminar",
             opportunity=4,
             defending=True,
             last_action="old-action",
@@ -489,7 +500,7 @@ async def test_final_checkpoint_unlocks_both_paths_once_without_selection_or_rew
     assert second.current_stage == 3 and second.completed_stages == (1, 2)
     assert final.kind == "completed" and final.completed_stages == (1, 2, 3)
     assert duplicate.kind == "completed" and resumed.kind == "completed"
-    assert final.available_paths == ("atirador", "rastreador")
+    assert final.available_paths == ("guardiao", "inquisidor")
     assert final.selected_path is None and not final.path_art_unlocked
     assert final.path_art_min_level == 12
     async with sessions() as session:
@@ -513,6 +524,141 @@ async def test_final_checkpoint_unlocks_both_paths_once_without_selection_or_rew
             .join(RewardEvent)
             .where(RewardEvent.character_id == character_id)
         ) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("character_class", "art_ids", "first_action"),
+    [
+        (
+            "vigia",
+            (
+                VIGIA_ART_IDS["disparo_preciso"],
+                VIGIA_ART_IDS["marca_da_presa"],
+                VIGIA_ART_IDS["saraivada"],
+            ),
+            VIGIA_ART_IDS["marca_da_presa"],
+        ),
+        (
+            "tecelao",
+            (
+                TECELAO_ART_IDS["chama_tecida"],
+                TECELAO_ART_IDS["fio_cortante"],
+                TECELAO_ART_IDS["veu_entrelacado"],
+            ),
+            TECELAO_ART_IDS["chama_tecida"],
+        ),
+    ],
+)
+async def test_vigia_and_tecelao_attempts_use_persisted_arts_and_reconnect(
+    database, character_class, art_ids, first_action
+):
+    actor = 997350 if character_class == "vigia" else 997351
+    character_id, sessions, service = await _seed_trial(
+        database,
+        actor,
+        character_class=character_class,
+        active_art_ids=art_ids,
+    )
+    offer = await service.resume(actor)
+    begun = await service.begin(actor, offer.state_version)
+    active = await service.start_attempt(actor, begun.state_version)
+    assert active.kind == "active" and active.attempt_id is not None
+    assert active.attempt_state["equipped_art_ids"] == list(art_ids)
+    assert active.consumable_options == ()
+
+    combat = await service.combat(actor, active.attempt_id)
+    assert combat is not None
+    assert combat.external_consumables_allowed is False
+    assert combat.consumable_uses == 0
+    assert combat.variant is None
+    assert set(combat.player_actions) == {"attack", *art_ids}
+    assert len(combat.fighters) >= 2
+
+    changed = await service.action(
+        actor,
+        active.attempt_id,
+        active.combat_version,
+        first_action,
+        target_id=active.stage_definition["entities"][0]["entity_id"],
+    )
+    assert changed.kind == "active"
+    assert changed.attempt_id == active.attempt_id
+    if character_class == "vigia":
+        assert changed.attempt_state["pedagogic_context"]["mark_application_event_id"]
+        assert changed.attempt_state["pedagogic_conditions"] == []
+    else:
+        burn_event = next(
+            row
+            for row in changed.attempt_state["events"]
+            if row["action_id"] == TECELAO_ART_IDS["chama_tecida"]
+        )
+        assert burn_event["dot_kind"] == "burn"
+        assert burn_event["dot_application_event_id"]
+        assert changed.attempt_state["pedagogic_conditions"] == [
+            "tecelao.stage_1.burn_applied"
+        ]
+    resumed = await service.resume(actor)
+    restored = await service.combat(actor, active.attempt_id)
+    latest_version = changed.combat_version
+    assert resumed.kind == "active"
+    assert resumed.attempt_id == active.attempt_id
+    assert resumed.encounter_id == active.encounter_id
+    assert resumed.combat_id == active.combat_id
+    assert restored is not None and restored.id == active.combat_id
+    assert restored.version == changed.combat_version
+    assert restored.fighters["player"].last_action == first_action
+    assert restored.consumable_uses == 0
+    if character_class == "tecelao":
+        assert restored.fighters["player"].action_chains["trama_encadeada"][
+            "prepared_by_action_id"
+        ] == first_action
+        assert restored.fighters["player"].action_chains["trama_encadeada"][
+            "remaining"
+        ] == 2
+        consumed = await service.action(
+            actor,
+            active.attempt_id,
+            changed.combat_version,
+            TECELAO_ART_IDS["fio_cortante"],
+            target_id=active.stage_definition["entities"][0]["entity_id"],
+        )
+        assert consumed.attempt_state["pedagogic_conditions"] == [
+            "tecelao.stage_1.burn_applied",
+        ]
+        chain_record = next(
+            row
+            for row in reversed(consumed.attempt_state["events"])
+            if row["action_id"] == TECELAO_ART_IDS["fio_cortante"]
+        )
+        assert chain_record["chain_empowered"] is True
+        assert chain_record["power_multiplier"] == "1.10"
+        assert chain_record["chain_prepared_by_action_instance_id"]
+        assert chain_record["chain_consumed_by_action_instance_id"]
+        latest_version = consumed.combat_version
+
+    rejected_consumable = await service.action(
+        actor,
+        active.attempt_id,
+        latest_version,
+        "consumable:external",
+    )
+    assert rejected_consumable.combat_version == latest_version
+
+    async with sessions() as session:
+        character = await session.get(Character, character_id)
+        assert character.vigor == 37
+        assert await session.scalar(
+            select(func.count()).select_from(Encounter).join(GameActivity).where(
+                GameActivity.character_id == character_id
+            )
+        ) == 1
+        for model in (RewardEvent, BestiaryEntry, CodexEntry, MaterialStack):
+            assert await session.scalar(
+                select(func.count()).select_from(model).where(
+                    model.character_id == character_id
+                )
+            ) == 0
 
 
 def test_trial_entities_require_stable_id_no_variant_and_passive_roles():

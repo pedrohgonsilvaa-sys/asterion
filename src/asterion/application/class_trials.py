@@ -19,20 +19,28 @@ from asterion.domain.class_trials import (
     CLASS_PATHS,
     ERRANTE_TRIAL_ID,
     SENTINEL_TRIAL_ID,
+    TECELAO_TRIAL_ID,
     TRIAL_COMPLETED_UNLOCK,
     TRIAL_CONTENT_PREFIX,
     TRIAL_IDS_BY_CLASS,
+    VIGIA_TRIAL_ID,
     TrialCombatEvent,
     TrialStageDefinition,
     create_errante_trial_combat,
     create_sentinel_trial_combat,
+    create_tecelao_trial_combat,
+    create_vigia_trial_combat,
     errante_conditions_for_event,
     errante_stage_definition,
     fresh_attempt_state,
     reset_trial_combat,
     sentinel_conditions_for_event,
     sentinel_stage_definition,
+    tecelao_conditions_for_event,
+    tecelao_stage_definition,
     trial_event_from_combat_event,
+    vigia_conditions_for_event,
+    vigia_stage_definition,
 )
 from asterion.domain.combat import (
     Combat,
@@ -175,8 +183,15 @@ class ClassTrialService:
 
             sentinel = state.trial_id == SENTINEL_TRIAL_ID
             errante = state.trial_id == ERRANTE_TRIAL_ID
-            uses_shared_combat = sentinel or errante
-            stage_builder = sentinel_stage_definition if sentinel else errante_stage_definition
+            vigia = state.trial_id == VIGIA_TRIAL_ID
+            tecelao = state.trial_id == TECELAO_TRIAL_ID
+            uses_shared_combat = sentinel or errante or vigia or tecelao
+            stage_builder = {
+                SENTINEL_TRIAL_ID: sentinel_stage_definition,
+                ERRANTE_TRIAL_ID: errante_stage_definition,
+                VIGIA_TRIAL_ID: vigia_stage_definition,
+                TECELAO_TRIAL_ID: tecelao_stage_definition,
+            }.get(state.trial_id)
             active_art_configuration = None
             if uses_shared_combat:
                 active_art_configuration = await load_active_art_configuration(
@@ -256,11 +271,12 @@ class ClassTrialService:
                     race=character.race,
                     character_class=character.character_class,
                 )
-                combat = (
-                    create_sentinel_trial_combat(player, attempt_definition)
-                    if sentinel
-                    else create_errante_trial_combat(player, attempt_definition)
-                )
+                combat = {
+                    SENTINEL_TRIAL_ID: create_sentinel_trial_combat,
+                    ERRANTE_TRIAL_ID: create_errante_trial_combat,
+                    VIGIA_TRIAL_ID: create_vigia_trial_combat,
+                    TECELAO_TRIAL_ID: create_tecelao_trial_combat,
+                }[state.trial_id](player, attempt_definition)
                 combat.configuration_snapshot = (
                     configuration.to_data(CURRENT_COMBAT_RULESET)
                     | active_art_configuration.to_data()
@@ -298,6 +314,20 @@ class ClassTrialService:
                             stored_definition,
                             trial_event_from_combat_event(combat, combat_event),
                         )
+                elif vigia:
+                    for combat_event in combat.events + combat.mechanic_events:
+                        self._append_vigia_event(
+                            state.attempt_state,
+                            stored_definition,
+                            trial_event_from_combat_event(combat, combat_event),
+                        )
+                elif tecelao:
+                    for combat_event in combat.events + combat.mechanic_events:
+                        self._append_tecelao_event(
+                            state.attempt_state,
+                            stored_definition,
+                            trial_event_from_combat_event(combat, combat_event),
+                        )
             await session.flush()
             return await self._view(session, character, state, world, activity)
 
@@ -319,7 +349,12 @@ class ClassTrialService:
             foreground = await self._foreground(session, character.id)
             if not self._owns_attempt(state, activity, foreground, attempt_id):
                 return await self._view(session, character, state, world, foreground)
-            if state.trial_id in {SENTINEL_TRIAL_ID, ERRANTE_TRIAL_ID}:
+            if state.trial_id in {
+                SENTINEL_TRIAL_ID,
+                ERRANTE_TRIAL_ID,
+                VIGIA_TRIAL_ID,
+                TECELAO_TRIAL_ID,
+            }:
                 # Implemented Class Trials derive pedagogy only from the shared-engine log.
                 return await self._view(session, character, state, world, activity)
             attempt = dict(state.attempt_state or {})
@@ -440,7 +475,12 @@ class ClassTrialService:
             foreground = await self._foreground(session, character.id)
             if (
                 state is None
-                or state.trial_id not in {SENTINEL_TRIAL_ID, ERRANTE_TRIAL_ID}
+                or state.trial_id not in {
+                    SENTINEL_TRIAL_ID,
+                    ERRANTE_TRIAL_ID,
+                    VIGIA_TRIAL_ID,
+                    TECELAO_TRIAL_ID,
+                }
                 or not self._owns_attempt(state, activity, foreground, attempt_id)
                 or activity.state_version != combat_version
                 or action_id.startswith("consumable:")
@@ -492,7 +532,7 @@ class ClassTrialService:
                         definition,
                         trial_event_from_combat_event(updated, combat_event),
                     )
-            else:
+            elif state.trial_id == ERRANTE_TRIAL_ID:
                 for combat_event in updated.events[len(combat.events) :]:
                     self._append_errante_event(
                         attempt,
@@ -501,6 +541,28 @@ class ClassTrialService:
                     )
                 for combat_event in updated.mechanic_events[len(combat.mechanic_events) :]:
                     self._append_errante_event(
+                        attempt,
+                        definition,
+                        trial_event_from_combat_event(updated, combat_event),
+                    )
+            elif state.trial_id == VIGIA_TRIAL_ID:
+                new_events = updated.events[len(combat.events) :]
+                new_mechanic_events = updated.mechanic_events[
+                    len(combat.mechanic_events) :
+                ]
+                for combat_event in new_events + new_mechanic_events:
+                    self._append_vigia_event(
+                        attempt,
+                        definition,
+                        trial_event_from_combat_event(updated, combat_event),
+                    )
+            elif state.trial_id == TECELAO_TRIAL_ID:
+                new_events = updated.events[len(combat.events) :]
+                new_mechanic_events = updated.mechanic_events[
+                    len(combat.mechanic_events) :
+                ]
+                for combat_event in new_events + new_mechanic_events:
+                    self._append_tecelao_event(
                         attempt,
                         definition,
                         trial_event_from_combat_event(updated, combat_event),
@@ -549,6 +611,13 @@ class ClassTrialService:
                 "barrier": str(fighter.barrier),
                 "barrier_remaining": fighter.barrier_remaining,
                 "barrier_source": fighter.barrier_source,
+                "protection_layers": fighter.protection_layers,
+                "training_state_tags": list(fighter.training_state_tags),
+                "tagged_direct_damage_reductions": {
+                    key: str(value)
+                    for key, value in fighter.tagged_direct_damage_reductions.items()
+                },
+                "action_chains": ClassTrialService._json_safe(fighter.action_chains),
                 "cooldowns": dict(fighter.cooldowns),
                 "resources": {
                     "ward_charges": fighter.ward_charges,
@@ -689,6 +758,96 @@ class ClassTrialService:
             }
         )
 
+    @staticmethod
+    def _append_vigia_event(
+        attempt: dict,
+        definition: TrialStageDefinition,
+        event: TrialCombatEvent,
+    ) -> None:
+        ClassTrialService._append_class_pedagogy_event(
+            attempt, definition, event, vigia_conditions_for_event
+        )
+
+    @staticmethod
+    def _append_tecelao_event(
+        attempt: dict,
+        definition: TrialStageDefinition,
+        event: TrialCombatEvent,
+    ) -> None:
+        ClassTrialService._append_class_pedagogy_event(
+            attempt, definition, event, tecelao_conditions_for_event
+        )
+
+    @staticmethod
+    def _append_class_pedagogy_event(
+        attempt: dict,
+        definition: TrialStageDefinition,
+        event: TrialCombatEvent,
+        evaluator,
+    ) -> None:
+        processed = set(attempt.get("processed_event_ids", ()))
+        if event.event_id in processed:
+            return
+        entity_ids = {entity.entity_id for entity in definition.entities}
+        if event.actor_id not in entity_ids | {"player"} or not set(
+            event.target_ids
+        ).issubset(entity_ids | {"player"}):
+            return
+        context = dict(attempt.get("pedagogic_context", {}))
+        conditions, context = evaluator(definition.stage, event, context)
+        if not set(conditions).issubset(set(definition.required_conditions)):
+            return
+        processed.add(event.event_id)
+        attempt["processed_event_ids"] = sorted(processed)
+        attempt["pedagogic_context"] = context
+        progress = set(attempt.get("pedagogic_conditions", ()))
+        progress.update(conditions)
+        attempt["pedagogic_conditions"] = sorted(progress)
+        attempt.setdefault("events", []).append(
+            {
+                "event_id": event.event_id,
+                "event_type": event.event_type,
+                "actor_id": event.actor_id,
+                "target_ids": list(event.target_ids),
+                "action_id": event.action_id,
+                "action_instance_id": event.action_instance_id,
+                "conditions": list(conditions),
+                "hit_index": event.hit_index,
+                "hit_count": event.hit_count,
+                "effective_damage": str(event.effective_damage),
+                "dot_kind": event.dot_kind,
+                "dot_application_event_id": event.dot_application_event_id,
+                "effect_application_event_id": event.effect_application_event_id,
+                "target_effect_ids": list(event.target_effect_ids),
+                "target_effect_application_event_ids": list(
+                    event.target_effect_application_event_ids
+                ),
+                "target_state_tags": list(event.target_state_tags),
+                "protection_layers_before": event.protection_layers_before,
+                "protection_layers_after": event.protection_layers_after,
+                "chain_state_before": event.chain_state_before,
+                "chain_state_after": event.chain_state_after,
+                "chain_prepared_by_action_id": event.chain_prepared_by_action_id,
+                "chain_consumed": event.chain_consumed,
+                "chain_empowered": event.chain_empowered,
+                "empowered_by_action_instance_id": event.empowered_by_action_instance_id,
+                "chain_prepared_by_action_instance_id": (
+                    event.chain_prepared_by_action_instance_id
+                ),
+                "chain_consumed_by_action_instance_id": (
+                    event.chain_consumed_by_action_instance_id
+                ),
+                "chain_window_before": event.chain_window_before,
+                "chain_window_after": event.chain_window_after,
+                "power_component": event.power_component,
+                "power_multiplier": str(event.power_multiplier),
+                "damage_power_multiplier": str(event.damage_power_multiplier),
+                "healing_power_multiplier": str(event.healing_power_multiplier),
+                "barrier_power_multiplier": str(event.barrier_power_multiplier),
+                "trigger_scope": event.trigger_scope,
+            }
+        )
+
     async def attach_combat(
         self,
         actor: int,
@@ -815,7 +974,12 @@ class ClassTrialService:
             ) or state.state_version != version:
                 return await self._view(session, character, state, world, foreground)
 
-            if state.trial_id in {SENTINEL_TRIAL_ID, ERRANTE_TRIAL_ID}:
+            if state.trial_id in {
+                SENTINEL_TRIAL_ID,
+                ERRANTE_TRIAL_ID,
+                VIGIA_TRIAL_ID,
+                TECELAO_TRIAL_ID,
+            }:
                 row = await session.execute(
                     select(Encounter, CombatRecord)
                     .join(CombatRecord, CombatRecord.encounter_id == Encounter.id)

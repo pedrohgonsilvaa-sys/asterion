@@ -54,6 +54,34 @@ ERRANTE_ART_LEVELS = {
     ERRANTE_ART_IDS["golpe_oportuno"]: 9,
 }
 
+VIGIA_ART_IDS = {
+    "disparo_preciso": FIRST_CLASS_ART_IDS["vigia"],
+    "marca_da_presa": "class_art.vigia.marca_da_presa",
+    "saraivada": "class_art.vigia.saraivada",
+    "olho_da_vigilia": "class_art.vigia.olho_da_vigilia",
+}
+
+VIGIA_ART_LEVELS = {
+    VIGIA_ART_IDS["disparo_preciso"]: 1,
+    VIGIA_ART_IDS["marca_da_presa"]: 4,
+    VIGIA_ART_IDS["saraivada"]: 7,
+    VIGIA_ART_IDS["olho_da_vigilia"]: 9,
+}
+
+TECELAO_ART_IDS = {
+    "fio_cortante": FIRST_CLASS_ART_IDS["tecelao"],
+    "chama_tecida": "class_art.tecelao.chama_tecida",
+    "ruptura_da_trama": "class_art.tecelao.ruptura_da_trama",
+    "veu_entrelacado": "class_art.tecelao.veu_entrelacado",
+}
+
+TECELAO_ART_LEVELS = {
+    TECELAO_ART_IDS["fio_cortante"]: 1,
+    TECELAO_ART_IDS["chama_tecida"]: 4,
+    TECELAO_ART_IDS["ruptura_da_trama"]: 7,
+    TECELAO_ART_IDS["veu_entrelacado"]: 9,
+}
+
 
 ACTIVE_ART_DEFINITIONS = {
     art_id: ActiveArtDefinition(art_id, character_class, 1)
@@ -63,6 +91,18 @@ ACTIVE_ART_DEFINITIONS.update(
     {
         art_id: ActiveArtDefinition(art_id, "sentinela", min_level)
         for art_id, min_level in SENTINEL_ART_LEVELS.items()
+    }
+)
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        art_id: ActiveArtDefinition(art_id, "vigia", min_level)
+        for art_id, min_level in VIGIA_ART_LEVELS.items()
+    }
+)
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        art_id: ActiveArtDefinition(art_id, "tecelao", min_level)
+        for art_id, min_level in TECELAO_ART_LEVELS.items()
     }
 )
 ACTIVE_ART_DEFINITIONS.update(
