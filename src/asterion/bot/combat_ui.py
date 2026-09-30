@@ -14,6 +14,7 @@ from asterion.domain.combat import (
     Combat,
     CombatConsumableOption,
     CombatEvent,
+    action_target_ids,
     allowed_actions,
     consumable_effect_options,
 )
@@ -94,6 +95,48 @@ class P4CombatCallback(CallbackData, prefix="p4fight"):
         return UUID(hex=self.activity)
 
 
+class ClassTrialActionCallback(CallbackData, prefix="trialact"):
+    attempt: str
+    version: str
+    action: str
+    target: str
+
+    @classmethod
+    def for_intent(
+        cls, attempt_id: UUID, version: int, action_index: int, target: str
+    ):
+        # Action/target indexes decode only against this persisted attempt/version.
+        return cls(
+            attempt=_uuid_token(attempt_id),
+            version=_base36(version),
+            action=_base36(action_index),
+            target=target,
+        )
+
+    @property
+    def attempt_id(self) -> UUID:
+        return _uuid_from_token(self.attempt)
+
+    @property
+    def combat_version(self) -> int:
+        return _from_base36(self.version)
+
+    @property
+    def action_index(self) -> int:
+        return _from_base36(self.action)
+
+    @property
+    def target_index(self) -> int | None:
+        if self.target in {"x", "s", "b"}:
+            return None
+        token = self.target[1:] if self.target.startswith("d") else self.target
+        return _from_base36(token)
+
+    @property
+    def direct_target(self) -> bool:
+        return self.target.startswith("d")
+
+
 _CONSUMABLE_CALLBACK_KEYS = {
     "consumable.heal": "H",
     "consumable.purification": "P",
@@ -139,6 +182,28 @@ def _text_token(value: str) -> str:
 
 def _text_from_token(value: str) -> str:
     return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4)).decode("utf-8")
+
+
+def class_trial_target_ids(state: Combat, action_id: str) -> tuple[str, ...]:
+    action = state.player_actions.get(action_id)
+    if action is None or action.target_mode in {"self", "all_opponents", "all_allies"}:
+        return ()
+    return action_target_ids(state, action_id)
+
+
+def class_trial_action_ids(state: Combat) -> tuple[str, ...]:
+    available = []
+    for action_id in allowed_actions(state):
+        if action_id == "defend":
+            available.append(action_id)
+            continue
+        action = state.player_actions.get(action_id)
+        if action is None:
+            continue
+        all_targets = action_target_ids(state, action_id)
+        if all_targets:
+            available.append(action_id)
+    return tuple(available)
 
 
 class CombatConsumableCallback(CallbackData, prefix="cu"):
@@ -489,32 +554,65 @@ def _render_consumable_selection(view: CombatView) -> Screen:
     return Screen("\n".join(lines).rstrip(), view.context, keyboard, "HTML")
 
 
+def _fighter_for_event(state: Combat, identifier: str | None):
+    if not identifier:
+        return None
+    if identifier in state.fighters:
+        return state.fighters[identifier]
+    return next(
+        (fighter for fighter in state.fighters.values() if fighter.id == identifier),
+        None,
+    )
+
+
 def event_line(state: Combat, event: CombatEvent) -> str:
-    actor = state.fighters[event.actor]
+    actor = _fighter_for_event(
+        state, event.actor_entity_id or event.actor
+    )
+    if actor is None:
+        return "O combate continua."
     actor_name = escape(actor.name)
     if event.action.startswith("prepare:"):
         action_id = event.action.split(":", 1)[1]
         action = state.enemy_actions.get(action_id)
-        label = escape(action.name if action else action_id)
-        return f"⚠️ <b>{actor_name}</b> prepara <b>{label}</b>."
+        label = escape(action.name if action else "ataque")
+        return f"☄️ <b>{actor_name}</b> prepara <b>{label}</b>."
     if event.action == "defend":
         return f"🛡️ <b>{actor_name}</b> usa Defender."
+    if event.action == "hold":
+        return f"✨ <b>{actor_name}</b> aguarda."
     if event.action == "resguardo:block":
         effect = _effect_label(state, event.effect_id, target_id=event.target)
-        target = escape(state.fighters[event.target].name)
-        return f"🛡️ Resguardo bloqueia <b>{effect}</b> em <b>{target}</b>."
+        target = _fighter_for_event(state, event.target)
+        target_name = escape(target.name if target else actor.name)
+        return f"🛡️ Resguardo bloqueia <b>{effect}</b> em <b>{target_name}</b>."
     if event.action.startswith("consumable:"):
         return _consumable_event_line(state, event, actor_name)
     actions = state.player_actions if event.actor == "player" else state.enemy_actions
-    action = actions[event.action]
+    action = actions.get(event.action)
+    if action is None:
+        if event.action.startswith("dot:"):
+            dot = {
+                "dot:poison": "Veneno",
+                "dot:bleed": "Sangramento",
+                "dot:burn": "Queimadura",
+            }.get(event.action, "Dano contínuo")
+            return f"☣️ <b>{actor_name}</b> sofre <b>{dot}</b>."
+        return f"✨ <b>{actor_name}</b> age no combate."
+    target = _fighter_for_event(state, event.target) or actor
+    target_name = escape(target.name)
     if event.barrier_value:
+        duration = (
+            action.target_barrier_duration
+            if target.id != actor.id and action.target_barrier_duration
+            else action.self_barrier_duration
+        )
         return (
-            f"🛡️ <b>{actor_name}</b> ergue <b>{escape(action.name)}</b>. "
-            f"Barreira · <code>{number(event.barrier_value)}</code> · "
-            f"<code>{action.self_barrier_duration}T</code>."
+            f"🛡️ <b>{actor_name}</b> ergue <b>{escape(action.name)}</b> "
+            f"em <b>{target_name}</b>. Barreira · "
+            f"<code>{number(event.barrier_value)}</code> · <code>{duration}T</code>."
         )
     label = action.name.split(" ", 1)[-1] if event.actor == "player" else action.name
-    target = state.fighters["enemy" if event.actor == "player" else "player"]
     emoji = (
         "⚔️"
         if event.actor == "player" and event.action == "attack"
@@ -524,42 +622,44 @@ def event_line(state: Combat, event: CombatEvent) -> str:
     )
     if event.actor == "player" and event.action == "attack":
         line = (
-            f"{emoji} <b>{actor_name}</b> ataca <b>{escape(target.name)}</b> "
+            f"{emoji} <b>{actor_name}</b> ataca <b>{target_name}</b> "
             f"e causa <code>{number(event.damage)}</code> de dano."
+        )
+    elif action.heal_coefficient and event.healed:
+        line = (
+            f"❤️ <b>{actor_name}</b> usa <b>{escape(label)}</b> em "
+            f"<b>{target_name}</b> e recupera <code>{number(event.healed)}</code> HP."
         )
     else:
         line = (
             f"{emoji} <b>{actor_name}</b> usa <b>{escape(label)}</b> em "
-            f"<b>{escape(target.name)}</b> e causa <code>{number(event.damage)}</code> de dano."
+            f"<b>{target_name}</b> e causa <code>{number(event.damage)}</code> de dano."
         )
     if event.critical:
         line += " Crítico."
-    if event.healed:
+    if event.healed and not action.heal_coefficient:
         line += f" Cura <code>{number(event.healed)}</code>."
     if event.effect_id:
-        effect = actions[event.action]
         stat_label = {"attack": "ATQ", "defense": "DEF", "agility": "AGI"}.get(
-            effect.effect_stat or "attack", effect.effect_stat or "ATQ"
+            action.effect_stat or "attack", action.effect_stat or "ATQ"
         )
         line += (
-            f" Reduz {stat_label} em <code>{number(effect.attack_debuff * 100)}%</code> por "
-            f"<code>{effect.duration}T</code>."
+            f" Reduz {stat_label} em <code>{number(action.attack_debuff * 100)}%</code> por "
+            f"<code>{action.duration}T</code>."
         )
     if event.actor_effect_id:
-        effect = actions[event.action]
         stat_label = {"attack": "ATQ", "defense": "DEF", "agility": "AGI"}.get(
-            effect.self_effect_stat or "attack",
-            effect.self_effect_stat or "ATQ",
+            action.self_effect_stat or "attack",
+            action.self_effect_stat or "ATQ",
         )
         line += (
             f" <b>{actor_name}</b> reduz a própria {stat_label} em "
-            f"<code>{number(effect.self_effect_magnitude * 100)}%</code> por "
-            f"<code>{effect.self_effect_duration}T</code>."
+            f"<code>{number(action.self_effect_magnitude * 100)}%</code> por "
+            f"<code>{action.self_effect_duration}T</code>."
         )
     if event.barrier_absorbed:
         line += f" Barreira absorve <code>{number(event.barrier_absorbed)}</code>."
     return line
-
 
 def _effect_label(state: Combat, effect_id: str, *, target_id: str) -> str:
     if effect_id.startswith("dot:"):
@@ -613,51 +713,165 @@ def _removed_effect_summary(event: CombatEvent) -> str:
     return "Removido"
 
 
+def _fighter_side(state: Combat, key: str) -> str:
+    fighter = state.fighters[key]
+    return fighter.side or ("player" if key == "player" else "enemy")
+
+
+def _status_lines(state: Combat, fighter, *, player: bool = False) -> list[str]:
+    name = escape(fighter.name)
+    lines: list[str] = []
+    if fighter.barrier > 0 and fighter.barrier_remaining > 0:
+        icon = "🔰" if player else "🛡️"
+        lines.append(
+            f"{icon} Barreira de {name} · <code>{number(fighter.barrier)}</code> · "
+            f"<code>{fighter.barrier_remaining}T</code>"
+        )
+    for effect in fighter.effects:
+        stat = {
+            "attack": "ATQ",
+            "defense": "DEF",
+            "agility": "AGI",
+            "perception": "PER",
+            "precision": "PRE",
+        }.get(effect.stat, effect.stat.upper())
+        sign = "−" if effect.kind == "debuff" else "+"
+        lines.append(
+            f"{'🔻' if effect.kind == 'debuff' else '✨'} {name} · {stat} "
+            f"{sign}<code>{number(abs(effect.magnitude) * 100)}%</code> · "
+            f"<code>{effect.remaining}T</code>"
+        )
+    dots = state.dot_states.get(fighter.id, ())
+    for dot in dots:
+        label = {
+            "poison": "Veneno",
+            "bleed": "Sangramento",
+            "burn": "Queimadura",
+        }.get(dot.kind, "Efeito contínuo")
+        lines.append(
+            f"☣️ {name} · {label} · {dot.stacks} · <code>{dot.remaining}T</code>"
+        )
+    if player and fighter.ward_charges > 0 and fighter.ward_remaining > 0:
+        lines.append(
+            f"🛡️ Resguardo · <code>{fighter.ward_remaining}T</code> · "
+            f"<code>{fighter.ward_charges} Carga(s)</code>"
+        )
+    return lines
+
+
+def _trial_fighter_card(state: Combat, key: str, *, icon: str) -> list[str]:
+    fighter = state.fighters[key]
+    name = escape(fighter.name)
+    lines = [
+        f"{icon} <b>{name}</b>",
+        f"❤️ <code>{number(fighter.hp)} / {number(fighter.stats.hp)}</code>",
+        hp_bar(fighter.hp, fighter.stats.hp),
+    ]
+    lines.extend(_status_lines(state, fighter, player=(key == "player")))
+    lines.append("")
+    return lines
+
+
 def render_combat(view: CombatView) -> Screen:
     state = view.combat
-    if view.consumable_screen is not None:
+    is_trial = view.context == "class_trial"
+    if not is_trial and view.consumable_screen is not None:
         return _render_consumable_selection(view)
-    player, enemy = state.fighters["player"], state.fighters["enemy"]
+    player = state.fighters["player"]
     icon = COPY[f"class:{player.character_class}"].split(" ", 1)[0]
     recent = [state.opening_log] + [event_line(state, event) for event in state.events]
-    lines = [
-        f"Turno {player.opportunity} · <b>{escape(player.name)}</b>",
-        "",
-        f"<b>🐺 {escape(enemy.name)}</b>",
-        f"❤️ <code>{number(enemy.hp)} / {number(enemy.stats.hp)}</code>",
-        hp_bar(enemy.hp, enemy.stats.hp),
-        "",
-        state.flavor,
-        "",
-        f"👉 {icon} <b>{escape(player.name)}</b>",
-        f"❤️ <code>{number(player.hp)} / {number(player.stats.hp)}</code>",
-        hp_bar(player.hp, player.stats.hp),
-        "",
-        "📜 Registro de Combate · Recentes",
-        "",
-        "\n".join(recent[-4:]),
-        "",
-    ]
-    status_lines = []
-    if enemy.barrier > 0 and enemy.barrier_remaining > 0:
-        status_lines.append(
-            f"🛡️ Barreira de {escape(enemy.name)} · <code>{number(enemy.barrier)}</code> · "
-            f"<code>{enemy.barrier_remaining}T</code>"
+    if is_trial:
+        lines = []
+        if view.trial_stage_caption:
+            lines.extend([f"⚔️ Provação · {escape(view.trial_stage_caption)}", ""])
+        lines.extend(
+            [
+                f"Turno {player.opportunity} · <b>{escape(player.name)}</b>",
+                "",
+            ]
         )
-    if player.barrier > 0 and player.barrier_remaining > 0:
-        status_lines.append(
-            f"🔰 Barreira · <code>{number(player.barrier)}</code> · "
-            f"<code>{player.barrier_remaining}T</code>"
+        enemies = sorted(
+            (
+                key for key in state.fighters
+                if key != "player" and _fighter_side(state, key) == "enemy"
+            ),
+            key=lambda key: (state.fighters[key].id, key),
         )
-    if player.ward_charges > 0 and player.ward_remaining > 0:
-        status_lines.append(
-            f"🛡️ Resguardo · <code>{player.ward_remaining}T</code> · <code>1 Carga</code>"
+        allies = sorted(
+            (
+                key for key in state.fighters
+                if key != "player" and _fighter_side(state, key) == "player"
+            ),
+            key=lambda key: (state.fighters[key].id, key),
         )
-    if status_lines:
-        lines[11:11] = status_lines
-    if view.consumable_notice:
-        lines[8:8] = [escape(view.consumable_notice), ""]
-    available = allowed_actions(state)
+        for key in enemies:
+            prepared_source = _fighter_for_event(state, state.prepared_source)
+            marker = "☄️" if prepared_source is state.fighters[key] else (
+                "🐺" if state.fighters[key].takes_turn else "✦"
+            )
+            lines.extend(_trial_fighter_card(state, key, icon=marker))
+        if state.prepared_action:
+            prepared = state.enemy_actions.get(state.prepared_action)
+            source = _fighter_for_event(state, state.prepared_source)
+            if prepared is not None and source is not None:
+                lines.extend(
+                    [
+                        f"☄️ <b>{escape(source.name)}</b> prepara "
+                        f"<b>{escape(prepared.name)}</b>.",
+                        "",
+                    ]
+                )
+        if state.flavor:
+            lines.extend([escape(state.flavor), ""])
+        for key in allies:
+            lines.extend(_trial_fighter_card(state, key, icon="✨"))
+        lines.extend(_trial_fighter_card(state, "player", icon=f"👉 {icon}"))
+        lines.extend(["📜 Registro de Combate · Recentes", "", "\n".join(recent[-4:]), ""])
+    else:
+        enemy = state.fighters["enemy"]
+        lines = [
+            f"Turno {player.opportunity} · <b>{escape(player.name)}</b>",
+            "",
+            f"<b>🐺 {escape(enemy.name)}</b>",
+            f"❤️ <code>{number(enemy.hp)} / {number(enemy.stats.hp)}</code>",
+            hp_bar(enemy.hp, enemy.stats.hp),
+            "",
+            state.flavor,
+            "",
+            f"👉 {icon} <b>{escape(player.name)}</b>",
+            f"❤️ <code>{number(player.hp)} / {number(player.stats.hp)}</code>",
+            hp_bar(player.hp, player.stats.hp),
+            "",
+            "📜 Registro de Combate · Recentes",
+            "",
+            "\n".join(recent[-4:]),
+            "",
+        ]
+        status_lines = []
+        if enemy.barrier > 0 and enemy.barrier_remaining > 0:
+            status_lines.append(
+                f"🛡️ Barreira de {escape(enemy.name)} · "
+                f"<code>{number(enemy.barrier)}</code> · <code>{enemy.barrier_remaining}T</code>"
+            )
+        if player.barrier > 0 and player.barrier_remaining > 0:
+            status_lines.append(
+                f"🔰 Barreira · <code>{number(player.barrier)}</code> · "
+                f"<code>{player.barrier_remaining}T</code>"
+            )
+        if player.ward_charges > 0 and player.ward_remaining > 0:
+            status_lines.append(
+                f"🛡️ Resguardo · <code>{player.ward_remaining}T</code> · <code>1 Carga</code>"
+            )
+        if status_lines:
+            lines[11:11] = status_lines
+        if view.consumable_notice:
+            lines[8:8] = [escape(view.consumable_notice), ""]
+
+    available = (
+        class_trial_action_ids(state)
+        if is_trial
+        else allowed_actions(state)
+    )
     buttons = []
     for action in available:
         if action == "attack":
@@ -669,7 +883,7 @@ def render_combat(view: CombatView) -> Screen:
             clean = art.name.split(" ", 1)[-1]
             label = clean
             hint = clean
-            if state.tutorial_stage == "art":
+            if not is_trial and state.tutorial_stage == "art":
                 lines.extend(
                     [
                         f"🎴 <b>{escape(clean)}</b> · Arte de Classe",
@@ -683,40 +897,52 @@ def render_combat(view: CombatView) -> Screen:
                         f"🌀 Efeito · −<code>{number(art.attack_debuff * 100)}%</code> ATQ "
                         f"por <code>{art.duration}T</code>",
                     )
-        lines.append(hint)
-        buttons.append(
-            InlineKeyboardButton(
-                text=label,
-                callback_data=(
-                    P1CombatCallback
-                    if view.context == "p1"
-                    else P2CombatCallback
-                    if view.context == "p2"
-                    else S2CombatCallback
-                    if view.context == "s2"
-                    else P3CombatCallback
-                    if view.context == "p3"
-                    else S3CombatCallback
-                    if view.context == "s3"
-                    else P4CombatCallback
-                    if view.context == "p4"
-                    else CombatCallback
-                )(
-                    activity=view.activity_id.hex,
-                    version=state.version,
-                    action=action,
-                ).pack(),
+        if not is_trial:
+            lines.append(hint)
+        if is_trial:
+            action_ids = class_trial_action_ids(state)
+            action_index = action_ids.index(action)
+            targets = class_trial_target_ids(state, action)
+            if action in {"attack", "defend"}:
+                targets = class_trial_target_ids(state, action)
+            target_code = (
+                "s" if len(targets) > 1
+                else "d0" if len(targets) == 1
+                else "x"
             )
-        )
-    if state.tutorial_stage == "normal" and not state.result:
+            callback = ClassTrialActionCallback.for_intent(
+                view.activity_id, state.version, action_index, target_code
+            ).pack()
+        else:
+            callback = (
+                P1CombatCallback
+                if view.context == "p1"
+                else P2CombatCallback
+                if view.context == "p2"
+                else S2CombatCallback
+                if view.context == "s2"
+                else P3CombatCallback
+                if view.context == "p3"
+                else S3CombatCallback
+                if view.context == "s3"
+                else P4CombatCallback
+                if view.context == "p4"
+                else CombatCallback
+            )(
+                activity=view.activity_id.hex,
+                version=state.version,
+                action=action,
+            ).pack()
+        buttons.append(InlineKeyboardButton(text=label, callback_data=callback))
+
+    if not is_trial and state.tutorial_stage == "normal" and not state.result:
         remaining = max(0, player.cooldowns.get("art", 0) - player.opportunity)
         if remaining:
             lines.append(f"{state.player_actions['art'].name} · CD{remaining}")
     if state.result == "victory" and view.context == "prologue":
-        # Mechanical receipt only: no new story scene or Braseiro/Descansar button.
         lines.append("320 XP")
     keyboard_rows = [buttons] if buttons else []
-    if view.consumable_options:
+    if not is_trial and view.consumable_options:
         keyboard_rows.append(
             [
                 InlineKeyboardButton(

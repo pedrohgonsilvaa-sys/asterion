@@ -96,6 +96,7 @@ class ClassTrialView:
     consumable_options: tuple = ()
     blocker: str | None = None
     combat_version: int | None = None
+    retry_available: bool = False
 
 
 class ClassTrialService:
@@ -1222,6 +1223,24 @@ class ClassTrialService:
                     .where(Encounter.game_activity_id == activity.id)
                 )
 
+        retry_available = False
+        if state is not None and state.status == "ready":
+            content_id = (
+                f"{TRIAL_CONTENT_PREFIX}{state.trial_id.removeprefix('trial.')}"
+            )
+            latest_attempt = await session.scalar(
+                select(GameActivity)
+                .where(
+                    GameActivity.character_id == character.id,
+                    GameActivity.content_id == content_id,
+                )
+                .order_by(GameActivity.last_valid_action_at.desc())
+                .limit(1)
+            )
+            retry_available = (
+                latest_attempt is not None and latest_attempt.status == "failed"
+            )
+
         if state is None:
             eligible = self._eligible(character, world)
             has_foreground = foreground is not None
@@ -1293,6 +1312,7 @@ class ClassTrialService:
                 else "foreground" if foreground is not None and state.status != "active" else None
             ),
             combat_version=(activity.state_version if active_is_valid and combat_id else None),
+            retry_available=retry_available,
         )
 
     async def _grant_completed_unlock(self, session, character_id: UUID) -> None:

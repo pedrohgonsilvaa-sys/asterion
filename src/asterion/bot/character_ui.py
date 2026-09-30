@@ -29,6 +29,7 @@ def render_character() -> Screen:
                 InlineKeyboardButton(text="Inventário", callback_data="inventory:root"),
                 InlineKeyboardButton(text="Equipamentos", callback_data="eq:r"),
             ],
+            [InlineKeyboardButton(text="Caminho", callback_data="character:path")],
             [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
         ]
     )
