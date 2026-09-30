@@ -30,6 +30,45 @@ class CombatConfigurationLocked(RuntimeError):
         super().__init__("Combat configuration is locked by an authoritative activity.")
 
 
+async def find_combat_configuration_blocker(
+    session: AsyncSession, character_id: UUID
+) -> CombatConfigurationBlocker | None:
+    """Read the shared foreground lock state for presentation without locking rows."""
+    activity = await session.scalar(
+        select(GameActivity)
+        .where(
+            GameActivity.character_id == character_id,
+            GameActivity.status == "active",
+        )
+        .limit(1)
+    )
+    if activity is not None:
+        return CombatConfigurationBlocker(
+            kind="foreground_activity",
+            id=activity.id,
+            status=activity.status,
+            content_id=activity.content_id,
+        )
+
+    # Ronda may retain its lock after its generic foreground row completes.
+    # Preparing is intentionally excluded: no batch has validly started.
+    hunt_round = await session.scalar(
+        select(HuntRound)
+        .where(
+            HuntRound.character_id == character_id,
+            HuntRound.status.in_(HUNT_ROUND_CONFIGURATION_LOCK_STATUSES),
+        )
+        .limit(1)
+    )
+    if hunt_round is not None:
+        return CombatConfigurationBlocker(
+            kind="hunt_round",
+            id=hunt_round.id,
+            status=hunt_round.status,
+        )
+    return None
+
+
 async def lock_for_combat_configuration_mutation(
     session: AsyncSession, character_id: UUID
 ) -> Character | None:
@@ -55,42 +94,8 @@ async def lock_for_combat_configuration_mutation(
     if character is None:
         return None
 
-    activity = await session.scalar(
-        select(GameActivity)
-        .where(
-            GameActivity.character_id == character.id,
-            GameActivity.status == "active",
-        )
-        .limit(1)
-    )
-    if activity is not None:
-        raise CombatConfigurationLocked(
-            CombatConfigurationBlocker(
-                kind="foreground_activity",
-                id=activity.id,
-                status=activity.status,
-                content_id=activity.content_id,
-            )
-        )
-
-    # Ronda may retain its configuration lock at an interruption boundary after
-    # its generic foreground row has been completed (for example, before an Elite).
-    # ``preparing`` is intentionally not included: no batch has been validly started.
-    hunt_round = await session.scalar(
-        select(HuntRound)
-        .where(
-            HuntRound.character_id == character.id,
-            HuntRound.status.in_(HUNT_ROUND_CONFIGURATION_LOCK_STATUSES),
-        )
-        .limit(1)
-    )
-    if hunt_round is not None:
-        raise CombatConfigurationLocked(
-            CombatConfigurationBlocker(
-                kind="hunt_round",
-                id=hunt_round.id,
-                status=hunt_round.status,
-            )
-        )
+    blocker = await find_combat_configuration_blocker(session, character.id)
+    if blocker is not None:
+        raise CombatConfigurationLocked(blocker)
 
     return character

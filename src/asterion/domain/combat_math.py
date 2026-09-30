@@ -6,6 +6,7 @@ from hashlib import sha256
 from uuid import UUID
 
 from asterion.domain.equipment_stats import EquipmentStatContribution
+from asterion.domain.paths import PATH_DEFINITIONS
 
 D = Decimal
 ZERO = D(0)
@@ -115,9 +116,26 @@ def resolve_combat_stats(
     level: int,
     race: str,
     equipment: EquipmentStatContribution | None = None,
+    selected_path: str | None = None,
 ) -> CombatStats:
     """Resolve class, materialized equipment bonuses, then final static race modifiers."""
     base = class_stats(character_class, level)
+    path = PATH_DEFINITIONS.get(selected_path or "")
+    if path is not None:
+        if path.character_class != character_class:
+            raise ValueError("Selected Path does not belong to the character Class.")
+        # Inherent Path percentages affect the class portion only and do not add
+        # a new intermediate rounding step before flat equipment is composed.
+        base = CombatStats(
+            base.hp * (D(1) + path.hp),
+            base.attack * (D(1) + path.attack),
+            base.defense * (D(1) + path.defense),
+            base.agility * (D(1) + path.agility),
+            base.per,
+            base.crit,
+            base.evasion,
+            base.block,
+        )
     equipment = equipment or EquipmentStatContribution()
     with localcontext() as ctx:
         ctx.prec = PRECISION

@@ -4,7 +4,6 @@ from aiogram.types import CallbackQuery, Message
 from asterion.application.class_trials import ClassTrialService
 from asterion.bot.class_trial_ui import (
     ClassTrialPageCallback,
-    render_class_path,
     render_class_trial_view,
     render_trial_targets,
 )
@@ -34,16 +33,6 @@ def class_trial_router(
             return
         _, screen = current
         await present(query.message, screen, images, edit=True)
-
-    @router.callback_query(F.data == "character:path")
-    async def path(query: CallbackQuery):
-        current = await current_screen(query.from_user.id)
-        await query.answer()
-        if current is not None and isinstance(query.message, Message):
-            view, _ = current
-            await present(
-                query.message, render_class_path(view), images, edit=True
-            )
 
     @router.callback_query(F.data.startswith("trial:"))
     async def page(query: CallbackQuery):

@@ -3,6 +3,7 @@
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from decimal import ROUND_FLOOR, Decimal, localcontext
+from typing import Any
 from uuid import UUID
 
 from asterion.domain.combat_math import (
@@ -78,6 +79,10 @@ class ActionEffect:
     duration: int
     kind: str = "buff"
     stat_modifier_mode: str = "multiplicative"
+    removable: bool = True
+    unremovable: bool = False
+    fixed_mechanic: bool = False
+    hard_cc: bool = False
 
 
 @dataclass(frozen=True)
@@ -128,6 +133,7 @@ class Action:
     self_barrier_debuff_magnitude_reduction: Decimal = ZERO
     target_barrier_debuff_magnitude_reduction: Decimal = ZERO
     target_effects: tuple[ActionEffect, ...] = ()
+    manifestation_kind: str | None = None
 
     def __post_init__(self) -> None:
         if self.hit_count < 1:
@@ -192,6 +198,8 @@ class Fighter:
     tagged_direct_damage_reductions: dict[str, Decimal] = field(default_factory=dict)
     action_chains: dict[str, dict[str, str]] = field(default_factory=dict)
     barrier_debuff_magnitude_reduction: Decimal = ZERO
+    selected_path: str | None = None
+    path_state: dict[str, Any] = field(default_factory=dict)
 
     def stat(self, name: str) -> Decimal:
         value = getattr(self.stats, name)
@@ -304,6 +312,12 @@ class CombatEvent:
     overheal: Decimal = ZERO
     target_hp_after: Decimal | None = None
     fighter_hp_after: tuple[tuple[str, Decimal], ...] = ()
+    path_triggers: tuple[str, ...] = ()
+    path_power_multiplier: Decimal = D(1)
+    path_final_damage_bonus: Decimal = ZERO
+    aim_stacks: int = 0
+    path_per_bonus: Decimal = ZERO
+    path_crit_bonus: Decimal = ZERO
 
 
 @dataclass(frozen=True, slots=True)
@@ -1190,6 +1204,36 @@ def _grant_retaliation(
         source_actor_id=target.retaliation_source_actor_id,
         remaining=target.retaliation_remaining,
     )
+    if target.selected_path == "bastiao":
+        source = "path.bastiao.fortaleza"
+        if not (
+            target.barrier > ZERO
+            and target.barrier_remaining > 0
+            and target.barrier_source == source
+        ):
+            value = (target.stats.hp * D("0.04") * D("1.10")).to_integral_value(
+                rounding=ROUND_FLOOR
+            )
+            if value > ZERO:
+                target.barrier = value
+                target.barrier_remaining = 1
+                target.barrier_applied_opportunity = target.opportunity
+                target.barrier_source = source
+                target.barrier_debuff_magnitude_reduction = ZERO
+                state.mechanic_events.append(
+                    CombatEvent(
+                        len(state.mechanic_events),
+                        state.round,
+                        target_key,
+                        "path.bastiao.fortaleza",
+                        target.id,
+                        actor_entity_id=target.id,
+                        barrier_value=value,
+                        barrier_applied_source=source,
+                        path_triggers=("bastiao.fortaleza",),
+                        internal=True,
+                    )
+                )
 
 
 def _action_is_offensive(action: Action) -> bool:
@@ -1402,6 +1446,7 @@ def _end_turn(state: Combat) -> None:
                 internal=True,
             )
         )
+    _tick_path_resources(state, actor_key)
     if not state.result:
         _advance_turn_cursor(state)
 
@@ -1409,6 +1454,18 @@ def _end_turn(state: Combat) -> None:
 def _chain_bonus(action: Action, component: str) -> Decimal:
     component_bonus = getattr(action, f"chain_power_bonus_{component}", None)
     return action.chain_power_bonus if component_bonus is None else component_bonus
+
+
+def _path_chain_bonus(actor: Fighter, action: Action, component: str) -> Decimal:
+    if actor.character_class == "tecelao" and actor.selected_path == "conjurador":
+        return D("0.15") if component == "damage" else D("0.06")
+    if actor.character_class == "tecelao" and actor.selected_path == "runico":
+        return D("0.06") if component == "damage" else D("0.15")
+    return _chain_bonus(action, component)
+
+
+def _path_target_context(path_resolution: dict, target: Fighter) -> dict:
+    return path_resolution.get("by_target", {}).get(target.id, {})
 
 
 def _action_power_component(action: Action) -> str:
@@ -1419,6 +1476,339 @@ def _action_power_component(action: Action) -> str:
     if action.self_barrier_coefficient > ZERO or action.target_barrier_coefficient > ZERO:
         return "barrier"
     return ""
+
+
+def _is_art_action(action_id: str, action: Action) -> bool:
+    return action_id == "art" or action.id.startswith(("class_art.", "path_art."))
+
+
+def _has_valid_negative_effect(state: Combat, target: Fighter) -> bool:
+    return any(
+        effect.kind == "debuff"
+        and effect.removable
+        and not effect.unremovable
+        and not effect.protected
+        and not effect.fixed_mechanic
+        and not effect.boss_protected
+        and effect.remaining > 0
+        and effect.stacks > 0
+        for effect in target.effects
+    ) or any(
+        dot.removable
+        and not dot.unremovable
+        and not dot.protected
+        and not dot.fixed_mechanic
+        and not dot.boss_protected
+        and dot.remaining > 0
+        and dot.stacks > 0
+        for dot in state.dot_states.get(target.id, ())
+    )
+
+
+def _aim_entry(target: Fighter, source: Fighter) -> dict | None:
+    entries = target.path_state.setdefault("aim_from", {})
+    entry = entries.get(source.id)
+    if not isinstance(entry, dict) or int(entry.get("remaining", 0)) <= 0:
+        return None
+    return entry
+
+
+def _grant_aim(
+    state: Combat,
+    source_key: str,
+    target_key: str,
+    *,
+    trigger: str,
+    action_targets: set[str] | None = None,
+) -> int:
+    source = state.fighters[source_key]
+    target = state.fighters[target_key]
+    specialization = source.selected_path if source.character_class == "vigia" else None
+    maximum = 4 if specialization == "atirador" else 2 if specialization == "rastreador" else 3
+    target_id = target.id
+    if specialization != "rastreador":
+        # Baseline Mira follows one offensive target; Atirador retains only the
+        # selected target as well. Stable fighter order makes AoE deterministic.
+        retained_ids = action_targets or {target_id}
+        for other in state.fighters.values():
+            if other.id not in retained_ids:
+                other.path_state.setdefault("aim_from", {}).pop(source.id, None)
+    else:
+        current_targets = [
+            fighter
+            for fighter in state.fighters.values()
+            if (entry := _aim_entry(fighter, source)) is not None
+        ]
+        if _aim_entry(target, source) is None and len(current_targets) >= 3:
+            return 0
+    entries = target.path_state.setdefault("aim_from", {})
+    entry = entries.get(source.id)
+    stacks = min(maximum, int(entry.get("stacks", 0)) + 1) if isinstance(entry, dict) else 1
+    entries[source.id] = {
+        "stacks": stacks,
+        "remaining": 2,
+        "applied_opportunity": target.opportunity,
+        "trigger": trigger,
+    }
+    return stacks
+
+
+def _tick_path_resources(state: Combat, actor_key: str) -> None:
+    actor = state.fighters[actor_key]
+    state_data = actor.path_state
+    for key in ("luminar_state", "manifestation_state", "devastador_charge"):
+        entry = state_data.get(key)
+        if not isinstance(entry, dict):
+            continue
+        if key == "devastador_charge":
+            if actor.opportunity > int(entry.get("expires_opportunity", -1)):
+                state_data.pop(key, None)
+            continue
+        applied = int(entry.get("applied_opportunity", actor.opportunity))
+        if actor.opportunity <= applied:
+            continue
+        remaining = max(0, int(entry.get("remaining", 0)) - 1)
+        if remaining <= 0:
+            state_data.pop(key, None)
+        else:
+            entry["remaining"] = remaining
+    for key in ("omen_offensive", "omen_defensive"):
+        entries = state_data.get(key)
+        if not isinstance(entries, dict):
+            continue
+        for target_id, entry in tuple(entries.items()):
+            if not isinstance(entry, dict):
+                entries.pop(target_id, None)
+                continue
+            applied = int(entry.get("applied_opportunity", actor.opportunity))
+            if actor.opportunity > applied:
+                entry["remaining"] = max(0, int(entry.get("remaining", 0)) - 1)
+            if int(entry.get("remaining", 0)) <= 0:
+                entries.pop(target_id, None)
+    incoming = actor.path_state.get("aim_from", {})
+    if isinstance(incoming, dict):
+        for source_id, entry in tuple(incoming.items()):
+            if not isinstance(entry, dict):
+                incoming.pop(source_id, None)
+                continue
+            applied = int(entry.get("applied_opportunity", actor.opportunity))
+            if actor.opportunity > applied:
+                entry["remaining"] = max(0, int(entry.get("remaining", 0)) - 1)
+            if int(entry.get("remaining", 0)) <= 0:
+                incoming.pop(source_id, None)
+
+
+def _new_omen(actor: Fighter, kind: str, target: Fighter) -> None:
+    key = "omen_offensive" if kind == "offensive" else "omen_defensive"
+    actor.path_state.setdefault(key, {})[target.id] = {
+        "remaining": 2,
+        "applied_opportunity": actor.opportunity,
+    }
+
+
+def _prepare_path_action(
+    state: Combat,
+    actor_id: str,
+    action_id: str,
+    action: Action,
+    target_keys: tuple[str, ...],
+) -> dict:
+    actor = state.fighters[actor_id]
+    is_art = _is_art_action(action_id, action)
+    direct = action.coefficient > ZERO
+    support = action.heal_coefficient > ZERO or (
+        action.self_barrier_coefficient > ZERO
+        or action.target_barrier_coefficient > ZERO
+    )
+    context = {
+        "by_target": {},
+        "target_ids": {state.fighters[key].id for key in target_keys},
+        "luminar_consumed": False,
+        "luminar_generated": None,
+        "action_instance_id": "",
+    }
+    if actor.character_class == "vigia" and direct and actor.selected_path != "rastreador":
+        target_ids = {state.fighters[key].id for key in target_keys}
+        for other in state.fighters.values():
+            if other.id not in target_ids:
+                other.path_state.setdefault("aim_from", {}).pop(actor.id, None)
+    for target_key in target_keys:
+        target = state.fighters[target_key]
+        aim = _aim_entry(target, actor) if actor.character_class == "vigia" else None
+        stacks = int(aim.get("stacks", 0)) if aim is not None else 0
+        entry = {
+            "damage_power": D(1),
+            "healing_power": D(1),
+            "barrier_power": D(1),
+            "final_damage_bonus": D(0),
+            "per_bonus": D(3) * stacks if actor.selected_path == "atirador" else ZERO,
+            "crit_bonus": D(6) if actor.selected_path == "atirador" and stacks >= 4 else ZERO,
+            "aim_stacks": stacks,
+            "triggers": [],
+            "oportunism": (
+                actor.character_class == "errante"
+                and direct
+                and _has_valid_negative_effect(state, target)
+            ),
+        }
+        if entry["oportunism"]:
+            entry["final_damage_bonus"] += D("0.08")
+            entry["triggers"].append("oportunismo")
+        if (
+            actor.selected_path == "devastador"
+            and is_art
+            and direct
+            and isinstance(actor.path_state.get("devastador_charge"), dict)
+            and actor.opportunity
+            <= int(actor.path_state["devastador_charge"].get("expires_opportunity", -1))
+        ):
+            entry["final_damage_bonus"] += D("0.12")
+            entry["triggers"].append("devastador.impacto_consumido")
+            context["devastador_consumed"] = True
+
+        if actor.character_class == "oraculo" and is_art:
+            if direct:
+                omen = actor.path_state.setdefault("omen_offensive", {}).pop(target.id, None)
+                if omen is not None and int(omen.get("remaining", 0)) > 0:
+                    entry["damage_power"] *= (
+                        D("1.16")
+                        if actor.selected_path == "agoureiro"
+                        else D("1.12")
+                    )
+                    entry["triggers"].append("pressagio.ofensivo_consumido")
+            if support:
+                omen = actor.path_state.setdefault("omen_defensive", {}).pop(target.id, None)
+                if omen is not None and int(omen.get("remaining", 0)) > 0:
+                    entry["healing_power"] *= D("1.12")
+                    entry["barrier_power"] *= D("1.12")
+                    entry["triggers"].append("pressagio.defensivo_consumido")
+        context["by_target"][target.id] = entry
+
+    if context.get("devastador_consumed"):
+        actor.path_state.pop("devastador_charge", None)
+
+    if actor.character_class == "luminar" and is_art:
+        state_entry = actor.path_state.get("luminar_state")
+        expected_kind = "fulgor" if support and not direct else "julgamento" if direct else None
+        if isinstance(state_entry, dict) and expected_kind is not None:
+            if (
+                state_entry.get("kind") == expected_kind
+                and int(state_entry.get("remaining", 0)) > 0
+            ):
+                percent = (
+                    D("0.15")
+                    if actor.selected_path == "guardiao" and expected_kind == "fulgor"
+                    else D("0.06")
+                    if actor.selected_path == "guardiao" and expected_kind == "julgamento"
+                    else D("0.06")
+                    if actor.selected_path == "inquisidor" and expected_kind == "fulgor"
+                    else D("0.15")
+                    if actor.selected_path == "inquisidor" and expected_kind == "julgamento"
+                    else D("0.10")
+                )
+                multiplier = D(1) + percent
+                for entry in context["by_target"].values():
+                    if expected_kind == "julgamento":
+                        entry["damage_power"] *= multiplier
+                    else:
+                        entry["healing_power"] *= multiplier
+                        entry["barrier_power"] *= multiplier
+                    entry["triggers"].append(f"luminar.{expected_kind}_consumido")
+                actor.path_state.pop("luminar_state", None)
+                context["luminar_consumed"] = True
+
+    if (
+        actor.selected_path == "invocador"
+        and action.manifestation_kind
+        and action.manifestation_kind != "triade_encarnada"
+    ):
+        previous = actor.path_state.get("manifestation_state")
+        if (
+            isinstance(previous, dict)
+            and int(previous.get("remaining", 0)) > 0
+            and actor.opportunity <= int(previous.get("expires_opportunity", -1))
+            and previous.get("kind") != action.manifestation_kind
+        ):
+            for entry in context["by_target"].values():
+                component = _action_power_component(action)
+                if component:
+                    entry[f"{component}_power"] *= D("1.12")
+                    entry["triggers"].append("invocador.triade")
+        actor.path_state["manifestation_state"] = {
+            "kind": action.manifestation_kind,
+            "remaining": 2,
+            "applied_opportunity": actor.opportunity,
+            "expires_opportunity": actor.opportunity + 2,
+        }
+    return context
+
+
+def _finalize_path_action(
+    state: Combat,
+    actor_id: str,
+    action_id: str,
+    action: Action,
+    context: dict,
+) -> str | None:
+    actor = state.fighters[actor_id]
+    if actor.character_class != "luminar" or not _is_art_action(action_id, action):
+        return None
+    if context.get("luminar_consumed"):
+        return None
+    if action.coefficient > ZERO:
+        kind = "fulgor"
+    elif (
+        action.heal_coefficient > ZERO
+        or action.self_barrier_coefficient > ZERO
+        or action.target_barrier_coefficient > ZERO
+    ):
+        kind = "julgamento"
+    else:
+        return None
+    actor.path_state["luminar_state"] = {
+        "kind": kind,
+        "remaining": 2,
+        "applied_opportunity": actor.opportunity,
+    }
+    return f"luminar.{kind}_gerado"
+
+
+def _path_effect_duration(actor: Fighter, effect: ActionEffect, duration: int) -> int:
+    if (
+        actor.selected_path == "sabotador"
+        and effect.kind == "debuff"
+        and effect.removable
+        and not effect.unremovable
+        and not effect.fixed_mechanic
+        and not effect.hard_cc
+        and duration in {1, 2}
+    ):
+        return min(3, duration + 1)
+    return duration
+
+
+def _record_devastador_charge(
+    state: Combat, actor_key: str, event_start: int, action_id: str
+) -> None:
+    player = state.fighters.get("player")
+    if player is None or player.selected_path != "devastador":
+        return
+    hp_loss = sum(
+        (
+            D(event.effective_damage)
+            for event in state.events[event_start:]
+            if event.actor == actor_key
+            and event.target == player.id
+            and event.action == action_id
+            and not event.action.startswith("dot:")
+        ),
+        ZERO,
+    )
+    if hp_loss >= player.stats.hp * D("0.08") and hp_loss > ZERO:
+        player.path_state["devastador_charge"] = {
+            "expires_opportunity": player.opportunity + 2,
+            "source_action": action_id,
+        }
 
 def _perform(
     state: Combat,
@@ -1431,6 +1821,7 @@ def _perform(
     _action_instance_id: str = "",
     _grant_action_retaliation: bool = True,
     _chain_resolution: dict[str, object] | None = None,
+    _path_resolution: dict | None = None,
 ) -> bool:
     actor = state.fighters[actor_id]
     response_to_prepared_action_instance_id = (
@@ -1489,12 +1880,17 @@ def _perform(
     target_keys = _resolve_action_targets(state, actor_id, action, target_id)
     if not target_keys:
         return False
+    if _path_resolution is None:
+        _path_resolution = _prepare_path_action(
+            state, actor_id, action_id, action, target_keys
+        )
 
     if action.hit_count > 1 and _hit_index is None:
         common_instance_id = (
             f"{state.id.hex}:{state.version}:{len(state.events)}:{actor.id}:{action_id}"
         )
         actions[action_id] = replace(action, hit_count=1)
+        _path_resolution["action_instance_id"] = common_instance_id
         committed = False
         chain_resolution = _chain_resolution
         try:
@@ -1514,6 +1910,7 @@ def _perform(
                     _action_instance_id=common_instance_id,
                     _grant_action_retaliation=False,
                     _chain_resolution=chain_resolution,
+                    _path_resolution=_path_resolution,
                 ):
                     break
                 committed = True
@@ -1594,6 +1991,22 @@ def _perform(
                             source_actor=actor,
                             source_event_id=f"{state.id.hex}:{state.events[index].sequence}",
                         )
+            if committed:
+                generated_path_trigger = _finalize_path_action(
+                    state, actor_id, action_id, action, _path_resolution
+                )
+                if generated_path_trigger:
+                    for index, event in enumerate(state.events):
+                        if (
+                            event.actor_entity_id == actor.id
+                            and event.action == action_id
+                            and event.action_instance_id == common_instance_id
+                        ):
+                            state.events[index] = replace(
+                                event,
+                                path_triggers=event.path_triggers
+                                + (generated_path_trigger,),
+                            )
         finally:
             actions[action_id] = action
         return committed
@@ -1631,6 +2044,7 @@ def _perform(
     action_instance_id = _action_instance_id or (
         f"{state.id.hex}:{state.version}:{len(state.events)}:{actor.id}:{action_id}"
     )
+    _path_resolution["action_instance_id"] = action_instance_id
     chain_key = action.consumes_chain or action.prepares_chain
     if _chain_resolution is None:
         chain_state = actor.action_chains.get(chain_key, {}) if chain_key else {}
@@ -1655,17 +2069,17 @@ def _perform(
         if chain_consumed and action.consumes_chain:
             actor.action_chains.pop(action.consumes_chain, None)
         damage_power_multiplier = (
-            D(1) + _chain_bonus(action, "damage")
+            D(1) + _path_chain_bonus(actor, action, "damage")
             if chain_consumed and action.coefficient > ZERO
             else D(1)
         )
         healing_power_multiplier = (
-            D(1) + _chain_bonus(action, "healing")
+            D(1) + _path_chain_bonus(actor, action, "healing")
             if chain_consumed and action.heal_coefficient > ZERO
             else D(1)
         )
         barrier_power_multiplier = (
-            D(1) + _chain_bonus(action, "barrier")
+            D(1) + _path_chain_bonus(actor, action, "barrier")
             if chain_consumed
             and (action.self_barrier_coefficient > ZERO or action.target_barrier_coefficient > ZERO)
             else D(1)
@@ -1738,7 +2152,15 @@ def _perform(
     }.get(power_component, D(1))
 
     if action.self_barrier_coefficient > ZERO:
-        barrier_coefficient = action.self_barrier_coefficient * barrier_power_multiplier
+        self_context = _path_target_context(_path_resolution, actor)
+        path_barrier_multiplier = D(self_context.get("barrier_power", D(1)))
+        if actor.selected_path == "bastiao":
+            path_barrier_multiplier *= D("1.10")
+        barrier_coefficient = (
+            action.self_barrier_coefficient
+            * barrier_power_multiplier
+            * path_barrier_multiplier
+        )
         value = (actor.stat("attack") * barrier_coefficient).to_integral_value(
             rounding=ROUND_FLOOR
         )
@@ -1784,7 +2206,10 @@ def _perform(
                 power_multiplier=power_multiplier,
                 damage_power_multiplier=damage_power_multiplier,
                 healing_power_multiplier=healing_power_multiplier,
-                barrier_power_multiplier=barrier_power_multiplier,
+                barrier_power_multiplier=barrier_power_multiplier * path_barrier_multiplier,
+                path_triggers=tuple(self_context.get("triggers", ())),
+                path_power_multiplier=path_barrier_multiplier,
+                aim_stacks=int(self_context.get("aim_stacks", 0)),
             )
         )
         if action.prepares_chain and not chain_state and _hit_index in {None, 1}:
@@ -1796,6 +2221,27 @@ def _perform(
                     "remaining": action.prepares_chain_duration,
                     "applied_opportunity": actor.opportunity,
                 }
+        generated_path_trigger = (
+            _finalize_path_action(state, actor_id, action_id, action, _path_resolution)
+            if _hit_index is None
+            else None
+        )
+        if generated_path_trigger:
+            state.events[-1] = replace(
+                state.events[-1],
+                path_triggers=state.events[-1].path_triggers + (generated_path_trigger,),
+            )
+        if (
+            actor.barrier > ZERO
+            and actor.character_class == "oraculo"
+            and _is_art_action(action_id, action)
+        ):
+            _new_omen(actor, "defensive", actor)
+            state.events[-1] = replace(
+                state.events[-1],
+                path_triggers=state.events[-1].path_triggers
+                + ("oraculo.pressagio_defensivo_criado",),
+            )
         state.resolving_prepared = False
         return True
 
@@ -1846,6 +2292,19 @@ def _perform(
     # stable by entity id and never depends on database order.
     for target_index, target_key in enumerate(target_keys):
         target = state.fighters[target_key]
+        target_path = _path_target_context(_path_resolution, target)
+        target_damage_power = damage_power_multiplier * D(
+            target_path.get("damage_power", D(1))
+        )
+        target_healing_power = healing_power_multiplier * D(
+            target_path.get("healing_power", D(1))
+        )
+        target_barrier_power = barrier_power_multiplier * D(
+            target_path.get("barrier_power", D(1))
+        )
+        if actor.selected_path == "bastiao":
+            target_barrier_power *= D("1.10")
+        damage_coefficient = action.coefficient * target_damage_power
         effect_trigger_applies = (
             action.effect_trigger_scope == "per_hit"
             or (
@@ -1951,6 +2410,14 @@ def _perform(
                     damage_power_multiplier=damage_power_multiplier,
                     healing_power_multiplier=healing_power_multiplier,
                     barrier_power_multiplier=barrier_power_multiplier,
+                    path_triggers=tuple(target_path.get("triggers", ())),
+                    path_power_multiplier=D(target_path.get("damage_power", D(1))),
+                    path_final_damage_bonus=D(
+                        target_path.get("final_damage_bonus", ZERO)
+                    ),
+                    aim_stacks=int(target_path.get("aim_stacks", 0)),
+                    path_per_bonus=D(target_path.get("per_bonus", ZERO)),
+                    path_crit_bonus=D(target_path.get("crit_bonus", ZERO)),
                 )
             )
             action_event_indices.append(event_index)
@@ -1975,7 +2442,10 @@ def _perform(
             )
             crit_chance = (
                 chance_from_percentage_points(
-                    actor.stat("crit") + target_debuff_bonus + next_direct_bonus
+                actor.stat("crit")
+                + target_debuff_bonus
+                + next_direct_bonus
+                + D(target_path.get("crit_bonus", ZERO))
                 )
                 if current_ruleset
                 else D("0.05")
@@ -2025,7 +2495,7 @@ def _perform(
                 for dot in state.dot_states.get(target.id, ())
             )
             else ZERO
-        )
+        ) + D(target_path.get("per_bonus", ZERO))
         damage = (
             direct_damage(
                 actor.stat("attack"),
@@ -2056,6 +2526,21 @@ def _perform(
                     rounding=ROUND_FLOOR
                 )
             )
+        path_final_damage_bonus = D(target_path.get("final_damage_bonus", ZERO))
+        path_triggers = list(target_path.get("triggers", ()))
+        if (
+            actor.selected_path == "carrasco"
+            and direct_eligible
+            and target.hp <= target.stats.hp * D("0.40")
+        ):
+            path_final_damage_bonus += D("0.08")
+            path_triggers.append("carrasco.sentenca")
+        if direct_eligible and path_final_damage_bonus > ZERO:
+            damage = int(
+                (D(damage) * (D(1) + path_final_damage_bonus)).to_integral_value(
+                    rounding=ROUND_FLOOR
+                )
+            )
         damage_without_defender = damage
         if target.defending and direct_eligible:
             damage_without_defender = direct_damage(
@@ -2074,6 +2559,13 @@ def _perform(
                         * (D(1) - direct_final_reduction)
                     ).to_integral_value(rounding=ROUND_FLOOR)
                 )
+            if path_final_damage_bonus > ZERO:
+                damage_without_defender = int(
+                    (
+                        D(damage_without_defender)
+                        * (D(1) + path_final_damage_bonus)
+                    ).to_integral_value(rounding=ROUND_FLOOR)
+                )
         defender_prevented_damage = (
             max(0, damage_without_defender - damage)
             if target.defending and direct_eligible
@@ -2081,6 +2573,20 @@ def _perform(
         )
 
         actual_damage, barrier_absorbed = _deal_damage(target, damage)
+        if direct_eligible and damage > 0 and actor.character_class == "vigia":
+            generated = _path_resolution.setdefault("aim_generated_targets", set())
+            if target.id not in generated:
+                stacks = _grant_aim(
+                    state,
+                    actor_id,
+                    target_key,
+                    trigger="direct",
+                    action_targets=_path_resolution.get("target_ids"),
+                )
+                generated.add(target.id)
+                if stacks:
+                    path_triggers.append("vigia.mira_gerada")
+                    target_path["aim_stacks_after"] = stacks
         if direct_eligible and protection_layers_before > 0:
             target.protection_layers -= 1
         protection_layers_after = target.protection_layers
@@ -2091,6 +2597,8 @@ def _perform(
         applied_effect = None
         dot_application_event_id = ""
         dot_application_kind = ""
+        target_effects_application_id = ""
+        target_effects_applied = False
         if action.attack_debuff and target.hp > 0 and effect_trigger_applies:
             had_ward = target.ward_charges > 0 and target.ward_remaining > 0
             applied_effect_id = action.effect_id or action.id
@@ -2105,7 +2613,12 @@ def _perform(
                     id=applied_effect_id,
                     stat=action.effect_stat or "attack",
                     magnitude=action.attack_debuff,
-                    remaining=action.duration,
+                    remaining=(
+                        min(3, action.duration + 1)
+                        if actor.selected_path == "sabotador"
+                        and action.duration in {1, 2}
+                        else action.duration
+                    ),
                     applied_opportunity=target.opportunity,
                 ),
                 application_event=effect_application_event_id,
@@ -2134,10 +2647,16 @@ def _perform(
                     id=effect.id,
                     stat=effect.stat,
                     magnitude=effect.magnitude,
-                    remaining=effect.duration,
+                    remaining=_path_effect_duration(
+                        actor, effect, effect.duration
+                    ),
                     applied_opportunity=target.opportunity,
                     kind=effect.kind,
                     stat_modifier_mode=effect.stat_modifier_mode,
+                    removable=effect.removable,
+                    unremovable=effect.unremovable,
+                    fixed_mechanic=effect.fixed_mechanic,
+                    hard_cc=effect.hard_cc,
                 )
                 for effect in action.target_effects
             )
@@ -2145,6 +2664,7 @@ def _perform(
                 state, target, target_effects, application_event=application_id
             )
             if target_effects_applied:
+                target_effects_application_id = application_id
                 status_applied = True
                 effect_application_event_id = application_id
                 applied_effect = next(
@@ -2197,6 +2717,33 @@ def _perform(
                 if had_ward and not applied and target.ward_charges == 0:
                     ward_blocked.append(chosen)
 
+        if actor.character_class == "vigia" and actor.selected_path == "rastreador":
+            agility_debuff_applied = any(
+                effect.application_event == target_effects_application_id
+                and effect.stat == "agility"
+                and effect.kind == "debuff"
+                and effect.remaining > 0
+                for effect in target.effects
+            ) or bool(
+                applied_effect is not None
+                and applied_effect.stat == "agility"
+                and applied_effect.kind == "debuff"
+            )
+            if dot_application_event_id or agility_debuff_applied:
+                generated = _path_resolution.setdefault("aim_generated_targets", set())
+                if target.id not in generated:
+                    stacks = _grant_aim(
+                        state,
+                        actor_id,
+                        target_key,
+                        trigger="status",
+                        action_targets=_path_resolution.get("target_ids"),
+                    )
+                    generated.add(target.id)
+                    if stacks:
+                        path_triggers.append("rastreador.mira_gerada")
+                        target_path["aim_stacks_after"] = stacks
+
         target_healed = D(0)
         base_healing = D(0)
         calculated_healing = D(0)
@@ -2210,7 +2757,7 @@ def _perform(
             base_healing = (
                 actor.stat("attack")
                 * action.heal_coefficient
-                * healing_power_multiplier
+                * target_healing_power
             )
             received_healing_multiplier = healing_received_multiplier(state, target_key)
             calculated_healing = (
@@ -2233,7 +2780,7 @@ def _perform(
             target_barrier = (
                 actor.stat("attack")
                 * action.target_barrier_coefficient
-                * barrier_power_multiplier
+                * target_barrier_power
             ).to_integral_value(rounding=ROUND_FLOOR)
             target_barrier = max(ZERO, target_barrier)
             if target_barrier > ZERO:
@@ -2244,6 +2791,27 @@ def _perform(
                 target.barrier_debuff_magnitude_reduction = (
                     action.target_barrier_debuff_magnitude_reduction
                 )
+
+        if actor.character_class == "oraculo" and _is_art_action(action_id, action):
+            applied_target_effects = [
+                effect
+                for effect in target.effects
+                if effect.remaining > 0
+                and (
+                    effect.application_event == effect_application_event_id
+                    or effect.application_event == target_effects_application_id
+                )
+            ]
+            if dot_application_event_id or any(
+                effect.kind == "debuff" for effect in applied_target_effects
+            ):
+                _new_omen(actor, "offensive", target)
+                path_triggers.append("oraculo.pressagio_ofensivo_criado")
+            if target_barrier > ZERO or any(
+                effect.kind == "buff" for effect in applied_target_effects
+            ):
+                _new_omen(actor, "defensive", target)
+                path_triggers.append("oraculo.pressagio_defensivo_criado")
 
         action_event_sequence = len(state.events)
         state.events.append(
@@ -2310,7 +2878,24 @@ def _perform(
                     power_multiplier=power_multiplier,
                     damage_power_multiplier=damage_power_multiplier,
                     healing_power_multiplier=healing_power_multiplier,
-                    barrier_power_multiplier=barrier_power_multiplier,
+                    barrier_power_multiplier=target_barrier_power,
+                    path_triggers=tuple(path_triggers),
+                    path_power_multiplier=(
+                        D(target_path.get("damage_power", D(1)))
+                        if power_component == "damage"
+                        else D(target_path.get("healing_power", D(1)))
+                        if power_component == "healing"
+                        else D(target_path.get("barrier_power", D(1)))
+                        * (D("1.10") if actor.selected_path == "bastiao" else D(1))
+                        if power_component == "barrier"
+                        else D(1)
+                    ),
+                    path_final_damage_bonus=path_final_damage_bonus,
+                    aim_stacks=int(
+                        target_path.get("aim_stacks_after", target_path.get("aim_stacks", 0))
+                    ),
+                path_per_bonus=D(target_path.get("per_bonus", ZERO)),
+                path_crit_bonus=D(target_path.get("crit_bonus", ZERO)),
                 trigger_scope=action.effect_trigger_scope,
                 barrier_applied_source=(
                     f"{actor.id}:{action.id}" if target_barrier > ZERO else ""
@@ -2370,6 +2955,23 @@ def _perform(
         if _hit_index in {None, 1}
         else ()
     )
+    if actor.character_class == "oraculo" and _is_art_action(action_id, action):
+        applied_actor_buffs = [
+            effect
+            for effect in actor.effects
+            if effect.id in applied_actor_effect_ids
+            and effect.kind == "buff"
+            and effect.remaining > 0
+        ]
+        if applied_actor_buffs:
+            _new_omen(actor, "defensive", actor)
+            if action_event_indices:
+                first = action_event_indices[0]
+                state.events[first] = replace(
+                    state.events[first],
+                    path_triggers=state.events[first].path_triggers
+                    + ("oraculo.pressagio_defensivo_criado",),
+                )
     if applied_actor_effect_ids and action_event_indices:
         first = action_event_indices[0]
         applied_actor_effect = next(
@@ -2457,6 +3059,18 @@ def _perform(
     _refresh_result(state)
     if prepared_resolution:
         state.prepared_action_instance_id = None
+    generated_path_trigger = (
+        _finalize_path_action(state, actor_id, action_id, action, _path_resolution)
+        if _hit_index is None
+        else None
+    )
+    if generated_path_trigger:
+        for index in action_event_indices:
+            state.events[index] = replace(
+                state.events[index],
+                path_triggers=state.events[index].path_triggers
+                + (generated_path_trigger,),
+            )
     state.resolving_prepared = False
     return True
 
@@ -2502,6 +3116,10 @@ def _apply_action_self_effect(
                 applied_opportunity=actor.opportunity,
                 kind=effect.kind,
                 stat_modifier_mode=effect.stat_modifier_mode,
+                removable=effect.removable,
+                unremovable=effect.unremovable,
+                fixed_mechanic=effect.fixed_mechanic,
+                hard_cc=effect.hard_cc,
             ),
             application_event=(
                 f"{state.id.hex}:{state.version}:{len(state.events)}:self-effect:{effect.id}"
@@ -2609,9 +3227,14 @@ def _advance_to_player(state: Combat) -> None:
                             )
                         )
                         target_id = candidates[0] if candidates else None
+            event_start = len(state.events)
             committed = _perform(
                 state, actor_key, action_id, target_id=target_id
             )
+            if committed and not prepared_declaration:
+                _record_devastador_charge(
+                    state, actor_key, event_start, action_id
+                )
             if (
                 committed
                 and action
@@ -2932,7 +3555,8 @@ def use_combat_consumable(
         if not effect_name:
             return state
     elif item.family == ConsumableFamily.PROTECTION:
-        barrier_value = (player.stats.hp * D("0.12")).to_integral_value(
+        barrier_multiplier = D("1.10") if player.selected_path == "bastiao" else D(1)
+        barrier_value = (player.stats.hp * D("0.12") * barrier_multiplier).to_integral_value(
             rounding=ROUND_FLOOR
         )
         if barrier_value <= 0:

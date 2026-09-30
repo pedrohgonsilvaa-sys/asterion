@@ -70,6 +70,12 @@ class Character(Base):
             "character_class IN ('sentinela','errante','vigia','tecelao','oraculo','luminar')",
             name="ck_character_class",
         ),
+        CheckConstraint(
+            "selected_path IS NULL OR selected_path IN ('bastiao','devastador','carrasco',"
+            "'sabotador','atirador','rastreador','conjurador','runico','agoureiro',"
+            "'invocador','guardiao','inquisidor')",
+            name="ck_character_selected_path",
+        ),
         CheckConstraint("level BETWEEN 1 AND 60 AND xp >= 0", name="ck_character_progress"),
         CheckConstraint("hp >= 0 AND hp <= max_hp AND max_hp > 0", name="ck_character_hp"),
         CheckConstraint(
@@ -88,6 +94,7 @@ class Character(Base):
     name: Mapped[str] = mapped_column(String(16), nullable=False)
     race: Mapped[str] = mapped_column(String(24), nullable=False)
     character_class: Mapped[str] = mapped_column(String(24), nullable=False)
+    selected_path: Mapped[str | None] = mapped_column(String(24))
     stage: Mapped[str] = mapped_column(String(64), nullable=False)
     ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
     level: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")

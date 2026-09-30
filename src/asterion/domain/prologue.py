@@ -72,12 +72,22 @@ class PrologueProfile:
             equipment_configuration.contribution()
             if equipment_configuration is not None
             else None,
+            equipment_configuration.selected_path
+            if equipment_configuration is not None
+            else None,
         )
         state = Combat(
             combat_id,
             RULESET,
             fighters={
-                "player": Fighter("player", name, 1, stats, hp, race, character_class),
+                "player": Fighter(
+                    "player", name, 1, stats, hp, race, character_class,
+                    selected_path=(
+                        equipment_configuration.selected_path
+                        if equipment_configuration is not None
+                        else None
+                    ),
+                ),
                 "enemy": Fighter("enemy", "Cão Cinéreo", 1, self.enemy, self.enemy.hp),
             },
             player_actions={
@@ -130,12 +140,22 @@ def p1_combat_profile(
         equipment_configuration.contribution()
         if equipment_configuration is not None
         else None,
+        equipment_configuration.selected_path
+        if equipment_configuration is not None
+        else None,
     )
     state = Combat(
         combat_id,
         RULESET,
         fighters={
-            "player": Fighter("player", name, 1, stats, hp, race, character_class),
+            "player": Fighter(
+                "player", name, 1, stats, hp, race, character_class,
+                selected_path=(
+                    equipment_configuration.selected_path
+                    if equipment_configuration is not None
+                    else None
+                ),
+            ),
             "enemy": Fighter(
                 "enemy",
                 "Cão Cinéreo",

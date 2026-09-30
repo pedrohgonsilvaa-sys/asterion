@@ -17,7 +17,9 @@ def level_xp(level: int) -> int:
 
 
 def consolidate_level(
-    character, equipment: EquipmentStatContribution | None = None
+    character,
+    equipment: EquipmentStatContribution | None = None,
+    selected_path: str | None = None,
 ) -> int:
     """Consolidate all earned XP at a valid activity boundary.
 
@@ -30,7 +32,11 @@ def consolidate_level(
         character.xp -= level_xp(character.level)
         character.level += 1
         character.max_hp = resolve_combat_stats(
-            character.character_class, character.level, character.race, equipment
+            character.character_class,
+            character.level,
+            character.race,
+            equipment,
+            selected_path,
         ).hp
         character.hp = min(character.hp, character.max_hp)
         advanced += 1
@@ -49,4 +55,6 @@ async def consolidate_character_level(
     configuration = equipment_configuration or await load_equipment_configuration(
         session, character
     )
-    return consolidate_level(character, configuration.contribution())
+    return consolidate_level(
+        character, configuration.contribution(), configuration.selected_path
+    )

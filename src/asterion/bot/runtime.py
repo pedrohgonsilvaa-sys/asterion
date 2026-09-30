@@ -13,6 +13,7 @@ from asterion.application.p1 import P1Service
 from asterion.application.p2 import P2Service
 from asterion.application.p3 import P3Service
 from asterion.application.p4 import P4Service
+from asterion.application.path_selection import PathSelectionService
 from asterion.application.prologue import PrologueService
 from asterion.application.round import RoundService
 from asterion.application.s1 import S1Service
@@ -27,6 +28,7 @@ from asterion.bot.p1_handlers import p1_router
 from asterion.bot.p2_handlers import p2_router
 from asterion.bot.p3_handlers import p3_router
 from asterion.bot.p4_handlers import p4_router
+from asterion.bot.path_handlers import path_router
 from asterion.bot.s1_handlers import s1_router
 from asterion.bot.s2_handlers import s2_router
 from asterion.bot.s3_handlers import s3_router
@@ -65,6 +67,7 @@ def get_bot_runtime() -> BotRuntime:
     s3 = S3Service(SessionFactory, settings.server_id)
     p4 = P4Service(SessionFactory, settings.server_id)
     class_trials = ClassTrialService(SessionFactory, settings.server_id)
+    paths = PathSelectionService(SessionFactory, settings.server_id)
     dispatcher.include_router(p2_router(p2, settings.creation_images, s3=s3, p4=p4))
     dispatcher.include_router(p1_router(p1, settings.creation_images))
     dispatcher.include_router(s1_router(s1, settings.creation_images))
@@ -72,6 +75,7 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(p3_router(p3, settings.creation_images, s3=s3))
     dispatcher.include_router(s3_router(s3, settings.creation_images))
     dispatcher.include_router(p4_router(p4, settings.creation_images))
+    dispatcher.include_router(path_router(paths, class_trials, settings.creation_images))
     dispatcher.include_router(class_trial_router(class_trials, settings.creation_images))
     dispatcher.include_router(
         combat_router(
