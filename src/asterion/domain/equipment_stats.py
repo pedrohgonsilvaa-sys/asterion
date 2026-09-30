@@ -129,6 +129,7 @@ class EquipmentConfigurationSnapshot:
 
     combat_configuration_version: int
     items: tuple[EquippedItemSnapshot, ...] = ()
+    selected_path: str | None = None
 
     def contribution(self) -> EquipmentStatContribution:
         slots: set[EquipmentSlot] = set()
@@ -158,6 +159,7 @@ class EquipmentConfigurationSnapshot:
             "combat_configuration_version": self.combat_configuration_version,
             "ruleset_version": ruleset_version,
             "equipment": [item.to_data() for item in self.items],
+            "selected_path": self.selected_path,
         }
 
 
@@ -286,7 +288,10 @@ def equipment_configuration_from_data(data: Mapping[str, Any]) -> EquipmentConfi
                 payload=normalized_payload,
             )
         )
-    result = EquipmentConfigurationSnapshot(version, tuple(items))
+    selected_path = data.get("selected_path")
+    if selected_path is not None and not isinstance(selected_path, str):
+        raise EquipmentConfigurationError("Invalid selected Path snapshot.")
+    result = EquipmentConfigurationSnapshot(version, tuple(items), selected_path)
     result.contribution()  # validate duplicates and 2H/off-hand invariants
     return result
 

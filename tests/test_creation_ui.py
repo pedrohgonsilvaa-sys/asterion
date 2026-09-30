@@ -133,10 +133,14 @@ async def test_unchanged_message_does_not_send_duplicate():
     assert not message.answer.called
 
 
-async def test_missing_official_file_uses_text_fallback(tmp_path):
+async def test_missing_official_file_uses_text_fallback():
     message = AsyncMock()
     screen = render(Creation(uuid4()))
-    await present(message, screen, {"name": f"file:{tmp_path / 'not-produced.png'}"})
+    await present(
+        message,
+        screen,
+        {"name": "file:tests/__missing_official_image_for_fallback_test__.png"},
+    )
     message.answer.assert_awaited_once()
     assert not message.answer_photo.called
 

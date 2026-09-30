@@ -58,7 +58,7 @@ async def test_0013_active_art_slots_constraints_and_safe_downgrade(schema_at_00
             ),
             {"id": character_id, "actor": actor},
         )
-        await connection.run_sync(lambda sync: _migrate(sync, "head"))
+        await connection.run_sync(lambda sync: _migrate(sync, "20260929_0013"))
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
             "20260929_0013"
         )

@@ -861,6 +861,7 @@ def create_creature_combat(
         player_level,
         race,
         equipment.contribution() if equipment is not None else None,
+        equipment.selected_path if equipment is not None else None,
     )
     enemy = road_enemy_stats(creature, level, variant)
     actions = {}
@@ -897,7 +898,10 @@ def create_creature_combat(
             combat_id,
             runtime_ruleset,
             fighters={
-                "player": Fighter("player", name, player_level, player_stats, hp, race, character_class),
+                "player": Fighter(
+                    "player", name, player_level, player_stats, hp, race, character_class,
+                    selected_path=(equipment.selected_path if equipment is not None else None),
+                ),
                 "enemy": Fighter(
                     "enemy",
                     creature.name,

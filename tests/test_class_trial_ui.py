@@ -8,6 +8,7 @@ from aiogram import Bot, Dispatcher
 
 from asterion.application.class_trials import ClassTrialService, ClassTrialView
 from asterion.application.creation import CreationService
+from asterion.application.path_selection import PathSelectionService
 from asterion.application.world import WorldService
 from asterion.bot.class_trial_handlers import class_trial_router
 from asterion.bot.class_trial_ui import (
@@ -24,6 +25,7 @@ from asterion.bot.combat_ui import (
     class_trial_target_ids,
 )
 from asterion.bot.creation_handlers import creation_router
+from asterion.bot.path_handlers import path_router
 from asterion.bot.world_handlers import world_router
 from asterion.domain.arts import LUMINAR_ART_IDS, TECELAO_ART_IDS
 from asterion.domain.class_trials import (
@@ -365,6 +367,9 @@ async def test_dispatch_start_menu_stale_callback_and_reconnect_keep_same_attemp
     actor = 982731
     _character_id, service = await _seed_trial(database, actor)
     dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        path_router(PathSelectionService(database[1], "ocaso"), service, {})
+    )
     dispatcher.include_router(class_trial_router(service, {}))
     dispatcher.include_router(
         creation_router(CreationService(database[1], "ocaso"), {}, class_trials=service)

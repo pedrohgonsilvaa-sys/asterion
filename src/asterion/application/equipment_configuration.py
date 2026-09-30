@@ -51,7 +51,9 @@ async def load_equipment_configuration(
         assignments[slot] = row.equipment_item_id
     item_ids = tuple(sorted(set(assignments.values()), key=str))
     if not item_ids:
-        return EquipmentConfigurationSnapshot(character.combat_configuration_version)
+        return EquipmentConfigurationSnapshot(
+            character.combat_configuration_version, selected_path=character.selected_path
+        )
 
     items_statement = (
         select(EquipmentItem)
@@ -109,6 +111,7 @@ def build_equipment_configuration(
     result = EquipmentConfigurationSnapshot(
         character.combat_configuration_version if version is None else version,
         tuple(sorted(snapshots, key=lambda item: item.slot)),
+        character.selected_path,
     )
     result.contribution()
     return result
@@ -122,6 +125,7 @@ def resolve_character_combat_stats(
         character.level,
         character.race,
         configuration.contribution(),
+        configuration.selected_path,
     )
 
 

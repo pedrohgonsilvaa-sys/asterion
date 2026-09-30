@@ -175,6 +175,14 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "barrier_power_multiplier": Decimal(
                         event.get("barrier_power_multiplier", "1")
                     ),
+                    "path_power_multiplier": Decimal(
+                        event.get("path_power_multiplier", "1")
+                    ),
+                    "path_final_damage_bonus": Decimal(
+                        event.get("path_final_damage_bonus", "0")
+                    ),
+                    "path_per_bonus": Decimal(event.get("path_per_bonus", "0")),
+                    "path_crit_bonus": Decimal(event.get("path_crit_bonus", "0")),
                     "applied_effect_magnitude": Decimal(
                         event.get("applied_effect_magnitude", "0")
                     ),
@@ -216,6 +224,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "target_effect_ids": tuple(event.get("target_effect_ids", ())),
                     "actor_effect_ids": tuple(event.get("actor_effect_ids", ())),
                     "target_state_tags": tuple(event.get("target_state_tags", ())),
+                    "path_triggers": tuple(event.get("path_triggers", ())),
                     "target_effect_application_event_ids": tuple(
                         event.get("target_effect_application_event_ids", ())
                     ),

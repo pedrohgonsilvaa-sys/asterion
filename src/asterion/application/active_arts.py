@@ -77,10 +77,8 @@ def _validate_definition(character: Character, definition: ActiveArtDefinition) 
         raise ActiveArtConfigurationError("Equipped Art does not belong to the character Class.")
     if character.level < definition.min_level:
         raise ActiveArtConfigurationError("Equipped Art level requirement is not met.")
-    # Path selection is not persisted by the current repository yet. Keep the
-    # authoritative hook explicit and fail closed when path Arts are introduced.
-    if definition.path_id is not None:
-        raise ActiveArtConfigurationError("Path-backed Arts require authoritative Path state.")
+    if definition.path_id is not None and character.selected_path != definition.path_id:
+        raise ActiveArtConfigurationError("Equipped Path Art does not match the selected Path.")
 
 
 async def load_active_art_configuration(
@@ -233,7 +231,7 @@ class ActiveArtService:
             raise ActiveArtMutationRejected(ActiveArtMutationCode.WRONG_CLASS)
         if character.level < definition.min_level:
             raise ActiveArtMutationRejected(ActiveArtMutationCode.LEVEL_REQUIRED)
-        if definition.path_id is not None:
+        if definition.path_id is not None and character.selected_path != definition.path_id:
             raise ActiveArtMutationRejected(ActiveArtMutationCode.PATH_REQUIRED)
 
     @staticmethod
