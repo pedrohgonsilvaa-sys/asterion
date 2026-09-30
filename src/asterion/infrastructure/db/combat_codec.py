@@ -44,6 +44,12 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "self_effect_magnitude": Decimal(
                         value.get("self_effect_magnitude", "0")
                     ),
+                    "heal_coefficient": Decimal(
+                        value.get("heal_coefficient", "0")
+                    ),
+                    "target_barrier_coefficient": Decimal(
+                        value.get("target_barrier_coefficient", "0")
+                    ),
                 }
             )
         )

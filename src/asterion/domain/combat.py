@@ -1,7 +1,7 @@
 """Reusable deterministic duel engine. Inputs and outputs are pure domain snapshots."""
 
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import ROUND_FLOOR, Decimal, localcontext
 from uuid import UUID
 
@@ -91,6 +91,10 @@ class Action:
     self_effect_magnitude: Decimal = ZERO
     self_effect_duration: int = 0
     self_effect_id: str | None = None
+    target_mode: str = "opponent"
+    heal_coefficient: Decimal = ZERO
+    target_barrier_coefficient: Decimal = ZERO
+    target_barrier_duration: int = 0
 
 
 @dataclass
@@ -123,6 +127,10 @@ class Fighter:
     retaliation_source_event_id: str = ""
     retaliation_source_actor_id: str = ""
     retaliation_duration_bonus: int = 0
+    side: str = ""
+    takes_turn: bool = True
+    defeat_on_zero: bool | None = None
+    required_for_victory: bool | None = None
 
     def stat(self, name: str) -> Decimal:
         value = getattr(self.stats, name)
@@ -183,6 +191,7 @@ class CombatEvent:
     retaliation_source_actor_id: str = ""
     retaliation_remaining: int = 0
     internal: bool = False
+    action_instance_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,10 +255,144 @@ class Combat:
         return "basics"
 
 
+TARGET_MODES = frozenset({"opponent", "ally", "self", "all_opponents", "all_allies"})
+
+
+def _fighter_side(state: Combat, key: str) -> str:
+    fighter = state.fighters[key]
+    return fighter.side or ("player" if key == "player" else "enemy")
+
+
+def _fighter_defeat_on_zero(state: Combat, key: str) -> bool:
+    value = state.fighters[key].defeat_on_zero
+    return key == "player" if value is None else value
+
+
+def _fighter_required_for_victory(state: Combat, key: str) -> bool:
+    value = state.fighters[key].required_for_victory
+    return _fighter_side(state, key) == "enemy" if value is None else value
+
+
+def _resolve_fighter_key(state: Combat, target_id: str | None) -> str | None:
+    if target_id is None:
+        return None
+    if target_id in state.fighters:
+        return target_id
+    matches = [key for key, fighter in state.fighters.items() if fighter.id == target_id]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _action_is_pure_self(action: Action) -> bool:
+    return bool(
+        action.coefficient <= ZERO
+        and action.attack_debuff <= ZERO
+        and action.native_dot_stacks <= 0
+        and action.heal_coefficient <= ZERO
+        and action.target_barrier_coefficient <= ZERO
+        and (
+            action.self_barrier_coefficient > ZERO
+            or (
+                action.self_effect_id
+                and action.self_effect_stat
+                and action.self_effect_magnitude > ZERO
+                and action.self_effect_duration > 0
+            )
+        )
+    )
+
+
+def _resolve_action_targets(
+    state: Combat,
+    actor_key: str,
+    action: Action,
+    requested_target: str | None = None,
+) -> tuple[str, ...]:
+    if actor_key not in state.fighters or state.fighters[actor_key].hp <= 0:
+        return ()
+    if action.target_mode not in TARGET_MODES:
+        return ()
+    if _action_is_pure_self(action) or action.target_mode == "self":
+        return (actor_key,)
+
+    actor_side = _fighter_side(state, actor_key)
+    wants_allies = action.target_mode in {"ally", "all_allies"}
+    candidates = [
+        key
+        for key, fighter in state.fighters.items()
+        if fighter.hp > 0
+        and ((_fighter_side(state, key) == actor_side) == wants_allies)
+    ]
+    candidates.sort(key=lambda key: (state.fighters[key].id, key))
+    if action.target_mode in {"all_opponents", "all_allies"}:
+        return tuple(candidates)
+
+    requested_key = _resolve_fighter_key(state, requested_target)
+    if requested_key is not None:
+        return (requested_key,) if requested_key in candidates else ()
+    if len(candidates) == 1:
+        return (candidates[0],)
+    if actor_key != "player" and "player" in candidates:
+        return ("player",)
+    return ()
+
+
+def action_target_ids(
+    state: Combat, action_id: str, *, actor_key: str = "player"
+) -> tuple[str, ...]:
+    """Return deterministic, alive target entity IDs selectable for one action."""
+    actions = state.player_actions if actor_key == "player" else state.enemy_actions
+    action = actions.get(action_id)
+    if action is None:
+        return ()
+    if (
+        action.target_mode in {"all_opponents", "all_allies", "self"}
+        or _action_is_pure_self(action)
+    ):
+        keys = _resolve_action_targets(state, actor_key, action)
+    else:
+        actor_side = _fighter_side(state, actor_key)
+        wants_allies = action.target_mode == "ally"
+        keys = tuple(
+            sorted(
+                (
+                    key
+                    for key, fighter in state.fighters.items()
+                    if fighter.hp > 0
+                    and ((_fighter_side(state, key) == actor_side) == wants_allies)
+                ),
+                key=lambda key: (state.fighters[key].id, key),
+            )
+        )
+    return tuple(state.fighters[key].id for key in keys)
+
+
+def _refresh_result(state: Combat) -> None:
+    if any(
+        fighter.hp <= 0 and _fighter_defeat_on_zero(state, key)
+        for key, fighter in state.fighters.items()
+    ):
+        state.result = "defeat"
+        _clear_prepared_action(state)
+        return
+    required_enemies = [
+        key
+        for key, fighter in state.fighters.items()
+        if _fighter_side(state, key) == "enemy"
+        and _fighter_required_for_victory(state, key)
+    ]
+    if required_enemies and all(state.fighters[key].hp <= 0 for key in required_enemies):
+        state.result = "victory"
+        _clear_prepared_action(state)
+
+
 def initiative(state: Combat) -> tuple[str, ...]:
     return tuple(
         sorted(
-            state.fighters,
+            (
+                key
+                for key, fighter in state.fighters.items()
+                if fighter.hp > 0 and fighter.takes_turn
+            ),
             key=lambda key: (
                 -state.fighters[key].stat("agility"),
                 -stable_priority(state.id, key),
@@ -801,10 +944,13 @@ def _deal_damage(target: Fighter, amount: Decimal | int) -> tuple[Decimal, Decim
 
 
 def _begin_turn(state: Combat) -> None:
-    actor = state.fighters[state.order[state.turn_index]]
+    if state.result or not state.order:
+        return
+    actor_key = state.order[state.turn_index]
+    actor = state.fighters[actor_key]
     actor.opportunity += 1
     actor.defending = False
-    if actor.id == "player" and state.prepared_action is not None:
+    if actor_key == "player" and state.prepared_action is not None:
         state.response_window_seen = True
 
 
@@ -971,8 +1117,28 @@ def _retaliation_action_resolved(
     )
 
 
+def _advance_turn_cursor(state: Combat) -> None:
+    if state.result:
+        return
+    while True:
+        state.turn_index += 1
+        if state.turn_index >= len(state.order):
+            state.round += 1
+            state.order = initiative(state)
+            state.turn_index = 0
+            if not state.order:
+                return
+        actor = state.fighters[state.order[state.turn_index]]
+        if actor.hp > 0 and actor.takes_turn:
+            break
+    _begin_turn(state)
+
+
 def _end_turn(state: Combat) -> None:
-    actor = state.fighters[state.order[state.turn_index]]
+    if not state.order:
+        return
+    actor_key = state.order[state.turn_index]
+    actor = state.fighters[actor_key]
     for dot in state.dot_states.get(actor.id, []):
         coefficient = (
             D("0.12")
@@ -982,7 +1148,8 @@ def _end_turn(state: Combat) -> None:
             else D("0.10")
         )
         snapshots = dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks
-        source = state.fighters.get(dot.source)
+        source_key = _resolve_fighter_key(state, dot.source)
+        source = state.fighters.get(source_key) if source_key is not None else None
         attacker_level = source.level if source is not None else actor.level
         damage = dot_damage(
             snapshots,
@@ -1010,10 +1177,7 @@ def _end_turn(state: Combat) -> None:
     state.dot_states[actor.id] = [
         dot for dot in state.dot_states.get(actor.id, []) if dot.remaining > 0
     ]
-    if actor.hp == 0 and not state.result:
-        state.result = "defeat" if actor.id == "player" else "victory"
-    if state.result:
-        _clear_prepared_action(state)
+    _refresh_result(state)
     for effect in actor.effects:
         if actor.opportunity > effect.applied_opportunity:
             effect.remaining -= 1
@@ -1040,7 +1204,7 @@ def _end_turn(state: Combat) -> None:
             _clear_retaliation(actor)
             _retaliation_event(
                 state,
-                actor_key=state.order[state.turn_index],
+                actor_key=actor_key,
                 target_id=actor.id,
                 kind="expired",
                 activation_id=activation_id,
@@ -1049,58 +1213,74 @@ def _end_turn(state: Combat) -> None:
                 source_actor_id=source_actor_id,
                 remaining=0,
             )
-    state.turn_index += 1
-    if state.turn_index == len(state.order):
-        state.round += 1
-        state.order = initiative(state)
-        state.turn_index = 0
-    _begin_turn(state)
+    if not state.result:
+        _advance_turn_cursor(state)
 
-
-def _perform(state: Combat, actor_id: str, action_id: str) -> None:
+def _perform(
+    state: Combat,
+    actor_id: str,
+    action_id: str,
+    *,
+    target_id: str | None = None,
+) -> bool:
     actor = state.fighters[actor_id]
-    target_key = "enemy" if actor_id == "player" else "player"
-    target = state.fighters[target_key]
-    prepared_resolution = state.resolving_prepared
-    target_defending = target.defending
-    target_effect_ids = tuple(
-        sorted(effect.id for effect in target.effects if effect.remaining > 0)
-    )
-    target_barrier_source = (
-        target.barrier_source
-        if target.barrier > ZERO and target.barrier_remaining > 0
-        else ""
-    )
     if action_id == "hold":
         actor.last_action = "hold"
-        state.events.append(CombatEvent(len(state.events), state.round, actor_id, action_id))
-        return
+        state.events.append(
+            CombatEvent(
+                len(state.events),
+                state.round,
+                actor_id,
+                action_id,
+                actor_entity_id=actor.id,
+            )
+        )
+        return True
     if action_id == "defend":
         actor.defending = True
         actor.last_action = action_id
-        state.events.append(CombatEvent(len(state.events), state.round, actor_id, action_id))
-        return
-    if actor_id == "player" or actor_id == "enemy":
-        for dot in state.dot_states.get(actor.id, []):
-            if dot.kind == "bleed":
-                snapshots = dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks
-                recoil = (
-                    sum(snapshots, D(0)) * D("0.03")
-                ).to_integral_value(rounding=ROUND_FLOOR)
-                _deal_damage(actor, recoil)
-        if actor.hp == 0:
-            state.result = "defeat" if actor_id == "player" else "victory"
-            _clear_prepared_action(state)
-            return
+        state.events.append(
+            CombatEvent(
+                len(state.events),
+                state.round,
+                actor_id,
+                action_id,
+                actor_entity_id=actor.id,
+            )
+        )
+        return True
+
+    # Bleed recoil belongs to the acting entity and resolves before its action.
+    for dot in state.dot_states.get(actor.id, []):
+        if dot.kind == "bleed":
+            snapshots = dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks
+            recoil = (sum(snapshots, D(0)) * D("0.03")).to_integral_value(
+                rounding=ROUND_FLOOR
+            )
+            _deal_damage(actor, recoil)
+    if actor.hp == 0:
+        _refresh_result(state)
+        return True
+
     actions = state.player_actions if actor_id == "player" else state.enemy_actions
-    action = actions[action_id]
+    action = actions.get(action_id)
+    if action is None:
+        return False
+    target_keys = _resolve_action_targets(state, actor_id, action, target_id)
+    if not target_keys:
+        return False
+
     prepared = action.prepared is True or (
         action.prepared is None and action_id == "leap"
     )
-    if actor_id == "enemy" and prepared and not state.resolving_prepared:
+    if (
+        _fighter_side(state, actor_id) == "enemy"
+        and prepared
+        and not state.resolving_prepared
+    ):
         state.prepared_action = action_id
         state.prepared_source = actor_id
-        state.prepared_target = target.id
+        state.prepared_target = state.fighters[target_keys[0]].id
         state.response_window_seen = False
         actor.last_action = f"prepare:{action_id}"
         actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
@@ -1113,7 +1293,8 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
                 actor_entity_id=actor.id,
             )
         )
-        return
+        return True
+
     if action.self_barrier_coefficient > ZERO:
         value = (actor.stat("attack") * action.self_barrier_coefficient).to_integral_value(
             rounding=ROUND_FLOOR
@@ -1131,16 +1312,22 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
                 state.round,
                 actor_id,
                 action_id,
-                actor_id,
+                actor.id,
                 barrier_value=actor.barrier,
                 actor_entity_id=actor.id,
+                action_instance_id=(
+                    f"{state.id.hex}:{state.version}:{len(state.events)}:{actor.id}:{action_id}"
+                ),
             )
         )
         state.resolving_prepared = False
-        return
+        return True
 
-    # Retaliation is committed only after the action has passed all ownership/action
-    # validation and any preparation-only step. Outcome RNG happens afterwards.
+    # Action-level resources are committed once, after action/target validation and
+    # before any per-target hit outcome. This keeps AoE from consuming them per target.
+    action_instance_id = (
+        f"{state.id.hex}:{state.version}:{len(state.events)}:{actor.id}:{action_id}"
+    )
     retaliation_context = _consume_retaliation(state, actor_id, actor, action)
     retaliation_used = bool(retaliation_context.get("used"))
     retaliation_source_type = str(retaliation_context.get("source_type", ""))
@@ -1149,45 +1336,261 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
 
     current_ruleset = state.ruleset == CURRENT_COMBAT_RULESET
     direct_eligible = action.coefficient > ZERO
-    dodged = False
-    if current_ruleset and direct_eligible:
-        streak = state.evasion_streaks.get(target.id, 0)
-        if streak >= 2:
-            # The anti-sequence guarantee is spent by the next eligible attack.
-            state.evasion_streaks[target.id] = 0
-        else:
-            evasion_chance = chance_from_percentage_points(target.stat("evasion"))
-            if evasion_chance > ZERO:
-                rng = CombatRng(state.id, state.rng_cursor)
-                dodged = rng.chance(
-                    evasion_chance,
-                    f"evasion:{actor_id}:{action_id}:{target.id}",
-                )
-                state.rng_cursor = rng.cursor
-            if dodged:
-                state.evasion_streaks[target.id] = streak + 1
-            else:
-                state.evasion_streaks[target.id] = 0
+    prepared_resolution = state.resolving_prepared
+    action_event_indices: list[int] = []
+    total_vamp_damage = D(0)
 
-    if dodged:
-        actor_effect_applied = _apply_action_self_effect(state, actor, action)
-        actor.last_action = action_id
-        if (action.cooldown or action.blocked_opportunities) and not state.resolving_prepared:
-            actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
+    # The target set is frozen before the first primary result. Target ordering is
+    # stable by entity id and never depends on database order.
+    for target_key in target_keys:
+        target = state.fighters[target_key]
+        target_defending = target.defending
+        target_effect_ids = tuple(
+            sorted(effect.id for effect in target.effects if effect.remaining > 0)
+        )
+        target_barrier_source = (
+            target.barrier_source
+            if target.barrier > ZERO and target.barrier_remaining > 0
+            else ""
+        )
+
+        dodged = False
+        if current_ruleset and direct_eligible:
+            streak = state.evasion_streaks.get(target.id, 0)
+            if streak >= 2:
+                state.evasion_streaks[target.id] = 0
+            else:
+                evasion_chance = chance_from_percentage_points(target.stat("evasion"))
+                if evasion_chance > ZERO:
+                    rng = CombatRng(state.id, state.rng_cursor)
+                    dodged = rng.chance(
+                        evasion_chance,
+                        f"evasion:{actor_id}:{action_id}:{target.id}",
+                    )
+                    state.rng_cursor = rng.cursor
+                if dodged:
+                    state.evasion_streaks[target.id] = streak + 1
+                else:
+                    state.evasion_streaks[target.id] = 0
+
+        if dodged:
+            event_index = len(state.events)
+            state.events.append(
+                CombatEvent(
+                    event_index,
+                    state.round,
+                    actor_id,
+                    action_id,
+                    target.id,
+                    dodged=True,
+                    actor_entity_id=actor.id,
+                    target_defending=target_defending,
+                    prepared_resolution=prepared_resolution,
+                    target_effect_ids=target_effect_ids,
+                    target_barrier_source=target_barrier_source,
+                    retaliation_valid=retaliation_valid,
+                    retaliation_used=retaliation_used,
+                    retaliation_activation_id=str(
+                        retaliation_context.get("activation_id", "")
+                    ),
+                    retaliation_source_type=retaliation_source_type,
+                    retaliation_source_event_id=str(
+                        retaliation_context.get("source_event_id", "")
+                    ),
+                    retaliation_source_actor_id=retaliation_source_actor_id,
+                    action_instance_id=action_instance_id,
+                )
+            )
+            action_event_indices.append(event_index)
+            continue
+
+        rng = CombatRng(state.id, state.rng_cursor)
+        critical = False
+        if direct_eligible:
+            crit_chance = (
+                chance_from_percentage_points(actor.stat("crit"))
+                if current_ruleset
+                else D("0.05")
+            )
+            if crit_chance > ZERO:
+                crit_purpose = (
+                    f"critical:{actor_id}:{action_id}:{target.id}"
+                    if current_ruleset
+                    else f"critical:{actor_id}:{action_id}"
+                )
+                critical = rng.chance(crit_chance, crit_purpose)
+
+        defender_reduction = (
+            D("0.52") if target.race == "cinereo" else D("0.45")
+        ) if target.defending else ZERO
+        blocked = False
+        if current_ruleset and direct_eligible:
+            block_chance = chance_from_percentage_points(target.stat("block"))
+            if block_chance > ZERO:
+                blocked = rng.chance(
+                    block_chance,
+                    f"block:{actor_id}:{action_id}:{target.id}",
+                )
+        state.rng_cursor = rng.cursor
+
+        mitigation_without_defender = (
+            combine_active_mitigation(D("0.35")) if blocked else ZERO
+        )
+        mitigation_parts = []
+        if target.defending:
+            mitigation_parts.append(defender_reduction)
+        if blocked:
+            mitigation_parts.append(D("0.35"))
+        mitigation = combine_active_mitigation(*mitigation_parts)
+        penetration = (actor.stat("per") if current_ruleset else ZERO) + (
+            action.per_bonus_if_target_poisoned
+            if any(
+                dot.kind == "poison" and dot.stacks > 0 and dot.remaining > 0
+                for dot in state.dot_states.get(target.id, ())
+            )
+            else ZERO
+        )
+        damage = (
+            direct_damage(
+                actor.stat("attack"),
+                action.coefficient,
+                target.stat("defense"),
+                actor.level,
+                critical=critical,
+                mitigation=mitigation,
+                penetration=penetration,
+            )
+            if direct_eligible
+            else 0
+        )
+        damage_without_defender = damage
+        if target.defending and direct_eligible:
+            damage_without_defender = direct_damage(
+                actor.stat("attack"),
+                action.coefficient,
+                target.stat("defense"),
+                actor.level,
+                critical=critical,
+                mitigation=mitigation_without_defender,
+                penetration=penetration,
+            )
+        defender_prevented_damage = (
+            max(0, damage_without_defender - damage)
+            if target.defending and direct_eligible
+            else 0
+        )
+
+        actual_damage, barrier_absorbed = _deal_damage(target, damage)
+        total_vamp_damage += actual_damage
+        ward_blocked: list[str] = []
+        status_applied = False
+        if action.attack_debuff and target.hp > 0:
+            had_ward = target.ward_charges > 0 and target.ward_remaining > 0
+            applied_effect_id = action.effect_id or action.id
+            status_applied = apply_effect(
+                state,
+                target,
+                Effect(
+                    id=applied_effect_id,
+                    stat=action.effect_stat or "attack",
+                    magnitude=action.attack_debuff,
+                    remaining=action.duration,
+                    applied_opportunity=target.opportunity,
+                ),
+                application_event=(
+                    f"{state.id.hex}:{state.version}:{len(state.events)}:effect:"
+                    f"{applied_effect_id}:{target.id}"
+                ),
+            )
+            if had_ward and not status_applied and target.ward_charges == 0:
+                ward_blocked.append(action.id)
+
+        if damage > 0 and target.hp > 0:
+            enemy_actor = _fighter_side(state, actor_id) == "enemy"
+            rider = (
+                "bleed"
+                if state.variant == "hemorrhagic"
+                else "poison"
+                if state.variant == "venomous"
+                else None
+            ) if enemy_actor else None
+            native_kind = action.native_dot_kind
+            native_stacks = action.native_dot_stacks
+            if (
+                enemy_actor
+                and native_kind is None
+                and native_stacks == 0
+                and action_id == "rend"
+            ):
+                native_kind, native_stacks = "bleed", 1
+            chosen = native_kind or rider
+            if chosen:
+                snapshot = actor.stat("attack")
+                had_ward = target.ward_charges > 0 and target.ward_remaining > 0
+                applied = apply_dot_stacks(
+                    state,
+                    target,
+                    kind=chosen,
+                    snapshots=[snapshot] * (native_stacks if native_kind else 1),
+                    source=actor.id,
+                    duration=_DOT_DURATIONS[chosen],
+                    application_event=(
+                        f"{state.id.hex}:{state.version}:{len(state.events)}:dot:"
+                        f"{chosen}:{target.id}"
+                    ),
+                )
+                if had_ward and not applied and target.ward_charges == 0:
+                    ward_blocked.append(chosen)
+
+        target_healed = D(0)
+        if action.heal_coefficient > ZERO and target.hp > 0:
+            target_healed = (
+                actor.stat("attack")
+                * action.heal_coefficient
+                * healing_received_multiplier(state, target_key)
+            ).to_integral_value(rounding=ROUND_FLOOR)
+            target_healed = min(
+                max(ZERO, target_healed),
+                max(ZERO, target.stats.hp - target.hp),
+            )
+            target.hp += target_healed
+
+        target_barrier = ZERO
+        if action.target_barrier_coefficient > ZERO and target.hp > 0:
+            target_barrier = (
+                actor.stat("attack") * action.target_barrier_coefficient
+            ).to_integral_value(rounding=ROUND_FLOOR)
+            target_barrier = max(ZERO, target_barrier)
+            if target_barrier > ZERO:
+                target.barrier = target_barrier
+                target.barrier_remaining = max(0, action.target_barrier_duration)
+                target.barrier_applied_opportunity = target.opportunity
+                target.barrier_source = f"{actor.id}:{action.id}"
+
+        action_event_sequence = len(state.events)
         state.events.append(
             CombatEvent(
-                len(state.events),
+                action_event_sequence,
                 state.round,
                 actor_id,
                 action_id,
                 target.id,
-                dodged=True,
+                damage,
+                critical,
+                target_healed,
+                (action.effect_id or action.id) if status_applied else "",
+                barrier_absorbed=barrier_absorbed,
+                barrier_value=target_barrier,
+                blocked=blocked,
                 actor_entity_id=actor.id,
+                calculated_damage=damage,
+                effective_damage=int(actual_damage),
                 target_defending=target_defending,
+                defender_mitigation_applied=defender_prevented_damage > 0,
+                defender_prevented_damage=defender_prevented_damage,
+                target_barrier_source=target_barrier_source,
                 prepared_resolution=prepared_resolution,
                 target_effect_ids=target_effect_ids,
-                target_barrier_source=target_barrier_source,
-                actor_effect_id=action.self_effect_id if actor_effect_applied else "",
                 retaliation_valid=retaliation_valid,
                 retaliation_used=retaliation_used,
                 retaliation_activation_id=str(
@@ -1198,219 +1601,81 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
                     retaliation_context.get("source_event_id", "")
                 ),
                 retaliation_source_actor_id=retaliation_source_actor_id,
+                action_instance_id=action_instance_id,
             )
         )
-        _retaliation_action_resolved(state, actor_id, actor, retaliation_context)
-        state.resolving_prepared = False
-        return
+        action_event_indices.append(action_event_sequence)
 
-    rng = CombatRng(state.id, state.rng_cursor)
-    critical = False
-    if direct_eligible:
-        crit_chance = (
-            chance_from_percentage_points(actor.stat("crit"))
-            if current_ruleset
-            else D("0.05")
-        )
-        if crit_chance > ZERO:
-            crit_purpose = (
-                f"critical:{actor_id}:{action_id}:{target.id}"
-                if current_ruleset
-                else f"critical:{actor_id}:{action_id}"
-            )
-            critical = rng.chance(crit_chance, crit_purpose)
-
-    defender_reduction = (
-        D("0.52") if target.race == "cinereo" else D("0.45")
-    ) if target.defending else ZERO
-    blocked = False
-    if current_ruleset and direct_eligible:
-        block_chance = chance_from_percentage_points(target.stat("block"))
-        if block_chance > ZERO:
-            blocked = rng.chance(
-                block_chance,
-                f"block:{actor_id}:{action_id}:{target.id}",
-            )
-    state.rng_cursor = rng.cursor
-
-    mitigation_without_defender = (
-        combine_active_mitigation(D("0.35")) if blocked else ZERO
-    )
-    mitigation_parts = []
-    if target.defending:
-        mitigation_parts.append(defender_reduction)
-    if blocked:
-        mitigation_parts.append(D("0.35"))
-    mitigation = combine_active_mitigation(*mitigation_parts)
-    penetration = (actor.stat("per") if current_ruleset else ZERO) + (
-        action.per_bonus_if_target_poisoned
-        if any(
-            dot.kind == "poison" and dot.stacks > 0 and dot.remaining > 0
-            for dot in state.dot_states.get(target.id, ())
-        )
-        else ZERO
-    )
-    damage = direct_damage(
-        actor.stat("attack"),
-        action.coefficient,
-        target.stat("defense"),
-        actor.level,
-        critical=critical,
-        mitigation=mitigation,
-        penetration=penetration,
-    )
-    damage_without_defender = damage
-    if target.defending and direct_eligible:
-        damage_without_defender = direct_damage(
-            actor.stat("attack"),
-            action.coefficient,
-            target.stat("defense"),
-            actor.level,
-            critical=critical,
-            mitigation=mitigation_without_defender,
-            penetration=penetration,
-        )
-    defender_prevented_damage = (
-        max(0, damage_without_defender - damage)
-        if target.defending and direct_eligible
-        else 0
-    )
-
-    actual_damage, barrier_absorbed = _deal_damage(target, damage)
-    healed = D(0)
-    if actor.race == "hemario" and actor.hp <= actor.stats.hp * D("0.40"):
-        healed = min(
-            actual_damage * D("0.12"), actor.stats.hp * D("0.03"), actor.stats.hp - actor.hp
-        ).to_integral_value(rounding=ROUND_FLOOR)
-        healed = max(D(0), healed)
-        actor.hp += healed
-    ward_blocked: list[str] = []
-    status_applied = False
-    if action.attack_debuff and target.hp > 0:
-        had_ward = target.ward_charges > 0 and target.ward_remaining > 0
-        applied_effect_id = action.effect_id or action.id
-        status_applied = apply_effect(
-            state,
-            target,
-            Effect(
-                id=applied_effect_id,
-                stat=action.effect_stat or "attack",
-                magnitude=action.attack_debuff,
-                remaining=action.duration,
-                applied_opportunity=target.opportunity,
-            ),
-            application_event=(
-                f"{state.id.hex}:{state.version}:{len(state.events)}:effect:{applied_effect_id}"
-            ),
-        )
-        if had_ward and not status_applied and target.ward_charges == 0:
-            ward_blocked.append(action.id)
-    actor_effect_applied = _apply_action_self_effect(state, actor, action)
-    # Native DoTs and variant riders are attached only to real direct hits.
-    # Legacy Rend snapshots had no metadata and retain their historical bleed.
-    if damage > 0 and target.hp > 0:
-        rider = (
-            "bleed" if state.variant == "hemorrhagic"
-            else "poison" if state.variant == "venomous" else None
-        ) if actor_id == "enemy" else None
-        native_kind = action.native_dot_kind
-        native_stacks = action.native_dot_stacks
         if (
-            actor_id == "enemy"
-            and native_kind is None
-            and native_stacks == 0
-            and action_id == "rend"
+            current_ruleset
+            and defender_prevented_damage > 0
+            and target.character_class == "sentinela"
         ):
-            native_kind, native_stacks = "bleed", 1
-        chosen = native_kind or rider
-        if chosen:
-            snapshot = actor.stat("attack")
-            had_ward = target.ward_charges > 0 and target.ward_remaining > 0
-            applied = apply_dot_stacks(
+            _grant_retaliation(
                 state,
-                target,
-                kind=chosen,
-                snapshots=[snapshot] * (native_stacks if native_kind else 1),
-                source=actor.id,
-                duration=_DOT_DURATIONS[chosen],
-                application_event=(
-                    f"{state.id.hex}:{state.version}:{len(state.events)}:dot:{chosen}"
-                ),
+                target_key=target_key,
+                source_actor=actor,
+                source_event_id=f"{state.id.hex}:{action_event_sequence}",
             )
-            if had_ward and not applied and target.ward_charges == 0:
-                ward_blocked.append(chosen)
+
+        for effect_id in ward_blocked:
+            state.events.append(
+                CombatEvent(
+                    len(state.events),
+                    state.round,
+                    target_key,
+                    "resguardo:block",
+                    target.id,
+                    effect_id=effect_id,
+                    actor_entity_id=target.id,
+                    action_instance_id=action_instance_id,
+                )
+            )
+
+    actor_effect_applied = _apply_action_self_effect(state, actor, action)
+    if actor_effect_applied and action_event_indices:
+        first = action_event_indices[0]
+        state.events[first] = replace(
+            state.events[first],
+            actor_effect_id=action.self_effect_id or "",
+        )
+
+    # Hemário vampirism is per action, including AoE: aggregate eligible HP damage
+    # and apply the existing 3% HP-Max cap once.
+    vamp_healed = D(0)
+    if (
+        actor.race == "hemario"
+        and actor.hp <= actor.stats.hp * D("0.40")
+        and total_vamp_damage > ZERO
+    ):
+        vamp_healed = min(
+            total_vamp_damage * D("0.12"),
+            actor.stats.hp * D("0.03"),
+            actor.stats.hp - actor.hp,
+        ).to_integral_value(rounding=ROUND_FLOOR)
+        vamp_healed = max(ZERO, vamp_healed)
+        actor.hp += vamp_healed
+        if vamp_healed > ZERO and action_event_indices:
+            target_event = next(
+                (
+                    index
+                    for index in action_event_indices
+                    if state.events[index].effective_damage > 0
+                ),
+                action_event_indices[0],
+            )
+            state.events[target_event] = replace(
+                state.events[target_event],
+                healed=state.events[target_event].healed + vamp_healed,
+            )
+
     actor.last_action = action_id
     if (action.cooldown or action.blocked_opportunities) and not state.resolving_prepared:
         actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
-
-    action_event_sequence = len(state.events)
-    state.events.append(
-        CombatEvent(
-            action_event_sequence,
-            state.round,
-            actor_id,
-            action_id,
-            target.id,
-            damage,
-            critical,
-            healed,
-            (action.effect_id or action.id) if status_applied else "",
-            barrier_absorbed=barrier_absorbed,
-            blocked=blocked,
-            actor_entity_id=actor.id,
-            actor_effect_id=action.self_effect_id if actor_effect_applied else "",
-            calculated_damage=damage,
-            effective_damage=int(actual_damage),
-            target_defending=target_defending,
-            defender_mitigation_applied=defender_prevented_damage > 0,
-            defender_prevented_damage=defender_prevented_damage,
-            target_barrier_source=target_barrier_source,
-            prepared_resolution=prepared_resolution,
-            target_effect_ids=target_effect_ids,
-            retaliation_valid=retaliation_valid,
-            retaliation_used=retaliation_used,
-            retaliation_activation_id=str(
-                retaliation_context.get("activation_id", "")
-            ),
-            retaliation_source_type=retaliation_source_type,
-            retaliation_source_event_id=str(
-                retaliation_context.get("source_event_id", "")
-            ),
-            retaliation_source_actor_id=retaliation_source_actor_id,
-        )
-    )
-
-    # Defender grants/refreshes one global Retaliation only when its own
-    # contribution prevented positive Direct Damage. Barrier is already downstream.
-    if (
-        current_ruleset
-        and defender_prevented_damage > 0
-        and target.character_class == "sentinela"
-    ):
-        _grant_retaliation(
-            state,
-            target_key=target_key,
-            source_actor=actor,
-            source_event_id=f"{state.id.hex}:{action_event_sequence}",
-        )
-
-    for effect_id in ward_blocked:
-        state.events.append(
-            CombatEvent(
-                len(state.events),
-                state.round,
-                target.id,
-                "resguardo:block",
-                target.id,
-                effect_id=effect_id,
-            )
-        )
     _retaliation_action_resolved(state, actor_id, actor, retaliation_context)
-    if target.hp == 0:
-        state.result = "victory" if actor_id == "player" else "defeat"
-        _clear_prepared_action(state)
+    _refresh_result(state)
     state.resolving_prepared = False
-
+    return True
 
 def _apply_action_self_effect(state: Combat, actor: Fighter, action: Action) -> bool:
     if (
@@ -1436,12 +1701,16 @@ def _apply_action_self_effect(state: Combat, actor: Fighter, action: Action) -> 
     )
 
 
-def _enemy_action(state: Combat) -> str:
+def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
     if state.pending_response is not None:
         action = state.pending_response
         state.pending_response = None
         return action
-    if state.prepared_action is not None and state.response_window_seen:
+    if (
+        state.prepared_action is not None
+        and state.prepared_source == actor_key
+        and state.response_window_seen
+    ):
         action = state.prepared_action
         state.prepared_action = None
         state.resolving_prepared = True
@@ -1449,7 +1718,8 @@ def _enemy_action(state: Combat) -> str:
         return action
     if state.prepared_action is not None:
         return "hold"
-    enemy = state.fighters["enemy"]
+    enemy = state.fighters[actor_key]
+
     def ready(action_id: str) -> bool:
         action = state.enemy_actions.get(action_id)
         if action is None or enemy.cooldowns.get(action_id, 0) > enemy.opportunity:
@@ -1466,8 +1736,13 @@ def _enemy_action(state: Combat) -> str:
                 return action
     # Alfa Cinéreo uses content priority rather than a positional cycle.
     if {"rend", "leap", "bite"}.issubset(state.enemy_actions):
+        player = state.fighters["player"]
         bleed_count = next(
-            (dot.stacks for dot in state.dot_states.get("player", []) if dot.kind == "bleed"),
+            (
+                dot.stacks
+                for dot in state.dot_states.get(player.id, [])
+                if dot.kind == "bleed"
+            ),
             0,
         )
         if ready("rend") and bleed_count == 0:
@@ -1477,26 +1752,47 @@ def _enemy_action(state: Combat) -> str:
         if ready("rend") and bleed_count < 3:
             return "rend"
         return "bite"
+    if not state.ai_cycle:
+        return "hold"
     for _ in range(len(state.ai_cycle)):
         action = state.ai_cycle[state.ai_position]
         state.ai_position = (state.ai_position + 1) % len(state.ai_cycle)
         if ready(action):
             return action
-    return state.ai_cycle[state.ai_position]
+    return "hold"
 
 
 def _advance_to_player(state: Combat) -> None:
-    while not state.result and state.order[state.turn_index] != "player":
-        _perform(state, "enemy", _enemy_action(state))
-        if not state.result:
+    while (
+        not state.result
+        and state.order
+        and state.order[state.turn_index] != "player"
+    ):
+        actor_key = state.order[state.turn_index]
+        if _fighter_side(state, actor_key) == "enemy":
+            _perform(state, actor_key, _enemy_action(state, actor_key))
+        else:
+            _perform(state, actor_key, "hold")
+        if state.result:
+            break
+        if state.fighters[actor_key].hp <= 0:
+            _advance_turn_cursor(state)
+        else:
             _end_turn(state)
+
 
 
 def start_combat(state: Combat) -> Combat:
     with localcontext() as ctx:
         ctx.prec = PRECISION
         state = deepcopy(state)
+        _refresh_result(state)
+        if state.result:
+            state.order = ()
+            state.turn_index = 0
+            return state
         state.order = initiative(state)
+        state.turn_index = 0
         _begin_turn(state)
         _advance_to_player(state)
         return state
@@ -1566,7 +1862,7 @@ def healing_received_multiplier(state: Combat, target_id: str = "player") -> Dec
         _DOT_STACK_CAPS["burn"],
         sum(
             max(0, dot.stacks)
-            for dot in state.dot_states.get(target_id, ())
+            for dot in state.dot_states.get(target.id, ())
             if dot.kind == "burn" and dot.remaining > 0
         ),
     )
@@ -1828,21 +2124,27 @@ def use_combat_consumable(
     )
 
 
-def act(state: Combat, action: str) -> Combat:
-    """Invalid intentions are a no-op; application also checks ownership/version."""
+def act(state: Combat, action: str, *, target_id: str | None = None) -> Combat:
+    """Resolve one player action; invalid action/target intentions are a no-op."""
     if action not in allowed_actions(state):
         return state
+    if action in state.player_actions:
+        definition = state.player_actions[action]
+        if not _resolve_action_targets(state, "player", definition, target_id):
+            return state
     with localcontext() as ctx:
         ctx.prec = PRECISION
-        state = deepcopy(state)
-        if state.tutorial and state.tutorial_stage != "normal":
-            state.pending_response = state.tutorial.responses.get(action)
-        _perform(state, "player", action)
-        state.used_attack |= action == "attack"
-        state.used_defend |= action == "defend"
-        state.used_art |= action == "art"
-        if not state.result:
-            _end_turn(state)
-            _advance_to_player(state)
-        state.version += 1
-        return state
+        updated = deepcopy(state)
+        if updated.tutorial and updated.tutorial_stage != "normal":
+            updated.pending_response = updated.tutorial.responses.get(action)
+        committed = _perform(updated, "player", action, target_id=target_id)
+        if not committed:
+            return state
+        updated.used_attack |= action == "attack"
+        updated.used_defend |= action == "defend"
+        updated.used_art |= action == "art"
+        if not updated.result:
+            _end_turn(updated)
+            _advance_to_player(updated)
+        updated.version += 1
+        return updated

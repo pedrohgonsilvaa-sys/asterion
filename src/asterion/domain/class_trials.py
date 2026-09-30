@@ -300,6 +300,7 @@ class TrialCombatEvent:
     actor_id: str
     target_ids: tuple[str, ...] = ()
     action_id: str = ""
+    action_instance_id: str = ""
     satisfied_conditions: tuple[str, ...] = ()
     entity_hp: Mapping[str, Decimal] | None = None
     entity_barriers: Mapping[str, tuple[Decimal, int]] | None = None
@@ -366,6 +367,7 @@ def trial_event_from_combat_event(
         actor_id=actor,
         target_ids=(event.target,) if event.target else (),
         action_id=action_id,
+        action_instance_id=event.action_instance_id,
         calculated_damage=Decimal(event.calculated_damage),
         effective_damage=Decimal(event.effective_damage),
         barrier_absorbed=event.barrier_absorbed,
