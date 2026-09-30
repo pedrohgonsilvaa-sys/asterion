@@ -1677,7 +1677,6 @@ def _perform(
     state.resolving_prepared = False
     return True
 
-
 def _apply_action_self_effect(state: Combat, actor: Fighter, action: Action) -> bool:
     if (
         not action.self_effect_id
@@ -1780,6 +1779,7 @@ def _advance_to_player(state: Combat) -> None:
             _advance_turn_cursor(state)
         else:
             _end_turn(state)
+
 
 
 def start_combat(state: Combat) -> Combat:
