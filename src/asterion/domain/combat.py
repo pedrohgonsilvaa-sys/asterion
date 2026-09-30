@@ -1703,12 +1703,16 @@ def _apply_action_self_effect(state: Combat, actor: Fighter, action: Action) -> 
     )
 
 
-def _enemy_action(state: Combat) -> str:
+def _enemy_action(state: Combat, actor_key: str) -> str:
     if state.pending_response is not None:
         action = state.pending_response
         state.pending_response = None
         return action
-    if state.prepared_action is not None and state.response_window_seen:
+    if (
+        state.prepared_action is not None
+        and state.prepared_source == actor_key
+        and state.response_window_seen
+    ):
         action = state.prepared_action
         state.prepared_action = None
         state.resolving_prepared = True
@@ -1716,7 +1720,8 @@ def _enemy_action(state: Combat) -> str:
         return action
     if state.prepared_action is not None:
         return "hold"
-    enemy = state.fighters["enemy"]
+    enemy = state.fighters[actor_key]
+
     def ready(action_id: str) -> bool:
         action = state.enemy_actions.get(action_id)
         if action is None or enemy.cooldowns.get(action_id, 0) > enemy.opportunity:
@@ -1733,8 +1738,13 @@ def _enemy_action(state: Combat) -> str:
                 return action
     # Alfa Cinéreo uses content priority rather than a positional cycle.
     if {"rend", "leap", "bite"}.issubset(state.enemy_actions):
+        player = state.fighters["player"]
         bleed_count = next(
-            (dot.stacks for dot in state.dot_states.get("player", []) if dot.kind == "bleed"),
+            (
+                dot.stacks
+                for dot in state.dot_states.get(player.id, [])
+                if dot.kind == "bleed"
+            ),
             0,
         )
         if ready("rend") and bleed_count == 0:
@@ -1744,18 +1754,32 @@ def _enemy_action(state: Combat) -> str:
         if ready("rend") and bleed_count < 3:
             return "rend"
         return "bite"
+    if not state.ai_cycle:
+        return "hold"
     for _ in range(len(state.ai_cycle)):
         action = state.ai_cycle[state.ai_position]
         state.ai_position = (state.ai_position + 1) % len(state.ai_cycle)
         if ready(action):
             return action
-    return state.ai_cycle[state.ai_position]
+    return "hold"
 
 
 def _advance_to_player(state: Combat) -> None:
-    while not state.result and state.order[state.turn_index] != "player":
-        _perform(state, "enemy", _enemy_action(state))
-        if not state.result:
+    while (
+        not state.result
+        and state.order
+        and state.order[state.turn_index] != "player"
+    ):
+        actor_key = state.order[state.turn_index]
+        if _fighter_side(state, actor_key) == "enemy":
+            _perform(state, actor_key, _enemy_action(state, actor_key))
+        else:
+            _perform(state, actor_key, "hold")
+        if state.result:
+            break
+        if state.fighters[actor_key].hp <= 0:
+            _advance_turn_cursor(state)
+        else:
             _end_turn(state)
 
 
@@ -1763,7 +1787,13 @@ def start_combat(state: Combat) -> Combat:
     with localcontext() as ctx:
         ctx.prec = PRECISION
         state = deepcopy(state)
+        _refresh_result(state)
+        if state.result:
+            state.order = ()
+            state.turn_index = 0
+            return state
         state.order = initiative(state)
+        state.turn_index = 0
         _begin_turn(state)
         _advance_to_player(state)
         return state
@@ -1833,7 +1863,7 @@ def healing_received_multiplier(state: Combat, target_id: str = "player") -> Dec
         _DOT_STACK_CAPS["burn"],
         sum(
             max(0, dot.stacks)
-            for dot in state.dot_states.get(target_id, ())
+            for dot in state.dot_states.get(target.id, ())
             if dot.kind == "burn" and dot.remaining > 0
         ),
     )
@@ -2095,21 +2125,27 @@ def use_combat_consumable(
     )
 
 
-def act(state: Combat, action: str) -> Combat:
-    """Invalid intentions are a no-op; application also checks ownership/version."""
+def act(state: Combat, action: str, *, target_id: str | None = None) -> Combat:
+    """Resolve one player action; invalid action/target intentions are a no-op."""
     if action not in allowed_actions(state):
         return state
+    if action in state.player_actions:
+        definition = state.player_actions[action]
+        if not _resolve_action_targets(state, "player", definition, target_id):
+            return state
     with localcontext() as ctx:
         ctx.prec = PRECISION
-        state = deepcopy(state)
-        if state.tutorial and state.tutorial_stage != "normal":
-            state.pending_response = state.tutorial.responses.get(action)
-        _perform(state, "player", action)
-        state.used_attack |= action == "attack"
-        state.used_defend |= action == "defend"
-        state.used_art |= action == "art"
-        if not state.result:
-            _end_turn(state)
-            _advance_to_player(state)
-        state.version += 1
-        return state
+        updated = deepcopy(state)
+        if updated.tutorial and updated.tutorial_stage != "normal":
+            updated.pending_response = updated.tutorial.responses.get(action)
+        committed = _perform(updated, "player", action, target_id=target_id)
+        if not committed:
+            return state
+        updated.used_attack |= action == "attack"
+        updated.used_defend |= action == "defend"
+        updated.used_art |= action == "art"
+        if not updated.result:
+            _end_turn(updated)
+            _advance_to_player(updated)
+        updated.version += 1
+        return updated
