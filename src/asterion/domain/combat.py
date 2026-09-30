@@ -1216,7 +1216,6 @@ def _end_turn(state: Combat) -> None:
     if not state.result:
         _advance_turn_cursor(state)
 
-
 def _perform(
     state: Combat,
     actor_id: str,
