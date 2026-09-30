@@ -50,6 +50,9 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "self_barrier_coefficient": Decimal(
                         value.get("self_barrier_coefficient", "0")
                     ),
+                    "self_barrier_debuff_magnitude_reduction": Decimal(
+                        value.get("self_barrier_debuff_magnitude_reduction", "0")
+                    ),
                     "self_effect_magnitude": Decimal(
                         value.get("self_effect_magnitude", "0")
                     ),
@@ -58,6 +61,9 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     ),
                     "target_barrier_coefficient": Decimal(
                         value.get("target_barrier_coefficient", "0")
+                    ),
+                    "target_barrier_debuff_magnitude_reduction": Decimal(
+                        value.get("target_barrier_debuff_magnitude_reduction", "0")
                     ),
                     "next_direct_crit_bonus": Decimal(
                         value.get("next_direct_crit_bonus", "0")
@@ -70,6 +76,12 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                             **(effect | {"magnitude": Decimal(effect["magnitude"])})
                         )
                         for effect in value.get("self_effects", ())
+                    ),
+                    "target_effects": tuple(
+                        ActionEffect(
+                            **(effect | {"magnitude": Decimal(effect["magnitude"])})
+                        )
+                        for effect in value.get("target_effects", ())
                     ),
                     "self_state_tags_after": (
                         tuple(value["self_state_tags_after"])
@@ -107,6 +119,9 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 | {
                     "hp": Decimal(value["hp"]),
                     "barrier": Decimal(value.get("barrier", "0")),
+                    "barrier_debuff_magnitude_reduction": Decimal(
+                        value.get("barrier_debuff_magnitude_reduction", "0")
+                    ),
                     "protection_reduction_per_layer": Decimal(
                         value.get("protection_reduction_per_layer", "0")
                     ),
@@ -160,6 +175,42 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "barrier_power_multiplier": Decimal(
                         event.get("barrier_power_multiplier", "1")
                     ),
+                    "applied_effect_magnitude": Decimal(
+                        event.get("applied_effect_magnitude", "0")
+                    ),
+                    "actor_applied_effect_magnitude": Decimal(
+                        event.get("actor_applied_effect_magnitude", "0")
+                    ),
+                    "base_healing": Decimal(event.get("base_healing", "0")),
+                    "calculated_healing": Decimal(
+                        event.get("calculated_healing", "0")
+                    ),
+                    "effective_healing": Decimal(
+                        event.get("effective_healing", event.get("healed", "0"))
+                    ),
+                    "healing_received_multiplier": Decimal(
+                        event.get("healing_received_multiplier", "1")
+                    ),
+                    "overheal": Decimal(event.get("overheal", "0")),
+                    "target_hp_after": (
+                        Decimal(event["target_hp_after"])
+                        if event.get("target_hp_after") is not None
+                        else None
+                    ),
+                    "actor_effect_facts": tuple(
+                        (
+                            str(row[0]),
+                            str(row[1]),
+                            Decimal(row[2]),
+                            int(row[3]),
+                            str(row[4]),
+                        )
+                        for row in event.get("actor_effect_facts", ())
+                    ),
+                    "fighter_hp_after": tuple(
+                        (str(row[0]), Decimal(row[1]))
+                        for row in event.get("fighter_hp_after", ())
+                    ),
                     "calculated_damage": int(event.get("calculated_damage", 0)),
                     "effective_damage": int(event.get("effective_damage", 0)),
                     "target_effect_ids": tuple(event.get("target_effect_ids", ())),
@@ -188,6 +239,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 },
                 "ai_cycle": tuple(payload["ai_cycle"]),
                 "ai_priority": tuple(payload.get("ai_priority", ())),
+                "ai_target_cycle": tuple(payload.get("ai_target_cycle", ())),
                 "order": tuple(payload["order"]),
                 "tutorial": tutorial,
                 "events": [combat_event(event) for event in payload["events"]],
