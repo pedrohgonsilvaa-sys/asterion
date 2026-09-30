@@ -50,6 +50,12 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "target_barrier_coefficient": Decimal(
                         value.get("target_barrier_coefficient", "0")
                     ),
+                    "next_direct_crit_bonus": Decimal(
+                        value.get("next_direct_crit_bonus", "0")
+                    ),
+                    "crit_bonus_if_target_debuffed": Decimal(
+                        value.get("crit_bonus_if_target_debuffed", "0")
+                    ),
                 }
             )
         )
@@ -62,6 +68,9 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 | {
                     "hp": Decimal(value["hp"]),
                     "barrier": Decimal(value.get("barrier", "0")),
+                    "next_direct_crit_bonus": Decimal(
+                        value.get("next_direct_crit_bonus", "0")
+                    ),
                     "stats": CombatStats(
                         **{stat: Decimal(number) for stat, number in value["stats"].items()}
                     ),
@@ -93,6 +102,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "calculated_damage": int(event.get("calculated_damage", 0)),
                     "effective_damage": int(event.get("effective_damage", 0)),
                     "target_effect_ids": tuple(event.get("target_effect_ids", ())),
+                    "actor_effect_ids": tuple(event.get("actor_effect_ids", ())),
                 }
             )
         )

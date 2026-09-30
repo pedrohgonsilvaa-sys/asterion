@@ -46,7 +46,7 @@ async def _seed_trial(
     *,
     level: int = 10,
     location: str = REFUGE,
-    character_class: str = "errante",
+    character_class: str = "vigia",
 ):
     _, sessions = database
     character_id = uuid4()
@@ -113,7 +113,7 @@ def _plan(stage: int, *, conditions=("demonstration.complete",)) -> TrialStageDe
 
 
 def _combat(plan: TrialStageDefinition) -> Combat:
-    stats = resolve_combat_stats("errante", 10, "remanescente")
+    stats = resolve_combat_stats("vigia", 10, "remanescente")
     fighters = {
         "player": Fighter(
             "player",
@@ -122,7 +122,7 @@ def _combat(plan: TrialStageDefinition) -> Combat:
             stats,
             Decimal("1"),
             race="remanescente",
-            character_class="errante",
+            character_class="vigia",
             opportunity=4,
             defending=True,
             last_action="old-action",
@@ -489,7 +489,7 @@ async def test_final_checkpoint_unlocks_both_paths_once_without_selection_or_rew
     assert second.current_stage == 3 and second.completed_stages == (1, 2)
     assert final.kind == "completed" and final.completed_stages == (1, 2, 3)
     assert duplicate.kind == "completed" and resumed.kind == "completed"
-    assert final.available_paths == ("carrasco", "sabotador")
+    assert final.available_paths == ("atirador", "rastreador")
     assert final.selected_path is None and not final.path_art_unlocked
     assert final.path_art_min_level == 12
     async with sessions() as session:
