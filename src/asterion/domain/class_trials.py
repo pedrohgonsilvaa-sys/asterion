@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from asterion.domain.arts import (
     ERRANTE_ART_IDS,
+    LUMINAR_ART_IDS,
+    ORACULO_ART_IDS,
     SENTINEL_ART_IDS,
     TECELAO_ART_IDS,
     VIGIA_ART_IDS,
@@ -106,6 +108,55 @@ TECELAO_ENTITY_IDS = {
 TECELAO_THREAD_KEY = "trama_encadeada"
 TECELAO_THREAD_BASE_POWER_BONUS = Decimal("0.10")
 TECELAO_THREAD_BASE_DURATION = 2
+ORACULO_CONDITION_IDS = {
+    1: "oraculo.stage_1.attack_weakened",
+    2: "oraculo.stage_2.prepared_threat_answered",
+    3: (
+        "oraculo.stage_3.offensive_window_used",
+        "oraculo.stage_3.prepared_threat_preserved",
+    ),
+}
+ORACULO_ENTITY_IDS = {
+    1: "trial_entity.oraculo.sinal",
+    2: "trial_entity.oraculo.antevisao",
+    3: "trial_entity.oraculo.futuro_possivel",
+}
+ORACULO_SINAL_EFFECT_ID = "oraculo.sinal_funesto.attack"
+ORACULO_OFFENSIVE_WINDOW_TAG = "oracle.offensive_window"
+ORACULO_TRAINING_ACTIONS = {
+    1: ("trial.oraculo.ataque_sinal",),
+    2: ("trial.oraculo.ataque_breve", "trial.oraculo.impacto_anunciado"),
+    3: ("trial.oraculo.pressao", "trial.oraculo.ruptura_predita"),
+}
+LUMINAR_CONDITION_IDS = {
+    1: "luminar.stage_1.sustain",
+    2: "luminar.stage_2.heal_reduced",
+    3: (
+        "luminar.stage_3.both_pressured",
+        "luminar.stage_3.priority_decision_survived",
+    ),
+}
+LUMINAR_ALLY_ENTITY_ID = "trial_entity.luminar.eco_aliado"
+LUMINAR_ENTITY_IDS = {
+    1: ("trial_entity.luminar.pressao", LUMINAR_ALLY_ENTITY_ID),
+    2: ("trial_entity.luminar.recuperacao",),
+    3: ("trial_entity.luminar.prioridade", LUMINAR_ALLY_ENTITY_ID),
+}
+LUMINAR_ACTIONS = {
+    "fulgor": LUMINAR_ART_IDS["fulgor"],
+    "renewal": LUMINAR_ART_IDS["renovacao"],
+    "ward": LUMINAR_ART_IDS["egide_solar"],
+    "judgment": LUMINAR_ART_IDS["julgamento"],
+}
+LUMINAR_ENEMY_ACTIONS = {
+    1: ("trial.luminar.pressao_aliado",),
+    2: ("trial.luminar.ataque_treino", "trial.luminar.recuperacao_treino"),
+    3: (
+        "trial.luminar.pressao_jogador",
+        "trial.luminar.pressao_aliado_etapa3",
+        "trial.luminar.recuperacao_prioridade",
+    ),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,6 +261,7 @@ class TrialStageDefinition:
     entities: tuple[TrialEntityDefinition, ...]
     required_conditions: tuple[str, ...] = ()
     allowed_art_ids: tuple[str, ...] = ()
+    ai_target_cycle: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.stage not in {1, 2, 3}:
@@ -227,6 +279,10 @@ class TrialStageDefinition:
             raise ValueError("Configured Class Trial Arts must be unique.")
         if len(self.allowed_art_ids) > 3:
             raise ValueError("Class Trials use at most three configured Class Arts.")
+        if any(not target for target in self.ai_target_cycle):
+            raise ValueError("Training AI targets must be stable entity ids.")
+        if not set(self.ai_target_cycle).issubset({"player", *ids}):
+            raise ValueError("Training AI targets must belong to the frozen stage.")
 
     def to_data(self) -> dict[str, Any]:
         return {
@@ -234,6 +290,7 @@ class TrialStageDefinition:
             "entities": [entity.to_data() for entity in self.entities],
             "required_conditions": list(self.required_conditions),
             "allowed_art_ids": list(self.allowed_art_ids),
+            "ai_target_cycle": list(self.ai_target_cycle),
         }
 
     @classmethod
@@ -243,6 +300,7 @@ class TrialStageDefinition:
             entities=tuple(TrialEntityDefinition.from_data(row) for row in data["entities"]),
             required_conditions=tuple(data.get("required_conditions", ())),
             allowed_art_ids=tuple(data.get("allowed_art_ids", ())),
+            ai_target_cycle=tuple(data.get("ai_target_cycle", ())),
         )
 
 
@@ -872,6 +930,322 @@ def create_tecelao_trial_combat(
     )
 
 
+def oraculo_stage_definition(
+    stage: int, *, allowed_art_ids: tuple[str, ...] = ()
+) -> TrialStageDefinition:
+    """Return the deterministic three-stage Oráculo training plan."""
+    if stage not in ORACULO_ENTITY_IDS:
+        raise ValueError("Oráculo has three documented trial stages.")
+    if len(allowed_art_ids) > 3 or len(set(allowed_art_ids)) != len(allowed_art_ids):
+        raise ValueError("Oráculo trials accept at most three unique equipped Arts.")
+    if not set(allowed_art_ids).issubset(set(ORACULO_ART_IDS.values())):
+        raise ValueError("Unknown Oráculo Art in trial combat configuration.")
+    specs = {
+        1: ("Eco do Sinal", Decimal("620"), Decimal("105"), Decimal("90"), Decimal("90"),
+            ORACULO_TRAINING_ACTIONS[1]),
+        2: ("Eco da Antevisão", Decimal("650"), Decimal("110"), Decimal("90"), Decimal("90"),
+            ORACULO_TRAINING_ACTIONS[2]),
+        3: ("Eco do Futuro Possível", Decimal("680"), Decimal("110"), Decimal("95"),
+            Decimal("95"), ORACULO_TRAINING_ACTIONS[3]),
+    }
+    _name, hp, attack, defense, agility, action_ids = specs[stage]
+    entity = TrialEntityDefinition(
+        entity_id=ORACULO_ENTITY_IDS[stage],
+        team="hostile",
+        turn_policy="active",
+        max_hp=hp,
+        stats={"attack": attack, "defense": defense, "agility": agility},
+        action_ids=action_ids,
+        action_cycle=(
+            (ORACULO_TRAINING_ACTIONS[3][0], ORACULO_TRAINING_ACTIONS[3][1])
+            if stage == 3
+            else action_ids
+        ),
+    )
+    conditions = ORACULO_CONDITION_IDS[stage]
+    if isinstance(conditions, str):
+        conditions = (conditions,)
+    return TrialStageDefinition(
+        stage=stage,
+        entities=(entity,),
+        required_conditions=tuple(conditions),
+        allowed_art_ids=tuple(allowed_art_ids),
+    )
+
+
+def oraculo_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action]:
+    if len(allowed_art_ids) > 3 or len(set(allowed_art_ids)) != len(allowed_art_ids):
+        raise ValueError("Oráculo combat configuration accepts at most three unique Arts.")
+    if not set(allowed_art_ids).issubset(set(ORACULO_ART_IDS.values())):
+        raise ValueError("Unknown Oráculo Art in trial combat configuration.")
+    definitions = {
+        ORACULO_ART_IDS["sinal_funesto"]: Action(
+            ORACULO_ART_IDS["sinal_funesto"], "Sinal Funesto", Decimal("1.05"),
+            attack_debuff=Decimal("0.08"), duration=2, cooldown=2,
+            effect_stat="attack", effect_id=ORACULO_SINAL_EFFECT_ID,
+        ),
+        ORACULO_ART_IDS["vislumbre"]: Action(
+            ORACULO_ART_IDS["vislumbre"], "Vislumbre", Decimal(0),
+            cooldown=3, target_mode="ally",
+            target_effects=(ActionEffect(
+                "oraculo.vislumbre.agility", "agility", Decimal("0.10"), 2, "buff"
+            ),),
+        ),
+        ORACULO_ART_IDS["ruina_predita"]: Action(
+            ORACULO_ART_IDS["ruina_predita"], "Ruína Predita", Decimal("1.20"),
+            cooldown=2,
+        ),
+        ORACULO_ART_IDS["veu_premonitorio"]: Action(
+            ORACULO_ART_IDS["veu_premonitorio"], "Véu Premonitório", Decimal(0),
+            cooldown=4, self_barrier_coefficient=Decimal("0.70"),
+            self_barrier_duration=2,
+            self_barrier_debuff_magnitude_reduction=Decimal("0.10"),
+        ),
+    }
+    return {
+        "attack": Action("attack", "Ataque Básico", Decimal(1)),
+        **{art_id: definitions[art_id] for art_id in allowed_art_ids},
+    }
+
+
+def oraculo_enemy_actions() -> dict[str, Action]:
+    return {
+        "trial.oraculo.ataque_sinal": Action(
+            "trial.oraculo.ataque_sinal", "Ataque de Treino", Decimal("1.00")
+        ),
+        "trial.oraculo.ataque_breve": Action(
+            "trial.oraculo.ataque_breve", "Ataque Breve", Decimal("0.90")
+        ),
+        "trial.oraculo.impacto_anunciado": Action(
+            "trial.oraculo.impacto_anunciado", "Impacto Anunciado", Decimal("1.65"),
+            prepared=True,
+        ),
+        "trial.oraculo.pressao": Action(
+            "trial.oraculo.pressao", "Pressão", Decimal("0.90"),
+            self_state_tags_after=(ORACULO_OFFENSIVE_WINDOW_TAG,),
+        ),
+        "trial.oraculo.ruptura_predita": Action(
+            "trial.oraculo.ruptura_predita", "Ruptura Predita de Treino",
+            Decimal("1.70"), prepared=True, self_state_tags_after=(),
+        ),
+    }
+
+
+def create_oraculo_trial_combat(
+    player: Fighter, definition: TrialStageDefinition
+) -> Combat:
+    canonical = oraculo_stage_definition(
+        definition.stage, allowed_art_ids=definition.allowed_art_ids
+    )
+    if canonical.to_data() != definition.to_data():
+        raise ValueError("Oráculo trial parameters must match the frozen stage plan.")
+    entity = definition.entities[0]
+    enemy = Fighter(
+        id=entity.entity_id,
+        name={1: "Eco do Sinal", 2: "Eco da Antevisão", 3: "Eco do Futuro Possível"}[
+            definition.stage
+        ],
+        level=10,
+        stats=CombatStats(
+            entity.max_hp,
+            entity.stats["attack"],
+            entity.stats["defense"],
+            entity.stats["agility"],
+        ),
+        hp=entity.max_hp,
+        training_state_tags=entity.initial_state_tags,
+    )
+    return Combat(
+        id=uuid4(),
+        ruleset=CURRENT_COMBAT_RULESET,
+        fighters={"player": player, "enemy": enemy},
+        player_actions=oraculo_player_actions(definition.allowed_art_ids),
+        enemy_actions=oraculo_enemy_actions(),
+        ai_cycle=entity.action_cycle or entity.action_ids,
+        variant=None,
+        external_consumables_allowed=False,
+    )
+
+
+def luminar_stage_definition(
+    stage: int, *, allowed_art_ids: tuple[str, ...] = ()
+) -> TrialStageDefinition:
+    """Return the deterministic three-stage Luminar training plan."""
+    if stage not in LUMINAR_ENTITY_IDS:
+        raise ValueError("Luminar has three documented trial stages.")
+    if len(allowed_art_ids) > 3 or len(set(allowed_art_ids)) != len(allowed_art_ids):
+        raise ValueError("Luminar trials accept at most three unique equipped Arts.")
+    if not set(allowed_art_ids).issubset(set(LUMINAR_ART_IDS.values())):
+        raise ValueError("Unknown Luminar Art in trial combat configuration.")
+
+    def hostile(entity_id: str, hp: str, attack: str, defense: str, agility: str,
+                actions: tuple[str, ...], *, cycle: tuple[str, ...] = ()):
+        return TrialEntityDefinition(
+            entity_id=entity_id,
+            team="hostile",
+            turn_policy="active",
+            max_hp=Decimal(hp),
+            stats={
+                "attack": Decimal(attack),
+                "defense": Decimal(defense),
+                "agility": Decimal(agility),
+            },
+            action_ids=actions,
+            action_cycle=cycle,
+        )
+
+    if stage == 1:
+        entities = (
+            hostile(LUMINAR_ENTITY_IDS[1][0], "600", "95", "85", "85",
+                    LUMINAR_ENEMY_ACTIONS[1]),
+            TrialEntityDefinition(
+                entity_id=LUMINAR_ALLY_ENTITY_ID,
+                team="ally",
+                turn_policy="passive",
+                max_hp=Decimal("480"),
+                stats={"attack": Decimal(0), "defense": Decimal("80"), "agility": Decimal(0)},
+                required_to_survive=True,
+            ),
+        )
+        target_cycle = (LUMINAR_ALLY_ENTITY_ID,)
+    elif stage == 2:
+        entities = (
+            hostile(LUMINAR_ENTITY_IDS[2][0], "680", "95", "90", "85",
+                    LUMINAR_ENEMY_ACTIONS[2], cycle=LUMINAR_ENEMY_ACTIONS[2]),
+        )
+        target_cycle = ()
+    else:
+        entities = (
+            hostile(LUMINAR_ENTITY_IDS[3][0], "760", "100", "95", "90",
+                    LUMINAR_ENEMY_ACTIONS[3], cycle=LUMINAR_ENEMY_ACTIONS[3]),
+            TrialEntityDefinition(
+                entity_id=LUMINAR_ALLY_ENTITY_ID,
+                team="ally",
+                turn_policy="passive",
+                max_hp=Decimal("480"),
+                stats={"attack": Decimal(0), "defense": Decimal("80"), "agility": Decimal(0)},
+                required_to_survive=True,
+            ),
+        )
+        target_cycle = ("player", LUMINAR_ALLY_ENTITY_ID)
+    conditions = LUMINAR_CONDITION_IDS[stage]
+    if isinstance(conditions, str):
+        conditions = (conditions,)
+    return TrialStageDefinition(
+        stage=stage,
+        entities=entities,
+        required_conditions=tuple(conditions),
+        allowed_art_ids=tuple(allowed_art_ids),
+        ai_target_cycle=target_cycle,
+    )
+
+
+def luminar_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action]:
+    if len(allowed_art_ids) > 3 or len(set(allowed_art_ids)) != len(allowed_art_ids):
+        raise ValueError("Luminar combat configuration accepts at most three unique Arts.")
+    if not set(allowed_art_ids).issubset(set(LUMINAR_ART_IDS.values())):
+        raise ValueError("Unknown Luminar Art in trial combat configuration.")
+    definitions = {
+        LUMINAR_ART_IDS["fulgor"]: Action(
+            LUMINAR_ART_IDS["fulgor"], "Fulgor", Decimal("1.10"), cooldown=2
+        ),
+        LUMINAR_ART_IDS["renovacao"]: Action(
+            LUMINAR_ART_IDS["renovacao"], "Renovação", Decimal(0),
+            cooldown=2, target_mode="ally", heal_coefficient=Decimal("0.85"),
+        ),
+        LUMINAR_ART_IDS["egide_solar"]: Action(
+            LUMINAR_ART_IDS["egide_solar"], "Égide Solar", Decimal(0),
+            cooldown=3, target_mode="ally", target_barrier_coefficient=Decimal("0.90"),
+            target_barrier_duration=2,
+        ),
+        LUMINAR_ART_IDS["julgamento"]: Action(
+            LUMINAR_ART_IDS["julgamento"], "Julgamento", Decimal("1.30"),
+            attack_debuff=Decimal("0.15"), duration=2, cooldown=3,
+            effect_stat="healing_received", effect_id="luminar.julgamento.cura",
+        ),
+    }
+    return {
+        "attack": Action("attack", "Ataque Básico", Decimal(1)),
+        **{art_id: definitions[art_id] for art_id in allowed_art_ids},
+    }
+
+
+def luminar_enemy_actions() -> dict[str, Action]:
+    return {
+        "trial.luminar.pressao_aliado": Action(
+            "trial.luminar.pressao_aliado", "Ataque de Treino", Decimal("1.00")
+        ),
+        "trial.luminar.ataque_treino": Action(
+            "trial.luminar.ataque_treino", "Ataque de Treino", Decimal("0.90")
+        ),
+        "trial.luminar.recuperacao_treino": Action(
+            "trial.luminar.recuperacao_treino", "Recuperação de Treino", Decimal(0),
+            heal_coefficient=Decimal("0.80"), target_mode="self",
+        ),
+        "trial.luminar.pressao_jogador": Action(
+            "trial.luminar.pressao_jogador", "Pressão de Treino", Decimal("0.95")
+        ),
+        "trial.luminar.pressao_aliado_etapa3": Action(
+            "trial.luminar.pressao_aliado_etapa3", "Pressão de Treino", Decimal("0.95")
+        ),
+        "trial.luminar.recuperacao_prioridade": Action(
+            "trial.luminar.recuperacao_prioridade", "Recuperação de Treino", Decimal(0),
+            heal_coefficient=Decimal("0.60"), target_mode="self",
+        ),
+    }
+
+
+def create_luminar_trial_combat(
+    player: Fighter, definition: TrialStageDefinition
+) -> Combat:
+    canonical = luminar_stage_definition(
+        definition.stage, allowed_art_ids=definition.allowed_art_ids
+    )
+    if canonical.to_data() != definition.to_data():
+        raise ValueError("Luminar trial parameters must match the frozen stage plan.")
+    fighters = {"player": player}
+    names = {
+        LUMINAR_ENTITY_IDS[1][0]: "Eco da Pressão",
+        LUMINAR_ENTITY_IDS[2][0]: "Eco da Recuperação",
+        LUMINAR_ENTITY_IDS[3][0]: "Eco da Prioridade",
+        LUMINAR_ALLY_ENTITY_ID: "Eco Aliado",
+    }
+    for entity in definition.entities:
+        fighters[entity.entity_id] = Fighter(
+            id=entity.entity_id,
+            name=names[entity.entity_id],
+            level=10,
+            stats=CombatStats(
+                entity.max_hp,
+                entity.stats["attack"],
+                entity.stats["defense"],
+                entity.stats["agility"],
+            ),
+            hp=entity.max_hp,
+            side="player" if entity.team == "ally" else "enemy",
+            takes_turn=entity.turn_policy == "active",
+            defeat_on_zero=True if entity.required_to_survive else None,
+            required_for_victory=(entity.team == "hostile"),
+        )
+    hostiles = [entity for entity in definition.entities if entity.team == "hostile"]
+    ai_cycle = tuple(
+        action_id
+        for entity in hostiles
+        for action_id in (entity.action_cycle or entity.action_ids)
+    )
+    return Combat(
+        id=uuid4(),
+        ruleset=CURRENT_COMBAT_RULESET,
+        fighters=fighters,
+        player_actions=luminar_player_actions(definition.allowed_art_ids),
+        enemy_actions=luminar_enemy_actions(),
+        ai_cycle=ai_cycle,
+        ai_target_cycle=definition.ai_target_cycle,
+        variant=None,
+        external_consumables_allowed=False,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class TrialCombatEvent:
     """Server-observed combat facts used by deterministic pedagogy evaluators."""
@@ -934,6 +1308,25 @@ class TrialCombatEvent:
     healing_power_multiplier: Decimal = Decimal(1)
     barrier_power_multiplier: Decimal = Decimal(1)
     trigger_scope: str = "per_action"
+    barrier_applied_source: str = ""
+    applied_effect_stat: str = ""
+    applied_effect_magnitude: Decimal = Decimal(0)
+    applied_effect_duration: int = 0
+    applied_effect_kind: str = ""
+    applied_effect_removable: bool = False
+    actor_effect_facts: tuple[tuple[str, str, Decimal, int, str], ...] = ()
+    actor_applied_effect_stat: str = ""
+    actor_applied_effect_magnitude: Decimal = Decimal(0)
+    actor_applied_effect_duration: int = 0
+    actor_applied_effect_kind: str = ""
+    base_healing: Decimal = Decimal(0)
+    calculated_healing: Decimal = Decimal(0)
+    effective_healing: Decimal = Decimal(0)
+    healing_received_multiplier: Decimal = Decimal(1)
+    overheal: Decimal = Decimal(0)
+    target_hp_after: Decimal | None = None
+    fighter_hp_after: Mapping[str, Decimal] | None = None
+    barrier_value: Decimal = Decimal(0)
 
     def __post_init__(self) -> None:
         if not self.event_id or len(self.event_id) > 128:
@@ -948,7 +1341,15 @@ class TrialCombatEvent:
             self.calculated_damage,
             self.effective_damage,
             self.barrier_absorbed,
+            self.barrier_value,
             self.defender_prevented_damage,
+            self.applied_effect_magnitude,
+            self.actor_applied_effect_magnitude,
+            self.base_healing,
+            self.calculated_healing,
+            self.effective_healing,
+            self.healing_received_multiplier,
+            self.overheal,
         ) < 0:
             raise ValueError("Class Trial combat damage facts cannot be negative.")
         if min(
@@ -1030,9 +1431,30 @@ def trial_event_from_combat_event(
         healing_power_multiplier=event.healing_power_multiplier,
         barrier_power_multiplier=event.barrier_power_multiplier,
         trigger_scope=event.trigger_scope,
+        barrier_applied_source=event.barrier_applied_source,
+        applied_effect_stat=event.applied_effect_stat,
+        applied_effect_magnitude=event.applied_effect_magnitude,
+        applied_effect_duration=event.applied_effect_duration,
+        applied_effect_kind=event.applied_effect_kind,
+        applied_effect_removable=event.applied_effect_removable,
+        actor_effect_facts=event.actor_effect_facts,
+        actor_applied_effect_stat=event.actor_applied_effect_stat,
+        actor_applied_effect_magnitude=event.actor_applied_effect_magnitude,
+        actor_applied_effect_duration=event.actor_applied_effect_duration,
+        actor_applied_effect_kind=event.actor_applied_effect_kind,
+        base_healing=event.base_healing,
+        calculated_healing=event.calculated_healing,
+        effective_healing=event.effective_healing,
+        healing_received_multiplier=event.healing_received_multiplier,
+        overheal=event.overheal,
+        target_hp_after=event.target_hp_after,
+        fighter_hp_after=tuple(
+            sorted((fighter.id, fighter.hp) for fighter in combat.fighters.values())
+        ) if not event.fighter_hp_after else event.fighter_hp_after,
         calculated_damage=Decimal(event.calculated_damage),
         effective_damage=Decimal(event.effective_damage),
         barrier_absorbed=event.barrier_absorbed,
+        barrier_value=event.barrier_value,
         target_barrier_source=event.target_barrier_source,
         target_effect_ids=event.target_effect_ids,
         defender_mitigation_applied=event.defender_mitigation_applied,
@@ -1048,6 +1470,281 @@ def trial_event_from_combat_event(
         retaliation_source_actor_id=event.retaliation_source_actor_id,
         dodged=event.dodged,
     )
+
+
+def _oracle_valid_response(
+    event: TrialCombatEvent, prepared_ids: set[str]
+) -> str | None:
+    """Recognize an accepted response to one exact Prepared Action instance."""
+    prepared_id = event.response_to_prepared_action_instance_id
+    if event.actor_id != "player" or prepared_id not in prepared_ids:
+        return None
+    if event.action_id == "defend":
+        return prepared_id
+    if event.action_id == ORACULO_ART_IDS["vislumbre"]:
+        if (
+            event.effect_applied
+            and (
+                (
+                    event.applied_effect_id == "oraculo.vislumbre.agility"
+                    and event.applied_effect_stat == "agility"
+                    and event.applied_effect_magnitude == Decimal("0.10")
+                    and event.applied_effect_kind == "buff"
+                )
+                or (
+                    event.actor_effect_id == "oraculo.vislumbre.agility"
+                    and event.actor_applied_effect_stat == "agility"
+                    and event.actor_applied_effect_magnitude == Decimal("0.10")
+                    and event.actor_applied_effect_kind == "buff"
+                )
+            )
+        ):
+            return prepared_id
+    if event.action_id == ORACULO_ART_IDS["veu_premonitorio"]:
+        expected = f"player:{ORACULO_ART_IDS['veu_premonitorio']}"
+        if event.barrier_value > 0 and event.barrier_applied_source == expected:
+            return prepared_id
+    return None
+
+
+def oraculo_conditions_for_event(
+    stage: int,
+    event: TrialCombatEvent,
+    context: Mapping[str, Any] | None = None,
+) -> tuple[tuple[str, ...], dict[str, Any]]:
+    """Evaluate Oracle pedagogy only from correlated, resolved engine facts."""
+    current = deepcopy(dict(context or {}))
+    echo_id = ORACULO_ENTITY_IDS.get(stage)
+    conditions: list[str] = []
+    if echo_id is None:
+        return (), current
+
+    if stage == 1:
+        application_id = current.get("sinal_application_event_id")
+        if (
+            event.event_type == "combat_action"
+            and event.actor_id == "player"
+            and event.action_id == ORACULO_ART_IDS["sinal_funesto"]
+            and event.target_ids == (echo_id,)
+            and event.effect_applied
+            and event.applied_effect_id == ORACULO_SINAL_EFFECT_ID
+            and event.applied_effect_stat == "attack"
+            and event.applied_effect_magnitude == Decimal("0.08")
+            and event.applied_effect_kind == "debuff"
+            and event.applied_effect_removable
+            and event.effect_application_event_id
+        ):
+            current["sinal_application_event_id"] = event.effect_application_event_id
+            application_id = event.effect_application_event_id
+        active_reduction = any(
+            effect_id == ORACULO_SINAL_EFFECT_ID
+            and stat == "attack"
+            and magnitude == Decimal("0.08")
+            and remaining > 0
+            and kind == "debuff"
+            for effect_id, stat, magnitude, remaining, kind in event.actor_effect_facts
+        )
+        if (
+            event.event_type == "combat_action"
+            and event.actor_id == echo_id
+            and event.action_id == ORACULO_TRAINING_ACTIONS[1][0]
+            and event.target_ids == ("player",)
+            and event.calculated_damage > 0
+            and active_reduction
+            and application_id
+        ):
+            conditions.append(ORACULO_CONDITION_IDS[1])
+
+    elif stage == 2:
+        prepared_ids = set(current.get("prepared_ids", ()))
+        responses = dict(current.get("prepared_responses", {}))
+        if (
+            event.event_type == "prepared_action"
+            and event.actor_id == echo_id
+            and event.action_id == ORACULO_TRAINING_ACTIONS[2][1]
+            and event.prepared_action_instance_id
+        ):
+            prepared_ids.add(event.prepared_action_instance_id)
+            current["prepared_ids"] = sorted(prepared_ids)
+        response_id = _oracle_valid_response(event, prepared_ids)
+        if response_id:
+            responses[response_id] = event.action_id
+            current["prepared_responses"] = responses
+        if (
+            event.event_type == "combat_action"
+            and event.actor_id == echo_id
+            and event.action_id == ORACULO_TRAINING_ACTIONS[2][1]
+            and event.prepared_resolution
+            and event.prepared_action_instance_id in prepared_ids
+            and event.prepared_action_instance_id in responses
+        ):
+            conditions.append(ORACULO_CONDITION_IDS[2])
+
+    elif stage == 3:
+        prepared_ids = set(current.get("prepared_after_ruina_ids", ()))
+        responses = dict(current.get("prepared_responses", {}))
+        ruina_action_id = current.get("ruina_action_instance_id")
+        if (
+            event.event_type == "combat_action"
+            and event.actor_id == "player"
+            and event.action_id == ORACULO_ART_IDS["ruina_predita"]
+            and event.target_ids == (echo_id,)
+            and ORACULO_OFFENSIVE_WINDOW_TAG in event.target_state_tags
+            and event.action_instance_id
+        ):
+            current["ruina_action_instance_id"] = event.action_instance_id
+            ruina_action_id = event.action_instance_id
+            conditions.append(ORACULO_CONDITION_IDS[3][0])
+        if (
+            event.event_type == "prepared_action"
+            and event.actor_id == echo_id
+            and event.action_id == ORACULO_TRAINING_ACTIONS[3][1]
+            and event.prepared_action_instance_id
+            and ruina_action_id
+        ):
+            prepared_ids.add(event.prepared_action_instance_id)
+            current["prepared_after_ruina_ids"] = sorted(prepared_ids)
+        response_id = _oracle_valid_response(event, prepared_ids)
+        if response_id:
+            responses[response_id] = event.action_id
+            current["prepared_responses"] = responses
+        if (
+            event.event_type == "combat_action"
+            and event.actor_id == echo_id
+            and event.action_id == ORACULO_TRAINING_ACTIONS[3][1]
+            and event.prepared_resolution
+            and event.prepared_action_instance_id in prepared_ids
+            and event.prepared_action_instance_id in responses
+        ):
+            conditions.append(ORACULO_CONDITION_IDS[3][1])
+    return tuple(dict.fromkeys(conditions)), current
+
+
+def luminar_conditions_for_event(
+    stage: int,
+    event: TrialCombatEvent,
+    context: Mapping[str, Any] | None = None,
+) -> tuple[tuple[str, ...], dict[str, Any]]:
+    """Evaluate Luminar support/judgment choices from actual healing and pressure."""
+    current = deepcopy(dict(context or {}))
+    hostile_id = LUMINAR_ENTITY_IDS.get(stage, (None,))[0]
+    if hostile_id is None:
+        return (), current
+    conditions: list[str] = []
+    ally_id = LUMINAR_ALLY_ENTITY_ID
+    judgment_effect_id = "luminar.julgamento.cura"
+
+    if stage == 1:
+        ally_damaged = bool(current.get("ally_damaged"))
+        if (
+            event.actor_id == hostile_id
+            and event.target_ids == (ally_id,)
+            and event.effective_damage > 0
+        ):
+            ally_damaged = True
+            current["ally_damaged"] = True
+        if (
+            event.actor_id == "player"
+            and event.action_id == LUMINAR_ACTIONS["renewal"]
+            and event.target_ids == (ally_id,)
+            and event.effective_healing > 0
+            and ally_damaged
+        ):
+            conditions.append(LUMINAR_CONDITION_IDS[1])
+        if (
+            event.actor_id == "player"
+            and event.action_id == LUMINAR_ACTIONS["ward"]
+            and event.target_ids == (ally_id,)
+            and event.barrier_value > 0
+            and event.barrier_applied_source
+        ):
+            current["ally_trial_barrier_source"] = event.barrier_applied_source
+        if (
+            event.actor_id == hostile_id
+            and event.target_ids == (ally_id,)
+            and event.barrier_absorbed > 0
+            and event.target_barrier_source
+            == current.get("ally_trial_barrier_source")
+        ):
+            conditions.append(LUMINAR_CONDITION_IDS[1])
+
+    elif stage == 2:
+        application_id = current.get("judgment_application_event_id")
+        if (
+            event.actor_id == "player"
+            and event.action_id == LUMINAR_ACTIONS["judgment"]
+            and event.target_ids == (hostile_id,)
+            and event.effect_applied
+            and event.applied_effect_id == judgment_effect_id
+            and event.applied_effect_stat == "healing_received"
+            and event.applied_effect_magnitude == Decimal("0.15")
+            and event.applied_effect_kind == "debuff"
+            and event.effect_application_event_id
+        ):
+            current["judgment_application_event_id"] = event.effect_application_event_id
+            application_id = event.effect_application_event_id
+        if (
+            event.actor_id == hostile_id
+            and event.action_id == "trial.luminar.recuperacao_treino"
+            and judgment_effect_id in event.target_effect_ids
+            and application_id in event.target_effect_application_event_ids
+            and event.healing_received_multiplier == Decimal("0.85")
+            and event.calculated_healing < event.base_healing
+            and event.effective_healing == event.calculated_healing
+            and event.effective_healing > 0
+        ):
+            conditions.append(LUMINAR_CONDITION_IDS[2])
+
+    elif stage == 3:
+        pressured = set(current.get("pressured_entities", ()))
+        if (
+            event.actor_id == hostile_id
+            and event.target_ids in {("player",), (ally_id,)}
+            and (event.effective_damage > 0 or event.barrier_absorbed > 0)
+        ):
+            pressured.add(event.target_ids[0])
+            current["pressured_entities"] = sorted(pressured)
+            if {"player", ally_id}.issubset(pressured) and not current.get(
+                "both_pressured"
+            ):
+                current["both_pressured"] = True
+                conditions.append(LUMINAR_CONDITION_IDS[3][0])
+
+        meaningful_decision = False
+        if current.get("both_pressured") and event.actor_id == "player":
+            meaningful_decision = (
+                event.action_id == LUMINAR_ACTIONS["renewal"]
+                and event.effective_healing > 0
+                or event.action_id == LUMINAR_ACTIONS["ward"]
+                and event.barrier_value > 0
+                or event.action_id == LUMINAR_ACTIONS["judgment"]
+                and event.effect_applied
+                and event.applied_effect_id == judgment_effect_id
+                and event.applied_effect_magnitude == Decimal("0.15")
+                or event.action_id == LUMINAR_ACTIONS["fulgor"]
+                and event.effective_damage > 0
+            )
+        if meaningful_decision:
+            current["priority_decision_event_id"] = event.event_id
+        decision_id = current.get("priority_decision_event_id")
+        if (
+            decision_id
+            and event.actor_id == hostile_id
+            and event.action_id
+            in {
+                "trial.luminar.pressao_jogador",
+                "trial.luminar.pressao_aliado_etapa3",
+            }
+            and event.target_ids in {("player",), (ally_id,)}
+            and event.event_id != decision_id
+        ):
+            hp_after = dict(event.fighter_hp_after or {})
+            if hp_after.get("player", Decimal(0)) > 0 and hp_after.get(
+                ally_id, Decimal(0)
+            ) > 0:
+                conditions.append(LUMINAR_CONDITION_IDS[3][1])
+
+    return tuple(dict.fromkeys(conditions)), current
 
 
 def sentinel_conditions_for_event(
@@ -1384,6 +2081,8 @@ def reset_trial_combat(
     result.used_art = False
     result.pending_response = None
     result.ai_position = 0
+    result.ai_target_cycle = definition.ai_target_cycle
+    result.ai_target_position = 0
     result.rng_cursor = 0
     result.result = None
     result.events = []
@@ -1418,6 +2117,7 @@ def reset_trial_combat(
         fighter.barrier_remaining = 0
         fighter.barrier_applied_opportunity = 0
         fighter.barrier_source = ""
+        fighter.barrier_debuff_magnitude_reduction = Decimal(0)
         fighter.ward_remaining = 0
         fighter.ward_charges = 0
         fighter.ward_applied_opportunity = 0

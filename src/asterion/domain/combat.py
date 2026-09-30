@@ -125,6 +125,9 @@ class Action:
     chain_power_bonus_healing: Decimal | None = None
     chain_power_bonus_barrier: Decimal | None = None
     prepares_chain_duration: int = 2
+    self_barrier_debuff_magnitude_reduction: Decimal = ZERO
+    target_barrier_debuff_magnitude_reduction: Decimal = ZERO
+    target_effects: tuple[ActionEffect, ...] = ()
 
     def __post_init__(self) -> None:
         if self.hit_count < 1:
@@ -188,6 +191,7 @@ class Fighter:
     training_state_tags: tuple[str, ...] = ()
     tagged_direct_damage_reductions: dict[str, Decimal] = field(default_factory=dict)
     action_chains: dict[str, dict[str, str]] = field(default_factory=dict)
+    barrier_debuff_magnitude_reduction: Decimal = ZERO
 
     def stat(self, name: str) -> Decimal:
         value = getattr(self.stats, name)
@@ -282,6 +286,24 @@ class CombatEvent:
     healing_power_multiplier: Decimal = D(1)
     barrier_power_multiplier: Decimal = D(1)
     trigger_scope: str = "per_action"
+    barrier_applied_source: str = ""
+    applied_effect_stat: str = ""
+    applied_effect_magnitude: Decimal = ZERO
+    applied_effect_duration: int = 0
+    applied_effect_kind: str = ""
+    applied_effect_removable: bool = False
+    actor_effect_facts: tuple[tuple[str, str, Decimal, int, str], ...] = ()
+    actor_applied_effect_stat: str = ""
+    actor_applied_effect_magnitude: Decimal = ZERO
+    actor_applied_effect_duration: int = 0
+    actor_applied_effect_kind: str = ""
+    base_healing: Decimal = ZERO
+    calculated_healing: Decimal = ZERO
+    effective_healing: Decimal = ZERO
+    healing_received_multiplier: Decimal = D(1)
+    overheal: Decimal = ZERO
+    target_hp_after: Decimal | None = None
+    fighter_hp_after: tuple[tuple[str, Decimal], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,6 +354,8 @@ class Combat:
     configuration_snapshot: dict | None = None
     ai_priority: tuple[str, ...] = ()
     external_consumables_allowed: bool = True
+    ai_target_cycle: tuple[str, ...] = ()
+    ai_target_position: int = 0
 
     @property
     def tutorial_stage(self) -> str:
@@ -701,6 +725,19 @@ def apply_effect_batch(
     for effect in pending:
         if target.race == "alvorano" and effect.kind == "debuff" and effect.removable:
             effect.magnitude *= D("0.88")
+        barrier_reduction = target.barrier_debuff_magnitude_reduction
+        numeric_stat = hasattr(target.stats, effect.stat) or effect.stat == "healing_received"
+        if (
+            barrier_reduction > ZERO
+            and target.barrier > ZERO
+            and target.barrier_remaining > 0
+            and effect.kind == "debuff"
+            and effect.removable
+            and not effect.fixed_mechanic
+            and not effect.hard_cc
+            and numeric_stat
+        ):
+            effect.magnitude *= max(ZERO, D(1) - barrier_reduction)
 
     simulated_effects = deepcopy(target.effects)
     would_apply: list[bool] = []
@@ -1026,10 +1063,12 @@ def _deal_damage(target: Fighter, amount: Decimal | int) -> tuple[Decimal, Decim
             target.barrier = D(0)
             target.barrier_remaining = 0
             target.barrier_source = ""
+            target.barrier_debuff_magnitude_reduction = ZERO
     else:
         target.barrier = D(0)
         target.barrier_remaining = 0
         target.barrier_source = ""
+        target.barrier_debuff_magnitude_reduction = ZERO
     hp_damage = min(max(D(0), target.hp), incoming - absorbed)
     target.hp = max(D(0), target.hp - hp_damage)
     return hp_damage, absorbed
@@ -1306,6 +1345,7 @@ def _end_turn(state: Combat) -> None:
         if actor.barrier_remaining == 0:
             actor.barrier = D(0)
             actor.barrier_source = ""
+            actor.barrier_debuff_magnitude_reduction = ZERO
     if actor.opportunity > actor.ward_applied_opportunity and actor.ward_remaining > 0:
         actor.ward_remaining -= 1
         if actor.ward_remaining == 0:
@@ -1393,6 +1433,14 @@ def _perform(
     _chain_resolution: dict[str, object] | None = None,
 ) -> bool:
     actor = state.fighters[actor_id]
+    response_to_prepared_action_instance_id = (
+        state.prepared_action_instance_id
+        if actor_id == "player"
+        and state.prepared_action is not None
+        and state.response_window_seen
+        and state.prepared_target == actor.id
+        else ""
+    )
     if action_id == "hold":
         actor.last_action = "hold"
         state.events.append(
@@ -1415,6 +1463,9 @@ def _perform(
                 actor_id,
                 action_id,
                 actor_entity_id=actor.id,
+                response_to_prepared_action_instance_id=(
+                    response_to_prepared_action_instance_id
+                ),
             )
         )
         return True
@@ -1695,6 +1746,9 @@ def _perform(
         actor.barrier_remaining = max(0, action.self_barrier_duration)
         actor.barrier_applied_opportunity = actor.opportunity
         actor.barrier_source = f"{actor_id}:{action.id}"
+        actor.barrier_debuff_magnitude_reduction = (
+            action.self_barrier_debuff_magnitude_reduction
+        )
         actor.last_action = action_id
         if (action.cooldown or action.blocked_opportunities) and not state.resolving_prepared:
             actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
@@ -1707,6 +1761,10 @@ def _perform(
                 actor.id,
                 barrier_value=actor.barrier,
                 actor_entity_id=actor.id,
+                response_to_prepared_action_instance_id=(
+                    response_to_prepared_action_instance_id
+                ),
+                barrier_applied_source=actor.barrier_source,
                 action_instance_id=action_instance_id,
                 chain_state_before=chain_state_before,
                 chain_state_after=chain_state_after,
@@ -1747,14 +1805,6 @@ def _perform(
     prepared_action_instance_id = (
         state.prepared_action_instance_id if state.resolving_prepared else ""
     )
-    response_to_prepared_action_instance_id = (
-        state.prepared_action_instance_id
-        if actor_id == "player"
-        and state.prepared_action is not None
-        and state.response_window_seen
-        and state.prepared_target == actor.id
-        else ""
-    )
     active_actor_effect_ids = {
         effect.id for effect in actor.effects if effect.remaining > 0
     }
@@ -1765,6 +1815,19 @@ def _perform(
     ):
         active_actor_effect_ids.add(actor.next_direct_crit_effect_id)
     actor_effect_ids = tuple(sorted(active_actor_effect_ids))
+    actor_effect_facts = tuple(
+        sorted(
+            (
+                effect.id,
+                effect.stat,
+                effect.magnitude,
+                effect.remaining,
+                effect.kind,
+            )
+            for effect in actor.effects
+            if effect.remaining > 0
+        )
+    )
     retaliation_context = _consume_retaliation(state, actor_id, actor, action)
     retaliation_used = bool(retaliation_context.get("used"))
     retaliation_source_type = str(retaliation_context.get("source_type", ""))
@@ -2025,6 +2088,7 @@ def _perform(
         ward_blocked: list[str] = []
         status_applied = False
         effect_application_event_id = ""
+        applied_effect = None
         dot_application_event_id = ""
         dot_application_kind = ""
         if action.attack_debuff and target.hp > 0 and effect_trigger_applies:
@@ -2050,6 +2114,47 @@ def _perform(
                 ward_blocked.append(action.id)
             if not status_applied:
                 effect_application_event_id = ""
+            else:
+                applied_effect = next(
+                    (
+                        effect
+                        for effect in target.effects
+                        if effect.application_event == effect_application_event_id
+                    ),
+                    None,
+                )
+
+        if action.target_effects and target.hp > 0 and effect_trigger_applies:
+            application_id = (
+                f"{state.id.hex}:{state.version}:{len(state.events)}:target-effects:"
+                f"{action.id}:{target.id}"
+            )
+            target_effects = tuple(
+                Effect(
+                    id=effect.id,
+                    stat=effect.stat,
+                    magnitude=effect.magnitude,
+                    remaining=effect.duration,
+                    applied_opportunity=target.opportunity,
+                    kind=effect.kind,
+                    stat_modifier_mode=effect.stat_modifier_mode,
+                )
+                for effect in action.target_effects
+            )
+            target_effects_applied = apply_effect_batch(
+                state, target, target_effects, application_event=application_id
+            )
+            if target_effects_applied:
+                status_applied = True
+                effect_application_event_id = application_id
+                applied_effect = next(
+                    (
+                        effect
+                        for effect in target.effects
+                        if effect.application_event == application_id
+                    ),
+                    None,
+                )
 
         if damage > 0 and target.hp > 0:
             enemy_actor = _fighter_side(state, actor_id) == "enemy"
@@ -2093,21 +2198,30 @@ def _perform(
                     ward_blocked.append(chosen)
 
         target_healed = D(0)
+        base_healing = D(0)
+        calculated_healing = D(0)
+        received_healing_multiplier = D(1)
+        overheal = D(0)
         if (
             action.heal_coefficient > ZERO
             and target.hp > 0
             and effect_trigger_applies
         ):
-            target_healed = (
+            base_healing = (
                 actor.stat("attack")
                 * action.heal_coefficient
-            * healing_power_multiplier
-                * healing_received_multiplier(state, target_key)
+                * healing_power_multiplier
+            )
+            received_healing_multiplier = healing_received_multiplier(state, target_key)
+            calculated_healing = (
+                base_healing * received_healing_multiplier
             ).to_integral_value(rounding=ROUND_FLOOR)
+            target_healed = calculated_healing
             target_healed = min(
                 max(ZERO, target_healed),
                 max(ZERO, target.stats.hp - target.hp),
             )
+            overheal = max(ZERO, calculated_healing - target_healed)
             target.hp += target_healed
 
         target_barrier = ZERO
@@ -2127,6 +2241,9 @@ def _perform(
                 target.barrier_remaining = max(0, action.target_barrier_duration)
                 target.barrier_applied_opportunity = target.opportunity
                 target.barrier_source = f"{actor.id}:{action.id}"
+                target.barrier_debuff_magnitude_reduction = (
+                    action.target_barrier_debuff_magnitude_reduction
+                )
 
         action_event_sequence = len(state.events)
         state.events.append(
@@ -2139,7 +2256,7 @@ def _perform(
                 damage,
                 critical,
                 target_healed,
-                (action.effect_id or action.id) if status_applied else "",
+                applied_effect.id if applied_effect is not None else "",
                 barrier_absorbed=barrier_absorbed,
                 barrier_value=target_barrier,
                 blocked=blocked,
@@ -2195,6 +2312,28 @@ def _perform(
                     healing_power_multiplier=healing_power_multiplier,
                     barrier_power_multiplier=barrier_power_multiplier,
                 trigger_scope=action.effect_trigger_scope,
+                barrier_applied_source=(
+                    f"{actor.id}:{action.id}" if target_barrier > ZERO else ""
+                ),
+                applied_effect_stat=applied_effect.stat if applied_effect else "",
+                applied_effect_magnitude=(
+                    applied_effect.magnitude if applied_effect else ZERO
+                ),
+                applied_effect_duration=applied_effect.remaining if applied_effect else 0,
+                applied_effect_kind=applied_effect.kind if applied_effect else "",
+                applied_effect_removable=(
+                    applied_effect.removable if applied_effect else False
+                ),
+                actor_effect_facts=actor_effect_facts,
+                base_healing=base_healing,
+                calculated_healing=calculated_healing,
+                effective_healing=target_healed,
+                healing_received_multiplier=received_healing_multiplier,
+                overheal=overheal,
+                target_hp_after=target.hp,
+                fighter_hp_after=tuple(
+                    sorted((fighter.id, fighter.hp) for fighter in state.fighters.values())
+                ),
             )
         )
         action_event_indices.append(action_event_sequence)
@@ -2233,11 +2372,32 @@ def _perform(
     )
     if applied_actor_effect_ids and action_event_indices:
         first = action_event_indices[0]
+        applied_actor_effect = next(
+            (
+                effect
+                for effect in actor.effects
+                if effect.id == applied_actor_effect_ids[0]
+                and effect.remaining > 0
+            ),
+            None,
+        )
         state.events[first] = replace(
             state.events[first],
             actor_effect_id=applied_actor_effect_ids[0],
             actor_effect_ids=tuple(
                 sorted(set(state.events[first].actor_effect_ids) | set(applied_actor_effect_ids))
+            ),
+            actor_applied_effect_stat=(
+                applied_actor_effect.stat if applied_actor_effect else ""
+            ),
+            actor_applied_effect_magnitude=(
+                applied_actor_effect.magnitude if applied_actor_effect else ZERO
+            ),
+            actor_applied_effect_duration=(
+                applied_actor_effect.remaining if applied_actor_effect else 0
+            ),
+            actor_applied_effect_kind=(
+                applied_actor_effect.kind if applied_actor_effect else ""
             ),
         )
 
@@ -2420,7 +2580,48 @@ def _advance_to_player(state: Combat) -> None:
     ):
         actor_key = state.order[state.turn_index]
         if _fighter_side(state, actor_key) == "enemy":
-            _perform(state, actor_key, _enemy_action(state, actor_key))
+            action_id = _enemy_action(state, actor_key)
+            action = state.enemy_actions.get(action_id)
+            resolving_prepared = state.resolving_prepared
+            prepared_declaration = bool(
+                action
+                and (action.prepared is True or (action.prepared is None and action_id == "leap"))
+                and not resolving_prepared
+            )
+            target_id = None
+            if action and action.target_mode == "opponent" and state.ai_target_cycle:
+                if resolving_prepared:
+                    target_id = state.prepared_target
+                else:
+                    requested = state.ai_target_cycle[
+                        state.ai_target_position % len(state.ai_target_cycle)
+                    ]
+                    requested_key = _resolve_fighter_key(state, requested)
+                    if requested_key is not None and state.fighters[requested_key].hp > ZERO:
+                        target_id = requested
+                    else:
+                        candidates = sorted(
+                            (
+                                fighter.id
+                                for key, fighter in state.fighters.items()
+                                if fighter.hp > ZERO
+                                and _fighter_side(state, key) != _fighter_side(state, actor_key)
+                            )
+                        )
+                        target_id = candidates[0] if candidates else None
+            committed = _perform(
+                state, actor_key, action_id, target_id=target_id
+            )
+            if (
+                committed
+                and action
+                and action.target_mode == "opponent"
+                and state.ai_target_cycle
+                and not prepared_declaration
+            ):
+                state.ai_target_position = (
+                    state.ai_target_position + 1
+                ) % len(state.ai_target_cycle)
         else:
             _perform(state, actor_key, "hold")
         if state.result:
@@ -2740,6 +2941,7 @@ def use_combat_consumable(
         player.barrier_remaining = 2
         player.barrier_applied_opportunity = player.opportunity
         player.barrier_source = "player:consumable.protecao"
+        player.barrier_debuff_magnitude_reduction = ZERO
     elif item.family == ConsumableFamily.DISPELLER:
         assert effect_id is not None
         selected = next(

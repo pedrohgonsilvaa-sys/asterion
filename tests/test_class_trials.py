@@ -9,17 +9,27 @@ from asterion.application.combat_configuration_guard import (
     CombatConfigurationLocked,
     lock_for_combat_configuration_mutation,
 )
-from asterion.domain.arts import TECELAO_ART_IDS, VIGIA_ART_IDS
+from asterion.domain.arts import (
+    LUMINAR_ART_IDS,
+    ORACULO_ART_IDS,
+    TECELAO_ART_IDS,
+    VIGIA_ART_IDS,
+)
 from asterion.domain.class_trials import (
     CLASS_PATHS,
+    LUMINAR_ALLY_ENTITY_ID,
+    LUMINAR_CONDITION_IDS,
+    ORACULO_CONDITION_IDS,
+    ORACULO_OFFENSIVE_WINDOW_TAG,
+    ORACULO_SINAL_EFFECT_ID,
     TRIAL_COMPLETED_UNLOCK,
     TRIAL_IDS_BY_CLASS,
     TrialCombatEvent,
     TrialEntityDefinition,
-    TrialStageDefinition,
 )
-from asterion.domain.combat import Action, Combat, Effect, Fighter
-from asterion.domain.combat_math import CURRENT_COMBAT_RULESET, resolve_combat_stats
+from asterion.domain.combat import allowed_actions
+from asterion.domain.combat_math import resolve_combat_stats
+from asterion.infrastructure.db.combat_codec import encode
 from asterion.infrastructure.db.models import (
     Account,
     BestiaryEntry,
@@ -27,6 +37,7 @@ from asterion.infrastructure.db.models import (
     CharacterActiveArtSlot,
     ClassTrialState,
     CodexEntry,
+    CombatRecord,
     ConsumableStack,
     Encounter,
     GameActivity,
@@ -89,127 +100,291 @@ async def _seed_trial(
     return character_id, sessions, ClassTrialService(sessions, "ocaso")
 
 
-def _plan(stage: int, *, conditions=("demonstration.complete",)) -> TrialStageDefinition:
-    """Synthetic templates keep the integration tests independent of class balance."""
-    return TrialStageDefinition(
-        stage=stage,
-        entities=(
-            TrialEntityDefinition(
-                "trial_entity.test.primary",
-                "hostile",
-                "active",
-                Decimal("100"),
-                {"attack": Decimal("1"), "defense": Decimal("1")},
-                ("training.attack",),
-            ),
-            TrialEntityDefinition(
-                "trial_entity.test.manifestation",
-                "hostile",
-                "passive",
-                Decimal("50"),
-                {"defense": Decimal("1")},
-            ),
-            TrialEntityDefinition(
-                "trial_entity.test.ally",
-                "ally",
-                "passive",
-                Decimal("30"),
-                {"defense": Decimal("1")},
-                required_to_survive=True,
-            ),
-        ),
-        required_conditions=tuple(conditions),
-        allowed_art_ids=("class_art.test_equipped",),
-    )
-
-
-def _combat(plan: TrialStageDefinition) -> Combat:
-    stats = resolve_combat_stats("luminar", 10, "remanescente")
-    fighters = {
-        "player": Fighter(
-            "player",
-            "Hero",
-            10,
-            stats,
-            Decimal("1"),
-            race="remanescente",
-            character_class="luminar",
-            opportunity=4,
-            defending=True,
-            last_action="old-action",
-            cooldowns={"old-action": 12},
-            effects=[Effect("old", "attack", Decimal("0.1"), 2, 0)],
-            barrier=Decimal("15"),
-            barrier_remaining=2,
-            barrier_source="old-source",
-            ward_remaining=2,
-            ward_charges=1,
-        )
-    }
-    for entity in plan.entities:
-        fighters[entity.entity_id] = Fighter(
-            entity.entity_id,
-            entity.entity_id,
-            10,
-            stats,
-            Decimal("1"),
-            opportunity=3,
-            last_action="old-action",
-            cooldowns={"old-action": 9},
-            effects=[Effect("old", "defense", Decimal("0.1"), 1, 0)],
-            barrier=Decimal("7"),
-            barrier_remaining=1,
-        )
-    return Combat(
-        uuid4(),
-        CURRENT_COMBAT_RULESET,
-        fighters,
-        {
-            "attack": Action("attack", "Attack", Decimal("1")),
-            "class_art.test_equipped": Action(
-                "class_art.test_equipped", "Equipped Art", Decimal("1")
-            ),
-            "unlisted_art": Action("unlisted_art", "Not Equipped", Decimal("1")),
-        },
-        {"training.attack": Action("training.attack", "Training", Decimal("1"))},
-        ("training.attack",),
-        rng_cursor=7,
-        consumable_uses=2,
-        variant=None,
-    )
-
-
 async def _start_stage(service: ClassTrialService, actor: int, stage: int):
     view = await service.resume(actor)
     if view.kind == "available":
         view = await service.begin(actor, view.state_version)
     if view.context == "refuge":
         view = await service.return_to_circle(actor, view.state_version)
-    return await service.start_attempt(actor, view.state_version, _plan(stage))
+    return await service.start_attempt(actor, view.state_version)
+
+
+def _stage_condition_events(active):
+    """Construct objective engine facts for a persisted Oráculo/Luminar stage."""
+    stage = active.current_stage
+    hostiles = tuple(
+        row["entity_id"]
+        for row in active.stage_definition["entities"]
+        if row["team"] == "hostile"
+    )
+    hostile = hostiles[0]
+    defeated = {entity_id: Decimal(0) for entity_id in hostiles}
+    prefix = f"{active.character_class}-{stage}"
+
+    if active.character_class == "luminar":
+        if stage == 1:
+            return (
+                TrialCombatEvent(
+                    f"{prefix}-pressure",
+                    "combat_action",
+                    hostile,
+                    (LUMINAR_ALLY_ENTITY_ID,),
+                    "trial.luminar.pressao_aliado",
+                    effective_damage=Decimal(1),
+                ),
+                TrialCombatEvent(
+                    f"{prefix}-renewal",
+                    "combat_action",
+                    "player",
+                    (LUMINAR_ALLY_ENTITY_ID,),
+                    LUMINAR_ART_IDS["renovacao"],
+                    effective_healing=Decimal(1),
+                    entity_hp=defeated,
+                ),
+            )
+        if stage == 2:
+            application_id = f"{prefix}-judgment-application"
+            return (
+                TrialCombatEvent(
+                    f"{prefix}-judgment",
+                    "combat_action",
+                    "player",
+                    (hostile,),
+                    LUMINAR_ART_IDS["julgamento"],
+                    effect_applied=True,
+                    applied_effect_id="luminar.julgamento.cura",
+                    effect_application_event_id=application_id,
+                    applied_effect_stat="healing_received",
+                    applied_effect_magnitude=Decimal("0.15"),
+                    applied_effect_kind="debuff",
+                ),
+                TrialCombatEvent(
+                    f"{prefix}-recovery",
+                    "combat_action",
+                    hostile,
+                    (hostile,),
+                    "trial.luminar.recuperacao_treino",
+                    target_effect_ids=("luminar.julgamento.cura",),
+                    target_effect_application_event_ids=(application_id,),
+                    base_healing=Decimal(100),
+                    calculated_healing=Decimal(85),
+                    effective_healing=Decimal(85),
+                    healing_received_multiplier=Decimal("0.85"),
+                    entity_hp=defeated,
+                ),
+            )
+        return (
+            TrialCombatEvent(
+                f"{prefix}-pressure-player",
+                "combat_action",
+                hostile,
+                ("player",),
+                "trial.luminar.pressao_jogador",
+                effective_damage=Decimal(1),
+            ),
+            TrialCombatEvent(
+                f"{prefix}-pressure-ally",
+                "combat_action",
+                hostile,
+                (LUMINAR_ALLY_ENTITY_ID,),
+                "trial.luminar.pressao_aliado_etapa3",
+                effective_damage=Decimal(1),
+            ),
+            TrialCombatEvent(
+                f"{prefix}-decision",
+                "combat_action",
+                "player",
+                (hostile,),
+                LUMINAR_ART_IDS["fulgor"],
+                effective_damage=Decimal(1),
+            ),
+            TrialCombatEvent(
+                f"{prefix}-survive-next-pressure",
+                "combat_action",
+                hostile,
+                ("player",),
+                "trial.luminar.pressao_jogador",
+                entity_hp=defeated,
+                fighter_hp_after={
+                    "player": Decimal(1),
+                    LUMINAR_ALLY_ENTITY_ID: Decimal(1),
+                },
+            ),
+        )
+
+    if stage == 1:
+        application_id = f"{prefix}-sinal-application"
+        return (
+            TrialCombatEvent(
+                f"{prefix}-sinal",
+                "combat_action",
+                "player",
+                (hostile,),
+                ORACULO_ART_IDS["sinal_funesto"],
+                effect_applied=True,
+                applied_effect_id=ORACULO_SINAL_EFFECT_ID,
+                effect_application_event_id=application_id,
+                applied_effect_stat="attack",
+                applied_effect_magnitude=Decimal("0.08"),
+                applied_effect_kind="debuff",
+                applied_effect_removable=True,
+            ),
+            TrialCombatEvent(
+                f"{prefix}-weakened-attack",
+                "combat_action",
+                hostile,
+                ("player",),
+                "trial.oraculo.ataque_sinal",
+                calculated_damage=Decimal(1),
+                actor_effect_facts=(
+                    (ORACULO_SINAL_EFFECT_ID, "attack", Decimal("0.08"), 2, "debuff"),
+                ),
+                entity_hp=defeated,
+            ),
+        )
+    if stage == 2:
+        prepared_id = f"{prefix}-prepared-instance"
+        return (
+            TrialCombatEvent(
+                f"{prefix}-prepare",
+                "prepared_action",
+                hostile,
+                action_id="trial.oraculo.impacto_anunciado",
+                prepared_action_instance_id=prepared_id,
+            ),
+            TrialCombatEvent(
+                f"{prefix}-defend",
+                "combat_action",
+                "player",
+                action_id="defend",
+                response_to_prepared_action_instance_id=prepared_id,
+            ),
+            TrialCombatEvent(
+                f"{prefix}-resolve",
+                "combat_action",
+                hostile,
+                ("player",),
+                "trial.oraculo.impacto_anunciado",
+                prepared_resolution=True,
+                prepared_action_instance_id=prepared_id,
+                entity_hp=defeated,
+            ),
+        )
+    prepared_id = f"{prefix}-prepared-instance"
+    return (
+        TrialCombatEvent(
+            f"{prefix}-ruina",
+            "combat_action",
+            "player",
+            (hostile,),
+            ORACULO_ART_IDS["ruina_predita"],
+            action_instance_id=f"{prefix}-ruina-action",
+            target_state_tags=(ORACULO_OFFENSIVE_WINDOW_TAG,),
+        ),
+        TrialCombatEvent(
+            f"{prefix}-prepare",
+            "prepared_action",
+            hostile,
+            action_id="trial.oraculo.ruptura_predita",
+            prepared_action_instance_id=prepared_id,
+        ),
+        TrialCombatEvent(
+            f"{prefix}-defend",
+            "combat_action",
+            "player",
+            action_id="defend",
+            response_to_prepared_action_instance_id=prepared_id,
+        ),
+        TrialCombatEvent(
+            f"{prefix}-resolve",
+            "combat_action",
+            hostile,
+            ("player",),
+            "trial.oraculo.ruptura_predita",
+            prepared_resolution=True,
+            prepared_action_instance_id=prepared_id,
+            entity_hp=defeated,
+        ),
+    )
 
 
 async def _complete_stage(service: ClassTrialService, actor: int, stage: int):
     active = await _start_stage(service, actor, stage)
     assert active is not None and active.kind == "active"
-    condition = active.stage_definition["required_conditions"][0]
-    event = TrialCombatEvent(
-        event_id=f"stage-{stage}-victory",
-        event_type="targets_defeated",
-        actor_id="player",
-        target_ids=(
-            "trial_entity.test.primary",
-            "trial_entity.test.manifestation",
-        ),
-        satisfied_conditions=(condition,),
-        entity_hp={
-            "trial_entity.test.primary": Decimal(0),
-            "trial_entity.test.manifestation": Decimal(0),
-        },
+    return await _fight_to_checkpoint(service, actor, active)
+
+
+def _next_trial_action(view, combat):
+    class_name = view.character_class
+    stage = view.current_stage
+    conditions = set(view.attempt_state["pedagogic_conditions"])
+    context = view.attempt_state["pedagogic_context"]
+    hostile = next(
+        row["entity_id"]
+        for row in view.stage_definition["entities"]
+        if row["team"] == "hostile"
     )
-    progressed = await service.record_combat_event(
-        actor, active.attempt_id, active.state_version, event
-    )
-    return await service.complete_stage(actor, active.attempt_id, progressed.state_version)
+    if combat.prepared_action is not None:
+        return "defend", None
+
+    if class_name == "oraculo":
+        sinal = ORACULO_ART_IDS["sinal_funesto"]
+        ruina = ORACULO_ART_IDS["ruina_predita"]
+        if stage == 1 and not context.get("sinal_application_event_id"):
+            return sinal, hostile
+        if stage == 3 and (
+            ORACULO_OFFENSIVE_WINDOW_TAG
+            in combat.fighters["enemy"].training_state_tags
+            and ORACULO_CONDITION_IDS[3][0] not in conditions
+        ):
+            return ruina, hostile
+        return "attack", hostile
+
+    if stage == 1 and LUMINAR_CONDITION_IDS[1] not in conditions:
+        if context.get("ally_damaged"):
+            return LUMINAR_ART_IDS["renovacao"], LUMINAR_ALLY_ENTITY_ID
+        return "attack", hostile
+    if stage == 2 and not context.get("judgment_application_event_id"):
+        return LUMINAR_ART_IDS["julgamento"], hostile
+    if stage == 3:
+        if not context.get("both_pressured"):
+            return "attack", hostile
+        if not context.get("priority_decision_event_id"):
+            return LUMINAR_ART_IDS["renovacao"], LUMINAR_ALLY_ENTITY_ID
+        if LUMINAR_CONDITION_IDS[3][1] not in conditions:
+            return "defend", None
+        return LUMINAR_ART_IDS["fulgor"], hostile
+    return LUMINAR_ART_IDS["fulgor"], hostile
+
+
+async def _fight_to_checkpoint(service, actor: int, active):
+    stage = active.current_stage
+    for _ in range(100):
+        assert active.kind == "active"
+        combat = await service.combat(actor, active.attempt_id)
+        assert combat is not None and combat.result is None
+        action, target = _next_trial_action(active, combat)
+        if action not in allowed_actions(combat):
+            action, target = "attack", next(
+                row["entity_id"]
+                for row in active.stage_definition["entities"]
+                if row["team"] == "hostile"
+            )
+        updated = await service.action(
+            actor,
+            active.attempt_id,
+            active.combat_version,
+            action,
+            target_id=target,
+        )
+        if updated.kind != "active":
+            assert (
+                updated.current_stage == stage + 1 or updated.kind == "completed"
+            )
+            return updated
+        assert updated.combat_version != active.combat_version
+        active = updated
+    pytest.fail(f"{active.character_class} Trial stage {stage} did not checkpoint")
 
 
 @pytest.mark.asyncio
@@ -253,45 +428,41 @@ async def test_trial_gate_and_begin_are_persistent_without_creating_a_quest(data
 @pytest.mark.asyncio
 async def test_stage_checkpoint_is_idempotent_and_reconnects_between_stages(database):
     actor = 997304
-    _, sessions, service = await _seed_trial(database, actor)
+    _, _, service = await _seed_trial(
+        database,
+        actor,
+        active_art_ids=(LUMINAR_ART_IDS["renovacao"], LUMINAR_ART_IDS["fulgor"]),
+    )
     active = await _start_stage(service, actor, 1)
     assert active.attempt_id is not None
-    duplicate_start = await service.start_attempt(
-        actor, active.state_version - 1, _plan(1)
-    )
+    duplicate_start = await service.start_attempt(actor, active.state_version - 1)
     assert duplicate_start.attempt_id == active.attempt_id
 
-    event = TrialCombatEvent(
-        event_id="target-one-down",
-        event_type="direct_damage",
-        actor_id="player",
-        target_ids=("trial_entity.test.primary",),
-        satisfied_conditions=("demonstration.complete",),
-        entity_hp={"trial_entity.test.primary": Decimal(0)},
+    hostile = next(
+        row["entity_id"]
+        for row in active.stage_definition["entities"]
+        if row["team"] == "hostile"
     )
-    first = await service.record_combat_event(
-        actor, active.attempt_id, active.state_version, event
+    first = await service.action(
+        actor,
+        active.attempt_id,
+        active.combat_version,
+        "attack",
+        target_id=hostile,
     )
-    duplicate = await service.record_combat_event(
-        actor, active.attempt_id, active.state_version, event
+    duplicate = await service.action(
+        actor,
+        active.attempt_id,
+        active.combat_version,
+        "attack",
+        target_id=hostile,
     )
-    assert duplicate.state_version == first.state_version
-    assert duplicate.attempt_state["processed_event_ids"] == ["target-one-down"]
-    incomplete = await service.complete_stage(actor, active.attempt_id, first.state_version)
-    assert incomplete.kind == "active" and incomplete.current_stage == 1
-
-    final_target = TrialCombatEvent(
-        event_id="passive-target-down",
-        event_type="area_damage",
-        actor_id="player",
-        target_ids=("trial_entity.test.manifestation",),
-        entity_hp={"trial_entity.test.manifestation": Decimal(0)},
+    assert duplicate.combat_version == first.combat_version
+    assert duplicate.attempt_state["events"] == first.attempt_state["events"]
+    checkpoint = await _fight_to_checkpoint(service, actor, first)
+    stale = await service.complete_stage(
+        actor, active.attempt_id, active.state_version
     )
-    second = await service.record_combat_event(
-        actor, active.attempt_id, incomplete.state_version, final_target
-    )
-    checkpoint = await service.complete_stage(actor, active.attempt_id, second.state_version)
-    stale = await service.complete_stage(actor, active.attempt_id, second.state_version)
     resumed = await service.resume(actor)
     assert checkpoint.kind == "ready"
     assert checkpoint.current_stage == 2 and checkpoint.completed_stages == (1,)
@@ -303,18 +474,45 @@ async def test_stage_checkpoint_is_idempotent_and_reconnects_between_stages(data
 @pytest.mark.asyncio
 async def test_defeat_clears_attempt_conditions_and_retry_reuses_stage_plan(database):
     actor = 997305
-    character_id, sessions, service = await _seed_trial(database, actor)
+    character_id, sessions, service = await _seed_trial(
+        database, actor, active_art_ids=(LUMINAR_ART_IDS["renovacao"],)
+    )
     active = await _start_stage(service, actor, 1)
-    condition_event = TrialCombatEvent(
-        event_id="pedagogy-event",
-        event_type="valid_response",
-        actor_id="player",
-        satisfied_conditions=("demonstration.complete",),
+    hostile = next(
+        row["entity_id"]
+        for row in active.stage_definition["entities"]
+        if row["team"] == "hostile"
     )
-    observed = await service.record_combat_event(
-        actor, active.attempt_id, active.state_version, condition_event
+    pressured = await service.action(
+        actor,
+        active.attempt_id,
+        active.combat_version,
+        "attack",
+        target_id=hostile,
     )
-    defeated = await service.fail_attempt(actor, active.attempt_id, observed.state_version)
+    observed = await service.action(
+        actor,
+        active.attempt_id,
+        pressured.combat_version,
+        LUMINAR_ART_IDS["renovacao"],
+        target_id=LUMINAR_ALLY_ENTITY_ID,
+    )
+    assert observed.attempt_state["pedagogic_conditions"] == [
+        LUMINAR_CONDITION_IDS[1]
+    ]
+    combat = await service.combat(actor, active.attempt_id)
+    assert combat is not None
+    combat.fighters[LUMINAR_ALLY_ENTITY_ID].hp = Decimal(1)
+    async with sessions.begin() as session:
+        record = await session.get(CombatRecord, combat.id)
+        record.snapshot = encode(combat)
+    defeated = await service.action(
+        actor,
+        active.attempt_id,
+        observed.combat_version,
+        "attack",
+        target_id=hostile,
+    )
     assert defeated.kind == "ready" and defeated.current_stage == 1
     assert defeated.completed_stages == () and defeated.attempt_state is None
     assert defeated.stage_definition == active.stage_definition
@@ -328,7 +526,12 @@ async def test_defeat_clears_attempt_conditions_and_retry_reuses_stage_plan(data
     assert retried.attempt_id != active.attempt_id
     assert retried.stage_definition == active.stage_definition
     assert retried.attempt_state["pedagogic_conditions"] == []
-    assert retried.attempt_state["entities"]["trial_entity.test.primary"]["hp"] == "100"
+    hostile = next(
+        row for row in active.stage_definition["entities"] if row["team"] == "hostile"
+    )
+    assert retried.attempt_state["entities"][hostile["entity_id"]]["hp"] == hostile[
+        "max_hp"
+    ]
     async with sessions() as session:
         previous = await session.scalar(
             select(GameActivity).where(GameActivity.id == active.attempt_id)
@@ -345,38 +548,28 @@ async def test_attempt_resets_trial_state_and_locks_configuration_without_vigor_
     actor = 997306
     character_id, sessions, service = await _seed_trial(database, actor)
     active = await _start_stage(service, actor, 1)
-    attached = await service.attach_combat(
-        actor, active.attempt_id, active.state_version, _combat(_plan(1))
-    )
     persisted_combat = await service.combat(actor, active.attempt_id)
-    assert attached.encounter_id is not None and attached.combat_id is not None
+    assert active.encounter_id is not None and active.combat_id is not None
+    assert persisted_combat is not None
     assert persisted_combat.fighters["player"].hp == persisted_combat.fighters["player"].stats.hp
     assert persisted_combat.fighters["player"].effects == []
     assert persisted_combat.fighters["player"].barrier == 0
     assert persisted_combat.fighters["player"].cooldowns == {}
-    assert persisted_combat.fighters["player"].ward_charges == 0
-    assert all(
-        fighter.opportunity == 0
-        and fighter.effects == []
-        and fighter.barrier == 0
-        and fighter.cooldowns == {}
-        for key, fighter in persisted_combat.fighters.items()
-        if key != "player"
-    )
-    assert "unlisted_art" not in persisted_combat.player_actions
-    assert persisted_combat.rng_cursor == 0 and persisted_combat.consumable_uses == 0
+    assert set(persisted_combat.player_actions) == {"attack"}
+    assert persisted_combat.consumable_uses == 0
+    assert not persisted_combat.external_consumables_allowed
     assert persisted_combat.variant is None
     assert active.consumable_options == ()
-    assert active.attempt_state["player"] == {
-        "hp": str(active.attempt_state["player"]["hp"]),
-        "effects": [],
-        "barrier": "0",
-        "barrier_remaining": 0,
-        "cooldowns": {},
-        "resources": {},
-    }
+    assert active.attempt_state["player"]["effects"] == []
+    assert active.attempt_state["player"]["barrier"] == "0"
+    assert active.attempt_state["player"]["cooldowns"] == {}
+    resources = active.attempt_state["player"]["resources"]
+    assert resources["ward_charges"] == 0 and resources["ward_remaining"] == 0
+    assert resources["next_direct_crit"]["bonus"] == "0"
+    assert resources["retaliation"]["charges"] == 0
+    assert resources["retaliation"]["remaining_T"] == 0
+    assert active.attempt_state["player"]["action_chains"] == {}
     assert active.attempt_state["external_consumables_used"] == 0
-    assert active.attempt_state["events"] == []
     async with sessions() as session:
         character = await session.get(Character, character_id)
         assert character.hp == character.max_hp
@@ -406,53 +599,123 @@ async def test_attempt_resets_trial_state_and_locks_configuration_without_vigor_
 @pytest.mark.asyncio
 async def test_reconnect_during_attempt_restores_identity_and_conditions(database):
     actor = 997307
-    _, sessions, service = await _seed_trial(database, actor)
+    _, sessions, service = await _seed_trial(
+        database,
+        actor,
+        active_art_ids=(LUMINAR_ART_IDS["egide_solar"], LUMINAR_ART_IDS["fulgor"]),
+    )
     active = await _start_stage(service, actor, 1)
-    attached = await service.attach_combat(
-        actor, active.attempt_id, active.state_version, _combat(_plan(1))
-    )
-    duplicate_attach = await service.attach_combat(
-        actor, active.attempt_id, active.state_version, _combat(_plan(1))
-    )
-    assert duplicate_attach.encounter_id == attached.encounter_id
-    assert duplicate_attach.combat_id == attached.combat_id
+    duplicate_start = await service.start_attempt(actor, active.state_version)
+    assert duplicate_start.encounter_id == active.encounter_id
+    assert duplicate_start.combat_id == active.combat_id
     assert await service.combat(actor, active.attempt_id) is not None
-    active = attached
     async with sessions() as session:
         assert await session.scalar(
             select(func.count()).select_from(Encounter).join(GameActivity).where(
                 GameActivity.character_id == active.character_id
             )
         ) == 1
-    event = TrialCombatEvent(
-        event_id="condition-a",
-        event_type="prepared_response",
-        actor_id="player",
-        target_ids=("trial_entity.test.primary",),
-        satisfied_conditions=("demonstration.complete",),
-        entity_barriers={"trial_entity.test.ally": (Decimal("12"), 2)},
-        data={"measurement": Decimal("1.25")},
-    )
-    changed = await service.record_combat_event(
-        actor, active.attempt_id, active.state_version, event
+    changed = await service.action(
+        actor,
+        active.attempt_id,
+        active.combat_version,
+        LUMINAR_ART_IDS["egide_solar"],
+        target_id=LUMINAR_ALLY_ENTITY_ID,
     )
     resumed = await service.resume(actor)
     assert resumed.kind == "active"
     assert resumed.attempt_id == active.attempt_id
     assert resumed.current_stage == 1
-    assert resumed.encounter_id == attached.encounter_id
-    assert resumed.combat_id == attached.combat_id
+    assert resumed.encounter_id == active.encounter_id
+    assert resumed.combat_id == active.combat_id
     assert resumed.stage_definition["entities"] == active.stage_definition["entities"]
     persisted_combat = await service.combat(actor, active.attempt_id)
-    assert persisted_combat.id == attached.combat_id
+    assert persisted_combat.id == active.combat_id
     assert set(persisted_combat.fighters) - {"player"} == {
         row["entity_id"] for row in active.stage_definition["entities"]
     }
-    assert resumed.attempt_state["pedagogic_conditions"] == ["demonstration.complete"]
-    assert resumed.attempt_state["entities"]["trial_entity.test.ally"]["barrier"] == "12"
-    assert resumed.attempt_state["entities"]["trial_entity.test.ally"]["barrier_remaining"] == 2
-    assert resumed.attempt_state["events"][0]["data"]["measurement"] == "1.25"
+    assert resumed.attempt_state["pedagogic_conditions"] == [
+        LUMINAR_CONDITION_IDS[1]
+    ]
+    assert resumed.attempt_state["pedagogic_context"]["ally_trial_barrier_source"] == (
+        f"player:{LUMINAR_ART_IDS['egide_solar']}"
+    )
+    assert Decimal(resumed.attempt_state["entities"][LUMINAR_ALLY_ENTITY_ID]["barrier"]) > 0
+    assert resumed.attempt_state["entities"][LUMINAR_ALLY_ENTITY_ID]["barrier_remaining"] > 0
+    assert any(
+        row["action_id"] == LUMINAR_ART_IDS["egide_solar"]
+        for row in resumed.attempt_state["events"]
+    )
     assert resumed.state_version == changed.state_version
+
+
+@pytest.mark.asyncio
+async def test_oraculo_vislumbre_answers_same_prepared_threat_after_reconnect(database):
+    actor = 997362
+    art_ids = (
+        ORACULO_ART_IDS["sinal_funesto"],
+        ORACULO_ART_IDS["vislumbre"],
+        ORACULO_ART_IDS["ruina_predita"],
+    )
+    _, _, service = await _seed_trial(
+        database,
+        actor,
+        character_class="oraculo",
+        active_art_ids=art_ids,
+    )
+    await service.begin(actor)
+    checkpoint = await _complete_stage(service, actor, 1)
+    assert checkpoint.current_stage == 2 and checkpoint.completed_stages == (1,)
+    active = await _start_stage(service, actor, 2)
+    hostile_id = active.stage_definition["entities"][0]["entity_id"]
+
+    for _ in range(3):
+        combat = await service.combat(actor, active.attempt_id)
+        assert combat is not None
+        if combat.prepared_action is not None:
+            break
+        active = await service.action(
+            actor,
+            active.attempt_id,
+            active.combat_version,
+            "attack",
+            target_id=hostile_id,
+        )
+    combat = await service.combat(actor, active.attempt_id)
+    assert combat is not None
+    prepared_instance = combat.prepared_action_instance_id
+    assert combat.prepared_action == "trial.oraculo.impacto_anunciado"
+    assert prepared_instance
+
+    resumed = await service.resume(actor)
+    restored = await service.combat(actor, active.attempt_id)
+    assert resumed.attempt_id == active.attempt_id
+    assert resumed.encounter_id == active.encounter_id
+    assert restored is not None
+    assert restored.prepared_action_instance_id == prepared_instance
+
+    answered = await service.action(
+        actor,
+        active.attempt_id,
+        resumed.combat_version,
+        ORACULO_ART_IDS["vislumbre"],
+        target_id="player",
+    )
+    assert answered.kind == "active" and answered.current_stage == 2
+    assert ORACULO_CONDITION_IDS[2] in answered.attempt_state["pedagogic_conditions"]
+    completed = await _fight_to_checkpoint(service, actor, answered)
+    assert completed.kind == "ready" and completed.current_stage == 3
+    assert completed.completed_stages == (1, 2)
+    persisted = await service.combat(actor, active.attempt_id)
+    assert persisted is not None
+    response_event = next(
+        event
+        for event in persisted.events
+        if event.action == ORACULO_ART_IDS["vislumbre"]
+    )
+    assert response_event.response_to_prepared_action_instance_id == prepared_instance
+    assert response_event.effect_id == "oraculo.vislumbre.agility"
+    assert response_event.target == "player"
 
 
 @pytest.mark.asyncio
@@ -460,16 +723,23 @@ async def test_required_ally_falling_to_zero_fails_attempt_and_discards_conditio
     actor = 997308
     _, _, service = await _seed_trial(database, actor)
     active = await _start_stage(service, actor, 1)
-    event = TrialCombatEvent(
-        event_id="ally-defeated",
-        event_type="damage_taken",
-        actor_id="trial_entity.test.primary",
-        target_ids=("trial_entity.test.ally",),
-        satisfied_conditions=("demonstration.complete",),
-        entity_hp={"trial_entity.test.ally": Decimal(0)},
+    hostile = next(
+        row["entity_id"]
+        for row in active.stage_definition["entities"]
+        if row["team"] == "hostile"
     )
-    failed = await service.record_combat_event(
-        actor, active.attempt_id, active.state_version, event
+    combat = await service.combat(actor, active.attempt_id)
+    assert combat is not None
+    combat.fighters[LUMINAR_ALLY_ENTITY_ID].hp = Decimal(1)
+    async with service.sessions.begin() as session:
+        record = await session.get(CombatRecord, combat.id)
+        record.snapshot = encode(combat)
+    failed = await service.action(
+        actor,
+        active.attempt_id,
+        active.combat_version,
+        "attack",
+        target_id=hostile,
     )
     assert failed.kind == "ready" and failed.status == "ready"
     assert failed.current_stage == 1 and failed.attempt_state is None
@@ -477,9 +747,40 @@ async def test_required_ally_falling_to_zero_fails_attempt_and_discards_conditio
 
 
 @pytest.mark.asyncio
-async def test_final_checkpoint_unlocks_both_paths_once_without_selection_or_reward(database):
-    actor = 997309
-    character_id, sessions, service = await _seed_trial(database, actor)
+@pytest.mark.parametrize(
+    ("character_class", "expected_paths", "art_ids", "actor"),
+    [
+        (
+            "luminar",
+            ("guardiao", "inquisidor"),
+            (
+                LUMINAR_ART_IDS["fulgor"],
+                LUMINAR_ART_IDS["renovacao"],
+                LUMINAR_ART_IDS["julgamento"],
+            ),
+            997309,
+        ),
+        (
+            "oraculo",
+            ("agoureiro", "invocador"),
+            (
+                ORACULO_ART_IDS["sinal_funesto"],
+                ORACULO_ART_IDS["vislumbre"],
+                ORACULO_ART_IDS["ruina_predita"],
+            ),
+            997352,
+        ),
+    ],
+)
+async def test_final_checkpoint_unlocks_both_paths_once_without_selection_or_reward(
+    database, character_class, expected_paths, art_ids, actor
+):
+    character_id, sessions, service = await _seed_trial(
+        database,
+        actor,
+        character_class=character_class,
+        active_art_ids=art_ids,
+    )
     await service.begin(actor)
     first = await _complete_stage(service, actor, 1)
     second = await _complete_stage(service, actor, 2)
@@ -500,7 +801,7 @@ async def test_final_checkpoint_unlocks_both_paths_once_without_selection_or_rew
     assert second.current_stage == 3 and second.completed_stages == (1, 2)
     assert final.kind == "completed" and final.completed_stages == (1, 2, 3)
     assert duplicate.kind == "completed" and resumed.kind == "completed"
-    assert final.available_paths == ("guardiao", "inquisidor")
+    assert final.available_paths == expected_paths
     assert final.selected_path is None and not final.path_art_unlocked
     assert final.path_art_min_level == 12
     async with sessions() as session:
@@ -523,6 +824,85 @@ async def test_final_checkpoint_unlocks_both_paths_once_without_selection_or_rew
             .select_from(RewardComponent)
             .join(RewardEvent)
             .where(RewardEvent.character_id == character_id)
+        ) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("character_class", "art_ids", "trial_art"),
+    [
+        (
+            "oraculo",
+            (
+                ORACULO_ART_IDS["sinal_funesto"],
+                ORACULO_ART_IDS["vislumbre"],
+                ORACULO_ART_IDS["ruina_predita"],
+            ),
+            ORACULO_ART_IDS["sinal_funesto"],
+        ),
+        (
+            "luminar",
+            (
+                LUMINAR_ART_IDS["fulgor"],
+                LUMINAR_ART_IDS["renovacao"],
+                LUMINAR_ART_IDS["egide_solar"],
+            ),
+            LUMINAR_ART_IDS["fulgor"],
+        ),
+    ],
+)
+async def test_oraculo_and_luminar_attempts_use_equipped_arts_and_preserve_costs(
+    database, character_class, art_ids, trial_art
+):
+    actor = 997360 if character_class == "oraculo" else 997361
+    character_id, sessions, service = await _seed_trial(
+        database,
+        actor,
+        character_class=character_class,
+        active_art_ids=art_ids,
+    )
+    offer = await service.resume(actor)
+    begun = await service.begin(actor, offer.state_version)
+    active = await service.start_attempt(actor, begun.state_version)
+    assert active.kind == "active" and active.attempt_id is not None
+    assert active.attempt_state["equipped_art_ids"] == list(art_ids)
+    assert active.consumable_options == ()
+
+    combat = await service.combat(actor, active.attempt_id)
+    assert combat is not None
+    assert combat.external_consumables_allowed is False
+    assert combat.variant is None
+    assert combat.consumable_uses == 0
+    assert set(combat.player_actions) == {"attack", *art_ids}
+    target_id = active.stage_definition["entities"][0]["entity_id"]
+
+    changed = await service.action(
+        actor,
+        active.attempt_id,
+        active.combat_version,
+        trial_art,
+        target_id=target_id,
+    )
+    assert changed.kind == "active" and changed.attempt_id == active.attempt_id
+    resumed = await service.resume(actor)
+    assert resumed.attempt_id == active.attempt_id
+    assert resumed.encounter_id == active.encounter_id
+    assert resumed.combat_id == active.combat_id
+    assert resumed.attempt_state["events"]
+
+    async with sessions() as session:
+        character = await session.get(Character, character_id)
+        assert character.xp == 0 and character.crowns == 23 and character.vigor == 37
+        for model in (RewardEvent, BestiaryEntry, CodexEntry, MaterialStack):
+            assert await session.scalar(
+                select(func.count()).select_from(model).where(
+                    model.character_id == character_id
+                )
+            ) == 0
+        assert await session.scalar(
+            select(func.count()).select_from(ConsumableStack).where(
+                ConsumableStack.character_id == character_id
+            )
         ) == 0
 
 

@@ -27,12 +27,18 @@ from asterion.domain.class_trials import (
     TrialCombatEvent,
     TrialStageDefinition,
     create_errante_trial_combat,
+    create_luminar_trial_combat,
+    create_oraculo_trial_combat,
     create_sentinel_trial_combat,
     create_tecelao_trial_combat,
     create_vigia_trial_combat,
     errante_conditions_for_event,
     errante_stage_definition,
     fresh_attempt_state,
+    luminar_conditions_for_event,
+    luminar_stage_definition,
+    oraculo_conditions_for_event,
+    oraculo_stage_definition,
     reset_trial_combat,
     sentinel_conditions_for_event,
     sentinel_stage_definition,
@@ -185,12 +191,16 @@ class ClassTrialService:
             errante = state.trial_id == ERRANTE_TRIAL_ID
             vigia = state.trial_id == VIGIA_TRIAL_ID
             tecelao = state.trial_id == TECELAO_TRIAL_ID
-            uses_shared_combat = sentinel or errante or vigia or tecelao
+            oraculo = state.trial_id == TRIAL_IDS_BY_CLASS["oraculo"]
+            luminar = state.trial_id == TRIAL_IDS_BY_CLASS["luminar"]
+            uses_shared_combat = sentinel or errante or vigia or tecelao or oraculo or luminar
             stage_builder = {
                 SENTINEL_TRIAL_ID: sentinel_stage_definition,
                 ERRANTE_TRIAL_ID: errante_stage_definition,
                 VIGIA_TRIAL_ID: vigia_stage_definition,
                 TECELAO_TRIAL_ID: tecelao_stage_definition,
+                TRIAL_IDS_BY_CLASS["oraculo"]: oraculo_stage_definition,
+                TRIAL_IDS_BY_CLASS["luminar"]: luminar_stage_definition,
             }.get(state.trial_id)
             active_art_configuration = None
             if uses_shared_combat:
@@ -276,6 +286,8 @@ class ClassTrialService:
                     ERRANTE_TRIAL_ID: create_errante_trial_combat,
                     VIGIA_TRIAL_ID: create_vigia_trial_combat,
                     TECELAO_TRIAL_ID: create_tecelao_trial_combat,
+                    TRIAL_IDS_BY_CLASS["oraculo"]: create_oraculo_trial_combat,
+                    TRIAL_IDS_BY_CLASS["luminar"]: create_luminar_trial_combat,
                 }[state.trial_id](player, attempt_definition)
                 combat.configuration_snapshot = (
                     configuration.to_data(CURRENT_COMBAT_RULESET)
@@ -328,6 +340,20 @@ class ClassTrialService:
                             stored_definition,
                             trial_event_from_combat_event(combat, combat_event),
                         )
+                elif oraculo:
+                    for combat_event in combat.events + combat.mechanic_events:
+                        self._append_oraculo_event(
+                            state.attempt_state,
+                            stored_definition,
+                            trial_event_from_combat_event(combat, combat_event),
+                        )
+                elif luminar:
+                    for combat_event in combat.events + combat.mechanic_events:
+                        self._append_luminar_event(
+                            state.attempt_state,
+                            stored_definition,
+                            trial_event_from_combat_event(combat, combat_event),
+                        )
             await session.flush()
             return await self._view(session, character, state, world, activity)
 
@@ -354,6 +380,8 @@ class ClassTrialService:
                 ERRANTE_TRIAL_ID,
                 VIGIA_TRIAL_ID,
                 TECELAO_TRIAL_ID,
+                TRIAL_IDS_BY_CLASS["oraculo"],
+                TRIAL_IDS_BY_CLASS["luminar"],
             }:
                 # Implemented Class Trials derive pedagogy only from the shared-engine log.
                 return await self._view(session, character, state, world, activity)
@@ -480,6 +508,8 @@ class ClassTrialService:
                     ERRANTE_TRIAL_ID,
                     VIGIA_TRIAL_ID,
                     TECELAO_TRIAL_ID,
+                    TRIAL_IDS_BY_CLASS["oraculo"],
+                    TRIAL_IDS_BY_CLASS["luminar"],
                 }
                 or not self._owns_attempt(state, activity, foreground, attempt_id)
                 or activity.state_version != combat_version
@@ -567,6 +597,24 @@ class ClassTrialService:
                         definition,
                         trial_event_from_combat_event(updated, combat_event),
                     )
+            elif state.trial_id == TRIAL_IDS_BY_CLASS["oraculo"]:
+                new_events = updated.events[len(combat.events) :]
+                new_mechanic_events = updated.mechanic_events[
+                    len(combat.mechanic_events) :
+                ]
+                for combat_event in new_events + new_mechanic_events:
+                    self._append_oraculo_event(
+                        attempt, definition, trial_event_from_combat_event(updated, combat_event)
+                    )
+            elif state.trial_id == TRIAL_IDS_BY_CLASS["luminar"]:
+                new_events = updated.events[len(combat.events) :]
+                new_mechanic_events = updated.mechanic_events[
+                    len(combat.mechanic_events) :
+                ]
+                for combat_event in new_events + new_mechanic_events:
+                    self._append_luminar_event(
+                        attempt, definition, trial_event_from_combat_event(updated, combat_event)
+                    )
 
             activity.state_version = updated.version
             activity.last_valid_action_at = datetime.now(UTC)
@@ -611,6 +659,9 @@ class ClassTrialService:
                 "barrier": str(fighter.barrier),
                 "barrier_remaining": fighter.barrier_remaining,
                 "barrier_source": fighter.barrier_source,
+                "barrier_debuff_magnitude_reduction": str(
+                    fighter.barrier_debuff_magnitude_reduction
+                ),
                 "protection_layers": fighter.protection_layers,
                 "training_state_tags": list(fighter.training_state_tags),
                 "tagged_direct_damage_reductions": {
@@ -657,6 +708,8 @@ class ClassTrialService:
             "response_window_seen": combat.response_window_seen,
             "resolving_prepared": combat.resolving_prepared,
             "combat_version": combat.version,
+            "ai_target_cycle": list(combat.ai_target_cycle),
+            "ai_target_position": combat.ai_target_position,
         }
         attempt["external_consumables_used"] = combat.consumable_uses
 
@@ -779,6 +832,26 @@ class ClassTrialService:
         )
 
     @staticmethod
+    def _append_oraculo_event(
+        attempt: dict,
+        definition: TrialStageDefinition,
+        event: TrialCombatEvent,
+    ) -> None:
+        ClassTrialService._append_class_pedagogy_event(
+            attempt, definition, event, oraculo_conditions_for_event
+        )
+
+    @staticmethod
+    def _append_luminar_event(
+        attempt: dict,
+        definition: TrialStageDefinition,
+        event: TrialCombatEvent,
+    ) -> None:
+        ClassTrialService._append_class_pedagogy_event(
+            attempt, definition, event, luminar_conditions_for_event
+        )
+
+    @staticmethod
     def _append_class_pedagogy_event(
         attempt: dict,
         definition: TrialStageDefinition,
@@ -811,10 +884,43 @@ class ClassTrialService:
                 "target_ids": list(event.target_ids),
                 "action_id": event.action_id,
                 "action_instance_id": event.action_instance_id,
+                "prepared_action_instance_id": event.prepared_action_instance_id,
+                "response_to_prepared_action_instance_id": (
+                    event.response_to_prepared_action_instance_id
+                ),
                 "conditions": list(conditions),
                 "hit_index": event.hit_index,
                 "hit_count": event.hit_count,
                 "effective_damage": str(event.effective_damage),
+                "calculated_damage": str(event.calculated_damage),
+                "barrier_absorbed": str(event.barrier_absorbed),
+                "target_barrier_source": event.target_barrier_source,
+                "barrier_value": str(event.barrier_value),
+                "barrier_applied_source": event.barrier_applied_source,
+                "applied_effect_id": event.applied_effect_id,
+                "applied_effect_stat": event.applied_effect_stat,
+                "applied_effect_magnitude": str(event.applied_effect_magnitude),
+                "applied_effect_duration": event.applied_effect_duration,
+                "applied_effect_kind": event.applied_effect_kind,
+                "applied_effect_removable": event.applied_effect_removable,
+                "actor_effect_ids": list(event.actor_effect_ids),
+                "actor_effect_facts": ClassTrialService._json_safe(
+                    event.actor_effect_facts
+                ),
+                "base_healing": str(event.base_healing),
+                "calculated_healing": str(event.calculated_healing),
+                "effective_healing": str(event.effective_healing),
+                "healing_received_multiplier": str(event.healing_received_multiplier),
+                "overheal": str(event.overheal),
+                "target_hp_after": (
+                    str(event.target_hp_after)
+                    if event.target_hp_after is not None
+                    else None
+                ),
+                "fighter_hp_after": ClassTrialService._json_safe(
+                    dict(event.fighter_hp_after or {})
+                ),
+                "prepared_resolution": event.prepared_resolution,
                 "dot_kind": event.dot_kind,
                 "dot_application_event_id": event.dot_application_event_id,
                 "effect_application_event_id": event.effect_application_event_id,
@@ -979,6 +1085,8 @@ class ClassTrialService:
                 ERRANTE_TRIAL_ID,
                 VIGIA_TRIAL_ID,
                 TECELAO_TRIAL_ID,
+                TRIAL_IDS_BY_CLASS["oraculo"],
+                TRIAL_IDS_BY_CLASS["luminar"],
             }:
                 row = await session.execute(
                     select(Encounter, CombatRecord)

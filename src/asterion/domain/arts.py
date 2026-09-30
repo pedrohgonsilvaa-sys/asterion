@@ -82,6 +82,34 @@ TECELAO_ART_LEVELS = {
     TECELAO_ART_IDS["veu_entrelacado"]: 9,
 }
 
+ORACULO_ART_IDS = {
+    "sinal_funesto": FIRST_CLASS_ART_IDS["oraculo"],
+    "vislumbre": "class_art.oraculo.vislumbre",
+    "ruina_predita": "class_art.oraculo.ruina_predita",
+    "veu_premonitorio": "class_art.oraculo.veu_premonitorio",
+}
+
+ORACULO_ART_LEVELS = {
+    ORACULO_ART_IDS["sinal_funesto"]: 1,
+    ORACULO_ART_IDS["vislumbre"]: 4,
+    ORACULO_ART_IDS["ruina_predita"]: 7,
+    ORACULO_ART_IDS["veu_premonitorio"]: 9,
+}
+
+LUMINAR_ART_IDS = {
+    "fulgor": FIRST_CLASS_ART_IDS["luminar"],
+    "renovacao": "class_art.luminar.renovacao",
+    "egide_solar": "class_art.luminar.egide_solar",
+    "julgamento": "class_art.luminar.julgamento",
+}
+
+LUMINAR_ART_LEVELS = {
+    LUMINAR_ART_IDS["fulgor"]: 1,
+    LUMINAR_ART_IDS["renovacao"]: 4,
+    LUMINAR_ART_IDS["egide_solar"]: 7,
+    LUMINAR_ART_IDS["julgamento"]: 9,
+}
+
 
 ACTIVE_ART_DEFINITIONS = {
     art_id: ActiveArtDefinition(art_id, character_class, 1)
@@ -91,6 +119,18 @@ ACTIVE_ART_DEFINITIONS.update(
     {
         art_id: ActiveArtDefinition(art_id, "sentinela", min_level)
         for art_id, min_level in SENTINEL_ART_LEVELS.items()
+    }
+)
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        art_id: ActiveArtDefinition(art_id, "oraculo", min_level)
+        for art_id, min_level in ORACULO_ART_LEVELS.items()
+    }
+)
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        art_id: ActiveArtDefinition(art_id, "luminar", min_level)
+        for art_id, min_level in LUMINAR_ART_LEVELS.items()
     }
 )
 ACTIVE_ART_DEFINITIONS.update(
