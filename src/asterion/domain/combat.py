@@ -69,6 +69,18 @@ class DotState:
 
 
 @dataclass(frozen=True)
+class ActionEffect:
+    """Additional deterministic effect applied by a single committed action."""
+
+    id: str
+    stat: str
+    magnitude: Decimal
+    duration: int
+    kind: str = "buff"
+    stat_modifier_mode: str = "multiplicative"
+
+
+@dataclass(frozen=True)
 class Action:
     id: str
     name: str
@@ -102,6 +114,36 @@ class Action:
     next_direct_crit_duration: int = 0
     next_direct_crit_effect_id: str | None = None
     crit_bonus_if_target_debuffed: Decimal = ZERO
+    hit_count: int = 1
+    self_effects: tuple[ActionEffect, ...] = ()
+    self_state_tags_after: tuple[str, ...] | None = None
+    effect_trigger_scope: str = "per_target"
+    prepares_chain: str | None = None
+    consumes_chain: str | None = None
+    chain_power_bonus: Decimal = ZERO
+    chain_power_bonus_damage: Decimal | None = None
+    chain_power_bonus_healing: Decimal | None = None
+    chain_power_bonus_barrier: Decimal | None = None
+    prepares_chain_duration: int = 2
+
+    def __post_init__(self) -> None:
+        if self.hit_count < 1:
+            raise ValueError("An action must resolve at least one hit.")
+        if self.chain_power_bonus < ZERO:
+            raise ValueError("Action chain power bonus cannot be negative.")
+        if any(
+            bonus is not None and bonus < ZERO
+            for bonus in (
+                self.chain_power_bonus_damage,
+                self.chain_power_bonus_healing,
+                self.chain_power_bonus_barrier,
+            )
+        ):
+            raise ValueError("Action component chain power bonus cannot be negative.")
+        if self.prepares_chain and self.prepares_chain_duration < 1:
+            raise ValueError("Prepared action chains require a positive duration.")
+        if self.effect_trigger_scope not in {"per_action", "per_hit", "per_target"}:
+            raise ValueError("Action effect trigger scope is invalid.")
 
 
 @dataclass
@@ -141,6 +183,11 @@ class Fighter:
     takes_turn: bool = True
     defeat_on_zero: bool | None = None
     required_for_victory: bool | None = None
+    protection_layers: int = 0
+    protection_reduction_per_layer: Decimal = ZERO
+    training_state_tags: tuple[str, ...] = ()
+    tagged_direct_damage_reductions: dict[str, Decimal] = field(default_factory=dict)
+    action_chains: dict[str, dict[str, str]] = field(default_factory=dict)
 
     def stat(self, name: str) -> Decimal:
         value = getattr(self.stats, name)
@@ -212,6 +259,29 @@ class CombatEvent:
     dot_kind: str = ""
     dot_application_event_id: str = ""
     dot_source_id: str = ""
+    hit_index: int = 1
+    hit_count: int = 1
+    protection_layers_before: int = 0
+    protection_layers_after: int = 0
+    target_state_tags: tuple[str, ...] = ()
+    target_effect_application_event_ids: tuple[str, ...] = ()
+    effect_application_event_id: str = ""
+    chain_state_before: str = ""
+    chain_state_after: str = ""
+    chain_prepared_by_action_id: str = ""
+    chain_consumed: bool = False
+    chain_empowered: bool = False
+    empowered_by_action_instance_id: str = ""
+    chain_prepared_by_action_instance_id: str = ""
+    chain_consumed_by_action_instance_id: str = ""
+    chain_window_before: int = 0
+    chain_window_after: int = 0
+    power_component: str = ""
+    power_multiplier: Decimal = D(1)
+    damage_power_multiplier: Decimal = D(1)
+    healing_power_multiplier: Decimal = D(1)
+    barrier_power_multiplier: Decimal = D(1)
+    trigger_scope: str = "per_action"
 
 
 @dataclass(frozen=True, slots=True)
@@ -318,6 +388,7 @@ def _action_is_pure_self(action: Action) -> bool:
                 and action.self_effect_magnitude > ZERO
                 and action.self_effect_duration > 0
             )
+            or bool(action.self_effects)
         )
     )
 
@@ -1261,8 +1332,53 @@ def _end_turn(state: Combat) -> None:
                 source_actor_id=source_actor_id,
                 remaining=0,
             )
+    for chain_key, chain in tuple(sorted(actor.action_chains.items())):
+        applied_opportunity = int(chain.get("applied_opportunity", actor.opportunity))
+        if actor.opportunity <= applied_opportunity:
+            continue
+        window_before = int(chain.get("remaining", chain.get("duration", 2)))
+        window_after = max(0, window_before - 1)
+        if window_after > 0:
+            chain["remaining"] = window_after
+            continue
+        actor.action_chains.pop(chain_key, None)
+        state.events.append(
+            CombatEvent(
+                len(state.events),
+                state.round,
+                actor_key,
+                "chain:expired",
+                actor.id,
+                actor_entity_id=actor.id,
+                action_instance_id=str(chain.get("action_instance_id", "")),
+                chain_state_before="ready",
+                chain_state_after="expired",
+                chain_prepared_by_action_id=str(chain.get("prepared_by_action_id", "")),
+                chain_prepared_by_action_instance_id=str(
+                    chain.get("action_instance_id", "")
+                ),
+                chain_window_before=window_before,
+                chain_window_after=0,
+                internal=True,
+            )
+        )
     if not state.result:
         _advance_turn_cursor(state)
+
+
+def _chain_bonus(action: Action, component: str) -> Decimal:
+    component_bonus = getattr(action, f"chain_power_bonus_{component}", None)
+    return action.chain_power_bonus if component_bonus is None else component_bonus
+
+
+def _action_power_component(action: Action) -> str:
+    if action.coefficient > ZERO:
+        return "damage"
+    if action.heal_coefficient > ZERO:
+        return "healing"
+    if action.self_barrier_coefficient > ZERO or action.target_barrier_coefficient > ZERO:
+        return "barrier"
+    return ""
 
 def _perform(
     state: Combat,
@@ -1270,6 +1386,11 @@ def _perform(
     action_id: str,
     *,
     target_id: str | None = None,
+    _hit_index: int | None = None,
+    _hit_count: int = 1,
+    _action_instance_id: str = "",
+    _grant_action_retaliation: bool = True,
+    _chain_resolution: dict[str, object] | None = None,
 ) -> bool:
     actor = state.fighters[actor_id]
     if action_id == "hold":
@@ -1299,7 +1420,7 @@ def _perform(
         return True
 
     # Bleed recoil belongs to the acting entity and resolves before its action.
-    for dot in state.dot_states.get(actor.id, []):
+    for dot in state.dot_states.get(actor.id, []) if _hit_index in {None, 1} else ():
         if dot.kind == "bleed":
             snapshots = dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks
             recoil = (sum(snapshots, D(0)) * D("0.03")).to_integral_value(
@@ -1317,6 +1438,114 @@ def _perform(
     target_keys = _resolve_action_targets(state, actor_id, action, target_id)
     if not target_keys:
         return False
+
+    if action.hit_count > 1 and _hit_index is None:
+        common_instance_id = (
+            f"{state.id.hex}:{state.version}:{len(state.events)}:{actor.id}:{action_id}"
+        )
+        actions[action_id] = replace(action, hit_count=1)
+        committed = False
+        chain_resolution = _chain_resolution
+        try:
+            for hit_index in range(1, action.hit_count + 1):
+                if state.result or not _resolve_action_targets(
+                    state, actor_id, action, target_id
+                ):
+                    break
+                event_start = len(state.events)
+                if not _perform(
+                    state,
+                    actor_id,
+                    action_id,
+                    target_id=target_id,
+                    _hit_index=hit_index,
+                    _hit_count=action.hit_count,
+                    _action_instance_id=common_instance_id,
+                    _grant_action_retaliation=False,
+                    _chain_resolution=chain_resolution,
+                ):
+                    break
+                committed = True
+                for index in range(event_start, len(state.events)):
+                    event = state.events[index]
+                    if (
+                        event.actor == actor_id
+                        and event.actor_entity_id == actor.id
+                        and event.action == action_id
+                        and event.target
+                    ):
+                        state.events[index] = replace(
+                            event,
+                            action_instance_id=common_instance_id,
+                            hit_index=hit_index,
+                            hit_count=action.hit_count,
+                        )
+                if chain_resolution is None:
+                    action_event = next(
+                        (
+                            event
+                            for event in state.events[event_start:]
+                            if event.actor_entity_id == actor.id
+                            and event.action == action_id
+                            and event.action_instance_id == common_instance_id
+                        ),
+                        None,
+                    )
+                    if action_event is not None:
+                        chain_resolution = {
+                            "chain_state_before": action_event.chain_state_before,
+                            "chain_state_after": action_event.chain_state_after,
+                            "chain_prepared_by_action_id": (
+                                action_event.chain_prepared_by_action_id
+                            ),
+                            "chain_prepared_by_action_instance_id": (
+                                action_event.chain_prepared_by_action_instance_id
+                            ),
+                            "chain_consumed_by_action_instance_id": (
+                                action_event.chain_consumed_by_action_instance_id
+                            ),
+                            "chain_consumed": action_event.chain_consumed,
+                            "chain_empowered": action_event.chain_empowered,
+                            "empowered_by_action_instance_id": (
+                                action_event.empowered_by_action_instance_id
+                            ),
+                            "chain_window_before": action_event.chain_window_before,
+                            "chain_window_after": action_event.chain_window_after,
+                            "power_component": action_event.power_component,
+                            "power_multiplier": action_event.power_multiplier,
+                            "damage_power_multiplier": (
+                                action_event.damage_power_multiplier
+                            ),
+                            "healing_power_multiplier": (
+                                action_event.healing_power_multiplier
+                            ),
+                            "barrier_power_multiplier": (
+                                action_event.barrier_power_multiplier
+                            ),
+                        }
+            if committed and state.ruleset == CURRENT_COMBAT_RULESET:
+                first_by_target: dict[str, int] = {}
+                for index, event in enumerate(state.events):
+                    if (
+                        event.action == action_id
+                        and event.action_instance_id == common_instance_id
+                        and event.defender_prevented_damage > 0
+                        and event.target
+                        and event.target not in first_by_target
+                    ):
+                        first_by_target[event.target] = index
+                for target_entity_id, index in first_by_target.items():
+                    target_key = _resolve_fighter_key(state, target_entity_id)
+                    if target_key is not None:
+                        _grant_retaliation(
+                            state,
+                            target_key=target_key,
+                            source_actor=actor,
+                            source_event_id=f"{state.id.hex}:{state.events[index].sequence}",
+                        )
+        finally:
+            actions[action_id] = action
+        return committed
 
     prepared = action.prepared is True or (
         action.prepared is None and action_id == "leap"
@@ -1348,8 +1577,118 @@ def _perform(
         )
         return True
 
+    action_instance_id = _action_instance_id or (
+        f"{state.id.hex}:{state.version}:{len(state.events)}:{actor.id}:{action_id}"
+    )
+    chain_key = action.consumes_chain or action.prepares_chain
+    if _chain_resolution is None:
+        chain_state = actor.action_chains.get(chain_key, {}) if chain_key else {}
+        chain_window_before = int(
+            chain_state.get("remaining", chain_state.get("duration", 2))
+        ) if chain_state else 0
+        if chain_state and chain_window_before <= 0 and chain_key:
+            actor.action_chains.pop(chain_key, None)
+            chain_state = {}
+            chain_window_before = 0
+        chain_state_before = "ready" if chain_state and chain_window_before > 0 else "none"
+        chain_prepared_by_action_id = str(chain_state.get("prepared_by_action_id", ""))
+        chain_prepared_by_action_instance_id = str(
+            chain_state.get("action_instance_id", "")
+        )
+        chain_consumed = bool(
+            action.consumes_chain
+            and chain_state
+            and chain_window_before > 0
+            and chain_prepared_by_action_id != action_id
+        )
+        if chain_consumed and action.consumes_chain:
+            actor.action_chains.pop(action.consumes_chain, None)
+        damage_power_multiplier = (
+            D(1) + _chain_bonus(action, "damage")
+            if chain_consumed and action.coefficient > ZERO
+            else D(1)
+        )
+        healing_power_multiplier = (
+            D(1) + _chain_bonus(action, "healing")
+            if chain_consumed and action.heal_coefficient > ZERO
+            else D(1)
+        )
+        barrier_power_multiplier = (
+            D(1) + _chain_bonus(action, "barrier")
+            if chain_consumed
+            and (action.self_barrier_coefficient > ZERO or action.target_barrier_coefficient > ZERO)
+            else D(1)
+        )
+        chain_empowered = chain_consumed and any(
+            multiplier > D(1)
+            for multiplier in (
+                damage_power_multiplier,
+                healing_power_multiplier,
+                barrier_power_multiplier,
+            )
+        )
+        chain_state_after = (
+            "consumed"
+            if chain_consumed
+            else "ready"
+            if chain_state_before == "ready" or action.prepares_chain
+            else "none"
+        )
+        chain_window_after = (
+            0
+            if chain_consumed
+            else chain_window_before
+            if chain_state_before == "ready"
+            else action.prepares_chain_duration
+            if action.prepares_chain
+            else 0
+        )
+        if not chain_prepared_by_action_id and action.prepares_chain:
+            chain_prepared_by_action_id = action_id
+            chain_prepared_by_action_instance_id = action_instance_id
+        empowered_by_action_instance_id = (
+            chain_prepared_by_action_instance_id if chain_consumed else ""
+        )
+        chain_consumed_by_action_instance_id = action_instance_id if chain_consumed else ""
+    else:
+        chain_state = actor.action_chains.get(chain_key, {}) if chain_key else {}
+        chain_state_before = str(_chain_resolution["chain_state_before"])
+        chain_state_after = str(_chain_resolution["chain_state_after"])
+        chain_prepared_by_action_id = str(
+            _chain_resolution["chain_prepared_by_action_id"]
+        )
+        chain_prepared_by_action_instance_id = str(
+            _chain_resolution["chain_prepared_by_action_instance_id"]
+        )
+        chain_consumed_by_action_instance_id = str(
+            _chain_resolution["chain_consumed_by_action_instance_id"]
+        )
+        chain_consumed = bool(_chain_resolution["chain_consumed"])
+        chain_empowered = bool(_chain_resolution["chain_empowered"])
+        empowered_by_action_instance_id = str(
+            _chain_resolution["empowered_by_action_instance_id"]
+        )
+        chain_window_before = int(_chain_resolution["chain_window_before"])
+        chain_window_after = int(_chain_resolution["chain_window_after"])
+        damage_power_multiplier = D(
+            _chain_resolution["damage_power_multiplier"]
+        )
+        healing_power_multiplier = D(
+            _chain_resolution["healing_power_multiplier"]
+        )
+        barrier_power_multiplier = D(
+            _chain_resolution["barrier_power_multiplier"]
+        )
+    power_component = _action_power_component(action)
+    power_multiplier = {
+        "damage": damage_power_multiplier,
+        "healing": healing_power_multiplier,
+        "barrier": barrier_power_multiplier,
+    }.get(power_component, D(1))
+
     if action.self_barrier_coefficient > ZERO:
-        value = (actor.stat("attack") * action.self_barrier_coefficient).to_integral_value(
+        barrier_coefficient = action.self_barrier_coefficient * barrier_power_multiplier
+        value = (actor.stat("attack") * barrier_coefficient).to_integral_value(
             rounding=ROUND_FLOOR
         )
         actor.barrier = max(ZERO, value)
@@ -1368,19 +1707,43 @@ def _perform(
                 actor.id,
                 barrier_value=actor.barrier,
                 actor_entity_id=actor.id,
-                action_instance_id=(
-                    f"{state.id.hex}:{state.version}:{len(state.events)}:{actor.id}:{action_id}"
+                action_instance_id=action_instance_id,
+                chain_state_before=chain_state_before,
+                chain_state_after=chain_state_after,
+                chain_prepared_by_action_id=chain_prepared_by_action_id,
+                chain_consumed=chain_consumed,
+                chain_empowered=chain_empowered,
+                empowered_by_action_instance_id=empowered_by_action_instance_id,
+                chain_prepared_by_action_instance_id=(
+                    chain_prepared_by_action_instance_id
                 ),
+                chain_consumed_by_action_instance_id=(
+                    chain_consumed_by_action_instance_id
+                ),
+                chain_window_before=chain_window_before,
+                chain_window_after=chain_window_after,
+                power_component=power_component,
+                power_multiplier=power_multiplier,
+                damage_power_multiplier=damage_power_multiplier,
+                healing_power_multiplier=healing_power_multiplier,
+                barrier_power_multiplier=barrier_power_multiplier,
             )
         )
+        if action.prepares_chain and not chain_state and _hit_index in {None, 1}:
+            if not chain_state:
+                actor.action_chains[action.prepares_chain] = {
+                    "prepared_by_action_id": action_id,
+                    "action_instance_id": action_instance_id,
+                    "duration": action.prepares_chain_duration,
+                    "remaining": action.prepares_chain_duration,
+                    "applied_opportunity": actor.opportunity,
+                }
         state.resolving_prepared = False
         return True
 
     # Action-level resources are committed once, after action/target validation and
     # before any per-target hit outcome. This keeps AoE from consuming them per target.
-    action_instance_id = (
-        f"{state.id.hex}:{state.version}:{len(state.events)}:{actor.id}:{action_id}"
-    )
+    damage_coefficient = action.coefficient * damage_power_multiplier
     prepared_action_instance_id = (
         state.prepared_action_instance_id if state.resolving_prepared else ""
     )
@@ -1411,17 +1774,40 @@ def _perform(
     current_ruleset = state.ruleset == CURRENT_COMBAT_RULESET
     direct_eligible = action.coefficient > ZERO
     prepared_resolution = state.resolving_prepared
+    resolved_hit_index = _hit_index or 1
+    resolved_hit_count = _hit_count if _hit_index is not None else action.hit_count
     action_event_indices: list[int] = []
     total_vamp_damage = D(0)
 
     # The target set is frozen before the first primary result. Target ordering is
     # stable by entity id and never depends on database order.
-    for target_key in target_keys:
+    for target_index, target_key in enumerate(target_keys):
         target = state.fighters[target_key]
+        effect_trigger_applies = (
+            action.effect_trigger_scope == "per_hit"
+            or (
+                action.effect_trigger_scope == "per_target"
+                and resolved_hit_index == 1
+            )
+            or (
+                action.effect_trigger_scope == "per_action"
+                and resolved_hit_index == 1
+                and target_index == 0
+            )
+        )
         target_defending = target.defending
         target_effect_ids = tuple(
             sorted(effect.id for effect in target.effects if effect.remaining > 0)
         )
+        target_effect_application_event_ids = tuple(
+            sorted(
+                effect.application_event
+                for effect in target.effects
+                if effect.remaining > 0 and effect.application_event
+            )
+        )
+        target_state_tags = tuple(sorted(target.training_state_tags))
+        protection_layers_before = target.protection_layers
         target_barrier_source = (
             target.barrier_source
             if target.barrier > ZERO and target.barrier_remaining > 0
@@ -1439,7 +1825,11 @@ def _perform(
                     rng = CombatRng(state.id, state.rng_cursor)
                     dodged = rng.chance(
                         evasion_chance,
-                        f"evasion:{actor_id}:{action_id}:{target.id}",
+                        (
+                            f"evasion:{actor_id}:{action_id}:{target.id}:hit:{resolved_hit_index}"
+                            if resolved_hit_count > 1
+                            else f"evasion:{actor_id}:{action_id}:{target.id}"
+                        ),
                     )
                     state.rng_cursor = rng.cursor
                 if dodged:
@@ -1473,6 +1863,31 @@ def _perform(
                     ),
                     retaliation_source_actor_id=retaliation_source_actor_id,
                     action_instance_id=action_instance_id,
+                    hit_index=resolved_hit_index,
+                    hit_count=resolved_hit_count,
+                    protection_layers_before=protection_layers_before,
+                    protection_layers_after=target.protection_layers,
+                    target_state_tags=target_state_tags,
+                    target_effect_application_event_ids=target_effect_application_event_ids,
+                    chain_state_before=chain_state_before,
+                    chain_state_after=chain_state_after,
+                    chain_prepared_by_action_id=chain_prepared_by_action_id,
+                    chain_consumed=chain_consumed,
+                    chain_empowered=chain_empowered,
+                    empowered_by_action_instance_id=empowered_by_action_instance_id,
+                    chain_prepared_by_action_instance_id=(
+                        chain_prepared_by_action_instance_id
+                    ),
+                    chain_consumed_by_action_instance_id=(
+                        chain_consumed_by_action_instance_id
+                    ),
+                    chain_window_before=chain_window_before,
+                    chain_window_after=chain_window_after,
+                    power_component=power_component,
+                    power_multiplier=power_multiplier,
+                    damage_power_multiplier=damage_power_multiplier,
+                    healing_power_multiplier=healing_power_multiplier,
+                    barrier_power_multiplier=barrier_power_multiplier,
                 )
             )
             action_event_indices.append(event_index)
@@ -1504,7 +1919,11 @@ def _perform(
             )
             if crit_chance > ZERO:
                 crit_purpose = (
-                    f"critical:{actor_id}:{action_id}:{target.id}"
+                    (
+                        f"critical:{actor_id}:{action_id}:{target.id}:hit:{resolved_hit_index}"
+                        if resolved_hit_count > 1
+                        else f"critical:{actor_id}:{action_id}:{target.id}"
+                    )
                     if current_ruleset
                     else f"critical:{actor_id}:{action_id}"
                 )
@@ -1519,7 +1938,11 @@ def _perform(
             if block_chance > ZERO:
                 blocked = rng.chance(
                     block_chance,
-                    f"block:{actor_id}:{action_id}:{target.id}",
+                    (
+                        f"block:{actor_id}:{action_id}:{target.id}:hit:{resolved_hit_index}"
+                        if resolved_hit_count > 1
+                        else f"block:{actor_id}:{action_id}:{target.id}"
+                    ),
                 )
         state.rng_cursor = rng.cursor
 
@@ -1543,7 +1966,7 @@ def _perform(
         damage = (
             direct_damage(
                 actor.stat("attack"),
-                action.coefficient,
+                damage_coefficient,
                 target.stat("defense"),
                 actor.level,
                 critical=critical,
@@ -1553,17 +1976,41 @@ def _perform(
             if direct_eligible
             else 0
         )
+        direct_final_reduction = min(
+            D(1),
+            target.protection_layers * target.protection_reduction_per_layer
+            + sum(
+                (
+                    target.tagged_direct_damage_reductions.get(tag, ZERO)
+                    for tag in target_state_tags
+                ),
+                ZERO,
+            ),
+        )
+        if direct_eligible and direct_final_reduction > ZERO:
+            damage = int(
+                (D(damage) * (D(1) - direct_final_reduction)).to_integral_value(
+                    rounding=ROUND_FLOOR
+                )
+            )
         damage_without_defender = damage
         if target.defending and direct_eligible:
             damage_without_defender = direct_damage(
                 actor.stat("attack"),
-                action.coefficient,
+                damage_coefficient,
                 target.stat("defense"),
                 actor.level,
                 critical=critical,
                 mitigation=mitigation_without_defender,
                 penetration=penetration,
             )
+            if direct_final_reduction > ZERO:
+                damage_without_defender = int(
+                    (
+                        D(damage_without_defender)
+                        * (D(1) - direct_final_reduction)
+                    ).to_integral_value(rounding=ROUND_FLOOR)
+                )
         defender_prevented_damage = (
             max(0, damage_without_defender - damage)
             if target.defending and direct_eligible
@@ -1571,14 +2018,22 @@ def _perform(
         )
 
         actual_damage, barrier_absorbed = _deal_damage(target, damage)
+        if direct_eligible and protection_layers_before > 0:
+            target.protection_layers -= 1
+        protection_layers_after = target.protection_layers
         total_vamp_damage += actual_damage
         ward_blocked: list[str] = []
         status_applied = False
+        effect_application_event_id = ""
         dot_application_event_id = ""
         dot_application_kind = ""
-        if action.attack_debuff and target.hp > 0:
+        if action.attack_debuff and target.hp > 0 and effect_trigger_applies:
             had_ward = target.ward_charges > 0 and target.ward_remaining > 0
             applied_effect_id = action.effect_id or action.id
+            effect_application_event_id = (
+                f"{state.id.hex}:{state.version}:{len(state.events)}:effect:"
+                f"{applied_effect_id}:{target.id}"
+            )
             status_applied = apply_effect(
                 state,
                 target,
@@ -1589,13 +2044,12 @@ def _perform(
                     remaining=action.duration,
                     applied_opportunity=target.opportunity,
                 ),
-                application_event=(
-                    f"{state.id.hex}:{state.version}:{len(state.events)}:effect:"
-                    f"{applied_effect_id}:{target.id}"
-                ),
+                application_event=effect_application_event_id,
             )
             if had_ward and not status_applied and target.ward_charges == 0:
                 ward_blocked.append(action.id)
+            if not status_applied:
+                effect_application_event_id = ""
 
         if damage > 0 and target.hp > 0:
             enemy_actor = _fighter_side(state, actor_id) == "enemy"
@@ -1616,7 +2070,7 @@ def _perform(
             ):
                 native_kind, native_stacks = "bleed", 1
             chosen = native_kind or rider
-            if chosen:
+            if chosen and effect_trigger_applies:
                 snapshot = actor.stat("attack")
                 had_ward = target.ward_charges > 0 and target.ward_remaining > 0
                 candidate_application_event_id = (
@@ -1639,10 +2093,15 @@ def _perform(
                     ward_blocked.append(chosen)
 
         target_healed = D(0)
-        if action.heal_coefficient > ZERO and target.hp > 0:
+        if (
+            action.heal_coefficient > ZERO
+            and target.hp > 0
+            and effect_trigger_applies
+        ):
             target_healed = (
                 actor.stat("attack")
                 * action.heal_coefficient
+            * healing_power_multiplier
                 * healing_received_multiplier(state, target_key)
             ).to_integral_value(rounding=ROUND_FLOOR)
             target_healed = min(
@@ -1652,9 +2111,15 @@ def _perform(
             target.hp += target_healed
 
         target_barrier = ZERO
-        if action.target_barrier_coefficient > ZERO and target.hp > 0:
+        if (
+            action.target_barrier_coefficient > ZERO
+            and target.hp > 0
+            and effect_trigger_applies
+        ):
             target_barrier = (
-                actor.stat("attack") * action.target_barrier_coefficient
+                actor.stat("attack")
+                * action.target_barrier_coefficient
+                * barrier_power_multiplier
             ).to_integral_value(rounding=ROUND_FLOOR)
             target_barrier = max(ZERO, target_barrier)
             if target_barrier > ZERO:
@@ -1687,7 +2152,9 @@ def _perform(
                 target_barrier_source=target_barrier_source,
                 prepared_resolution=prepared_resolution,
                 target_effect_ids=target_effect_ids,
+                target_effect_application_event_ids=target_effect_application_event_ids,
                 actor_effect_ids=actor_effect_ids,
+                effect_application_event_id=effect_application_event_id,
                 prepared_action_instance_id=prepared_action_instance_id,
                 response_to_prepared_action_instance_id=response_to_prepared_action_instance_id,
                 dot_kind=dot_application_kind,
@@ -1703,6 +2170,31 @@ def _perform(
                 ),
                 retaliation_source_actor_id=retaliation_source_actor_id,
                 action_instance_id=action_instance_id,
+                hit_index=resolved_hit_index,
+                hit_count=resolved_hit_count,
+                protection_layers_before=protection_layers_before,
+                protection_layers_after=protection_layers_after,
+                target_state_tags=target_state_tags,
+                chain_state_before=chain_state_before,
+                chain_state_after=chain_state_after,
+                chain_prepared_by_action_id=chain_prepared_by_action_id,
+                chain_consumed=chain_consumed,
+                chain_empowered=chain_empowered,
+                empowered_by_action_instance_id=empowered_by_action_instance_id,
+                    chain_prepared_by_action_instance_id=(
+                        chain_prepared_by_action_instance_id
+                    ),
+                    chain_consumed_by_action_instance_id=(
+                        chain_consumed_by_action_instance_id
+                    ),
+                    chain_window_before=chain_window_before,
+                    chain_window_after=chain_window_after,
+                    power_component=power_component,
+                    power_multiplier=power_multiplier,
+                    damage_power_multiplier=damage_power_multiplier,
+                    healing_power_multiplier=healing_power_multiplier,
+                    barrier_power_multiplier=barrier_power_multiplier,
+                trigger_scope=action.effect_trigger_scope,
             )
         )
         action_event_indices.append(action_event_sequence)
@@ -1711,6 +2203,7 @@ def _perform(
             current_ruleset
             and defender_prevented_damage > 0
             and target.character_class == "sentinela"
+            and _grant_action_retaliation
         ):
             _grant_retaliation(
                 state,
@@ -1733,12 +2226,19 @@ def _perform(
                 )
             )
 
-    actor_effect_applied = _apply_action_self_effect(state, actor, action)
-    if actor_effect_applied and action_event_indices:
+    applied_actor_effect_ids = (
+        _apply_action_self_effect(state, actor, action)
+        if _hit_index in {None, 1}
+        else ()
+    )
+    if applied_actor_effect_ids and action_event_indices:
         first = action_event_indices[0]
         state.events[first] = replace(
             state.events[first],
-            actor_effect_id=action.self_effect_id or "",
+            actor_effect_id=applied_actor_effect_ids[0],
+            actor_effect_ids=tuple(
+                sorted(set(state.events[first].actor_effect_ids) | set(applied_actor_effect_ids))
+            ),
         )
 
     # Hemário vampirism is per action, including AoE: aggregate eligible HP damage
@@ -1770,6 +2270,16 @@ def _perform(
                 healed=state.events[target_event].healed + vamp_healed,
             )
 
+    if action.self_state_tags_after is not None:
+        actor.training_state_tags = tuple(sorted(set(action.self_state_tags_after)))
+    if action.prepares_chain and not chain_state and _hit_index in {None, 1}:
+        actor.action_chains[action.prepares_chain] = {
+            "prepared_by_action_id": action_id,
+            "action_instance_id": action_instance_id,
+            "duration": action.prepares_chain_duration,
+            "remaining": action.prepares_chain_duration,
+            "applied_opportunity": actor.opportunity,
+        }
     actor.last_action = action_id
     if (action.cooldown or action.blocked_opportunities) and not state.resolving_prepared:
         actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
@@ -1790,30 +2300,55 @@ def _perform(
     state.resolving_prepared = False
     return True
 
-def _apply_action_self_effect(state: Combat, actor: Fighter, action: Action) -> bool:
+def _apply_action_self_effect(
+    state: Combat, actor: Fighter, action: Action
+) -> tuple[str, ...]:
+    applied_ids: list[str] = []
     if (
         not action.self_effect_id
         or not action.self_effect_stat
         or action.self_effect_magnitude < ZERO
         or action.self_effect_duration <= 0
     ):
-        return False
-    return apply_effect(
-        state,
-        actor,
-        Effect(
-            id=action.self_effect_id,
-            stat=action.self_effect_stat,
-            magnitude=action.self_effect_magnitude,
-            remaining=action.self_effect_duration,
-            applied_opportunity=actor.opportunity,
-            kind=action.self_effect_kind,
-            stat_modifier_mode=action.self_effect_modifier_mode,
-        ),
-        application_event=(
-            f"{state.id.hex}:{state.version}:{len(state.events)}:self-effect:{action.self_effect_id}"
-        ),
-    )
+        pass
+    else:
+        if apply_effect(
+            state,
+            actor,
+            Effect(
+                id=action.self_effect_id,
+                stat=action.self_effect_stat,
+                magnitude=action.self_effect_magnitude,
+                remaining=action.self_effect_duration,
+                applied_opportunity=actor.opportunity,
+                kind=action.self_effect_kind,
+                stat_modifier_mode=action.self_effect_modifier_mode,
+            ),
+            application_event=(
+                f"{state.id.hex}:{state.version}:{len(state.events)}:self-effect:"
+                f"{action.self_effect_id}"
+            ),
+        ):
+            applied_ids.append(action.self_effect_id)
+    for effect in action.self_effects:
+        if apply_effect(
+            state,
+            actor,
+            Effect(
+                id=effect.id,
+                stat=effect.stat,
+                magnitude=effect.magnitude,
+                remaining=effect.duration,
+                applied_opportunity=actor.opportunity,
+                kind=effect.kind,
+                stat_modifier_mode=effect.stat_modifier_mode,
+            ),
+            application_event=(
+                f"{state.id.hex}:{state.version}:{len(state.events)}:self-effect:{effect.id}"
+            ),
+        ):
+            applied_ids.append(effect.id)
+    return tuple(applied_ids)
 
 
 def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
