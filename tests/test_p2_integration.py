@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import func, select
 
+from asterion.application.active_arts import ActiveArtService
 from asterion.application.bestiary import BestiaryRecorder
 from asterion.application.p2 import (
     ASH_POINT_IDS,
@@ -20,6 +21,7 @@ from asterion.application.p2 import (
     P2Service,
 )
 from asterion.application.progression import level_xp
+from asterion.domain.arts import FIRST_CLASS_ART_IDS
 from asterion.domain.combat_math import resolve_combat_stats
 from asterion.domain.road import SPIDER
 from asterion.infrastructure.db.models import (
@@ -271,6 +273,9 @@ async def test_p2_discovery_ash_points_observation_and_reconnect_are_idempotent(
     database,
 ):
     character_id, service = await _seed(database, 881005)
+    art_id = FIRST_CLASS_ART_IDS["sentinela"]
+    equipped = await ActiveArtService(database[1], "ocaso").equip_art(881005, 1, art_id)
+    assert equipped is not None and equipped.combat_configuration_version == 1
     offer = await service.alda(881005)
     active = await service.accept(881005, offer.state_version)
     view = await service.travel_to_charneca(881005, active.state_version)
@@ -287,6 +292,10 @@ async def test_p2_discovery_ash_points_observation_and_reconnect_are_idempotent(
     combat = await service.examine_ash_point(
         881005, ASH_POINT_IDS[1], view.state_version
     )
+    assert art_id in combat.combat.player_actions
+    assert combat.combat.configuration_snapshot["active_arts"] == [
+        {"slot": 1, "art_id": art_id}
+    ]
 
     async with database[1]() as session:
         quest = await session.scalar(

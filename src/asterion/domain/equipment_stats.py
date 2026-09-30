@@ -130,6 +130,7 @@ class EquipmentConfigurationSnapshot:
     combat_configuration_version: int
     items: tuple[EquippedItemSnapshot, ...] = ()
     selected_path: str | None = None
+    talent_choices: tuple[tuple[int, str], ...] = ()
 
     def contribution(self) -> EquipmentStatContribution:
         slots: set[EquipmentSlot] = set()
@@ -160,6 +161,10 @@ class EquipmentConfigurationSnapshot:
             "ruleset_version": ruleset_version,
             "equipment": [item.to_data() for item in self.items],
             "selected_path": self.selected_path,
+            "talents": [
+                {"point_slot": slot, "talent_id": talent_id}
+                for slot, talent_id in self.talent_choices
+            ],
         }
 
 
@@ -291,7 +296,36 @@ def equipment_configuration_from_data(data: Mapping[str, Any]) -> EquipmentConfi
     selected_path = data.get("selected_path")
     if selected_path is not None and not isinstance(selected_path, str):
         raise EquipmentConfigurationError("Invalid selected Path snapshot.")
-    result = EquipmentConfigurationSnapshot(version, tuple(items), selected_path)
+    raw_talents = data.get("talents", [])
+    if not isinstance(raw_talents, (list, tuple)):
+        raise EquipmentConfigurationError("Invalid Talent configuration snapshot.")
+    talent_choices = []
+    seen_slots: set[int] = set()
+    seen_talents: set[str] = set()
+    for raw in raw_talents:
+        if not isinstance(raw, Mapping):
+            raise EquipmentConfigurationError("Invalid Talent choice snapshot.")
+        slot = raw.get("point_slot")
+        talent_id = raw.get("talent_id")
+        if (
+            isinstance(slot, bool)
+            or not isinstance(slot, int)
+            or not 1 <= slot <= 12
+            or not isinstance(talent_id, str)
+            or not talent_id
+            or slot in seen_slots
+            or talent_id in seen_talents
+        ):
+            raise EquipmentConfigurationError("Invalid or duplicate Talent choice snapshot.")
+        seen_slots.add(slot)
+        seen_talents.add(talent_id)
+        talent_choices.append((slot, talent_id))
+    result = EquipmentConfigurationSnapshot(
+        version,
+        tuple(items),
+        selected_path,
+        tuple(sorted(talent_choices)),
+    )
     result.contribution()  # validate duplicates and 2H/off-hand invariants
     return result
 

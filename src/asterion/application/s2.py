@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.bestiary import BestiaryRecorder
 from asterion.application.equipment_configuration import (
     load_equipment_configuration,
@@ -771,6 +772,7 @@ class S2Service:
                 return foreground
             return None
         configuration = await load_equipment_configuration(session, character)
+        active_art_configuration = await load_active_art_configuration(session, character)
         reconcile_character_hp(character, configuration)
         combat = create_creature_combat(
             uuid4(),
@@ -786,6 +788,10 @@ class S2Service:
             ruleset_version=RULESET,
             flavor="As cinzas cedem sob os passos. Um Peregrino Calcinado se volta para você.",
             opening_log="🧥 Peregrino Calcinado · Nv.4 surge junto ao acampamento.",
+            active_art_ids=active_art_configuration.art_ids,
+        )
+        combat.configuration_snapshot = (combat.configuration_snapshot or {}) | (
+            active_art_configuration.to_data()
         )
         activity, encounter, record = await CombatRepository(session).create(
             character, S2_COMBAT_CONTENT_ID, combat

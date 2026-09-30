@@ -27,7 +27,6 @@ from asterion.application.road import (
     RoadService,
     RoadView,
 )
-from asterion.domain.arts import FIRST_CLASS_ART_IDS
 from asterion.domain.combat import (
     act,
     allowed_actions,
@@ -658,6 +657,18 @@ class RoundService(RoadService):
         combat_id = uuid4()
         encounter_id = uuid4()
         raw_combat_configuration = round_configuration.get("combat_configuration")
+        raw_active_arts = (
+            raw_combat_configuration.get("active_arts")
+            if isinstance(raw_combat_configuration, dict)
+            else None
+        )
+        frozen_active_arts = None
+        if isinstance(raw_active_arts, list):
+            frozen_active_arts = tuple(
+                str(entry.get("art_id"))
+                for entry in raw_active_arts
+                if isinstance(entry, dict) and entry.get("art_id")
+            )
         if isinstance(raw_combat_configuration, dict):
             equipment_configuration = equipment_configuration_from_data(
                 raw_combat_configuration
@@ -683,26 +694,10 @@ class RoundService(RoadService):
             equipment_configuration=equipment_configuration,
             ruleset_version=encounter_ruleset,
             location_label=profile.label,
-        )
-        raw_active_arts = (
-            raw_combat_configuration.get("active_arts")
-            if isinstance(raw_combat_configuration, dict)
-            else None
+            active_art_ids=frozen_active_arts,
         )
         if isinstance(raw_active_arts, list):
-            frozen_active_arts = tuple(
-                str(entry.get("art_id"))
-                for entry in raw_active_arts
-                if isinstance(entry, dict) and entry.get("art_id")
-            )
             combat.configuration_snapshot = dict(raw_combat_configuration)
-            if (
-                FIRST_CLASS_ART_IDS.get(
-                    str(round_configuration.get("character_class", c.character_class))
-                )
-                not in frozen_active_arts
-            ):
-                combat.player_actions.pop("art", None)
         encounter = HuntRoundEncounter(
             id=encounter_id,
             round_id=state.id,
@@ -976,6 +971,11 @@ class RoundService(RoadService):
             return ("action", "defend")
         if "defend" in actions:
             return ("action", "defend")
+        active_art = next(
+            (action for action in actions if action.startswith("class_art.")), None
+        )
+        if active_art is not None:
+            return ("action", active_art)
         if "art" in actions:
             return ("action", "art")
         if "attack" in actions:

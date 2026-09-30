@@ -121,6 +121,15 @@ ACTIVE_ART_DEFINITIONS.update(
         for art_id, min_level in SENTINEL_ART_LEVELS.items()
     }
 )
+
+ART_IDS_BY_CLASS = {
+    "sentinela": tuple(SENTINEL_ART_IDS.values()),
+    "errante": tuple(ERRANTE_ART_IDS.values()),
+    "vigia": tuple(VIGIA_ART_IDS.values()),
+    "tecelao": tuple(TECELAO_ART_IDS.values()),
+    "oraculo": tuple(ORACULO_ART_IDS.values()),
+    "luminar": tuple(LUMINAR_ART_IDS.values()),
+}
 ACTIVE_ART_DEFINITIONS.update(
     {
         art_id: ActiveArtDefinition(art_id, "oraculo", min_level)

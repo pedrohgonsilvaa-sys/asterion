@@ -127,6 +127,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     ),
                     "protection_layers": int(value.get("protection_layers", 0)),
                     "training_state_tags": tuple(value.get("training_state_tags", ())),
+                    "talent_ids": tuple(value.get("talent_ids", ())),
                     "tagged_direct_damage_reductions": {
                         tag: Decimal(reduction)
                         for tag, reduction in value.get(

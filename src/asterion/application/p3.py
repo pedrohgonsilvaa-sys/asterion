@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.bestiary import BestiaryRecorder
 from asterion.application.equipment_configuration import (
     load_equipment_configuration,
@@ -759,6 +760,7 @@ class P3Service:
                 return foreground
             return None
         configuration = await load_equipment_configuration(session, character)
+        active_art_configuration = await load_active_art_configuration(session, character)
         reconcile_character_hp(character, configuration)
         mission_cervo = replace(CERVO, ai=("ocaso_charge", "antler_gore"))
         combat = create_creature_combat(
@@ -775,6 +777,10 @@ class P3Service:
             ruleset_version=RULESET,
             flavor="Entre as raízes, um Cervo Escoriado prepara uma investida.",
             opening_log="🦌 Cervo Escoriado · Nv.5 bloqueia o caminho entre os galhos.",
+            active_art_ids=active_art_configuration.art_ids,
+        )
+        combat.configuration_snapshot = (combat.configuration_snapshot or {}) | (
+            active_art_configuration.to_data()
         )
         activity, _, _ = await CombatRepository(session).create(
             character, P3_COMBAT_CONTENT_ID, combat

@@ -675,6 +675,21 @@ class CharacterActiveArtSlot(Base):
     art_id: Mapped[str] = mapped_column(String(96), nullable=False)
 
 
+class CharacterTalentChoice(Base):
+    __tablename__ = "character_talent_choices"
+    __table_args__ = (
+        PrimaryKeyConstraint("character_id", "point_slot", name="pk_character_talent_choices"),
+        UniqueConstraint("character_id", "talent_id", name="uq_character_talent_choice"),
+        CheckConstraint("point_slot BETWEEN 1 AND 12", name="ck_character_talent_point_slot"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    point_slot: Mapped[int] = mapped_column(Integer, nullable=False)
+    talent_id: Mapped[str] = mapped_column(String(96), nullable=False)
+
+
 class RuneStack(Base):
     __tablename__ = "rune_stacks"
     __table_args__ = (

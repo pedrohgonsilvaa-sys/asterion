@@ -7,6 +7,7 @@ from uuid import UUID
 
 from asterion.domain.equipment_stats import EquipmentStatContribution
 from asterion.domain.paths import PATH_DEFINITIONS
+from asterion.domain.talents import static_talent_modifiers
 
 D = Decimal
 ZERO = D(0)
@@ -117,8 +118,9 @@ def resolve_combat_stats(
     race: str,
     equipment: EquipmentStatContribution | None = None,
     selected_path: str | None = None,
+    talent_ids: tuple[str, ...] = (),
 ) -> CombatStats:
-    """Resolve class, materialized equipment bonuses, then final static race modifiers."""
+    """Resolve class, Path and Talent modifiers before flat equipment and race."""
     base = class_stats(character_class, level)
     path = PATH_DEFINITIONS.get(selected_path or "")
     if path is not None:
@@ -131,6 +133,20 @@ def resolve_combat_stats(
             base.attack * (D(1) + path.attack),
             base.defense * (D(1) + path.defense),
             base.agility * (D(1) + path.agility),
+            base.per,
+            base.crit,
+            base.evasion,
+            base.block,
+        )
+    attack_percent, hp_percent, agility_percent = static_talent_modifiers(
+        character_class, talent_ids
+    )
+    if talent_ids:
+        base = CombatStats(
+            base.hp * (D(1) + hp_percent),
+            base.attack * (D(1) + attack_percent),
+            base.defense,
+            base.agility * (D(1) + agility_percent),
             base.per,
             base.crit,
             base.evasion,

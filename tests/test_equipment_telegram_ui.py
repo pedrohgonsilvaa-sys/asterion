@@ -92,11 +92,19 @@ def test_character_hub_has_canonical_copy_and_only_live_navigation():
     ) in screen.text
     assert [[button.text for button in row] for row in screen.keyboard.inline_keyboard] == [
         ["Inventário", "Equipamentos"],
+        ["Artes", "Talentos"],
         ["Caminho"],
         ["← Menu"],
     ]
     callbacks = [button.callback_data for button in _buttons(screen)]
-    assert callbacks == ["inventory:root", "eq:r", "character:path", "menu:back"]
+    assert callbacks == [
+        "inventory:root",
+        "eq:r",
+        "character:arts",
+        "character:talents",
+        "character:path",
+        "menu:back",
+    ]
     assert "🎴 Artes · Combate" in screen.text
     assert all("menu:noop" not in value for value in callbacks)
     assert screen.image_key == "character"

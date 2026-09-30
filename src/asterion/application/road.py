@@ -18,7 +18,6 @@ from asterion.application.equipment_configuration import (
     reconcile_character_hp,
 )
 from asterion.application.progression import consolidate_character_level, level_xp
-from asterion.domain.arts import FIRST_CLASS_ART_IDS
 from asterion.domain.combat import (
     CombatConsumableOption,
     act,
@@ -444,12 +443,11 @@ class RoadService:
                 player_level=c.level,
                 equipment_configuration=equipment_configuration,
                 location_label=profile.label,
+                active_art_ids=active_art_configuration.art_ids,
             )
             combat.configuration_snapshot = (combat.configuration_snapshot or {}) | (
                 active_art_configuration.to_data()
             )
-            if FIRST_CLASS_ART_IDS[c.character_class] not in active_art_configuration.art_ids:
-                combat.player_actions.pop("art", None)
             activity, encounter, record = await CombatRepository(s).create(c, HUNT_CONTENT, combat)
             s.add(
                 HuntContext(
@@ -1043,15 +1041,11 @@ class RoadService:
                     player_level=c.level,
                     equipment_configuration=equipment_configuration,
                     location_label=hunt_profile.label,
+                    active_art_ids=active_art_configuration.art_ids,
                 )
                 combat.configuration_snapshot = (combat.configuration_snapshot or {}) | (
                     active_art_configuration.to_data()
                 )
-                if (
-                    FIRST_CLASS_ART_IDS[c.character_class]
-                    not in active_art_configuration.art_ids
-                ):
-                    combat.player_actions.pop("art", None)
                 activity, encounter, _ = await CombatRepository(s).create(
                     c, EXPLORE_CONTENT, combat
                 )
