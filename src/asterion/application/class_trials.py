@@ -356,6 +356,7 @@ class ClassTrialService:
                     "actor_id": event.actor_id,
                     "target_ids": list(event.target_ids),
                     "action_id": event.action_id,
+                    "action_instance_id": event.action_instance_id,
                     "conditions": list(satisfied_conditions),
                     "calculated_damage": str(event.calculated_damage),
                     "effective_damage": str(event.effective_damage),
@@ -404,6 +405,8 @@ class ClassTrialService:
         attempt_id: UUID,
         combat_version: int,
         action_id: str,
+        *,
+        target_id: str | None = None,
     ) -> ClassTrialView | None:
         """Apply one player action to an active Sentinel trial combat snapshot."""
         async with self.sessions.begin() as session:
@@ -447,7 +450,7 @@ class ClassTrialService:
                 or action_id not in allowed_actions(combat)
             ):
                 return await self._view(session, character, state, world, activity)
-            updated = act(combat, action_id)
+            updated = act(combat, action_id, target_id=target_id)
             if updated.version == combat.version or updated.consumable_uses != 0:
                 return await self._view(session, character, state, world, activity)
 
@@ -574,6 +577,7 @@ class ClassTrialService:
                 "actor_id": event.actor_id,
                 "target_ids": list(event.target_ids),
                 "action_id": event.action_id,
+                "action_instance_id": event.action_instance_id,
                 "conditions": list(conditions),
                 "calculated_damage": str(event.calculated_damage),
                 "effective_damage": str(event.effective_damage),
