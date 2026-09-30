@@ -41,6 +41,9 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "self_barrier_coefficient": Decimal(
                         value.get("self_barrier_coefficient", "0")
                     ),
+                    "self_effect_magnitude": Decimal(
+                        value.get("self_effect_magnitude", "0")
+                    ),
                 }
             )
         )
@@ -72,6 +75,22 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
     tutorial = payload["tutorial"]
     if tutorial:
         tutorial = Tutorial(**(tutorial | {"required_basics": tuple(tutorial["required_basics"])}))
+
+    def combat_event(event):
+        return CombatEvent(
+            **(
+                event
+                | {
+                    "healed": Decimal(event["healed"]),
+                    "barrier_absorbed": Decimal(event.get("barrier_absorbed", "0")),
+                    "barrier_value": Decimal(event.get("barrier_value", "0")),
+                    "calculated_damage": int(event.get("calculated_damage", 0)),
+                    "effective_damage": int(event.get("effective_damage", 0)),
+                    "target_effect_ids": tuple(event.get("target_effect_ids", ())),
+                }
+            )
+        )
+
     return Combat(
         **(
             payload
@@ -90,20 +109,9 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 "ai_priority": tuple(payload.get("ai_priority", ())),
                 "order": tuple(payload["order"]),
                 "tutorial": tutorial,
-                "events": [
-                    CombatEvent(
-                        **(
-                            event
-                            | {
-                                "healed": Decimal(event["healed"]),
-                                "barrier_absorbed": Decimal(
-                                    event.get("barrier_absorbed", "0")
-                                ),
-                                "barrier_value": Decimal(event.get("barrier_value", "0")),
-                            }
-                        )
-                    )
-                    for event in payload["events"]
+                "events": [combat_event(event) for event in payload["events"]],
+                "mechanic_events": [
+                    combat_event(event) for event in payload.get("mechanic_events", ())
                 ],
                 "dot_states": {
                     target: [

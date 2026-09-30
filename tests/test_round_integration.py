@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import func, select
 
+from asterion.application.active_arts import ActiveArtService
 from asterion.application.combat_configuration_guard import CombatConfigurationLocked
 from asterion.application.equipment import EquipmentService
 from asterion.application.progression import level_xp
@@ -14,6 +15,7 @@ from asterion.application.round import (
     PURIFY_CONSUMABLE,
     RoundService,
 )
+from asterion.domain.arts import FIRST_CLASS_ART_IDS
 from asterion.domain.combat import DotState
 from asterion.domain.combat_math import Stats, resolve_combat_stats
 from asterion.domain.equipment_stats import equipment_configuration_from_data
@@ -304,6 +306,44 @@ async def test_round_freezes_equipment_across_encounters_and_keeps_new_level(dat
         blocked_id = blocked.id
     with pytest.raises(CombatConfigurationLocked):
         await EquipmentService(database[1], "ocaso").equip_item(actor, blocked_id)
+
+
+@pytest.mark.asyncio
+async def test_round_freezes_authoritative_active_arts_and_blocks_mutation(database):
+    actor, service = await _seed_round(database, 772022)
+    art_id = FIRST_CLASS_ART_IDS["sentinela"]
+    art_service = ActiveArtService(database[1], "ocaso")
+    equipped = await art_service.equip_art(actor, 1, art_id)
+    assert equipped is not None and equipped.combat_configuration_version == 1
+
+    prepared = await service.prepare_round(actor, 5)
+    started = await service.start_round(actor, prepared.round_id, prepared.state_version)
+    assert started.kind in {"round_active", "round_interrupted"}
+
+    async with database[1]() as session:
+        state = await session.scalar(select(HuntRound).where(HuntRound.id == started.round_id))
+        frozen = state.config_snapshot["combat_configuration"]
+        assert frozen["combat_configuration_version"] == 1
+        assert frozen["active_arts"] == [{"slot": 1, "art_id": art_id}]
+        encounter = await session.scalar(
+            select(HuntRoundEncounter)
+            .where(HuntRoundEncounter.round_id == state.id)
+            .order_by(HuntRoundEncounter.ordinal)
+        )
+        assert encounter.combat_snapshot["configuration_snapshot"] == frozen
+        assert "art" in encounter.combat_snapshot["player_actions"]
+
+    with pytest.raises(CombatConfigurationLocked):
+        await art_service.unequip_slot(actor, 1, expected_configuration_version=1)
+
+    resumed = await service.resume(actor)
+    assert resumed.round_id == started.round_id
+    async with database[1]() as session:
+        state = await session.scalar(select(HuntRound).where(HuntRound.id == started.round_id))
+        assert state.config_snapshot["combat_configuration"]["active_arts"] == [
+            {"slot": 1, "art_id": art_id}
+        ]
+
 
 
 @pytest.mark.asyncio

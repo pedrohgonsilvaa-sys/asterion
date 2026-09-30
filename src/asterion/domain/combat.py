@@ -86,6 +86,11 @@ class Action:
     self_barrier_coefficient: Decimal = D(0)
     self_barrier_duration: int = 0
     skip_if_barrier_active: bool = False
+    effect_id: str | None = None
+    self_effect_stat: str | None = None
+    self_effect_magnitude: Decimal = ZERO
+    self_effect_duration: int = 0
+    self_effect_id: str | None = None
 
 
 @dataclass
@@ -110,6 +115,14 @@ class Fighter:
     ward_charges: int = 0
     ward_applied_opportunity: int = 0
     damage_taken_modifiers: dict[str, Decimal] = field(default_factory=dict)
+    retaliation_charges: int = 0
+    retaliation_remaining: int = 0
+    retaliation_applied_opportunity: int = 0
+    retaliation_activation_id: str = ""
+    retaliation_source_type: str = ""
+    retaliation_source_event_id: str = ""
+    retaliation_source_actor_id: str = ""
+    retaliation_duration_bonus: int = 0
 
     def stat(self, name: str) -> Decimal:
         value = getattr(self.stats, name)
@@ -151,6 +164,25 @@ class CombatEvent:
     effect_removal_kind: str | None = None
     dodged: bool = False
     blocked: bool = False
+    actor_entity_id: str = ""
+    actor_effect_id: str = ""
+    calculated_damage: int = 0
+    effective_damage: int = 0
+    target_defending: bool = False
+    defender_mitigation_applied: bool = False
+    target_barrier_source: str = ""
+    prepared_resolution: bool = False
+    target_effect_ids: tuple[str, ...] = ()
+    defender_prevented_damage: int = 0
+    retaliation_valid: bool = False
+    retaliation_used: bool = False
+    retaliation_event: str = ""
+    retaliation_activation_id: str = ""
+    retaliation_source_type: str = ""
+    retaliation_source_event_id: str = ""
+    retaliation_source_actor_id: str = ""
+    retaliation_remaining: int = 0
+    internal: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +216,7 @@ class Combat:
     rng_cursor: int = 0
     result: str | None = None
     events: list[CombatEvent] = field(default_factory=list)
+    mechanic_events: list[CombatEvent] = field(default_factory=list)
     prepared_action: str | None = None
     prepared_source: str | None = None
     prepared_target: str | None = None
@@ -198,6 +231,7 @@ class Combat:
     evasion_streaks: dict[str, int] = field(default_factory=dict)
     configuration_snapshot: dict | None = None
     ai_priority: tuple[str, ...] = ()
+    external_consumables_allowed: bool = True
 
     @property
     def tutorial_stage(self) -> str:
@@ -632,7 +666,11 @@ def consumable_effect_options(
 ) -> tuple[tuple[str, str], ...]:
     """Return stable IDs for currently selectable effects, not display indexes."""
     item = definition(item_id)
-    if item is None or target_id not in state.fighters:
+    if (
+        item is None
+        or not state.external_consumables_allowed
+        or target_id not in state.fighters
+    ):
         return ()
     target = state.fighters[target_id]
     options: list[tuple[str, str]] = []
@@ -682,6 +720,8 @@ def combat_consumable_options(
     state: Combat, item_ids: tuple[str, ...] | list[str], *, budget_limit: int
 ) -> tuple[CombatConsumableOption, ...]:
     """Project stock-backed, currently valid actions for a combat screen."""
+    if not state.external_consumables_allowed:
+        return ()
     options: list[CombatConsumableOption] = []
     for item_id in sorted(set(item_ids)):
         item = definition(item_id)
@@ -782,6 +822,155 @@ def _cooldown_deadline(actor: Fighter, action: Action) -> int:
     return actor.opportunity + action.blocked_opportunities + 1
 
 
+def _retaliation_duration(actor: Fighter) -> int:
+    return max(1, 1 + max(0, actor.retaliation_duration_bonus))
+
+
+def _retaliation_active(actor: Fighter) -> bool:
+    return actor.retaliation_charges > 0 and actor.retaliation_remaining > 0
+
+
+def _clear_retaliation(actor: Fighter) -> None:
+    actor.retaliation_charges = 0
+    actor.retaliation_remaining = 0
+    actor.retaliation_applied_opportunity = 0
+    actor.retaliation_activation_id = ""
+    actor.retaliation_source_type = ""
+    actor.retaliation_source_event_id = ""
+    actor.retaliation_source_actor_id = ""
+
+
+def _retaliation_event(
+    state: Combat,
+    *,
+    actor_key: str,
+    target_id: str,
+    kind: str,
+    activation_id: str,
+    source_type: str,
+    source_event_id: str,
+    source_actor_id: str,
+    remaining: int,
+) -> None:
+    state.mechanic_events.append(
+        CombatEvent(
+            len(state.mechanic_events),
+            state.round,
+            actor_key,
+            f"retaliation:{kind}",
+            target_id,
+            actor_entity_id=state.fighters[actor_key].id,
+            retaliation_event=kind,
+            retaliation_activation_id=activation_id,
+            retaliation_source_type=source_type,
+            retaliation_source_event_id=source_event_id,
+            retaliation_source_actor_id=source_actor_id,
+            retaliation_remaining=remaining,
+            internal=True,
+        )
+    )
+
+
+def _grant_retaliation(
+    state: Combat,
+    *,
+    target_key: str,
+    source_actor: Fighter,
+    source_event_id: str,
+    source_type: str = "defender",
+) -> None:
+    target = state.fighters[target_key]
+    if target.character_class != "sentinela":
+        return
+    duration = _retaliation_duration(target)
+    if _retaliation_active(target):
+        target.retaliation_remaining = max(target.retaliation_remaining, duration)
+        target.retaliation_applied_opportunity = target.opportunity
+        target.retaliation_source_type = source_type
+        target.retaliation_source_event_id = source_event_id
+        target.retaliation_source_actor_id = source_actor.id
+        kind = "refreshed"
+    else:
+        target.retaliation_charges = 1
+        target.retaliation_remaining = duration
+        target.retaliation_applied_opportunity = target.opportunity
+        target.retaliation_activation_id = (
+            f"{state.id.hex}:retaliation:{state.version}:{len(state.events)}:{target.id}"
+        )
+        target.retaliation_source_type = source_type
+        target.retaliation_source_event_id = source_event_id
+        target.retaliation_source_actor_id = source_actor.id
+        kind = "granted"
+    _retaliation_event(
+        state,
+        actor_key=target_key,
+        target_id=target.id,
+        kind=kind,
+        activation_id=target.retaliation_activation_id,
+        source_type=target.retaliation_source_type,
+        source_event_id=target.retaliation_source_event_id,
+        source_actor_id=target.retaliation_source_actor_id,
+        remaining=target.retaliation_remaining,
+    )
+
+
+def _action_is_offensive(action: Action) -> bool:
+    return bool(
+        action.coefficient > ZERO
+        or action.attack_debuff > ZERO
+        or action.native_dot_stacks > 0
+    )
+
+
+def _consume_retaliation(
+    state: Combat, actor_key: str, actor: Fighter, action: Action
+) -> dict[str, str | bool | int]:
+    if (
+        actor.character_class != "sentinela"
+        or not _retaliation_active(actor)
+        or not _action_is_offensive(action)
+    ):
+        return {"used": False}
+    context: dict[str, str | bool | int] = {
+        "used": True,
+        "activation_id": actor.retaliation_activation_id,
+        "source_type": actor.retaliation_source_type,
+        "source_event_id": actor.retaliation_source_event_id,
+        "source_actor_id": actor.retaliation_source_actor_id,
+    }
+    _retaliation_event(
+        state,
+        actor_key=actor_key,
+        target_id=actor.id,
+        kind="consumed",
+        activation_id=actor.retaliation_activation_id,
+        source_type=actor.retaliation_source_type,
+        source_event_id=actor.retaliation_source_event_id,
+        source_actor_id=actor.retaliation_source_actor_id,
+        remaining=0,
+    )
+    _clear_retaliation(actor)
+    return context
+
+
+def _retaliation_action_resolved(
+    state: Combat, actor_key: str, actor: Fighter, context: dict[str, str | bool | int]
+) -> None:
+    if not context.get("used"):
+        return
+    _retaliation_event(
+        state,
+        actor_key=actor_key,
+        target_id=actor.id,
+        kind="action_resolved",
+        activation_id=str(context.get("activation_id", "")),
+        source_type=str(context.get("source_type", "")),
+        source_event_id=str(context.get("source_event_id", "")),
+        source_actor_id=str(context.get("source_actor_id", "")),
+        remaining=0,
+    )
+
+
 def _end_turn(state: Combat) -> None:
     actor = state.fighters[state.order[state.turn_index]]
     for dot in state.dot_states.get(actor.id, []):
@@ -838,6 +1027,28 @@ def _end_turn(state: Combat) -> None:
         actor.ward_remaining -= 1
         if actor.ward_remaining == 0:
             actor.ward_charges = 0
+    if (
+        _retaliation_active(actor)
+        and actor.opportunity > actor.retaliation_applied_opportunity
+    ):
+        actor.retaliation_remaining -= 1
+        if actor.retaliation_remaining <= 0:
+            activation_id = actor.retaliation_activation_id
+            source_type = actor.retaliation_source_type
+            source_event_id = actor.retaliation_source_event_id
+            source_actor_id = actor.retaliation_source_actor_id
+            _clear_retaliation(actor)
+            _retaliation_event(
+                state,
+                actor_key=state.order[state.turn_index],
+                target_id=actor.id,
+                kind="expired",
+                activation_id=activation_id,
+                source_type=source_type,
+                source_event_id=source_event_id,
+                source_actor_id=source_actor_id,
+                remaining=0,
+            )
     state.turn_index += 1
     if state.turn_index == len(state.order):
         state.round += 1
@@ -848,7 +1059,18 @@ def _end_turn(state: Combat) -> None:
 
 def _perform(state: Combat, actor_id: str, action_id: str) -> None:
     actor = state.fighters[actor_id]
-    target = state.fighters["enemy" if actor_id == "player" else "player"]
+    target_key = "enemy" if actor_id == "player" else "player"
+    target = state.fighters[target_key]
+    prepared_resolution = state.resolving_prepared
+    target_defending = target.defending
+    target_effect_ids = tuple(
+        sorted(effect.id for effect in target.effects if effect.remaining > 0)
+    )
+    target_barrier_source = (
+        target.barrier_source
+        if target.barrier > ZERO and target.barrier_remaining > 0
+        else ""
+    )
     if action_id == "hold":
         actor.last_action = "hold"
         state.events.append(CombatEvent(len(state.events), state.round, actor_id, action_id))
@@ -883,7 +1105,13 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
         actor.last_action = f"prepare:{action_id}"
         actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
         state.events.append(
-            CombatEvent(len(state.events), state.round, actor_id, f"prepare:{action_id}")
+            CombatEvent(
+                len(state.events),
+                state.round,
+                actor_id,
+                f"prepare:{action_id}",
+                actor_entity_id=actor.id,
+            )
         )
         return
     if action.self_barrier_coefficient > ZERO:
@@ -905,10 +1133,20 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
                 action_id,
                 actor_id,
                 barrier_value=actor.barrier,
+                actor_entity_id=actor.id,
             )
         )
         state.resolving_prepared = False
         return
+
+    # Retaliation is committed only after the action has passed all ownership/action
+    # validation and any preparation-only step. Outcome RNG happens afterwards.
+    retaliation_context = _consume_retaliation(state, actor_id, actor, action)
+    retaliation_used = bool(retaliation_context.get("used"))
+    retaliation_source_type = str(retaliation_context.get("source_type", ""))
+    retaliation_source_actor_id = str(retaliation_context.get("source_actor_id", ""))
+    retaliation_valid = retaliation_used and retaliation_source_type == "defender"
+
     current_ruleset = state.ruleset == CURRENT_COMBAT_RULESET
     direct_eligible = action.coefficient > ZERO
     dodged = False
@@ -932,6 +1170,7 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
                 state.evasion_streaks[target.id] = 0
 
     if dodged:
+        actor_effect_applied = _apply_action_self_effect(state, actor, action)
         actor.last_action = action_id
         if (action.cooldown or action.blocked_opportunities) and not state.resolving_prepared:
             actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
@@ -943,8 +1182,25 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
                 action_id,
                 target.id,
                 dodged=True,
+                actor_entity_id=actor.id,
+                target_defending=target_defending,
+                prepared_resolution=prepared_resolution,
+                target_effect_ids=target_effect_ids,
+                target_barrier_source=target_barrier_source,
+                actor_effect_id=action.self_effect_id if actor_effect_applied else "",
+                retaliation_valid=retaliation_valid,
+                retaliation_used=retaliation_used,
+                retaliation_activation_id=str(
+                    retaliation_context.get("activation_id", "")
+                ),
+                retaliation_source_type=retaliation_source_type,
+                retaliation_source_event_id=str(
+                    retaliation_context.get("source_event_id", "")
+                ),
+                retaliation_source_actor_id=retaliation_source_actor_id,
             )
         )
+        _retaliation_action_resolved(state, actor_id, actor, retaliation_context)
         state.resolving_prepared = False
         return
 
@@ -963,9 +1219,10 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
                 else f"critical:{actor_id}:{action_id}"
             )
             critical = rng.chance(crit_chance, crit_purpose)
-    mitigation_parts = []
-    if target.defending:
-        mitigation_parts.append(D("0.52") if target.race == "cinereo" else D("0.45"))
+
+    defender_reduction = (
+        D("0.52") if target.race == "cinereo" else D("0.45")
+    ) if target.defending else ZERO
     blocked = False
     if current_ruleset and direct_eligible:
         block_chance = chance_from_percentage_points(target.stat("block"))
@@ -974,10 +1231,25 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
                 block_chance,
                 f"block:{actor_id}:{action_id}:{target.id}",
             )
-        if blocked:
-            mitigation_parts.append(D("0.35"))
     state.rng_cursor = rng.cursor
+
+    mitigation_without_defender = (
+        combine_active_mitigation(D("0.35")) if blocked else ZERO
+    )
+    mitigation_parts = []
+    if target.defending:
+        mitigation_parts.append(defender_reduction)
+    if blocked:
+        mitigation_parts.append(D("0.35"))
     mitigation = combine_active_mitigation(*mitigation_parts)
+    penetration = (actor.stat("per") if current_ruleset else ZERO) + (
+        action.per_bonus_if_target_poisoned
+        if any(
+            dot.kind == "poison" and dot.stacks > 0 and dot.remaining > 0
+            for dot in state.dot_states.get(target.id, ())
+        )
+        else ZERO
+    )
     damage = direct_damage(
         actor.stat("attack"),
         action.coefficient,
@@ -985,16 +1257,25 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
         actor.level,
         critical=critical,
         mitigation=mitigation,
-        penetration=(actor.stat("per") if current_ruleset else ZERO)
-        + (
-            action.per_bonus_if_target_poisoned
-            if any(
-                dot.kind == "poison" and dot.stacks > 0 and dot.remaining > 0
-                for dot in state.dot_states.get(target.id, ())
-            )
-            else ZERO
-        ),
+        penetration=penetration,
     )
+    damage_without_defender = damage
+    if target.defending and direct_eligible:
+        damage_without_defender = direct_damage(
+            actor.stat("attack"),
+            action.coefficient,
+            target.stat("defense"),
+            actor.level,
+            critical=critical,
+            mitigation=mitigation_without_defender,
+            penetration=penetration,
+        )
+    defender_prevented_damage = (
+        max(0, damage_without_defender - damage)
+        if target.defending and direct_eligible
+        else 0
+    )
+
     actual_damage, barrier_absorbed = _deal_damage(target, damage)
     healed = D(0)
     if actor.race == "hemario" and actor.hp <= actor.stats.hp * D("0.40"):
@@ -1007,22 +1288,24 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
     status_applied = False
     if action.attack_debuff and target.hp > 0:
         had_ward = target.ward_charges > 0 and target.ward_remaining > 0
+        applied_effect_id = action.effect_id or action.id
         status_applied = apply_effect(
             state,
             target,
             Effect(
-                id=action.id,
+                id=applied_effect_id,
                 stat=action.effect_stat or "attack",
                 magnitude=action.attack_debuff,
                 remaining=action.duration,
                 applied_opportunity=target.opportunity,
             ),
             application_event=(
-                f"{state.id.hex}:{state.version}:{len(state.events)}:effect:{action.id}"
+                f"{state.id.hex}:{state.version}:{len(state.events)}:effect:{applied_effect_id}"
             ),
         )
         if had_ward and not status_applied and target.ward_charges == 0:
             ward_blocked.append(action.id)
+    actor_effect_applied = _apply_action_self_effect(state, actor, action)
     # Native DoTs and variant riders are attached only to real direct hits.
     # Legacy Rend snapshots had no metadata and retain their historical bleed.
     if damage > 0 and target.hp > 0:
@@ -1059,9 +1342,11 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
     actor.last_action = action_id
     if (action.cooldown or action.blocked_opportunities) and not state.resolving_prepared:
         actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
+
+    action_event_sequence = len(state.events)
     state.events.append(
         CombatEvent(
-            len(state.events),
+            action_event_sequence,
             state.round,
             actor_id,
             action_id,
@@ -1069,11 +1354,46 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
             damage,
             critical,
             healed,
-            action.id if status_applied else "",
+            (action.effect_id or action.id) if status_applied else "",
             barrier_absorbed=barrier_absorbed,
             blocked=blocked,
+            actor_entity_id=actor.id,
+            actor_effect_id=action.self_effect_id if actor_effect_applied else "",
+            calculated_damage=damage,
+            effective_damage=int(actual_damage),
+            target_defending=target_defending,
+            defender_mitigation_applied=defender_prevented_damage > 0,
+            defender_prevented_damage=defender_prevented_damage,
+            target_barrier_source=target_barrier_source,
+            prepared_resolution=prepared_resolution,
+            target_effect_ids=target_effect_ids,
+            retaliation_valid=retaliation_valid,
+            retaliation_used=retaliation_used,
+            retaliation_activation_id=str(
+                retaliation_context.get("activation_id", "")
+            ),
+            retaliation_source_type=retaliation_source_type,
+            retaliation_source_event_id=str(
+                retaliation_context.get("source_event_id", "")
+            ),
+            retaliation_source_actor_id=retaliation_source_actor_id,
         )
     )
+
+    # Defender grants/refreshes one global Retaliation only when its own
+    # contribution prevented positive Direct Damage. Barrier is already downstream.
+    if (
+        current_ruleset
+        and defender_prevented_damage > 0
+        and target.character_class == "sentinela"
+    ):
+        _grant_retaliation(
+            state,
+            target_key=target_key,
+            source_actor=actor,
+            source_event_id=f"{state.id.hex}:{action_event_sequence}",
+        )
+
     for effect_id in ward_blocked:
         state.events.append(
             CombatEvent(
@@ -1085,10 +1405,35 @@ def _perform(state: Combat, actor_id: str, action_id: str) -> None:
                 effect_id=effect_id,
             )
         )
+    _retaliation_action_resolved(state, actor_id, actor, retaliation_context)
     if target.hp == 0:
         state.result = "victory" if actor_id == "player" else "defeat"
         _clear_prepared_action(state)
     state.resolving_prepared = False
+
+
+def _apply_action_self_effect(state: Combat, actor: Fighter, action: Action) -> bool:
+    if (
+        not action.self_effect_id
+        or not action.self_effect_stat
+        or action.self_effect_magnitude <= ZERO
+        or action.self_effect_duration <= 0
+    ):
+        return False
+    return apply_effect(
+        state,
+        actor,
+        Effect(
+            id=action.self_effect_id,
+            stat=action.self_effect_stat,
+            magnitude=action.self_effect_magnitude,
+            remaining=action.self_effect_duration,
+            applied_opportunity=actor.opportunity,
+        ),
+        application_event=(
+            f"{state.id.hex}:{state.version}:{len(state.events)}:self-effect:{action.self_effect_id}"
+        ),
+    )
 
 
 def _enemy_action(state: Combat) -> str:
@@ -1361,6 +1706,7 @@ def combat_consumable_usable(
     if (
         item is None
         or item.use_context is not UseContext.COMBAT_PVE
+        or not state.external_consumables_allowed
         or state.tutorial_stage != "normal"
         or not consumable_available(state)
         or state.fighters["player"].hp <= 0

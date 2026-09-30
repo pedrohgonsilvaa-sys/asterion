@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     reconcile_character_hp,
@@ -26,6 +27,7 @@ from asterion.application.road import (
     RoadService,
     RoadView,
 )
+from asterion.domain.arts import FIRST_CLASS_ART_IDS
 from asterion.domain.combat import (
     act,
     allowed_actions,
@@ -366,6 +368,7 @@ class RoundService(RoadService):
             if active is not None:
                 return await self._road_blocking_view(s, c)
             equipment_configuration = await load_equipment_configuration(s, c)
+            active_art_configuration = await load_active_art_configuration(s, c)
             reconcile_character_hp(c, equipment_configuration)
             now = datetime.now(UTC)
             activity = GameActivity(
@@ -388,7 +391,10 @@ class RoundService(RoadService):
                 "race": c.race,
                 "level_at_start": c.level,
                 "ruleset_version": RULESET,
-                "combat_configuration": equipment_configuration.to_data(RULESET),
+                "combat_configuration": (
+                    equipment_configuration.to_data(RULESET)
+                    | active_art_configuration.to_data()
+                ),
                 "prepared_consumables": {
                     HEAL_CONSUMABLE: bool(state.prepared_heal),
                     PURIFY_CONSUMABLE: bool(state.prepared_purify),
@@ -678,6 +684,25 @@ class RoundService(RoadService):
             ruleset_version=encounter_ruleset,
             location_label=profile.label,
         )
+        raw_active_arts = (
+            raw_combat_configuration.get("active_arts")
+            if isinstance(raw_combat_configuration, dict)
+            else None
+        )
+        if isinstance(raw_active_arts, list):
+            frozen_active_arts = tuple(
+                str(entry.get("art_id"))
+                for entry in raw_active_arts
+                if isinstance(entry, dict) and entry.get("art_id")
+            )
+            combat.configuration_snapshot = dict(raw_combat_configuration)
+            if (
+                FIRST_CLASS_ART_IDS.get(
+                    str(round_configuration.get("character_class", c.character_class))
+                )
+                not in frozen_active_arts
+            ):
+                combat.player_actions.pop("art", None)
         encounter = HuntRoundEncounter(
             id=encounter_id,
             round_id=state.id,

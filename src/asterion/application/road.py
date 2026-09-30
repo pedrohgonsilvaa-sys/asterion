@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.bestiary import BESTIARY_STAGE_LABELS, BestiaryRecorder
 from asterion.application.equipment import equipment_instance_payload
 from asterion.application.equipment_configuration import (
@@ -17,6 +18,7 @@ from asterion.application.equipment_configuration import (
     reconcile_character_hp,
 )
 from asterion.application.progression import consolidate_character_level, level_xp
+from asterion.domain.arts import FIRST_CLASS_ART_IDS
 from asterion.domain.combat import (
     CombatConsumableOption,
     act,
@@ -435,6 +437,7 @@ class RoadService:
             variant = select_variant(seed, creature, profile=profile)
             combat_id = uuid4()
             equipment_configuration = await load_equipment_configuration(s, c)
+            active_art_configuration = await load_active_art_configuration(s, c)
             reconcile_character_hp(c, equipment_configuration)
             combat = create_road_combat(
                 combat_id, c.name, c.character_class, c.race, c.hp, creature, level, variant,
@@ -442,6 +445,11 @@ class RoadService:
                 equipment_configuration=equipment_configuration,
                 location_label=profile.label,
             )
+            combat.configuration_snapshot = (combat.configuration_snapshot or {}) | (
+                active_art_configuration.to_data()
+            )
+            if FIRST_CLASS_ART_IDS[c.character_class] not in active_art_configuration.art_ids:
+                combat.player_actions.pop("art", None)
             activity, encounter, record = await CombatRepository(s).create(c, HUNT_CONTENT, combat)
             s.add(
                 HuntContext(
@@ -1028,6 +1036,7 @@ class RoadService:
                 level = min(c.level, creature.max_level)
                 variant = select_variant(seed, creature, profile=hunt_profile)
                 equipment_configuration = await load_equipment_configuration(s, c)
+                active_art_configuration = await load_active_art_configuration(s, c)
                 reconcile_character_hp(c, equipment_configuration)
                 combat = create_road_combat(
                     uuid4(), c.name, c.character_class, c.race, c.hp, creature, level, variant,
@@ -1035,6 +1044,14 @@ class RoadService:
                     equipment_configuration=equipment_configuration,
                     location_label=hunt_profile.label,
                 )
+                combat.configuration_snapshot = (combat.configuration_snapshot or {}) | (
+                    active_art_configuration.to_data()
+                )
+                if (
+                    FIRST_CLASS_ART_IDS[c.character_class]
+                    not in active_art_configuration.art_ids
+                ):
+                    combat.player_actions.pop("art", None)
                 activity, encounter, _ = await CombatRepository(s).create(
                     c, EXPLORE_CONTENT, combat
                 )

@@ -5,9 +5,12 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import delete, func, select
 
+from asterion.application.active_arts import ActiveArtService
+from asterion.application.combat_configuration_guard import CombatConfigurationLocked
 from asterion.application.equipment import equipment_instance_payload
 from asterion.application.progression import consolidate_level, level_xp
 from asterion.application.road import REFUGE, ROAD, RoadService
+from asterion.domain.arts import FIRST_CLASS_ART_IDS
 from asterion.domain.combat import allowed_actions
 from asterion.domain.road import materialize_equipment
 from asterion.infrastructure.db.models import (
@@ -134,12 +137,38 @@ async def test_road_travel_and_hunt_reconnect_are_persistent(database):
         combat.encounter_id,
         combat.combat_id,
     )
-    assert set(allowed_actions(resumed.combat)) >= {"attack", "defend", "art"}
+    assert set(allowed_actions(resumed.combat)) >= {"attack", "defend"}
+    assert "art" not in allowed_actions(resumed.combat)
+    assert resumed.combat.configuration_snapshot["active_arts"] == []
     async with database[1]() as session:
         context = await session.scalar(
             select(HuntContext).where(HuntContext.game_activity_id == combat.activity_id)
         )
         assert context.local_id == "tdo.location.estrada_das_cinzas"
+
+
+@pytest.mark.asyncio
+async def test_manual_hunt_uses_authoritative_active_art_snapshot(database):
+    actor, service = await _seed_road(database, 771121)
+    art_id = FIRST_CLASS_ART_IDS["sentinela"]
+    art_service = ActiveArtService(database[1], "ocaso")
+    equipped = await art_service.equip_art(actor, 1, art_id)
+    assert equipped is not None and equipped.combat_configuration_version == 1
+
+    await service.travel(actor, ROAD)
+    combat = await service.start_hunt(actor)
+    assert combat.kind == "combat"
+    assert "art" in allowed_actions(combat.combat)
+    assert combat.combat.configuration_snapshot["active_arts"] == [
+        {"slot": 1, "art_id": art_id}
+    ]
+    assert combat.combat.configuration_snapshot["combat_configuration_version"] == 1
+
+    resumed = await service.resume(actor)
+    assert resumed.combat.configuration_snapshot == combat.combat.configuration_snapshot
+    with pytest.raises(CombatConfigurationLocked):
+        await art_service.unequip_slot(actor, 1, expected_configuration_version=1)
+
 
 
 @pytest.mark.asyncio

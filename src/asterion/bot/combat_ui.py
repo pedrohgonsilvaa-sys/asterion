@@ -545,6 +545,17 @@ def event_line(state: Combat, event: CombatEvent) -> str:
             f" Reduz {stat_label} em <code>{number(effect.attack_debuff * 100)}%</code> por "
             f"<code>{effect.duration}T</code>."
         )
+    if event.actor_effect_id:
+        effect = actions[event.action]
+        stat_label = {"attack": "ATQ", "defense": "DEF", "agility": "AGI"}.get(
+            effect.self_effect_stat or "attack",
+            effect.self_effect_stat or "ATQ",
+        )
+        line += (
+            f" <b>{actor_name}</b> reduz a própria {stat_label} em "
+            f"<code>{number(effect.self_effect_magnitude * 100)}%</code> por "
+            f"<code>{effect.self_effect_duration}T</code>."
+        )
     if event.barrier_absorbed:
         line += f" Barreira absorve <code>{number(event.barrier_absorbed)}</code>."
     return line
