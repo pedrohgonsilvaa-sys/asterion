@@ -419,7 +419,7 @@ async def test_p6_chamber_boss_retry_codex_and_campaign_reward(database, monkeyp
                 BestiaryEvidence.creature_id == VIGIA_PARTIDO.creature_id,
                 BestiaryEvidence.evidence_id == "p6_completed",
             )
-        ) is not None
+        ) is None
         assert await session.scalar(
             select(BestiaryEvidence.id).where(
                 BestiaryEvidence.character_id == character_id,
@@ -433,6 +433,19 @@ async def test_p6_chamber_boss_retry_codex_and_campaign_reward(database, monkeyp
                 RewardEvent.source_id.like(f"{P6_REWARD_SOURCE}:enemy-xp:%"),
             )
         ) is None
+        milestone = await session.scalar(
+            select(RewardComponent)
+            .join(RewardEvent)
+            .where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id
+                == f"bestiary:first_victory:{character_id}:{VIGIA_PARTIDO.creature_id}",
+                RewardComponent.kind == "bestiary_first_victory_xp",
+            )
+        )
+        assert milestone is not None and milestone.quantity == 474
+        character = await session.get(Character, character_id)
+        assert character is not None and character.xp == xp_before_boss + 474
 
     after = await service.action(actor, victory.state_version, "inspect_after")
     assert after is not None and after.step == 7 and after.kind == "record_anchor"
@@ -457,6 +470,13 @@ async def test_p6_chamber_boss_retry_codex_and_campaign_reward(database, monkeyp
             select(Quest).where(Quest.character_id == character_id, Quest.quest_id == P6_ID)
         )
         assert quest is not None and quest.progress["reward_choice"] == "last_post"
+        assert await session.scalar(
+            select(BestiaryEvidence.id).where(
+                BestiaryEvidence.character_id == character_id,
+                BestiaryEvidence.creature_id == VIGIA_PARTIDO.creature_id,
+                BestiaryEvidence.evidence_id == "p6_completed",
+            )
+        ) is not None
         reward = await session.scalar(
             select(RewardEvent).where(
                 RewardEvent.character_id == character_id,
