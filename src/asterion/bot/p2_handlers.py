@@ -5,11 +5,13 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from asterion.application.p2 import ASH_POINT_IDS, P2Service
 from asterion.application.p4 import P4Service
+from asterion.application.p5 import P5Service
 from asterion.application.s3 import S3Service
 from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
 from asterion.bot.p2_ui import render_p2
 from asterion.bot.p4_ui import render_p4
+from asterion.bot.p5_ui import render_p5
 from asterion.bot.s3_ui import render_s3
 
 
@@ -18,6 +20,7 @@ def p2_router(
     images: dict[str, str],
     s3: S3Service | None = None,
     p4: P4Service | None = None,
+    p5: P5Service | None = None,
 ) -> Router:
     router = Router(name="p2")
     router.callback_query.filter(F.message.chat.type == "private")
@@ -36,6 +39,36 @@ def p2_router(
                 p4_view.status == "active" or p4_view.available
             ):
                 screen = render_p4(p4_view)
+                if s3_view is not None and (
+                    s3_view.status == "active" or s3_view.available or s3_view.reacceptable
+                ):
+                    callback = "s3:detail" if s3_view.status == "active" else "s3:offer"
+                    rows = list(screen.keyboard.inline_keyboard) if screen.keyboard else []
+                    rows.insert(
+                        max(0, len(rows) - 1),
+                        [
+                            InlineKeyboardButton(
+                                text="Rastros sob os Galhos", callback_data=callback
+                            )
+                        ],
+                    )
+                    screen = Screen(
+                        screen.text,
+                        screen.image_key,
+                        InlineKeyboardMarkup(inline_keyboard=rows),
+                        screen.parse_mode,
+                    )
+                await query.answer()
+                if isinstance(query.message, Message):
+                    await present(query.message, screen, images, edit=True)
+                return
+            p5_view = await p5.alda(actor) if p5 is not None else None
+            if p5_view is not None and (
+                p5_view.status == "active"
+                or p5_view.status == "completed"
+                or p5_view.available
+            ):
+                screen = render_p5(p5_view)
                 if s3_view is not None and (
                     s3_view.status == "active" or s3_view.available or s3_view.reacceptable
                 ):

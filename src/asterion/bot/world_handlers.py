@@ -12,6 +12,7 @@ from asterion.application.p1 import P1Service
 from asterion.application.p2 import CHARNECA, P2Service
 from asterion.application.p3 import P3Service
 from asterion.application.p4 import P4Service
+from asterion.application.p5 import P5Service
 from asterion.application.prologue import PrologueService
 from asterion.application.road import BOSQUE, REFUGE, ROAD, RUINS, RoadService
 from asterion.application.s1 import S1Service
@@ -29,6 +30,7 @@ from asterion.bot.p1_ui import render_p1
 from asterion.bot.p2_ui import render_p2, render_p2_mission_detail
 from asterion.bot.p3_ui import render_p3, render_p3_detail
 from asterion.bot.p4_ui import render_p4, render_p4_detail
+from asterion.bot.p5_ui import render_p5, render_p5_detail
 from asterion.bot.road_ui import render_road
 from asterion.bot.s2_ui import render_s2
 from asterion.bot.s3_ui import render_s3
@@ -51,6 +53,7 @@ def world_router(
     p3: P3Service | None = None,
     s3: S3Service | None = None,
     p4: P4Service | None = None,
+    p5: P5Service | None = None,
     class_trials: ClassTrialService | None = None,
     s4: S4Service | None = None,
     s5: S5Service | None = None,
@@ -95,6 +98,10 @@ def world_router(
         p4_view = await p4.resume(message.from_user.id) if p4 and message.from_user else None
         if p4_view is not None and p4_view.status == "active" and p4_view.kind == "combat":
             await present(message, render_p4(p4_view), images)
+            return
+        p5_view = await p5.resume(message.from_user.id) if p5 and message.from_user else None
+        if p5_view is not None and p5_view.status == "active" and p5_view.kind == "combat":
+            await present(message, render_p5(p5_view), images)
             return
         s4_view = await s4.resume(message.from_user.id) if s4 and message.from_user else None
         if s4_view is not None and s4_view.status == "active" and s4_view.kind == "combat":
@@ -168,6 +175,13 @@ def world_router(
             and p4_view.kind == "combat" and isinstance(query.message, Message)
         ):
             await present(query.message, render_p4(p4_view), images, edit=True)
+            return
+        p5_view = await p5.resume(query.from_user.id) if p5 else None
+        if (
+            p5_view is not None and p5_view.status == "active"
+            and p5_view.kind == "combat" and isinstance(query.message, Message)
+        ):
+            await present(query.message, render_p5(p5_view), images, edit=True)
             return
         s4_view = await s4.resume(query.from_user.id) if s4 else None
         if (
@@ -268,6 +282,10 @@ def world_router(
         if p4_view is not None and p4_view.status == "active" and p4_view.kind == "combat" and isinstance(query.message, Message):
             await present(query.message, render_p4(p4_view), images, edit=True)
             return True
+        p5_view = await p5.resume(query.from_user.id) if p5 is not None else None
+        if p5_view is not None and p5_view.status == "active" and p5_view.kind == "combat" and isinstance(query.message, Message):
+            await present(query.message, render_p5(p5_view), images, edit=True)
+            return True
         s4_view = await s4.resume(query.from_user.id) if s4 is not None else None
         if s4_view is not None and s4_view.status == "active" and s4_view.kind == "combat" and isinstance(query.message, Message):
             await present(query.message, render_s4(s4_view), images, edit=True)
@@ -367,6 +385,10 @@ def world_router(
         if p4_view is not None and p4_view.status == "active" and p4_view.kind == "combat" and isinstance(query.message, Message):
             await present(query.message, render_p4(p4_view), images, edit=True)
             return True
+        p5_view = await p5.resume(query.from_user.id) if p5 else None
+        if p5_view is not None and p5_view.status == "active" and p5_view.kind == "combat" and isinstance(query.message, Message):
+            await present(query.message, render_p5(p5_view), images, edit=True)
+            return True
         s3_view = await s3.resume(query.from_user.id) if s3 else None
         if s3_view is not None and s3_view.status == "active" and s3_view.kind == "combat" and isinstance(query.message, Message):
             await present(query.message, render_s3(s3_view), images, edit=True)
@@ -422,6 +444,10 @@ def world_router(
         p4_view = await p4.resume(query.from_user.id) if p4 is not None else None
         if p4_view is not None and p4_view.status == "active" and p4_view.kind == "combat":
             await present(query.message, render_p4(p4_view), images, edit=True)
+            return
+        p5_view = await p5.resume(query.from_user.id) if p5 is not None else None
+        if p5_view is not None and p5_view.status == "active" and p5_view.kind == "combat":
+            await present(query.message, render_p5(p5_view), images, edit=True)
             return
         s4_view = await s4.resume(query.from_user.id) if s4 is not None else None
         if s4_view is not None and s4_view.status == "active" and s4_view.kind == "combat":
@@ -1007,10 +1033,13 @@ def world_router(
         p3_view = await p3.resume(query.from_user.id) if p3 else None
         s3_view = await s3.resume(query.from_user.id) if s3 else None
         p4_view = await p4.resume(query.from_user.id) if p4 else None
+        p5_view = await p5.resume(query.from_user.id) if p5 else None
         if s3_view is None and s3 is not None:
             s3_view = await s3.offer(query.from_user.id)
         if p4_view is None and p4 is not None:
             p4_view = await p4.offer(query.from_user.id)
+        if p5_view is None and p5 is not None:
+            p5_view = await p5.offer(query.from_user.id)
         s4_view = await s4.summary(query.from_user.id) if s4 else None
         s5_view = await s5.summary(query.from_user.id) if s5 else None
         s1_view = await s1.resume(query.from_user.id) if s1 else None
@@ -1041,6 +1070,12 @@ def world_router(
                 "📜 Pedras que Ainda Vigiam · Em Andamento\nTerras do Ocaso · Nv. 7+"
             )
             keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
+        elif p5_view is not None and p5_view.status == "active":
+            text += (
+                "\n\n🔥 Missão Principal\n\n"
+                "📜 A Porta do Poente · Em Andamento\nTerras do Ocaso · Nv. 9+"
+            )
+            keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
         elif p3_view is not None and p3_view.status == "active":
             text += (
                 "\n\n🔥 Missão Principal\n\n"
@@ -1055,6 +1090,12 @@ def world_router(
                 "📜 Pedras que Ainda Vigiam · Disponível\nTerras do Ocaso · Nv. 7+"
             )
             keyboard.append([InlineKeyboardButton(text="Principal", callback_data="p4:offer")])
+        elif p5_view is not None and p5_view.available:
+            text += (
+                "\n\n🔥 Missão Principal\n\n"
+                "📜 A Porta do Poente · Disponível\nTerras do Ocaso · Nv. 9+"
+            )
+            keyboard.append([InlineKeyboardButton(text="Principal", callback_data="p5:offer")])
         secondary_lines = []
         secondary_buttons = []
         if s1_view is not None and s1_view.status == "active":
@@ -1114,6 +1155,11 @@ def world_router(
             keyboard.extend(secondary_buttons)
         if p4_view is not None and p4_view.status == "completed":
             text += "\n\n✅ Pedras que Ainda Vigiam · Concluída"
+        if p5_view is not None and p5_view.status == "completed":
+            text += "\n\n✅ A Porta do Poente · Concluída"
+            keyboard.append([InlineKeyboardButton(text="A Porta do Poente", callback_data="p5:resume")])
+        elif p5_view is not None and p5_view.status != "active" and not p5_view.available:
+            text += "\n\n🔒 A Porta do Poente · Bloqueada · Requer P4 concluída e Nv.9"
         keyboard.append(
             [InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")]
         )
@@ -1214,6 +1260,7 @@ def world_router(
             screen = render_p3(p3_view)
         s4_view = await s4.oren(query.from_user.id) if s4 else None
         s5_view = await s5.oren(query.from_user.id) if s5 else None
+        p5_view = await p5.oren(query.from_user.id) if p5 else None
         additions = []
         rows = list(screen.keyboard.inline_keyboard) if screen.keyboard else []
         for mission_view, title, callback in (
@@ -1236,6 +1283,18 @@ def world_router(
             additions.append(f"📜 {title} · {status}")
             if action is not None:
                 rows.append([InlineKeyboardButton(text=title, callback_data=f"{callback}:{action}")])
+        if p5_view is not None and p5_view.status == "active":
+            reports = set(p5_view.progress.get("reports", ()))
+            action = (
+                f"p5:{p5_view.state_version}:report:oren"
+                if p5_view.step == 6 and "oren" not in reports
+                else "p5:resume"
+            )
+            additions.append("📜 A Porta do Poente · Em Andamento")
+            rows.append([InlineKeyboardButton(text="A Porta do Poente", callback_data=action)])
+        elif p5_view is not None and p5_view.status == "completed":
+            additions.append("✅ A Porta do Poente · Concluída")
+            rows.append([InlineKeyboardButton(text="A Porta do Poente", callback_data="p5:resume")])
         if additions:
             screen = Screen(
                 screen.text + "\n\n" + "\n".join(additions),
@@ -1270,6 +1329,18 @@ def world_router(
         if p4_view is not None and p4_view.status == "active":
             await present(query.message, render_p4_detail(p4_view), images, edit=True)
             return
+        p5_view = await p5.resume(query.from_user.id) if p5 else None
+        if p5_view is not None and p5_view.status == "active":
+            await present(query.message, render_p5_detail(p5_view), images, edit=True)
+            return
+        if p5_view is not None and p5_view.status == "completed":
+            await present(query.message, render_p5(p5_view), images, edit=True)
+            return
+        if p5 is not None:
+            p5_view = await p5.offer(query.from_user.id)
+            if p5_view is not None and p5_view.available:
+                await present(query.message, render_p5(p5_view), images, edit=True)
+                return
         p3_view = await p3.resume(query.from_user.id) if p3 else None
         if p3_view is not None and p3_view.status == "active":
             await present(
@@ -1537,6 +1608,18 @@ def world_router(
             return
         if key in {"bosque", "ruinas"} and p4_view is not None and p4_view.status == "active":
             screen = render_p4(p4_view)
+            rows = list(screen.keyboard.inline_keyboard) if screen.keyboard else []
+            rows.append([InlineKeyboardButton(text="← Terras do Ocaso", callback_data="world:map:region:tdo")])
+            await present(
+                query.message,
+                Screen(screen.text, screen.image_key, InlineKeyboardMarkup(inline_keyboard=rows), parse_mode=screen.parse_mode),
+                images,
+                edit=True,
+            )
+            return
+        p5_view = await p5.resume(query.from_user.id) if p5 is not None else None
+        if key == "ruinas" and p5_view is not None and p5_view.status == "active":
+            screen = render_p5(p5_view)
             rows = list(screen.keyboard.inline_keyboard) if screen.keyboard else []
             rows.append([InlineKeyboardButton(text="← Terras do Ocaso", callback_data="world:map:region:tdo")])
             await present(
