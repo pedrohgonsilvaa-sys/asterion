@@ -10,6 +10,8 @@ from asterion.application.prologue import PrologueService
 from asterion.application.road import RoadService
 from asterion.application.s2 import S2Service
 from asterion.application.s3 import S3Service
+from asterion.application.s4 import S4Service
+from asterion.application.s5 import S5Service
 from asterion.application.world import WorldService
 from asterion.bot.combat_ui import (
     CombatCallback,
@@ -29,6 +31,8 @@ from asterion.bot.p4_ui import render_p4
 from asterion.bot.road_ui import render_road
 from asterion.bot.s2_ui import render_s2
 from asterion.bot.s3_ui import render_s3
+from asterion.bot.s4_ui import render_s4
+from asterion.bot.s5_ui import render_s5
 from asterion.bot.world_ui import render_world
 
 
@@ -42,6 +46,8 @@ def combat_router(
     p3: P3Service | None = None,
     s3: S3Service | None = None,
     p4: P4Service | None = None,
+    s4: S4Service | None = None,
+    s5: S5Service | None = None,
 ) -> Router:
     router = Router(name="foreground_combat")
     router.callback_query.filter(F.message.chat.type == "private")
@@ -96,6 +102,16 @@ def combat_router(
                 actor, activity_id, version, consumable_id=item_id,
                 target_id=target_id, effect_id=effect_id,
             )
+        if view is None and s4 is not None:
+            view = await s4.action_combat(
+                actor, activity_id, version, consumable_id=item_id,
+                target_id=target_id, effect_id=effect_id,
+            )
+        if view is None and s5 is not None:
+            view = await s5.action_combat(
+                actor, activity_id, version, consumable_id=item_id,
+                target_id=target_id, effect_id=effect_id,
+            )
         return view
 
     async def consumable_selection(actor, activity_id, version, **kwargs):
@@ -120,6 +136,10 @@ def combat_router(
             view = await s3.consumable_selection(actor, activity_id, version, **kwargs)
         if view is None and p4 is not None:
             view = await p4.consumable_selection(actor, activity_id, version, **kwargs)
+        if view is None and s4 is not None:
+            view = await s4.consumable_selection(actor, activity_id, version, **kwargs)
+        if view is None and s5 is not None:
+            view = await s5.consumable_selection(actor, activity_id, version, **kwargs)
         return view
 
     def render_service_view(view):
@@ -133,6 +153,10 @@ def combat_router(
             return render_s3(view)
         if getattr(view, "context", None) == "p4":
             return render_p4(view)
+        if getattr(view, "context", None) == "s4":
+            return render_s4(view)
+        if getattr(view, "context", None) == "s5":
+            return render_s5(view)
         if hasattr(view, "kind"):
             return render_road(view)
         return render_combat(view)
@@ -311,6 +335,8 @@ def combat_router(
                 and p3 is None
                 and s3 is None
                 and p4 is None
+                and s4 is None
+                and s5 is None
             )
             or not isinstance(query.message, Message)
         ):

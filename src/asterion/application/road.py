@@ -94,6 +94,7 @@ REGION = "Terras do Ocaso"
 P2_QUEST_ID = "P2"
 P3_QUEST_ID = "P3"
 P4_QUEST_ID = "P4"
+S4_QUEST_ID = "S4"
 CHARNECA_ROUTE_ENDPOINTS = frozenset((REFUGE, CHARNECA))
 BOSQUE_ROUTE_ENDPOINTS = frozenset((CHARNECA, BOSQUE))
 BOSQUE_RUINS_ROUTE_ENDPOINTS = frozenset((BOSQUE, RUINS))
@@ -329,7 +330,7 @@ class RoadService:
                 elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
                     gate_ok = (
                         await self._p4_completed(s, c.id)
-                        and c.level >= 8
+                        and await self._ruins_route_level_gate(s, c)
                         and await self._has_location(s, c.id, RUINS_LOCATION)
                     )
                     route_unlock = RUINS_ROUTE_UNLOCK
@@ -2196,6 +2197,21 @@ class RoadService:
             )
         )
 
+    async def _ruins_route_level_gate(self, s, character) -> bool:
+        if character.level >= 8:
+            return True
+        if character.level < 7:
+            return False
+        return bool(
+            await s.scalar(
+                select(Quest.id).where(
+                    Quest.character_id == character.id,
+                    Quest.quest_id == S4_QUEST_ID,
+                    Quest.status == "active",
+                )
+            )
+        )
+
     async def _has_location(self, s, character_id, location_id) -> bool:
         return bool(
             await s.scalar(
@@ -2612,6 +2628,13 @@ class RoadService:
                 Quest.status == "active",
             )
         )
+        active_s4 = await s.scalar(
+            select(Quest.id).where(
+                Quest.character_id == c.id,
+                Quest.quest_id == S4_QUEST_ID,
+                Quest.status == "active",
+            )
+        )
         if active_p3 or active_p4:
             brazier_id = None
             brazier_label = None
@@ -2632,7 +2655,7 @@ class RoadService:
             ))
         )
         ruins_route_known = bool(
-            c.level >= 8
+            (c.level >= 8 or (c.level >= 7 and active_s4 is not None))
             and await self._p4_completed(s, c.id)
             and await self._has_location(s, c.id, RUINS_LOCATION)
             and await s.scalar(select(Unlock.id).where(

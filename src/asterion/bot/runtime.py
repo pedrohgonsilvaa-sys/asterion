@@ -20,6 +20,8 @@ from asterion.application.round import RoundService
 from asterion.application.s1 import S1Service
 from asterion.application.s2 import S2Service
 from asterion.application.s3 import S3Service
+from asterion.application.s4 import S4Service
+from asterion.application.s5 import S5Service
 from asterion.application.talents import TalentService
 from asterion.application.world import WorldService
 from asterion.bot.character_progression_handlers import character_progression_router
@@ -35,6 +37,8 @@ from asterion.bot.path_handlers import path_router
 from asterion.bot.s1_handlers import s1_router
 from asterion.bot.s2_handlers import s2_router
 from asterion.bot.s3_handlers import s3_router
+from asterion.bot.s4_handlers import s4_router
+from asterion.bot.s5_handlers import s5_router
 from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
 from asterion.domain.creation import NamePolicy
@@ -68,6 +72,8 @@ def get_bot_runtime() -> BotRuntime:
     s2 = S2Service(SessionFactory, settings.server_id)
     p3 = P3Service(SessionFactory, settings.server_id)
     s3 = S3Service(SessionFactory, settings.server_id)
+    s4 = S4Service(SessionFactory, settings.server_id)
+    s5 = S5Service(SessionFactory, settings.server_id)
     p4 = P4Service(SessionFactory, settings.server_id)
     class_trials = ClassTrialService(SessionFactory, settings.server_id)
     paths = PathSelectionService(SessionFactory, settings.server_id)
@@ -79,6 +85,8 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(s2_router(s2, settings.creation_images))
     dispatcher.include_router(p3_router(p3, settings.creation_images, s3=s3))
     dispatcher.include_router(s3_router(s3, settings.creation_images))
+    dispatcher.include_router(s4_router(s4, settings.creation_images))
+    dispatcher.include_router(s5_router(s5, settings.creation_images))
     dispatcher.include_router(p4_router(p4, settings.creation_images))
     dispatcher.include_router(path_router(paths, class_trials, settings.creation_images))
     dispatcher.include_router(
@@ -96,6 +104,8 @@ def get_bot_runtime() -> BotRuntime:
             p3=p3,
             s3=s3,
             p4=p4,
+            s4=s4,
+            s5=s5,
         )
     )
     dispatcher.include_router(
@@ -124,6 +134,8 @@ def get_bot_runtime() -> BotRuntime:
             s3=s3,
             p4=p4,
             class_trials=class_trials,
+            s4=s4,
+            s5=s5,
         )
     )
     dispatcher.include_router(
@@ -144,6 +156,8 @@ def get_bot_runtime() -> BotRuntime:
             s3=s3,
             p4=p4,
             class_trials=class_trials,
+            s4=s4,
+            s5=s5,
         )
     )
     return BotRuntime(
