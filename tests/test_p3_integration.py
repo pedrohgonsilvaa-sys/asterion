@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import func, select
 
+from asterion.application.active_arts import ActiveArtService
 from asterion.application.p3 import (
     P3_COMBAT_CONTENT_ID,
     P3_ID,
@@ -12,6 +13,7 @@ from asterion.application.p3 import (
     P3Service,
 )
 from asterion.application.road import BOSQUE, CHARNECA, REFUGE
+from asterion.domain.arts import FIRST_CLASS_ART_IDS
 from asterion.domain.combat_math import resolve_combat_stats
 from asterion.infrastructure.db.models import (
     Account,
@@ -99,6 +101,20 @@ async def _start_scripted_combat(service: P3Service, actor: int):
         view = await service.examine_fragment(actor, fragment_id, view.state_version)
     assert view is not None and view.kind == "combat" and view.combat is not None
     return view
+
+
+@pytest.mark.asyncio
+async def test_p3_scripted_combat_freezes_equipped_class_art(database):
+    _, service = await _seed_p3(database, 998304)
+    art_id = FIRST_CLASS_ART_IDS["sentinela"]
+    equipped = await ActiveArtService(database[1], "ocaso").equip_art(998304, 1, art_id)
+    assert equipped is not None and equipped.combat_configuration_version == 1
+
+    combat = await _start_scripted_combat(service, 998304)
+    assert art_id in combat.combat.player_actions
+    assert combat.combat.configuration_snapshot["active_arts"] == [
+        {"slot": 1, "art_id": art_id}
+    ]
 
 
 def _terminal(result: str):

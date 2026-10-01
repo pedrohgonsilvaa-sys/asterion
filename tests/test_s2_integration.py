@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
+from asterion.application.active_arts import ActiveArtService
 from asterion.application.road import CHARNECA, REFUGE, RoadService
 from asterion.application.s2 import (
     S2_CODEX_ENTRY,
@@ -11,6 +12,7 @@ from asterion.application.s2 import (
     S2_REWARD_SOURCE,
     S2Service,
 )
+from asterion.domain.arts import FIRST_CLASS_ART_IDS
 from asterion.infrastructure.db.models import (
     BestiaryEntry,
     Brazier,
@@ -126,6 +128,9 @@ async def test_s2_gate_and_offer_do_not_create_quest(database):
 @pytest.mark.asyncio
 async def test_s2_camp_vestiges_and_combat_are_persistent_and_fixed(database):
     character_id, service = await _seed_s2(database, 997104)
+    art_id = FIRST_CLASS_ART_IDS["sentinela"]
+    equipped = await ActiveArtService(database[1], "ocaso").equip_art(997104, 1, art_id)
+    assert equipped is not None and equipped.combat_configuration_version == 1
     accepted = await service.accept(997104)
     blocked = await service.find_camp(997104, accepted.state_version)
     assert not blocked.progress.get("camp_found")
@@ -162,6 +167,10 @@ async def test_s2_camp_vestiges_and_combat_are_persistent_and_fixed(database):
     assert combat.combat.fighters["enemy"].name == "Peregrino Calcinado"
     assert combat.combat.fighters["enemy"].level == 4
     assert combat.consumable_budget_limit == 1
+    assert art_id in combat.combat.player_actions
+    assert combat.combat.configuration_snapshot["active_arts"] == [
+        {"slot": 1, "art_id": art_id}
+    ]
 
     resumed = await service.resume(997104)
     assert (resumed.activity_id, resumed.encounter_id, resumed.combat_id) == (

@@ -880,7 +880,7 @@ def render_combat(view: CombatView) -> Screen:
             label, hint = "Defender", "🛡️ Defender · Reduz Dano até seu próximo Turno"
         else:
             art = state.player_actions[action]
-            clean = art.name.split(" ", 1)[-1]
+            clean = art.name.removeprefix("🎴 ").strip().removeprefix("🗡️ ")
             label = clean
             hint = clean
             if not is_trial and state.tutorial_stage == "art":
@@ -914,6 +914,19 @@ def render_combat(view: CombatView) -> Screen:
                 view.activity_id, state.version, action_index, target_code
             ).pack()
         else:
+            callback_action = action
+            if action.startswith("class_art.") and isinstance(state.configuration_snapshot, dict):
+                active = state.configuration_snapshot.get("active_arts", ())
+                slot = next(
+                    (
+                        entry.get("slot")
+                        for entry in active
+                        if isinstance(entry, dict) and entry.get("art_id") == action
+                    ),
+                    None,
+                )
+                if slot in {1, 2, 3}:
+                    callback_action = f"a{slot}"
             callback = (
                 P1CombatCallback
                 if view.context == "p1"
@@ -931,7 +944,7 @@ def render_combat(view: CombatView) -> Screen:
             )(
                 activity=view.activity_id.hex,
                 version=state.version,
-                action=action,
+                action=callback_action,
             ).pack()
         buttons.append(InlineKeyboardButton(text=label, callback_data=callback))
 

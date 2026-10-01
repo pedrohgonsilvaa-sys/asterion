@@ -199,6 +199,7 @@ class Fighter:
     action_chains: dict[str, dict[str, str]] = field(default_factory=dict)
     barrier_debuff_magnitude_reduction: Decimal = ZERO
     selected_path: str | None = None
+    talent_ids: tuple[str, ...] = ()
     path_state: dict[str, Any] = field(default_factory=dict)
 
     def stat(self, name: str) -> Decimal:
@@ -1204,6 +1205,24 @@ def _grant_retaliation(
         source_actor_id=target.retaliation_source_actor_id,
         remaining=target.retaliation_remaining,
     )
+    if "talent.sentinela.ritmo_de_guarda" in target.talent_ids:
+        effect_id = "talent.sentinela.ritmo_de_guarda.agility"
+        existing = next((effect for effect in target.effects if effect.id == effect_id), None)
+        if existing is None:
+            target.effects.append(
+                Effect(
+                    effect_id,
+                    "agility",
+                    D("0.05"),
+                    1,
+                    target.opportunity,
+                    kind="buff",
+                )
+            )
+        else:
+            existing.magnitude = D("0.05")
+            existing.remaining = 1
+            existing.applied_opportunity = target.opportunity
     if target.selected_path == "bastiao":
         source = "path.bastiao.fortaleza"
         if not (
@@ -3602,6 +3621,17 @@ def use_combat_consumable(
 
 def act(state: Combat, action: str, *, target_id: str | None = None) -> Combat:
     """Resolve one player action; invalid action/target intentions are a no-op."""
+    if (
+        len(action) == 2
+        and action[0] == "a"
+        and action[1] in "123"
+        and isinstance(state.configuration_snapshot, dict)
+    ):
+        slot = int(action[1])
+        for entry in state.configuration_snapshot.get("active_arts", ()):
+            if isinstance(entry, dict) and entry.get("slot") == slot:
+                action = str(entry.get("art_id", action))
+                break
     if action not in allowed_actions(state):
         return state
     if action in state.player_actions:

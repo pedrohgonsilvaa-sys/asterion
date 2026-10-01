@@ -10,9 +10,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.combat_configuration_guard import (
+    find_combat_configuration_blocker,
     lock_for_combat_configuration_mutation,
 )
-from asterion.domain.arts import ActiveArtDefinition, active_art_definition
+from asterion.domain.arts import (
+    ACTIVE_ART_DEFINITIONS,
+    ActiveArtDefinition,
+    active_art_definition,
+)
 from asterion.infrastructure.db.models import Character, CharacterActiveArtSlot
 
 ACTIVE_ART_SLOTS = (1, 2, 3)
@@ -72,6 +77,19 @@ class ActiveArtMutationResult:
     combat_configuration_version: int
 
 
+@dataclass(frozen=True, slots=True)
+class ActiveArtCharacterView:
+    character_id: UUID
+    character_name: str
+    character_class: str
+    level: int
+    selected_path: str | None
+    combat_configuration_version: int
+    slots: tuple[ActiveArtSlotSnapshot, ...]
+    available_art_ids: tuple[str, ...]
+    foreground: bool
+
+
 def _validate_definition(character: Character, definition: ActiveArtDefinition) -> None:
     if definition.character_class != character.character_class:
         raise ActiveArtConfigurationError("Equipped Art does not belong to the character Class.")
@@ -127,6 +145,39 @@ class ActiveArtService:
             raise ValueError("A trusted server id is required")
         self.sessions = sessions
         self.server_id = server_id
+
+    async def view(self, actor: int) -> ActiveArtCharacterView | None:
+        async with self.sessions() as session:
+            character = await session.scalar(
+                select(Character).where(
+                    Character.telegram_id == actor,
+                    Character.server_id == self.server_id,
+                )
+            )
+            if character is None:
+                return None
+            configuration = await load_active_art_configuration(
+                session, character, lock_rows=False
+            )
+            blocker = await find_combat_configuration_blocker(session, character.id)
+            available = tuple(
+                art_id
+                for art_id, definition in ACTIVE_ART_DEFINITIONS.items()
+                if definition.character_class == character.character_class
+                and character.level >= definition.min_level
+                and (definition.path_id is None or definition.path_id == character.selected_path)
+            )
+            return ActiveArtCharacterView(
+                character.id,
+                character.name,
+                character.character_class,
+                character.level,
+                character.selected_path,
+                character.combat_configuration_version,
+                configuration.slots,
+                available,
+                blocker is not None,
+            )
 
     async def equip_art(
         self,

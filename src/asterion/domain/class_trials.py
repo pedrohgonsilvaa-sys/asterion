@@ -1170,6 +1170,25 @@ def luminar_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action
     }
 
 
+def class_player_actions(
+    character_class: str,
+    allowed_art_ids: tuple[str, ...],
+) -> dict[str, Action]:
+    """Return the existing canonical Class Art actions for any PvE combat."""
+    factories = {
+        "sentinela": sentinel_player_actions,
+        "errante": errante_player_actions,
+        "vigia": vigia_player_actions,
+        "tecelao": tecelao_player_actions,
+        "oraculo": oraculo_player_actions,
+        "luminar": luminar_player_actions,
+    }
+    factory = factories.get(character_class)
+    if factory is None:
+        raise ValueError("Character Class does not have a Class Art catalog.")
+    return factory(tuple(allowed_art_ids))
+
+
 def luminar_enemy_actions() -> dict[str, Action]:
     return {
         "trial.luminar.pressao_aliado": Action(

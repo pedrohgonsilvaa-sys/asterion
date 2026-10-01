@@ -10,9 +10,11 @@ from asterion.application.combat_configuration_guard import CombatConfigurationL
 from asterion.application.equipment import equipment_instance_payload
 from asterion.application.progression import consolidate_level, level_xp
 from asterion.application.road import REFUGE, ROAD, RoadService
-from asterion.domain.arts import FIRST_CLASS_ART_IDS
-from asterion.domain.combat import allowed_actions
+from asterion.domain.arts import FIRST_CLASS_ART_IDS, SENTINEL_ART_IDS
+from asterion.domain.combat import act, allowed_actions
+from asterion.domain.combat_math import resolve_combat_stats
 from asterion.domain.road import materialize_equipment
+from asterion.domain.talents import TALENTS_BY_CLASS
 from asterion.infrastructure.db.models import (
     Account,
     BestiaryEntry,
@@ -20,6 +22,7 @@ from asterion.infrastructure.db.models import (
     BlockedDelivery,
     Brazier,
     Character,
+    CharacterTalentChoice,
     EquipmentItem,
     ExplorationAttempt,
     GameActivity,
@@ -67,32 +70,38 @@ async def _seed_road(
         )
         await session.flush()
         seed_rows = [
-                *([Quest(
-                    character_id=cid,
-                    quest_id="P1",
-                    title="Vozes na Estrada",
-                    status=p1_status,
-                    step=7,
-                    content_version="tdo-1.0.2",
-                )] if include_p1 else []),
-                Brazier(character_id=cid, brazier_id="tdo.brazier.estrada"),
-                Brazier(character_id=cid, brazier_id="tdo.brazier.refugio_do_ocaso"),
-                WorldState(character_id=cid, region="Terras do Ocaso", location="Refúgio do Ocaso"),
-                Unlock(character_id=cid, unlock_id="hunt_manual.estrada_das_cinzas"),
-                Unlock(character_id=cid, unlock_id="explore.estrada_das_cinzas"),
-                BestiaryEntry(
-                    character_id=cid,
-                    creature_id="dog_cinereo",
-                    bkp=7,
-                    stage="observed",
-                ),
-                BestiaryEntry(
-                    character_id=cid,
-                    creature_id="corvo_fuligem",
-                    bkp=7,
-                    stage="observed",
-                ),
-            ]
+            *(
+                [
+                    Quest(
+                        character_id=cid,
+                        quest_id="P1",
+                        title="Vozes na Estrada",
+                        status=p1_status,
+                        step=7,
+                        content_version="tdo-1.0.2",
+                    )
+                ]
+                if include_p1
+                else []
+            ),
+            Brazier(character_id=cid, brazier_id="tdo.brazier.estrada"),
+            Brazier(character_id=cid, brazier_id="tdo.brazier.refugio_do_ocaso"),
+            WorldState(character_id=cid, region="Terras do Ocaso", location="Refúgio do Ocaso"),
+            Unlock(character_id=cid, unlock_id="hunt_manual.estrada_das_cinzas"),
+            Unlock(character_id=cid, unlock_id="explore.estrada_das_cinzas"),
+            BestiaryEntry(
+                character_id=cid,
+                creature_id="dog_cinereo",
+                bkp=7,
+                stage="observed",
+            ),
+            BestiaryEntry(
+                character_id=cid,
+                creature_id="corvo_fuligem",
+                bkp=7,
+                stage="observed",
+            ),
+        ]
         session.add_all(seed_rows)
         session.add_all(
             [
@@ -158,17 +167,14 @@ async def test_manual_hunt_uses_authoritative_active_art_snapshot(database):
     await service.travel(actor, ROAD)
     combat = await service.start_hunt(actor)
     assert combat.kind == "combat"
-    assert "art" in allowed_actions(combat.combat)
-    assert combat.combat.configuration_snapshot["active_arts"] == [
-        {"slot": 1, "art_id": art_id}
-    ]
+    assert FIRST_CLASS_ART_IDS["sentinela"] in allowed_actions(combat.combat)
+    assert combat.combat.configuration_snapshot["active_arts"] == [{"slot": 1, "art_id": art_id}]
     assert combat.combat.configuration_snapshot["combat_configuration_version"] == 1
 
     resumed = await service.resume(actor)
     assert resumed.combat.configuration_snapshot == combat.combat.configuration_snapshot
     with pytest.raises(CombatConfigurationLocked):
         await art_service.unequip_slot(actor, 1, expected_configuration_version=1)
-
 
 
 @pytest.mark.asyncio
@@ -214,9 +220,12 @@ async def test_unacknowledged_hunt_result_blocks_old_start_callback(database):
     assert blocked.kind == "hunt_victory"
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
-        assert await session.scalar(
-            select(func.count(GameActivity.id)).where(GameActivity.character_id == character.id)
-        ) == 1
+        assert (
+            await session.scalar(
+                select(func.count(GameActivity.id)).where(GameActivity.character_id == character.id)
+            )
+            == 1
+        )
 
 
 @pytest.mark.asyncio
@@ -235,11 +244,14 @@ async def test_unacknowledged_exploration_result_blocks_old_explore_callback(dat
     assert stale.attempt_id == first.attempt_id
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
-        assert await session.scalar(
-            select(func.count(ExplorationAttempt.id)).where(
-                ExplorationAttempt.character_id == character.id
+        assert (
+            await session.scalar(
+                select(func.count(ExplorationAttempt.id)).where(
+                    ExplorationAttempt.character_id == character.id
+                )
             )
-        ) == 1
+            == 1
+        )
 
 
 @pytest.mark.asyncio
@@ -319,14 +331,24 @@ async def test_exploration_combat_pays_xp_crowns_material_and_vigor(database, mo
         assert character.xp == 2960
         assert character.crowns == 20
         assert character.vigor == 96
-        assert (await session.scalar(select(func.count(RewardEvent.id)).where(
-            RewardEvent.character_id == character.id,
-            RewardEvent.source_id == f"explore:{view.attempt_id}",
-        ))) == 1
-        assert (await session.scalar(select(func.count(RewardComponent.id)).join(RewardEvent).where(
-            RewardEvent.character_id == character.id,
-            RewardEvent.source_id == f"explore:{view.attempt_id}",
-        ))) >= 2
+        assert (
+            await session.scalar(
+                select(func.count(RewardEvent.id)).where(
+                    RewardEvent.character_id == character.id,
+                    RewardEvent.source_id == f"explore:{view.attempt_id}",
+                )
+            )
+        ) == 1
+        assert (
+            await session.scalar(
+                select(func.count(RewardComponent.id))
+                .join(RewardEvent)
+                .where(
+                    RewardEvent.character_id == character.id,
+                    RewardEvent.source_id == f"explore:{view.attempt_id}",
+                )
+            )
+        ) >= 2
         assert (
             await session.scalar(
                 select(func.count(MaterialStack.id)).where(
@@ -358,9 +380,13 @@ async def test_exploration_combat_with_low_vigor_only_pays_quarter_xp(database, 
         assert character.xp == 2780
         assert character.crowns == 0
         assert character.vigor == 3
-        assert (await session.scalar(select(func.count(MaterialStack.id)).where(
-            MaterialStack.character_id == character.id
-        ))) == 0
+        assert (
+            await session.scalar(
+                select(func.count(MaterialStack.id)).where(
+                    MaterialStack.character_id == character.id
+                )
+            )
+        ) == 0
 
 
 @pytest.mark.asyncio
@@ -392,39 +418,50 @@ async def test_inventory_slots_pending_cap_and_overflow_are_auditable(database):
             )
         ).all()
         assert sorted(item.quantity for item in material_stacks) == [1, 999]
-        assert await session.scalar(
-            select(PendingItem).where(PendingItem.source_key == "merge-overflow")
-        ) is None
+        assert (
+            await session.scalar(
+                select(PendingItem).where(PendingItem.source_key == "merge-overflow")
+            )
+            is None
+        )
 
         for index in range(58):
-            session.add(MaterialStack(
-                character_id=character.id,
-                material_id=f"material.test.slot.{index}",
-                quantity=1,
-                bound=False,
-            ))
+            session.add(
+                MaterialStack(
+                    character_id=character.id,
+                    material_id=f"material.test.slot.{index}",
+                    quantity=1,
+                    bound=False,
+                )
+            )
         await session.flush()
-        await service._deliver_material(
-            session, character, "material.test.last", 1, "slot-60"
-        )
+        await service._deliver_material(session, character, "material.test.last", 1, "slot-60")
         await service._deliver_material(
             session, character, "material.test.pending", 1, "slot-pending"
         )
         for index in range(17):
-            session.add(PendingItem(
-                character_id=character.id,
-                source_key=f"pending.fill.{index}",
-                kind="material",
-                payload={"material_id": f"material.fill.{index}"},
-                quantity=1,
-            ))
+            session.add(
+                PendingItem(
+                    character_id=character.id,
+                    source_key=f"pending.fill.{index}",
+                    kind="material",
+                    payload={"material_id": f"material.fill.{index}"},
+                    quantity=1,
+                )
+            )
         await session.flush()
         await service._pending(
-            session, character.id, "pending.twentieth", "material",
+            session,
+            character.id,
+            "pending.twentieth",
+            "material",
             {"material_id": "material.twentieth"},
         )
         await service._pending(
-            session, character.id, "pending.blocked", "material",
+            session,
+            character.id,
+            "pending.blocked",
+            "material",
             {"material_id": "material.blocked"},
         )
         await session.flush()
@@ -448,9 +485,7 @@ async def test_inventory_slots_pending_cap_and_overflow_are_auditable(database):
 async def test_full_inventory_and_pending_hold_concrete_equipment_without_loss(database):
     actor, service = await _seed_road(database, 771109)
     await service.travel(actor, ROAD)
-    _, payload = equipment_instance_payload(
-        materialize_equipment("blocked-equipment", "Raro", 1)
-    )
+    _, payload = equipment_instance_payload(materialize_equipment("blocked-equipment", "Raro", 1))
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         for index in range(60):
@@ -525,10 +560,12 @@ async def test_bestiary_observed_at_seven_and_known_at_ten(database):
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         await service._bestiary(session, character.id, "dog_cinereo")
         await session.flush()
-        entry = await session.scalar(select(BestiaryEntry).where(
-            BestiaryEntry.character_id == character.id,
-            BestiaryEntry.creature_id == "dog_cinereo",
-        ))
+        entry = await session.scalar(
+            select(BestiaryEntry).where(
+                BestiaryEntry.character_id == character.id,
+                BestiaryEntry.creature_id == "dog_cinereo",
+            )
+        )
         assert (entry.bkp, entry.stage) == (7, "observed")
         await service._add_bestiary_evidence(
             session, entry, character.id, "dog_cinereo", "test.known", "test", 3
@@ -551,60 +588,64 @@ async def test_hunt_receipt_persists_equipment_rune_and_bestiary_details(databas
         )
         session.add(activity)
         await session.flush()
-        session.add(HuntContext(
-            game_activity_id=activity.id,
-            character_id=character.id,
-            local_id="tdo.location.estrada_das_cinzas",
-            creature_id="dog_cinereo",
-            category="common",
-            enemy_level=1,
-            variant="furious",
-            seed="receipt-seed",
-            loot_profile="hunt",
-        ))
+        session.add(
+            HuntContext(
+                game_activity_id=activity.id,
+                character_id=character.id,
+                local_id="tdo.location.estrada_das_cinzas",
+                creature_id="dog_cinereo",
+                category="common",
+                enemy_level=1,
+                variant="furious",
+                seed="receipt-seed",
+                loot_profile="hunt",
+            )
+        )
         event = RewardEvent(character_id=character.id, source_id=f"activity:{activity.id}")
         session.add(event)
         await session.flush()
-        session.add_all([
-            RewardComponent(
-                reward_event_id=event.id,
-                kind="equipment",
-                item_id="Arma do Caminhante",
-                quantity=1,
-                payload={
-                    "item_name": "Arma do Caminhante",
-                    "enhancement": 0,
-                    "rarity": "Raro",
-                    "slot": "Principal",
-                    "item_level": 1,
-                    "bound": False,
-                },
-            ),
-            RewardComponent(
-                reward_event_id=event.id,
-                kind="rune",
-                item_id="Brasa",
-                quantity=1,
-                payload={
-                    "family": "Brasa",
-                    "rarity": "Rara",
-                    "grade": 1,
-                    "potency": "0.35%",
-                    "bound": False,
-                },
-            ),
-            RewardComponent(
-                reward_event_id=event.id,
-                kind="bestiary",
-                item_id="dog_cinereo",
-                quantity=1,
-                payload={
-                    "creature_name": "Cão Cinéreo",
-                    "stage": "known",
-                    "stage_label": "Conhecido",
-                },
-            ),
-        ])
+        session.add_all(
+            [
+                RewardComponent(
+                    reward_event_id=event.id,
+                    kind="equipment",
+                    item_id="Arma do Caminhante",
+                    quantity=1,
+                    payload={
+                        "item_name": "Arma do Caminhante",
+                        "enhancement": 0,
+                        "rarity": "Raro",
+                        "slot": "Principal",
+                        "item_level": 1,
+                        "bound": False,
+                    },
+                ),
+                RewardComponent(
+                    reward_event_id=event.id,
+                    kind="rune",
+                    item_id="Brasa",
+                    quantity=1,
+                    payload={
+                        "family": "Brasa",
+                        "rarity": "Rara",
+                        "grade": 1,
+                        "potency": "0.35%",
+                        "bound": False,
+                    },
+                ),
+                RewardComponent(
+                    reward_event_id=event.id,
+                    kind="bestiary",
+                    item_id="dog_cinereo",
+                    quantity=1,
+                    payload={
+                        "creature_name": "Cão Cinéreo",
+                        "stage": "known",
+                        "stage_label": "Conhecido",
+                    },
+                ),
+            ]
+        )
         await session.commit()
 
     async with database[1]() as session:
@@ -621,13 +662,9 @@ async def test_hunt_receipt_persists_equipment_rune_and_bestiary_details(databas
         for line in immediate.reward_lines
     )
     assert any(
-        "🔮 Runa Brasa · Rara · Grau 1 · Negociável" == line
-        for line in immediate.reward_lines
+        "🔮 Runa Brasa · Rara · Grau 1 · Negociável" == line for line in immediate.reward_lines
     )
-    assert any(
-        "📖 Bestiário · Cão Cinéreo · Conhecido" == line
-        for line in immediate.reward_lines
-    )
+    assert any("📖 Bestiário · Cão Cinéreo · Conhecido" == line for line in immediate.reward_lines)
 
 
 @pytest.mark.asyncio
@@ -635,29 +672,29 @@ async def test_bestiary_variant_repetition_and_alpha_requirements(database):
     actor, service = await _seed_road(database, 771106)
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
-        await service._bestiary(
-            session, character.id, "dog_cinereo", variant="furious"
-        )
+        await service._bestiary(session, character.id, "dog_cinereo", variant="furious")
         await session.flush()
         for _ in range(5):
             await service._bestiary(
                 session, character.id, "dog_cinereo", victory=True, variant="furious"
             )
-        dog = await session.scalar(select(BestiaryEntry).where(
-            BestiaryEntry.character_id == character.id,
-            BestiaryEntry.creature_id == "dog_cinereo",
-        ))
+        dog = await session.scalar(
+            select(BestiaryEntry).where(
+                BestiaryEntry.character_id == character.id,
+                BestiaryEntry.creature_id == "dog_cinereo",
+            )
+        )
         assert dog.wins == 5
         assert dog.bkp >= 30
         assert dog.stage == "studied"
 
-        await service._bestiary(
-            session, character.id, "alfa_cinereo", victory=True, elite=True
+        await service._bestiary(session, character.id, "alfa_cinereo", victory=True, elite=True)
+        alpha = await session.scalar(
+            select(BestiaryEntry).where(
+                BestiaryEntry.character_id == character.id,
+                BestiaryEntry.creature_id == "alfa_cinereo",
+            )
         )
-        alpha = await session.scalar(select(BestiaryEntry).where(
-            BestiaryEntry.character_id == character.id,
-            BestiaryEntry.creature_id == "alfa_cinereo",
-        ))
         await service._add_bestiary_evidence(
             session, alpha, character.id, "alfa_cinereo", "mechanic:bleed", "mechanic", 5
         )
@@ -665,9 +702,7 @@ async def test_bestiary_variant_repetition_and_alpha_requirements(database):
             session, alpha, character.id, "alfa_cinereo", "mechanic:prepared_leap", "mechanic", 5
         )
         alpha.bkp = 45
-        await service._bestiary(
-            session, character.id, "alfa_cinereo", victory=True, elite=True
-        )
+        await service._bestiary(session, character.id, "alfa_cinereo", victory=True, elite=True)
         assert alpha.stage == "dominated"
 
 
@@ -762,12 +797,15 @@ async def test_first_observation_grants_fixed_xp_once_and_survives_reconnect(dat
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert character.xp == 2720 + 48
-        assert await session.scalar(
-            select(func.count(RewardEvent.id)).where(
-                RewardEvent.character_id == character.id,
-                RewardEvent.source_id == f"bestiary:observation:{character.id}:corvo_fuligem",
+        assert (
+            await session.scalar(
+                select(func.count(RewardEvent.id)).where(
+                    RewardEvent.character_id == character.id,
+                    RewardEvent.source_id == f"bestiary:observation:{character.id}:corvo_fuligem",
+                )
             )
-        ) == 1
+            == 1
+        )
     resumed = await service.resume(actor)
     assert resumed.kind == "combat"
     async with database[1]() as session:
@@ -786,13 +824,18 @@ async def test_alpha_first_major_victory_xp_is_unique(database):
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert character.xp == 2720 + 198
-        assert await session.scalar(
-            select(func.count(RewardComponent.id)).join(RewardEvent).where(
-                RewardEvent.character_id == character.id,
-                RewardEvent.source_id == f"bestiary:first_victory:{character.id}:alfa_cinereo",
-                RewardComponent.kind == "bestiary_first_victory_xp",
+        assert (
+            await session.scalar(
+                select(func.count(RewardComponent.id))
+                .join(RewardEvent)
+                .where(
+                    RewardEvent.character_id == character.id,
+                    RewardEvent.source_id == f"bestiary:first_victory:{character.id}:alfa_cinereo",
+                    RewardComponent.kind == "bestiary_first_victory_xp",
+                )
             )
-        ) == 1
+            == 1
+        )
 
 
 @pytest.mark.asyncio
@@ -851,28 +894,28 @@ async def test_rastros_context_is_persisted_for_reconnect(database, monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_rastros_with_existing_habitat_persists_flavor_without_bkp(
-    database, monkeypatch
-):
+async def test_rastros_with_existing_habitat_persists_flavor_without_bkp(database, monkeypatch):
     import asterion.application.road as road_module
 
     actor, service = await _seed_road(database, 771122)
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
-        session.add_all([
-            BestiaryEvidence(
-                character_id=character.id,
-                creature_id="dog_cinereo",
-                evidence_id="habitat:estrada",
-                category="habitat",
-            ),
-            BestiaryEvidence(
-                character_id=character.id,
-                creature_id="corvo_fuligem",
-                evidence_id="habitat:estrada",
-                category="habitat",
-            ),
-        ])
+        session.add_all(
+            [
+                BestiaryEvidence(
+                    character_id=character.id,
+                    creature_id="dog_cinereo",
+                    evidence_id="habitat:estrada",
+                    category="habitat",
+                ),
+                BestiaryEvidence(
+                    character_id=character.id,
+                    creature_id="corvo_fuligem",
+                    evidence_id="habitat:estrada",
+                    category="habitat",
+                ),
+            ]
+        )
         await session.commit()
     await service.travel(actor, ROAD)
     monkeypatch.setattr(
@@ -883,8 +926,7 @@ async def test_rastros_with_existing_habitat_persists_flavor_without_bkp(
     first = await service.explore(actor)
     assert first.result_text.startswith("Texto-base.")
     assert any(
-        context in first.result_text
-        for context in road_module.RASTROS_CONTEXT_TEXT.values()
+        context in first.result_text for context in road_module.RASTROS_CONTEXT_TEXT.values()
     )
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
@@ -970,20 +1012,22 @@ async def test_exploration_retry_is_hidden_at_six_per_hour(database, monkeypatch
         current.created_at = datetime.now(UTC) - timedelta(minutes=10)
         now = datetime.now(UTC)
         for index in range(5):
-            session.add(ExplorationAttempt(
-                character_id=character.id,
-                local_id=ROAD,
-                ruleset_version="gdd-1.4.3-baseline-1.0",
-                seed=f"retry-limit-{index}",
-                category="narrative",
-                result_id="explore.tdo.estrada.vozes_vento",
-                status="completed",
-                state_version=1,
-                progress={"result_text": "Outro resultado.", "settled": True},
-                created_at=now - timedelta(minutes=1),
-                completed_at=now - timedelta(minutes=1),
-                result_acknowledged=True,
-            ))
+            session.add(
+                ExplorationAttempt(
+                    character_id=character.id,
+                    local_id=ROAD,
+                    ruleset_version="gdd-1.4.3-baseline-1.0",
+                    seed=f"retry-limit-{index}",
+                    category="narrative",
+                    result_id="explore.tdo.estrada.vozes_vento",
+                    status="completed",
+                    state_version=1,
+                    progress={"result_text": "Outro resultado.", "settled": True},
+                    created_at=now - timedelta(minutes=1),
+                    completed_at=now - timedelta(minutes=1),
+                    result_acknowledged=True,
+                )
+            )
         await session.commit()
     resumed = await service.resume(actor)
     assert resumed.kind == "exploration"
@@ -1008,12 +1052,15 @@ async def test_road_activity_expires_once_without_vigor_or_economy(database):
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert character.vigor == 100
-        assert await session.scalar(
-            select(func.count(GameActivity.id)).where(
-                GameActivity.character_id == character.id,
-                GameActivity.status == "active",
+        assert (
+            await session.scalar(
+                select(func.count(GameActivity.id)).where(
+                    GameActivity.character_id == character.id,
+                    GameActivity.status == "active",
+                )
             )
-        ) == 0
+            == 0
+        )
 
 
 @pytest.mark.asyncio
@@ -1042,3 +1089,61 @@ async def test_minimum_post_p1_journey_consolidates_before_next_hunt(database, m
     assert hunt.kind == "combat"
     assert hunt.combat.fighters["player"].level == 2
     assert "peregrino_calcinado" in {creature.creature_id for creature in road_pool(2)}
+
+
+@pytest.mark.asyncio
+async def test_normal_manual_hunt_uses_only_persisted_active_arts(database):
+    actor, service = await _seed_road(database, 772210)
+    _, sessions = database
+    async with sessions.begin() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        talent_id = TALENTS_BY_CLASS["sentinela"][0].talent_id
+        stats = resolve_combat_stats(
+            "sentinela", 10, "remanescente", talent_ids=(talent_id,)
+        )
+        character.level = 10
+        character.hp = stats.hp
+        character.max_hp = stats.hp
+        session.add(
+            CharacterTalentChoice(
+                character_id=character.id,
+                point_slot=1,
+                talent_id=talent_id,
+            )
+        )
+
+    art_service = ActiveArtService(sessions, "ocaso")
+    configured = (
+        SENTINEL_ART_IDS["golpe_de_guarda"],
+        SENTINEL_ART_IDS["quebra_postura"],
+        SENTINEL_ART_IDS["muralha_breve"],
+    )
+    await art_service.equip_art(actor, 1, configured[0], expected_configuration_version=0)
+    await art_service.equip_art(actor, 2, configured[1], expected_configuration_version=1)
+    await art_service.equip_art(actor, 3, configured[2], expected_configuration_version=2)
+
+    await service.travel(actor, ROAD)
+    hunt = await service.start_hunt(actor)
+    assert hunt.kind == "combat"
+    assert set(hunt.combat.player_actions) == {"attack", *configured}
+    # Snapshot entries retain persisted slot identity and are immutable on reconnect.
+    assert hunt.combat.configuration_snapshot["active_arts"] == [
+        {"slot": slot, "art_id": art_id} for slot, art_id in enumerate(configured, start=1)
+    ]
+    assert hunt.combat.fighters["player"].talent_ids == (talent_id,)
+    assert hunt.combat.configuration_snapshot["talents"] == [
+        {"point_slot": 1, "talent_id": talent_id}
+    ]
+    assert set(configured).issubset(allowed_actions(hunt.combat))
+    assert "art" not in allowed_actions(hunt.combat)
+
+    resolved = act(hunt.combat, "a2")
+    assert resolved.version == hunt.combat.version + 1
+    assert any(event.action == configured[1] for event in resolved.events)
+    resumed = await service.resume(actor)
+    assert resumed.kind == "combat"
+    assert resumed.combat.fighters["player"].talent_ids == (talent_id,)
+    assert (
+        resumed.combat.configuration_snapshot["active_arts"]
+        == (hunt.combat.configuration_snapshot["active_arts"])
+    )

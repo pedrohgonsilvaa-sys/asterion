@@ -331,7 +331,8 @@ async def test_round_freezes_authoritative_active_arts_and_blocks_mutation(datab
             .order_by(HuntRoundEncounter.ordinal)
         )
         assert encounter.combat_snapshot["configuration_snapshot"] == frozen
-        assert "art" in encounter.combat_snapshot["player_actions"]
+        assert FIRST_CLASS_ART_IDS["sentinela"] in encounter.combat_snapshot["player_actions"]
+        assert "art" not in encounter.combat_snapshot["player_actions"]
 
     with pytest.raises(CombatConfigurationLocked):
         await art_service.unequip_slot(actor, 1, expected_configuration_version=1)

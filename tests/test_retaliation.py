@@ -86,6 +86,27 @@ def test_defender_positive_direct_reduction_grants_one_retaliation():
     assert [event.retaliation_event for event in state.mechanic_events] == ["granted"]
 
 
+def test_ritmo_de_guarda_triggers_from_real_retaliation_and_survives_snapshot():
+    state = retaliation_battle()
+    state.fighters["player"].talent_ids = ("talent.sentinela.ritmo_de_guarda",)
+
+    state = act(state, "defend")
+    agility = next(
+        effect
+        for effect in state.fighters["player"].effects
+        if effect.id == "talent.sentinela.ritmo_de_guarda.agility"
+    )
+    assert agility.magnitude == D("0.05")
+    assert agility.remaining == 1
+    assert state.fighters["player"].retaliation_charges == 1
+
+    restored = decode(encode(state), state.id, state.ruleset, state.version)
+    assert restored.fighters["player"].talent_ids == (
+        "talent.sentinela.ritmo_de_guarda",
+    )
+    assert restored.fighters["player"].effects == state.fighters["player"].effects
+
+
 def test_barrier_absorbing_all_remaining_damage_does_not_block_retaliation():
     state = retaliation_battle(barrier=D(5000))
     starting_hp = state.fighters["player"].hp

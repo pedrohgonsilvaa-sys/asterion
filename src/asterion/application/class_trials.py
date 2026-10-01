@@ -281,6 +281,10 @@ class ClassTrialService:
                     Decimal(character.hp),
                     race=character.race,
                     character_class=character.character_class,
+                    selected_path=configuration.selected_path,
+                    talent_ids=tuple(
+                        talent_id for _, talent_id in configuration.talent_choices
+                    ),
                 )
                 combat = {
                     SENTINEL_TRIAL_ID: create_sentinel_trial_combat,
