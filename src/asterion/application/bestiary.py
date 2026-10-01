@@ -168,7 +168,11 @@ class BestiaryRecorder:
                     )
                 elif creature_id == "vigia_partido":
                     await self._grant_regional_victory_xp(
-                        session, character_id, creature_id, reference_level=10
+                        session,
+                        character_id,
+                        creature_id,
+                        reference_level=10,
+                        configured_xp=474,
                     )
             else:
                 entry.bkp += _repeat_bkp(
@@ -471,7 +475,13 @@ class BestiaryRecorder:
         return True
 
     async def _grant_regional_victory_xp(
-        self, session, character_id, creature_id, *, reference_level
+        self,
+        session,
+        character_id,
+        creature_id,
+        *,
+        reference_level,
+        configured_xp=None,
     ):
         source_id = f"bestiary:first_victory:{character_id}:{creature_id}"
         event = await session.scalar(
@@ -484,9 +494,13 @@ class BestiaryRecorder:
         )
         if event is not None:
             return False
-        xp = int(
-            (Decimal(level_xp(reference_level)) * Decimal("0.06")).quantize(
-                Decimal(1), rounding=ROUND_HALF_UP
+        xp = (
+            configured_xp
+            if configured_xp is not None
+            else int(
+                (Decimal(level_xp(reference_level)) * Decimal("0.06")).quantize(
+                    Decimal(1), rounding=ROUND_HALF_UP
+                )
             )
         )
         event = RewardEvent(character_id=character_id, source_id=source_id)
@@ -498,7 +512,11 @@ class BestiaryRecorder:
                 kind="bestiary_first_victory_xp",
                 item_id=creature_id,
                 quantity=xp,
-                payload={"reference_level": reference_level, "fixed_percent": "0.06"},
+                payload=(
+                    {"reference_level": reference_level, "configured_xp": configured_xp}
+                    if configured_xp is not None
+                    else {"reference_level": reference_level, "fixed_percent": "0.06"}
+                ),
             )
         )
         character = await session.scalar(
