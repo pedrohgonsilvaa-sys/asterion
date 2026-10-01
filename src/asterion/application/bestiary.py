@@ -108,7 +108,35 @@ class BestiaryRecorder:
                     session, entry, character_id, creature_id,
                     f"variant_victory:{variant}", "variant_victory", 6,
                 )
-        if elite:
+        evidence_ids = set(
+            (
+                await session.scalars(
+                    select(BestiaryEvidence.evidence_id).where(
+                        BestiaryEvidence.character_id == character_id,
+                        BestiaryEvidence.creature_id == creature_id,
+                    )
+                )
+            ).all()
+        )
+        if creature_id == "vigia_partido" or observation_category == "boss":
+            required = {
+                "first_victory",
+                "p6_completed",
+                "phase:a_fratura",
+                "phase:o_ultimo_posto",
+                "action:egide_partida",
+                "action:queda_ocaso",
+            }
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
+        elif elite:
             await self.add_evidence(
                 session, entry, character_id, creature_id, "elite", "elite", 8
             )
@@ -163,7 +191,25 @@ class BestiaryRecorder:
                 )
             ).all()
         )
-        if elite:
+        if creature_id == "vigia_partido" or observation_category == "boss":
+            required = {
+                "first_victory",
+                "p6_completed",
+                "phase:a_fratura",
+                "phase:o_ultimo_posto",
+                "action:egide_partida",
+                "action:queda_ocaso",
+            }
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
+        elif elite:
             if creature_id == "alfa_cinereo":
                 special = {
                     "first_victory",
@@ -310,6 +356,46 @@ class BestiaryRecorder:
         )
         entry.bkp += points
         return True
+
+    async def refresh_boss_mastery(self, session, character_id, creature_id):
+        """Recompute the campaign boss stage after an external campaign fact is added."""
+        entry = await session.scalar(
+            select(BestiaryEntry)
+            .where(
+                BestiaryEntry.character_id == character_id,
+                BestiaryEntry.creature_id == creature_id,
+            )
+            .with_for_update()
+        )
+        if entry is None:
+            return
+        evidence_ids = set(
+            (
+                await session.scalars(
+                    select(BestiaryEvidence.evidence_id).where(
+                        BestiaryEvidence.character_id == character_id,
+                        BestiaryEvidence.creature_id == creature_id,
+                    )
+                )
+            ).all()
+        )
+        required = {
+            "first_victory",
+            "p6_completed",
+            "phase:a_fratura",
+            "phase:o_ultimo_posto",
+            "action:egide_partida",
+            "action:queda_ocaso",
+        }
+        entry.stage = (
+            "dominated"
+            if required.issubset(evidence_ids)
+            else "studied"
+            if entry.bkp >= 22
+            else "known"
+            if entry.bkp >= 8
+            else "observed"
+        )
 
     async def _grant_observation_xp(
         self, session, character_id, creature_id, reference_level

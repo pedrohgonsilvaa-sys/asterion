@@ -13,6 +13,7 @@ from asterion.application.p2 import CHARNECA, P2Service
 from asterion.application.p3 import P3Service
 from asterion.application.p4 import P4Service
 from asterion.application.p5 import P5Service
+from asterion.application.p6 import P6Service
 from asterion.application.prologue import PrologueService
 from asterion.application.road import BOSQUE, REFUGE, ROAD, RUINS, RoadService
 from asterion.application.s1 import S1Service
@@ -20,6 +21,7 @@ from asterion.application.s2 import S2Service
 from asterion.application.s3 import S3Service
 from asterion.application.s4 import S4Service
 from asterion.application.s5 import S5Service
+from asterion.application.s6 import S6Service
 from asterion.application.world import WorldService
 from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
@@ -31,11 +33,13 @@ from asterion.bot.p2_ui import render_p2, render_p2_mission_detail
 from asterion.bot.p3_ui import render_p3, render_p3_detail
 from asterion.bot.p4_ui import render_p4, render_p4_detail
 from asterion.bot.p5_ui import render_p5, render_p5_detail
+from asterion.bot.p6_ui import render_p6
 from asterion.bot.road_ui import render_road
 from asterion.bot.s2_ui import render_s2
 from asterion.bot.s3_ui import render_s3
 from asterion.bot.s4_ui import render_s4
 from asterion.bot.s5_ui import render_s5
+from asterion.bot.s6_ui import render_s6
 from asterion.bot.world_ui import render_world
 
 
@@ -57,6 +61,8 @@ def world_router(
     class_trials: ClassTrialService | None = None,
     s4: S4Service | None = None,
     s5: S5Service | None = None,
+    s6: S6Service | None = None,
+    p6: P6Service | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -95,6 +101,14 @@ def world_router(
                 images,
             )
             return
+        p6_view = await p6.resume(message.from_user.id) if p6 and message.from_user else None
+        if p6_view is not None and p6_view.status == "active" and p6_view.kind == "combat":
+            await present(message, render_p6(p6_view), images)
+            return
+        s6_view = await s6.resume(message.from_user.id) if s6 and message.from_user else None
+        if s6_view is not None and s6_view.status == "active" and s6_view.kind == "combat":
+            await present(message, render_s6(s6_view), images)
+            return
         p4_view = await p4.resume(message.from_user.id) if p4 and message.from_user else None
         if p4_view is not None and p4_view.status == "active" and p4_view.kind == "combat":
             await present(message, render_p4(p4_view), images)
@@ -124,6 +138,9 @@ def world_router(
             await present(message, render_p3(p3_view), images)
             return
         road_view = await road.resume(message.from_user.id) if road and message.from_user else None
+        if p6_view is not None and p6_view.status == "active" and p6_view.location == "Câmara do Poente":
+            await present(message, render_p6(p6_view), images)
+            return
         if road_view is not None:
             await present(message, render_road(road_view), images)
             return
@@ -168,6 +185,16 @@ def world_router(
                 images,
                 edit=True,
             )
+            return
+        p6_view = await p6.resume(query.from_user.id) if p6 else None
+        if (p6_view is not None and p6_view.status == "active" and p6_view.kind == "combat"
+                and isinstance(query.message, Message)):
+            await present(query.message, render_p6(p6_view), images, edit=True)
+            return
+        s6_view = await s6.resume(query.from_user.id) if s6 else None
+        if (s6_view is not None and s6_view.status == "active" and s6_view.kind == "combat"
+                and isinstance(query.message, Message)):
+            await present(query.message, render_s6(s6_view), images, edit=True)
             return
         p4_view = await p4.resume(query.from_user.id) if p4 else None
         if (
@@ -230,6 +257,11 @@ def world_router(
         ):
             await present(query.message, render_road(road_view), images, edit=True)
             return
+        if (p6_view is not None and p6_view.status == "active"
+                and p6_view.location == "Câmara do Poente"
+                and isinstance(query.message, Message)):
+            await present(query.message, render_p6(p6_view), images, edit=True)
+            return
         p1_view = await p1.resume(query.from_user.id) if p1 else None
         if (
             p1_view is not None
@@ -259,6 +291,14 @@ def world_router(
             and isinstance(query.message, Message)
         ):
             await present(query.message, render_p2(p2_view), images, edit=True)
+            return True
+        p6_view = await p6.resume(query.from_user.id) if p6 else None
+        if p6_view is not None and p6_view.status == "active" and p6_view.kind == "combat" and isinstance(query.message, Message):
+            await present(query.message, render_p6(p6_view), images, edit=True)
+            return True
+        s6_view = await s6.resume(query.from_user.id) if s6 else None
+        if s6_view is not None and s6_view.status == "active" and s6_view.kind == "combat" and isinstance(query.message, Message):
+            await present(query.message, render_s6(s6_view), images, edit=True)
             return True
         view = await s2.resume(query.from_user.id) if s2 is not None else None
         if (
@@ -363,6 +403,14 @@ def world_router(
                 edit=True,
             )
             return True
+        p6_view = await p6.resume(query.from_user.id) if p6 else None
+        if p6_view is not None and p6_view.status == "active" and p6_view.kind == "combat" and isinstance(query.message, Message):
+            await present(query.message, render_p6(p6_view), images, edit=True)
+            return True
+        s6_view = await s6.resume(query.from_user.id) if s6 else None
+        if s6_view is not None and s6_view.status == "active" and s6_view.kind == "combat" and isinstance(query.message, Message):
+            await present(query.message, render_s6(s6_view), images, edit=True)
+            return True
         s2_view = await s2.resume(query.from_user.id) if s2 else None
         if (
             s2_view is not None
@@ -436,6 +484,14 @@ def world_router(
         s2_view = await s2.resume(query.from_user.id) if s2 is not None else None
         if s2_view is not None and s2_view.status == "active":
             await present(query.message, render_s2(s2_view), images, edit=True)
+            return
+        p6_view = await p6.resume(query.from_user.id) if p6 else None
+        if p6_view is not None and p6_view.status == "active" and p6_view.kind == "combat":
+            await present(query.message, render_p6(p6_view), images, edit=True)
+            return
+        s6_view = await s6.resume(query.from_user.id) if s6 else None
+        if s6_view is not None and s6_view.status == "active" and s6_view.kind == "combat":
+            await present(query.message, render_s6(s6_view), images, edit=True)
             return
         p3_view = await p3.resume(query.from_user.id) if p3 is not None else None
         if p3_view is not None and p3_view.status == "active" and p3_view.kind == "combat":
@@ -1034,6 +1090,8 @@ def world_router(
         s3_view = await s3.resume(query.from_user.id) if s3 else None
         p4_view = await p4.resume(query.from_user.id) if p4 else None
         p5_view = await p5.resume(query.from_user.id) if p5 else None
+        p6_view = await p6.resume(query.from_user.id) if p6 else None
+        s6_view = await s6.summary(query.from_user.id) if s6 else None
         if s3_view is None and s3 is not None:
             s3_view = await s3.offer(query.from_user.id)
         if p4_view is None and p4 is not None:
@@ -1064,6 +1122,9 @@ def world_router(
             keyboard.append(
                 [InlineKeyboardButton(text="Principal", callback_data="world:principal")]
             )
+        elif p6_view is not None and p6_view.status == "active":
+            text += "\n\n🔥 Missão Principal\n\n📜 O Vigia Partido · Em Andamento\nTerras do Ocaso · Nv.10"
+            keyboard.append([InlineKeyboardButton(text="Principal", callback_data="p6:resume")])
         elif p4_view is not None and p4_view.status == "active":
             text += (
                 "\n\n🔥 Missão Principal\n\n"
@@ -1148,6 +1209,20 @@ def world_router(
                 secondary_buttons.append([
                     InlineKeyboardButton(text=title, callback_data=f"{callback}:{action}")
                 ])
+        if s6_view is not None:
+            if s6_view.status == "active":
+                state, action = "Em Andamento", "detail"
+            elif s6_view.status == "completed":
+                state, action = "Concluída", "detail"
+            elif s6_view.reacceptable:
+                state, action = "Disponível para reaceite", "offer"
+            elif s6_view.available:
+                state, action = "Disponível", "offer"
+            else:
+                state, action = "Bloqueada · Requer S2 + P5 concluídas e Nv.10", None
+            secondary_lines.append(f"📜 Onde os Nomes Terminaram · {state}")
+            if action is not None:
+                secondary_buttons.append([InlineKeyboardButton(text="Onde os Nomes Terminaram", callback_data=f"s6:{action}")])
         if secondary_lines:
             text += "\n\n📖 Missões Secundárias\n\n" + "\n".join(
                 f"{index} {line}" for index, line in enumerate(secondary_lines, start=1)
@@ -1160,6 +1235,9 @@ def world_router(
             keyboard.append([InlineKeyboardButton(text="A Porta do Poente", callback_data="p5:resume")])
         elif p5_view is not None and p5_view.status != "active" and not p5_view.available:
             text += "\n\n🔒 A Porta do Poente · Bloqueada · Requer P4 concluída e Nv.9"
+        if p6_view is not None and p6_view.status == "completed":
+            text += "\n\n✅ O Vigia Partido · Concluída"
+            keyboard.append([InlineKeyboardButton(text="O Vigia Partido", callback_data="p6:resume")])
         keyboard.append(
             [InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")]
         )
@@ -1261,6 +1339,8 @@ def world_router(
         s4_view = await s4.oren(query.from_user.id) if s4 else None
         s5_view = await s5.oren(query.from_user.id) if s5 else None
         p5_view = await p5.oren(query.from_user.id) if p5 else None
+        s6_view = await s6.resume(query.from_user.id) if s6 else None
+        p6_view = await p6.resume(query.from_user.id) if p6 else None
         additions = []
         rows = list(screen.keyboard.inline_keyboard) if screen.keyboard else []
         for mission_view, title, callback in (
@@ -1295,6 +1375,26 @@ def world_router(
         elif p5_view is not None and p5_view.status == "completed":
             additions.append("✅ A Porta do Poente · Concluída")
             rows.append([InlineKeyboardButton(text="A Porta do Poente", callback_data="p5:resume")])
+        if s6_view is not None:
+            if s6_view.status in {"active", "completed"}:
+                label = "Onde os Nomes Terminaram · " + ("Concluída" if s6_view.status == "completed" else "Em Andamento")
+                action = "resume"
+            elif s6_view.reacceptable:
+                label, action = "Onde os Nomes Terminaram · Reaceitar", "offer"
+            elif s6_view.available:
+                label, action = "Onde os Nomes Terminaram · Disponível", "offer"
+            else:
+                label, action = "Onde os Nomes Terminaram · Indisponível", None
+            additions.append(f"📜 {label}")
+            if action is not None:
+                rows.append([InlineKeyboardButton(text=label, callback_data=f"s6:{action}")])
+        if p6_view is not None and p6_view.status == "active":
+            label = "O Vigia Partido · Em Andamento"
+            additions.append(f"📜 {label}")
+            rows.append([InlineKeyboardButton(text="Relato de P6", callback_data="p6:resume")])
+        elif p6_view is not None and p6_view.status == "completed":
+            additions.append("✅ O Vigia Partido · Concluída")
+            rows.append([InlineKeyboardButton(text="O Vigia Partido", callback_data="p6:resume")])
         if additions:
             screen = Screen(
                 screen.text + "\n\n" + "\n".join(additions),
@@ -1328,6 +1428,10 @@ def world_router(
         p4_view = await p4.resume(query.from_user.id) if p4 else None
         if p4_view is not None and p4_view.status == "active":
             await present(query.message, render_p4_detail(p4_view), images, edit=True)
+            return
+        p6_view = await p6.resume(query.from_user.id) if p6 else None
+        if p6_view is not None and p6_view.status == "active":
+            await present(query.message, render_p6(p6_view), images, edit=True)
             return
         p5_view = await p5.resume(query.from_user.id) if p5 else None
         if p5_view is not None and p5_view.status == "active":

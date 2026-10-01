@@ -4,11 +4,13 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
 from asterion.application.p5 import P5_ELEMENTS, P5Service
+from asterion.application.p6 import P6Service
 from asterion.bot.creation_handlers import present
 from asterion.bot.p5_ui import render_p5
+from asterion.bot.p6_ui import render_p6
 
 
-def p5_router(service: P5Service, images: dict[str, str]) -> Router:
+def p5_router(service: P5Service, images: dict[str, str], *, p6: P6Service | None = None) -> Router:
     router = Router(name="p5")
     router.callback_query.filter(F.message.chat.type == "private")
 
@@ -65,6 +67,16 @@ def p5_router(service: P5Service, images: dict[str, str]) -> Router:
                 view = await service.offer(actor)
         await query.answer()
         if view is not None and isinstance(query.message, Message):
-            await present(query.message, render_p5(view), images, edit=True)
+            p6_view = (
+                await p6.resume(actor)
+                if p6 is not None and view.status == "completed"
+                else None
+            )
+            screen = (
+                render_p6(p6_view)
+                if p6_view is not None and p6_view.status == "active"
+                else render_p5(view)
+            )
+            await present(query.message, screen, images, edit=True)
 
     return router

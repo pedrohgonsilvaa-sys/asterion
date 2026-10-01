@@ -71,6 +71,16 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "crit_bonus_if_target_debuffed": Decimal(
                         value.get("crit_bonus_if_target_debuffed", "0")
                     ),
+                    "enemy_hp_fraction_below": (
+                        Decimal(value["enemy_hp_fraction_below"])
+                        if value.get("enemy_hp_fraction_below") is not None
+                        else None
+                    ),
+                    "enemy_hp_fraction_at_most": (
+                        Decimal(value["enemy_hp_fraction_at_most"])
+                        if value.get("enemy_hp_fraction_at_most") is not None
+                        else None
+                    ),
                     "self_effects": tuple(
                         ActionEffect(
                             **(effect | {"magnitude": Decimal(effect["magnitude"])})
@@ -135,6 +145,10 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                         ).items()
                     },
                     "action_chains": value.get("action_chains", {}),
+                    "action_use_counts": {
+                        key: int(count)
+                        for key, count in value.get("action_use_counts", {}).items()
+                    },
                     "next_direct_crit_bonus": Decimal(
                         value.get("next_direct_crit_bonus", "0")
                     ),

@@ -15,6 +15,7 @@ from asterion.application.p2 import P2Service
 from asterion.application.p3 import P3Service
 from asterion.application.p4 import P4Service
 from asterion.application.p5 import P5Service
+from asterion.application.p6 import P6Service
 from asterion.application.path_selection import PathSelectionService
 from asterion.application.prologue import PrologueService
 from asterion.application.round import RoundService
@@ -23,6 +24,7 @@ from asterion.application.s2 import S2Service
 from asterion.application.s3 import S3Service
 from asterion.application.s4 import S4Service
 from asterion.application.s5 import S5Service
+from asterion.application.s6 import S6Service
 from asterion.application.talents import TalentService
 from asterion.application.world import WorldService
 from asterion.bot.character_progression_handlers import character_progression_router
@@ -35,12 +37,14 @@ from asterion.bot.p2_handlers import p2_router
 from asterion.bot.p3_handlers import p3_router
 from asterion.bot.p4_handlers import p4_router
 from asterion.bot.p5_handlers import p5_router
+from asterion.bot.p6_handlers import p6_router
 from asterion.bot.path_handlers import path_router
 from asterion.bot.s1_handlers import s1_router
 from asterion.bot.s2_handlers import s2_router
 from asterion.bot.s3_handlers import s3_router
 from asterion.bot.s4_handlers import s4_router
 from asterion.bot.s5_handlers import s5_router
+from asterion.bot.s6_handlers import s6_router
 from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
 from asterion.domain.creation import NamePolicy
@@ -78,11 +82,13 @@ def get_bot_runtime() -> BotRuntime:
     s5 = S5Service(SessionFactory, settings.server_id)
     p4 = P4Service(SessionFactory, settings.server_id)
     p5 = P5Service(SessionFactory, settings.server_id)
+    p6 = P6Service(SessionFactory, settings.server_id)
+    s6 = S6Service(SessionFactory, settings.server_id)
     class_trials = ClassTrialService(SessionFactory, settings.server_id)
     paths = PathSelectionService(SessionFactory, settings.server_id)
     active_arts = ActiveArtService(SessionFactory, settings.server_id)
     talents = TalentService(SessionFactory, settings.server_id)
-    dispatcher.include_router(p2_router(p2, settings.creation_images, s3=s3, p4=p4, p5=p5))
+    dispatcher.include_router(p2_router(p2, settings.creation_images, s3=s3, p4=p4, p5=p5, p6=p6))
     dispatcher.include_router(p1_router(p1, settings.creation_images))
     dispatcher.include_router(s1_router(s1, settings.creation_images))
     dispatcher.include_router(s2_router(s2, settings.creation_images))
@@ -91,7 +97,9 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(s4_router(s4, settings.creation_images))
     dispatcher.include_router(s5_router(s5, settings.creation_images))
     dispatcher.include_router(p4_router(p4, settings.creation_images))
-    dispatcher.include_router(p5_router(p5, settings.creation_images))
+    dispatcher.include_router(p5_router(p5, settings.creation_images, p6=p6))
+    dispatcher.include_router(s6_router(s6, settings.creation_images))
+    dispatcher.include_router(p6_router(p6, settings.creation_images))
     dispatcher.include_router(path_router(paths, class_trials, settings.creation_images))
     dispatcher.include_router(
         character_progression_router(talents, active_arts, settings.creation_images)
@@ -111,6 +119,8 @@ def get_bot_runtime() -> BotRuntime:
             p5=p5,
             s4=s4,
             s5=s5,
+            s6=s6,
+            p6=p6,
         )
     )
     dispatcher.include_router(
@@ -142,6 +152,8 @@ def get_bot_runtime() -> BotRuntime:
             class_trials=class_trials,
             s4=s4,
             s5=s5,
+            s6=s6,
+            p6=p6,
         )
     )
     dispatcher.include_router(
@@ -165,6 +177,8 @@ def get_bot_runtime() -> BotRuntime:
             class_trials=class_trials,
             s4=s4,
             s5=s5,
+            s6=s6,
+            p6=p6,
         )
     )
     return BotRuntime(

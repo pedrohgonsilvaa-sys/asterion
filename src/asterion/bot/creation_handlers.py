@@ -14,12 +14,14 @@ from asterion.application.p2 import P2Service
 from asterion.application.p3 import P3Service
 from asterion.application.p4 import P4Service
 from asterion.application.p5 import P5Service
+from asterion.application.p6 import P6Service
 from asterion.application.prologue import PrologueService
 from asterion.application.road import RoadService
 from asterion.application.s2 import S2Service
 from asterion.application.s3 import S3Service
 from asterion.application.s4 import S4Service
 from asterion.application.s5 import S5Service
+from asterion.application.s6 import S6Service
 from asterion.application.world import WorldService
 from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
@@ -29,10 +31,12 @@ from asterion.bot.p2_ui import render_p2
 from asterion.bot.p3_ui import render_p3
 from asterion.bot.p4_ui import render_p4
 from asterion.bot.p5_ui import render_p5
+from asterion.bot.p6_ui import render_p6
 from asterion.bot.s2_ui import render_s2
 from asterion.bot.s3_ui import render_s3
 from asterion.bot.s4_ui import render_s4
 from asterion.bot.s5_ui import render_s5
+from asterion.bot.s6_ui import render_s6
 from asterion.bot.world_ui import render_world
 
 
@@ -116,6 +120,8 @@ def creation_router(
     p5: P5Service | None = None,
     s4: S4Service | None = None,
     s5: S5Service | None = None,
+    s6: S6Service | None = None,
+    p6: P6Service | None = None,
 ) -> Router:
     router = Router(name="character_creation")
     router.message.filter(F.chat.type == "private")
@@ -136,6 +142,12 @@ def creation_router(
         p5_view = await p5.resume(actor) if p5 is not None else None
         if p5_view is not None and p5_view.status == "active" and p5_view.kind == "combat":
             return render_p5(p5_view)
+        p6_view = await p6.resume(actor) if p6 is not None else None
+        if p6_view is not None and p6_view.status == "active" and p6_view.kind == "combat":
+            return render_p6(p6_view)
+        s6_view = await s6.resume(actor) if s6 is not None else None
+        if s6_view is not None and s6_view.status == "active" and s6_view.kind == "combat":
+            return render_s6(s6_view)
         s4_view = await s4.resume(actor) if s4 is not None else None
         if s4_view is not None and s4_view.status == "active" and s4_view.kind == "combat":
             return render_s4(s4_view)
@@ -167,6 +179,10 @@ def creation_router(
                 from asterion.bot.road_ui import render_road
 
                 return render_road(road_view)
+        if p6_view is not None and p6_view.status == "active":
+            return render_p6(p6_view)
+        if s6_view is not None and s6_view.status == "active":
+            return render_s6(s6_view)
         if p3_view is not None and p3_view.status == "active":
             return render_p3(p3_view)
         if p4_view is not None and p4_view.status == "active":

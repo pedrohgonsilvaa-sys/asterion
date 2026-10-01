@@ -6,12 +6,14 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from asterion.application.p2 import ASH_POINT_IDS, P2Service
 from asterion.application.p4 import P4Service
 from asterion.application.p5 import P5Service
+from asterion.application.p6 import P6Service
 from asterion.application.s3 import S3Service
 from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
 from asterion.bot.p2_ui import render_p2
 from asterion.bot.p4_ui import render_p4
 from asterion.bot.p5_ui import render_p5
+from asterion.bot.p6_ui import render_p6
 from asterion.bot.s3_ui import render_s3
 
 
@@ -21,6 +23,7 @@ def p2_router(
     s3: S3Service | None = None,
     p4: P4Service | None = None,
     p5: P5Service | None = None,
+    p6: P6Service | None = None,
 ) -> Router:
     router = Router(name="p2")
     router.callback_query.filter(F.message.chat.type == "private")
@@ -61,6 +64,12 @@ def p2_router(
                 await query.answer()
                 if isinstance(query.message, Message):
                     await present(query.message, screen, images, edit=True)
+                return
+            p6_view = await p6.resume(actor) if p6 is not None else None
+            if p6_view is not None and p6_view.status == "active":
+                await query.answer()
+                if isinstance(query.message, Message):
+                    await present(query.message, render_p6(p6_view), images, edit=True)
                 return
             p5_view = await p5.alda(actor) if p5 is not None else None
             if p5_view is not None and (
