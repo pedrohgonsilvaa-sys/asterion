@@ -166,6 +166,10 @@ class BestiaryRecorder:
                     await self._grant_regional_victory_xp(
                         session, character_id, creature_id, reference_level=6
                     )
+                elif creature_id == "vigia_partido":
+                    await self._grant_regional_victory_xp(
+                        session, character_id, creature_id, reference_level=10
+                    )
             else:
                 entry.bkp += _repeat_bkp(
                     entry.wins, elite, observation_category
