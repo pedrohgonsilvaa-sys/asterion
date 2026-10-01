@@ -722,4 +722,3 @@ def test_stage_three_echo_applies_its_own_guard_open_effect():
     from asterion.bot.combat_ui import event_line
 
     assert "própria DEF" in event_line(combat, event)
-
