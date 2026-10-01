@@ -6,6 +6,7 @@ from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal, localcontext
 from hashlib import sha256
 from uuid import UUID
 
+from asterion.domain.class_trials import class_player_actions
 from asterion.domain.combat import Action, Combat, Fighter, start_combat
 from asterion.domain.combat_math import (
     CURRENT_COMBAT_RULESET,
@@ -810,6 +811,7 @@ def create_road_combat(
     equipment_configuration: EquipmentConfigurationSnapshot | None = None,
     ruleset_version: str | None = None,
     location_label: str = "Estrada das Cinzas",
+    active_art_ids: tuple[str, ...] | None = None,
 ) -> Combat:
     flavor = (
         "A Estrada guarda ameaças entre as cinzas."
@@ -835,6 +837,7 @@ def create_road_combat(
         ruleset_version=ruleset_version,
         flavor=flavor,
         opening_log=opening_log,
+        active_art_ids=active_art_ids,
     )
 
 
@@ -852,6 +855,7 @@ def create_creature_combat(
     ruleset_version: str | None = None,
     flavor: str = "",
     opening_log: str = "",
+    active_art_ids: tuple[str, ...] | None = None,
 ) -> Combat:
     player_level = level if player_level is None else player_level
     runtime_ruleset = ruleset_version or RULESET
@@ -861,6 +865,10 @@ def create_creature_combat(
         player_level,
         race,
         equipment.contribution() if equipment is not None else None,
+        equipment.selected_path if equipment is not None else None,
+        tuple(talent_id for _, talent_id in equipment.talent_choices)
+        if equipment is not None
+        else (),
     )
     enemy = road_enemy_stats(creature, level, variant)
     actions = {}
@@ -892,12 +900,29 @@ def create_creature_combat(
             self_barrier_duration,
             skip_if_barrier_active,
         )
+    talent_ids = (
+        tuple(talent_id for _, talent_id in equipment.talent_choices)
+        if equipment is not None
+        else ()
+    )
+    player_actions = (
+        {
+            "attack": Action("attack", "⚔️ Atacar", D(1)),
+            "art": first_art(character_class, 1),
+        }
+        if active_art_ids is None
+        else class_player_actions(character_class, tuple(active_art_ids))
+    )
     return start_combat(
         Combat(
             combat_id,
             runtime_ruleset,
             fighters={
-                "player": Fighter("player", name, player_level, player_stats, hp, race, character_class),
+                "player": Fighter(
+                    "player", name, player_level, player_stats, hp, race, character_class,
+                    selected_path=(equipment.selected_path if equipment is not None else None),
+                    talent_ids=talent_ids,
+                ),
                 "enemy": Fighter(
                     "enemy",
                     creature.name,
@@ -907,10 +932,7 @@ def create_creature_combat(
                     damage_taken_modifiers=dict(creature.damage_taken_modifiers),
                 ),
             },
-            player_actions={
-                "attack": Action("attack", "⚔️ Atacar", D(1)),
-                "art": first_art(character_class, 1),
-            },
+            player_actions=player_actions,
             enemy_actions=actions,
             ai_cycle=creature.ai,
             tutorial=None,

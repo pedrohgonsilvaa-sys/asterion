@@ -1,0 +1,167 @@
+"""Canonical active-Art identities that are implemented by the current runtime."""
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class ActiveArtDefinition:
+    art_id: str
+    character_class: str
+    min_level: int
+    path_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.art_id or len(self.art_id) > 96:
+            raise ValueError("Active Arts require a stable id.")
+        if self.min_level < 1:
+            raise ValueError("Active Art minimum level must be positive.")
+
+
+FIRST_CLASS_ART_IDS = {
+    "sentinela": "class_art.sentinela.golpe_de_guarda",
+    "errante": "class_art.errante.corte_veloz",
+    "vigia": "class_art.vigia.disparo_preciso",
+    "tecelao": "class_art.tecelao.fio_cortante",
+    "oraculo": "class_art.oraculo.sinal_funesto",
+    "luminar": "class_art.luminar.fulgor",
+}
+
+SENTINEL_ART_IDS = {
+    "golpe_de_guarda": FIRST_CLASS_ART_IDS["sentinela"],
+    "quebra_postura": "class_art.sentinela.quebra_postura",
+    "muralha_breve": "class_art.sentinela.muralha_breve",
+    "impacto_resoluto": "class_art.sentinela.impacto_resoluto",
+}
+
+SENTINEL_ART_LEVELS = {
+    SENTINEL_ART_IDS["golpe_de_guarda"]: 1,
+    SENTINEL_ART_IDS["quebra_postura"]: 4,
+    SENTINEL_ART_IDS["muralha_breve"]: 7,
+    SENTINEL_ART_IDS["impacto_resoluto"]: 9,
+}
+
+ERRANTE_ART_IDS = {
+    "corte_veloz": FIRST_CLASS_ART_IDS["errante"],
+    "ferida_profunda": "class_art.errante.ferida_profunda",
+    "passo_velado": "class_art.errante.passo_velado",
+    "golpe_oportuno": "class_art.errante.golpe_oportuno",
+}
+
+ERRANTE_ART_LEVELS = {
+    ERRANTE_ART_IDS["corte_veloz"]: 1,
+    ERRANTE_ART_IDS["ferida_profunda"]: 4,
+    ERRANTE_ART_IDS["passo_velado"]: 7,
+    ERRANTE_ART_IDS["golpe_oportuno"]: 9,
+}
+
+VIGIA_ART_IDS = {
+    "disparo_preciso": FIRST_CLASS_ART_IDS["vigia"],
+    "marca_da_presa": "class_art.vigia.marca_da_presa",
+    "saraivada": "class_art.vigia.saraivada",
+    "olho_da_vigilia": "class_art.vigia.olho_da_vigilia",
+}
+
+VIGIA_ART_LEVELS = {
+    VIGIA_ART_IDS["disparo_preciso"]: 1,
+    VIGIA_ART_IDS["marca_da_presa"]: 4,
+    VIGIA_ART_IDS["saraivada"]: 7,
+    VIGIA_ART_IDS["olho_da_vigilia"]: 9,
+}
+
+TECELAO_ART_IDS = {
+    "fio_cortante": FIRST_CLASS_ART_IDS["tecelao"],
+    "chama_tecida": "class_art.tecelao.chama_tecida",
+    "ruptura_da_trama": "class_art.tecelao.ruptura_da_trama",
+    "veu_entrelacado": "class_art.tecelao.veu_entrelacado",
+}
+
+TECELAO_ART_LEVELS = {
+    TECELAO_ART_IDS["fio_cortante"]: 1,
+    TECELAO_ART_IDS["chama_tecida"]: 4,
+    TECELAO_ART_IDS["ruptura_da_trama"]: 7,
+    TECELAO_ART_IDS["veu_entrelacado"]: 9,
+}
+
+ORACULO_ART_IDS = {
+    "sinal_funesto": FIRST_CLASS_ART_IDS["oraculo"],
+    "vislumbre": "class_art.oraculo.vislumbre",
+    "ruina_predita": "class_art.oraculo.ruina_predita",
+    "veu_premonitorio": "class_art.oraculo.veu_premonitorio",
+}
+
+ORACULO_ART_LEVELS = {
+    ORACULO_ART_IDS["sinal_funesto"]: 1,
+    ORACULO_ART_IDS["vislumbre"]: 4,
+    ORACULO_ART_IDS["ruina_predita"]: 7,
+    ORACULO_ART_IDS["veu_premonitorio"]: 9,
+}
+
+LUMINAR_ART_IDS = {
+    "fulgor": FIRST_CLASS_ART_IDS["luminar"],
+    "renovacao": "class_art.luminar.renovacao",
+    "egide_solar": "class_art.luminar.egide_solar",
+    "julgamento": "class_art.luminar.julgamento",
+}
+
+LUMINAR_ART_LEVELS = {
+    LUMINAR_ART_IDS["fulgor"]: 1,
+    LUMINAR_ART_IDS["renovacao"]: 4,
+    LUMINAR_ART_IDS["egide_solar"]: 7,
+    LUMINAR_ART_IDS["julgamento"]: 9,
+}
+
+
+ACTIVE_ART_DEFINITIONS = {
+    art_id: ActiveArtDefinition(art_id, character_class, 1)
+    for character_class, art_id in FIRST_CLASS_ART_IDS.items()
+}
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        art_id: ActiveArtDefinition(art_id, "sentinela", min_level)
+        for art_id, min_level in SENTINEL_ART_LEVELS.items()
+    }
+)
+
+ART_IDS_BY_CLASS = {
+    "sentinela": tuple(SENTINEL_ART_IDS.values()),
+    "errante": tuple(ERRANTE_ART_IDS.values()),
+    "vigia": tuple(VIGIA_ART_IDS.values()),
+    "tecelao": tuple(TECELAO_ART_IDS.values()),
+    "oraculo": tuple(ORACULO_ART_IDS.values()),
+    "luminar": tuple(LUMINAR_ART_IDS.values()),
+}
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        art_id: ActiveArtDefinition(art_id, "oraculo", min_level)
+        for art_id, min_level in ORACULO_ART_LEVELS.items()
+    }
+)
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        art_id: ActiveArtDefinition(art_id, "luminar", min_level)
+        for art_id, min_level in LUMINAR_ART_LEVELS.items()
+    }
+)
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        art_id: ActiveArtDefinition(art_id, "vigia", min_level)
+        for art_id, min_level in VIGIA_ART_LEVELS.items()
+    }
+)
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        art_id: ActiveArtDefinition(art_id, "tecelao", min_level)
+        for art_id, min_level in TECELAO_ART_LEVELS.items()
+    }
+)
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        art_id: ActiveArtDefinition(art_id, "errante", min_level)
+        for art_id, min_level in ERRANTE_ART_LEVELS.items()
+    }
+)
+
+
+def active_art_definition(art_id: str) -> ActiveArtDefinition | None:
+    """Return a runtime-backed Art definition; unknown/unimplemented Arts are not equipable."""
+    return ACTIVE_ART_DEFINITIONS.get(art_id)

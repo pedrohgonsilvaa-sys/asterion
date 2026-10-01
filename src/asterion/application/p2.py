@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.bestiary import BestiaryRecorder
 from asterion.application.equipment_configuration import (
     load_equipment_configuration,
@@ -775,6 +776,7 @@ class P2Service:
                 else None
             )
         configuration = await load_equipment_configuration(session, character)
+        active_art_configuration = await load_active_art_configuration(session, character)
         reconcile_character_hp(character, configuration)
         combat = create_creature_combat(
             uuid4(),
@@ -790,6 +792,10 @@ class P2Service:
             ruleset_version=RULESET,
             flavor="A fuligem se move sobre a pedra; a Aranha de Cinza avança.",
             opening_log="🕷️ Aranha de Cinza · Nv.3 surge entre a fuligem.",
+            active_art_ids=active_art_configuration.art_ids,
+        )
+        combat.configuration_snapshot = (combat.configuration_snapshot or {}) | (
+            active_art_configuration.to_data()
         )
         activity, _, _ = await CombatRepository(session).create(
             character, P2_COMBAT_CONTENT_ID, combat

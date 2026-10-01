@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from sqlalchemy import select
 
+from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     reconcile_character_hp,
@@ -29,6 +30,7 @@ async def materialize(session, character, content_id, creature, enemy_level, *, 
     from dataclasses import replace
 
     configuration = await load_equipment_configuration(session, character)
+    active_art_configuration = await load_active_art_configuration(session, character)
     reconcile_character_hp(character, configuration)
     actor = replace(creature, ai=ai) if ai is not None else creature
     state = create_creature_combat(
@@ -45,6 +47,10 @@ async def materialize(session, character, content_id, creature, enemy_level, *, 
         ruleset_version=RULESET,
         flavor=flavor,
         opening_log=opening_log,
+        active_art_ids=active_art_configuration.art_ids,
+    )
+    state.configuration_snapshot = (state.configuration_snapshot or {}) | (
+        active_art_configuration.to_data()
     )
     activity, _, _ = await CombatRepository(session).create(character, content_id, state)
     return activity

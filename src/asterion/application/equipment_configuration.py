@@ -16,7 +16,13 @@ from asterion.domain.equipment_stats import (
     EquipmentConfigurationSnapshot,
     item_snapshot_from_persisted,
 )
-from asterion.infrastructure.db.models import Character, CharacterEquipmentSlot, EquipmentItem
+from asterion.domain.talents import TALENT_DEFINITIONS, TALENT_POINT_LEVELS, talent_points_at_level
+from asterion.infrastructure.db.models import (
+    Character,
+    CharacterEquipmentSlot,
+    CharacterTalentChoice,
+    EquipmentItem,
+)
 
 D = Decimal
 
@@ -43,6 +49,7 @@ async def load_equipment_configuration(
     if lock_rows:
         slots_statement = slots_statement.with_for_update()
     rows = list((await session.scalars(slots_statement)).all())
+    talent_choices = await _load_talent_choices(session, character, lock_rows=lock_rows)
     assignments: dict[EquipmentSlot, UUID] = {}
     for row in rows:
         slot = parse_equipment_slot(row.slot)
@@ -51,7 +58,11 @@ async def load_equipment_configuration(
         assignments[slot] = row.equipment_item_id
     item_ids = tuple(sorted(set(assignments.values()), key=str))
     if not item_ids:
-        return EquipmentConfigurationSnapshot(character.combat_configuration_version)
+        return EquipmentConfigurationSnapshot(
+            character.combat_configuration_version,
+            selected_path=character.selected_path,
+            talent_choices=talent_choices,
+        )
 
     items_statement = (
         select(EquipmentItem)
@@ -72,6 +83,7 @@ async def load_equipment_configuration(
         character,
         entries,
         version=character.combat_configuration_version,
+        talent_choices=talent_choices,
     )
 
 
@@ -80,6 +92,7 @@ def build_equipment_configuration(
     entries: list[tuple[EquipmentSlot, EquipmentItem]],
     *,
     version: int | None = None,
+    talent_choices: tuple[tuple[int, str], ...] = (),
 ) -> EquipmentConfigurationSnapshot:
     """Build validated pure configuration from already-authoritative item rows."""
     snapshots = []
@@ -109,6 +122,8 @@ def build_equipment_configuration(
     result = EquipmentConfigurationSnapshot(
         character.combat_configuration_version if version is None else version,
         tuple(sorted(snapshots, key=lambda item: item.slot)),
+        character.selected_path,
+        talent_choices,
     )
     result.contribution()
     return result
@@ -122,6 +137,8 @@ def resolve_character_combat_stats(
         character.level,
         character.race,
         configuration.contribution(),
+        configuration.selected_path,
+        tuple(talent_id for _, talent_id in configuration.talent_choices),
     )
 
 
@@ -172,3 +189,39 @@ def hp_after_equipment_change(character: Character, new_max_hp: Decimal) -> Deci
 def _floor_scaled_hp(hp: Decimal, new_max_hp: Decimal, old_max_hp: Decimal) -> Decimal:
     exact_ratio = Fraction(hp) * Fraction(new_max_hp) / Fraction(old_max_hp)
     return D(exact_ratio.numerator // exact_ratio.denominator)
+
+
+async def _load_talent_choices(
+    session: AsyncSession,
+    character: Character,
+    *,
+    lock_rows: bool,
+) -> tuple[tuple[int, str], ...]:
+    statement = (
+        select(CharacterTalentChoice)
+        .where(CharacterTalentChoice.character_id == character.id)
+        .order_by(CharacterTalentChoice.point_slot)
+    )
+    if lock_rows:
+        statement = statement.with_for_update()
+    rows = list((await session.scalars(statement)).all())
+    seen_slots: set[int] = set()
+    seen_talents: set[str] = set()
+    active: list[tuple[int, str]] = []
+    available_points = talent_points_at_level(character.level)
+    for row in rows:
+        definition = TALENT_DEFINITIONS.get(row.talent_id)
+        if (
+            not 1 <= row.point_slot <= len(TALENT_POINT_LEVELS)
+            or row.point_slot in seen_slots
+            or row.talent_id in seen_talents
+            or definition is None
+            or definition.character_class != character.character_class
+            or definition.level > TALENT_POINT_LEVELS[row.point_slot - 1]
+        ):
+            raise EquipmentConfigurationError("Persisted Talent configuration is invalid.")
+        seen_slots.add(row.point_slot)
+        seen_talents.add(row.talent_id)
+        if row.point_slot <= available_points:
+            active.append((row.point_slot, row.talent_id))
+    return tuple(active)

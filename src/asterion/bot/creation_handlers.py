@@ -7,6 +7,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
 from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message, Update
 
+from asterion.application.class_trials import ClassTrialService
 from asterion.application.creation import CreationService
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import P2Service
@@ -17,6 +18,7 @@ from asterion.application.road import RoadService
 from asterion.application.s2 import S2Service
 from asterion.application.s3 import S3Service
 from asterion.application.world import WorldService
+from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import CreationCallback, Screen, render
 from asterion.bot.p1_ui import render_p1
@@ -104,6 +106,7 @@ def creation_router(
     p3: P3Service | None = None,
     s3: S3Service | None = None,
     p4: P4Service | None = None,
+    class_trials: ClassTrialService | None = None,
 ) -> Router:
     router = Router(name="character_creation")
     router.message.filter(F.chat.type == "private")
@@ -113,6 +116,11 @@ def creation_router(
         p2_view = await p2.resume(actor) if p2 is not None else None
         if p2_view is not None and p2_view.status == "active" and p2_view.kind == "combat":
             return render_p2(p2_view)
+        trial_view = (
+            await class_trials.resume(actor) if class_trials is not None else None
+        )
+        if trial_view is not None and trial_view.kind == "active":
+            return await render_class_trial_view(class_trials, actor, trial_view)
         p4_view = await p4.resume(actor) if p4 is not None else None
         if p4_view is not None and p4_view.status == "active" and p4_view.kind == "combat":
             return render_p4(p4_view)

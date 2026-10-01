@@ -70,6 +70,12 @@ class Character(Base):
             "character_class IN ('sentinela','errante','vigia','tecelao','oraculo','luminar')",
             name="ck_character_class",
         ),
+        CheckConstraint(
+            "selected_path IS NULL OR selected_path IN ('bastiao','devastador','carrasco',"
+            "'sabotador','atirador','rastreador','conjurador','runico','agoureiro',"
+            "'invocador','guardiao','inquisidor')",
+            name="ck_character_selected_path",
+        ),
         CheckConstraint("level BETWEEN 1 AND 60 AND xp >= 0", name="ck_character_progress"),
         CheckConstraint("hp >= 0 AND hp <= max_hp AND max_hp > 0", name="ck_character_hp"),
         CheckConstraint(
@@ -88,6 +94,7 @@ class Character(Base):
     name: Mapped[str] = mapped_column(String(16), nullable=False)
     race: Mapped[str] = mapped_column(String(24), nullable=False)
     character_class: Mapped[str] = mapped_column(String(24), nullable=False)
+    selected_path: Mapped[str | None] = mapped_column(String(24))
     stage: Mapped[str] = mapped_column(String(64), nullable=False)
     ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
     level: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
@@ -185,6 +192,82 @@ class Unlock(Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
     unlock_id: Mapped[str] = mapped_column(String(96), nullable=False)
+
+
+class ClassTrialState(Base):
+    """Durable shared progression state for a character's one Class Trial."""
+
+    __tablename__ = "class_trial_states"
+    __table_args__ = (
+        CheckConstraint(
+            "character_class IN ('sentinela','errante','vigia','tecelao','oraculo','luminar')",
+            name="ck_class_trial_class",
+        ),
+        CheckConstraint("status IN ('ready','active','completed')", name="ck_class_trial_status"),
+        CheckConstraint("current_stage BETWEEN 1 AND 3", name="ck_class_trial_stage"),
+        CheckConstraint("state_version >= 0", name="ck_class_trial_state_version"),
+        CheckConstraint(
+            "(status = 'active') = (current_attempt_id IS NOT NULL)",
+            name="ck_class_trial_attempt_status",
+        ),
+        CheckConstraint(
+            "(status = 'active') = (attempt_state IS NOT NULL)",
+            name="ck_class_trial_attempt_snapshot",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(completed_stages) = 'array'",
+            name="ck_class_trial_checkpoints_array",
+        ),
+        CheckConstraint(
+            "stage_definition IS NULL OR jsonb_typeof(stage_definition) = 'object'",
+            name="ck_class_trial_stage_definition_object",
+        ),
+        CheckConstraint(
+            "attempt_state IS NULL OR jsonb_typeof(attempt_state) = 'object'",
+            name="ck_class_trial_attempt_state_object",
+        ),
+        CheckConstraint(
+            "context IN ('circle','refuge')",
+            name="ck_class_trial_context",
+        ),
+        CheckConstraint(
+            "status != 'completed' OR completed_stages = '[1,2,3]'::jsonb",
+            name="ck_class_trial_complete_checkpoints",
+        ),
+        ForeignKeyConstraint(
+            ["current_attempt_id", "character_id"],
+            ["game_activities.id", "game_activities.character_id"],
+            name="fk_class_trial_attempt_character_activity",
+        ),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    character_class: Mapped[str] = mapped_column(String(24), nullable=False)
+    trial_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="ready", server_default="ready"
+    )
+    current_stage: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    completed_stages: Mapped[list[int]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
+    state_version: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    context: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="circle", server_default="circle"
+    )
+    current_attempt_id: Mapped[UUID | None] = mapped_column(Uuid, unique=True)
+    stage_definition: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True)
+    )
+    attempt_state: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True)
+    )
 
 
 class MaterialStack(Base):
@@ -575,6 +658,36 @@ class CharacterEquipmentSlot(Base):
     equipment_item_id: Mapped[UUID] = mapped_column(
         ForeignKey("equipment_items.id", ondelete="RESTRICT"), nullable=False
     )
+
+
+class CharacterActiveArtSlot(Base):
+    __tablename__ = "character_active_art_slots"
+    __table_args__ = (
+        PrimaryKeyConstraint("character_id", "slot", name="pk_character_active_art_slots"),
+        UniqueConstraint("character_id", "art_id", name="uq_character_active_art"),
+        CheckConstraint("slot BETWEEN 1 AND 3", name="ck_character_active_art_slot"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    slot: Mapped[int] = mapped_column(Integer, nullable=False)
+    art_id: Mapped[str] = mapped_column(String(96), nullable=False)
+
+
+class CharacterTalentChoice(Base):
+    __tablename__ = "character_talent_choices"
+    __table_args__ = (
+        PrimaryKeyConstraint("character_id", "point_slot", name="pk_character_talent_choices"),
+        UniqueConstraint("character_id", "talent_id", name="uq_character_talent_choice"),
+        CheckConstraint("point_slot BETWEEN 1 AND 12", name="ck_character_talent_point_slot"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    point_slot: Mapped[int] = mapped_column(Integer, nullable=False)
+    talent_id: Mapped[str] = mapped_column(String(96), nullable=False)
 
 
 class RuneStack(Base):
