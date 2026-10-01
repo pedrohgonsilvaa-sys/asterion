@@ -13,6 +13,7 @@ from asterion.application.p1 import P1Service
 from asterion.application.p2 import P2Service
 from asterion.application.p3 import P3Service
 from asterion.application.p4 import P4Service
+from asterion.application.p5 import P5Service
 from asterion.application.prologue import PrologueService
 from asterion.application.road import RoadService
 from asterion.application.s2 import S2Service
@@ -27,6 +28,7 @@ from asterion.bot.p1_ui import render_p1
 from asterion.bot.p2_ui import render_p2
 from asterion.bot.p3_ui import render_p3
 from asterion.bot.p4_ui import render_p4
+from asterion.bot.p5_ui import render_p5
 from asterion.bot.s2_ui import render_s2
 from asterion.bot.s3_ui import render_s3
 from asterion.bot.s4_ui import render_s4
@@ -111,6 +113,7 @@ def creation_router(
     s3: S3Service | None = None,
     p4: P4Service | None = None,
     class_trials: ClassTrialService | None = None,
+    p5: P5Service | None = None,
     s4: S4Service | None = None,
     s5: S5Service | None = None,
 ) -> Router:
@@ -130,6 +133,9 @@ def creation_router(
         p4_view = await p4.resume(actor) if p4 is not None else None
         if p4_view is not None and p4_view.status == "active" and p4_view.kind == "combat":
             return render_p4(p4_view)
+        p5_view = await p5.resume(actor) if p5 is not None else None
+        if p5_view is not None and p5_view.status == "active" and p5_view.kind == "combat":
+            return render_p5(p5_view)
         s4_view = await s4.resume(actor) if s4 is not None else None
         if s4_view is not None and s4_view.status == "active" and s4_view.kind == "combat":
             return render_s4(s4_view)
@@ -165,6 +171,8 @@ def creation_router(
             return render_p3(p3_view)
         if p4_view is not None and p4_view.status == "active":
             return render_p4(p4_view)
+        if p5_view is not None and p5_view.status == "active":
+            return render_p5(p5_view)
         if s3_view is not None and s3_view.status == "active":
             return render_s3(s3_view)
         if s2_view is not None and s2_view.status == "active":

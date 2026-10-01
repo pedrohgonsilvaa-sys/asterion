@@ -95,6 +95,16 @@ class P4CombatCallback(CallbackData, prefix="p4fight"):
         return UUID(hex=self.activity)
 
 
+class P5CombatCallback(CallbackData, prefix="p5fight"):
+    activity: str
+    version: int
+    action: str
+
+    @property
+    def activity_id(self) -> UUID:
+        return UUID(hex=self.activity)
+
+
 class S4CombatCallback(CallbackData, prefix="s4fight"):
     activity: str
     version: int
@@ -960,6 +970,8 @@ def render_combat(view: CombatView) -> Screen:
                 if view.context == "s3"
                 else P4CombatCallback
                 if view.context == "p4"
+                else P5CombatCallback
+                if view.context == "p5"
                 else S4CombatCallback
                 if view.context == "s4"
                 else S5CombatCallback
