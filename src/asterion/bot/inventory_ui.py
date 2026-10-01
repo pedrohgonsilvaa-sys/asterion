@@ -82,6 +82,7 @@ MATERIAL_META = {
     "material.tdo.residuo_ocaso": ("💧", "Essência · Grau I"),
     "material.tdo.catalisador_elite_i": ("⚗️", "Recurso Especial · Grau I"),
     "material.tdo.fragmento_aprimoramento_i": ("🪨", "Recurso Especial · Grau I"),
+    "material.tdo.nucleo_vigia_partido": ("💠", "Núcleo de Chefe"),
 }
 
 CONSUMABLE_FAMILY_LABELS = {

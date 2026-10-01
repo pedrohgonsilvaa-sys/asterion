@@ -278,7 +278,26 @@ SUNSET_CUSTODIAN = Creature(
     ),
     ai_priority=("marca_poente", "guarda_poente", "queda_poente"),
 )
-CREATURE_CATALOG = (*CREATURE_CATALOG, VIGIA, FACELESS_CUSTODIAN, SUNSET_CUSTODIAN)
+VIGIA_PARTIDO = Creature(
+    "vigia_partido",
+    "Vigia Partido",
+    "boss",
+    "balanced",
+    10,
+    10,
+    0,
+    ("golpe_vigia",),
+    (
+        ("golpe_vigia", "Golpe do Vigia", D("1.00"), 0, D(0), 0),
+        ("marca_sentinela", "Marca da Sentinela", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+        ("egide_partida", "Égide Partida", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D("0.90"), 2, True, "self", None, None, 2),
+        ("varredura_fraturada", "Varredura Fraturada", D("0.80"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents", D("0.70")),
+        ("peso_ruina", "Peso da Ruína", D("1.35"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "opponent", D("0.70")),
+        ("queda_ocaso", "Queda do Ocaso", D("1.85"), 0, D(0), 0, None, 0, True, 5, None, D(0), D(0), 0, False, "opponent", None, D("0.35")),
+    ),
+    ai_priority=("egide_partida", "marca_sentinela", "queda_ocaso", "varredura_fraturada", "peso_ruina", "golpe_vigia"),
+)
+CREATURE_CATALOG = (*CREATURE_CATALOG, VIGIA, FACELESS_CUSTODIAN, SUNSET_CUSTODIAN, VIGIA_PARTIDO)
 
 VARIANTS = {
     "furious": StatMultipliers(D(1), D("1.08"), D("0.92"), D(1)),
@@ -883,6 +902,10 @@ def create_creature_combat(
         self_barrier_coefficient = specification[12] if len(specification) > 12 else D(0)
         self_barrier_duration = specification[13] if len(specification) > 13 else 0
         skip_if_barrier_active = specification[14] if len(specification) > 14 else False
+        target_mode = specification[15] if len(specification) > 15 else "opponent"
+        enemy_hp_fraction_below = specification[16] if len(specification) > 16 and specification[16] is not None else None
+        enemy_hp_fraction_at_most = specification[17] if len(specification) > 17 and specification[17] is not None else None
+        max_uses_per_combat = specification[18] if len(specification) > 18 else None
         actions[key] = Action(
             key,
             label,
@@ -899,6 +922,10 @@ def create_creature_combat(
             self_barrier_coefficient,
             self_barrier_duration,
             skip_if_barrier_active,
+            target_mode=target_mode,
+            enemy_hp_fraction_below=D(enemy_hp_fraction_below) if enemy_hp_fraction_below is not None else None,
+            enemy_hp_fraction_at_most=D(enemy_hp_fraction_at_most) if enemy_hp_fraction_at_most is not None else None,
+            max_uses_per_combat=max_uses_per_combat,
         )
     talent_ids = (
         tuple(talent_id for _, talent_id in equipment.talent_choices)

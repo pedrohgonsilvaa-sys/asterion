@@ -108,7 +108,35 @@ class BestiaryRecorder:
                     session, entry, character_id, creature_id,
                     f"variant_victory:{variant}", "variant_victory", 6,
                 )
-        if elite:
+        evidence_ids = set(
+            (
+                await session.scalars(
+                    select(BestiaryEvidence.evidence_id).where(
+                        BestiaryEvidence.character_id == character_id,
+                        BestiaryEvidence.creature_id == creature_id,
+                    )
+                )
+            ).all()
+        )
+        if creature_id == "vigia_partido" or observation_category == "boss":
+            required = {
+                "first_victory",
+                "p6_completed",
+                "phase:a_fratura",
+                "phase:o_ultimo_posto",
+                "action:egide_partida",
+                "action:queda_ocaso",
+            }
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
+        elif elite:
             await self.add_evidence(
                 session, entry, character_id, creature_id, "elite", "elite", 8
             )
@@ -138,6 +166,14 @@ class BestiaryRecorder:
                     await self._grant_regional_victory_xp(
                         session, character_id, creature_id, reference_level=6
                     )
+                elif creature_id == "vigia_partido":
+                    await self._grant_regional_victory_xp(
+                        session,
+                        character_id,
+                        creature_id,
+                        reference_level=10,
+                        configured_xp=474,
+                    )
             else:
                 entry.bkp += _repeat_bkp(
                     entry.wins, elite, observation_category
@@ -163,7 +199,25 @@ class BestiaryRecorder:
                 )
             ).all()
         )
-        if elite:
+        if creature_id == "vigia_partido" or observation_category == "boss":
+            required = {
+                "first_victory",
+                "p6_completed",
+                "phase:a_fratura",
+                "phase:o_ultimo_posto",
+                "action:egide_partida",
+                "action:queda_ocaso",
+            }
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
+        elif elite:
             if creature_id == "alfa_cinereo":
                 special = {
                     "first_victory",
@@ -311,6 +365,46 @@ class BestiaryRecorder:
         entry.bkp += points
         return True
 
+    async def refresh_boss_mastery(self, session, character_id, creature_id):
+        """Recompute the campaign boss stage after an external campaign fact is added."""
+        entry = await session.scalar(
+            select(BestiaryEntry)
+            .where(
+                BestiaryEntry.character_id == character_id,
+                BestiaryEntry.creature_id == creature_id,
+            )
+            .with_for_update()
+        )
+        if entry is None:
+            return
+        evidence_ids = set(
+            (
+                await session.scalars(
+                    select(BestiaryEvidence.evidence_id).where(
+                        BestiaryEvidence.character_id == character_id,
+                        BestiaryEvidence.creature_id == creature_id,
+                    )
+                )
+            ).all()
+        )
+        required = {
+            "first_victory",
+            "p6_completed",
+            "phase:a_fratura",
+            "phase:o_ultimo_posto",
+            "action:egide_partida",
+            "action:queda_ocaso",
+        }
+        entry.stage = (
+            "dominated"
+            if required.issubset(evidence_ids)
+            else "studied"
+            if entry.bkp >= 22
+            else "known"
+            if entry.bkp >= 8
+            else "observed"
+        )
+
     async def _grant_observation_xp(
         self, session, character_id, creature_id, reference_level
     ):
@@ -381,7 +475,13 @@ class BestiaryRecorder:
         return True
 
     async def _grant_regional_victory_xp(
-        self, session, character_id, creature_id, *, reference_level
+        self,
+        session,
+        character_id,
+        creature_id,
+        *,
+        reference_level,
+        configured_xp=None,
     ):
         source_id = f"bestiary:first_victory:{character_id}:{creature_id}"
         event = await session.scalar(
@@ -394,9 +494,13 @@ class BestiaryRecorder:
         )
         if event is not None:
             return False
-        xp = int(
-            (Decimal(level_xp(reference_level)) * Decimal("0.06")).quantize(
-                Decimal(1), rounding=ROUND_HALF_UP
+        xp = (
+            configured_xp
+            if configured_xp is not None
+            else int(
+                (Decimal(level_xp(reference_level)) * Decimal("0.06")).quantize(
+                    Decimal(1), rounding=ROUND_HALF_UP
+                )
             )
         )
         event = RewardEvent(character_id=character_id, source_id=source_id)
@@ -408,7 +512,11 @@ class BestiaryRecorder:
                 kind="bestiary_first_victory_xp",
                 item_id=creature_id,
                 quantity=xp,
-                payload={"reference_level": reference_level, "fixed_percent": "0.06"},
+                payload=(
+                    {"reference_level": reference_level, "configured_xp": configured_xp}
+                    if configured_xp is not None
+                    else {"reference_level": reference_level, "fixed_percent": "0.06"}
+                ),
             )
         )
         character = await session.scalar(

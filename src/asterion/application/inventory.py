@@ -37,6 +37,7 @@ MATERIAL_LABELS = {
     "material.tdo.residuo_ocaso": "Resíduo do Ocaso",
     "material.tdo.catalisador_elite_i": "Catalisador de Elite I",
     "material.tdo.fragmento_aprimoramento_i": "Fragmento de Aprimoramento I",
+    "material.tdo.nucleo_vigia_partido": "Núcleo do Vigia Partido",
 }
 
 @dataclass(frozen=True)

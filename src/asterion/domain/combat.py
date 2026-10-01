@@ -134,6 +134,9 @@ class Action:
     target_barrier_debuff_magnitude_reduction: Decimal = ZERO
     target_effects: tuple[ActionEffect, ...] = ()
     manifestation_kind: str | None = None
+    enemy_hp_fraction_below: Decimal | None = None
+    enemy_hp_fraction_at_most: Decimal | None = None
+    max_uses_per_combat: int | None = None
 
     def __post_init__(self) -> None:
         if self.hit_count < 1:
@@ -153,6 +156,18 @@ class Action:
             raise ValueError("Prepared action chains require a positive duration.")
         if self.effect_trigger_scope not in {"per_action", "per_hit", "per_target"}:
             raise ValueError("Action effect trigger scope is invalid.")
+        if (
+            self.enemy_hp_fraction_below is not None
+            and not ZERO <= self.enemy_hp_fraction_below <= D(1)
+        ):
+            raise ValueError("Enemy HP phase threshold must be between zero and one.")
+        if (
+            self.enemy_hp_fraction_at_most is not None
+            and not ZERO <= self.enemy_hp_fraction_at_most <= D(1)
+        ):
+            raise ValueError("Enemy HP phase threshold must be between zero and one.")
+        if self.max_uses_per_combat is not None and self.max_uses_per_combat < 1:
+            raise ValueError("Combat action use limit must be positive.")
 
 
 @dataclass
@@ -201,6 +216,7 @@ class Fighter:
     selected_path: str | None = None
     talent_ids: tuple[str, ...] = ()
     path_state: dict[str, Any] = field(default_factory=dict)
+    action_use_counts: dict[str, int] = field(default_factory=dict)
 
     def stat(self, name: str) -> Decimal:
         value = getattr(self.stats, name)
@@ -2028,6 +2044,8 @@ def _perform(
                             )
         finally:
             actions[action_id] = action
+        if committed:
+            actor.action_use_counts[action_id] = actor.action_use_counts.get(action_id, 0) + 1
         return committed
 
     prepared = action.prepared is True or (
@@ -2047,6 +2065,7 @@ def _perform(
         state.response_window_seen = False
         actor.last_action = f"prepare:{action_id}"
         actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
+        actor.action_use_counts[action_id] = actor.action_use_counts.get(action_id, 0) + 1
         state.events.append(
             CombatEvent(
                 len(state.events),
@@ -2191,6 +2210,8 @@ def _perform(
             action.self_barrier_debuff_magnitude_reduction
         )
         actor.last_action = action_id
+        if _hit_index is None:
+            actor.action_use_counts[action_id] = actor.action_use_counts.get(action_id, 0) + 1
         if (action.cooldown or action.blocked_opportunities) and not state.resolving_prepared:
             actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
         state.events.append(
@@ -3062,6 +3083,8 @@ def _perform(
             "applied_opportunity": actor.opportunity,
         }
     actor.last_action = action_id
+    if _hit_index is None and not prepared_resolution:
+        actor.action_use_counts[action_id] = actor.action_use_counts.get(action_id, 0) + 1
     if (action.cooldown or action.blocked_opportunities) and not state.resolving_prepared:
         actor.cooldowns[action_id] = _cooldown_deadline(actor, action)
     if action.next_direct_crit_bonus > ZERO:
@@ -3170,6 +3193,21 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
     def ready(action_id: str) -> bool:
         action = state.enemy_actions.get(action_id)
         if action is None or enemy.cooldowns.get(action_id, 0) > enemy.opportunity:
+            return False
+        if (
+            action.max_uses_per_combat is not None
+            and enemy.action_use_counts.get(action_id, 0) >= action.max_uses_per_combat
+        ):
+            return False
+        if (
+            action.enemy_hp_fraction_below is not None
+            and enemy.hp >= enemy.stats.hp * action.enemy_hp_fraction_below
+        ):
+            return False
+        if (
+            action.enemy_hp_fraction_at_most is not None
+            and enemy.hp > enemy.stats.hp * action.enemy_hp_fraction_at_most
+        ):
             return False
         return not (
             action.skip_if_barrier_active
