@@ -22,6 +22,8 @@ from asterion.bot.combat_ui import (
     P4CombatCallback,
     S2CombatCallback,
     S3CombatCallback,
+    S4CombatCallback,
+    S5CombatCallback,
     render_combat,
 )
 from asterion.bot.creation_handlers import present
@@ -301,6 +303,42 @@ def combat_router(
         await query.answer()
         if view is not None and isinstance(query.message, Message):
             await present(query.message, render_p4(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("s4fight:"))
+    async def s4_action(query: CallbackQuery):
+        if s4 is None:
+            await query.answer()
+            return
+        try:
+            data = S4CombatCallback.unpack(query.data or "")
+            activity_id = data.activity_id
+        except (KeyError, TypeError, ValueError):
+            await query.answer()
+            return
+        view = await s4.action_combat(
+            query.from_user.id, activity_id, data.version, data.action
+        )
+        await query.answer()
+        if view is not None and isinstance(query.message, Message):
+            await present(query.message, render_s4(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("s5fight:"))
+    async def s5_action(query: CallbackQuery):
+        if s5 is None:
+            await query.answer()
+            return
+        try:
+            data = S5CombatCallback.unpack(query.data or "")
+            activity_id = data.activity_id
+        except (KeyError, TypeError, ValueError):
+            await query.answer()
+            return
+        view = await s5.action_combat(
+            query.from_user.id, activity_id, data.version, data.action
+        )
+        await query.answer()
+        if view is not None and isinstance(query.message, Message):
+            await present(query.message, render_s5(view), images, edit=True)
 
     @router.callback_query(F.data.startswith("cu:"))
     async def consumable(query: CallbackQuery):
