@@ -282,13 +282,6 @@ class P6Service:
                     session, character.id, VIGIA_PARTIDO.creature_id,
                     victory=True, observation_category="boss",
                 )
-                await self.bestiary.add_evidence(
-                    session, entry, character.id, VIGIA_PARTIDO.creature_id,
-                    "p6_completed", "campaign", 5,
-                )
-                await self.bestiary.refresh_boss_mastery(
-                    session, character.id, VIGIA_PARTIDO.creature_id
-                )
                 await self._ensure_achievement(session, character.id, "feat.tdo.a_ultima_guarda")
                 progress.update(boss_defeated=True, awaiting_retry=False, boss_result="victory")
                 quest.step = 6
@@ -445,6 +438,14 @@ class P6Service:
         quest.step = 9
         quest.progress = {**(quest.progress or {}), "completed": True, "reward_choice": choice}
         quest.state_version += 1
+        entry = await self._ensure_bestiary_entry(session, character.id)
+        await self.bestiary.add_evidence(
+            session, entry, character.id, VIGIA_PARTIDO.creature_id,
+            "p6_completed", "campaign", 5,
+        )
+        await self.bestiary.refresh_boss_mastery(
+            session, character.id, VIGIA_PARTIDO.creature_id
+        )
         await consolidate_character_level(session, character)
         await self._award_regional_completion_if_eligible(session, character.id, character.level)
 
