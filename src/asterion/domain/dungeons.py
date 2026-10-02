@@ -130,15 +130,24 @@ def stable_percent(seed: str, purpose: str) -> bool:
 
 
 def difficulty_gate(
-    *, level: int, discovered: bool, stable_first_clear: bool, fractured_first_clear: bool
+    *,
+    level: int,
+    discovered: bool,
+    stable_first_clear: bool,
+    fractured_first_clear: bool,
+    minimum_level: int = 4,
 ) -> dict[str, str]:
     """Return player-facing eligibility without exposing undiscovered content."""
     if not discovered:
         return {}
     return {
-        "stable": "available" if level >= 4 else "level",
+        "stable": "available" if level >= minimum_level else "level",
         "fractured": (
-            "level" if level < 4 else "available" if stable_first_clear else "first_stable"
+            "level"
+            if level < minimum_level
+            else "available"
+            if stable_first_clear
+            else "first_stable"
         ),
         "rupture": (
             "available"

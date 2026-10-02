@@ -76,6 +76,7 @@ def upgrade() -> None:
     op.create_table(
         "dungeon_run_members",
         sa.Column("run_id", sa.Uuid(), nullable=False),
+        sa.Column("foreground_activity_id", sa.Uuid(), nullable=True),
         sa.Column("character_id", sa.Uuid(), nullable=False),
         sa.Column("position", sa.Integer(), nullable=False),
         sa.Column("status", sa.String(length=16), nullable=False),
@@ -137,7 +138,14 @@ def upgrade() -> None:
             name="fk_dungeon_run_members_run_id_dungeon_runs",
             ondelete="CASCADE",
         ),
+        sa.ForeignKeyConstraint(
+            ["foreground_activity_id"],
+            ["game_activities.id"],
+            name="fk_dungeon_run_members_foreground_activity_id_game_activities",
+            ondelete="SET NULL",
+        ),
         sa.PrimaryKeyConstraint("run_id", "character_id", name="pk_dungeon_run_members"),
+        sa.UniqueConstraint("foreground_activity_id", name="uq_dungeon_run_member_foreground"),
         sa.UniqueConstraint("run_id", "position", name="uq_dungeon_run_member_position"),
     )
     op.create_index(
@@ -200,11 +208,178 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("character_id", name="pk_dungeon_pity_states"),
     )
+    op.create_table(
+        "dungeon_lobbies",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("dungeon_family_id", sa.String(length=96), nullable=False),
+        sa.Column("difficulty", sa.String(length=16), nullable=False),
+        sa.Column("mode", sa.String(length=16), nullable=False),
+        sa.Column("status", sa.String(length=16), nullable=False),
+        sa.Column("leader_character_id", sa.Uuid(), nullable=False),
+        sa.Column("state_version", sa.BigInteger(), nullable=False),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("confirmation_deadline", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("run_id", sa.Uuid(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint("mode IN ('invite','matchmaking')", name="ck_dungeon_lobby_mode"),
+        sa.CheckConstraint(
+            "status IN ('forming','confirming','started','cancelled','expired')",
+            name="ck_dungeon_lobby_status",
+        ),
+        sa.CheckConstraint("state_version >= 0", name="ck_dungeon_lobby_state_version"),
+        sa.ForeignKeyConstraint(
+            ["leader_character_id"],
+            ["characters.id"],
+            name="fk_dungeon_lobbies_leader_character_id_characters",
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["run_id"], ["dungeon_runs.id"], name="fk_dungeon_lobbies_run_id_dungeon_runs",
+            ondelete="SET NULL",
+        ),
+        sa.PrimaryKeyConstraint("id", name="pk_dungeon_lobbies"),
+    )
+    op.create_index(
+        "ix_dungeon_lobbies_open",
+        "dungeon_lobbies",
+        ["dungeon_family_id", "difficulty", "created_at"],
+        unique=False,
+        postgresql_where=sa.text("status IN ('forming','confirming')"),
+    )
+    op.create_table(
+        "dungeon_lobby_members",
+        sa.Column("lobby_id", sa.Uuid(), nullable=False),
+        sa.Column("character_id", sa.Uuid(), nullable=False),
+        sa.Column("foreground_activity_id", sa.Uuid(), nullable=True),
+        sa.Column("position", sa.Integer(), nullable=False),
+        sa.Column("status", sa.String(length=16), nullable=False),
+        sa.Column(
+            "joined_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+        ),
+        sa.Column("confirmed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.CheckConstraint("position BETWEEN 1 AND 4", name="ck_dungeon_lobby_position"),
+        sa.CheckConstraint(
+            "status IN ('invited','joined','queued','matched','confirmed','declined','left')",
+            name="ck_dungeon_lobby_member_status",
+        ),
+        sa.ForeignKeyConstraint(
+            ["character_id"], ["characters.id"],
+            name="fk_dungeon_lobby_members_character_id_characters", ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["lobby_id"], ["dungeon_lobbies.id"],
+            name="fk_dungeon_lobby_members_lobby_id_dungeon_lobbies", ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["foreground_activity_id"], ["game_activities.id"],
+            name="fk_dungeon_lobby_members_foreground_activity_id_game_activities",
+            ondelete="SET NULL",
+        ),
+        sa.PrimaryKeyConstraint("lobby_id", "character_id", name="pk_dungeon_lobby_members"),
+        sa.UniqueConstraint(
+            "foreground_activity_id", name="uq_dungeon_lobby_member_foreground"
+        ),
+        sa.UniqueConstraint("lobby_id", "position", name="uq_dungeon_lobby_position"),
+    )
+    op.create_index(
+        "uq_dungeon_open_lobby_member",
+        "dungeon_lobby_members",
+        ["character_id"],
+        unique=True,
+        postgresql_where=sa.text(
+            "status IN ('invited','joined','queued','matched','confirmed')"
+        ),
+    )
+    op.create_table(
+        "dungeon_invites",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("lobby_id", sa.Uuid(), nullable=False),
+        sa.Column("inviter_character_id", sa.Uuid(), nullable=False),
+        sa.Column("invitee_character_id", sa.Uuid(), nullable=False),
+        sa.Column("status", sa.String(length=16), nullable=False),
+        sa.Column("state_version", sa.BigInteger(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.CheckConstraint(
+            "status IN ('pending','accepted','declined','cancelled','expired')",
+            name="ck_dungeon_invite_status",
+        ),
+        sa.CheckConstraint("state_version >= 0", name="ck_dungeon_invite_version"),
+        sa.ForeignKeyConstraint(
+            ["invitee_character_id"], ["characters.id"],
+            name="fk_dungeon_invites_invitee_character_id_characters", ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["inviter_character_id"], ["characters.id"],
+            name="fk_dungeon_invites_inviter_character_id_characters", ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["lobby_id"], ["dungeon_lobbies.id"],
+            name="fk_dungeon_invites_lobby_id_dungeon_lobbies", ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name="pk_dungeon_invites"),
+        sa.UniqueConstraint("lobby_id", "invitee_character_id", name="uq_dungeon_invite_target"),
+    )
+    op.create_index(
+        "ix_dungeon_invites_pending",
+        "dungeon_invites",
+        ["invitee_character_id", "expires_at"],
+        unique=False,
+        postgresql_where=sa.text("status = 'pending'"),
+    )
+    op.create_table(
+        "dungeon_match_queue",
+        sa.Column("character_id", sa.Uuid(), nullable=False),
+        sa.Column("dungeon_family_id", sa.String(length=96), nullable=False),
+        sa.Column("difficulty", sa.String(length=16), nullable=False),
+        sa.Column("status", sa.String(length=16), nullable=False),
+        sa.Column("lobby_id", sa.Uuid(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "status IN ('queued','matched','cancelled','expired')",
+            name="ck_dungeon_match_queue_status",
+        ),
+        sa.ForeignKeyConstraint(
+            ["character_id"], ["characters.id"],
+            name="fk_dungeon_match_queue_character_id_characters", ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["lobby_id"], ["dungeon_lobbies.id"],
+            name="fk_dungeon_match_queue_lobby_id_dungeon_lobbies", ondelete="SET NULL",
+        ),
+        sa.PrimaryKeyConstraint("character_id", name="pk_dungeon_match_queue"),
+    )
+    op.create_index(
+        "ix_dungeon_match_queue_grouping",
+        "dungeon_match_queue",
+        ["dungeon_family_id", "difficulty", "created_at"],
+        unique=False,
+        postgresql_where=sa.text("status = 'queued'"),
+    )
 
 
 def downgrade() -> None:
     bind = op.get_bind()
     for table in (
+        "dungeon_match_queue",
+        "dungeon_invites",
+        "dungeon_lobby_members",
+        "dungeon_lobbies",
         "dungeon_run_encounters",
         "dungeon_run_members",
         "dungeon_runs",
@@ -213,6 +388,14 @@ def downgrade() -> None:
         bind.exec_driver_sql(f'LOCK TABLE "{table}" IN SHARE ROW EXCLUSIVE MODE')
         if bind.scalar(sa.text(f'SELECT EXISTS (SELECT 1 FROM "{table}")')):
             raise RuntimeError(f"Cannot downgrade while {table} contains dungeon state")
+    op.drop_index("ix_dungeon_match_queue_grouping", table_name="dungeon_match_queue")
+    op.drop_table("dungeon_match_queue")
+    op.drop_index("ix_dungeon_invites_pending", table_name="dungeon_invites")
+    op.drop_table("dungeon_invites")
+    op.drop_index("uq_dungeon_open_lobby_member", table_name="dungeon_lobby_members")
+    op.drop_table("dungeon_lobby_members")
+    op.drop_index("ix_dungeon_lobbies_open", table_name="dungeon_lobbies")
+    op.drop_table("dungeon_lobbies")
     op.drop_table("dungeon_run_encounters")
     op.drop_index("uq_dungeon_active_member", table_name="dungeon_run_members")
     op.drop_table("dungeon_run_members")

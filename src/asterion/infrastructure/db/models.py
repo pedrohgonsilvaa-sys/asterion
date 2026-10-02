@@ -480,6 +480,9 @@ class DungeonRunMember(Base):
     run_id: Mapped[UUID] = mapped_column(
         ForeignKey("dungeon_runs.id", ondelete="CASCADE"), nullable=False
     )
+    foreground_activity_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("game_activities.id", ondelete="SET NULL"), unique=True
+    )
     character_id: Mapped[UUID] = mapped_column(
         ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
     )
@@ -547,6 +550,151 @@ class DungeonPityState(Base):
     )
     legendary_plus_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     mythic_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class DungeonLobby(Base):
+    """Durable group-formation and ready-check state for dungeon runs."""
+
+    __tablename__ = "dungeon_lobbies"
+    __table_args__ = (
+        CheckConstraint("mode IN ('invite','matchmaking')", name="ck_dungeon_lobby_mode"),
+        CheckConstraint(
+            "status IN ('forming','confirming','started','cancelled','expired')",
+            name="ck_dungeon_lobby_status",
+        ),
+        CheckConstraint("state_version >= 0", name="ck_dungeon_lobby_state_version"),
+        Index(
+            "ix_dungeon_lobbies_open",
+            "dungeon_family_id",
+            "difficulty",
+            "created_at",
+            postgresql_where=text("status IN ('forming','confirming')"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    dungeon_family_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    difficulty: Mapped[str] = mapped_column(String(16), nullable=False)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="forming")
+    leader_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    confirmation_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    run_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("dungeon_runs.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class DungeonLobbyMember(Base):
+    """One participant's durable state in a lobby/ready check."""
+
+    __tablename__ = "dungeon_lobby_members"
+    __table_args__ = (
+        PrimaryKeyConstraint("lobby_id", "character_id", name="pk_dungeon_lobby_members"),
+        UniqueConstraint("lobby_id", "position", name="uq_dungeon_lobby_position"),
+        CheckConstraint("position BETWEEN 1 AND 4", name="ck_dungeon_lobby_position"),
+        CheckConstraint(
+            "status IN ('invited','joined','queued','matched','confirmed','declined','left')",
+            name="ck_dungeon_lobby_member_status",
+        ),
+        Index(
+            "uq_dungeon_open_lobby_member",
+            "character_id",
+            unique=True,
+            postgresql_where=text("status IN ('invited','joined','queued','matched','confirmed')"),
+        ),
+    )
+
+    lobby_id: Mapped[UUID] = mapped_column(
+        ForeignKey("dungeon_lobbies.id", ondelete="CASCADE"), nullable=False
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    foreground_activity_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("game_activities.id", ondelete="SET NULL"), unique=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="joined")
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DungeonInvite(Base):
+    """Persistent, cancellable, expiring invite with no resource reservation."""
+
+    __tablename__ = "dungeon_invites"
+    __table_args__ = (
+        UniqueConstraint("lobby_id", "invitee_character_id", name="uq_dungeon_invite_target"),
+        CheckConstraint(
+            "status IN ('pending','accepted','declined','cancelled','expired')",
+            name="ck_dungeon_invite_status",
+        ),
+        CheckConstraint("state_version >= 0", name="ck_dungeon_invite_version"),
+        Index(
+            "ix_dungeon_invites_pending",
+            "invitee_character_id",
+            "expires_at",
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    lobby_id: Mapped[UUID] = mapped_column(
+        ForeignKey("dungeon_lobbies.id", ondelete="CASCADE"), nullable=False
+    )
+    inviter_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    invitee_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class DungeonMatchQueue(Base):
+    """One active matchmaking request per character."""
+
+    __tablename__ = "dungeon_match_queue"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued','matched','cancelled','expired')",
+            name="ck_dungeon_match_queue_status",
+        ),
+        Index(
+            "ix_dungeon_match_queue_grouping",
+            "dungeon_family_id",
+            "difficulty",
+            "created_at",
+            postgresql_where=text("status = 'queued'"),
+        ),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    dungeon_family_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    difficulty: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
+    lobby_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("dungeon_lobbies.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class CreationInput(Base):

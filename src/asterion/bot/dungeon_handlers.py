@@ -15,6 +15,7 @@ from asterion.domain.combat import action_target_ids
 def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
     router = Router(name="dungeons")
     router.callback_query.filter(F.message.chat.type == "private")
+    router.message.filter(F.chat.type == "private")
 
     async def show(query: CallbackQuery, view):
         await query.answer()
@@ -27,16 +28,128 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
 
     @router.callback_query(F.data == "dungeon:crypt")
     async def detail(query: CallbackQuery):
-        await show(query, await service.detail(query.from_user.id))
+        await show(query, await service.detail(query.from_user.id, "dungeon.tdo.cripta_ocaso"))
+
+    @router.callback_query(F.data == "dungeon:galleries")
+    async def galleries(query: CallbackQuery):
+        await show(
+            query,
+            await service.detail(query.from_user.id, "dungeon.tdo.galerias_vigia"),
+        )
+
+    @router.callback_query(F.data.startswith("dungeon:group:"))
+    async def prepare_group(query: CallbackQuery):
+        try:
+            _, _, family_key, difficulty_key = (query.data or "").split(":")
+            family = {
+                "c": "dungeon.tdo.cripta_ocaso",
+                "g": "dungeon.tdo.galerias_vigia",
+            }[family_key]
+            difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
+                difficulty_key
+            ]
+            view = await service.prepare_group(query.from_user.id, family, difficulty)
+        except (KeyError, ValueError, TypeError):
+            view = await service.resume(query.from_user.id)
+        await show(query, view)
+
+    @router.callback_query(F.data.startswith("dungeon:queue:"))
+    async def queue(query: CallbackQuery):
+        try:
+            _, _, family_key, difficulty_key = (query.data or "").split(":")
+            family = {
+                "c": "dungeon.tdo.cripta_ocaso",
+                "g": "dungeon.tdo.galerias_vigia",
+            }[family_key]
+            difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
+                difficulty_key
+            ]
+            view = await service.join_matchmaking(
+                query.from_user.id, family, difficulty
+            )
+        except (KeyError, ValueError, TypeError):
+            view = await service.resume(query.from_user.id)
+        await show(query, view)
+
+    @router.callback_query(F.data.startswith("dungeon:ready:"))
+    async def ready_check(query: CallbackQuery):
+        try:
+            _, _, lobby_id, version = (query.data or "").split(":")
+            view = await service.open_entry_confirmation(
+                query.from_user.id, UUID(hex=lobby_id), int(version)
+            )
+        except (ValueError, TypeError, IndexError):
+            view = await service.resume(query.from_user.id)
+        await show(query, view)
+
+    @router.callback_query(F.data.startswith("dungeon:conf:"))
+    async def confirm_entry(query: CallbackQuery):
+        try:
+            _, _, lobby_id, version, answer = (query.data or "").split(":")
+            view = await service.confirm_entry(
+                query.from_user.id,
+                UUID(hex=lobby_id),
+                int(version),
+                confirm=answer == "y",
+            )
+        except (ValueError, TypeError, IndexError):
+            view = await service.resume(query.from_user.id)
+        await show(query, view)
+
+    @router.callback_query(F.data.startswith("dungeon:inv:"))
+    async def respond_invite(query: CallbackQuery):
+        try:
+            _, _, invite_id, answer = (query.data or "").split(":")
+            view = await service.respond_invite(
+                query.from_user.id, UUID(hex=invite_id), accept=answer == "y"
+            )
+        except (ValueError, TypeError, IndexError):
+            view = await service.resume(query.from_user.id)
+        await show(query, view)
+
+    @router.callback_query(F.data.startswith("dungeon:cancel:"))
+    async def cancel_lobby(query: CallbackQuery):
+        try:
+            _, _, lobby_id, version = (query.data or "").split(":")
+            view = await service.cancel_queue_or_lobby(
+                query.from_user.id, UUID(hex=lobby_id), int(version)
+            )
+        except (ValueError, TypeError, IndexError):
+            view = await service.resume(query.from_user.id)
+        await show(query, view)
+
+    @router.message(F.text.startswith("/dungeon_invite"))
+    async def invite_by_character_name(message: Message):
+        parts = (message.text or "").split(maxsplit=1)
+        if len(parts) != 2 or not parts[1].strip():
+            await message.answer("Use: /dungeon_invite Nome exato do personagem")
+            return
+        view = await service.invite_active_lobby_by_name(
+            message.from_user.id, parts[1].strip()
+        )
+        await present(message, render_dungeons(view), images)
 
     @router.callback_query(F.data.startswith("dungeon:start:"))
     async def start(query: CallbackQuery):
-        suffix = (query.data or "").rsplit(":", 1)[-1]
-        if suffix not in {"s", "f"}:
-            await show(query, await service.detail(query.from_user.id))
+        pieces = (query.data or "").split(":")
+        if len(pieces) == 4:
+            family = {
+                "c": "dungeon.tdo.cripta_ocaso",
+                "g": "dungeon.tdo.galerias_vigia",
+            }.get(pieces[2])
+            suffix = pieces[3]
+        else:
+            family = "dungeon.tdo.cripta_ocaso"
+            suffix = pieces[-1]
+        if family is None or suffix not in {"s", "f", "r"}:
+            fallback = family or "dungeon.tdo.cripta_ocaso"
+            await show(query, await service.detail(query.from_user.id, fallback))
             return
-        difficulty = "stable" if suffix == "s" else "fractured"
-        await show(query, await service.start_solo(query.from_user.id, difficulty))
+        difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[suffix]
+        await show(
+            query,
+            await service.start_solo(query.from_user.id, difficulty, family),
+        )
 
     @router.callback_query(F.data.startswith("dungeon:e:"))
     async def enter(query: CallbackQuery):
@@ -117,17 +230,22 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
             elif data.target == "b":
                 pass
             else:
-                actions = class_trial_action_ids(view.combat)
+                actor_key = view.combat_actor_key
+                actions = class_trial_action_ids(view.combat, actor_key=actor_key)
                 if not 0 <= data.action_index < len(actions):
                     view = await service.resume(query.from_user.id)
                 else:
                     action_id = actions[data.action_index]
-                    definition = view.combat.player_actions.get(action_id)
+                    from asterion.domain.combat import player_actions_for
+
+                    definition = player_actions_for(view.combat, actor_key).get(action_id)
                     targets = (
                         ()
                         if definition is None
                         or definition.target_mode in {"self", "all_opponents", "all_allies"}
-                        else action_target_ids(view.combat, action_id)
+                        else action_target_ids(
+                            view.combat, action_id, actor_key=actor_key or "player"
+                        )
                     )
                     if data.target == "s":
                         if len(targets) > 1 and isinstance(query.message, Message):

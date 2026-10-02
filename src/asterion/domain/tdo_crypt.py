@@ -15,6 +15,7 @@ from asterion.domain.road import (
     PROFANADOR_CALCINADO,
     SEM_NOME,
     CreatureCombatantSpec,
+    PlayerCombatantSpec,
     create_creature_party_combat,
 )
 
@@ -38,7 +39,11 @@ CRYPT_ENCOUNTERS = {
 }
 
 
-def encounter_specs(ordinal: int, difficulty: str) -> tuple[CreatureCombatantSpec, ...]:
+def encounter_specs(
+    ordinal: int,
+    difficulty: str,
+    initial_group_size: int = 1,
+) -> tuple[CreatureCombatantSpec, ...]:
     if ordinal == 1:
         return (CreatureCombatantSpec(PROFANADOR_CALCINADO, 4, "enemy"),)
     if ordinal == 2:
@@ -81,8 +86,8 @@ def encounter_specs(ordinal: int, difficulty: str) -> tuple[CreatureCombatantSpe
         }[difficulty]
         hp_multiplier, attack_multiplier = profile
         boss_factors = StatMultipliers(
-            D(3) / D("2.20") * hp_multiplier,
-            attack_multiplier,
+            D(3) / D("2.20") * hp_multiplier * (D(1) + D("0.78") * (initial_group_size - 1)),
+            attack_multiplier * (D(1) + D("0.07") * (initial_group_size - 1)),
             D(1),
             D(1),
         )
@@ -103,6 +108,8 @@ def create_crypt_combat(
     active_art_ids: tuple[str, ...],
     ordinal: int,
     run_seed: str,
+    initial_group_size: int = 1,
+    party: tuple[PlayerCombatantSpec, ...] | None = None,
 ) -> Combat:
     definition = CRYPT_ENCOUNTERS[ordinal]
     state = create_creature_party_combat(
@@ -111,7 +118,7 @@ def create_crypt_combat(
         character_class,
         race,
         hp,
-        encounter_specs(ordinal, difficulty),
+        encounter_specs(ordinal, difficulty, initial_group_size),
         player_level=level,
         equipment_configuration=equipment,
         active_art_ids=active_art_ids,
@@ -121,6 +128,7 @@ def create_crypt_combat(
             {"stable": 12, "fractured": 10, "rupture": 8}[difficulty] if ordinal == 5 else 0
         ),
         pressure_cap=5 if ordinal == 5 else 0,
+        party=party,
     )
     state.configuration_snapshot = (state.configuration_snapshot or {}) | {
         "active_arts": [
@@ -131,6 +139,7 @@ def create_crypt_combat(
             "difficulty": difficulty,
             "ordinal": ordinal,
             "seed": run_seed,
+            "initial_group_size": initial_group_size,
         },
     }
     if ordinal == 4:
