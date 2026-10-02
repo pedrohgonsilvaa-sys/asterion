@@ -339,27 +339,61 @@ async def test_alchemy_and_tdo_rune_crafts_use_existing_stack_models(database):
 
 
 @pytest.mark.asyncio
-async def test_pending_and_blocked_delivery_preserve_crafted_output(database, monkeypatch):
+async def test_crafting_requires_inventory_space_before_preview(database, monkeypatch):
     actor = 840105
     character_id = await _seed_active_professions(database, actor, "blacksmith", "alchemist")
     await _add_materials(database, character_id, {IRON: 7, RESIDUE: 3})
     monkeypatch.setattr(crafting_module, "INVENTORY_CAPACITY", 0)
     service = CraftingService(database[1], "ocaso")
+
+    with pytest.raises(CraftingRejected, match="inventory_full"):
+        await service.preview(actor, "recipe.tdo.blacksmith.walker_weapon.comum")
+
+    async with database[1]() as session:
+        character = await session.get(Character, character_id)
+        mats = (
+            await session.scalars(
+                select(MaterialStack).where(MaterialStack.character_id == character_id)
+            )
+        ).all()
+        receipts = (
+            await session.scalars(
+                select(CraftingReceipt).where(CraftingReceipt.character_id == character_id)
+            )
+        ).all()
+        assert character.crowns == 5000
+        assert {row.material_id: row.quantity for row in mats} == {IRON: 7, RESIDUE: 3}
+        assert receipts == []
+
+
+@pytest.mark.asyncio
+async def test_pending_and_blocked_delivery_recover_capacity_race_after_preview(
+    database, monkeypatch
+):
+    service = CraftingService(database[1], "ocaso")
+
+    actor = 840106
+    character_id = await _seed_active_professions(database, actor, "blacksmith", "alchemist")
+    await _add_materials(database, character_id, {IRON: 7, RESIDUE: 3})
     preview = await service.preview(actor, "recipe.tdo.blacksmith.walker_weapon.comum")
-    assert preview is not None
-    assert preview.delivery == "Pending"
+    assert preview is not None and preview.delivery == "Inventário"
+
+    monkeypatch.setattr(crafting_module, "INVENTORY_CAPACITY", 0)
     result = await service.commit(actor, preview.receipt_id)
     assert result is not None and result.delivery == "Pending"
     pending_view = await InventoryService(database[1], "ocaso").pending(actor)
     assert pending_view is not None and pending_view.pending_count == 1
     assert pending_view.entries[0].title == "Arma do Caminhante"
 
-    actor = 840106
+    actor = 840109
     character_id = await _seed_active_professions(database, actor, "blacksmith", "alchemist")
     await _add_materials(database, character_id, {IRON: 7, RESIDUE: 3})
-    monkeypatch.setattr(crafting_module, "PENDING_CAPACITY", 0)
+    monkeypatch.setattr(crafting_module, "INVENTORY_CAPACITY", 60)
     preview = await service.preview(actor, "recipe.tdo.blacksmith.walker_weapon.comum")
-    assert preview is not None
+    assert preview is not None and preview.delivery == "Inventário"
+
+    monkeypatch.setattr(crafting_module, "INVENTORY_CAPACITY", 0)
+    monkeypatch.setattr(crafting_module, "PENDING_CAPACITY", 0)
     result = await service.commit(actor, preview.receipt_id)
     assert result is not None and result.delivery == "Pending"
     async with database[1]() as session:
