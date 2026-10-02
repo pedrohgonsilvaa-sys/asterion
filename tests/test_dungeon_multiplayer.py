@@ -798,6 +798,7 @@ async def test_ready_check_revalidates_every_group_member_before_confirmation(da
     sent = await service.invite_by_name(
         actors[0], lobby.lobby_id, lobby.lobby_version, "Herob"
     )
+    assert sent is not None and sent.reason == "invited:Herob"
     pending = await service.pending_invite(actors[1])
     accepted = await service.respond_invite(
         actors[1], pending.invite_id, accept=True
