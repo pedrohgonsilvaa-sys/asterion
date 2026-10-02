@@ -288,6 +288,7 @@ def _reason_label(reason: str | None) -> str:
         "wrong_location": "🔒 Local Inapropriado",
         "foreground": "🔒 Durante atividade",
         "delivery_blocked": "🔒 Entregas pendentes",
+        "inventory_full": "🔒 Inventário Cheio",
         "materials": "🔒 Materiais Insuficientes",
         "crowns": "🔒 Coroas Insuficientes",
         "unavailable_in_c1": "🔒 Criação indisponível neste bloco",
