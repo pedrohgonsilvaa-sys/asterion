@@ -291,7 +291,7 @@ def _reason_label(reason: str | None) -> str:
         "inventory_full": "🔒 Inventário Cheio",
         "materials": "🔒 Materiais Insuficientes",
         "crowns": "🔒 Coroas Insuficientes",
-        "unavailable_in_c1": "🔒 Criação indisponível neste bloco",
+        "requires_equipment": "💫 Aplicação pelo detalhe do Equipamento",
     }.get(reason or "", "✨ Disponível")
 
 

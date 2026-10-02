@@ -1,4 +1,6 @@
 import os
+import runpy
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -9,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import command
+from asterion.domain.equipment_modifications import rune_potency_for
 
 
 def _migrate(connection, revision: str, direction: str = "upgrade") -> None:
@@ -128,3 +131,70 @@ async def test_0017_profession_and_crafting_state_upgrade_constraints_and_safe_d
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
             "20261002_0017"
         )
+
+
+@pytest.mark.asyncio
+async def test_0017_corrects_only_exact_legacy_higher_grade_rune_potencies_idempotently(
+    schema_at_0016,
+):
+    engine = schema_at_0016
+    actor = 998877665502
+    character_id = uuid4()
+    legacy_id, unrelated_id, grade_one_id = uuid4(), uuid4(), uuid4()
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("INSERT INTO accounts (telegram_id) VALUES (:actor)"), {"actor": actor}
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO characters (id, telegram_id, server_id, name, race, "
+                "character_class, stage, ruleset_version, level, xp, hp, max_hp, vigor, "
+                "max_vigor, crowns, combat_configuration_version) VALUES (:id, :actor, "
+                "'ocaso', 'Runista', 'remanescente', 'sentinela', 'menu:ready', 'test', "
+                "10, 0, 702, 702, 100, 100, 5000, 0)"
+            ),
+            {"id": character_id, "actor": actor},
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO rune_stacks "
+                "(id, character_id, family, rarity, grade, potency, quantity, bound) "
+                "VALUES (:legacy, :character, 'Brasa', 'Lendária', 6, '0.55%', 1, false), "
+                "(:unrelated, :character, 'Brasa', 'Rara', 6, '0.56%', 1, false), "
+                "(:grade_one, :character, 'Brasa', 'Rara', 1, '0.35%', 1, false)"
+            ),
+            {
+                "legacy": legacy_id,
+                "unrelated": unrelated_id,
+                "grade_one": grade_one_id,
+                "character": character_id,
+            },
+        )
+        await connection.run_sync(lambda sync: _migrate(sync, "head"))
+
+        async def potency(row_id):
+            return await connection.scalar(
+                text("SELECT potency FROM rune_stacks WHERE id=:id"), {"id": row_id}
+            )
+
+        assert await potency(legacy_id) == "1.00%"
+        assert await potency(unrelated_id) == "0.56%"
+        assert await potency(grade_one_id) == "0.35%"
+
+        migration = runpy.run_path(
+            str(
+                Path(__file__).parents[1]
+                / "alembic"
+                / "versions"
+                / "20261002_0017_professions_crafting.py"
+            )
+        )
+        for family, rarity, legacy, *grades in migration["_LEGACY_RUNE_POTENCIES"]:
+            assert legacy == rune_potency_for(family, rarity, 1)
+            assert grades == [rune_potency_for(family, rarity, grade) for grade in range(2, 7)]
+        backfill = migration["_backfill_legacy_rune_potencies"]
+        await connection.run_sync(backfill)
+        await connection.run_sync(backfill)
+        assert await potency(legacy_id) == "1.00%"
+        assert await potency(unrelated_id) == "0.56%"
+        assert await potency(grade_one_id) == "0.35%"

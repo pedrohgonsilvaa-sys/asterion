@@ -406,7 +406,7 @@ async def test_pending_and_blocked_delivery_recover_capacity_race_after_preview(
 
 
 @pytest.mark.asyncio
-async def test_known_eco_recipe_is_listed_but_unavailable_in_c1(database):
+async def test_known_eco_recipe_requires_equipment_application(database):
     actor = 840107
     character_id = await _seed_active_professions(database, actor, "blacksmith", "artificer")
     await _set_profession_level(database, character_id, "artificer", 10)
@@ -420,8 +420,8 @@ async def test_known_eco_recipe_is_listed_but_unavailable_in_c1(database):
     )
     assert echo.known is True
     assert echo.available is False
-    assert echo.reason == "unavailable_in_c1"
-    with pytest.raises(CraftingRejected, match="unavailable_in_c1"):
+    assert echo.reason == "requires_equipment"
+    with pytest.raises(CraftingRejected, match="requires_equipment"):
         await service.preview(actor, echo.recipe.recipe_id)
 
 

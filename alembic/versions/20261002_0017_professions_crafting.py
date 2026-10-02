@@ -10,6 +10,101 @@ down_revision = "20261001_0016"
 branch_labels = None
 depends_on = None
 
+# Dungeon drops before C2 stored the right rune grade but always wrote the
+# Grade I potency. Only these exact legacy values are eligible for correction.
+# Current values are frozen here so this historical migration stays stable.
+_LEGACY_RUNE_POTENCIES = (
+    ("Brasa", "Rara", "0.35%", "0.40%", "0.40%", "0.45%", "0.55%", "0.60%"),
+    ("Brasa", "Épica", "0.45%", "0.50%", "0.55%", "0.65%", "0.70%", "0.80%"),
+    ("Brasa", "Lendária", "0.55%", "0.60%", "0.70%", "0.80%", "0.90%", "1.00%"),
+    ("Pedra", "Rara", "0.55%", "0.60%", "0.70%", "0.80%", "0.90%", "1.00%"),
+    ("Pedra", "Épica", "0.80%", "0.90%", "1.00%", "1.10%", "1.25%", "1.40%"),
+    ("Pedra", "Lendária", "1.00%", "1.10%", "1.25%", "1.40%", "1.60%", "1.80%"),
+    ("Caminhante", "Rara", "0.55%", "0.60%", "0.70%", "0.80%", "0.90%", "1.00%"),
+    ("Caminhante", "Épica", "0.80%", "0.90%", "1.00%", "1.10%", "1.25%", "1.40%"),
+    ("Caminhante", "Lendária", "1.00%", "1.10%", "1.25%", "1.40%", "1.60%", "1.80%"),
+    (
+        "Fresta", "Rara", "0.25 p.p.", "0.25 p.p.", "0.25 p.p.",
+        "0.50 p.p.", "0.50 p.p.", "0.50 p.p.",
+    ),
+    (
+        "Fresta", "Épica", "0.50 p.p.", "0.50 p.p.", "0.50 p.p.",
+        "0.50 p.p.", "0.75 p.p.", "0.75 p.p.",
+    ),
+    (
+        "Fresta", "Lendária", "0.50 p.p.", "0.50 p.p.", "0.75 p.p.",
+        "0.75 p.p.", "1.00 p.p.", "1.00 p.p.",
+    ),
+    (
+        "Presságio", "Rara", "0.25 p.p.", "0.25 p.p.", "0.25 p.p.",
+        "0.50 p.p.", "0.50 p.p.", "0.50 p.p.",
+    ),
+    (
+        "Presságio", "Épica", "0.50 p.p.", "0.50 p.p.", "0.50 p.p.",
+        "0.50 p.p.", "0.75 p.p.", "0.75 p.p.",
+    ),
+    (
+        "Presságio", "Lendária", "0.50 p.p.", "0.50 p.p.", "0.75 p.p.",
+        "0.75 p.p.", "1.00 p.p.", "1.00 p.p.",
+    ),
+    ("Persistência", "Rara", "0.35%", "0.40%", "0.40%", "0.45%", "0.55%", "0.60%"),
+    ("Persistência", "Épica", "0.45%", "0.50%", "0.55%", "0.65%", "0.70%", "0.80%"),
+    ("Persistência", "Lendária", "0.55%", "0.60%", "0.70%", "0.80%", "0.90%", "1.00%"),
+    (
+        "Desvio", "Rara", "0.25 p.p.", "0.25 p.p.", "0.25 p.p.",
+        "0.25 p.p.", "0.25 p.p.", "0.25 p.p.",
+    ),
+    (
+        "Desvio", "Épica", "0.25 p.p.", "0.25 p.p.", "0.25 p.p.",
+        "0.50 p.p.", "0.50 p.p.", "0.50 p.p.",
+    ),
+    (
+        "Desvio", "Lendária", "0.25 p.p.", "0.25 p.p.", "0.25 p.p.",
+        "0.50 p.p.", "0.50 p.p.", "0.50 p.p.",
+    ),
+    (
+        "Guarda", "Rara", "0.25 p.p.", "0.25 p.p.", "0.25 p.p.",
+        "0.50 p.p.", "0.50 p.p.", "0.50 p.p.",
+    ),
+    (
+        "Guarda", "Épica", "0.50 p.p.", "0.50 p.p.", "0.50 p.p.",
+        "0.50 p.p.", "0.75 p.p.", "0.75 p.p.",
+    ),
+    (
+        "Guarda", "Lendária", "0.50 p.p.", "0.50 p.p.", "0.75 p.p.",
+        "0.75 p.p.", "1.00 p.p.", "1.00 p.p.",
+    ),
+)
+
+
+def _backfill_legacy_rune_potencies(bind) -> None:
+    values_sql = []
+    parameters = {}
+    for row_index, row in enumerate(_LEGACY_RUNE_POTENCIES):
+        placeholders = []
+        for column_index, value in enumerate(row):
+            parameter = f"v_{row_index}_{column_index}"
+            placeholders.append(f":{parameter}")
+            parameters[parameter] = value
+        values_sql.append("(" + ", ".join(placeholders) + ")")
+
+    bind.execute(
+        sa.text(
+            "UPDATE rune_stacks AS stack "
+            "SET potency = CASE stack.grade "
+            "WHEN 2 THEN legacy.grade_2 WHEN 3 THEN legacy.grade_3 "
+            "WHEN 4 THEN legacy.grade_4 WHEN 5 THEN legacy.grade_5 "
+            "WHEN 6 THEN legacy.grade_6 END "
+            "FROM (VALUES "
+            + ", ".join(values_sql)
+            + ") AS legacy(family, rarity, grade_i, grade_2, grade_3, grade_4, grade_5, grade_6) "
+            "WHERE stack.grade BETWEEN 2 AND 6 "
+            "AND stack.family = legacy.family AND stack.rarity = legacy.rarity "
+            "AND stack.potency = legacy.grade_i"
+        ),
+        parameters,
+    )
+
 
 def upgrade() -> None:
     op.create_table(
@@ -74,6 +169,7 @@ def upgrade() -> None:
         ["character_id", "status"],
         unique=False,
     )
+    _backfill_legacy_rune_potencies(op.get_bind())
 
 
 def downgrade() -> None:

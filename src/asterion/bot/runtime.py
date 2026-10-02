@@ -10,6 +10,7 @@ from asterion.application.crafting import CraftingService
 from asterion.application.creation import CreationService
 from asterion.application.dungeons import DungeonService
 from asterion.application.equipment import EquipmentService
+from asterion.application.equipment_modifications import EquipmentModificationService
 from asterion.application.equipment_view import EquipmentViewService
 from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
@@ -36,6 +37,7 @@ from asterion.bot.combat_handlers import combat_router
 from asterion.bot.creation_handlers import creation_router
 from asterion.bot.dungeon_handlers import dungeon_router
 from asterion.bot.equipment_handlers import equipment_router
+from asterion.bot.equipment_modification_handlers import equipment_modification_router
 from asterion.bot.p1_handlers import p1_router
 from asterion.bot.p2_handlers import p2_router
 from asterion.bot.p3_handlers import p3_router
@@ -78,6 +80,7 @@ def get_bot_runtime() -> BotRuntime:
     inventory = InventoryService(SessionFactory, settings.server_id)
     equipment = EquipmentService(SessionFactory, settings.server_id)
     equipment_views = EquipmentViewService(SessionFactory, settings.server_id)
+    equipment_modifications = EquipmentModificationService(SessionFactory, settings.server_id)
     consumables = ConsumableService(SessionFactory, settings.server_id)
     s1 = S1Service(SessionFactory, settings.server_id)
     s2 = S2Service(SessionFactory, settings.server_id)
@@ -142,6 +145,14 @@ def get_bot_runtime() -> BotRuntime:
             settings.creation_images,
             p1=p1,
             road=road,
+        )
+    )
+    dispatcher.include_router(
+        equipment_modification_router(
+            equipment_modifications,
+            equipment_views,
+            inventory,
+            settings.creation_images,
         )
     )
     dispatcher.include_router(

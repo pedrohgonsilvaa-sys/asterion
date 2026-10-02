@@ -276,6 +276,8 @@ def _special_recipes() -> list[RecipeDefinition]:
             output_kind="enchantment",
             required_level=10,
             rarity="Épico",
+            output_id="PER",
+            output_family="Marca da Fresta",
             sw=2,
             fixed_materials=(
                 MaterialRequirement(RESIDUE, 5),
@@ -289,6 +291,51 @@ def _special_recipes() -> list[RecipeDefinition]:
             description="Encantamento Épico de PER · Grau I",
         ),
     ]
+
+
+def _enchantment_recipes() -> list[RecipeDefinition]:
+    """Known TDO enchantments are applied directly to an equipment instance."""
+    families = (
+        ("fio_cinereo", "Fio Cinéreo", "ATQ"),
+        ("pele_de_pedra", "Pele de Pedra", "DEF"),
+        ("passo_de_fuligem", "Passo de Fuligem", "AGI"),
+        ("marca_da_fresta", "Marca da Fresta", "PER"),
+        ("eco_do_pressagio", "Eco do Presságio", "CRIT"),
+        ("sopro_persistente", "Sopro Persistente", "HP"),
+        ("veu_de_desvio", "Véu de Desvio", "Esquiva"),
+        ("selo_de_guarda", "Selo de Guarda", "Bloqueio"),
+    )
+    result = []
+    for family_id, name, stat in families:
+        for rarity, rarity_id, level, residue, iron, catalysts, cost in (
+            ("Raro", "raro", 5, 3, 1, 0, 50),
+            ("Épico", "epico", 10, 5, 2, 1, 100),
+        ):
+            result.append(
+                RecipeDefinition(
+                    recipe_id=f"recipe.tdo.artificer.enchantment.{family_id}.{rarity_id}",
+                    profession_id="artificer",
+                    name=name,
+                    output_kind="enchantment",
+                    required_level=level,
+                    rarity=rarity,
+                    output_id=stat,
+                    output_family=name,
+                    fixed_materials=(
+                        MaterialRequirement(RESIDUE, residue),
+                        MaterialRequirement(IRON, iron),
+                        *(
+                            (MaterialRequirement(CATALYST_I, catalysts, False),)
+                            if catalysts
+                            else ()
+                        ),
+                    ),
+                    fixed_crown_cost=cost,
+                    creation_enabled=False,
+                    description=f"Encantamento {rarity} · {stat} · Grau I",
+                )
+            )
+    return result
 
 
 def _rune_recipes() -> list[RecipeDefinition]:
@@ -331,7 +378,11 @@ def _rune_recipes() -> list[RecipeDefinition]:
 
 
 RECIPE_DEFINITIONS = tuple(
-    _equipment_recipes() + _alchemy_recipes() + _rune_recipes() + _special_recipes()
+    _equipment_recipes()
+    + _alchemy_recipes()
+    + _rune_recipes()
+    + _enchantment_recipes()
+    + _special_recipes()
 )
 RECIPE_BY_ID = {recipe.recipe_id: recipe for recipe in RECIPE_DEFINITIONS}
 RECIPES_BY_PROFESSION = {

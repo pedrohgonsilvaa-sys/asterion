@@ -62,9 +62,7 @@ Stats = CombatStats
 
 LEGACY_COMBAT_RULESET = "gdd-1.4.3-baseline-1.0"
 CURRENT_COMBAT_RULESET = "gdd-1.4.6-baseline-1.0"
-SUPPORTED_LEGACY_COMBAT_RULESETS = frozenset(
-    {LEGACY_COMBAT_RULESET, "gdd-1.4.2-baseline-1.0"}
-)
+SUPPORTED_LEGACY_COMBAT_RULESETS = frozenset({LEGACY_COMBAT_RULESET, "gdd-1.4.2-baseline-1.0"})
 
 
 def growth(level: int) -> Decimal:
@@ -120,7 +118,7 @@ def resolve_combat_stats(
     selected_path: str | None = None,
     talent_ids: tuple[str, ...] = (),
 ) -> CombatStats:
-    """Resolve class, Path and Talent modifiers before flat equipment and race."""
+    """Resolve class, Path, Talent, equipment, components, then final race."""
     base = class_stats(character_class, level)
     path = PATH_DEFINITIONS.get(selected_path or "")
     if path is not None:
@@ -158,8 +156,31 @@ def resolve_combat_stats(
         composed = CombatStats(
             *(
                 left + right
-                for left, right in zip(
-                    base.combat_values(), equipment.values(), strict=True
+                for left, right in zip(base.combat_values(), equipment.values(), strict=True)
+            )
+        )
+        # Rune and Enchantment powers are distinct post-enhancement stages.
+        # Main attributes are fractions of the currently composed total;
+        # secondary combat chances are additive percentage points.
+        composed = CombatStats(
+            *(
+                value * (D(1) + percent) + points
+                for value, percent, points in zip(
+                    composed.combat_values(),
+                    equipment.rune_percent,
+                    equipment.rune_points,
+                    strict=True,
+                )
+            )
+        )
+        composed = CombatStats(
+            *(
+                value * (D(1) + percent) + points
+                for value, percent, points in zip(
+                    composed.combat_values(),
+                    equipment.enchantment_percent,
+                    equipment.enchantment_points,
+                    strict=True,
                 )
             )
         )
@@ -249,9 +270,7 @@ def direct_damage(
         effective = effective_defense(defense, penetration)
         active_mitigation = min(D("0.65"), max(ZERO, mitigation))
         value = (
-            raw
-            * (D(1) - defense_reduction(effective, attacker_level))
-            * (D(1) - active_mitigation)
+            raw * (D(1) - defense_reduction(effective, attacker_level)) * (D(1) - active_mitigation)
         )
         return max(1, int(value.to_integral_value(rounding=ROUND_FLOOR)))
 

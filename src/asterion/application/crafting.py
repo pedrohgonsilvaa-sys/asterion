@@ -63,7 +63,7 @@ class CraftingErrorCode:
     INVENTORY_FULL = "inventory_full"
     MATERIALS = "materials"
     CROWNS = "crowns"
-    UNAVAILABLE_IN_C1 = "unavailable_in_c1"
+    REQUIRES_EQUIPMENT = "requires_equipment"
     STALE_PREVIEW = "stale_preview"
     PREVIEW_CLOSED = "preview_closed"
 
@@ -228,10 +228,7 @@ class CraftingService:
             # A preview can only be created while Inventory has a valid destination.
             # If capacity changes after the player confirms that preview, recovery
             # may use Pending/BlockedDelivery instead of losing or duplicating output.
-            if recipe_view.reason != CraftingErrorCode.INVENTORY_FULL:
-                self._require_available(recipe_view, known)
-            elif not known:
-                raise CraftingRejected(CraftingErrorCode.RECIPE_NOT_KNOWN)
+            self._require_available(recipe_view, known)
             fingerprint = self._fingerprint(
                 character,
                 definition,
@@ -309,7 +306,11 @@ class CraftingService:
                 location,
                 foreground,
             )
-            self._require_available(recipe_view, known)
+            # Inventory capacity can change after a valid preview. In that
+            # case the committed output is recovered through Pending or
+            # BlockedDelivery; every other stale condition remains invalid.
+            if recipe_view.reason != CraftingErrorCode.INVENTORY_FULL or not known:
+                self._require_available(recipe_view, known)
             fingerprint = self._fingerprint(
                 character,
                 definition,
@@ -449,7 +450,7 @@ class CraftingService:
         else:
             cost = recipe_crown_cost(recipe, item_level or character.level)
         if recipe.output_kind == "enchantment" and not recipe.creation_enabled:
-            reason = CraftingErrorCode.UNAVAILABLE_IN_C1
+            reason = CraftingErrorCode.REQUIRES_EQUIPMENT
         elif active_row is None:
             reason = CraftingErrorCode.PROFESSION_INACTIVE
         elif active_row.level < recipe.required_level:
@@ -676,7 +677,7 @@ class CraftingService:
                 "family": family,
                 "rarity": recipe.rarity,
                 "grade": recipe.grade,
-                "potency": rune_potency(family, recipe.rarity),
+                "potency": rune_potency(family, recipe.rarity, recipe.grade),
                 "bound": view.result_bound,
             }
             delivery = await self._deliver_rune(
@@ -684,7 +685,7 @@ class CraftingService:
             )
             result = {"rune": output_payload}
         else:
-            raise CraftingRejected(CraftingErrorCode.UNAVAILABLE_IN_C1)
+            raise CraftingRejected(CraftingErrorCode.REQUIRES_EQUIPMENT)
 
         return {**result, "delivery": delivery}
 

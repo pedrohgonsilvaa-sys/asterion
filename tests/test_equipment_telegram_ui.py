@@ -31,11 +31,7 @@ from tests.test_creation_ui import callback_update
 
 
 def _buttons(screen):
-    return [
-        button
-        for row in screen.keyboard.inline_keyboard
-        for button in row
-    ]
+    return [button for row in screen.keyboard.inline_keyboard for button in row]
 
 
 def _item(
@@ -51,6 +47,8 @@ def _item(
     equipped_slot=None,
     contribution=None,
     lore=None,
+    reroll_available=False,
+    secondaries=(),
 ):
     return EquipmentItemView(
         item_instance_id=uuid4(),
@@ -65,6 +63,8 @@ def _item(
         equipped_slot=equipped_slot,
         lore=lore,
         eligible=eligible,
+        reroll_available=reroll_available,
+        secondaries=secondaries,
     )
 
 
@@ -74,9 +74,7 @@ def _root(items=None, *, version=4, blocked_secondary=False):
         EquipmentSlotView(
             slot,
             items.get(slot),
-            blocked_by_two_handed=(
-                slot == EquipmentSlot.SECUNDARIA and blocked_secondary
-            ),
+            blocked_by_two_handed=(slot == EquipmentSlot.SECUNDARIA and blocked_secondary),
         )
         for slot, _, _, _ in SLOT_PRESENTATION
     )
@@ -154,7 +152,15 @@ def test_equipment_root_always_renders_eight_slots_and_stable_numeric_callbacks(
     assert all(line in screen.text for line in expected)
     buttons = _buttons(screen)
     assert [button.text for button in buttons] == [
-        "1", "2", "3", "4", "5", "6", "7", "8", "← Personagem"
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "← Personagem",
     ]
     assert [button.callback_data for button in buttons[:8]] == [
         "eq:s:p:2147483647",
@@ -178,16 +184,21 @@ def test_equipment_root_shows_partial_equipment_and_blocks_secondary_for_two_han
         enhancement=6,
         equipped_slot=EquipmentSlot.PRINCIPAL,
     )
-    screen = render_equipment_root(
-        _root({EquipmentSlot.PRINCIPAL: weapon}, blocked_secondary=True)
-    )
+    screen = render_equipment_root(_root({EquipmentSlot.PRINCIPAL: weapon}, blocked_secondary=True))
     assert "1 🗡️ Arma Principal · Lâmina &lt;da Ruptura&gt; · +6" in screen.text
     assert "2 ⚔️ Arma Secundária · Bloqueada" in screen.text
     assert "🔒 Arma de 2 mãos equipada" in screen.text
     assert "3 🪖 Cabeça · Vazio" in screen.text
     buttons = _buttons(screen)
     assert [button.text for button in buttons] == [
-        "1", "3", "4", "5", "6", "7", "8", "← Personagem"
+        "1",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "← Personagem",
     ]
     assert all(button.callback_data != "eq:s:s:4" for button in buttons)
     assert "ATQ" not in screen.text
@@ -235,23 +246,39 @@ def test_equipment_detail_localizes_rarity_and_displays_actual_contribution(rari
     assert "🛡️ Bloqueio +2%" in screen.text
     assert "DEF" not in screen.text and "Esquiva" not in screen.text
     assert all(len(button.callback_data.encode()) <= 64 for button in _buttons(screen))
-    assert all(
-        button.text not in {"Runas", "Encantamento", "Aprimorar"}
-        for button in _buttons(screen)
-    )
+    assert "Aprimorar" not in [button.text for button in _buttons(screen)]
+    assert "Runas" in [button.text for button in _buttons(screen)]
+    assert "Encantamento" in [button.text for button in _buttons(screen)]
 
 
 def test_equipment_detail_requires_level_without_equip_action_and_inventory_return():
     item = _item(level=25, eligible=False)
-    screen = render_equipment_detail(
-        EquipmentDetailView(uuid4(), 10, 9, item), context="i"
-    )
+    screen = render_equipment_detail(EquipmentDetailView(uuid4(), 10, 9, item), context="i")
     assert "📈 Nível do Item · 25" in screen.text
     assert "⏳ Requer Nv. 25" in screen.text
     buttons = _buttons(screen)
-    assert [button.text for button in buttons] == ["← Equipamentos"]
-    assert buttons[0].callback_data == "inventory:category:equipment"
+    assert [button.text for button in buttons] == [
+        "Runas",
+        "Encantamento",
+        "Aprimorar",
+        "Favoritar",
+        "Bloquear",
+        "Desmontar",
+        "← Equipamentos",
+    ]
+    assert buttons[-1].callback_data == "inventory:category:equipment"
     assert "[Trocar]" not in screen.text
+
+
+def test_equipment_detail_hides_reroll_when_no_legal_secondary_identity_exists():
+    item = _item(
+        slot=EquipmentSlot.TORSO,
+        item_slot="Torso",
+        secondaries=(("HP", "1"), ("DEF", "1"), ("Bloqueio", "0.25")),
+        reroll_available=False,
+    )
+    screen = render_equipment_detail(EquipmentDetailView(uuid4(), 10, 3, item), context="i")
+    assert "Reroll" not in [button.text for button in _buttons(screen)]
 
 
 def test_equipped_detail_and_inventory_context_never_offers_swap():
@@ -261,11 +288,23 @@ def test_equipped_detail_and_inventory_context_never_offers_swap():
     assert [button.text for button in _buttons(slot_detail)] == [
         "Trocar",
         "Desequipar",
+        "Runas",
+        "Encantamento",
+        "Aprimorar",
+        "Favoritar",
+        "Bloquear",
+        "Desmontar",
         "← Equipamentos",
     ]
     inventory_detail = render_equipment_detail(view, context="i")
     assert [button.text for button in _buttons(inventory_detail)] == [
         "Desequipar",
+        "Runas",
+        "Encantamento",
+        "Aprimorar",
+        "Favoritar",
+        "Bloquear",
+        "Desmontar",
         "← Equipamentos",
     ]
     assert "✅ Equipado" in inventory_detail.text
@@ -334,9 +373,7 @@ def test_inventory_equipment_rows_are_clickable_localized_and_show_equipped_stat
 
 def test_empty_candidates_show_text_state_and_return_without_dead_action():
     screen = render_equipment_candidates(
-        EquipmentCandidatesView(
-            uuid4(), 1, 0, EquipmentSlot.CABECA, ()
-        )
+        EquipmentCandidatesView(uuid4(), 1, 0, EquipmentSlot.CABECA, ())
     )
     assert "Nenhum Equipamento compatível disponível." in screen.text
     assert [button.callback_data for button in _buttons(screen)] == ["eq:r"]
@@ -354,9 +391,7 @@ async def test_stale_slot_read_replies_and_rebuilds_authoritative_equipment_root
     equipment_service = AsyncMock()
     inventory = AsyncMock()
     dispatcher = Dispatcher(disable_fsm=True)
-    dispatcher.include_router(
-        equipment_router(read_service, equipment_service, inventory, {})
-    )
+    dispatcher.include_router(equipment_router(read_service, equipment_service, inventory, {}))
     telegram = Bot("123456:local-test-token")
     telegram.session.make_request = AsyncMock(return_value=True)
 

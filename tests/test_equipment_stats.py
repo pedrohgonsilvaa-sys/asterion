@@ -179,7 +179,7 @@ def test_core_secondaries_and_enhancement_use_exact_decimal_order():
                 "enhancement": 0,
                 "rune": {"id": "rune"},
             },
-            "unsupported",
+            "fields are invalid",
         ),
     ],
 )

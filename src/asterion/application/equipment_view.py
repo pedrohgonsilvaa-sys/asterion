@@ -13,6 +13,7 @@ from asterion.domain.equipment import (
     assignment_for_item_slot,
     parse_equipment_slot,
 )
+from asterion.domain.equipment_modifications import reroll_candidates
 from asterion.domain.equipment_stats import (
     EquipmentConfigurationError,
     EquipmentStatContribution,
@@ -57,6 +58,13 @@ class EquipmentItemView:
     equipped_slot: EquipmentSlot | None = None
     lore: str | None = None
     eligible: bool = True
+    item_version: int = 0
+    favorite: bool = False
+    locked: bool = False
+    runes: tuple[dict, ...] = ()
+    enchantment: dict | None = None
+    secondaries: tuple[tuple[str, str], ...] = ()
+    reroll_available: bool = False
 
     @property
     def equipped(self) -> bool:
@@ -117,8 +125,7 @@ class EquipmentViewService:
                 return None
             slots = await self._equipped_state(session, character)
             by_slot = {
-                slot: self._item_view(row, slot, character.level)
-                for slot, row in slots.items()
+                slot: self._item_view(row, slot, character.level) for slot, row in slots.items()
             }
             main = by_slot.get(EquipmentSlot.PRINCIPAL)
             blocked = bool(main and main.two_handed)
@@ -164,9 +171,7 @@ class EquipmentViewService:
             ).all()
             if len(slot_rows) > 1:
                 raise EquipmentViewUnavailable("Equipment item occupies multiple slots.")
-            equipped_slot = (
-                parse_equipment_slot(slot_rows[0].slot) if slot_rows else None
-            )
+            equipped_slot = parse_equipment_slot(slot_rows[0].slot) if slot_rows else None
             if slot_rows and equipped_slot is None:
                 raise EquipmentViewUnavailable("Invalid persisted equipment slot.")
             view = self._item_view(item, equipped_slot, character.level)
@@ -201,8 +206,7 @@ class EquipmentViewService:
                 )
 
             equipped_by_slot = {
-                slot: self._item_view(row, slot, character.level)
-                for slot, row in equipped.items()
+                slot: self._item_view(row, slot, character.level) for slot, row in equipped.items()
             }
             current_ids = {view.item_instance_id for view in equipped_by_slot.values()}
             rows = (
@@ -316,6 +320,19 @@ class EquipmentViewService:
             raise EquipmentViewUnavailable("Stored equipment cannot be displayed safely.") from exc
         raw_lore = (item.payload or {}).get("lore")
         lore = raw_lore.strip() if isinstance(raw_lore, str) and raw_lore.strip() else None
+        payload = item.payload or {}
+        raw_runes = payload.get("runes")
+        if raw_runes is None:
+            raw_rune = payload.get("rune")
+            raw_runes = () if raw_rune is None else (raw_rune,)
+        elif isinstance(raw_runes, dict):
+            raw_runes = tuple(raw_runes.get(affinity) for affinity in ("A", "B"))
+        runes = tuple(entry for entry in raw_runes if isinstance(entry, dict))
+        raw_enchantment = payload.get("enchantment")
+        reroll_available = bool(snapshot.secondaries) and any(
+            reroll_candidates(item.slot, snapshot.secondaries, index)
+            for index in range(len(snapshot.secondaries))
+        )
         return EquipmentItemView(
             item_instance_id=item.id,
             name=item.item_name,
@@ -329,15 +346,20 @@ class EquipmentViewService:
             equipped_slot=equipped_slot,
             lore=lore,
             eligible=character_level >= item.item_level,
+            item_version=int(payload.get("item_version", 0)),
+            favorite=bool(payload.get("favorite", False)),
+            locked=bool(payload.get("locked", False)),
+            runes=runes,
+            enchantment=(raw_enchantment if isinstance(raw_enchantment, dict) else None),
+            secondaries=tuple((name, str(value)) for name, value in snapshot.secondaries),
+            reroll_available=reroll_available,
         )
 
     def _validate_configuration(self, items: dict[EquipmentSlot, EquipmentItemView]) -> None:
         mythic_count = sum(item.rarity == "Mítico" for item in items.values())
         main = items.get(EquipmentSlot.PRINCIPAL)
         if mythic_count > 1 or (
-            main is not None
-            and main.two_handed
-            and EquipmentSlot.SECUNDARIA in items
+            main is not None and main.two_handed and EquipmentSlot.SECUNDARIA in items
         ):
             raise EquipmentViewUnavailable("Invalid equipped configuration.")
 
