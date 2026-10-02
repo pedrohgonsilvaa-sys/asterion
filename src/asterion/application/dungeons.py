@@ -608,6 +608,29 @@ class DungeonService:
             ).all()
             if not 2 <= len(members) <= 4:
                 return await self._lobby_view(session, character, lobby, None, reason="group_size")
+            family = DUNGEON_FAMILIES.get(lobby.dungeon_family_id)
+            for candidate in members:
+                candidate_character = await session.scalar(
+                    select(Character)
+                    .where(Character.id == candidate.character_id)
+                    .with_for_update()
+                )
+                if candidate_character is None:
+                    return await self._lobby_view(
+                        session, character, lobby, None, reason="eligibility"
+                    )
+                reason = await self._eligibility_reason(
+                    session,
+                    candidate_character,
+                    family,
+                    lobby.difficulty,
+                    allowed_activity_id=candidate.foreground_activity_id,
+                    allowed_lobby_id=lobby.id,
+                )
+                if reason:
+                    return await self._lobby_view(
+                        session, character, lobby, None, reason=reason
+                    )
             lobby.status = "confirming"
             lobby.confirmation_deadline = datetime.now(UTC) + READY_CHECK_LIMIT
             lobby.expires_at = lobby.confirmation_deadline
@@ -782,6 +805,8 @@ class DungeonService:
                 status="queued",
                 lobby_id=lobby.id,
             )
+            queue_row.dungeon_family_id = family_id
+            queue_row.difficulty = difficulty
             queue_row.status = "queued"
             queue_row.lobby_id = lobby.id
             session.add(queue_row)
