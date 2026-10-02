@@ -395,7 +395,7 @@ async def test_pending_and_blocked_delivery_recover_capacity_race_after_preview(
     monkeypatch.setattr(crafting_module, "INVENTORY_CAPACITY", 0)
     monkeypatch.setattr(crafting_module, "PENDING_CAPACITY", 0)
     result = await service.commit(actor, preview.receipt_id)
-    assert result is not None and result.delivery == "Pending"
+    assert result is not None and result.delivery == "BlockedDelivery"
     async with database[1]() as session:
         held = await session.scalar(
             select(BlockedDelivery).where(BlockedDelivery.character_id == character_id)
