@@ -257,7 +257,6 @@ async def test_migration_schema_supports_four_members_and_persisted_pity(databas
                 brazier_activated=False,
                 active_checkpoint_encounter=6,
                 progress={},
-                vigor_refunded=False,
             )
         )
         session.add(
@@ -280,6 +279,7 @@ async def test_migration_schema_supports_four_members_and_persisted_pity(databas
                     position=position,
                     status="active",
                     vigor_reserved=25,
+                    vigor_refunded=False,
                     consumable_uses=0,
                     combat_configuration={},
                     hp=702,
