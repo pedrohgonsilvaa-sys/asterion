@@ -35,7 +35,6 @@ def upgrade() -> None:
             server_default=sa.text("'{}'::jsonb"),
             nullable=False,
         ),
-        sa.Column("vigor_refunded", sa.Boolean(), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -72,7 +71,7 @@ def upgrade() -> None:
         "dungeon_runs",
         ["last_activity_at"],
         unique=False,
-        postgresql_where=sa.text("status = 'active'"),
+        postgresql_where=sa.text("status IN ('active','defeated')"),
     )
     op.create_table(
         "dungeon_run_members",
@@ -81,6 +80,12 @@ def upgrade() -> None:
         sa.Column("position", sa.Integer(), nullable=False),
         sa.Column("status", sa.String(length=16), nullable=False),
         sa.Column("vigor_reserved", sa.Integer(), nullable=False),
+        sa.Column(
+            "vigor_refunded",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("false"),
+        ),
         sa.Column("consumable_uses", sa.Integer(), nullable=False),
         sa.Column(
             "combat_configuration",
