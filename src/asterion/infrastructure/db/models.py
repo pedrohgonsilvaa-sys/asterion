@@ -434,7 +434,6 @@ class DungeonRun(Base):
     progress: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
-    vigor_refunded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -474,7 +473,7 @@ class DungeonRunMember(Base):
             "uq_dungeon_active_member",
             "character_id",
             unique=True,
-            postgresql_where=text("status = 'active'"),
+            postgresql_where=text("status IN ('active','defeated')"),
         ),
     )
 
@@ -487,6 +486,7 @@ class DungeonRunMember(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
     vigor_reserved: Mapped[int] = mapped_column(Integer, nullable=False)
+    vigor_refunded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     consumable_uses: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     combat_configuration: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
