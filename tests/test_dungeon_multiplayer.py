@@ -746,3 +746,83 @@ async def test_group_settlement_has_individual_contribution_first_clear_and_pity
             )
         ).all()
         assert len(clear_unlocks) == 2
+
+
+@pytest.mark.asyncio
+async def test_matchmaking_reentry_updates_persisted_family_and_difficulty(database):
+    actor = 781070
+    sessions, character_ids = await _seed_party(database, (actor,))
+    service = DungeonService(sessions, "ocaso")
+
+    first = await service.join_matchmaking(
+        actor, "dungeon.tdo.cripta_ocaso", "stable"
+    )
+    assert first is not None and first.kind == "queue"
+    cancelled = await service.cancel_queue_or_lobby(
+        actor, first.lobby_id, first.lobby_version
+    )
+    assert cancelled is not None and cancelled.kind == "cancelled"
+
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_ids[0])
+        character.level = 8
+        world = await session.get(WorldState, character_ids[0])
+        world.location = RUINS
+        session.add(
+            Unlock(
+                character_id=character_ids[0],
+                unlock_id=GALLERIES_FAMILY_ID,
+            )
+        )
+
+    second = await service.join_matchmaking(
+        actor, GALLERIES_FAMILY_ID, "stable"
+    )
+    assert second is not None and second.kind == "queue"
+    async with sessions() as session:
+        row = await session.get(DungeonMatchQueue, character_ids[0])
+        assert row.dungeon_family_id == GALLERIES_FAMILY_ID
+        assert row.difficulty == "stable"
+        assert row.lobby_id == second.lobby_id
+
+
+@pytest.mark.asyncio
+async def test_ready_check_revalidates_every_group_member_before_confirmation(database):
+    actors = (781071, 781072)
+    sessions, character_ids = await _seed_party(database, actors)
+    service = DungeonService(sessions, "ocaso")
+
+    lobby = await service.prepare_group(
+        actors[0], "dungeon.tdo.cripta_ocaso", "stable"
+    )
+    sent = await service.invite_by_name(
+        actors[0], lobby.lobby_id, lobby.lobby_version, "Herob"
+    )
+    pending = await service.pending_invite(actors[1])
+    accepted = await service.respond_invite(
+        actors[1], pending.invite_id, accept=True
+    )
+    assert accepted is not None and accepted.kind == "lobby"
+
+    async with sessions.begin() as session:
+        unlock = await session.scalar(
+            select(Unlock).where(
+                Unlock.character_id == character_ids[1],
+                Unlock.unlock_id == "dungeon.tdo.cripta_ocaso",
+            )
+        )
+        await session.delete(unlock)
+
+    blocked = await service.open_entry_confirmation(
+        actors[0], lobby.lobby_id, accepted.lobby_version
+    )
+    assert blocked is not None
+    assert blocked.kind == "lobby"
+    assert blocked.reason == "discovery"
+    async with sessions() as session:
+        characters = (
+            await session.scalars(
+                select(Character).where(Character.id.in_(character_ids))
+            )
+        ).all()
+        assert all(character.vigor == 100 for character in characters)
