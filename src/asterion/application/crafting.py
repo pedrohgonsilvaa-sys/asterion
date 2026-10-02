@@ -706,8 +706,9 @@ class CraftingService:
                 )
             )
             return "Inventário"
-        await self._store_pending(session, character, source_key, "equipment", payload, 1)
-        return "Pending"
+        return await self._store_pending(
+            session, character, source_key, "equipment", payload, 1
+        )
 
     async def _deliver_consumable(self, session, character, source_key, item_id, quantity) -> str:
         if await self._delivery_exists(session, character.id, source_key):
@@ -731,7 +732,7 @@ class CraftingService:
                 ConsumableStack(character_id=character.id, consumable_id=item_id, quantity=quantity)
             )
             return "Inventário"
-        await self._store_pending(
+        return await self._store_pending(
             session,
             character,
             source_key,
@@ -739,7 +740,6 @@ class CraftingService:
             {"consumable_id": item_id},
             quantity,
         )
-        return "Pending"
 
     async def _deliver_rune(self, session, character, source_key, payload) -> str:
         if await self._delivery_exists(session, character.id, source_key):
@@ -771,8 +771,9 @@ class CraftingService:
                 )
             )
             return "Inventário"
-        await self._store_pending(session, character, source_key, "rune", payload, 1)
-        return "Pending"
+        return await self._store_pending(
+            session, character, source_key, "rune", payload, 1
+        )
 
     async def _store_pending(self, session, character, source_key, kind, payload, quantity):
         count = int(
@@ -791,7 +792,7 @@ class CraftingService:
                     quantity=quantity,
                 )
             )
-            return
+            return "Pending"
         session.add(
             BlockedDelivery(
                 character_id=character.id,
@@ -803,6 +804,7 @@ class CraftingService:
             )
         )
         character.delivery_blocked = True
+        return "BlockedDelivery"
 
     async def _delivery_exists(self, session, character_id, source_key) -> bool:
         for model in (EquipmentItem, PendingItem, BlockedDelivery):
