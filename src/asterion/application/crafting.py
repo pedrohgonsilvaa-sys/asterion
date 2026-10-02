@@ -60,6 +60,7 @@ class CraftingErrorCode:
     WRONG_LOCATION = "wrong_location"
     FOREGROUND = "foreground"
     DELIVERY_BLOCKED = "delivery_blocked"
+    INVENTORY_FULL = "inventory_full"
     MATERIALS = "materials"
     CROWNS = "crowns"
     UNAVAILABLE_IN_C1 = "unavailable_in_c1"
@@ -224,7 +225,13 @@ class CraftingService:
                 location,
                 foreground,
             )
-            self._require_available(recipe_view, known)
+            # A preview can only be created while Inventory has a valid destination.
+            # If capacity changes after the player confirms that preview, recovery
+            # may use Pending/BlockedDelivery instead of losing or duplicating output.
+            if recipe_view.reason != CraftingErrorCode.INVENTORY_FULL:
+                self._require_available(recipe_view, known)
+            elif not known:
+                raise CraftingRejected(CraftingErrorCode.RECIPE_NOT_KNOWN)
             fingerprint = self._fingerprint(
                 character,
                 definition,
@@ -483,6 +490,16 @@ class CraftingService:
     ) -> RecipeView:
         view = self._recipe_view(character, recipe, active_row, material_rows, location, foreground)
         delivery = await self._delivery_destination(session, character, recipe, view.result_bound)
+        if (
+            view.reason is None
+            and recipe.output_kind in {"equipment", "consumable", "rune"}
+            and delivery != "Inventário"
+        ):
+            view = replace(
+                view,
+                available=False,
+                reason=CraftingErrorCode.INVENTORY_FULL,
+            )
         return replace(view, delivery=delivery)
 
     async def _delivery_destination(self, session, character, recipe, result_bound: bool) -> str:
@@ -584,7 +601,9 @@ class CraftingService:
             "location": location,
             "recipe_id": recipe.recipe_id,
             "known": known,
-            "delivery": delivery,
+            # Delivery is intentionally excluded: a preview is created only with
+            # valid Inventory capacity, while a later capacity race is recovered
+            # through Pending/BlockedDelivery after confirmation.
             "professions": [
                 (row.slot, row.profession_id, row.level, row.pxp)
                 for row in sorted(profession_rows, key=lambda item: item.slot)
