@@ -274,7 +274,6 @@ class DungeonService:
                 brazier_after_encounter=3,
                 active_checkpoint_encounter=None,
                 progress={"internal_xp": 0, "retry_available": False},
-                vigor_refunded=False,
                 created_at=now,
                 last_activity_at=now,
             )
@@ -284,6 +283,7 @@ class DungeonService:
                 position=1,
                 status="active",
                 vigor_reserved=profile.vigor,
+                vigor_refunded=False,
                 consumable_uses=0,
                 combat_configuration=snapshot,
                 hp=character.hp,
@@ -621,7 +621,7 @@ class DungeonService:
             ):
                 return await self._run_view(session, character, run, member, activity=activity)
             activity.status = "failed"
-            await self._refund_vigor(character, run, member)
+            await self._refund_vigor(character, member)
             run.status = "failed"
             run.failed_at = datetime.now(UTC)
             run.state_version += 1
@@ -696,7 +696,7 @@ class DungeonService:
             run.progress = progress
             run.state_version += 1
             member.status = "left"
-            await self._refund_vigor(character, run, member)
+            await self._refund_vigor(character, member)
             await self._return_to_charneca(session, character.id)
             return
         member.hp = member.max_hp
@@ -860,6 +860,7 @@ class DungeonService:
                 "first_clear": first_clear,
                 "consumed_vigor": member.vigor_reserved,
             }
+            member.vigor_reserved = 0
             await consolidate_character_level(session, character)
         run.status = "completed"
         run.completed_at = datetime.now(UTC)
@@ -1275,14 +1276,14 @@ class DungeonService:
         run.state_version += 1
         run.progress = {**(run.progress or {}), "internal_xp": 0, "expired": True}
         member.status = "left"
-        await self._refund_vigor(character, run, member)
+        await self._refund_vigor(character, member)
         await self._return_to_charneca(session, character.id)
 
-    async def _refund_vigor(self, character, run, member):
-        if run.vigor_refunded or member.vigor_reserved <= 0:
+    async def _refund_vigor(self, character, member):
+        if member.vigor_refunded or member.vigor_reserved <= 0:
             return
         character.vigor = min(character.max_vigor, character.vigor + member.vigor_reserved)
-        run.vigor_refunded = True
+        member.vigor_refunded = True
         member.vigor_reserved = 0
 
     async def _active_run(self, session, character_id, *, run_id=None, lock=False):
