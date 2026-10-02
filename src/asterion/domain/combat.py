@@ -335,6 +335,18 @@ class CombatEvent:
     aim_stacks: int = 0
     path_per_bonus: Decimal = ZERO
     path_crit_bonus: Decimal = ZERO
+    pressure_stacks: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class CombatStatAura:
+    """A live source-counted modifier applied to selected combatants."""
+
+    aura_id: str
+    stat: str
+    source_fighter_keys: tuple[str, ...]
+    target_fighter_keys: tuple[str, ...]
+    multiplier_per_source: Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -387,6 +399,14 @@ class Combat:
     external_consumables_allowed: bool = True
     ai_target_cycle: tuple[str, ...] = ()
     ai_target_position: int = 0
+    ai_cycles: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    ai_positions: dict[str, int] = field(default_factory=dict)
+    ai_priorities: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    pressure_start_opportunity: int = 0
+    pressure_cap: int = 0
+    pressure_step: Decimal = D("0.03")
+    pressure_stacks: int = 0
+    stat_auras: tuple[CombatStatAura, ...] = ()
 
     @property
     def tutorial_stage(self) -> str:
@@ -407,6 +427,21 @@ TARGET_MODES = frozenset({"opponent", "ally", "self", "all_opponents", "all_alli
 def _fighter_side(state: Combat, key: str) -> str:
     fighter = state.fighters[key]
     return fighter.side or ("player" if key == "player" else "enemy")
+
+
+def _fighter_stat(state: Combat, fighter_key: str, stat_name: str) -> Decimal:
+    value = state.fighters[fighter_key].stat(stat_name)
+    for aura in state.stat_auras:
+        if aura.stat != stat_name or fighter_key not in aura.target_fighter_keys:
+            continue
+        active_sources = sum(
+            state.fighters[source_key].hp > 0
+            for source_key in aura.source_fighter_keys
+            if source_key in state.fighters
+        )
+        if active_sources:
+            value *= D(1) + aura.multiplier_per_source * active_sources
+    return value
 
 
 def _fighter_defeat_on_zero(state: Combat, key: str) -> bool:
@@ -2540,7 +2575,7 @@ def _perform(
             direct_damage(
                 actor.stat("attack"),
                 damage_coefficient,
-                target.stat("defense"),
+                _fighter_stat(state, target_key, "defense"),
                 actor.level,
                 critical=critical,
                 mitigation=mitigation,
@@ -2581,12 +2616,24 @@ def _perform(
                     rounding=ROUND_FLOOR
                 )
             )
+        pressure_stacks = (
+            state.pressure_stacks
+            if _fighter_side(state, actor_id) == "enemy"
+            else 0
+        )
+        if direct_eligible and pressure_stacks > 0:
+            damage = int(
+                (
+                    D(damage)
+                    * (D(1) + state.pressure_step * pressure_stacks)
+                ).to_integral_value(rounding=ROUND_FLOOR)
+            )
         damage_without_defender = damage
         if target.defending and direct_eligible:
             damage_without_defender = direct_damage(
                 actor.stat("attack"),
                 damage_coefficient,
-                target.stat("defense"),
+                _fighter_stat(state, target_key, "defense"),
                 actor.level,
                 critical=critical,
                 mitigation=mitigation_without_defender,
@@ -2604,6 +2651,13 @@ def _perform(
                     (
                         D(damage_without_defender)
                         * (D(1) + path_final_damage_bonus)
+                    ).to_integral_value(rounding=ROUND_FLOOR)
+                )
+            if pressure_stacks > 0:
+                damage_without_defender = int(
+                    (
+                        D(damage_without_defender)
+                        * (D(1) + state.pressure_step * pressure_stacks)
                     ).to_integral_value(rounding=ROUND_FLOOR)
                 )
         defender_prevented_damage = (
@@ -2956,10 +3010,11 @@ def _perform(
                 healing_received_multiplier=received_healing_multiplier,
                 overheal=overheal,
                 target_hp_after=target.hp,
-                fighter_hp_after=tuple(
-                    sorted((fighter.id, fighter.hp) for fighter in state.fighters.values())
-                ),
-            )
+                    fighter_hp_after=tuple(
+                        sorted((fighter.id, fighter.hp) for fighter in state.fighters.values())
+                    ),
+                    pressure_stacks=pressure_stacks,
+                )
         )
         action_event_indices.append(action_event_sequence)
 
@@ -3215,12 +3270,14 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
             and enemy.barrier_remaining > 0
         )
 
-    if state.ai_priority:
-        for action in state.ai_priority:
+    priority = state.ai_priorities.get(actor_key, state.ai_priority)
+    if priority:
+        for action in priority:
             if ready(action):
                 return action
     # Alfa Cinéreo uses content priority rather than a positional cycle.
-    if {"rend", "leap", "bite"}.issubset(state.enemy_actions):
+    cycle = state.ai_cycles.get(actor_key, state.ai_cycle)
+    if {"rend", "leap", "bite"}.issubset(cycle):
         player = state.fighters["player"]
         bleed_count = next(
             (
@@ -3237,11 +3294,20 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
         if ready("rend") and bleed_count < 3:
             return "rend"
         return "bite"
-    if not state.ai_cycle:
+    if not cycle:
         return "hold"
-    for _ in range(len(state.ai_cycle)):
-        action = state.ai_cycle[state.ai_position]
-        state.ai_position = (state.ai_position + 1) % len(state.ai_cycle)
+    if state.pressure_start_opportunity and state.pressure_cap:
+        state.pressure_stacks = min(
+            state.pressure_cap,
+            max(0, enemy.opportunity - state.pressure_start_opportunity + 1),
+        )
+    position = state.ai_positions.get(actor_key, 0)
+    for _ in range(len(cycle)):
+        action = cycle[position]
+        position = (position + 1) % len(cycle)
+        state.ai_positions[actor_key] = position
+        if actor_key == 'enemy':
+            state.ai_position = position
         if ready(action):
             return action
     return "hold"

@@ -3,6 +3,7 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
+from asterion.application.dungeons import DungeonService
 from asterion.application.p2 import P2Service
 from asterion.application.p3 import P3Service
 from asterion.application.p4 import P4Service
@@ -62,13 +63,23 @@ def combat_router(
     s5: S5Service | None = None,
     s6: S6Service | None = None,
     p6: P6Service | None = None,
+    dungeons: DungeonService | None = None,
 ) -> Router:
     router = Router(name="foreground_combat")
     router.callback_query.filter(F.message.chat.type == "private")
 
     async def consumable_action(actor, activity_id, version, *, item_id, target_id, effect_id):
         view = (
-            await road.action(
+            await dungeons.consume_for_activity(
+                actor, activity_id, version, item_id=item_id,
+                target_id=target_id, effect_id=effect_id,
+            )
+            if dungeons is not None
+            else None
+        )
+        if view is None:
+            view = (
+                await road.action(
                 actor,
                 activity_id,
                 version,
@@ -76,9 +87,9 @@ def combat_router(
                 target_id=target_id,
                 effect_id=effect_id,
             )
-            if road is not None
-            else None
-        )
+                if road is not None
+                else None
+            )
         if view is None and s2 is not None:
             view = await s2.action(
                 actor,
@@ -145,10 +156,12 @@ def combat_router(
 
     async def consumable_selection(actor, activity_id, version, **kwargs):
         view = (
-            await road.consumable_selection(actor, activity_id, version, **kwargs)
-            if road is not None
+            await dungeons.consumable_selection(actor, activity_id, version, **kwargs)
+            if dungeons is not None
             else None
         )
+        if view is None and road is not None:
+            view = await road.consumable_selection(actor, activity_id, version, **kwargs)
         if view is None and s2 is not None:
             view = await s2.consumable_selection(
                 actor, activity_id, version, **kwargs
@@ -178,6 +191,10 @@ def combat_router(
         return view
 
     def render_service_view(view):
+        if getattr(view, "context", None) == "dungeon":
+            from asterion.bot.dungeon_ui import render_dungeons
+
+            return render_dungeons(view)
         if getattr(view, "context", None) == "s2":
             return render_s2(view)
         if getattr(view, "context", None) == "p2":
@@ -469,6 +486,7 @@ def combat_router(
                 and s5 is None
                 and s6 is None
                 and p6 is None
+                and dungeons is None
             )
             or not isinstance(query.message, Message)
         ):

@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from asterion.application.class_trials import ClassTrialService
 from asterion.application.consumables import ConsumableService
+from asterion.application.dungeons import DungeonService
 from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import CHARNECA, P2Service
@@ -27,6 +28,7 @@ from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
+from asterion.bot.dungeon_ui import render_dungeons
 from asterion.bot.inventory_ui import render_inventory
 from asterion.bot.p1_ui import render_p1
 from asterion.bot.p2_ui import render_p2, render_p2_mission_detail
@@ -63,6 +65,7 @@ def world_router(
     s5: S5Service | None = None,
     s6: S6Service | None = None,
     p6: P6Service | None = None,
+    dungeons: DungeonService | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -81,6 +84,10 @@ def world_router(
         return render_combat(combat_view) if combat_view is not None else None
 
     async def show(message: Message):
+        dungeon_view = await dungeons.resume(message.from_user.id) if dungeons and message.from_user else None
+        if dungeon_view is not None:
+            await present(message, render_dungeons(dungeon_view), images)
+            return
         p2_view = await p2.resume(message.from_user.id) if p2 and message.from_user else None
         if (
             p2_view is not None
@@ -164,6 +171,10 @@ def world_router(
             await present(message, screen, images)
 
     async def show_menu(query: CallbackQuery):
+        dungeon_view = await dungeons.resume(query.from_user.id) if dungeons else None
+        if dungeon_view is not None and isinstance(query.message, Message):
+            await present(query.message, render_dungeons(dungeon_view), images, edit=True)
+            return
         p2_view = await p2.resume(query.from_user.id) if p2 else None
         if (
             p2_view is not None
@@ -381,6 +392,10 @@ def world_router(
         )
 
     async def foreground(query: CallbackQuery) -> bool:
+        dungeon_view = await dungeons.resume(query.from_user.id) if dungeons else None
+        if dungeon_view is not None and isinstance(query.message, Message):
+            await present(query.message, render_dungeons(dungeon_view), images, edit=True)
+            return True
         p2_view = await p2.resume(query.from_user.id) if p2 else None
         if (
             p2_view is not None
@@ -1060,7 +1075,7 @@ def world_router(
                 ],
                 [
                     InlineKeyboardButton(text="Caçadas", callback_data="menu:noop"),
-                    InlineKeyboardButton(text="Masmorras", callback_data="menu:noop"),
+                    InlineKeyboardButton(text="Masmorras", callback_data="dungeon:known"),
                 ],
                 [
                     InlineKeyboardButton(text="Desbravar", callback_data="menu:noop"),

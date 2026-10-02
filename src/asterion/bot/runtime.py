@@ -7,6 +7,7 @@ from asterion.application.active_arts import ActiveArtService
 from asterion.application.class_trials import ClassTrialService
 from asterion.application.consumables import ConsumableService
 from asterion.application.creation import CreationService
+from asterion.application.dungeons import DungeonService
 from asterion.application.equipment import EquipmentService
 from asterion.application.equipment_view import EquipmentViewService
 from asterion.application.inventory import InventoryService
@@ -31,6 +32,7 @@ from asterion.bot.character_progression_handlers import character_progression_ro
 from asterion.bot.class_trial_handlers import class_trial_router
 from asterion.bot.combat_handlers import combat_router
 from asterion.bot.creation_handlers import creation_router
+from asterion.bot.dungeon_handlers import dungeon_router
 from asterion.bot.equipment_handlers import equipment_router
 from asterion.bot.p1_handlers import p1_router
 from asterion.bot.p2_handlers import p2_router
@@ -88,6 +90,7 @@ def get_bot_runtime() -> BotRuntime:
     paths = PathSelectionService(SessionFactory, settings.server_id)
     active_arts = ActiveArtService(SessionFactory, settings.server_id)
     talents = TalentService(SessionFactory, settings.server_id)
+    dungeons = DungeonService(SessionFactory, settings.server_id)
     dispatcher.include_router(p2_router(p2, settings.creation_images, s3=s3, p4=p4, p5=p5, p6=p6))
     dispatcher.include_router(p1_router(p1, settings.creation_images))
     dispatcher.include_router(s1_router(s1, settings.creation_images))
@@ -105,6 +108,7 @@ def get_bot_runtime() -> BotRuntime:
         character_progression_router(talents, active_arts, settings.creation_images)
     )
     dispatcher.include_router(class_trial_router(class_trials, settings.creation_images))
+    dispatcher.include_router(dungeon_router(dungeons, settings.creation_images))
     dispatcher.include_router(
         combat_router(
             prologue,
@@ -121,6 +125,7 @@ def get_bot_runtime() -> BotRuntime:
             s5=s5,
             s6=s6,
             p6=p6,
+            dungeons=dungeons,
         )
     )
     dispatcher.include_router(
@@ -154,6 +159,7 @@ def get_bot_runtime() -> BotRuntime:
             s5=s5,
             s6=s6,
             p6=p6,
+            dungeons=dungeons,
         )
     )
     dispatcher.include_router(
@@ -179,6 +185,7 @@ def get_bot_runtime() -> BotRuntime:
             s5=s5,
             s6=s6,
             p6=p6,
+            dungeons=dungeons,
         )
     )
     return BotRuntime(

@@ -384,10 +384,169 @@ class RewardGrant(Base):
     xp: Mapped[int] = mapped_column(BigInteger, nullable=False)
     ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class DungeonRun(Base):
+    """Durable, multiplayer-capable state for one dungeon expedition."""
+
+    __tablename__ = "dungeon_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active','completed','failed','expired')",
+            name="ck_dungeon_run_status",
+        ),
+        CheckConstraint(
+            "difficulty IN ('stable','fractured','rupture')",
+            name="ck_dungeon_run_difficulty",
+        ),
+        CheckConstraint("initial_group_size BETWEEN 1 AND 4", name="ck_dungeon_run_group_size"),
+        CheckConstraint("current_encounter_ordinal >= 1", name="ck_dungeon_run_ordinal"),
+        CheckConstraint("state_version >= 0", name="ck_dungeon_run_state_version"),
+        CheckConstraint(
+            "active_checkpoint_encounter IS NULL OR active_checkpoint_encounter >= 1",
+            name="ck_dungeon_run_checkpoint",
+        ),
+        CheckConstraint("jsonb_typeof(progress) = 'object'", name="ck_dungeon_run_progress"),
+        Index(
+            "ix_dungeon_runs_active_updated",
+            "last_activity_at",
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    dungeon_family_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    difficulty: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
+    content_version: Mapped[str] = mapped_column(String(48), nullable=False)
+    reference_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    initial_group_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    current_encounter_ordinal: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    seed: Mapped[str] = mapped_column(String(128), nullable=False)
+    has_brazier: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    brazier_activated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    brazier_after_encounter: Mapped[int | None] = mapped_column(Integer)
+    active_checkpoint_encounter: Mapped[int | None] = mapped_column(Integer)
+    progress: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    vigor_refunded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_activity_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DungeonRunMember(Base):
+    """Run participant record; D1 creates one participant, D2 may add up to four."""
+
+    __tablename__ = "dungeon_run_members"
+    __table_args__ = (
+        PrimaryKeyConstraint("run_id", "character_id", name="pk_dungeon_run_members"),
+        UniqueConstraint("run_id", "position", name="uq_dungeon_run_member_position"),
+        CheckConstraint("position BETWEEN 1 AND 4", name="ck_dungeon_run_member_position"),
+        CheckConstraint(
+            "status IN ('active','defeated','left')",
+            name="ck_dungeon_run_member_status",
+        ),
+        CheckConstraint("vigor_reserved >= 0", name="ck_dungeon_run_member_vigor"),
+        CheckConstraint("consumable_uses >= 0", name="ck_dungeon_run_member_consumables"),
+        CheckConstraint("hp >= 0 AND max_hp > 0 AND hp <= max_hp", name="ck_dungeon_run_member_hp"),
+        CheckConstraint(
+            "jsonb_typeof(combat_configuration) = 'object'",
+            name="ck_dungeon_run_member_config",
+        ),
+        CheckConstraint("jsonb_typeof(run_state) = 'object'", name="ck_dungeon_run_member_state"),
+        CheckConstraint(
+            "jsonb_typeof(contribution) = 'object'",
+            name="ck_dungeon_run_member_contribution",
+        ),
+        Index(
+            "uq_dungeon_active_member",
+            "character_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+    run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("dungeon_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    vigor_reserved: Mapped[int] = mapped_column(Integer, nullable=False)
+    consumable_uses: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    combat_configuration: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    hp: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    max_hp: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    run_state: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    contribution: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+
+
+class DungeonRunEncounter(Base):
+    """One stable encounter slot, with its latest retry activity reference."""
+
+    __tablename__ = "dungeon_run_encounters"
+    __table_args__ = (
+        PrimaryKeyConstraint("run_id", "encounter_ordinal", name="pk_dungeon_run_encounters"),
+        CheckConstraint("encounter_ordinal >= 1", name="ck_dungeon_encounter_ordinal"),
+        CheckConstraint(
+            "status IN ('pending','active','completed')",
+            name="ck_dungeon_encounter_status",
+        ),
+        CheckConstraint("attempt_count >= 0", name="ck_dungeon_encounter_attempt_count"),
+        CheckConstraint("jsonb_typeof(progress) = 'object'", name="ck_dungeon_encounter_progress"),
+        ForeignKeyConstraint(
+            ["activity_id"], ["game_activities.id"], name="fk_dungeon_encounter_activity"
+        ),
+        UniqueConstraint("activity_id", name="uq_dungeon_encounter_activity"),
+    )
+
+    run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("dungeon_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    encounter_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    definition_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    activity_id: Mapped[UUID | None] = mapped_column(Uuid)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    progress: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    reward_settled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DungeonPityState(Base):
+    __tablename__ = "dungeon_pity_states"
+    __table_args__ = (
+        CheckConstraint("legendary_plus_points >= 0", name="ck_dungeon_pity_legendary_points"),
+        CheckConstraint("mythic_points >= 0", name="ck_dungeon_pity_mythic_points"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    legendary_plus_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    mythic_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class CreationInput(Base):

@@ -145,6 +145,44 @@ class S5CombatCallback(CallbackData, prefix="s5fight"):
         return UUID(hex=self.activity)
 
 
+class DungeonCombatCallback(CallbackData, prefix="df"):
+    run: str
+    activity: str
+    version: str
+    action: str
+    target: str
+
+    @classmethod
+    def for_intent(
+        cls, run_id: UUID, activity_id: UUID, version: int, action_index: int, target: str
+    ):
+        return cls(
+            run=run_id.hex[:16],
+            activity=_uuid_token(activity_id),
+            version=_base36(version),
+            action=_base36(action_index),
+            target=target,
+        )
+
+    @property
+    def activity_id(self) -> UUID:
+        return _uuid_from_token(self.activity)
+
+    @property
+    def combat_version(self) -> int:
+        return _from_base36(self.version)
+
+    @property
+    def action_index(self) -> int:
+        return _from_base36(self.action)
+
+    @property
+    def target_index(self) -> int | None:
+        if self.target in {"x", "s", "b"}:
+            return None
+        return _from_base36(self.target[1:] if self.target.startswith("d") else self.target)
+
+
 class ClassTrialActionCallback(CallbackData, prefix="trialact"):
     attempt: str
     version: str
@@ -825,15 +863,19 @@ def _trial_fighter_card(state: Combat, key: str, *, icon: str) -> list[str]:
 def render_combat(view: CombatView) -> Screen:
     state = view.combat
     is_trial = view.context == "class_trial"
+    is_dungeon = view.context == "dungeon"
+    is_party_combat = is_trial or is_dungeon
     if not is_trial and view.consumable_screen is not None:
         return _render_consumable_selection(view)
     player = state.fighters["player"]
     icon = COPY[f"class:{player.character_class}"].split(" ", 1)[0]
     recent = [state.opening_log] + [event_line(state, event) for event in state.events]
-    if is_trial:
+    if is_party_combat:
         lines = []
-        if view.trial_stage_caption:
+        if is_trial and view.trial_stage_caption:
             lines.extend([f"⚔️ Provação · {escape(view.trial_stage_caption)}", ""])
+        elif is_dungeon:
+            lines.extend([f"⛓️ Masmorra · {escape(view.environment)}", ""])
         lines.extend(
             [
                 f"Turno {player.opportunity} · <b>{escape(player.name)}</b>",
@@ -919,7 +961,7 @@ def render_combat(view: CombatView) -> Screen:
 
     available = (
         class_trial_action_ids(state)
-        if is_trial
+        if is_party_combat
         else allowed_actions(state)
     )
     buttons = []
@@ -953,15 +995,23 @@ def render_combat(view: CombatView) -> Screen:
             action_ids = class_trial_action_ids(state)
             action_index = action_ids.index(action)
             targets = class_trial_target_ids(state, action)
-            if action in {"attack", "defend"}:
-                targets = class_trial_target_ids(state, action)
-            target_code = (
-                "s" if len(targets) > 1
-                else "d0" if len(targets) == 1
-                else "x"
-            )
+            target_code = "s" if len(targets) > 1 else "d0" if len(targets) == 1 else "x"
             callback = ClassTrialActionCallback.for_intent(
                 view.activity_id, state.version, action_index, target_code
+            ).pack()
+        elif is_dungeon:
+            action_ids = class_trial_action_ids(state)
+            action_index = action_ids.index(action)
+            definition = state.player_actions.get(action)
+            targets = (
+                ()
+                if definition is None
+                or definition.target_mode in {"self", "all_opponents", "all_allies"}
+                else action_target_ids(state, action)
+            )
+            target_code = "s" if len(targets) > 1 else "d0" if targets else "x"
+            callback = DungeonCombatCallback.for_intent(
+                view.run_id, view.activity_id, state.version, action_index, target_code
             ).pack()
         else:
             callback_action = action

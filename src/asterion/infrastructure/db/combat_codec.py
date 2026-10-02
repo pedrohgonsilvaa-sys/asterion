@@ -9,6 +9,7 @@ from asterion.domain.combat import (
     ActionEffect,
     Combat,
     CombatEvent,
+    CombatStatAura,
     DotState,
     Effect,
     Fighter,
@@ -198,6 +199,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     ),
                     "path_per_bonus": Decimal(event.get("path_per_bonus", "0")),
                     "path_crit_bonus": Decimal(event.get("path_crit_bonus", "0")),
+                    "pressure_stacks": int(event.get("pressure_stacks", 0)),
                     "applied_effect_magnitude": Decimal(
                         event.get("applied_effect_magnitude", "0")
                     ),
@@ -264,6 +266,43 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 "ai_cycle": tuple(payload["ai_cycle"]),
                 "ai_priority": tuple(payload.get("ai_priority", ())),
                 "ai_target_cycle": tuple(payload.get("ai_target_cycle", ())),
+                "ai_cycles": {
+                    str(key): tuple(value)
+                    for key, value in payload.get("ai_cycles", {}).items()
+                },
+                "ai_positions": {
+                    str(key): int(value)
+                    for key, value in payload.get("ai_positions", {}).items()
+                },
+                "ai_priorities": {
+                    str(key): tuple(value)
+                    for key, value in payload.get("ai_priorities", {}).items()
+                },
+                "pressure_start_opportunity": int(
+                    payload.get("pressure_start_opportunity", 0)
+                ),
+                "pressure_cap": int(payload.get("pressure_cap", 0)),
+                "pressure_step": Decimal(payload.get("pressure_step", "0.03")),
+                "pressure_stacks": int(payload.get("pressure_stacks", 0)),
+                "stat_auras": tuple(
+                    CombatStatAura(
+                        **(
+                            aura
+                            | {
+                                "source_fighter_keys": tuple(
+                                    aura.get("source_fighter_keys", ())
+                                ),
+                                "target_fighter_keys": tuple(
+                                    aura.get("target_fighter_keys", ())
+                                ),
+                                "multiplier_per_source": Decimal(
+                                    aura.get("multiplier_per_source", "0")
+                                ),
+                            }
+                        )
+                    )
+                    for aura in payload.get("stat_auras", ())
+                ),
                 "order": tuple(payload["order"]),
                 "tutorial": tutorial,
                 "events": [combat_event(event) for event in payload["events"]],
