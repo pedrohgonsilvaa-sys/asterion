@@ -8,9 +8,23 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from asterion.domain.equipment import EquipmentSlot, assignment_for_item_slot, parse_equipment_slot
+from asterion.domain.equipment_modifications import (
+    ENCHANTMENT_FAMILIES,
+    POINT_ATTRIBUTES,
+    RUNE_FAMILIES,
+    EquipmentModificationError,
+    enchantment_compatible,
+    enchantment_multiplier,
+    enchantment_potency_for,
+    equipment_grade,
+    parse_component_potency,
+    rune_compatible,
+    rune_potency_for,
+)
 
 D = Decimal
 ZERO = D(0)
+ZERO_STAGE = (ZERO,) * 8
 
 ATTRIBUTE_NAMES = {
     "HP": "hp",
@@ -72,6 +86,10 @@ class EquipmentStatContribution:
     crit: Decimal = ZERO
     evasion: Decimal = ZERO
     block: Decimal = ZERO
+    rune_percent: tuple[Decimal, ...] = ZERO_STAGE
+    rune_points: tuple[Decimal, ...] = ZERO_STAGE
+    enchantment_percent: tuple[Decimal, ...] = ZERO_STAGE
+    enchantment_points: tuple[Decimal, ...] = ZERO_STAGE
 
     def values(self) -> tuple[Decimal, ...]:
         return (
@@ -87,8 +105,40 @@ class EquipmentStatContribution:
 
     def __add__(self, other: EquipmentStatContribution) -> EquipmentStatContribution:
         return EquipmentStatContribution(
-            *(left + right for left, right in zip(self.values(), other.values(), strict=True))
+            *(left + right for left, right in zip(self.values(), other.values(), strict=True)),
+            rune_percent=_add_stage(self.rune_percent, other.rune_percent),
+            rune_points=_add_stage(self.rune_points, other.rune_points),
+            enchantment_percent=_add_stage(self.enchantment_percent, other.enchantment_percent),
+            enchantment_points=_add_stage(self.enchantment_points, other.enchantment_points),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class InstalledComponent:
+    family: str
+    effect: str
+    rarity: str
+    grade: int
+    potency: str
+    bound: bool
+    identifier: str | None = None
+    name: str | None = None
+
+    def to_data(self, *, enchantment: bool = False) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "family": self.family,
+            "effect": self.effect,
+            "rarity": self.rarity,
+            "grade": self.grade,
+            "potency": self.potency,
+            "bound": self.bound,
+        }
+        if enchantment:
+            if self.identifier is not None:
+                data["enchantment_id"] = self.identifier
+            if self.name is not None:
+                data["name"] = self.name
+        return data
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,11 +153,12 @@ class EquippedItemSnapshot:
     enhancement: int
     core: tuple[tuple[str, Decimal], ...]
     secondaries: tuple[tuple[str, Decimal], ...]
-    rune: None = None
-    enchantment: None = None
+    rune: InstalledComponent | None = None
+    enchantment: InstalledComponent | None = None
+    runes: tuple[tuple[str, InstalledComponent], ...] = ()
 
     def to_data(self) -> dict[str, Any]:
-        return {
+        data = {
             "item_instance_id": self.item_instance_id,
             "slot": self.slot,
             "item_slot": self.item_slot,
@@ -118,9 +169,15 @@ class EquippedItemSnapshot:
             "secondaries": [
                 {"attribute": key, "value": str(value)} for key, value in self.secondaries
             ],
-            "rune": self.rune,
-            "enchantment": self.enchantment,
+            "rune": self.rune.to_data() if self.rune is not None else None,
+            "enchantment": (
+                self.enchantment.to_data(enchantment=True)
+                if self.enchantment is not None else None
+            ),
         }
+        if self.item_slot == "2H":
+            data["runes"] = {key: value.to_data() for key, value in self.runes}
+        return data
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,14 +286,39 @@ def item_snapshot_from_persisted(
         if name not in ATTRIBUTE_NAMES or name in seen:
             raise EquipmentConfigurationError("Unknown or duplicate secondary attribute.")
         seen.add(name)
-        secondaries.append((name, _decimal_value(secondary.get("value"), allow_zero=False)))
+        # Low-level items can legitimately round a secondary's budget to zero;
+        # identity still occupies its rarity slot and is valid for rerolling.
+        secondaries.append((name, _decimal_value(secondary.get("value"), allow_zero=True)))
     pool_slot = assignment.slot
     if any(name not in CORE_POOLS[pool_slot] for name, _ in core):
         raise EquipmentConfigurationError("Core attribute is not eligible for this equipment slot.")
     if any(name not in SECONDARY_POOLS[pool_slot] for name, _ in secondaries):
         raise EquipmentConfigurationError("Secondary is not eligible for this equipment slot.")
-    if payload.get("rune") is not None or payload.get("enchantment") is not None:
-        raise EquipmentConfigurationError("Installed runes and enchantments are unsupported.")
+    rune = None
+    runes: tuple[tuple[str, InstalledComponent], ...] = ()
+    if item_slot == "2H":
+        if payload.get("rune") is not None:
+            raise EquipmentConfigurationError("A two-handed item uses rune affinities A and B.")
+        raw_runes = payload.get("runes")
+        if raw_runes is not None:
+            if not isinstance(raw_runes, Mapping) or any(
+                key not in {"A", "B"} for key in raw_runes
+            ):
+                raise EquipmentConfigurationError("Invalid two-handed Rune affinity state.")
+            runes = tuple(
+                (key, _installed_component(raw, item_slot, item_level, kind="rune", affinity=key))
+                for key, raw in sorted(raw_runes.items()) if raw is not None
+            )
+    else:
+        if payload.get("runes") not in (None, {}):
+            raise EquipmentConfigurationError("Normal equipment has one Rune slot.")
+        if payload.get("rune") is not None:
+            rune = _installed_component(payload["rune"], item_slot, item_level, kind="rune")
+    enchantment = None
+    if payload.get("enchantment") is not None:
+        enchantment = _installed_component(
+            payload["enchantment"], item_slot, item_level, kind="enchantment"
+        )
     return EquippedItemSnapshot(
         item_instance_id=item_instance_id,
         slot=parsed_slot.value,
@@ -246,19 +328,42 @@ def item_snapshot_from_persisted(
         enhancement=enhancement,
         core=tuple(sorted(core)),
         secondaries=tuple(secondaries),
+        rune=rune,
+        enchantment=enchantment,
+        runes=runes,
     )
 
 
 def equipment_stat_contribution(item: EquippedItemSnapshot) -> EquipmentStatContribution:
-    """Compose persisted core, secondaries, then total enhancement multiplier."""
+    """Compose core/secondaries, enhancement, then component stages."""
     values = {name: ZERO for name in ATTRIBUTE_NAMES}
     for name, value in item.core:
         values[name] += value
     for name, value in item.secondaries:
         values[name] += value
     multiplier = ENHANCEMENT_MULTIPLIERS[item.enhancement]
+    rune_percent = list(ZERO_STAGE)
+    rune_points = list(ZERO_STAGE)
+    enchant_percent = list(ZERO_STAGE)
+    enchant_points = list(ZERO_STAGE)
+    installed_runes = ((item.rune,) if item.rune is not None else ()) + tuple(
+        value for _, value in item.runes
+    )
+    for component in installed_runes:
+        _add_component_power(component, rune_percent, rune_points)
+    if item.enchantment is not None:
+        _add_component_power(
+            item.enchantment,
+            enchant_percent,
+            enchant_points,
+            multiplier=enchantment_multiplier(item.item_slot, item.enchantment.effect),
+        )
     return EquipmentStatContribution(
-        *(values[name] * multiplier for name in ATTRIBUTE_NAMES)
+        *(values[name] * multiplier for name in ATTRIBUTE_NAMES),
+        rune_percent=tuple(rune_percent),
+        rune_points=tuple(rune_points),
+        enchantment_percent=tuple(enchant_percent),
+        enchantment_points=tuple(enchant_points),
     )
 
 
@@ -280,6 +385,7 @@ def equipment_configuration_from_data(data: Mapping[str, Any]) -> EquipmentConfi
             "core": raw.get("core"),
             "secondaries": raw.get("secondaries"),
             "rune": raw.get("rune"),
+            "runes": raw.get("runes"),
             "enchantment": raw.get("enchantment"),
             "item_instance_id": raw.get("item_instance_id"),
         }
@@ -342,3 +448,74 @@ def _decimal_value(value: Any, *, allow_zero: bool) -> Decimal:
     if not result.is_finite() or result < ZERO or (not allow_zero and result == ZERO):
         raise EquipmentConfigurationError("Equipment stat value is out of range.")
     return result
+
+
+def _add_stage(left: tuple[Decimal, ...], right: tuple[Decimal, ...]) -> tuple[Decimal, ...]:
+    return tuple(a + b for a, b in zip(left, right, strict=True))
+
+
+def _add_component_power(
+    component: InstalledComponent,
+    percentages: list[Decimal],
+    points: list[Decimal],
+    *,
+    multiplier: int = 1,
+) -> None:
+    position = tuple(ATTRIBUTE_NAMES).index(component.effect)
+    try:
+        amount = parse_component_potency(component.potency, component.effect) * multiplier
+    except EquipmentModificationError as exc:
+        raise EquipmentConfigurationError(str(exc)) from exc
+    (points if component.effect in POINT_ATTRIBUTES else percentages)[position] += amount
+
+
+def _installed_component(
+    raw: Any, item_slot: str, item_level: int, *, kind: str, affinity: str = "A"
+) -> InstalledComponent:
+    if not isinstance(raw, Mapping):
+        raise EquipmentConfigurationError("Installed component is invalid.")
+    family = raw.get("family")
+    rarity = raw.get("rarity")
+    grade = raw.get("grade")
+    potency = raw.get("potency")
+    bound = raw.get("bound")
+    if (
+        not isinstance(family, str)
+        or not isinstance(rarity, str)
+        or isinstance(grade, bool)
+        or not isinstance(grade, int)
+        or not isinstance(potency, str)
+        or not isinstance(bound, bool)
+    ):
+        raise EquipmentConfigurationError("Installed component fields are invalid.")
+    try:
+        if not 1 <= grade <= equipment_grade(item_level):
+            raise EquipmentModificationError("Component Grade exceeds equipment Grade.")
+        if kind == "rune":
+            if not rune_compatible(item_slot, family, affinity):
+                raise EquipmentModificationError("Rune effect is incompatible with equipment.")
+            effect = RUNE_FAMILIES[family][0]
+            expected = rune_potency_for(family, rarity, grade)
+        else:
+            if not enchantment_compatible(item_slot, family):
+                raise EquipmentModificationError(
+                    "Enchantment effect is incompatible with equipment."
+                )
+            effect = ENCHANTMENT_FAMILIES[family]
+            expected = enchantment_potency_for(family, rarity, grade)
+        if raw.get("effect", effect) != effect:
+            raise EquipmentModificationError("Component effect contradicts its family.")
+        parse_component_potency(potency, effect)
+        if potency != expected:
+            raise EquipmentModificationError(
+                "Component potency contradicts its family, rarity or Grade."
+            )
+    except EquipmentModificationError as exc:
+        raise EquipmentConfigurationError(str(exc)) from exc
+    identifier = raw.get("enchantment_id")
+    name = raw.get("name")
+    if (identifier is not None and not isinstance(identifier, str)) or (
+        name is not None and not isinstance(name, str)
+    ):
+        raise EquipmentConfigurationError("Enchantment identity is invalid.")
+    return InstalledComponent(family, effect, rarity, grade, potency, bound, identifier, name)

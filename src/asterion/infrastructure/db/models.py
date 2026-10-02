@@ -997,6 +997,71 @@ class CharacterTalentChoice(Base):
     talent_id: Mapped[str] = mapped_column(String(96), nullable=False)
 
 
+class CharacterProfession(Base):
+    """The two active profession slots; abandoned progress is deliberately deleted."""
+
+    __tablename__ = "character_professions"
+    __table_args__ = (
+        PrimaryKeyConstraint("character_id", "slot", name="pk_character_professions"),
+        UniqueConstraint("character_id", "profession_id", name="uq_character_profession"),
+        CheckConstraint("slot IN ('primary','secondary')", name="ck_character_profession_slot"),
+        CheckConstraint(
+            "profession_id IN ('blacksmith','artificer','alchemist','leatherworker','jeweler')",
+            name="ck_character_profession_id",
+        ),
+        CheckConstraint("level BETWEEN 1 AND 30", name="ck_character_profession_level"),
+        CheckConstraint(
+            "slot != 'secondary' OR level <= 15",
+            name="ck_character_profession_secondary_cap",
+        ),
+        CheckConstraint("pxp >= 0", name="ck_character_profession_pxp"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    slot: Mapped[str] = mapped_column(String(12), nullable=False)
+    profession_id: Mapped[str] = mapped_column(String(24), nullable=False)
+    level: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    pxp: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+
+
+class CraftingReceipt(Base):
+    """Durable preview/commit receipt that prevents craft output rerolls and dupes."""
+
+    __tablename__ = "crafting_receipts"
+    __table_args__ = (
+        UniqueConstraint("character_id", "source_key", name="uq_character_craft_source"),
+        Index("ix_crafting_receipts_character_status", "character_id", "status"),
+        CheckConstraint(
+            "status IN ('preview','committed','cancelled','expired')",
+            name="ck_crafting_receipt_status",
+        ),
+        CheckConstraint(
+            "output_payload IS NULL OR jsonb_typeof(output_payload) = 'object'",
+            name="ck_crafting_receipt_payload",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    recipe_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    source_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="preview", server_default="preview"
+    )
+    preview_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    seed: Mapped[str] = mapped_column(String(128), nullable=False)
+    output_kind: Mapped[str | None] = mapped_column(String(24))
+    output_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class RuneStack(Base):
     __tablename__ = "rune_stacks"
     __table_args__ = (

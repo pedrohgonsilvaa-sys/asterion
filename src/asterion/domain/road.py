@@ -16,6 +16,12 @@ from asterion.domain.combat_math import (
     growth,
     resolve_combat_stats,
 )
+from asterion.domain.equipment_modifications import (
+    RARITY_MULT,
+    SECONDARY_SCALE,
+    SLOT_WEIGHTS,
+    rune_potency_for,
+)
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.prologue import first_art
 
@@ -414,13 +420,9 @@ EQUIPMENT_CATALOG = (
     ("Botas da Estrada", "Pés"), ("Selo Enegrecido", "Acessório"),
     ("Relicário de Cinzas", "Artefato"),
 )
-SLOT_WEIGHTS = {"Principal": 18, "2H": 28, "Secundária": 10, "Cabeça": 10, "Torso": 16, "Mãos": 10, "Pés": 10, "Acessório": 12, "Artefato": 14}
 RARITY_SECONDARIES = {"Comum": 0, "Raro": 1, "Épico": 2, "Lendário": 3, "Mítico": 4}
 RUNE_FAMILIES = (("Brasa", "ATQ"), ("Pedra", "DEF"), ("Caminhante", "AGI"), ("Fresta", "PER"), ("Presságio", "CRIT"), ("Persistência", "HP"), ("Desvio", "Esquiva"), ("Guarda", "Bloqueio"))
-RUNE_POTENCY = {"HP": ("0.35%", "0.45%", "0.55%"), "ATQ": ("0.35%", "0.45%", "0.55%"), "DEF": ("0.55%", "0.80%", "1.00%"), "AGI": ("0.55%", "0.80%", "1.00%"), "PER": ("0.25 p.p.", "0.50 p.p.", "0.50 p.p."), "CRIT": ("0.25 p.p.", "0.50 p.p.", "0.50 p.p."), "Esquiva": ("0.25 p.p.", "0.25 p.p.", "0.25 p.p."), "Bloqueio": ("0.25 p.p.", "0.50 p.p.", "0.50 p.p.")}
 CORE60 = {"Principal": {"ATQ": 25}, "Secundária": {"ATQ": 7, "DEF": 5}, "2H": {"ATQ": 35}, "Cabeça": {"HP": 45, "DEF": 6}, "Torso": {"HP": 95, "DEF": 12}, "Mãos": {"ATQ": 10, "DEF": 5}, "Pés": {"HP": 60, "AGI": 8}, "Acessório": {"HP": 50, "ATQ": 7, "AGI": 4}, "Artefato": {"HP": 55, "ATQ": 7, "DEF": 5, "AGI": 4}}
-SECONDARY_SCALE = {"HP": D("8.5"), "ATQ": D("1.35"), "DEF": D("2.30"), "AGI": D("3.00"), "PER": D("0.80"), "CRIT": D("0.67"), "Esquiva": D("0.33"), "Bloqueio": D("0.95")}
-RARITY_MULT = {"Comum": D("1"), "Raro": D("1.07"), "Épico": D("1.15"), "Lendário": D("1.24"), "Mítico": D("1.45")}
 
 def _stable_draw(seed: str, purpose: str, modulo: int) -> int:
     return int.from_bytes(sha256(f"{seed}:{purpose}".encode()).digest(), "big") % modulo
@@ -461,7 +463,7 @@ def materialize_equipment(
     for index in range(min(count, len(pool))):
         pick = _stable_draw(seed, f"equipment.secondary.{index}", len(pool))
         attribute = pool.pop(pick)
-        budget = D(SLOT_WEIGHTS["Principal" if slot == "2H" else slot]) * (RARITY_MULT[rarity] - 1) / max(1, count)
+        budget = D(SLOT_WEIGHTS[slot]) * (RARITY_MULT[rarity] - 1) / max(1, count)
         scale = g.sqrt() if attribute in {"PER", "CRIT", "Esquiva", "Bloqueio"} else g
         raw = budget * SECONDARY_SCALE[attribute] * scale
         if attribute in {"PER", "CRIT", "Esquiva", "Bloqueio"}:
@@ -477,9 +479,8 @@ def materialize_equipment(
         secondaries.append({"attribute": attribute, "value": str(value)})
     return {"item_name": name, "slot": slot, "item_level": level, "rarity": rarity, "core": core, "secondaries": secondaries, "enhancement": 0, "rune": None, "enchantment": None, "bound": bound}
 
-def rune_potency(family: str, rarity: str) -> str:
-    stat = dict(RUNE_FAMILIES)[family]
-    return RUNE_POTENCY[stat][{"Rara": 0, "Épica": 1, "Lendária": 2}[rarity]]
+def rune_potency(family: str, rarity: str, grade: int = 1) -> str:
+    return rune_potency_for(family, rarity, grade)
 
 def equipment_rarity(seed: str, category: str, elite_pity: int = 0, legendary_pity: int = 0) -> str:
     roll = _stable_draw(seed, "equipment.rarity", 10000) / 100

@@ -2113,11 +2113,12 @@ class DungeonService:
             return None
         rarity = roll_weighted(seed, "rune.rarity", profile.rune_rarity_bands)
         family = RUNE_FAMILY_IDS[stable_draw(seed, "rune.family", len(RUNE_FAMILY_IDS))]
+        grade = min(6, max(1, (run.reference_level - 1) // 10 + 1))
         return {
             "family": family,
             "rarity": rarity,
-            "grade": min(6, max(1, (run.reference_level - 1) // 10 + 1)),
-            "potency": rune_potency(family, rarity),
+            "grade": grade,
+            "potency": rune_potency(family, rarity, grade),
             "bound": False,
         }
 

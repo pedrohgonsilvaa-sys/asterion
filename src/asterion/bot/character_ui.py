@@ -33,6 +33,7 @@ def render_character() -> Screen:
                 InlineKeyboardButton(text="Artes", callback_data="character:arts"),
                 InlineKeyboardButton(text="Talentos", callback_data="character:talents"),
             ],
+            [InlineKeyboardButton(text="Ofícios", callback_data="character:professions")],
             [InlineKeyboardButton(text="Caminho", callback_data="character:path")],
             [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
         ]

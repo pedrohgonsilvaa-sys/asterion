@@ -45,11 +45,7 @@ def _last_callback_answer(bot):
 
 
 def _buttons(screen):
-    return [
-        button
-        for row in screen.reply_markup.inline_keyboard
-        for button in row
-    ]
+    return [button for row in screen.reply_markup.inline_keyboard for button in row]
 
 
 def _dispatcher(database):
@@ -92,9 +88,7 @@ async def _add_item(
 ):
     item_id = uuid4()
     async with database[1].begin() as session:
-        character = await session.scalar(
-            select(Character).where(Character.telegram_id == actor)
-        )
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         session.add(
             EquipmentItem(
                 id=item_id,
@@ -120,9 +114,7 @@ async def _add_item(
 
 async def _equipped_state(database, actor):
     async with database[1]() as session:
-        character = await session.scalar(
-            select(Character).where(Character.telegram_id == actor)
-        )
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         slots = (
             await session.scalars(
                 select(CharacterEquipmentSlot).where(
@@ -162,35 +154,49 @@ async def test_telegram_inventory_equip_unequip_and_duplicate_callback_are_persi
     detail_callback = _buttons(screen)[0].callback_data
     assert detail_callback == f"eq:v:{item_id.hex}"
 
-    screen = await _click(
-        dispatcher, telegram, detail_callback, actor=actor, update_id=9104
-    )
+    screen = await _click(dispatcher, telegram, detail_callback, actor=actor, update_id=9104)
     assert "🔵 Raro · Cabeça" in screen.text
     assert "🔗 Vinculado" in screen.text
     assert "📈 Nível do Item · 1" in screen.text
     assert "❤️ HP +12.24" in screen.text
     assert "🗡️ PER +0.255%" in screen.text
-    assert [button.text for button in _buttons(screen)] == ["Equipar", "← Equipamentos"]
+    assert [button.text for button in _buttons(screen)] == [
+        "Equipar",
+        "Runas",
+        "Encantamento",
+        "Aprimorar",
+        "Reroll",
+        "Favoritar",
+        "Bloquear",
+        "Desmontar",
+        "← Equipamentos",
+    ]
     equip_callback = _buttons(screen)[0].callback_data
     assert len(equip_callback.encode()) <= 64
 
     character_before, _ = await _equipped_state(database, actor)
     hp_before = character_before.max_hp
-    screen = await _click(
-        dispatcher, telegram, equip_callback, actor=actor, update_id=9105
-    )
+    screen = await _click(dispatcher, telegram, equip_callback, actor=actor, update_id=9105)
     assert "✅ Equipado" in screen.text
     assert "Equipar" not in [button.text for button in _buttons(screen)]
-    assert [button.text for button in _buttons(screen)] == ["Desequipar", "← Equipamentos"]
+    assert [button.text for button in _buttons(screen)] == [
+        "Desequipar",
+        "Runas",
+        "Encantamento",
+        "Aprimorar",
+        "Reroll",
+        "Favoritar",
+        "Bloquear",
+        "Desmontar",
+        "← Equipamentos",
+    ]
     character_after, equipped = await _equipped_state(database, actor)
     assert equipped == {EquipmentSlot.CABECA.value: item_id}
     assert character_after.combat_configuration_version == 1
     assert character_after.max_hp > hp_before
 
     # A callback replay retains its old version and cannot change HP/version twice.
-    screen = await _click(
-        dispatcher, telegram, equip_callback, actor=actor, update_id=9106
-    )
+    screen = await _click(dispatcher, telegram, equip_callback, actor=actor, update_id=9106)
     assert "✅ Equipado" in screen.text
     assert character_after.combat_configuration_version == 1
     assert _last_callback_answer(telegram).text == "Configuração atualizada."
@@ -202,12 +208,20 @@ async def test_telegram_inventory_equip_unequip_and_duplicate_callback_are_persi
 
     unequip_callback = _buttons(screen)[0].callback_data
     assert unequip_callback == "eq:u:h:1:i"
-    screen = await _click(
-        dispatcher, telegram, unequip_callback, actor=actor, update_id=9107
-    )
+    screen = await _click(dispatcher, telegram, unequip_callback, actor=actor, update_id=9107)
     assert "Elmo de Cinzas" in screen.text
     assert "✅ Equipado" not in screen.text
-    assert [button.text for button in _buttons(screen)] == ["Equipar", "← Equipamentos"]
+    assert [button.text for button in _buttons(screen)] == [
+        "Equipar",
+        "Runas",
+        "Encantamento",
+        "Aprimorar",
+        "Reroll",
+        "Favoritar",
+        "Bloquear",
+        "Desmontar",
+        "← Equipamentos",
+    ]
     character_final, final_slots = await _equipped_state(database, actor)
     assert final_slots == {}
     assert character_final.combat_configuration_version == 2
@@ -251,14 +265,10 @@ async def test_telegram_slot_swap_and_two_handed_equipment_use_authoritative_ser
 
     screen = await _click(dispatcher, telegram, "eq:r", actor=actor, update_id=9201)
     assert "3 🪖 Cabeça · Elmo Antigo · +0" in screen.text
-    screen = await _click(
-        dispatcher, telegram, "eq:s:h:2", actor=actor, update_id=9202
-    )
+    screen = await _click(dispatcher, telegram, "eq:s:h:2", actor=actor, update_id=9202)
     assert "Elmo Antigo" in screen.text
     assert [button.text for button in _buttons(screen)][:2] == ["Trocar", "Desequipar"]
-    screen = await _click(
-        dispatcher, telegram, "eq:c:h:2", actor=actor, update_id=9203
-    )
+    screen = await _click(dispatcher, telegram, "eq:c:h:2", actor=actor, update_id=9203)
     assert "Elmo Novo" in screen.text
     assert "Elmo Antigo" not in screen.text
     assert _buttons(screen)[0].callback_data == f"eq:e:{second_head.hex}:2:s"
@@ -332,9 +342,7 @@ async def test_telegram_equipment_callback_rejects_foreign_item_and_locked_mutat
     detail = await EquipmentViewService(database[1], "ocaso").detail(actor, item_id)
     assert detail is not None
     async with database[1].begin() as session:
-        character = await session.scalar(
-            select(Character).where(Character.telegram_id == actor)
-        )
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         session.add(
             GameActivity(
                 character_id=character.id,
