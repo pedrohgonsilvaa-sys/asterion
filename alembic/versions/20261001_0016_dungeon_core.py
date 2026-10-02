@@ -71,7 +71,7 @@ def upgrade() -> None:
         "dungeon_runs",
         ["last_activity_at"],
         unique=False,
-        postgresql_where=sa.text("status IN ('active','defeated')"),
+        postgresql_where=sa.text("status = 'active'"),
     )
     op.create_table(
         "dungeon_run_members",
@@ -145,7 +145,7 @@ def upgrade() -> None:
         "dungeon_run_members",
         ["character_id"],
         unique=True,
-        postgresql_where=sa.text("status = 'active'"),
+        postgresql_where=sa.text("status IN ('active','defeated')"),
     )
     op.create_table(
         "dungeon_run_encounters",
