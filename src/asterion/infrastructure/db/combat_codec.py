@@ -8,7 +8,10 @@ from asterion.domain.combat import (
     Action,
     ActionEffect,
     Combat,
+    CombatDamageAura,
     CombatEvent,
+    CombatPhaseTrigger,
+    CombatStatAura,
     DotState,
     Effect,
     Fighter,
@@ -22,7 +25,7 @@ def _json_value(value):
         return str(value)
     if isinstance(value, dict):
         return {key: _json_value(item) for key, item in value.items()}
-    if isinstance(value, (tuple, list)):
+    if isinstance(value, (tuple, list, set, frozenset)):
         return [_json_value(item) for item in value]
     return value
 
@@ -49,6 +52,9 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     ),
                     "self_barrier_coefficient": Decimal(
                         value.get("self_barrier_coefficient", "0")
+                    ),
+                    "self_barrier_hp_fraction": Decimal(
+                        value.get("self_barrier_hp_fraction", "0")
                     ),
                     "self_barrier_debuff_magnitude_reduction": Decimal(
                         value.get("self_barrier_debuff_magnitude_reduction", "0")
@@ -116,6 +122,13 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     ),
                     "prepares_chain_duration": int(
                         value.get("prepares_chain_duration", 2)
+                    ),
+                    "revive_fighter_keys": tuple(value.get("revive_fighter_keys", ())),
+                    "requires_defeated_fighter_keys": tuple(
+                        value.get("requires_defeated_fighter_keys", ())
+                    ),
+                    "revive_hp_fraction": Decimal(
+                        value.get("revive_hp_fraction", "0.50")
                     ),
                 }
             )
@@ -198,6 +211,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     ),
                     "path_per_bonus": Decimal(event.get("path_per_bonus", "0")),
                     "path_crit_bonus": Decimal(event.get("path_crit_bonus", "0")),
+                    "pressure_stacks": int(event.get("pressure_stacks", 0)),
                     "applied_effect_magnitude": Decimal(
                         event.get("applied_effect_magnitude", "0")
                     ),
@@ -258,12 +272,100 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 "player_actions": {
                     key: action(value) for key, value in payload["player_actions"].items()
                 },
+                "player_actions_by_fighter": {
+                    str(fighter_key): {
+                        key: action(value) for key, value in actions.items()
+                    }
+                    for fighter_key, actions in payload.get(
+                        "player_actions_by_fighter", {}
+                    ).items()
+                },
                 "enemy_actions": {
                     key: action(value) for key, value in payload["enemy_actions"].items()
                 },
                 "ai_cycle": tuple(payload["ai_cycle"]),
                 "ai_priority": tuple(payload.get("ai_priority", ())),
                 "ai_target_cycle": tuple(payload.get("ai_target_cycle", ())),
+                "ai_cycles": {
+                    str(key): tuple(value)
+                    for key, value in payload.get("ai_cycles", {}).items()
+                },
+                "ai_positions": {
+                    str(key): int(value)
+                    for key, value in payload.get("ai_positions", {}).items()
+                },
+                "ai_priorities": {
+                    str(key): tuple(value)
+                    for key, value in payload.get("ai_priorities", {}).items()
+                },
+                "pressure_start_opportunity": int(
+                    payload.get("pressure_start_opportunity", 0)
+                ),
+                "pressure_cap": int(payload.get("pressure_cap", 0)),
+                "pressure_step": Decimal(payload.get("pressure_step", "0.03")),
+                "pressure_stacks": int(payload.get("pressure_stacks", 0)),
+                "stat_auras": tuple(
+                    CombatStatAura(
+                        **(
+                            aura
+                            | {
+                                "source_fighter_keys": tuple(
+                                    aura.get("source_fighter_keys", ())
+                                ),
+                                "target_fighter_keys": tuple(
+                                    aura.get("target_fighter_keys", ())
+                                ),
+                                "multiplier_per_source": Decimal(
+                                    aura.get("multiplier_per_source", "0")
+                                ),
+                            }
+                        )
+                    )
+                    for aura in payload.get("stat_auras", ())
+                ),
+                "damage_auras": tuple(
+                    CombatDamageAura(
+                        **(
+                            aura
+                            | {
+                                "source_fighter_keys": tuple(
+                                    aura.get("source_fighter_keys", ())
+                                ),
+                                "target_fighter_keys": tuple(
+                                    aura.get("target_fighter_keys", ())
+                                ),
+                                "reduction_per_source": Decimal(
+                                    aura.get("reduction_per_source", "0")
+                                ),
+                            }
+                        )
+                    )
+                    for aura in payload.get("damage_auras", ())
+                ),
+                "phase_triggers": tuple(
+                    CombatPhaseTrigger(
+                        **(
+                            trigger
+                            | {
+                                "hp_fraction_at_most": Decimal(
+                                    trigger["hp_fraction_at_most"]
+                                ),
+                                "activate_fighter_keys": tuple(
+                                    trigger.get("activate_fighter_keys", ())
+                                ),
+                                "revive_fighter_keys": tuple(
+                                    trigger.get("revive_fighter_keys", ())
+                                ),
+                                "revive_hp_fraction": Decimal(
+                                    trigger.get("revive_hp_fraction", "0.50")
+                                ),
+                            }
+                        )
+                    )
+                    for trigger in payload.get("phase_triggers", ())
+                ),
+                "phase_triggered_ids": set(payload.get("phase_triggered_ids", ())),
+                "party_mode": bool(payload.get("party_mode", False)),
                 "order": tuple(payload["order"]),
                 "tutorial": tutorial,
                 "events": [combat_event(event) for event in payload["events"]],

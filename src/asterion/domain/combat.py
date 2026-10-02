@@ -137,6 +137,10 @@ class Action:
     enemy_hp_fraction_below: Decimal | None = None
     enemy_hp_fraction_at_most: Decimal | None = None
     max_uses_per_combat: int | None = None
+    revive_fighter_keys: tuple[str, ...] = ()
+    revive_hp_fraction: Decimal = D("0.50")
+    requires_defeated_fighter_keys: tuple[str, ...] = ()
+    self_barrier_hp_fraction: Decimal = ZERO
 
     def __post_init__(self) -> None:
         if self.hit_count < 1:
@@ -168,6 +172,10 @@ class Action:
             raise ValueError("Enemy HP phase threshold must be between zero and one.")
         if self.max_uses_per_combat is not None and self.max_uses_per_combat < 1:
             raise ValueError("Combat action use limit must be positive.")
+        if self.self_barrier_hp_fraction < ZERO or self.self_barrier_hp_fraction > D(1):
+            raise ValueError("HP-based barrier fraction must be between zero and one.")
+        if not ZERO < self.revive_hp_fraction <= D(1):
+            raise ValueError("Revive HP fraction must be between zero and one.")
 
 
 @dataclass
@@ -335,6 +343,40 @@ class CombatEvent:
     aim_stacks: int = 0
     path_per_bonus: Decimal = ZERO
     path_crit_bonus: Decimal = ZERO
+    pressure_stacks: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class CombatStatAura:
+    """A live source-counted modifier applied to selected combatants."""
+
+    aura_id: str
+    stat: str
+    source_fighter_keys: tuple[str, ...]
+    target_fighter_keys: tuple[str, ...]
+    multiplier_per_source: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class CombatDamageAura:
+    """A final-damage reduction supplied by a set of living combat entities."""
+
+    aura_id: str
+    source_fighter_keys: tuple[str, ...]
+    target_fighter_keys: tuple[str, ...]
+    reduction_per_source: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class CombatPhaseTrigger:
+    """One-shot, HP-threshold event that activates or revives encounter objects."""
+
+    trigger_id: str
+    source_fighter_key: str
+    hp_fraction_at_most: Decimal
+    activate_fighter_keys: tuple[str, ...] = ()
+    revive_fighter_keys: tuple[str, ...] = ()
+    revive_hp_fraction: Decimal = D("0.50")
 
 
 @dataclass(frozen=True, slots=True)
@@ -387,6 +429,19 @@ class Combat:
     external_consumables_allowed: bool = True
     ai_target_cycle: tuple[str, ...] = ()
     ai_target_position: int = 0
+    ai_cycles: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    ai_positions: dict[str, int] = field(default_factory=dict)
+    ai_priorities: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    pressure_start_opportunity: int = 0
+    pressure_cap: int = 0
+    pressure_step: Decimal = D("0.03")
+    pressure_stacks: int = 0
+    stat_auras: tuple[CombatStatAura, ...] = ()
+    player_actions_by_fighter: dict[str, dict[str, Action]] = field(default_factory=dict)
+    party_mode: bool = False
+    damage_auras: tuple[CombatDamageAura, ...] = ()
+    phase_triggers: tuple[CombatPhaseTrigger, ...] = ()
+    phase_triggered_ids: set[str] = field(default_factory=set)
 
     @property
     def tutorial_stage(self) -> str:
@@ -409,9 +464,97 @@ def _fighter_side(state: Combat, key: str) -> str:
     return fighter.side or ("player" if key == "player" else "enemy")
 
 
+def _fighter_stat(state: Combat, fighter_key: str, stat_name: str) -> Decimal:
+    value = state.fighters[fighter_key].stat(stat_name)
+    for aura in state.stat_auras:
+        if aura.stat != stat_name or fighter_key not in aura.target_fighter_keys:
+            continue
+        active_sources = sum(
+            state.fighters[source_key].hp > 0
+            for source_key in aura.source_fighter_keys
+            if source_key in state.fighters
+        )
+        if active_sources:
+            value *= D(1) + aura.multiplier_per_source * active_sources
+    return value
+
+
 def _fighter_defeat_on_zero(state: Combat, key: str) -> bool:
     value = state.fighters[key].defeat_on_zero
-    return key == "player" if value is None else value
+    if value is not None:
+        return value
+    if state.party_mode and _fighter_side(state, key) == "player":
+        return False
+    return key == "player"
+
+
+def active_player_key(state: Combat) -> str | None:
+    """Return the player-side fighter whose opportunity is currently open."""
+    if not state.order:
+        return None
+    key = state.order[state.turn_index]
+    is_player_turn = (
+        _fighter_side(state, key) == "player" if state.party_mode else key == "player"
+    )
+    if key in state.fighters and is_player_turn:
+        return key
+    return None
+
+
+def _is_player_turn_actor(state: Combat, key: str) -> bool:
+    """Keep legacy 1v1 turns on `player`; party runs allow every active member."""
+    return _fighter_side(state, key) == "player" if state.party_mode else key == "player"
+
+
+def player_actions_for(state: Combat, fighter_key: str | None = None) -> dict[str, Action]:
+    if fighter_key is None:
+        fighter_key = active_player_key(state) or "player"
+    return state.player_actions_by_fighter.get(fighter_key, state.player_actions)
+
+
+def _resolve_phase_triggers(state: Combat) -> None:
+    for trigger in state.phase_triggers:
+        if trigger.trigger_id in state.phase_triggered_ids:
+            continue
+        source = state.fighters.get(trigger.source_fighter_key)
+        if source is None or source.stats.hp <= ZERO:
+            continue
+        if source.hp > source.stats.hp * trigger.hp_fraction_at_most:
+            continue
+        for key in trigger.activate_fighter_keys:
+            fighter = state.fighters.get(key)
+            if fighter is not None and fighter.hp <= ZERO:
+                fighter.hp = fighter.stats.hp
+        for key in trigger.revive_fighter_keys:
+            fighter = state.fighters.get(key)
+            if fighter is not None and fighter.hp <= ZERO:
+                fighter.hp = fighter.stats.hp * trigger.revive_hp_fraction
+        state.phase_triggered_ids.add(trigger.trigger_id)
+        state.mechanic_events.append(
+            CombatEvent(
+                len(state.mechanic_events),
+                state.round,
+                trigger.source_fighter_key,
+                f"phase:{trigger.trigger_id}",
+                target=source.id,
+                actor_entity_id=source.id,
+                internal=True,
+            )
+        )
+
+
+def _damage_aura_reduction(state: Combat, target_key: str) -> Decimal:
+    reduction = ZERO
+    for aura in state.damage_auras:
+        if target_key not in aura.target_fighter_keys:
+            continue
+        active_sources = sum(
+            state.fighters[key].hp > ZERO
+            for key in aura.source_fighter_keys
+            if key in state.fighters
+        )
+        reduction += aura.reduction_per_source * active_sources
+    return min(D(1), max(ZERO, reduction))
 
 
 def _fighter_required_for_victory(state: Combat, key: str) -> bool:
@@ -437,6 +580,7 @@ def _action_is_pure_self(action: Action) -> bool:
         and action.target_barrier_coefficient <= ZERO
         and (
             action.self_barrier_coefficient > ZERO
+            or action.self_barrier_hp_fraction > ZERO
             or (
                 action.self_effect_id
                 and action.self_effect_stat
@@ -478,8 +622,12 @@ def _resolve_action_targets(
         return (requested_key,) if requested_key in candidates else ()
     if len(candidates) == 1:
         return (candidates[0],)
-    if actor_key != "player" and "player" in candidates:
-        return ("player",)
+    if _fighter_side(state, actor_key) == "enemy":
+        player_candidates = tuple(
+            key for key in candidates if _fighter_side(state, key) == "player"
+        )
+        if len(player_candidates) == 1:
+            return player_candidates
     return ()
 
 
@@ -487,7 +635,11 @@ def action_target_ids(
     state: Combat, action_id: str, *, actor_key: str = "player"
 ) -> tuple[str, ...]:
     """Return deterministic, alive target entity IDs selectable for one action."""
-    actions = state.player_actions if actor_key == "player" else state.enemy_actions
+    actions = (
+        player_actions_for(state, actor_key)
+        if _fighter_side(state, actor_key) == "player"
+        else state.enemy_actions
+    )
     action = actions.get(action_id)
     if action is None:
         return ()
@@ -514,6 +666,16 @@ def action_target_ids(
 
 
 def _refresh_result(state: Combat) -> None:
+    if state.party_mode:
+        if not any(
+            _fighter_side(state, key) == "player"
+            and fighter.hp > ZERO
+            and fighter.takes_turn
+            for key, fighter in state.fighters.items()
+        ):
+            state.result = "defeat"
+            _clear_prepared_action(state)
+            return
     if any(
         fighter.hp <= 0 and _fighter_defeat_on_zero(state, key)
         for key, fighter in state.fighters.items()
@@ -548,12 +710,15 @@ def initiative(state: Combat) -> tuple[str, ...]:
     )
 
 
-def allowed_actions(state: Combat) -> tuple[str, ...]:
-    if state.result or not state.order or state.order[state.turn_index] != "player":
+def allowed_actions(state: Combat, fighter_key: str | None = None) -> tuple[str, ...]:
+    active_key = active_player_key(state)
+    fighter_key = fighter_key or active_key
+    if state.result or active_key is None or fighter_key != active_key:
         return ()
-    player = state.fighters["player"]
+    player = state.fighters[fighter_key]
+    actions = player_actions_for(state, fighter_key)
     allowed = [
-        key for key in state.player_actions if player.cooldowns.get(key, 0) <= player.opportunity
+        key for key in actions if player.cooldowns.get(key, 0) <= player.opportunity
     ]
     if player.last_action != "defend":
         allowed.append("defend")
@@ -1020,9 +1185,17 @@ def _effect_display_name(state: Combat, target_id: str, selection: str) -> str:
 
 
 def combat_consumable_options(
-    state: Combat, item_ids: tuple[str, ...] | list[str], *, budget_limit: int
+    state: Combat,
+    item_ids: tuple[str, ...] | list[str],
+    *,
+    budget_limit: int,
+    actor_key: str | None = None,
 ) -> tuple[CombatConsumableOption, ...]:
     """Project stock-backed, currently valid actions for a combat screen."""
+    actor_key = actor_key or active_player_key(state) or "player"
+    actor = state.fighters.get(actor_key)
+    if actor is None:
+        return ()
     if not state.external_consumables_allowed:
         return ()
     options: list[CombatConsumableOption] = []
@@ -1036,31 +1209,37 @@ def combat_consumable_options(
             ConsumableFamily.WARDING,
         }:
             if combat_consumable_usable(
-                state, item_id, target_id="player", budget_limit=budget_limit
+                state, item_id, target_id=actor_key, budget_limit=budget_limit,
+                actor_key=actor_key,
             ):
-                options.append(CombatConsumableOption(item_id, "player", None, item.name))
+                options.append(CombatConsumableOption(item_id, actor_key, None, item.name))
         elif item.family in {ConsumableFamily.PURIFICATION, ConsumableFamily.ANTIDOTE}:
             for effect_id, selection in consumable_effect_options(
-                state, item_id, target_id="player"
+                state, item_id, target_id=actor_key
             ):
                 if combat_consumable_usable(
                     state,
                     item_id,
-                    target_id="player",
+                    target_id=actor_key,
                     effect_id=effect_id,
                     budget_limit=budget_limit,
+                    actor_key=actor_key,
                 ):
                     options.append(
                         CombatConsumableOption(
                             item_id,
-                            "player",
+                            actor_key,
                             effect_id,
-                            f"{item.name} · {_effect_display_name(state, 'player', selection)}",
+                            f"{item.name} · {_effect_display_name(state, actor_key, selection)}",
                         )
                     )
         elif item.family == ConsumableFamily.DISPELLER:
             for target_id, target in state.fighters.items():
-                if target_id == "player" or target.hp <= 0:
+                if (
+                    _fighter_side(state, target_id) != "enemy"
+                    or target_id == actor_key
+                    or target.hp <= 0
+                ):
                     continue
                 for effect_id, selection in consumable_effect_options(
                     state, item_id, target_id=target_id
@@ -1071,6 +1250,7 @@ def combat_consumable_options(
                         target_id=target_id,
                         effect_id=effect_id,
                         budget_limit=budget_limit,
+                        actor_key=actor_key,
                     ):
                         options.append(
                             CombatConsumableOption(
@@ -1112,7 +1292,7 @@ def _begin_turn(state: Combat) -> None:
     actor = state.fighters[actor_key]
     actor.opportunity += 1
     actor.defending = False
-    if actor_key == "player" and state.prepared_action is not None:
+    if _is_player_turn_actor(state, actor_key) and state.prepared_action is not None:
         state.response_window_seen = True
 
 
@@ -1508,7 +1688,11 @@ def _action_power_component(action: Action) -> str:
         return "damage"
     if action.heal_coefficient > ZERO:
         return "healing"
-    if action.self_barrier_coefficient > ZERO or action.target_barrier_coefficient > ZERO:
+    if (
+        action.self_barrier_coefficient > ZERO
+        or action.self_barrier_hp_fraction > ZERO
+        or action.target_barrier_coefficient > ZERO
+    ):
         return "barrier"
     return ""
 
@@ -1653,6 +1837,7 @@ def _prepare_path_action(
     direct = action.coefficient > ZERO
     support = action.heal_coefficient > ZERO or (
         action.self_barrier_coefficient > ZERO
+        or action.self_barrier_hp_fraction > ZERO
         or action.target_barrier_coefficient > ZERO
     )
     context = {
@@ -1861,7 +2046,7 @@ def _perform(
     actor = state.fighters[actor_id]
     response_to_prepared_action_instance_id = (
         state.prepared_action_instance_id
-        if actor_id == "player"
+        if _fighter_side(state, actor_id) == "player"
         and state.prepared_action is not None
         and state.response_window_seen
         and state.prepared_target == actor.id
@@ -1908,9 +2093,18 @@ def _perform(
         _refresh_result(state)
         return True
 
-    actions = state.player_actions if actor_id == "player" else state.enemy_actions
+    actions = (
+        state.player_actions
+        if _fighter_side(state, actor_id) == "player"
+        else state.enemy_actions
+    )
     action = actions.get(action_id)
     if action is None:
+        return False
+    if action.requires_defeated_fighter_keys and not any(
+        key in state.fighters and state.fighters[key].hp <= ZERO
+        for key in action.requires_defeated_fighter_keys
+    ):
         return False
     target_keys = _resolve_action_targets(state, actor_id, action, target_id)
     if not target_keys:
@@ -2119,7 +2313,11 @@ def _perform(
         barrier_power_multiplier = (
             D(1) + _path_chain_bonus(actor, action, "barrier")
             if chain_consumed
-            and (action.self_barrier_coefficient > ZERO or action.target_barrier_coefficient > ZERO)
+            and (
+                action.self_barrier_coefficient > ZERO
+                or action.self_barrier_hp_fraction > ZERO
+                or action.target_barrier_coefficient > ZERO
+            )
             else D(1)
         )
         chain_empowered = chain_consumed and any(
@@ -2189,19 +2387,27 @@ def _perform(
         "barrier": barrier_power_multiplier,
     }.get(power_component, D(1))
 
-    if action.self_barrier_coefficient > ZERO:
+    if action.self_barrier_coefficient > ZERO or action.self_barrier_hp_fraction > ZERO:
         self_context = _path_target_context(_path_resolution, actor)
         path_barrier_multiplier = D(self_context.get("barrier_power", D(1)))
         if actor.selected_path == "bastiao":
             path_barrier_multiplier *= D("1.10")
-        barrier_coefficient = (
-            action.self_barrier_coefficient
-            * barrier_power_multiplier
-            * path_barrier_multiplier
-        )
-        value = (actor.stat("attack") * barrier_coefficient).to_integral_value(
-            rounding=ROUND_FLOOR
-        )
+        if action.self_barrier_hp_fraction > ZERO:
+            value = (
+                actor.stats.hp
+                * action.self_barrier_hp_fraction
+                * barrier_power_multiplier
+                * path_barrier_multiplier
+            ).to_integral_value(rounding=ROUND_FLOOR)
+        else:
+            barrier_coefficient = (
+                action.self_barrier_coefficient
+                * barrier_power_multiplier
+                * path_barrier_multiplier
+            )
+            value = (actor.stat("attack") * barrier_coefficient).to_integral_value(
+                rounding=ROUND_FLOOR
+            )
         actor.barrier = max(ZERO, value)
         actor.barrier_remaining = max(0, action.self_barrier_duration)
         actor.barrier_applied_opportunity = actor.opportunity
@@ -2540,7 +2746,7 @@ def _perform(
             direct_damage(
                 actor.stat("attack"),
                 damage_coefficient,
-                target.stat("defense"),
+                _fighter_stat(state, target_key, "defense"),
                 actor.level,
                 critical=critical,
                 mitigation=mitigation,
@@ -2552,6 +2758,7 @@ def _perform(
         direct_final_reduction = min(
             D(1),
             target.protection_layers * target.protection_reduction_per_layer
+            + _damage_aura_reduction(state, target_key)
             + sum(
                 (
                     target.tagged_direct_damage_reductions.get(tag, ZERO)
@@ -2581,12 +2788,24 @@ def _perform(
                     rounding=ROUND_FLOOR
                 )
             )
+        pressure_stacks = (
+            state.pressure_stacks
+            if _fighter_side(state, actor_id) == "enemy"
+            else 0
+        )
+        if direct_eligible and pressure_stacks > 0:
+            damage = int(
+                (
+                    D(damage)
+                    * (D(1) + state.pressure_step * pressure_stacks)
+                ).to_integral_value(rounding=ROUND_FLOOR)
+            )
         damage_without_defender = damage
         if target.defending and direct_eligible:
             damage_without_defender = direct_damage(
                 actor.stat("attack"),
                 damage_coefficient,
-                target.stat("defense"),
+                _fighter_stat(state, target_key, "defense"),
                 actor.level,
                 critical=critical,
                 mitigation=mitigation_without_defender,
@@ -2606,6 +2825,13 @@ def _perform(
                         * (D(1) + path_final_damage_bonus)
                     ).to_integral_value(rounding=ROUND_FLOOR)
                 )
+            if pressure_stacks > 0:
+                damage_without_defender = int(
+                    (
+                        D(damage_without_defender)
+                        * (D(1) + state.pressure_step * pressure_stacks)
+                    ).to_integral_value(rounding=ROUND_FLOOR)
+                )
         defender_prevented_damage = (
             max(0, damage_without_defender - damage)
             if target.defending and direct_eligible
@@ -2613,6 +2839,8 @@ def _perform(
         )
 
         actual_damage, barrier_absorbed = _deal_damage(target, damage)
+        if actual_damage > 0:
+            _resolve_phase_triggers(state)
         if direct_eligible and damage > 0 and actor.character_class == "vigia":
             generated = _path_resolution.setdefault("aim_generated_targets", set())
             if target.id not in generated:
@@ -2956,10 +3184,11 @@ def _perform(
                 healing_received_multiplier=received_healing_multiplier,
                 overheal=overheal,
                 target_hp_after=target.hp,
-                fighter_hp_after=tuple(
-                    sorted((fighter.id, fighter.hp) for fighter in state.fighters.values())
-                ),
-            )
+                    fighter_hp_after=tuple(
+                        sorted((fighter.id, fighter.hp) for fighter in state.fighters.values())
+                    ),
+                    pressure_stacks=pressure_stacks,
+                )
         )
         action_event_indices.append(action_event_sequence)
 
@@ -3098,6 +3327,30 @@ def _perform(
         actor.next_direct_crit_expires_opportunity = None
         actor.next_direct_crit_effect_id = ""
     _retaliation_action_resolved(state, actor_id, actor, retaliation_context)
+    if action.revive_fighter_keys and _hit_index in {None, 1}:
+        defeated = sorted(
+            (
+                key
+                for key in action.revive_fighter_keys
+                if key in state.fighters and state.fighters[key].hp <= ZERO
+            ),
+            key=lambda key: (state.fighters[key].id, key),
+        )
+        if defeated:
+            revived_key = defeated[0]
+            revived = state.fighters[revived_key]
+            revived.hp = revived.stats.hp * action.revive_hp_fraction
+            state.mechanic_events.append(
+                CombatEvent(
+                    len(state.mechanic_events),
+                    state.round,
+                    actor_id,
+                    f"revive:{revived_key}",
+                    target=revived.id,
+                    actor_entity_id=actor.id,
+                    internal=True,
+                )
+            )
     _refresh_result(state)
     if prepared_resolution:
         state.prepared_action_instance_id = None
@@ -3172,6 +3425,12 @@ def _apply_action_self_effect(
 
 
 def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
+    if state.pressure_start_opportunity and state.pressure_cap:
+        enemy = state.fighters[actor_key]
+        state.pressure_stacks = min(
+            state.pressure_cap,
+            max(0, enemy.opportunity - state.pressure_start_opportunity + 1),
+        )
     if state.pending_response is not None:
         action = state.pending_response
         state.pending_response = None
@@ -3199,6 +3458,11 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
             and enemy.action_use_counts.get(action_id, 0) >= action.max_uses_per_combat
         ):
             return False
+        if action.requires_defeated_fighter_keys and not any(
+            key in state.fighters and state.fighters[key].hp <= ZERO
+            for key in action.requires_defeated_fighter_keys
+        ):
+            return False
         if (
             action.enemy_hp_fraction_below is not None
             and enemy.hp >= enemy.stats.hp * action.enemy_hp_fraction_below
@@ -3215,12 +3479,14 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
             and enemy.barrier_remaining > 0
         )
 
-    if state.ai_priority:
-        for action in state.ai_priority:
+    priority = state.ai_priorities.get(actor_key, state.ai_priority)
+    if priority:
+        for action in priority:
             if ready(action):
                 return action
     # Alfa Cinéreo uses content priority rather than a positional cycle.
-    if {"rend", "leap", "bite"}.issubset(state.enemy_actions):
+    cycle = state.ai_cycles.get(actor_key, state.ai_cycle)
+    if {"rend", "leap", "bite"}.issubset(cycle):
         player = state.fighters["player"]
         bleed_count = next(
             (
@@ -3237,11 +3503,15 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
         if ready("rend") and bleed_count < 3:
             return "rend"
         return "bite"
-    if not state.ai_cycle:
+    if not cycle:
         return "hold"
-    for _ in range(len(state.ai_cycle)):
-        action = state.ai_cycle[state.ai_position]
-        state.ai_position = (state.ai_position + 1) % len(state.ai_cycle)
+    position = state.ai_positions.get(actor_key, 0)
+    for _ in range(len(cycle)):
+        action = cycle[position]
+        position = (position + 1) % len(cycle)
+        state.ai_positions[actor_key] = position
+        if actor_key == 'enemy':
+            state.ai_position = position
         if ready(action):
             return action
     return "hold"
@@ -3251,7 +3521,7 @@ def _advance_to_player(state: Combat) -> None:
     while (
         not state.result
         and state.order
-        and state.order[state.turn_index] != "player"
+        and not _is_player_turn_actor(state, state.order[state.turn_index])
     ):
         actor_key = state.order[state.turn_index]
         if _fighter_side(state, actor_key) == "enemy":
@@ -3332,10 +3602,13 @@ def start_combat(state: Combat) -> Combat:
 CONSUMABLE_COOLDOWN_KEY = "consumable"
 
 
-def consumable_available(state: Combat) -> bool:
-    if state.result or not state.order or state.order[state.turn_index] != "player":
+def consumable_available(state: Combat, actor_key: str | None = None) -> bool:
+    actor_key = actor_key or active_player_key(state) or "player"
+    if state.result or not state.order or state.order[state.turn_index] != actor_key:
         return False
-    player = state.fighters["player"]
+    player = state.fighters.get(actor_key)
+    if player is None or _fighter_side(state, actor_key) != "player":
+        return False
     return player.cooldowns.get(CONSUMABLE_COOLDOWN_KEY, 0) <= player.opportunity
 
 
@@ -3349,9 +3622,10 @@ def _finish_consumable_turn(
     effect_removal_kind: str | None = None,
     barrier_value: Decimal = ZERO,
     barrier_absorbed: Decimal = ZERO,
+    actor_key: str = "player",
 ) -> Combat:
     healed = D(0) if healed is None else healed
-    player = state.fighters["player"]
+    player = state.fighters[actor_key]
     player.last_action = action
     # CD2: unavailable on the next opportunity and available on the following one.
     player.cooldowns[CONSUMABLE_COOLDOWN_KEY] = player.opportunity + 2
@@ -3359,7 +3633,7 @@ def _finish_consumable_turn(
         CombatEvent(
             len(state.events),
             state.round,
-            "player",
+            actor_key,
             action,
             target,
             healed=healed,
@@ -3411,33 +3685,38 @@ def effective_heal_amount(state: Combat, target_id: str = "player") -> Decimal:
     return min(max(D(0), amount), max(D(0), target.stats.hp - target.hp))
 
 
-def use_heal_consumable(state: Combat) -> Combat:
+def use_heal_consumable(state: Combat, *, actor_key: str | None = None) -> Combat:
     """Apply the official 22% HP-Max heal as a normal player action."""
-    if not consumable_available(state):
+    actor_key = actor_key or active_player_key(state) or "player"
+    if not consumable_available(state, actor_key):
         return state
     with localcontext() as ctx:
         ctx.prec = PRECISION
         updated = deepcopy(state)
-        player = updated.fighters["player"]
-        healed = effective_heal_amount(updated)
+        player = updated.fighters[actor_key]
+        healed = effective_heal_amount(updated, actor_key)
         if healed <= 0:
             return state
         player.hp += healed
-        return _finish_consumable_turn(updated, "consumable:heal", healed)
+        return _finish_consumable_turn(
+            updated, "consumable:heal", healed, actor_key=actor_key
+        )
 
 
 def use_purification_consumable(
-    state: Combat, *, dot_index: int | None = None, effect_index: int | None = None
+    state: Combat, *, dot_index: int | None = None, effect_index: int | None = None,
+    actor_key: str | None = None,
 ) -> Combat:
     """Remove one oldest DoT stack or one removable non-stack debuff."""
-    if not consumable_available(state) or (dot_index is None) == (effect_index is None):
+    actor_key = actor_key or active_player_key(state) or "player"
+    if not consumable_available(state, actor_key) or (dot_index is None) == (effect_index is None):
         return state
     with localcontext() as ctx:
         ctx.prec = PRECISION
         updated = deepcopy(state)
-        player = updated.fighters["player"]
+        player = updated.fighters[actor_key]
         if dot_index is not None:
-            dots = updated.dot_states.get("player", [])
+            dots = updated.dot_states.get(actor_key, [])
             if not 0 <= dot_index < len(dots):
                 return state
             dot = dots[dot_index]
@@ -3468,7 +3747,9 @@ def use_purification_consumable(
             if not purifiable(effect):
                 return state
             player.effects.pop(effect_index)
-        return _finish_consumable_turn(updated, "consumable:purify")
+        return _finish_consumable_turn(
+            updated, "consumable:purify", actor_key=actor_key
+        )
 
 
 def _effect_token(effect: Effect, index: int) -> str:
@@ -3528,41 +3809,53 @@ def combat_consumable_usable(
     target_id: str | None = None,
     effect_id: str | None = None,
     budget_limit: int | None = None,
+    actor_key: str | None = None,
 ) -> bool:
+    actor_key = actor_key or active_player_key(state) or "player"
     item = definition(item_id)
+    actor = state.fighters.get(actor_key)
     if (
         item is None
         or item.use_context is not UseContext.COMBAT_PVE
         or not state.external_consumables_allowed
         or state.tutorial_stage != "normal"
-        or not consumable_available(state)
-        or state.fighters["player"].hp <= 0
+        or not consumable_available(state, actor_key)
+        or actor is None
+        or _fighter_side(state, actor_key) != "player"
+        or actor.hp <= 0
         or (budget_limit is not None and state.consumable_uses >= budget_limit)
     ):
         return False
-    player = state.fighters["player"]
     if item.family == ConsumableFamily.HEALING:
-        return effective_heal_amount(state) > 0 and effect_id is None
+        return (
+            effective_heal_amount(state, actor_key) > 0
+            and effect_id is None
+            and target_id in {None, actor_key}
+        )
     if item.family in {
         ConsumableFamily.PURIFICATION,
         ConsumableFamily.ANTIDOTE,
         ConsumableFamily.DISPELLER,
     }:
         if item.family == ConsumableFamily.DISPELLER:
-            if target_id is None or target_id == "player":
+            if (
+                target_id is None
+                or _fighter_side(state, target_id) != "enemy"
+                or target_id == actor_key
+            ):
                 return False
             target = state.fighters.get(target_id)
             if target is None or target.hp <= 0:
                 return False
         else:
-            target_id = "player"
-            target = player
+            target_id = actor_key
+            target = actor
         choices = {option_id for option_id, _ in consumable_effect_options(
             state, item_id, target_id=target_id
         )}
         return bool(choices) and effect_id in choices
     if item.family in {ConsumableFamily.PROTECTION, ConsumableFamily.WARDING}:
-        return effect_id is None and target_id in {None, "player"}
+        return effect_id is None and target_id in {None, actor_key}
     return False
 
 
@@ -3573,21 +3866,24 @@ def use_combat_consumable(
     target_id: str | None = None,
     effect_id: str | None = None,
     budget_limit: int | None = None,
+    actor_key: str | None = None,
 ) -> Combat:
     """Apply a valid PvE Consumable as one normal, versioned combat action."""
+    actor_key = actor_key or active_player_key(state) or "player"
     if not combat_consumable_usable(
         state,
         item_id,
         target_id=target_id,
         effect_id=effect_id,
         budget_limit=budget_limit,
+        actor_key=actor_key,
     ):
         return state
     item = definition(item_id)
     assert item is not None
     updated = deepcopy(state)
-    player = updated.fighters["player"]
-    resolved_target = target_id or "player"
+    player = updated.fighters[actor_key]
+    resolved_target = target_id or actor_key
     target = updated.fighters[resolved_target]
     healed = D(0)
     effect_name = ""
@@ -3595,20 +3891,20 @@ def use_combat_consumable(
     barrier_value = D(0)
 
     if item.family == ConsumableFamily.HEALING:
-        healed = effective_heal_amount(updated)
+        healed = effective_heal_amount(updated, actor_key)
         if healed <= 0:
             return state
         player.hp += healed
     elif item.family == ConsumableFamily.PURIFICATION:
         assert effect_id is not None
         effect_name = _remove_selected_dot(
-            updated, "player", effect_id, all_stacks=False
+            updated, actor_key, effect_id, all_stacks=False
         ) or _remove_selected_effect(player, effect_id, one_stack=True) or ""
         if not effect_name:
             return state
     elif item.family == ConsumableFamily.ANTIDOTE:
         assert effect_id is not None
-        effect_name = _remove_selected_dot(updated, "player", effect_id, all_stacks=True) or ""
+        effect_name = _remove_selected_dot(updated, actor_key, effect_id, all_stacks=True) or ""
         if not effect_name:
             return state
     elif item.family == ConsumableFamily.PROTECTION:
@@ -3654,13 +3950,24 @@ def use_combat_consumable(
         effect_id=effect_name,
         effect_removal_kind=effect_removal_kind,
         barrier_value=barrier_value,
+        actor_key=actor_key,
     )
 
 
-def act(state: Combat, action: str, *, target_id: str | None = None) -> Combat:
+def act(
+    state: Combat,
+    action: str,
+    *,
+    target_id: str | None = None,
+    actor_key: str | None = None,
+) -> Combat:
     """Resolve one player action; invalid action/target intentions are a no-op."""
+    actor_key = actor_key or active_player_key(state)
+    if actor_key is None:
+        return state
     if (
-        len(action) == 2
+        not state.party_mode
+        and len(action) == 2
         and action[0] == "a"
         and action[1] in "123"
         and isinstance(state.configuration_snapshot, dict)
@@ -3670,18 +3977,19 @@ def act(state: Combat, action: str, *, target_id: str | None = None) -> Combat:
             if isinstance(entry, dict) and entry.get("slot") == slot:
                 action = str(entry.get("art_id", action))
                 break
-    if action not in allowed_actions(state):
+    if action not in allowed_actions(state, actor_key):
         return state
-    if action in state.player_actions:
-        definition = state.player_actions[action]
-        if not _resolve_action_targets(state, "player", definition, target_id):
+    actions = player_actions_for(state, actor_key)
+    if action in actions:
+        definition = actions[action]
+        if not _resolve_action_targets(state, actor_key, definition, target_id):
             return state
     with localcontext() as ctx:
         ctx.prec = PRECISION
         updated = deepcopy(state)
         if updated.tutorial and updated.tutorial_stage != "normal":
             updated.pending_response = updated.tutorial.responses.get(action)
-        committed = _perform(updated, "player", action, target_id=target_id)
+        committed = _perform(updated, actor_key, action, target_id=target_id)
         if not committed:
             return state
         updated.used_attack |= action == "attack"

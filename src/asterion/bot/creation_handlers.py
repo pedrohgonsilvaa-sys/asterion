@@ -9,6 +9,7 @@ from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message, 
 
 from asterion.application.class_trials import ClassTrialService
 from asterion.application.creation import CreationService
+from asterion.application.dungeons import DungeonService
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import P2Service
 from asterion.application.p3 import P3Service
@@ -26,6 +27,7 @@ from asterion.application.world import WorldService
 from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import CreationCallback, Screen, render
+from asterion.bot.dungeon_ui import render_dungeons
 from asterion.bot.p1_ui import render_p1
 from asterion.bot.p2_ui import render_p2
 from asterion.bot.p3_ui import render_p3
@@ -122,12 +124,16 @@ def creation_router(
     s5: S5Service | None = None,
     s6: S6Service | None = None,
     p6: P6Service | None = None,
+    dungeons: DungeonService | None = None,
 ) -> Router:
     router = Router(name="character_creation")
     router.message.filter(F.chat.type == "private")
     router.callback_query.filter(F.message.chat.type == "private")
 
     async def current_screen(actor, state):
+        dungeon_view = await dungeons.resume(actor) if dungeons is not None else None
+        if dungeon_view is not None:
+            return render_dungeons(dungeon_view)
         p2_view = await p2.resume(actor) if p2 is not None else None
         if p2_view is not None and p2_view.status == "active" and p2_view.kind == "combat":
             return render_p2(p2_view)

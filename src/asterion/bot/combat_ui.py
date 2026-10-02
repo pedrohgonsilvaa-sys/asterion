@@ -15,8 +15,10 @@ from asterion.domain.combat import (
     CombatConsumableOption,
     CombatEvent,
     action_target_ids,
+    active_player_key,
     allowed_actions,
     consumable_effect_options,
+    player_actions_for,
 )
 from asterion.domain.consumables import (
     CONSUMABLE_CATALOG,
@@ -145,6 +147,44 @@ class S5CombatCallback(CallbackData, prefix="s5fight"):
         return UUID(hex=self.activity)
 
 
+class DungeonCombatCallback(CallbackData, prefix="df"):
+    run: str
+    activity: str
+    version: str
+    action: str
+    target: str
+
+    @classmethod
+    def for_intent(
+        cls, run_id: UUID, activity_id: UUID, version: int, action_index: int, target: str
+    ):
+        return cls(
+            run=run_id.hex[:16],
+            activity=_uuid_token(activity_id),
+            version=_base36(version),
+            action=_base36(action_index),
+            target=target,
+        )
+
+    @property
+    def activity_id(self) -> UUID:
+        return _uuid_from_token(self.activity)
+
+    @property
+    def combat_version(self) -> int:
+        return _from_base36(self.version)
+
+    @property
+    def action_index(self) -> int:
+        return _from_base36(self.action)
+
+    @property
+    def target_index(self) -> int | None:
+        if self.target in {"x", "s", "b"}:
+            return None
+        return _from_base36(self.target[1:] if self.target.startswith("d") else self.target)
+
+
 class ClassTrialActionCallback(CallbackData, prefix="trialact"):
     attempt: str
     version: str
@@ -234,23 +274,29 @@ def _text_from_token(value: str) -> str:
     return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4)).decode("utf-8")
 
 
-def class_trial_target_ids(state: Combat, action_id: str) -> tuple[str, ...]:
-    action = state.player_actions.get(action_id)
+def class_trial_target_ids(
+    state: Combat, action_id: str, *, actor_key: str | None = None
+) -> tuple[str, ...]:
+    actor_key = actor_key or active_player_key(state) or "player"
+    action = player_actions_for(state, actor_key).get(action_id)
     if action is None or action.target_mode in {"self", "all_opponents", "all_allies"}:
         return ()
-    return action_target_ids(state, action_id)
+    return action_target_ids(state, action_id, actor_key=actor_key)
 
 
-def class_trial_action_ids(state: Combat) -> tuple[str, ...]:
+def class_trial_action_ids(
+    state: Combat, *, actor_key: str | None = None
+) -> tuple[str, ...]:
+    actor_key = actor_key or active_player_key(state) or "player"
     available = []
-    for action_id in allowed_actions(state):
+    for action_id in allowed_actions(state, actor_key):
         if action_id == "defend":
             available.append(action_id)
             continue
-        action = state.player_actions.get(action_id)
+        action = player_actions_for(state, actor_key).get(action_id)
         if action is None:
             continue
-        all_targets = action_target_ids(state, action_id)
+        all_targets = action_target_ids(state, action_id, actor_key=actor_key)
         if all_targets:
             available.append(action_id)
     return tuple(available)
@@ -825,15 +871,40 @@ def _trial_fighter_card(state: Combat, key: str, *, icon: str) -> list[str]:
 def render_combat(view: CombatView) -> Screen:
     state = view.combat
     is_trial = view.context == "class_trial"
+    is_dungeon = view.context == "dungeon"
+    is_party_combat = is_trial or is_dungeon
     if not is_trial and view.consumable_screen is not None:
         return _render_consumable_selection(view)
-    player = state.fighters["player"]
+    active_key = active_player_key(state)
+    requested_actor_key = getattr(view, "combat_actor_key", None)
+    action_actor_key = (
+        requested_actor_key
+        if requested_actor_key == active_key
+        else active_key
+        if not is_dungeon
+        else None
+    )
+    player_key = active_key or requested_actor_key or "player"
+    player = state.fighters.get(player_key, state.fighters.get("player"))
+    if player is None:
+        return Screen("⚔️ Combate indisponível.", view.context)
+    player_actions = player_actions_for(state, action_actor_key or player_key)
     icon = COPY[f"class:{player.character_class}"].split(" ", 1)[0]
     recent = [state.opening_log] + [event_line(state, event) for event in state.events]
-    if is_trial:
+    if is_party_combat:
         lines = []
-        if view.trial_stage_caption:
+        if is_trial and view.trial_stage_caption:
             lines.extend([f"⚔️ Provação · {escape(view.trial_stage_caption)}", ""])
+        elif is_dungeon:
+            lines.extend([f"⛓️ Masmorra · {escape(view.environment)}", ""])
+            if getattr(view, "member_status", None) == "defeated":
+                lines.extend(
+                    [
+                        "💀 Você foi derrotado neste encontro. "
+                        "A expedição continua em modo de observação.",
+                        "",
+                    ]
+                )
         lines.extend(
             [
                 f"Turno {player.opportunity} · <b>{escape(player.name)}</b>",
@@ -848,10 +919,7 @@ def render_combat(view: CombatView) -> Screen:
             key=lambda key: (state.fighters[key].id, key),
         )
         allies = sorted(
-            (
-                key for key in state.fighters
-                if key != "player" and _fighter_side(state, key) == "player"
-            ),
+            (key for key in state.fighters if _fighter_side(state, key) == "player"),
             key=lambda key: (state.fighters[key].id, key),
         )
         for key in enemies:
@@ -874,8 +942,12 @@ def render_combat(view: CombatView) -> Screen:
         if state.flavor:
             lines.extend([escape(state.flavor), ""])
         for key in allies:
-            lines.extend(_trial_fighter_card(state, key, icon="✨"))
-        lines.extend(_trial_fighter_card(state, "player", icon=f"👉 {icon}"))
+            fighter_icon = (
+                f"👉 {COPY[f'class:{state.fighters[key].character_class}'].split(' ', 1)[0]}"
+                if key == active_key
+                else "✨"
+            )
+            lines.extend(_trial_fighter_card(state, key, icon=fighter_icon))
         lines.extend(["📜 Registro de Combate · Recentes", "", "\n".join(recent[-4:]), ""])
     else:
         enemy = state.fighters["enemy"]
@@ -918,9 +990,11 @@ def render_combat(view: CombatView) -> Screen:
             lines[8:8] = [escape(view.consumable_notice), ""]
 
     available = (
-        class_trial_action_ids(state)
-        if is_trial
-        else allowed_actions(state)
+        class_trial_action_ids(state, actor_key=action_actor_key)
+        if is_party_combat and action_actor_key is not None
+        else allowed_actions(state, action_actor_key)
+        if action_actor_key is not None
+        else ()
     )
     buttons = []
     for action in available:
@@ -929,7 +1003,7 @@ def render_combat(view: CombatView) -> Screen:
         elif action == "defend":
             label, hint = "Defender", "🛡️ Defender · Reduz Dano até seu próximo Turno"
         else:
-            art = state.player_actions[action]
+            art = player_actions[action]
             clean = art.name.removeprefix("🎴 ").strip().removeprefix("🗡️ ")
             label = clean
             hint = clean
@@ -950,18 +1024,26 @@ def render_combat(view: CombatView) -> Screen:
         if not is_trial:
             lines.append(hint)
         if is_trial:
-            action_ids = class_trial_action_ids(state)
+            action_ids = class_trial_action_ids(state, actor_key=action_actor_key)
             action_index = action_ids.index(action)
-            targets = class_trial_target_ids(state, action)
-            if action in {"attack", "defend"}:
-                targets = class_trial_target_ids(state, action)
-            target_code = (
-                "s" if len(targets) > 1
-                else "d0" if len(targets) == 1
-                else "x"
-            )
+            targets = class_trial_target_ids(state, action, actor_key=action_actor_key)
+            target_code = "s" if len(targets) > 1 else "d0" if len(targets) == 1 else "x"
             callback = ClassTrialActionCallback.for_intent(
                 view.activity_id, state.version, action_index, target_code
+            ).pack()
+        elif is_dungeon:
+            action_ids = class_trial_action_ids(state, actor_key=action_actor_key)
+            action_index = action_ids.index(action)
+            definition = player_actions.get(action)
+            targets = (
+                ()
+                if definition is None
+                or definition.target_mode in {"self", "all_opponents", "all_allies"}
+                else action_target_ids(state, action, actor_key=action_actor_key or "player")
+            )
+            target_code = "s" if len(targets) > 1 else "d0" if targets else "x"
+            callback = DungeonCombatCallback.for_intent(
+                view.run_id, view.activity_id, state.version, action_index, target_code
             ).pack()
         else:
             callback_action = action
@@ -1011,7 +1093,9 @@ def render_combat(view: CombatView) -> Screen:
     if not is_trial and state.tutorial_stage == "normal" and not state.result:
         remaining = max(0, player.cooldowns.get("art", 0) - player.opportunity)
         if remaining:
-            lines.append(f"{state.player_actions['art'].name} · CD{remaining}")
+            art = player_actions.get("art")
+            if art is not None:
+                lines.append(f"{art.name} · CD{remaining}")
     if state.result == "victory" and view.context == "prologue":
         lines.append("320 XP")
     keyboard_rows = [buttons] if buttons else []

@@ -297,7 +297,91 @@ VIGIA_PARTIDO = Creature(
     ),
     ai_priority=("egide_partida", "marca_sentinela", "queda_ocaso", "varredura_fraturada", "peso_ruina", "golpe_vigia"),
 )
-CREATURE_CATALOG = (*CREATURE_CATALOG, VIGIA, FACELESS_CUSTODIAN, SUNSET_CUSTODIAN, VIGIA_PARTIDO)
+PROFANADOR_CALCINADO = Creature(
+    "profanador_calcinado", "Profanador Calcinado", "common", "balanced", 4, 7, 0,
+    ("ferramenta_quebrada", "golpe_impuro", "ferramenta_quebrada"),
+    (
+        ("ferramenta_quebrada", "Ferramenta Quebrada", D("1.00"), 0, D(0), 0),
+        ("golpe_impuro", "Golpe Impuro", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+    ),
+    ai_priority=("golpe_impuro", "ferramenta_quebrada"),
+)
+GUARDIAO_LAPIDES = Creature(
+    "guardiao_lapides", "Guardião das Lápides", "elite", "brute", 6, 7, 0,
+    ("pancada_pedra", "lapide_partida", "pancada_pedra", "peso_mortos"),
+    (
+        ("pancada_pedra", "Pancada de Pedra", D("1.00"), 0, D(0), 0),
+        ("lapide_partida", "Lápide Partida", D("0.85"), 0, D(0), 0, "bleed", 1, False, 2),
+        ("peso_mortos", "Peso dos Mortos", D("1.65"), 0, D(0), 0, None, 0, True),
+    ),
+)
+SEM_NOME = Creature(
+    "sem_nome", "O Sem-Nome", "boss", "balanced", 7, 7, 0,
+    ("golpe_lapide", "marca_apagada", "maos_esquecidos", "peso_sepulcro"),
+    (
+        ("golpe_lapide", "Golpe de Lápide", D("1.00"), 0, D(0), 0),
+        ("marca_apagada", "Marca Apagada", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "agility"),
+        ("peso_sepulcro", "Peso do Sepulcro", D("1.70"), 0, D(0), 0, None, 0, True, None, None, D(0), D(0), 0, False, "opponent", D("0.70")),
+        ("maos_esquecidos", "Mãos dos Esquecidos", D("0.80"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents", D("0.70")),
+    ),
+    ai_priority=("maos_esquecidos", "marca_apagada", "peso_sepulcro", "golpe_lapide"),
+)
+LAPIDE_SEM_NOME = Creature(
+    "lapide_sem_nome", "Lápide sem Nome", "common", "balanced", 6, 6, 0, (), ()
+)
+CREATURE_CATALOG = (
+    *CREATURE_CATALOG, VIGIA, FACELESS_CUSTODIAN, SUNSET_CUSTODIAN,
+    VIGIA_PARTIDO, PROFANADOR_CALCINADO, GUARDIAO_LAPIDES, SEM_NOME,
+    LAPIDE_SEM_NOME,
+)
+
+VIGIA_INTEGRO = Creature(
+    "vigia_integro", "Vigia Íntegro", "elite", "armored", 9, 9, 0,
+    ("golpe_guarda", "marca_restricao", "queda_guarda", "egide_integra"),
+    (
+        ("golpe_guarda", "Golpe de Guarda", D("1.00"), 0, D(0), 0),
+        ("egide_integra", "Égide Íntegra", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.80"), 2, True, "self"),
+        ("marca_restricao", "Marca de Restrição", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "agility"),
+        ("queda_guarda", "Queda da Guarda", D("1.60"), 0, D(0), 0, None, 0, True),
+    ),
+    ai_priority=("egide_integra", "marca_restricao", "queda_guarda", "golpe_guarda"),
+)
+PRECEPTOR_RACHADO = Creature(
+    "preceptor_rachado", "Preceptor Rachado", "elite", "controller", 9, 9, 0,
+    ("restabelecer_conduto", "peso_ordem", "impacto_regulador"),
+    (
+        ("impacto_regulador", "Impacto Regulador", D("1.00"), 0, D(0), 0),
+        ("peso_ordem", "Peso da Ordem", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "attack"),
+        ("restabelecer_conduto", "Restabelecer Conduto", D(0), 0, D(0), 0, None, 0, False, None, None, D(0), D(0), 0, False, "self", None, None, 1, ("conductor_1", "conductor_2"), ("conductor_1", "conductor_2"), D("0.50")),
+    ),
+    ai_priority=("restabelecer_conduto", "peso_ordem", "impacto_regulador"),
+)
+GUARD_CONDUCTOR = Creature(
+    "condutor_guarda", "Condutor de Guarda", "common", "balanced", 9, 9, 0, (), ()
+)
+SEAL_GUARD_FRAGMENT = Creature(
+    "fragmento_guarda", "Fragmento de Guarda", "common", "balanced", 9, 60, 0, (), ()
+)
+CUSTODIO_PRIMEIRO_SELO = Creature(
+    "custodio_primeiro_selo", "Custódio do Primeiro Selo", "boss", "armored", 10, 10, 0,
+    ("golpe_regulador", "marca_contencao", "egide_selo", "varredura_selo", "ruptura_selo"),
+    (
+        ("golpe_regulador", "Golpe Regulador", D("1.00"), 0, D(0), 0),
+        ("marca_contencao", "Marca de Contenção", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "agility"),
+        ("egide_selo", "Égide do Selo", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), 0, False, "self", None, None, 2, (), (), D("0.50"), D("0.08")),
+        ("varredura_selo", "Varredura do Selo", D("0.80"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+        ("ruptura_selo", "Ruptura do Primeiro Selo", D("1.75"), 0, D(0), 0, None, 0, True, 5, None, D(0), D(0), 0, False, "opponent", None, D("0.35")),
+    ),
+    ai_priority=("egide_selo", "marca_contencao", "ruptura_selo", "varredura_selo", "golpe_regulador"),
+)
+CREATURE_CATALOG = (
+    *CREATURE_CATALOG,
+    VIGIA_INTEGRO,
+    PRECEPTOR_RACHADO,
+    GUARD_CONDUCTOR,
+    SEAL_GUARD_FRAGMENT,
+    CUSTODIO_PRIMEIRO_SELO,
+)
 
 VARIANTS = {
     "furious": StatMultipliers(D(1), D("1.08"), D("0.92"), D(1)),
@@ -876,23 +960,58 @@ def create_creature_combat(
     opening_log: str = "",
     active_art_ids: tuple[str, ...] | None = None,
 ) -> Combat:
-    player_level = level if player_level is None else player_level
-    runtime_ruleset = ruleset_version or RULESET
-    equipment = equipment_configuration
-    player_stats = resolve_combat_stats(
+    return create_creature_party_combat(
+        combat_id,
+        name,
         character_class,
-        player_level,
         race,
-        equipment.contribution() if equipment is not None else None,
-        equipment.selected_path if equipment is not None else None,
-        tuple(talent_id for _, talent_id in equipment.talent_choices)
-        if equipment is not None
-        else (),
+        hp,
+        (CreatureCombatantSpec(creature, level, "enemy", variant),),
+        player_level=player_level,
+        equipment_configuration=equipment_configuration,
+        ruleset_version=ruleset_version,
+        flavor=flavor,
+        opening_log=opening_log,
+        active_art_ids=active_art_ids,
     )
-    enemy = road_enemy_stats(creature, level, variant)
-    actions = {}
+
+
+@dataclass(frozen=True)
+class CreatureCombatantSpec:
+    creature: Creature
+    level: int
+    fighter_key: str
+    variant: str | None = None
+    stat_multipliers: StatMultipliers | None = None
+    passive: bool = False
+    required_for_victory: bool = True
+    defeat_on_zero: bool = False
+    initially_inactive: bool = False
+
+
+@dataclass(frozen=True)
+class PlayerCombatantSpec:
+    """One dungeon party member with a frozen individual combat setup."""
+
+    fighter_key: str
+    character_id: str
+    name: str
+    character_class: str
+    race: str
+    level: int
+    hp: Decimal
+    equipment_configuration: EquipmentConfigurationSnapshot
+    active_art_ids: tuple[str, ...]
+    active: bool = True
+
+
+def _creature_actions(creature: Creature, prefix: str = "") -> tuple[dict[str, Action], tuple[str, ...], tuple[str, ...]]:
+    actions: dict[str, Action] = {}
+    key_map: dict[str, str] = {}
     for specification in creature.actions:
         key, label, coefficient, blocked_opportunities, debuff, duration = specification[:6]
+        actual_key = f"{prefix}{key}"
+        key_map[key] = actual_key
         native_dot_kind = specification[6] if len(specification) > 6 else None
         native_dot_stacks = specification[7] if len(specification) > 7 else 0
         prepared = specification[8] if len(specification) > 8 else False
@@ -906,8 +1025,12 @@ def create_creature_combat(
         enemy_hp_fraction_below = specification[16] if len(specification) > 16 and specification[16] is not None else None
         enemy_hp_fraction_at_most = specification[17] if len(specification) > 17 and specification[17] is not None else None
         max_uses_per_combat = specification[18] if len(specification) > 18 else None
-        actions[key] = Action(
-            key,
+        revive_fighter_keys = tuple(specification[19]) if len(specification) > 19 else ()
+        requires_defeated_fighter_keys = tuple(specification[20]) if len(specification) > 20 else ()
+        revive_hp_fraction = D(specification[21]) if len(specification) > 21 else D("0.50")
+        self_barrier_hp_fraction = D(specification[22]) if len(specification) > 22 else D(0)
+        actions[actual_key] = Action(
+            actual_key,
             label,
             coefficient,
             blocked_opportunities,
@@ -926,49 +1049,184 @@ def create_creature_combat(
             enemy_hp_fraction_below=D(enemy_hp_fraction_below) if enemy_hp_fraction_below is not None else None,
             enemy_hp_fraction_at_most=D(enemy_hp_fraction_at_most) if enemy_hp_fraction_at_most is not None else None,
             max_uses_per_combat=max_uses_per_combat,
+            revive_fighter_keys=revive_fighter_keys,
+            requires_defeated_fighter_keys=requires_defeated_fighter_keys,
+            revive_hp_fraction=revive_hp_fraction,
+            self_barrier_hp_fraction=self_barrier_hp_fraction,
         )
+    cycle = tuple(key_map[key] for key in creature.ai if key in key_map)
+    priority = tuple(key_map[key] for key in creature.ai_priority if key in key_map)
+    return actions, cycle, priority
+
+
+def _apply_stat_multipliers(stats: CombatStats, factors: StatMultipliers) -> CombatStats:
+    return CombatStats(
+        stats.hp * factors.hp,
+        stats.attack * factors.attack,
+        stats.defense * factors.defense,
+        stats.agility * factors.agility,
+        stats.per,
+        stats.crit,
+        stats.evasion,
+        stats.block,
+    )
+
+
+def create_creature_party_combat(
+    combat_id: UUID,
+    name: str,
+    character_class: str,
+    race: str,
+    hp: Decimal,
+    enemies: tuple[CreatureCombatantSpec, ...],
+    *,
+    player_level: int,
+    equipment_configuration: EquipmentConfigurationSnapshot | None = None,
+    ruleset_version: str | None = None,
+    flavor: str = "",
+    opening_log: str = "",
+    active_art_ids: tuple[str, ...] | None = None,
+    pressure_start_opportunity: int = 0,
+    pressure_cap: int = 0,
+    party: tuple[PlayerCombatantSpec, ...] | None = None,
+) -> Combat:
+    """Create a shared-engine combat with independent AI schedules per enemy."""
+    if not enemies:
+        raise ValueError("A creature combat requires at least one enemy entity.")
+    player_level = enemies[0].level if player_level is None else player_level
+    runtime_ruleset = ruleset_version or RULESET
+    equipment = equipment_configuration
+    player_stats = resolve_combat_stats(
+        character_class,
+        player_level,
+        race,
+        equipment.contribution() if equipment is not None else None,
+        equipment.selected_path if equipment is not None else None,
+        tuple(talent_id for _, talent_id in equipment.talent_choices)
+        if equipment is not None
+        else (),
+    )
     talent_ids = (
         tuple(talent_id for _, talent_id in equipment.talent_choices)
         if equipment is not None
         else ()
     )
-    player_actions = (
-        {
-            "attack": Action("attack", "⚔️ Atacar", D(1)),
-            "art": first_art(character_class, 1),
-        }
-        if active_art_ids is None
-        else class_player_actions(character_class, tuple(active_art_ids))
-    )
+    actions: dict[str, Action] = {}
+    fighters: dict[str, Fighter] = {}
+    player_actions: dict[str, Action] = {}
+    player_actions_by_fighter: dict[str, dict[str, Action]] = {}
+    if party is not None and len(party) > 1:
+        if len(party) > 4 or len({member.character_id for member in party}) != len(party):
+            raise ValueError("Dungeon parties contain one to four unique characters.")
+        for member in party:
+            member_equipment = member.equipment_configuration
+            member_stats = resolve_combat_stats(
+                member.character_class,
+                member.level,
+                member.race,
+                member_equipment.contribution(),
+                member_equipment.selected_path,
+                tuple(talent_id for _, talent_id in member_equipment.talent_choices),
+            )
+            member_actions = class_player_actions(
+                member.character_class, member.active_art_ids
+            )
+            for action_id, action in member_actions.items():
+                existing = player_actions.get(action_id)
+                if existing is not None and existing != action:
+                    raise ValueError("Party action ids must resolve to one canonical action.")
+                player_actions[action_id] = action
+            player_actions_by_fighter[member.fighter_key] = member_actions
+            fighters[member.fighter_key] = Fighter(
+                id=member.character_id,
+                name=member.name,
+                level=member.level,
+                stats=member_stats,
+                hp=member.hp,
+                race=member.race,
+                character_class=member.character_class,
+                selected_path=member_equipment.selected_path,
+                talent_ids=tuple(talent_id for _, talent_id in member_equipment.talent_choices),
+                side="player",
+                takes_turn=member.active,
+                defeat_on_zero=False,
+                required_for_victory=False,
+            )
+    else:
+        fighters["player"] = Fighter(
+            "player", name, player_level, player_stats, hp, race, character_class,
+            selected_path=(equipment.selected_path if equipment is not None else None),
+            talent_ids=talent_ids,
+        )
+    ai_cycles: dict[str, tuple[str, ...]] = {}
+    ai_positions: dict[str, int] = {}
+    ai_priorities: dict[str, tuple[str, ...]] = {}
+    for index, specification in enumerate(enemies):
+        if specification.fighter_key in fighters:
+            raise ValueError("Creature combat fighter keys must be unique.")
+        creature = specification.creature
+        prefix = "" if len(enemies) == 1 else f"e{index}_"
+        enemy_actions, cycle, priority = _creature_actions(creature, prefix)
+        actions.update(enemy_actions)
+        base_stats = road_enemy_stats(
+            creature, specification.level, specification.variant
+        )
+        if specification.stat_multipliers is not None:
+            base_stats = _apply_stat_multipliers(
+                base_stats, specification.stat_multipliers
+            )
+        fighters[specification.fighter_key] = Fighter(
+            id=(
+                "enemy"
+                if len(enemies) == 1 and specification.fighter_key == "enemy"
+                else f"dungeon:{creature.creature_id}:{index + 1}"
+            ),
+            name=creature.name,
+            level=specification.level,
+            stats=base_stats,
+            hp=D(0) if specification.initially_inactive else base_stats.hp,
+            side="enemy",
+            takes_turn=not specification.passive,
+            defeat_on_zero=specification.defeat_on_zero,
+            required_for_victory=specification.required_for_victory,
+            damage_taken_modifiers=dict(creature.damage_taken_modifiers),
+        )
+        ai_cycles[specification.fighter_key] = cycle
+        ai_positions[specification.fighter_key] = 0
+        ai_priorities[specification.fighter_key] = priority
+    if not player_actions:
+        player_actions = (
+            {
+                "attack": Action("attack", "⚔️ Atacar", D(1)),
+                "art": first_art(character_class, 1),
+            }
+            if active_art_ids is None
+            else class_player_actions(character_class, tuple(active_art_ids))
+        )
     return start_combat(
         Combat(
             combat_id,
             runtime_ruleset,
-            fighters={
-                "player": Fighter(
-                    "player", name, player_level, player_stats, hp, race, character_class,
-                    selected_path=(equipment.selected_path if equipment is not None else None),
-                    talent_ids=talent_ids,
-                ),
-                "enemy": Fighter(
-                    "enemy",
-                    creature.name,
-                    level,
-                    enemy,
-                    enemy.hp,
-                    damage_taken_modifiers=dict(creature.damage_taken_modifiers),
-                ),
-            },
+            fighters=fighters,
             player_actions=player_actions,
             enemy_actions=actions,
-            ai_cycle=creature.ai,
+            ai_cycle=ai_cycles.get("enemy", ()),
             tutorial=None,
             flavor=flavor,
             opening_log=opening_log,
-            variant=variant,
-            ai_priority=creature.ai_priority,
+            variant=enemies[0].variant if len(enemies) == 1 else None,
+            ai_priority=ai_priorities.get("enemy", ()),
             configuration_snapshot=(
                 equipment.to_data(runtime_ruleset) if equipment is not None else None
             ),
+            ai_cycles=ai_cycles,
+            ai_positions=ai_positions,
+            ai_priorities=ai_priorities,
+            pressure_start_opportunity=pressure_start_opportunity,
+            pressure_cap=pressure_cap,
+            player_actions_by_fighter=player_actions_by_fighter,
+            party_mode=party is not None and len(party) > 1,
+            ai_target_cycle=(tuple(member.character_id for member in party or ())
+                             if party is not None and len(party) > 1 else ()),
         )
     )
