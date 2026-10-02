@@ -240,7 +240,6 @@ class CraftingService:
                 material_rows,
                 recipe_view.ingredients,
                 known,
-                recipe_view.delivery,
             )
             existing = await session.scalar(
                 select(CraftingReceipt)
@@ -319,7 +318,6 @@ class CraftingService:
                 material_rows,
                 recipe_view.ingredients,
                 known,
-                recipe_view.delivery,
             )
             if fingerprint != receipt.preview_fingerprint:
                 raise CraftingRejected(CraftingErrorCode.STALE_PREVIEW)
@@ -590,7 +588,7 @@ class CraftingService:
 
     @staticmethod
     def _fingerprint(
-        character, recipe, profession_rows, location, material_rows, ingredients, known, delivery
+        character, recipe, profession_rows, location, material_rows, ingredients, known
     ) -> str:
         relevant_ids = {entry.material_id for entry in ingredients}
         payload = {
