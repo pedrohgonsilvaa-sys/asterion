@@ -93,6 +93,7 @@ def test_character_hub_has_canonical_copy_and_only_live_navigation():
     assert [[button.text for button in row] for row in screen.keyboard.inline_keyboard] == [
         ["Inventário", "Equipamentos"],
         ["Artes", "Talentos"],
+        ["Ofícios"],
         ["Caminho"],
         ["← Menu"],
     ]
@@ -102,6 +103,7 @@ def test_character_hub_has_canonical_copy_and_only_live_navigation():
         "eq:r",
         "character:arts",
         "character:talents",
+        "character:professions",
         "character:path",
         "menu:back",
     ]

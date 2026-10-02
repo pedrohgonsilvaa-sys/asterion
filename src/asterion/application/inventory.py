@@ -38,6 +38,8 @@ MATERIAL_LABELS = {
     "material.tdo.catalisador_elite_i": "Catalisador de Elite I",
     "material.tdo.fragmento_aprimoramento_i": "Fragmento de Aprimoramento I",
     "material.tdo.nucleo_vigia_partido": "Núcleo do Vigia Partido",
+    "material.tdo.nucleo_cripta_ocaso": "Núcleo da Cripta do Ocaso",
+    "material.tdo.nucleo_galerias_vigia": "Núcleo das Galerias do Vigia",
 }
 
 @dataclass(frozen=True)
@@ -406,6 +408,18 @@ class InventoryService:
                 key=str(row.id),
                 title=MATERIAL_LABELS.get(material_id, material_id),
                 quantity=row.quantity,
+                bound=bool(payload.get("bound", False)),
+                payload=payload,
+            )
+        if row.kind == "consumable":
+            consumable_id = payload.get("consumable_id", "")
+            definition = consumable_definition(consumable_id)
+            return InventoryEntry(
+                kind="consumable",
+                key=str(row.id),
+                title=definition.name if definition is not None else "Consumível",
+                quantity=row.quantity,
+                grade=definition.grade if definition is not None else None,
                 bound=bool(payload.get("bound", False)),
                 payload=payload,
             )
