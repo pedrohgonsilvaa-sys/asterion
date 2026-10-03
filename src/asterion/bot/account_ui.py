@@ -186,7 +186,18 @@ def render_help_topic(key: str) -> Screen:
 
 def render_account(view: AccountView) -> Screen:
     if view.deletion_pending:
-        return render_deletion_pending(view)
+        return Screen(
+            f"👤 Conta\n\n{escape(view.name)} · Nv. {view.level}\n\n"
+            f"⏳ Exclusão Pendente · {_remaining(view.deletion_due_at)}",
+            "character",
+            _keyboard(
+                [
+                    [_button("Acompanhar Exclusão", "account:d:pending")],
+                    [_button("← Configurações", "settings:root")],
+                ]
+            ),
+            parse_mode="HTML",
+        )
     return Screen(
         f"👤 Conta\n\n{escape(view.name)} · Nv. {view.level}",
         "character",
@@ -302,6 +313,7 @@ def render_deletion_pending(view: AccountView) -> Screen:
                         f"account:d:cancel:{_base36(view.deletion_revision or 0)}",
                     )
                 ],
+                [_button("← Conta", "account:root")],
             ]
         ),
         parse_mode="HTML",

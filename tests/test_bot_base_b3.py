@@ -460,9 +460,20 @@ async def test_start_and_menu_show_pending_deletion_until_cancelled(database):
     await dispatcher.feed_raw_update(bot, _message_update("/start", actor=actor, update_id=80))
     screen = _last_screen(bot)
     assert "Exclusão Pendente" in screen.text
+    back_to_account = _button(screen, "← Conta")
+    await dispatcher.feed_raw_update(
+        bot, callback_update(back_to_account.callback_data, actor=actor, update_id=81)
+    )
+    account_screen = _last_screen(bot)
+    assert "👤 Conta" in account_screen.text and "Exclusão Pendente" in account_screen.text
+    follow_pending = _button(account_screen, "Acompanhar Exclusão")
+    await dispatcher.feed_raw_update(
+        bot, callback_update(follow_pending.callback_data, actor=actor, update_id=82)
+    )
+    screen = _last_screen(bot)
     cancel = _button(screen, "Cancelar Exclusão")
     await dispatcher.feed_raw_update(
-        bot, callback_update(cancel.callback_data, actor=actor, update_id=81)
+        bot, callback_update(cancel.callback_data, actor=actor, update_id=83)
     )
     screen = _last_screen(bot)
     assert "Conta" in screen.text and "Exclusão Pendente" not in screen.text

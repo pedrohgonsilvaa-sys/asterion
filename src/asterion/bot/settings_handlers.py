@@ -230,6 +230,18 @@ def settings_router(
         if isinstance(query.message, Message):
             await present(query.message, render_delete_confirmation(view), images, edit=True)
 
+    @router.callback_query(F.data == "account:d:pending")
+    async def pending_deletion(query: CallbackQuery) -> None:
+        view = await service.account(query.from_user.id)
+        if view is None or not view.deletion_pending:
+            await query.answer("Esta ação expirou.", show_alert=True)
+            if isinstance(query.message, Message):
+                await show_account(query)
+            return
+        await query.answer()
+        if isinstance(query.message, Message):
+            await present(query.message, render_deletion_pending(view), images, edit=True)
+
     @router.callback_query(F.data.startswith("account:d:confirm:"))
     async def delete_confirm(query: CallbackQuery) -> None:
         parts = (query.data or "").split(":")
