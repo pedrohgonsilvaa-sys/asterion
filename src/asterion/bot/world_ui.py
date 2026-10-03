@@ -76,7 +76,7 @@ def render_world(view: WorldView) -> Screen:
         ("Personagem", "character:root"),
         ("Guilda", "menu:noop"),
         ("Mercado", "menu:noop"),
-        ("Códice", "menu:noop"),
+        ("Códice", "knowledge:codex"),
         ("Calendário", "menu:noop"),
         ("Vínculos", "menu:noop"),
         ("Classificação", "menu:noop"),

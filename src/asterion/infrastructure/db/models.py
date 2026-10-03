@@ -122,6 +122,33 @@ class Character(Base):
     )
 
 
+class CharacterProfile(Base):
+    """Optional player-authored character history and pending Telegram input."""
+
+    __tablename__ = "character_profiles"
+    __table_args__ = (
+        CheckConstraint("revision >= 0", name="ck_character_profile_revision"),
+        CheckConstraint(
+            "history IS NULL OR char_length(history) <= 1200",
+            name="ck_character_profile_history_length",
+        ),
+        CheckConstraint(
+            "history_prompt_message_id IS NULL OR history_prompt_message_id > 0",
+            name="ck_character_profile_prompt_message_id",
+        ),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    history: Mapped[str | None] = mapped_column(Text)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    history_prompt_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class Brazier(Base):
     __tablename__ = "braziers"
     __table_args__ = (UniqueConstraint("character_id", "brazier_id", name="uq_character_brazier"),)

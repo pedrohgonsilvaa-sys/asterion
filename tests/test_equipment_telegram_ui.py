@@ -84,15 +84,12 @@ def _root(items=None, *, version=4, blocked_secondary=False):
 def test_character_hub_has_canonical_copy_and_only_live_navigation():
     screen = render_character()
     assert screen.text.startswith("🪪 Personagem\n\n")
-    assert (
-        "Cada batalha, escolha e descoberta deixa marcas em quem você se torna. "
-        "Aqui estão os caminhos, conquistas e escolhas que dão forma à sua jornada por Asterion."
-    ) in screen.text
+    assert "Consulte os atributos, escolhas e recursos" in screen.text
     assert [[button.text for button in row] for row in screen.keyboard.inline_keyboard] == [
         ["Inventário", "Equipamentos"],
         ["Artes", "Talentos"],
-        ["Ofícios"],
-        ["Caminho"],
+        ["Atributos", "Ofícios"],
+        ["Perfil", "Caminho"],
         ["← Menu"],
     ]
     callbacks = [button.callback_data for button in _buttons(screen)]
@@ -101,7 +98,9 @@ def test_character_hub_has_canonical_copy_and_only_live_navigation():
         "eq:r",
         "character:arts",
         "character:talents",
+        "character:attributes",
         "character:professions",
+        "character:profile",
         "character:path",
         "menu:back",
     ]

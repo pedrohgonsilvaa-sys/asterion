@@ -6,19 +6,16 @@ from asterion.bot.creation_ui import Screen
 
 CHARACTER_COPY = (
     "🪪 Personagem\n\n"
-    "Cada batalha, escolha e descoberta deixa marcas em quem você se torna. "
-    "Aqui estão os caminhos, conquistas e escolhas que dão forma à sua jornada por Asterion.\n\n"
+    "Consulte os atributos, escolhas e recursos que já fazem parte da "
+    "jornada do seu personagem.\n\n"
     "🎒 Inventário · Itens\n"
     "🛡️ Equipamentos · Arsenal\n"
     "🎴 Artes · Combate\n"
-    "🧩 Doutrinas · Configuração\n"
     "🌿 Talentos · Evolução\n"
     "📈 Atributos · Status\n"
     "⚒️ Ofícios · Criação\n"
-    "🎨 Cosméticos · Aparência\n"
     "📇 Perfil · Identidade\n"
-    "🎭 Caminho · Especialização\n"
-    "🏛️ Legado · Ascensão"
+    "🎭 Caminho · Especialização"
 )
 
 
@@ -33,8 +30,14 @@ def render_character() -> Screen:
                 InlineKeyboardButton(text="Artes", callback_data="character:arts"),
                 InlineKeyboardButton(text="Talentos", callback_data="character:talents"),
             ],
-            [InlineKeyboardButton(text="Ofícios", callback_data="character:professions")],
-            [InlineKeyboardButton(text="Caminho", callback_data="character:path")],
+            [
+                InlineKeyboardButton(text="Atributos", callback_data="character:attributes"),
+                InlineKeyboardButton(text="Ofícios", callback_data="character:professions"),
+            ],
+            [
+                InlineKeyboardButton(text="Perfil", callback_data="character:profile"),
+                InlineKeyboardButton(text="Caminho", callback_data="character:path"),
+            ],
             [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
         ]
     )
