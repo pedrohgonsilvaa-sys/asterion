@@ -206,6 +206,9 @@ class PrologueService:
             )
             .on_conflict_do_nothing()
         )
+        from asterion.application.tdo_feats import reconcile_tdo_feats
+
+        await reconcile_tdo_feats(session, character)
 
     async def _ensure_tutorial_bestiary(self, session, character) -> None:
         """Record the tutorial Cão observation without granting observation XP."""

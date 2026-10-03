@@ -190,6 +190,7 @@ class AchievementPresentation:
     description: str
     reward: str | None = None
     player_facing: bool = True
+    hidden: bool = False
 
 
 ACHIEVEMENT_CATEGORIES = (
@@ -205,33 +206,73 @@ ACHIEVEMENT_CATEGORIES = (
 )
 ACHIEVEMENTS = (
     AchievementPresentation(
-        "feat.tdo.cinzas_na_estrada",
-        "Cinzas na Estrada",
-        "exploration",
-        "Concluiu o Prólogo em Vitória ou Derrota válida.",
+        "feat.tdo.cinzas_na_estrada", "Cinzas na Estrada", "exploration",
+        "Concluiu o Prólogo.",
     ),
     AchievementPresentation(
-        "feat.tdo.a_ultima_guarda",
-        "A Última Guarda",
-        "combat",
+        "feat.tdo.andarilho_das_cinzas", "Andarilho das Cinzas", "exploration",
+        "Descobriu os Locais e Braseiros principais das Terras do Ocaso.",
+        "Título · Andarilho das Cinzas",
+    ),
+    AchievementPresentation(
+        "feat.tdo.sob_a_superficie", "Sob a Superfície", "secrets",
+        "Descobriu as profundezas das Terras do Ocaso.",
+        "Banner · Profundezas do Ocaso", hidden=True,
+    ),
+    AchievementPresentation(
+        "feat.tdo.a_ultima_guarda", "A Última Guarda", "combat",
         "Derrotou o Vigia Partido pela primeira vez.",
         "Título · Vigia das Cinzas",
     ),
     AchievementPresentation(
-        "feat.tdo.terras_do_ocaso",
-        "Terras do Ocaso",
-        "exploration",
-        "Concluiu P6, alcançou Nv.10 e descobriu os cinco Locais principais.",
+        "feat.tdo.silencio_entre_os_nomes", "Silêncio entre os Nomes", "pve",
+        "Concluiu a Cripta do Ocaso em dificuldade Estável pela primeira vez.",
+        "Emblema · Lápide Raspada",
+    ),
+    AchievementPresentation(
+        "feat.tdo.a_ordem_interrompida", "A Ordem Interrompida", "pve",
+        "Concluiu as Galerias do Vigia em dificuldade Estável pela primeira vez.",
+        "Emblema · Selo Fraturado",
+    ),
+    AchievementPresentation(
+        "feat.tdo.cinzas_fraturadas", "Cinzas Fraturadas", "pve",
+        "Concluiu a Cripta e as Galerias em dificuldade Fraturada.",
+        "Moldura · Pedra Fraturada",
+    ),
+    AchievementPresentation(
+        "feat.tdo.cacador_do_ocaso", "Caçador do Ocaso", "bestiary",
+        "Dominou o conhecimento das criaturas-base das Terras do Ocaso.",
+        "Título · Caçador do Ocaso",
+    ),
+    AchievementPresentation(
+        "feat.tdo.entre_aquilo_que_caca", "Entre Aquilo que Caça", "secrets",
+        "Dominou criaturas e descobriu as Variantes regionais.",
+        "Aparência · Errante das Cinzas", hidden=True,
+    ),
+    AchievementPresentation(
+        "feat.tdo.testemunha_dos_guardioes", "Testemunha dos Guardiões", "bestiary",
+        "Estudou os guardiões conhecidos das Terras do Ocaso.",
+        "Banner · Última Vigília",
+    ),
+    AchievementPresentation(
+        "feat.tdo.nomes_sob_a_cinza", "Nomes sob a Cinza", "secrets",
+        "Reuniu os registros disponíveis sobre a rota dos Peregrinos.",
+        "Emblema · Nome Apagado", hidden=True,
+    ),
+    AchievementPresentation(
+        "feat.tdo.a_ordem_ainda_permanece", "A Ordem Ainda Permanece", "secrets",
+        "Reuniu os registros conhecidos sobre o Primeiro Selo e a Âncora.",
+        "Moldura · Vigília Antiga", hidden=True,
+    ),
+    AchievementPresentation(
+        "feat.tdo.terras_do_ocaso", "Terras do Ocaso", "exploration",
+        "Concluiu a campanha principal das Terras do Ocaso.",
         "Banner · Ocaso",
     ),
-    # P6 also stores this technical gate in Achievement. It is deliberately
-    # not a player-facing Feito in the regional catalog.
+    # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
-        "feat.tdo.campaign.completed",
-        "",
-        "",
-        "",
-        player_facing=False,
+        "feat.tdo.campaign.completed", "", "", "",
+        player_facing=False, hidden=True,
     ),
 )
 ACHIEVEMENT_BY_ID = {entry.achievement_id: entry for entry in ACHIEVEMENTS}

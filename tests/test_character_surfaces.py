@@ -169,6 +169,9 @@ async def test_knowledge_appears_only_from_persisted_records_and_known_locations
     async with sessions.begin() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         character_id = character.id
+        # This read-only surface test models a pre-prologue character; the
+        # standard road fixture otherwise carries a valid legacy prologue fact.
+        character.stage = "creation:complete"
         await session.execute(
             delete(BestiaryEvidence).where(BestiaryEvidence.character_id == character_id)
         )

@@ -115,10 +115,10 @@ def render_profile(view: ProfileView) -> Screen:
         "📇 Perfil",
         "",
         *_identity(view.name, view.level, view.character_class, view.selected_path),
-        "",
-        "📖 História",
-        "",
     ]
+    if view.selected_title:
+        lines.extend(["", f"🎖️ {view.selected_title}"])
+    lines.extend(["", "📖 História", ""])
     if view.history:
         from html import escape
 

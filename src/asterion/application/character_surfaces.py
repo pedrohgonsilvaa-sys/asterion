@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.bestiary import BESTIARY_STAGE_LABELS
+from asterion.application.cosmetic_catalog import COSMETICS_BY_ID
 from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     resolve_character_combat_stats,
@@ -26,12 +27,14 @@ from asterion.application.knowledge_catalog import (
     MATERIAL_LABELS,
     VARIANT_LABELS,
 )
+from asterion.application.tdo_feats import reconcile_tdo_feats
 from asterion.domain.road import creature_for
 from asterion.infrastructure.db.models import (
     Achievement,
     BestiaryEntry,
     BestiaryEvidence,
     Character,
+    CharacterCosmeticSelection,
     CharacterProfile,
     CodexEntry,
     CodexFragment,
@@ -68,6 +71,7 @@ class ProfileView:
     selected_path: str | None
     history: str | None
     revision: int
+    selected_title: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,10 +165,22 @@ class CharacterSurfacesService:
             character = await self._character(session, actor_id)
             if character is None:
                 return None
+            await reconcile_tdo_feats(session, character)
             profile = await session.scalar(
                 select(CharacterProfile).where(CharacterProfile.character_id == character.id)
             )
-            return self._profile_view(character, profile)
+            selected_title_id = await session.scalar(
+                select(CharacterCosmeticSelection.cosmetic_id).where(
+                    CharacterCosmeticSelection.character_id == character.id,
+                    CharacterCosmeticSelection.cosmetic_type == "title",
+                )
+            )
+            selected_title = (
+                COSMETICS_BY_ID[selected_title_id].name
+                if selected_title_id in COSMETICS_BY_ID
+                else None
+            )
+            return self._profile_view(character, profile, selected_title)
 
     async def begin_history_input(
         self, actor_id: int, expected_revision: int, prompt_message_id: int
@@ -232,6 +248,7 @@ class CharacterSurfacesService:
             character = await self._character(session, actor_id)
             if character is None:
                 return None
+            await reconcile_tdo_feats(session, character)
             character_id = character.id
             codex_rows = list(
                 (
@@ -417,7 +434,11 @@ class CharacterSurfacesService:
         return await session.scalar(statement)
 
     @staticmethod
-    def _profile_view(character: Character, profile: CharacterProfile | None) -> ProfileView:
+    def _profile_view(
+        character: Character,
+        profile: CharacterProfile | None,
+        selected_title: str | None = None,
+    ) -> ProfileView:
         return ProfileView(
             name=character.name,
             level=character.level,
@@ -425,6 +446,7 @@ class CharacterSurfacesService:
             selected_path=character.selected_path,
             history=profile.history if profile else None,
             revision=profile.revision if profile else 0,
+            selected_title=selected_title,
         )
 
 

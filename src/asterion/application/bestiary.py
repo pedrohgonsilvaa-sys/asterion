@@ -5,6 +5,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import select
 
 from asterion.application.progression import level_xp
+from asterion.application.tdo_feats import reconcile_tdo_feats_for_character
 from asterion.domain.road import creature_for
 from asterion.infrastructure.db.models import (
     BestiaryEntry,
@@ -257,6 +258,15 @@ class BestiaryRecorder:
             )
 
         new_evidence_ids = evidence_ids - before_evidence_ids
+        if (
+            (previous_stage is not None and previous_stage != entry.stage)
+            or any(evidence.startswith("variant:") for evidence in new_evidence_ids)
+            or (
+                creature_id == "vigia_partido"
+                and "first_victory" in new_evidence_ids
+            )
+        ):
+            await reconcile_tdo_feats_for_character(session, character_id)
         if (previous_stage is not None and previous_stage != entry.stage) or (
             victory and new_evidence_ids
         ):
@@ -395,6 +405,7 @@ class BestiaryRecorder:
             "action:egide_partida",
             "action:queda_ocaso",
         }
+        previous_stage = entry.stage
         entry.stage = (
             "dominated"
             if required.issubset(evidence_ids)
@@ -404,6 +415,8 @@ class BestiaryRecorder:
             if entry.bkp >= 8
             else "observed"
         )
+        if entry.stage != previous_stage:
+            await reconcile_tdo_feats_for_character(session, character_id)
 
     async def _grant_observation_xp(
         self, session, character_id, creature_id, reference_level

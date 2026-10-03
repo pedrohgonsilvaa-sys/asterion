@@ -291,6 +291,11 @@ async def test_victory_grants_exactly_once_and_persists_hp(prologue, database):
         assert await session.scalar(select(func.count()).select_from(Brazier)) == 1
         assert await session.scalar(select(func.count()).select_from(WorldState)) == 1
         assert await session.scalar(select(func.count()).select_from(LocationDiscovery)) == 1
+        assert await session.scalar(
+            select(func.count()).select_from(Achievement).where(
+                Achievement.achievement_id == "feat.tdo.cinzas_na_estrada"
+            )
+        ) == 1
         # Schema contains no loot, currency, material, vigor or bestiary bonus grant.
         assert set(RewardGrant.__table__.columns.keys()) == {
             "game_activity_id",
@@ -358,6 +363,11 @@ async def test_defeat_completes_prologue_without_reward_and_reaches_brazier(
         assert stored.xp == 0
         assert stored.hp == 0
         assert await session.scalar(select(func.count()).select_from(RewardGrant)) == 0
+        assert await session.scalar(
+            select(func.count()).select_from(Achievement).where(
+                Achievement.achievement_id == "feat.tdo.cinzas_na_estrada"
+            )
+        ) == 1
         assert await session.scalar(select(func.count()).select_from(Brazier)) == 1
         world = await session.scalar(select(WorldState))
         assert (world.region, world.location) == ("Terras do Ocaso", "Estrada das Cinzas")
