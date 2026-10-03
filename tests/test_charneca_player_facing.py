@@ -126,9 +126,18 @@ async def test_map_opens_p2_context_during_mission_and_normal_local_after_comple
         callback_update("world:map:local:charneca", update_id=880404, actor=actor),
     )
     contextual = _last_method(bot)
-    assert "Examinar Pontos de Fuligem · 0/3" in contextual.text
+    assert "Examinar Pontos de Fuligem · 0/3" not in contextual.text
+    assert "world:local" in _callbacks(contextual)
     assert "Caçadas · Disponível" not in contextual.text
     assert "Desbravar · Disponível" not in contextual.text
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update("world:local", update_id=880408, actor=actor),
+    )
+    local = _last_method(bot)
+    assert "Local Atual" in local.text
+    assert "Examinar Pontos de Fuligem · 0/3" not in local.text
+    assert "world:missions" in _callbacks(local)
 
     completed_actor = 880405
     await _seed_charneca(
@@ -154,8 +163,9 @@ async def test_map_opens_p2_context_during_mission_and_normal_local_after_comple
     )
     normal = _last_method(bot)
     assert "Charneca da Fuligem · Local Atual" in normal.text
-    assert "road:prepare" in _callbacks(normal)
-    assert "road:explore" in _callbacks(normal)
+    assert "world:local" in _callbacks(normal)
+    assert "road:prepare" not in _callbacks(normal)
+    assert "road:explore" not in _callbacks(normal)
     assert "Cripta" not in normal.text
     assert "p2:resume" not in _callbacks(normal)
 
@@ -277,7 +287,7 @@ async def test_brazier_travel_lists_only_known_destinations_and_keeps_route_dist
         )
         restored = _last_method(bot)
         assert "Refúgio do Ocaso" in _text(restored)
-        assert "road:route:charneca" in _callbacks(restored)
+        assert "world:map:fromlocal" in _callbacks(restored)
 
     actor = 880412
     road = await _seed_charneca(
@@ -317,14 +327,36 @@ async def test_brazier_travel_lists_only_known_destinations_and_keeps_route_dist
     )
     arrived = _last_method(bot)
     assert "Charneca da Fuligem · Local Atual" in arrived.text
-    assert "Retornar ao Refúgio" in [
-        button.text
-        for row in arrived.reply_markup.inline_keyboard
-        for button in row
-    ]
+    assert "world:map:fromlocal" in _callbacks(arrived)
     await known_dispatcher.feed_raw_update(
         bot,
-        callback_update("road:route:refuge", update_id=880415, actor=actor),
+        callback_update("world:map:fromlocal", update_id=880415, actor=actor),
+    )
+    map_screen = _last_method(bot)
+    region_callback = next(
+        callback
+        for callback in _callbacks(map_screen)
+        if callback == "world:map:region:tdo:fromlocal"
+    )
+    await known_dispatcher.feed_raw_update(
+        bot,
+        callback_update(region_callback, update_id=880418, actor=actor),
+    )
+    region = _last_method(bot)
+    charneca_callback = next(
+        callback
+        for callback in _callbacks(region)
+        if callback == "world:map:local:charneca:fromlocal"
+    )
+    await known_dispatcher.feed_raw_update(
+        bot,
+        callback_update(charneca_callback, update_id=880419, actor=actor),
+    )
+    detail = _last_method(bot)
+    assert "road:route:refuge" in _callbacks(detail)
+    await known_dispatcher.feed_raw_update(
+        bot,
+        callback_update("road:route:refuge", update_id=880420, actor=actor),
     )
     returned = _last_method(bot)
     assert "Refúgio do Ocaso" in returned.text

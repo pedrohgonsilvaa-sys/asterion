@@ -258,7 +258,7 @@ async def test_p3_combat_consumable_selection_and_use_are_persisted_once(databas
 
 
 @pytest.mark.asyncio
-async def test_bosque_map_is_mission_context_until_p3_completes(database):
+async def test_bosque_map_does_not_auto_open_p3_and_mission_remains_reachable(database):
     actor = 998329
     _, p3 = await _seed_p3(database, actor)
     accepted = await p3.accept(actor)
@@ -285,13 +285,31 @@ async def test_bosque_map_is_mission_context_until_p3_completes(database):
     await dispatcher.feed_raw_update(
         bot, callback_update(bosque_button.callback_data, update_id=998331, actor=actor)
     )
-    mission = _last_method(bot)
-    assert "Fragmentos de Construção" in mission.text
-    assert all(
-        not (button.text in {"Caçar", "Desbravar"} or "Ronda" in button.text)
-        for row in mission.reply_markup.inline_keyboard
+    place = _last_method(bot)
+    assert "Fragmentos de Construção" not in place.text
+    assert "world:local" in [
+        button.callback_data
+        for row in place.reply_markup.inline_keyboard
         for button in row
+    ]
+    await dispatcher.feed_raw_update(
+        bot, callback_update("world:local", update_id=998337, actor=actor)
     )
+    local = _last_method(bot)
+    assert "world:missions" in [
+        button.callback_data
+        for row in local.reply_markup.inline_keyboard
+        for button in row
+    ]
+    await dispatcher.feed_raw_update(
+        bot, callback_update("world:missions", update_id=998338, actor=actor)
+    )
+    missions = _last_method(bot)
+    assert "Sob Galhos Calcinados · Em Andamento" in missions.text
+    await dispatcher.feed_raw_update(
+        bot, callback_update("world:principal", update_id=998339, actor=actor)
+    )
+    assert "fragmentos de construção" in _last_method(bot).text
 
 
 @pytest.mark.asyncio
@@ -369,7 +387,20 @@ async def test_completed_p3_map_exposes_bosque_and_route(database):
         for row in bosque.reply_markup.inline_keyboard
         for button in row
     ]
-    assert "road:prepare" in callbacks
-    assert "road:explore" in callbacks
+    assert "world:local" in callbacks
+    assert "road:prepare" not in callbacks
+    assert "road:explore" not in callbacks
     assert "road:route:charneca" in callbacks
-    assert "Caçar" in [button.text for row in bosque.reply_markup.inline_keyboard for button in row]
+    assert "Caçar" not in [
+        button.text for row in bosque.reply_markup.inline_keyboard for button in row
+    ]
+    await dispatcher.feed_raw_update(
+        bot, callback_update("world:local", update_id=998337, actor=actor)
+    )
+    local = _last_method(bot)
+    assert "Caçar" in [button.text for row in local.reply_markup.inline_keyboard for button in row]
+    assert "road:hunt" in [
+        button.callback_data
+        for row in local.reply_markup.inline_keyboard
+        for button in row
+    ]

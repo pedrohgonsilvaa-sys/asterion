@@ -650,6 +650,24 @@ async def test_terminal_round_result_acknowledges_without_restarting_batch(datab
     assert result.end_reason == "vigor"
 
     back = await service.round_back(actor, result.round_id)
-    assert back.kind == "hunt_prepare"
+    assert back.kind == "road"
     resumed = await service.resume(actor)
     assert resumed.kind == "road"
+
+
+@pytest.mark.asyncio
+async def test_leaving_round_preparation_returns_to_local_without_cost(database):
+    actor, service = await _seed_round(database, 772099, vigor=73)
+    prepared = await service.prepare_round(actor, 10)
+    assert prepared.kind == "round_prepare"
+
+    local = await service.round_back(actor, prepared.round_id)
+    assert local.kind == "road"
+    resumed = await service.resume(actor)
+    assert resumed.kind == "road"
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        state = await session.scalar(select(HuntRound).where(HuntRound.id == prepared.round_id))
+        assert character.vigor == 73
+        assert state.status == "cancelled"
+        assert state.result_acknowledged is True

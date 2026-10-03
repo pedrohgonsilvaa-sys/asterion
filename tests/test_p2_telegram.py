@@ -25,6 +25,7 @@ from asterion.bot.p2_ui import render_p2
 from asterion.bot.world_handlers import world_router
 from asterion.domain.prologue import PROFILE
 from asterion.infrastructure.db.models import (
+    Brazier,
     Character,
     ConsumableStack,
     GameActivity,
@@ -687,8 +688,17 @@ async def test_start_restores_same_p2_combat_and_does_not_reopen_completed_p2(
     assert current.combat_id == active.combat_id
 
     completed_actor = 984063
-    _, completed_service = await _seed(database, completed_actor)
+    completed_character_id, completed_service = await _seed(database, completed_actor)
     await _complete_p2(completed_service, completed_actor, monkeypatch)
+    # P1 completion legitimately discovers the Refuge brazier; this fixture
+    # starts at P1 complete, so seed that persisted discovery explicitly.
+    async with database[1].begin() as session:
+        session.add(
+            Brazier(
+                character_id=completed_character_id,
+                brazier_id="tdo.brazier.refugio_do_ocaso",
+            )
+        )
     completed_dispatcher = Dispatcher(disable_fsm=True)
     completed_dispatcher.include_router(
         creation_router(

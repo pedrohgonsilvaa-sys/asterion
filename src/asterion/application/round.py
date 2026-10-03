@@ -538,6 +538,13 @@ class RoundService(RoadService):
                     .where(HuntRound.id == round_id, HuntRound.character_id == c.id)
                     .with_for_update()
                 )
+            if state is not None and state.status == "preparing":
+                # Leaving preparation is free: no Vigor or Consumables have been
+                # reserved yet, so resolve the draft and return to the Local.
+                state.status = "cancelled"
+                state.result_acknowledged = True
+                state.completed_at = datetime.now(UTC)
+                state.state_version += 1
             if state is not None and state.status in ROUND_RESULT_STATUSES:
                 state.result_acknowledged = True
             # A stale interruption/result callback cannot visually escape a manual
@@ -545,7 +552,7 @@ class RoundService(RoadService):
             blocking = await super()._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
-            if world.location in {REFUGE, CHARNECA, BOSQUE, RUINS}:
+            if world.location in {ROAD, REFUGE, CHARNECA, BOSQUE, RUINS}:
                 return await self._view_for_world(s, c, world)
             location = world.location
             return RoadView(

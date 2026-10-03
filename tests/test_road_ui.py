@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from asterion.application.road import CHARNECA, REFUGE, ROAD, RoadView
 from asterion.application.round import RoundView
-from asterion.bot.road_ui import render_road
+from asterion.bot.road_ui import render_road, render_round_selection
 
 
 def _callbacks(screen):
@@ -16,7 +16,7 @@ def _callbacks(screen):
     ]
 
 
-def test_group_stays_unavailable_but_round_callbacks_are_live():
+def test_hunt_is_manual_and_round_is_opened_from_local():
     prepare = render_road(
         RoadView(
             "hunt_prepare",
@@ -36,20 +36,18 @@ def test_group_stays_unavailable_but_round_callbacks_are_live():
         for row in screen.keyboard.inline_keyboard
         for button in row
     ]
-    assert "road:unavailable:group" in callbacks
-    assert "road:round:new:5" in callbacks
-    assert "road:round:new:10" in callbacks
-    assert "road:round:new:20" in callbacks
-    assert all("road:unavailable:round" not in callback for callback in callbacks)
+    assert "road:unavailable:group" not in callbacks
+    assert "world:round" in callbacks
+    assert all(not callback.startswith("road:round:new:") for callback in callbacks)
     assert all(callback != "menu:noop" for callback in callbacks)
 
 
 
 def test_round_batch_selection_uses_numbered_list_and_numeric_buttons():
-    screen = render_road(RoadView("road", uuid4(), ROAD, familiar=True))
-    assert "1 🏕️ Ronda · 5 Encontros" in screen.text
-    assert "2 🏕️ Ronda · 10 Encontros" in screen.text
-    assert "3 🏕️ Ronda · 20 Encontros" in screen.text
+    screen = render_round_selection(RoadView("road", uuid4(), ROAD, familiar=True))
+    assert "1 · 5 Encontros" in screen.text
+    assert "2 · 10 Encontros" in screen.text
+    assert "3 · 20 Encontros" in screen.text
     buttons = [
         button
         for row in screen.keyboard.inline_keyboard
@@ -89,7 +87,8 @@ def test_charneca_local_exposes_only_unlocked_round_and_regional_route():
     assert "Charneca da Fuligem · Local Atual" in locked.text
     assert "Terras do Ocaso · Nv. 3–5" in locked.text
     assert "Ronda de Caça · Vença uma Caçada neste Local" in locked.text
-    assert "road:route:refuge" in _callbacks(locked)
+    assert "world:map:fromlocal" in _callbacks(locked)
+    assert "road:route:refuge" not in _callbacks(locked)
     assert not any(value.startswith("road:round:new:") for value in _callbacks(locked))
     assert not any("Cripta" in value for value in _callbacks(locked))
 
@@ -107,10 +106,11 @@ def test_charneca_local_exposes_only_unlocked_round_and_regional_route():
             ),
         )
     )
-    assert "1 🏕️ Ronda · 5 Encontros" in familiar.text
-    assert "🔥 Braseiro · Descoberto" in familiar.text
-    assert "road:round:new:5" in _callbacks(familiar)
-    assert "world:travel" in _callbacks(familiar)
+    assert "Ronda de Caça · Disponível" in familiar.text
+    assert "Braseiro do Vento Morto · Descoberto" in familiar.text
+    assert "world:round" in _callbacks(familiar)
+    assert "road:round:new:5" not in _callbacks(familiar)
+    assert "world:map:fromlocal" in _callbacks(familiar)
 
 
 def test_charneca_hunt_and_explore_recovery_never_offer_retry():
@@ -144,6 +144,12 @@ def test_charneca_hunt_and_explore_recovery_never_offer_retry():
     assert "🔥 Braseiro do Vento Morto" in explore.text
     assert "road:explore" not in _callbacks(explore)
     assert "road:route:charneca" not in _callbacks(explore)
+
+    estrada_defeat = render_road(
+        RoadView("hunt_defeat", uuid4(), ROAD, recovery_brazier=None)
+    )
+    assert "road:prepare" not in _callbacks(estrada_defeat)
+    assert _callbacks(estrada_defeat) == ["road:local"]
 
 
 def test_charneca_round_screens_use_frozen_local_and_regional_recovery():

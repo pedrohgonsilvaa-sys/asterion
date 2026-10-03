@@ -103,36 +103,6 @@ def _local_return(location: str, attempt_id=None) -> InlineKeyboardButton:
     )
 
 
-def _route_button(destination: str, current: str) -> InlineKeyboardButton:
-    labels = {
-        (REFUGE, CHARNECA): ("Seguir para a Charneca", "road:route:charneca"),
-        (CHARNECA, REFUGE): ("Retornar ao Refúgio", "road:route:refuge"),
-        (CHARNECA, BOSQUE): ("Seguir para o Bosque", "road:route:bosque"),
-        (BOSQUE, CHARNECA): ("Retornar à Charneca", "road:route:charneca"),
-        (BOSQUE, RUINS): ("Seguir para as Ruínas", "road:route:ruinas"),
-        (RUINS, BOSQUE): ("Retornar ao Bosque", "road:route:bosque"),
-    }
-    label, callback = labels[(current, destination)]
-    return InlineKeyboardButton(text=label, callback_data=callback)
-
-
-def _route_destinations(view: RoadView) -> tuple[str, ...]:
-    if view.route_destinations:
-        return view.route_destinations
-    # Preserve legacy RoadView fixtures/callsites that only supplied the old bool.
-    if not view.route_available:
-        return ()
-    if view.location == REFUGE:
-        return (CHARNECA,)
-    if view.location == CHARNECA:
-        return (REFUGE,)
-    if view.location == BOSQUE:
-        return (CHARNECA,)
-    if view.location == RUINS:
-        return (BOSQUE,)
-    return ()
-
-
 def _round_screen(view) -> Screen | None:
     if not getattr(view, "kind", "").startswith("round_"):
         return None
@@ -173,7 +143,7 @@ def _round_screen(view) -> Screen | None:
                     callback_data=f"road:round:start:{token}:{view.state_version}",
                 )
             ],
-            [InlineKeyboardButton(text="← Caçada", callback_data=f"road:round:back:{token}")],
+            [InlineKeyboardButton(text=f"← {view.location}", callback_data=f"road:round:back:{token}")],
         ]
         return Screen(
             text,
@@ -291,15 +261,12 @@ def _round_screen(view) -> Screen | None:
             f"🐺 {creature} · Nv. {view.enemy_level}"
             f"{flavor}"
         )
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    text="Enfrentar Elite",
-                    callback_data=f"road:round:elite:{token}:{view.state_version}",
-                )
-            ],
-            [InlineKeyboardButton(text="← Caçada", callback_data=f"road:round:back:{token}")],
-        ]
+        keyboard = [[
+            InlineKeyboardButton(
+                text="Enfrentar Elite",
+                callback_data=f"road:round:elite:{token}:{view.state_version}",
+            )
+        ]]
         return Screen(
             text,
             "road_round_elite",
@@ -319,7 +286,7 @@ def _round_screen(view) -> Screen | None:
             InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        InlineKeyboardButton(text="← Caçada", callback_data=f"road:round:back:{token}")
+                        InlineKeyboardButton(text=f"← {view.location}", callback_data=f"road:round:back:{token}")
                     ]
                 ]
             ),
@@ -338,7 +305,7 @@ def _round_screen(view) -> Screen | None:
             InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        InlineKeyboardButton(text="← Caçada", callback_data=f"road:round:back:{token}")
+                        InlineKeyboardButton(text=f"← {view.location}", callback_data=f"road:round:back:{token}")
                     ]
                 ]
             ),
@@ -361,7 +328,7 @@ def _round_screen(view) -> Screen | None:
         route_button = _recovery_route(view)
         if route_button is not None:
             keyboard.append([route_button])
-        keyboard.append([InlineKeyboardButton(text="← Caçada", callback_data=f"road:round:back:{token}")])
+        keyboard.append([InlineKeyboardButton(text=f"← {view.recovery_location or view.location}", callback_data=f"road:round:back:{token}")])
         return Screen(
             text,
             "brazier_estrada" if view.recovery_location in {None, ROAD} else "road_defeat",
@@ -402,7 +369,7 @@ def _round_screen(view) -> Screen | None:
         if corrective:
             keyboard.append(corrective)
         keyboard.append(
-            [InlineKeyboardButton(text="← Caçada", callback_data=f"road:round:back:{token}")]
+            [InlineKeyboardButton(text=f"← {view.location}", callback_data=f"road:round:back:{token}")]
         )
         return Screen(
             text,
@@ -416,7 +383,6 @@ def render_road(view: RoadView) -> Screen:
     round_screen = _round_screen(view)
     if round_screen is not None:
         return round_screen
-    route_destinations = _route_destinations(view)
     if view.kind == "combat" and view.combat is not None:
         return render_combat(
             CombatView(
@@ -456,10 +422,7 @@ def render_road(view: RoadView) -> Screen:
                 "💀 Derrota\n\n🔥 Braseiro da Estrada\nEstrada das Cinzas · Terras do Ocaso\n\n"
                 "❤️ HP · Restaurado\n\n🦌 Caçada · Encerrada"
             )
-            keyboard = [
-                [InlineKeyboardButton(text="Caçar Novamente", callback_data="road:prepare")],
-                [InlineKeyboardButton(text="← Estrada das Cinzas", callback_data="road:local")],
-            ]
+            keyboard = [[_local_return(ROAD)]]
         return Screen(text, "road_defeat", InlineKeyboardMarkup(inline_keyboard=keyboard))
     if view.kind == "hunt_prepare":
         title, subtitle = _location_copy(view.location)
@@ -468,11 +431,10 @@ def render_road(view: RoadView) -> Screen:
             "🦌 Caçada\n\n"
             f"{local_block}\n\n"
             f"👤 {escape(view.name or 'Personagem')}\n❤️ <code>{view.hp} / {view.max_hp}</code>\n"
-            f"⚡ Vigor · <code>{view.vigor} / {view.max_vigor}</code>\n\n👤 Grupo\n⚔️ Escolha o formato da Caçada."
+            f"⚡ Vigor · <code>{view.vigor} / {view.max_vigor}</code>"
         )
         keyboard = [
-            [InlineKeyboardButton(text="[1] Solo", callback_data="road:hunt")],
-            [InlineKeyboardButton(text="[2] Grupo", callback_data="road:unavailable:group")],
+            [InlineKeyboardButton(text="Caçar", callback_data="road:hunt")],
             [_local_return(view.location)],
         ]
         return Screen(text, "hunt_prepare", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
@@ -487,7 +449,11 @@ def render_road(view: RoadView) -> Screen:
         if view.reward_lines:
             text += "\n\n" + "\n".join(view.reward_lines)
         keyboard = [
-            [InlineKeyboardButton(text="Caçar Novamente", callback_data="road:prepare")],
+            *(
+                [[InlineKeyboardButton(text="Caçar Novamente", callback_data=f"road:repeat:{view.activity_id.hex}")]]
+                if view.activity_id is not None
+                else []
+            ),
             [_local_return(view.location)],
         ]
         return Screen(text, "road_victory", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
@@ -515,13 +481,6 @@ def render_road(view: RoadView) -> Screen:
         route_button = _recovery_route(view)
         if route_button is not None:
             buttons.append([route_button])
-        elif view.retry_available and view.recovery_brazier is None:
-            buttons.append([
-                InlineKeyboardButton(
-                    text="Desbravar Novamente",
-                    callback_data=f"road:explore:{view.attempt_id.hex}",
-                )
-            ])
         buttons.append(
             [
                 _local_return(
@@ -538,7 +497,7 @@ def render_road(view: RoadView) -> Screen:
             "🧭 Desbravar\n\n"
             f"{title} · Local Atual\n{subtitle}\n\n👤 Solo\n"
             f"❤️ <code>{view.hp} / {view.max_hp}</code>\n"
-            f"⚡ 4 Vigor quando a economia for concedida · <code>{view.vigor} / {view.max_vigor}</code>"
+            f"⚡ Vigor · <code>{view.vigor} / {view.max_vigor}</code>"
         )
         keyboard = [
             [InlineKeyboardButton(text="Desbravar", callback_data="road:explore:start")],
@@ -571,113 +530,142 @@ def render_road(view: RoadView) -> Screen:
             InlineKeyboardMarkup(inline_keyboard=[[_local_return(view.location)]]),
             parse_mode="HTML",
         )
-    if view.location == ROAD:
-        round_line = (
-            "1 🏕️ Ronda · 5 Encontros\n"
-            "2 🏕️ Ronda · 10 Encontros\n"
-            "3 🏕️ Ronda · 20 Encontros"
-            if view.familiar
-            else "🔒 Ronda de Caça · Vença uma Caçada neste Local"
+    if view.kind in {"road", "refuge", "charneca", "bosque", "ruinas"}:
+        return render_current_local(
+            view,
+            explore_state="available" if view.explore_available else None,
         )
-        text = (
-            "🔥 Estrada das Cinzas · Local Atual\nTerras do Ocaso · Nv. 1–10\n\n"
-            "🔥 Braseiro · Descoberto\n"
-            + (
-                "🧭 Desbravar · Disponível\n"
-                if view.explore_available
-                else "⏳ Desbravar · Em recarga\n"
+    return Screen(
+        "Local indisponível.",
+        "road",
+        InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="← Menu", callback_data="menu:back")]]
+        ),
+    )
+
+def render_current_local(
+    view: RoadView,
+    *,
+    explore_state: str | None = None,
+    explore_message: str | None = None,
+    dungeon: tuple[str, str] | None = None,
+    mission_available: bool = False,
+) -> Screen:
+    """Render the current Local as the sole entry point for local activities."""
+    title, subtitle = _location_copy(view.location)
+    def bar(current, maximum, fill: str) -> str:
+        value = min(10, max(0, int(current * 10 / maximum))) if maximum else 0
+        return fill * value + "⬜" * (10 - value)
+
+    lines = [
+        "📍 Local Atual",
+        f"{title} · Local Atual",
+        subtitle,
+        "",
+        f"👤 {escape(view.name or 'Personagem')}",
+        f"❤️ HP · {view.hp} / {view.max_hp}",
+        bar(view.hp, view.max_hp, "🟩"),
+        f"⚡ Vigor · {view.vigor} / {view.max_vigor}",
+        bar(view.vigor, view.max_vigor, "🟨"),
+    ]
+    keyboard: list[list[InlineKeyboardButton]] = []
+    if view.location in {ROAD, CHARNECA, BOSQUE, RUINS}:
+        lines.extend(["", "🦌 Caçada · Disponível"])
+        keyboard.append([InlineKeyboardButton(text="Caçar", callback_data="road:hunt")])
+        if view.familiar:
+            lines.append("🏕️ Ronda de Caça · Disponível")
+            keyboard.append([InlineKeyboardButton(text="Ronda", callback_data="world:round")])
+        else:
+            lines.append("🔒 Ronda de Caça · Vença uma Caçada neste Local")
+        if explore_state == "available":
+            lines.append("🧭 Desbravar · Disponível")
+            keyboard.append(
+                [InlineKeyboardButton(text="Desbravar", callback_data="road:explore:start")]
             )
-            + "🦌 Caçada · Disponível\n\n"
-            + round_line
-        )
-        keyboard = [
-            [InlineKeyboardButton(text="Caçar", callback_data="road:prepare")],
-            *(
-                [[InlineKeyboardButton(text="Desbravar", callback_data="road:explore")]]
-                if view.explore_available
-                else []
-            ),
-            *(
-                [[
-                    InlineKeyboardButton(text="1", callback_data="road:round:new:5"),
-                    InlineKeyboardButton(text="2", callback_data="road:round:new:10"),
-                    InlineKeyboardButton(text="3", callback_data="road:round:new:20"),
-                ]]
-                if view.familiar
-                else []
-            ),
-            *(
-                [[InlineKeyboardButton(text="Travessia dos Braseiros", callback_data="world:travel")]]
-                if view.brazier_id and view.brazier_destinations
-                else []
-            ),
-            [InlineKeyboardButton(text="← Terras do Ocaso", callback_data="menu:back")],
-        ]
-    elif view.location in {CHARNECA, BOSQUE, RUINS}:
-        round_line = (
-            "1 🏕️ Ronda · 5 Encontros\n"
-            "2 🏕️ Ronda · 10 Encontros\n"
-            "3 🏕️ Ronda · 20 Encontros"
-            if view.familiar
-            else "🔒 Ronda de Caça · Vença uma Caçada neste Local"
-        )
-        brazier_line = (
-            "🔥 Braseiro · Descoberto"
-            if view.brazier_id is not None
-            else "🔥 Braseiro · Não descoberto"
-        )
-        title, subtitle = _location_copy(view.location)
-        text = (
-            f"{title} · Local Atual\n{subtitle}\n\n"
-            f"{brazier_line}\n"
-            + (
-                "🧭 Desbravar · Disponível\n"
-                if view.explore_available
-                else "⏳ Desbravar · Em recarga\n"
+        elif explore_state == "cooldown":
+            lines.append(
+                "⏳ Desbravar · Em recarga"
+                + (f" · {escape(explore_message)}" if explore_message else "")
             )
-            + "🦌 Caçada · Disponível\n\n"
-            + round_line
-        )
-        keyboard = [
-            [InlineKeyboardButton(text="Caçar", callback_data="road:prepare")],
-            *(
-                [[InlineKeyboardButton(text="Desbravar", callback_data="road:explore")]]
-                if view.explore_available
-                else []
-            ),
-            *(
-                [[
-                    InlineKeyboardButton(text="1", callback_data="road:round:new:5"),
-                    InlineKeyboardButton(text="2", callback_data="road:round:new:10"),
-                    InlineKeyboardButton(text="3", callback_data="road:round:new:20"),
-                ]]
-                if view.familiar
-                else []
-            ),
-            *([[_route_button(destination, view.location) for destination in route_destinations]]
-              if route_destinations else []),
-            *(
-                [[InlineKeyboardButton(text="Travessia dos Braseiros", callback_data="world:travel")]]
-                if view.brazier_id and view.brazier_destinations
-                else []
-            ),
-            [InlineKeyboardButton(text="← Terras do Ocaso", callback_data="menu:back")],
-        ]
-    elif view.location == REFUGE:
-        text = "🔥 Braseiro do Refúgio\nRefúgio do Ocaso · Terras do Ocaso"
-        keyboard = [
-            [InlineKeyboardButton(text="Alda Veyr", callback_data="p2:alda")],
-            [InlineKeyboardButton(text="Oren Cal", callback_data="world:oren")],
-            *([[_route_button(destination, view.location) for destination in route_destinations]]
-              if route_destinations else []),
-            *(
-                [[InlineKeyboardButton(text="Travessia dos Braseiros", callback_data="world:travel")]]
-                if view.brazier_id and view.brazier_destinations
-                else []
-            ),
-            [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
-        ]
+        elif explore_state == "limit":
+            lines.append(
+                "🔒 Desbravar · Limite recente atingido"
+                + (f" · {escape(explore_message)}" if explore_message else "")
+            )
+        else:
+            lines.append("🚫 Desbravar · Indisponível neste Local")
+        if view.brazier_label:
+            lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        elif view.location != ROAD:
+            lines.append("🔥 Braseiro · Não descoberto")
+        if dungeon is not None:
+            dungeon_name, dungeon_callback = dungeon
+            lines.append(f"⛓️ {escape(dungeon_name)} · Conhecida")
+            keyboard.append(
+                [InlineKeyboardButton(text=dungeon_name, callback_data=dungeon_callback)]
+            )
+        if mission_available:
+            lines.append("📜 Missões · Acompanhar objetivos")
+            keyboard.append(
+                [InlineKeyboardButton(text="Missões", callback_data="world:missions")]
+            )
     else:
-        text = "Local indisponível."
-        keyboard = [[InlineKeyboardButton(text="← Menu", callback_data="menu:back")]]
-    return Screen(text, "road", InlineKeyboardMarkup(inline_keyboard=keyboard))
+        lines.extend(["", "Local narrativo seguro."])
+        if view.brazier_label:
+            lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        if view.location == REFUGE:
+            if mission_available:
+                keyboard.append(
+                    [InlineKeyboardButton(text="Missões", callback_data="world:missions")]
+                )
+            keyboard.extend(
+                [
+                    [InlineKeyboardButton(text="Alda Veyr", callback_data="p2:alda")],
+                    [InlineKeyboardButton(text="Oren Cal", callback_data="world:oren")],
+                ]
+            )
+        elif mission_available:
+            keyboard.append(
+                [InlineKeyboardButton(text="Missão Atual", callback_data="world:missions")]
+            )
+    keyboard.extend(
+        [
+            [InlineKeyboardButton(text="Viajar", callback_data="world:map:fromlocal")],
+            [InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")],
+        ]
+    )
+    return Screen(
+        "\n".join(lines),
+        "local_current",
+        InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML",
+    )
+
+
+def render_round_selection(view: RoadView) -> Screen:
+    if not view.familiar:
+        text = (
+            "🏕️ Ronda de Caça\n\n"
+            f"{escape(view.location)}\n\n"
+            "🔒 Vença uma Caçada manual neste Local para liberar a Ronda."
+        )
+        keyboard = [[InlineKeyboardButton(text=f"← {view.location}", callback_data="world:local")]]
+    else:
+        text = (
+            f"🏕️ Ronda de Caça\n{escape(view.location)} · Terras do Ocaso\n\n"
+            "Escolha o tamanho do lote.\n\n"
+            "1 · 5 Encontros\n2 · 10 Encontros\n3 · 20 Encontros"
+        )
+        keyboard = [
+            [
+                InlineKeyboardButton(text="1", callback_data="road:round:new:5"),
+                InlineKeyboardButton(text="2", callback_data="road:round:new:10"),
+                InlineKeyboardButton(text="3", callback_data="road:round:new:20"),
+            ],
+            [InlineKeyboardButton(text=f"← {view.location}", callback_data="world:local")],
+        ]
+    return Screen(
+        text,
+        "round_selection",
+        InlineKeyboardMarkup(inline_keyboard=keyboard),
+    )

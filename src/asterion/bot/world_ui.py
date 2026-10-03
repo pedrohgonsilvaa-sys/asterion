@@ -22,6 +22,25 @@ def number(value: int) -> str:
     return f"{value:,}".replace(",", ".")
 
 
+def render_adventure(location: str | None = None) -> Screen:
+    current = f"📍 Local Atual · {escape(location)}\n\n" if location else ""
+    text = (
+        "🗺️ Aventura\n\n"
+        f"{current}"
+        "Escolha para onde deseja seguir."
+    )
+    keyboard = [
+        [InlineKeyboardButton(text="Local Atual", callback_data="world:local")],
+        [
+            InlineKeyboardButton(text="Mapa", callback_data="world:map"),
+            InlineKeyboardButton(text="Missões", callback_data="world:missions"),
+        ],
+        [InlineKeyboardButton(text="Masmorras", callback_data="dungeon:known")],
+        [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
+    ]
+    return Screen(text, "adventure", InlineKeyboardMarkup(inline_keyboard=keyboard))
+
+
 def render_world(view: WorldView) -> Screen:
     if view.kind == "brazier":
         text = (
