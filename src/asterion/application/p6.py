@@ -135,12 +135,22 @@ class P6Service:
                     return await self._view(session, character, quest, world)
                 progress["door_crossed"] = True
                 quest.step = 2
-            elif operation == "enter_chamber" and quest.step == 2 and progress.get("door_crossed") and self._at(world, RUINS):
+            elif (
+                operation == "enter_chamber"
+                and quest.step == 2
+                and progress.get("door_crossed")
+                and self._at(world, RUINS)
+            ):
                 world.region, world.location = REGION, P6_CHAMBER
                 await self._ensure_location(session, character.id, P6_CHAMBER_LOCATION_ID)
                 progress["chamber_discovered"] = True
                 quest.step = 3
-            elif operation == "enter_chamber" and quest.step == 5 and progress.get("awaiting_retry") and self._at(world, RUINS):
+            elif (
+                operation == "enter_chamber"
+                and quest.step == 5
+                and progress.get("awaiting_retry")
+                and self._at(world, RUINS)
+            ):
                 world.region, world.location = REGION, P6_CHAMBER
                 await self._ensure_location(session, character.id, P6_CHAMBER_LOCATION_ID)
             elif operation == "inspect_before" and quest.step == 3 and self._at(world, P6_CHAMBER):
@@ -153,7 +163,12 @@ class P6Service:
                     quest.step = 4
                     return await self._view(session, character, quest, world)
                 progress = dict(quest.progress or progress)
-            elif operation == "retry" and quest.step == 5 and progress.get("awaiting_retry") and self._at(world, P6_CHAMBER):
+            elif (
+                operation == "retry"
+                and quest.step == 5
+                and progress.get("awaiting_retry")
+                and self._at(world, P6_CHAMBER)
+            ):
                 progress["awaiting_retry"] = False
                 quest.progress = progress
                 if await self._materialize(session, character, quest) is None:
@@ -171,14 +186,33 @@ class P6Service:
                 for fragment in P6_CODEX_ANCHOR_FRAGMENTS:
                     await self._ensure_fragment(session, character.id, P6_CODEX_ANCHOR, fragment)
                 await self._ensure_codex(session, character.id, P6_OLD_ASTERIANS)
-                await self._ensure_fragment(session, character.id, P6_OLD_ASTERIANS, "codex.fragment.antigos_asterianos.outras_ancoras_existiram")
+                await self._ensure_fragment(
+                    session,
+                    character.id,
+                    P6_OLD_ASTERIANS,
+                    "codex.fragment.antigos_asterianos.outras_ancoras_existiram",
+                )
                 await self._ensure_codex(session, character.id, P6_RUINS_CODEX)
-                await self._ensure_fragment(session, character.id, P6_RUINS_CODEX, "codex.fragment.ruinas_do_vigia.vigia_protegia_estrutura")
+                await self._ensure_fragment(
+                    session,
+                    character.id,
+                    P6_RUINS_CODEX,
+                    "codex.fragment.ruinas_do_vigia.vigia_protegia_estrutura",
+                )
                 await self._ensure_codex(session, character.id, P6_CHAMBER_CODEX)
-                await self._ensure_fragment(session, character.id, P6_CHAMBER_CODEX, "codex.fragment.camara_do_poente.estrutura_chamada_ancora")
+                await self._ensure_fragment(
+                    session,
+                    character.id,
+                    P6_CHAMBER_CODEX,
+                    "codex.fragment.camara_do_poente.estrutura_chamada_ancora",
+                )
             elif operation == "return_ruins" and quest.step == 8 and self._at(world, P6_CHAMBER):
                 world.region, world.location = REGION, RUINS
-            elif operation in {"report_alda", "report_oren"} and quest.step == 8 and self._at(world, REFUGE):
+            elif (
+                operation in {"report_alda", "report_oren"}
+                and quest.step == 8
+                and self._at(world, REFUGE)
+            ):
                 reports = set(progress.get("reports", ()))
                 reports.add("alda" if operation == "report_alda" else "oren")
                 progress["reports"] = [key for key in ("alda", "oren") if key in reports]
@@ -228,11 +262,13 @@ class P6Service:
             if quest is None:
                 return None
             activity = await session.scalar(
-                select(GameActivity).where(
+                select(GameActivity)
+                .where(
                     GameActivity.id == activity_id,
                     GameActivity.character_id == character.id,
                     GameActivity.content_id == P6_CONTENT_ID,
-                ).with_for_update()
+                )
+                .with_for_update()
             )
             if activity is None:
                 return None
@@ -248,9 +284,14 @@ class P6Service:
             ):
                 return current
             updated = await apply_action(
-                session, character, activity, action=action,
-                consumable_id=consumable_id, target_id=target_id,
-                effect_id=effect_id, category=VIGIA_PARTIDO.category,
+                session,
+                character,
+                activity,
+                action=action,
+                consumable_id=consumable_id,
+                target_id=target_id,
+                effect_id=effect_id,
+                category=VIGIA_PARTIDO.category,
             )
             if updated is None or updated.version == version:
                 return current
@@ -264,13 +305,23 @@ class P6Service:
                 hp_fraction = enemy.hp / enemy.stats.hp
                 if hp_fraction < 1 and hp_fraction <= Decimal("0.70"):
                     await self.bestiary.add_evidence(
-                        session, entry, character.id, VIGIA_PARTIDO.creature_id,
-                        "phase:a_fratura", "phase", 5,
+                        session,
+                        entry,
+                        character.id,
+                        VIGIA_PARTIDO.creature_id,
+                        "phase:a_fratura",
+                        "phase",
+                        5,
                     )
                 if hp_fraction <= Decimal("0.35"):
                     await self.bestiary.add_evidence(
-                        session, entry, character.id, VIGIA_PARTIDO.creature_id,
-                        "phase:o_ultimo_posto", "phase", 5,
+                        session,
+                        entry,
+                        character.id,
+                        VIGIA_PARTIDO.creature_id,
+                        "phase:o_ultimo_posto",
+                        "phase",
+                        5,
                     )
 
             progress = dict(quest.progress or {})
@@ -279,8 +330,11 @@ class P6Service:
                 await self._grant_nucleus_once(session, character)
                 await normalize_character_hp(session, character)
                 await self.bestiary.record(
-                    session, character.id, VIGIA_PARTIDO.creature_id,
-                    victory=True, observation_category="boss",
+                    session,
+                    character.id,
+                    VIGIA_PARTIDO.creature_id,
+                    victory=True,
+                    observation_category="boss",
                 )
                 await self._ensure_achievement(session, character.id, "feat.tdo.a_ultima_guarda")
                 progress.update(boss_defeated=True, awaiting_retry=False, boss_result="victory")
@@ -288,22 +342,28 @@ class P6Service:
             elif updated.result == "defeat":
                 activity.status = "failed"
                 await self.bestiary.record(
-                    session, character.id, VIGIA_PARTIDO.creature_id,
+                    session,
+                    character.id,
+                    VIGIA_PARTIDO.creature_id,
                     observation_category="boss",
                 )
                 brazier, location = await self.road.recover_normal_pve_defeat(
                     session, character, RUINS_LOCATION, world
                 )
                 progress.update(
-                    boss_result="defeat", awaiting_retry=True,
+                    boss_result="defeat",
+                    awaiting_retry=True,
                     defeat_activity_id=str(activity.id),
-                    recovery_brazier=brazier, recovery_location=location,
+                    recovery_brazier=brazier,
+                    recovery_location=location,
                 )
             quest.progress = progress
             quest.state_version += 1
             return await self._view(session, character, quest, world)
 
-    async def consumable_selection(self, actor: int, activity_id: UUID, version: int, **kwargs) -> P6View | None:
+    async def consumable_selection(
+        self, actor: int, activity_id: UUID, version: int, **kwargs
+    ) -> P6View | None:
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor)
             if character is None:
@@ -311,10 +371,15 @@ class P6Service:
             quest = await self._ensure_started(session, character, quest)
             if quest is None:
                 return None
-            activity = await session.scalar(select(GameActivity).where(
-                GameActivity.id == activity_id, GameActivity.character_id == character.id,
-                GameActivity.content_id == P6_CONTENT_ID,
-            ).with_for_update())
+            activity = await session.scalar(
+                select(GameActivity)
+                .where(
+                    GameActivity.id == activity_id,
+                    GameActivity.character_id == character.id,
+                    GameActivity.content_id == P6_CONTENT_ID,
+                )
+                .with_for_update()
+            )
             if activity is None:
                 return None
             current = await self._view(session, character, quest, world)
@@ -323,28 +388,37 @@ class P6Service:
                 return current
             if activity.state_version != version:
                 from dataclasses import replace
+
                 return replace(current, consumable_notice="⚠️ O combate foi atualizado.")
             return derive_consumable_selection(current, **kwargs)
 
     async def _ensure_started(self, session, character, quest):
         if quest is not None or character.level < 10:
             return quest
-        p5 = await session.scalar(select(Quest.id).where(
-            Quest.character_id == character.id, Quest.quest_id == P5_ID,
-            Quest.status == "completed",
-        ))
+        p5 = await session.scalar(
+            select(Quest.id).where(
+                Quest.character_id == character.id,
+                Quest.quest_id == P5_ID,
+                Quest.status == "completed",
+            )
+        )
         if not p5:
             return None
-        p5_quest = await session.scalar(select(Quest).where(
-            Quest.character_id == character.id, Quest.quest_id == P5_ID
-        ))
+        p5_quest = await session.scalar(
+            select(Quest).where(Quest.character_id == character.id, Quest.quest_id == P5_ID)
+        )
         progress = dict(p5_quest.progress or {}) if p5_quest else {}
         if not progress.get("door_known"):
             return None
         quest = Quest(
-            character_id=character.id, quest_id=P6_ID, title=P6_TITLE,
-            status="active", step=1, content_version=P6_VERSION,
-            state_version=0, progress={"door_known": bool(progress.get("door_known"))},
+            character_id=character.id,
+            quest_id=P6_ID,
+            title=P6_TITLE,
+            status="active",
+            step=1,
+            content_version=P6_VERSION,
+            state_version=0,
+            progress={"door_known": bool(progress.get("door_known"))},
         )
         session.add(quest)
         await session.flush()
@@ -354,7 +428,11 @@ class P6Service:
         if await self._foreground(session, character.id):
             return None
         activity = await materialize(
-            session, character, P6_CONTENT_ID, VIGIA_PARTIDO, 10,
+            session,
+            character,
+            P6_CONTENT_ID,
+            VIGIA_PARTIDO,
+            10,
             flavor="O Vigia Partido ergue-se diante da estrutura central.",
             opening_log="⚔️ Vigia Partido · Nv.10 protege a Câmara do Poente.",
         )
@@ -366,34 +444,55 @@ class P6Service:
         return activity
 
     async def _grant_nucleus_once(self, session, character):
-        event = await session.scalar(select(RewardEvent).where(
-            RewardEvent.character_id == character.id,
-            RewardEvent.source_id == P6_NUCLEUS_SOURCE,
-        ).with_for_update())
+        event = await session.scalar(
+            select(RewardEvent)
+            .where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == P6_NUCLEUS_SOURCE,
+            )
+            .with_for_update()
+        )
         if event is not None:
             return
         event = RewardEvent(character_id=character.id, source_id=P6_NUCLEUS_SOURCE)
         session.add(event)
         await session.flush()
-        session.add(RewardComponent(
-            reward_event_id=event.id, kind="material", item_id=P6_NUCLEUS,
-            quantity=1, payload={"material_id": P6_NUCLEUS, "bound": True, "first_victory": True},
-        ))
+        session.add(
+            RewardComponent(
+                reward_event_id=event.id,
+                kind="material",
+                item_id=P6_NUCLEUS,
+                quantity=1,
+                payload={"material_id": P6_NUCLEUS, "bound": True, "first_victory": True},
+            )
+        )
         await self.road.deliver_material(
-            session, character, P6_NUCLEUS, 1,
-            f"{P6_NUCLEUS_SOURCE}:material", bound=True,
+            session,
+            character,
+            P6_NUCLEUS,
+            1,
+            f"{P6_NUCLEUS_SOURCE}:material",
+            bound=True,
         )
 
     async def _complete(self, session, character, quest, choice):
-        event = await session.scalar(select(RewardEvent).where(
-            RewardEvent.character_id == character.id,
-            RewardEvent.source_id == P6_REWARD_SOURCE,
-        ).with_for_update())
+        event = await session.scalar(
+            select(RewardEvent)
+            .where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == P6_REWARD_SOURCE,
+            )
+            .with_for_update()
+        )
         if event is None:
             name, slot = P6_CHOICES[choice]
             payload = materialize_equipment(
-                f"{P6_REWARD_SOURCE}:{character.id}:{choice}", "Épico", 10,
-                forced_name=name, forced_slot=slot, bound=True,
+                f"{P6_REWARD_SOURCE}:{character.id}:{choice}",
+                "Épico",
+                10,
+                forced_name=name,
+                forced_slot=slot,
+                bound=True,
             )
             event = RewardEvent(character_id=character.id, source_id=P6_REWARD_SOURCE)
             session.add(event)
@@ -402,29 +501,61 @@ class P6Service:
             character.crowns += 500
             components = [
                 RewardComponent(reward_event_id=event.id, kind="xp", item_id=None, quantity=14220),
-                RewardComponent(reward_event_id=event.id, kind="crowns", item_id=None, quantity=500),
-                RewardComponent(reward_event_id=event.id, kind="equipment", item_id=None, quantity=1,
-                                payload=payload | {"choice": choice}),
-                RewardComponent(reward_event_id=event.id, kind="material", item_id=P6_IRON,
-                                quantity=4, payload={"material_id": P6_IRON, "bound": True}),
-                RewardComponent(reward_event_id=event.id, kind="material", item_id=P6_RESIDUE,
-                                quantity=4, payload={"material_id": P6_RESIDUE, "bound": True}),
+                RewardComponent(
+                    reward_event_id=event.id, kind="crowns", item_id=None, quantity=500
+                ),
+                RewardComponent(
+                    reward_event_id=event.id,
+                    kind="equipment",
+                    item_id=None,
+                    quantity=1,
+                    payload=payload | {"choice": choice},
+                ),
+                RewardComponent(
+                    reward_event_id=event.id,
+                    kind="material",
+                    item_id=P6_IRON,
+                    quantity=4,
+                    payload={"material_id": P6_IRON, "bound": True},
+                ),
+                RewardComponent(
+                    reward_event_id=event.id,
+                    kind="material",
+                    item_id=P6_RESIDUE,
+                    quantity=4,
+                    payload={"material_id": P6_RESIDUE, "bound": True},
+                ),
             ]
             session.add_all(components)
-            await self.road.deliver_material(session, character, P6_IRON, 4,
-                                             f"{P6_REWARD_SOURCE}:material:{P6_IRON}", bound=True)
-            await self.road.deliver_material(session, character, P6_RESIDUE, 4,
-                                             f"{P6_REWARD_SOURCE}:material:{P6_RESIDUE}", bound=True)
+            await self.road.deliver_material(
+                session, character, P6_IRON, 4, f"{P6_REWARD_SOURCE}:material:{P6_IRON}", bound=True
+            )
+            await self.road.deliver_material(
+                session,
+                character,
+                P6_RESIDUE,
+                4,
+                f"{P6_REWARD_SOURCE}:material:{P6_RESIDUE}",
+                bound=True,
+            )
             source_key = f"{P6_REWARD_SOURCE}:equipment:{choice}"
             if await self.road._inventory_slots(session, character.id) < 60:
                 from asterion.application.equipment import equipment_instance_payload
+
                 item_id, instance = equipment_instance_payload(payload)
-                session.add(EquipmentItem(
-                    id=item_id, character_id=character.id, source_key=source_key,
-                    item_name=instance["item_name"], rarity=instance["rarity"],
-                    slot=instance["slot"], item_level=instance["item_level"],
-                    bound=True, payload=instance,
-                ))
+                session.add(
+                    EquipmentItem(
+                        id=item_id,
+                        character_id=character.id,
+                        source_key=source_key,
+                        item_name=instance["item_name"],
+                        rarity=instance["rarity"],
+                        slot=instance["slot"],
+                        item_level=instance["item_level"],
+                        bound=True,
+                        payload=instance,
+                    )
+                )
             else:
                 await self.road._pending(session, character.id, source_key, "equipment", payload)
 
@@ -440,24 +571,40 @@ class P6Service:
         quest.state_version += 1
         entry = await self._ensure_bestiary_entry(session, character.id)
         await self.bestiary.add_evidence(
-            session, entry, character.id, VIGIA_PARTIDO.creature_id,
-            "p6_completed", "campaign", 5,
+            session,
+            entry,
+            character.id,
+            VIGIA_PARTIDO.creature_id,
+            "p6_completed",
+            "campaign",
+            5,
         )
-        await self.bestiary.refresh_boss_mastery(
-            session, character.id, VIGIA_PARTIDO.creature_id
-        )
+        await self.bestiary.refresh_boss_mastery(session, character.id, VIGIA_PARTIDO.creature_id)
         await consolidate_character_level(session, character)
         await self._award_regional_completion_if_eligible(session, character.id, character.level)
+        from asterion.application.tdo_feats import reconcile_tdo_feats
+
+        await reconcile_tdo_feats(session, character)
 
     async def _award_regional_completion_if_eligible(self, session, character_id, level):
         if level < 10:
             return
-        required = {"tdo.location.estrada_das_cinzas", "tdo.location.refugio_do_ocaso",
-                    "tdo.location.charneca_da_fuligem", "tdo.location.bosque_calcinado",
-                    "tdo.location.ruinas_do_vigia"}
-        found = set((await session.scalars(select(LocationDiscovery.location_id).where(
-            LocationDiscovery.character_id == character_id,
-        ))).all())
+        required = {
+            "tdo.location.estrada_das_cinzas",
+            "tdo.location.refugio_do_ocaso",
+            "tdo.location.charneca_da_fuligem",
+            "tdo.location.bosque_calcinado",
+            "tdo.location.ruinas_do_vigia",
+        }
+        found = set(
+            (
+                await session.scalars(
+                    select(LocationDiscovery.location_id).where(
+                        LocationDiscovery.character_id == character_id,
+                    )
+                )
+            ).all()
+        )
         if required.issubset(found):
             await self._ensure_achievement(session, character_id, "feat.tdo.terras_do_ocaso")
 
@@ -465,22 +612,38 @@ class P6Service:
         progress = dict(quest.progress or {}) if quest else {}
         activity = combat = encounter = record = None
         try:
-            activity_id = UUID(progress.get("boss_activity_id")) if progress.get("boss_activity_id") else None
+            activity_id = (
+                UUID(progress.get("boss_activity_id")) if progress.get("boss_activity_id") else None
+            )
         except (TypeError, ValueError):
             activity_id = None
         if activity_id is not None:
-            activity = await session.scalar(select(GameActivity).where(
-                GameActivity.id == activity_id, GameActivity.character_id == character.id,
-                GameActivity.content_id == P6_CONTENT_ID,
-            ))
+            activity = await session.scalar(
+                select(GameActivity).where(
+                    GameActivity.id == activity_id,
+                    GameActivity.character_id == character.id,
+                    GameActivity.content_id == P6_CONTENT_ID,
+                )
+            )
             if activity is not None:
-                row = (await session.execute(select(Encounter, CombatRecord).join(CombatRecord).where(
-                    Encounter.game_activity_id == activity.id,
-                ))).one_or_none()
+                row = (
+                    await session.execute(
+                        select(Encounter, CombatRecord)
+                        .join(CombatRecord)
+                        .where(
+                            Encounter.game_activity_id == activity.id,
+                        )
+                    )
+                ).one_or_none()
                 if row:
                     encounter, record = row
                     if activity.status == "active":
-                        combat = decode(record.snapshot, record.id, activity.ruleset_version, activity.state_version)
+                        combat = decode(
+                            record.snapshot,
+                            record.id,
+                            activity.ruleset_version,
+                            activity.state_version,
+                        )
         if requested_kind is not None:
             kind = requested_kind
         elif quest is None:
@@ -490,17 +653,35 @@ class P6Service:
         elif combat is not None:
             kind = "combat"
         elif quest.step == 5 and progress.get("awaiting_retry"):
-            kind = "retry" if self._at(world, P6_CHAMBER) else "retry_chamber" if self._at(world, RUINS) else "retry_travel"
+            kind = (
+                "retry"
+                if self._at(world, P6_CHAMBER)
+                else "retry_chamber"
+                if self._at(world, RUINS)
+                else "retry_travel"
+            )
         elif quest.step == 1:
             kind = "cross_door" if self._at(world, RUINS) else "travel_ruins"
         elif quest.step == 2:
             kind = "enter_chamber" if self._at(world, RUINS) else "travel_chamber"
         elif quest.step in {3, 4}:
-            kind = "inspect_before" if quest.step == 3 and self._at(world, P6_CHAMBER) else "start_boss" if quest.step == 4 and self._at(world, P6_CHAMBER) else "travel_chamber"
+            kind = (
+                "inspect_before"
+                if quest.step == 3 and self._at(world, P6_CHAMBER)
+                else "start_boss"
+                if quest.step == 4 and self._at(world, P6_CHAMBER)
+                else "travel_chamber"
+            )
         elif quest.step in {6, 7}:
             kind = "inspect_after" if quest.step == 6 else "record_anchor"
         elif quest.step == 8:
-            kind = "reports" if self._at(world, REFUGE) else "return_refuge" if self._at(world, RUINS) else "return_ruins"
+            kind = (
+                "reports"
+                if self._at(world, REFUGE)
+                else "return_refuge"
+                if self._at(world, RUINS)
+                else "return_ruins"
+            )
         elif quest.step == 9:
             kind = "choose_reward"
         else:
@@ -508,31 +689,51 @@ class P6Service:
         options = quantities = ()
         budget = 0
         if activity is not None and activity.status == "active" and combat is not None:
-            options, quantities, budget = await consumable_state(session, character, combat, VIGIA_PARTIDO.category)
+            options, quantities, budget = await consumable_state(
+                session, character, combat, VIGIA_PARTIDO.category
+            )
         guidance = await self._journey_guidance(session, character)
         return P6View(
-            character_id=character.id, kind=kind, status=quest.status if quest else None,
-            step=quest.step if quest else None, state_version=quest.state_version if quest else 0,
-            progress=progress, location=world.location if world else "", level=character.level,
-            available=quest is not None and quest.status == "active", combat=combat,
+            character_id=character.id,
+            kind=kind,
+            status=quest.status if quest else None,
+            step=quest.step if quest else None,
+            state_version=quest.state_version if quest else 0,
+            progress=progress,
+            location=world.location if world else "",
+            level=character.level,
+            available=quest is not None and quest.status == "active",
+            combat=combat,
             activity_id=activity.id if activity else None,
             activity_state_version=activity.state_version if activity else None,
             activity_status=activity.status if activity else None,
             encounter_id=encounter.id if encounter else None,
-            combat_id=record.id if record else None, consumable_options=options,
-            consumable_quantities=quantities, consumable_budget_limit=budget,
-            guidance=guidance, xp=character.xp,
+            combat_id=record.id if record else None,
+            consumable_options=options,
+            consumable_quantities=quantities,
+            consumable_budget_limit=budget,
+            guidance=guidance,
+            xp=character.xp,
         )
 
     async def _journey_guidance(self, session, character):
         from asterion.domain.talents import TALENT_POINT_LEVELS
         from asterion.infrastructure.db.models import CharacterTalentChoice, ClassTrialState
+
         points_due = sum(level <= character.level for level in TALENT_POINT_LEVELS)
-        spent = await session.scalar(select(func.count()).select_from(
-            CharacterTalentChoice).where(CharacterTalentChoice.character_id == character.id)) or 0
+        spent = (
+            await session.scalar(
+                select(func.count())
+                .select_from(CharacterTalentChoice)
+                .where(CharacterTalentChoice.character_id == character.id)
+            )
+            or 0
+        )
         if spent < points_due:
             return "talents"
-        trial = await session.scalar(select(ClassTrialState).where(ClassTrialState.character_id == character.id))
+        trial = await session.scalar(
+            select(ClassTrialState).where(ClassTrialState.character_id == character.id)
+        )
         if trial is None or trial.status != "completed":
             return "trial"
         if character.selected_path is None:
@@ -540,82 +741,137 @@ class P6Service:
         return None
 
     async def _ensure_bestiary_entry(self, session, character_id):
-        entry = await session.scalar(select(BestiaryEntry).where(
-            BestiaryEntry.character_id == character_id,
-            BestiaryEntry.creature_id == VIGIA_PARTIDO.creature_id,
-        ).with_for_update())
-        if entry is None:
-            await self.bestiary.record(session, character_id, VIGIA_PARTIDO.creature_id,
-                                       observation_category="boss")
-            entry = await session.scalar(select(BestiaryEntry).where(
+        entry = await session.scalar(
+            select(BestiaryEntry)
+            .where(
                 BestiaryEntry.character_id == character_id,
                 BestiaryEntry.creature_id == VIGIA_PARTIDO.creature_id,
-            ).with_for_update())
+            )
+            .with_for_update()
+        )
+        if entry is None:
+            await self.bestiary.record(
+                session, character_id, VIGIA_PARTIDO.creature_id, observation_category="boss"
+            )
+            entry = await session.scalar(
+                select(BestiaryEntry)
+                .where(
+                    BestiaryEntry.character_id == character_id,
+                    BestiaryEntry.creature_id == VIGIA_PARTIDO.creature_id,
+                )
+                .with_for_update()
+            )
         return entry
 
     async def _ensure_location(self, session, character_id, location_id):
-        found = await session.scalar(select(LocationDiscovery).where(
-            LocationDiscovery.character_id == character_id,
-            LocationDiscovery.location_id == location_id,
-        ).with_for_update())
+        found = await session.scalar(
+            select(LocationDiscovery)
+            .where(
+                LocationDiscovery.character_id == character_id,
+                LocationDiscovery.location_id == location_id,
+            )
+            .with_for_update()
+        )
         if found is None:
             session.add(LocationDiscovery(character_id=character_id, location_id=location_id))
 
     async def _ensure_codex(self, session, character_id, entry_id):
-        found = await session.scalar(select(CodexEntry).where(
-            CodexEntry.character_id == character_id, CodexEntry.entry_id == entry_id,
-        ).with_for_update())
+        found = await session.scalar(
+            select(CodexEntry)
+            .where(
+                CodexEntry.character_id == character_id,
+                CodexEntry.entry_id == entry_id,
+            )
+            .with_for_update()
+        )
         if found is None:
             session.add(CodexEntry(character_id=character_id, entry_id=entry_id))
 
     async def _ensure_fragment(self, session, character_id, entry_id, fragment_id):
         await self._ensure_codex(session, character_id, entry_id)
-        found = await session.scalar(select(CodexFragment).where(
-            CodexFragment.character_id == character_id,
-            CodexFragment.entry_id == entry_id,
-            CodexFragment.fragment_id == fragment_id,
-        ).with_for_update())
+        found = await session.scalar(
+            select(CodexFragment)
+            .where(
+                CodexFragment.character_id == character_id,
+                CodexFragment.entry_id == entry_id,
+                CodexFragment.fragment_id == fragment_id,
+            )
+            .with_for_update()
+        )
         if found is None:
-            session.add(CodexFragment(character_id=character_id, entry_id=entry_id,
-                                      fragment_id=fragment_id))
+            session.add(
+                CodexFragment(character_id=character_id, entry_id=entry_id, fragment_id=fragment_id)
+            )
 
     async def _ensure_unlock(self, session, character_id, unlock_id):
-        found = await session.scalar(select(Unlock).where(
-            Unlock.character_id == character_id, Unlock.unlock_id == unlock_id,
-        ).with_for_update())
+        found = await session.scalar(
+            select(Unlock)
+            .where(
+                Unlock.character_id == character_id,
+                Unlock.unlock_id == unlock_id,
+            )
+            .with_for_update()
+        )
         if found is None:
             session.add(Unlock(character_id=character_id, unlock_id=unlock_id))
 
     async def _ensure_achievement(self, session, character_id, achievement_id):
-        found = await session.scalar(select(Achievement).where(
-            Achievement.character_id == character_id, Achievement.achievement_id == achievement_id,
-        ).with_for_update())
+        found = await session.scalar(
+            select(Achievement)
+            .where(
+                Achievement.character_id == character_id,
+                Achievement.achievement_id == achievement_id,
+            )
+            .with_for_update()
+        )
         if found is None:
             session.add(Achievement(character_id=character_id, achievement_id=achievement_id))
 
     async def _locked_state(self, session, actor):
-        character = await session.scalar(select(Character).where(
-            Character.telegram_id == actor, Character.server_id == self.server_id,
-        ).with_for_update())
+        character = await session.scalar(
+            select(Character)
+            .where(
+                Character.telegram_id == actor,
+                Character.server_id == self.server_id,
+            )
+            .with_for_update()
+        )
         if character is None:
             return None, None, None
-        quest = await session.scalar(select(Quest).where(
-            Quest.character_id == character.id, Quest.quest_id == P6_ID,
-        ).with_for_update())
-        world = await session.scalar(select(WorldState).where(
-            WorldState.character_id == character.id,
-        ).with_for_update())
+        quest = await session.scalar(
+            select(Quest)
+            .where(
+                Quest.character_id == character.id,
+                Quest.quest_id == P6_ID,
+            )
+            .with_for_update()
+        )
+        world = await session.scalar(
+            select(WorldState)
+            .where(
+                WorldState.character_id == character.id,
+            )
+            .with_for_update()
+        )
         return character, quest, world
 
     async def _foreground(self, session, character_id):
-        return await session.scalar(select(GameActivity).where(
-            GameActivity.character_id == character_id, GameActivity.status == "active",
-        ))
+        return await session.scalar(
+            select(GameActivity).where(
+                GameActivity.character_id == character_id,
+                GameActivity.status == "active",
+            )
+        )
 
     @staticmethod
     def _valid(quest, version, *, step=None):
-        return bool(quest and quest.status == "active" and quest.content_version == P6_VERSION
-                    and quest.state_version == version and (step is None or quest.step == step))
+        return bool(
+            quest
+            and quest.status == "active"
+            and quest.content_version == P6_VERSION
+            and quest.state_version == version
+            and (step is None or quest.step == step)
+        )
 
     @staticmethod
     def _at(world, location):

@@ -317,9 +317,7 @@ class DungeonService:
                 known_dungeons=tuple(known),
             )
 
-    async def detail(
-        self, actor: int, family_id: str = CRYPT_FAMILY_ID
-    ) -> DungeonView | None:
+    async def detail(self, actor: int, family_id: str = CRYPT_FAMILY_ID) -> DungeonView | None:
         async with self.sessions() as session:
             character = await self._character(session, actor)
             if character is None:
@@ -359,13 +357,9 @@ class DungeonService:
             if character is None:
                 return None
             family = DUNGEON_FAMILIES.get(family_id)
-            reason = await self._eligibility_reason(
-                session, character, family, difficulty
-            )
+            reason = await self._eligibility_reason(session, character, family, difficulty)
             if reason:
-                return self._view(
-                    character, kind="detail", reason=reason, family_id=family_id
-                )
+                return self._view(character, kind="detail", reason=reason, family_id=family_id)
             lobby = DungeonLobby(
                 id=uuid4(),
                 dungeon_family_id=family_id,
@@ -428,9 +422,7 @@ class DungeonService:
                 await session.scalars(
                     select(DungeonLobbyMember).where(
                         DungeonLobbyMember.lobby_id == lobby.id,
-                        DungeonLobbyMember.status.in_(
-                            ("joined", "matched", "confirmed")
-                        ),
+                        DungeonLobbyMember.status.in_(("joined", "matched", "confirmed")),
                     )
                 )
             ).all()
@@ -547,9 +539,7 @@ class DungeonService:
                     select(DungeonLobbyMember)
                     .where(
                         DungeonLobbyMember.lobby_id == lobby.id,
-                        DungeonLobbyMember.status.in_(
-                            {"joined", "queued", "matched", "confirmed"}
-                        ),
+                        DungeonLobbyMember.status.in_({"joined", "queued", "matched", "confirmed"}),
                     )
                     .order_by(DungeonLobbyMember.position)
                     .with_for_update()
@@ -628,9 +618,7 @@ class DungeonService:
                     allowed_lobby_id=lobby.id,
                 )
                 if reason:
-                    return await self._lobby_view(
-                        session, character, lobby, None, reason=reason
-                    )
+                    return await self._lobby_view(session, character, lobby, None, reason=reason)
             lobby.status = "confirming"
             lobby.confirmation_deadline = datetime.now(UTC) + READY_CHECK_LIMIT
             lobby.expires_at = lobby.confirmation_deadline
@@ -670,10 +658,12 @@ class DungeonService:
                     await self._cancel_lobby(session, lobby, expired=True)
                 return await self._view_for_lobby(session, character, lobby_id, kind="stale")
             member = await session.scalar(
-                select(DungeonLobbyMember).where(
+                select(DungeonLobbyMember)
+                .where(
                     DungeonLobbyMember.lobby_id == lobby.id,
                     DungeonLobbyMember.character_id == character.id,
-                ).with_for_update()
+                )
+                .with_for_update()
             )
             if member is None or member.status not in {"matched", "confirmed"}:
                 return await self._lobby_view(
@@ -777,9 +767,7 @@ class DungeonService:
                     select(DungeonLobbyMember)
                     .where(
                         DungeonLobbyMember.lobby_id == lobby.id,
-                        DungeonLobbyMember.status.in_(
-                            {"joined", "queued", "matched", "confirmed"}
-                        ),
+                        DungeonLobbyMember.status.in_({"joined", "queued", "matched", "confirmed"}),
                     )
                     .order_by(DungeonLobbyMember.position)
                     .with_for_update()
@@ -831,9 +819,7 @@ class DungeonService:
                     select(DungeonLobbyMember)
                     .where(
                         DungeonLobbyMember.lobby_id == lobby.id,
-                        DungeonLobbyMember.status.in_(
-                            {"joined", "queued", "matched", "confirmed"}
-                        ),
+                        DungeonLobbyMember.status.in_({"joined", "queued", "matched", "confirmed"}),
                     )
                     .order_by(DungeonLobbyMember.position)
                     .with_for_update()
@@ -947,13 +933,9 @@ class DungeonService:
                 difficulty not in DIFFICULTIES
                 or world is None
                 or world.location != family.entry_location
-                or not await self._has_unlock(
-                    session, character.id, family.discovery_unlock
-                )
+                or not await self._has_unlock(session, character.id, family.discovery_unlock)
             ):
-                return self._view(
-                    character, kind="detail", reason="gate", family_id=family_id
-                )
+                return self._view(character, kind="detail", reason="gate", family_id=family_id)
             stable = await self._has_unlock(
                 session, character.id, family.first_clear_prefix + "stable"
             )
@@ -969,8 +951,11 @@ class DungeonService:
             )
             if gates.get(difficulty) != "available":
                 return self._view(
-                    character, kind="detail", difficulty_gates=tuple(gates.items()),
-                    reason="gate", family_id=family.family_id
+                    character,
+                    kind="detail",
+                    difficulty_gates=tuple(gates.items()),
+                    reason="gate",
+                    family_id=family.family_id,
                 )
             active_activity = await session.scalar(
                 select(GameActivity.id)
@@ -998,9 +983,7 @@ class DungeonService:
                 ruleset_version=family.ruleset_version,
                 content_version=family.content_version,
                 reference_level=(
-                    family.reference_level
-                    if difficulty != "rupture"
-                    else profile.reference_level
+                    family.reference_level if difficulty != "rupture" else profile.reference_level
                 ),
                 initial_group_size=1,
                 current_encounter_ordinal=1,
@@ -1095,12 +1078,8 @@ class DungeonService:
                     .join(DungeonLobby, DungeonLobby.id == DungeonLobbyMember.lobby_id)
                     .where(
                         DungeonLobbyMember.character_id == character.id,
-                        DungeonLobbyMember.status.in_(
-                            ("joined", "queued", "matched", "confirmed")
-                        ),
-                        DungeonLobby.status.in_(
-                            ("forming", "confirming")
-                        ),
+                        DungeonLobbyMember.status.in_(("joined", "queued", "matched", "confirmed")),
+                        DungeonLobby.status.in_(("forming", "confirming")),
                     )
                     .order_by(DungeonLobby.created_at.desc())
                     .with_for_update(of=DungeonLobbyMember)
@@ -1208,9 +1187,7 @@ class DungeonService:
                 (
                     await session.scalars(
                         select(Character)
-                        .where(
-                            Character.id.in_(row.character_id for row in run_members)
-                        )
+                        .where(Character.id.in_(row.character_id for row in run_members))
                         .order_by(Character.id)
                         .with_for_update()
                     )
@@ -1245,9 +1222,7 @@ class DungeonService:
                 )
             primary_member = active_members[0]
             primary_character = character_by_id[primary_member.character_id]
-            equipment = equipment_configuration_from_data(
-                primary_member.combat_configuration
-            )
+            equipment = equipment_configuration_from_data(primary_member.combat_configuration)
             active_arts = party_specs[primary_member.position - 1].active_art_ids
             group = tuple(party_specs) if run.initial_group_size > 1 else None
             combat = (
@@ -1295,9 +1270,7 @@ class DungeonService:
                 ],
             }
             for run_member in run_members:
-                old_shell = await session.get(
-                    GameActivity, run_member.foreground_activity_id
-                )
+                old_shell = await session.get(GameActivity, run_member.foreground_activity_id)
                 if old_shell is not None and old_shell.status == "active":
                     old_shell.status = "completed"
             activity, _, record = await CombatRepository(session).create(
@@ -1430,15 +1403,17 @@ class DungeonService:
                 canonical_activity.ruleset_version,
                 canonical_activity.state_version,
             )
-            actor_key = (
-                f"member_{member.position}"
-                if run.initial_group_size > 1
-                else "player"
-            )
+            actor_key = f"member_{member.position}" if run.initial_group_size > 1 else "player"
             if active_player_key(state) != actor_key:
                 return await self._run_view(
-                    session, character, run, member,
-                    activity=activity, combat=state, record=record, encounter=encounter,
+                    session,
+                    character,
+                    run,
+                    member,
+                    activity=activity,
+                    combat=state,
+                    record=record,
+                    encounter=encounter,
                 )
             stack = None
             if consumable_id is not None:
@@ -1510,9 +1485,7 @@ class DungeonService:
             run.last_activity_at = datetime.now(UTC)
             for run_member in members:
                 fighter_key = (
-                    f"member_{run_member.position}"
-                    if run.initial_group_size > 1
-                    else "player"
+                    f"member_{run_member.position}" if run.initial_group_size > 1 else "player"
                 )
                 fighter = updated.fighters.get(fighter_key)
                 if fighter is None:
@@ -1528,14 +1501,26 @@ class DungeonService:
             await self._record_combat_events(session, character, run, encounter, state, updated)
             if updated.result == "victory":
                 await self._encounter_victory(
-                    session, character, run, members, character_by_id,
-                    encounter, canonical_activity, updated
+                    session,
+                    character,
+                    run,
+                    members,
+                    character_by_id,
+                    encounter,
+                    canonical_activity,
+                    updated,
                 )
                 return await self._run_view(session, character, run, member)
             if updated.result == "defeat":
                 await self._encounter_defeat(
-                    session, character, run, members, character_by_id,
-                    encounter, canonical_activity, updated
+                    session,
+                    character,
+                    run,
+                    members,
+                    character_by_id,
+                    encounter,
+                    canonical_activity,
+                    updated,
                 )
                 return await self._run_view(session, character, run, member)
             return await self._run_view(
@@ -1552,7 +1537,7 @@ class DungeonService:
     @staticmethod
     def _record_contribution(member, before, after, actor_key, max_hp) -> None:
         """Accumulate objective useful actions; rewards use relative party bands."""
-        new_events = after.events[len(before.events):]
+        new_events = after.events[len(before.events) :]
         events = [event for event in new_events if event.actor == actor_key and not event.internal]
         if not events:
             return
@@ -1687,17 +1672,12 @@ class DungeonService:
                     DungeonRunEncounter.status == "active",
                 )
             )
-            if (
-                run.state_version != state_version
-                or active_encounter is not None
-            ):
+            if run.state_version != state_version or active_encounter is not None:
                 return await self._run_view(session, character, run, member)
             progress = dict(run.progress or {})
             votes = set(progress.get("abandon_votes", ()))
             votes.add(str(character.id))
-            participant_ids = {
-                str(row.character_id) for row in members if row.status != "left"
-            }
+            participant_ids = {str(row.character_id) for row in members if row.status != "left"}
             if votes != participant_ids:
                 progress["abandon_votes"] = sorted(votes)
                 run.progress = progress
@@ -1706,22 +1686,16 @@ class DungeonService:
                     shell = await session.get(GameActivity, run_member.foreground_activity_id)
                     if shell is not None and shell.status == "active":
                         shell.state_version = run.state_version
-                return await self._run_view(
-                    session, character, run, member, kind="abandon_pending"
-                )
+                return await self._run_view(session, character, run, member, kind="abandon_pending")
             for run_member in members:
                 if run_member.status == "left":
                     continue
                 run_member.status = "left"
-                await self._refund_vigor(
-                    character_by_id[run_member.character_id], run_member
-                )
+                await self._refund_vigor(character_by_id[run_member.character_id], run_member)
                 shell = await session.get(GameActivity, run_member.foreground_activity_id)
                 if shell is not None and shell.status == "active":
                     shell.status = "failed"
-                await self._return_to_entry(
-                    session, run_member.character_id, run.dungeon_family_id
-                )
+                await self._return_to_entry(session, run_member.character_id, run.dungeon_family_id)
             run.status = "failed"
             run.failed_at = datetime.now(UTC)
             run.state_version += 1
@@ -1732,8 +1706,7 @@ class DungeonService:
             return await self._run_view(session, character, run, member, kind="failed")
 
     async def _encounter_victory(
-        self, session, character, run, members, character_by_id,
-        encounter, activity, combat
+        self, session, character, run, members, character_by_id, encounter, activity, combat
     ) -> None:
         ordinal = encounter.encounter_ordinal
         for participant in members:
@@ -1767,12 +1740,13 @@ class DungeonService:
                         await self._grant_boss_milestone(
                             session, participant_character, run, spec.creature.creature_id
                         )
-                        await self._refresh_crypt_boss_mastery(
-                            session, participant_character.id
-                        )
+                        await self._refresh_crypt_boss_mastery(session, participant_character.id)
                     elif spec.creature.creature_id == "custodio_primeiro_selo":
                         await self._grant_boss_milestone(
-                            session, participant_character, run, spec.creature.creature_id,
+                            session,
+                            participant_character,
+                            run,
+                            spec.creature.creature_id,
                             fixed_xp=474,
                         )
         encounter.status = "completed"
@@ -1796,9 +1770,7 @@ class DungeonService:
         progress["retry_available"] = False
         run.progress = progress
         if ordinal == 5:
-            await self._settle_run(
-                session, character, run, members, character_by_id
-            )
+            await self._settle_run(session, character, run, members, character_by_id)
             for participant in members:
                 shell = await session.get(GameActivity, participant.foreground_activity_id)
                 if shell is not None and shell.status == "active":
@@ -1816,8 +1788,7 @@ class DungeonService:
         await self._create_lobby_activity(session, character, run)
 
     async def _encounter_defeat(
-        self, session, character, run, members, character_by_id,
-        encounter, activity, combat
+        self, session, character, run, members, character_by_id, encounter, activity, combat
     ) -> None:
         for participant in members:
             participant_character = character_by_id[participant.character_id]
@@ -1840,9 +1811,7 @@ class DungeonService:
                 if shell is not None and shell.status == "active":
                     shell.status = "failed"
                 participant.status = "left"
-                await self._refund_vigor(
-                    character_by_id[participant.character_id], participant
-                )
+                await self._refund_vigor(character_by_id[participant.character_id], participant)
                 await self._return_to_entry(
                     session, participant.character_id, run.dungeon_family_id
                 )
@@ -1880,18 +1849,14 @@ class DungeonService:
             return D("0.25")
         return D(0)
 
-    async def _settle_run(
-        self, session, character, run, members, character_by_id
-    ) -> None:
+    async def _settle_run(self, session, character, run, members, character_by_id) -> None:
         family = _family(run.dungeon_family_id)
         root_source = family.reward_prefix + run.id.hex
         progress = dict(run.progress or {})
         reward_lines_by_character = dict(progress.get("reward_lines_by_character", {}))
         first_clear_by_character = dict(progress.get("first_clear_by_character", {}))
         participation_by_character = dict(progress.get("participation_by_character", {}))
-        consumed_vigor = {
-            str(row.character_id): row.vigor_reserved for row in members
-        }
+        consumed_vigor = {str(row.character_id): row.vigor_reserved for row in members}
         raw_internal_rewards = tuple(progress.get("internal_rewards", ()))
         profile = DIFFICULTIES[run.difficulty]
         for member in members:
@@ -1918,9 +1883,7 @@ class DungeonService:
             if event is not None:
                 continue
             first_clear_id = family.first_clear_prefix + run.difficulty
-            first_clear = not await self._has_unlock(
-                session, character.id, first_clear_id
-            )
+            first_clear = not await self._has_unlock(session, character.id, first_clear_id)
             completion_xp = dungeon_completion_xp(
                 run.reference_level, run.difficulty, first_clear=first_clear
             )
@@ -1973,9 +1936,7 @@ class DungeonService:
             for material_id, quantity in sorted(material_counts.items()):
                 material_source = f"{source}:material:{material_id}"
                 if len(material_source) > 96:
-                    material_digest = hashlib.sha256(
-                        material_id.encode("utf-8")
-                    ).hexdigest()[:16]
+                    material_digest = hashlib.sha256(material_id.encode("utf-8")).hexdigest()[:16]
                     material_source = f"{source}:m:{material_digest}"
                 components.append(
                     RewardComponent(
@@ -2042,12 +2003,8 @@ class DungeonService:
                         payload=rune_payload,
                     )
                 )
-                await self._deliver_rune(
-                    session, character.id, f"{source}:rune", rune_payload
-                )
-            has_recipe = await self._has_unlock(
-                session, character.id, family.recipe_unlock
-            )
+                await self._deliver_rune(session, character.id, f"{source}:rune", rune_payload)
+            has_recipe = await self._has_unlock(session, character.id, family.recipe_unlock)
             recipe_revealed = (
                 not has_recipe
                 and stable_draw(member_seed, "recipe.discovery", 10_000)
@@ -2089,6 +2046,9 @@ class DungeonService:
                 family=family,
             )
             await consolidate_character_level(session, character)
+            from asterion.application.tdo_feats import reconcile_tdo_feats
+
+            await reconcile_tdo_feats(session, character)
         progress.update(
             internal_xp=0,
             internal_rewards=[],
@@ -2226,9 +2186,7 @@ class DungeonService:
         )
 
     async def _refresh_crypt_boss_mastery(self, session, character_id):
-        if not await self._has_unlock(
-            session, character_id, CRYPT_FIRST_CLEAR_PREFIX + "stable"
-        ):
+        if not await self._has_unlock(session, character_id, CRYPT_FIRST_CLEAR_PREFIX + "stable"):
             return
         entry = await session.scalar(
             select(BestiaryEntry)
@@ -2290,9 +2248,7 @@ class DungeonService:
         legacy_event_cursor = progress.get("event_cursor", 0) if group_size == 1 else 0
         legacy_mechanic_cursor = progress.get("mechanic_cursor", 0) if group_size == 1 else 0
         cursor = int(cursor_data.get("event", legacy_event_cursor))
-        mechanic_cursor = int(
-            cursor_data.get("mechanic", legacy_mechanic_cursor)
-        )
+        mechanic_cursor = int(cursor_data.get("mechanic", legacy_mechanic_cursor))
         if cursor > len(after.events):
             cursor = 0
         mechanic_events = getattr(after, "mechanic_events", ())
@@ -2305,11 +2261,7 @@ class DungeonService:
             "enemy",
         )
         boss = after.fighters.get(boss_key) if encounter.encounter_ordinal == 5 else None
-        boss_creature_id = (
-            "sem_nome"
-            if family_id == CRYPT_FAMILY_ID
-            else "custodio_primeiro_selo"
-        )
+        boss_creature_id = "sem_nome" if family_id == CRYPT_FAMILY_ID else "custodio_primeiro_selo"
         for event in after.events[cursor:]:
             if boss is not None:
                 for fighter_id, hp in event.fighter_hp_after:
@@ -2374,13 +2326,21 @@ class DungeonService:
         for event in mechanic_events[mechanic_cursor:]:
             if event.action == "phase:galleries.order_of_containment":
                 await self._add_bestiary_evidence(
-                    session, character.id, boss_creature_id,
-                    "mechanic:fragmentos_ativos", "mechanic", 5,
+                    session,
+                    character.id,
+                    boss_creature_id,
+                    "mechanic:fragmentos_ativos",
+                    "mechanic",
+                    5,
                 )
             elif event.action == "phase:galleries.last_order":
                 await self._add_bestiary_evidence(
-                    session, character.id, boss_creature_id,
-                    "phase:ultima_ordem", "phase", 5,
+                    session,
+                    character.id,
+                    boss_creature_id,
+                    "phase:ultima_ordem",
+                    "phase",
+                    5,
                 )
         member_cursors[str(character.id)] = {
             "event": len(after.events),
@@ -2388,9 +2348,7 @@ class DungeonService:
         }
         progress.update(member_event_cursors=member_cursors)
         if group_size == 1:
-            progress.update(
-                event_cursor=len(after.events), mechanic_cursor=len(mechanic_events)
-            )
+            progress.update(event_cursor=len(after.events), mechanic_cursor=len(mechanic_events))
         encounter.progress = progress
         if encounter.encounter_ordinal == 5:
             if family_id == CRYPT_FAMILY_ID:
@@ -2526,9 +2484,7 @@ class DungeonService:
             return "gate"
         if not await self._has_unlock(session, character.id, family.discovery_unlock):
             return "discovery"
-        stable = await self._has_unlock(
-            session, character.id, family.first_clear_prefix + "stable"
-        )
+        stable = await self._has_unlock(session, character.id, family.first_clear_prefix + "stable")
         fractured = await self._has_unlock(
             session, character.id, family.first_clear_prefix + "fractured"
         )
@@ -2558,9 +2514,7 @@ class DungeonService:
             return "vigor"
         lobby_membership = select(DungeonLobbyMember.character_id).where(
             DungeonLobbyMember.character_id == character.id,
-            DungeonLobbyMember.status.in_(
-                ("invited", "joined", "queued", "matched", "confirmed")
-            ),
+            DungeonLobbyMember.status.in_(("invited", "joined", "queued", "matched", "confirmed")),
         )
         if allowed_lobby_id is not None:
             lobby_membership = lobby_membership.where(
@@ -2596,9 +2550,7 @@ class DungeonService:
                 .join(Character, Character.id == DungeonLobbyMember.character_id)
                 .where(
                     DungeonLobbyMember.lobby_id == lobby.id,
-                    DungeonLobbyMember.status.in_(
-                        {"joined", "queued", "matched", "confirmed"}
-                    ),
+                    DungeonLobbyMember.status.in_({"joined", "queued", "matched", "confirmed"}),
                 )
                 .order_by(DungeonLobbyMember.position)
             )
@@ -2615,8 +2567,10 @@ class DungeonService:
             for lobby_member, member_character in rows
         )
         if kind is None:
-            kind = "confirming" if lobby.status == "confirming" else (
-                "queue" if lobby.mode == "matchmaking" else "lobby"
+            kind = (
+                "confirming"
+                if lobby.status == "confirming"
+                else ("queue" if lobby.mode == "matchmaking" else "lobby")
             )
         view = self._view(
             character,
@@ -2750,9 +2704,7 @@ class DungeonService:
             ruleset_version=family.ruleset_version,
             content_version=family.content_version,
             reference_level=(
-                family.reference_level
-                if lobby.difficulty != "rupture"
-                else profile.reference_level
+                family.reference_level if lobby.difficulty != "rupture" else profile.reference_level
             ),
             initial_group_size=len(ordered_members),
             current_encounter_ordinal=1,
@@ -2775,9 +2727,7 @@ class DungeonService:
             shell.state_version = run.state_version
             shell.ruleset_version = family.ruleset_version
             world = await session.scalar(
-                select(WorldState)
-                .where(WorldState.character_id == character.id)
-                .with_for_update()
+                select(WorldState).where(WorldState.character_id == character.id).with_for_update()
             )
             if world is not None:
                 world.region = REGION
@@ -3007,9 +2957,7 @@ class DungeonService:
             character_name=character.name,
             level=character.level,
             location=(
-                family.name
-                if run is not None and run.status == "active"
-                else self._location(None)
+                family.name if run is not None and run.status == "active" else self._location(None)
             ),
             hp=D(character.hp),
             max_hp=D(character.max_hp),
@@ -3092,15 +3040,11 @@ class DungeonService:
             if run_member.status == "left":
                 continue
             run_member.status = "left"
-            await self._refund_vigor(
-                character_by_id[run_member.character_id], run_member
-            )
+            await self._refund_vigor(character_by_id[run_member.character_id], run_member)
             shell = await session.get(GameActivity, run_member.foreground_activity_id)
             if shell is not None and shell.status == "active":
                 shell.status = "failed"
-            await self._return_to_entry(
-                session, run_member.character_id, run.dungeon_family_id
-            )
+            await self._return_to_entry(session, run_member.character_id, run.dungeon_family_id)
 
     async def _refund_vigor(self, character, member):
         if member.vigor_refunded or member.vigor_reserved <= 0:

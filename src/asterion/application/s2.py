@@ -173,11 +173,7 @@ class S2Service:
             ):
                 return await self._view(session, character, quest, world)
             if reaccept:
-                if (
-                    quest is None
-                    or quest.status != "abandoned"
-                    or quest.state_version != version
-                ):
+                if quest is None or quest.status != "abandoned" or quest.state_version != version:
                     return await self._view(session, character, quest, world)
                 quest.status = "active"
                 quest.step = 1
@@ -230,9 +226,7 @@ class S2Service:
             quest.state_version += 1
             return await self._view(session, character, quest, world)
 
-    async def examine_vestige(
-        self, actor: int, vestige_id: str, version: int
-    ) -> S2View | None:
+    async def examine_vestige(self, actor: int, vestige_id: str, version: int) -> S2View | None:
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor)
             if character is None or quest is None:
@@ -262,9 +256,7 @@ class S2Service:
                     quest.progress = {
                         **(quest.progress or {}),
                         "vestiges": [
-                            item
-                            for item in S2_VESTIGE_IDS
-                            if item in vestiges - {vestige_id}
+                            item for item in S2_VESTIGE_IDS if item in vestiges - {vestige_id}
                         ],
                     }
                     return await self._view(session, character, quest, world)
@@ -372,8 +364,7 @@ class S2Service:
                     notice = self._consumable_rejection_notice(combat, budget)
                     return replace(
                         current,
-                        consumable_notice=notice
-                        or "⚠️ Consumível · Não está mais disponível.",
+                        consumable_notice=notice or "⚠️ Consumível · Não está mais disponível.",
                     )
                 stack.quantity -= 1
 
@@ -416,10 +407,8 @@ class S2Service:
                     observation_category="common",
                 )
                 await self._normalize_character_hp(session, character)
-                recovery_brazier, recovery_location = (
-                    await self.road.recover_normal_pve_defeat(
-                        session, character, CHARNECA_LOCATION, world
-                    )
+                recovery_brazier, recovery_location = await self.road.recover_normal_pve_defeat(
+                    session, character, CHARNECA_LOCATION, world
                 )
                 progress.update(
                     encounter_result="defeat",
@@ -488,9 +477,7 @@ class S2Service:
 
             item = consumable_definition(item_id or "")
             item_options = tuple(
-                option
-                for option in current.consumable_options
-                if option.item_id == item_id
+                option for option in current.consumable_options if option.item_id == item_id
             )
             if item is None or not item_options:
                 return replace(
@@ -500,9 +487,7 @@ class S2Service:
                 )
             if screen == "choose_item":
                 if item.family == ConsumableFamily.DISPELLER:
-                    target_ids = tuple(
-                        dict.fromkeys(option.target_id for option in item_options)
-                    )
+                    target_ids = tuple(dict.fromkeys(option.target_id for option in item_options))
                     if len(target_ids) > 1:
                         return replace(
                             current,
@@ -514,16 +499,12 @@ class S2Service:
                     parent = "items"
                 else:
                     target_id, parent = "player", "items"
-                selected = tuple(
-                    option for option in item_options if option.target_id == target_id
-                )
+                selected = tuple(option for option in item_options if option.target_id == target_id)
                 return self._selection_after_target(
                     current, item, target_id, selected, parent=parent
                 )
             if screen == "choose_target" and item.family == ConsumableFamily.DISPELLER:
-                selected = tuple(
-                    option for option in item_options if option.target_id == target_id
-                )
+                selected = tuple(option for option in item_options if option.target_id == target_id)
                 if not selected:
                     return replace(
                         current,
@@ -534,9 +515,7 @@ class S2Service:
                     current, item, target_id, selected, parent="targets"
                 )
             if screen == "targets" and item.family == ConsumableFamily.DISPELLER:
-                target_ids = tuple(
-                    dict.fromkeys(option.target_id for option in item_options)
-                )
+                target_ids = tuple(dict.fromkeys(option.target_id for option in item_options))
                 if len(target_ids) > 1:
                     return replace(
                         current,
@@ -710,6 +689,9 @@ class S2Service:
                 "codex_recorded": True,
             }
             quest.state_version += 1
+            from asterion.application.tdo_feats import reconcile_tdo_feats
+
+            await reconcile_tdo_feats(session, character)
             if character.tracked_secondary_quest_id == S2_ID:
                 character.tracked_secondary_quest_id = None
             return await self._view(session, character, quest, world)
@@ -719,14 +701,10 @@ class S2Service:
             character, quest, world = await self._locked_state(session, actor)
             if character is None or quest is None:
                 return None
-            if not self._valid(quest, version) or await self._foreground(
-                session, character.id
-            ):
+            if not self._valid(quest, version) or await self._foreground(session, character.id):
                 return await self._view(session, character, quest, world)
             character.tracked_secondary_quest_id = (
-                None
-                if character.tracked_secondary_quest_id == S2_ID
-                else S2_ID
+                None if character.tracked_secondary_quest_id == S2_ID else S2_ID
             )
             quest.state_version += 1
             return await self._view(session, character, quest, world)
@@ -747,9 +725,7 @@ class S2Service:
             character, quest, world = await self._locked_state(session, actor)
             if character is None or quest is None or world is None:
                 return None
-            if not self._valid(quest, version) or await self._foreground(
-                session, character.id
-            ):
+            if not self._valid(quest, version) or await self._foreground(session, character.id):
                 return await self._view(session, character, quest, world)
             quest.status = "abandoned"
             quest.step = 1
@@ -764,11 +740,9 @@ class S2Service:
             return None
         foreground = await self._foreground(session, character.id)
         if foreground is not None:
-            if (
-                foreground.content_id == S2_COMBAT_CONTENT_ID
-                and str(foreground.id)
-                == (quest.progress or {}).get("combat_activity_id")
-            ):
+            if foreground.content_id == S2_COMBAT_CONTENT_ID and str(foreground.id) == (
+                quest.progress or {}
+            ).get("combat_activity_id"):
                 return foreground
             return None
         configuration = await load_equipment_configuration(session, character)
@@ -972,9 +946,7 @@ class S2Service:
             available=available,
             reacceptable=reacceptable,
             tracked=bool(
-                quest
-                and quest.status == "active"
-                and character.tracked_secondary_quest_id == S2_ID
+                quest and quest.status == "active" and character.tracked_secondary_quest_id == S2_ID
             ),
             combat=combat,
             activity_id=activity.id if activity is not None else None,
@@ -1012,9 +984,7 @@ class S2Service:
             return None, None, None
         quest = await self._locked_quest(session, character.id)
         world = await session.scalar(
-            select(WorldState)
-            .where(WorldState.character_id == character.id)
-            .with_for_update()
+            select(WorldState).where(WorldState.character_id == character.id).with_for_update()
         )
         return character, quest, world
 
@@ -1058,9 +1028,7 @@ class S2Service:
         )
 
     async def _ensure(self, session, model, **values):
-        found = await session.scalar(
-            select(model).filter_by(**values).with_for_update()
-        )
+        found = await session.scalar(select(model).filter_by(**values).with_for_update())
         if found is not None:
             return found
         row = model(**values)
@@ -1080,8 +1048,4 @@ class S2Service:
 
     @staticmethod
     def _at(world, location):
-        return bool(
-            world is not None
-            and world.region == REGION
-            and world.location == location
-        )
+        return bool(world is not None and world.region == REGION and world.location == location)

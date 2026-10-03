@@ -1065,8 +1065,7 @@ def world_router(
             text = (
                 "🗺️ Aventura\n\nEstradas, ruínas e caminhos esquecidos se estendem por Asterion. "
                 "Escolha como deseja seguir sua jornada.\n\n🗺️ Mapa · Mundo\n📜 Missões · Objetivos\n"
-                "🦌 Caçadas · Combate\n⛓️ Masmorras · Desafios\n🧭 Desbravar · Exploração\n"
-                "🌍 Eventos Mundiais · Ocorrências\n⚔️ PvP · Competição"
+                "🦌 Caçadas · Combate\n⛓️ Masmorras · Desafios\n🧭 Desbravar · Exploração"
             )
             keyboard = [
                 [
@@ -1074,14 +1073,12 @@ def world_router(
                     InlineKeyboardButton(text="Missões", callback_data="world:missions"),
                 ],
                 [
-                    InlineKeyboardButton(text="Caçadas", callback_data="menu:noop"),
+                    InlineKeyboardButton(text="Caçadas", callback_data="road:hunt"),
                     InlineKeyboardButton(text="Masmorras", callback_data="dungeon:known"),
                 ],
                 [
-                    InlineKeyboardButton(text="Desbravar", callback_data="menu:noop"),
-                    InlineKeyboardButton(text="Eventos", callback_data="menu:noop"),
+                    InlineKeyboardButton(text="Desbravar", callback_data="road:explore"),
                 ],
-                [InlineKeyboardButton(text="PvP", callback_data="menu:noop")],
                 [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
             ]
             await present(
@@ -1969,9 +1966,5 @@ def world_router(
             return
         await query.answer()
         await show_menu(query)
-
-    @router.callback_query(F.data == "menu:noop")
-    async def noop(query: CallbackQuery):
-        await query.answer()
 
     return router

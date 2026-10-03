@@ -85,7 +85,9 @@ async def test_victory_creates_only_brazier_and_world_state(database):
     async with database[1]() as session:
         assert await session.scalar(select(Brazier)) is not None
         assert await session.scalar(select(WorldState)) is not None
-        assert await session.scalar(select(Achievement)) is None
+        achievement = await session.scalar(select(Achievement))
+        assert achievement is not None
+        assert achievement.achievement_id == "feat.tdo.cinzas_na_estrada"
         assert await session.scalar(select(Quest)) is None
 
 

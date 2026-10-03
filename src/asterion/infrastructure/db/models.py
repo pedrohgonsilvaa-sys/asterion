@@ -122,6 +122,180 @@ class Character(Base):
     )
 
 
+class CharacterProfile(Base):
+    """Optional player-authored character history and pending Telegram input."""
+
+    __tablename__ = "character_profiles"
+    __table_args__ = (
+        CheckConstraint("revision >= 0", name="ck_character_profile_revision"),
+        CheckConstraint(
+            "history IS NULL OR char_length(history) <= 1200",
+            name="ck_character_profile_history_length",
+        ),
+        CheckConstraint(
+            "history_prompt_message_id IS NULL OR history_prompt_message_id > 0",
+            name="ck_character_profile_prompt_message_id",
+        ),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    history: Mapped[str | None] = mapped_column(Text)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    history_prompt_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CharacterNotificationPreference(Base):
+    """Sparse per-character notification overrides; absent rows mean enabled."""
+
+    __tablename__ = "character_notification_preferences"
+    __table_args__ = (
+        CheckConstraint(
+            "category IN ('essentials','events','competitive','guild','market','chronicle')",
+            name="ck_character_notification_category",
+        ),
+        CheckConstraint("revision >= 0", name="ck_character_notification_revision"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    category: Mapped[str] = mapped_column(String(16), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CharacterNameReservation(Base):
+    """Normalized names kept unavailable after rename or deletion."""
+
+    __tablename__ = "character_name_reservations"
+    __table_args__ = (
+        CheckConstraint("normalized_name ~ '^[a-z]{3,16}$'", name="ck_name_reservation_name"),
+        CheckConstraint("source IN ('rename','deletion')", name="ck_name_reservation_source"),
+        Index("ix_name_reservation_expiry", "reserved_until"),
+    )
+
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    normalized_name: Mapped[str] = mapped_column(String(16), primary_key=True)
+    reserved_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    origin_character_id: Mapped[UUID | None] = mapped_column(Uuid)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CharacterRenameHistory(Base):
+    """Administrative identity history retained after character deletion."""
+
+    __tablename__ = "character_rename_history"
+    __table_args__ = (
+        CheckConstraint("origin IN ('player')", name="ck_character_rename_origin"),
+        Index("ix_character_rename_history", "character_id", "renamed_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    old_name: Mapped[str] = mapped_column(String(16), nullable=False)
+    new_name: Mapped[str] = mapped_column(String(16), nullable=False)
+    renamed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    origin: Mapped[str] = mapped_column(String(16), nullable=False, default="player")
+
+
+class CharacterDeletionRequest(Base):
+    """Deletion workflow history is retained after its Character row is purged."""
+
+    __tablename__ = "character_deletion_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('preview','pending','cancelled','completed')",
+            name="ck_character_deletion_status",
+        ),
+        CheckConstraint("revision >= 0", name="ck_character_deletion_revision"),
+        CheckConstraint("due_at > requested_at", name="ck_character_deletion_due"),
+        Index(
+            "uq_open_character_deletion",
+            "character_id",
+            unique=True,
+            postgresql_where=text("status IN ('preview','pending')"),
+        ),
+        Index(
+            "ix_due_character_deletions",
+            "due_at",
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    name_at_request: Mapped[str] = mapped_column(String(16), nullable=False)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+
+class CharacterAccountInput(Base):
+    """Durable, versioned state for an uncommitted character rename input."""
+
+    __tablename__ = "character_account_inputs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('awaiting','preview','invalid','unavailable')",
+            name="ck_character_account_input_status",
+        ),
+        CheckConstraint("revision >= 0", name="ck_character_account_input_revision"),
+        CheckConstraint("prompt_message_id > 0", name="ck_character_account_input_prompt"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    prompt_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    current_name: Mapped[str] = mapped_column(String(16), nullable=False)
+    new_name: Mapped[str | None] = mapped_column(String(16))
+    last_update_id: Mapped[int | None] = mapped_column(BigInteger)
+    error: Mapped[str | None] = mapped_column(String(16))
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CharacterPendingInput(Base):
+    """One persistent Telegram free-text prompt may be active per character."""
+
+    __tablename__ = "character_pending_inputs"
+    __table_args__ = (
+        CheckConstraint(
+            "input_kind IN ('history','doctrine_name','rename')",
+            name="ck_character_pending_input_kind",
+        ),
+        CheckConstraint("prompt_message_id > 0", name="ck_character_pending_input_prompt"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    input_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    prompt_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class Brazier(Base):
     __tablename__ = "braziers"
     __table_args__ = (UniqueConstraint("character_id", "brazier_id", name="uq_character_brazier"),)
@@ -141,6 +315,138 @@ class Achievement(Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
     achievement_id: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class CharacterCosmetic(Base):
+    """A permanent cosmetic entitlement earned by one character."""
+
+    __tablename__ = "character_cosmetics"
+    __table_args__ = (
+        PrimaryKeyConstraint("character_id", "cosmetic_id", name="pk_character_cosmetics"),
+        UniqueConstraint(
+            "character_id",
+            "cosmetic_type",
+            "cosmetic_id",
+            name="uq_character_cosmetic_type_id",
+        ),
+        CheckConstraint(
+            "cosmetic_type IN ('appearance','title','emblem','frame','banner')",
+            name="ck_character_cosmetic_type",
+        ),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    cosmetic_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    cosmetic_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_achievement_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    acquired_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CharacterCosmeticSelection(Base):
+    """At most one owned cosmetic selected for each presentation category."""
+
+    __tablename__ = "character_cosmetic_selections"
+    __table_args__ = (
+        PrimaryKeyConstraint(
+            "character_id", "cosmetic_type", name="pk_character_cosmetic_selection"
+        ),
+        ForeignKeyConstraint(
+            ["character_id", "cosmetic_type", "cosmetic_id"],
+            [
+                "character_cosmetics.character_id",
+                "character_cosmetics.cosmetic_type",
+                "character_cosmetics.cosmetic_id",
+            ],
+            ondelete="CASCADE",
+            name="fk_character_cosmetic_selection_owned",
+        ),
+        CheckConstraint(
+            "cosmetic_type IN ('appearance','title','emblem','frame','banner')",
+            name="ck_character_cosmetic_selection_type",
+        ),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    cosmetic_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    cosmetic_id: Mapped[str] = mapped_column(String(96), nullable=False)
+
+
+class CharacterDoctrine(Base):
+    """A saved reference-based character combat configuration."""
+
+    __tablename__ = "character_doctrines"
+    __table_args__ = (
+        UniqueConstraint("id", "character_id", name="uq_character_doctrine_owner"),
+        Index(
+            "uq_character_doctrine_name",
+            "character_id",
+            text("lower(name)"),
+            unique=True,
+        ),
+        CheckConstraint("char_length(name) BETWEEN 1 AND 40", name="ck_doctrine_name_length"),
+        CheckConstraint("revision >= 0", name="ck_doctrine_revision"),
+        CheckConstraint(
+            "jsonb_typeof(configuration) = 'object'",
+            name="ck_doctrine_configuration_object",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(40), nullable=False)
+    configuration: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CharacterDoctrineInput(Base):
+    """Durable, stale-safe Telegram name input for Doctrine creation/rename."""
+
+    __tablename__ = "character_doctrine_inputs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["doctrine_id", "character_id"],
+            ["character_doctrines.id", "character_doctrines.character_id"],
+            ondelete="CASCADE",
+            name="fk_character_doctrine_input_target",
+        ),
+        CheckConstraint("action IN ('create','rename')", name="ck_doctrine_input_action"),
+        CheckConstraint(
+            "(action = 'create' AND doctrine_id IS NULL) OR "
+            "(action = 'rename' AND doctrine_id IS NOT NULL)",
+            name="ck_doctrine_input_target",
+        ),
+        CheckConstraint("expected_revision >= 0", name="ck_doctrine_input_revision"),
+        CheckConstraint(
+            "expected_configuration_version >= 0", name="ck_doctrine_input_config_version"
+        ),
+        CheckConstraint("prompt_message_id > 0", name="ck_doctrine_input_prompt"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    action: Mapped[str] = mapped_column(String(8), nullable=False)
+    doctrine_id: Mapped[UUID | None] = mapped_column(Uuid)
+    expected_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    expected_configuration_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    prompt_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class Quest(Base):
@@ -262,19 +568,13 @@ class ClassTrialState(Base):
         String(16), nullable=False, default="circle", server_default="circle"
     )
     current_attempt_id: Mapped[UUID | None] = mapped_column(Uuid, unique=True)
-    stage_definition: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB(none_as_null=True)
-    )
-    attempt_state: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB(none_as_null=True)
-    )
+    stage_definition: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    attempt_state: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
 
 
 class MaterialStack(Base):
     __tablename__ = "material_stacks"
-    __table_args__ = (
-        CheckConstraint("quantity BETWEEN 0 AND 999", name="ck_material_quantity"),
-    )
+    __table_args__ = (CheckConstraint("quantity BETWEEN 0 AND 999", name="ck_material_quantity"),)
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
     material_id: Mapped[str] = mapped_column(String(96), nullable=False)
@@ -583,9 +883,7 @@ class DungeonLobby(Base):
     state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     confirmation_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    run_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("dungeon_runs.id", ondelete="SET NULL")
-    )
+    run_id: Mapped[UUID | None] = mapped_column(ForeignKey("dungeon_runs.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -191,10 +191,7 @@ class S6Service:
             character, quest, world = await self._locked_state(session, actor)
             if character is None or quest is None:
                 return None
-            if (
-                not self._valid(quest, version)
-                or await self._foreground(session, character.id)
-            ):
+            if not self._valid(quest, version) or await self._foreground(session, character.id):
                 return await self._view(session, character, quest, world)
             quest.status = "abandoned"
             quest.progress = {}
@@ -248,7 +245,12 @@ class S6Service:
                     progress.pop("abandoned_shelter_examined", None)
                     return await self._view(session, character, quest, world)
                 progress = dict(quest.progress or progress)
-            elif operation == "retry" and quest.step == 4 and progress.get("awaiting_retry") and self._at(world, RUINS):
+            elif (
+                operation == "retry"
+                and quest.step == 4
+                and progress.get("awaiting_retry")
+                and self._at(world, RUINS)
+            ):
                 progress["awaiting_retry"] = False
                 quest.progress = progress
                 if await self._materialize(session, character, quest) is None:
@@ -270,17 +272,29 @@ class S6Service:
             quest.state_version += 1
             return await self._view(session, character, quest, world)
 
-    async def action_combat(self, actor: int, activity_id: UUID, version: int, action: str | None = None, *, consumable_id=None, target_id=None, effect_id=None):
+    async def action_combat(
+        self,
+        actor: int,
+        activity_id: UUID,
+        version: int,
+        action: str | None = None,
+        *,
+        consumable_id=None,
+        target_id=None,
+        effect_id=None,
+    ):
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor)
             if character is None or quest is None:
                 return None
             activity = await session.scalar(
-                select(GameActivity).where(
+                select(GameActivity)
+                .where(
                     GameActivity.id == activity_id,
                     GameActivity.character_id == character.id,
                     GameActivity.content_id == S6_CONTENT_ID,
-                ).with_for_update()
+                )
+                .with_for_update()
             )
             if activity is None:
                 return None
@@ -296,9 +310,14 @@ class S6Service:
             ):
                 return current
             updated = await apply_action(
-                session, character, activity, action=action,
-                consumable_id=consumable_id, target_id=target_id,
-                effect_id=effect_id, category=FACELESS_CUSTODIAN.category,
+                session,
+                character,
+                activity,
+                action=action,
+                consumable_id=consumable_id,
+                target_id=target_id,
+                effect_id=effect_id,
+                category=FACELESS_CUSTODIAN.category,
             )
             if updated is None or updated.version == version:
                 return current
@@ -310,7 +329,9 @@ class S6Service:
             )
             if existing is None:
                 await self.bestiary.record(
-                    session, character.id, FACELESS_CUSTODIAN.creature_id,
+                    session,
+                    character.id,
+                    FACELESS_CUSTODIAN.creature_id,
                     observation_category="uncommon",
                 )
             await self.bestiary.record_combat_events(
@@ -322,24 +343,31 @@ class S6Service:
                 await self._grant_enemy_xp(session, character, activity)
                 await normalize_character_hp(session, character)
                 await self.bestiary.record(
-                    session, character.id, FACELESS_CUSTODIAN.creature_id,
-                    victory=True, observation_category="uncommon",
+                    session,
+                    character.id,
+                    FACELESS_CUSTODIAN.creature_id,
+                    victory=True,
+                    observation_category="uncommon",
                 )
                 progress.update(combat_result="victory", awaiting_retry=False)
                 quest.step = 5
             elif updated.result == "defeat":
                 activity.status = "failed"
                 await self.bestiary.record(
-                    session, character.id, FACELESS_CUSTODIAN.creature_id,
+                    session,
+                    character.id,
+                    FACELESS_CUSTODIAN.creature_id,
                     observation_category="uncommon",
                 )
                 brazier, location = await self.road.recover_normal_pve_defeat(
                     session, character, RUINS_LOCATION, world
                 )
                 progress.update(
-                    combat_result="defeat", awaiting_retry=True,
+                    combat_result="defeat",
+                    awaiting_retry=True,
                     defeat_activity_id=str(activity.id),
-                    recovery_brazier=brazier, recovery_location=location,
+                    recovery_brazier=brazier,
+                    recovery_location=location,
                 )
             quest.progress = progress
             quest.state_version += 1
@@ -351,24 +379,29 @@ class S6Service:
             if character is None or quest is None:
                 return None
             activity = await session.scalar(
-                select(GameActivity).where(
+                select(GameActivity)
+                .where(
                     GameActivity.id == activity_id,
                     GameActivity.character_id == character.id,
                     GameActivity.content_id == S6_CONTENT_ID,
-                ).with_for_update()
+                )
+                .with_for_update()
             )
             if activity is None:
                 return None
             current = await self._view(session, character, quest, world)
             foreground = await self._foreground(session, character.id)
             if (
-                quest.status != "active" or quest.step != 4
-                or activity.status != "active" or foreground is None
+                quest.status != "active"
+                or quest.step != 4
+                or activity.status != "active"
+                or foreground is None
                 or foreground.id != activity.id
             ):
                 return current
             if activity.state_version != version:
                 from dataclasses import replace
+
                 return replace(current, consumable_notice="⚠️ O combate foi atualizado.")
             return derive_consumable_selection(current, **kwargs)
 
@@ -376,7 +409,11 @@ class S6Service:
         if await self._foreground(session, character.id):
             return None
         activity = await materialize(
-            session, character, S6_CONTENT_ID, FACELESS_CUSTODIAN, 10,
+            session,
+            character,
+            S6_CONTENT_ID,
+            FACELESS_CUSTODIAN,
+            10,
             flavor="Marcas de passagem terminam diante de uma figura imóvel.",
             opening_log="🛡️ Custódio Sem Rosto · Nv.10 interrompe a trilha dos Peregrinos.",
         )
@@ -389,83 +426,125 @@ class S6Service:
 
     async def _grant_enemy_xp(self, session, character, activity):
         source = f"{S6_REWARD_SOURCE}:enemy-xp:{activity.id}"
-        event = await session.scalar(select(RewardEvent).where(
-            RewardEvent.character_id == character.id, RewardEvent.source_id == source
-        ).with_for_update())
+        event = await session.scalar(
+            select(RewardEvent)
+            .where(RewardEvent.character_id == character.id, RewardEvent.source_id == source)
+            .with_for_update()
+        )
         if event is not None:
             return
         amount = enemy_xp(10, "uncommon", player_level=character.level)
         event = RewardEvent(character_id=character.id, source_id=source)
         session.add(event)
         await session.flush()
-        session.add(RewardComponent(
-            reward_event_id=event.id, kind="enemy_xp",
-            item_id=FACELESS_CUSTODIAN.creature_id, quantity=amount,
-            payload={"enemy_level": 10, "category": "uncommon"},
-        ))
+        session.add(
+            RewardComponent(
+                reward_event_id=event.id,
+                kind="enemy_xp",
+                item_id=FACELESS_CUSTODIAN.creature_id,
+                quantity=amount,
+                payload={"enemy_level": 10, "category": "uncommon"},
+            )
+        )
         character.xp += amount
 
     async def _complete(self, session, character, quest):
-        event = await session.scalar(select(RewardEvent).where(
-            RewardEvent.character_id == character.id,
-            RewardEvent.source_id == S6_REWARD_SOURCE,
-        ).with_for_update())
+        event = await session.scalar(
+            select(RewardEvent)
+            .where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == S6_REWARD_SOURCE,
+            )
+            .with_for_update()
+        )
         if event is None:
             event = RewardEvent(character_id=character.id, source_id=S6_REWARD_SOURCE)
             session.add(event)
             await session.flush()
             character.xp += 7900
             character.crowns += 310
-            session.add_all([
-                RewardComponent(reward_event_id=event.id, kind="xp", item_id=None, quantity=7900),
-                RewardComponent(reward_event_id=event.id, kind="crowns", item_id=None, quantity=310),
-                *[
+            session.add_all(
+                [
                     RewardComponent(
-                        reward_event_id=event.id, kind="material", item_id=material_id,
-                        quantity=quantity, payload={"material_id": material_id, "bound": True},
-                    )
-                    for material_id, quantity in S6_MATERIALS
-                ],
-            ])
+                        reward_event_id=event.id, kind="xp", item_id=None, quantity=7900
+                    ),
+                    RewardComponent(
+                        reward_event_id=event.id, kind="crowns", item_id=None, quantity=310
+                    ),
+                    *[
+                        RewardComponent(
+                            reward_event_id=event.id,
+                            kind="material",
+                            item_id=material_id,
+                            quantity=quantity,
+                            payload={"material_id": material_id, "bound": True},
+                        )
+                        for material_id, quantity in S6_MATERIALS
+                    ],
+                ]
+            )
             for material_id, quantity in S6_MATERIALS:
                 await self.road.deliver_material(
-                    session, character, material_id, quantity,
-                    f"{S6_REWARD_SOURCE}:material:{material_id}", bound=True,
+                    session,
+                    character,
+                    material_id,
+                    quantity,
+                    f"{S6_REWARD_SOURCE}:material:{material_id}",
+                    bound=True,
                 )
         await self._ensure_codex_fragment(
             session, character.id, S6_CODEX_PEREGRINOS, S6_CODEX_FRAGMENT
         )
-        await self._ensure_codex_fragment(
-            session, character.id, S6_RUINS_CODEX, S6_RUINS_FRAGMENT
-        )
+        await self._ensure_codex_fragment(session, character.id, S6_RUINS_CODEX, S6_RUINS_FRAGMENT)
         quest.status = "completed"
-        quest.progress = {**(quest.progress or {}), "completed": True, "last_route_record_found": True}
+        quest.progress = {
+            **(quest.progress or {}),
+            "completed": True,
+            "last_route_record_found": True,
+        }
         quest.state_version += 1
         if character.tracked_secondary_quest_id == S6_ID:
             character.tracked_secondary_quest_id = None
         await consolidate_character_level(session, character)
+        from asterion.application.tdo_feats import reconcile_tdo_feats
+
+        await reconcile_tdo_feats(session, character)
 
     async def _view(self, session, character, quest, world, requested_kind=None, *, available=None):
         progress = dict(quest.progress or {}) if quest else {}
         activity = combat = encounter = record = None
         stored_id = None
         try:
-            stored_id = UUID(progress["combat_activity_id"]) if progress.get("combat_activity_id") else None
+            stored_id = (
+                UUID(progress["combat_activity_id"]) if progress.get("combat_activity_id") else None
+            )
         except (TypeError, ValueError):
             pass
         if stored_id is not None:
-            activity = await session.scalar(select(GameActivity).where(
-                GameActivity.id == stored_id, GameActivity.character_id == character.id,
-                GameActivity.content_id == S6_CONTENT_ID,
-            ))
+            activity = await session.scalar(
+                select(GameActivity).where(
+                    GameActivity.id == stored_id,
+                    GameActivity.character_id == character.id,
+                    GameActivity.content_id == S6_CONTENT_ID,
+                )
+            )
             if activity is not None:
-                pair = (await session.execute(select(Encounter, CombatRecord)
-                    .join(CombatRecord)
-                    .where(Encounter.game_activity_id == activity.id))).one_or_none()
+                pair = (
+                    await session.execute(
+                        select(Encounter, CombatRecord)
+                        .join(CombatRecord)
+                        .where(Encounter.game_activity_id == activity.id)
+                    )
+                ).one_or_none()
                 if pair:
                     encounter, record = pair
                     if activity.status == "active":
-                        combat = decode(record.snapshot, record.id, activity.ruleset_version, activity.state_version)
+                        combat = decode(
+                            record.snapshot,
+                            record.id,
+                            activity.ruleset_version,
+                            activity.state_version,
+                        )
         status = quest.status if quest else "unaccepted"
         eligible = await self._eligible(session, character)
         can_offer = bool(eligible and (quest is None or quest.status == "abandoned"))
@@ -504,81 +583,117 @@ class S6Service:
                 session, character, combat, FACELESS_CUSTODIAN.category
             )
         return S6View(
-            character_id=character.id, kind=kind, status=status,
+            character_id=character.id,
+            kind=kind,
+            status=status,
             step=quest.step if quest else 1,
             state_version=quest.state_version if quest else 0,
-            progress=progress, location=world.location if world else "",
+            progress=progress,
+            location=world.location if world else "",
             level=character.level,
             available=bool(available if available is not None else can_offer),
             reacceptable=bool(quest and quest.status == "abandoned" and eligible),
-            tracked=bool(quest and quest.status == "active" and character.tracked_secondary_quest_id == S6_ID),
-            combat=combat, activity_id=activity.id if activity else None,
+            tracked=bool(
+                quest and quest.status == "active" and character.tracked_secondary_quest_id == S6_ID
+            ),
+            combat=combat,
+            activity_id=activity.id if activity else None,
             activity_state_version=activity.state_version if activity else None,
             activity_status=activity.status if activity else None,
             encounter_id=encounter.id if encounter else None,
             combat_id=record.id if record else None,
-            consumable_options=options, consumable_quantities=quantities,
-            consumable_budget_limit=budget, xp=character.xp,
+            consumable_options=options,
+            consumable_quantities=quantities,
+            consumable_budget_limit=budget,
+            xp=character.xp,
         )
 
     async def _eligible(self, session, character):
         if character.level < 10:
             return False
-        completed = await session.scalar(select(Quest.id).where(
-            Quest.character_id == character.id, Quest.quest_id == "S2", Quest.status == "completed"
-        ))
-        p5_completed = await session.scalar(select(Quest.id).where(
-            Quest.character_id == character.id, Quest.quest_id == P5_ID, Quest.status == "completed"
-        ))
+        completed = await session.scalar(
+            select(Quest.id).where(
+                Quest.character_id == character.id,
+                Quest.quest_id == "S2",
+                Quest.status == "completed",
+            )
+        )
+        p5_completed = await session.scalar(
+            select(Quest.id).where(
+                Quest.character_id == character.id,
+                Quest.quest_id == P5_ID,
+                Quest.status == "completed",
+            )
+        )
         return bool(completed and p5_completed)
 
     async def _ensure_codex_fragment(self, session, character_id, entry_id, fragment_id):
-        if await session.scalar(select(CodexEntry.id).where(
-            CodexEntry.character_id == character_id, CodexEntry.entry_id == entry_id
-        )) is None:
+        if (
+            await session.scalar(
+                select(CodexEntry.id).where(
+                    CodexEntry.character_id == character_id, CodexEntry.entry_id == entry_id
+                )
+            )
+            is None
+        ):
             session.add(CodexEntry(character_id=character_id, entry_id=entry_id))
             await session.flush()
-        if await session.scalar(select(CodexFragment.id).where(
-            CodexFragment.character_id == character_id,
-            CodexFragment.entry_id == entry_id,
-            CodexFragment.fragment_id == fragment_id,
-        )) is None:
-            session.add(CodexFragment(
-                character_id=character_id, entry_id=entry_id, fragment_id=fragment_id
-            ))
+        if (
+            await session.scalar(
+                select(CodexFragment.id).where(
+                    CodexFragment.character_id == character_id,
+                    CodexFragment.entry_id == entry_id,
+                    CodexFragment.fragment_id == fragment_id,
+                )
+            )
+            is None
+        ):
+            session.add(
+                CodexFragment(character_id=character_id, entry_id=entry_id, fragment_id=fragment_id)
+            )
             await session.flush()
 
     async def _locked_state(self, session, actor):
-        character = await session.scalar(select(Character).where(
-            Character.telegram_id == actor, Character.server_id == self.server_id
-        ).with_for_update())
+        character = await session.scalar(
+            select(Character)
+            .where(Character.telegram_id == actor, Character.server_id == self.server_id)
+            .with_for_update()
+        )
         if character is None:
             return None, None, None
-        quest = await session.scalar(select(Quest).where(
-            Quest.character_id == character.id, Quest.quest_id == S6_ID
-        ).with_for_update())
-        world = await session.scalar(select(WorldState).where(
-            WorldState.character_id == character.id
-        ).with_for_update())
+        quest = await session.scalar(
+            select(Quest)
+            .where(Quest.character_id == character.id, Quest.quest_id == S6_ID)
+            .with_for_update()
+        )
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character.id).with_for_update()
+        )
         return character, quest, world
 
     async def _character(self, session, actor):
-        return await session.scalar(select(Character).where(
-            Character.telegram_id == actor, Character.server_id == self.server_id
-        ))
+        return await session.scalar(
+            select(Character).where(
+                Character.telegram_id == actor, Character.server_id == self.server_id
+            )
+        )
 
     async def _quest(self, session, character_id):
-        return await session.scalar(select(Quest).where(
-            Quest.character_id == character_id, Quest.quest_id == S6_ID
-        ))
+        return await session.scalar(
+            select(Quest).where(Quest.character_id == character_id, Quest.quest_id == S6_ID)
+        )
 
     async def _world(self, session, character_id):
-        return await session.scalar(select(WorldState).where(WorldState.character_id == character_id))
+        return await session.scalar(
+            select(WorldState).where(WorldState.character_id == character_id)
+        )
 
     async def _foreground(self, session, character_id):
-        return await session.scalar(select(GameActivity).where(
-            GameActivity.character_id == character_id, GameActivity.status == "active"
-        ))
+        return await session.scalar(
+            select(GameActivity).where(
+                GameActivity.character_id == character_id, GameActivity.status == "active"
+            )
+        )
 
     @staticmethod
     def _valid(quest, version, *, step=None):

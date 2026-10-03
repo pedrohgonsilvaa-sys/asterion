@@ -149,7 +149,9 @@ class WorldService:
                 if brazier is None or world is None:
                     return None
                 c.hp = c.max_hp
-                session.add(Achievement(character_id=c.id, achievement_id=ACHIEVEMENT_ID))
+                from asterion.application.tdo_feats import reconcile_tdo_feats
+
+                await reconcile_tdo_feats(session, c)
                 session.add(
                     Quest(
                         character_id=c.id,
