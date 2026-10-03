@@ -38,6 +38,7 @@ from asterion.infrastructure.db.models import (
     CharacterDoctrine,
     CharacterDoctrineInput,
     CharacterEquipmentSlot,
+    CharacterPendingInput,
     CharacterTalentChoice,
     ClassTrialState,
     EquipmentItem,
@@ -263,6 +264,13 @@ class DoctrineService:
                 )
                 if doctrine is None or doctrine.revision != expected_revision:
                     return False
+            lease = await session.scalar(
+                select(CharacterPendingInput)
+                .where(CharacterPendingInput.character_id == character.id)
+                .with_for_update()
+            )
+            if lease is not None and lease.input_kind != "doctrine_name":
+                return False
             state = await session.scalar(
                 select(CharacterDoctrineInput)
                 .where(CharacterDoctrineInput.character_id == character.id)
@@ -277,6 +285,17 @@ class DoctrineService:
             state.expected_configuration_version = expected_configuration_version
             state.prompt_message_id = prompt_message_id
             state.updated_at = datetime.now(UTC)
+            if lease is None:
+                session.add(
+                    CharacterPendingInput(
+                        character_id=character.id,
+                        input_kind="doctrine_name",
+                        prompt_message_id=prompt_message_id,
+                    )
+                )
+            else:
+                lease.prompt_message_id = prompt_message_id
+                lease.updated_at = datetime.now(UTC)
             return True
 
     async def save_name_reply(
@@ -294,8 +313,20 @@ class DoctrineService:
             )
             if state is None or state.prompt_message_id != prompt_message_id:
                 raise DoctrineRejected("stale_input")
+            lease = await session.scalar(
+                select(CharacterPendingInput)
+                .where(
+                    CharacterPendingInput.character_id == character.id,
+                    CharacterPendingInput.input_kind == "doctrine_name",
+                    CharacterPendingInput.prompt_message_id == prompt_message_id,
+                )
+                .with_for_update()
+            )
+            if lease is None:
+                raise DoctrineRejected("stale_input")
             if state.expected_configuration_version != character.combat_configuration_version:
                 await session.delete(state)
+                await session.delete(lease)
                 raise DoctrineRejected("stale_configuration")
             if state.action == "create":
                 rows = list(
@@ -309,6 +340,7 @@ class DoctrineService:
                 )
                 if len(rows) >= MAX_DOCTRINES:
                     await session.delete(state)
+                    await session.delete(lease)
                     raise DoctrineRejected("limit")
                 config = await self._current_configuration(session, character, lock_rows=True)
                 row = CharacterDoctrine(
@@ -326,16 +358,44 @@ class DoctrineService:
                 )
                 if row is None or row.revision != state.expected_revision:
                     await session.delete(state)
+                    await session.delete(lease)
                     raise DoctrineRejected("stale_doctrine")
                 row.name = name
                 row.revision += 1
                 row.updated_at = datetime.now(UTC)
             await session.delete(state)
+            await session.delete(lease)
             try:
                 await session.flush()
             except IntegrityError as exc:
                 raise DoctrineRejected("duplicate_name") from exc
             return DoctrineMutation(True, character.combat_configuration_version, row.id)
+
+    async def cancel_name_input(self, actor: int) -> bool:
+        async with self.sessions.begin() as session:
+            character = await self._lock_character(session, actor)
+            if character is None:
+                return False
+            state = await session.scalar(
+                select(CharacterDoctrineInput)
+                .where(CharacterDoctrineInput.character_id == character.id)
+                .with_for_update()
+            )
+            lease = await session.scalar(
+                select(CharacterPendingInput)
+                .where(
+                    CharacterPendingInput.character_id == character.id,
+                    CharacterPendingInput.input_kind == "doctrine_name",
+                )
+                .with_for_update()
+            )
+            if state is None and lease is None:
+                return False
+            if state is not None:
+                await session.delete(state)
+            if lease is not None:
+                await session.delete(lease)
+            return True
 
     async def overwrite_current(
         self,

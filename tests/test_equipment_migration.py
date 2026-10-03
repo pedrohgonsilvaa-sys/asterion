@@ -124,7 +124,7 @@ async def test_0009_equipment_upgrade_constraints_safe_downgrade_and_reupgrade(
         )
         await connection.run_sync(lambda sync: _migrate(sync, "head"))
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261002_0019"
+            "20261003_0020"
         )
         assert await _column_exists(
             connection, "characters", "combat_configuration_version"
@@ -205,7 +205,7 @@ async def test_0009_equipment_upgrade_constraints_safe_downgrade_and_reupgrade(
             text("SELECT equipment_item_id FROM character_equipment_slots WHERE slot='Principal'")
         ) == equipment_id
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261002_0019"
+            "20261003_0020"
         )
         await connection.execute(text("DELETE FROM character_equipment_slots"))
         await connection.run_sync(lambda sync: _migrate(sync, "20260924_0009", "downgrade"))
@@ -222,7 +222,7 @@ async def test_0009_equipment_upgrade_constraints_safe_downgrade_and_reupgrade(
         ) == equipment_id
         await connection.run_sync(lambda sync: _migrate(sync, "head"))
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261002_0019"
+            "20261003_0020"
         )
         assert await connection.scalar(
             text("SELECT combat_configuration_version FROM characters WHERE id=:id"),

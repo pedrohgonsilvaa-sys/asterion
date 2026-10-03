@@ -35,6 +35,7 @@ from asterion.infrastructure.db.models import (
     BestiaryEvidence,
     Character,
     CharacterCosmeticSelection,
+    CharacterPendingInput,
     CharacterProfile,
     CodexEntry,
     CodexFragment,
@@ -200,6 +201,23 @@ class CharacterSurfacesService:
                 await session.flush()
             if profile.revision != expected_revision:
                 return False
+            lease = await session.scalar(
+                select(CharacterPendingInput)
+                .where(CharacterPendingInput.character_id == character.id)
+                .with_for_update()
+            )
+            if lease is not None and lease.input_kind != "history":
+                return False
+            if lease is None:
+                lease = CharacterPendingInput(
+                    character_id=character.id,
+                    input_kind="history",
+                    prompt_message_id=prompt_message_id,
+                )
+                session.add(lease)
+            else:
+                lease.prompt_message_id = prompt_message_id
+                lease.updated_at = datetime.now(UTC)
             profile.history_prompt_message_id = prompt_message_id
             profile.updated_at = datetime.now(UTC)
             return True
@@ -215,10 +233,23 @@ class CharacterSurfacesService:
                 .with_for_update()
             )
             if profile is None or profile.history_prompt_message_id is None:
-                return False
-            profile.history_prompt_message_id = None
-            profile.updated_at = datetime.now(UTC)
-            return True
+                history_cleared = False
+            else:
+                profile.history_prompt_message_id = None
+                profile.updated_at = datetime.now(UTC)
+                history_cleared = True
+            lease = await session.scalar(
+                select(CharacterPendingInput)
+                .where(
+                    CharacterPendingInput.character_id == character.id,
+                    CharacterPendingInput.input_kind == "history",
+                )
+                .with_for_update()
+            )
+            if lease is not None:
+                await session.delete(lease)
+                return True
+            return history_cleared
 
     async def save_history(self, actor_id: int, prompt_message_id: int, raw_text: str) -> str:
         text = _clean_history(raw_text)
@@ -237,10 +268,22 @@ class CharacterSurfacesService:
             )
             if profile is None or profile.history_prompt_message_id != prompt_message_id:
                 return HistoryInputResult.STALE
+            lease = await session.scalar(
+                select(CharacterPendingInput)
+                .where(
+                    CharacterPendingInput.character_id == character.id,
+                    CharacterPendingInput.input_kind == "history",
+                    CharacterPendingInput.prompt_message_id == prompt_message_id,
+                )
+                .with_for_update()
+            )
+            if lease is None:
+                return HistoryInputResult.STALE
             profile.history = text
             profile.revision += 1
             profile.history_prompt_message_id = None
             profile.updated_at = datetime.now(UTC)
+            await session.delete(lease)
             return HistoryInputResult.SAVED
 
     async def knowledge(self, actor_id: int) -> KnowledgeView | None:

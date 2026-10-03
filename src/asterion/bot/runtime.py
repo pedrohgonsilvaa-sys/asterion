@@ -3,6 +3,7 @@ from functools import lru_cache
 
 from aiogram import Bot, Dispatcher
 
+from asterion.application.account import AccountService
 from asterion.application.active_arts import ActiveArtService
 from asterion.application.character_surfaces import CharacterSurfacesService
 from asterion.application.class_trials import ClassTrialService
@@ -58,6 +59,7 @@ from asterion.bot.s3_handlers import s3_router
 from asterion.bot.s4_handlers import s4_router
 from asterion.bot.s5_handlers import s5_router
 from asterion.bot.s6_handlers import s6_router
+from asterion.bot.settings_handlers import settings_router
 from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
 from asterion.domain.creation import NamePolicy
@@ -108,6 +110,14 @@ def get_bot_runtime() -> BotRuntime:
     character_surfaces = CharacterSurfacesService(SessionFactory, settings.server_id)
     cosmetics = CosmeticService(SessionFactory, settings.server_id)
     doctrines = DoctrineService(SessionFactory, settings.server_id)
+    account = AccountService(
+        SessionFactory,
+        settings.server_id,
+        NamePolicy(settings.blocked_character_names),
+    )
+    dispatcher.include_router(
+        settings_router(account, character_surfaces, settings.creation_images)
+    )
     dispatcher.include_router(
         character_surfaces_router(character_surfaces, settings.creation_images)
     )

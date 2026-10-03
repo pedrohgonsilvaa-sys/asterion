@@ -74,15 +74,8 @@ def render_world(view: WorldView) -> Screen:
     labels = [
         ("Aventura", "world:adventure"),
         ("Personagem", "character:root"),
-        ("Guilda", "menu:noop"),
-        ("Mercado", "menu:noop"),
         ("Códice", "knowledge:codex"),
-        ("Calendário", "menu:noop"),
-        ("Vínculos", "menu:noop"),
-        ("Classificação", "menu:noop"),
-        ("Benefícios", "menu:noop"),
-        ("Comunidade", "menu:noop"),
-        ("Configurações", "menu:noop"),
+        ("Configurações", "settings:root"),
     ]
     rows = [
         [InlineKeyboardButton(text=a, callback_data=b) for a, b in labels[i : i + 2]]

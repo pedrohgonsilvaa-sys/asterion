@@ -166,28 +166,12 @@ async def test_concurrent_confirmation_is_idempotent_across_devices(service, dat
         assert draft.step == "completed"
 
 
-async def test_name_race_has_one_winner_and_retry_preserves_choices(service, database, monkeypatch):
+async def test_name_race_has_one_winner_and_retry_preserves_choices(service, database):
     first, second = await asyncio.gather(ready(service, 1, "LUIKEN"), ready(service, 2, "luiken"))
-    original = service._name_allowed
-    arrived = 0
-    barrier = asyncio.Event()
-
-    async def both_checked_before_insert(session, name):
-        nonlocal arrived
-        allowed = await original(session, name)
-        assert allowed
-        arrived += 1
-        if arrived == 2:
-            barrier.set()
-        await asyncio.wait_for(barrier.wait(), timeout=10)
-        return allowed
-
-    with monkeypatch.context() as patch:
-        patch.setattr(service, "_name_allowed", both_checked_before_insert)
-        results = await asyncio.gather(
-            click(service, 1, first, "confirm"),
-            click(service, 2, second, "confirm"),
-        )
+    results = await asyncio.gather(
+        click(service, 1, first, "confirm"),
+        click(service, 2, second, "confirm"),
+    )
     assert sorted(result.step for result in results) == [PROLOGUE, "name"]
     loser_index = next(i for i, result in enumerate(results) if result.step == "name")
     loser = results[loser_index]

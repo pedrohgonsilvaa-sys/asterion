@@ -3,10 +3,11 @@
 from dataclasses import fields, replace
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.character_names import lock_character_name, name_available
 from asterion.domain.combat_math import resolve_combat_stats
 from asterion.domain.creation import (
     PROLOGUE,
@@ -104,12 +105,8 @@ class CreationService:
     async def _name_allowed(self, session: AsyncSession, name: str) -> bool:
         if not self.policy.accepts(name):
             return False
-        return not await session.scalar(
-            select(Character.id).where(
-                Character.server_id == self.server_id,
-                func.lower(Character.name) == name.lower(),
-            )
-        )
+        await lock_character_name(session, self.server_id, name)
+        return await name_available(session, server_id=self.server_id, name=name)
 
     async def name(self, actor: int, value: str, update_id: int) -> Creation:
         async with self.sessions.begin() as session:
