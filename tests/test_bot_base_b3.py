@@ -326,7 +326,18 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     )
     screen = _last_screen(bot)
     assert "Eventos" not in screen.text and "PvP" not in screen.text
-    assert "Caçadas" in screen.text and "Desbravar" in screen.text
+    assert "Caçadas" not in screen.text and "Desbravar" not in screen.text
+    assert {
+        button.callback_data
+        for row in screen.reply_markup.inline_keyboard
+        for button in row
+    } == {
+        "world:local",
+        "world:map",
+        "world:missions",
+        "dungeon:known",
+        "menu:back",
+    }
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, callback_update("settings:root", actor=actor, update_id=update_id)

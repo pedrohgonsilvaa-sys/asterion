@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
-from asterion.application.road import ROAD
+from asterion.application.road import ROAD, RoadView
 from asterion.application.round import RoundView
 from asterion.bot.road_ui import render_road
 
@@ -51,6 +51,17 @@ def test_round_prepare_uses_approved_summary_and_actions():
     callbacks = _callbacks(screen)
     assert any(value.startswith("road:round:cons:") for value in callbacks)
     assert any(value.startswith("road:round:start:") for value in callbacks)
+
+
+def test_round_prepare_back_returns_to_selection_screen():
+    screen = render_road(RoadView("round_select", uuid4(), ROAD, familiar=True))
+    assert "Escolha o tamanho do lote." in screen.text
+    assert _callbacks(screen) == [
+        "road:round:new:5",
+        "road:round:new:10",
+        "road:round:new:20",
+        "world:local",
+    ]
 
 
 def test_round_consumables_use_numeric_toggles_and_no_external_shortcuts():

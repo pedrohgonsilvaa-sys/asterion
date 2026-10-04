@@ -532,12 +532,22 @@ class RoundService(RoadService):
             if c is None or world is None:
                 return None
             state = None
+            cancelled_preparation = False
             if round_id is not None:
                 state = await s.scalar(
                     select(HuntRound)
                     .where(HuntRound.id == round_id, HuntRound.character_id == c.id)
                     .with_for_update()
                 )
+            if state is not None and state.status == "preparing":
+                # Leaving preparation is free: no Vigor or Consumables have been
+                # reserved yet. Resolve only this uncommitted draft and return to
+                # the batch-size selection at the same Local.
+                state.status = "cancelled"
+                state.result_acknowledged = True
+                state.completed_at = datetime.now(UTC)
+                state.state_version += 1
+                cancelled_preparation = True
             if state is not None and state.status in ROUND_RESULT_STATUSES:
                 state.result_acknowledged = True
             # A stale interruption/result callback cannot visually escape a manual
@@ -545,7 +555,20 @@ class RoundService(RoadService):
             blocking = await super()._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
-            if world.location in {REFUGE, CHARNECA, BOSQUE, RUINS}:
+            if cancelled_preparation:
+                local = await self._view_for_world(s, c, world)
+                return RoadView(
+                    "round_select",
+                    c.id,
+                    world.location,
+                    familiar=local.familiar,
+                    vigor=c.vigor,
+                    max_vigor=c.max_vigor,
+                    name=c.name,
+                    hp=c.hp,
+                    max_hp=c.max_hp,
+                )
+            if world.location in {ROAD, REFUGE, CHARNECA, BOSQUE, RUINS}:
                 return await self._view_for_world(s, c, world)
             location = world.location
             return RoadView(

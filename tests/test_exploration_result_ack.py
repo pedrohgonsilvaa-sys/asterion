@@ -203,10 +203,6 @@ async def test_explore_result_return_acknowledges_once_in_each_local(
     bot = _telegram()
 
     await dispatcher.feed_raw_update(
-        bot, callback_update("road:explore", update_id=actor, actor=actor)
-    )
-    assert "Desbravar" in _last_method(bot).text
-    await dispatcher.feed_raw_update(
         bot,
         callback_update("road:explore:start", update_id=actor + 10, actor=actor),
     )
@@ -267,9 +263,6 @@ async def test_explore_result_return_acknowledges_once_in_each_local(
         attempt.created_at = datetime.now(UTC) - timedelta(minutes=6)
         await session.commit()
     await dispatcher.feed_raw_update(
-        bot, callback_update("road:explore", update_id=actor + 60, actor=actor)
-    )
-    await dispatcher.feed_raw_update(
         bot,
         callback_update("road:explore:start", update_id=actor + 70, actor=actor),
     )
@@ -307,7 +300,7 @@ async def test_explore_result_return_acknowledges_once_in_each_local(
 
 
 @pytest.mark.asyncio
-async def test_explore_retry_acknowledges_exact_attempt_and_stale_retry_is_safe(
+async def test_explore_result_has_no_retry_and_stale_return_is_safe(
     database, monkeypatch
 ):
     actor = 881504
@@ -321,9 +314,6 @@ async def test_explore_retry_acknowledges_exact_attempt_and_stale_retry_is_safe(
     dispatcher = _dispatcher(database, road)
     bot = _telegram()
     await dispatcher.feed_raw_update(
-        bot, callback_update("road:explore", update_id=actor, actor=actor)
-    )
-    await dispatcher.feed_raw_update(
         bot,
         callback_update("road:explore:start", update_id=actor + 1, actor=actor),
     )
@@ -335,16 +325,20 @@ async def test_explore_retry_acknowledges_exact_attempt_and_stale_retry_is_safe(
 
     current = await road.resume(actor)
     assert current is not None and current.retry_available is True
-    retry_callback = next(
+    result_screen = render_road(current)
+    callbacks = [
         callback
-        for row in render_road(current).keyboard.inline_keyboard
+        for row in result_screen.keyboard.inline_keyboard
         for callback in [button.callback_data for button in row]
-        if callback.startswith("road:explore:")
+    ]
+    assert not any(callback.startswith("road:explore:") for callback in callbacks)
+    return_callback = next(
+        callback for callback in callbacks if callback.startswith("road:local:")
     )
     await dispatcher.feed_raw_update(
-        bot, callback_update(retry_callback, update_id=actor + 2, actor=actor)
+        bot, callback_update(return_callback, update_id=actor + 2, actor=actor)
     )
-    assert _last_method(bot).text.startswith("🧭 Desbravar")
+    assert "Local Atual" in _last_method(bot).text
     async with database[1]() as session:
         attempt = await session.get(ExplorationAttempt, attempt_id)
         assert attempt is not None and attempt.result_acknowledged is True
@@ -355,9 +349,9 @@ async def test_explore_retry_acknowledges_exact_attempt_and_stale_retry_is_safe(
         ) == 1
 
     await dispatcher.feed_raw_update(
-        bot, callback_update(retry_callback, update_id=actor + 3, actor=actor)
+        bot, callback_update(return_callback, update_id=actor + 3, actor=actor)
     )
-    assert _last_method(bot).text.startswith("🧭 Desbravar")
+    assert "Local Atual" in _last_method(bot).text
     async with database[1]() as session:
         assert await session.scalar(
             select(func.count(ExplorationAttempt.id)).where(

@@ -93,12 +93,13 @@ async def test_oren_and_missions_expose_s4_and_s5_together_without_accepting(dat
     missions = _last_method(bot)
     assert "Vigília sem Voz · Disponível" in missions.text
     assert "A Luz que Não Aquece · Disponível" in missions.text
-    assert _button(
-        SimpleNamespace(keyboard=missions.reply_markup), "Vigília sem Voz"
-    ).callback_data == "s4:offer"
-    assert _button(
-        SimpleNamespace(keyboard=missions.reply_markup), "A Luz que Não Aquece"
-    ).callback_data == "s5:offer"
+    mission_buttons = {
+        button.callback_data: button.text
+        for row in missions.reply_markup.inline_keyboard
+        for button in row
+    }
+    assert mission_buttons["s4:offer"] == "1"
+    assert mission_buttons["s5:offer"] == "2"
 
     for mission, update_id in (("s4", 998627), ("s5", 998629)):
         await dispatcher.feed_raw_update(

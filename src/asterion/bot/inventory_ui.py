@@ -336,8 +336,7 @@ def render_inventory(view: InventoryView) -> Screen:
             lines.extend(_entry_lines(index, entry))
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Inventário", callback_data="inventory:root")],
-            [InlineKeyboardButton(text="← Voltar", callback_data="menu:back")],
+            [InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")],
         ]
     )
     return Screen("\n".join(lines), "pending", keyboard, parse_mode="HTML")
