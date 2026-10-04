@@ -22,20 +22,41 @@ def number(value: int) -> str:
     return f"{value:,}".replace(",", ".")
 
 
-def render_adventure(location: str | None = None) -> Screen:
-    current = f"📍 Local Atual · {escape(location)}\n\n" if location else ""
+def render_adventure(
+    location: str | None = None, principal_quest_title: str | None = None
+) -> Screen:
+    location_icon = {
+        "Estrada das Cinzas": "🔥",
+        "Refúgio do Ocaso": "🏚️",
+        "Charneca da Fuligem": "🌑",
+        "Bosque Calcinado": "🌲",
+        "Ruínas do Vigia": "🪨",
+    }.get(location, "📍")
+    current = (
+        f"📍 Local Atual\n{location_icon} {escape(location)}\nTerras do Ocaso\n\n"
+        if location
+        else ""
+    )
+    principal_quest = (
+        f"📜 Missão Principal\n{escape(principal_quest_title)} · Em Andamento\n\n"
+        if principal_quest_title
+        else ""
+    )
     text = (
         "🗺️ Aventura\n\n"
         f"{current}"
-        "Escolha para onde deseja seguir."
+        f"{principal_quest}"
+        "Escolha uma atividade ou abra o Mapa."
     )
     keyboard = [
-        [InlineKeyboardButton(text="Local Atual", callback_data="world:local")],
         [
+            InlineKeyboardButton(text="Local Atual", callback_data="world:local"),
             InlineKeyboardButton(text="Mapa", callback_data="world:map"),
-            InlineKeyboardButton(text="Missões", callback_data="world:missions"),
         ],
-        [InlineKeyboardButton(text="Masmorras", callback_data="dungeon:known")],
+        [
+            InlineKeyboardButton(text="Missões", callback_data="world:missions"),
+            InlineKeyboardButton(text="Masmorras", callback_data="dungeon:known"),
+        ],
         [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
     ]
     return Screen(text, "adventure", InlineKeyboardMarkup(inline_keyboard=keyboard))

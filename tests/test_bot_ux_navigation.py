@@ -1,3 +1,4 @@
+from decimal import Decimal
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -7,10 +8,16 @@ from sqlalchemy import select
 
 from asterion.application.p1 import P1Service
 from asterion.application.road import CHARNECA, REFUGE, ROAD, RoadView
-from asterion.application.world import WorldService
-from asterion.bot.road_ui import render_current_local, render_round_selection
+from asterion.application.round import RoundView
+from asterion.application.world import WorldService, WorldView
+from asterion.bot.character_ui import render_character
+from asterion.bot.road_ui import (
+    render_current_local,
+    render_road,
+    render_round_selection,
+)
 from asterion.bot.world_handlers import world_router
-from asterion.bot.world_ui import render_adventure
+from asterion.bot.world_ui import render_adventure, render_world
 from asterion.infrastructure.db.models import Character, LocationDiscovery
 from tests.test_creation_ui import callback_update
 from tests.test_road_integration import _seed_road
@@ -43,7 +50,7 @@ def _button(screen, label):
 
 def test_adventure_root_only_exposes_navigation_and_contextual_activities():
     screen = render_adventure(CHARNECA)
-    assert "Local Atual · Charneca da Fuligem" in screen.text
+    assert "📍 Local Atual\n🌑 Charneca da Fuligem\nTerras do Ocaso" in screen.text
     assert set(_callbacks(screen)) == {
         "world:local",
         "world:map",
@@ -55,6 +62,70 @@ def test_adventure_root_only_exposes_navigation_and_contextual_activities():
         callback in {"road:hunt", "road:explore", "road:prepare"}
         for callback in _callbacks(screen)
     )
+
+
+def test_adventure_root_displays_only_supplied_current_principal_quest():
+    screen = render_adventure(CHARNECA, "Fuligem sem Fogo")
+    assert "📜 Missão Principal\nFuligem sem Fogo · Em Andamento" in screen.text
+    assert "P2" not in screen.text
+
+
+def test_primary_telegram_screens_have_live_compact_callbacks_and_exits():
+    world = WorldView(
+        kind="menu",
+        character_id=uuid4(),
+        name="Aster",
+        race="remanescente",
+        character_class="sentinela",
+        hp=Decimal("100"),
+        max_hp=Decimal("100"),
+        vigor=80,
+        max_vigor=100,
+        xp=200,
+        region="Terras do Ocaso",
+        location=CHARNECA,
+        quest_title="Fuligem sem Fogo",
+    )
+    screens = [
+        render_world(world),
+        render_adventure(CHARNECA, "Fuligem sem Fogo"),
+        render_character(),
+        render_current_local(
+            RoadView(
+                "charneca",
+                uuid4(),
+                CHARNECA,
+                name="Aster",
+                hp=Decimal("100"),
+                max_hp=Decimal("100"),
+                vigor=80,
+                max_vigor=100,
+            )
+        ),
+        render_round_selection(
+            RoadView("charneca", uuid4(), CHARNECA, familiar=True)
+        ),
+        render_road(
+            RoundView(
+                kind="round_prepare",
+                character_id=uuid4(),
+                location=CHARNECA,
+                round_id=uuid4(),
+                state_version=1234,
+                batch_size=10,
+                hp=Decimal("100"),
+                max_hp=Decimal("100"),
+                vigor=80,
+                max_vigor=100,
+            )
+        ),
+    ]
+    for screen in screens:
+        callbacks = _callbacks(screen)
+        assert callbacks, screen.image_key
+        assert all(len(callback.encode("utf-8")) <= 64 for callback in callbacks)
+        assert all(callback != "menu:noop" for callback in callbacks)
+        assert all(not callback.startswith("road:unavailable:") for callback in callbacks)
 
 
 def test_local_is_the_entry_for_manual_hunt_round_and_explore():
@@ -201,4 +272,28 @@ async def test_telegram_adventure_local_hunt_and_map_callbacks_use_real_services
         for row in combat.reply_markup.inline_keyboard
         for button in row
     )
+
+
+@pytest.mark.asyncio
+async def test_legacy_oren_entry_without_available_missions_has_local_exit(database):
+    actor = 883402
+    _, road = await _seed_road(database, actor=actor)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        world_router(WorldService(database[1], "ocaso"), {}, road=road)
+    )
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(return_value=True)
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update("world:oren", update_id=883403, actor=actor),
+    )
+    response = bot.session.make_request.call_args.args[1]
+    callbacks = [
+        button.callback_data
+        for row in response.reply_markup.inline_keyboard
+        for button in row
+    ]
+    assert "Não há uma missão disponível" in response.text
+    assert callbacks == ["world:local"]
 

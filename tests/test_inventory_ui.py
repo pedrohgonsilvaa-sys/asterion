@@ -92,7 +92,7 @@ def test_pending_root_is_real_read_model_without_placeholder_actions():
     assert "⚠️ Entregas aguardando espaço · 1" in screen.text
     assert "Couro Escoriado · 3" in screen.text
     callbacks = _callbacks(screen)
-    assert callbacks == ["inventory:root", "menu:back"]
+    assert callbacks == ["inventory:root"]
     assert "menu:noop" not in callbacks
 
 

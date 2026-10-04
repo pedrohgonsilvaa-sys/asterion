@@ -7,6 +7,7 @@ from sqlalchemy import select
 from asterion.application.creation import CreationService
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import CHARNECA, P2Service
+from asterion.application.p3 import P3Service
 from asterion.application.round import RoundService
 from asterion.application.world import WorldService
 from asterion.bot.creation_handlers import creation_router
@@ -116,6 +117,12 @@ async def test_map_opens_p2_context_during_mission_and_normal_local_after_comple
     bot = _telegram()
     await dispatcher.feed_raw_update(
         bot,
+        callback_update("world:adventure", update_id=880430, actor=actor),
+    )
+    adventure = _last_method(bot)
+    assert "📜 Missão Principal\nFuligem sem Fogo · Em Andamento" in adventure.text
+    await dispatcher.feed_raw_update(
+        bot,
         callback_update("world:map:region:tdo", update_id=880403, actor=actor),
     )
     region = _last_method(bot)
@@ -136,6 +143,7 @@ async def test_map_opens_p2_context_during_mission_and_normal_local_after_comple
     )
     local = _last_method(bot)
     assert "Local Atual" in local.text
+    assert local.text.count("Local Atual") == 1
     assert "Examinar Pontos de Fuligem · 0/3" not in local.text
     assert "world:missions" in _callbacks(local)
 
@@ -162,7 +170,8 @@ async def test_map_opens_p2_context_during_mission_and_normal_local_after_comple
         ),
     )
     normal = _last_method(bot)
-    assert "Charneca da Fuligem · Local Atual" in normal.text
+    assert "Charneca da Fuligem" in normal.text
+    assert normal.text.count("Local Atual") == 1
     assert "world:local" in _callbacks(normal)
     assert "road:prepare" not in _callbacks(normal)
     assert "road:explore" not in _callbacks(normal)
@@ -326,7 +335,7 @@ async def test_brazier_travel_lists_only_known_destinations_and_keeps_route_dist
         bot, callback_update(vento_callback, update_id=880414, actor=actor)
     )
     arrived = _last_method(bot)
-    assert "Charneca da Fuligem · Local Atual" in arrived.text
+    assert "📍 Local Atual\n🌑 Charneca da Fuligem" in arrived.text
     assert "world:map:fromlocal" in _callbacks(arrived)
     await known_dispatcher.feed_raw_update(
         bot,
@@ -407,16 +416,17 @@ async def test_remote_known_local_offers_travel_only_when_authoritatively_availa
     )
     remote = _last_method(bot)
     assert "Local Atual" not in remote.text
-    assert "world:travel" in _callbacks(remote)
+    travel_callback = "world:travel:to:road"
+    assert travel_callback in _callbacks(remote)
+    assert "world:travel" not in _callbacks(remote)
 
     await dispatcher.feed_raw_update(
         bot,
-        callback_update("world:travel", update_id=880419, actor=actor),
+        callback_update(travel_callback, update_id=880419, actor=actor),
     )
-    travel = _last_method(bot)
-    assert "Travessia dos Braseiros" in _text(travel)
-    assert "Braseiro do Refúgio" in _text(travel)
-    assert any(value.startswith("road:travel:") for value in _callbacks(travel))
+    arrived = _last_method(bot)
+    assert "Estrada das Cinzas" in _text(arrived)
+    assert "Travessia dos Braseiros" not in _text(arrived)
     async with database[1]() as session:
         character = await session.scalar(
             select(Character).where(Character.telegram_id == actor)
@@ -424,7 +434,136 @@ async def test_remote_known_local_offers_travel_only_when_authoritatively_availa
         world = await session.scalar(
             select(WorldState).where(WorldState.character_id == character.id)
         )
-        assert world.location == "Refúgio do Ocaso"
+        assert world.location == "Estrada das Cinzas"
+
+
+@pytest.mark.asyncio
+async def test_map_region_lists_all_known_locations_and_brazier_detail_travels_directly(
+    database,
+):
+    actor = 880424
+    road = await _seed_charneca(
+        database,
+        actor=actor,
+        name="Rota",
+        location=CHARNECA,
+        permanent_braziers=(
+            "tdo.brazier.refugio_do_ocaso",
+            "tdo.brazier.vento_morto",
+        ),
+    )
+    travel_calls = []
+    travel_brazier = road.travel_brazier
+
+    async def record_travel(request_actor, brazier_id):
+        travel_calls.append(brazier_id)
+        return await travel_brazier(request_actor, brazier_id)
+
+    road.travel_brazier = record_travel
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        world_router(
+            WorldService(database[1], "ocaso"),
+            {},
+            p1=P1Service(database[1], "ocaso"),
+            road=road,
+            p2=P2Service(database[1], "ocaso"),
+        )
+    )
+    bot = _telegram()
+
+    async def click(data, update_id):
+        await dispatcher.feed_raw_update(
+            bot, callback_update(data, update_id=update_id, actor=actor)
+        )
+        return _last_method(bot)
+
+    await click("world:map:fromlocal", 880425)
+    await click("world:map:region:tdo:fromlocal", 880426)
+    region = _last_method(bot)
+    numeric_buttons = [
+        button
+        for row in region.reply_markup.inline_keyboard
+        for button in row
+        if button.text.isdigit()
+    ]
+    assert [button.text for button in numeric_buttons] == ["1", "2", "3"]
+    assert len({button.callback_data for button in numeric_buttons}) == 3
+
+    detail = await click("world:map:local:refuge:fromlocal", 880427)
+    assert "Viajar pelo Braseiro" in [
+        button.text
+        for row in detail.reply_markup.inline_keyboard
+        for button in row
+    ]
+    direct = "world:travel:to:refuge:fromlocal"
+    assert direct in _callbacks(detail)
+    arrived = await click(direct, 880428)
+    assert "Refúgio do Ocaso" in _text(arrived)
+    assert travel_calls == ["tdo.brazier.refugio_do_ocaso"]
+
+    stale = await click(direct, 880429)
+    assert "Refúgio do Ocaso" in _text(stale)
+    assert travel_calls == ["tdo.brazier.refugio_do_ocaso"]
+
+
+@pytest.mark.asyncio
+async def test_known_inaccessible_location_has_map_detail_without_fake_travel(database):
+    actor = 880431
+    road = await _seed_charneca(
+        database,
+        actor=actor,
+        location=CHARNECA,
+        permanent_braziers=("tdo.brazier.vento_morto",),
+    )
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        session.add(
+            Quest(
+                character_id=character.id,
+                quest_id="P3",
+                title="Sob Galhos Calcinados",
+                status="completed",
+                step=5,
+                content_version="tdo-1.0.11",
+                progress={"completed": True},
+            )
+        )
+        await session.commit()
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        world_router(
+            WorldService(database[1], "ocaso"),
+            {},
+            p1=P1Service(database[1], "ocaso"),
+            road=road,
+            p2=P2Service(database[1], "ocaso"),
+            p3=P3Service(database[1], "ocaso"),
+        )
+    )
+    bot = _telegram()
+
+    async def click(data, update_id):
+        await dispatcher.feed_raw_update(
+            bot, callback_update(data, update_id=update_id, actor=actor)
+        )
+        return _last_method(bot)
+
+    await click("world:map", 880432)
+    await click("world:map:region:tdo", 880433)
+    region = _last_method(bot)
+    assert "Bosque Calcinado · Conhecido" in region.text
+    assert "world:map:local:bosque" in _callbacks(region)
+    detail = await click("world:map:local:bosque", 880434)
+    assert "Bosque Calcinado" in _text(detail)
+    assert "Deslocamento · Indisponível a partir do Local atual" in _text(detail)
+    assert not any(
+        callback.startswith("road:route:") or callback.startswith("world:travel")
+        for callback in _callbacks(detail)
+    )
+    assert "world:map:region:tdo" in _callbacks(detail)
 
     unavailable_actor = 880420
     unavailable_road = await _seed_charneca(

@@ -84,7 +84,7 @@ def test_charneca_local_exposes_only_unlocked_round_and_regional_route():
             route_available=True,
         )
     )
-    assert "Charneca da Fuligem · Local Atual" in locked.text
+    assert "📍 Local Atual\n🌑 Charneca da Fuligem" in locked.text
     assert "Terras do Ocaso · Nv. 3–5" in locked.text
     assert "Ronda de Caça · Vença uma Caçada neste Local" in locked.text
     assert "world:map:fromlocal" in _callbacks(locked)

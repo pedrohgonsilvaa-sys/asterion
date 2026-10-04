@@ -661,8 +661,9 @@ async def test_leaving_round_preparation_returns_to_local_without_cost(database)
     prepared = await service.prepare_round(actor, 10)
     assert prepared.kind == "round_prepare"
 
-    local = await service.round_back(actor, prepared.round_id)
-    assert local.kind == "road"
+    selection = await service.round_back(actor, prepared.round_id)
+    assert selection.kind == "round_select"
+    assert selection.location == prepared.location
     resumed = await service.resume(actor)
     assert resumed.kind == "road"
     async with database[1]() as session:
@@ -671,3 +672,60 @@ async def test_leaving_round_preparation_returns_to_local_without_cost(database)
         assert character.vigor == 73
         assert state.status == "cancelled"
         assert state.result_acknowledged is True
+
+
+@pytest.mark.asyncio
+async def test_round_preparation_back_callback_returns_to_round_selection(database):
+    from unittest.mock import AsyncMock
+
+    from aiogram import Bot, Dispatcher
+
+    from asterion.application.world import WorldService
+    from asterion.bot.world_handlers import world_router
+    from tests.test_creation_ui import callback_update
+
+    actor, service = await _seed_round(database, 772101, vigor=73)
+    prepared = await service.prepare_round(actor, 10)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        world_router(WorldService(database[1], "ocaso"), {}, road=service)
+    )
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(return_value=True)
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update(
+            f"road:round:back:{prepared.round_id.hex}",
+            update_id=772102,
+            actor=actor,
+        ),
+    )
+    response = bot.session.make_request.call_args.args[1]
+    callbacks = [
+        button.callback_data
+        for row in response.reply_markup.inline_keyboard
+        for button in row
+    ]
+    assert "Escolha o tamanho do lote." in response.text
+    assert callbacks[:3] == [
+        "road:round:new:5",
+        "road:round:new:10",
+        "road:round:new:20",
+    ]
+    assert callbacks[-1] == "world:local"
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update("road:round:new:5", update_id=772103, actor=actor),
+    )
+    next_preparation = bot.session.make_request.call_args.args[1]
+    assert "🎯 Ronda · 5 Encontros" in next_preparation.text
+    new_round_id = await service.resume(actor)
+    assert new_round_id.kind == "round_prepare"
+    assert new_round_id.round_id != prepared.round_id
+    async with database[1]() as session:
+        states = (
+            await session.scalars(
+                select(HuntRound).where(HuntRound.character_id == new_round_id.character_id)
+            )
+        ).all()
+        assert sum(state.status == "preparing" for state in states) == 1

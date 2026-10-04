@@ -106,6 +106,8 @@ def _local_return(location: str, attempt_id=None) -> InlineKeyboardButton:
 def _round_screen(view) -> Screen | None:
     if not getattr(view, "kind", "").startswith("round_"):
         return None
+    if view.kind == "round_select":
+        return render_round_selection(view)
     token = _round_token(view)
     if view.location == CHARNECA:
         place = "🌑 Charneca da Fuligem\nTerras do Ocaso · Nv. 3–5"
@@ -559,7 +561,7 @@ def render_current_local(
 
     lines = [
         "📍 Local Atual",
-        f"{title} · Local Atual",
+        title,
         subtitle,
         "",
         f"👤 {escape(view.name or 'Personagem')}",

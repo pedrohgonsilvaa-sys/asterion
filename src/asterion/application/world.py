@@ -45,6 +45,33 @@ class WorldService:
     def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
         self.sessions, self.server_id = sessions, server_id
 
+    async def principal_quest_title(self, actor: int) -> str | None:
+        """Return the active principal quest persisted for the player's character."""
+        async with self.sessions() as session:
+            character = await session.scalar(
+                select(Character).where(
+                    Character.telegram_id == actor,
+                    Character.server_id == self.server_id,
+                )
+            )
+            if character is None:
+                return None
+            quests = (
+                await session.scalars(
+                    select(Quest).where(
+                        Quest.character_id == character.id,
+                        Quest.quest_id.in_(("P1", "P2", "P3", "P4", "P5", "P6")),
+                        Quest.status == "active",
+                    )
+                )
+            ).all()
+            if not quests:
+                return None
+            # Principal progression is linear; if legacy data has multiple active
+            # rows, show the furthest authored step rather than a stale predecessor.
+            rank = {f"P{level}": level for level in range(1, 7)}
+            return max(quests, key=lambda quest: rank[quest.quest_id]).title
+
     async def resume(self, actor: int) -> WorldView | None:
         async with self.sessions() as session:
             c = await session.scalar(

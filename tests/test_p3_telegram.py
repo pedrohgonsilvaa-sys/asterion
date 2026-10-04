@@ -376,7 +376,7 @@ async def test_completed_p3_map_exposes_bosque_and_route(database):
     await dispatcher.feed_raw_update(
         bot, callback_update(route_button.callback_data, update_id=998335, actor=actor)
     )
-    assert "Bosque Calcinado · Local Atual" in _last_method(bot).text
+    assert "📍 Local Atual\n🌲 Bosque Calcinado" in _last_method(bot).text
     await dispatcher.feed_raw_update(
         bot, callback_update("world:map:local:bosque", update_id=998336, actor=actor)
     )
