@@ -91,6 +91,17 @@ class TDOPlaythrough:
                         .order_by(CharacterEquipmentSlot.slot)
                     )
                 ).all()
+                equipment_owned = (
+                    await session.scalars(
+                        select(EquipmentItem)
+                        .where(EquipmentItem.character_id == character.id)
+                        .order_by(
+                            EquipmentItem.slot,
+                            EquipmentItem.item_level.desc(),
+                            EquipmentItem.id,
+                        )
+                    )
+                ).all()
                 brazier_ids = (
                     await session.scalars(
                         select(Brazier.brazier_id)
@@ -139,7 +150,10 @@ class TDOPlaythrough:
                             GameActivity.status.in_(("completed", "failed")),
                             HuntContext.result_acknowledged.is_(False),
                         )
-                        .order_by(GameActivity.id)
+                        .order_by(
+                            GameActivity.last_valid_action_at,
+                            GameActivity.id,
+                        )
                     )
                 ).all()
                 hunt_results = (
@@ -154,7 +168,10 @@ class TDOPlaythrough:
                             HuntContext.character_id == character.id,
                             GameActivity.status.in_(("completed", "failed")),
                         )
-                        .order_by(GameActivity.id)
+                        .order_by(
+                            GameActivity.last_valid_action_at,
+                            GameActivity.id,
+                        )
                     )
                 ).all()
                 talents = (
@@ -230,6 +247,17 @@ class TDOPlaythrough:
                         )
                         for slot, item in equipment
                     ],
+                    "equipment_inventory": [
+                        (
+                            item.id.hex,
+                            item.item_name,
+                            item.rarity,
+                            item.slot,
+                            item.item_level,
+                            any(equipped_item.id == item.id for _, equipped_item in equipment),
+                        )
+                        for item in equipment_owned
+                    ],
                     "braziers": list(brazier_ids),
                     "unlocks": list(unlock_ids),
                     "foreground": [
@@ -256,8 +284,9 @@ class TDOPlaythrough:
                     ],
                     "hunt_results": [
                         (activity_id.hex, status, acknowledged)
-                        for activity_id, status, acknowledged in hunt_results
+                        for activity_id, status, acknowledged in hunt_results[-5:]
                     ],
+                    "hunt_result_count": len(hunt_results),
                     "talents": list(talents),
                     "path": character.selected_path,
                     "active_arts": list(arts),
@@ -301,6 +330,8 @@ class TDOPlaythrough:
             raise AssertionError(
                 f"Combate sem ação elegível na janela do jogador: {combat!r}"
             )
+        if combat.prepared_action is not None and "defend" in available:
+            return "defend"
         arts = [
             action
             for action in available
@@ -322,6 +353,8 @@ class TDOPlaythrough:
         *,
         label: str,
         max_actions: int = 400,
+        action_picker: Callable[[Any], str] | None = None,
+        trace_actions: bool = False,
     ):
         """Play a real combat and reconnect after the first committed action."""
         if view is None or getattr(view, "combat", None) is None:
@@ -333,7 +366,24 @@ class TDOPlaythrough:
             combat = getattr(current, "combat", None)
             if combat is None or combat.result is not None:
                 return current
-            action = self.combat_action(combat)
+            action = (
+                action_picker(current)
+                if action_picker is not None
+                else self.combat_action(combat)
+            )
+            if trace_actions:
+                player = combat.fighters.get("player")
+                enemies = tuple(
+                    (fighter.name, str(fighter.hp), str(fighter.stats.hp))
+                    for key, fighter in combat.fighters.items()
+                    if key != "player" and fighter.hp > 0
+                )
+                print(
+                    f"{label} · ação {_ + 1}: {action}; "
+                    f"HP jogador={player.hp}/{player.stats.hp if player else '?'}; "
+                    f"inimigos={enemies}; preparado={combat.prepared_action}",
+                    flush=True,
+                )
             updated = await mutate(current, action)
             if updated is None:
                 raise AssertionError(
