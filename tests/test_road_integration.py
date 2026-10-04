@@ -23,6 +23,8 @@ from asterion.infrastructure.db.models import (
     Brazier,
     Character,
     CharacterTalentChoice,
+    CombatRecord,
+    Encounter,
     EquipmentItem,
     ExplorationAttempt,
     GameActivity,
@@ -416,10 +418,6 @@ async def test_blocking_hunt_receipt_uses_latest_timestamp_not_largest_uuid(data
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    reason="P0: terminal opening defeat is persisted as an active hunt and softlocks Road",
-)
 async def test_hunt_start_settles_opening_defeat_when_enemy_acts_first(database, monkeypatch):
     import asterion.application.road as road_module
     from asterion.domain.road import creature_for
@@ -441,13 +439,97 @@ async def test_hunt_start_settles_opening_defeat_when_enemy_acts_first(database,
 
     view = await service.start_hunt(actor)
 
-    # Expected behavior after a fix: settle this immediate defeat and show its receipt.
     assert view.kind == "hunt_defeat"
     async with sessions() as session:
         activity = await session.scalar(
             select(GameActivity).where(GameActivity.id == view.activity_id)
         )
         assert activity.status == "failed"
+        record = await session.scalar(
+            select(CombatRecord)
+            .join(Encounter, Encounter.id == CombatRecord.encounter_id)
+            .where(Encounter.game_activity_id == activity.id)
+        )
+        assert record is not None
+        assert record.snapshot["result"] == "defeat"
+        assert not await session.scalar(
+            select(RewardEvent.id).where(
+                RewardEvent.character_id == activity.character_id,
+                RewardEvent.source_id == f"activity:{activity.id}",
+            )
+        )
+        character = await session.get(Character, activity.character_id)
+        assert character.hp == character.max_hp
+        context = await session.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == activity.id)
+        )
+        assert context.result_acknowledged is False
+    resumed = await service.resume(actor)
+    assert resumed.kind == "hunt_defeat"
+    assert resumed.activity_id == view.activity_id
+    acknowledged = await service.acknowledge_defeat(actor)
+    assert acknowledged.kind == "road"
+    assert (await service.acknowledge_defeat(actor)).kind == "road"
+    assert (await service.prepare_hunt(actor)).kind == "hunt_prepare"
+    async with sessions() as session:
+        context = await session.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == view.activity_id)
+        )
+        assert context.result_acknowledged is True
+
+
+@pytest.mark.asyncio
+async def test_exploration_start_settles_opening_defeat_and_reconnects(database, monkeypatch):
+    import asterion.application.road as road_module
+    from asterion.domain.road import creature_for
+
+    actor, service = await _seed_road(database, 771127)
+    _, sessions = database
+    async with sessions.begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor).with_for_update()
+        )
+        character.hp = Decimal("4.530")
+    await service.travel(actor, ROAD)
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *args: ("combat", "explore.tdo.estrada.combat.dog_cinereo", "Cão."),
+    )
+    monkeypatch.setattr(road_module, "select_variant", lambda *args, **kwargs: None)
+    monkeypatch.setattr(road_module, "creature_for", creature_for)
+
+    view = await service.explore(actor)
+
+    assert view.kind == "exploration"
+    assert "interrompida" in view.result_text
+    async with sessions() as session:
+        attempt = await session.scalar(
+            select(ExplorationAttempt).where(ExplorationAttempt.id == view.attempt_id)
+        )
+        activity = await session.get(GameActivity, attempt.activity_id)
+        assert attempt.status == "failed"
+        assert attempt.completed_at is not None
+        assert attempt.progress["settled"] is True
+        assert activity.status == "failed"
+        assert activity.last_valid_action_at is not None
+        assert not await session.scalar(
+            select(RewardEvent.id).where(
+                RewardEvent.character_id == attempt.character_id,
+                RewardEvent.source_id == f"activity:{activity.id}",
+            )
+        )
+        character = await session.get(Character, attempt.character_id)
+        assert character.hp == character.max_hp
+
+    resumed = await service.resume(actor)
+    assert resumed.kind == "exploration"
+    assert resumed.attempt_id == view.attempt_id
+    assert resumed.result_text == view.result_text
+    acknowledged = await service.acknowledge_result(actor, view.attempt_id)
+    assert acknowledged.kind == "road"
+    assert (await service.acknowledge_result(actor, view.attempt_id)).kind == "road"
+    assert (await service.prepare_hunt(actor)).kind == "hunt_prepare"
 
 
 @pytest.mark.asyncio

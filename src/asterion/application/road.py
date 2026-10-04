@@ -486,6 +486,10 @@ class RoadService:
             )
             await self._record_charneca_habitat(s, c.id, creature.creature_id, profile)
             await s.flush()
+            if combat.result == "defeat":
+                return await self._settle_road_defeat(
+                    s, c, activity, combat, world, record=record
+                )
             return await self._combat_view(s, c, activity)
 
     async def prepare_hunt(self, actor: int) -> RoadView | None:
@@ -636,61 +640,8 @@ class RoadService:
                         else await self._combat_view(s, c, activity)
                     )
             elif updated.result == "defeat":
-                activity.status = "failed"
-                recovery_brazier, recovery_location = await self._recover_normal_pve_defeat(
-                    s,
-                    c,
-                    context.local_id if context is not None else None,
-                    world,
-                )
-                if activity.content_id == EXPLORE_CONTENT:
-                    attempt = await s.scalar(
-                        select(ExplorationAttempt)
-                        .where(ExplorationAttempt.activity_id == activity.id)
-                        .with_for_update()
-                    )
-                    if attempt is not None:
-                        attempt.status = "failed"
-                        attempt.completed_at = datetime.now(UTC)
-                        attempt.progress = {
-                            **(attempt.progress or {}),
-                            "receipt_text": "A exploração foi interrompida.",
-                            **(
-                                {
-                                    "recovery_brazier": recovery_brazier,
-                                    "recovery_location": recovery_location,
-                                }
-                                if recovery_brazier is not None
-                                else {}
-                            ),
-                            "settled": True,
-                        }
-                        await consolidate_character_level(s, c)
-                        return await self._attempt_view(s, c, attempt)
-                await consolidate_character_level(s, c)
-                return RoadView(
-                    "hunt_defeat",
-                    c.id,
-                    _location_label(context.local_id if context else None),
-                    activity_id=activity.id,
-                    vigor=c.vigor,
-                    max_vigor=c.max_vigor,
-                    recovery_brazier=recovery_brazier,
-                    recovery_location=recovery_location,
-                    route_available=(
-                        context is not None
-                        and (
-                            (context.local_id == CHARNECA_LOCATION and recovery_location == REFUGE)
-                            or (
-                                context.local_id == BOSQUE_LOCATION
-                                and recovery_location == CHARNECA
-                            )
-                            or (
-                                context.local_id == RUINS_LOCATION
-                                and recovery_location in {BOSQUE, CHARNECA, REFUGE}
-                            )
-                        )
-                    ),
+                return await self._settle_road_defeat(
+                    s, c, activity, updated, world, context=context, record=record
                 )
             return await self._combat_view(s, c, activity)
 
@@ -1110,7 +1061,7 @@ class RoadService:
                 combat.configuration_snapshot = (combat.configuration_snapshot or {}) | (
                     active_art_configuration.to_data()
                 )
-                activity, encounter, _ = await CombatRepository(s).create(
+                activity, encounter, record = await CombatRepository(s).create(
                     c, EXPLORE_CONTENT, combat
                 )
                 attempt.activity_id = activity.id
@@ -1140,6 +1091,10 @@ class RoadService:
                 )
                 await self._record_charneca_habitat(s, c.id, creature_id, hunt_profile)
                 await s.flush()
+                if combat.result == "defeat":
+                    return await self._settle_road_defeat(
+                        s, c, activity, combat, world, record=record
+                    )
                 return await self._combat_view(s, c, activity)
             await self._settle_exploration(s, c, attempt)
             return await self._attempt_view(s, c, attempt)
@@ -2476,6 +2431,65 @@ class RoadService:
             world.region = REGION
             world.location = recovery_location
         return BRAZIER_DETAILS[brazier_id][1], recovery_location
+
+    async def _settle_road_defeat(
+        self, s, c, activity, combat, world, *, context=None, record=None
+    ):
+        """Settle a terminal manual-Hunt or combat-Exploration defeat once.
+
+        Road combat can already be terminal when it is created: the shared combat
+        engine resolves opening enemy actions before returning the initial state.
+        Route that case through the same failure receipt and regional recovery used
+        after a player action so it cannot remain an active foreground forever.
+        """
+        if activity.status != "active":
+            return await self._result_view_for_activity(s, c, activity, world)
+        if record is not None:
+            record.snapshot = encode(combat)
+        activity.status = "failed"
+        activity.state_version = combat.version
+        activity.last_valid_action_at = datetime.now(UTC)
+        c.hp = combat.fighters["player"].hp
+        if context is None:
+            context = await s.scalar(
+                select(HuntContext)
+                .where(HuntContext.game_activity_id == activity.id)
+                .with_for_update()
+            )
+        if context is not None:
+            await self._record_bestiary_combat_events(s, c.id, context, combat)
+        recovery_brazier, recovery_location = await self._recover_normal_pve_defeat(
+            s,
+            c,
+            context.local_id if context is not None else None,
+            world,
+        )
+        if activity.content_id == EXPLORE_CONTENT:
+            attempt = await s.scalar(
+                select(ExplorationAttempt)
+                .where(ExplorationAttempt.activity_id == activity.id)
+                .with_for_update()
+            )
+            if attempt is not None:
+                attempt.status = "failed"
+                attempt.completed_at = datetime.now(UTC)
+                attempt.progress = {
+                    **(attempt.progress or {}),
+                    "receipt_text": "A exploração foi interrompida.",
+                    **(
+                        {
+                            "recovery_brazier": recovery_brazier,
+                            "recovery_location": recovery_location,
+                        }
+                        if recovery_brazier is not None
+                        else {}
+                    ),
+                    "settled": True,
+                }
+                await consolidate_character_level(s, c)
+                return await self._attempt_view(s, c, attempt)
+        await consolidate_character_level(s, c)
+        return await self._hunt_defeat_view(s, c, activity, context)
 
     async def _record_charneca_habitat(self, s, character_id, creature_id, profile):
         if profile.local_id not in {CHARNECA_LOCATION, BOSQUE_LOCATION, RUINS_LOCATION}:
