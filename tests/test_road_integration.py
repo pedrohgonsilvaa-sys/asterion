@@ -416,6 +416,41 @@ async def test_blocking_hunt_receipt_uses_latest_timestamp_not_largest_uuid(data
 
 
 @pytest.mark.asyncio
+@pytest.mark.xfail(
+    strict=True,
+    reason="P0: terminal opening defeat is persisted as an active hunt and softlocks Road",
+)
+async def test_hunt_start_settles_opening_defeat_when_enemy_acts_first(database, monkeypatch):
+    import asterion.application.road as road_module
+    from asterion.domain.road import creature_for
+
+    actor, service = await _seed_road(database, 771126)
+    _, sessions = database
+    async with sessions.begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor).with_for_update()
+        )
+        character.hp = Decimal("4.530")
+    await service.travel(actor, ROAD)
+    monkeypatch.setattr(
+        road_module,
+        "select_creature",
+        lambda *args, **kwargs: creature_for("dog_cinereo"),
+    )
+    monkeypatch.setattr(road_module, "select_variant", lambda *args, **kwargs: None)
+
+    view = await service.start_hunt(actor)
+
+    # Expected behavior after a fix: settle this immediate defeat and show its receipt.
+    assert view.kind == "hunt_defeat"
+    async with sessions() as session:
+        activity = await session.scalar(
+            select(GameActivity).where(GameActivity.id == view.activity_id)
+        )
+        assert activity.status == "failed"
+
+
+@pytest.mark.asyncio
 async def test_hunt_victory_receipt_reconstructs_without_duplicate_reward(database):
     actor, service = await _seed_road(database, 771104)
     await service.travel(actor, ROAD)

@@ -22,9 +22,11 @@ from asterion.infrastructure.db.models import (
     CharacterProfession,
     CharacterTalentChoice,
     ClassTrialState,
+    CombatRecord,
     ConsumableStack,
     DungeonRun,
     DungeonRunMember,
+    Encounter,
     EquipmentItem,
     GameActivity,
     HuntContext,
@@ -106,6 +108,22 @@ class TDOPlaythrough:
                 active_activities = (
                     await session.scalars(
                         select(GameActivity)
+                        .where(
+                            GameActivity.character_id == character.id,
+                            GameActivity.status == "active",
+                        )
+                    )
+                ).all()
+                active_combat_rows = (
+                    await session.execute(
+                        select(
+                            GameActivity.id,
+                            GameActivity.content_id,
+                            GameActivity.state_version,
+                            CombatRecord.snapshot,
+                        )
+                        .join(Encounter, Encounter.game_activity_id == GameActivity.id)
+                        .join(CombatRecord, CombatRecord.encounter_id == Encounter.id)
                         .where(
                             GameActivity.character_id == character.id,
                             GameActivity.status == "active",
@@ -217,6 +235,21 @@ class TDOPlaythrough:
                     "foreground": [
                         (activity.id.hex, activity.content_id, activity.state_version)
                         for activity in active_activities
+                    ],
+                    "foreground_combat": [
+                        {
+                            "activity_id": activity_id.hex,
+                            "content_id": content_id,
+                            "state_version": state_version,
+                            "result": snapshot.get("result"),
+                            "turn_index": snapshot.get("turn_index"),
+                            "order": snapshot.get("order"),
+                            "fighters": {
+                                fighter_id: fighter.get("hp")
+                                for fighter_id, fighter in snapshot.get("fighters", {}).items()
+                            },
+                        }
+                        for activity_id, content_id, state_version, snapshot in active_combat_rows
                     ],
                     "unacknowledged_hunt_results": [
                         (activity_id.hex, status) for activity_id, status in unacknowledged_hunts

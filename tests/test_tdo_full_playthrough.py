@@ -48,8 +48,8 @@ async def _create_remanescente_sentinela(driver: TDOPlaythrough) -> None:
 
 
 @pytest.mark.asyncio
-async def test_tdo_full_playthrough_stops_at_first_blocker(database, monkeypatch):
-    """Begin a real Nv.1 journey; every progression mutation uses a public service."""
+async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch):
+    """Restart at Nv.1; all progression mutations use public services."""
     actor = 7_000_000_000_000 + uuid4().int % 100_000_000_000
     _, sessions = database
     driver = TDOPlaythrough(actor, sessions)
@@ -226,7 +226,15 @@ async def test_tdo_full_playthrough_stops_at_first_blocker(database, monkeypatch
             if view.kind == "hunt_victory":
                 await service.acknowledge_result(actor)
             else:
-                assert view.kind == "hunt_defeat", view
+                if view.kind != "hunt_defeat":
+                    mark = await driver.snapshot(f"resultado inesperado · {label}")
+                    combat = view.combat
+                    raise AssertionError(
+                        f"{label}: combate retornou estado inesperado: kind={view.kind!r}, "
+                        f"result={getattr(combat, 'result', None)!r}, "
+                        f"activity_id={view.activity_id!r}; snapshot={mark.state!r}\n"
+                        f"{driver.diagnostic()}"
+                    )
                 await service.acknowledge_defeat(actor)
             await driver.snapshot(f"{label} · {view.kind}")
             return view
