@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import delete, func, select
@@ -127,6 +127,55 @@ async def _seed_road(
         )
         await session.commit()
     return actor, RoadService(sessions, "ocaso")
+
+
+async def _seed_hunt_receipts(database, actor, receipts):
+    """Seed hunt receipts with deliberately chosen UUID/timestamp ordering."""
+    _, sessions = database
+    async with sessions() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        for index, (activity_id, status, action_at, acknowledged) in enumerate(receipts):
+            session.add(
+                GameActivity(
+                    id=activity_id,
+                    character_id=character.id,
+                    content_id="road_manual_hunt",
+                    status=status,
+                    state_version=0,
+                    ruleset_version="gdd-1.4.3-baseline-1.0",
+                    last_valid_action_at=action_at,
+                )
+            )
+            session.add(
+                HuntContext(
+                    game_activity_id=activity_id,
+                    character_id=character.id,
+                    local_id="tdo.location.estrada_das_cinzas",
+                    creature_id="dog_cinereo",
+                    category="common",
+                    enemy_level=1,
+                    variant=None,
+                    seed=f"receipt-test-{index}",
+                    result_acknowledged=acknowledged,
+                )
+            )
+        await session.commit()
+
+
+async def _hunt_acknowledgements(database, actor):
+    _, sessions = database
+    async with sessions() as session:
+        character_id = await session.scalar(
+            select(Character.id).where(Character.telegram_id == actor)
+        )
+        rows = (
+            await session.execute(
+                select(GameActivity.id, GameActivity.status, HuntContext.result_acknowledged)
+                .join(HuntContext, HuntContext.game_activity_id == GameActivity.id)
+                .where(GameActivity.character_id == character_id)
+            )
+        ).all()
+    return {row.id: (row.status, row.result_acknowledged) for row in rows}
 
 
 @pytest.mark.asyncio
@@ -272,6 +321,98 @@ async def test_unacknowledged_hunt_defeat_blocks_stale_travel_callback(database)
             select(WorldState).where(WorldState.character_id == blocked.character_id)
         )
         assert world.location == ROAD
+
+
+@pytest.mark.asyncio
+async def test_acknowledge_result_selects_new_victory_after_acknowledged_defeat(database):
+    actor, service = await _seed_road(database, 771123)
+    now = datetime.now(UTC)
+    old_defeat = UUID("ffffffff-ffff-4fff-8fff-fffffffffff0")
+    new_victory = UUID("00000000-0000-4000-8000-000000000010")
+    await _seed_hunt_receipts(
+        database,
+        actor,
+        [(old_defeat, "failed", now - timedelta(minutes=2), False)],
+    )
+
+    await service.acknowledge_defeat(actor)
+    assert (await _hunt_acknowledgements(database, actor))[old_defeat] == ("failed", True)
+
+    await _seed_hunt_receipts(
+        database,
+        actor,
+        [(new_victory, "completed", now, False)],
+    )
+    await service.acknowledge_result(actor)
+    state_after_victory_ack = await _hunt_acknowledgements(database, actor)
+    assert state_after_victory_ack == {
+        old_defeat: ("failed", True),
+        new_victory: ("completed", True),
+    }
+
+    _, sessions = database
+    async with sessions() as session:
+        pending = await session.scalar(
+            select(func.count(HuntContext.id))
+            .join(GameActivity, HuntContext.game_activity_id == GameActivity.id)
+            .where(
+                HuntContext.result_acknowledged.is_(False),
+                GameActivity.status.in_(("completed", "failed")),
+            )
+        )
+        reward_count = await session.scalar(select(func.count(RewardEvent.id)))
+    assert pending == 0
+
+    # No eligible result remains: repeated acknowledgements are a no-op.
+    await service.acknowledge_result(actor)
+    await service.acknowledge_defeat(actor)
+    assert await _hunt_acknowledgements(database, actor) == state_after_victory_ack
+    async with sessions() as session:
+        assert await session.scalar(select(func.count(RewardEvent.id))) == reward_count
+
+
+@pytest.mark.asyncio
+async def test_acknowledge_defeat_uses_latest_timestamp_not_largest_uuid(database):
+    actor, service = await _seed_road(database, 771124)
+    now = datetime.now(UTC)
+    older = UUID("ffffffff-ffff-4fff-8fff-fffffffffff1")
+    newer = UUID("00000000-0000-4000-8000-000000000011")
+    await _seed_hunt_receipts(
+        database,
+        actor,
+        [
+            (older, "failed", now - timedelta(minutes=2), False),
+            (newer, "failed", now, False),
+        ],
+    )
+
+    await service.acknowledge_defeat(actor)
+
+    assert await _hunt_acknowledgements(database, actor) == {
+        older: ("failed", False),
+        newer: ("failed", True),
+    }
+
+
+@pytest.mark.asyncio
+async def test_blocking_hunt_receipt_uses_latest_timestamp_not_largest_uuid(database):
+    actor, service = await _seed_road(database, 771125)
+    now = datetime.now(UTC)
+    older_defeat = UUID("ffffffff-ffff-4fff-8fff-fffffffffff2")
+    newer_victory = UUID("00000000-0000-4000-8000-000000000012")
+    await _seed_hunt_receipts(
+        database,
+        actor,
+        [
+            (older_defeat, "failed", now - timedelta(minutes=2), False),
+            (newer_victory, "completed", now, False),
+        ],
+    )
+
+    view = await service.resume(actor)
+
+    assert view.kind == "hunt_victory"
+    assert view.activity_id == newer_victory
 
 
 @pytest.mark.asyncio

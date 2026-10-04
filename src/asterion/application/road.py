@@ -888,8 +888,13 @@ class RoadService:
             context = await s.scalar(
                 select(HuntContext)
                 .join(GameActivity, HuntContext.game_activity_id == GameActivity.id)
-                .where(HuntContext.character_id == c.id, GameActivity.status == "failed")
-                .order_by(GameActivity.id.desc())
+                .where(
+                    HuntContext.character_id == c.id,
+                    GameActivity.content_id == HUNT_CONTENT,
+                    GameActivity.status == "failed",
+                    HuntContext.result_acknowledged.is_(False),
+                )
+                .order_by(GameActivity.last_valid_action_at.desc(), GameActivity.id.desc())
                 .limit(1)
                 .with_for_update()
             )
@@ -941,8 +946,13 @@ class RoadService:
             context = await s.scalar(
                 select(HuntContext)
                 .join(GameActivity, HuntContext.game_activity_id == GameActivity.id)
-                .where(HuntContext.character_id == c.id, GameActivity.content_id == HUNT_CONTENT)
-                .order_by(GameActivity.id.desc())
+                .where(
+                    HuntContext.character_id == c.id,
+                    GameActivity.content_id == HUNT_CONTENT,
+                    GameActivity.status.in_(("completed", "failed")),
+                    HuntContext.result_acknowledged.is_(False),
+                )
+                .order_by(GameActivity.last_valid_action_at.desc(), GameActivity.id.desc())
                 .limit(1)
                 .with_for_update()
             )
@@ -2534,7 +2544,7 @@ class RoadService:
                 GameActivity.status.in_(("completed", "failed")),
                 HuntContext.result_acknowledged.is_(False),
             )
-            .order_by(GameActivity.id.desc())
+            .order_by(GameActivity.last_valid_action_at.desc(), GameActivity.id.desc())
             .limit(1)
             .with_for_update()
         )
