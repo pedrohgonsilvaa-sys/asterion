@@ -91,6 +91,7 @@ async def test_rename_preview_commit_reservation_cooldown_and_duplicate_callback
     now = datetime.now(UTC)
     async with sessions.begin() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        old_name = character.name
         character.crowns = 5000
 
     service = _service(sessions)
@@ -103,7 +104,9 @@ async def test_rename_preview_commit_reservation_cooldown_and_duplicate_callback
     assert await service.confirm_rename(actor, preview.revision, now=now) == "Nova"
     async with sessions() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
-        reservation = await session.get(CharacterNameReservation, ("ocaso", "heroa"))
+        reservation = await session.get(
+            CharacterNameReservation, ("ocaso", old_name.casefold())
+        )
         history = await session.scalar(
             select(CharacterRenameHistory).where(
                 CharacterRenameHistory.character_id == character.id
@@ -112,13 +115,13 @@ async def test_rename_preview_commit_reservation_cooldown_and_duplicate_callback
     assert character.name == "Nova" and character.crowns == 2500
     assert reservation is not None and reservation.source == "rename"
     assert reservation.reserved_until == now + timedelta(days=30)
-    assert history.old_name == "Heroa" and history.new_name == "Nova"
+    assert history.old_name == old_name and history.new_name == "Nova"
     with pytest.raises(AccountRejected, match="stale_preview"):
         await service.confirm_rename(actor, preview.revision, now=now)
     view = await service.account(actor, now=now)
     assert view is not None and view.rename_available_at == now + timedelta(days=30)
     async with sessions() as session:
-        assert not await name_available(session, server_id="ocaso", name="Heroa", now=now)
+        assert not await name_available(session, server_id="ocaso", name=old_name, now=now)
 
 
 @pytest.mark.asyncio
@@ -194,6 +197,7 @@ async def test_due_deletion_cleans_character_graph_and_reserves_final_name(datab
     async with sessions.begin() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         character_id = character.id
+        old_name = character.name
         session.add(
             CharacterProfile(
                 character_id=character.id,
@@ -234,7 +238,9 @@ async def test_due_deletion_cleans_character_graph_and_reserves_final_name(datab
             is None
         )
         account = await session.get(Account, actor)
-        reservation = await session.get(CharacterNameReservation, ("ocaso", "heroa"))
+        reservation = await session.get(
+            CharacterNameReservation, ("ocaso", old_name.casefold())
+        )
         request = await session.scalar(
             select(CharacterDeletionRequest).where(
                 CharacterDeletionRequest.character_id == character_id
@@ -244,16 +250,16 @@ async def test_due_deletion_cleans_character_graph_and_reserves_final_name(datab
         assert reservation is not None and reservation.source == "deletion"
         assert reservation.reserved_until == due + timedelta(days=30)
         assert request is not None and request.status == "completed"
-        assert not await name_available(session, server_id="ocaso", name="Heroa", now=due)
+        assert not await name_available(session, server_id="ocaso", name=old_name, now=due)
         assert not await name_available(
-            session, server_id="ocaso", name="Heroa", now=due + timedelta(days=29)
+            session, server_id="ocaso", name=old_name, now=due + timedelta(days=29)
         )
         assert await name_available(
-            session, server_id="ocaso", name="Heroa", now=due + timedelta(days=30)
+            session, server_id="ocaso", name=old_name, now=due + timedelta(days=30)
         )
     creation = CreationService(sessions, "ocaso", NamePolicy())
     async with sessions.begin() as session:
-        assert not await creation._name_allowed(session, "Heroa")
+        assert not await creation._name_allowed(session, old_name)
 
 
 @pytest.mark.asyncio

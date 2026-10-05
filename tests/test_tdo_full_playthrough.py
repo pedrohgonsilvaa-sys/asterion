@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import func, select
 
 import asterion.application.vigor as vigor_module
-from asterion.application.active_arts import ActiveArtService
+from asterion.application.active_arts import ActiveArtService, load_active_art_configuration
 from asterion.application.class_trials import ClassTrialService
 from asterion.application.crafting import CraftingService
 from asterion.application.creation import CreationService
@@ -16,6 +16,7 @@ from asterion.application.equipment import EquipmentService
 from asterion.application.equipment_configuration import (
     build_equipment_configuration,
     load_equipment_configuration,
+    reconcile_character_hp,
     resolve_character_combat_stats,
 )
 from asterion.application.p1 import P1Service
@@ -40,10 +41,19 @@ from asterion.application.world import WorldService
 from asterion.domain.arts import FIRST_CLASS_ART_IDS, SENTINEL_ART_IDS
 from asterion.domain.class_trials import SENTINEL_CONDITION_IDS
 from asterion.domain.combat import action_target_ids, allowed_actions
+from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
 from asterion.domain.dungeons import dungeon_completion_xp
 from asterion.domain.equipment import assignment_for_item_slot, parse_equipment_slot
 from asterion.domain.prologue import PROFILE as PROLOGUE_PROFILE
-from asterion.domain.road import EXPLORATION_PROFILES, select_exploration_result
+from asterion.domain.road import (
+    EXPLORATION_PROFILES,
+    VIGIA_PARTIDO,
+    create_creature_combat,
+    select_exploration_result,
+)
+from asterion.domain.road import (
+    RULESET as ROAD_RULESET,
+)
 from asterion.domain.tdo_galleries import GALLERIES_FAMILY_ID
 from asterion.infrastructure.db.models import (
     Character,
@@ -58,7 +68,9 @@ from asterion.infrastructure.db.models import (
     WorldState,
 )
 from tests.helpers.tdo_playthrough import (
+    P6_DIAGNOSTIC_LOADOUTS,
     TDOPlaythrough,
+    best_p6_diagnostic_configuration,
     choose_p6_policy_action,
     sample_p6_policies,
 )
@@ -84,6 +96,8 @@ def _compact_playthrough_report(driver, mark):
         "vigor_potion_gained_total",
         "simulated_elapsed_seconds",
         "manual_hunts",
+        "manual_hunts_normal_vigor",
+        "manual_hunts_reduced_xp",
         "rounds",
         "explorations",
         "dungeon_runs",
@@ -108,9 +122,23 @@ def _compact_playthrough_report(driver, mark):
             for milestone in driver.level_milestones
         ],
         "xp_by_origin": dict(driver.xp_by_origin),
+        "xp_ledger_total": state.get("xp_ledger_total"),
+        "xp_source_count": len(state.get("xp_sources", [])),
+        "unclassified_xp_sources": state.get("unclassified_xp_sources"),
         "clock": {
             "elapsed_seconds": driver.clock.elapsed_seconds,
             "waits": list(driver.clock.waits),
+            "round_cadence_seconds": sum(
+                wait["seconds"]
+                for wait in driver.clock.waits
+                if str(wait["reason"]).startswith("Ronda cadence")
+            ),
+            "offline_vigor_wait_seconds": sum(
+                wait["seconds"]
+                for wait in driver.clock.waits
+                if "offline natural regeneration" in str(wait["reason"])
+                or "offline Vigor wait" in str(wait["reason"])
+            ),
             "vigor_regenerated": driver.clock.vigor_regenerated,
             "vigor_spent": driver.clock.vigor_spent,
             "vigor_external": driver.clock.vigor_external_gains,
@@ -130,6 +158,8 @@ def _compact_playthrough_report(driver, mark):
                 "location",
                 "hunt_result_count",
                 "manual_hunt_count",
+                "manual_hunts_normal_vigor",
+                "manual_hunts_reduced_xp",
                 "rounds",
                 "exploration_count",
                 "completed_explorations",
@@ -321,10 +351,7 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     blocked_hunt = await rounds.start_hunt(actor)
     assert blocked_hunt is not None and blocked_hunt.kind.startswith("round_")
     if started.kind == "round_active":
-        driver.clock.advance(12 * 60 * 60, "offline wait before Ronda batch")
-        advanced = await rounds.advance_due_rounds()
-        assert advanced > 0
-        round_result = await rounds.resume(actor)
+        round_result = await driver.clock.process_round_cadence(rounds, actor)
     else:
         round_result = started
     assert round_result is not None
@@ -368,6 +395,9 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
 
     # S1 is a normal secondary quest, available once the character reaches Nv.2.
     async def manual_hunt(label, *, capture=True):
+        await driver.clock.wait_for_vigor(
+            sessions, actor, 2, f"offline Vigor wait before {label}"
+        )
         service = RoadService(sessions, "ocaso")
         for _receipt in range(6):
             view = await service.start_hunt(actor)
@@ -538,7 +568,8 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
                 return UUID(hex=seed)
             return original_uuid4()
 
-        before_xp = await current_xp_total()
+        before_xp_state = await driver.capture_xp_totals()
+        before_xp = before_xp_state[0]
         async with sessions() as session:
             before_character = await session.scalar(
                 select(Character).where(Character.telegram_id == actor)
@@ -578,7 +609,14 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             assert attempt is not None and attempt.result_acknowledged is True, (
                 f"{label}: recibo de Desbravar não foi reconhecido no banco"
             )
-        after_xp = await current_xp_total()
+        after_xp_state = await driver.capture_xp_totals()
+        after_xp = after_xp_state[0]
+        driver.record_public_xp_delta(
+            f"direct:Desbravar:{view.attempt_id}:{target_result_id}",
+            "Desbravar",
+            before_xp_state,
+            after_xp_state,
+        )
         async with sessions() as session:
             after_character = await session.scalar(
                 select(Character).where(Character.telegram_id == actor)
@@ -2110,6 +2148,9 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     await travel_to_refuge()
     await travel_from_refuge_to(BOSQUE)
     await rest_and_return(BOSQUE)
+    await driver.clock.wait_for_vigor(
+        sessions, actor, 2, "offline Vigor wait before prepared Ronda batch"
+    )
     round_prep = await rounds.prepare_round(actor, 5)
     assert round_prep is not None and round_prep.kind == "round_prepare", (
         round_prep,
@@ -2134,9 +2175,10 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     assert round_active is not None and round_active.kind in {"round_active", "round_interrupted"}
     round_reconnected = await RoundService(sessions, "ocaso").resume(actor)
     assert round_reconnected is not None and round_reconnected.round_id == round_active.round_id
-    driver.clock.advance(12 * 60 * 60, "offline wait before prepared Ronda batch")
-    await rounds.advance_due_rounds()
-    prepared_round_result = await rounds.resume(actor)
+    if round_active.kind == "round_active":
+        prepared_round_result = await driver.clock.process_round_cadence(rounds, actor)
+    else:
+        prepared_round_result = round_active
     assert prepared_round_result is not None
     prepared_round_completed = prepared_round_result.completed_encounters
     prepared_round_end_reason = prepared_round_result.end_reason
@@ -2213,41 +2255,127 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     p6_view = await p6.action(actor, p6_view.state_version, "enter_chamber")
     assert p6_view is not None and p6_view.step == 3 and p6_view.location == "Câmara do Poente"
     p6_view = await p6.action(actor, p6_view.state_version, "inspect_before")
-    p6_view = await p6.action(actor, p6_view.state_version, "start_boss")
-    assert p6_view is not None and p6_view.kind == "combat" and p6_view.combat is not None
-    await driver.snapshot("P6 · Vigia Partido materializado")
-    initial_heals = dict(p6_view.consumable_quantities).get("consumable.heal", 0)
+    assert p6_view is not None and p6_view.kind == "start_boss"
+
+    async def build_p6_diagnostic_combat():
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            assert character is not None
+            equipment_configuration = await load_equipment_configuration(session, character)
+            active_art_configuration = await load_active_art_configuration(session, character)
+            reconcile_character_hp(character, equipment_configuration)
+            combat = create_creature_combat(
+                uuid4(),
+                character.name,
+                character.character_class,
+                character.race,
+                character.hp,
+                VIGIA_PARTIDO,
+                10,
+                None,
+                player_level=character.level,
+                equipment_configuration=equipment_configuration,
+                ruleset_version=ROAD_RULESET,
+                active_art_ids=active_art_configuration.art_ids,
+            )
+            combat.configuration_snapshot = (combat.configuration_snapshot or {}) | (
+                active_art_configuration.to_data()
+            )
+            return combat
+
+    pure_p6_combat = await build_p6_diagnostic_combat()
+    assert pure_p6_combat.fighters["player"].selected_path in {"sentinela", "devastador"}
+    assert not any(action.startswith("path_art.") for action in pure_p6_combat.player_actions)
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        heal_row = await session.scalar(
+            select(ConsumableStack).where(
+                ConsumableStack.character_id == character.id,
+                ConsumableStack.consumable_id == "consumable.heal",
+            )
+        )
+        initial_heals = heal_row.quantity if heal_row is not None else 0
+    p6_budget = ENCOUNTER_CONSUMABLE_LIMITS.get(VIGIA_PARTIDO.category, 0)
     p6_policy_summary, p6_policy_records = sample_p6_policies(
-        p6_view.combat,
+        pure_p6_combat,
         heal_count=initial_heals,
-        budget_limit=p6_view.consumable_budget_limit,
+        budget_limit=p6_budget,
     )
     driver.p6_diagnostics.append(p6_policy_summary)
+    best_loadout, best_policy, best_policy_summary = best_p6_diagnostic_configuration(
+        p6_policy_summary
+    )
+    consistent_sample_victories = best_policy_summary["victories"]
     print(
         "P6_REAL_COMBAT_STATS="
         f"player={p6_policy_records[0]['player_stats']!r} "
         f"boss={p6_policy_records[0]['boss_stats']!r} "
-        f"path={p6_view.combat.fighters['player'].selected_path!r} "
-        f"arts={tuple(p6_view.combat.player_actions)!r} "
-        f"heals={initial_heals} budget={p6_view.consumable_budget_limit}",
+        f"path={pure_p6_combat.fighters['player'].selected_path!r} "
+        f"loadouts={P6_DIAGNOSTIC_LOADOUTS!r} "
+        f"heals={initial_heals} budget={p6_budget}",
         flush=True,
     )
-    print(f"P6_POLICY_SAMPLE_30={p6_policy_summary!r}", flush=True)
-    if not any(result["victories"] for result in p6_policy_summary.values()):
-        mark = await driver.snapshot("P6 · diagnóstico A/B/C sem vitória em 30 seeds")
+    print(
+        f"P6_POLICY_MATRIX_30_PER_CONFIGURATION={p6_policy_summary!r}; "
+        f"best=({best_loadout}, {best_policy}, {best_policy_summary!r})",
+        flush=True,
+    )
+    # Treat fewer than five wins in a 30-seed cohort as exceptional, rather
+    # than evidence of repeatable viability; no seed is selected for the run.
+    if consistent_sample_victories < 5:
+        mark = await driver.snapshot("P6 · matriz diagnóstica com vitória excepcional ou ausente")
+        await driver.assert_xp_ledger()
         print(f"TDO_PLAYTHROUGH_REPORT={_compact_playthrough_report(driver, mark)!r}", flush=True)
         pytest.skip(
-            "P6 balance candidate: nenhuma das três políticas venceu 30 seeds; "
-            f"snapshot={mark.state!r}; políticas={p6_policy_summary!r}"
+            "P6 balance candidate: nenhuma combinação teve ao menos cinco vitórias em 30 seeds; "
+            f"snapshot={mark.state!r}; matriz={p6_policy_summary!r}"
         )
-    p6_policy = max(
-        p6_policy_summary,
-        key=lambda policy: (
-            p6_policy_summary[policy]["victories"],
-            -p6_policy_summary[policy]["median_boss_hp_remaining"],
-            -p6_policy_summary[policy]["median_damage_received"],
-        ),
+
+    desired_art_ids = P6_DIAGNOSTIC_LOADOUTS[best_loadout]
+    p6_arts = ActiveArtService(sessions, "ocaso")
+    p6_art_view = await p6_arts.view(actor)
+    assert p6_art_view is not None
+    current_arts = {entry.slot: entry.art_id for entry in p6_art_view.slots}
+    if tuple(current_arts.get(slot) for slot in (1, 2, 3)) != desired_art_ids:
+        configuration_version = p6_art_view.combat_configuration_version
+        for slot in (1, 2, 3):
+            if slot in current_arts:
+                result = await p6_arts.unequip_slot(
+                    actor,
+                    slot,
+                    expected_configuration_version=configuration_version,
+                )
+                assert result is not None and result.changed
+                configuration_version = result.combat_configuration_version
+        for slot, art_id in enumerate(desired_art_ids, start=1):
+            result = await p6_arts.equip_art(
+                actor,
+                slot,
+                art_id,
+                expected_configuration_version=configuration_version,
+            )
+            assert result is not None and result.changed
+            configuration_version = result.combat_configuration_version
+    selected_arts = await p6_arts.view(actor)
+    assert selected_arts is not None
+    assert tuple(entry.art_id for entry in selected_arts.slots) == desired_art_ids
+    await driver.snapshot(
+        f"P6 · loadout agregado escolhido · {best_loadout} · {best_policy}"
     )
+
+    p6_view = await p6.resume(actor)
+    assert p6_view is not None and p6_view.kind == "start_boss"
+    p6_view = await p6.action(actor, p6_view.state_version, "start_boss")
+    assert p6_view is not None and p6_view.kind == "combat" and p6_view.combat is not None
+    assert not any(action.startswith("path_art.") for action in p6_view.combat.player_actions)
+    await driver.snapshot("P6 · Vigia Partido materializado após a matriz pura")
+    initial_heals = dict(p6_view.consumable_quantities).get("consumable.heal", 0)
+    p6_policy = best_policy
 
     def p6_action(current):
         combat = current.combat
@@ -2312,6 +2440,23 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             event_name: retaliation_events.count(event_name)
             for event_name in sorted(set(retaliation_events))
         }
+        path_trigger_counts = {}
+        for event in completed_combat.events:
+            for trigger in event.path_triggers:
+                path_trigger_counts[trigger] = path_trigger_counts.get(trigger, 0) + 1
+        player_action_counts = {
+            action: sum(
+                event.actor == "player" and event.action == action
+                for event in completed_combat.events
+            )
+            for action in sorted(
+                {
+                    event.action
+                    for event in completed_combat.events
+                    if event.actor == "player"
+                }
+            )
+        }
         highest_phase = 1
         if boss.hp < boss.stats.hp * Decimal("0.70"):
             highest_phase = 2
@@ -2333,19 +2478,22 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             ),
             "prepared_defends": prepared_defends,
             "retaliation_events": retaliation_counts,
-            "actions": {
-                action: sum(
-                    event.actor == "player" and event.action == action
-                    for event in completed_combat.events
-                )
-                for action in sorted(
-                    {
-                        event.action
-                        for event in completed_combat.events
-                        if event.actor == "player"
-                    }
-                )
-            },
+            "muralha_used": player_action_counts.get(
+                SENTINEL_ART_IDS["muralha_breve"], 0
+            ),
+            "quebra_postura_used": player_action_counts.get(
+                SENTINEL_ART_IDS["quebra_postura"], 0
+            ),
+            "devastador_charge_consumed": path_trigger_counts.get(
+                "devastador.impacto_consumido", 0
+            ),
+            "defeat_cause": (
+                "player_hp_zero"
+                if completed_combat.result == "defeat" and player.hp <= 0
+                else None
+            ),
+            "path_triggers": path_trigger_counts,
+            "actions": player_action_counts,
         }
         public_p6_attempts.append(attempt_record)
         print(f"P6_PUBLIC_ATTEMPT={attempt_record!r}", flush=True)
@@ -2388,6 +2536,7 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             assert p6_view.combat is not None
     if p6_view.progress.get("boss_result") != "victory":
         mark = await driver.snapshot("P6 · 12 tentativas públicas sem vitória")
+        await driver.assert_xp_ledger()
         print(f"P6_PUBLIC_ATTEMPTS={public_p6_attempts!r}", flush=True)
         print(f"TDO_PLAYTHROUGH_REPORT={_compact_playthrough_report(driver, mark)!r}", flush=True)
         pytest.skip(
@@ -2453,4 +2602,5 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         assert world_row is not None and world_row.location == REFUGE
 
     final_mark = await driver.snapshot("TDO Nv.1–10 concluído até P6")
+    await driver.assert_xp_ledger(require_completed_campaign=True)
     print(f"TDO_PLAYTHROUGH_REPORT={_compact_playthrough_report(driver, final_mark)!r}", flush=True)

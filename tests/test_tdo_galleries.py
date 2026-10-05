@@ -1,24 +1,40 @@
 from copy import deepcopy
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import func, select
 
 from asterion.application.dungeons import DungeonService
+from asterion.application.road import REGION, RUINS, RoadService
 from asterion.domain.combat import _enemy_action, _fighter_stat, _perform, act
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.road import (
     CUSTODIO_PRIMEIRO_SELO,
     GUARD_CONDUCTOR,
+    RUINS_EXPLORE_UNLOCK,
+    RUINS_LOCATION,
     VIGIA_INTEGRO,
     road_enemy_stats,
 )
 from asterion.domain.tdo_galleries import (
+    GALLERIES_FAMILY_ID,
     create_galleries_combat,
     gallery_encounter_specs,
 )
 from asterion.infrastructure.db.combat_codec import decode, encode
+from asterion.infrastructure.db.models import (
+    Account,
+    Character,
+    DungeonRun,
+    DungeonRunMember,
+    LocationDiscovery,
+    Quest,
+    Unlock,
+    WorldState,
+)
 
 D = Decimal
 
@@ -39,6 +55,126 @@ def _combat(ordinal: int, *, difficulty: str = "stable", group_size: int = 1):
         run_seed=f"gallery-{ordinal}-{difficulty}-{group_size}",
         initial_group_size=group_size,
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("actor", "initial_vigor"), ((775420, 24), (775421, 0)))
+async def test_galleries_entry_reconciles_vigor_at_exact_natural_threshold(
+    database, monkeypatch, actor, initial_vigor
+):
+    import asterion.application.dungeons as dungeons_module
+    import asterion.application.road as road_module
+    import asterion.application.vigor as vigor_module
+
+    class SimulatedDateTime(datetime):
+        current = datetime(2026, 10, 5, 12, 0, tzinfo=UTC)
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current.astimezone(tz) if tz else cls.current.replace(tzinfo=None)
+
+    clock = SimulatedDateTime
+    monkeypatch.setattr(vigor_module, "utcnow", lambda: clock.current)
+    monkeypatch.setattr(road_module, "datetime", clock)
+    monkeypatch.setattr(dungeons_module, "datetime", clock)
+    monkeypatch.setattr(
+        road_module, "select_exploration_result", lambda *args, **kwargs: "galerias_vigia"
+    )
+
+    _engine, sessions = database
+    character_id = uuid4()
+    async with sessions.begin() as session:
+        session.add(Account(telegram_id=actor))
+        session.add(
+            Character(
+                id=character_id,
+                telegram_id=actor,
+                server_id="ocaso",
+                name="Heroa",
+                race="remanescente",
+                character_class="sentinela",
+                stage="menu:ready",
+                ruleset_version="gdd-1.4.8-baseline-1.0",
+                level=8,
+                xp=0,
+                hp=Decimal("900"),
+                max_hp=Decimal("900"),
+                vigor=initial_vigor,
+                max_vigor=100,
+                vigor_regen_at=clock.current,
+                crowns=0,
+            )
+        )
+        session.add(WorldState(character_id=character_id, region=REGION, location=RUINS))
+        # These are only prior-route prerequisites. The Galleries unlock itself
+        # must be materialized by the public Desbravar result below.
+        session.add_all(
+            (
+                Quest(
+                    character_id=character_id,
+                    quest_id="P4",
+                    title="Pedras que Ainda Vigiam",
+                    status="completed",
+                    step=6,
+                    content_version="tdo-1.0.11",
+                ),
+                LocationDiscovery(character_id=character_id, location_id=RUINS_LOCATION),
+                Unlock(character_id=character_id, unlock_id=RUINS_EXPLORE_UNLOCK),
+            )
+        )
+
+    road = RoadService(sessions, "ocaso")
+    prepared = await road.prepare_explore(actor)
+    assert prepared is not None and prepared.kind == "explore_prepare"
+    discovery = await road.explore(actor)
+    assert discovery is not None and discovery.result_id == "explore.tdo.ruinas.galerias"
+    await road.acknowledge_result(actor, discovery.attempt_id)
+
+    async with sessions() as session:
+        assert await session.scalar(
+            select(Unlock.id).where(
+                Unlock.character_id == character_id,
+                Unlock.unlock_id == GALLERIES_FAMILY_ID,
+            )
+        ) is not None
+
+    service = DungeonService(sessions, "ocaso")
+    threshold_seconds = (25 - initial_vigor) * 864
+    refused = await service.start_solo(actor, "stable", family_id=GALLERIES_FAMILY_ID)
+    assert refused is not None and refused.kind == "detail" and refused.reason == "vigor"
+    clock.current += timedelta(seconds=threshold_seconds - 1)
+    refused = await service.start_solo(actor, "stable", family_id=GALLERIES_FAMILY_ID)
+    assert refused is not None and refused.kind == "detail" and refused.reason == "vigor"
+    async with sessions() as session:
+        character = await session.get(Character, character_id)
+        assert character is not None and character.vigor == 24
+        assert await session.scalar(select(func.count(DungeonRun.id))) == 0
+
+    clock.current += timedelta(seconds=1)
+    accepted = await service.start_solo(actor, "stable", family_id=GALLERIES_FAMILY_ID)
+    assert accepted is not None and accepted.kind == "ready"
+    assert accepted.run_id is not None and accepted.vigor == 0
+    run_id = accepted.run_id
+
+    resumed = await DungeonService(sessions, "ocaso").resume(actor)
+    assert resumed is not None and resumed.run_id == run_id
+    retried_start = await service.start_solo(actor, "stable", family_id=GALLERIES_FAMILY_ID)
+    assert retried_start is not None and retried_start.run_id == run_id
+    async with sessions() as session:
+        runs = (
+            await session.scalars(
+                select(DungeonRun).where(
+                    DungeonRun.dungeon_family_id == GALLERIES_FAMILY_ID
+                )
+            )
+        ).all()
+        member = await session.scalar(
+            select(DungeonRunMember).where(DungeonRunMember.run_id == run_id)
+        )
+        character = await session.get(Character, character_id)
+        assert len(runs) == 1 and runs[0].id == run_id and runs[0].status == "active"
+        assert member is not None and member.vigor_reserved == 25
+        assert character is not None and character.vigor == 0
 
 
 @pytest.mark.parametrize(

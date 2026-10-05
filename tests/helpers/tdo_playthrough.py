@@ -13,14 +13,15 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from statistics import median
 from typing import Any
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from asterion.application.progression import level_xp
+from asterion.domain.arts import SENTINEL_ART_IDS
+from asterion.domain.class_trials import sentinel_player_actions
 from asterion.domain.combat import (
-    _enemy_action,
     act,
     allowed_actions,
     combat_consumable_options,
@@ -46,6 +47,9 @@ from asterion.infrastructure.db.models import (
     HuntRound,
     MaterialStack,
     Quest,
+    RewardComponent,
+    RewardEvent,
+    RewardGrant,
     Unlock,
     WorldState,
 )
@@ -107,6 +111,17 @@ class SimulatedJourneyClock:
         self.advance(seconds, reason)
         return seconds
 
+    async def process_round_cadence(self, service, actor: int, *, max_boundaries: int = 5):
+        """Advance a normal Ronda at its official 180-second boundaries."""
+        result = None
+        for ordinal in range(1, max_boundaries + 1):
+            self.advance(180, f"Ronda cadence · fronteira {ordinal}/5 · +3m")
+            await service.advance_due_rounds()
+            result = await service.resume(actor)
+            if result is None or result.kind != "round_active":
+                return result
+        return result
+
 
 @dataclass(frozen=True)
 class JourneyMark:
@@ -127,30 +142,243 @@ class TDOPlaythrough:
     _last_total_xp: int | None = None
     _last_level: int | None = None
     _last_level_milestone_xp_total: int | None = None
-
-    @staticmethod
-    def _xp_origin(label: str) -> str:
-        normalized = label.casefold()
-        if "prólogo" in normalized or "prologo" in normalized:
-            return "Prólogo"
-        if "desbravar" in normalized or "explore" in normalized:
-            return "Desbravar"
-        if "cripta" in normalized or "galerias" in normalized or "masmorra" in normalized:
-            return "Masmorra"
-        if "ronda" in normalized:
-            return "Ronda"
-        if "caçada" in normalized or "cacada" in normalized or "hunt" in normalized:
-            return "Caçada"
-        if any(f"p{number}" in normalized for number in range(1, 7)):
-            return "P1–P6"
-        if any(f"s{number}" in normalized for number in range(1, 7)):
-            return "S1–S6"
-        return "Bestiário/outros"
+    direct_xp_sources: dict[str, tuple[str, int]] = field(default_factory=dict)
+    xp_source_rows: list[dict[str, Any]] = field(default_factory=list)
+    unclassified_xp_sources: list[str] = field(default_factory=list)
 
     @staticmethod
     def total_xp(level: int, residual_xp: int) -> int:
         """Derive received XP from level thresholds and the current residual."""
         return sum(level_xp(value) for value in range(1, level)) + residual_xp
+
+    async def capture_xp_totals(self) -> tuple[int, int]:
+        """Capture persisted character XP and ledger XP around one public action."""
+        async with self.sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == self.actor)
+            )
+            if character is None:
+                raise AssertionError("cannot capture XP without a character")
+            total = self.total_xp(character.level, character.xp)
+            event_total = await session.scalar(
+                select(func.coalesce(func.sum(RewardComponent.quantity), 0))
+                .join(RewardEvent, RewardEvent.id == RewardComponent.reward_event_id)
+                .where(
+                    RewardEvent.character_id == character.id,
+                    RewardComponent.kind.in_(
+                        (
+                            "xp",
+                            "enemy_xp",
+                            "bestiary_observation_xp",
+                            "bestiary_first_victory_xp",
+                        )
+                    ),
+                )
+            )
+            grant_total = await session.scalar(
+                select(func.coalesce(func.sum(RewardGrant.xp), 0)).where(
+                    RewardGrant.character_id == character.id
+                )
+            )
+            return total, int(event_total or 0) + int(grant_total or 0)
+
+    def record_public_xp_delta(
+        self,
+        source_id: str,
+        origin: str,
+        before: tuple[int, int],
+        after: tuple[int, int],
+    ) -> None:
+        """Attribute only direct XP from one measured public operation.
+
+        Persisted RewardEvent/RewardGrant XP is subtracted from the operation's
+        total delta; the remainder is the direct, non-ledger award.
+        """
+        total_delta = after[0] - before[0]
+        persisted_delta = after[1] - before[1]
+        direct_delta = total_delta - persisted_delta
+        if direct_delta < 0:
+            raise AssertionError(
+                f"XP ledger grew by {persisted_delta}, but the public operation "
+                f"only changed character XP by {total_delta}; source={source_id}"
+            )
+        if direct_delta:
+            previous = self.direct_xp_sources.get(source_id)
+            current = (origin, direct_delta)
+            if previous is not None and previous != current:
+                raise AssertionError(
+                    f"direct XP source changed on retry: {source_id} {previous!r} -> {current!r}"
+                )
+            self.direct_xp_sources[source_id] = current
+
+    @staticmethod
+    def _xp_source_origin(source_id: str, content_id: str | None = None) -> str:
+        if source_id.startswith("p") and source_id[1:2].isdigit():
+            principal = source_id[:2].upper()
+            if ":enemy-xp:" in source_id:
+                return f"{principal} · inimigos"
+            return principal
+        if source_id.startswith("s") and source_id[1:2].isdigit():
+            secondary = source_id[:2].upper()
+            if ":enemy-xp:" in source_id:
+                return f"{secondary} · inimigos"
+            return secondary
+        if source_id.startswith("activity:"):
+            if content_id == "prologue_first_combat":
+                return "Prólogo"
+            if content_id == "road_hunt_round_encounter":
+                return "Ronda"
+            if content_id == "road_manual_hunt":
+                return "Caçada"
+            return "Atividade de combate"
+        if source_id.startswith("explore:"):
+            return "Desbravar"
+        if source_id.startswith("dungeon.tdo.cripta_ocaso.run."):
+            return "Cripta"
+        if source_id.startswith("dungeon.tdo.galerias_vigia.run."):
+            return "Galerias"
+        if source_id.startswith(("bestiary:", "bestiary.first_victory:")):
+            return "Bestiário"
+        if source_id.startswith("direct:"):
+            return source_id.split(":", 2)[1]
+        return "Não classificado"
+
+    async def _xp_ledger(
+        self, session, character_id
+    ) -> tuple[dict[str, int], list[dict[str, Any]], list[str]]:
+        rows = (
+            await session.execute(
+                select(
+                    RewardEvent.source_id,
+                    RewardComponent.kind,
+                    func.sum(RewardComponent.quantity),
+                )
+                .join(RewardComponent, RewardComponent.reward_event_id == RewardEvent.id)
+                .where(
+                    RewardEvent.character_id == character_id,
+                    RewardComponent.kind.in_(
+                        (
+                            "xp",
+                            "enemy_xp",
+                            "bestiary_observation_xp",
+                            "bestiary_first_victory_xp",
+                        )
+                    ),
+                )
+                .group_by(RewardEvent.source_id, RewardComponent.kind)
+            )
+        ).all()
+        source_amounts: dict[str, int] = {}
+        for source_id, _kind, quantity in rows:
+            source_amounts[str(source_id)] = source_amounts.get(str(source_id), 0) + int(quantity)
+
+        grant_rows = (
+            await session.execute(
+                select(RewardGrant.game_activity_id, RewardGrant.xp, GameActivity.content_id)
+                .join(GameActivity, GameActivity.id == RewardGrant.game_activity_id)
+                .where(RewardGrant.character_id == character_id)
+            )
+        ).all()
+        for activity_id, quantity, content_id in grant_rows:
+            source_id = f"activity:{activity_id}"
+            if content_id == "prologue_first_combat":
+                source_amounts[source_id] = source_amounts.get(source_id, 0) + int(quantity)
+
+        activity_ids = [
+            UUID(source_id.split(":", 1)[1])
+            for source_id in source_amounts
+            if source_id.startswith("activity:")
+        ]
+        content_by_activity = {}
+        if activity_ids:
+            activity_rows = (
+                await session.execute(
+                    select(GameActivity.id, GameActivity.content_id).where(
+                        GameActivity.id.in_(activity_ids)
+                    )
+                )
+            ).all()
+            content_by_activity = {row.id: row.content_id for row in activity_rows}
+
+        exploration_ids = [
+            UUID(source_id.split(":", 1)[1])
+            for source_id in source_amounts
+            if source_id.startswith("explore:")
+        ]
+        exploration_result_by_id = {}
+        if exploration_ids:
+            exploration_rows = (
+                await session.execute(
+                    select(ExplorationAttempt.id, ExplorationAttempt.result_id).where(
+                        ExplorationAttempt.id.in_(exploration_ids)
+                    )
+                )
+            ).all()
+            exploration_result_by_id = {row.id: row.result_id for row in exploration_rows}
+
+        origins: dict[str, int] = {}
+        source_details: list[dict[str, Any]] = []
+        unknown: list[str] = []
+        for source_id, amount in sorted(source_amounts.items()):
+            activity_id = (
+                UUID(source_id.split(":", 1)[1])
+                if source_id.startswith("activity:")
+                else None
+            )
+            origin = self._xp_source_origin(
+                source_id, content_by_activity.get(activity_id) if activity_id else None
+            )
+            if origin == "Não classificado":
+                unknown.append(source_id)
+            origins[origin] = origins.get(origin, 0) + amount
+            detail = {"source_id": source_id, "origin": origin, "xp": amount}
+            if source_id.startswith("explore:"):
+                attempt_id = UUID(source_id.split(":", 1)[1])
+                detail["result_id"] = exploration_result_by_id.get(attempt_id)
+            source_details.append(detail)
+
+        ledger_ids = set(source_amounts)
+        for source_id, (origin, amount) in sorted(self.direct_xp_sources.items()):
+            if source_id in ledger_ids:
+                continue
+            origins[origin] = origins.get(origin, 0) + amount
+            source_details.append({"source_id": source_id, "origin": origin, "xp": amount})
+        return origins, source_details, unknown
+
+    async def assert_xp_ledger(self, *, require_completed_campaign: bool = False) -> None:
+        """Require exact XP reconciliation and report concrete unknown sources."""
+        async with self.sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == self.actor)
+            )
+            if character is None:
+                raise AssertionError("cannot validate XP ledger without a character")
+            total = self.total_xp(character.level, character.xp)
+            origins, details, unknown = await self._xp_ledger(session, character.id)
+        ledger_total = sum(origins.values())
+        level_1_to_11 = sum(level_xp(value) for value in range(1, 11))
+        if ledger_total != total or unknown:
+            raise AssertionError(
+                "XP ledger mismatch: "
+                f"character_total={total}, ledger_total={ledger_total}, "
+                f"unclassified_sources={unknown!r}, details={details!r}"
+            )
+        if level_1_to_11 != 97_800:
+            raise AssertionError(
+                f"level 1 to 11 XP threshold changed unexpectedly: {level_1_to_11}"
+            )
+        if require_completed_campaign:
+            principal_fixed = sum(origins.get(f"P{number}", 0) for number in range(1, 7))
+            secondary_fixed = sum(origins.get(f"S{number}", 0) for number in range(1, 7))
+            if principal_fixed != 37_120 or origins.get("P6", 0) != 14_220:
+                raise AssertionError(
+                    f"fixed principal XP mismatch: total={principal_fixed}, "
+                    f"P6={origins.get('P6', 0)}, sources={details!r}"
+                )
+            if secondary_fixed != 21_965:
+                raise AssertionError(
+                    f"fixed secondary XP mismatch: total={secondary_fixed}, sources={details!r}"
+                )
 
     async def snapshot(self, label: str) -> JourneyMark:
         """Read a compact persisted-state diagnostic; this method never writes."""
@@ -343,6 +571,46 @@ class TDOPlaythrough:
                     )
                     or 0
                 )
+                manual_activity_ids = (
+                    await session.scalars(
+                        select(GameActivity.id)
+                        .join(HuntContext, HuntContext.game_activity_id == GameActivity.id)
+                        .where(
+                            HuntContext.character_id == character.id,
+                            GameActivity.content_id == "road_manual_hunt",
+                        )
+                    )
+                ).all()
+                manual_reward_kinds: dict[str, set[str]] = {}
+                if manual_activity_ids:
+                    manual_rows = (
+                        await session.execute(
+                            select(RewardEvent.source_id, RewardComponent.kind)
+                            .join(
+                                RewardComponent,
+                                RewardComponent.reward_event_id == RewardEvent.id,
+                            )
+                            .where(
+                                RewardEvent.character_id == character.id,
+                                RewardEvent.source_id.in_(
+                                    [
+                                        f"activity:{activity_id}"
+                                        for activity_id in manual_activity_ids
+                                    ]
+                                ),
+                            )
+                        )
+                    ).all()
+                    for source_id, kind in manual_rows:
+                        manual_reward_kinds.setdefault(source_id, set()).add(kind)
+                manual_hunts_normal_vigor = sum(
+                    "xp" in kinds and "crowns" in kinds
+                    for kinds in manual_reward_kinds.values()
+                )
+                manual_hunts_reduced_xp = sum(
+                    "xp" in kinds and "crowns" not in kinds
+                    for kinds in manual_reward_kinds.values()
+                )
                 rounds = (
                     await session.execute(
                         select(HuntRound.status, func.count(HuntRound.id))
@@ -365,6 +633,12 @@ class TDOPlaythrough:
                 cumulative_xp = sum(
                     level_xp(level) for level in range(1, character.level)
                 ) + character.xp
+                xp_by_origin, xp_source_rows, unclassified_xp_sources = await self._xp_ledger(
+                    session, character.id
+                )
+                self.xp_by_origin = xp_by_origin
+                self.xp_source_rows = xp_source_rows
+                self.unclassified_xp_sources = unclassified_xp_sources
                 regenerated_delta = (
                     self.clock.vigor_regenerated - self.clock._last_snapshot_regenerated
                 )
@@ -391,6 +665,10 @@ class TDOPlaythrough:
                     ),
                     "xp_received_total": cumulative_xp,
                     "xp_received_since_previous_snapshot": xp_since_snapshot,
+                    "xp_ledger_total": sum(xp_by_origin.values()),
+                    "xp_by_origin": dict(xp_by_origin),
+                    "xp_sources": list(xp_source_rows),
+                    "unclassified_xp_sources": list(unclassified_xp_sources),
                     "crowns": character.crowns,
                     "vigor": character.vigor,
                     "vigor_regenerated_total": self.clock.vigor_regenerated,
@@ -469,6 +747,8 @@ class TDOPlaythrough:
                     ],
                     "hunt_result_count": len(hunt_results),
                     "manual_hunt_count": manual_hunts,
+                    "manual_hunts_normal_vigor": manual_hunts_normal_vigor,
+                    "manual_hunts_reduced_xp": manual_hunts_reduced_xp,
                     "rounds": dict(rounds),
                     "exploration_count": exploration_count,
                     "completed_explorations": completed_explorations,
@@ -501,13 +781,6 @@ class TDOPlaythrough:
                         else None
                     ),
                 }
-                if self._last_total_xp is not None:
-                    xp_delta = max(0, cumulative_xp - self._last_total_xp)
-                    if xp_delta:
-                        origin = self._xp_origin(label)
-                        self.xp_by_origin[origin] = (
-                            self.xp_by_origin.get(origin, 0) + xp_delta
-                        )
                 if self._last_level is None:
                     self._last_level_milestone_xp_total = cumulative_xp
                 elif character.level > self._last_level:
@@ -545,6 +818,8 @@ class TDOPlaythrough:
                                     for family_id, status, count in dungeon_runs
                                 ],
                                 "manual_hunts": manual_hunts,
+                                "manual_hunts_normal_vigor": manual_hunts_normal_vigor,
+                                "manual_hunts_reduced_xp": manual_hunts_reduced_xp,
                                 "rounds": dict(rounds),
                                 "quests": [
                                     (quest["id"], quest["status"], quest["step"])
@@ -729,6 +1004,35 @@ def _p6_best_art(combat) -> str | None:
     )
 
 
+P6_DIAGNOSTIC_LOADOUTS = {
+    "A": (
+        SENTINEL_ART_IDS["golpe_de_guarda"],
+        SENTINEL_ART_IDS["quebra_postura"],
+        SENTINEL_ART_IDS["impacto_resoluto"],
+    ),
+    "B": (
+        SENTINEL_ART_IDS["muralha_breve"],
+        SENTINEL_ART_IDS["quebra_postura"],
+        SENTINEL_ART_IDS["impacto_resoluto"],
+    ),
+    "C": (
+        SENTINEL_ART_IDS["golpe_de_guarda"],
+        SENTINEL_ART_IDS["muralha_breve"],
+        SENTINEL_ART_IDS["impacto_resoluto"],
+    ),
+    "D": (
+        SENTINEL_ART_IDS["golpe_de_guarda"],
+        SENTINEL_ART_IDS["quebra_postura"],
+        SENTINEL_ART_IDS["muralha_breve"],
+    ),
+}
+
+
+def _p6_available_art(combat, key: str) -> str | None:
+    action_id = SENTINEL_ART_IDS[key]
+    return action_id if action_id in allowed_actions(combat) else None
+
+
 def choose_p6_policy_action(combat, policy, *, heal_count, budget_limit):
     available = allowed_actions(combat)
     if not available:
@@ -756,28 +1060,62 @@ def choose_p6_policy_action(combat, policy, *, heal_count, budget_limit):
             return charged_art
 
     heal_threshold = {
-        "simple": Decimal("0.40"),
+        "baseline": Decimal("0.40"),
         "sentinela": Decimal("0.55"),
-        "devastador": Decimal("0.55"),
+        "devastador": Decimal("0.48"),
     }[policy]
     if can_heal and hp_fraction <= heal_threshold:
         return "consumable:consumable.heal"
 
-    retaliation_active = player.retaliation_charges > 0 and player.retaliation_remaining > 0
-    if retaliation_active:
+    if policy == "baseline":
         art = _p6_best_art(combat)
         if art is not None:
             return art
+    else:
+        retaliation_active = (
+            player.retaliation_charges > 0 and player.retaliation_remaining > 0
+        )
+        impact = _p6_available_art(combat, "impacto_resoluto")
+        guard = _p6_available_art(combat, "golpe_de_guarda")
+        break_posture = _p6_available_art(combat, "quebra_postura")
+        wall = _p6_available_art(combat, "muralha_breve")
 
-    if policy in {"sentinela", "devastador"} and "defend" in available:
-        # Preview the same deterministic enemy selector on a copy. A strong
-        # non-telegraphed strike is a sensible time to reduce damage and earn
-        # the real Sentinel retaliation event for the next offensive Art.
-        preview = deepcopy(combat)
-        enemy_action_id = _enemy_action(preview, "enemy")
-        enemy_action = combat.enemy_actions.get(enemy_action_id)
-        if enemy_action is not None and enemy_action.coefficient >= Decimal("1.35"):
-            return "defend"
+        if (
+            policy == "sentinela"
+            and wall is not None
+            and (player.barrier <= 0 or player.barrier_remaining <= 0)
+            and hp_fraction < Decimal("0.90")
+        ):
+            return wall
+        if (
+            policy == "devastador"
+            and hp_fraction < Decimal("0.45")
+            and wall is not None
+            and (player.barrier <= 0 or player.barrier_remaining <= 0)
+        ):
+            return wall
+
+        if retaliation_active:
+            for action in (impact, guard, break_posture):
+                if action is not None:
+                    return action
+
+        enemy = combat.fighters.get("enemy")
+        has_defense_break = bool(
+            enemy
+            and any(
+                effect.kind == "debuff"
+                and effect.remaining > 0
+                and effect.stat == "defense"
+                for effect in enemy.effects
+            )
+        )
+        if break_posture is not None and not has_defense_break:
+            return break_posture
+        if impact is not None:
+            return impact
+        if guard is not None:
+            return guard
 
     art = _p6_best_art(combat)
     if art is not None:
@@ -792,6 +1130,7 @@ def simulate_p6_policy(
     *,
     seed: int,
     policy: str,
+    loadout: str = "A",
     heal_count: int,
     budget_limit: int,
 ) -> dict[str, Any]:
@@ -800,6 +1139,20 @@ def simulate_p6_policy(
 
     combat = deepcopy(initial_combat)
     combat.id = uuid5(NAMESPACE_URL, f"asterion:tdo:p6:diagnostic:{seed}")
+    art_ids = P6_DIAGNOSTIC_LOADOUTS[loadout]
+    retained_actions = {
+        action_id: action
+        for action_id, action in combat.player_actions.items()
+        if not action_id.startswith(("class_art.sentinela.", "path_art."))
+    }
+    combat.player_actions = retained_actions | sentinel_player_actions(art_ids)
+    if combat.configuration_snapshot is not None:
+        snapshot = dict(combat.configuration_snapshot)
+        snapshot["active_arts"] = [
+            {"slot": index, "art_id": art_id}
+            for index, art_id in enumerate(art_ids, start=1)
+        ]
+        combat.configuration_snapshot = snapshot
     starting_enemy = combat.fighters["enemy"]
     enemy_max_hp = starting_enemy.stats.hp
     player = combat.fighters["player"]
@@ -808,10 +1161,13 @@ def simulate_p6_policy(
     remaining_heals = heal_count
     actions: Counter[str] = Counter()
     defended_prepared = 0
+    charge_granted = 0
+    charge_consumed = 0
 
     for _ in range(400):
         if combat.result is not None:
             break
+        player = combat.fighters["player"]
         action = choose_p6_policy_action(
             combat,
             policy,
@@ -829,12 +1185,26 @@ def simulate_p6_policy(
                 raise AssertionError("Pure P6 diagnostic could not use available heal")
             remaining_heals -= 1
         else:
+            previous_charge = player.path_state.get("devastador_charge")
+            previous_event_count = len(combat.events)
             if action == "defend" and combat.prepared_action is not None:
                 defended_prepared += 1
+            if action == "defend":
+                actions["defend"] += 1
             updated = act(combat, action)
             if updated.version == combat.version:
                 raise AssertionError(f"Pure P6 diagnostic action was rejected: {action}")
-        actions[action] += 1
+            new_events = updated.events[previous_event_count:]
+            charge_consumed += sum(
+                "devastador.impacto_consumido" in event.path_triggers
+                for event in new_events
+            )
+            next_charge = updated.fighters["player"].path_state.get("devastador_charge")
+            charge_granted += int(
+                not isinstance(previous_charge, dict) and isinstance(next_charge, dict)
+            )
+        if action != "defend":
+            actions[action] += 1
         combat = updated
     else:
         raise AssertionError("Pure P6 diagnostic exceeded 400 player actions")
@@ -856,6 +1226,7 @@ def simulate_p6_policy(
     return {
         "seed": seed,
         "policy": policy,
+        "loadout": loadout,
         "result": combat.result,
         "turns": combat.round,
         "player_actions": sum(actions.values()),
@@ -867,6 +1238,19 @@ def simulate_p6_policy(
         "prepared_defended": defended_prepared,
         "retaliation_granted": retaliation_events["granted"],
         "retaliation_consumed": retaliation_events["consumed"],
+        "muralha_used": actions[SENTINEL_ART_IDS["muralha_breve"]],
+        "quebra_postura_used": actions[SENTINEL_ART_IDS["quebra_postura"]],
+        "impacto_resoluto_used": actions[SENTINEL_ART_IDS["impacto_resoluto"]],
+        "defend_used": actions["defend"],
+        "devastador_charge_granted": charge_granted,
+        "devastador_charge_consumed": charge_consumed,
+        "defeat_cause": (
+            "player_hp_zero"
+            if combat.result == "defeat" and combat.fighters["player"].hp <= 0
+            else "other"
+            if combat.result == "defeat"
+            else None
+        ),
         "actions": dict(actions),
         "player_stats": {
             "hp": str(player_stats.hp),
@@ -889,36 +1273,95 @@ def simulate_p6_policy(
 
 
 def sample_p6_policies(initial_combat, *, heal_count: int, budget_limit: int, seeds=range(1, 31)):
-    """Run a small deterministic A/B/C pure-combat sample for the test report."""
+    """Run four legal Sentinela loadouts against three deterministic policies."""
     records = [
         simulate_p6_policy(
             initial_combat,
             seed=seed,
             policy=policy,
+            loadout=loadout,
             heal_count=heal_count,
             budget_limit=budget_limit,
         )
-        for policy in ("simple", "sentinela", "devastador")
+        for loadout in P6_DIAGNOSTIC_LOADOUTS
+        for policy in ("baseline", "sentinela", "devastador")
         for seed in seeds
     ]
     summary = {}
-    for policy in ("simple", "sentinela", "devastador"):
-        cohort = [record for record in records if record["policy"] == policy]
-        summary[policy] = {
-            "samples": len(cohort),
-            "victories": sum(record["result"] == "victory" for record in cohort),
-            "defeats": sum(record["result"] == "defeat" for record in cohort),
-            "victory_seeds": [
-                record["seed"] for record in cohort if record["result"] == "victory"
-            ],
-            "median_turns": median(record["turns"] for record in cohort),
-            "median_boss_hp_remaining": median(
-                int(Decimal(record["boss_hp_remaining"])) for record in cohort
-            ),
-            "median_damage_received": median(record["damage_received"] for record in cohort),
-            "median_max_phase": median(record["highest_phase"] for record in cohort),
-            "median_heals_used": median(record["heals_used"] for record in cohort),
-            "retaliation_granted": sum(record["retaliation_granted"] for record in cohort),
-            "retaliation_consumed": sum(record["retaliation_consumed"] for record in cohort),
-        }
+    for loadout, art_ids in P6_DIAGNOSTIC_LOADOUTS.items():
+        summary[loadout] = {"arts": art_ids, "policies": {}}
+        for policy in ("baseline", "sentinela", "devastador"):
+            cohort = [
+                record
+                for record in records
+                if record["loadout"] == loadout and record["policy"] == policy
+            ]
+            defeats = [record for record in cohort if record["result"] == "defeat"]
+            summary[loadout]["policies"][policy] = {
+                "samples": len(cohort),
+                "victories": sum(record["result"] == "victory" for record in cohort),
+                "defeats": len(defeats),
+                "median_turns": median(record["turns"] for record in cohort),
+                "median_boss_hp_remaining": median(
+                    int(Decimal(record["boss_hp_remaining"])) for record in cohort
+                ),
+                "median_boss_hp_remaining_on_defeat": (
+                    median(int(Decimal(record["boss_hp_remaining"])) for record in defeats)
+                    if defeats
+                    else 0
+                ),
+                "median_player_hp_remaining": median(
+                    Decimal(record["player_hp_remaining"]) for record in cohort
+                ),
+                "median_damage_received": median(record["damage_received"] for record in cohort),
+                "median_max_phase": median(record["highest_phase"] for record in cohort),
+                "median_heals_used": median(record["heals_used"] for record in cohort),
+                "heals_used_total": sum(record["heals_used"] for record in cohort),
+                "defend_used_total": sum(record["defend_used"] for record in cohort),
+                "prepared_defended_total": sum(
+                    record["prepared_defended"] for record in cohort
+                ),
+                "muralha_used_total": sum(record["muralha_used"] for record in cohort),
+                "quebra_postura_used_total": sum(
+                    record["quebra_postura_used"] for record in cohort
+                ),
+                "retaliation_granted_total": sum(
+                    record["retaliation_granted"] for record in cohort
+                ),
+                "retaliation_consumed_total": sum(
+                    record["retaliation_consumed"] for record in cohort
+                ),
+                "devastador_charge_granted_total": sum(
+                    record["devastador_charge_granted"] for record in cohort
+                ),
+                "devastador_charge_consumed_total": sum(
+                    record["devastador_charge_consumed"] for record in cohort
+                ),
+                "defeat_causes": {
+                    cause: sum(record["defeat_cause"] == cause for record in defeats)
+                    for cause in sorted(
+                        {record["defeat_cause"] for record in defeats if record["defeat_cause"]}
+                    )
+                },
+            }
     return summary, records
+
+
+def best_p6_diagnostic_configuration(summary):
+    """Choose aggregate performance without selecting a winning seed."""
+    choices = [
+        (loadout, policy, result)
+        for loadout, loadout_result in summary.items()
+        for policy, result in loadout_result["policies"].items()
+    ]
+    if not choices:
+        raise AssertionError("P6 diagnostic matrix is empty")
+    return max(
+        choices,
+        key=lambda choice: (
+            choice[2]["victories"],
+            -choice[2]["median_boss_hp_remaining"],
+            -choice[2]["median_damage_received"],
+            -choice[2]["median_turns"],
+        ),
+    )

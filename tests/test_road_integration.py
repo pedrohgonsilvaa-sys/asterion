@@ -13,7 +13,7 @@ from asterion.application.road import REFUGE, ROAD, RoadService
 from asterion.domain.arts import FIRST_CLASS_ART_IDS, SENTINEL_ART_IDS
 from asterion.domain.combat import act, allowed_actions
 from asterion.domain.combat_math import resolve_combat_stats
-from asterion.domain.road import materialize_equipment
+from asterion.domain.road import enemy_xp, materialize_equipment
 from asterion.domain.talents import TALENTS_BY_CLASS
 from asterion.infrastructure.db.models import (
     Account,
@@ -56,7 +56,7 @@ async def _seed_road(
                 id=cid,
                 telegram_id=actor,
                 server_id="ocaso",
-                name="Heroa",
+                name=f"Hero{chr(ord('a') + actor % 26)}",
                 race="remanescente",
                 character_class="sentinela",
                 stage="menu:ready",
@@ -645,6 +645,68 @@ async def test_exploration_combat_with_low_vigor_only_pays_quarter_xp(database, 
                 )
             )
         ) == 0
+
+
+@pytest.mark.asyncio
+async def test_manual_hunt_with_insufficient_vigor_receives_quarter_xp_only(database, monkeypatch):
+    import asterion.application.road as road_module
+    from asterion.domain.road import creature_for
+
+    actor, service = await _seed_road(database, 771127, vigor=0)
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor).with_for_update()
+        )
+        character.vigor_regen_at = datetime.now(UTC)
+    await service.travel(actor, ROAD)
+    creature = creature_for("dog_cinereo")
+    monkeypatch.setattr(road_module, "select_creature", lambda *args, **kwargs: creature)
+    monkeypatch.setattr(road_module, "select_variant", lambda *args, **kwargs: None)
+
+    view = await service.start_hunt(actor)
+    for _ in range(100):
+        if view.kind != "combat":
+            break
+        action = "art" if "art" in allowed_actions(view.combat) else "attack"
+        view = await service.action(actor, view.activity_id, view.combat.version, action)
+    assert view.kind == "hunt_victory"
+    await service.acknowledge_result(actor)
+
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        context = await session.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == view.activity_id)
+        )
+        reward = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == f"activity:{view.activity_id}",
+            )
+        )
+        xp = await session.scalar(
+            select(RewardComponent.quantity).where(
+                RewardComponent.reward_event_id == reward.id,
+                RewardComponent.kind == "xp",
+            )
+        )
+        crowns = await session.scalar(
+            select(func.count(RewardComponent.id)).where(
+                RewardComponent.reward_event_id == reward.id,
+                RewardComponent.kind == "crowns",
+            )
+        )
+        expected = enemy_xp(
+            context.enemy_level,
+            context.category,
+            Decimal("0.25"),
+            player_level=character.level,
+        )
+        assert xp == expected
+        assert xp < enemy_xp(
+            context.enemy_level, context.category, player_level=character.level
+        )
+        assert crowns == 0
+        assert character.vigor == 0
 
 
 @pytest.mark.asyncio
