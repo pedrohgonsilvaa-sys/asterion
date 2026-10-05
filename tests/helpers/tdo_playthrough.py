@@ -449,6 +449,23 @@ class TDOPlaythrough:
                                 ],
                                 "manual_hunts": manual_hunts,
                                 "rounds": dict(rounds),
+                                "quests": [
+                                    (quest["id"], quest["status"], quest["step"])
+                                    for quest in state["quests"]
+                                ],
+                                "equipped": [
+                                    (slot, item_name, rarity, item_level, payload)
+                                    for slot, _item_id, item_name, rarity, item_level, payload
+                                    in state["equipped"]
+                                ],
+                                "equipment_inventory": [
+                                    (item_name, rarity, slot, item_level, is_equipped)
+                                    for _item_id, item_name, rarity, slot, item_level, is_equipped
+                                    in state["equipment_inventory"]
+                                ],
+                                "consumables": state["consumables"],
+                                "materials": state["materials"],
+                                "braziers": state["braziers"],
                             }
                         )
                         previous_total = milestone_total
