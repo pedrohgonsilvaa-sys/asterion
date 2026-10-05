@@ -344,7 +344,6 @@ class DungeonService:
                 character,
                 kind="detail",
                 difficulty_gates=tuple(gates.items()),
-                first_clear=stable,
                 family_id=family.family_id,
             )
 
