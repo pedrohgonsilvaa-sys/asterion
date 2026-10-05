@@ -632,8 +632,11 @@ class RoundService(RoadService):
             guard += 1
             if guard > state.batch_size + 1:
                 raise RuntimeError("hunt round advancement exceeded batch guard")
-            await reconcile_character_vigor(s, c, now=now)
             due_at = state.next_resolution_at
+            # A delayed worker must replay each economic decision at its
+            # scheduled boundary. Using worker wall-clock here would let later
+            # Vigor finance encounters that should already have been skipped.
+            await reconcile_character_vigor(s, c, now=due_at)
             encounter = await self._current_encounter(
                 s, state.id, lock=True, statuses=("materialized",)
             )
@@ -667,7 +670,7 @@ class RoundService(RoadService):
             )
             await self._finish_round(s, state, "ended", reason)
             return
-        await reconcile_character_vigor(s, c)
+        await reconcile_character_vigor(s, c, now=anchor)
         if c.vigor < 2:
             await self._finish_round(s, state, "ended", "vigor")
             return
@@ -922,6 +925,7 @@ class RoundService(RoadService):
             encounter.id,
             evidence,
             equipment_configuration=frozen_configuration,
+            now=due_at,
         )
         state.completed_encounters += 1
         state.next_resolution_at = None

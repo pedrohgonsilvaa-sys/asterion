@@ -1190,8 +1190,9 @@ class RoadService:
         bestiary_evidence_ids=frozenset(),
         *,
         equipment_configuration: EquipmentConfigurationSnapshot | None = None,
+        now: datetime | None = None,
     ):
-        await reconcile_character_vigor(s, c)
+        await reconcile_character_vigor(s, c, now=now)
         context = await s.scalar(
             select(HuntContext).where(HuntContext.game_activity_id == activity.id).with_for_update()
         )
