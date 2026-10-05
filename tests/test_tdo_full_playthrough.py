@@ -229,6 +229,11 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     import asterion.application.consumables as consumables_module
     import asterion.application.dungeons as dungeons_module
 
+    # Both modules import utcnow directly and pass explicit anchors into
+    # Vigor reconciliation. Keep every temporal boundary on the same
+    # simulated clock so a wall-clock anchor cannot overlap simulated time.
+    monkeypatch.setattr(consumables_module, "utcnow", driver.clock.now)
+    monkeypatch.setattr(dungeons_module, "utcnow", driver.clock.now)
     monkeypatch.setattr(consumables_module, "add_vigor_state", tracked_add_vigor)
     monkeypatch.setattr(dungeons_module, "add_vigor_state", tracked_add_vigor)
     await driver.snapshot("personagem criado pelo fluxo público")
@@ -2603,4 +2608,11 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
 
     final_mark = await driver.snapshot("TDO Nv.1–10 concluído até P6")
     await driver.assert_xp_ledger(require_completed_campaign=True)
+    assert driver.clock.vigor_regenerated <= int(
+        driver.clock.elapsed_seconds // vigor_module.REGEN_INTERVAL_SECONDS
+    ), (
+        "the journey clock credited more natural Vigor than elapsed time allows: "
+        f"regen={driver.clock.vigor_regenerated}, "
+        f"elapsed={driver.clock.elapsed_seconds}s"
+    )
     print(f"TDO_PLAYTHROUGH_REPORT={_compact_playthrough_report(driver, final_mark)!r}", flush=True)
