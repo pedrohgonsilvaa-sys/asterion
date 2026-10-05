@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.consumables import daily_consumable_cycle
+from asterion.application.vigor import reconcile_character_vigor, utcnow
 from asterion.domain.consumables import VIGOR_USABLE_AT_OR_BELOW, ConsumableFamily
 from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.equipment import assignment_for_item_slot
@@ -163,10 +163,15 @@ class InventoryService:
         item = consumable_definition(item_id)
         if item is None:
             return None
-        async with self.sessions() as session:
-            character = await self._character(session, actor)
+        async with self.sessions.begin() as session:
+            character = await session.scalar(
+                select(Character)
+                .where(Character.telegram_id == actor, Character.server_id == self.server_id)
+                .with_for_update()
+            )
             if character is None:
                 return None
+            await reconcile_character_vigor(session, character)
             counts = await self._counts(session, character.id)
             quantity = await session.scalar(
                 select(ConsumableStack.quantity).where(
@@ -187,7 +192,7 @@ class InventoryService:
                     entry.quantity > 0
                     and character.vigor <= VIGOR_USABLE_AT_OR_BELOW
                     and character.vigor_consumable_cycle
-                    != daily_consumable_cycle(datetime.now(UTC))
+                    != daily_consumable_cycle(utcnow())
                     and active is None
                 )
             return InventoryView(

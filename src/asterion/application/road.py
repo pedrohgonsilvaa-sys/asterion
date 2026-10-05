@@ -18,6 +18,7 @@ from asterion.application.equipment_configuration import (
     reconcile_character_hp,
 )
 from asterion.application.progression import consolidate_character_level, level_xp
+from asterion.application.vigor import reconcile_character_vigor
 from asterion.domain.combat import (
     CombatConsumableOption,
     act,
@@ -210,7 +211,7 @@ class RoadService:
 
     async def resume(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
-            c = await self._character(s, actor)
+            c, _world = await self._locked_world(s, actor)
             if c is None:
                 return None
             blocking = await self._road_blocking_view(s, c)
@@ -833,7 +834,7 @@ class RoadService:
 
     async def acknowledge_defeat(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
-            c = await self._character(s, actor)
+            c, world = await self._locked_world(s, actor)
             if c is None:
                 return None
             context = await s.scalar(
@@ -851,14 +852,13 @@ class RoadService:
             )
             if context is not None:
                 context.result_acknowledged = True
-            world = await s.scalar(select(WorldState).where(WorldState.character_id == c.id))
             return await self._view_for_world(s, c, world) if world else None
 
     async def acknowledge_result(
         self, actor: int, attempt_id: UUID | None = None
     ) -> RoadView | None:
         async with self.sessions.begin() as s:
-            c = await self._character(s, actor)
+            c, _world = await self._locked_world(s, actor)
             if c is None:
                 return None
             if attempt_id is not None:
@@ -1191,6 +1191,7 @@ class RoadService:
         *,
         equipment_configuration: EquipmentConfigurationSnapshot | None = None,
     ):
+        await reconcile_character_vigor(s, c)
         context = await s.scalar(
             select(HuntContext).where(HuntContext.game_activity_id == activity.id).with_for_update()
         )
@@ -1406,6 +1407,7 @@ class RoadService:
     async def _settle_exploration(self, s, c, attempt):
         if (attempt.progress or {}).get("settled"):
             return
+        await reconcile_character_vigor(s, c)
         base_text = (attempt.progress or {}).get("result_text", "")
         if attempt.local_id == CHARNECA_LOCATION:
             await self._settle_charneca_exploration(s, c, attempt, base_text)
@@ -2879,6 +2881,7 @@ class RoadService:
         )
         if c is None:
             return None, None
+        await reconcile_character_vigor(s, c)
         world = await s.scalar(
             select(WorldState).where(WorldState.character_id == c.id).with_for_update()
         )

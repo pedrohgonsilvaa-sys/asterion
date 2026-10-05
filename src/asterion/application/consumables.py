@@ -6,8 +6,8 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.vigor import add_vigor_state, reconcile_character_vigor, utcnow
 from asterion.domain.consumables import (
-    VIGOR_MAXIMUM,
     VIGOR_RESTORE,
     VIGOR_USABLE_AT_OR_BELOW,
     ConsumableFamily,
@@ -47,7 +47,8 @@ class ConsumableService:
         item = definition(item_id)
         if item is None or item.family != ConsumableFamily.VIGOR:
             return None
-        cycle = daily_consumable_cycle(now or datetime.now(UTC))
+        now = now or utcnow()
+        cycle = daily_consumable_cycle(now)
         async with self.sessions.begin() as session:
             character = await session.scalar(
                 select(Character)
@@ -57,6 +58,8 @@ class ConsumableService:
                 )
                 .with_for_update()
             )
+            if character is not None:
+                await reconcile_character_vigor(session, character, now=now)
             if (
                 character is None
                 or character.vigor > VIGOR_USABLE_AT_OR_BELOW
@@ -83,6 +86,6 @@ class ConsumableService:
             if stack is None:
                 return None
             stack.quantity -= 1
-            character.vigor = min(VIGOR_MAXIMUM, character.vigor + VIGOR_RESTORE)
+            add_vigor_state(character, VIGOR_RESTORE, now=now)
             character.vigor_consumable_cycle = cycle
             return character.vigor

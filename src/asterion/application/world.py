@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.progression import level_xp
+from asterion.application.vigor import reconcile_character_vigor
 from asterion.infrastructure.db.models import (
     Achievement,
     Brazier,
@@ -73,12 +74,14 @@ class WorldService:
             return max(quests, key=lambda quest: rank[quest.quest_id]).title
 
     async def resume(self, actor: int) -> WorldView | None:
-        async with self.sessions() as session:
+        async with self.sessions.begin() as session:
             c = await session.scalar(
-                select(Character).where(
-                    Character.telegram_id == actor, Character.server_id == self.server_id
-                )
+                select(Character)
+                .where(Character.telegram_id == actor, Character.server_id == self.server_id)
+                .with_for_update()
             )
+            if c is not None:
+                await reconcile_character_vigor(session, c)
             if c is None or c.stage not in {
                 "cinzas_na_estrada:ready_for_first_brazier",
                 "menu:ready",
@@ -164,6 +167,7 @@ class WorldService:
             )
             if c is None:
                 return None
+            await reconcile_character_vigor(session, c)
             if c.stage == "cinzas_na_estrada:ready_for_first_brazier":
                 brazier = await session.scalar(
                     select(Brazier).where(
@@ -205,15 +209,17 @@ class WorldService:
                         Brazier.brazier_id == "tdo.brazier.refugio_do_ocaso",
                     )
                 )
-                if not (
+                if (
                     q
                     and q.status == "completed"
                     and world
                     and world.location == "Refúgio do Ocaso"
                     and refuge
                 ):
-                    return await self.resume(actor)
-                c.hp = c.max_hp
+                    c.hp = c.max_hp
+                # For stale/unauthorized rest callbacks, leave state intact.
+                # Rebuild the view only after this transaction releases the
+                # character lock; resume() locks it to reconcile Vigor.
             else:
                 return None
         return await self.resume(actor)

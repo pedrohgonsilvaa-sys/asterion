@@ -20,6 +20,7 @@ from asterion.application.equipment_configuration import (
 )
 from asterion.application.progression import consolidate_character_level
 from asterion.application.road import CHARNECA, REGION, RUINS, RoadService
+from asterion.application.vigor import add_vigor_state, reconcile_character_vigor, utcnow
 from asterion.domain.combat import (
     CombatConsumableOption,
     act,
@@ -296,8 +297,8 @@ class DungeonService:
         self.road = RoadService(sessions, server_id)
 
     async def known(self, actor: int) -> DungeonView | None:
-        async with self.sessions() as session:
-            character = await self._character(session, actor)
+        async with self.sessions.begin() as session:
+            character = await self._locked_character(session, actor)
             if character is None:
                 return None
             known = []
@@ -318,8 +319,8 @@ class DungeonService:
             )
 
     async def detail(self, actor: int, family_id: str = CRYPT_FAMILY_ID) -> DungeonView | None:
-        async with self.sessions() as session:
-            character = await self._character(session, actor)
+        async with self.sessions.begin() as session:
+            character = await self._locked_character(session, actor)
             if character is None:
                 return None
             family = DUNGEON_FAMILIES.get(family_id)
@@ -455,7 +456,7 @@ class DungeonService:
         self, actor: int, character_name: str
     ) -> DungeonView | None:
         """Invite a character by exact name from the caller's forming group."""
-        async with self.sessions() as session:
+        async with self.sessions.begin() as session:
             leader = await self._character(session, actor)
             if leader is None:
                 return None
@@ -475,7 +476,7 @@ class DungeonService:
         return await self.invite_by_name(actor, lobby_id, version, character_name)
 
     async def pending_invite(self, actor: int) -> DungeonView | None:
-        async with self.sessions() as session:
+        async with self.sessions.begin() as session:
             character = await self._character(session, actor)
             if character is None:
                 return None
@@ -1690,7 +1691,9 @@ class DungeonService:
                 if run_member.status == "left":
                     continue
                 run_member.status = "left"
-                await self._refund_vigor(character_by_id[run_member.character_id], run_member)
+                await self._refund_vigor(
+                    session, character_by_id[run_member.character_id], run_member
+                )
                 shell = await session.get(GameActivity, run_member.foreground_activity_id)
                 if shell is not None and shell.status == "active":
                     shell.status = "failed"
@@ -1810,7 +1813,9 @@ class DungeonService:
                 if shell is not None and shell.status == "active":
                     shell.status = "failed"
                 participant.status = "left"
-                await self._refund_vigor(character_by_id[participant.character_id], participant)
+                await self._refund_vigor(
+                    session, character_by_id[participant.character_id], participant
+                )
                 await self._return_to_entry(
                     session, participant.character_id, run.dungeon_family_id
                 )
@@ -2481,6 +2486,7 @@ class DungeonService:
     ):
         if family is None or difficulty not in DIFFICULTIES:
             return "gate"
+        await reconcile_character_vigor(session, character)
         if not await self._has_unlock(session, character.id, family.discovery_unlock):
             return "discovery"
         stable = await self._has_unlock(session, character.id, family.first_clear_prefix + "stable")
@@ -3039,16 +3045,18 @@ class DungeonService:
             if run_member.status == "left":
                 continue
             run_member.status = "left"
-            await self._refund_vigor(character_by_id[run_member.character_id], run_member)
+            await self._refund_vigor(session, character_by_id[run_member.character_id], run_member)
             shell = await session.get(GameActivity, run_member.foreground_activity_id)
             if shell is not None and shell.status == "active":
                 shell.status = "failed"
             await self._return_to_entry(session, run_member.character_id, run.dungeon_family_id)
 
-    async def _refund_vigor(self, character, member):
+    async def _refund_vigor(self, session, character, member):
         if member.vigor_refunded or member.vigor_reserved <= 0:
             return
-        character.vigor = min(character.max_vigor, character.vigor + member.vigor_reserved)
+        now = utcnow()
+        await reconcile_character_vigor(session, character, now=now)
+        add_vigor_state(character, member.vigor_reserved, now=now)
         member.vigor_refunded = True
         member.vigor_reserved = 0
 
@@ -3088,19 +3096,17 @@ class DungeonService:
         )
 
     async def _locked_character(self, session, actor):
-        return await session.scalar(
+        character = await session.scalar(
             select(Character)
             .where(Character.telegram_id == actor, Character.server_id == self.server_id)
             .with_for_update()
         )
+        if character is not None:
+            await reconcile_character_vigor(session, character)
+        return character
 
     async def _character(self, session, actor):
-        return await session.scalar(
-            select(Character).where(
-                Character.telegram_id == actor,
-                Character.server_id == self.server_id,
-            )
-        )
+        return await self._locked_character(session, actor)
 
     async def _has_unlock(self, session, character_id, unlock_id):
         return (
@@ -3183,7 +3189,7 @@ class DungeonService:
         target_id: str,
         effect_id: str | None,
     ) -> DungeonView | None:
-        async with self.sessions() as session:
+        async with self.sessions.begin() as session:
             character = await self._character(session, actor)
             if character is None:
                 return None
