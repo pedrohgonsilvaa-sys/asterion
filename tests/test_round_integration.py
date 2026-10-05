@@ -28,6 +28,7 @@ from asterion.infrastructure.db.models import (
     GameActivity,
     HuntRound,
     HuntRoundEncounter,
+    RewardComponent,
     RewardEvent,
     Unlock,
 )
@@ -383,6 +384,68 @@ async def test_cancel_during_materialized_encounter_waits_for_boundary(database,
         assert len(encounters) == 1
 
 
+
+@pytest.mark.asyncio
+async def test_round_observes_natural_vigor_regeneration_between_encounters(
+    database, monkeypatch
+):
+    import asterion.application.round as round_module
+    import asterion.application.vigor as vigor_module
+
+    actor, service = await _seed_round(database, 772120, vigor=2)
+    _force_safe_common(monkeypatch, round_module)
+    prepared = await service.prepare_round(actor, 5)
+    started = await service.start_round(actor, prepared.round_id, prepared.state_version)
+    assert started.kind == "round_active"
+
+    anchor = datetime.now(UTC)
+    target = anchor + timedelta(seconds=864)
+
+    class JourneyClock(datetime):
+        instant = target
+
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return cls.instant.replace(tzinfo=None)
+            return cls.instant.astimezone(tz)
+
+    monkeypatch.setattr(round_module, "datetime", JourneyClock)
+    monkeypatch.setattr(vigor_module, "utcnow", lambda: target)
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor).with_for_update()
+        )
+        state = await session.scalar(
+            select(HuntRound).where(HuntRound.id == started.round_id).with_for_update()
+        )
+        character.vigor = 1
+        character.vigor_regen_at = anchor
+        state.next_resolution_at = target - timedelta(seconds=1)
+
+    assert await service.advance_due_rounds() == 1
+    result = await service.resume(actor)
+    assert result.kind == "round_ended"
+    assert result.completed_encounters == 1
+    assert result.vigor == 0
+
+    async with database[1]() as session:
+        encounter = await session.scalar(
+            select(HuntRoundEncounter).where(
+                HuntRoundEncounter.round_id == started.round_id,
+                HuntRoundEncounter.ordinal == 1,
+            )
+        )
+        assert encounter is not None and encounter.activity_id is not None
+        crowns = await session.scalar(
+            select(func.count(RewardComponent.id))
+            .join(RewardEvent, RewardEvent.id == RewardComponent.reward_event_id)
+            .where(
+                RewardEvent.source_id == f"activity:{encounter.activity_id}",
+                RewardComponent.kind == "crowns",
+            )
+        )
+        assert crowns == 1
 @pytest.mark.asyncio
 async def test_vigor_ending_happens_before_next_encounter_is_created(database, monkeypatch):
     import asterion.application.round as round_module

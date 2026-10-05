@@ -7,14 +7,25 @@ database access is read-only and exists to capture milestone diagnostics.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from statistics import median
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from asterion.application.progression import level_xp
-from asterion.domain.combat import allowed_actions
+from asterion.domain.combat import (
+    _enemy_action,
+    act,
+    allowed_actions,
+    combat_consumable_options,
+    use_combat_consumable,
+)
 from asterion.infrastructure.db.models import (
     Brazier,
     Character,
@@ -40,6 +51,63 @@ from asterion.infrastructure.db.models import (
 )
 
 
+@dataclass
+class SimulatedJourneyClock:
+    """One deterministic clock shared by Vigor, Road cooldowns and Ronda."""
+
+    instant: datetime = field(default_factory=lambda: datetime.now(UTC))
+    elapsed_seconds: float = 0
+    waits: list[dict[str, Any]] = field(default_factory=list)
+    vigor_regenerated: int = 0
+    vigor_external_gains: int = 0
+    vigor_potion_gains: int = 0
+    vigor_spent: int = 0
+    _last_snapshot_vigor: int | None = None
+    _last_snapshot_regenerated: int = 0
+    _last_snapshot_external: int = 0
+
+    def now(self, tz=None):
+        value = self.instant
+        return value.astimezone(tz) if tz else value.replace(tzinfo=None)
+
+    def advance(self, seconds: float, reason: str) -> None:
+        if seconds < 0:
+            raise ValueError("simulated time cannot move backwards")
+        if seconds == 0:
+            return
+        self.instant += timedelta(seconds=seconds)
+        self.elapsed_seconds += seconds
+        self.waits.append({"seconds": seconds, "reason": reason})
+
+    def datetime_type(self):
+        clock = self
+
+        class SimulatedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return clock.now(tz)
+
+        return SimulatedDateTime
+
+    async def wait_for_vigor(self, sessions, actor: int, target: int, reason: str) -> float:
+        """Advance only the equivalent natural regeneration time, never state."""
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            if character is None:
+                raise AssertionError("cannot wait for Vigor without a character")
+            missing = max(0, target - character.vigor)
+            anchor = character.vigor_regen_at
+        if not missing:
+            return 0
+        anchor = anchor.replace(tzinfo=UTC) if anchor.tzinfo is None else anchor.astimezone(UTC)
+        remainder = max(0.0, (self.instant - anchor).total_seconds()) % 864
+        seconds = max(0.0, missing * 864 - remainder)
+        self.advance(seconds, reason)
+        return seconds
+
+
 @dataclass(frozen=True)
 class JourneyMark:
     label: str
@@ -53,6 +121,9 @@ class TDOPlaythrough:
     marks: list[JourneyMark] = field(default_factory=list)
     level_milestones: list[dict[str, Any]] = field(default_factory=list)
     xp_by_origin: dict[str, int] = field(default_factory=dict)
+    p6_diagnostics: list[dict[str, Any]] = field(default_factory=list)
+    last_combat: Any | None = field(default=None, repr=False)
+    clock: SimulatedJourneyClock = field(default_factory=SimulatedJourneyClock)
     _last_total_xp: int | None = None
     _last_level: int | None = None
     _last_level_milestone_xp_total: int | None = None
@@ -294,6 +365,20 @@ class TDOPlaythrough:
                 cumulative_xp = sum(
                     level_xp(level) for level in range(1, character.level)
                 ) + character.xp
+                regenerated_delta = (
+                    self.clock.vigor_regenerated - self.clock._last_snapshot_regenerated
+                )
+                external_delta = (
+                    self.clock.vigor_external_gains - self.clock._last_snapshot_external
+                )
+                if self.clock._last_snapshot_vigor is not None:
+                    expected_vigor = (
+                        self.clock._last_snapshot_vigor + regenerated_delta + external_delta
+                    )
+                    self.clock.vigor_spent += max(0, expected_vigor - character.vigor)
+                self.clock._last_snapshot_vigor = character.vigor
+                self.clock._last_snapshot_regenerated = self.clock.vigor_regenerated
+                self.clock._last_snapshot_external = self.clock.vigor_external_gains
                 xp_since_snapshot = (
                     0 if self._last_total_xp is None else cumulative_xp - self._last_total_xp
                 )
@@ -308,6 +393,12 @@ class TDOPlaythrough:
                     "xp_received_since_previous_snapshot": xp_since_snapshot,
                     "crowns": character.crowns,
                     "vigor": character.vigor,
+                    "vigor_regenerated_total": self.clock.vigor_regenerated,
+                    "vigor_spent_total": self.clock.vigor_spent,
+                    "vigor_external_gained_total": self.clock.vigor_external_gains,
+                    "vigor_potion_gained_total": self.clock.vigor_potion_gains,
+                    "simulated_elapsed_seconds": self.clock.elapsed_seconds,
+                    "simulated_waits": list(self.clock.waits),
                     "hp": str(character.hp),
                     "max_hp": str(character.max_hp),
                     "location": world.location if world else None,
@@ -439,6 +530,12 @@ class TDOPlaythrough:
                                 "xp_received_total": milestone_total,
                                 "crowns": character.crowns,
                                 "vigor": character.vigor,
+                                "vigor_regenerated_total": self.clock.vigor_regenerated,
+                                "vigor_spent_total": self.clock.vigor_spent,
+                                "vigor_external_gained_total": self.clock.vigor_external_gains,
+                                "vigor_potion_gained_total": self.clock.vigor_potion_gains,
+                                "simulated_elapsed_seconds": self.clock.elapsed_seconds,
+                                "simulated_waits": list(self.clock.waits),
                                 "hp": str(character.hp),
                                 "max_hp": str(character.max_hp),
                                 "location": world.location if world else None,
@@ -479,9 +576,14 @@ class TDOPlaythrough:
     def diagnostic(self) -> str:
         if not self.marks:
             return "Nenhum marco persistido foi capturado."
-        return "\n".join(
+        marks = "\n".join(
             f"{mark.label}: {mark.state!r}" for mark in self.marks[-8:]
         )
+        if self.p6_diagnostics:
+            return f"{marks}\nP6 pure diagnostics: {self.p6_diagnostics!r}"
+        return marks
+
+
     @staticmethod
     def combat_action(combat) -> str:
         """Choose only an action currently offered by the canonical combat engine."""
@@ -521,6 +623,7 @@ class TDOPlaythrough:
             raise AssertionError(f"{label}: não iniciou um combate jogável\n{self.diagnostic()}")
         initial_ids = self.combat_ids(view)
         current = view
+        self.last_combat = current.combat
         reconnected = False
         for _ in range(max_actions):
             combat = getattr(current, "combat", None)
@@ -530,6 +633,16 @@ class TDOPlaythrough:
                 action_picker(current)
                 if action_picker is not None
                 else self.combat_action(combat)
+            )
+            expected_combat = (
+                use_combat_consumable(
+                    combat,
+                    action.removeprefix("consumable:"),
+                    target_id=combat.fighters["player"].id,
+                    budget_limit=getattr(current, "consumable_budget_limit", None),
+                )
+                if action.startswith("consumable:")
+                else act(combat, action)
             )
             if trace_actions:
                 player = combat.fighters.get("player")
@@ -557,6 +670,7 @@ class TDOPlaythrough:
                     f"{self.diagnostic()}"
                 )
             current = updated
+            self.last_combat = next_combat or expected_combat
             if (
                 not reconnected
                 and next_combat is not None
@@ -595,3 +709,216 @@ class TDOPlaythrough:
                 getattr(view, "combat_id", None),
             )
         )
+
+def _p6_best_art(combat) -> str | None:
+    available = allowed_actions(combat)
+    arts = [
+        action_id
+        for action_id in available
+        if action_id.startswith(("class_art.", "path_art."))
+        and combat.player_actions[action_id].coefficient > 0
+    ]
+    if not arts:
+        return None
+    return max(
+        arts,
+        key=lambda action_id: (
+            combat.player_actions[action_id].coefficient,
+            action_id,
+        ),
+    )
+
+
+def choose_p6_policy_action(combat, policy, *, heal_count, budget_limit):
+    available = allowed_actions(combat)
+    if not available:
+        raise AssertionError("P6 diagnostic reached a turn without player actions")
+    if combat.prepared_action is not None and "defend" in available:
+        return "defend"
+
+    player = combat.fighters["player"]
+    hp_fraction = player.hp / player.stats.hp
+    heal_options = combat_consumable_options(
+        combat,
+        ("consumable.heal",) if heal_count > 0 else (),
+        budget_limit=budget_limit,
+    )
+    can_heal = bool(heal_options)
+    charge = player.path_state.get("devastador_charge")
+    has_devastador_charge = (
+        policy == "devastador"
+        and isinstance(charge, dict)
+        and player.opportunity <= int(charge.get("expires_opportunity", -1))
+    )
+    if has_devastador_charge and hp_fraction > 0.20:
+        charged_art = _p6_best_art(combat)
+        if charged_art is not None:
+            return charged_art
+
+    heal_threshold = {
+        "simple": Decimal("0.40"),
+        "sentinela": Decimal("0.55"),
+        "devastador": Decimal("0.55"),
+    }[policy]
+    if can_heal and hp_fraction <= heal_threshold:
+        return "consumable:consumable.heal"
+
+    retaliation_active = player.retaliation_charges > 0 and player.retaliation_remaining > 0
+    if retaliation_active:
+        art = _p6_best_art(combat)
+        if art is not None:
+            return art
+
+    if policy in {"sentinela", "devastador"} and "defend" in available:
+        # Preview the same deterministic enemy selector on a copy. A strong
+        # non-telegraphed strike is a sensible time to reduce damage and earn
+        # the real Sentinel retaliation event for the next offensive Art.
+        preview = deepcopy(combat)
+        enemy_action_id = _enemy_action(preview, "enemy")
+        enemy_action = combat.enemy_actions.get(enemy_action_id)
+        if enemy_action is not None and enemy_action.coefficient >= Decimal("1.35"):
+            return "defend"
+
+    art = _p6_best_art(combat)
+    if art is not None:
+        return art
+    if "attack" in available:
+        return "attack"
+    return available[0]
+
+
+def simulate_p6_policy(
+    initial_combat,
+    *,
+    seed: int,
+    policy: str,
+    heal_count: int,
+    budget_limit: int,
+) -> dict[str, Any]:
+    """Purely simulate one diagnostic seed; never writes gameplay state."""
+    from collections import Counter
+
+    combat = deepcopy(initial_combat)
+    combat.id = uuid5(NAMESPACE_URL, f"asterion:tdo:p6:diagnostic:{seed}")
+    starting_enemy = combat.fighters["enemy"]
+    enemy_max_hp = starting_enemy.stats.hp
+    player = combat.fighters["player"]
+    player_stats = player.stats
+    initial_player_hp = player.hp
+    remaining_heals = heal_count
+    actions: Counter[str] = Counter()
+    defended_prepared = 0
+
+    for _ in range(400):
+        if combat.result is not None:
+            break
+        action = choose_p6_policy_action(
+            combat,
+            policy,
+            heal_count=remaining_heals,
+            budget_limit=budget_limit,
+        )
+        if action == "consumable:consumable.heal":
+            updated = use_combat_consumable(
+                combat,
+                "consumable.heal",
+                target_id="player",
+                budget_limit=budget_limit,
+            )
+            if updated.version == combat.version:
+                raise AssertionError("Pure P6 diagnostic could not use available heal")
+            remaining_heals -= 1
+        else:
+            if action == "defend" and combat.prepared_action is not None:
+                defended_prepared += 1
+            updated = act(combat, action)
+            if updated.version == combat.version:
+                raise AssertionError(f"Pure P6 diagnostic action was rejected: {action}")
+        actions[action] += 1
+        combat = updated
+    else:
+        raise AssertionError("Pure P6 diagnostic exceeded 400 player actions")
+
+    enemy_hp = combat.fighters["enemy"].hp
+    player_damage = sum(
+        event.effective_damage
+        for event in combat.events
+        if event.target == player.id and event.effective_damage > 0
+    )
+    highest_phase = 1
+    if enemy_hp < enemy_max_hp * Decimal("0.70"):
+        highest_phase = 2
+    if enemy_hp <= enemy_max_hp * Decimal("0.35"):
+        highest_phase = 3
+    retaliation_events = Counter(
+        event.retaliation_event for event in combat.mechanic_events if event.retaliation_event
+    )
+    return {
+        "seed": seed,
+        "policy": policy,
+        "result": combat.result,
+        "turns": combat.round,
+        "player_actions": sum(actions.values()),
+        "highest_phase": highest_phase,
+        "boss_hp_remaining": str(enemy_hp),
+        "player_hp_remaining": str(combat.fighters["player"].hp),
+        "damage_received": player_damage,
+        "heals_used": heal_count - remaining_heals,
+        "prepared_defended": defended_prepared,
+        "retaliation_granted": retaliation_events["granted"],
+        "retaliation_consumed": retaliation_events["consumed"],
+        "actions": dict(actions),
+        "player_stats": {
+            "hp": str(player_stats.hp),
+            "attack": str(player_stats.attack),
+            "defense": str(player_stats.defense),
+            "agility": str(player_stats.agility),
+            "perception": str(player_stats.per),
+            "crit": str(player_stats.crit),
+            "evasion": str(player_stats.evasion),
+            "block": str(player_stats.block),
+            "starting_hp": str(initial_player_hp),
+        },
+        "boss_stats": {
+            "hp": str(starting_enemy.stats.hp),
+            "attack": str(starting_enemy.stats.attack),
+            "defense": str(starting_enemy.stats.defense),
+            "agility": str(starting_enemy.stats.agility),
+        },
+    }
+
+
+def sample_p6_policies(initial_combat, *, heal_count: int, budget_limit: int, seeds=range(1, 31)):
+    """Run a small deterministic A/B/C pure-combat sample for the test report."""
+    records = [
+        simulate_p6_policy(
+            initial_combat,
+            seed=seed,
+            policy=policy,
+            heal_count=heal_count,
+            budget_limit=budget_limit,
+        )
+        for policy in ("simple", "sentinela", "devastador")
+        for seed in seeds
+    ]
+    summary = {}
+    for policy in ("simple", "sentinela", "devastador"):
+        cohort = [record for record in records if record["policy"] == policy]
+        summary[policy] = {
+            "samples": len(cohort),
+            "victories": sum(record["result"] == "victory" for record in cohort),
+            "defeats": sum(record["result"] == "defeat" for record in cohort),
+            "victory_seeds": [
+                record["seed"] for record in cohort if record["result"] == "victory"
+            ],
+            "median_turns": median(record["turns"] for record in cohort),
+            "median_boss_hp_remaining": median(
+                int(Decimal(record["boss_hp_remaining"])) for record in cohort
+            ),
+            "median_damage_received": median(record["damage_received"] for record in cohort),
+            "median_max_phase": median(record["highest_phase"] for record in cohort),
+            "median_heals_used": median(record["heals_used"] for record in cohort),
+            "retaliation_granted": sum(record["retaliation_granted"] for record in cohort),
+            "retaliation_consumed": sum(record["retaliation_consumed"] for record in cohort),
+        }
+    return summary, records
