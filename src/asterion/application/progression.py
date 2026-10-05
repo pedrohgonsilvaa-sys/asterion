@@ -1,6 +1,6 @@
 """Reusable character progression rules for resolution boundaries."""
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 from asterion.application.equipment_configuration import load_equipment_configuration
 from asterion.domain.combat_math import resolve_combat_stats
@@ -24,10 +24,16 @@ def consolidate_level(
 ) -> int:
     """Consolidate all earned XP at a valid activity boundary.
 
-    XP is stored as progress inside the current level.  Level 60 is a hard
+    XP is stored as progress inside the current level. Level 60 is a hard
     cap, so any surplus that cannot produce another level is intentionally
-    discarded rather than hidden in the character row.
+    discarded rather than hidden in the character row. Current HP is also
+    normalized to whole points so legacy fractional health cannot survive a
+    progression boundary.
     """
+    character.hp = max(
+        Decimal(0),
+        Decimal(character.hp).to_integral_value(rounding=ROUND_FLOOR),
+    )
     advanced = 0
     while character.level < 60 and character.xp >= level_xp(character.level):
         character.xp -= level_xp(character.level)
