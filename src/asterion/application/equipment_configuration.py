@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_FLOOR, Decimal
 from fractions import Fraction
 from uuid import UUID
 
@@ -146,7 +146,7 @@ def reconcile_character_hp(
     character: Character,
     configuration: EquipmentConfigurationSnapshot,
 ) -> CombatStats:
-    """Reconcile legacy persisted max HP at a safe boundary, preserving its ratio."""
+    """Reconcile static max HP and close persisted current HP to whole points."""
     stats = resolve_character_combat_stats(character, configuration)
     new_max_hp = stats.hp
     old_max_hp = D(character.max_hp)
@@ -154,6 +154,10 @@ def reconcile_character_hp(
     if old_max_hp <= 0:
         raise EquipmentConfigurationError("Character has invalid persisted maximum HP.")
     if new_max_hp == old_max_hp:
+        character.hp = min(
+            new_max_hp,
+            max(D(0), old_hp.to_integral_value(rounding=ROUND_FLOOR)),
+        )
         return stats
     if old_hp == 0:
         new_hp = D(0)
@@ -168,7 +172,7 @@ def reconcile_character_hp(
 
 
 def hp_after_equipment_change(character: Character, new_max_hp: Decimal) -> Decimal:
-    """Return HP after an effective equipment change, without mutating the row."""
+    """Return whole-point HP after an effective equipment change, without mutating the row."""
     old_max_hp = D(character.max_hp)
     old_hp = D(character.hp)
     if old_max_hp <= 0:
@@ -176,7 +180,10 @@ def hp_after_equipment_change(character: Character, new_max_hp: Decimal) -> Deci
     if old_hp == 0:
         return D(0)
     if D(new_max_hp) == old_max_hp:
-        return min(old_hp, old_max_hp)
+        return min(
+            old_max_hp,
+            max(D(0), old_hp.to_integral_value(rounding=ROUND_FLOOR)),
+        )
     return min(
         D(new_max_hp),
         max(
