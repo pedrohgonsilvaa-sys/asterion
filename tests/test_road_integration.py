@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import delete, func, select
@@ -13,7 +13,7 @@ from asterion.application.road import REFUGE, ROAD, RoadService
 from asterion.domain.arts import FIRST_CLASS_ART_IDS, SENTINEL_ART_IDS
 from asterion.domain.combat import act, allowed_actions
 from asterion.domain.combat_math import resolve_combat_stats
-from asterion.domain.road import materialize_equipment
+from asterion.domain.road import enemy_xp, materialize_equipment
 from asterion.domain.talents import TALENTS_BY_CLASS
 from asterion.infrastructure.db.models import (
     Account,
@@ -23,6 +23,8 @@ from asterion.infrastructure.db.models import (
     Brazier,
     Character,
     CharacterTalentChoice,
+    CombatRecord,
+    Encounter,
     EquipmentItem,
     ExplorationAttempt,
     GameActivity,
@@ -54,7 +56,7 @@ async def _seed_road(
                 id=cid,
                 telegram_id=actor,
                 server_id="ocaso",
-                name="Heroa",
+                name=f"Hero{chr(ord('a') + actor % 26)}",
                 race="remanescente",
                 character_class="sentinela",
                 stage="menu:ready",
@@ -127,6 +129,55 @@ async def _seed_road(
         )
         await session.commit()
     return actor, RoadService(sessions, "ocaso")
+
+
+async def _seed_hunt_receipts(database, actor, receipts):
+    """Seed hunt receipts with deliberately chosen UUID/timestamp ordering."""
+    _, sessions = database
+    async with sessions() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        for index, (activity_id, status, action_at, acknowledged) in enumerate(receipts):
+            session.add(
+                GameActivity(
+                    id=activity_id,
+                    character_id=character.id,
+                    content_id="road_manual_hunt",
+                    status=status,
+                    state_version=0,
+                    ruleset_version="gdd-1.4.3-baseline-1.0",
+                    last_valid_action_at=action_at,
+                )
+            )
+            session.add(
+                HuntContext(
+                    game_activity_id=activity_id,
+                    character_id=character.id,
+                    local_id="tdo.location.estrada_das_cinzas",
+                    creature_id="dog_cinereo",
+                    category="common",
+                    enemy_level=1,
+                    variant=None,
+                    seed=f"receipt-test-{index}",
+                    result_acknowledged=acknowledged,
+                )
+            )
+        await session.commit()
+
+
+async def _hunt_acknowledgements(database, actor):
+    _, sessions = database
+    async with sessions() as session:
+        character_id = await session.scalar(
+            select(Character.id).where(Character.telegram_id == actor)
+        )
+        rows = (
+            await session.execute(
+                select(GameActivity.id, GameActivity.status, HuntContext.result_acknowledged)
+                .join(HuntContext, HuntContext.game_activity_id == GameActivity.id)
+                .where(GameActivity.character_id == character_id)
+            )
+        ).all()
+    return {row.id: (row.status, row.result_acknowledged) for row in rows}
 
 
 @pytest.mark.asyncio
@@ -275,6 +326,213 @@ async def test_unacknowledged_hunt_defeat_blocks_stale_travel_callback(database)
 
 
 @pytest.mark.asyncio
+async def test_acknowledge_result_selects_new_victory_after_acknowledged_defeat(database):
+    actor, service = await _seed_road(database, 771123)
+    now = datetime.now(UTC)
+    old_defeat = UUID("ffffffff-ffff-4fff-8fff-fffffffffff0")
+    new_victory = UUID("00000000-0000-4000-8000-000000000010")
+    await _seed_hunt_receipts(
+        database,
+        actor,
+        [(old_defeat, "failed", now - timedelta(minutes=2), False)],
+    )
+
+    await service.acknowledge_defeat(actor)
+    assert (await _hunt_acknowledgements(database, actor))[old_defeat] == ("failed", True)
+
+    await _seed_hunt_receipts(
+        database,
+        actor,
+        [(new_victory, "completed", now, False)],
+    )
+    await service.acknowledge_result(actor)
+    state_after_victory_ack = await _hunt_acknowledgements(database, actor)
+    assert state_after_victory_ack == {
+        old_defeat: ("failed", True),
+        new_victory: ("completed", True),
+    }
+
+    _, sessions = database
+    async with sessions() as session:
+        pending = await session.scalar(
+            select(func.count(HuntContext.id))
+            .join(GameActivity, HuntContext.game_activity_id == GameActivity.id)
+            .where(
+                HuntContext.result_acknowledged.is_(False),
+                GameActivity.status.in_(("completed", "failed")),
+            )
+        )
+        reward_count = await session.scalar(select(func.count(RewardEvent.id)))
+    assert pending == 0
+
+    # No eligible result remains: repeated acknowledgements are a no-op.
+    await service.acknowledge_result(actor)
+    await service.acknowledge_defeat(actor)
+    assert await _hunt_acknowledgements(database, actor) == state_after_victory_ack
+    async with sessions() as session:
+        assert await session.scalar(select(func.count(RewardEvent.id))) == reward_count
+
+
+@pytest.mark.asyncio
+async def test_acknowledge_defeat_uses_latest_timestamp_not_largest_uuid(database):
+    actor, service = await _seed_road(database, 771124)
+    now = datetime.now(UTC)
+    older = UUID("ffffffff-ffff-4fff-8fff-fffffffffff1")
+    newer = UUID("00000000-0000-4000-8000-000000000011")
+    await _seed_hunt_receipts(
+        database,
+        actor,
+        [
+            (older, "failed", now - timedelta(minutes=2), False),
+            (newer, "failed", now, False),
+        ],
+    )
+
+    await service.acknowledge_defeat(actor)
+
+    assert await _hunt_acknowledgements(database, actor) == {
+        older: ("failed", False),
+        newer: ("failed", True),
+    }
+
+
+@pytest.mark.asyncio
+async def test_blocking_hunt_receipt_uses_latest_timestamp_not_largest_uuid(database):
+    actor, service = await _seed_road(database, 771125)
+    now = datetime.now(UTC)
+    older_defeat = UUID("ffffffff-ffff-4fff-8fff-fffffffffff2")
+    newer_victory = UUID("00000000-0000-4000-8000-000000000012")
+    await _seed_hunt_receipts(
+        database,
+        actor,
+        [
+            (older_defeat, "failed", now - timedelta(minutes=2), False),
+            (newer_victory, "completed", now, False),
+        ],
+    )
+
+    view = await service.resume(actor)
+
+    assert view.kind == "hunt_victory"
+    assert view.activity_id == newer_victory
+
+
+@pytest.mark.asyncio
+async def test_hunt_start_settles_opening_defeat_when_enemy_acts_first(database, monkeypatch):
+    import asterion.application.road as road_module
+    from asterion.domain.road import creature_for
+
+    actor, service = await _seed_road(database, 771126)
+    _, sessions = database
+    async with sessions.begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor).with_for_update()
+        )
+        character.hp = Decimal("4.530")
+    await service.travel(actor, ROAD)
+    monkeypatch.setattr(
+        road_module,
+        "select_creature",
+        lambda *args, **kwargs: creature_for("dog_cinereo"),
+    )
+    monkeypatch.setattr(road_module, "select_variant", lambda *args, **kwargs: None)
+
+    view = await service.start_hunt(actor)
+
+    assert view.kind == "hunt_defeat"
+    async with sessions() as session:
+        activity = await session.scalar(
+            select(GameActivity).where(GameActivity.id == view.activity_id)
+        )
+        assert activity.status == "failed"
+        record = await session.scalar(
+            select(CombatRecord)
+            .join(Encounter, Encounter.id == CombatRecord.encounter_id)
+            .where(Encounter.game_activity_id == activity.id)
+        )
+        assert record is not None
+        assert record.snapshot["result"] == "defeat"
+        assert not await session.scalar(
+            select(RewardEvent.id).where(
+                RewardEvent.character_id == activity.character_id,
+                RewardEvent.source_id == f"activity:{activity.id}",
+            )
+        )
+        character = await session.get(Character, activity.character_id)
+        assert character.hp == character.max_hp
+        context = await session.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == activity.id)
+        )
+        assert context.result_acknowledged is False
+    resumed = await service.resume(actor)
+    assert resumed.kind == "hunt_defeat"
+    assert resumed.activity_id == view.activity_id
+    acknowledged = await service.acknowledge_defeat(actor)
+    assert acknowledged.kind == "road"
+    assert (await service.acknowledge_defeat(actor)).kind == "road"
+    assert (await service.prepare_hunt(actor)).kind == "hunt_prepare"
+    async with sessions() as session:
+        context = await session.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == view.activity_id)
+        )
+        assert context.result_acknowledged is True
+
+
+@pytest.mark.asyncio
+async def test_exploration_start_settles_opening_defeat_and_reconnects(database, monkeypatch):
+    import asterion.application.road as road_module
+    from asterion.domain.road import creature_for
+
+    actor, service = await _seed_road(database, 771127)
+    _, sessions = database
+    async with sessions.begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor).with_for_update()
+        )
+        character.hp = Decimal("4.530")
+    await service.travel(actor, ROAD)
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *args: ("combat", "explore.tdo.estrada.combat.dog_cinereo", "Cão."),
+    )
+    monkeypatch.setattr(road_module, "select_variant", lambda *args, **kwargs: None)
+    monkeypatch.setattr(road_module, "creature_for", creature_for)
+
+    view = await service.explore(actor)
+
+    assert view.kind == "exploration"
+    assert "interrompida" in view.result_text
+    async with sessions() as session:
+        attempt = await session.scalar(
+            select(ExplorationAttempt).where(ExplorationAttempt.id == view.attempt_id)
+        )
+        activity = await session.get(GameActivity, attempt.activity_id)
+        assert attempt.status == "failed"
+        assert attempt.completed_at is not None
+        assert attempt.progress["settled"] is True
+        assert activity.status == "failed"
+        assert activity.last_valid_action_at is not None
+        assert not await session.scalar(
+            select(RewardEvent.id).where(
+                RewardEvent.character_id == attempt.character_id,
+                RewardEvent.source_id == f"activity:{activity.id}",
+            )
+        )
+        character = await session.get(Character, attempt.character_id)
+        assert character.hp == character.max_hp
+
+    resumed = await service.resume(actor)
+    assert resumed.kind == "exploration"
+    assert resumed.attempt_id == view.attempt_id
+    assert resumed.result_text == view.result_text
+    acknowledged = await service.acknowledge_result(actor, view.attempt_id)
+    assert acknowledged.kind == "road"
+    assert (await service.acknowledge_result(actor, view.attempt_id)).kind == "road"
+    assert (await service.prepare_hunt(actor)).kind == "hunt_prepare"
+
+
+@pytest.mark.asyncio
 async def test_hunt_victory_receipt_reconstructs_without_duplicate_reward(database):
     actor, service = await _seed_road(database, 771104)
     await service.travel(actor, ROAD)
@@ -387,6 +645,68 @@ async def test_exploration_combat_with_low_vigor_only_pays_quarter_xp(database, 
                 )
             )
         ) == 0
+
+
+@pytest.mark.asyncio
+async def test_manual_hunt_with_insufficient_vigor_receives_quarter_xp_only(database, monkeypatch):
+    import asterion.application.road as road_module
+    from asterion.domain.road import creature_for
+
+    actor, service = await _seed_road(database, 771127, vigor=0)
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor).with_for_update()
+        )
+        character.vigor_regen_at = datetime.now(UTC)
+    await service.travel(actor, ROAD)
+    creature = creature_for("dog_cinereo")
+    monkeypatch.setattr(road_module, "select_creature", lambda *args, **kwargs: creature)
+    monkeypatch.setattr(road_module, "select_variant", lambda *args, **kwargs: None)
+
+    view = await service.start_hunt(actor)
+    for _ in range(100):
+        if view.kind != "combat":
+            break
+        action = "art" if "art" in allowed_actions(view.combat) else "attack"
+        view = await service.action(actor, view.activity_id, view.combat.version, action)
+    assert view.kind == "hunt_victory"
+    await service.acknowledge_result(actor)
+
+    async with database[1]() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        context = await session.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == view.activity_id)
+        )
+        reward = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == f"activity:{view.activity_id}",
+            )
+        )
+        xp = await session.scalar(
+            select(RewardComponent.quantity).where(
+                RewardComponent.reward_event_id == reward.id,
+                RewardComponent.kind == "xp",
+            )
+        )
+        crowns = await session.scalar(
+            select(func.count(RewardComponent.id)).where(
+                RewardComponent.reward_event_id == reward.id,
+                RewardComponent.kind == "crowns",
+            )
+        )
+        expected = enemy_xp(
+            context.enemy_level,
+            context.category,
+            Decimal("0.25"),
+            player_level=character.level,
+        )
+        assert xp == expected
+        assert xp < enemy_xp(
+            context.enemy_level, context.category, player_level=character.level
+        )
+        assert crowns == 0
+        assert character.vigor == 0
 
 
 @pytest.mark.asyncio

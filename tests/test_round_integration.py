@@ -15,6 +15,7 @@ from asterion.application.round import (
     PURIFY_CONSUMABLE,
     RoundService,
 )
+from asterion.application.vigor import REGEN_INTERVAL_SECONDS
 from asterion.domain.arts import FIRST_CLASS_ART_IDS
 from asterion.domain.combat import DotState
 from asterion.domain.combat_math import Stats, resolve_combat_stats
@@ -28,6 +29,7 @@ from asterion.infrastructure.db.models import (
     GameActivity,
     HuntRound,
     HuntRoundEncounter,
+    RewardComponent,
     RewardEvent,
     Unlock,
 )
@@ -383,6 +385,289 @@ async def test_cancel_during_materialized_encounter_waits_for_boundary(database,
         assert len(encounters) == 1
 
 
+
+@pytest.mark.asyncio
+async def test_round_observes_natural_vigor_regeneration_between_encounters(
+    database, monkeypatch
+):
+    import asterion.application.round as round_module
+    import asterion.application.vigor as vigor_module
+
+    actor, service = await _seed_round(database, 772120, vigor=2)
+    _force_safe_common(monkeypatch, round_module)
+    prepared = await service.prepare_round(actor, 5)
+    started = await service.start_round(actor, prepared.round_id, prepared.state_version)
+    assert started.kind == "round_active"
+
+    anchor = datetime.now(UTC)
+    target = anchor + timedelta(seconds=864)
+
+    class JourneyClock(datetime):
+        instant = target
+
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return cls.instant.replace(tzinfo=None)
+            return cls.instant.astimezone(tz)
+
+    monkeypatch.setattr(round_module, "datetime", JourneyClock)
+    monkeypatch.setattr(vigor_module, "utcnow", lambda: target)
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor).with_for_update()
+        )
+        state = await session.scalar(
+            select(HuntRound).where(HuntRound.id == started.round_id).with_for_update()
+        )
+        character.vigor = 1
+        character.vigor_regen_at = anchor
+        state.next_resolution_at = target
+
+    assert await service.advance_due_rounds() == 1
+    result = await service.resume(actor)
+    assert result.kind == "round_ended"
+    assert result.completed_encounters == 1
+    assert result.vigor == 0
+
+    async with database[1]() as session:
+        encounter = await session.scalar(
+            select(HuntRoundEncounter).where(
+                HuntRoundEncounter.round_id == started.round_id,
+                HuntRoundEncounter.ordinal == 1,
+            )
+        )
+        assert encounter is not None and encounter.activity_id is not None
+        crowns = await session.scalar(
+            select(func.count(RewardComponent.id))
+            .join(RewardEvent, RewardEvent.id == RewardComponent.reward_event_id)
+            .where(
+                RewardEvent.source_id == f"activity:{encounter.activity_id}",
+                RewardComponent.kind == "crowns",
+            )
+        )
+        assert crowns == 1
+
+
+def _install_round_clock(monkeypatch, instant):
+    import asterion.application.round as round_module
+    import asterion.application.vigor as vigor_module
+
+    class ControlledDateTime(datetime):
+        current = instant
+
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return cls.current.replace(tzinfo=None)
+            return cls.current.astimezone(tz)
+
+    monkeypatch.setattr(round_module, "datetime", ControlledDateTime)
+    monkeypatch.setattr(vigor_module, "utcnow", lambda: ControlledDateTime.current)
+    return ControlledDateTime
+
+
+async def _advance_round_cadence(clock, service, actor, count):
+    result = None
+    for _ in range(count):
+        clock.current += timedelta(minutes=3)
+        await service.advance_due_rounds()
+        result = await service.resume(actor)
+        if result.kind != "round_active":
+            break
+    return result
+
+
+@pytest.mark.asyncio
+async def test_delayed_round_catchup_cannot_finance_future_encounters_with_vigor(
+    database, monkeypatch
+):
+    import asterion.application.round as round_module
+
+    actor, service = await _seed_round(database, 772121, vigor=2)
+    _force_safe_common(monkeypatch, round_module)
+    start = datetime.now(UTC)
+    clock = _install_round_clock(monkeypatch, start)
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor).with_for_update()
+        )
+        character.vigor_regen_at = start
+
+    prepared = await service.prepare_round(actor, 5)
+    started = await service.start_round(actor, prepared.round_id, prepared.state_version)
+    assert started.kind == "round_active"
+
+    clock.current = start + timedelta(hours=12)
+    assert await service.advance_due_rounds() == 1
+
+    async with database[1]() as session:
+        state = await session.scalar(
+            select(HuntRound).where(HuntRound.id == started.round_id)
+        )
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        encounters = (
+            await session.scalars(
+                select(HuntRoundEncounter)
+                .where(HuntRoundEncounter.round_id == started.round_id)
+                .order_by(HuntRoundEncounter.ordinal)
+            )
+        ).all()
+        assert state.status == "ended" and state.end_reason == "vigor"
+        assert state.completed_encounters == 1
+        assert character.vigor == 0
+        assert [(row.ordinal, row.status) for row in encounters] == [(1, "completed")]
+
+    # Reconnect at worker wall-clock time may naturally refill Vigor, but must
+    # leave the terminal batch closed and never materialize another encounter.
+    resumed = await service.resume(actor)
+    assert resumed.kind == "round_ended"
+    assert await service.advance_due_rounds() == 0
+    async with database[1]() as session:
+        assert await session.scalar(
+            select(func.count(HuntRoundEncounter.id)).where(
+                HuntRoundEncounter.round_id == started.round_id
+            )
+        ) == 1
+
+
+@pytest.mark.asyncio
+async def test_round_five_encounters_pointwise_and_delayed_catchup_are_economically_equal(
+    database, monkeypatch
+):
+    import asterion.application.road as road_module
+    import asterion.application.round as round_module
+
+    actor_on_time, on_time_service = await _seed_round(database, 772122, vigor=10)
+    actor_delayed, delayed_service = await _seed_round(database, 772123, vigor=10)
+    _force_safe_common(monkeypatch, round_module)
+    monkeypatch.setattr(road_module, "_draw_int", lambda seed, label, upper: upper - 1)
+    start = datetime.now(UTC)
+    clock = _install_round_clock(monkeypatch, start)
+    async with database[1].begin() as session:
+        for actor in (actor_on_time, actor_delayed):
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor).with_for_update()
+            )
+            character.vigor_regen_at = start
+
+    on_time_prepare = await on_time_service.prepare_round(actor_on_time, 5)
+    on_time_start = await on_time_service.start_round(
+        actor_on_time, on_time_prepare.round_id, on_time_prepare.state_version
+    )
+    assert on_time_start.kind == "round_active"
+    assert (await on_time_service.resume(actor_on_time)).round_id == on_time_start.round_id
+    on_time_result = await _advance_round_cadence(
+        clock, on_time_service, actor_on_time, 5
+    )
+    assert on_time_result.kind == "round_completed"
+    assert on_time_result.completed_encounters == 5
+    on_time_seed = on_time_start.round_id
+
+    delayed_start_time = clock.current
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character)
+            .where(Character.telegram_id == actor_delayed)
+            .with_for_update()
+        )
+        character.vigor_regen_at = delayed_start_time
+    delayed_prepare = await delayed_service.prepare_round(actor_delayed, 5)
+    delayed_start = await delayed_service.start_round(
+        actor_delayed, delayed_prepare.round_id, delayed_prepare.state_version
+    )
+    assert delayed_start.kind == "round_active"
+    assert (await delayed_service.resume(actor_delayed)).round_id == delayed_start.round_id
+    clock.current = delayed_start_time + timedelta(hours=12)
+    assert await delayed_service.advance_due_rounds() == 1
+
+    async with database[1]() as session:
+        on_time_state = await session.scalar(
+            select(HuntRound).where(HuntRound.id == on_time_start.round_id)
+        )
+        delayed_state = await session.scalar(
+            select(HuntRound).where(HuntRound.id == delayed_start.round_id)
+        )
+        on_time_character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor_on_time)
+        )
+        delayed_character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor_delayed)
+        )
+        assert on_time_state.config_snapshot == delayed_state.config_snapshot
+        assert on_time_state.completed_encounters == delayed_state.completed_encounters == 5
+        assert on_time_state.status == delayed_state.status == "completed"
+        assert on_time_character.vigor == delayed_character.vigor == 1
+        assert on_time_character.xp == delayed_character.xp
+        assert on_time_character.crowns == delayed_character.crowns
+        for round_id in (on_time_seed, delayed_start.round_id):
+            encounters = (
+                await session.scalars(
+                    select(HuntRoundEncounter)
+                    .where(HuntRoundEncounter.round_id == round_id)
+                    .order_by(HuntRoundEncounter.ordinal)
+                )
+            ).all()
+            assert [row.status for row in encounters] == ["completed"] * 5
+            assert len({row.ordinal for row in encounters}) == 5
+            activity_ids = [row.activity_id for row in encounters]
+            assert all(activity_ids)
+            reward_count = await session.scalar(
+                select(func.count(RewardEvent.id)).where(
+                    RewardEvent.source_id.in_([f"activity:{item}" for item in activity_ids])
+                )
+            )
+            assert reward_count == 5
+
+    # Reconnect later may regenerate Vigor naturally, but it must not reopen
+    # the completed batch or alter any of its already-settled rewards.
+    delayed_result = await delayed_service.resume(actor_delayed)
+    assert delayed_result.kind == "round_completed"
+    assert delayed_result.completed_encounters == 5
+
+
+@pytest.mark.asyncio
+async def test_round_regeneration_is_first_available_at_next_due_boundary(
+    database, monkeypatch
+):
+    import asterion.application.round as round_module
+
+    actor, service = await _seed_round(database, 772124, vigor=10)
+    _force_safe_common(monkeypatch, round_module)
+    start = datetime.now(UTC)
+    clock = _install_round_clock(monkeypatch, start)
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor).with_for_update()
+        )
+        character.vigor_regen_at = start
+    prepared = await service.prepare_round(actor, 5)
+    started = await service.start_round(actor, prepared.round_id, prepared.state_version)
+    assert started.kind == "round_active"
+
+    clock.current = start + timedelta(minutes=12)
+    await service.advance_due_rounds()
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character.vigor == 2
+
+    clock.current = start + timedelta(seconds=REGEN_INTERVAL_SECONDS)
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character.vigor == 2
+
+    clock.current = start + timedelta(minutes=15)
+    await service.advance_due_rounds()
+    result = await service.resume(actor)
+    assert result.kind == "round_completed"
+    assert result.completed_encounters == 5
+    assert result.vigor == 1
 @pytest.mark.asyncio
 async def test_vigor_ending_happens_before_next_encounter_is_created(database, monkeypatch):
     import asterion.application.round as round_module

@@ -27,6 +27,7 @@ from asterion.application.road import (
     RoadService,
     RoadView,
 )
+from asterion.application.vigor import reconcile_character_vigor
 from asterion.domain.combat import (
     act,
     allowed_actions,
@@ -134,6 +135,16 @@ class RoundService(RoadService):
 
     def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
         super().__init__(sessions, server_id)
+
+    async def _character(self, s, actor):
+        character = await s.scalar(
+            select(Character)
+            .where(Character.telegram_id == actor, Character.server_id == self.server_id)
+            .with_for_update()
+        )
+        if character is not None:
+            await reconcile_character_vigor(s, character)
+        return character
 
     async def _round_profile(self, s, c, world):
         profile = hunt_profile_for_location(world.location) if world is not None else None
@@ -622,6 +633,10 @@ class RoundService(RoadService):
             if guard > state.batch_size + 1:
                 raise RuntimeError("hunt round advancement exceeded batch guard")
             due_at = state.next_resolution_at
+            # A delayed worker must replay each economic decision at its
+            # scheduled boundary. Using worker wall-clock here would let later
+            # Vigor finance encounters that should already have been skipped.
+            await reconcile_character_vigor(s, c, now=due_at)
             encounter = await self._current_encounter(
                 s, state.id, lock=True, statuses=("materialized",)
             )
@@ -655,6 +670,7 @@ class RoundService(RoadService):
             )
             await self._finish_round(s, state, "ended", reason)
             return
+        await reconcile_character_vigor(s, c, now=anchor)
         if c.vigor < 2:
             await self._finish_round(s, state, "ended", "vigor")
             return
@@ -909,6 +925,7 @@ class RoundService(RoadService):
             encounter.id,
             evidence,
             equipment_configuration=frozen_configuration,
+            now=due_at,
         )
         state.completed_encounters += 1
         state.next_resolution_at = None

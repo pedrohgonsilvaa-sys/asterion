@@ -28,6 +28,7 @@ from asterion.application.knowledge_catalog import (
     VARIANT_LABELS,
 )
 from asterion.application.tdo_feats import reconcile_tdo_feats
+from asterion.application.vigor import reconcile_character_vigor
 from asterion.domain.road import creature_for
 from asterion.infrastructure.db.models import (
     Achievement,
@@ -138,9 +139,14 @@ class CharacterSurfacesService:
 
     async def attributes(self, actor_id: int) -> AttributesView | None:
         async with self.sessions.begin() as session:
-            character = await self._character(session, actor_id)
+            character = await session.scalar(
+                select(Character)
+                .where(Character.telegram_id == actor_id, Character.server_id == self.server_id)
+                .with_for_update()
+            )
             if character is None:
                 return None
+            await reconcile_character_vigor(session, character)
             configuration = await load_equipment_configuration(session, character, lock_rows=False)
             stats = resolve_character_combat_stats(character, configuration)
             return AttributesView(

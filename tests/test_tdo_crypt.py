@@ -53,6 +53,20 @@ async def _seed(database, *, actor: int, level: int = 4, vigor: int = 100):
 
 
 @pytest.mark.asyncio
+async def test_discovered_crypt_detail_opens_with_stable_available(database):
+    actor = 774400
+    _character_id, sessions = await _seed(database, actor=actor, level=4)
+    service = DungeonService(sessions, "ocaso")
+
+    view = await service.detail(actor)
+
+    assert view is not None and view.kind == "detail"
+    assert dict(view.difficulty_gates)["stable"] == "available"
+    assert dict(view.difficulty_gates)["fractured"] == "first_stable"
+    assert view.first_clear is False
+
+
+@pytest.mark.asyncio
 async def test_solo_run_reserves_vigor_snapshots_and_reconnects_to_same_encounter(database):
     actor = 774401
     _character_id, sessions = await _seed(database, actor=actor)

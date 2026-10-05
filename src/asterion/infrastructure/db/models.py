@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -102,6 +102,12 @@ class Character(Base):
     hp: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
     max_hp: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
     vigor: Mapped[int] = mapped_column(Integer, nullable=False, default=100, server_default="100")
+    vigor_regen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+    )
     max_vigor: Mapped[int] = mapped_column(
         Integer, nullable=False, default=100, server_default="100"
     )
