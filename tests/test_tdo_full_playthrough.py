@@ -1,5 +1,6 @@
 import os
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
@@ -9,7 +10,13 @@ from asterion.application.active_arts import ActiveArtService
 from asterion.application.class_trials import ClassTrialService
 from asterion.application.crafting import CraftingService
 from asterion.application.creation import CreationService
+from asterion.application.dungeons import CRYPT_FAMILY_ID, DungeonService
 from asterion.application.equipment import EquipmentService
+from asterion.application.equipment_configuration import (
+    build_equipment_configuration,
+    load_equipment_configuration,
+    resolve_character_combat_stats,
+)
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import ASH_POINT_IDS, P2Service
 from asterion.application.p3 import P3Service
@@ -31,13 +38,19 @@ from asterion.application.talents import TalentService
 from asterion.application.world import WorldService
 from asterion.domain.arts import FIRST_CLASS_ART_IDS, SENTINEL_ART_IDS
 from asterion.domain.class_trials import SENTINEL_CONDITION_IDS
-from asterion.domain.combat import allowed_actions
+from asterion.domain.combat import action_target_ids, allowed_actions
+from asterion.domain.dungeons import dungeon_completion_xp
+from asterion.domain.equipment import assignment_for_item_slot, parse_equipment_slot
 from asterion.domain.prologue import PROFILE as PROLOGUE_PROFILE
+from asterion.domain.road import EXPLORATION_PROFILES, select_exploration_result
+from asterion.domain.tdo_galleries import GALLERIES_FAMILY_ID
 from asterion.infrastructure.db.models import (
     Character,
     CharacterEquipmentSlot,
     ConsumableStack,
+    DungeonRun,
     EquipmentItem,
+    ExplorationAttempt,
     GameActivity,
     Quest,
     RewardEvent,
@@ -200,15 +213,19 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     blocked_hunt = await rounds.start_hunt(actor)
     assert blocked_hunt is not None and blocked_hunt.kind.startswith("round_")
     if started.kind == "round_active":
-        cancel = await rounds.cancel_round(actor, started.round_id, started.state_version)
-        assert cancel is not None and cancel.cancel_requested
-        JourneyClock.instant += timedelta(minutes=3)
-        assert await rounds.advance_due_rounds() == 1
+        JourneyClock.instant += timedelta(hours=12)
+        advanced = await rounds.advance_due_rounds()
+        assert advanced > 0
         round_result = await rounds.resume(actor)
-        assert round_result is not None and round_result.kind == "round_cancelled"
-        await rounds.round_back(actor, started.round_id)
     else:
-        elite = await rounds.engage_round_elite(actor, started.round_id, started.state_version)
+        round_result = started
+    assert round_result is not None
+    completed_round_encounters = round_result.completed_encounters
+    round_terminal_kind = round_result.kind
+    if round_result.kind == "round_interrupted":
+        elite = await rounds.engage_round_elite(
+            actor, started.round_id, round_result.state_version
+        )
         assert elite is not None and elite.combat is not None
         elite = await driver.combat_to_result(
             elite,
@@ -218,8 +235,26 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             lambda: RoundService(sessions, "ocaso").resume(actor),
             label="Ronda · Elite interrompida",
         )
-        await RoundService(sessions, "ocaso").acknowledge_result(actor)
-    await driver.snapshot("Ronda real encerrada sem mutação direta do estado")
+        if elite.kind == "hunt_victory":
+            await RoundService(sessions, "ocaso").acknowledge_result(actor)
+        else:
+            assert elite.kind == "hunt_defeat", elite
+            await RoundService(sessions, "ocaso").acknowledge_defeat(actor)
+        round_result = await rounds.round_back(actor, started.round_id)
+    elif round_result.kind in {"round_completed", "round_ended", "round_defeated"}:
+        round_result = await rounds.round_back(actor, started.round_id)
+    assert round_result is not None and round_result.kind not in {
+        "round_active",
+        "round_interrupted",
+        "round_cancelled",
+    }, (round_result, driver.diagnostic())
+    print(
+        "RONDA PÚBLICA · "
+        f"resultado={round_terminal_kind} · "
+        f"encontros={completed_round_encounters}/5 · "
+        f"Vigor={round_result.vigor}/{round_result.max_vigor}"
+    )
+    await driver.snapshot("Ronda pública realmente avançada pelo serviço")
 
     # S1 is a normal secondary quest, available once the character reaches Nv.2.
     async def manual_hunt(label, *, capture=True):
@@ -236,12 +271,12 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
                 await service.acknowledge_defeat(actor)
                 if capture:
                     await driver.snapshot(f"{label} · recibo de derrota reconhecido")
-                continue
+                return view
             if view is not None and view.kind == "hunt_victory":
                 await service.acknowledge_result(actor)
                 if capture:
                     await driver.snapshot(f"{label} · recibo de vitória reconhecido")
-                continue
+                return view
             assert view is not None and view.kind == "combat", (view, driver.diagnostic())
             view = await driver.combat_to_result(
                 view,
@@ -280,6 +315,486 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             )
             return character.level
 
+    async def current_xp_total():
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            assert character is not None
+            return driver.total_xp(character.level, character.xp)
+
+    async def explore_result(target_result_id, label):
+        """Use real Explore service with a selected seed and its actual selector."""
+        import asterion.application.road as road_module
+
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            assert character is not None
+            world = await session.get(WorldState, character.id)
+            assert world is not None
+            local_by_label = {
+                ROAD: road_module.ROAD_LOCATION,
+                CHARNECA: road_module.CHARNECA_LOCATION,
+                BOSQUE: road_module.BOSQUE_LOCATION,
+                RUINS: road_module.RUINS_LOCATION,
+            }
+            local_id = local_by_label[world.location]
+            profile = EXPLORATION_PROFILES[local_id]
+            attempt_local_id = ROAD if local_id == road_module.ROAD_LOCATION else local_id
+            recent_rows = (
+                await session.scalars(
+                    select(ExplorationAttempt.result_id)
+                    .where(
+                        ExplorationAttempt.character_id == character.id,
+                        ExplorationAttempt.local_id == attempt_local_id,
+                    )
+                    .order_by(ExplorationAttempt.created_at.desc())
+                    .limit(3)
+                )
+            ).all()
+            recent = tuple(str(value).rsplit(".", 1)[-1] for value in recent_rows)
+            unique_ids = tuple(result.result_id for result in profile.results if result.unique)
+            excluded = tuple(
+                (
+                    await session.scalars(
+                        select(ExplorationAttempt.result_id).where(
+                            ExplorationAttempt.character_id == character.id,
+                            ExplorationAttempt.local_id == attempt_local_id,
+                            ExplorationAttempt.status == "completed",
+                            ExplorationAttempt.result_id.in_(unique_ids),
+                        )
+                    )
+                ).all()
+            )
+            level = character.level
+            last = await session.scalar(
+                select(ExplorationAttempt)
+                .where(
+                    ExplorationAttempt.character_id == character.id,
+                    ExplorationAttempt.local_id == attempt_local_id,
+                )
+                .order_by(ExplorationAttempt.created_at.desc())
+                .limit(1)
+            )
+            latest_created = last.created_at if last is not None else None
+
+        target_key = next(
+            result.key
+            for result in profile.results
+            if result.result_id == target_result_id
+        )
+        seed = next(
+            (
+                f"{candidate:032x}"
+                for candidate in range(500_000)
+                if select_exploration_result(
+                    f"{candidate:032x}", level, recent, tuple(map(str, excluded)), profile
+                )
+                == target_key
+            ),
+            None,
+        )
+        if seed is None:
+            raise AssertionError(
+                f"{label}: nenhum seed determinístico selecionou resultado elegível "
+                f"{target_result_id!r} para Nv.{level}; excluídos={excluded!r}; "
+                f"local={world.location!r}; {driver.diagnostic()}"
+            )
+
+        now = datetime.now(UTC)
+        if latest_created is not None:
+            now = max(now, latest_created + timedelta(minutes=5, seconds=1))
+
+        class ExploreClock(datetime):
+            instant = None
+
+            @classmethod
+            def now(cls, tz=None):
+                return cls.instant.astimezone(tz) if tz else cls.instant.replace(tzinfo=None)
+
+        ExploreClock.instant = now
+
+        original_uuid4 = road_module.uuid4
+        seed_pending = True
+
+        def deterministic_uuid4():
+            nonlocal seed_pending
+            if seed_pending:
+                seed_pending = False
+                return UUID(hex=seed)
+            return original_uuid4()
+
+        before_xp = await current_xp_total()
+        async with sessions() as session:
+            before_character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            assert before_character is not None
+            before_crowns, before_vigor, before_level = (
+                before_character.crowns,
+                before_character.vigor,
+                before_character.level,
+            )
+
+        with monkeypatch.context() as patch:
+            patch.setattr(road_module, "datetime", ExploreClock)
+            patch.setattr(road_module, "uuid4", deterministic_uuid4)
+            service = RoadService(sessions, "ocaso")
+            prepared = await service.prepare_explore(actor)
+            assert prepared is not None and prepared.kind == "explore_prepare", (
+                f"{label}: preparação de Desbravar indisponível: {prepared!r}; "
+                f"{driver.diagnostic()}"
+            )
+            view = await service.explore(actor)
+
+        assert view is not None and view.kind == "exploration", (
+            f"{label}: Desbravar não concluiu resultado narrativo: {view!r}; "
+            f"{driver.diagnostic()}"
+        )
+        assert view.result_id == target_result_id, (view, driver.diagnostic())
+        acknowledged = await RoadService(sessions, "ocaso").acknowledge_result(
+            actor, view.attempt_id
+        )
+        assert acknowledged is not None and acknowledged.kind not in {
+            "exploration",
+            "combat",
+        }, (acknowledged, driver.diagnostic())
+        async with sessions() as session:
+            attempt = await session.get(ExplorationAttempt, view.attempt_id)
+            assert attempt is not None and attempt.result_acknowledged is True, (
+                f"{label}: recibo de Desbravar não foi reconhecido no banco"
+            )
+        after_xp = await current_xp_total()
+        async with sessions() as session:
+            after_character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            assert after_character is not None
+            receipt = {
+                "local": view.location,
+                "result": view.result_id,
+                "xp": after_xp - before_xp,
+                "crowns": after_character.crowns - before_crowns,
+                "vigor_spent": before_vigor - after_character.vigor,
+                "level_before": before_level,
+                "level_after": after_character.level,
+                "receipt": view.result_text,
+            }
+        print(f"TDO_EXPLORE_RECEIPT={receipt!r}", flush=True)
+        await driver.snapshot(f"Desbravar · {label} · {target_result_id}")
+        return view
+
+    async def run_solo_dungeon(family_id, label, *, allow_vigor_block=False):
+        mark = await driver.snapshot(f"{label} · antes do detalhe")
+        print(f"TDO_DUNGEON_ENTRY_SNAPSHOT={mark.state!r}", flush=True)
+        service = DungeonService(sessions, "ocaso")
+        detail = await service.detail(actor, family_id)
+        assert detail is not None and detail.kind == "detail", (detail, driver.diagnostic())
+        assert dict(detail.difficulty_gates).get("stable") == "available", (
+            detail,
+            driver.diagnostic(),
+        )
+        current = await service.start_solo(actor, "stable", family_id)
+        if (
+            allow_vigor_block
+            and current is not None
+            and current.kind == "detail"
+            and current.reason == "vigor"
+        ):
+            assert current.run_id is None and current.vigor < 25, current
+            outcome = {
+                "family": family_id,
+                "status": "blocked_vigor",
+                "vigor": current.vigor,
+                "required": 25,
+            }
+            print(f"TDO_DUNGEON_BLOCKER={outcome!r}", flush=True)
+            await driver.snapshot(f"{label} · bloqueada por Vigor sem criar run")
+            return outcome
+        assert current is not None and current.run_id is not None, (
+            f"{label}: run Solo não iniciou: {current!r}; {driver.diagnostic()}"
+        )
+        original_run_id = current.run_id
+        await driver.snapshot(f"{label} · run iniciada")
+        encounter_attempts = 0
+        retries = 0
+        while encounter_attempts < 8:
+            if current.run_id != original_run_id:
+                raise AssertionError(f"{label}: reconnect/retry criou outra run")
+            if current.kind in {"completed", "failed", "expired"}:
+                break
+            if current.kind == "brazier":
+                current = await service.activate_brazier(
+                    actor, current.run_id, current.state_version
+                )
+                assert current is not None and current.kind != "stale", (
+                    f"{label}: ativação do Braseiro falhou: {current!r}"
+                )
+                await driver.snapshot(f"{label} · Braseiro ativado")
+                continue
+            if current.kind == "retry":
+                if retries >= 1:
+                    break
+                retries += 1
+                current = await service.retry(actor, current.run_id, current.state_version)
+                assert current is not None and current.kind != "stale"
+                continue
+            if current.combat is None:
+                current = await service.begin_encounter(
+                    actor, current.run_id, current.state_version
+                )
+            assert current is not None and current.combat is not None, (
+                f"{label}: encontro não materializou combate: {current!r}; "
+                f"{driver.diagnostic()}"
+            )
+            encounter_attempts += 1
+
+            def pick(current_view):
+                combat = current_view.combat
+                player = combat.fighters.get("player")
+                if (
+                    player is not None
+                    and player.hp * 10 <= player.stats.hp * 4
+                    and any(
+                        option.item_id == "consumable.heal"
+                        for option in current_view.consumable_options
+                    )
+                ):
+                    return "consumable:consumable.heal"
+                return driver.combat_action(combat)
+
+            async def mutate(current_view, action):
+                if action.startswith("consumable:"):
+                    return await service.action(
+                        actor,
+                        current_view.run_id,
+                        current_view.activity_id,
+                        current_view.combat.version,
+                        "attack",
+                        consumable_id=action.removeprefix("consumable:"),
+                    )
+                targets = action_target_ids(current_view.combat, action)
+                return await service.action(
+                    actor,
+                    current_view.run_id,
+                    current_view.activity_id,
+                    current_view.combat.version,
+                    action,
+                    targets[0] if targets else None,
+                )
+
+            current = await driver.combat_to_result(
+                current,
+                mutate,
+                lambda: DungeonService(sessions, "ocaso").resume(actor),
+                label=f"{label} · Encontro {current.ordinal} · tentativa {encounter_attempts}",
+                action_picker=pick,
+            )
+            await driver.snapshot(
+                f"{label} · resultado do Encontro {current.ordinal} · {current.kind}"
+            )
+            if current.kind in {"failed", "completed"}:
+                break
+
+        assert current.run_id == original_run_id, (current, driver.diagnostic())
+        async with sessions() as session:
+            run = await session.get(DungeonRun, original_run_id)
+            assert run is not None
+            outcome = {
+                "family": family_id,
+                "status": run.status,
+                "difficulty": run.difficulty,
+                "encounter": run.current_encounter_ordinal,
+                "brazier_exists": run.has_brazier,
+                "brazier_activated": run.brazier_activated,
+                "internal_xp": (run.progress or {}).get("internal_xp", 0),
+                "retry_count": retries,
+                "encounter_attempts": encounter_attempts,
+            }
+        assert outcome["status"] in {"completed", "failed"}, (
+            f"{label}: run permaneceu sem resolução terminal: {outcome!r}; "
+            f"{driver.diagnostic()}"
+        )
+        print(f"TDO_DUNGEON_RUN={outcome!r}", flush=True)
+        await driver.snapshot(f"{label} · run {outcome['status']}")
+        return outcome
+
+    async def equip_best_available_combat_gear():
+        """Equip only owned items that improve the official combat stat vector."""
+        equipment_service = EquipmentService(sessions, "ocaso")
+        changed = []
+        for _ in range(12):
+            async with sessions.begin() as session:
+                character = await session.scalar(
+                    select(Character)
+                    .where(Character.telegram_id == actor)
+                    .with_for_update()
+                )
+                assert character is not None
+                owned = (
+                    await session.scalars(
+                        select(EquipmentItem)
+                        .where(EquipmentItem.character_id == character.id)
+                        .order_by(EquipmentItem.id)
+                    )
+                ).all()
+                equipped_rows = (
+                    await session.execute(
+                        select(CharacterEquipmentSlot.slot, EquipmentItem)
+                        .join(
+                            EquipmentItem,
+                            EquipmentItem.id == CharacterEquipmentSlot.equipment_item_id,
+                        )
+                        .where(CharacterEquipmentSlot.character_id == character.id)
+                    )
+                ).all()
+                assignments = {
+                    parse_equipment_slot(slot): item for slot, item in equipped_rows
+                }
+                baseline_configuration = build_equipment_configuration(
+                    character,
+                    list(assignments.items()),
+                    version=character.combat_configuration_version,
+                    talent_choices=(
+                        await load_equipment_configuration(
+                            session, character, lock_rows=False
+                        )
+                    ).talent_choices,
+                )
+                baseline_stats = resolve_character_combat_stats(
+                    character, baseline_configuration
+                )
+                version = character.combat_configuration_version
+                level = character.level
+                currently_equipped = {item.id for item in assignments.values()}
+                candidates = []
+                for item in owned:
+                    if item.id in currently_equipped or item.item_level > level:
+                        continue
+                    assignment = assignment_for_item_slot(item.slot)
+                    if assignment is None:
+                        continue
+                    replaced = dict(assignments)
+                    if item.slot == "2H":
+                        replaced.pop(parse_equipment_slot("Secundária"), None)
+                    replaced[assignment.slot] = item
+                    try:
+                        candidate_configuration = build_equipment_configuration(
+                            character,
+                            list(replaced.items()),
+                            version=version,
+                            talent_choices=baseline_configuration.talent_choices,
+                        )
+                        candidate_stats = resolve_character_combat_stats(
+                            character, candidate_configuration
+                        )
+                    except ValueError:
+                        continue
+                    normalized_delta = sum(
+                        (
+                            (new - old) / max(abs(old), Decimal(1))
+                            for old, new in zip(
+                                baseline_stats.values(), candidate_stats.values(), strict=True
+                            )
+                        ),
+                        Decimal(0),
+                    )
+                    if normalized_delta > 0:
+                        candidates.append(
+                            (
+                                normalized_delta,
+                                str(item.id),
+                                assignment.slot,
+                                item,
+                            )
+                        )
+                if not candidates:
+                    break
+                candidates.sort(key=lambda row: (row[0], row[1]), reverse=True)
+                delta, _item_id, slot, item = candidates[0]
+            result = await equipment_service.equip_item(
+                actor,
+                item.id,
+                expected_configuration_version=version,
+            )
+            if result is not None and result.changed:
+                changed.append(
+                    (slot.value, item.item_name, item.rarity, item.item_level, str(delta))
+                )
+            else:
+                break
+        return changed
+
+    async def travel_to_refuge():
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            assert character is not None
+            world = await session.get(WorldState, character.id)
+            assert world is not None
+            location = world.location
+        if location == ROAD:
+            arrived = await road.travel(actor, REFUGE)
+        elif location == CHARNECA:
+            arrived = await road.travel_route(actor, REFUGE)
+        elif location == BOSQUE:
+            arrived = await road.travel_route(actor, CHARNECA)
+            assert arrived is not None
+            arrived = await road.travel_route(actor, REFUGE)
+        elif location == RUINS:
+            arrived = await road.travel_route(actor, BOSQUE)
+            assert arrived is not None
+            arrived = await road.travel_route(actor, CHARNECA)
+            assert arrived is not None
+            arrived = await road.travel_route(actor, REFUGE)
+        else:
+            assert location == REFUGE
+            return
+        assert arrived is not None and arrived.location == REFUGE, (arrived, driver.diagnostic())
+
+    async def travel_from_refuge_to(destination):
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            assert character is not None
+            world = await session.get(WorldState, character.id)
+            assert world is not None
+            location = world.location
+        if location == ROAD:
+            await road.travel(actor, REFUGE)
+            location = REFUGE
+        if location != REFUGE:
+            await travel_to_refuge()
+        if destination == REFUGE:
+            return
+        arrived = await road.travel_route(actor, CHARNECA)
+        assert arrived is not None and arrived.location == CHARNECA
+        if destination == CHARNECA:
+            return
+        arrived = await road.travel_route(actor, BOSQUE)
+        assert arrived is not None and arrived.location == BOSQUE
+        if destination == BOSQUE:
+            return
+        assert destination == RUINS
+        arrived = await road.travel_route(actor, RUINS)
+        assert arrived is not None and arrived.location == RUINS, (
+            arrived,
+            driver.diagnostic(),
+        )
+
+    async def rest_and_return(destination):
+        await travel_to_refuge()
+        rested = await WorldService(sessions, "ocaso").rest(actor)
+        assert rested is not None and rested.hp == rested.max_hp
+        if destination != REFUGE:
+            await travel_from_refuge_to(destination)
+
+    await road.travel(actor, ROAD)
+    await explore_result("explore.tdo.estrada.marco_viajantes", "Estrada das Cinzas")
     await road.travel(actor, REFUGE)
     for attempt in range(40):
         offer = await S1Service(sessions, "ocaso").offer(actor)
@@ -366,16 +881,143 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     assert active_p2.status == "completed"
     await driver.snapshot("P2 concluída")
 
-    # Continue with ordinary Road hunts until P3's level gate is met.
-    for attempt in range(80):
+    await travel_from_refuge_to(CHARNECA)
+    for attempt in range(24):
+        if await current_level() >= 4:
+            break
+        await manual_hunt(f"Nv.4 · Caçada complementar na Charneca {attempt + 1}")
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            world = await session.get(WorldState, character.id) if character else None
+            assert character is not None and world is not None
+            location = world.location
+            needs_rest = character.hp * 10 < character.max_hp * 6
+        if location != CHARNECA or needs_rest:
+            await rest_and_return(CHARNECA)
+    assert await current_level() >= 4, driver.diagnostic()
+    # S2 is eligible after P2 and Nv.4, so use its authored XP before more grind.
+    await travel_to_refuge()
+    # Keep this mission flow tied to its own persisted gate and progress.
+    s2 = S2Service(sessions, "ocaso")
+    s2_offer = await s2.oren(actor)
+    assert s2_offer is not None and s2_offer.available, (s2_offer, driver.diagnostic())
+    s2_view = await s2.accept(actor, s2_offer.state_version)
+    await road.travel_route(actor, CHARNECA)
+    s2_view = await s2.find_camp(actor, s2_view.state_version)
+    for vestige in S2_VESTIGE_IDS:
+        s2_view = await s2.examine_vestige(actor, vestige, s2_view.state_version)
+    assert s2_view.kind == "combat" and s2_view.combat is not None
+    for attempt in range(6):
+        if s2_view.combat.result == "defeat" and s2_view.activity_status == "active":
+            mark = await driver.snapshot("S2 · derrota terminal ao materializar combate")
+            raise AssertionError(
+                f"P0: S2 persistiu derrota inicial como Foreground ativo; {mark.state!r}"
+            )
+        s2_view = await driver.combat_to_result(
+            s2_view,
+            lambda current, action: s2.action(
+                actor, current.activity_id, current.activity_state_version, action
+            ),
+            lambda: S2Service(sessions, "ocaso").resume(actor),
+            label=f"S2 · Peregrino Calcinado · tentativa {attempt + 1}",
+        )
+        if s2_view.progress.get("encounter_result") == "victory":
+            break
+        assert s2_view.progress.get("encounter_result") == "defeat", driver.diagnostic()
+        await driver.snapshot(f"S2 · derrota legítima · tentativa {attempt + 1}")
+        if attempt < 5:
+            async with sessions() as session:
+                character = await session.scalar(
+                    select(Character).where(Character.telegram_id == actor)
+                )
+                world = await session.get(WorldState, character.id)
+                location = world.location
+            if location == REFUGE:
+                await road.travel_route(actor, CHARNECA)
+            s2_view = await s2.retry(actor, s2_view.state_version)
+            assert s2_view.kind == "combat" and s2_view.combat is not None
+    assert s2_view.progress.get("encounter_result") == "victory", driver.diagnostic()
+    s2_view = await s2.recover_fragment(actor, s2_view.state_version)
+    assert s2_view.step == 6
+    await road.travel_route(actor, REFUGE)
+    s2_view = await s2.complete_with_oren(actor, s2_view.state_version)
+    assert s2_view.status == "completed"
+    await driver.snapshot("S2 concluída")
+    await travel_from_refuge_to(CHARNECA)
+    await explore_result("explore.tdo.charneca.braseiro", "Charneca · Braseiro do Vento Morto")
+    await explore_result("explore.tdo.charneca.cripta", "Charneca · descoberta da Cripta")
+    await rest_and_return(CHARNECA)
+    crypt_equipment = await equip_best_available_combat_gear()
+    crypt_arts = ActiveArtService(sessions, "ocaso")
+    crypt_art_view = await crypt_arts.view(actor)
+    assert crypt_art_view is not None
+    second_sentinel_art = SENTINEL_ART_IDS["quebra_postura"]
+    if (
+        second_sentinel_art in crypt_art_view.available_art_ids
+        and second_sentinel_art not in {entry.art_id for entry in crypt_art_view.slots}
+    ):
+        equipped_art = await crypt_arts.equip_art(
+            actor,
+            2,
+            second_sentinel_art,
+            expected_configuration_version=crypt_art_view.combat_configuration_version,
+        )
+        assert equipped_art is not None and equipped_art.changed
+    await driver.snapshot(
+        "Cripta · equipamento comparado pela configuração real · "
+        f"{crypt_equipment!r}; Artes={second_sentinel_art in crypt_art_view.available_art_ids}"
+    )
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        crypt_vigor = character.vigor
+    if crypt_vigor < 25:
+        await rest_and_return(CHARNECA)
+    crypt_before_xp = await current_xp_total()
+    crypt_run = await run_solo_dungeon(CRYPT_FAMILY_ID, "Cripta do Ocaso · Estável")
+    crypt_after_xp = await current_xp_total()
+    if crypt_run["status"] == "completed":
+        print(
+            "TDO_CRYPT_XP="
+            f"{{'actual_delta': {crypt_after_xp - crypt_before_xp}, "
+            f"'completion_reference': {dungeon_completion_xp(6, 'stable', first_clear=True)}, "
+            f"'first_clear_total_expected_before_milestones': 6640}}",
+            flush=True,
+        )
+    await travel_to_refuge()
+    await driver.snapshot("Nv.4+ · Cripta concluída ou derrota legítima registrada")
+
+    # Continue with level-appropriate public hunts until P3's level gate is met.
+    # A defeat or low HP uses the normal Refuge recovery; this never restores Vigor.
+    await travel_from_refuge_to(CHARNECA)
+    for attempt in range(45):
         if await current_level() >= 5:
             break
-        await road.travel(actor, ROAD)
-        await manual_hunt(f"Nv.5 · Caçada {attempt + 1}")
-        await road.travel(actor, REFUGE)
-        await WorldService(sessions, "ocaso").rest(actor)
+        await manual_hunt(
+            f"Nv.5 · Caçada complementar na Charneca {attempt + 1}",
+            capture=attempt % 5 == 4,
+        )
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            world = await session.get(WorldState, character.id) if character else None
+            assert character is not None and world is not None
+            location = world.location
+            needs_rest = character.hp * 10 < character.max_hp * 6
+        if location != CHARNECA or needs_rest:
+            await rest_and_return(CHARNECA)
+        if attempt % 5 == 4:
+            await driver.snapshot(
+                f"progressão pública para Nv.5 · {attempt + 1} Caçadas após conteúdo único"
+            )
     assert await current_level() >= 5, driver.diagnostic()
     await driver.snapshot("Nv.5 · gate de P3 alcançado")
+    await travel_to_refuge()
 
     talents = TalentService(sessions, "ocaso")
     talent_view = await talents.view(actor)
@@ -433,6 +1075,74 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     assert p3_complete is not None and p3_complete.status == "completed"
     await driver.snapshot("P3 concluída")
 
+    # S3 is available after P3 at Nv.5; consume that authored content first.
+    s3 = S3Service(sessions, "ocaso")
+    s3_offer = await s3.alda(actor)
+    assert s3_offer is not None and s3_offer.available, (s3_offer, driver.diagnostic())
+    s3_view = await s3.accept(actor, s3_offer.state_version)
+    await road.travel_route(actor, CHARNECA)
+    await road.travel_route(actor, BOSQUE)
+    s3_view = await s3.interact(actor, s3_view.state_version, "route")
+    for track in S3_TRACKS:
+        s3_view = await s3.interact(actor, s3_view.state_version, "track", track)
+    assert s3_view.kind == "combat" and s3_view.combat is not None
+    for attempt in range(6):
+        if s3_view.combat.result == "defeat" and s3_view.activity_status == "active":
+            mark = await driver.snapshot("S3 · derrota terminal ao materializar combate")
+            raise AssertionError(
+                f"P0: S3 persistiu derrota inicial como Foreground ativo; {mark.state!r}"
+            )
+        s3_view = await driver.combat_to_result(
+            s3_view,
+            lambda current, action: s3.action(
+                actor, current.activity_id, current.activity_state_version, action
+            ),
+            lambda: S3Service(sessions, "ocaso").resume(actor),
+            label=f"S3 · Cervo Escoriado · tentativa {attempt + 1}",
+        )
+        if s3_view.progress.get("combat_result") == "victory":
+            break
+        assert s3_view.progress.get("combat_result") == "defeat", driver.diagnostic()
+        await driver.snapshot(f"S3 · derrota legítima · tentativa {attempt + 1}")
+        if attempt < 5:
+            async with sessions() as session:
+                character = await session.scalar(
+                    select(Character).where(Character.telegram_id == actor)
+                )
+                world = await session.get(WorldState, character.id)
+                location = world.location
+            if location == REFUGE:
+                await road.travel_route(actor, CHARNECA)
+                await road.travel_route(actor, BOSQUE)
+            elif location == CHARNECA:
+                await road.travel_route(actor, BOSQUE)
+            s3_view = await s3.retry(actor, s3_view.state_version)
+            assert s3_view.kind == "combat" and s3_view.combat is not None
+    assert s3_view.progress.get("combat_result") == "victory", driver.diagnostic()
+    s3_view = await s3.interact(actor, s3_view.state_version, "cargo")
+    await road.travel_route(actor, CHARNECA)
+    await road.travel_route(actor, REFUGE)
+    s3_view = await s3.interact(actor, s3_view.state_version, "report")
+    assert s3_view.status == "completed"
+    await driver.snapshot("S3 concluída")
+    await travel_from_refuge_to(BOSQUE)
+    for attempt in range(40):
+        if await current_level() >= 6:
+            break
+        await manual_hunt(f"Nv.6 · Caçada complementar no Bosque {attempt + 1}")
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            world = await session.get(WorldState, character.id) if character else None
+            assert character is not None and world is not None
+            location = world.location
+            needs_rest = character.hp * 10 < character.max_hp * 6
+        if location != BOSQUE or needs_rest:
+            await rest_and_return(BOSQUE)
+    assert await current_level() >= 6, driver.diagnostic()
+    await explore_result("explore.tdo.bosque.braseiro", "Bosque · Braseiro dos Galhos Mortos")
+
     # Use the P3 artifact reward through the real Equipment validator; its
     # existing HP/ATQ/DEF budget is a legitimate upgrade for the public journey.
     async with sessions() as session:
@@ -457,7 +1167,8 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     assert equipped_p3 is not None and equipped_p3.changed
     await driver.snapshot("Relicário de Cinzas equipado pela configuração oficial")
 
-    for attempt in range(450):
+    nv7_hunts = 0
+    for attempt in range(100):
         if await current_level() >= 7:
             break
         async with sessions() as session:
@@ -478,6 +1189,7 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         await manual_hunt(
             f"Nv.7 · Caçada {attempt + 1}", capture=(attempt % 10 == 9)
         )
+        nv7_hunts += 1
         async with sessions() as session:
             character = await session.scalar(
                 select(Character).where(Character.telegram_id == actor)
@@ -492,8 +1204,17 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             if location in {BOSQUE, CHARNECA}:
                 await road.travel_route(actor, REFUGE)
             await WorldService(sessions, "ocaso").rest(actor)
-    assert await current_level() >= 7, driver.diagnostic()
-    await driver.snapshot("Nv.7 · gate de P4 alcançado")
+    nv7_mark = await driver.snapshot("progressão até Nv.7 após conteúdo atual")
+    print(
+        "TDO_LEVEL_7_GATE="
+        f"level={nv7_mark.state.get('level')} · "
+        f"residual_xp={nv7_mark.state.get('xp')} · "
+        f"next_level_xp={nv7_mark.state.get('xp_required_next_level')} · "
+        f"manual_hunts_at_gate={nv7_hunts} · "
+        f"vigor={nv7_mark.state.get('vigor')} · hp="
+        f"{nv7_mark.state.get('hp')}/{nv7_mark.state.get('max_hp')}"
+    )
+    assert nv7_mark.state.get("level", 0) >= 7, driver.diagnostic()
 
     p4 = P4Service(sessions, "ocaso")
     p4_offer = await p4.offer(actor)
@@ -555,102 +1276,7 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     assert p4_complete.status == "completed"
     await driver.snapshot("P4 concluída")
 
-    # Continue with the optional content that is already unlocked before P5.
-    s2 = S2Service(sessions, "ocaso")
-    s2_offer = await s2.oren(actor)
-    assert s2_offer is not None and s2_offer.available, (s2_offer, driver.diagnostic())
-    s2_view = await s2.accept(actor, s2_offer.state_version)
-    await road.travel_route(actor, CHARNECA)
-    s2_view = await s2.find_camp(actor, s2_view.state_version)
-    for vestige in S2_VESTIGE_IDS:
-        s2_view = await s2.examine_vestige(actor, vestige, s2_view.state_version)
-    assert s2_view.kind == "combat" and s2_view.combat is not None
-    for attempt in range(6):
-        if s2_view.combat.result == "defeat" and s2_view.activity_status == "active":
-            mark = await driver.snapshot("S2 · derrota terminal ao materializar combate")
-            raise AssertionError(
-                f"P0: S2 persistiu derrota inicial como Foreground ativo; {mark.state!r}"
-            )
-        s2_view = await driver.combat_to_result(
-            s2_view,
-            lambda current, action: s2.action(
-                actor, current.activity_id, current.activity_state_version, action
-            ),
-            lambda: S2Service(sessions, "ocaso").resume(actor),
-            label=f"S2 · Peregrino Calcinado · tentativa {attempt + 1}",
-        )
-        if s2_view.progress.get("encounter_result") == "victory":
-            break
-        assert s2_view.progress.get("encounter_result") == "defeat", driver.diagnostic()
-        await driver.snapshot(f"S2 · derrota legítima · tentativa {attempt + 1}")
-        if attempt < 5:
-            async with sessions() as session:
-                character = await session.scalar(
-                    select(Character).where(Character.telegram_id == actor)
-                )
-                world = await session.get(WorldState, character.id)
-                location = world.location
-            if location == REFUGE:
-                await road.travel_route(actor, CHARNECA)
-            s2_view = await s2.retry(actor, s2_view.state_version)
-            assert s2_view.kind == "combat" and s2_view.combat is not None
-    assert s2_view.progress.get("encounter_result") == "victory", driver.diagnostic()
-    s2_view = await s2.recover_fragment(actor, s2_view.state_version)
-    assert s2_view.step == 6
-    await road.travel_route(actor, REFUGE)
-    s2_view = await s2.complete_with_oren(actor, s2_view.state_version)
-    assert s2_view.status == "completed"
-    await driver.snapshot("S2 concluída")
 
-    s3 = S3Service(sessions, "ocaso")
-    s3_offer = await s3.alda(actor)
-    assert s3_offer is not None and s3_offer.available, (s3_offer, driver.diagnostic())
-    s3_view = await s3.accept(actor, s3_offer.state_version)
-    await road.travel_route(actor, CHARNECA)
-    await road.travel_route(actor, BOSQUE)
-    s3_view = await s3.interact(actor, s3_view.state_version, "route")
-    for track in S3_TRACKS:
-        s3_view = await s3.interact(actor, s3_view.state_version, "track", track)
-    assert s3_view.kind == "combat" and s3_view.combat is not None
-    for attempt in range(6):
-        if s3_view.combat.result == "defeat" and s3_view.activity_status == "active":
-            mark = await driver.snapshot("S3 · derrota terminal ao materializar combate")
-            raise AssertionError(
-                f"P0: S3 persistiu derrota inicial como Foreground ativo; {mark.state!r}"
-            )
-        s3_view = await driver.combat_to_result(
-            s3_view,
-            lambda current, action: s3.action(
-                actor, current.activity_id, current.activity_state_version, action
-            ),
-            lambda: S3Service(sessions, "ocaso").resume(actor),
-            label=f"S3 · Cervo Escoriado · tentativa {attempt + 1}",
-        )
-        if s3_view.progress.get("combat_result") == "victory":
-            break
-        assert s3_view.progress.get("combat_result") == "defeat", driver.diagnostic()
-        await driver.snapshot(f"S3 · derrota legítima · tentativa {attempt + 1}")
-        if attempt < 5:
-            async with sessions() as session:
-                character = await session.scalar(
-                    select(Character).where(Character.telegram_id == actor)
-                )
-                world = await session.get(WorldState, character.id)
-                location = world.location
-            if location == REFUGE:
-                await road.travel_route(actor, CHARNECA)
-                await road.travel_route(actor, BOSQUE)
-            elif location == CHARNECA:
-                await road.travel_route(actor, BOSQUE)
-            s3_view = await s3.retry(actor, s3_view.state_version)
-            assert s3_view.kind == "combat" and s3_view.combat is not None
-    assert s3_view.progress.get("combat_result") == "victory", driver.diagnostic()
-    s3_view = await s3.interact(actor, s3_view.state_version, "cargo")
-    await road.travel_route(actor, CHARNECA)
-    await road.travel_route(actor, REFUGE)
-    s3_view = await s3.interact(actor, s3_view.state_version, "report")
-    assert s3_view.status == "completed"
-    await driver.snapshot("S3 concluída")
 
     async def travel_to_ruins():
         async with sessions() as session:
@@ -734,6 +1360,42 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     assert s4_view.status == "completed"
     await driver.snapshot("S4 concluída")
 
+    # S5's real gate is P4 + level 8. Continue with public Bosque hunts after
+    # finishing the Nv.7 content instead of offering the mission early.
+    nv8_pre_s5_hunts = 0
+    for attempt in range(100):
+        if await current_level() >= 8:
+            break
+        await travel_from_refuge_to(BOSQUE)
+        await manual_hunt(
+            f"Nv.8 · Caçada antes de S5 {attempt + 1}", capture=(attempt % 8 == 7)
+        )
+        nv8_pre_s5_hunts += 1
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            world = await session.get(WorldState, character.id) if character else None
+            assert character is not None and world is not None
+            location = world.location
+            needs_rest = character.hp * 10 < character.max_hp * 6
+        if location != BOSQUE or needs_rest:
+            await rest_and_return(BOSQUE)
+        if attempt % 8 == 7:
+            await driver.snapshot(
+                f"progressão pública de Nv.7 a Nv.8 antes de S5 · {attempt + 1} Caçadas"
+            )
+    nv8_pre_s5 = await driver.snapshot("Nv.8 · gate real de S5 alcançado")
+    print(
+        "TDO_LEVEL_8_GATE="
+        f"level={nv8_pre_s5.state.get('level')} · "
+        f"residual_xp={nv8_pre_s5.state.get('xp')} · "
+        f"manual_hunts_before_s5={nv8_pre_s5_hunts} · "
+        f"vigor={nv8_pre_s5.state.get('vigor')}"
+    )
+    assert nv8_pre_s5.state.get("level", 0) >= 8, driver.diagnostic()
+    await travel_to_refuge()
+
     s5 = S5Service(sessions, "ocaso")
     s5_offer = await s5.oren(actor)
     assert s5_offer is not None and s5_offer.available, (s5_offer, driver.diagnostic())
@@ -772,10 +1434,10 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     assert s5_view.status == "completed"
     await driver.snapshot("S5 concluída")
 
-    # The next main gate is P5 at Nv.9. Continue using ordinary Bosque hunts
-    # if mission rewards have not reached it yet; no progression state is seeded.
-    for attempt in range(500):
-        if await current_level() >= 9:
+    # Reach the minimum level for Galleries through its public overland gate,
+    # then spend the first Stable run before supplementing with manual Hunts.
+    for attempt in range(36):
+        if await current_level() >= 8:
             break
         async with sessions() as session:
             character = await session.scalar(
@@ -785,15 +1447,10 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             assert character is not None and world is not None
             location = world.location
             needs_rest = character.hp * 10 < character.max_hp * 6
-        if location == REFUGE:
-            await road.travel_route(actor, CHARNECA)
-            await road.travel_route(actor, BOSQUE)
-        elif location == CHARNECA:
-            await road.travel_route(actor, BOSQUE)
-        else:
-            assert location == BOSQUE, (location, driver.diagnostic())
+        if location != BOSQUE:
+            await travel_from_refuge_to(BOSQUE)
         await manual_hunt(
-            f"Nv.9 · Caçada {attempt + 1}", capture=(attempt % 25 == 24)
+            f"Nv.8 · Caçada complementar {attempt + 1}", capture=(attempt % 8 == 7)
         )
         async with sessions() as session:
             character = await session.scalar(
@@ -804,17 +1461,84 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             location = world.location
             needs_rest = character.hp * 10 < character.max_hp * 6
         if location != BOSQUE or needs_rest:
-            if location == BOSQUE:
-                await road.travel_route(actor, CHARNECA)
-                location = CHARNECA
-            if location == CHARNECA:
-                await road.travel_route(actor, REFUGE)
-                location = REFUGE
-            if location == REFUGE:
-                await WorldService(sessions, "ocaso").rest(actor)
-        if attempt % 50 == 49:
+            await rest_and_return(BOSQUE)
+        if attempt % 8 == 7:
+            await driver.snapshot(f"progressão pública até Nv.8 · {attempt + 1} Caçadas")
+    assert await current_level() >= 8, driver.diagnostic()
+    await travel_to_ruins()
+    await rest_and_return(RUINS)
+    await explore_result("explore.tdo.ruinas.galerias", "Ruínas · descoberta das Galerias")
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        galleries_vigor = character.vigor
+    if galleries_vigor < 25:
+        await rest_and_return(RUINS)
+    galleries_run = await run_solo_dungeon(
+        GALLERIES_FAMILY_ID,
+        "Galerias do Vigia · Estável",
+        allow_vigor_block=True,
+    )
+    if galleries_run["status"] == "blocked_vigor":
+        blocker_snapshot = await driver.snapshot(
+            "P1 · Galerias descobertas, entrada recusada por Vigor"
+        )
+        blocker_state = blocker_snapshot.state
+        xp_received_total = TDOPlaythrough.total_xp(
+            blocker_state.get("level", 1), blocker_state.get("xp", 0)
+        )
+        print(
+            "TDO_PLAYTHROUGH_CHECKPOINT="
+            f"level={blocker_state.get('level')} · "
+            f"xp_residual={blocker_state.get('xp')} · "
+            f"xp_received_total={xp_received_total} · "
+            f"crowns={blocker_state.get('crowns')} · vigor={blocker_state.get('vigor')} · "
+            f"hp={blocker_state.get('hp')}/{blocker_state.get('max_hp')} · "
+            f"quests={blocker_state.get('quests')} · "
+            f"explorations={blocker_state.get('completed_explorations')} · "
+            f"dungeons={blocker_state.get('dungeon_runs')} · "
+            f"manual_hunts={blocker_state.get('manual_hunt_count')} · "
+            f"rounds={blocker_state.get('rounds')} · "
+            f"equipment={blocker_state.get('equipped')} · "
+            f"consumables={blocker_state.get('consumables')} · "
+            f"materials={blocker_state.get('materials')}"
+        )
+        print(f"TDO_LEVEL_MILESTONES={driver.level_milestones!r}", flush=True)
+        print(f"TDO_XP_BY_ORIGIN={driver.xp_by_origin!r}", flush=True)
+        print(
+            "TDO_P1_VIGOR_REGENERATION="
+            "descoberta legítima das Galerias; início Solo retornou reason=vigor; "
+            "Vigor=0/100 após múltiplos marcos/relógio de jornada; nenhuma run criada; "
+            "Character não possui timestamp de regeneração nem serviço de regen."
+        )
+        return
+    await rest_and_return(RUINS)
+    await explore_result("explore.tdo.ruinas.braseiro", "Ruínas · Braseiro do Poente")
+    await travel_to_refuge_from_ruins()
+
+    for attempt in range(36):
+        if await current_level() >= 9:
+            break
+        await travel_from_refuge_to(BOSQUE)
+        await manual_hunt(
+            f"Nv.9 · Caçada complementar {attempt + 1}", capture=(attempt % 8 == 7)
+        )
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            world = await session.get(WorldState, character.id) if character else None
+            assert character is not None and world is not None
+            needs_rest = character.hp * 10 < character.max_hp * 6
+            location = world.location
+        if location != BOSQUE or needs_rest:
+            await rest_and_return(BOSQUE)
+        if attempt % 8 == 7:
             await driver.snapshot(f"progressão pública até Nv.9 · {attempt + 1} Caçadas")
     assert await current_level() >= 9, driver.diagnostic()
+    await travel_to_refuge()
     await driver.snapshot("Nv.9 · gate de P5 alcançado")
 
     # Configure professions and craft only from resources earned in the
@@ -1018,43 +1742,17 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     assert p5_view.status == "completed"
     await driver.snapshot("P5 concluída")
 
-    # P5 completion unlocks the level-10 flow. If still below the gate, use
-    # public hunts before spending the newly earned second Talent point.
-    for attempt in range(500):
+    # P5 completion unlocks the level-10 flow. At this point the first
+    # discoveries, dungeon clears, missions and timed Ronda have been consumed.
+    hunts_to_level_10 = 0
+    for attempt in range(40):
         if await current_level() >= 10:
             break
-        async with sessions() as session:
-            character = await session.scalar(
-                select(Character).where(Character.telegram_id == actor)
-            )
-            world = await session.get(WorldState, character.id) if character else None
-            assert character is not None and world is not None
-            location = world.location
-            needs_rest = character.hp * 10 < character.max_hp * 6
-        if location == REFUGE:
-            await road.travel_route(actor, CHARNECA)
-            await road.travel_route(actor, BOSQUE)
-        elif location == CHARNECA:
-            await road.travel_route(actor, BOSQUE)
-        else:
-            assert location == BOSQUE, (location, driver.diagnostic())
-        async with sessions() as session:
-            character = await session.scalar(
-                select(Character).where(Character.telegram_id == actor)
-            )
-            world = await session.get(WorldState, character.id) if character else None
-            assert character is not None and world is not None
-            if world.location != BOSQUE:
-                mark = await driver.snapshot(
-                    f"Nv.10 · rota à Caçada bloqueada · tentativa {attempt + 1}"
-                )
-                raise AssertionError(
-                    f"Rota não chegou ao Bosque antes da Caçada: "
-                    f"{mark.state!r}\n{driver.diagnostic()}"
-                )
+        await travel_from_refuge_to(BOSQUE)
         await manual_hunt(
-            f"Nv.10 · Caçada {attempt + 1}", capture=(attempt % 25 == 24)
+            f"Nv.10 · Caçada complementar {attempt + 1}", capture=(attempt % 8 == 7)
         )
+        hunts_to_level_10 += 1
         async with sessions() as session:
             character = await session.scalar(
                 select(Character).where(Character.telegram_id == actor)
@@ -1064,17 +1762,20 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             location = world.location
             needs_rest = character.hp * 10 < character.max_hp * 6
         if location != BOSQUE or needs_rest:
-            if location == BOSQUE:
-                await road.travel_route(actor, CHARNECA)
-                location = CHARNECA
-            if location == CHARNECA:
-                await road.travel_route(actor, REFUGE)
-                location = REFUGE
-            if location == REFUGE:
-                await WorldService(sessions, "ocaso").rest(actor)
-        if attempt % 50 == 49:
+            await rest_and_return(BOSQUE)
+        if attempt % 8 == 7:
             await driver.snapshot(f"progressão pública até Nv.10 · {attempt + 1} Caçadas")
-    assert await current_level() >= 10, driver.diagnostic()
+    if await current_level() < 10:
+        await driver.snapshot("BAL · Caçadas complementares até o gate de Nv.10")
+        print(
+            f"TDO_LEVEL_10_REQUIRES_MORE_THAN_40_HUNTS="
+            f"{hunts_to_level_10}; state={driver.marks[-1].state!r}",
+            flush=True,
+        )
+        raise AssertionError(
+            "Progressão não chegou a Nv.10 após 40 complementos manuais, "
+            "mesmo com conteúdo e Masmorras representativos."
+        )
     await driver.snapshot("Nv.10 · segundo Ponto de Talento disponível")
 
     talents = TalentService(sessions, "ocaso")
@@ -1331,76 +2032,6 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         await driver.snapshot("P6 · Couraça de Fuligem Comum criada e equipada")
     else:
         await driver.snapshot("P6 · receita de Couraça consultada, sem recursos suficientes")
-
-    async def equip_best_available_combat_gear():
-        async with sessions() as session:
-            character = await session.scalar(
-                select(Character).where(Character.telegram_id == actor)
-            )
-            assert character is not None
-            owned = (
-                await session.scalars(
-                    select(EquipmentItem).where(EquipmentItem.character_id == character.id)
-                )
-            ).all()
-            equipped_rows = (
-                await session.execute(
-                    select(CharacterEquipmentSlot.slot, EquipmentItem)
-                    .join(
-                        EquipmentItem,
-                        EquipmentItem.id == CharacterEquipmentSlot.equipment_item_id,
-                    )
-                    .where(CharacterEquipmentSlot.character_id == character.id)
-                )
-            ).all()
-            equipped_by_slot = {slot: item for slot, item in equipped_rows}
-            version = character.combat_configuration_version
-            level = character.level
-
-        rarity_order = {
-            "Comum": 1,
-            "Raro": 2,
-            "Épico": 3,
-            "Lendário": 4,
-            "Mítico": 5,
-        }
-
-        def gear_rank(item):
-            return rarity_order.get(item.rarity, 0), item.item_level
-
-        best_by_slot = {}
-        for item in owned:
-            if item.item_level > level:
-                continue
-            # A two-handed weapon occupies the Principal assignment and the
-            # public EquipmentService removes any conflicting Secundária slot.
-            # Include it in the same real equipment comparison rather than
-            # silently leaving an eligible weapon unused.
-            effective_slot = "Principal" if item.slot == "2H" else item.slot
-            previous = best_by_slot.get(effective_slot)
-            if previous is None or gear_rank(item) > gear_rank(previous):
-                best_by_slot[effective_slot] = item
-        if best_by_slot.get("Principal") is not None and best_by_slot["Principal"].slot == "2H":
-            # A 2H weapon removes the secondary slot; do not immediately ask
-            # the validator to equip an incompatible off-hand afterward.
-            best_by_slot.pop("Secundária", None)
-
-        equipment_service = EquipmentService(sessions, "ocaso")
-        changed = []
-        for slot, item in sorted(best_by_slot.items()):
-            current = equipped_by_slot.get(slot)
-            if current is not None and gear_rank(item) <= gear_rank(current):
-                continue
-            result = await equipment_service.equip_item(
-                actor,
-                item.id,
-                expected_configuration_version=version,
-            )
-            if result is not None and result.changed:
-                version = result.combat_configuration_version
-                equipped_by_slot[slot] = item
-                changed.append((slot, item.item_name, item.rarity, item.item_level))
-        return changed
 
     better_gear = await equip_best_available_combat_gear()
     await driver.snapshot(

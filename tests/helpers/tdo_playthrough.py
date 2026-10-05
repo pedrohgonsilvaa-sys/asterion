@@ -10,9 +10,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from asterion.application.progression import level_xp
 from asterion.domain.combat import allowed_actions
 from asterion.infrastructure.db.models import (
     Brazier,
@@ -28,8 +29,10 @@ from asterion.infrastructure.db.models import (
     DungeonRunMember,
     Encounter,
     EquipmentItem,
+    ExplorationAttempt,
     GameActivity,
     HuntContext,
+    HuntRound,
     MaterialStack,
     Quest,
     Unlock,
@@ -48,6 +51,35 @@ class TDOPlaythrough:
     actor: int
     sessions: async_sessionmaker
     marks: list[JourneyMark] = field(default_factory=list)
+    level_milestones: list[dict[str, Any]] = field(default_factory=list)
+    xp_by_origin: dict[str, int] = field(default_factory=dict)
+    _last_total_xp: int | None = None
+    _last_level: int | None = None
+    _last_level_milestone_xp_total: int | None = None
+
+    @staticmethod
+    def _xp_origin(label: str) -> str:
+        normalized = label.casefold()
+        if "prólogo" in normalized or "prologo" in normalized:
+            return "Prólogo"
+        if "desbravar" in normalized or "explore" in normalized:
+            return "Desbravar"
+        if "cripta" in normalized or "galerias" in normalized or "masmorra" in normalized:
+            return "Masmorra"
+        if "ronda" in normalized:
+            return "Ronda"
+        if "caçada" in normalized or "cacada" in normalized or "hunt" in normalized:
+            return "Caçada"
+        if any(f"p{number}" in normalized for number in range(1, 7)):
+            return "P1–P6"
+        if any(f"s{number}" in normalized for number in range(1, 7)):
+            return "S1–S6"
+        return "Bestiário/outros"
+
+    @staticmethod
+    def total_xp(level: int, residual_xp: int) -> int:
+        """Derive received XP from level thresholds and the current residual."""
+        return sum(level_xp(value) for value in range(1, level)) + residual_xp
 
     async def snapshot(self, label: str) -> JourneyMark:
         """Read a compact persisted-state diagnostic; this method never writes."""
@@ -212,10 +244,68 @@ class TDOPlaythrough:
                         DungeonRun.status == "active",
                     )
                 )
+                exploration_count = int(
+                    await session.scalar(
+                        select(func.count(ExplorationAttempt.id)).where(
+                            ExplorationAttempt.character_id == character.id
+                        )
+                    )
+                    or 0
+                )
+                completed_explorations = int(
+                    await session.scalar(
+                        select(func.count(ExplorationAttempt.id)).where(
+                            ExplorationAttempt.character_id == character.id,
+                            ExplorationAttempt.status == "completed",
+                        )
+                    )
+                    or 0
+                )
+                manual_hunts = int(
+                    await session.scalar(
+                        select(func.count(HuntContext.game_activity_id))
+                        .join(GameActivity, GameActivity.id == HuntContext.game_activity_id)
+                        .where(
+                            HuntContext.character_id == character.id,
+                            GameActivity.content_id == "road_manual_hunt",
+                        )
+                    )
+                    or 0
+                )
+                rounds = (
+                    await session.execute(
+                        select(HuntRound.status, func.count(HuntRound.id))
+                        .where(HuntRound.character_id == character.id)
+                        .group_by(HuntRound.status)
+                    )
+                ).all()
+                dungeon_runs = (
+                    await session.execute(
+                        select(
+                            DungeonRun.dungeon_family_id,
+                            DungeonRun.status,
+                            func.count(DungeonRun.id),
+                        )
+                        .join(DungeonRunMember, DungeonRunMember.run_id == DungeonRun.id)
+                        .where(DungeonRunMember.character_id == character.id)
+                        .group_by(DungeonRun.dungeon_family_id, DungeonRun.status)
+                    )
+                ).all()
+                cumulative_xp = sum(
+                    level_xp(level) for level in range(1, character.level)
+                ) + character.xp
+                xp_since_snapshot = (
+                    0 if self._last_total_xp is None else cumulative_xp - self._last_total_xp
+                )
                 state = {
                     "name": character.name,
                     "level": character.level,
                     "xp": character.xp,
+                    "xp_required_next_level": (
+                        level_xp(character.level) if character.level < 60 else 0
+                    ),
+                    "xp_received_total": cumulative_xp,
+                    "xp_received_since_previous_snapshot": xp_since_snapshot,
                     "crowns": character.crowns,
                     "vigor": character.vigor,
                     "hp": str(character.hp),
@@ -287,6 +377,14 @@ class TDOPlaythrough:
                         for activity_id, status, acknowledged in hunt_results[-5:]
                     ],
                     "hunt_result_count": len(hunt_results),
+                    "manual_hunt_count": manual_hunts,
+                    "rounds": dict(rounds),
+                    "exploration_count": exploration_count,
+                    "completed_explorations": completed_explorations,
+                    "dungeon_runs": [
+                        (family_id, status, count)
+                        for family_id, status, count in dungeon_runs
+                    ],
                     "talents": list(talents),
                     "path": character.selected_path,
                     "active_arts": list(arts),
@@ -312,6 +410,51 @@ class TDOPlaythrough:
                         else None
                     ),
                 }
+                if self._last_total_xp is not None:
+                    xp_delta = max(0, cumulative_xp - self._last_total_xp)
+                    if xp_delta:
+                        origin = self._xp_origin(label)
+                        self.xp_by_origin[origin] = (
+                            self.xp_by_origin.get(origin, 0) + xp_delta
+                        )
+                if self._last_level is None:
+                    self._last_level_milestone_xp_total = cumulative_xp
+                elif character.level > self._last_level:
+                    previous_total = self._last_level_milestone_xp_total or 0
+                    for level in range(self._last_level + 1, character.level + 1):
+                        threshold = sum(level_xp(item) for item in range(1, level))
+                        milestone_total = (
+                            cumulative_xp if level == character.level else threshold
+                        )
+                        self.level_milestones.append(
+                            {
+                                "level": level,
+                                "xp_residual": character.xp if level == character.level else 0,
+                                "xp_required_next": (
+                                    level_xp(level) if level < 60 else 0
+                                ),
+                                "xp_received_since_previous_milestone": max(
+                                    0, milestone_total - previous_total
+                                ),
+                                "xp_received_total": milestone_total,
+                                "crowns": character.crowns,
+                                "vigor": character.vigor,
+                                "hp": str(character.hp),
+                                "max_hp": str(character.max_hp),
+                                "location": world.location if world else None,
+                                "explorations": exploration_count,
+                                "dungeon_runs": [
+                                    (family_id, status, count)
+                                    for family_id, status, count in dungeon_runs
+                                ],
+                                "manual_hunts": manual_hunts,
+                                "rounds": dict(rounds),
+                            }
+                        )
+                        previous_total = milestone_total
+                    self._last_level_milestone_xp_total = cumulative_xp
+                self._last_total_xp = cumulative_xp
+                self._last_level = character.level
         mark = JourneyMark(label, state)
         self.marks.append(mark)
         return mark
