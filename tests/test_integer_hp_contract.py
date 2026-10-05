@@ -38,6 +38,13 @@ def test_reconcile_floors_legacy_sub_one_hp_to_zero_without_rounding_up():
     assert character.hp == D(0)
 
 
+def test_reconcile_floors_sub_one_hp_before_legacy_fractional_max_ratio_change():
+    character = _character(hp="0.75", max_hp="712.530")
+    reconcile_character_hp(character, EquipmentConfigurationSnapshot(0))
+    assert character.max_hp == D(713)
+    assert character.hp == D(0)
+
+
 def test_reconcile_floors_fractional_current_hp_when_max_is_already_current():
     character = _character(hp="37.99")
     reconcile_character_hp(character, EquipmentConfigurationSnapshot(0))
@@ -47,6 +54,11 @@ def test_reconcile_floors_fractional_current_hp_when_max_is_already_current():
 def test_equipment_boundary_never_preserves_fractional_hp_when_max_is_unchanged():
     character = _character(hp="1.99")
     assert hp_after_equipment_change(character, D(713)) == D(1)
+
+
+def test_equipment_boundary_never_heals_legacy_sub_one_hp_during_max_change():
+    character = _character(hp="0.99", max_hp="712.530")
+    assert hp_after_equipment_change(character, D(713)) == D(0)
 
 
 def test_progression_boundary_normalizes_legacy_fractional_hp_without_level_up():
