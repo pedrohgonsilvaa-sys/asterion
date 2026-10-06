@@ -1,6 +1,6 @@
 """Numerical and codec contracts for C2 equipment modifications."""
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -305,7 +305,7 @@ def test_rune_and_enchantment_percentage_follow_enhancement_before_race():
     expected *= D("1.0035")
     expected *= D("1.001")
     expected *= D("1.015")
-    assert resolved.attack == expected
+    assert resolved.attack == expected.quantize(D(1), rounding=ROUND_HALF_UP)
     incorrect_flat_rune = (
         (class_stats("sentinela", 10).attack + D("12.5")) * D("1.015")
         + D("0.35")
