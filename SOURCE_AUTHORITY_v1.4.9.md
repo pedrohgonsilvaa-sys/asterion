@@ -171,7 +171,7 @@ A especificação focada histórica da implementação desse limite está em `do
 
 ## Snapshot histórico — P1 Vozes na Estrada
 
-A Fonte Regional v1.0.13 e a Fonte Visual/UI de 2026-10-04 são as autoridades vigentes para o conteúdo e a apresentação de **P1 — Vozes na Estrada**. O fluxo abaixo é uma nota de implementação preservada neste índice.
+Neste snapshot histórico de P1, a Fonte Regional v1.0.13 e a Fonte Visual/UI de 2026-10-04 eram as referências vigentes naquele momento. O fluxo abaixo é uma nota de implementação preservada neste índice e não substitui as autoridades atuais definidas acima.
 
 O fluxo autoritativo é:
 
