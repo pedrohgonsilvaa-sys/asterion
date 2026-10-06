@@ -281,14 +281,12 @@ def test_resolver_adds_equipment_before_static_racial_modifiers_only():
         block=D(1),
     )
     remnant = resolve_combat_stats("sentinela", 1, "remanescente", bonus)
-    assert remnant.values() == (
-        D("814.030"), D("103.530"), D("102.515"), D("75.110")
-    )
+    assert remnant.values() == (D(814), D(104), D(103), D(75))
     assert (remnant.per, remnant.crit, remnant.evasion, remnant.block) == (
         D(3), D(7), D(4), D(1)
     )
     alvorano = resolve_combat_stats("errante", 1, "alvorano", bonus)
-    assert alvorano.agility == D("92.40")
+    assert alvorano.agility == D(92)
     assert (alvorano.per, alvorano.crit, alvorano.evasion, alvorano.block) == (
         D(3), D(7), D(4), D(1)
     )

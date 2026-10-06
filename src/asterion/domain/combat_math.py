@@ -61,8 +61,14 @@ Stats = CombatStats
 
 
 LEGACY_COMBAT_RULESET = "gdd-1.4.3-baseline-1.0"
-CURRENT_COMBAT_RULESET = "gdd-1.4.6-baseline-1.0"
-SUPPORTED_LEGACY_COMBAT_RULESETS = frozenset({LEGACY_COMBAT_RULESET, "gdd-1.4.2-baseline-1.0"})
+CURRENT_COMBAT_RULESET = "gdd-1.4.9-baseline-1.0"
+SUPPORTED_LEGACY_COMBAT_RULESETS = frozenset(
+    {
+        LEGACY_COMBAT_RULESET,
+        "gdd-1.4.2-baseline-1.0",
+        "gdd-1.4.6-baseline-1.0",
+    }
+)
 
 
 def growth(level: int) -> Decimal:
@@ -85,7 +91,8 @@ def class_stats(character_class: str, level: int) -> CombatStats:
 
 
 def racial_stats(stats: CombatStats, race: str) -> CombatStats:
-    # No new global racial rounding rule: composition retains fractional values.
+    # Racial composition keeps full precision; the central resolver performs
+    # the single final primary-stat rounding step after all static modifiers.
     with localcontext() as ctx:
         ctx.prec = PRECISION
         if race == "remanescente":
@@ -110,6 +117,25 @@ def racial_stats(stats: CombatStats, race: str) -> CombatStats:
         return stats
 
 
+def finalize_primary_stats(stats: CombatStats) -> CombatStats:
+    """Close final static HP/ATQ/DEF/AGI to integers with official half-up rounding."""
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        hp, attack, defense, agility = (
+            value.quantize(D(1), rounding=ROUND_HALF_UP) for value in stats.values()
+        )
+        return CombatStats(
+            max(D(1), hp),
+            max(ZERO, attack),
+            max(ZERO, defense),
+            max(ZERO, agility),
+            stats.per,
+            stats.crit,
+            stats.evasion,
+            stats.block,
+        )
+
+
 def resolve_combat_stats(
     character_class: str,
     level: int,
@@ -118,7 +144,7 @@ def resolve_combat_stats(
     selected_path: str | None = None,
     talent_ids: tuple[str, ...] = (),
 ) -> CombatStats:
-    """Resolve class, Path, Talent, equipment, components, then final race."""
+    """Resolve all static stages, then round final primary stats exactly once."""
     base = class_stats(character_class, level)
     path = PATH_DEFINITIONS.get(selected_path or "")
     if path is not None:
@@ -184,7 +210,7 @@ def resolve_combat_stats(
                 )
             )
         )
-    return racial_stats(composed, race)
+    return finalize_primary_stats(racial_stats(composed, race))
 
 
 def neutral_stats(level: int) -> CombatStats:

@@ -14,6 +14,7 @@ from asterion.domain.combat import (
 from asterion.domain.combat_math import (
     CURRENT_COMBAT_RULESET,
     class_stats,
+    finalize_primary_stats,
     racial_stats,
     resolve_combat_stats,
 )
@@ -78,7 +79,20 @@ def _battle(character_class: str, selected_path: str | None = None):
 @pytest.mark.parametrize("path_id", tuple(PATH_DEFINITIONS))
 def test_path_stat_modifiers_apply_to_only_the_class_stat_portion(path_id):
     path = PATH_DEFINITIONS[path_id]
-    base = resolve_combat_stats(path.character_class, 10, "remanescente")
+    intrinsic = class_stats(path.character_class, 10)
+    expected_without_path = finalize_primary_stats(racial_stats(intrinsic, "remanescente"))
+    expected_with_path = finalize_primary_stats(
+        racial_stats(
+            replace(
+                intrinsic,
+                hp=intrinsic.hp * (D(1) + path.hp),
+                attack=intrinsic.attack * (D(1) + path.attack),
+                defense=intrinsic.defense * (D(1) + path.defense),
+                agility=intrinsic.agility * (D(1) + path.agility),
+            ),
+            "remanescente",
+        )
+    )
     without_path = resolve_combat_stats(path.character_class, 10, "remanescente")
     with_path = resolve_combat_stats(
         path.character_class,
@@ -86,11 +100,8 @@ def test_path_stat_modifiers_apply_to_only_the_class_stat_portion(path_id):
         "remanescente",
         selected_path=path_id,
     )
-    assert without_path.values() == base.values()
-    assert with_path.hp == base.hp * (D(1) + path.hp)
-    assert with_path.attack == base.attack * (D(1) + path.attack)
-    assert with_path.defense == base.defense * (D(1) + path.defense)
-    assert with_path.agility == base.agility * (D(1) + path.agility)
+    assert without_path == expected_without_path
+    assert with_path == expected_with_path
 
 
 def test_path_switch_cost_uses_shared_rounded_level_unit():
@@ -102,15 +113,17 @@ def test_path_modifier_precedes_equipment_and_final_racial_modifier():
     base = class_stats("sentinela", 10)
     path = PATH_DEFINITIONS["bastiao"]
     equipment = EquipmentStatContribution(hp=D(120), attack=D(40), defense=D(25), agility=D(5))
-    expected = racial_stats(
-        replace(
-            base,
-            hp=base.hp * (D(1) + path.hp) + equipment.hp,
-            attack=base.attack * (D(1) + path.attack) + equipment.attack,
-            defense=base.defense * (D(1) + path.defense) + equipment.defense,
-            agility=base.agility * (D(1) + path.agility) + equipment.agility,
-        ),
-        "remanescente",
+    expected = finalize_primary_stats(
+        racial_stats(
+            replace(
+                base,
+                hp=base.hp * (D(1) + path.hp) + equipment.hp,
+                attack=base.attack * (D(1) + path.attack) + equipment.attack,
+                defense=base.defense * (D(1) + path.defense) + equipment.defense,
+                agility=base.agility * (D(1) + path.agility) + equipment.agility,
+            ),
+            "remanescente",
+        )
     )
     actual = resolve_combat_stats(
         "sentinela", 10, "remanescente", equipment, selected_path="bastiao"

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from decimal import Decimal
 from fractions import Fraction
 from uuid import uuid4
@@ -21,9 +22,15 @@ from asterion.bot.character_progression_ui import (
     render_talent_root,
 )
 from asterion.domain.arts import ART_IDS_BY_CLASS
-from asterion.domain.combat_math import resolve_combat_stats
+from asterion.domain.combat_math import (
+    class_stats,
+    finalize_primary_stats,
+    racial_stats,
+    resolve_combat_stats,
+)
 from asterion.domain.economy import crowns_per_level
 from asterion.domain.equipment_stats import EquipmentStatContribution
+from asterion.domain.paths import PATH_DEFINITIONS
 from asterion.domain.talents import (
     TALENT_CATALOG,
     TALENTS_BY_CLASS,
@@ -138,6 +145,7 @@ def test_nv5_talent_stat_effects_match_all_six_class_catalogs():
         "luminar": ("Luz Incisiva", "Vitalidade Solar", "Clarão Ágil"),
     }
     for character_class, names in choices.items():
+        intrinsic = class_stats(character_class, 10)
         base = resolve_combat_stats(character_class, 10, "alvorano")
         attack = resolve_combat_stats(
             character_class,
@@ -157,12 +165,22 @@ def test_nv5_talent_stat_effects_match_all_six_class_catalogs():
             "alvorano",
             talent_ids=(_talent(character_class, names[2]).talent_id,),
         )
-        assert attack.attack == base.attack * D("1.01")
-        assert hp.hp == base.hp * D("1.01")
-        if character_class == "sentinela":
-            assert agility.agility == base.agility
-        else:
-            assert agility.agility == base.agility * D("1.03")
+        expected_attack = finalize_primary_stats(
+            racial_stats(replace(intrinsic, attack=intrinsic.attack * D("1.01")), "alvorano")
+        )
+        expected_hp = finalize_primary_stats(
+            racial_stats(replace(intrinsic, hp=intrinsic.hp * D("1.01")), "alvorano")
+        )
+        agility_multiplier = D(1) if character_class == "sentinela" else D("1.03")
+        expected_agility = finalize_primary_stats(
+            racial_stats(
+                replace(intrinsic, agility=intrinsic.agility * agility_multiplier),
+                "alvorano",
+            )
+        )
+        assert attack.attack == expected_attack.attack
+        assert hp.hp == expected_hp.hp
+        assert agility.agility == expected_agility.agility
         assert base.defense == attack.defense == hp.defense == agility.defense
 
 
@@ -299,9 +317,22 @@ async def test_talent_acquire_preserves_hp_ratio_and_uses_path_before_equipment(
         selected_path="bastiao",
         talent_ids=(talent_id,),
     )
-    base_path = resolve_combat_stats("sentinela", 10, "remanescente", selected_path="bastiao")
-    assert expected.hp == base_path.hp * D("1.01") + D(100) * D("1.015")
-    assert expected.attack == base_path.attack + D(100) * D("1.015")
+    intrinsic = class_stats("sentinela", 10)
+    path = PATH_DEFINITIONS["bastiao"]
+    expected_from_order = finalize_primary_stats(
+        racial_stats(
+            replace(
+                intrinsic,
+                hp=intrinsic.hp * (D(1) + path.hp) * D("1.01") + D(100),
+                attack=intrinsic.attack * (D(1) + path.attack) + D(100),
+                defense=intrinsic.defense * (D(1) + path.defense),
+                agility=intrinsic.agility * (D(1) + path.agility),
+            ),
+            "remanescente",
+        )
+    )
+    assert expected.hp == expected_from_order.hp
+    assert expected.attack == expected_from_order.attack
     async with sessions() as session:
         character = await session.get(Character, character_id)
         assert (

@@ -5,6 +5,7 @@ import pytest
 
 from asterion.domain.combat_math import (
     CombatRng,
+    CombatStats,
     StatMultipliers,
     class_stats,
     combine_active_mitigation,
@@ -13,12 +14,14 @@ from asterion.domain.combat_math import (
     dot_damage,
     effective_defense,
     enemy_stats,
+    finalize_primary_stats,
     growth,
     neutral_stats,
     racial_stats,
     resolve_combat_stats,
     stable_priority,
 )
+from asterion.domain.equipment_stats import EquipmentStatContribution
 
 D = Decimal
 COMBAT_ID = UUID("f77365ce-14b2-467f-bcd4-395ac6e8f3a5")
@@ -79,10 +82,33 @@ def test_dog_vector_includes_common_category_without_intermediate_rounding():
     assert PROFILE.art_blocked_opportunities == 1
 
 
-def test_racial_stats_preserve_fractional_composition():
+def test_racial_stats_preserve_fractional_composition_before_finalization():
     stats = racial_stats(class_stats("sentinela", 1), "remanescente")
     assert stats.values() == (D("712.530"), D("93.380"), D("82.215"), D("70.035"))
     assert racial_stats(class_stats("errante", 1), "alvorano").agility == D("87.15")
+
+
+def test_finalizer_rounds_only_primary_stats_half_up_and_applies_floors():
+    stats = CombatStats(
+        D("10.49"),
+        D("20.50"),
+        D("30.51"),
+        D("40.50"),
+        D("1.25"),
+        D("5.50"),
+        D("0.25"),
+        D("0.75"),
+    )
+    finalized = finalize_primary_stats(stats)
+    assert finalized.values() == (D(10), D(21), D(31), D(41))
+    assert (finalized.per, finalized.crit, finalized.evasion, finalized.block) == (
+        D("1.25"),
+        D("5.50"),
+        D("0.25"),
+        D("0.75"),
+    )
+    floored = finalize_primary_stats(CombatStats(D("0.49"), D("-0.6"), D("-1"), D("-2")))
+    assert floored.values() == (D(1), D(0), D(0), D(0))
 
 
 @pytest.mark.parametrize(
@@ -98,17 +124,43 @@ def test_central_resolver_preserves_level_one_and_level_sixty_class_curves(cls):
     )
 
 
-def test_central_resolver_applies_static_race_modifiers_only_to_four_base_stats():
+def test_central_resolver_rounds_final_static_race_modifiers_once():
     remanescente = resolve_combat_stats("sentinela", 1, "remanescente")
     alvorano = resolve_combat_stats("errante", 1, "alvorano")
-    assert remanescente.values() == (D("712.530"), D("93.380"), D("82.215"), D("70.035"))
+    assert remanescente.values() == (D(713), D(93), D(82), D(70))
     assert (remanescente.per, remanescente.crit, remanescente.evasion, remanescente.block) == (
         D(0), D(5), D(0), D(0)
     )
-    assert alvorano.agility == D("87.15")
+    assert alvorano.agility == D(87)
     assert (alvorano.per, alvorano.crit, alvorano.evasion, alvorano.block) == (
         D(0), D(5), D(0), D(0)
     )
+
+
+def test_central_resolver_closes_fractional_equipment_components_and_path_stats():
+    zero_stage = (D(0),) * 8
+    equipment = EquipmentStatContribution(
+        hp=D("3.4"),
+        attack=D("2.6"),
+        defense=D("1.2"),
+        agility=D("4.8"),
+        per=D("0.25"),
+        crit=D("0.50"),
+        rune_percent=(D("0.0055"), D("0.0055"), D("0.01"), D("0.01")) + (D(0),) * 4,
+        rune_points=zero_stage,
+        enchantment_percent=(D("0.0035"), D("0.0035"), D("0.007"), D("0.007")) + (D(0),) * 4,
+        enchantment_points=zero_stage,
+    )
+    stats = resolve_combat_stats(
+        "sentinela",
+        10,
+        "remanescente",
+        equipment,
+        selected_path="devastador",
+    )
+    assert all(value == value.to_integral_value() for value in stats.values())
+    assert stats.per == D("0.25")
+    assert stats.crit == D("5.50")
 
 
 def test_per_reduces_defense_before_normal_formula_and_caps_at_thirty_points():
