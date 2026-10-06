@@ -4,13 +4,10 @@ Fundação técnica do **Asterion**, RPG/MMORPG dark fantasy para Telegram.
 
 ## Estado atual
 
-Este repositório começou do zero em setembro de 2026. A implementação segue três fontes de projeto consolidadas:
-
-- **ASTERION — GDD Estrutural v1.4.3** — Fonte Mestra vigente, com a **Baseline Numérica v1.0 fechada para implementação e testes**.
-- **ASTERION — Conteúdo: Terras do Ocaso v1.0.2 FINAL** — autoridade regional da vertical slice Nv.1–10.
-- **ASTERION — Consolidação de Visual & UI (2026-09-21), sincronizada com GDD v1.4.3 + Terras do Ocaso v1.0.2** — Fonte de apresentação, navegação e UX player-facing.
-
-A Fonte Mestra v1.4.3 substitui integralmente a v1.4.2 e versões anteriores. A reabertura da conversão absoluta de XP de inimigos foi encerrada na v1.4.3; a Baseline Numérica v1.0 não possui reabertura numérica vigente.
+Este repositório começou do zero em setembro de 2026. As fontes autoritativas
+vigentes e sua hierarquia estão listadas em [`docs/SOURCE_AUTHORITY.md`](docs/SOURCE_AUTHORITY.md).
+Nesta sincronização, elas são a Fonte Mestra v1.4.9, Terras do Ocaso v1.0.13,
+Vales dos Enforcados v1.0.3 e a consolidação Visual/UI de 2026-10-04.
 
 A primeira meta de produção é uma **vertical slice das Terras do Ocaso**, antes da produção integral do conteúdo de lançamento.
 
@@ -131,9 +128,9 @@ A implementação técnica do primeiro encontro está documentada em
 histórica do primeiro Braseiro, fim do Prólogo e Menu Principal permanece em
 [`docs/specs/PROLOGUE_BRAZIER_MENU_V1.4.3_TDO_V1.0.1.md`](docs/specs/PROLOGUE_BRAZIER_MENU_V1.4.3_TDO_V1.0.1.md).
 
-As autoridades vigentes para o próximo bloco são **GDD v1.4.3 + Terras do Ocaso
-v1.0.2 FINAL + Visual/UI 2026-09-21 sincronizada com TDO v1.0.2**. Antes de código
-novo, consulte `docs/SOURCE_AUTHORITY.md`. A especificação técnica do próximo bloco está em
+Este trecho preserva um snapshot histórico da implementação de P1. Para trabalho
+atual, use as autoridades listadas em `docs/SOURCE_AUTHORITY.md`. A especificação
+focada de P1 permanece como registro histórico em
 [`docs/specs/P1_VOZES_NA_ESTRADA_V1.4.3_TDO_V1.0.2.md`](docs/specs/P1_VOZES_NA_ESTRADA_V1.4.3_TDO_V1.0.2.md).
 
 ## Testes completos
