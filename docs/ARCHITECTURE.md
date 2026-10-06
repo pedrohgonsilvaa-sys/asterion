@@ -2,15 +2,14 @@
 
 ## Autoridade das fontes
 
-A implementação deve ser confrontada continuamente com:
+A implementação deve consultar [`docs/SOURCE_AUTHORITY.md`](SOURCE_AUTHORITY.md)
+para identificar as Fontes vigentes e sua hierarquia. Nesta sincronização, são
+Fonte Mestra v1.4.9, Terras do Ocaso v1.0.13, Vales dos Enforcados v1.0.3 e a
+consolidação Visual/UI de 2026-10-04.
 
-1. **ASTERION — GDD Estrutural v1.4.3**, Fonte Mestra vigente;
-2. **ASTERION — Conteúdo: Terras do Ocaso v1.0.2 FINAL**, autoridade regional;
-3. **ASTERION — Consolidação de Visual & UI (2026-09-21), sincronizada com GDD v1.4.3 + TDO v1.0.2**.
-
-A Fonte Mestra v1.4.3 substitui integralmente v1.4.2 e todas as versões anteriores. Sua **Baseline Numérica v1.0 está fechada para implementação e testes**; a reabertura da conversão absoluta de XP de inimigos foi encerrada.
-
-Este documento registra somente decisões de implementação da fundação. Ele não substitui as Fontes. Exemplos de mockup ainda podem usar `SIMULAR` quando não correspondem a conteúdo autoritativo. Valores, custos, limites, fórmulas e slots consolidados na Baseline Numérica v1.0 e o conteúdo fechado de Terras do Ocaso v1.0.2 devem ser tratados como oficiais.
+Este documento registra somente decisões de implementação da fundação. Ele não
+substitui as Fontes. Exemplos de mockup ainda podem usar `SIMULAR` quando não
+correspondem a conteúdo autoritativo.
 
 ## Modular monolith
 
