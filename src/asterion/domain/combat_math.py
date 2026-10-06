@@ -61,8 +61,14 @@ Stats = CombatStats
 
 
 LEGACY_COMBAT_RULESET = "gdd-1.4.3-baseline-1.0"
-CURRENT_COMBAT_RULESET = "gdd-1.4.6-baseline-1.0"
-SUPPORTED_LEGACY_COMBAT_RULESETS = frozenset({LEGACY_COMBAT_RULESET, "gdd-1.4.2-baseline-1.0"})
+CURRENT_COMBAT_RULESET = "gdd-1.4.9-baseline-1.0"
+SUPPORTED_LEGACY_COMBAT_RULESETS = frozenset(
+    {
+        LEGACY_COMBAT_RULESET,
+        "gdd-1.4.2-baseline-1.0",
+        "gdd-1.4.6-baseline-1.0",
+    }
+)
 
 
 def growth(level: int) -> Decimal:

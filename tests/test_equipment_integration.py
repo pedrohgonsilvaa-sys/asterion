@@ -242,7 +242,7 @@ async def test_equipment_hp_changes_preserve_percentage_and_never_revive(databas
             select(Character).where(Character.telegram_id == actor)
         )
         assert character.max_hp == equipped_max
-        assert character.hp == Decimal(407)
+        assert character.hp == Decimal(406)
     unchanged = await service.equip_item(actor, item_id, expected_configuration_version=1)
     assert unchanged is not None and unchanged.status == EquipmentMutationStatus.ALREADY_EQUIPPED
     async with database[1]() as session:
@@ -250,7 +250,7 @@ async def test_equipment_hp_changes_preserve_percentage_and_never_revive(databas
             select(Character).where(Character.telegram_id == actor)
         )
         assert (character.hp, character.max_hp, character.combat_configuration_version) == (
-            Decimal(407), equipped_max, 1
+            Decimal(406), equipped_max, 1
         )
 
     removed = await service.unequip_slot(
@@ -262,7 +262,7 @@ async def test_equipment_hp_changes_preserve_percentage_and_never_revive(databas
             select(Character).where(Character.telegram_id == actor)
         )
         assert character.max_hp == base_hp
-        assert character.hp == Decimal(356)
+        assert character.hp == Decimal(355)
 
     dead_actor = 907121
     dead_character_id = await _seed_actor(database, dead_actor)
