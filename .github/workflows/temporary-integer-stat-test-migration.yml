@@ -1,0 +1,122 @@
+name: Temporary integer stat test migration
+
+on:
+  push:
+    branches: [fix/integer-final-primary-stats]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-tests:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/integer-final-primary-stats
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Update legacy fractional expectations
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              if old not in text:
+                  raise SystemExit(f"expected block not found in {path}: {old[:80]!r}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace_exact(
+              "tests/test_equipment_modifications_domain.py",
+              "from decimal import Decimal",
+              "from decimal import ROUND_HALF_UP, Decimal",
+          )
+          replace_exact(
+              "tests/test_equipment_modifications_domain.py",
+              "    assert resolved.attack == expected\n",
+              "    assert resolved.attack == expected.quantize(D(1), rounding=ROUND_HALF_UP)\n",
+          )
+
+          replace_exact(
+              "tests/test_equipment_stats.py",
+              '''    assert remnant.values() == (\n        D("814.030"), D("103.530"), D("102.515"), D("75.110")\n    )''',
+              '''    assert remnant.values() == (D(814), D(104), D(103), D(75))''',
+          )
+          replace_exact(
+              "tests/test_equipment_stats.py",
+              '    assert alvorano.agility == D("92.40")',
+              '    assert alvorano.agility == D(92)',
+          )
+
+          replace_exact(
+              "tests/test_path_passives.py",
+              '''    class_stats,\n    racial_stats,''',
+              '''    class_stats,\n    finalize_primary_stats,\n    racial_stats,''',
+          )
+          replace_exact(
+              "tests/test_path_passives.py",
+              '''def test_path_stat_modifiers_apply_to_only_the_class_stat_portion(path_id):\n    path = PATH_DEFINITIONS[path_id]\n    base = resolve_combat_stats(path.character_class, 10, "remanescente")\n    without_path = resolve_combat_stats(path.character_class, 10, "remanescente")\n    with_path = resolve_combat_stats(\n        path.character_class,\n        10,\n        "remanescente",\n        selected_path=path_id,\n    )\n    assert without_path.values() == base.values()\n    assert with_path.hp == base.hp * (D(1) + path.hp)\n    assert with_path.attack == base.attack * (D(1) + path.attack)\n    assert with_path.defense == base.defense * (D(1) + path.defense)\n    assert with_path.agility == base.agility * (D(1) + path.agility)''',
+              '''def test_path_stat_modifiers_apply_to_only_the_class_stat_portion(path_id):\n    path = PATH_DEFINITIONS[path_id]\n    intrinsic = class_stats(path.character_class, 10)\n    expected_without_path = finalize_primary_stats(racial_stats(intrinsic, "remanescente"))\n    expected_with_path = finalize_primary_stats(\n        racial_stats(\n            replace(\n                intrinsic,\n                hp=intrinsic.hp * (D(1) + path.hp),\n                attack=intrinsic.attack * (D(1) + path.attack),\n                defense=intrinsic.defense * (D(1) + path.defense),\n                agility=intrinsic.agility * (D(1) + path.agility),\n            ),\n            "remanescente",\n        )\n    )\n    without_path = resolve_combat_stats(path.character_class, 10, "remanescente")\n    with_path = resolve_combat_stats(\n        path.character_class,\n        10,\n        "remanescente",\n        selected_path=path_id,\n    )\n    assert without_path == expected_without_path\n    assert with_path == expected_with_path''',
+          )
+          replace_exact(
+              "tests/test_path_passives.py",
+              '''def test_path_modifier_precedes_equipment_and_final_racial_modifier():\n    base = class_stats("sentinela", 10)\n    path = PATH_DEFINITIONS["bastiao"]\n    equipment = EquipmentStatContribution(hp=D(120), attack=D(40), defense=D(25), agility=D(5))\n    expected = racial_stats(\n        replace(\n            base,\n            hp=base.hp * (D(1) + path.hp) + equipment.hp,\n            attack=base.attack * (D(1) + path.attack) + equipment.attack,\n            defense=base.defense * (D(1) + path.defense) + equipment.defense,\n            agility=base.agility * (D(1) + path.agility) + equipment.agility,\n        ),\n        "remanescente",\n    )\n    actual = resolve_combat_stats(\n        "sentinela", 10, "remanescente", equipment, selected_path="bastiao"\n    )\n    assert actual == expected''',
+              '''def test_path_modifier_precedes_equipment_and_final_racial_modifier():\n    base = class_stats("sentinela", 10)\n    path = PATH_DEFINITIONS["bastiao"]\n    equipment = EquipmentStatContribution(hp=D(120), attack=D(40), defense=D(25), agility=D(5))\n    expected = finalize_primary_stats(\n        racial_stats(\n            replace(\n                base,\n                hp=base.hp * (D(1) + path.hp) + equipment.hp,\n                attack=base.attack * (D(1) + path.attack) + equipment.attack,\n                defense=base.defense * (D(1) + path.defense) + equipment.defense,\n                agility=base.agility * (D(1) + path.agility) + equipment.agility,\n            ),\n            "remanescente",\n        )\n    )\n    actual = resolve_combat_stats(\n        "sentinela", 10, "remanescente", equipment, selected_path="bastiao"\n    )\n    assert actual == expected''',
+          )
+
+          replace_exact(
+              "tests/test_talents.py",
+              "from decimal import Decimal",
+              "from dataclasses import replace\nfrom decimal import Decimal",
+          )
+          replace_exact(
+              "tests/test_talents.py",
+              "from asterion.domain.combat_math import resolve_combat_stats",
+              '''from asterion.domain.combat_math import (\n    class_stats,\n    finalize_primary_stats,\n    racial_stats,\n    resolve_combat_stats,\n)''',
+          )
+          replace_exact(
+              "tests/test_talents.py",
+              "from asterion.domain.equipment_stats import EquipmentStatContribution",
+              "from asterion.domain.equipment_stats import EquipmentStatContribution\nfrom asterion.domain.paths import PATH_DEFINITIONS",
+          )
+          replace_exact(
+              "tests/test_talents.py",
+              '''def test_nv5_talent_stat_effects_match_all_six_class_catalogs():\n    choices = {\n        "sentinela": ("Aço Desperto", "Carne de Pedra", "Ritmo de Guarda"),\n        "errante": ("Fio Afiado", "Passo Prudente", "Instinto Rápido"),\n        "vigia": ("Mão Firme", "Sobrevivente das Trilhas", "Passo do Caçador"),\n        "tecelao": ("Fio Potente", "Trama Vital", "Passo Entre Fios"),\n        "oraculo": ("Visão Cruel", "Pressentimento Vital", "Passos do Destino"),\n        "luminar": ("Luz Incisiva", "Vitalidade Solar", "Clarão Ágil"),\n    }\n    for character_class, names in choices.items():\n        base = resolve_combat_stats(character_class, 10, "alvorano")\n        attack = resolve_combat_stats(\n            character_class,\n            10,\n            "alvorano",\n            talent_ids=(_talent(character_class, names[0]).talent_id,),\n        )\n        hp = resolve_combat_stats(\n            character_class,\n            10,\n            "alvorano",\n            talent_ids=(_talent(character_class, names[1]).talent_id,),\n        )\n        agility = resolve_combat_stats(\n            character_class,\n            10,\n            "alvorano",\n            talent_ids=(_talent(character_class, names[2]).talent_id,),\n        )\n        assert attack.attack == base.attack * D("1.01")\n        assert hp.hp == base.hp * D("1.01")\n        if character_class == "sentinela":\n            assert agility.agility == base.agility\n        else:\n            assert agility.agility == base.agility * D("1.03")\n        assert base.defense == attack.defense == hp.defense == agility.defense''',
+              '''def test_nv5_talent_stat_effects_match_all_six_class_catalogs():\n    choices = {\n        "sentinela": ("Aço Desperto", "Carne de Pedra", "Ritmo de Guarda"),\n        "errante": ("Fio Afiado", "Passo Prudente", "Instinto Rápido"),\n        "vigia": ("Mão Firme", "Sobrevivente das Trilhas", "Passo do Caçador"),\n        "tecelao": ("Fio Potente", "Trama Vital", "Passo Entre Fios"),\n        "oraculo": ("Visão Cruel", "Pressentimento Vital", "Passos do Destino"),\n        "luminar": ("Luz Incisiva", "Vitalidade Solar", "Clarão Ágil"),\n    }\n    for character_class, names in choices.items():\n        intrinsic = class_stats(character_class, 10)\n        base = resolve_combat_stats(character_class, 10, "alvorano")\n        attack = resolve_combat_stats(\n            character_class,\n            10,\n            "alvorano",\n            talent_ids=(_talent(character_class, names[0]).talent_id,),\n        )\n        hp = resolve_combat_stats(\n            character_class,\n            10,\n            "alvorano",\n            talent_ids=(_talent(character_class, names[1]).talent_id,),\n        )\n        agility = resolve_combat_stats(\n            character_class,\n            10,\n            "alvorano",\n            talent_ids=(_talent(character_class, names[2]).talent_id,),\n        )\n        expected_attack = finalize_primary_stats(\n            racial_stats(replace(intrinsic, attack=intrinsic.attack * D("1.01")), "alvorano")\n        )\n        expected_hp = finalize_primary_stats(\n            racial_stats(replace(intrinsic, hp=intrinsic.hp * D("1.01")), "alvorano")\n        )\n        agility_multiplier = D(1) if character_class == "sentinela" else D("1.03")\n        expected_agility = finalize_primary_stats(\n            racial_stats(\n                replace(intrinsic, agility=intrinsic.agility * agility_multiplier),\n                "alvorano",\n            )\n        )\n        assert attack.attack == expected_attack.attack\n        assert hp.hp == expected_hp.hp\n        assert agility.agility == expected_agility.agility\n        assert base.defense == attack.defense == hp.defense == agility.defense''',
+          )
+          replace_exact(
+              "tests/test_talents.py",
+              '''    base_path = resolve_combat_stats("sentinela", 10, "remanescente", selected_path="bastiao")\n    assert expected.hp == base_path.hp * D("1.01") + D(100) * D("1.015")\n    assert expected.attack == base_path.attack + D(100) * D("1.015")''',
+              '''    intrinsic = class_stats("sentinela", 10)\n    path = PATH_DEFINITIONS["bastiao"]\n    expected_from_order = finalize_primary_stats(\n        racial_stats(\n            replace(\n                intrinsic,\n                hp=intrinsic.hp * (D(1) + path.hp) * D("1.01") + D(100),\n                attack=intrinsic.attack * (D(1) + path.attack) + D(100),\n                defense=intrinsic.defense * (D(1) + path.defense),\n                agility=intrinsic.agility * (D(1) + path.agility),\n            ),\n            "remanescente",\n        )\n    )\n    assert expected.hp == expected_from_order.hp\n    assert expected.attack == expected_from_order.attack''',
+          )
+          PY
+      - name: Focused tests
+        run: |
+          pytest -q \
+            tests/test_combat_math.py \
+            tests/test_integer_hp_contract.py \
+            tests/test_equipment_integration.py \
+            tests/test_equipment_modifications_domain.py \
+            tests/test_equipment_stats.py \
+            tests/test_path_passives.py \
+            tests/test_talents.py
+          ruff check .
+          git diff --check
+      - name: Commit migrated expectations
+        shell: bash
+        run: |
+          rm .github/workflows/temporary-integer-stat-test-migration.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests .github/workflows/temporary-integer-stat-test-migration.yml
+          git commit -m "test: align primary stat expectations with integer contract"
+          git push origin HEAD:fix/integer-final-primary-stats
