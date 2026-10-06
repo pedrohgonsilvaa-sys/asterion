@@ -3,8 +3,8 @@
 
 **Data de consolidação:** 2026-10-04<br>
 **Escopo:** vertical slice / primeira jornada / Nv.1–10, com saída para Nv.11<br>
-**Autoridade estrutural:** `ASTERION_GDD_Estrutural_v1.4.8_Fonte_Mestra.md`<br>
-**Autoridade Visual/UI:** `ASTERION_UI_DECISOES_2026-10-04_FINAL_SYNC_v1.4.8_TDO_v1.0.13_VALES_v1.0.3.md`<br>
+**Autoridade estrutural:** `ASTERION_GDD_Estrutural_v1.4.9_Fonte_Mestra.md`<br>
+**Autoridade Visual/UI:** `ASTERION_UI_DECISOES_2026-10-05_FINAL_SYNC_v1.4.9_TDO_v1.0.13_VALES_v1.0.3.md`<br>
 
 > Esta Fonte contém **conteúdo regional**, não redefine sistemas globais. Em conflito estrutural, prevalece a Fonte Mestra vigente. Em conflito de apresentação, prevalece a Fonte Visual/UI vigente.
 
@@ -3354,7 +3354,7 @@ Terras do Ocaso não exige para saída:
 
 # 26. Sincronização com a Fonte Visual/UI
 
-A Fonte `ASTERION_UI_DECISOES_2026-10-04_FINAL_SYNC_v1.4.8_TDO_v1.0.13_VALES_v1.0.3.md` é a autoridade player-facing vigente para a vertical slice e está sincronizada com a Fonte Mestra v1.4.8 e esta revisão regional v1.0.13.
+A Fonte `ASTERION_UI_DECISOES_2026-10-05_FINAL_SYNC_v1.4.9_TDO_v1.0.13_VALES_v1.0.3.md` é a autoridade player-facing vigente para a vertical slice e está sincronizada com a Fonte Mestra v1.4.9 e esta revisão regional v1.0.13.
 
 As decisões gerais de interface já consolidadas — padrão de Missões, HUD de combate, Menu Principal, Braseiros, Códice, navegação, P1 e apresentação de Equipamentos/Runas — continuam válidas.
 
@@ -3547,7 +3547,7 @@ Esta consolidação não implementa S3, P4, Ruínas do Vigia, Cripta, Galerias, 
 
 # 30. Fechamento implementável v1.0.11 — S3, P4 e Ruínas do Vigia
 
-Esta seção fecha S3, P4 e o Local normal Ruínas do Vigia. Em divergência de formulações anteriores, esta seção prevalece para estes conteúdos. A Fonte Mestra v1.4.8 continua autoridade para regras globais. Não implementa S4, S5, P5, P6, Câmara do Poente ou gameplay das Galerias.
+Esta seção fecha S3, P4 e o Local normal Ruínas do Vigia. Em divergência de formulações anteriores, esta seção prevalece para estes conteúdos. A Fonte Mestra v1.4.9 continua autoridade para regras globais. Não implementa S4, S5, P5, P6, Câmara do Poente ou gameplay das Galerias.
 
 ## 30.1 S3 — Rastros sob os Galhos
 

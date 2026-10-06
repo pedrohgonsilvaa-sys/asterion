@@ -1,6 +1,6 @@
 # Autoridade das Fontes
 
-**Índice atualizado:** 2026-10-05. As notas de implementação mais abaixo preservam snapshots anteriores; consulte `REPASSE_TECNICO.md` para o estado operacional registrado em 03/10/2026.
+**Índice atualizado:** 2026-10-06. As notas de implementação mais abaixo preservam snapshots históricos anteriores e não substituem as Fontes oficiais vigentes nem o estado atual do repositório.
 
 ## Fonte Mestra vigente
 
@@ -17,6 +17,7 @@ Estado oficial:
 - a v1.4.9 formaliza o fechamento único de `HP Máximo`, `ATQ`, `DEF` e `AGI` estáticos finais em pontos inteiros com `round_half_up`, além de HP atual inteiro; não altera percentuais, curvas, custos, recompensas ou parâmetros de balanceamento;
 - a reabertura anterior da conversão absoluta da unidade de XP de inimigo foi encerrada na v1.4.3;
 - não existe reabertura numérica vigente na baseline;
+- a v1.4.9 formaliza que HP Máximo, ATQ, DEF e AGI estáticos finais fecham uma única vez com `round_half_up` após toda a composição estática; HP atual autoritativo é inteiro e HP legado fracionário é fechado para baixo em fronteira segura;
 - Cosméticos possui três categorias oficiais: Aparência, Título e Moldura.
 
 ## Fonte regional vigente
@@ -37,11 +38,9 @@ A segunda região usa a autoridade de conteúdo **Vales dos Enforcados v1.0.3 FI
 
 A apresentação player-facing deve seguir:
 
-**ASTERION — Consolidação de Visual & UI — atualização 2026-10-04, sincronizada com Terras do Ocaso v1.0.13 + Vales dos Enforcados v1.0.3**
+**ASTERION — Consolidação de Visual & UI — atualização 2026-10-05, sincronizada com Fonte Mestra v1.4.9 + Terras do Ocaso v1.0.13 + Vales dos Enforcados v1.0.3**
 
-Arquivo vigente: `ASTERION_UI_DECISOES_2026-10-04_FINAL_SYNC_v1.4.8_TDO_v1.0.13_VALES_v1.0.3.md`.
-
-A revisão estrutural v1.4.9 não altera nomenclatura, navegação ou layout player-facing; por isso esta consolidação Visual/UI permanece vigente. Onde um exemplo visual exibir valor fracionário de HP/ATQ/DEF/AGI, prevalece a regra mecânica v1.4.9 de fechamento inteiro.
+Arquivo vigente: `ASTERION_UI_DECISOES_2026-10-05_FINAL_SYNC_v1.4.9_TDO_v1.0.13_VALES_v1.0.3.md`.
 
 Ela define nomenclatura, texto, estrutura de telas, navegação, estados visuais e UX do Bot do Telegram. É subordinada à Fonte Mestra para regras mecânicas/números e à Fonte Regional para conteúdo regional oficial.
 
@@ -53,15 +52,15 @@ As Fontes abaixo complementam as autoridades estrutural, regional e de Visual/UI
 
 ### Lore canônica complementar
 
-**Arquivo:** `ASTERION_LORE_BIBLE_CANON_v1.0.md`
+**Arquivo vigente:** `ASTERION_LORE_BIBLE_CANON_v1.1.md`
 
-Define verdade narrativa consolidada, cosmologia, relações históricas, limites de revelação e segredos de autor necessários para impedir contradições de Lore. Quando um fato já estiver definido em Fonte Mestra ou Regional vigente, essas Fontes superiores prevalecem.
+A v1.1 substitui a v1.0. Define verdade narrativa consolidada, cosmologia, relações históricas, famílias fenotípicas reconhecíveis das cinco Raças, limites de revelação e segredos de autor necessários para impedir contradições de Lore. Quando um fato já estiver definido em Fonte Mestra ou Regional vigente, essas Fontes superiores prevalecem.
 
 ### Direção visual especializada — personagens humanoides
 
-**Arquivo vigente:** `ASTERION_BIBLIA_VISUAL_PERSONAGENS_RACAS_CLASSES_E_NPCS_v1.1.md`
+**Arquivo vigente:** `ASTERION_BIBLIA_VISUAL_PERSONAGENS_RACAS_CLASSES_E_NPCS_v1.2.md`
 
-A v1.1 substitui a v1.0 para produção futura. Define anatomia/presença das 5 Raças, leitura das 6 Classes e 12 Caminhos, NPCs, adaptação regional, Aparências, estados de pose, composição e proibições de humanoides.
+A v1.2 substitui a v1.1 para produção futura. Define famílias fenotípicas legíveis das 5 Raças, fundos de herança, composição de fundos Raça × Classe, leitura das 6 Classes e 12 Caminhos, NPCs, adaptação regional, Aparências, estados de pose, composição e proibições de humanoides.
 
 ### Direção visual especializada — criaturas e biomas
 
@@ -83,9 +82,15 @@ Define **como renderizar** o conteúdo já autorizado: canvas, proporção, pixe
 
 ### Controle operacional de produção
 
-**Arquivo:** `ASTERION_MATRIZ_DE_PRODUCAO_VISUAL_v1.0.md`
+**Arquivo:** `ASTERION_MATRIZ_DE_PRODUCAO_VISUAL_v1.1.md`
 
-Documento de produção, não Fonte de cânone. Distribui idade aparente, tons de pele, cabelo, constituição, pose e estado de arma/foco entre assets concretos para garantir diversidade e continuidade. Qualquer linha que conflite com Fonte autoritativa deve ser corrigida na Matriz, nunca na Fonte superior.
+Documento de produção, não Fonte de cânone. A v1.1 substitui a v1.0 e distribui as 10 âncoras raciais, as 60 âncoras Raça × Classe, fenótipos dentro das faixas canônicas, pose, estado de arma/foco e os 30 fundos-base Raça × Classe. Qualquer linha que conflite com Fonte autoritativa deve ser corrigida na Matriz, nunca na Fonte superior.
+
+## Decisão visual aprovada em 06/10/2026 — legibilidade racial e fundos
+
+Para assets de seleção e personagens jogáveis, a identidade racial não pode depender apenas de postura, roupa ou texto. As cinco Raças possuem famílias fenotípicas recorrentes, com exceções possíveis por descendência mista. Assets de seleção usam o centro fenotípico; skins Raça × Classe preservam ao menos dois marcadores raciais fortes.
+
+Fundos de seleção racial passam a usar motivos de herança próprios; fundos Raça × Classe combinam herança racial + função da Classe + adaptação regional quando aplicável. O mesmo fundo genérico de ruínas para todo o catálogo deve ser rejeitado.
 
 ## Regra para produção visual
 
@@ -128,7 +133,7 @@ Antes de implementar um sistema:
 
 ## Snapshot de implementação histórico — criação e primeiro combate
 
-As seções de implementação abaixo foram preservadas como registro operacional e não substituem as Fontes oficiais vigentes nem o snapshot mais recente de `REPASSE_TECNICO.md`.
+As seções de implementação abaixo foram preservadas como registro histórico e não substituem as Fontes oficiais vigentes nem o estado atual do repositório.
 
 O fluxo implementado permanece:
 
@@ -192,7 +197,7 @@ A implementação jogável de P1 foi integrada ao `main` no commit squash `bc45b
 
 ## Próximo bloco aprovado — snapshot histórico
 
-O plano abaixo descreve uma etapa anterior do desenvolvimento. Use `REPASSE_TECNICO.md` para o estado de implementação e próximos passos registrados mais recentemente.
+O plano abaixo descreve uma etapa anterior do desenvolvimento e permanece apenas como snapshot histórico. Não deve ser usado para determinar o próximo bloco vigente de implementação.
 
 O próximo bloco de produção parte do estado pós-P1 e implementa **Travessia Refúgio ↔ Estrada + Caçada Manual Solo + familiaridade da Ronda + Desbravar da Estrada**, sem iniciar ainda a execução automática da Ronda, Caçada em Grupo, P2/S1 ou outro Local.
 
