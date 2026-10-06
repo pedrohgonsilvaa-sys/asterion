@@ -150,13 +150,14 @@ def reconcile_character_hp(
     stats = resolve_character_combat_stats(character, configuration)
     new_max_hp = stats.hp
     old_max_hp = D(character.max_hp)
-    old_hp = D(character.hp).to_integral_value(rounding=ROUND_FLOOR)
+    old_hp = D(character.hp)
+    whole_old_hp = old_hp.to_integral_value(rounding=ROUND_FLOOR)
     if old_max_hp <= 0:
         raise EquipmentConfigurationError("Character has invalid persisted maximum HP.")
     if new_max_hp == old_max_hp:
-        character.hp = min(new_max_hp, max(D(0), old_hp))
+        character.hp = min(new_max_hp, max(D(0), whole_old_hp))
         return stats
-    if old_hp <= 0:
+    if whole_old_hp <= 0:
         new_hp = D(0)
     else:
         new_hp = max(
@@ -171,13 +172,14 @@ def reconcile_character_hp(
 def hp_after_equipment_change(character: Character, new_max_hp: Decimal) -> Decimal:
     """Return whole-point HP after an effective equipment change, without mutating the row."""
     old_max_hp = D(character.max_hp)
-    old_hp = D(character.hp).to_integral_value(rounding=ROUND_FLOOR)
+    old_hp = D(character.hp)
+    whole_old_hp = old_hp.to_integral_value(rounding=ROUND_FLOOR)
     if old_max_hp <= 0:
         raise EquipmentConfigurationError("Character has invalid persisted maximum HP.")
-    if old_hp <= 0:
+    if whole_old_hp <= 0:
         return D(0)
     if D(new_max_hp) == old_max_hp:
-        return min(old_max_hp, old_hp)
+        return min(old_max_hp, whole_old_hp)
     return min(
         D(new_max_hp),
         max(
