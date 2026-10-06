@@ -857,7 +857,7 @@ A correção manual não deve reescrever silenciosamente o design canônico.
 
 # 23. MATRIZ DE PRODUÇÃO VISUAL
 
-`ASTERION_MATRIZ_DE_PRODUCAO_VISUAL_v1.0.md` funciona como controle editorial/operacional.
+`ASTERION_MATRIZ_DE_PRODUCAO_VISUAL_v1.1.md` funciona como controle editorial/operacional.
 
 Ela pode definir, para um lote específico:
 

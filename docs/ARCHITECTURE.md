@@ -5,7 +5,7 @@
 A implementação deve consultar [`docs/SOURCE_AUTHORITY.md`](SOURCE_AUTHORITY.md)
 para identificar as Fontes vigentes e sua hierarquia. Nesta sincronização, são
 Fonte Mestra v1.4.9, Terras do Ocaso v1.0.13, Vales dos Enforcados v1.0.3 e a
-consolidação Visual/UI de 2026-10-04.
+consolidação Visual/UI v1.4.9 de 2026-10-05.
 
 Este documento registra somente decisões de implementação da fundação. Ele não
 substitui as Fontes. Exemplos de mockup ainda podem usar `SIMULAR` quando não
@@ -60,9 +60,9 @@ O worker e a política de retry serão implementados antes de qualquer fluxo eco
 - `/start`, `/menu`, reconnect e mensagens antigas deverão reconstruir a interface a partir do estado autoritativo;
 - UI seguirá a Fonte Visual/UI e deverá preferir edição da mesma mensagem quando apropriado.
 
-## Etapas imediatas
+## Sequência inicial de produção — registro histórico
 
-Já implementados no `main`: fundação técnica/CI, conta e criação persistentes, atividade Foreground, Prólogo `Cinzas na Estrada`, primeiro combate determinístico, Braseiro da Estrada, conclusão do Prólogo, início de P1 e Menu Principal persistente.
+O plano abaixo registra a sequência inicial de produção descrita nesta arquitetura; permanece como contexto histórico e não representa o backlog nem as Fontes vigentes atuais.
 
 Próxima sequência de produção:
 
