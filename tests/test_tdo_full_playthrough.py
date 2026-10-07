@@ -60,6 +60,7 @@ from asterion.infrastructure.db.models import (
     CharacterEquipmentSlot,
     ConsumableStack,
     DungeonRun,
+    DungeonRunMember,
     EquipmentItem,
     ExplorationAttempt,
     GameActivity,
@@ -707,19 +708,73 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
                 f"{driver.diagnostic()}"
             )
             encounter_attempts += 1
+            player_fighter = current.combat.fighters.get("player")
+            enemies = [
+                (fighter.name, fighter.stats, fighter.hp)
+                for fighter_id, fighter in current.combat.fighters.items()
+                if fighter_id != "player"
+            ]
+            print(
+                f"TDO_DUNGEON_COMBAT_START={label!r} "
+                f"player_stats={player_fighter.stats if player_fighter else None!r} "
+                f"player_hp={player_fighter.hp if player_fighter else None!r} "
+                f"enemies={enemies!r} "
+                f"heals={dict(current.consumable_quantities).get('consumable.heal', 0)}",
+                flush=True,
+            )
 
             def pick(current_view):
                 combat = current_view.combat
                 player = combat.fighters.get("player")
                 if (
                     player is not None
-                    and player.hp * 10 <= player.stats.hp * 4
+                    and player.hp * 100 <= player.stats.hp * 35
                     and any(
                         option.item_id == "consumable.heal"
                         for option in current_view.consumable_options
                     )
                 ):
                     return "consumable:consumable.heal"
+                available = allowed_actions(combat)
+                if combat.prepared_action is not None and "defend" in available:
+                    return "defend"
+                alive_enemies = sum(
+                    fighter.hp > 0
+                    for key, fighter in combat.fighters.items()
+                    if key != "player"
+                )
+                if (
+                    player is not None
+                    and player.barrier <= 0
+                    and alive_enemies > 1
+                    and SENTINEL_ART_IDS["muralha_breve"] in available
+                ):
+                    return SENTINEL_ART_IDS["muralha_breve"]
+                enemies = [
+                    fighter
+                    for key, fighter in combat.fighters.items()
+                    if key != "player" and fighter.hp > 0
+                ]
+                if (
+                    SENTINEL_ART_IDS["quebra_postura"] in available
+                    and any(
+                        not any(
+                            effect.id == "sentinel.quebra_postura"
+                            for effect in enemy.effects
+                        )
+                        for enemy in enemies
+                    )
+                ):
+                    return SENTINEL_ART_IDS["quebra_postura"]
+                for art_id in (
+                    SENTINEL_ART_IDS["impacto_resoluto"],
+                    SENTINEL_ART_IDS["golpe_de_guarda"],
+                    SENTINEL_ART_IDS["quebra_postura"],
+                ):
+                    if art_id in available:
+                        return art_id
+                if "attack" in available:
+                    return "attack"
                 return driver.combat_action(combat)
 
             async def mutate(current_view, action):
@@ -733,6 +788,38 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
                         consumable_id=action.removeprefix("consumable:"),
                     )
                 targets = action_target_ids(current_view.combat, action)
+                action_definition = current_view.combat.player_actions.get(action)
+                if (
+                    action_definition is not None
+                    and action_definition.target_mode == "opponent"
+                    and len(targets) > 1
+                ):
+                    target_by_id = {
+                        fighter.id: fighter
+                        for key, fighter in current_view.combat.fighters.items()
+                        if key != "player"
+                    }
+                    if len(targets) >= 3:
+                        # The Galerias E4 adds have low HP and add enemy turns;
+                        # remove a guard before focusing the boss.
+                        target_id = min(
+                            targets,
+                            key=lambda candidate_id: (
+                                target_by_id[candidate_id].hp,
+                                -target_by_id[candidate_id].stats.attack,
+                                candidate_id,
+                            ),
+                        )
+                    else:
+                        target_id = max(
+                            targets,
+                            key=lambda candidate_id: (
+                                target_by_id[candidate_id].stats.attack,
+                                target_by_id[candidate_id].stats.agility,
+                                -target_by_id[candidate_id].hp,
+                            ),
+                        )
+                    targets = (target_id,)
                 return await service.action(
                     actor,
                     current_view.run_id,
@@ -748,6 +835,7 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
                 lambda: DungeonService(sessions, "ocaso").resume(actor),
                 label=f"{label} · Encontro {current.ordinal} · tentativa {encounter_attempts}",
                 action_picker=pick,
+                trace_actions=True,
             )
             await driver.snapshot(
                 f"{label} · resultado do Encontro {current.ordinal} · {current.kind}"
@@ -950,6 +1038,105 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         if destination != REFUGE:
             await travel_from_refuge_to(destination)
 
+    dungeon_professions = ProfessionService(sessions, "ocaso")
+    dungeon_crafting = CraftingService(sessions, "ocaso")
+
+    async def ensure_dungeon_professions():
+        view = await dungeon_professions.view(actor)
+        assert view is not None
+        if not view.configured:
+            await dungeon_professions.initial_selection(actor, "alchemist", "blacksmith")
+
+    async def craft_dungeon_healing_stock(target_quantity):
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            assert character is not None
+            stack = await session.scalar(
+                select(ConsumableStack).where(
+                    ConsumableStack.character_id == character.id,
+                    ConsumableStack.consumable_id == "consumable.heal",
+                )
+            )
+            quantity = stack.quantity if stack is not None else 0
+        while quantity < target_quantity:
+            recipe = await dungeon_crafting.recipe(actor, "recipe.tdo.alchemist.heal")
+            if recipe is None or not recipe.available:
+                break
+            preview = await dungeon_crafting.preview(actor, "recipe.tdo.alchemist.heal")
+            assert preview is not None
+            result = await dungeon_crafting.commit(actor, preview.receipt_id)
+            assert result is not None and result.status == "committed"
+            quantity += 1
+        return quantity
+
+    async def craft_and_equip_dungeon_equipment(recipe_id, label):
+        recipe = await dungeon_crafting.recipe(actor, recipe_id)
+        if recipe is None or not recipe.available:
+            await driver.snapshot(f"{label} · receita indisponível com recursos legítimos")
+            return None
+        preview = await dungeon_crafting.preview(actor, recipe_id)
+        assert preview is not None
+        result = await dungeon_crafting.commit(actor, preview.receipt_id)
+        assert result is not None and result.status == "committed"
+        item_id = result.output_payload.get("equipment_item_id")
+        assert item_id is not None
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            assert character is not None
+            item = await session.get(EquipmentItem, UUID(item_id))
+            assert item is not None and item.character_id == character.id
+            configuration_version = character.combat_configuration_version
+        equipped = await EquipmentService(sessions, "ocaso").equip_item(
+            actor,
+            item.id,
+            expected_configuration_version=configuration_version,
+        )
+        assert equipped is not None and equipped.changed
+        await driver.snapshot(f"{label} · criado e equipado por serviços oficiais")
+        return item.id
+
+    async def equip_dungeon_art_loadout(desired=None):
+        """Equip unlocked Sentinela Arts through the public configuration service."""
+        service = ActiveArtService(sessions, "ocaso")
+        view = await service.view(actor)
+        assert view is not None
+        desired = desired or (
+            SENTINEL_ART_IDS["golpe_de_guarda"],
+            SENTINEL_ART_IDS["muralha_breve"],
+            SENTINEL_ART_IDS["impacto_resoluto"],
+        )
+        assert set(desired).issubset(set(view.available_art_ids)), (
+            desired,
+            view.available_art_ids,
+        )
+        version = view.combat_configuration_version
+        for slot in sorted(entry.slot for entry in view.slots):
+            result = await service.unequip_slot(
+                actor,
+                slot,
+                expected_configuration_version=version,
+            )
+            assert result is not None and result.changed
+            version = result.combat_configuration_version
+        for slot, art_id in enumerate(desired, start=1):
+            result = await service.equip_art(
+                actor,
+                slot,
+                art_id,
+                expected_configuration_version=version,
+            )
+            assert result is not None and result.changed
+            version = result.combat_configuration_version
+        refreshed = await service.view(actor)
+        assert refreshed is not None
+        assert tuple(entry.art_id for entry in refreshed.slots) == desired
+        await driver.snapshot(f"Artes legítimas configuradas para Masmorra · {desired!r}")
+        return desired
+
     await road.travel(actor, ROAD)
     await explore_result("explore.tdo.estrada.marco_viajantes", "Estrada das Cinzas")
     await road.travel(actor, REFUGE)
@@ -1105,6 +1292,21 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     await travel_from_refuge_to(CHARNECA)
     await explore_result("explore.tdo.charneca.braseiro", "Charneca · Braseiro do Vento Morto")
     await explore_result("explore.tdo.charneca.cripta", "Charneca · descoberta da Cripta")
+    # The first diagnostic attempt previously entered at the minimum level
+    # without any consumables. Select the two active professions and make a
+    # small healing stock through the public craft flow before this optional
+    # run; do not grant or edit inventory directly.
+    await travel_to_refuge()
+    await ensure_dungeon_professions()
+    crypt_healing_stock = await craft_dungeon_healing_stock(2)
+    crypt_weapon = await craft_and_equip_dungeon_equipment(
+        "recipe.tdo.blacksmith.walker_weapon.comum",
+        "Cripta · Arma Principal",
+    )
+    await driver.snapshot(
+        "Cripta · preparação legítima · "
+        f"Arma={crypt_weapon is not None}; Poções de Cura={crypt_healing_stock}"
+    )
     await rest_and_return(CHARNECA)
     crypt_equipment = await equip_best_available_combat_gear()
     crypt_arts = ActiveArtService(sessions, "ocaso")
@@ -1614,7 +1816,27 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         if attempt % 8 == 7:
             await driver.snapshot(f"progressão pública até Nv.8 · {attempt + 1} Caçadas")
     assert await current_level() >= 8, driver.diagnostic()
-    await travel_to_ruins()
+    # Use the public profession/crafting/equipment services at a safe hub
+    # before the Galleries, where the previous run still lacked a Principal
+    # weapon and had no healing consumables despite having enough resources.
+    await travel_to_refuge()
+    await ensure_dungeon_professions()
+    gallery_weapon = await craft_and_equip_dungeon_equipment(
+        "recipe.tdo.blacksmith.walker_weapon.comum",
+        "Galerias · Arma Principal",
+    )
+    gallery_cuirass = await craft_and_equip_dungeon_equipment(
+        "recipe.tdo.blacksmith.fuligem_cuirass.comum",
+        "Galerias · Couraça",
+    )
+    gallery_healing_stock = await craft_dungeon_healing_stock(4)
+    gallery_gear_changes = await equip_best_available_combat_gear()
+    await driver.snapshot(
+        "Galerias · preparação legítima · "
+        f"Arma={gallery_weapon is not None}; Couraça={gallery_cuirass is not None}; "
+        f"Poções de Cura={gallery_healing_stock}; melhor equipamento elegível="
+        f"{gallery_gear_changes!r}"
+    )
     await rest_and_return(RUINS)
     await explore_result("explore.tdo.ruinas.galerias", "Ruínas · descoberta das Galerias")
     galleries_run = await run_solo_dungeon(
@@ -2225,6 +2447,65 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         )
     )
     await driver.snapshot(outcome_label)
+
+    # The minimum-level run above diagnoses early readiness. Revisit the
+    # optional Galleries only after the Ronda check so this experiment cannot
+    # consume the healing stock that the Ronda flow is meant to exercise.
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        completed_gallery_runs = await session.scalar(
+            select(func.count())
+            .select_from(DungeonRun)
+            .join(DungeonRunMember, DungeonRunMember.run_id == DungeonRun.id)
+            .where(
+                DungeonRunMember.character_id == character.id,
+                DungeonRun.dungeon_family_id == GALLERIES_FAMILY_ID,
+                DungeonRun.difficulty == "stable",
+                DungeonRun.status == "completed",
+            )
+        )
+    if not completed_gallery_runs:
+        await travel_to_refuge()
+        await ensure_dungeon_professions()
+        gallery_healing_stock = 0
+        for supply_attempt in range(7):
+            gallery_healing_stock = await craft_dungeon_healing_stock(6)
+            if gallery_healing_stock >= 6:
+                break
+            if supply_attempt == 6:
+                break
+            await travel_from_refuge_to(BOSQUE)
+            await manual_hunt(
+                f"Preparação legítima das Galerias · Caçada {supply_attempt + 1}",
+                capture=False,
+            )
+            await travel_to_refuge()
+            rested = await WorldService(sessions, "ocaso").rest(actor)
+            assert rested is not None and rested.hp == rested.max_hp
+        selected_dungeon_arts = await equip_dungeon_art_loadout(
+            (
+                SENTINEL_ART_IDS["golpe_de_guarda"],
+                SENTINEL_ART_IDS["muralha_breve"],
+                SENTINEL_ART_IDS["impacto_resoluto"],
+            )
+        )
+        gallery_gear_changes = await equip_best_available_combat_gear()
+        await driver.snapshot(
+            "Galerias · revisita preparada · "
+            f"Poções de Cura={gallery_healing_stock}; artes={selected_dungeon_arts!r}; "
+            f"equipamento={gallery_gear_changes!r}"
+        )
+        await rest_and_return(RUINS)
+        late_gallery_run = await run_solo_dungeon(
+            GALLERIES_FAMILY_ID,
+            "Galerias do Vigia · Estável · revisita preparada",
+        )
+        print(f"TDO_GALLERIES_LATE_RUN={late_gallery_run!r}", flush=True)
+        await travel_to_refuge_from_ruins()
+
     await travel_to_refuge()
     rested_before_p6 = await WorldService(sessions, "ocaso").rest(actor)
     assert rested_before_p6 is not None and rested_before_p6.hp == rested_before_p6.max_hp
