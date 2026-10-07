@@ -9,7 +9,7 @@ from asterion.application.active_arts import ActiveArtService
 from asterion.application.combat_configuration_guard import CombatConfigurationLocked
 from asterion.application.equipment import EquipmentService
 from asterion.application.progression import level_xp
-from asterion.application.road import ROAD
+from asterion.application.road import ROAD, RoadService
 from asterion.application.round import (
     HEAL_CONSUMABLE,
     PURIFY_CONSUMABLE,
@@ -17,16 +17,17 @@ from asterion.application.round import (
 )
 from asterion.application.vigor import REGEN_INTERVAL_SECONDS
 from asterion.domain.arts import FIRST_CLASS_ART_IDS
-from asterion.domain.combat import DotState
+from asterion.domain.combat import DotState, allowed_actions
 from asterion.domain.combat_math import Stats, resolve_combat_stats
 from asterion.domain.equipment_stats import equipment_configuration_from_data
-from asterion.domain.road import CREATURES, ROUND_FAMILIARITY
+from asterion.domain.road import CREATURES, ROUND_FAMILIARITY, crowns, enemy_xp
 from asterion.infrastructure.db.models import (
     Character,
     CombatRecord,
     ConsumableStack,
     EquipmentItem,
     GameActivity,
+    HuntContext,
     HuntRound,
     HuntRoundEncounter,
     RewardComponent,
@@ -626,6 +627,143 @@ async def test_round_five_encounters_pointwise_and_delayed_catchup_are_economica
     delayed_result = await delayed_service.resume(actor_delayed)
     assert delayed_result.kind == "round_completed"
     assert delayed_result.completed_encounters == 5
+
+
+@pytest.mark.asyncio
+async def test_five_manual_hunts_and_round_batch_have_comparable_public_yield(
+    database, monkeypatch
+):
+    """Compare public five-Hunt and Ronda yield without inventing Hunt cadence."""
+    import asterion.application.road as road_module
+    import asterion.application.round as round_module
+
+    manual_actor, _ = await _seed_round(database, 772125, vigor=10)
+    round_actor, round_service = await _seed_round(database, 772126, vigor=10)
+    manual_service = RoadService(database[1], "ocaso")
+
+    _force_safe_common(monkeypatch, round_module)
+    monkeypatch.setattr(round_module, "select_variant", lambda seed, creature, **kwargs: None)
+    monkeypatch.setattr(road_module, "select_creature", lambda seed, level, **kwargs: CREATURES[0])
+    monkeypatch.setattr(road_module, "select_variant", lambda seed, creature, **kwargs: None)
+    road_create_combat = road_module.create_road_combat
+
+    def safe_manual_combat(*args, **kwargs):
+        state = road_create_combat(*args, **kwargs)
+        enemy = state.fighters["enemy"]
+        enemy.stats = Stats(
+            enemy.stats.hp,
+            Decimal(1),
+            enemy.stats.defense,
+            enemy.stats.agility,
+        )
+        return state
+
+    monkeypatch.setattr(road_module, "create_road_combat", safe_manual_combat)
+    monkeypatch.setattr(road_module, "_draw_int", lambda seed, label, upper: upper - 1)
+
+    start = datetime.now(UTC)
+    clock = _install_round_clock(monkeypatch, start)
+    monkeypatch.setattr(road_module, "datetime", clock)
+    async with database[1].begin() as session:
+        for actor in (manual_actor, round_actor):
+            character = await session.scalar(
+                select(Character)
+                .where(Character.telegram_id == actor)
+                .with_for_update()
+            )
+            character.vigor = 10
+            character.vigor_regen_at = start
+
+    for _ in range(5):
+        view = await manual_service.start_hunt(manual_actor)
+        assert view is not None and view.kind == "combat"
+        for _turn in range(50):
+            if view.kind != "combat":
+                break
+            assert view.combat is not None
+            choices = allowed_actions(view.combat)
+            action = "attack" if "attack" in choices else "defend"
+            view = await manual_service.action(
+                manual_actor, view.activity_id, view.combat.version, action
+            )
+            assert view is not None
+        assert view.kind == "hunt_victory"
+        await manual_service.acknowledge_result(manual_actor)
+
+    round_prepare = await round_service.prepare_round(round_actor, 5)
+    round_start = await round_service.start_round(
+        round_actor, round_prepare.round_id, round_prepare.state_version
+    )
+    assert round_start.kind == "round_active"
+    round_result = await _advance_round_cadence(
+        clock, round_service, round_actor, 5
+    )
+    assert round_result is not None
+    assert round_result.kind == "round_completed"
+    assert round_result.completed_encounters == 5
+
+    # Manual Hunts have no authoritative three-minute cadence. Give both
+    # routes the same 15-minute comparison horizon for natural Vigor recovery.
+    clock.current = start + timedelta(minutes=15)
+    manual_ready = await manual_service.prepare_hunt(manual_actor)
+    assert manual_ready is not None and manual_ready.kind == "hunt_prepare"
+
+    actor_stats = {}
+    for actor in (manual_actor, round_actor):
+        async with database[1]() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            activity_ids = list(
+                (
+                    await session.scalars(
+                        select(HuntContext.game_activity_id).where(
+                            HuntContext.character_id == character.id
+                        )
+                    )
+                ).all()
+            )
+            reward_rows = (
+                await session.execute(
+                    select(RewardEvent.source_id, RewardComponent.kind, RewardComponent.quantity)
+                    .join(RewardComponent, RewardComponent.reward_event_id == RewardEvent.id)
+                    .where(RewardEvent.character_id == character.id)
+                )
+            ).all()
+            activity_reward_count = await session.scalar(
+                select(func.count(RewardEvent.id)).where(
+                    RewardEvent.character_id == character.id,
+                    RewardEvent.source_id.in_(
+                        [f"activity:{activity_id}" for activity_id in activity_ids]
+                    ),
+                )
+            )
+            activity_stats = {}
+            for source_id, kind, quantity in reward_rows:
+                if source_id.startswith("activity:"):
+                    activity_stats[kind] = activity_stats.get(kind, 0) + quantity
+            actor_stats[actor] = {
+                "vigor": character.vigor,
+                "xp_residual": character.xp,
+                "crowns": character.crowns,
+                "completed_activities": len(activity_ids),
+                "activity_reward_events": activity_reward_count,
+                "activity_components": activity_stats,
+            }
+
+    manual_stats = actor_stats[manual_actor]
+    round_stats = actor_stats[round_actor]
+    assert manual_stats["completed_activities"] == round_stats["completed_activities"] == 5
+    assert manual_stats["activity_reward_events"] == round_stats["activity_reward_events"] == 5
+    assert manual_stats["vigor"] == round_stats["vigor"] == 1
+    assert manual_stats["xp_residual"] == round_stats["xp_residual"]
+    assert manual_stats["crowns"] == round_stats["crowns"]
+    assert manual_stats["activity_components"] == round_stats["activity_components"]
+    assert manual_stats["activity_components"] == {
+        "bestiary": 1,
+        "xp": 5 * enemy_xp(1, "common", player_level=1),
+        "crowns": 5 * crowns(1, "common"),
+    }
 
 
 @pytest.mark.asyncio
