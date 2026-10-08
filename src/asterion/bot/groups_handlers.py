@@ -35,6 +35,8 @@ def groups_router(
     p4=None,
     p5=None,
     p6=None,
+    s2=None,
+    s3=None,
     s6=None,
 ) -> Router:
     router = Router(name="groups")
@@ -282,6 +284,8 @@ def groups_router(
                 "campaign_p4": p4,
                 "campaign_p5": p5,
                 "campaign_p6": p6,
+                "campaign_s2": s2,
+                "campaign_s3": s3,
                 "campaign_s6": s6,
             }
             campaign_service = service_by_type.get(proposal.activity_type)
@@ -320,6 +324,14 @@ def groups_router(
                     from asterion.bot.p6_ui import render_p6
 
                     screen = render_p6(view)
+                elif proposal.activity_type == "campaign_s2":
+                    from asterion.bot.s2_ui import render_s2
+
+                    screen = render_s2(view)
+                elif proposal.activity_type == "campaign_s3":
+                    from asterion.bot.s3_ui import render_s3
+
+                    screen = render_s3(view)
                 else:
                     from asterion.bot.s6_ui import render_s6
 

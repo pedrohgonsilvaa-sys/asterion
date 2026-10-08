@@ -3,6 +3,7 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
+from asterion.application.groups import GroupError
 from asterion.application.s3 import S3_TRACKS, S3Service
 from asterion.bot.creation_handlers import present
 from asterion.bot.s3_ui import render_s3
@@ -50,6 +51,16 @@ def s3_router(service: S3Service, images: dict[str, str]) -> Router:
                         view = await service.interact(actor, version, "track", S3_TRACKS[index - 1])
                 elif operation == "retry" and len(parts) == 3:
                     view = await service.retry(actor, version)
+                elif operation == "group" and len(parts) == 3:
+                    try:
+                        view = await service.propose_group_combat(actor, version)
+                    except GroupError:
+                        await query.answer(
+                            "Não foi possível preparar o Grupo.", show_alert=True
+                        )
+                        return
+                elif operation == "solo" and len(parts) == 3:
+                    view = await service.start_solo_combat(actor, version)
                 elif operation in {"cargo", "report"} and len(parts) == 3:
                     view = await service.interact(actor, version, operation)
                 elif operation == "track" and len(parts) == 3:

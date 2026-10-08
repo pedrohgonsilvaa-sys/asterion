@@ -1,6 +1,7 @@
 import pytest
 from sqlalchemy import select
 
+from asterion.application.groups import GroupService
 from asterion.application.s1 import (
     CODEX_ROAD,
     LIGHTS_FRAGMENT,
@@ -8,6 +9,7 @@ from asterion.application.s1 import (
     S1Service,
 )
 from asterion.infrastructure.db.models import (
+    CampaignObjectiveCredit,
     Character,
     CodexEntry,
     CodexFragment,
@@ -264,3 +266,99 @@ async def test_s1_existing_lights_fragment_is_not_announced_as_new(database):
     view = await service.observe_light(actor, view.state_version)
     assert view.fragment_owned is True
     assert view.fragment_new_this_attempt is False
+
+
+@pytest.mark.asyncio
+async def test_s1_shares_present_objectives_but_keeps_completion_rewards_personal(database):
+    actors = (774006, 774007)
+    services = [await _seed_s1(database, actor) for actor in actors]
+    sessions = database[1]
+    groups = GroupService(sessions, "ocaso")
+    for actor, service in zip(actors, services, strict=True):
+        await service.accept(actor)
+    async with sessions() as session:
+        invitee = await session.scalar(
+            select(Character).where(Character.telegram_id == actors[1])
+        )
+        assert invitee is not None
+        invitee_name = invitee.name
+    group = await groups.create_group(actors[0])
+    invite = await groups.invite(
+        actors[0], invitee_name, expected_group_revision=group.revision
+    )
+    await groups.respond_invite(
+        actors[1], invite.invite_id, expected_revision=invite.revision, accept=True
+    )
+
+    async with sessions.begin() as session:
+        characters = list(
+            (
+                await session.scalars(
+                    select(Character).where(Character.telegram_id.in_(actors))
+                )
+            ).all()
+        )
+        for character in characters:
+            world = await session.scalar(
+                select(WorldState).where(WorldState.character_id == character.id)
+            )
+            world.location = "Estrada das Cinzas"
+
+    first = await services[0].resume(actors[0])
+    second = await services[1].resume(actors[1])
+    assert first is not None and second is not None
+    first = await services[0].investigate_point(actors[0], 2, first.state_version)
+    second = await services[1].resume(actors[1])
+    assert first.progress["points"] == second.progress["points"] == [2]
+
+    for point in (1, 3):
+        first = await services[0].investigate_point(actors[0], point, first.state_version)
+    assert first.step == 2
+    second = await services[1].resume(actors[1])
+    assert second.step == 2 and second.progress["points"] == [1, 2, 3]
+    first = await services[0].examine_ashes(actors[0], first.state_version)
+    second = await services[1].resume(actors[1])
+    assert first.step == second.step == 3
+    first = await services[0].observe_light(actors[0], first.state_version)
+    second = await services[1].resume(actors[1])
+    assert first.step == second.step == 4
+
+    async with sessions.begin() as session:
+        characters = list(
+            (
+                await session.scalars(
+                    select(Character).where(Character.telegram_id.in_(actors))
+                )
+            ).all()
+        )
+        for character in characters:
+            world = await session.scalar(
+                select(WorldState).where(WorldState.character_id == character.id)
+            )
+            world.location = "Refúgio do Ocaso"
+
+    completed = await services[0].complete_with_oren(actors[0], first.state_version)
+    assert completed.status == "completed"
+    remaining = await services[1].resume(actors[1])
+    assert remaining.status == "active" and remaining.step == 4
+    async with sessions() as session:
+        credits = (
+            await session.scalars(
+                select(CampaignObjectiveCredit).where(
+                    CampaignObjectiveCredit.quest_id == "S1"
+                )
+            )
+        ).all()
+        assert len(credits) == 10
+        assert await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == characters[0].id,
+                RewardEvent.source_id == REWARD_SOURCE,
+            )
+        ) is not None
+        assert await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == characters[1].id,
+                RewardEvent.source_id == REWARD_SOURCE,
+            )
+        ) is None

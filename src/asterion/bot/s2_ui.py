@@ -154,6 +154,10 @@ def render_s2(view: S2View) -> Screen:
         elif view.location == CHARNECA:
             lines[-1] = "🎯 Enfrentar novamente o Peregrino Calcinado"
             keyboard.append([_button("Nova tentativa", f"s2:{version}:retry")])
+            if view.group_size > 1:
+                keyboard.append(
+                    [_button("Propor tentativa em Grupo", f"s2:{version}:group")]
+                )
         else:
             keyboard.append([_button("Ver no Mapa", "world:map")])
         keyboard.append([_button("← Missões", "world:missions")])
@@ -174,6 +178,32 @@ def render_s2(view: S2View) -> Screen:
             "🎯 Recuperar o fragmento de registro carbonizado",
             "s2_fragment",
             InlineKeyboardMarkup(inline_keyboard=keyboard),
+        )
+
+    if view.kind == "combat_pending":
+        if view.proposal_id is not None:
+            return Screen(
+                "📖 Os Nomes Esquecidos · Confirmação de Grupo\n\n"
+                "A proposta para enfrentar o Peregrino está ativa. Confira a entrada e a "
+                "elegibilidade na tela do Grupo.",
+                "s2_objective",
+                InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [_button("Abrir Grupo", "group:root")],
+                        [_button("Atualizar", "s2:detail")],
+                    ]
+                ),
+            )
+        rows = []
+        if view.group_size > 1:
+            rows.append([_button("Propor combate em Grupo", f"s2:{version}:group")])
+        rows.append([_button("Enfrentar Solo", f"s2:{version}:solo")])
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            "📖 Os Nomes Esquecidos · Em Andamento\n\n"
+            "O Peregrino Calcinado aguarda junto ao acampamento.",
+            "s2_objective",
+            InlineKeyboardMarkup(inline_keyboard=rows),
         )
 
     if view.kind == "return" or (view.step == 6 and view.status == "active"):

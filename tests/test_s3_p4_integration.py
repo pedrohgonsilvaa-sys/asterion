@@ -135,6 +135,99 @@ async def test_s3_offer_tracks_and_fixed_combat_are_persistent(database):
 
 
 @pytest.mark.asyncio
+async def test_s3_shares_tracks_and_runs_confirmed_group_encounter(database, monkeypatch):
+    import asterion.application.campaign_coop as campaign_coop
+    from asterion.domain.combat import active_player_key
+
+    actors = (998410, 998411)
+    seeded = [await _seed_campaign(database, actor, level=5) for actor in actors]
+    character_ids = [row[0] for row in seeded]
+    sessions = database[1]
+    groups = GroupService(sessions, "ocaso")
+    service = S3Service(sessions, "ocaso", groups=groups)
+    accepted = [await service.accept(actor) for actor in actors]
+    assert all(view is not None and view.status == "active" for view in accepted)
+
+    group = await groups.create_group(actors[0])
+    async with sessions() as session:
+        invitee = await session.scalar(
+            select(Character).where(Character.id == character_ids[1])
+        )
+        assert invitee is not None
+        invitee_name = invitee.name
+    invite = await groups.invite(
+        actors[0], invitee_name, expected_group_revision=group.revision
+    )
+    await groups.respond_invite(
+        actors[1], invite.invite_id, expected_revision=invite.revision, accept=True
+    )
+    await _reach_bosque(sessions, actors[0])
+    await _reach_bosque(sessions, actors[1])
+
+    view = await service.resume(actors[0])
+    view = await service.interact(actors[0], view.state_version, "route")
+    companion = await service.resume(actors[1])
+    assert view.step == companion.step == 2
+    for track_id in ("s3.track.2", "s3.track.1", "s3.track.3"):
+        view = await service.interact(actors[0], view.state_version, "track", track_id)
+    companion = await service.resume(actors[1])
+    assert view.kind == "combat_pending" and view.group_size == 2
+    assert companion.step == 3 and len(companion.progress["tracks"]) == 3
+
+    proposal = await service.propose_group_combat(actors[0], view.state_version)
+    invitee_proposals = await groups.activity_proposals(actors[1])
+    pending = next(row for row in invitee_proposals if row.proposal_id == proposal.proposal_id)
+    ready = await groups.respond_activity(
+        actors[1], pending.proposal_id, expected_revision=pending.revision, accept=True
+    )
+    started = await service.start_group_combat(
+        actors[0], ready.proposal_id, expected_revision=ready.revision
+    )
+    views = {actor: await service.resume(actor) for actor in actors}
+    assert started.kind == "combat"
+    assert len({views[actor].encounter_id for actor in actors}) == 1
+    assert len({views[actor].activity_id for actor in actors}) == 2
+    assert all(views[actor].combat == views[actors[0]].combat for actor in actors)
+    assert all(views[actor].combat_actor_key != "player" for actor in actors)
+
+    def terminal_victory(combat, action, *, actor_key=None, target_id=None):
+        updated = deepcopy(combat)
+        updated.version += 1
+        updated.result = "victory"
+        return updated
+
+    monkeypatch.setattr(campaign_coop, "act", terminal_victory)
+    active_key = active_player_key(views[actors[0]].combat)
+    current_actor = next(
+        actor for actor in actors if views[actor].combat_actor_key == active_key
+    )
+    current = views[current_actor]
+    resolved = await service.action(
+        current_actor,
+        current.activity_id,
+        current.activity_state_version,
+        "attack",
+    )
+    assert resolved.step == 4 and resolved.progress["combat_result"] == "victory"
+    for actor in actors:
+        member_view = await service.resume(actor)
+        assert member_view.step == 4
+        assert member_view.progress["combat_result"] == "victory"
+
+    async with sessions() as session:
+        activities = (
+            await session.scalars(
+                select(GameActivity).where(
+                    GameActivity.character_id.in_(character_ids),
+                    GameActivity.content_id == "s3_scripted_cervo_escoriado",
+                )
+            )
+        ).all()
+        assert len(activities) == 2
+        assert {activity.status for activity in activities} == {"completed"}
+
+
+@pytest.mark.asyncio
 async def test_s3_victory_report_reward_and_retry_are_idempotent(database, monkeypatch):
     import asterion.application.scripted_combat as scripted_combat
 

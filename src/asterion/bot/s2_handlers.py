@@ -3,6 +3,7 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
+from asterion.application.groups import GroupError
 from asterion.application.s2 import S2Service
 from asterion.bot.creation_handlers import present
 from asterion.bot.s2_ui import render_s2
@@ -88,6 +89,31 @@ def s2_router(service: S2Service, images: dict[str, str]) -> Router:
             query,
             await service.examine_vestige(query.from_user.id, vestige_id, version),
         )
+
+    @router.callback_query(F.data.startswith("s2:") & F.data.endswith(":group"))
+    async def group_combat(query: CallbackQuery):
+        await query.answer()
+        try:
+            _, raw_version, _ = (query.data or "").split(":")
+            version = int(raw_version)
+        except (TypeError, ValueError):
+            return
+        try:
+            view = await service.propose_group_combat(query.from_user.id, version)
+        except GroupError:
+            await query.answer("Não foi possível preparar o Grupo.", show_alert=True)
+            return
+        await show(query, view)
+
+    @router.callback_query(F.data.startswith("s2:") & F.data.endswith(":solo"))
+    async def solo_combat(query: CallbackQuery):
+        await query.answer()
+        try:
+            _, raw_version, _ = (query.data or "").split(":")
+            version = int(raw_version)
+        except (TypeError, ValueError):
+            return
+        await show(query, await service.start_solo_combat(query.from_user.id, version))
 
     for action, method in (
         ("retry", "retry"),
