@@ -4,7 +4,7 @@ from html import escape
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from asterion.application.groups import GroupView, IncomingInviteView
+from asterion.application.groups import ActivityProposalView, GroupView, IncomingInviteView
 from asterion.bot.creation_ui import Screen
 
 
@@ -38,7 +38,10 @@ def render_links(group: GroupView | None, incoming_count: int) -> Screen:
     return Screen(text, "links", keyboard)
 
 
-def render_group(group: GroupView | None) -> Screen:
+def render_group(
+    group: GroupView | None,
+    proposals: tuple[ActivityProposalView, ...] = (),
+) -> Screen:
     if group is None:
         return Screen(
             "👥 Grupo\n\nCrie um Grupo persistente para convidar companheiros e preparar "
@@ -55,6 +58,49 @@ def render_group(group: GroupView | None) -> Screen:
 
     lines = [f"👥 Grupo · {len(group.members)}/4", ""]
     rows: list[list[InlineKeyboardButton]] = []
+    for proposal in proposals:
+        title = str(proposal.context_payload.get("title") or proposal.activity_type)
+        checkpoint = proposal.context_payload.get("checkpoint")
+        lines.extend([f"⚔️ {escape(title)}", f"Jornada · {escape(str(checkpoint or ''))}"])
+        for participant in proposal.participants:
+            if participant.eligibility == "ineligible":
+                status = "Inelegível"
+            elif participant.eligibility == "helper":
+                status = "Ajudante"
+            else:
+                status = "Elegível"
+            response = {
+                "accepted": "Confirmou",
+                "declined": "Recusou",
+                "pending": "Aguardando",
+                "not_required": "",
+            }.get(participant.response, "")
+            lines.append(f"· {escape(participant.name)} · {status} · {response}")
+        token = proposal.proposal_id.hex
+        revision = revision36(proposal.revision)
+        if proposal.viewer_response == "pending":
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text="Aceitar atividade",
+                        callback_data=f"group:proposal:yes:{token}:{revision}",
+                    ),
+                    InlineKeyboardButton(
+                        text="Recusar",
+                        callback_data=f"group:proposal:no:{token}:{revision}",
+                    ),
+                ]
+            )
+        elif proposal.status == "ready" and proposal.viewer_response == "accepted":
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text="Iniciar atividade",
+                        callback_data=f"group:proposal:start:{token}:{revision}",
+                    )
+                ]
+            )
+        lines.append("")
     for index, member in enumerate(group.members, start=1):
         leader = " · Líder" if member.is_leader else ""
         lines.append(

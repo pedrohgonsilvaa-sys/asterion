@@ -256,6 +256,16 @@ async def test_p5_stage_and_report_screens_follow_real_callbacks(database, monke
             actor=actor,
         ),
     )
+    pending = await p5.resume(actor)
+    assert pending is not None and pending.kind == "combat_pending"
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update(
+            _button(render_p5(pending), "Enfrentar Solo").callback_data,
+            update_id=998726,
+            actor=actor,
+        ),
+    )
     combat = await p5.resume(actor)
     assert combat is not None and combat.kind == "combat"
     monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
@@ -266,15 +276,15 @@ async def test_p5_stage_and_report_screens_follow_real_callbacks(database, monke
         if button.callback_data.startswith("p5fight:")
     )
     await dispatcher.feed_raw_update(
-        bot, callback_update(attack, update_id=998726, actor=actor)
+        bot, callback_update(attack, update_id=998730, actor=actor)
     )
     elements = await p5.resume(actor)
     assert elements is not None and elements.kind == "elements"
     screen = render_p5(elements)
     assert "Elementos da Estrutura · 0/3" in screen.text
-    for update_id in (998727, 998728, 998729):
+    for update_id in (998731, 998732, 998733):
         screen = render_p5(await p5.resume(actor))
-        number = str(update_id - 998726)
+        number = str(update_id - 998730)
         await dispatcher.feed_raw_update(
             bot,
             callback_update(
@@ -289,7 +299,7 @@ async def test_p5_stage_and_report_screens_follow_real_callbacks(database, monke
         bot,
         callback_update(
             _button(render_p5(symbol), "Registrar símbolo").callback_data,
-            update_id=998730,
+            update_id=998734,
             actor=actor,
         ),
     )
@@ -301,7 +311,7 @@ async def test_p5_stage_and_report_screens_follow_real_callbacks(database, monke
         bot,
         callback_update(
             _button(render_p5(oren), "Reportar a Oren Cal").callback_data,
-            update_id=998731,
+            update_id=998735,
             actor=actor,
         ),
     )
@@ -312,7 +322,7 @@ async def test_p5_stage_and_report_screens_follow_real_callbacks(database, monke
         bot,
         callback_update(
             _button(render_p5(alda), "Reportar a Alda Veyr").callback_data,
-            update_id=998732,
+            update_id=998736,
             actor=actor,
         ),
     )

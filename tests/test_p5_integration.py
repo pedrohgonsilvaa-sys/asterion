@@ -48,8 +48,9 @@ async def _start_combat(service, actor, sessions, character_id):
     assert first is not None and first.step == 2
     stale = await service.action(actor, accepted.state_version, "find_door")
     assert stale is not None and stale.step == 2
-    combat = await service.action(actor, first.state_version, "find_door")
-    return combat
+    pending = await service.action(actor, first.state_version, "find_door")
+    assert pending is not None and pending.kind == "combat_pending" and pending.step == 3
+    return await service.action(actor, pending.state_version, "start_boss")
 
 
 @pytest.mark.asyncio

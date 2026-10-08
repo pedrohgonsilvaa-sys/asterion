@@ -32,8 +32,10 @@ def _combat(view):
         consumable_quantities=view.consumable_quantities,
         consumable_budget_limit=view.consumable_budget_limit,
         ready_consumable_option=view.ready_consumable_option,
+        combat_actor_key=view.combat_actor_key,
     ))
-    return Screen(f"📜 {S6_TITLE} · Encontro de Missão\n🛡️ Custódio Sem Rosto · Nv.10\n" + hud.text,
+    enemy_name = view.combat.fighters.get("enemy").name if view.combat and view.combat.fighters.get("enemy") else "Guardião do Último Rastro"
+    return Screen(f"📜 {S6_TITLE} · Encontro de Missão\n🛡️ {enemy_name} · Nv.10\n" + hud.text,
                   "s6", hud.keyboard, parse_mode=hud.parse_mode)
 
 
@@ -113,12 +115,24 @@ def _render_s6_screen(view: S6View) -> Screen:
             rows = [[_to_ruins(view)]]
             if view.location == RUINS:
                 rows = [[_b("Nova tentativa", f"s6:{v}:retry")]]
+                rows.append([_b("Formar Grupo", f"s6:{v}:group")])
             text = (f"❌ Derrota · Custódio Sem Rosto\n🔥 {p.get('recovery_brazier') or 'Braseiro do Refúgio'}\n"
                     f"{p.get('recovery_location') or view.location} · Terras do Ocaso\n❤️ HP · Restaurado\nVigor e Consumíveis usados permanecem.\n\n"
                     "As marcas e o abrigo permanecem registrados.")
             rows.append([_b("← Missões", "world:missions")])
             return Screen(text, "s6_recovery", _kb(rows))
-        return Screen(f"📜 {S6_TITLE} · Encontro pendente", "s6", _kb([[_b("Atualizar", "s6:resume")]]))
+        return Screen(
+            f"📜 {S6_TITLE} · Em Andamento\n🎯 Enfrentar o Guardião do Último Rastro.",
+            "s6",
+            _kb(
+                [
+                    [_b("Enfrentar Solo", f"s6:{v}:start_boss")],
+                    [_b("Formar Grupo", f"s6:{v}:group")],
+                    [_b("Grupo", "group:root")],
+                    [_b("← Missões", "world:missions")],
+                ]
+            ),
+        )
     if view.kind == "last_record":
         return Screen(f"🛡️ Ruínas do Vigia\n📜 {S6_TITLE} · Em Andamento\n\n🎯 Encontrar o último registro legível da rota.",
                       "s6", _kb([[_b("Examinar registro", f"s6:{v}:record")], [_b("← Missões", "world:missions")]]))

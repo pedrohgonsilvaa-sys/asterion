@@ -284,6 +284,28 @@ SUNSET_CUSTODIAN = Creature(
     ),
     ai_priority=("marca_poente", "guarda_poente", "queda_poente"),
 )
+LAST_TRACE_GUARDIAN = Creature(
+    "guardiao_ultimo_rastro",
+    "Guardião do Último Rastro",
+    "boss",
+    "balanced",
+    10,
+    10,
+    0,
+    ("marca_rastro", "golpe_guardiao", "golpe_guardiao", "queda_travessia"),
+    (
+        ("golpe_guardiao", "Golpe da Última Trilha", D("1.00"), 0, D(0), 0),
+        (
+            "marca_rastro", "Marca do Rastro", D("0.90"), 0, D("0.10"), 2,
+            None, 0, False, 3, "agility",
+        ),
+        (
+            "queda_travessia", "Queda da Travessia", D("1.65"), 0, D(0), 0,
+            None, 0, True, 4,
+        ),
+    ),
+    ai_priority=("marca_rastro", "queda_travessia"),
+)
 VIGIA_PARTIDO = Creature(
     "vigia_partido",
     "Vigia Partido",
@@ -337,7 +359,7 @@ LAPIDE_SEM_NOME = Creature(
 )
 CREATURE_CATALOG = (
     *CREATURE_CATALOG, VIGIA, FACELESS_CUSTODIAN, SUNSET_CUSTODIAN,
-    VIGIA_PARTIDO, PROFANADOR_CALCINADO, GUARDIAO_LAPIDES, SEM_NOME,
+    LAST_TRACE_GUARDIAN, VIGIA_PARTIDO, PROFANADOR_CALCINADO, GUARDIAO_LAPIDES, SEM_NOME,
     LAPIDE_SEM_NOME,
 )
 
@@ -984,6 +1006,7 @@ class CreatureCombatantSpec:
     fighter_key: str
     variant: str | None = None
     stat_multipliers: StatMultipliers | None = None
+    campaign_boss_group_size: int | None = None
     passive: bool = False
     required_for_victory: bool = True
     defeat_on_zero: bool = False
@@ -1004,6 +1027,7 @@ class PlayerCombatantSpec:
     equipment_configuration: EquipmentConfigurationSnapshot
     active_art_ids: tuple[str, ...]
     active: bool = True
+    active_art_snapshots: tuple[dict, ...] = ()
 
 
 def _creature_actions(creature: Creature, prefix: str = "") -> tuple[dict[str, Action], tuple[str, ...], tuple[str, ...]]:
@@ -1116,6 +1140,7 @@ def create_creature_party_combat(
     fighters: dict[str, Fighter] = {}
     player_actions: dict[str, Action] = {}
     player_actions_by_fighter: dict[str, dict[str, Action]] = {}
+    player_configuration_snapshots: dict[str, dict] = {}
     if party is not None and len(party) > 1:
         if len(party) > 4 or len({member.character_id for member in party}) != len(party):
             raise ValueError("Dungeon parties contain one to four unique characters.")
@@ -1138,6 +1163,10 @@ def create_creature_party_combat(
                     raise ValueError("Party action ids must resolve to one canonical action.")
                 player_actions[action_id] = action
             player_actions_by_fighter[member.fighter_key] = member_actions
+            player_configuration_snapshots[member.fighter_key] = (
+                member.equipment_configuration.to_data(runtime_ruleset)
+                | {"active_arts": list(member.active_art_snapshots)}
+            )
             fighters[member.fighter_key] = Fighter(
                 id=member.character_id,
                 name=member.name,
@@ -1172,7 +1201,13 @@ def create_creature_party_combat(
         base_stats = road_enemy_stats(
             creature, specification.level, specification.variant
         )
-        if specification.stat_multipliers is not None:
+        if specification.campaign_boss_group_size is not None:
+            from asterion.domain.campaign_combat import scale_campaign_boss_stats
+
+            base_stats = scale_campaign_boss_stats(
+                base_stats, specification.campaign_boss_group_size
+            )
+        elif specification.stat_multipliers is not None:
             base_stats = _apply_stat_multipliers(
                 base_stats, specification.stat_multipliers
             )
@@ -1226,6 +1261,7 @@ def create_creature_party_combat(
             pressure_start_opportunity=pressure_start_opportunity,
             pressure_cap=pressure_cap,
             player_actions_by_fighter=player_actions_by_fighter,
+            player_configuration_snapshots=player_configuration_snapshots,
             party_mode=party is not None and len(party) > 1,
             ai_target_cycle=(tuple(member.character_id for member in party or ())
                              if party is not None and len(party) > 1 else ()),

@@ -34,6 +34,7 @@ def _combat(view):
         consumable_quantities=view.consumable_quantities,
         consumable_budget_limit=view.consumable_budget_limit,
         ready_consumable_option=view.ready_consumable_option,
+        combat_actor_key=view.combat_actor_key,
     ))
     enemy = view.combat.fighters.get("enemy")
     phase = (
@@ -131,9 +132,12 @@ def render_p6(view: P6View) -> Screen:
                       "p6", _kb([[_b("Examinar estrutura", f"p6:{v}:inspect_before")], [_b("← Missões", "world:missions")]]), parse_mode="HTML")
     if view.kind == "start_boss":
         return Screen(f"📜 {P6_TITLE} · Câmara do Poente\n\n🎯 Enfrentar Vigia Partido.\n\nO combate começará quando você estiver pronto.{_guidance(view)}",
-                      "p6", _kb([[_b("Iniciar confronto", f"p6:{v}:start_boss")], [_b("← Missões", "world:missions")]]))
+                      "p6", _kb([[_b("Iniciar Solo", f"p6:{v}:start_boss")],
+                                  [_b("Formar Grupo", f"p6:{v}:group")],
+                                  [_b("Grupo", "group:root")], [_b("← Missões", "world:missions")]]))
     if view.kind in {"retry", "retry_chamber", "retry_travel"}:
-        rows = [[_b("Tentar novamente", f"p6:{v}:retry")]] if view.kind == "retry" else [[_b("Retornar à Câmara", f"p6:{v}:enter_chamber")]] if view.kind == "retry_chamber" else [[_route_ruins(view)]]
+        rows = [[_b("Tentar novamente", f"p6:{v}:retry")],
+                [_b("Formar Grupo", f"p6:{v}:group")]] if view.kind == "retry" else [[_b("Retornar à Câmara", f"p6:{v}:enter_chamber")]] if view.kind == "retry_chamber" else [[_route_ruins(view)]]
         rows.append([_b("← Missões", "world:missions")])
         return Screen(f"❌ Vigia Partido · Tentativa encerrada\n✅ Etapas anteriores preservadas\n📍 Recuperação · {p.get('recovery_brazier') or 'Braseiro do Refúgio'}\n❤️ HP restaurado · Vigor preservado\n\nA nova tentativa mantém o mesmo chefe, Nv.10 e configuração regional.{_guidance(view)}",
                       "p6_recovery", _kb(rows))

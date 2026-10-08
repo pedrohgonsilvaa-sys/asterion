@@ -23,7 +23,7 @@ from asterion.application.s6 import (
     S6_REWARD_SOURCE,
     S6Service,
 )
-from asterion.domain.road import FACELESS_CUSTODIAN, VIGIA_PARTIDO
+from asterion.domain.road import LAST_TRACE_GUARDIAN, VIGIA_PARTIDO
 from asterion.infrastructure.db.models import (
     Achievement,
     BestiaryEntry,
@@ -142,13 +142,15 @@ async def test_s6_gate_checkpoint_retry_rewards_and_codex_are_idempotent(databas
     assert third_mark is not None and third_mark.step == 3
     assert third_mark.progress["pilgrim_marks"] == [S6_MARKS[0], S6_MARKS[1], S6_MARKS[2]]
 
-    combat = await service.action(actor, third_mark.state_version, "shelter")
+    pending = await service.action(actor, third_mark.state_version, "shelter")
+    assert pending is not None and pending.kind == "combat_pending" and pending.step == 4
+    combat = await service.action(actor, pending.state_version, "start_boss")
     assert combat is not None and combat.kind == "combat" and combat.step == 4
-    assert combat.combat.fighters["enemy"].name == FACELESS_CUSTODIAN.name
+    assert combat.combat.fighters["enemy"].name == LAST_TRACE_GUARDIAN.name
     assert combat.combat.fighters["enemy"].level == 10
     assert combat.combat.variant is None
     assert combat.combat.enemy_actions.keys() == {
-        action[0] for action in FACELESS_CUSTODIAN.actions
+        action[0] for action in LAST_TRACE_GUARDIAN.actions
     }
     assert combat.activity_id and combat.encounter_id
     assert await service.resume(actor) is not None
@@ -240,7 +242,7 @@ async def test_s6_gate_checkpoint_retry_rewards_and_codex_are_idempotent(databas
         assert await session.scalar(
             select(BestiaryEntry.id).where(
                 BestiaryEntry.character_id == character_id,
-                BestiaryEntry.creature_id == FACELESS_CUSTODIAN.creature_id,
+                BestiaryEntry.creature_id == LAST_TRACE_GUARDIAN.creature_id,
                 BestiaryEntry.wins == 1,
             )
         ) is not None

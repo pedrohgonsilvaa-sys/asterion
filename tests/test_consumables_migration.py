@@ -145,7 +145,7 @@ async def test_0008_stock_survives_global_consumables_upgrade_downgrade_and_reup
         # The current ORM includes columns from later revisions, so exercise
         # InventoryService only after upgrading its schema to the current head.
         await connection.run_sync(lambda sync: _migrate(sync, "head"))
-        assert await _current_revision(connection) == "20261008_0022"
+        assert await _current_revision(connection) == "20261008_0023"
         assert await _stock_rows(connection, character_id) == expected_stock
 
     view = await InventoryService(sessions, "ocaso").category(actor, "consumables")

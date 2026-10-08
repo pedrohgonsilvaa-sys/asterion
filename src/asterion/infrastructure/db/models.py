@@ -318,6 +318,210 @@ class GroupActivityParticipant(Base):
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class CampaignJourney(Base):
+    """Persistent campaign context; character Quest rows remain authoritative."""
+
+    __tablename__ = "campaign_journeys"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active','paused','completed','cancelled')",
+            name="ck_campaign_journey_status",
+        ),
+        CheckConstraint("revision >= 0", name="ck_campaign_journey_revision"),
+        CheckConstraint(
+            "context_payload IS NULL OR jsonb_typeof(context_payload) = 'object'",
+            name="ck_campaign_journey_context_object",
+        ),
+        Index("ix_campaign_journeys_group_status", "group_id", "status", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    group_id: Mapped[UUID] = mapped_column(
+        ForeignKey("social_groups.id", ondelete="CASCADE"), nullable=False
+    )
+    quest_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    checkpoint: Mapped[str] = mapped_column(String(96), nullable=False)
+    journey_reference_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    technical_host_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="RESTRICT"), nullable=False
+    )
+    context_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CampaignJourneyMember(Base):
+    """Membership snapshot for one cooperative campaign journey."""
+
+    __tablename__ = "campaign_journey_members"
+    __table_args__ = (
+        PrimaryKeyConstraint("journey_id", "character_id"),
+        CheckConstraint("role IN ('eligible','helper')", name="ck_campaign_journey_member_role"),
+        CheckConstraint(
+            "status IN ('active','left','completed')",
+            name="ck_campaign_journey_member_status",
+        ),
+        Index("ix_campaign_journey_member_character", "character_id", "status"),
+    )
+
+    journey_id: Mapped[UUID] = mapped_column(
+        ForeignKey("campaign_journeys.id", ondelete="CASCADE"), nullable=False
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    checkpoint_snapshot: Mapped[str] = mapped_column(String(96), nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CampaignSharedEncounter(Base):
+    """One frozen, reconnectable combat shared by an activity roster."""
+
+    __tablename__ = "campaign_shared_encounters"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active','completed','failed','paused')",
+            name="ck_campaign_shared_encounter_status",
+        ),
+        CheckConstraint(
+            "roster_size BETWEEN 1 AND 4", name="ck_campaign_shared_encounter_roster_size"
+        ),
+        CheckConstraint("state_version >= 0", name="ck_campaign_shared_encounter_version"),
+        CheckConstraint(
+            "scaling_snapshot IS NULL OR jsonb_typeof(scaling_snapshot) = 'object'",
+            name="ck_campaign_shared_encounter_scaling_object",
+        ),
+        CheckConstraint(
+            "combat_snapshot IS NULL OR jsonb_typeof(combat_snapshot) = 'object'",
+            name="ck_campaign_shared_encounter_combat_object",
+        ),
+        UniqueConstraint("proposal_id", name="uq_campaign_shared_encounter_proposal"),
+        Index("ix_campaign_shared_encounters_journey_status", "journey_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    journey_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("campaign_journeys.id", ondelete="SET NULL")
+    )
+    proposal_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("group_activity_proposals.id", ondelete="SET NULL")
+    )
+    quest_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    content_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    journey_reference_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    technical_host_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="RESTRICT"), nullable=False
+    )
+    roster_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    scaling_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
+    state_version: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    combat_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CampaignSharedEncounterMember(Base):
+    """Per-character foreground lease and idempotent result state for shared combat."""
+
+    __tablename__ = "campaign_shared_encounter_members"
+    __table_args__ = (
+        PrimaryKeyConstraint("shared_encounter_id", "character_id"),
+        UniqueConstraint("game_activity_id", name="uq_campaign_shared_member_activity"),
+        UniqueConstraint(
+            "shared_encounter_id", "actor_key", name="uq_campaign_shared_member_actor"
+        ),
+        CheckConstraint("role IN ('eligible','helper')", name="ck_campaign_shared_member_role"),
+        CheckConstraint(
+            "settlement_state IN ('pending','settled')",
+            name="ck_campaign_shared_member_settlement",
+        ),
+        Index("ix_campaign_shared_member_character", "character_id", "shared_encounter_id"),
+    )
+
+    shared_encounter_id: Mapped[UUID] = mapped_column(
+        ForeignKey("campaign_shared_encounters.id", ondelete="CASCADE"), nullable=False
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    game_activity_id: Mapped[UUID] = mapped_column(
+        ForeignKey("game_activities.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_key: Mapped[str] = mapped_column(String(16), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    checkpoint_snapshot: Mapped[str] = mapped_column(String(96), nullable=False)
+    settlement_state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default="pending"
+    )
+    result: Mapped[str | None] = mapped_column(String(16))
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CampaignObjectiveCredit(Base):
+    """Idempotent evidence record for a shared objective credited per character."""
+
+    __tablename__ = "campaign_objective_credits"
+    __table_args__ = (
+        UniqueConstraint(
+            "character_id",
+            "quest_id",
+            "objective_id",
+            "source_key",
+            name="uq_campaign_objective_credit",
+        ),
+        Index("ix_campaign_objective_credit_source", "source_key", "quest_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    journey_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("campaign_journeys.id", ondelete="SET NULL")
+    )
+    quest_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    objective_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    source_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class CharacterProfile(Base):
     """Optional player-authored character history and pending Telegram input."""
 

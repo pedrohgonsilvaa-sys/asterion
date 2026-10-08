@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 
 from asterion.application.p1 import P1Service
-from asterion.infrastructure.db.models import Character, Quest
+from asterion.infrastructure.db.models import Character, Quest, WorldState
 
 
 def test_p1_metadata_constraints_match_models():
@@ -54,6 +54,13 @@ async def test_p1_follow_is_exactly_one_step_and_stale_is_noop(database):
                 status="active",
                 step=1,
                 content_version="tdo-1.0.2",
+            )
+        )
+        s.add(
+            WorldState(
+                character_id=cid,
+                region="Terras do Ocaso",
+                location="Estrada das Cinzas",
             )
         )
         await s.commit()

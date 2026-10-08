@@ -64,7 +64,7 @@ async def test_0017_profession_and_crafting_state_upgrade_constraints_and_safe_d
         )
         await connection.run_sync(lambda sync: _migrate(sync, "head"))
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261008_0022"
+            "20261008_0023"
         )
         assert (
             await connection.scalar(
@@ -129,7 +129,7 @@ async def test_0017_profession_and_crafting_state_upgrade_constraints_and_safe_d
         assert await connection.scalar(text("SELECT to_regclass('crafting_receipts')")) is None
         await connection.run_sync(lambda sync: _migrate(sync, "head"))
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261008_0022"
+            "20261008_0023"
         )
 
 

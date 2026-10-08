@@ -10,6 +10,7 @@ from asterion.application.road import RUINS, RoadService
 from asterion.application.s6 import S6_MARKS, S6Service
 from asterion.bot.combat_handlers import combat_router
 from asterion.bot.p6_ui import render_p6
+from asterion.bot.s6_handlers import s6_router
 from asterion.bot.s6_ui import render_s6
 from asterion.domain.prologue import PROFILE
 from tests.test_creation_ui import callback_update
@@ -36,6 +37,15 @@ def _fight_button(screen, prefix):
     )
 
 
+def _button(screen, label):
+    return next(
+        button
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+        if button.text == label
+    )
+
+
 def _advance_one(combat, _action):
     updated = deepcopy(combat)
     updated.version += 1
@@ -56,11 +66,10 @@ async def test_s6fight_callback_executes_shared_combat_and_renders_again(databas
     marked = reviewed
     for mark in S6_MARKS:
         marked = await service.action(actor, marked.state_version, "mark", mark)
-    combat = await service.action(actor, marked.state_version, "shelter")
-    assert combat is not None and combat.kind == "combat"
-
-    monkeypatch.setattr(scripted_combat, "act", _advance_one)
+    pending = await service.action(actor, marked.state_version, "shelter")
+    assert pending is not None and pending.kind == "combat_pending"
     dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(s6_router(service, {}))
     dispatcher.include_router(
         combat_router(
             PrologueService(sessions, "ocaso", PROFILE),
@@ -70,6 +79,18 @@ async def test_s6fight_callback_executes_shared_combat_and_renders_again(databas
         )
     )
     bot = _telegram()
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update(
+            _button(render_s6(pending), "Enfrentar Solo").callback_data,
+            update_id=998931,
+            actor=actor,
+        ),
+    )
+    combat = await service.resume(actor)
+    assert combat is not None and combat.kind == "combat"
+
+    monkeypatch.setattr(scripted_combat, "act", _advance_one)
     button = _fight_button(render_s6(combat), "s6fight")
     assert len(button.callback_data.encode("utf-8")) <= 64
     await dispatcher.feed_raw_update(

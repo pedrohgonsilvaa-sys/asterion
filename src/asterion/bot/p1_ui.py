@@ -66,6 +66,7 @@ def render_p1(view: P1View) -> Screen:
             [_button("← Missões", "world:missions")],
         ]
     elif view.step == 3 and p.get("defeat"):
+        group_available = view.group_size > 1 and view.proposal_id is None
         text = (
             "💀 Derrota\n\n🔥 Braseiro da Estrada\nEstrada das Cinzas · Terras do Ocaso\n\n"
             "❤️ HP · Restaurado\n\n📜 Vozes na Estrada · Em Andamento\n\n"
@@ -73,8 +74,35 @@ def render_p1(view: P1View) -> Screen:
         )
         keyboard = [
             [_button("Retornar à Estrada", f"p1:{version}:retry")],
+            *(
+                [[_button("Formar Grupo", f"p1:{version}:group")]]
+                if group_available
+                else []
+            ),
+            *(
+                [[_button("Abrir Grupo", "group:root")]]
+                if view.proposal_id is not None
+                else []
+            ),
             [_button("← Menu", "menu:back")],
         ]
+    elif view.step == 3:
+        text = (
+            f"{_mission_header()}\n\n🐺 Cão Cinéreo\n\n"
+            "Os sulcos terminam diante da criatura. Você pode enfrentar o encontro só ou chamar o Grupo."
+        )
+        if view.proposal_id is not None:
+            state = "Confirmação pronta" if view.proposal_status == "ready" else "Aguardando confirmações"
+            text += f"\n\n👥 {state} · abra Grupo para iniciar quando todos confirmarem."
+            keyboard = [
+                [_button("Abrir Grupo", "group:root")],
+                [_button("← Missões", "world:missions")],
+            ]
+        else:
+            keyboard = [[_button("Enfrentar Solo", f"p1:{version}:solo")]]
+            if view.group_size > 1:
+                keyboard.append([_button("Formar Grupo", f"p1:{version}:group")])
+            keyboard.append([_button("← Missões", "world:missions")])
     elif view.step == 4:
         text = (
             f"{_mission_header()}\n\n🏚️ Refúgio do Ocaso\n\n"
