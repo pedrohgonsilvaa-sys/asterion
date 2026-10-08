@@ -97,8 +97,8 @@ def get_bot_runtime() -> BotRuntime:
     s2 = S2Service(SessionFactory, settings.server_id, groups=groups)
     p3 = P3Service(SessionFactory, settings.server_id, groups=groups)
     s3 = S3Service(SessionFactory, settings.server_id, groups=groups)
-    s4 = S4Service(SessionFactory, settings.server_id)
-    s5 = S5Service(SessionFactory, settings.server_id)
+    s4 = S4Service(SessionFactory, settings.server_id, groups=groups)
+    s5 = S5Service(SessionFactory, settings.server_id, groups=groups)
     p4 = P4Service(SessionFactory, settings.server_id, groups=groups)
     p5 = P5Service(SessionFactory, settings.server_id, groups=groups)
     p6 = P6Service(SessionFactory, settings.server_id, groups=groups)
@@ -138,6 +138,8 @@ def get_bot_runtime() -> BotRuntime:
             p6=p6,
             s2=s2,
             s3=s3,
+            s4=s4,
+            s5=s5,
             s6=s6,
         )
     )

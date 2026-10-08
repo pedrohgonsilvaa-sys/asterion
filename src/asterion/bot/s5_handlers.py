@@ -3,6 +3,7 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
+from asterion.application.groups import GroupError
 from asterion.application.s5 import S5_LIGHT_POINTS, S5Service
 from asterion.bot.combat_ui import S5CombatCallback
 from asterion.bot.creation_handlers import present
@@ -59,6 +60,16 @@ def s5_router(service: S5Service, images: dict[str, str]) -> Router:
                         view = await service.toggle_tracking(actor, version)
                     else:
                         view = await service.action(actor, version, operation)
+                elif operation == "group" and len(parts) == 3:
+                    try:
+                        view = await service.propose_group_combat(actor, version)
+                    except GroupError:
+                        await query.answer(
+                            "Não foi possível preparar o Grupo.", show_alert=True
+                        )
+                        return
+                elif operation == "solo" and len(parts) == 3:
+                    view = await service.start_solo_combat(actor, version)
                 elif operation == "abandon" and len(parts) == 4 and parts[3] == "confirm":
                     view = await service.abandon(actor, version)
         if view is None:

@@ -35,6 +35,7 @@ def _combat(view: S4View) -> Screen:
             consumable_quantities=view.consumable_quantities,
             consumable_budget_limit=view.consumable_budget_limit,
             ready_consumable_option=view.ready_consumable_option,
+            combat_actor_key=view.combat_actor_key,
         )
     )
     return Screen(
@@ -158,14 +159,32 @@ def render_s4(view: S4View) -> Screen:
             ]),
         )
     if view.kind == "combat_pending":
+        if view.proposal_id is not None:
+            return Screen(
+                f"📜 {S4_TITLE} · Confirmação de Grupo\n\n"
+                "A proposta para enfrentar o Vigia Rachado está ativa. "
+                "Confira elegibilidade e confirme a entrada na tela do Grupo.",
+                "s4",
+                _keyboard([
+                    [_button("Abrir Grupo", "group:root")],
+                    [_button("Atualizar", "s4:resume")],
+                ]),
+            )
+        rows = []
+        if view.group_size > 1:
+            rows.append([_button("Propor combate em Grupo", f"s4:{version}:group")])
+        rows.append([_button("Enfrentar Solo", f"s4:{version}:solo")])
+        rows.append([_button("← Missões", "world:missions")])
         return Screen(
-            f"📜 {S4_TITLE} · Em Andamento\n🎯 O encontro com o Vigia Rachado será reconstruído.",
-            "s4", _keyboard([[_button("Atualizar", "s4:resume")]]),
+            f"📜 {S4_TITLE} · Em Andamento\n🎯 O Vigia Rachado aguarda nas Ruínas.",
+            "s4", _keyboard(rows),
         )
     if view.kind == "recovery":
         rows = []
         if view.location == RUINS:
             rows.append([_button("Tentar novamente", f"s4:{version}:retry")])
+            if view.group_size > 1:
+                rows.append([_button("Propor tentativa em Grupo", f"s4:{version}:group")])
         else:
             rows.extend(_routes(view))
         rows.append([_button("← Missões", "world:missions")])

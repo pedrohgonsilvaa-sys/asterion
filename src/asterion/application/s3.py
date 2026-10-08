@@ -525,10 +525,18 @@ class S3Service:
                 or await self._foreground(session, character.id)
             ):
                 return await self._view(session, character, quest, world)
-            progress["awaiting_retry"] = False
+            reservation = await session.scalar(
+                select(GroupActivityParticipant).where(
+                    GroupActivityParticipant.character_id == character.id,
+                    GroupActivityParticipant.reservation_state == "active",
+                )
+            )
+            if reservation is not None:
+                return await self._view(session, character, quest, world)
+            progress.update(awaiting_retry=False, combat_pending=False)
             quest.progress = progress
             if await self._materialize(session, character, quest) is None:
-                progress["awaiting_retry"] = True
+                progress.update(awaiting_retry=True, combat_pending=True)
                 quest.progress = progress
                 return await self._view(session, character, quest, world)
             quest.state_version += 1
