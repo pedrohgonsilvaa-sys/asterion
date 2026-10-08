@@ -62,6 +62,7 @@ def _combat_screen(view: P2View) -> Screen:
         consumable_quantities=view.consumable_quantities,
         consumable_budget_limit=view.consumable_budget_limit,
         ready_consumable_option=view.ready_consumable_option,
+        combat_actor_key=view.combat_actor_key,
     )
     return render_combat(combat_view)
 
@@ -202,6 +203,33 @@ def render_p2(view: P2View) -> Screen:
                 [_button("← Missões", "world:missions")],
             ),
         )
+
+    if view.kind == "combat_pending":
+        lines = [
+            "📜 Fuligem sem Fogo · Em Andamento",
+            "🌫️ Charneca da Fuligem",
+            "",
+            "🕷️ Aranha de Cinza",
+            "O encontro pode ser enfrentado sozinho ou com o Grupo.",
+        ]
+        if view.proposal_id is not None:
+            state = (
+                "Confirmação pronta"
+                if view.proposal_status == "ready"
+                else "Aguardando confirmações"
+            )
+            lines.extend(["", f"👥 {state} · abra Grupo para iniciar."])
+            keyboard = _keyboard(
+                [_button("Abrir Grupo", "group:root")],
+                [_button("← Missões", "world:missions")],
+            )
+        else:
+            rows = [[_button("Enfrentar Solo", f"p2:{version}:solo")]]
+            if view.group_size > 1:
+                rows.append([_button("Formar Grupo", f"p2:{version}:group")])
+            rows.append([_button("← Missões", "world:missions")])
+            keyboard = _keyboard(*rows)
+        return Screen("\n".join(lines), "p2", keyboard)
 
     if view.kind == "stone":
         lines = [

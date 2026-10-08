@@ -79,6 +79,29 @@ def test_travel_callback_carries_authoritative_state_version():
     assert button.callback_data == "p2:9:travel"
 
 
+def test_spider_checkpoint_offers_solo_or_confirmed_group_and_reconnect_target():
+    solo_or_group = render_p2(
+        _view("combat_pending", step=3, version=31, location="Charneca da Fuligem", group_size=3)
+    )
+    callbacks = {button.text: button.callback_data for button in _buttons(solo_or_group)}
+    assert callbacks["Enfrentar Solo"] == "p2:31:solo"
+    assert callbacks["Formar Grupo"] == "p2:31:group"
+
+    pending = render_p2(
+        _view(
+            "combat_pending",
+            step=3,
+            version=32,
+            location="Charneca da Fuligem",
+            group_size=3,
+            proposal_id=uuid4(),
+            proposal_status="pending",
+        )
+    )
+    assert "Aguardando confirmações" in pending.text
+    assert _buttons(pending)[0].callback_data == "group:root"
+
+
 def test_refuge_keeps_oren_and_adds_local_alda_interaction():
     screen = render_road(RoadView("refuge", uuid4(), "Refúgio do Ocaso"))
     callbacks = {button.text: button.callback_data for button in _buttons(screen)}
