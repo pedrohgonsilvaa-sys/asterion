@@ -46,6 +46,17 @@ def p4_router(service: P4Service, images: dict[str, str]) -> Router:
                         )
                 elif operation == "report" and len(parts) == 4:
                     view = await service.action(actor, version, f"report_{parts[3]}")
+                elif operation == "route" and len(parts) == 4:
+                    destination = {
+                        "charneca": "Charneca da Fuligem",
+                        "refuge": "Refúgio do Ocaso",
+                    }.get(parts[3])
+                    if destination is not None:
+                        view = await service.mission_route(actor, version, destination)
+                elif operation == "group" and len(parts) == 3:
+                    view = await service.propose_group_combat(actor, version)
+                elif operation == "solo" and len(parts) == 3:
+                    view = await service.start_solo_combat(actor, version)
                 elif operation in {"path", "enter", "retry", "safe", "return"} and len(parts) == 3:
                     action = {"safe": "safe_route"}.get(operation, operation)
                     view = await service.action(actor, version, action)

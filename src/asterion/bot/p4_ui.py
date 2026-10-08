@@ -32,6 +32,7 @@ def _combat(view: P4View) -> Screen:
             consumable_quantities=view.consumable_quantities,
             consumable_budget_limit=view.consumable_budget_limit,
             ready_consumable_option=view.ready_consumable_option,
+            combat_actor_key=view.combat_actor_key,
         )
     )
     return Screen("📜 Pedras que Ainda Vigiam · Encontro de Missão\n" + hud.text, "p4", hud.keyboard, parse_mode=hud.parse_mode)
@@ -141,6 +142,30 @@ def render_p4(view: P4View) -> Screen:
             "p4_recovery",
             _keyboard(rows),
         )
+    if view.kind == "combat_pending":
+        if view.proposal_id is not None:
+            return Screen(
+                "📜 Pedras que Ainda Vigiam · Confirmação de Grupo\n\n"
+                "Confira elegibilidade, checkpoint e recompensa pessoal na tela do Grupo.",
+                "p4",
+                _keyboard(
+                    [
+                        [_button("Abrir Grupo", "group:root")],
+                        [_button("Atualizar", "p4:resume")],
+                    ]
+                ),
+            )
+        rows = []
+        if view.group_size > 1:
+            rows.append([_button("Propor combate em Grupo", f"p4:{version}:group")])
+        rows.append([_button("Enfrentar Solo", f"p4:{version}:solo")])
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            "📜 Pedras que Ainda Vigiam · Em Andamento\n"
+            "O caminho está livre para enfrentar o Vigia Rachado.",
+            "p4",
+            _keyboard(rows),
+        )
     if view.kind == "structures":
         found = set(progress.get("structures", ()))
         lines = ["🛡️ Ruínas do Vigia · Contexto de Missão", "📜 Pedras que Ainda Vigiam", f"🎯 Examinar estruturas de guarda · {len(found)}/2", ""]
@@ -164,9 +189,9 @@ def render_p4(view: P4View) -> Screen:
         if view.location == RUINS:
             rows.append([_button("Retornar ao Bosque", f"p4:{version}:return")])
         elif view.location == BOSQUE:
-            rows.append([_button("Seguir para a Charneca", "road:route:charneca")])
+            rows.append([_button("Seguir para a Charneca", f"p4:{version}:route:charneca")])
         elif view.location == "Charneca da Fuligem":
-            rows.append([_button("Retornar ao Refúgio", "road:route:refuge")])
+            rows.append([_button("Retornar ao Refúgio", f"p4:{version}:route:refuge")])
         else:
             rows.append([_button("Falar com Alda Veyr", f"p4:{version}:report_alda")])
         rows.append([_button("← Missões", "world:missions")])

@@ -2,15 +2,18 @@ from copy import deepcopy
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
+from asterion.application.groups import GroupService
 from asterion.application.p3 import P3_ID
-from asterion.application.p4 import P4_REWARD_SOURCE, P4Service
+from asterion.application.p4 import P4_ID, P4_REWARD_SOURCE, P4Service
 from asterion.application.progression import level_xp
 from asterion.application.road import BOSQUE, CHARNECA, REFUGE, RoadService
 from asterion.application.s3 import S3_ID, S3_REWARD_SOURCE, S3Service
 from asterion.infrastructure.db.models import (
     Brazier,
+    CampaignObjectiveCredit,
+    CampaignSharedEncounter,
     Character,
     CodexEntry,
     CodexFragment,
@@ -417,3 +420,128 @@ async def test_p4_fixed_vigia_barrier_and_reward_unlocks(database, monkeypatch):
                 Encounter.game_activity_id == combat.activity_id
             )
         ) is not None
+
+
+@pytest.mark.asyncio
+async def test_p4_group_shares_ruins_and_vigia_without_sharing_mission_rewards(
+    database, monkeypatch
+):
+    import asterion.application.campaign_coop as campaign_coop
+    from asterion.domain.combat import active_player_key
+
+    actors = (998421, 998422)
+    seeded = [await _seed_campaign(database, actor, level=7) for actor in actors]
+    character_ids = [row[0] for row in seeded]
+    sessions = database[1]
+    groups = GroupService(sessions, "ocaso")
+    service = P4Service(sessions, "ocaso", groups=groups)
+    for actor in actors:
+        accepted = await service.accept(actor)
+        assert accepted is not None and accepted.status == "active"
+        await _reach_bosque(sessions, actor)
+
+    async with sessions() as session:
+        invitee = await session.scalar(
+            select(Character).where(Character.id == character_ids[1])
+        )
+        assert invitee is not None
+        invitee_name = invitee.name
+    group = await groups.create_group(actors[0])
+    invitation = await groups.invite(
+        actors[0], invitee_name, expected_group_revision=group.revision
+    )
+    await groups.respond_invite(
+        actors[1],
+        invitation.invite_id,
+        expected_revision=invitation.revision,
+        accept=True,
+    )
+
+    view = await service.resume(actors[0])
+    assert view is not None and view.step == 1
+    path = await service.action(actors[0], view.state_version, "path")
+    assert path is not None and path.step == 2
+    ruins = await service.action(actors[0], path.state_version, "enter")
+    assert ruins is not None and ruins.step == 3
+    assert ruins.kind == "combat_pending" and ruins.group_size == 2
+    second = await service.resume(actors[1])
+    assert second is not None and second.step == 3 and second.location == "Ruínas do Vigia"
+
+    proposed = await service.propose_group_combat(actors[0], ruins.state_version)
+    assert proposed is not None and proposed.proposal_id is not None
+    incoming = await groups.activity_proposals(actors[1])
+    proposal = next(row for row in incoming if row.proposal_id == proposed.proposal_id)
+    assert all(
+        participant.reward_eligible is True
+        for participant in proposal.participants
+        if participant.eligibility == "eligible"
+    )
+    ready = await groups.respond_activity(
+        actors[1], proposal.proposal_id, expected_revision=proposal.revision, accept=True
+    )
+    started = await service.start_group_combat(
+        actors[0], ready.proposal_id, expected_revision=ready.revision
+    )
+    resumed = await service.resume(actors[1])
+    assert started is not None and resumed is not None
+    assert started.kind == resumed.kind == "combat"
+    assert started.encounter_id == resumed.encounter_id
+    assert started.group_size == resumed.group_size == 2
+    assert {started.combat_actor_key, resumed.combat_actor_key} == {"p1", "p2"}
+
+    def resolve_victory(combat, action, *, target_id=None, actor_key=None):
+        updated = deepcopy(combat)
+        updated.version += 1
+        updated.result = "victory"
+        return updated
+
+    monkeypatch.setattr(campaign_coop, "act", resolve_victory)
+    active_key = active_player_key(started.combat)
+    actor_view, actor = next(
+        (current, actor)
+        for current, actor in ((started, actors[0]), (resumed, actors[1]))
+        if current.combat_actor_key == active_key
+    )
+    victory = await service.action_combat(
+        actor,
+        actor_view.activity_id,
+        actor_view.activity_state_version,
+        "attack",
+        target_id="enemy",
+    )
+    assert victory is not None and victory.step == 4
+    await service.action_combat(
+        actor,
+        actor_view.activity_id,
+        actor_view.activity_state_version,
+        "attack",
+        target_id="enemy",
+    )
+
+    async with sessions() as session:
+        quests = list(
+            (
+                await session.scalars(
+                    select(Quest).where(
+                        Quest.character_id.in_(character_ids), Quest.quest_id == P4_ID
+                    )
+                )
+            ).all()
+        )
+        assert len(quests) == 2 and all(row.step == 4 for row in quests)
+        assert await session.scalar(
+            select(func.count()).where(
+                CampaignObjectiveCredit.objective_id == "p4.vigia_rachado"
+            )
+        ) == 2
+        assert await session.scalar(
+            select(func.count()).where(
+                CampaignSharedEncounter.content_id == "p4_scripted_vigia_rachado"
+            )
+        ) == 1
+        assert await session.scalar(
+            select(RewardEvent.id).where(
+                RewardEvent.character_id.in_(character_ids),
+                RewardEvent.source_id == P4_REWARD_SOURCE,
+            )
+        ) is None
