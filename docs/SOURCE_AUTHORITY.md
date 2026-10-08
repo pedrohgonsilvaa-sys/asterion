@@ -6,13 +6,14 @@
 
 A implementação do Asterion deve usar como autoridade principal:
 
-**ASTERION — GDD Estrutural v1.4.9 — Fonte Mestra Consolidada**
+**ASTERION — GDD Estrutural v1.5.0 — Fonte Mestra Consolidada**
 
-Arquivo vigente: `ASTERION_GDD_Estrutural_v1.4.9_Fonte_Mestra.md`.
+Arquivo vigente: `ASTERION_GDD_Estrutural_v1.5.0_Fonte_Mestra.md`.
 
 Estado oficial:
 
-- a v1.4.9 substitui integralmente a v1.4.8 e versões anteriores;
+- a v1.5.0 substitui integralmente a v1.4.9 e versões anteriores;
+- a v1.5.0 formaliza Grupo persistente, Campanha cooperativa, escala de Chefes de Campanha, sequência PvPvE e lock de Domínio do Rastro sem reabrir os demais valores da Baseline Numérica v1.0;
 - a Baseline Numérica v1.0 está fechada para implementação e testes;
 - a v1.4.9 formaliza o fechamento único de `HP Máximo`, `ATQ`, `DEF` e `AGI` estáticos finais em pontos inteiros com `round_half_up`, além de HP atual inteiro; não altera percentuais, curvas, custos, recompensas ou parâmetros de balanceamento;
 - a reabertura anterior da conversão absoluta da unidade de XP de inimigo foi encerrada na v1.4.3;
@@ -24,9 +25,9 @@ Estado oficial:
 
 A vertical slice Nv.1–10 usa como autoridade de conteúdo:
 
-**ASTERION — Conteúdo: Terras do Ocaso v1.0.13 FINAL**
+**ASTERION — Conteúdo: Terras do Ocaso v1.0.15 FINAL**
 
-Arquivo vigente: `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.13_FINAL.md`.
+Arquivo vigente: `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.15_FINAL.md`.
 
 Ela define Locais, Braseiros permanentes, Missões, Feitos, Bestiário, inimigos, descobertas e demais conteúdo regional consolidado das Terras do Ocaso.
 
@@ -38,13 +39,21 @@ A segunda região usa a autoridade de conteúdo **Vales dos Enforcados v1.0.3 FI
 
 A apresentação player-facing deve seguir:
 
-**ASTERION — Consolidação de Visual & UI — atualização 2026-10-05, sincronizada com Fonte Mestra v1.4.9 + Terras do Ocaso v1.0.13 + Vales dos Enforcados v1.0.3**
+**ASTERION — Consolidação de Visual & UI — atualização 2026-10-08, sincronizada com Fonte Mestra v1.5.0 + Terras do Ocaso v1.0.15 + Vales dos Enforcados v1.0.3**
 
-Arquivo vigente: `ASTERION_UI_DECISOES_2026-10-05_FINAL_SYNC_v1.4.9_TDO_v1.0.13_VALES_v1.0.3.md`.
+Arquivo vigente: `ASTERION_UI_DECISOES_2026-10-08_FINAL_SYNC_v1.5.0_TDO_v1.0.15_VALES_v1.0.3.md`.
 
 Ela define nomenclatura, texto, estrutura de telas, navegação, estados visuais e UX do Bot do Telegram. É subordinada à Fonte Mestra para regras mecânicas/números e à Fonte Regional para conteúdo regional oficial.
 
 Exemplos de mockup não criam regra mecânica ou conteúdo canônico quando a autoridade correspondente já definir outro valor/estado.
+
+## Regras cooperativas e roadmap técnico vigentes
+
+A regra normativa de Grupo, Campanha cooperativa, Caçada em Grupo, PvPvE, Domínio do Rastro e integração com Ronda está incorporada à Fonte Mestra v1.5.0, §§51–54. A autoridade regional TDO v1.0.15 aplica essa regra à P1 e à S6; o conteúdo regional dos Vales v1.0.3 permanece inalterado e aplica as regras globais por referência.
+
+A especificação técnica `docs/specs/MMO_PVPVE_FINAL_SPEC_V1.md` e os roadmaps `docs/specs/COOPERATIVE_MULTIPLAYER_ROADMAP_V2.md` e `docs/specs/OPTIONAL_SIDE_QUEST_BOSSES_V2.md` orientam entrega e verificação, sempre subordinados às Fontes oficiais. O antigo Decision Register MMO/PvPvE é histórico/supersedido e não é autoridade vigente.
+
+O kit numérico de combate de S12 continua sendo blocker de conteúdo; não deve ser inferido nem inventado.
 
 ## Fontes complementares de Lore e Direção Visual
 
@@ -64,7 +73,9 @@ A v1.2 substitui a v1.1 para produção futura. Define famílias fenotípicas le
 
 ### Direção visual especializada — criaturas e biomas
 
-**Arquivo:** `ASTERION_BESTIARIO_VISUAL_E_BIOMAS_v1.0.md`
+**Arquivo vigente:** `ASTERION_BESTIARIO_VISUAL_E_BIOMAS_v1.1.md`
+
+A v1.1 atualiza a direção visual de criaturas e biomas, incluindo o Guardião do Último Rastro, sem substituir mecânica ou conteúdo das Fontes Regionais FINAL.
 
 Define ecologia visual, anatomia, silhueta, materiais, escala, habitats, Variantes, Elites, criaturas de Masmorra e Chefes. Nas Regiões 1–2, mecânica e conteúdo continuam pertencendo às Fontes Regionais FINAL.
 
