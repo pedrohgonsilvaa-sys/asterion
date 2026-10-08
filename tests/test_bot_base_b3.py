@@ -325,6 +325,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
         "Personagem",
         "Códice",
         "Configurações",
+        "Vínculos",
     }
     update_id += 1
     await dispatcher.feed_raw_update(

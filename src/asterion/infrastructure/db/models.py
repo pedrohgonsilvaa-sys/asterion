@@ -128,6 +128,196 @@ class Character(Base):
     )
 
 
+class SocialGroup(Base):
+    """Persistent social group; activity rosters are stored separately."""
+
+    __tablename__ = "social_groups"
+    __table_args__ = (
+        CheckConstraint("status IN ('active','disbanded')", name="ck_social_group_status"),
+        CheckConstraint("revision >= 0", name="ck_social_group_revision"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    leader_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class SocialGroupMember(Base):
+    """One-character membership; a character can be in only one social group."""
+
+    __tablename__ = "social_group_members"
+    __table_args__ = (
+        Index("ix_social_group_members_group_joined", "group_id", "joined_at", "character_id"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    group_id: Mapped[UUID] = mapped_column(
+        ForeignKey("social_groups.id", ondelete="CASCADE"), nullable=False
+    )
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class SocialGroupInvite(Base):
+    """Targeted, persistent invitation that expires ten minutes after creation."""
+
+    __tablename__ = "social_group_invites"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','accepted','declined','cancelled','expired')",
+            name="ck_social_group_invite_status",
+        ),
+        CheckConstraint("revision >= 0", name="ck_social_group_invite_revision"),
+        Index(
+            "uq_pending_social_group_invite",
+            "group_id",
+            "invitee_character_id",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_social_group_invites_inbox", "invitee_character_id", "status", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    group_id: Mapped[UUID] = mapped_column(
+        ForeignKey("social_groups.id", ondelete="CASCADE"), nullable=False
+    )
+    inviter_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    invitee_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default="pending"
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GroupActivityProposal(Base):
+    """A durable 60-second confirmation before any shared activity is created."""
+
+    __tablename__ = "group_activity_proposals"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','ready','declined','expired','cancelled','started',"
+            "'completed','failed')",
+            name="ck_group_activity_proposal_status",
+        ),
+        CheckConstraint("revision >= 0", name="ck_group_activity_proposal_revision"),
+        CheckConstraint("expires_at > created_at", name="ck_group_activity_proposal_expiry"),
+        CheckConstraint(
+            "context_payload IS NULL OR jsonb_typeof(context_payload) = 'object'",
+            name="ck_group_activity_context_object",
+        ),
+        CheckConstraint("activity_type <> ''", name="ck_group_activity_type_nonempty"),
+        Index("ix_group_activity_proposal_group_status", "group_id", "status", "created_at"),
+        Index("ix_group_activity_proposal_expiry", "status", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    group_id: Mapped[UUID] = mapped_column(
+        ForeignKey("social_groups.id", ondelete="CASCADE"), nullable=False
+    )
+    activity_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    proposer_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    journey_reference_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    context_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default="pending"
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    cancel_reason: Mapped[str | None] = mapped_column(String(48))
+    activity_reference: Mapped[str | None] = mapped_column(String(96))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GroupActivityParticipant(Base):
+    """Candidate status and immutable consent record for a group activity."""
+
+    __tablename__ = "group_activity_participants"
+    __table_args__ = (
+        PrimaryKeyConstraint("proposal_id", "character_id"),
+        CheckConstraint(
+            "eligibility IN ('eligible','helper','ineligible')",
+            name="ck_group_activity_participant_eligibility",
+        ),
+        CheckConstraint(
+            "response IN ('pending','accepted','declined','not_required')",
+            name="ck_group_activity_participant_response",
+        ),
+        CheckConstraint(
+            "reservation_state IN ('active','released')",
+            name="ck_group_activity_participant_reservation",
+        ),
+        CheckConstraint(
+            "eligibility != 'ineligible' OR response = 'not_required'",
+            name="ck_group_activity_ineligible_response",
+        ),
+        CheckConstraint(
+            "eligibility = 'ineligible' OR response != 'not_required'",
+            name="ck_group_activity_eligible_response",
+        ),
+        CheckConstraint("ordinal >= 0", name="ck_group_activity_participant_ordinal"),
+        CheckConstraint(
+            "eligibility_snapshot IS NULL OR jsonb_typeof(eligibility_snapshot) = 'object'",
+            name="ck_group_activity_eligibility_snapshot_object",
+        ),
+        Index(
+            "uq_character_active_group_proposal",
+            "character_id",
+            unique=True,
+            postgresql_where=text("reservation_state = 'active'"),
+        ),
+    )
+
+    proposal_id: Mapped[UUID] = mapped_column(
+        ForeignKey("group_activity_proposals.id", ondelete="CASCADE"), nullable=False
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    eligibility: Mapped[str] = mapped_column(String(16), nullable=False)
+    eligibility_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    eligibility_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    response: Mapped[str] = mapped_column(String(16), nullable=False)
+    reservation_state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class CharacterProfile(Base):
     """Optional player-authored character history and pending Telegram input."""
 

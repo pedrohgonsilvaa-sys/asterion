@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.character_deletion import delete_character_owned_data
 from asterion.application.character_names import lock_character_name, name_available, utc_now
+from asterion.application.groups import prepare_character_deletion
 from asterion.domain.creation import NamePolicy, normalize_name
 from asterion.infrastructure.db.models import (
     Character,
@@ -33,6 +34,8 @@ from asterion.infrastructure.db.models import (
     DungeonRunMember,
     GameActivity,
     HuntRound,
+    SocialGroup,
+    SocialGroupMember,
 )
 
 NOTIFICATION_CATEGORIES = frozenset(
@@ -132,6 +135,24 @@ async def finalize_due_character_deletions(
         requests = list((await session.execute(query)).all())
         finalized = 0
         for request_id, candidate_character_id in requests:
+            # Group mutations lock Group before Character. Keep the same order
+            # when a due deletion needs to transfer leadership or cancel a ready
+            # check, otherwise deletion could deadlock against an invite/roster
+            # mutation. If membership changed while we waited, retry next pass.
+            candidate_group_id = await session.scalar(
+                select(SocialGroupMember.group_id).where(
+                    SocialGroupMember.character_id == candidate_character_id
+                )
+            )
+            locked_group = None
+            if candidate_group_id is not None:
+                locked_group = await session.scalar(
+                    select(SocialGroup)
+                    .where(SocialGroup.id == candidate_group_id)
+                    .with_for_update(skip_locked=True)
+                )
+                if locked_group is None:
+                    continue
             character = await session.scalar(
                 select(Character)
                 .where(
@@ -179,8 +200,17 @@ async def finalize_due_character_deletions(
                 or request.due_at > now
             ):
                 continue
+            current_group_id = await session.scalar(
+                select(SocialGroupMember.group_id).where(
+                    SocialGroupMember.character_id == character.id
+                )
+            )
+            if current_group_id != candidate_group_id:
+                continue
             # A due request must never delete a character still holding gameplay state.
             if await _has_foreground(session, character.id):
+                continue
+            if not await prepare_character_deletion(session, character.id):
                 continue
             old_name = character.name
             await lock_character_name(session, server_id, old_name)
