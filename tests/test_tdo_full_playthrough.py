@@ -60,7 +60,6 @@ from asterion.infrastructure.db.models import (
     CharacterEquipmentSlot,
     ConsumableStack,
     DungeonRun,
-    DungeonRunMember,
     EquipmentItem,
     ExplorationAttempt,
     GameActivity,
@@ -80,6 +79,10 @@ pytestmark = pytest.mark.skipif(
     os.getenv("ASTERION_RUN_TDO_FULL_PLAYTHROUGH") != "1",
     reason="playthrough diagnóstico longo; habilite ASTERION_RUN_TDO_FULL_PLAYTHROUGH=1",
 )
+
+
+def _consumable_quantity(quantities, consumable_id):
+    return sum(quantity for item_id, quantity in quantities if item_id == consumable_id)
 
 
 def _compact_playthrough_report(driver, mark):
@@ -719,7 +722,8 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
                 f"player_stats={player_fighter.stats if player_fighter else None!r} "
                 f"player_hp={player_fighter.hp if player_fighter else None!r} "
                 f"enemies={enemies!r} "
-                f"heals={dict(current.consumable_quantities).get('consumable.heal', 0)}",
+                "heals="
+                f"{_consumable_quantity(current.consumable_quantities, 'consumable.heal')}",
                 flush=True,
             )
 
@@ -1047,19 +1051,22 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         if not view.configured:
             await dungeon_professions.initial_selection(actor, "alchemist", "blacksmith")
 
-    async def craft_dungeon_healing_stock(target_quantity):
+    async def healing_stock_count():
         async with sessions() as session:
             character = await session.scalar(
                 select(Character).where(Character.telegram_id == actor)
             )
             assert character is not None
-            stack = await session.scalar(
-                select(ConsumableStack).where(
+            quantity = await session.scalar(
+                select(func.coalesce(func.sum(ConsumableStack.quantity), 0)).where(
                     ConsumableStack.character_id == character.id,
                     ConsumableStack.consumable_id == "consumable.heal",
                 )
             )
-            quantity = stack.quantity if stack is not None else 0
+            return int(quantity or 0)
+
+    async def craft_dungeon_healing_stock(target_quantity):
+        quantity = await healing_stock_count()
         while quantity < target_quantity:
             recipe = await dungeon_crafting.recipe(actor, "recipe.tdo.alchemist.heal")
             if recipe is None or not recipe.available:
@@ -1098,44 +1105,6 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         assert equipped is not None and equipped.changed
         await driver.snapshot(f"{label} · criado e equipado por serviços oficiais")
         return item.id
-
-    async def equip_dungeon_art_loadout(desired=None):
-        """Equip unlocked Sentinela Arts through the public configuration service."""
-        service = ActiveArtService(sessions, "ocaso")
-        view = await service.view(actor)
-        assert view is not None
-        desired = desired or (
-            SENTINEL_ART_IDS["golpe_de_guarda"],
-            SENTINEL_ART_IDS["muralha_breve"],
-            SENTINEL_ART_IDS["impacto_resoluto"],
-        )
-        assert set(desired).issubset(set(view.available_art_ids)), (
-            desired,
-            view.available_art_ids,
-        )
-        version = view.combat_configuration_version
-        for slot in sorted(entry.slot for entry in view.slots):
-            result = await service.unequip_slot(
-                actor,
-                slot,
-                expected_configuration_version=version,
-            )
-            assert result is not None and result.changed
-            version = result.combat_configuration_version
-        for slot, art_id in enumerate(desired, start=1):
-            result = await service.equip_art(
-                actor,
-                slot,
-                art_id,
-                expected_configuration_version=version,
-            )
-            assert result is not None and result.changed
-            version = result.combat_configuration_version
-        refreshed = await service.view(actor)
-        assert refreshed is not None
-        assert tuple(entry.art_id for entry in refreshed.slots) == desired
-        await driver.snapshot(f"Artes legítimas configuradas para Masmorra · {desired!r}")
-        return desired
 
     await road.travel(actor, ROAD)
     await explore_result("explore.tdo.estrada.marco_viajantes", "Estrada das Cinzas")
@@ -1881,18 +1850,7 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     crafting = CraftingService(sessions, "ocaso")
 
     async def refill_p5_healing_stock(target_quantity=2):
-        async with sessions() as session:
-            character = await session.scalar(
-                select(Character).where(Character.telegram_id == actor)
-            )
-            assert character is not None
-            stack = await session.scalar(
-                select(ConsumableStack).where(
-                    ConsumableStack.character_id == character.id,
-                    ConsumableStack.consumable_id == "consumable.heal",
-                )
-            )
-            quantity = stack.quantity if stack is not None else 0
+        quantity = await healing_stock_count()
         while quantity < target_quantity:
             recipe = await crafting.recipe(actor, "recipe.tdo.alchemist.heal")
             if recipe is None or not recipe.available:
@@ -1901,20 +1859,6 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             assert preview is not None
             await crafting.commit(actor, preview.receipt_id)
             quantity += 1
-
-    async def healing_stock_count():
-        async with sessions() as session:
-            character = await session.scalar(
-                select(Character).where(Character.telegram_id == actor)
-            )
-            assert character is not None
-            stack = await session.scalar(
-                select(ConsumableStack).where(
-                    ConsumableStack.character_id == character.id,
-                    ConsumableStack.consumable_id == "consumable.heal",
-                )
-            )
-            return stack.quantity if stack is not None else 0
 
     async def craft_torso_if_available(label):
         recipe_id = "recipe.tdo.blacksmith.fuligem_cuirass.comum"
@@ -2448,69 +2392,34 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     )
     await driver.snapshot(outcome_label)
 
-    # The minimum-level run above diagnoses early readiness. Revisit the
-    # optional Galleries only after the Ronda check so this experiment cannot
-    # consume the healing stock that the Ronda flow is meant to exercise.
-    async with sessions() as session:
-        character = await session.scalar(
-            select(Character).where(Character.telegram_id == actor)
-        )
-        assert character is not None
-        completed_gallery_runs = await session.scalar(
-            select(func.count())
-            .select_from(DungeonRun)
-            .join(DungeonRunMember, DungeonRunMember.run_id == DungeonRun.id)
-            .where(
-                DungeonRunMember.character_id == character.id,
-                DungeonRun.dungeon_family_id == GALLERIES_FAMILY_ID,
-                DungeonRun.difficulty == "stable",
-                DungeonRun.status == "completed",
-            )
-        )
-    if not completed_gallery_runs:
-        await travel_to_refuge()
-        await ensure_dungeon_professions()
-        gallery_healing_stock = 0
-        for supply_attempt in range(7):
-            gallery_healing_stock = await craft_dungeon_healing_stock(6)
-            if gallery_healing_stock >= 6:
-                break
-            if supply_attempt == 6:
-                break
-            await travel_from_refuge_to(BOSQUE)
-            await manual_hunt(
-                f"Preparação legítima das Galerias · Caçada {supply_attempt + 1}",
-                capture=False,
-            )
-            await travel_to_refuge()
-            rested = await WorldService(sessions, "ocaso").rest(actor)
-            assert rested is not None and rested.hp == rested.max_hp
-        selected_dungeon_arts = await equip_dungeon_art_loadout(
-            (
-                SENTINEL_ART_IDS["golpe_de_guarda"],
-                SENTINEL_ART_IDS["muralha_breve"],
-                SENTINEL_ART_IDS["impacto_resoluto"],
-            )
-        )
-        gallery_gear_changes = await equip_best_available_combat_gear()
-        await driver.snapshot(
-            "Galerias · revisita preparada · "
-            f"Poções de Cura={gallery_healing_stock}; artes={selected_dungeon_arts!r}; "
-            f"equipamento={gallery_gear_changes!r}"
-        )
-        await rest_and_return(RUINS)
-        late_gallery_run = await run_solo_dungeon(
-            GALLERIES_FAMILY_ID,
-            "Galerias do Vigia · Estável · revisita preparada",
-        )
-        print(f"TDO_GALLERIES_LATE_RUN={late_gallery_run!r}", flush=True)
-        await travel_to_refuge_from_ruins()
-
     await travel_to_refuge()
     rested_before_p6 = await WorldService(sessions, "ocaso").rest(actor)
     assert rested_before_p6 is not None and rested_before_p6.hp == rested_before_p6.max_hp
-    await refill_p5_healing_stock()
-    await driver.snapshot("P6 · consumíveis restantes preparados após a Ronda")
+    await refill_p5_healing_stock(target_quantity=4)
+    p6_supply_hunts = 0
+    for supply_attempt in range(12):
+        if await healing_stock_count() >= 4:
+            break
+        await road.travel(actor, ROAD)
+        await manual_hunt(
+            f"Preparação legítima para P6 · Caçada {supply_attempt + 1}",
+            capture=False,
+        )
+        p6_supply_hunts += 1
+        await road.travel(actor, REFUGE)
+        rested = await WorldService(sessions, "ocaso").rest(actor)
+        assert rested is not None and rested.hp == rested.max_hp
+        await refill_p5_healing_stock(target_quantity=4)
+    p6_healing_stock = await healing_stock_count()
+    assert p6_healing_stock >= 4, (
+        "P6 diagnostic requires a representative four-heal stock, obtained through public "
+        f"Hunt/Crafting only; stock={p6_healing_stock}; hunts={p6_supply_hunts}; "
+        f"{driver.diagnostic()}"
+    )
+    await driver.snapshot(
+        "P6 · consumíveis legitimamente preparados · "
+        f"Poções={p6_healing_stock}; Caçadas de suprimento={p6_supply_hunts}"
+    )
 
     # Preserve the three legal direct-damage Arts for the campaign boss. The
     # previous trace showed that replacing a damage slot with Muralha delayed
@@ -2579,13 +2488,13 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             select(Character).where(Character.telegram_id == actor)
         )
         assert character is not None
-        heal_row = await session.scalar(
-            select(ConsumableStack).where(
+        initial_heals = await session.scalar(
+            select(func.coalesce(func.sum(ConsumableStack.quantity), 0)).where(
                 ConsumableStack.character_id == character.id,
                 ConsumableStack.consumable_id == "consumable.heal",
             )
         )
-        initial_heals = heal_row.quantity if heal_row is not None else 0
+        initial_heals = int(initial_heals or 0)
     p6_budget = ENCOUNTER_CONSUMABLE_LIMITS.get(VIGIA_PARTIDO.category, 0)
     p6_policy_summary, p6_policy_records = sample_p6_policies(
         pure_p6_combat,
@@ -2660,7 +2569,6 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     assert p6_view is not None and p6_view.kind == "combat" and p6_view.combat is not None
     assert not any(action.startswith("path_art.") for action in p6_view.combat.player_actions)
     await driver.snapshot("P6 · Vigia Partido materializado após a matriz pura")
-    initial_heals = dict(p6_view.consumable_quantities).get("consumable.heal", 0)
     p6_policy = best_policy
 
     def p6_action(current):
@@ -2668,7 +2576,9 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         return choose_p6_policy_action(
             combat,
             p6_policy,
-            heal_count=dict(current.consumable_quantities).get("consumable.heal", 0),
+            heal_count=_consumable_quantity(
+                current.consumable_quantities, "consumable.heal"
+            ),
             budget_limit=current.consumable_budget_limit,
         )
 
@@ -2693,7 +2603,6 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
                 **arguments,
             )
 
-        p6_heals_before = dict(p6_view.consumable_quantities).get("consumable.heal", 0)
         p6_view = await driver.combat_to_result(
             p6_view,
             p6_mutate,
@@ -2757,11 +2666,7 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             "boss_hp_remaining": str(boss.hp),
             "player_hp_remaining": str(player.hp),
             "damage_received": received_damage,
-            "heals_used": max(
-                0,
-                p6_heals_before
-                - dict(p6_view.consumable_quantities).get("consumable.heal", 0),
-            ),
+            "heals_used": player_action_counts.get("consumable:consumable.heal", 0),
             "prepared_defends": prepared_defends,
             "retaliation_events": retaliation_counts,
             "muralha_used": player_action_counts.get(
