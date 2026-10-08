@@ -27,7 +27,14 @@ def _parse_revision(value: str) -> int:
 
 
 def groups_router(
-    service: GroupService, images: dict[str, str], p1=None, p2=None, p5=None, p6=None, s6=None
+    service: GroupService,
+    images: dict[str, str],
+    p1=None,
+    p2=None,
+    p3=None,
+    p5=None,
+    p6=None,
+    s6=None,
 ) -> Router:
     router = Router(name="groups")
     router.message.filter(F.chat.type == "private")
@@ -270,6 +277,7 @@ def groups_router(
             service_by_type = {
                 "campaign_p1": p1,
                 "campaign_p2": p2,
+                "campaign_p3": p3,
                 "campaign_p5": p5,
                 "campaign_p6": p6,
                 "campaign_s6": s6,
@@ -294,6 +302,10 @@ def groups_router(
                     from asterion.bot.p2_ui import render_p2
 
                     screen = render_p2(view)
+                elif proposal.activity_type == "campaign_p3":
+                    from asterion.bot.p3_ui import render_p3
+
+                    screen = render_p3(view)
                 elif proposal.activity_type == "campaign_p5":
                     from asterion.bot.p5_ui import render_p5
 

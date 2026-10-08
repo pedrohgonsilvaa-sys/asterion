@@ -1,18 +1,37 @@
 """Authoritative P3 mission flow composed from the shared Quest/combat/reward systems."""
 
+import hashlib
+import json
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.bestiary import BestiaryRecorder
+from asterion.application.campaign_coop import (
+    CampaignRosterMember,
+    campaign_action_intent,
+    campaign_actor_key,
+    campaign_combat_for_activity,
+    create_campaign_encounter,
+    lock_campaign_encounter,
+    resolve_campaign_action,
+    settle_campaign_encounter,
+)
+from asterion.application.campaign_objectives import (
+    campaign_roster_ids,
+    lock_campaign_roster,
+    present_campaign_members,
+    record_campaign_objective_credit,
+)
 from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     reconcile_character_hp,
 )
+from asterion.application.groups import ActivityEligibility, GroupError, GroupService
 from asterion.application.progression import consolidate_character_level
 from asterion.application.road import (
     BOSQUE,
@@ -39,13 +58,17 @@ from asterion.domain.road import (
     BOSQUE_LOCATION,
     CERVO,
     RULESET,
+    CreatureCombatantSpec,
+    PlayerCombatantSpec,
     create_creature_combat,
+    create_creature_party_combat,
     enemy_xp,
     materialize_equipment,
 )
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
+    CampaignSharedEncounterMember,
     Character,
     CodexEntry,
     CodexFragment,
@@ -54,10 +77,14 @@ from asterion.infrastructure.db.models import (
     Encounter,
     EquipmentItem,
     GameActivity,
+    GroupActivityParticipant,
+    GroupActivityProposal,
     LocationDiscovery,
     Quest,
     RewardComponent,
     RewardEvent,
+    SocialGroup,
+    SocialGroupMember,
     Unlock,
     WorldState,
 )
@@ -112,14 +139,25 @@ class P3View:
     consumable_notice: str | None = None
     ready_consumable_option: CombatConsumableOption | None = None
     xp: int = 0
+    combat_actor_key: str = "player"
+    group_size: int = 1
+    proposal_id: UUID | None = None
+    proposal_status: str | None = None
 
 
 class P3Service:
     """Quest-specific P3 flow; combat, delivery, bestiary and progression stay shared."""
 
-    def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
+    def __init__(
+        self,
+        sessions: async_sessionmaker[AsyncSession],
+        server_id: str,
+        *,
+        groups: GroupService | None = None,
+    ):
         self.sessions = sessions
         self.server_id = server_id
+        self.groups = groups
         self.bestiary = BestiaryRecorder()
         self.road = RoadService(sessions, server_id)
 
@@ -192,42 +230,45 @@ class P3Service:
             return await self._view(session, character, quest, world)
 
     async def mission_route(self, actor: int, version: int, destination: str) -> P3View | None:
-        """Move only along the explicit P3 mission path; all travel remains free."""
+        """Move present, eligible P3 members together along the explicit mission path."""
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor)
             if character is None or quest is None or world is None:
                 return None
             if not self._valid(quest, version) or await self._foreground(session, character.id):
                 return await self._view(session, character, quest, world)
-            progress = dict(quest.progress or {})
-            step = quest.step
-            current = world.location
-            allowed = False
-            if step == 1 and current == REFUGE and destination == CHARNECA:
-                allowed = await self._has_unlock(
-                    session, character.id, "route.tdo.refugio_charneca"
-                )
-            elif step == 3 and progress.get("awaiting_retry"):
-                if current == REFUGE and destination == CHARNECA:
-                    allowed = await self._has_unlock(
-                        session, character.id, "route.tdo.refugio_charneca"
-                    )
-                elif current == CHARNECA and destination == BOSQUE:
-                    allowed = await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK)
-                elif current == BOSQUE and destination == CHARNECA:
-                    allowed = await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK)
-            elif step == 5:
-                if current == BOSQUE and destination == CHARNECA:
-                    allowed = await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK)
-                elif current == CHARNECA and destination == REFUGE:
-                    allowed = await self._has_unlock(
-                        session, character.id, "route.tdo.refugio_charneca"
-                    )
-            if not allowed:
+            if not await self._destination_allowed(session, character, quest, world, destination):
                 return await self._view(session, character, quest, world)
-            world.region = REGION
-            world.location = destination
-            quest.state_version += 1
+            roster_ids = await campaign_roster_ids(session, character.id)
+            present = await present_campaign_members(
+                session,
+                character_ids=roster_ids,
+                quest_id=P3_ID,
+                content_version=P3_VERSION,
+                step=quest.step,
+                region=REGION,
+                location=world.location,
+            )
+            for member in present:
+                if not await self._destination_allowed(
+                    session, member.character, member.quest, member.world, destination
+                ):
+                    continue
+                from_location = member.world.location
+                member.world.region = REGION
+                member.world.location = destination
+                member.quest.state_version += 1
+                await record_campaign_objective_credit(
+                    session,
+                    character_id=member.character.id,
+                    quest_id=P3_ID,
+                    objective_id="p3.route",
+                    source_key=(
+                        f"p3.route:{member.quest.step}:{from_location}:{destination}:"
+                        f"{member.quest.state_version - 1}"
+                    ),
+                    evidence={"from": from_location, "to": destination},
+                )
             return await self._view(session, character, quest, world)
 
     async def s3_campaign_route(self, actor: int, s3_version: int, destination: str) -> bool:
@@ -276,29 +317,76 @@ class P3Service:
             ):
                 return await self._view(session, character, quest, world)
             if first_entry:
-                await self._ensure(
+                roster_ids = await campaign_roster_ids(session, character.id)
+                present = await present_campaign_members(
                     session,
-                    LocationDiscovery,
-                    character_id=character.id,
-                    location_id=P3_LOCATION_ID,
+                    character_ids=roster_ids,
+                    quest_id=P3_ID,
+                    content_version=P3_VERSION,
+                    step=1,
+                    region=REGION,
+                    location=CHARNECA,
                 )
-                await self._ensure(
-                    session,
-                    Unlock,
-                    character_id=character.id,
-                    unlock_id=P3_ROUTE_UNLOCK,
-                )
-                world.region = REGION
-                world.location = BOSQUE
-                progress.update(bosque_entered=True, fragments=[])
-                quest.step = 2
+                for member in present:
+                    member_progress = dict(member.quest.progress or {})
+                    if member_progress.get("bosque_entered"):
+                        continue
+                    await self._ensure(
+                        session,
+                        LocationDiscovery,
+                        character_id=member.character.id,
+                        location_id=P3_LOCATION_ID,
+                    )
+                    await self._ensure(
+                        session,
+                        Unlock,
+                        character_id=member.character.id,
+                        unlock_id=P3_ROUTE_UNLOCK,
+                    )
+                    member.world.region = REGION
+                    member.world.location = BOSQUE
+                    member_progress.update(bosque_entered=True, fragments=[])
+                    member.quest.progress = member_progress
+                    member.quest.step = 2
+                    member.quest.state_version += 1
+                    await record_campaign_objective_credit(
+                        session,
+                        character_id=member.character.id,
+                        quest_id=P3_ID,
+                        objective_id="p3.enter_bosque",
+                        source_key="p3.enter_bosque:first-entry",
+                        evidence={"location_id": P3_LOCATION_ID},
+                    )
             else:
                 if not await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK):
                     return await self._view(session, character, quest, world)
-                world.region = REGION
-                world.location = BOSQUE
-            quest.progress = progress
-            quest.state_version += 1
+                roster_ids = await campaign_roster_ids(session, character.id)
+                present = await present_campaign_members(
+                    session,
+                    character_ids=roster_ids,
+                    quest_id=P3_ID,
+                    content_version=P3_VERSION,
+                    step=3,
+                    region=REGION,
+                    location=CHARNECA,
+                )
+                for member in present:
+                    member_progress = dict(member.quest.progress or {})
+                    if not member_progress.get("awaiting_retry") or not await self._has_unlock(
+                        session, member.character.id, P3_ROUTE_UNLOCK
+                    ):
+                        continue
+                    member.world.region = REGION
+                    member.world.location = BOSQUE
+                    member.quest.state_version += 1
+                    await record_campaign_objective_credit(
+                        session,
+                        character_id=member.character.id,
+                        quest_id=P3_ID,
+                        objective_id="p3.retry_route",
+                        source_key=f"p3.retry_route:{member.quest.state_version - 1}",
+                        evidence={"from": CHARNECA, "to": BOSQUE},
+                    )
             return await self._view(session, character, quest, world)
 
     async def examine_fragment(self, actor: int, fragment_id: str, version: int) -> P3View | None:
@@ -313,20 +401,38 @@ class P3Service:
                 or await self._foreground(session, character.id)
             ):
                 return await self._view(session, character, quest, world)
-            progress = dict(quest.progress or {})
-            found = set(progress.get("fragments", ()))
-            if fragment_id in found:
-                return await self._view(session, character, quest, world)
-            found.add(fragment_id)
-            progress["fragments"] = [item for item in P3_FRAGMENTS if item in found]
-            if len(found) == len(P3_FRAGMENTS):
-                quest.step = 3
-                progress.update(awaiting_retry=False, combat_result=None)
-                quest.progress = progress
+            roster_ids = await campaign_roster_ids(session, character.id)
+            present = await present_campaign_members(
+                session,
+                character_ids=roster_ids,
+                quest_id=P3_ID,
+                content_version=P3_VERSION,
+                step=2,
+                region=REGION,
+                location=BOSQUE,
+            )
+            for member in present:
+                member_progress = dict(member.quest.progress or {})
+                found = set(member_progress.get("fragments", ()))
+                if fragment_id in found:
+                    continue
+                found.add(fragment_id)
+                member_progress["fragments"] = [item for item in P3_FRAGMENTS if item in found]
+                member.quest.progress = member_progress
+                if len(found) == len(P3_FRAGMENTS):
+                    member.quest.step = 3
+                    member_progress.update(awaiting_retry=False, combat_result=None)
+                member.quest.state_version += 1
+                await record_campaign_objective_credit(
+                    session,
+                    character_id=member.character.id,
+                    quest_id=P3_ID,
+                    objective_id="p3.fragment",
+                    source_key=f"p3.fragment:{fragment_id}",
+                    evidence={"fragment_id": fragment_id, "location": BOSQUE},
+                )
+            if quest.step == 3 and await self._social_group_size(session, character.id) == 1:
                 await self._materialize_combat(session, character, quest)
-            else:
-                quest.progress = progress
-            quest.state_version += 1
             return await self._view(session, character, quest, world)
 
     async def retry(self, actor: int, version: int) -> P3View | None:
@@ -342,15 +448,153 @@ class P3Service:
                 or await self._foreground(session, character.id)
             ):
                 return await self._view(session, character, quest, world)
-            progress.update(awaiting_retry=False, combat_pending=False)
-            quest.progress = progress
-            activity = await self._materialize_combat(session, character, quest)
-            if activity is None:
-                progress["awaiting_retry"] = True
-                quest.progress = progress
+            roster_ids = await campaign_roster_ids(session, character.id)
+            present = await present_campaign_members(
+                session,
+                character_ids=roster_ids,
+                quest_id=P3_ID,
+                content_version=P3_VERSION,
+                step=3,
+                region=REGION,
+                location=BOSQUE,
+            )
+            for member in present:
+                member_progress = dict(member.quest.progress or {})
+                if not member_progress.get("awaiting_retry"):
+                    continue
+                member_progress.update(awaiting_retry=False, combat_pending=False)
+                member.quest.progress = member_progress
+                member.quest.state_version += 1
+                await record_campaign_objective_credit(
+                    session,
+                    character_id=member.character.id,
+                    quest_id=P3_ID,
+                    objective_id="p3.retry",
+                    source_key=f"p3.retry:{member.quest.state_version - 1}",
+                    evidence={"location": BOSQUE},
+                )
+            if await self._social_group_size(session, character.id) == 1:
+                activity = await self._materialize_combat(session, character, quest)
+                if activity is None:
+                    progress["awaiting_retry"] = True
+                    quest.progress = progress
+                    return await self._view(session, character, quest, world)
+            return await self._view(session, character, quest, world)
+
+    async def start_solo_combat(self, actor: int, version: int) -> P3View | None:
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None or quest is None or world is None:
+                return None
+            progress = dict(quest.progress or {})
+            if (
+                not self._valid(quest, version, step=3)
+                or progress.get("awaiting_retry")
+                or len(progress.get("fragments", ())) != len(P3_FRAGMENTS)
+                or not self._at(world, BOSQUE)
+                or await self._foreground(session, character.id)
+            ):
                 return await self._view(session, character, quest, world)
+            reservation = await session.scalar(
+                select(GroupActivityParticipant).where(
+                    GroupActivityParticipant.character_id == character.id,
+                    GroupActivityParticipant.reservation_state == "active",
+                )
+            )
+            if reservation is not None:
+                return await self._view(session, character, quest, world)
+            await self._materialize_combat(session, character, quest)
             quest.state_version += 1
             return await self._view(session, character, quest, world)
+
+    async def propose_group_combat(self, actor: int, version: int) -> P3View | None:
+        if self.groups is None:
+            return await self.resume(actor)
+        initial = await self.resume(actor)
+        if (
+            initial is None
+            or initial.status != "active"
+            or initial.step != 3
+            or initial.state_version != version
+            or initial.location != BOSQUE
+            or len(initial.progress.get("fragments", ())) != len(P3_FRAGMENTS)
+            or initial.progress.get("awaiting_retry")
+        ):
+            return initial
+        group = await self.groups.group(actor)
+        if group is None or len(group.members) < 2:
+            return await self.start_solo_combat(actor, version)
+        proposal = await self.groups.propose_activity(
+            actor,
+            activity_type="campaign_p3",
+            participant_character_ids=tuple(member.character_id for member in group.members),
+            eligibility_resolver=self._p3_combat_eligibility,
+            context_payload={
+                "quest_id": P3_ID,
+                "checkpoint": "p3.cervo_escoriado",
+                "title": f"{P3_TITLE} · Cervo Escoriado",
+                "reference_character_id": str(initial.character_id),
+                "location": BOSQUE,
+            },
+            journey_reference_character_id=initial.character_id,
+        )
+        view = await self.resume(actor)
+        return (
+            replace(view, proposal_id=proposal.proposal_id, proposal_status=proposal.status)
+            if view is not None
+            else None
+        )
+
+    async def start_group_combat(
+        self,
+        actor: int,
+        proposal_id: UUID,
+        *,
+        expected_revision: int,
+    ) -> P3View | None:
+        if self.groups is None:
+            return await self.resume(actor)
+        await self.groups.start_activity(
+            actor,
+            proposal_id,
+            expected_revision=expected_revision,
+            eligibility_resolver=self._p3_combat_eligibility,
+            create_activity=self._create_p3_group_combat,
+        )
+        return await self.resume(actor)
+
+    async def campaign_action(
+        self,
+        actor: int,
+        activity_id: UUID,
+        version: int,
+        action_index: int,
+        target_code: str,
+    ) -> P3View | None:
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                return None
+            encounter, member, combat = await campaign_combat_for_activity(
+                session, activity_id, character.id
+            )
+            if (
+                encounter is None
+                or member is None
+                or encounter.quest_id != P3_ID
+                or encounter.content_id != P3_COMBAT_CONTENT_ID
+                or combat is None
+            ):
+                return None
+            intent = campaign_action_intent(
+                combat, member.actor_key, action_index, target_code
+            )
+            if intent is None:
+                return await self.resume(actor)
+            action, target_id = intent
+        return await self.action(
+            actor, activity_id, version, action, target_id=target_id
+        )
 
     async def action(
         self,
@@ -378,6 +622,22 @@ class P3Service:
             )
             if activity is None or quest is None:
                 return None
+            _shared, shared_member, _combat = await campaign_combat_for_activity(
+                session, activity_id, character.id
+            )
+            if shared_member is not None:
+                return await self._shared_action(
+                    session,
+                    character,
+                    quest,
+                    world,
+                    activity_id,
+                    version,
+                    action,
+                    consumable_id=consumable_id,
+                    target_id=target_id,
+                    effect_id=effect_id,
+                )
             current = await self._view(session, character, quest, world)
             foreground = await self._foreground(session, character.id)
             if (
@@ -466,6 +726,164 @@ class P3Service:
             quest.state_version += 1
             return await self._view(session, character, quest, world)
 
+    async def _shared_action(
+        self,
+        session: AsyncSession,
+        character: Character,
+        quest: Quest,
+        world: WorldState | None,
+        activity_id: UUID,
+        version: int,
+        action: str | None,
+        *,
+        consumable_id: str | None,
+        target_id: str | None,
+        effect_id: str | None,
+    ) -> P3View:
+        locked = await lock_campaign_encounter(session, activity_id, character.id)
+        if locked is None or locked.encounter.content_id != P3_COMBAT_CONTENT_ID:
+            return await self._view(session, character, quest, world)
+        member = next(
+            (row for row in locked.members if row.game_activity_id == activity_id), None
+        )
+        activity = locked.activities.get(activity_id)
+        if (
+            member is None
+            or activity is None
+            or activity.state_version != version
+            or activity.status != "active"
+            or locked.encounter.state_version != version
+            or (action is None) == (consumable_id is None)
+        ):
+            return await self._view(session, character, quest, world)
+        stack = None
+        if consumable_id is not None:
+            stack = await session.scalar(
+                select(ConsumableStack)
+                .where(
+                    ConsumableStack.character_id == character.id,
+                    ConsumableStack.consumable_id == consumable_id,
+                    ConsumableStack.quantity > 0,
+                )
+                .with_for_update()
+            )
+            if stack is None:
+                return replace(
+                    await self._view(session, character, quest, world),
+                    consumable_notice="⚠️ Consumível · Não está mais disponível.",
+                )
+        updated = resolve_campaign_action(
+            locked,
+            activity_id=activity_id,
+            version=version,
+            action=action,
+            consumable_id=consumable_id,
+            target_id=target_id,
+            effect_id=effect_id,
+            consumable_budget=ENCOUNTER_CONSUMABLE_LIMITS.get(CERVO.category, 0),
+        )
+        if updated.version == version:
+            return await self._view(session, character, quest, world)
+        if stack is not None:
+            stack.quantity -= 1
+        member_by_character = {row.character_id: row for row in locked.members}
+        quests = list(
+            (
+                await session.scalars(
+                    select(Quest)
+                    .where(
+                        Quest.character_id.in_(locked.characters),
+                        Quest.quest_id == P3_ID,
+                    )
+                    .order_by(Quest.character_id)
+                    .with_for_update()
+                )
+            ).all()
+        )
+        quests_by_character = {row.character_id: row for row in quests}
+        worlds = list(
+            (
+                await session.scalars(
+                    select(WorldState)
+                    .where(WorldState.character_id.in_(locked.characters))
+                    .order_by(WorldState.character_id)
+                    .with_for_update()
+                )
+            ).all()
+        )
+        worlds_by_character = {row.character_id: row for row in worlds}
+        for character_id, participant in locked.characters.items():
+            roster_member = member_by_character[character_id]
+            participant_quest = quests_by_character.get(character_id)
+            if updated.result:
+                await record_campaign_objective_credit(
+                    session,
+                    character_id=character_id,
+                    quest_id=P3_ID,
+                    objective_id="p3.cervo_escoriado",
+                    source_key=f"p3.cervo_escoriado:{locked.encounter.id}",
+                    evidence={"result": updated.result, "encounter_id": str(locked.encounter.id)},
+                )
+            await self.bestiary.record_combat_events(
+                session, character_id, CERVO.creature_id, None, updated
+            )
+            if updated.result == "victory":
+                await self.bestiary.record(
+                    session,
+                    character_id,
+                    CERVO.creature_id,
+                    victory=True,
+                    observation_category="common",
+                )
+                if roster_member.role == "eligible":
+                    await self._grant_enemy_xp(
+                        session,
+                        participant,
+                        locked.activities[roster_member.game_activity_id],
+                    )
+                    configuration = await load_equipment_configuration(session, participant)
+                    reconcile_character_hp(participant, configuration)
+                    await consolidate_character_level(session, participant, configuration)
+                    reconcile_character_hp(participant, configuration)
+                if (
+                    roster_member.role == "eligible"
+                    and participant_quest is not None
+                    and participant_quest.status == "active"
+                    and participant_quest.step == 3
+                ):
+                    progress = dict(participant_quest.progress or {})
+                    progress.update(combat_result="victory", awaiting_retry=False)
+                    participant_quest.progress = progress
+                    participant_quest.step = 4
+                    participant_quest.state_version += 1
+            elif updated.result == "defeat":
+                await self.bestiary.record(
+                    session, character_id, CERVO.creature_id, observation_category="common"
+                )
+                participant_world = worlds_by_character.get(character_id)
+                recovery_brazier, recovery_location = await self.road.recover_normal_pve_defeat(
+                    session, participant, BOSQUE_LOCATION, participant_world
+                )
+                if (
+                    roster_member.role == "eligible"
+                    and participant_quest is not None
+                    and participant_quest.status == "active"
+                    and participant_quest.step == 3
+                ):
+                    progress = dict(participant_quest.progress or {})
+                    progress.update(
+                        combat_result="defeat",
+                        awaiting_retry=True,
+                        defeat_activity_id=str(roster_member.game_activity_id),
+                        recovery_brazier=recovery_brazier,
+                        recovery_location=recovery_location,
+                    )
+                    participant_quest.progress = progress
+                    participant_quest.state_version += 1
+        if updated.result:
+            await settle_campaign_encounter(session, locked, updated.result)
+        return await self._view(session, character, quest, world)
+
     async def consumable_selection(
         self,
         actor: int,
@@ -494,9 +912,16 @@ class P3Service:
                 return None
             current = await self._view(session, character, quest, world)
             foreground = await self._foreground(session, character.id)
+            shared, shared_member, _combat = await campaign_combat_for_activity(
+                session, activity.id, character.id
+            )
+            shared_allowed = bool(
+                shared is not None
+                and shared_member is not None
+                and shared_member.role in {"eligible", "helper"}
+            )
             if (
-                quest.status != "active"
-                or quest.step != 3
+                (not shared_allowed and (quest.status != "active" or quest.step != 3))
                 or activity.status != "active"
                 or foreground is None
                 or foreground.id != activity.id
@@ -599,19 +1024,41 @@ class P3Service:
             character, quest, world = await self._locked_state(session, actor)
             if character is None or quest is None:
                 return None
-            progress = dict(quest.progress or {})
             if (
                 not self._valid(quest, version, step=4)
                 or not self._at(world, BOSQUE)
-                or progress.get("combat_result") != "victory"
-                or progress.get("carved_fragment_examined")
                 or await self._foreground(session, character.id)
             ):
                 return await self._view(session, character, quest, world)
-            progress["carved_fragment_examined"] = True
-            quest.progress = progress
-            quest.step = 5
-            quest.state_version += 1
+            roster_ids = await campaign_roster_ids(session, character.id)
+            present = await present_campaign_members(
+                session,
+                character_ids=roster_ids,
+                quest_id=P3_ID,
+                content_version=P3_VERSION,
+                step=4,
+                region=REGION,
+                location=BOSQUE,
+            )
+            for member in present:
+                member_progress = dict(member.quest.progress or {})
+                if (
+                    member_progress.get("combat_result") != "victory"
+                    or member_progress.get("carved_fragment_examined")
+                ):
+                    continue
+                member_progress["carved_fragment_examined"] = True
+                member.quest.progress = member_progress
+                member.quest.step = 5
+                member.quest.state_version += 1
+                await record_campaign_objective_credit(
+                    session,
+                    character_id=member.character.id,
+                    quest_id=P3_ID,
+                    objective_id="p3.carved_fragment",
+                    source_key="p3.carved_fragment:bosque",
+                    evidence={"location": BOSQUE},
+                )
             return await self._view(session, character, quest, world)
 
     async def talk_to_oren(self, actor: int, version: int) -> P3View | None:
@@ -626,8 +1073,29 @@ class P3Service:
                 or await self._foreground(session, character.id)
             ):
                 return await self._view(session, character, quest, world)
-            quest.step = 6
-            quest.state_version += 1
+            roster_ids = await campaign_roster_ids(session, character.id)
+            present = await present_campaign_members(
+                session,
+                character_ids=roster_ids,
+                quest_id=P3_ID,
+                content_version=P3_VERSION,
+                step=5,
+                region=REGION,
+                location=REFUGE,
+            )
+            for member in present:
+                if not (member.quest.progress or {}).get("carved_fragment_examined"):
+                    continue
+                member.quest.step = 6
+                member.quest.state_version += 1
+                await record_campaign_objective_credit(
+                    session,
+                    character_id=member.character.id,
+                    quest_id=P3_ID,
+                    objective_id="p3.return_to_oren",
+                    source_key=f"p3.return_to_oren:{member.quest.state_version - 1}",
+                    evidence={"location": REFUGE},
+                )
             return await self._view(session, character, quest, world)
 
     async def choose_reward(self, actor: int, version: int, choice: str) -> P3View | None:
@@ -793,6 +1261,167 @@ class P3Service:
         await session.flush()
         return activity
 
+    async def _p3_combat_eligibility(
+        self, session: AsyncSession, character: Character, payload: dict
+    ) -> ActivityEligibility:
+        quest = await session.scalar(
+            select(Quest).where(Quest.character_id == character.id, Quest.quest_id == P3_ID)
+        )
+        world = await self._world(session, character.id)
+        active = await self._foreground(session, character.id)
+        progress = dict(quest.progress or {}) if quest else {}
+        if (
+            active is not None
+            or not self._at(world, BOSQUE)
+            or payload.get("location") != BOSQUE
+            or quest is None
+            or quest.content_version != P3_VERSION
+        ):
+            role = "ineligible"
+        elif (
+            quest.status == "active"
+            and quest.step == 3
+            and len(progress.get("fragments", ())) == len(P3_FRAGMENTS)
+            and not progress.get("awaiting_retry")
+        ):
+            role = "eligible"
+        elif quest.status == "completed" or quest.step > 3:
+            role = "helper"
+        else:
+            role = "ineligible"
+        snapshot = {
+            "character_id": str(character.id),
+            "role": role,
+            "quest_status": quest.status if quest else None,
+            "quest_step": quest.step if quest else None,
+            "quest_version": quest.state_version if quest else None,
+            "quest_content_version": quest.content_version if quest else None,
+            "fragments": sorted(progress.get("fragments", ())),
+            "location": world.location if world else None,
+            "region": world.region if world else None,
+            "active_activity": str(active.id) if active else None,
+            "combat_configuration_version": character.combat_configuration_version,
+            "level": character.level,
+        }
+        fingerprint = hashlib.sha256(
+            json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        return ActivityEligibility(role, fingerprint, snapshot)
+
+    async def _create_p3_group_combat(
+        self,
+        session: AsyncSession,
+        proposal: GroupActivityProposal,
+        characters: tuple[Character, ...],
+    ) -> str:
+        participants = list(
+            (
+                await session.scalars(
+                    select(GroupActivityParticipant)
+                    .where(GroupActivityParticipant.proposal_id == proposal.id)
+                    .order_by(GroupActivityParticipant.ordinal)
+                )
+            ).all()
+        )
+        roles = {row.character_id: row.eligibility for row in participants}
+        if any(roles.get(character.id) not in {"eligible", "helper"} for character in characters):
+            raise GroupError("eligibility_changed")
+        group = await session.get(SocialGroup, proposal.group_id)
+        if group is None:
+            raise GroupError("not_in_group")
+        party = []
+        roster = []
+        for index, character in enumerate(characters, start=1):
+            equipment = await load_equipment_configuration(session, character)
+            arts = await load_active_art_configuration(session, character)
+            reconcile_character_hp(character, equipment)
+            actor_key = campaign_actor_key(index, len(characters))
+            party.append(
+                PlayerCombatantSpec(
+                    fighter_key=actor_key,
+                    character_id=str(character.id),
+                    name=character.name,
+                    character_class=character.character_class,
+                    race=character.race,
+                    level=character.level,
+                    hp=character.hp,
+                    equipment_configuration=equipment,
+                    active_art_ids=arts.art_ids,
+                    active_art_snapshots=tuple(slot.to_data() for slot in arts.slots),
+                )
+            )
+            roster.append(
+                CampaignRosterMember(
+                    character=character,
+                    actor_key=actor_key,
+                    role=roles[character.id],
+                    checkpoint="p3.cervo_escoriado",
+                )
+            )
+        lead = characters[0]
+        mission_cervo = replace(CERVO, ai=("ocaso_charge", "antler_gore"))
+        combat = create_creature_party_combat(
+            uuid4(),
+            lead.name,
+            lead.character_class,
+            lead.race,
+            lead.hp,
+            (CreatureCombatantSpec(mission_cervo, 5, "enemy"),),
+            player_level=lead.level,
+            equipment_configuration=party[0].equipment_configuration,
+            ruleset_version=RULESET,
+            flavor="Entre as raízes, um Cervo Escoriado prepara uma investida.",
+            opening_log="🦌 Cervo Escoriado · Nv.5 bloqueia o caminho entre os galhos.",
+            active_art_ids=party[0].active_art_ids,
+            party=tuple(party),
+        )
+        arts = await load_active_art_configuration(session, lead)
+        combat.configuration_snapshot = (combat.configuration_snapshot or {}) | arts.to_data()
+        encounter = await create_campaign_encounter(
+            session,
+            group=group,
+            proposal=proposal,
+            roster=roster,
+            quest_id=P3_ID,
+            content_id=P3_COMBAT_CONTENT_ID,
+            combat=combat,
+            ruleset_version=RULESET,
+            checkpoint="p3.cervo_escoriado",
+        )
+        encounter_members = list(
+            (
+                await session.scalars(
+                    select(CampaignSharedEncounterMember).where(
+                        CampaignSharedEncounterMember.shared_encounter_id == encounter.id
+                    )
+                )
+            ).all()
+        )
+        for member in encounter_members:
+            participant_quest = await session.scalar(
+                select(Quest)
+                .where(Quest.character_id == member.character_id, Quest.quest_id == P3_ID)
+                .with_for_update()
+            )
+            if participant_quest is not None and member.role == "eligible":
+                participant_quest.progress = {
+                    **(participant_quest.progress or {}),
+                    "combat_activity_id": str(member.game_activity_id),
+                }
+            await self.bestiary.record(
+                session,
+                member.character_id,
+                CERVO.creature_id,
+                evidence_id=f"habitat:{P3_LOCATION_ID}",
+                evidence_category="habitat",
+                evidence_points=3,
+                grant_observation_xp=True,
+                observation_level=5,
+                observation_category="common",
+            )
+        await session.flush()
+        return str(encounter.id)
+
     async def _grant_enemy_xp(self, session, character, activity) -> int:
         source_id = f"{P3_REWARD_SOURCE}:enemy-xp:{activity.id}"
         existing = await session.scalar(
@@ -826,16 +1455,24 @@ class P3Service:
 
     async def _view(self, session, character, quest, world, requested_kind=None):
         progress = dict(quest.progress or {}) if quest else {}
-        activity = None
+        group_size = await self._social_group_size(session, character.id)
+        activity = await session.scalar(
+            select(GameActivity).where(
+                GameActivity.character_id == character.id,
+                GameActivity.content_id == P3_COMBAT_CONTENT_ID,
+                GameActivity.status == "active",
+            )
+        )
         encounter_id = combat_id = None
         combat = None
         activity_status = activity_version = None
+        combat_actor_key = "player"
         stored = progress.get("combat_activity_id")
         try:
             stored_id = UUID(stored) if stored else None
         except (TypeError, ValueError):
             stored_id = None
-        if stored_id is not None:
+        if activity is None and stored_id is not None:
             activity = await session.scalar(
                 select(GameActivity).where(
                     GameActivity.id == stored_id,
@@ -843,9 +1480,18 @@ class P3Service:
                     GameActivity.content_id == P3_COMBAT_CONTENT_ID,
                 )
             )
-            if activity is not None:
-                activity_status = activity.status
-                activity_version = activity.state_version
+        if activity is not None:
+            activity_status = activity.status
+            activity_version = activity.state_version
+            shared, shared_member, shared_combat = await campaign_combat_for_activity(
+                session, activity.id, character.id
+            )
+            if shared is not None and shared_member is not None:
+                encounter_id = combat_id = shared.id
+                combat_actor_key = shared_member.actor_key
+                combat = shared_combat if activity.status == "active" else None
+                group_size = shared.roster_size
+            else:
                 row = (
                     await session.execute(
                         select(Encounter, CombatRecord)
@@ -871,10 +1517,10 @@ class P3Service:
             kind = requested_kind
         elif quest is None:
             kind = "offer" if available else "unavailable"
-        elif quest.status == "completed":
-            kind = "completed"
         elif combat is not None:
             kind = "combat"
+        elif quest.status == "completed":
+            kind = "completed"
         elif step == 1:
             kind = "travel"
         elif step == 2:
@@ -905,8 +1551,29 @@ class P3Service:
             ).all()
             quantities = tuple((row.consumable_id, row.quantity) for row in stock)
             options = combat_consumable_options(
-                combat, tuple(row.consumable_id for row in stock), budget_limit=budget
+                combat,
+                tuple(row.consumable_id for row in stock),
+                budget_limit=budget,
+                actor_key=combat_actor_key,
             )
+        proposal_pair = None
+        if activity is None:
+            proposal_rows = await session.execute(
+                select(GroupActivityParticipant, GroupActivityProposal)
+                .join(
+                    GroupActivityProposal,
+                    GroupActivityProposal.id == GroupActivityParticipant.proposal_id,
+                )
+                .where(
+                    GroupActivityParticipant.character_id == character.id,
+                    GroupActivityParticipant.reservation_state == "active",
+                    GroupActivityProposal.activity_type == "campaign_p3",
+                    GroupActivityProposal.status.in_(("pending", "ready")),
+                )
+                .order_by(GroupActivityProposal.created_at.desc(), GroupActivityProposal.id)
+                .limit(1)
+            )
+            proposal_pair = proposal_rows.first()
         return P3View(
             character_id=character.id,
             kind=kind,
@@ -927,6 +1594,10 @@ class P3Service:
             consumable_quantities=quantities,
             consumable_budget_limit=budget,
             xp=character.xp,
+            combat_actor_key=combat_actor_key,
+            group_size=group_size,
+            proposal_id=proposal_pair[1].id if proposal_pair else None,
+            proposal_status=proposal_pair[1].status if proposal_pair else None,
         )
 
     async def _eligible(self, session, character):
@@ -939,11 +1610,50 @@ class P3Service:
         )
         return bool(completed and character.level >= 5)
 
+    async def _destination_allowed(self, session, character, quest, world, destination):
+        if quest is None or world is None or world.region != REGION:
+            return False
+        progress = dict(quest.progress or {})
+        if quest.step == 1 and world.location == REFUGE and destination == CHARNECA:
+            return await self._has_unlock(session, character.id, CHARNECA_ROUTE_UNLOCK)
+        if quest.step == 3 and progress.get("awaiting_retry"):
+            if world.location == REFUGE and destination == CHARNECA:
+                return await self._has_unlock(session, character.id, CHARNECA_ROUTE_UNLOCK)
+            if {world.location, destination} == {CHARNECA, BOSQUE}:
+                return await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK)
+        if quest.step == 5:
+            if {world.location, destination} == {BOSQUE, CHARNECA}:
+                return await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK)
+            if {world.location, destination} == {CHARNECA, REFUGE}:
+                return await self._has_unlock(session, character.id, CHARNECA_ROUTE_UNLOCK)
+        return False
+
+    async def _social_group_size(self, session, character_id: UUID) -> int:
+        membership = await session.get(SocialGroupMember, character_id)
+        if membership is None:
+            return 1
+        group = await session.get(SocialGroup, membership.group_id)
+        if group is None or group.status != "active":
+            return 1
+        return int(
+            await session.scalar(
+                select(func.count())
+                .select_from(SocialGroupMember)
+                .where(SocialGroupMember.group_id == group.id)
+            )
+            or 1
+        )
+
     async def _locked_state(self, session, actor):
-        character = await session.scalar(
+        seed = await session.scalar(
             select(Character)
             .where(Character.telegram_id == actor, Character.server_id == self.server_id)
-            .with_for_update()
+        )
+        if seed is None:
+            return None, None, None
+        await lock_campaign_roster(session, seed.id)
+        character = await session.scalar(
+            select(Character).where(Character.id == seed.id).with_for_update()
         )
         if character is None:
             return None, None, None

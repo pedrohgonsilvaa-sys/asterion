@@ -42,6 +42,7 @@ def _combat(view: P3View) -> Screen:
         consumable_quantities=view.consumable_quantities,
         consumable_budget_limit=view.consumable_budget_limit,
         ready_consumable_option=view.ready_consumable_option,
+        combat_actor_key=view.combat_actor_key,
     )
     hud = render_combat(combat_view)
     return Screen(
@@ -211,11 +212,27 @@ def render_p3(view: P3View) -> Screen:
             InlineKeyboardMarkup(inline_keyboard=rows),
         )
     if view.kind == "combat_pending":
+        if view.proposal_id is not None:
+            return Screen(
+                "🌿 Sob Galhos Calcinados · Confirmação de Grupo\n\n"
+                "A proposta de combate está ativa. Confira a entrada e a elegibilidade "
+                "na tela do Grupo.",
+                "p3",
+                _keyboard(
+                    [_button("Abrir Grupo", "group:root")],
+                    [_button("Atualizar", "p3:resume")],
+                ),
+            )
+        rows = []
+        if view.group_size > 1:
+            rows.append([_button("Propor combate em Grupo", f"p3:{version}:group")])
+        rows.append([_button("Enfrentar Solo", f"p3:{version}:solo")])
+        rows.append([_button("← Missões", "world:missions")])
         return Screen(
             "🌿 Sob Galhos Calcinados · Em Andamento\n"
-            "O combate está sendo reconstruído a partir do estado registrado.",
+            "O caminho está livre para iniciar o encontro com o Cervo Escoriado.",
             "p3",
-            _keyboard([_button("Atualizar", "p3:resume")]),
+            InlineKeyboardMarkup(inline_keyboard=rows),
         )
     if view.kind == "carved":
         return Screen(

@@ -3,6 +3,7 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
+from asterion.application.groups import GroupError
 from asterion.application.p3 import P3_FRAGMENTS, P3Service
 from asterion.application.road import CHARNECA, REFUGE
 from asterion.application.s3 import S3Service
@@ -76,6 +77,14 @@ def p3_router(
                         )
                 elif operation == "retry" and len(parts) == 3:
                     view = await service.retry(actor, version)
+                elif operation == "solo" and len(parts) == 3:
+                    view = await service.start_solo_combat(actor, version)
+                elif operation == "group" and len(parts) == 3:
+                    try:
+                        view = await service.propose_group_combat(actor, version)
+                    except GroupError as exc:
+                        await query.answer(str(exc), show_alert=True)
+                        return
                 elif operation == "carved" and len(parts) == 3:
                     view = await service.examine_carved_fragment(actor, version)
                 elif operation == "oren" and len(parts) == 3:

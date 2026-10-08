@@ -1,11 +1,13 @@
+from dataclasses import replace
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from aiogram import Bot, Dispatcher
 from sqlalchemy import select
 
 from asterion.application.creation import CreationService
-from asterion.application.p3 import P3_ID
+from asterion.application.p3 import P3_ID, P3View
 from asterion.application.prologue import PrologueService
 from asterion.application.road import BOSQUE, CHARNECA, RoadService
 from asterion.application.s2 import S2Service
@@ -45,6 +47,39 @@ def _command_update(text: str, update_id: int, actor: int):
         {"type": "bot_command", "offset": 0, "length": len(text)}
     ]
     return update
+
+
+def test_p3_group_combat_prompt_is_explicit_and_callbacks_are_compact():
+    view = P3View(
+        character_id=uuid4(),
+        kind="combat_pending",
+        status="active",
+        step=3,
+        state_version=17,
+        progress={"fragments": ["p3.fragment.1", "p3.fragment.2", "p3.fragment.3"]},
+        location=BOSQUE,
+        level=9,
+        group_size=2,
+    )
+    screen = render_p3(view)
+    buttons = {
+        button.text: button.callback_data
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+    }
+    assert "Propor combate em Grupo" in buttons
+    assert buttons["Propor combate em Grupo"] == "p3:17:group"
+    assert "Enfrentar Solo" in buttons
+    assert all(len(callback.encode("utf-8")) <= 64 for callback in buttons.values())
+
+    pending = render_p3(replace(view, proposal_id=uuid4(), proposal_status="pending"))
+    pending_buttons = {
+        button.text
+        for row in pending.keyboard.inline_keyboard
+        for button in row
+    }
+    assert "Abrir Grupo" in pending_buttons
+    assert "Enfrentar Solo" not in pending_buttons
 
 
 @pytest.mark.asyncio

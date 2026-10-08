@@ -6,8 +6,10 @@ import pytest
 from sqlalchemy import func, select
 
 from asterion.application.active_arts import ActiveArtService
+from asterion.application.groups import GroupService
 from asterion.application.p3 import (
     P3_COMBAT_CONTENT_ID,
+    P3_FRAGMENTS,
     P3_ID,
     P3_REWARD_SOURCE,
     P3Service,
@@ -18,6 +20,7 @@ from asterion.domain.combat_math import resolve_combat_stats
 from asterion.infrastructure.db.models import (
     Account,
     Brazier,
+    CampaignObjectiveCredit,
     Character,
     CodexEntry,
     CodexFragment,
@@ -115,6 +118,147 @@ async def test_p3_scripted_combat_freezes_equipped_class_art(database):
     assert combat.combat.configuration_snapshot["active_arts"] == [
         {"slot": 1, "art_id": art_id}
     ]
+
+
+@pytest.mark.asyncio
+async def test_p3_group_shares_present_evidence_and_cervo_but_keeps_rewards_personal(
+    database, monkeypatch
+):
+    import asterion.application.campaign_coop as campaign_coop
+    from asterion.domain.combat import active_player_key
+
+    actors = (998411, 998412)
+    seeded = [await _seed_p3(database, actor) for actor in actors]
+    character_ids = [row[0] for row in seeded]
+    sessions = database[1]
+    groups = GroupService(sessions, "ocaso")
+    service = P3Service(sessions, "ocaso", groups=groups)
+    for actor in actors:
+        offer = await service.offer(actor)
+        assert offer is not None and offer.available
+        accepted = await service.accept(actor, offer.state_version)
+        assert accepted is not None and accepted.status == "active"
+
+    async with sessions() as session:
+        invitee = await session.scalar(select(Character).where(Character.id == character_ids[1]))
+        assert invitee is not None
+        invitee_name = invitee.name
+    group = await groups.create_group(actors[0])
+    invitation = await groups.invite(
+        actors[0], invitee_name, expected_group_revision=group.revision
+    )
+    await groups.respond_invite(
+        actors[1],
+        invitation.invite_id,
+        expected_revision=invitation.revision,
+        accept=True,
+    )
+
+    view = await service.resume(actors[0])
+    assert view is not None
+    view = await service.mission_route(actors[0], view.state_version, CHARNECA)
+    assert view is not None and view.location == CHARNECA
+    view = await service.enter_bosque(actors[0], view.state_version)
+    assert view is not None and view.step == 2 and view.location == BOSQUE
+    for fragment in P3_FRAGMENTS:
+        view = await service.examine_fragment(actors[0], fragment, view.state_version)
+    assert view is not None and view.kind == "combat_pending" and view.group_size == 2
+
+    proposed = await service.propose_group_combat(actors[0], view.state_version)
+    assert proposed is not None and proposed.proposal_id is not None
+    incoming = await groups.activity_proposals(actors[1])
+    proposal = next(row for row in incoming if row.proposal_id == proposed.proposal_id)
+    ready = await groups.respond_activity(
+        actors[1], proposal.proposal_id, expected_revision=proposal.revision, accept=True
+    )
+    started = await service.start_group_combat(
+        actors[0], ready.proposal_id, expected_revision=ready.revision
+    )
+    resumed = await service.resume(actors[1])
+    assert started is not None and resumed is not None
+    assert started.kind == resumed.kind == "combat"
+    assert started.encounter_id == resumed.encounter_id
+    assert {started.combat_actor_key, resumed.combat_actor_key} == {"p1", "p2"}
+
+    def resolve_victory(combat, action, *, target_id=None, actor_key=None):
+        updated = deepcopy(combat)
+        updated.version += 1
+        updated.result = "victory"
+        return updated
+
+    monkeypatch.setattr(campaign_coop, "act", resolve_victory)
+    active_key = active_player_key(started.combat)
+    actor_view, actor = next(
+        (view, actor)
+        for view, actor in ((started, actors[0]), (resumed, actors[1]))
+        if view.combat_actor_key == active_key
+    )
+    victory = await service.action(
+        actor,
+        actor_view.activity_id,
+        actor_view.activity_state_version,
+        "attack",
+    )
+    assert victory is not None and victory.step == 4
+    await service.action(
+        actor,
+        actor_view.activity_id,
+        actor_view.activity_state_version,
+        "attack",
+    )
+    async with sessions() as session:
+        quests = list(
+            (
+                await session.scalars(
+                    select(Quest).where(
+                        Quest.character_id.in_(character_ids), Quest.quest_id == P3_ID
+                    )
+                )
+            ).all()
+        )
+        assert len(quests) == 2 and all(row.step == 4 for row in quests)
+        assert await session.scalar(
+            select(func.count()).where(
+                CampaignObjectiveCredit.objective_id == "p3.cervo_escoriado"
+            )
+        ) == 2
+
+    view = await service.resume(actors[0])
+    view = await service.examine_carved_fragment(actors[0], view.state_version)
+    view = await service.mission_route(actors[0], view.state_version, CHARNECA)
+    view = await service.mission_route(actors[0], view.state_version, REFUGE)
+    view = await service.talk_to_oren(actors[0], view.state_version)
+    assert view is not None and view.step == 6
+    chosen = await service.choose_reward(actors[0], view.state_version, "veil")
+    assert chosen is not None and chosen.status == "completed"
+    second = await service.resume(actors[1])
+    assert second is not None and second.status == "active" and second.step == 6
+    completed = await service.choose_reward(actors[1], second.state_version, "seal")
+    assert completed is not None and completed.status == "completed"
+
+    async with sessions() as session:
+        reward_events = list(
+            (
+                await session.scalars(
+                    select(RewardEvent).where(
+                        RewardEvent.character_id.in_(character_ids),
+                        RewardEvent.source_id == P3_REWARD_SOURCE,
+                    )
+                )
+            ).all()
+        )
+        assert len(reward_events) == 2
+        equipment = list(
+            (
+                await session.scalars(
+                    select(EquipmentItem).where(EquipmentItem.character_id.in_(character_ids))
+                )
+            ).all()
+        )
+        assert {item.item_name for item in equipment} >= {
+            "Véu do Bosque",
+            "Selo do Galho Morto",
+        }
 
 
 def _terminal(result: str):
