@@ -617,6 +617,23 @@ def world_router(
             await present(query.message, render_road(view), images, edit=True)
 
     @router.callback_query(
+        F.data.regexp(r"^road:pvpve:continue:q:[0-9a-fA-F]{32}$")
+    )
+    async def continue_pvpve_queue(query: CallbackQuery):
+        if road is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        try:
+            queue_id = UUID(hex=(query.data or "").rsplit(":", 1)[1])
+        except (IndexError, TypeError, ValueError):
+            await query.answer()
+            return
+        view = await road.pvpve.continue_queue(query.from_user.id, queue_id)
+        await query.answer()
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(
         F.data.regexp(r"^road:pvpve:cancel:(?:q:)?[0-9a-fA-F]{32}$")
     )
     async def cancel_pvpve_queue(query: CallbackQuery):

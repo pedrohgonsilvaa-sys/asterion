@@ -1,6 +1,4 @@
-"""Test helpers for advancing PvPvE queues without waiting on wall-clock time."""
-
-from datetime import timedelta
+"""Test helpers for exercising PvPvE queues without artificial wait periods."""
 
 
 def disable_round_pvpve_for_test(service):
@@ -14,7 +12,7 @@ def disable_round_pvpve_for_test(service):
 
 
 async def start_manual_hunt_after_no_match(service, actor: int, monkeypatch):
-    """Resolve an unmatched manual queue at its real expiry and return its PvE combat."""
+    """Continue an unmatched manual queue immediately as its PvE combat."""
     queued = await service.start_hunt(actor)
     if queued is None or queued.kind != "hunt_queue":
         return queued
@@ -23,7 +21,6 @@ async def start_manual_hunt_after_no_match(service, actor: int, monkeypatch):
 
     from sqlalchemy import select
 
-    from asterion.application import pvpve as pvpve_module
     from asterion.infrastructure.db.models import PvpveQueue, PvpveQueueMember
 
     async with service.sessions() as session:
@@ -34,17 +31,9 @@ async def start_manual_hunt_after_no_match(service, actor: int, monkeypatch):
         )
         if queue is None:
             raise AssertionError("waiting Hunt activity has no PvPvE queue")
-        expires_at = queue.expires_at
+        queue_id = queue.id
 
-    with monkeypatch.context() as clock:
-        clock.setattr(
-            pvpve_module,
-            "_utcnow",
-            lambda: expires_at + timedelta(seconds=1),
-        )
-        if not await service.pvpve.refresh_queue(actor, queued.activity_id):
-            raise AssertionError("unmatched Hunt queue did not resolve at expiry")
-        resolved = await service.resume(actor)
+    resolved = await service.pvpve.continue_queue(actor, queue_id)
 
     if resolved is None or resolved.kind != "combat":
         raise AssertionError("an unmatched Hunt did not continue as ordinary PvE")

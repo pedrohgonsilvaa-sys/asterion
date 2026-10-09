@@ -60,8 +60,9 @@ from asterion.infrastructure.db.models import (
 PVP_COOLDOWN = timedelta(minutes=3)
 REMATCH_COOLDOWN = timedelta(minutes=10)
 DOMAIN_COOLDOWN = timedelta(minutes=30)
-MANUAL_QUEUE_TTL = timedelta(minutes=20)
-ROUND_QUEUE_TTL = timedelta(minutes=75)
+# Backend-only lifetime for an optional Manual/Group rival exposure. The player
+# can continue to PvE immediately; this value never gates that action.
+MANUAL_MATCH_WINDOW = timedelta(minutes=20)
 PVPVE_CONTENT_ID = PVPVE_CONTENT
 PVPVE_QUEUE_CONTENT_ID = PVPVE_QUEUE_CONTENT
 
@@ -87,9 +88,18 @@ class PvpveService:
         self.road = road
 
     async def queue_round_hunt(
-        self, session, character, world, profile, round_state, activity, *, now
+        self,
+        session,
+        character,
+        world,
+        profile,
+        round_state,
+        activity,
+        *,
+        now,
+        frontier_at,
     ) -> bool:
-        """Offer one safe Ronda frontier to the approved solo PvPvE queue."""
+        """Expose a Ronda hunt until its existing three-minute frontier."""
         await self._match_lock(session, profile.local_id, 1)
         existing = await session.scalar(
             select(PvpveQueueMember)
@@ -113,7 +123,7 @@ class PvpveService:
             source_type="round",
             roster_snapshot=[character.id.hex],
             created_at=now,
-            expires_at=now + ROUND_QUEUE_TTL,
+            expires_at=frontier_at,
         )
         session.add(queue)
         await session.flush()
@@ -131,7 +141,7 @@ class PvpveService:
             **(round_state.config_snapshot or {}),
             "pvpve_checked_for": round_state.completed_encounters + 1,
         }
-        round_state.next_resolution_at = queue.expires_at
+        round_state.next_resolution_at = frontier_at
         round_state.state_version += 1
         activity.content_id = PVPVE_QUEUE_CONTENT_ID
         activity.state_version = round_state.state_version
@@ -139,6 +149,67 @@ class PvpveService:
         await session.flush()
         await self._try_match(session, queue, now=now)
         return True
+
+    async def continue_queue(self, actor: int, queue_id: UUID) -> RoadView | None:
+        """Continue to PvE immediately when no compatible PvP rival is queued."""
+        async with self.sessions.begin() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                return None
+            member = await session.scalar(
+                select(PvpveQueueMember).where(
+                    PvpveQueueMember.queue_id == queue_id,
+                    PvpveQueueMember.character_id == character.id,
+                )
+            )
+            if member is None:
+                return None
+            queue = await session.scalar(
+                select(PvpveQueue)
+                .where(PvpveQueue.id == queue_id)
+                .with_for_update()
+            )
+            if queue is None:
+                return None
+            activity = await session.get(GameActivity, member.game_activity_id)
+            if activity is None:
+                return None
+            if queue.status == "waiting":
+                await self._match_lock(session, queue.local_id, queue.roster_size)
+                members, characters, activities = await self._lock_queue_roster(
+                    session, queue.id
+                )
+                if not members or len(members) != queue.roster_size:
+                    await self._cancel_queue(
+                        session, queue, members, activities, _utcnow()
+                    )
+                else:
+                    now = _utcnow()
+                    matched = await self._try_match(session, queue, now=now)
+                    if not matched:
+                        if queue.source_type == "round":
+                            queue.status = "expired"
+                            queue.resolved_at = now
+                            await self.road.continue_round_after_queue(
+                                session,
+                                queue,
+                                character,
+                                activity,
+                                anchor=queue.expires_at,
+                                now=now,
+                            )
+                        else:
+                            await self._materialize_queue_pve(
+                                session,
+                                queue,
+                                members,
+                                characters,
+                                activities,
+                                now=now,
+                            )
+            return await self._view_after_queue_resolution(
+                session, character, activity
+            )
 
     async def queue_manual_hunt(self, session, character, world, profile) -> RoadView:
         now = _utcnow()
@@ -151,7 +222,7 @@ class PvpveService:
             source_type="manual",
             roster_snapshot=[character.id.hex],
             created_at=now,
-            expires_at=now + MANUAL_QUEUE_TTL,
+            expires_at=now + MANUAL_MATCH_WINDOW,
         )
         session.add(queue)
         await session.flush()
@@ -206,7 +277,7 @@ class PvpveService:
             proposal_id=proposal.id,
             roster_snapshot=[item.id.hex for item in characters],
             created_at=now,
-            expires_at=now + MANUAL_QUEUE_TTL,
+            expires_at=now + MANUAL_MATCH_WINDOW,
         )
         session.add(queue)
         await session.flush()
@@ -391,7 +462,8 @@ class PvpveService:
                             queue,
                             character,
                             round_activity,
-                            anchor=now,
+                            anchor=queue.expires_at,
+                            now=now,
                         )
                 else:
                     await self._cancel_queue(session, queue, members, activities, now)
@@ -1735,6 +1807,7 @@ class PvpveService:
                 character,
                 activity_by_character[character.id],
                 anchor=queue.expires_at,
+                now=now,
             )
         else:
             character = roster[0]
@@ -1936,8 +2009,6 @@ class PvpveService:
         )
 
     def _queue_view(self, character, location, activity, queue, now) -> RoadView:
-        remaining = max(0, int((queue.expires_at - now).total_seconds() + 0.999999))
-        minutes, seconds = divmod(remaining, 60)
         return RoadView(
             "hunt_queue",
             character.id,
@@ -1949,7 +2020,10 @@ class PvpveService:
             name=character.name,
             hp=character.hp,
             max_hp=character.max_hp,
-            result_text=f"Busca por grupo rival · até {minutes:02d}:{seconds:02d}",
+            result_text=(
+                "A busca por rival é opcional. Continue para a presa PvE agora "
+                "ou mantenha a trilha aberta para um encontro compatível."
+            ),
             pvpve_round_queue=queue.source_type == "round",
             pvpve_queue_id=queue.id,
         )

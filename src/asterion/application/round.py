@@ -683,7 +683,14 @@ class RoundService(RoadService):
                 await self._preflight_or_materialize(s, c, state, due_at)
 
     async def _preflight_or_materialize(
-        self, s, c, state, anchor: datetime, *, wall_now: datetime | None = None
+        self,
+        s,
+        c,
+        state,
+        anchor: datetime,
+        *,
+        wall_now: datetime | None = None,
+        vigor_anchor: datetime | None = None,
     ) -> None:
         if state.status != "active":
             return
@@ -706,7 +713,7 @@ class RoundService(RoadService):
             )
             await self._finish_round(s, state, "ended", reason)
             return
-        await reconcile_character_vigor(s, c, now=anchor)
+        await reconcile_character_vigor(s, c, now=vigor_anchor or anchor)
         if c.vigor < 2:
             await self._finish_round(s, state, "ended", "vigor")
             return
@@ -738,7 +745,14 @@ class RoundService(RoadService):
                 profile = hunt_profile_for_local_id(snapshot.get("local_id"))
                 if activity is not None and world is not None and profile is not None:
                     if await self.pvpve.queue_round_hunt(
-                        s, c, world, profile, state, activity, now=now
+                        s,
+                        c,
+                        world,
+                        profile,
+                        state,
+                        activity,
+                        now=now,
+                        frontier_at=anchor + ROUND_CADENCE,
                     ):
                         return
             snapshot["pvpve_checked_for"] = ordinal
@@ -746,7 +760,14 @@ class RoundService(RoadService):
         await self._materialize_next(s, c, state, anchor)
 
     async def continue_round_after_queue(
-        self, session, queue, character, activity, *, anchor: datetime
+        self,
+        session,
+        queue,
+        character,
+        activity,
+        *,
+        anchor: datetime,
+        now: datetime | None = None,
     ) -> bool:
         state = await session.scalar(
             select(HuntRound)
@@ -759,11 +780,27 @@ class RoundService(RoadService):
         activity.status = "active"
         state.next_resolution_at = None
         state.state_version += 1
+        actual_now = now or datetime.now(UTC)
+        # The queue expires at the next official Ronda frontier. Materialize the
+        # queued prey from the beginning of this interval so it resolves at that
+        # same boundary, preserving exactly three minutes per encounter.
+        interval_start = anchor - ROUND_CADENCE
         activity.state_version = state.state_version
-        activity.last_valid_action_at = anchor
+        activity.last_valid_action_at = actual_now
         await self._preflight_or_materialize(
-            session, character, state, anchor, wall_now=anchor
+            session,
+            character,
+            state,
+            interval_start,
+            wall_now=actual_now,
+            vigor_anchor=min(actual_now, anchor),
         )
+        if (
+            state.status == "active"
+            and state.next_resolution_at is not None
+            and state.next_resolution_at <= actual_now
+        ):
+            await self._advance_round_locked(session, character, state, actual_now)
         return activity.content_id == ROUND_CONTENT and (
             state.status == "active"
             or (state.status == "interrupted" and state.end_reason == "elite")

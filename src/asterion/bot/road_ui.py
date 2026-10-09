@@ -390,34 +390,41 @@ def render_road(view: RoadView) -> Screen:
         return round_screen
     if view.kind == "hunt_queue":
         heading = (
-            "🛡️ Ronda · Busca por Rival"
+            "🛡️ Ronda · Exposta ao PvPvE"
             if view.pvpve_round_queue
-            else "🦌 Caçada · Busca por Rival"
+            else "🦌 Caçada · Exposta ao PvPvE"
         )
         text = (
             f"{heading}\n\n"
             f"{_location_copy(view.location)[0]} · Terras do Ocaso\n\n"
             f"{escape(view.result_text or 'Procurando um grupo compatível…')}\n\n"
+            "Sem rival compatível, a jornada segue para a presa PvE.\n"
             "⚡ Vigor · Será verificado ao formar o encontro"
         )
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="Atualizar Busca",
+                        text="Buscar Rival",
                         callback_data=f"road:pvpve:refresh:q:{view.pvpve_queue_id.hex}",
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        text=(
-                            "Continuar sem Rival"
-                            if view.pvpve_round_queue
-                            else "Cancelar Busca"
-                        ),
-                        callback_data=f"road:pvpve:cancel:q:{view.pvpve_queue_id.hex}",
+                        text="Continuar sem Rival",
+                        callback_data=f"road:pvpve:continue:q:{view.pvpve_queue_id.hex}",
                     )
                 ],
+                *(
+                    []
+                    if view.pvpve_round_queue
+                    else [[
+                        InlineKeyboardButton(
+                            text="Cancelar Caçada",
+                            callback_data=f"road:pvpve:cancel:q:{view.pvpve_queue_id.hex}",
+                        )
+                    ]]
+                ),
             ]
         )
         return Screen(text, "hunt_queue", keyboard, parse_mode="HTML")
