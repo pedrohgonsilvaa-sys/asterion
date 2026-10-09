@@ -59,6 +59,14 @@ from asterion.infrastructure.db.models import (
 )
 
 
+async def refresh_pvpve_queue_for_view(pvpve, actor: int, view) -> bool:
+    """Refresh the exact queue represented by a persisted playthrough view."""
+    queue_id = getattr(view, "pvpve_queue_id", None)
+    if queue_id is not None:
+        return await pvpve.refresh_queue(actor, queue_id=queue_id)
+    return await pvpve.refresh_queue(actor, view.activity_id)
+
+
 @dataclass
 class SimulatedJourneyClock:
     """One deterministic clock shared by Vigor, Road cooldowns and Ronda."""
@@ -129,7 +137,9 @@ class SimulatedJourneyClock:
                     ROUND_QUEUE_TTL.total_seconds(),
                     f"Ronda PvPvE queue · sem rival · TTL de {ROUND_QUEUE_TTL}",
                 )
-                refreshed = await service.pvpve.refresh_queue(actor, result.activity_id)
+                refreshed = await refresh_pvpve_queue_for_view(
+                    service.pvpve, actor, result
+                )
                 if not refreshed:
                     raise AssertionError("Ronda PvPvE queue could not be refreshed")
                 await service.advance_due_rounds()

@@ -73,6 +73,7 @@ from tests.helpers.tdo_playthrough import (
     TDOPlaythrough,
     best_p6_diagnostic_configuration,
     choose_p6_policy_action,
+    refresh_pvpve_queue_for_view,
     sample_p6_policies,
 )
 
@@ -323,7 +324,9 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
                 MANUAL_QUEUE_TTL.total_seconds(),
                 f"PvPvE manual queue · fallback PvE · {label}",
             )
-            refreshed = await service.pvpve.refresh_queue(actor, view.activity_id)
+            refreshed = await refresh_pvpve_queue_for_view(
+                service.pvpve, actor, view
+            )
             assert refreshed, f"fila manual não pôde ser atualizada · {label}"
             view = await service.resume(actor)
         return view
