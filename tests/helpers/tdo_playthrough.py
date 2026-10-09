@@ -19,7 +19,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from asterion.application.progression import level_xp
-from asterion.application.pvpve import ROUND_QUEUE_TTL
 from asterion.domain.arts import SENTINEL_ART_IDS
 from asterion.domain.class_trials import sentinel_player_actions
 from asterion.domain.combat import (
@@ -49,6 +48,7 @@ from asterion.infrastructure.db.models import (
     HuntRound,
     MaterialStack,
     PendingItem,
+    PvpveQueue,
     Quest,
     RewardComponent,
     RewardEvent,
@@ -124,7 +124,7 @@ class SimulatedJourneyClock:
         return seconds
 
     async def process_round_cadence(self, service, actor: int, *, max_boundaries: int = 5):
-        """Advance official 3-minute Ronda frontiers and PvPvE queue TTLs."""
+        """Advance Ronda only to its official encounter frontiers."""
         result = await service.resume(actor)
         boundary = 0
         steps = 0
@@ -133,15 +133,23 @@ class SimulatedJourneyClock:
             if result is None:
                 return None
             if result.kind == "hunt_queue" and result.pvpve_round_queue:
-                self.advance(
-                    ROUND_QUEUE_TTL.total_seconds(),
-                    f"Ronda PvPvE queue · sem rival · TTL de {ROUND_QUEUE_TTL}",
+                queue_id = result.pvpve_queue_id
+                if queue_id is None:
+                    raise AssertionError("Ronda PvPvE view has no queue identity")
+                async with service.sessions() as session:
+                    queue = await session.get(PvpveQueue, queue_id)
+                    if queue is None:
+                        raise AssertionError("Ronda PvPvE queue disappeared")
+                    frontier = queue.expires_at
+                frontier = (
+                    frontier.replace(tzinfo=UTC)
+                    if frontier.tzinfo is None
+                    else frontier.astimezone(UTC)
                 )
-                refreshed = await refresh_pvpve_queue_for_view(
-                    service.pvpve, actor, result
-                )
-                if not refreshed:
-                    raise AssertionError("Ronda PvPvE queue could not be refreshed")
+                seconds = max(0.0, (frontier - self.instant).total_seconds())
+                if seconds > 0:
+                    boundary += 1
+                    self.advance(seconds, f"Ronda cadence · fronteira {boundary}/5 · +3m")
                 await service.advance_due_rounds()
                 result = await service.resume(actor)
                 continue

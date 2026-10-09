@@ -28,7 +28,6 @@ from asterion.application.p6 import P6Service
 from asterion.application.path_selection import PathSelectionService
 from asterion.application.professions import ProfessionService
 from asterion.application.prologue import PrologueService
-from asterion.application.pvpve import MANUAL_QUEUE_TTL
 from asterion.application.road import BOSQUE, CHARNECA, REFUGE, ROAD, RUINS, RoadService
 from asterion.application.round import RoundService
 from asterion.application.s1 import S1Service
@@ -73,7 +72,6 @@ from tests.helpers.tdo_playthrough import (
     TDOPlaythrough,
     best_p6_diagnostic_configuration,
     choose_p6_policy_action,
-    refresh_pvpve_queue_for_view,
     sample_p6_policies,
 )
 
@@ -317,18 +315,9 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     async def start_manual_hunt(service, label):
         view = await service.start_hunt(actor)
         if view is not None and view.kind == "hunt_queue":
-            # The PvPvE matching window is real game time. With no opposing
-            # account in this isolated playthrough, expire it through the public
-            # queue refresh service before continuing as ordinary PvE.
-            driver.clock.advance(
-                MANUAL_QUEUE_TTL.total_seconds(),
-                f"PvPvE manual queue · fallback PvE · {label}",
-            )
-            refreshed = await refresh_pvpve_queue_for_view(
-                service.pvpve, actor, view
-            )
-            assert refreshed, f"fila manual não pôde ser atualizada · {label}"
-            view = await service.resume(actor)
+            assert view.pvpve_queue_id is not None
+            view = await service.pvpve.continue_queue(actor, view.pvpve_queue_id)
+            assert view is not None, f"fila manual não pôde seguir para PvE · {label}"
         return view
 
     hunt = None
