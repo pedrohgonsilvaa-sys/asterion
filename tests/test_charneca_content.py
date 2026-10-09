@@ -60,7 +60,10 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
-from tests.helpers.pvpve import start_manual_hunt_after_no_match
+from tests.helpers.pvpve import (
+    disable_round_pvpve_for_test,
+    start_manual_hunt_after_no_match,
+)
 
 
 async def _seed_charneca(
@@ -600,7 +603,7 @@ async def test_charneca_round_defeat_recovers_without_restarting_and_preparing_r
         location=CHARNECA,
         round_familiarity=True,
     )
-    rounds = RoundService(database[1], "ocaso")
+    rounds = disable_round_pvpve_for_test(RoundService(database[1], "ocaso"))
     monkeypatch.setattr(
         round_application,
         "select_creature",
@@ -673,7 +676,7 @@ async def test_charneca_round_defeat_after_vento_keeps_prior_rewards_and_locatio
         round_familiarity=True,
         permanent_braziers=("tdo.brazier.vento_morto",),
     )
-    rounds = RoundService(database[1], "ocaso")
+    rounds = disable_round_pvpve_for_test(RoundService(database[1], "ocaso"))
     monkeypatch.setattr(
         round_application,
         "select_creature",
@@ -821,7 +824,7 @@ async def test_charneca_round_requires_local_manual_familiarity_and_freezes_loca
         location=CHARNECA,
         road_familiarity=True,
     )
-    rounds = RoundService(database[1], "ocaso")
+    rounds = disable_round_pvpve_for_test(RoundService(database[1], "ocaso"))
     blocked = await rounds.prepare_round(actor, 5)
     assert blocked.kind == "charneca"
     async with database[1]() as session:

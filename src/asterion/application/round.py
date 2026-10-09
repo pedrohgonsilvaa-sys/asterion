@@ -20,6 +20,8 @@ from asterion.application.road import (
     CHARNECA,
     HUNT_CONTENT,
     MATERIAL_LABELS,
+    PVPVE_CONTENT,
+    PVPVE_QUEUE_CONTENT,
     REFUGE,
     ROAD,
     RUINS,
@@ -68,6 +70,7 @@ from asterion.infrastructure.db.models import (
     RewardComponent,
     RewardEvent,
     Unlock,
+    WorldState,
 )
 
 ROUND_CONTENT = "road_hunt_round"
@@ -209,6 +212,12 @@ class RoundService(RoadService):
             if round_state.status == "preparing":
                 return await self._round_view(s, c, round_state)
             if round_state.status == "active":
+                activity = await self._round_activity(s, round_state)
+                if activity is not None and activity.content_id in {
+                    PVPVE_CONTENT,
+                    PVPVE_QUEUE_CONTENT,
+                }:
+                    return await self.pvpve.view_for_activity(s, c, activity)
                 await self._advance_round_locked(s, c, round_state, datetime.now(UTC))
                 if round_state.status != "active":
                     return await self._round_view(s, c, round_state)
@@ -412,7 +421,16 @@ class RoundService(RoadService):
             }
             state.state_version += 1
             activity.state_version = state.state_version
-            await self._preflight_or_materialize(s, c, state, now)
+            await self._preflight_or_materialize(s, c, state, now, wall_now=now)
+            activity = await self._round_activity(s, state)
+            if activity is not None and activity.content_id in {
+                PVPVE_CONTENT,
+                PVPVE_QUEUE_CONTENT,
+            }:
+                pvpve_view = await self.pvpve.view_for_activity(s, c, activity)
+                if pvpve_view is not None:
+                    return pvpve_view
+                return await self._road_blocking_view(s, c)
             return await self._round_view(s, c, state)
 
     async def cancel_round(
@@ -508,6 +526,8 @@ class RoundService(RoadService):
                     snapshot=encounter.combat_snapshot,
                 )
             )
+            context_snapshot = dict(state.config_snapshot or {})
+            pvpve_context = self._pvpve_context(context_snapshot)
             s.add(
                 HuntContext(
                     game_activity_id=activity.id,
@@ -519,8 +539,11 @@ class RoundService(RoadService):
                     variant=encounter.variant,
                     seed=encounter.seed,
                     loot_profile="hunt",
+                    **pvpve_context,
                 )
             )
+            if pvpve_context:
+                state.config_snapshot = self._clear_pvpve_context(context_snapshot)
             encounter.activity_id = activity.id
             encounter.status = "elite_combat"
             state.elite_engaged = True
@@ -597,6 +620,7 @@ class RoundService(RoadService):
         """Advance timed encounters without requiring a Telegram interaction."""
         processed = 0
         while processed < limit:
+            queue_refresh: tuple[int, UUID] | None = None
             async with self.sessions.begin() as s:
                 now = datetime.now(UTC)
                 state = await s.scalar(
@@ -618,8 +642,18 @@ class RoundService(RoadService):
                 if c is None:
                     await self._finish_round(s, state, "ended", "invalid_character")
                 else:
-                    await self._advance_round_locked(s, c, state, now)
+                    activity = await self._round_activity(s, state)
+                    if activity is not None and activity.content_id == PVPVE_QUEUE_CONTENT:
+                        queue_refresh = (c.telegram_id, activity.id)
+                    elif activity is not None and activity.content_id == PVPVE_CONTENT:
+                        state.next_resolution_at = None
+                        state.state_version += 1
+                        activity.state_version = state.state_version
+                    else:
+                        await self._advance_round_locked(s, c, state, now)
                 processed += 1
+            if queue_refresh is not None:
+                await self.pvpve.refresh_queue(*queue_refresh)
         return processed
 
     async def _advance_round_locked(self, s, c, state, now: datetime) -> None:
@@ -648,7 +682,9 @@ class RoundService(RoadService):
             if state.status == "active":
                 await self._preflight_or_materialize(s, c, state, due_at)
 
-    async def _preflight_or_materialize(self, s, c, state, anchor: datetime) -> None:
+    async def _preflight_or_materialize(
+        self, s, c, state, anchor: datetime, *, wall_now: datetime | None = None
+    ) -> None:
         if state.status != "active":
             return
         if state.cancel_requested:
@@ -674,7 +710,15 @@ class RoundService(RoadService):
         if c.vigor < 2:
             await self._finish_round(s, state, "ended", "vigor")
             return
-        if c.max_hp > 0 and c.hp < c.max_hp * SAFETY_THRESHOLD:
+        snapshot = dict(state.config_snapshot or {})
+        continue_after_pvp = bool(snapshot.pop("pvpve_continue_after_win", False))
+        if continue_after_pvp:
+            state.config_snapshot = snapshot
+        if (
+            not continue_after_pvp
+            and c.max_hp > 0
+            and c.hp < c.max_hp * SAFETY_THRESHOLD
+        ):
             await self._finish_round(s, state, "ended", "hp")
             return
         current = await self._current_encounter(
@@ -682,7 +726,163 @@ class RoundService(RoadService):
         )
         if current is not None:
             return
+        ordinal = state.completed_encounters + 1
+        snapshot = dict(state.config_snapshot or {})
+        now = wall_now or datetime.now(UTC)
+        if snapshot.get("pvpve_checked_for") != ordinal:
+            if anchor + ROUND_CADENCE > now:
+                activity = await self._round_activity(s, state)
+                world = await s.scalar(
+                    select(WorldState).where(WorldState.character_id == c.id)
+                )
+                profile = hunt_profile_for_local_id(snapshot.get("local_id"))
+                if activity is not None and world is not None and profile is not None:
+                    if await self.pvpve.queue_round_hunt(
+                        s, c, world, profile, state, activity, now=now
+                    ):
+                        return
+            snapshot["pvpve_checked_for"] = ordinal
+            state.config_snapshot = snapshot
         await self._materialize_next(s, c, state, anchor)
+
+    async def continue_round_after_queue(
+        self, session, queue, character, activity, *, anchor: datetime
+    ) -> bool:
+        state = await session.scalar(
+            select(HuntRound)
+            .where(HuntRound.activity_id == activity.id)
+            .with_for_update()
+        )
+        if state is None or state.status != "active":
+            return False
+        activity.content_id = ROUND_CONTENT
+        activity.status = "active"
+        state.next_resolution_at = None
+        state.state_version += 1
+        activity.state_version = state.state_version
+        activity.last_valid_action_at = anchor
+        await self._preflight_or_materialize(
+            session, character, state, anchor, wall_now=anchor
+        )
+        return activity.content_id == ROUND_CONTENT and (
+            state.status == "active"
+            or (state.status == "interrupted" and state.end_reason == "elite")
+        )
+
+    async def continue_round_after_pvp(
+        self,
+        session,
+        collision,
+        queue,
+        member,
+        character,
+        activity,
+        *,
+        reference_level: int,
+        anchor: datetime,
+    ) -> bool:
+        state = await session.scalar(
+            select(HuntRound)
+            .where(HuntRound.activity_id == activity.id)
+            .with_for_update()
+        )
+        if state is None or state.status != "active":
+            return False
+        state.config_snapshot = {
+            **(state.config_snapshot or {}),
+            "pvpve_checked_for": state.completed_encounters + 1,
+            "pvpve_collision_id": collision.id.hex,
+            "pvpve_reference_level": reference_level,
+            "pvpve_domain_eligible": bool(member.domain_eligible),
+            "pvpve_continue_after_win": True,
+        }
+        activity.content_id = ROUND_CONTENT
+        activity.status = "active"
+        state.next_resolution_at = None
+        state.state_version += 1
+        activity.state_version = state.state_version
+        activity.last_valid_action_at = anchor
+        await self._preflight_or_materialize(
+            session, character, state, anchor, wall_now=anchor
+        )
+        return activity.content_id == ROUND_CONTENT and (
+            state.status == "active"
+            or (state.status == "interrupted" and state.end_reason == "elite")
+        )
+
+    async def finish_round_after_pvp_defeat(
+        self,
+        session,
+        member,
+        character,
+        activity,
+        *,
+        local_id: str,
+        world,
+        now: datetime,
+    ) -> bool:
+        state = await session.scalar(
+            select(HuntRound)
+            .where(HuntRound.activity_id == activity.id)
+            .with_for_update()
+        )
+        if state is None or state.status != "active":
+            return False
+        recovery_brazier, recovery_location = await self._recover_normal_pve_defeat(
+            session, character, local_id, world
+        )
+        if recovery_brazier is not None:
+            state.config_snapshot = {
+                **(state.config_snapshot or {}),
+                "recovery_brazier": recovery_brazier,
+                "recovery_location": recovery_location,
+            }
+        await self._finish_round(session, state, "defeated", "pvpve_defeat")
+        state.completed_at = now
+        state.result_acknowledged = False
+        member.result_acknowledged = True
+        return True
+
+    async def finish_round_after_queue_invalid(
+        self, session, activity, *, now: datetime
+    ) -> bool:
+        state = await session.scalar(
+            select(HuntRound)
+            .where(HuntRound.activity_id == activity.id)
+            .with_for_update()
+        )
+        if state is None or state.status != "active":
+            return False
+        await self._finish_round(session, state, "ended", "pvpve_context_changed")
+        state.completed_at = now
+        return True
+
+    @staticmethod
+    def _pvpve_context(snapshot: dict) -> dict:
+        raw_id = snapshot.get("pvpve_collision_id")
+        if not isinstance(raw_id, str):
+            return {}
+        try:
+            collision_id = UUID(hex=raw_id)
+        except ValueError:
+            return {}
+        return {
+            "pvpve_collision_id": collision_id,
+            "pvpve_reference_level": int(snapshot.get("pvpve_reference_level") or 0) or None,
+            "pvpve_domain_eligible": bool(snapshot.get("pvpve_domain_eligible")),
+        }
+
+    @staticmethod
+    def _clear_pvpve_context(snapshot: dict) -> dict:
+        updated = dict(snapshot)
+        for key in (
+            "pvpve_collision_id",
+            "pvpve_reference_level",
+            "pvpve_domain_eligible",
+            "pvpve_continue_after_win",
+        ):
+            updated.pop(key, None)
+        return updated
 
     async def _materialize_next(self, s, c, state, anchor: datetime) -> None:
         ordinal = state.completed_encounters + 1
@@ -878,6 +1078,8 @@ class RoundService(RoadService):
                 snapshot=encode(combat),
             )
         )
+        context_snapshot = dict(state.config_snapshot or {})
+        pvpve_context = self._pvpve_context(context_snapshot)
         context = HuntContext(
             game_activity_id=child.id,
             character_id=c.id,
@@ -889,8 +1091,11 @@ class RoundService(RoadService):
             seed=encounter.seed,
             loot_profile="round",
             result_acknowledged=True,
+            **pvpve_context,
         )
         s.add(context)
+        if pvpve_context:
+            state.config_snapshot = self._clear_pvpve_context(context_snapshot)
         encounter.activity_id = child.id
         await s.flush()
         evidence = await self._record_bestiary_combat_events(s, c.id, context, combat)
@@ -909,6 +1114,10 @@ class RoundService(RoadService):
                 }
             state.next_resolution_at = None
             await self._finish_round(s, state, "defeated")
+            if context.pvpve_collision_id is not None:
+                await self.pvpve.finish_prey_member(
+                    s, context.pvpve_collision_id, c.id, victory=False
+                )
             return
 
         encounter.status = "completed"

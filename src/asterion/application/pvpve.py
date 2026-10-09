@@ -27,7 +27,13 @@ from asterion.application.road import (
     RoadView,
     _location_label,
 )
-from asterion.domain.combat import act, active_player_key
+from asterion.domain.combat import (
+    act,
+    action_target_ids,
+    active_player_key,
+    allowed_actions,
+    player_actions_for,
+)
 from asterion.domain.economy import crowns_per_level, round_10
 from asterion.domain.road import (
     RULESET,
@@ -55,6 +61,7 @@ PVP_COOLDOWN = timedelta(minutes=3)
 REMATCH_COOLDOWN = timedelta(minutes=10)
 DOMAIN_COOLDOWN = timedelta(minutes=30)
 MANUAL_QUEUE_TTL = timedelta(minutes=20)
+ROUND_QUEUE_TTL = timedelta(minutes=75)
 PVPVE_CONTENT_ID = PVPVE_CONTENT
 PVPVE_QUEUE_CONTENT_ID = PVPVE_QUEUE_CONTENT
 
@@ -78,6 +85,54 @@ class PvpveService:
         self.sessions = sessions
         self.server_id = server_id
         self.road = road
+
+    async def queue_round_hunt(
+        self, session, character, world, profile, round_state, activity, *, now
+    ) -> bool:
+        """Offer one safe Ronda frontier to the approved solo PvPvE queue."""
+        existing = await session.scalar(
+            select(PvpveQueueMember).where(
+                PvpveQueueMember.game_activity_id == activity.id,
+                PvpveQueueMember.character_id == character.id,
+            )
+        )
+        if existing is not None:
+            return True
+        await self._match_lock(session, profile.local_id, 1)
+        queue = PvpveQueue(
+            id=uuid4(),
+            server_id=self.server_id,
+            local_id=profile.local_id,
+            roster_size=1,
+            source_type="round",
+            roster_snapshot=[character.id.hex],
+            created_at=now,
+            expires_at=now + ROUND_QUEUE_TTL,
+        )
+        session.add(queue)
+        await session.flush()
+        session.add(
+            PvpveQueueMember(
+                queue_id=queue.id,
+                character_id=character.id,
+                account_id=character.telegram_id,
+                game_activity_id=activity.id,
+                actor_key="q1",
+                ordinal=1,
+            )
+        )
+        round_state.config_snapshot = {
+            **(round_state.config_snapshot or {}),
+            "pvpve_checked_for": round_state.completed_encounters + 1,
+        }
+        round_state.next_resolution_at = queue.expires_at
+        round_state.state_version += 1
+        activity.content_id = PVPVE_QUEUE_CONTENT_ID
+        activity.state_version = round_state.state_version
+        activity.last_valid_action_at = now
+        await session.flush()
+        await self._try_match(session, queue, now=now)
+        return True
 
     async def queue_manual_hunt(self, session, character, world, profile) -> RoadView:
         now = _utcnow()
@@ -257,15 +312,29 @@ class PvpveService:
             )
             now = _utcnow()
             if queue.status == "waiting":
-                await self._cancel_queue(session, queue, members, activities, now)
+                if queue.source_type == "round":
+                    queue.status = "cancelled"
+                    queue.resolved_at = now
+                    round_activity = next(
+                        (row for row in activities if row.id == activity_id), None
+                    )
+                    if round_activity is not None:
+                        await self.road.continue_round_after_queue(
+                            session,
+                            queue,
+                            character,
+                            round_activity,
+                            anchor=now,
+                        )
+                else:
+                    await self._cancel_queue(session, queue, members, activities, now)
             world = await session.scalar(
                 select(WorldState).where(WorldState.character_id == character.id)
             )
-            return (
-                await self.road._view_for_world(session, character, world)
-                if world is not None
-                else None
-            )
+            blocking = await self.road._road_blocking_view(session, character)
+            if blocking is not None:
+                return blocking
+            return await self.road._view_for_world(session, character, world) if world else None
 
     async def view_for_activity(self, session, character, activity) -> RoadView | None:
         if activity.content_id == PVPVE_QUEUE_CONTENT_ID:
@@ -297,6 +366,7 @@ class PvpveService:
                     hp=character.hp,
                     max_hp=character.max_hp,
                     result_text="Busca expirada · Atualize para continuar como Caçada PvE.",
+                    pvpve_round_queue=queue.source_type == "round",
                 )
             return self._queue_view(
                 character,
@@ -396,6 +466,50 @@ class PvpveService:
                 return True, await self._combat_view(
                     session, character, activity, collision, member, combat
                 )
+            own_queue_id = (
+                collision.queue_a_id if member.side == "a" else collision.queue_b_id
+            )
+            own_queue = await session.get(PvpveQueue, own_queue_id)
+            if (
+                own_queue is not None
+                and own_queue.source_type == "round"
+                and not member.round_takeover
+            ):
+                now = _utcnow()
+                updated = await self._advance_round_ai(
+                    session,
+                    collision,
+                    members,
+                    char_by_id,
+                    activity_by_id,
+                    combat,
+                )
+                if updated.version != combat.version:
+                    collision.combat_snapshot = encode(updated)
+                    collision.state_version = updated.version
+                    for row in members:
+                        fighter = updated.fighters.get(row.actor_key)
+                        if fighter is not None:
+                            char_by_id[row.character_id].hp = fighter.hp
+                        roster_activity = activity_by_id[row.game_activity_id]
+                        roster_activity.state_version = updated.version
+                        roster_activity.last_valid_action_at = now
+                if updated.result:
+                    await self._resolve_collision(
+                        session,
+                        collision,
+                        members,
+                        char_by_id,
+                        activity_by_id,
+                        updated,
+                        now=now,
+                    )
+                await session.flush()
+                return True, await self._view_after_resolution(
+                    session,
+                    char_by_id[seed_character.id],
+                    activity_by_id[activity_id],
+                )
             actor_action = action
             resolved_target = target_id
             if action_index is not None:
@@ -431,6 +545,15 @@ class PvpveService:
             now = _utcnow()
             if actor_action != "hold":
                 member.contributed = True
+            if not updated.result:
+                updated = await self._advance_round_ai(
+                    session,
+                    collision,
+                    members,
+                    char_by_id,
+                    activity_by_id,
+                    updated,
+                )
             collision.combat_snapshot = encode(updated)
             collision.state_version = updated.version
             for row in members:
@@ -740,6 +863,8 @@ class PvpveService:
         )
 
     async def _combat_view(self, session, character, activity, collision, member, combat):
+        queue_id = collision.queue_a_id if member.side == "a" else collision.queue_b_id
+        queue = await session.get(PvpveQueue, queue_id)
         return RoadView(
             "combat",
             character.id,
@@ -759,7 +884,82 @@ class PvpveService:
             consumable_budget_limit=0,
             combat_context="pvpve",
             combat_actor_key=member.actor_key,
+            pvpve_round_ai=bool(
+                queue is not None
+                and queue.source_type == "round"
+                and not member.round_takeover
+            ),
+            pvpve_round_takeover=bool(
+                queue is not None
+                and queue.source_type == "round"
+                and member.round_takeover
+            ),
         )
+
+    async def assume_round_control(self, actor: int, activity_id: UUID) -> RoadView | None:
+        """Persist a Ronda PvPvE takeover for the member's next opportunity."""
+        async with self.sessions.begin() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                return None
+            activity = await session.scalar(
+                select(GameActivity)
+                .where(
+                    GameActivity.id == activity_id,
+                    GameActivity.character_id == character.id,
+                    GameActivity.content_id == PVPVE_CONTENT_ID,
+                )
+            )
+            if activity is None:
+                return None
+            member = await session.scalar(
+                select(PvpveCollisionMember)
+                .where(
+                    PvpveCollisionMember.game_activity_id == activity.id,
+                    PvpveCollisionMember.character_id == character.id,
+                )
+            )
+            if member is None:
+                return None
+            collision = await session.scalar(
+                select(PvpveCollision)
+                .where(PvpveCollision.id == member.collision_id)
+                .with_for_update()
+            )
+            if collision is None or collision.status != "active":
+                activity = await session.scalar(
+                    select(GameActivity).where(GameActivity.id == activity_id)
+                )
+                if activity is None:
+                    return None
+                return await self._collision_view_for_activity(
+                    session, character, activity
+                )
+            member = await session.scalar(
+                select(PvpveCollisionMember)
+                .where(
+                    PvpveCollisionMember.collision_id == collision.id,
+                    PvpveCollisionMember.character_id == character.id,
+                )
+                .with_for_update()
+            )
+            activity = await session.scalar(
+                select(GameActivity)
+                .where(GameActivity.id == activity_id)
+                .with_for_update()
+            )
+            if member is None or activity is None:
+                return None
+            queue_id = collision.queue_a_id if member.side == "a" else collision.queue_b_id
+            queue = await session.get(PvpveQueue, queue_id)
+            if queue is None or queue.source_type != "round":
+                return await self._collision_view_for_activity(
+                    session, character, activity
+                )
+            member.round_takeover = True
+            return await self._collision_view_for_activity(
+                session, character, activity
+            )
 
     async def _defeat_view(self, session, character, activity, member):
         world = await session.scalar(
@@ -1056,6 +1256,7 @@ class PvpveService:
         queue_b.status = "matched"
         queue_a.resolved_at = now
         queue_b.resolved_at = now
+        activity_by_id = {}
         for queued, character, side, spec in member_specs:
             activity = await session.get(GameActivity, queued.game_activity_id)
             if activity is None:
@@ -1064,6 +1265,7 @@ class PvpveService:
             activity.state_version = combat.version
             activity.ruleset_version = RULESET
             activity.last_valid_action_at = now
+            activity_by_id[activity.id] = activity
             session.add(
                 PvpveCollisionMember(
                     collision_id=collision.id,
@@ -1076,6 +1278,105 @@ class PvpveService:
                 )
             )
         await session.flush()
+
+        members = list(
+            (
+                await session.scalars(
+                    select(PvpveCollisionMember)
+                    .where(PvpveCollisionMember.collision_id == collision.id)
+                    .order_by(PvpveCollisionMember.character_id)
+                )
+            ).all()
+        )
+        combat = await self._advance_round_ai(
+            session,
+            collision,
+            members,
+            characters_by_id,
+            activity_by_id,
+            combat,
+        )
+        if combat.version != collision.state_version:
+            collision.combat_snapshot = encode(combat)
+            collision.state_version = combat.version
+            for row in members:
+                fighter = combat.fighters.get(row.actor_key)
+                character = characters_by_id.get(row.character_id)
+                activity = activity_by_id.get(row.game_activity_id)
+                if fighter is not None and character is not None:
+                    character.hp = fighter.hp
+                if activity is not None:
+                    activity.state_version = combat.version
+                    activity.last_valid_action_at = now
+        if combat.result:
+            await self._resolve_collision(
+                session,
+                collision,
+                members,
+                characters_by_id,
+                activity_by_id,
+                combat,
+                now=now,
+            )
+
+    async def _advance_round_ai(
+        self, session, collision, members, characters, activities, combat
+    ):
+        queues = {
+            "a": await session.get(PvpveQueue, collision.queue_a_id),
+            "b": await session.get(PvpveQueue, collision.queue_b_id),
+        }
+        member_by_actor = {row.actor_key: row for row in members}
+        steps = 0
+        while combat.result is None and steps < 64:
+            actor_key = active_player_key(combat)
+            member = member_by_actor.get(actor_key)
+            queue = queues.get(member.side) if member is not None else None
+            if (
+                member is None
+                or queue is None
+                or queue.source_type != "round"
+                or member.round_takeover
+            ):
+                break
+            available = player_actions_for(combat, actor_key)
+            candidates = []
+            fighter = combat.fighters[actor_key]
+            for action_id in allowed_actions(combat, actor_key):
+                if action_id == "defend":
+                    candidates.append((Decimal("-1"), action_id, None))
+                    continue
+                action = available.get(action_id)
+                targets = action_target_ids(combat, action_id, actor_key=actor_key)
+                if action is None or not targets:
+                    continue
+                score = action.coefficient * action.hit_count
+                missing_hp = max(Decimal(0), fighter.stats.hp - fighter.hp)
+                if missing_hp and action.heal_coefficient > 0:
+                    score += action.heal_coefficient * min(
+                        Decimal(1), missing_hp / fighter.stats.hp
+                    )
+                if action.self_barrier_coefficient > 0 and not fighter.barriers:
+                    score += action.self_barrier_coefficient * Decimal("0.5")
+                candidates.append((score, action_id, targets[0]))
+            if not candidates:
+                break
+            _score, action_id, target_id = max(
+                candidates, key=lambda candidate: (candidate[0], candidate[1])
+            )
+            updated = act(
+                combat,
+                action_id,
+                target_id=target_id,
+                actor_key=actor_key,
+            )
+            if updated.version == combat.version:
+                break
+            if action_id != "hold":
+                member.contributed = True
+            combat = updated
+            steps += 1
+        return combat
 
     async def _resolve_collision(
         self, session, collision, members, characters, activities, combat, *, now
@@ -1091,6 +1392,10 @@ class PvpveService:
         collision.resolved_at = now
         collision.status = "prey" if winner is not None else "failed"
         await self._record_match_history(session, members, now)
+        queues = {
+            "a": await session.get(PvpveQueue, collision.queue_a_id),
+            "b": await session.get(PvpveQueue, collision.queue_b_id),
+        }
         sides: dict[str, list[PvpveCollisionMember]] = {"a": [], "b": []}
         for member in members:
             sides[member.side].append(member)
@@ -1104,26 +1409,44 @@ class PvpveService:
             member.status = "defeated"
             member.domain_eligible = False
             member.settled_at = now
-            activity.status = "failed"
+            source_queue = queues.get(member.side)
             world = await session.scalar(
                 select(WorldState)
                 .where(WorldState.character_id == character.id)
                 .with_for_update()
             )
-            await self.road._recover_normal_pve_defeat(
-                session, character, collision.local_id, world
-            )
+            ended_round = False
+            if source_queue is not None and source_queue.source_type == "round":
+                ended_round = await self.road.finish_round_after_pvp_defeat(
+                    session,
+                    member,
+                    character,
+                    activity,
+                    local_id=collision.local_id,
+                    world=world,
+                    now=now,
+                )
+            if not ended_round:
+                activity.status = "failed"
+                await self.road._recover_normal_pve_defeat(
+                    session, character, collision.local_id, world
+                )
         if winner is None:
-            for queue_id in (collision.queue_a_id, collision.queue_b_id):
-                queue = await session.get(PvpveQueue, queue_id)
+            for queue in queues.values():
                 if queue is not None:
                     await self._finish_one_group_proposal(session, queue, now, victory=False)
             return
-        winning_queue_id = collision.queue_a_id if winner == "a" else collision.queue_b_id
-        queue = await session.scalar(
-            select(PvpveQueue).where(PvpveQueue.id == winning_queue_id).with_for_update()
-        )
+        queue = queues[winner]
+        if queue is not None:
+            await session.scalar(
+                select(PvpveQueue)
+                .where(PvpveQueue.id == queue.id)
+                .with_for_update()
+            )
         survivors = sorted(sides[winner], key=lambda row: row.actor_key)
+        if queue is None:
+            collision.status = "failed"
+            return
         await self._materialize_survivor_prey(
             session,
             collision,
@@ -1156,7 +1479,33 @@ class PvpveService:
         reference_level = max(character.level for character in survivor_characters)
         collision.prey_reference_level = reference_level
         prey_seed = sha256(f"pvpve-prey:{collision.id.hex}".encode()).hexdigest()
-        if queue.source_type == "group" and len(survivors) >= 2:
+        if queue.source_type == "round":
+            member = survivors[0]
+            character = characters[member.character_id]
+            activity = activities[member.game_activity_id]
+            continued = await self.road.continue_round_after_pvp(
+                session,
+                collision,
+                queue,
+                member,
+                character,
+                activity,
+                reference_level=reference_level,
+                anchor=now,
+            )
+            if not continued:
+                # PvP is already resolved. If the normal Ronda preflight ends
+                # the batch (for example, insufficient Vigor), close this
+                # collision without leaving an orphaned active prey member.
+                collision.status = "completed"
+                member.status = "settled"
+                member.result_acknowledged = True
+                member.domain_eligible = False
+                member.settled_at = now
+                if activity.status == "active":
+                    activity.status = "failed"
+                return
+        elif queue.source_type == "group" and len(survivors) >= 2:
             proposal = await session.scalar(
                 select(GroupActivityProposal)
                 .where(GroupActivityProposal.id == queue.proposal_id)
@@ -1291,6 +1640,15 @@ class PvpveService:
                 [activity_by_character[item.id] for item in roster],
             )
             proposal.activity_reference = encounter_id
+        elif queue.source_type == "round":
+            character = roster[0]
+            await self.road.continue_round_after_queue(
+                session,
+                queue,
+                character,
+                activity_by_character[character.id],
+                anchor=queue.expires_at,
+            )
         else:
             character = roster[0]
             await self.road._materialize_manual_hunt(
@@ -1304,6 +1662,25 @@ class PvpveService:
     async def _cancel_queue(self, session, queue, members, activities, now) -> None:
         queue.status = "cancelled"
         queue.resolved_at = now
+        if queue.source_type == "round":
+            queue_members = members or list(
+                (
+                    await session.scalars(
+                        select(PvpveQueueMember).where(
+                            PvpveQueueMember.queue_id == queue.id
+                        )
+                    )
+                ).all()
+            )
+            activity_by_id = {row.id: row for row in activities}
+            for member in queue_members:
+                activity = activity_by_id.get(member.game_activity_id)
+                if activity is None:
+                    activity = await session.get(GameActivity, member.game_activity_id)
+                if activity is not None:
+                    await self.road.finish_round_after_queue_invalid(
+                        session, activity, now=now
+                    )
         for activity in activities:
             if activity.status == "active" and activity.content_id == PVPVE_QUEUE_CONTENT_ID:
                 activity.status = "completed"
@@ -1486,4 +1863,5 @@ class PvpveService:
             hp=character.hp,
             max_hp=character.max_hp,
             result_text=f"Busca por grupo rival · até {minutes:02d}:{seconds:02d}",
+            pvpve_round_queue=queue.source_type == "round",
         )

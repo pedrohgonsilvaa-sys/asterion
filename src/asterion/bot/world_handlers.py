@@ -629,6 +629,23 @@ def world_router(
         if view is not None:
             await present(query.message, render_road(view), images, edit=True)
 
+    @router.callback_query(
+        F.data.regexp(r"^road:pvpve:takeover:[0-9a-fA-F]{32}$")
+    )
+    async def takeover_pvpve_round(query: CallbackQuery):
+        if road is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        try:
+            activity_id = UUID(hex=(query.data or "").rsplit(":", 1)[1])
+        except (IndexError, TypeError, ValueError):
+            await query.answer()
+            return
+        view = await road.pvpve.assume_round_control(query.from_user.id, activity_id)
+        await query.answer("Você assumirá o combate na próxima oportunidade.")
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+
     @router.callback_query(F.data == "road:prepare")
     async def hunt_prepare(query: CallbackQuery):
         if await foreground(query):

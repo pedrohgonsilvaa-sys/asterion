@@ -3,6 +3,16 @@
 from datetime import timedelta
 
 
+def disable_round_pvpve_for_test(service):
+    """Keep tests of ordinary Ronda behavior independent from PvPvE matching."""
+
+    async def no_round_match(*_args, **_kwargs):
+        return False
+
+    service.pvpve.queue_round_hunt = no_round_match
+    return service
+
+
 async def start_manual_hunt_after_no_match(service, actor: int, monkeypatch):
     """Resolve an unmatched manual queue at its real expiry and return its PvE combat."""
     queued = await service.start_hunt(actor)
