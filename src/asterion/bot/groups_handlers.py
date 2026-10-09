@@ -14,10 +14,12 @@ from asterion.bot.creation_handlers import present
 from asterion.bot.groups_ui import (
     render_expired_group_action,
     render_group,
+    render_hunt_roster,
     render_invites,
     render_links,
     revision36,
 )
+from asterion.bot.road_ui import render_road
 
 
 def _parse_revision(value: str) -> int:
@@ -40,6 +42,7 @@ def groups_router(
     s4=None,
     s5=None,
     s6=None,
+    road=None,
 ) -> Router:
     router = Router(name="groups")
     router.message.filter(F.chat.type == "private")
@@ -258,6 +261,102 @@ def groups_router(
         if isinstance(query.message, Message):
             await show_group(query)
 
+    @router.callback_query(F.data == "group:hunt:open")
+    async def group_hunt_open(query: CallbackQuery) -> None:
+        group = await service.group(query.from_user.id)
+        await query.answer()
+        if isinstance(query.message, Message):
+            await present(
+                query.message,
+                render_hunt_roster(group),
+                images,
+                edit=True,
+            )
+
+    @router.callback_query(F.data.startswith("group:hunt:t:"))
+    async def group_hunt_toggle(query: CallbackQuery) -> None:
+        try:
+            parts = (query.data or "").split(":")
+            if len(parts) != 6:
+                raise ValueError("invalid roster callback")
+            index = int(parts[3])
+            mask = int(parts[4])
+            revision = _parse_revision(parts[5])
+            group = await service.group(query.from_user.id)
+            if group is None or group.revision != revision or not 0 <= index < len(group.members):
+                await query.answer()
+                if isinstance(query.message, Message):
+                    await present(
+                        query.message,
+                        render_hunt_roster(group, stale=True),
+                        images,
+                        edit=True,
+                    )
+                return
+            mask ^= 1 << index
+        except (ValueError, TypeError):
+            await stale(query)
+            return
+        await query.answer()
+        if isinstance(query.message, Message):
+            await present(
+                query.message,
+                render_hunt_roster(group, mask),
+                images,
+                edit=True,
+            )
+
+    @router.callback_query(F.data.startswith("group:hunt:p:"))
+    async def group_hunt_propose(query: CallbackQuery) -> None:
+        try:
+            parts = (query.data or "").split(":")
+            if len(parts) != 5:
+                raise ValueError("invalid roster proposal")
+            mask = int(parts[3])
+            expected_revision = _parse_revision(parts[4])
+            group = await service.group(query.from_user.id)
+            if group is None or group.revision != expected_revision:
+                await query.answer("O Grupo mudou. Atualize a seleção.", show_alert=True)
+                if isinstance(query.message, Message):
+                    await present(
+                        query.message,
+                        render_hunt_roster(group, stale=True),
+                        images,
+                        edit=True,
+                    )
+                return
+            participant_ids = tuple(
+                member.character_id
+                for index, member in enumerate(group.members)
+                if mask & (1 << index)
+            )
+            if road is None:
+                await query.answer("Caçadas em Grupo indisponíveis.", show_alert=True)
+                return
+            proposer_id = await road.group_hunts.character_id(query.from_user.id)
+            if proposer_id is None or proposer_id not in participant_ids:
+                await query.answer("Inclua seu personagem no roster.", show_alert=True)
+                return
+            if not 2 <= len(participant_ids) <= 4:
+                await query.answer("Selecione de dois a quatro integrantes.", show_alert=True)
+                return
+            context_payload = await road.group_hunts.context_payload(query.from_user.id)
+            await service.propose_activity(
+                query.from_user.id,
+                activity_type="hunt_group",
+                participant_character_ids=participant_ids,
+                eligibility_resolver=road.group_hunts.eligibility,
+                context_payload=context_payload,
+            )
+        except (ValueError, GroupError) as exc:
+            if isinstance(exc, GroupError) and exc.code not in {"stale", "hunt_context_changed"}:
+                await query.answer(_error_text(exc.code), show_alert=True)
+                return
+            await stale(query)
+            return
+        await query.answer("Confirmação de Caçada enviada.")
+        await show_group(query)
+
     @router.callback_query(F.data.startswith("group:proposal:"))
     async def activity_proposal_action(query: CallbackQuery) -> None:
         parts = (query.data or "").split(":")
@@ -279,6 +378,27 @@ def groups_router(
                 await show_group(query)
                 return
             proposal = await service.activity_proposal(query.from_user.id, proposal_id)
+            if proposal.activity_type == "hunt_group":
+                if road is None:
+                    await query.answer("Caçadas em Grupo indisponíveis.", show_alert=True)
+                    return
+                result = await service.start_activity(
+                    query.from_user.id,
+                    proposal_id,
+                    expected_revision=revision,
+                    eligibility_resolver=road.group_hunts.eligibility,
+                    create_activity=road.group_hunts.create_activity,
+                )
+                if not result.started:
+                    await query.answer("A confirmação expirou ou o roster mudou.", show_alert=True)
+                    await show_group(query)
+                    return
+                await query.answer("Caçada em Grupo iniciada.")
+                if isinstance(query.message, Message):
+                    view = await road.resume(query.from_user.id)
+                    if view is not None:
+                        await present(query.message, render_road(view), images, edit=True)
+                return
             service_by_type = {
                 "campaign_p1": p1,
                 "campaign_p2": p2,
@@ -381,5 +501,12 @@ def _error_text(code: str) -> str:
         "roster_size_invalid": "O roster precisa ter de um a quatro personagens.",
         "journey_reference_not_member": "A referência da Jornada precisa pertencer ao Grupo.",
         "participant_ineligible": "Você não está elegível para confirmar essa atividade.",
+        "hunt_unavailable": "Caçada indisponível neste Local ou momento.",
+        "hunt_context_changed": "O Local ou a disponibilidade mudou. Atualize a tela.",
+        "group_roster_size_invalid": "O roster da Caçada precisa ter de dois a quatro personagens.",
+        "empty_eligible_roster": "Nenhum integrante está elegível para esta atividade.",
+        "proposer_not_in_roster": "Seu personagem precisa participar do roster.",
+        "eligibility_changed": "A elegibilidade mudou. Prepare uma nova confirmação.",
+        "confirmation_expired": "A confirmação da atividade expirou.",
     }
     return messages.get(code, "Não foi possível concluir essa ação.")

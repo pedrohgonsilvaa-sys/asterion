@@ -22,6 +22,7 @@ from asterion.application.vigor import reconcile_character_vigor
 from asterion.domain.combat import (
     CombatConsumableOption,
     act,
+    active_player_key,
     combat_consumable_options,
     use_combat_consumable,
 )
@@ -120,6 +121,7 @@ BRAZIER_DETAILS = {
     RUINS_BRAZIER: (RUINS, "Braseiro do Poente"),
 }
 HUNT_CONTENT = "road_manual_hunt"
+GROUP_HUNT_CONTENT = "road_group_hunt"
 EXPLORE_CONTENT = "road_exploration"
 CHARNECA_DUNGEON_UNLOCK = "dungeon.tdo.cripta_ocaso"
 CHARNECA_KNOWN_PATH_UNLOCK = "known_path.tdo.cripta_ocaso"
@@ -186,6 +188,8 @@ class RoadView:
     brazier_destinations: tuple[tuple[str, str, str], ...] = ()
     recovery_brazier: str | None = None
     recovery_location: str | None = None
+    combat_context: str = "road"
+    combat_actor_key: str | None = None
 
 
 def _exploration_local_id(profile) -> str:
@@ -208,6 +212,9 @@ class RoadService:
     def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
         self.sessions, self.server_id = sessions, server_id
         self.bestiary = BestiaryRecorder()
+        from asterion.application.group_hunts import GroupHuntService
+
+        self.group_hunts = GroupHuntService(sessions, server_id, self)
 
     async def resume(self, actor: int) -> RoadView | None:
         async with self.sessions.begin() as s:
@@ -400,8 +407,10 @@ class RoadService:
                 )
             )
             if active is not None:
-                if active.content_id not in {HUNT_CONTENT, EXPLORE_CONTENT}:
+                if active.content_id not in {HUNT_CONTENT, GROUP_HUNT_CONTENT, EXPLORE_CONTENT}:
                     return None
+                if active.content_id == GROUP_HUNT_CONTENT:
+                    return await self._road_blocking_view(s, c)
                 if self._expired(active):
                     return await self._expire_activity(s, c, active)
                 return await self._road_blocking_view(s, c)
@@ -528,6 +537,17 @@ class RoadService:
         target_id: str | None = None,
         effect_id: str | None = None,
     ) -> RoadView | None:
+        handled, group_view = await self.group_hunts.handle_action(
+            actor,
+            activity_id,
+            version,
+            action,
+            consumable_id=consumable_id,
+            target_id=target_id,
+            effect_id=effect_id,
+        )
+        if handled:
+            return group_view
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
             if c is None:
@@ -658,6 +678,17 @@ class RoadService:
         parent: str = "items",
     ) -> RoadView | None:
         """Rebuild a read-only Consumable choice screen from current combat state."""
+        group_view = await self.group_hunts.consumable_selection(
+            actor,
+            activity_id,
+            version,
+            screen=screen,
+            item_id=item_id,
+            target_id=target_id,
+            parent=parent,
+        )
+        if group_view is not None:
+            return group_view
         async with self.sessions.begin() as s:
             c, world = await self._locked_world(s, actor)
             if c is None or not await self._p1_completed(s, c.id):
@@ -809,7 +840,10 @@ class RoadService:
 
     @staticmethod
     def _consumable_rejection_notice(combat, budget_limit):
-        player = combat.fighters["player"]
+        key = active_player_key(combat) or "player"
+        player = combat.fighters.get(key) or combat.fighters.get("player")
+        if player is None:
+            return None
         if player.cooldowns.get("consumable", 0) > player.opportunity:
             return "⏳ Consumíveis · Em Recarga"
         if budget_limit and combat.consumable_uses >= budget_limit:
@@ -842,7 +876,7 @@ class RoadService:
                 .join(GameActivity, HuntContext.game_activity_id == GameActivity.id)
                 .where(
                     HuntContext.character_id == c.id,
-                    GameActivity.content_id == HUNT_CONTENT,
+                    GameActivity.content_id.in_((HUNT_CONTENT, GROUP_HUNT_CONTENT)),
                     GameActivity.status == "failed",
                     HuntContext.result_acknowledged.is_(False),
                 )
@@ -899,7 +933,7 @@ class RoadService:
                 .join(GameActivity, HuntContext.game_activity_id == GameActivity.id)
                 .where(
                     HuntContext.character_id == c.id,
-                    GameActivity.content_id == HUNT_CONTENT,
+                    GameActivity.content_id.in_((HUNT_CONTENT, GROUP_HUNT_CONTENT)),
                     GameActivity.status.in_(("completed", "failed")),
                     HuntContext.result_acknowledged.is_(False),
                 )
@@ -2525,8 +2559,10 @@ class RoadService:
             .with_for_update()
         )
         if active is not None:
-            if active.content_id not in {HUNT_CONTENT, EXPLORE_CONTENT}:
+            if active.content_id not in {HUNT_CONTENT, GROUP_HUNT_CONTENT, EXPLORE_CONTENT}:
                 return None
+            if active.content_id == GROUP_HUNT_CONTENT:
+                return await self.group_hunts.view_for_activity(s, c, active)
             if self._expired(active):
                 return await self._expire_activity(s, c, active)
             if active.content_id == HUNT_CONTENT:
@@ -2557,7 +2593,7 @@ class RoadService:
             .join(GameActivity, HuntContext.game_activity_id == GameActivity.id)
             .where(
                 HuntContext.character_id == c.id,
-                GameActivity.content_id == HUNT_CONTENT,
+                GameActivity.content_id.in_((HUNT_CONTENT, GROUP_HUNT_CONTENT)),
                 GameActivity.status.in_(("completed", "failed")),
                 HuntContext.result_acknowledged.is_(False),
             )
@@ -2572,6 +2608,8 @@ class RoadService:
         )
         if activity is None:
             return None
+        if activity.content_id == GROUP_HUNT_CONTENT:
+            return await self.group_hunts.view_for_activity(s, c, activity)
         if activity.status == "completed":
             return await self._hunt_victory_view(s, c, activity)
         return await self._hunt_defeat_view(s, c, activity, context)
@@ -2623,6 +2661,8 @@ class RoadService:
 
     async def _expire_activity(self, s, c, activity):
         """Resolve an abandoned Road foreground exactly once."""
+        if activity.content_id == GROUP_HUNT_CONTENT:
+            return await self.group_hunts.expire_from_road(s, c, activity)
         if activity.status != "active":
             world = await s.scalar(select(WorldState).where(WorldState.character_id == c.id))
             return await self._result_view_for_activity(s, c, activity, world)
@@ -2664,6 +2704,8 @@ class RoadService:
         return await self._hunt_defeat_view(s, c, activity, context)
 
     async def _result_view_for_activity(self, s, c, activity, world):
+        if activity.content_id == GROUP_HUNT_CONTENT:
+            return await self.group_hunts.view_for_activity(s, c, activity)
         if activity.content_id == HUNT_CONTENT:
             if activity.status == "completed":
                 context = await s.scalar(
@@ -2688,6 +2730,8 @@ class RoadService:
         return await self._view_for_world(s, c, world) if world is not None else None
 
     async def _combat_view(self, s, c, activity):
+        if activity.content_id == GROUP_HUNT_CONTENT:
+            return await self.group_hunts.view_for_activity(s, c, activity)
         encounter, record = await CombatRepository(s).combat(activity)
         combat = decode(
             record.snapshot, record.id, activity.ruleset_version, activity.state_version

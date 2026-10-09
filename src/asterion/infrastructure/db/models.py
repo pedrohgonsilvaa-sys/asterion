@@ -1465,6 +1465,97 @@ class HuntContext(Base):
     )
 
 
+class GroupHuntEncounter(Base):
+    """One frozen PvE encounter shared by an individual activity roster."""
+
+    __tablename__ = "group_hunt_encounters"
+    __table_args__ = (
+        CheckConstraint("roster_size BETWEEN 2 AND 4", name="ck_group_hunt_roster_size"),
+        CheckConstraint("enemy_level >= 1", name="ck_group_hunt_enemy_level"),
+        CheckConstraint("reference_level >= 1", name="ck_group_hunt_reference_level"),
+        CheckConstraint("state_version >= 0", name="ck_group_hunt_version"),
+        CheckConstraint(
+            "status IN ('active','completed','failed')", name="ck_group_hunt_status"
+        ),
+        CheckConstraint(
+            "jsonb_typeof(scaling_snapshot) = 'object'",
+            name="ck_group_hunt_scaling_object",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(combat_snapshot) = 'object'",
+            name="ck_group_hunt_combat_object",
+        ),
+        UniqueConstraint("proposal_id", name="uq_group_hunt_proposal"),
+        Index("ix_group_hunt_group_status", "group_id", "status", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    group_id: Mapped[UUID] = mapped_column(
+        ForeignKey("social_groups.id", ondelete="CASCADE"), nullable=False
+    )
+    proposal_id: Mapped[UUID] = mapped_column(
+        ForeignKey("group_activity_proposals.id", ondelete="RESTRICT"), nullable=False
+    )
+    local_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    creature_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    category: Mapped[str] = mapped_column(String(16), nullable=False)
+    enemy_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    reference_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    variant: Mapped[str | None] = mapped_column(String(24))
+    seed: Mapped[str] = mapped_column(String(128), nullable=False)
+    roster_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    scaling_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    combat_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, unique=True)
+    ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
+    state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    combat_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GroupHuntMember(Base):
+    """Individual activity lease, turn identity and reward seed in a Group Hunt."""
+
+    __tablename__ = "group_hunt_members"
+    __table_args__ = (
+        PrimaryKeyConstraint("group_hunt_encounter_id", "character_id"),
+        UniqueConstraint("game_activity_id", name="uq_group_hunt_member_activity"),
+        UniqueConstraint("group_hunt_encounter_id", "actor_key", name="uq_group_hunt_member_actor"),
+        CheckConstraint("ordinal BETWEEN 1 AND 4", name="ck_group_hunt_member_ordinal"),
+        CheckConstraint("consumable_uses >= 0", name="ck_group_hunt_member_consumables"),
+        CheckConstraint(
+            "settlement_state IN ('pending','settled')",
+            name="ck_group_hunt_member_settlement",
+        ),
+        Index("ix_group_hunt_member_character", "character_id", "group_hunt_encounter_id"),
+    )
+
+    group_hunt_encounter_id: Mapped[UUID] = mapped_column(
+        ForeignKey("group_hunt_encounters.id", ondelete="CASCADE"), nullable=False
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    game_activity_id: Mapped[UUID] = mapped_column(
+        ForeignKey("game_activities.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_key: Mapped[str] = mapped_column(String(16), nullable=False)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    loot_seed: Mapped[str] = mapped_column(String(128), nullable=False)
+    consumable_uses: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    settlement_state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default="pending"
+    )
+    result: Mapped[str | None] = mapped_column(String(16))
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class HuntRound(Base):
     """Authoritative Ronda de Caça batch state."""
 

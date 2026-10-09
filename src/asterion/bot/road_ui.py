@@ -394,7 +394,8 @@ def render_road(view: RoadView) -> Screen:
                 view.combat,
                 "road",
                 0,
-                context="road",
+                context=view.combat_context,
+                combat_actor_key=view.combat_actor_key,
                 consumable_options=view.consumable_options,
                 consumable_screen=view.consumable_screen,
                 selected_consumable_id=view.selected_consumable_id,
@@ -437,6 +438,7 @@ def render_road(view: RoadView) -> Screen:
         )
         keyboard = [
             [InlineKeyboardButton(text="Caçar", callback_data="road:hunt")],
+            [InlineKeyboardButton(text="Grupo", callback_data="group:root")],
             [_local_return(view.location)],
         ]
         return Screen(text, "hunt_prepare", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
@@ -453,7 +455,7 @@ def render_road(view: RoadView) -> Screen:
         keyboard = [
             *(
                 [[InlineKeyboardButton(text="Caçar Novamente", callback_data=f"road:repeat:{view.activity_id.hex}")]]
-                if view.activity_id is not None
+                if view.activity_id is not None and view.combat_context != "group_hunt"
                 else []
             ),
             [_local_return(view.location)],
@@ -574,6 +576,7 @@ def render_current_local(
     if view.location in {ROAD, CHARNECA, BOSQUE, RUINS}:
         lines.extend(["", "🦌 Caçada · Disponível"])
         keyboard.append([InlineKeyboardButton(text="Caçar", callback_data="road:hunt")])
+        keyboard.append([InlineKeyboardButton(text="Grupo", callback_data="group:root")])
         if view.familiar:
             lines.append("🏕️ Ronda de Caça · Disponível")
             keyboard.append([InlineKeyboardButton(text="Ronda", callback_data="world:round")])

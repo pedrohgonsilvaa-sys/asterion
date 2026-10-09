@@ -902,6 +902,7 @@ def render_combat(view: CombatView) -> Screen:
     is_dungeon = view.context == "dungeon"
     is_party_combat = is_trial or is_dungeon or state.party_mode
     is_campaign_party = state.party_mode and not is_trial and not is_dungeon
+    actor_bound_party = is_campaign_party or view.context == "group_hunt"
     if not is_trial and view.consumable_screen is not None:
         return _render_consumable_selection(view)
     active_key = active_player_key(state)
@@ -910,7 +911,7 @@ def render_combat(view: CombatView) -> Screen:
         requested_actor_key
         if requested_actor_key == active_key
         else active_key
-        if not is_dungeon and not is_campaign_party
+        if not is_dungeon and not actor_bound_party
         else None
     )
     player_key = active_key or requested_actor_key or "player"
