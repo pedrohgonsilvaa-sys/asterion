@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from asterion.application.progression import level_xp
+from asterion.application.pvpve import ROUND_QUEUE_TTL
 from asterion.domain.arts import SENTINEL_ART_IDS
 from asterion.domain.class_trials import sentinel_player_actions
 from asterion.domain.combat import (
@@ -28,6 +29,7 @@ from asterion.domain.combat import (
     use_combat_consumable,
 )
 from asterion.infrastructure.db.models import (
+    BlockedDelivery,
     Brazier,
     Character,
     CharacterActiveArtSlot,
@@ -46,10 +48,12 @@ from asterion.infrastructure.db.models import (
     HuntContext,
     HuntRound,
     MaterialStack,
+    PendingItem,
     Quest,
     RewardComponent,
     RewardEvent,
     RewardGrant,
+    RuneStack,
     Unlock,
     WorldState,
 )
@@ -112,15 +116,38 @@ class SimulatedJourneyClock:
         return seconds
 
     async def process_round_cadence(self, service, actor: int, *, max_boundaries: int = 5):
-        """Advance a normal Ronda at its official 180-second boundaries."""
-        result = None
-        for ordinal in range(1, max_boundaries + 1):
-            self.advance(180, f"Ronda cadence · fronteira {ordinal}/5 · +3m")
+        """Advance official 3-minute Ronda frontiers and PvPvE queue TTLs."""
+        result = await service.resume(actor)
+        boundary = 0
+        steps = 0
+        while steps < max_boundaries * 4 + 4:
+            steps += 1
+            if result is None:
+                return None
+            if result.kind == "hunt_queue" and result.pvpve_round_queue:
+                self.advance(
+                    ROUND_QUEUE_TTL.total_seconds(),
+                    f"Ronda PvPvE queue · sem rival · TTL de {ROUND_QUEUE_TTL}",
+                )
+                refreshed = await service.pvpve.refresh_queue(actor, result.activity_id)
+                if not refreshed:
+                    raise AssertionError("Ronda PvPvE queue could not be refreshed")
+                await service.advance_due_rounds()
+                result = await service.resume(actor)
+                continue
+            if result.kind != "round_active":
+                return result
+            due_at = result.next_resolution_at
+            if due_at is None:
+                raise AssertionError("active Ronda has no next temporal frontier")
+            due_at = due_at.replace(tzinfo=UTC) if due_at.tzinfo is None else due_at.astimezone(UTC)
+            seconds = max(0.0, (due_at - self.instant).total_seconds())
+            if seconds > 0:
+                boundary += 1
+                self.advance(seconds, f"Ronda cadence · fronteira {boundary}/5 · +3m")
             await service.advance_due_rounds()
             result = await service.resume(actor)
-            if result is None or result.kind != "round_active":
-                return result
-        return result
+        raise AssertionError(f"Ronda did not reach a terminal/frontier state: {result!r}")
 
 
 @dataclass(frozen=True)
@@ -422,6 +449,30 @@ class TDOPlaythrough:
                         .order_by(CharacterEquipmentSlot.slot)
                     )
                 ).all()
+                pending_items = (
+                    await session.scalars(
+                        select(PendingItem)
+                        .where(PendingItem.character_id == character.id)
+                        .order_by(PendingItem.source_key, PendingItem.id)
+                    )
+                ).all()
+                blocked_deliveries = (
+                    await session.scalars(
+                        select(BlockedDelivery)
+                        .where(
+                            BlockedDelivery.character_id == character.id,
+                            BlockedDelivery.status == "pending",
+                        )
+                        .order_by(BlockedDelivery.created_at, BlockedDelivery.id)
+                    )
+                ).all()
+                runes = (
+                    await session.scalars(
+                        select(RuneStack)
+                        .where(RuneStack.character_id == character.id)
+                        .order_by(RuneStack.family, RuneStack.rarity, RuneStack.grade)
+                    )
+                ).all()
                 equipment_owned = (
                     await session.scalars(
                         select(EquipmentItem)
@@ -679,6 +730,20 @@ class TDOPlaythrough:
                     "simulated_waits": list(self.clock.waits),
                     "hp": str(character.hp),
                     "max_hp": str(character.max_hp),
+                    "delivery_blocked": character.delivery_blocked,
+                    "inventory_slots": (
+                        len(equipment_owned) + len(materials) + len(consumables) + len(runes)
+                    ),
+                    "pending_items": [
+                        (row.source_key, row.kind, row.quantity) for row in pending_items
+                    ],
+                    "blocked_deliveries": [
+                        (row.source_key, row.kind, row.quantity) for row in blocked_deliveries
+                    ],
+                    "runes": [
+                        (row.family, row.rarity, row.grade, row.quantity, row.bound)
+                        for row in runes
+                    ],
                     "location": world.location if world else None,
                     "quests": [
                         {
