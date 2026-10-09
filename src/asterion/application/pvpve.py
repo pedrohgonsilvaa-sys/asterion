@@ -90,15 +90,21 @@ class PvpveService:
         self, session, character, world, profile, round_state, activity, *, now
     ) -> bool:
         """Offer one safe Ronda frontier to the approved solo PvPvE queue."""
+        await self._match_lock(session, profile.local_id, 1)
         existing = await session.scalar(
-            select(PvpveQueueMember).where(
+            select(PvpveQueueMember)
+            .join(PvpveQueue, PvpveQueue.id == PvpveQueueMember.queue_id)
+            .where(
                 PvpveQueueMember.game_activity_id == activity.id,
                 PvpveQueueMember.character_id == character.id,
+                PvpveQueue.status == "waiting",
+                PvpveQueue.source_type == "round",
             )
+            .order_by(PvpveQueue.created_at.desc(), PvpveQueue.id.desc())
+            .limit(1)
         )
         if existing is not None:
             return True
-        await self._match_lock(session, profile.local_id, 1)
         queue = PvpveQueue(
             id=uuid4(),
             server_id=self.server_id,
@@ -237,10 +243,15 @@ class PvpveService:
             if character is None:
                 return False
             seed = await session.scalar(
-                select(PvpveQueueMember).where(
+                select(PvpveQueueMember)
+                .join(PvpveQueue, PvpveQueue.id == PvpveQueueMember.queue_id)
+                .where(
                     PvpveQueueMember.character_id == character.id,
                     PvpveQueueMember.game_activity_id == activity_id,
+                    PvpveQueue.status == "waiting",
                 )
+                .order_by(PvpveQueue.created_at.desc(), PvpveQueue.id.desc())
+                .limit(1)
             )
             if seed is None:
                 return False
@@ -283,10 +294,15 @@ class PvpveService:
             if character is None:
                 return None
             seed = await session.scalar(
-                select(PvpveQueueMember).where(
+                select(PvpveQueueMember)
+                .join(PvpveQueue, PvpveQueue.id == PvpveQueueMember.queue_id)
+                .where(
                     PvpveQueueMember.character_id == character.id,
                     PvpveQueueMember.game_activity_id == activity_id,
+                    PvpveQueue.status == "waiting",
                 )
+                .order_by(PvpveQueue.created_at.desc(), PvpveQueue.id.desc())
+                .limit(1)
             )
             if seed is None:
                 return None
@@ -339,10 +355,15 @@ class PvpveService:
     async def view_for_activity(self, session, character, activity) -> RoadView | None:
         if activity.content_id == PVPVE_QUEUE_CONTENT_ID:
             member = await session.scalar(
-                select(PvpveQueueMember).where(
+                select(PvpveQueueMember)
+                .join(PvpveQueue, PvpveQueue.id == PvpveQueueMember.queue_id)
+                .where(
                     PvpveQueueMember.game_activity_id == activity.id,
                     PvpveQueueMember.character_id == character.id,
+                    PvpveQueue.status == "waiting",
                 )
+                .order_by(PvpveQueue.created_at.desc(), PvpveQueue.id.desc())
+                .limit(1)
             )
             if member is None:
                 return None

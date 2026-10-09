@@ -24,7 +24,11 @@ from asterion.infrastructure.db.models import (
     WorldState,
 )
 from tests.test_road_integration import _seed_road
-from tests.test_round_integration import _force_safe_common, _seed_round
+from tests.test_round_integration import (
+    _force_safe_common,
+    _install_round_clock,
+    _seed_round,
+)
 
 
 @pytest.mark.asyncio
@@ -89,6 +93,83 @@ async def test_expired_round_queue_continues_as_normal_pve_without_new_round(dat
         assert queue is not None and state is not None
         assert state.status == "active" and state.completed_encounters == 0
         assert await session.scalar(select(HuntRoundEncounter.id)) is not None
+
+
+@pytest.mark.asyncio
+async def test_round_cadence_survives_repeated_pvpve_queue_fallbacks(database, monkeypatch):
+    actor, service = await _seed_round(database, 992713, pvpve=True)
+    import asterion.application.round as round_module
+
+    _force_safe_common(monkeypatch, round_module)
+    clock = _install_round_clock(monkeypatch, datetime.now(UTC))
+    monkeypatch.setattr(pvpve_module, "_utcnow", lambda: clock.current)
+    prepared = await service.prepare_round(actor, 5)
+    started = await service.start_round(actor, prepared.round_id, prepared.state_version)
+    assert started is not None and started.kind == "hunt_queue"
+
+    result = started
+    for encounter_index in range(5):
+        if result.kind == "hunt_queue":
+            async with database[1]() as session:
+                queue = await session.scalar(
+                    select(PvpveQueue).where(
+                        PvpveQueue.status == "waiting",
+                        PvpveQueue.source_type == "round",
+                    )
+                )
+            assert queue is not None
+            clock.current = queue.expires_at
+            assert await service.pvpve.refresh_queue(actor, result.activity_id)
+            async with database[1]() as session:
+                persisted_round = await session.get(HuntRound, prepared.round_id)
+                persisted_activity = await session.get(GameActivity, started.activity_id)
+                persisted_encounter = await session.scalar(
+                    select(HuntRoundEncounter).where(
+                        HuntRoundEncounter.round_id == prepared.round_id,
+                        HuntRoundEncounter.status == "materialized",
+                    )
+                )
+                assert persisted_round is not None
+                assert persisted_activity is not None
+                assert persisted_round.next_resolution_at is not None, (
+                    persisted_round.status,
+                    persisted_round.end_reason,
+                    persisted_round.config_snapshot,
+                    persisted_activity.content_id,
+                    persisted_encounter,
+                )
+            result = await service.resume(actor)
+        assert result is not None and result.kind == "round_active", result
+        if result.next_resolution_at is None:
+            async with database[1]() as session:
+                persisted_round = await session.get(HuntRound, prepared.round_id)
+                persisted_activity = await session.get(GameActivity, started.activity_id)
+                encounters = (
+                    await session.scalars(
+                        select(HuntRoundEncounter)
+                        .where(HuntRoundEncounter.round_id == prepared.round_id)
+                        .order_by(HuntRoundEncounter.ordinal)
+                    )
+                ).all()
+                queues = (
+                    await session.scalars(
+                        select(PvpveQueue).order_by(PvpveQueue.created_at)
+                    )
+                ).all()
+            raise AssertionError(
+                "active round lost its next cadence frontier: "
+                f"encounter_index={encounter_index}, view={result!r}, "
+                f"state={persisted_round!r}, activity={persisted_activity!r}, "
+                f"encounters={[(row.ordinal, row.status) for row in encounters]!r}, "
+                f"queues={[(row.status, row.expires_at) for row in queues]!r}, "
+                f"clock={clock.current!r}"
+            )
+        clock.current = result.next_resolution_at
+        await service.advance_due_rounds()
+        result = await service.resume(actor)
+
+    assert result is not None and result.kind == "round_completed", result
+    assert result.completed_encounters == 5
 
 
 @pytest.mark.asyncio
