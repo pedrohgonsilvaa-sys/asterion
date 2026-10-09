@@ -4,13 +4,12 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select, text
 
-import asterion.application.road as road_module
+import asterion.application.pvpve as pvpve_module
 from asterion.application.combat_configuration_guard import (
     CombatConfigurationLocked,
     lock_for_combat_configuration_mutation,
 )
 from asterion.application.road import ROAD
-from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import Character, GameActivity, HuntRound
 from tests.test_road_integration import _seed_road
 
@@ -137,14 +136,18 @@ async def test_postgres_activity_start_first_is_seen_after_character_lock(databa
 
     creation_reached = asyncio.Event()
     allow_creation = asyncio.Event()
-    original_create = CombatRepository.create
+    original_queue = pvpve_module.PvpveService.queue_manual_hunt.__get__(service.pvpve)
 
-    async def pause_after_character_lock(repository, character, content_id, combat):
+    async def pause_after_character_lock(session, character, world, profile):
         creation_reached.set()
         await allow_creation.wait()
-        return await original_create(repository, character, content_id, combat)
+        return await original_queue(session, character, world, profile)
 
-    monkeypatch.setattr(road_module.CombatRepository, "create", pause_after_character_lock)
+    monkeypatch.setattr(
+        service.pvpve,
+        "queue_manual_hunt",
+        pause_after_character_lock,
+    )
     activity_task = asyncio.create_task(service.start_hunt(actor))
     mutation_task = None
     try:
@@ -158,7 +161,7 @@ async def test_postgres_activity_start_first_is_seen_after_character_lock(databa
         await _wait_for_postgres_lock(database, "characters")
         allow_creation.set()
         activity = await asyncio.wait_for(activity_task, timeout=5)
-        assert activity is not None and activity.kind == "combat"
+        assert activity is not None and activity.kind == "hunt_queue"
         with pytest.raises(CombatConfigurationLocked) as raised:
             await asyncio.wait_for(mutation_task, timeout=5)
         assert raised.value.blocker.kind == "foreground_activity"

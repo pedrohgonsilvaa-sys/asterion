@@ -21,6 +21,7 @@ from asterion.infrastructure.db.models import (
     GroupHuntEncounter,
     GroupHuntMember,
     HuntContext,
+    PvpveQueue,
     Quest,
     RewardEvent,
     Unlock,
@@ -143,7 +144,7 @@ async def _ready_group_hunt(groups, road, actors, ids, group):
                 accept=True,
                 now=NOW + timedelta(seconds=1),
             )
-    return await groups.start_activity(
+    started = await groups.start_activity(
         actors[NAMES[0]],
         proposal.proposal_id,
         expected_revision=proposal.revision,
@@ -151,6 +152,28 @@ async def _ready_group_hunt(groups, road, actors, ids, group):
         create_activity=road.group_hunts.create_activity,
         now=NOW + timedelta(seconds=2),
     )
+    await _materialize_group_queue_without_opponent(road, proposal.proposal_id)
+    return started
+
+
+async def _materialize_group_queue_without_opponent(road, proposal_id):
+    """Advance the configured no-rival queue to its normal PvE fallback in tests."""
+    async with road.sessions.begin() as session:
+        queue = await session.scalar(
+            select(PvpveQueue)
+            .where(PvpveQueue.proposal_id == proposal_id)
+            .with_for_update()
+        )
+        if queue is None or queue.status != "waiting":
+            return
+        members, characters, activities = await road.pvpve._lock_queue_roster(
+            session, queue.id
+        )
+        now = datetime.now(UTC)
+        queue.expires_at = now - timedelta(seconds=1)
+        await road.pvpve._materialize_queue_pve(
+            session, queue, members, characters, activities, now=now
+        )
 
 
 @pytest.mark.asyncio
@@ -224,6 +247,7 @@ async def test_group_hunt_ready_check_freezes_roster_and_reconnects(
         now=NOW + timedelta(seconds=2),
     )
     assert started.started
+    await _materialize_group_queue_without_opponent(road, proposal.proposal_id)
 
     async with database[1]() as session:
         encounter = await session.scalar(

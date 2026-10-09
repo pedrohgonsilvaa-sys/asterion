@@ -7,6 +7,7 @@ from asterion.application.p1 import P1Service
 from asterion.bot.combat_ui import CampaignCombatCallback, CombatCallback, P1CombatCallback
 from asterion.bot.creation_handlers import present
 from asterion.bot.p1_ui import render_p1
+from asterion.bot.road_ui import render_road
 
 
 def p1_router(
@@ -19,6 +20,7 @@ def p1_router(
     p5=None,
     p6=None,
     s6=None,
+    road=None,
 ) -> Router:
     router = Router(name="p1")
     router.callback_query.filter(F.message.chat.type == "private")
@@ -91,6 +93,19 @@ def p1_router(
             if isinstance(query.message, Message):
                 await present(query.message, screen, images, edit=True)
             return
+        if road is not None:
+            view = await road.pvpve.action_intent(
+                query.from_user.id,
+                cb.activity_id,
+                cb.combat_version,
+                cb.action_index,
+                cb.target,
+            )
+            if view is not None:
+                await query.answer()
+                if isinstance(query.message, Message):
+                    await present(query.message, render_road(view), images, edit=True)
+                return
         await query.answer()
 
     @router.callback_query(F.data.startswith("fight:"))

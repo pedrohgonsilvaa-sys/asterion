@@ -26,6 +26,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
+from tests.helpers.pvpve import start_manual_hunt_after_no_match
 from tests.test_creation_ui import callback_update, message_update
 from tests.test_s2_integration import _seed_s2, _start_scripted_combat
 
@@ -127,7 +128,7 @@ async def test_s2_combat_callback_and_start_menu_reconnect_same_foreground(datab
 
 
 @pytest.mark.asyncio
-async def test_start_reconstructs_road_combat_before_narrative_s2(database):
+async def test_start_reconstructs_road_combat_before_narrative_s2(database, monkeypatch):
     actor = 997210
     character_id, s2 = await _seed_s2(database, actor)
     accepted = await s2.accept(actor)
@@ -144,7 +145,7 @@ async def test_start_reconstructs_road_combat_before_narrative_s2(database):
         )
 
     road = RoadService(database[1], "ocaso")
-    combat = await road.start_hunt(actor)
+    combat = await start_manual_hunt_after_no_match(road, actor, monkeypatch)
     assert combat is not None and combat.kind == "combat"
     expected_ids = (
         combat.activity_id,

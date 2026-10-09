@@ -1460,6 +1460,13 @@ class HuntContext(Base):
     variant: Mapped[str | None] = mapped_column(String(24))
     seed: Mapped[str] = mapped_column(String(128), nullable=False)
     loot_profile: Mapped[str] = mapped_column(String(32), nullable=False, default="hunt")
+    pvpve_collision_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("pvpve_collisions.id", ondelete="SET NULL")
+    )
+    pvpve_reference_level: Mapped[int | None] = mapped_column(Integer)
+    pvpve_domain_eligible: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     result_acknowledged: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
@@ -1554,6 +1561,234 @@ class GroupHuntMember(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PvpveQueue(Base):
+    """A short-lived hunt intent, matched only before a prey is materialized."""
+
+    __tablename__ = "pvpve_queues"
+    __table_args__ = (
+        CheckConstraint("roster_size BETWEEN 1 AND 4", name="ck_pvpve_queue_roster_size"),
+        CheckConstraint("source_type IN ('manual','group','round')", name="ck_pvpve_queue_source"),
+        CheckConstraint(
+            "status IN ('waiting','matched','expired','cancelled')",
+            name="ck_pvpve_queue_status",
+        ),
+        CheckConstraint("jsonb_typeof(roster_snapshot) = 'array'", name="ck_pvpve_queue_roster"),
+        UniqueConstraint("proposal_id", name="uq_pvpve_queue_proposal"),
+        Index(
+            "ix_pvpve_queue_match",
+            "server_id",
+            "local_id",
+            "roster_size",
+            "status",
+            "created_at",
+        ),
+        Index(
+            "uq_pvpve_queue_waiting_group",
+            "group_id",
+            unique=True,
+            postgresql_where=text("status = 'waiting' AND group_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    local_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    roster_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    group_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("social_groups.id", ondelete="SET NULL")
+    )
+    proposal_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("group_activity_proposals.id", ondelete="SET NULL")
+    )
+    roster_snapshot: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="waiting", server_default="waiting"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PvpveQueueMember(Base):
+    __tablename__ = "pvpve_queue_members"
+    __table_args__ = (
+        PrimaryKeyConstraint("queue_id", "character_id"),
+        UniqueConstraint("game_activity_id", name="uq_pvpve_queue_activity"),
+        CheckConstraint("ordinal BETWEEN 1 AND 4", name="ck_pvpve_queue_ordinal"),
+        Index("ix_pvpve_queue_member_character", "character_id", "queue_id"),
+    )
+
+    queue_id: Mapped[UUID] = mapped_column(
+        ForeignKey("pvpve_queues.id", ondelete="CASCADE"), nullable=False
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), nullable=False
+    )
+    game_activity_id: Mapped[UUID] = mapped_column(
+        ForeignKey("game_activities.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_key: Mapped[str] = mapped_column(String(16), nullable=False)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class PvpveCollision(Base):
+    __tablename__ = "pvpve_collisions"
+    __table_args__ = (
+        CheckConstraint("roster_size BETWEEN 1 AND 4", name="ck_pvpve_collision_roster"),
+        CheckConstraint("state_version >= 0", name="ck_pvpve_collision_version"),
+        CheckConstraint(
+            "status IN ('active','prey','completed','failed')", name="ck_pvpve_collision_status"
+        ),
+        CheckConstraint(
+            "winner_side IS NULL OR winner_side IN ('a','b')",
+            name="ck_pvpve_collision_winner",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(combat_snapshot) = 'object'",
+            name="ck_pvpve_collision_snapshot",
+        ),
+        UniqueConstraint("queue_a_id", name="uq_pvpve_collision_queue_a"),
+        UniqueConstraint("queue_b_id", name="uq_pvpve_collision_queue_b"),
+        UniqueConstraint("combat_id", name="uq_pvpve_collision_combat"),
+        Index("ix_pvpve_collision_local_created", "local_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    local_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    roster_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    queue_a_id: Mapped[UUID] = mapped_column(
+        ForeignKey("pvpve_queues.id", ondelete="RESTRICT"), nullable=False
+    )
+    queue_b_id: Mapped[UUID] = mapped_column(
+        ForeignKey("pvpve_queues.id", ondelete="RESTRICT"), nullable=False
+    )
+    combat_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
+    state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    combat_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    winner_side: Mapped[str | None] = mapped_column(String(1))
+    prey_reference_level: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PvpveCollisionMember(Base):
+    __tablename__ = "pvpve_collision_members"
+    __table_args__ = (
+        PrimaryKeyConstraint("collision_id", "character_id"),
+        UniqueConstraint("game_activity_id", name="uq_pvpve_collision_member_activity"),
+        UniqueConstraint("collision_id", "actor_key", name="uq_pvpve_collision_member_actor"),
+        CheckConstraint("side IN ('a','b')", name="ck_pvpve_collision_member_side"),
+        CheckConstraint(
+            "status IN ('active','prey','defeated','settled')",
+            name="ck_pvpve_collision_member_status",
+        ),
+        CheckConstraint(
+            "prey_result IS NULL OR prey_result IN ('victory','defeat')",
+            name="ck_pvpve_collision_member_prey_result",
+        ),
+        Index("ix_pvpve_collision_member_account", "account_id", "collision_id"),
+    )
+
+    collision_id: Mapped[UUID] = mapped_column(
+        ForeignKey("pvpve_collisions.id", ondelete="CASCADE"), nullable=False
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), nullable=False
+    )
+    game_activity_id: Mapped[UUID] = mapped_column(
+        ForeignKey("game_activities.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_key: Mapped[str] = mapped_column(String(16), nullable=False)
+    side: Mapped[str] = mapped_column(String(1), nullable=False)
+    contributed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    domain_eligible: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    result_acknowledged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    prey_result: Mapped[str | None] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PvpveAccountPair(Base):
+    __tablename__ = "pvpve_account_pairs"
+    __table_args__ = (
+        CheckConstraint("account_a < account_b", name="ck_pvpve_account_pair_order"),
+    )
+
+    account_a: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), primary_key=True
+    )
+    account_b: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), primary_key=True
+    )
+    last_match_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    domain_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PvpveAccountCooldown(Base):
+    __tablename__ = "pvpve_account_cooldowns"
+
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), primary_key=True
+    )
+    pvp_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PvpveDomainGrant(Base):
+    __tablename__ = "pvpve_domain_grants"
+    __table_args__ = (
+        PrimaryKeyConstraint("collision_id", "character_id"),
+        CheckConstraint("crowns >= 0", name="ck_pvpve_domain_crowns"),
+        CheckConstraint(
+            "status IN ('granted','locked','no_economic_reward','no_opponent')",
+            name="ck_pvpve_domain_status",
+        ),
+    )
+
+    collision_id: Mapped[UUID] = mapped_column(
+        ForeignKey("pvpve_collisions.id", ondelete="CASCADE"), nullable=False
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    crowns: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    material_id: Mapped[str | None] = mapped_column(String(96))
+    status: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="granted", server_default="granted"
+    )
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class HuntRound(Base):

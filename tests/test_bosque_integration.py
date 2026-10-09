@@ -19,6 +19,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
+from tests.helpers.pvpve import start_manual_hunt_after_no_match
 from tests.test_road_integration import _seed_road
 
 
@@ -103,7 +104,7 @@ async def test_bosque_manual_hunt_freezes_local_and_first_win_unlocks_round(
         return creature_for("carnical_fuligem")
 
     monkeypatch.setattr(road_module, "select_creature", choose)
-    combat = await service.start_hunt(actor)
+    combat = await start_manual_hunt_after_no_match(service, actor, monkeypatch)
     assert combat.kind == "combat"
     assert seen_profiles and seen_profiles[0].local_id == BOSQUE_LOCATION
     async with database[1]() as session:
@@ -246,7 +247,7 @@ async def test_bosque_hunt_defeat_uses_regional_recovery_priority(
     character_id, service, _ = await _seed_bosque(
         database, actor, level=6, braziers=known_braziers
     )
-    combat = await service.start_hunt(actor)
+    combat = await start_manual_hunt_after_no_match(service, actor, monkeypatch)
     monkeypatch.setattr(road_module, "act", _terminal("defeat"))
     defeated = await service.action(
         actor, combat.activity_id, combat.combat.version, "attack"

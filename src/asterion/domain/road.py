@@ -1030,6 +1030,80 @@ class PlayerCombatantSpec:
     active_art_snapshots: tuple[dict, ...] = ()
 
 
+def create_player_versus_player_combat(
+    combat_id: UUID,
+    left: tuple[PlayerCombatantSpec, ...],
+    right: tuple[PlayerCombatantSpec, ...],
+    *,
+    ruleset_version: str | None = None,
+    flavor: str = "",
+    opening_log: str = "",
+) -> Combat:
+    """Create a shared manual-vs-manual combat using each real frozen setup."""
+    if not 1 <= len(left) <= 4 or len(left) != len(right):
+        raise ValueError("PvPvE collision sides must have equal size from one to four.")
+    participants = (*left, *right)
+    if len({item.character_id for item in participants}) != len(participants):
+        raise ValueError("A character cannot occupy both sides of a PvP collision.")
+    runtime_ruleset = ruleset_version or RULESET
+    fighters: dict[str, Fighter] = {}
+    actions_by_fighter: dict[str, dict[str, Action]] = {}
+    configuration_snapshots: dict[str, dict] = {}
+    first_actions: dict[str, Action] | None = None
+    for side, roster in (("player", left), ("enemy", right)):
+        for member in roster:
+            equipment = member.equipment_configuration
+            talent_ids = tuple(talent_id for _, talent_id in equipment.talent_choices)
+            stats = resolve_combat_stats(
+                member.character_class,
+                member.level,
+                member.race,
+                equipment.contribution(),
+                equipment.selected_path,
+                talent_ids,
+            )
+            actions = class_player_actions(member.character_class, member.active_art_ids)
+            actions_by_fighter[member.fighter_key] = actions
+            first_actions = first_actions or actions
+            configuration_snapshots[member.fighter_key] = (
+                equipment.to_data(runtime_ruleset)
+                | {"active_arts": list(member.active_art_snapshots)}
+            )
+            fighters[member.fighter_key] = Fighter(
+                id=member.character_id,
+                name=member.name,
+                level=member.level,
+                stats=stats,
+                hp=member.hp,
+                race=member.race,
+                character_class=member.character_class,
+                selected_path=equipment.selected_path,
+                talent_ids=talent_ids,
+                side=side,
+                takes_turn=member.active,
+                defeat_on_zero=False,
+                required_for_victory=(side == "enemy"),
+            )
+    assert first_actions is not None
+    return start_combat(
+        Combat(
+            combat_id,
+            runtime_ruleset,
+            fighters=fighters,
+            player_actions=first_actions,
+            enemy_actions={},
+            ai_cycle=(),
+            flavor=flavor,
+            opening_log=opening_log,
+            player_actions_by_fighter=actions_by_fighter,
+            player_configuration_snapshots=configuration_snapshots,
+            party_mode=True,
+            manual_sides=("player", "enemy"),
+            external_consumables_allowed=False,
+        )
+    )
+
+
 def _creature_actions(creature: Creature, prefix: str = "") -> tuple[dict[str, Action], tuple[str, ...], tuple[str, ...]]:
     actions: dict[str, Action] = {}
     key_map: dict[str, str] = {}

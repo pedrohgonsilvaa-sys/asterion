@@ -900,6 +900,7 @@ def render_combat(view: CombatView) -> Screen:
     state = view.combat
     is_trial = view.context == "class_trial"
     is_dungeon = view.context == "dungeon"
+    is_pvpve = view.context == "pvpve"
     is_party_combat = is_trial or is_dungeon or state.party_mode
     is_campaign_party = state.party_mode and not is_trial and not is_dungeon
     actor_bound_party = is_campaign_party or view.context == "group_hunt"
@@ -925,6 +926,8 @@ def render_combat(view: CombatView) -> Screen:
         lines = []
         if is_trial and view.trial_stage_caption:
             lines.extend([f"⚔️ Provação · {escape(view.trial_stage_caption)}", ""])
+        elif is_pvpve:
+            lines.extend(["⚔️ Confronto PvPvE · Disputa pelo Rastro", ""])
         elif is_dungeon:
             lines.extend([f"⛓️ Masmorra · {escape(view.environment)}", ""])
             if getattr(view, "member_status", None) == "defeated":
@@ -941,21 +944,33 @@ def render_combat(view: CombatView) -> Screen:
                 "",
             ]
         )
+        viewer_side = _fighter_side(state, player_key) if is_pvpve else "player"
         enemies = sorted(
             (
-                key for key in state.fighters
-                if key != "player" and _fighter_side(state, key) == "enemy"
+                key
+                for key in state.fighters
+                if _fighter_side(state, key) != viewer_side
+                and (is_pvpve or _fighter_side(state, key) == "enemy")
             ),
             key=lambda key: (state.fighters[key].id, key),
         )
         allies = sorted(
-            (key for key in state.fighters if _fighter_side(state, key) == "player"),
+            (
+                key
+                for key in state.fighters
+                if _fighter_side(state, key) == viewer_side
+                and (is_pvpve or _fighter_side(state, key) == "player")
+            ),
             key=lambda key: (state.fighters[key].id, key),
         )
         for key in enemies:
             prepared_source = _fighter_for_event(state, state.prepared_source)
-            marker = "☄️" if prepared_source is state.fighters[key] else (
-                "🐺" if state.fighters[key].takes_turn else "✦"
+            marker = (
+                f"⚔️ {COPY[f'class:{state.fighters[key].character_class}'].split(' ', 1)[0]}"
+                if is_pvpve
+                else "☄️"
+                if prepared_source is state.fighters[key]
+                else ("🐺" if state.fighters[key].takes_turn else "✦")
             )
             lines.extend(_trial_fighter_card(state, key, icon=marker))
         if state.prepared_action:
@@ -1027,6 +1042,7 @@ def render_combat(view: CombatView) -> Screen:
         else ()
     )
     buttons = []
+    target_button_rows = []
     for action in available:
         if action == "attack":
             label, hint = "Atacar", "⚔️ Atacar · Causa Dano"
@@ -1085,6 +1101,31 @@ def render_combat(view: CombatView) -> Screen:
                 or definition.target_mode in {"self", "all_opponents", "all_allies"}
                 else action_target_ids(state, action, actor_key=action_actor_key or "player")
             )
+            if is_pvpve and len(targets) > 1:
+                for target_index, target_id in enumerate(targets):
+                    target = next(
+                        (
+                            fighter
+                            for fighter in state.fighters.values()
+                            if fighter.id == target_id
+                        ),
+                        None,
+                    )
+                    target_name = target.name if target is not None else "Oponente"
+                    target_button_rows.append(
+                        [
+                            InlineKeyboardButton(
+                                text=f"{label} · {target_name[:16]}",
+                                callback_data=CampaignCombatCallback.for_intent(
+                                    view.activity_id,
+                                    state.version,
+                                    action_index,
+                                    f"d{target_index}",
+                                ).pack(),
+                            )
+                        ]
+                    )
+                continue
             target_code = "s" if len(targets) > 1 else "d0" if targets else "x"
             callback = CampaignCombatCallback.for_intent(
                 view.activity_id, state.version, action_index, target_code
@@ -1143,6 +1184,7 @@ def render_combat(view: CombatView) -> Screen:
     if state.result == "victory" and view.context == "prologue":
         lines.append("320 XP")
     keyboard_rows = [buttons] if buttons else []
+    keyboard_rows.extend(target_button_rows)
     if not is_trial and view.consumable_options:
         keyboard_rows.append(
             [

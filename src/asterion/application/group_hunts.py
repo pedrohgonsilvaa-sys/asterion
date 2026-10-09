@@ -180,8 +180,48 @@ class GroupHuntService:
         proposal: GroupActivityProposal,
         characters: Sequence[Character],
     ) -> str:
+        return await self.road.pvpve.queue_group_hunt(session, proposal, characters)
+
+    async def materialize_queued_pve(
+        self,
+        session: AsyncSession,
+        proposal: GroupActivityProposal,
+        characters: Sequence[Character],
+        activities: Sequence[GameActivity],
+        *,
+        collision_id: UUID | None = None,
+        domain_eligible: dict[UUID, bool] | None = None,
+        reference_level: int | None = None,
+        seed: str | None = None,
+    ) -> str:
+        """Turn an accepted hunt intent into its frozen shared PvE encounter."""
+        return await self._create_pve_encounter(
+            session,
+            proposal,
+            characters,
+            activities=activities,
+            collision_id=collision_id,
+            domain_eligible=domain_eligible,
+            reference_level=reference_level,
+            seed=seed,
+        )
+
+    async def _create_pve_encounter(
+        self,
+        session: AsyncSession,
+        proposal: GroupActivityProposal,
+        characters: Sequence[Character],
+        *,
+        activities: Sequence[GameActivity] | None = None,
+        collision_id: UUID | None = None,
+        domain_eligible: dict[UUID, bool] | None = None,
+        reference_level: int | None = None,
+        seed: str | None = None,
+    ) -> str:
         if not 2 <= len(characters) <= 4:
             raise GroupError("group_roster_size_invalid")
+        if activities is not None and len(activities) != len(characters):
+            raise GroupError("hunt_context_changed")
         context = proposal.context_payload
         world_rows = list(
             (
@@ -216,8 +256,8 @@ class GroupHuntService:
                 raise GroupError("hunt_context_changed")
         assert profile is not None
 
-        seed = sha256(f"group-hunt:{proposal.id.hex}".encode()).hexdigest()
-        reference_level = max(character.level for character in characters)
+        seed = seed or sha256(f"group-hunt:{proposal.id.hex}".encode()).hexdigest()
+        reference_level = reference_level or max(character.level for character in characters)
         creature = select_creature(seed, reference_level, profile=profile)
         enemy_level = min(reference_level, creature.max_level)
         variant = select_variant(seed, creature, profile=profile)
@@ -306,15 +346,24 @@ class GroupHuntService:
         session.add(encounter)
         await session.flush()
         for index, (character, spec) in enumerate(zip(characters, specs, strict=True), start=1):
-            activity = GameActivity(
-                id=uuid4(),
-                character_id=character.id,
-                content_id=GROUP_HUNT_CONTENT,
-                status="active",
-                state_version=combat.version,
-                ruleset_version=RULESET,
-                last_valid_action_at=datetime.now(UTC),
+            activity = (
+                activities[index - 1]
+                if activities is not None
+                else GameActivity(
+                    id=uuid4(),
+                    character_id=character.id,
+                    content_id=GROUP_HUNT_CONTENT,
+                    status="active",
+                    state_version=combat.version,
+                    ruleset_version=RULESET,
+                    last_valid_action_at=datetime.now(UTC),
+                )
             )
+            activity.content_id = GROUP_HUNT_CONTENT
+            activity.status = "active"
+            activity.state_version = combat.version
+            activity.ruleset_version = RULESET
+            activity.last_valid_action_at = datetime.now(UTC)
             session.add(activity)
             await session.flush()
             member_seed = f"{seed}:{character.id.hex}"
@@ -339,6 +388,11 @@ class GroupHuntService:
                     variant=variant,
                     seed=member_seed,
                     loot_profile="hunt",
+                    pvpve_collision_id=collision_id,
+                    pvpve_reference_level=reference_level if collision_id is not None else None,
+                    pvpve_domain_eligible=bool(
+                        domain_eligible and domain_eligible.get(character.id, False)
+                    ),
                 )
             )
             await self.road._bestiary(
@@ -814,6 +868,13 @@ class GroupHuntService:
             else:
                 activity.status = "failed"
                 member.result = "defeat"
+                if context is not None and context.pvpve_collision_id is not None:
+                    await self.road.pvpve.finish_prey_member(
+                        session,
+                        context.pvpve_collision_id,
+                        character.id,
+                        victory=False,
+                    )
                 world = await session.scalar(
                     select(WorldState)
                     .where(WorldState.character_id == character.id)
@@ -866,6 +927,18 @@ class GroupHuntService:
             if activity.status == "active":
                 activity.status = "failed"
                 activity.last_valid_action_at = now
+                context = await session.scalar(
+                    select(HuntContext)
+                    .where(HuntContext.game_activity_id == activity.id)
+                    .with_for_update()
+                )
+                if context is not None and context.pvpve_collision_id is not None:
+                    await self.road.pvpve.finish_prey_member(
+                        session,
+                        context.pvpve_collision_id,
+                        character.id,
+                        victory=False,
+                    )
                 await self.road._recover_normal_pve_defeat(
                     session, character, encounter.local_id
                 )

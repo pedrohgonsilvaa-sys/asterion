@@ -265,7 +265,11 @@ def world_router(
         if (
             road_view is not None
             and isinstance(query.message, Message)
-            and (road_view.kind in {"combat", "exploration"} or road_view.kind.startswith("round_"))
+            and (
+                road_view.kind
+                in {"combat", "exploration", "hunt_queue", "hunt_defeat", "hunt_victory"}
+                or road_view.kind.startswith("round_")
+            )
         ):
             await present(query.message, render_road(road_view), images, edit=True)
             return
@@ -466,6 +470,10 @@ def world_router(
             await present(query.message, render_s5(s5_view), images, edit=True)
             return True
         road_view = await road.resume(query.from_user.id) if road else None
+        if road_view is not None and road_view.kind == "hunt_queue":
+            if isinstance(query.message, Message):
+                await present(query.message, render_road(road_view), images, edit=True)
+            return True
         if road_view is not None and road_view.kind == "exploration":
             callback_attempt_id = exploration_callback_attempt_id(query)
             if (
@@ -585,6 +593,41 @@ def world_router(
             view = await road.start_hunt(query.from_user.id)
             if view is not None:
                 await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(
+        F.data.regexp(r"^road:pvpve:refresh:[0-9a-fA-F]{32}$")
+    )
+    async def refresh_pvpve_queue(query: CallbackQuery):
+        if road is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        try:
+            activity_id = UUID(hex=(query.data or "").rsplit(":", 1)[1])
+        except (IndexError, TypeError, ValueError):
+            await query.answer()
+            return
+        await road.pvpve.refresh_queue(query.from_user.id, activity_id)
+        view = await road.resume(query.from_user.id)
+        await query.answer()
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(
+        F.data.regexp(r"^road:pvpve:cancel:[0-9a-fA-F]{32}$")
+    )
+    async def cancel_pvpve_queue(query: CallbackQuery):
+        if road is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        try:
+            activity_id = UUID(hex=(query.data or "").rsplit(":", 1)[1])
+        except (IndexError, TypeError, ValueError):
+            await query.answer()
+            return
+        view = await road.pvpve.cancel_queue(query.from_user.id, activity_id)
+        await query.answer()
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
 
     @router.callback_query(F.data == "road:prepare")
     async def hunt_prepare(query: CallbackQuery):
