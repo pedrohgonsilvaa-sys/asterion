@@ -197,6 +197,7 @@ class RoadView:
     pvpve_round_queue: bool = False
     pvpve_round_ai: bool = False
     pvpve_round_takeover: bool = False
+    pvpve_queue_id: UUID | None = None
 
 
 def _exploration_local_id(profile) -> str:

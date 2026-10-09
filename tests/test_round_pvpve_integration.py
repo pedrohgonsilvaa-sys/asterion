@@ -109,6 +109,7 @@ async def test_round_cadence_survives_repeated_pvpve_queue_fallbacks(database, m
 
     result = started
     for encounter_index in range(5):
+        expired_queue_id = None
         if result.kind == "hunt_queue":
             async with database[1]() as session:
                 queue = await session.scalar(
@@ -118,8 +119,9 @@ async def test_round_cadence_survives_repeated_pvpve_queue_fallbacks(database, m
                     )
                 )
             assert queue is not None
+            expired_queue_id = queue.id
             clock.current = queue.expires_at
-            assert await service.pvpve.refresh_queue(actor, result.activity_id)
+            assert await service.pvpve.refresh_queue(actor, queue_id=queue.id)
             async with database[1]() as session:
                 persisted_round = await session.get(HuntRound, prepared.round_id)
                 persisted_activity = await session.get(GameActivity, started.activity_id)
@@ -167,6 +169,21 @@ async def test_round_cadence_survives_repeated_pvpve_queue_fallbacks(database, m
         clock.current = result.next_resolution_at
         await service.advance_due_rounds()
         result = await service.resume(actor)
+        if (
+            result is not None
+            and result.kind == "hunt_queue"
+            and expired_queue_id is not None
+            and result.pvpve_queue_id is not None
+            and result.pvpve_queue_id != expired_queue_id
+        ):
+            stale = await service.pvpve.cancel_queue(
+                actor, queue_id=expired_queue_id
+            )
+            assert stale is not None and stale.kind == "hunt_queue"
+            assert stale.pvpve_queue_id == result.pvpve_queue_id
+            async with database[1]() as session:
+                active_queue = await session.get(PvpveQueue, result.pvpve_queue_id)
+                assert active_queue is not None and active_queue.status == "waiting"
 
     assert result is not None and result.kind == "round_completed", result
     assert result.completed_encounters == 5
@@ -214,7 +231,8 @@ async def test_round_queue_cancel_continues_the_same_batch(database):
     queued = await service.start_round(actor, prepared.round_id, prepared.state_version)
     assert queued.kind == "hunt_queue"
 
-    view = await service.pvpve.cancel_queue(actor, queued.activity_id)
+    assert queued.pvpve_queue_id is not None
+    view = await service.pvpve.cancel_queue(actor, queue_id=queued.pvpve_queue_id)
     assert view is not None and view.kind == "round_active"
     async with database[1]() as session:
         queue = await session.scalar(select(PvpveQueue))
@@ -654,6 +672,7 @@ async def test_round_pvp_defeat_ends_batch_and_preserves_round_result(database):
                 ward_remaining=0,
                 protection_layers=0,
                 defending=False,
+                stats=replace(fighter.stats, evasion=Decimal(0)),
             )
             if key == round_key
             else replace(fighter, stats=replace(fighter.stats, attack=Decimal("10000")))
@@ -672,6 +691,17 @@ async def test_round_pvp_defeat_ends_batch_and_preserves_round_result(database):
             )
         )
         target_id = combat.fighters[round_key].id
+        activities = (
+            await session.scalars(
+                select(GameActivity).where(
+                    GameActivity.id.in_(
+                        (round_member.game_activity_id, manual_member.game_activity_id)
+                    )
+                )
+            )
+        ).all()
+        for activity in activities:
+            activity.state_version = combat.version
 
     await service.action(
         manual_actor,

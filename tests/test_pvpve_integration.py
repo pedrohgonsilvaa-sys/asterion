@@ -486,10 +486,15 @@ async def test_waiting_queue_can_be_cancelled_without_cost_or_collision(database
     assert callbacks
     assert all(len(callback.encode()) < 64 for callback in callbacks)
     assert any(callback.startswith("road:pvpve:cancel:") for callback in callbacks)
+    assert queue_view.pvpve_queue_id is not None
 
-    cancelled = await road.pvpve.cancel_queue(ACTORS[0], queue_view.activity_id)
+    cancelled = await road.pvpve.cancel_queue(
+        ACTORS[0], queue_id=queue_view.pvpve_queue_id
+    )
     assert cancelled is not None and cancelled.kind == "road"
-    duplicate = await road.pvpve.cancel_queue(ACTORS[0], queue_view.activity_id)
+    duplicate = await road.pvpve.cancel_queue(
+        ACTORS[0], queue_id=queue_view.pvpve_queue_id
+    )
     assert duplicate is not None and duplicate.kind == "road"
     async with database[1]() as session:
         character = await session.get(Character, characters[ACTORS[0]])

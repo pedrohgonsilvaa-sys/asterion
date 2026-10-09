@@ -405,7 +405,7 @@ def render_road(view: RoadView) -> Screen:
                 [
                     InlineKeyboardButton(
                         text="Atualizar Busca",
-                        callback_data=f"road:pvpve:refresh:{view.activity_id.hex}",
+                        callback_data=f"road:pvpve:refresh:q:{view.pvpve_queue_id.hex}",
                     )
                 ],
                 [
@@ -415,7 +415,7 @@ def render_road(view: RoadView) -> Screen:
                             if view.pvpve_round_queue
                             else "Cancelar Busca"
                         ),
-                        callback_data=f"road:pvpve:cancel:{view.activity_id.hex}",
+                        callback_data=f"road:pvpve:cancel:q:{view.pvpve_queue_id.hex}",
                     )
                 ],
             ]

@@ -236,29 +236,40 @@ class PvpveService:
         await self._try_match(session, queue, now=now)
         return queue.id.hex
 
-    async def refresh_queue(self, actor: int, activity_id: UUID) -> bool:
+    async def refresh_queue(
+        self,
+        actor: int,
+        activity_id: UUID | None = None,
+        *,
+        queue_id: UUID | None = None,
+    ) -> bool:
         """Refresh one queue without first locking its viewer's Character row."""
+        if activity_id is None and queue_id is None:
+            return False
         async with self.sessions.begin() as session:
             character = await self._character(session, actor)
             if character is None:
                 return False
-            seed = await session.scalar(
+            query = (
                 select(PvpveQueueMember)
                 .join(PvpveQueue, PvpveQueue.id == PvpveQueueMember.queue_id)
                 .where(
                     PvpveQueueMember.character_id == character.id,
-                    PvpveQueueMember.game_activity_id == activity_id,
                     PvpveQueue.status == "waiting",
                 )
-                .order_by(PvpveQueue.created_at.desc(), PvpveQueue.id.desc())
+            )
+            if queue_id is not None:
+                query = query.where(PvpveQueue.id == queue_id)
+            else:
+                query = query.where(PvpveQueueMember.game_activity_id == activity_id)
+            seed = await session.scalar(
+                query.order_by(PvpveQueue.created_at.desc(), PvpveQueue.id.desc())
                 .limit(1)
             )
             if seed is None:
                 return False
             queue_hint = await session.get(PvpveQueue, seed.queue_id)
-            activity = await session.scalar(
-                select(GameActivity).where(GameActivity.id == activity_id)
-            )
+            activity = await session.get(GameActivity, seed.game_activity_id)
             if (
                 queue_hint is None
                 or activity is None
@@ -287,34 +298,74 @@ class PvpveService:
             await session.flush()
             return True
 
-    async def cancel_queue(self, actor: int, activity_id: UUID) -> RoadView | None:
+    async def cancel_queue(
+        self,
+        actor: int,
+        activity_id: UUID | None = None,
+        *,
+        queue_id: UUID | None = None,
+    ) -> RoadView | None:
         """Cancel a waiting queue before any PvP encounter or Vigor cost exists."""
+        if activity_id is None and queue_id is None:
+            return None
         async with self.sessions.begin() as session:
             character = await self._character(session, actor)
             if character is None:
                 return None
-            seed = await session.scalar(
+            query = (
                 select(PvpveQueueMember)
                 .join(PvpveQueue, PvpveQueue.id == PvpveQueueMember.queue_id)
-                .where(
-                    PvpveQueueMember.character_id == character.id,
+                .where(PvpveQueueMember.character_id == character.id)
+            )
+            if queue_id is not None:
+                query = query.where(PvpveQueue.id == queue_id)
+            else:
+                query = query.where(
                     PvpveQueueMember.game_activity_id == activity_id,
                     PvpveQueue.status == "waiting",
                 )
-                .order_by(PvpveQueue.created_at.desc(), PvpveQueue.id.desc())
+            seed = await session.scalar(
+                query.order_by(PvpveQueue.created_at.desc(), PvpveQueue.id.desc())
                 .limit(1)
             )
+            if seed is None and queue_id is None:
+                # A repeated legacy callback is a safe no-op; resolve it to the
+                # latest cancelled attempt only after no current queue matched.
+                seed = await session.scalar(
+                    select(PvpveQueueMember)
+                    .join(PvpveQueue, PvpveQueue.id == PvpveQueueMember.queue_id)
+                    .where(
+                        PvpveQueueMember.character_id == character.id,
+                        PvpveQueueMember.game_activity_id == activity_id,
+                        PvpveQueue.status == "cancelled",
+                    )
+                    .order_by(PvpveQueue.created_at.desc(), PvpveQueue.id.desc())
+                    .limit(1)
+                )
             if seed is None:
                 return None
             queue_hint = await session.get(PvpveQueue, seed.queue_id)
+            activity_id = seed.game_activity_id
             activity = await session.get(GameActivity, activity_id)
             if queue_hint is None or activity is None:
                 return None
-            if (
-                queue_hint.status != "waiting"
-                or activity.content_id != PVPVE_QUEUE_CONTENT_ID
-            ):
-                return await self.view_for_activity(session, character, activity)
+            if queue_hint.status != "waiting":
+                return await self._view_after_queue_resolution(
+                    session, character, activity
+                )
+            if activity.content_id != PVPVE_QUEUE_CONTENT_ID:
+                return await self._route_activity(session, character, activity)
+            if queue_id is None and queue_hint.source_type == "round":
+                # Activity IDs are reused by successive Ronda queues. Require
+                # the queue-specific token so an old callback cannot cancel a
+                # later frontier in the same batch.
+                return self._queue_view(
+                    character,
+                    queue_hint.local_id,
+                    activity,
+                    queue_hint,
+                    _utcnow(),
+                )
             await self._match_lock(session, queue_hint.local_id, queue_hint.roster_size)
             queue = await session.scalar(
                 select(PvpveQueue)
@@ -352,6 +403,20 @@ class PvpveService:
                 return blocking
             return await self.road._view_for_world(session, character, world) if world else None
 
+    async def _view_after_queue_resolution(self, session, character, activity):
+        blocking = await self.road._road_blocking_view(session, character)
+        if blocking is not None:
+            return blocking
+        refreshed = await session.get(GameActivity, activity.id, populate_existing=True)
+        if refreshed is not None and refreshed.status == "active":
+            routed = await self._route_activity(session, character, refreshed)
+            if routed is not None:
+                return routed
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character.id)
+        )
+        return await self.road._view_for_world(session, character, world) if world else None
+
     async def view_for_activity(self, session, character, activity) -> RoadView | None:
         if activity.content_id == PVPVE_QUEUE_CONTENT_ID:
             member = await session.scalar(
@@ -388,6 +453,7 @@ class PvpveService:
                     max_hp=character.max_hp,
                     result_text="Busca expirada · Atualize para continuar como Caçada PvE.",
                     pvpve_round_queue=queue.source_type == "round",
+                    pvpve_queue_id=queue.id,
                 )
             return self._queue_view(
                 character,
@@ -1885,4 +1951,5 @@ class PvpveService:
             max_hp=character.max_hp,
             result_text=f"Busca por grupo rival · até {minutes:02d}:{seconds:02d}",
             pvpve_round_queue=queue.source_type == "round",
+            pvpve_queue_id=queue.id,
         )
