@@ -1492,6 +1492,8 @@ class RoundService(RoadService):
             **MATERIAL_LABELS,
             "material.tdo.catalisador_elite_i": "Catalisador de Elite I",
             "material.tdo.fragmento_aprimoramento_i": "Fragmento de Aprimoramento I",
+            "material.vde.catalisador_elite_ii": "Catalisador de Elite II",
+            "material.vde.fragmento_aprimoramento_ii": "Fragmento de Aprimoramento II",
         }
         resource_icons = {
             "material.tdo.ferro_de_fuligem": "⛏️",
@@ -1500,6 +1502,8 @@ class RoundService(RoadService):
             "material.tdo.residuo_ocaso": "💧",
             "material.tdo.catalisador_elite_i": "⚗️",
             "material.tdo.fragmento_aprimoramento_i": "🪨",
+            "material.vde.catalisador_elite_ii": "⚗️",
+            "material.vde.fragmento_aprimoramento_ii": "🪨",
         }
         for row in rows:
             payload = row.payload or {}

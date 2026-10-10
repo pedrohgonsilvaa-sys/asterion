@@ -1,6 +1,6 @@
 # Autoridade das Fontes
 
-**Índice atualizado:** 2026-10-06. As notas de implementação mais abaixo preservam snapshots históricos anteriores e não substituem as Fontes oficiais vigentes nem o estado atual do repositório.
+**Índice atualizado:** 2026-10-10. As notas de implementação mais abaixo preservam snapshots históricos anteriores e não substituem as Fontes oficiais vigentes nem o estado atual do repositório.
 
 ## Fonte Mestra vigente
 
@@ -33,7 +33,7 @@ Ela define Locais, Braseiros permanentes, Missões, Feitos, Bestiário, inimigos
 
 Quando a Fonte Regional especificar conteúdo dentro de parâmetros sistêmicos da Fonte Mestra, ambas devem ser aplicadas em conjunto. Em conflito estrutural ou numérico, a Fonte Mestra prevalece; em conteúdo regional fechado, a revisão vigente prevalece sobre rascunhos ou versões regionais anteriores.
 
-A segunda região usa a autoridade de conteúdo **Vales dos Enforcados v1.0.3 FINAL**, em `ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.3_FINAL.md`.
+A segunda região usa a autoridade de conteúdo **Vales dos Enforcados v1.0.4 FINAL**, em `ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.4_FINAL.md`. A revisão fecha somente os pools ponderados de Material Básico por criatura para Caçada/Ronda; os demais fatos regionais permanecem os da v1.0.3.
 
 ## Fonte Visual/UI
 
@@ -49,7 +49,7 @@ Exemplos de mockup não criam regra mecânica ou conteúdo canônico quando a au
 
 ## Regras cooperativas e roadmap técnico vigentes
 
-A regra normativa de Grupo, Campanha cooperativa, Caçada em Grupo, PvPvE, Domínio do Rastro e integração com Ronda está incorporada à Fonte Mestra v1.5.0, §§51–54. A autoridade regional TDO v1.0.15 aplica essa regra à P1 e à S6; o conteúdo regional dos Vales v1.0.3 permanece inalterado e aplica as regras globais por referência.
+A regra normativa de Grupo, Campanha cooperativa, Caçada em Grupo, PvPvE, Domínio do Rastro e integração com Ronda está incorporada à Fonte Mestra v1.5.0, §§51–54. A autoridade regional TDO v1.0.15 aplica essa regra à P1 e à S6; o conteúdo regional dos Vales v1.0.4 preserva as regras globais por referência, alterando somente os pools de Material Básico por criatura.
 
 A especificação técnica `docs/specs/MMO_PVPVE_FINAL_SPEC_V1.md` e os roadmaps `docs/specs/COOPERATIVE_MULTIPLAYER_ROADMAP_V2.md` e `docs/specs/OPTIONAL_SIDE_QUEST_BOSSES_V2.md` orientam entrega e verificação, sempre subordinados às Fontes oficiais. O antigo Decision Register MMO/PvPvE é histórico/supersedido e não é autoridade vigente.
 

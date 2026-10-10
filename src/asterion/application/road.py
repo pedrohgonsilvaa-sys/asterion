@@ -31,6 +31,7 @@ from asterion.domain.consumables import (
     ConsumableFamily,
 )
 from asterion.domain.consumables import definition as consumable_definition
+from asterion.domain.equipment_modifications import equipment_grade
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.road import (
     BOSQUE_BRAZIER,
@@ -47,6 +48,7 @@ from asterion.domain.road import (
     RUINS_LOCATION,
     RUINS_ROUTE_UNLOCK,
     RULESET,
+    VDE_BASIC_MATERIAL_CREATURE_IDS,
     VDE_GARGANTA_BRAZIER,
     VDE_GARGANTA_LOCATION,
     VDE_GARGANTA_VIGILIA_ROUTE,
@@ -176,6 +178,8 @@ MATERIAL_LABELS = {
     "material.vde.couro_musgoso": "Couro Musgoso",
     "material.vde.erva_de_turfa": "Erva de Turfa",
     "material.vde.resina_enredada": "Resina Enredada",
+    "material.vde.catalisador_elite_ii": "Catalisador de Elite II",
+    "material.vde.fragmento_aprimoramento_ii": "Fragmento de Aprimoramento II",
 }
 VDE_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.vde.garganta.ferro_enredado": "material.vde.ferro_enredado",
@@ -257,9 +261,20 @@ def _location_label(local_id: str | None) -> str:
 
 
 def _grade_fragment_for_level(level: int) -> str:
-    if 1 <= level <= 10:
-        return "material.tdo.fragmento_aprimoramento_i"
-    raise ValueError(f"no global fragment grade configured for level {level}")
+    return _grade_material_for_level(level, "fragmento_aprimoramento")
+
+
+def _grade_catalyst_for_level(level: int) -> str:
+    return _grade_material_for_level(level, "catalisador_elite")
+
+
+def _grade_material_for_level(level: int, material_kind: str) -> str:
+    grade = equipment_grade(level)
+    regional_grade = {1: ("tdo", "i"), 2: ("vde", "ii")}.get(grade)
+    if regional_grade is not None:
+        region, roman_grade = regional_grade
+        return f"material.{region}.{material_kind}_{roman_grade}"
+    raise ValueError(f"no global {material_kind} configured for level {level}")
 
 
 class RoadService:
@@ -1439,14 +1454,15 @@ class RoadService:
                 else 3 + _draw_int(context.seed, "elite-materials", 2)
             )
             for ordinal in range(material_count):
-                # Keep the historical Common/Road ordinal-zero seed stable.
-                # Uncommon has multiple independent units and therefore gets
-                # an explicit ordinal in each sub-roll.
-                material_seed = (
-                    context.seed
-                    if context.category == "common" and ordinal == 0
-                    else f"{context.seed}:material:{ordinal}"
-                )
+                # Vales material units use explicit stable subdraw ordinals.
+                # Preserve the legacy deterministic stream for the existing
+                # Ocaso tables while the shared generator handles both regions.
+                if context.creature_id in VDE_BASIC_MATERIAL_CREATURE_IDS:
+                    material_seed = f"{context.seed}:material.basic.{ordinal}"
+                elif context.category == "common" and ordinal == 0:
+                    material_seed = context.seed
+                else:
+                    material_seed = f"{context.seed}:material:{ordinal}"
                 material = material_for(context.creature_id, material_seed)
                 components.append(
                     ("material", material, 1, {"material_id": material, "bound": False})
@@ -1455,7 +1471,9 @@ class RoadService:
                     s, c, material, 1, f"activity:{activity.id}:material:{ordinal}"
                 )
             if context.category == "elite":
-                components.append(("catalyst", "material.tdo.catalisador_elite_i", 1, {}))
+                components.append(
+                    ("catalyst", _grade_catalyst_for_level(context.enemy_level), 1, {})
+                )
                 if _draw_int(context.seed, "fragment", 100) < 40:
                     components.append(
                         ("fragment", _grade_fragment_for_level(context.enemy_level), 1, {})
