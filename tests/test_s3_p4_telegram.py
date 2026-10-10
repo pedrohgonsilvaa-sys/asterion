@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from aiogram import Bot, Dispatcher
@@ -6,7 +7,7 @@ from sqlalchemy import select
 
 from asterion.application.creation import CreationService
 from asterion.application.p2 import P2Service
-from asterion.application.p4 import P4Service
+from asterion.application.p4 import P4Service, P4View
 from asterion.application.prologue import PrologueService
 from asterion.application.road import BOSQUE, CHARNECA, RoadService
 from asterion.application.s3 import S3Service
@@ -228,3 +229,25 @@ async def test_p4_combat_callback_menu_and_start_reconnect_same_activity(databas
         resumed.combat_id,
         resumed.activity_state_version,
     ) == expected
+
+
+def test_p4_group_confirmation_buttons_use_compact_callbacks():
+    view = P4View(
+        character_id=uuid4(),
+        kind="combat_pending",
+        status="active",
+        step=3,
+        state_version=17,
+        progress={"ruins_discovered": True},
+        location="Ruínas do Vigia",
+        level=7,
+        group_size=3,
+    )
+
+    screen = render_p4(view)
+    group = _button(screen, "Propor combate em Grupo")
+    solo = _button(screen, "Enfrentar Solo")
+    assert group.callback_data == "p4:17:group"
+    assert solo.callback_data == "p4:17:solo"
+    assert len(group.callback_data.encode()) < 64
+    assert len(solo.callback_data.encode()) < 64

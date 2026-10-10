@@ -15,6 +15,7 @@ def p1_router(
     *,
     p2=None,
     p3=None,
+    p4=None,
     p5=None,
     p6=None,
     s6=None,
@@ -44,7 +45,7 @@ def p1_router(
         except (KeyError, TypeError, ValueError):
             await query.answer()
             return
-        candidates = (service, p2, p3, p5, p6, s6)
+        candidates = (service, p2, p3, p4, p5, p6, s6)
         renderers = {
             "p1": render_p1,
         }
@@ -68,6 +69,10 @@ def p1_router(
                 from asterion.bot.p3_ui import render_p3
 
                 screen = render_p3(view)
+            elif getattr(view, "context", None) == "p4":
+                from asterion.bot.p4_ui import render_p4
+
+                screen = render_p4(view)
             elif getattr(view, "context", None) == "p5":
                 from asterion.bot.p5_ui import render_p5
 

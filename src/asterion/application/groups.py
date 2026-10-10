@@ -89,6 +89,7 @@ class ActivityParticipantView:
     eligibility: str
     response: str
     ordinal: int
+    reward_eligible: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1091,6 +1092,13 @@ class GroupService:
                     eligibility=participant.eligibility,
                     response=participant.response,
                     ordinal=participant.ordinal,
+                    reward_eligible=(
+                        (participant.eligibility_snapshot or {}).get(
+                            "mission_reward_eligible"
+                        )
+                        if isinstance(participant.eligibility_snapshot, dict)
+                        else None
+                    ),
                 )
                 for participant, character in rows
             ),

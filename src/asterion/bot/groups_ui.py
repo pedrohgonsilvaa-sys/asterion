@@ -76,6 +76,16 @@ def render_group(
                 "not_required": "",
             }.get(participant.response, "")
             lines.append(f"· {escape(participant.name)} · {status} · {response}")
+            if (
+                participant.eligibility != "ineligible"
+                and participant.reward_eligible is not None
+            ):
+                reward = (
+                    "Elegível"
+                    if participant.reward_eligible
+                    else "Não elegível neste encontro"
+                )
+                lines.append(f"  Recompensa pessoal · {reward}")
         token = proposal.proposal_id.hex
         revision = revision36(proposal.revision)
         if proposal.viewer_response == "pending":

@@ -32,6 +32,7 @@ def groups_router(
     p1=None,
     p2=None,
     p3=None,
+    p4=None,
     p5=None,
     p6=None,
     s6=None,
@@ -278,6 +279,7 @@ def groups_router(
                 "campaign_p1": p1,
                 "campaign_p2": p2,
                 "campaign_p3": p3,
+                "campaign_p4": p4,
                 "campaign_p5": p5,
                 "campaign_p6": p6,
                 "campaign_s6": s6,
@@ -306,6 +308,10 @@ def groups_router(
                     from asterion.bot.p3_ui import render_p3
 
                     screen = render_p3(view)
+                elif proposal.activity_type == "campaign_p4":
+                    from asterion.bot.p4_ui import render_p4
+
+                    screen = render_p4(view)
                 elif proposal.activity_type == "campaign_p5":
                     from asterion.bot.p5_ui import render_p5
 
