@@ -9,7 +9,15 @@ from asterion.bot.creation_handlers import present
 from asterion.bot.p1_ui import render_p1
 
 
-def p1_router(service: P1Service, images: dict[str, str], *, p5=None, p6=None, s6=None) -> Router:
+def p1_router(
+    service: P1Service,
+    images: dict[str, str],
+    *,
+    p2=None,
+    p5=None,
+    p6=None,
+    s6=None,
+) -> Router:
     router = Router(name="p1")
     router.callback_query.filter(F.message.chat.type == "private")
 
@@ -35,7 +43,7 @@ def p1_router(service: P1Service, images: dict[str, str], *, p5=None, p6=None, s
         except (KeyError, TypeError, ValueError):
             await query.answer()
             return
-        candidates = (service, p5, p6, s6)
+        candidates = (service, p2, p5, p6, s6)
         renderers = {
             "p1": render_p1,
         }
@@ -51,7 +59,11 @@ def p1_router(service: P1Service, images: dict[str, str], *, p5=None, p6=None, s
             )
             if view is None:
                 continue
-            if getattr(view, "context", None) == "p5":
+            if getattr(view, "context", None) == "p2":
+                from asterion.bot.p2_ui import render_p2
+
+                screen = render_p2(view)
+            elif getattr(view, "context", None) == "p5":
                 from asterion.bot.p5_ui import render_p5
 
                 screen = render_p5(view)

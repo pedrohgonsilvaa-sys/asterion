@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 
 from asterion.application.active_arts import ActiveArtService
 from asterion.application.bestiary import BestiaryRecorder
+from asterion.application.groups import GroupService
 from asterion.application.p2 import (
     ASH_POINT_IDS,
     CHARNECA_LOCATION_ID,
@@ -29,6 +30,8 @@ from asterion.infrastructure.db.models import (
     BestiaryEntry,
     BestiaryEvidence,
     BlockedDelivery,
+    CampaignObjectiveCredit,
+    CampaignSharedEncounter,
     Character,
     CodexEntry,
     ConsumableStack,
@@ -213,6 +216,140 @@ async def test_p2_offer_gate_is_explicit_and_acceptance_creates_one_quest(databa
             )
         )
         assert incomplete_id != low_level_id != wrong_location_id
+
+
+@pytest.mark.asyncio
+async def test_p2_group_shares_present_objectives_and_runs_one_confirmed_spider_fight(
+    database, monkeypatch
+):
+    import asterion.application.campaign_coop as campaign_coop
+    from asterion.domain.combat import active_player_key
+
+    actors = (881301, 881302)
+    seeded = [_seed(database, actor) for actor in actors]
+    characters = [await item for item in seeded]
+    sessions = database[1]
+    groups = GroupService(sessions, "ocaso")
+    service = P2Service(sessions, "ocaso", groups=groups)
+    active = []
+    for actor in actors:
+        offer = await service.alda(actor)
+        assert offer is not None and offer.available
+        active.append(await service.accept(actor, offer.state_version))
+
+    async with sessions() as session:
+        invitee = await session.scalar(
+            select(Character).where(Character.id == characters[1][0])
+        )
+        invitee_name = invitee.name
+    group = await groups.create_group(actors[0])
+    invite = await groups.invite(
+        actors[0], invitee_name, expected_group_revision=group.revision
+    )
+    await groups.respond_invite(
+        actors[1], invite.invite_id, expected_revision=invite.revision, accept=True
+    )
+
+    view = await service.travel_to_charneca(actors[0], active[0].state_version)
+    assert view is not None and view.step == 2
+    async with sessions() as session:
+        quest_rows = list(
+            (
+                await session.scalars(
+                    select(Quest).where(
+                        Quest.character_id.in_([item[0] for item in characters]),
+                        Quest.quest_id == P2_ID,
+                    )
+                )
+            ).all()
+        )
+        assert len(quest_rows) == 2
+        assert all(row.step == 2 for row in quest_rows)
+        assert await session.scalar(
+            select(func.count()).select_from(CampaignObjectiveCredit)
+        ) == 2
+
+    for point_id in ASH_POINT_IDS:
+        view = await service.examine_ash_point(actors[0], point_id, view.state_version)
+    assert view is not None and view.kind == "combat_pending" and view.group_size == 2
+    assert view.activity_id is None
+
+    proposal_view = await service.propose_group_combat(actors[0], view.state_version)
+    assert proposal_view is not None and proposal_view.proposal_id is not None
+    assert proposal_view.proposal_status == "pending"
+    incoming = await groups.activity_proposals(actors[1])
+    proposal = next(row for row in incoming if row.proposal_id == proposal_view.proposal_id)
+    ready = await groups.respond_activity(
+        actors[1], proposal.proposal_id, expected_revision=proposal.revision, accept=True
+    )
+    assert ready.status == "ready"
+    started = await service.start_group_combat(
+        actors[0], ready.proposal_id, expected_revision=ready.revision
+    )
+    resumed = await service.resume(actors[1])
+    assert started is not None and resumed is not None
+    assert started.kind == resumed.kind == "combat"
+    assert started.encounter_id == resumed.encounter_id
+    assert started.group_size == resumed.group_size == 2
+    assert {started.combat_actor_key, resumed.combat_actor_key} == {"p1", "p2"}
+
+    def resolve_victory(combat, action, *, target_id=None, actor_key=None):
+        updated = deepcopy(combat)
+        updated.version += 1
+        updated.result = "victory"
+        return updated
+
+    monkeypatch.setattr(campaign_coop, "act", resolve_victory)
+    active_key = active_player_key(started.combat)
+    active_view = next(
+        item
+        for item in (started, resumed)
+        if item.combat_actor_key == active_key
+    )
+    active_actor = actors[0] if active_view.character_id == characters[0][0] else actors[1]
+    victory = await service.action(
+        active_actor,
+        active_view.activity_id,
+        active_view.activity_state_version,
+        "attack",
+    )
+    assert victory is not None and victory.step == 4
+    await service.action(
+        active_actor,
+        active_view.activity_id,
+        active_view.activity_state_version,
+        "attack",
+    )
+    async with sessions() as session:
+        quests = list(
+            (
+                await session.scalars(
+                    select(Quest).where(
+                        Quest.character_id.in_([item[0] for item in characters]),
+                        Quest.quest_id == P2_ID,
+                    )
+                )
+            ).all()
+        )
+        assert all(row.step == 4 for row in quests)
+        encounter = await session.scalar(
+            select(CampaignSharedEncounter).where(
+                CampaignSharedEncounter.id == started.encounter_id
+            )
+        )
+        assert encounter is not None and encounter.status == "completed"
+        assert await session.scalar(
+            select(func.count())
+            .select_from(CampaignObjectiveCredit)
+            .where(CampaignObjectiveCredit.objective_id == "p2.aranha_cinza")
+        ) == 2
+        for character_id in (item[0] for item in characters):
+            assert await session.scalar(
+                select(func.count()).select_from(RewardEvent).where(
+                    RewardEvent.character_id == character_id,
+                    RewardEvent.source_id.like(f"{P2_REWARD_SOURCE}:enemy-xp:%"),
+                )
+            ) == 1
 
 
 @pytest.mark.asyncio

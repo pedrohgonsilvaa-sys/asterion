@@ -3,6 +3,7 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from asterion.application.groups import GroupError
 from asterion.application.p2 import ASH_POINT_IDS, P2Service
 from asterion.application.p4 import P4Service
 from asterion.application.p5 import P5Service
@@ -130,6 +131,17 @@ def p2_router(
                         view = await service.examine_ash_point(
                             actor, point_id, version
                         )
+                elif action == "solo" and len(parts) == 3:
+                    view = await service.start_solo_combat(actor, version)
+                elif action == "group" and len(parts) == 3:
+                    try:
+                        view = await service.propose_group_combat(actor, version)
+                    except GroupError:
+                        await query.answer(
+                            "Não foi possível preparar o Grupo. Atualize a tela.",
+                            show_alert=True,
+                        )
+                        return
                 elif action == "retry" and len(parts) == 3:
                     view = await service.return_to_charneca(actor, version)
                 elif action == "stone" and len(parts) == 3:
