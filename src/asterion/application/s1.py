@@ -6,6 +6,12 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.campaign_objectives import (
+    campaign_roster_ids,
+    lock_campaign_roster,
+    present_campaign_members,
+    record_campaign_objective_credit,
+)
 from asterion.application.progression import consolidate_character_level
 from asterion.infrastructure.db.models import (
     Character,
@@ -160,7 +166,7 @@ class S1Service:
 
     async def investigate_point(self, actor: int, point: int, version: int) -> S1View | None:
         async with self.sessions.begin() as session:
-            c, q, world = await self._locked_state(session, actor)
+            c, q, world = await self._locked_coop_state(session, actor)
             if c is None or q is None or world is None:
                 return None
             if (
@@ -170,21 +176,37 @@ class S1Service:
                 or await self._foreground(session, c.id)
             ):
                 return await self._view(session, c, q, world, "objective")
-            progress = dict(q.progress or {})
-            points = {int(value) for value in progress.get("points", []) if int(value) in {1, 2, 3}}
-            if point in points:
-                return await self._view(session, c, q, world, "objective")
-            points.add(point)
-            progress["points"] = sorted(points)
-            if len(points) == 3:
-                q.step = 2
-            q.progress = progress
-            q.state_version += 1
+            members = await self._present_objective_members(
+                session, c.id, step=1, location=ROAD
+            )
+            for member in members:
+                progress = dict(member.quest.progress or {})
+                points = {
+                    int(value)
+                    for value in progress.get("points", [])
+                    if int(value) in {1, 2, 3}
+                }
+                if point in points:
+                    continue
+                points.add(point)
+                progress["points"] = sorted(points)
+                if len(points) == 3:
+                    member.quest.step = 2
+                member.quest.progress = progress
+                member.quest.state_version += 1
+                await record_campaign_objective_credit(
+                    session,
+                    character_id=member.character.id,
+                    quest_id=S1_ID,
+                    objective_id="s1.signal",
+                    source_key=f"s1.signal:{point}",
+                    evidence={"point": point, "location": ROAD},
+                )
             return await self._view(session, c, q, world, "objective")
 
     async def examine_ashes(self, actor: int, version: int) -> S1View | None:
         async with self.sessions.begin() as session:
-            c, q, world = await self._locked_state(session, actor)
+            c, q, world = await self._locked_coop_state(session, actor)
             if c is None or q is None or world is None:
                 return None
             if (
@@ -193,13 +215,29 @@ class S1Service:
                 or await self._foreground(session, c.id)
             ):
                 return await self._view(session, c, q, world, "objective")
-            q.step = 3
-            q.state_version += 1
+            for member in await self._present_objective_members(
+                session, c.id, step=2, location=ROAD
+            ):
+                progress = dict(member.quest.progress or {})
+                if progress.get("ashes_examined"):
+                    continue
+                progress["ashes_examined"] = True
+                member.quest.progress = progress
+                member.quest.step = 3
+                member.quest.state_version += 1
+                await record_campaign_objective_credit(
+                    session,
+                    character_id=member.character.id,
+                    quest_id=S1_ID,
+                    objective_id="s1.ashes",
+                    source_key="s1.ashes:examined",
+                    evidence={"location": ROAD},
+                )
             return await self._view(session, c, q, world, "objective")
 
     async def observe_light(self, actor: int, version: int) -> S1View | None:
         async with self.sessions.begin() as session:
-            c, q, world = await self._locked_state(session, actor)
+            c, q, world = await self._locked_coop_state(session, actor)
             if c is None or q is None or world is None:
                 return None
             if (
@@ -208,25 +246,38 @@ class S1Service:
                 or await self._foreground(session, c.id)
             ):
                 return await self._view(session, c, q, world, "objective")
-            await self._ensure(
-                session,
-                CodexEntry,
-                character_id=c.id,
-                entry_id=CODEX_ROAD,
-            )
-            fragment_new = await self._ensure(
-                session,
-                CodexFragment,
-                character_id=c.id,
-                entry_id=CODEX_ROAD,
-                fragment_id=LIGHTS_FRAGMENT,
-            )
-            progress = dict(q.progress or {})
-            progress["light_observed"] = True
-            progress["fragment_new_this_attempt"] = bool(fragment_new)
-            q.progress = progress
-            q.step = 4
-            q.state_version += 1
+            for member in await self._present_objective_members(
+                session, c.id, step=3, location=ROAD
+            ):
+                progress = dict(member.quest.progress or {})
+                if progress.get("light_observed"):
+                    continue
+                await self._ensure(
+                    session,
+                    CodexEntry,
+                    character_id=member.character.id,
+                    entry_id=CODEX_ROAD,
+                )
+                fragment_new = await self._ensure(
+                    session,
+                    CodexFragment,
+                    character_id=member.character.id,
+                    entry_id=CODEX_ROAD,
+                    fragment_id=LIGHTS_FRAGMENT,
+                )
+                progress["light_observed"] = True
+                progress["fragment_new_this_attempt"] = bool(fragment_new)
+                member.quest.progress = progress
+                member.quest.step = 4
+                member.quest.state_version += 1
+                await record_campaign_objective_credit(
+                    session,
+                    character_id=member.character.id,
+                    quest_id=S1_ID,
+                    objective_id="s1.light",
+                    source_key="s1.light:observed",
+                    evidence={"location": ROAD, "codex_entry": CODEX_ROAD},
+                )
             return await self._view(session, c, q, world, "objective")
 
     async def complete_with_oren(self, actor: int, version: int) -> S1View | None:
@@ -359,6 +410,32 @@ class S1Service:
         q = await self._locked_quest(session, c.id)
         world = await self._locked_world(session, c.id)
         return c, q, world
+
+    async def _locked_coop_state(self, session: AsyncSession, actor: int):
+        seed = await self._character(session, actor)
+        if seed is None:
+            return None, None, None
+        await lock_campaign_roster(session, seed.id)
+        return await self._locked_state(session, actor)
+
+    async def _present_objective_members(
+        self,
+        session: AsyncSession,
+        character_id: UUID,
+        *,
+        step: int,
+        location: str,
+    ):
+        roster_ids = await campaign_roster_ids(session, character_id)
+        return await present_campaign_members(
+            session,
+            character_ids=roster_ids,
+            quest_id=S1_ID,
+            content_version=S1_VERSION,
+            step=step,
+            region=REGION,
+            location=location,
+        )
 
     async def _character(self, session: AsyncSession, actor: int) -> Character | None:
         return await session.scalar(

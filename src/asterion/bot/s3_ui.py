@@ -43,6 +43,7 @@ def _combat(view: S3View) -> Screen:
             consumable_quantities=view.consumable_quantities,
             consumable_budget_limit=view.consumable_budget_limit,
             ready_consumable_option=view.ready_consumable_option,
+            combat_actor_key=view.combat_actor_key,
         )
     )
     return Screen("📜 Rastros sob os Galhos · Encontro de Missão\n" + hud.text, "s3", hud.keyboard, parse_mode=hud.parse_mode)
@@ -167,6 +168,10 @@ def render_s3(view: S3View) -> Screen:
         rows = []
         if view.location == BOSQUE:
             rows.append([_button("Nova tentativa", f"s3:{version}:retry")])
+            if view.group_size > 1:
+                rows.append(
+                    [_button("Propor tentativa em Grupo", f"s3:{version}:group")]
+                )
         elif view.location == REFUGE:
             rows.append([_button(
                 "Seguir para a Charneca",
@@ -187,6 +192,31 @@ def render_s3(view: S3View) -> Screen:
             "❤️ HP · Restaurado\nVigor e Consumíveis usados permanecem como estavam.\n\n"
             "📜 Rastros sob os Galhos · Em Andamento\n🎯 Retornar ao Bosque para uma nova tentativa.",
             "s3_recovery",
+            _keyboard(rows),
+        )
+    if view.kind == "combat_pending":
+        if view.proposal_id is not None:
+            return Screen(
+                "📜 Rastros sob os Galhos · Confirmação de Grupo\n\n"
+                "A proposta para enfrentar o Cervo Escoriado está ativa. "
+                "Confira elegibilidade e confirme a entrada na tela do Grupo.",
+                "s3_objective",
+                _keyboard(
+                    [
+                        [_button("Abrir Grupo", "group:root")],
+                        [_button("Atualizar", "s3:resume")],
+                    ]
+                ),
+            )
+        rows = []
+        if view.group_size > 1:
+            rows.append([_button("Propor combate em Grupo", f"s3:{version}:group")])
+        rows.append([_button("Enfrentar Solo", f"s3:{version}:solo")])
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            "📜 Rastros sob os Galhos · Em Andamento\n\n"
+            "O Cervo Escoriado aguarda entre os galhos.",
+            "s3_objective",
             _keyboard(rows),
         )
     if view.kind == "cargo":

@@ -94,9 +94,9 @@ def get_bot_runtime() -> BotRuntime:
     equipment_modifications = EquipmentModificationService(SessionFactory, settings.server_id)
     consumables = ConsumableService(SessionFactory, settings.server_id)
     s1 = S1Service(SessionFactory, settings.server_id)
-    s2 = S2Service(SessionFactory, settings.server_id)
+    s2 = S2Service(SessionFactory, settings.server_id, groups=groups)
     p3 = P3Service(SessionFactory, settings.server_id, groups=groups)
-    s3 = S3Service(SessionFactory, settings.server_id)
+    s3 = S3Service(SessionFactory, settings.server_id, groups=groups)
     s4 = S4Service(SessionFactory, settings.server_id)
     s5 = S5Service(SessionFactory, settings.server_id)
     p4 = P4Service(SessionFactory, settings.server_id, groups=groups)
@@ -128,7 +128,17 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(doctrines_router(doctrines, settings.creation_images))
     dispatcher.include_router(
         groups_router(
-            groups, settings.creation_images, p1=p1, p2=p2, p3=p3, p4=p4, p5=p5, p6=p6, s6=s6
+            groups,
+            settings.creation_images,
+            p1=p1,
+            p2=p2,
+            p3=p3,
+            p4=p4,
+            p5=p5,
+            p6=p6,
+            s2=s2,
+            s3=s3,
+            s6=s6,
         )
     )
     dispatcher.include_router(p2_router(p2, settings.creation_images, s3=s3, p4=p4, p5=p5, p6=p6))
