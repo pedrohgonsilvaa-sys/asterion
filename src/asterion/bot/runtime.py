@@ -16,6 +16,7 @@ from asterion.application.dungeons import DungeonService
 from asterion.application.equipment import EquipmentService
 from asterion.application.equipment_modifications import EquipmentModificationService
 from asterion.application.equipment_view import EquipmentViewService
+from asterion.application.groups import GroupService
 from asterion.application.inventory import InventoryService
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import P2Service
@@ -45,6 +46,7 @@ from asterion.bot.doctrines_handlers import doctrines_router
 from asterion.bot.dungeon_handlers import dungeon_router
 from asterion.bot.equipment_handlers import equipment_router
 from asterion.bot.equipment_modification_handlers import equipment_modification_router
+from asterion.bot.groups_handlers import groups_router
 from asterion.bot.p1_handlers import p1_router
 from asterion.bot.p2_handlers import p2_router
 from asterion.bot.p3_handlers import p3_router
@@ -110,6 +112,7 @@ def get_bot_runtime() -> BotRuntime:
     character_surfaces = CharacterSurfacesService(SessionFactory, settings.server_id)
     cosmetics = CosmeticService(SessionFactory, settings.server_id)
     doctrines = DoctrineService(SessionFactory, settings.server_id)
+    groups = GroupService(SessionFactory, settings.server_id)
     account = AccountService(
         SessionFactory,
         settings.server_id,
@@ -123,6 +126,7 @@ def get_bot_runtime() -> BotRuntime:
     )
     dispatcher.include_router(cosmetics_router(cosmetics, settings.creation_images))
     dispatcher.include_router(doctrines_router(doctrines, settings.creation_images))
+    dispatcher.include_router(groups_router(groups, settings.creation_images))
     dispatcher.include_router(p2_router(p2, settings.creation_images, s3=s3, p4=p4, p5=p5, p6=p6))
     dispatcher.include_router(p1_router(p1, settings.creation_images))
     dispatcher.include_router(s1_router(s1, settings.creation_images))
