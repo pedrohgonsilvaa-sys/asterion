@@ -1,3 +1,4 @@
+# ruff: noqa: E501,I001,F401
 from copy import deepcopy
 from decimal import Decimal
 
