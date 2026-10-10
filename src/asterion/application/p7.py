@@ -57,6 +57,7 @@ from asterion.infrastructure.db.models import (
     CampaignSharedEncounterMember,
     Character,
     CodexEntry,
+    CodexFragment,
     CombatRecord,
     ConsumableStack,
     Encounter,
@@ -84,6 +85,7 @@ VIGILIA = "Vigília do Vale"
 GARGANTA_LOCATION_ID = "vde.location.garganta_dos_lacos"
 VIGILIA_LOCATION_ID = "vde.location.vigilia_do_vale"
 VIGILIA_BRAZIER = "vde.brazier.vigilia_do_vale"
+GARGANTA_BRAZIER = "vde.brazier.garganta_dos_lacos"
 GARGANTA_HUNT_UNLOCK = "hunt.manual.vde.garganta_dos_lacos"
 GARGANTA_EXPLORE_UNLOCK = "explore.vde.garganta_dos_lacos"
 GARGANTA_VIGILIA_ROUTE = "route.vde.garganta_vigilia"
@@ -166,6 +168,9 @@ class P7Service:
             if character is None or world is None:
                 return None
             if quest is not None:
+                if (quest.progress or {}).get("entered_garganta"):
+                    await self._ensure_location(session, character.id, GARGANTA_LOCATION_ID)
+                    await self._ensure_brazier(session, character.id, GARGANTA_BRAZIER)
                 return await self._view(session, character, quest, world)
             p6 = await session.scalar(
                 select(Quest).where(
@@ -179,6 +184,7 @@ class P7Service:
                 return await self._view(session, character, None, world)
             world.region, world.location = REGION, GARGANTA
             await self._ensure_location(session, character.id, GARGANTA_LOCATION_ID)
+            await self._ensure_brazier(session, character.id, GARGANTA_BRAZIER)
             quest = Quest(
                 character_id=character.id,
                 quest_id=P7_ID,
@@ -888,6 +894,12 @@ class P7Service:
         await self._ensure_unlock(session, character.id, GARGANTA_HUNT_UNLOCK)
         await self._ensure_unlock(session, character.id, GARGANTA_EXPLORE_UNLOCK)
         await self._ensure_codex(session, character.id, P7_ROUTES_CODEX)
+        await self._ensure_codex_fragment(
+            session,
+            character.id,
+            P7_ROUTES_CODEX,
+            "codex.fragment.vales.routes.garganta_vigilia",
+        )
         quest.status = "completed"
         quest.step = 7
         quest.progress = {**(quest.progress or {}), "reported_dara": True, "completed": True}
@@ -1067,15 +1079,15 @@ class P7Service:
         if found is None:
             session.add(LocationDiscovery(character_id=character_id, location_id=location_id))
 
-    async def _ensure_brazier(self, session, character_id):
+    async def _ensure_brazier(self, session, character_id, brazier_id=VIGILIA_BRAZIER):
         found = await session.scalar(
             select(Brazier.id).where(
                 Brazier.character_id == character_id,
-                Brazier.brazier_id == VIGILIA_BRAZIER,
+                Brazier.brazier_id == brazier_id,
             )
         )
         if found is None:
-            session.add(Brazier(character_id=character_id, brazier_id=VIGILIA_BRAZIER))
+            session.add(Brazier(character_id=character_id, brazier_id=brazier_id))
 
     async def _ensure_unlock(self, session, character_id, unlock_id):
         found = await session.scalar(
@@ -1106,3 +1118,20 @@ class P7Service:
         )
         if found is None:
             session.add(CodexEntry(character_id=character_id, entry_id=entry_id))
+
+    async def _ensure_codex_fragment(self, session, character_id, entry_id, fragment_id):
+        found = await session.scalar(
+            select(CodexFragment.id).where(
+                CodexFragment.character_id == character_id,
+                CodexFragment.fragment_id == fragment_id,
+            )
+        )
+        if found is None:
+            await self._ensure_codex(session, character_id, entry_id)
+            session.add(
+                CodexFragment(
+                    character_id=character_id,
+                    entry_id=entry_id,
+                    fragment_id=fragment_id,
+                )
+            )

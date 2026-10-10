@@ -50,6 +50,16 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "per_bonus_if_target_poisoned": Decimal(
                         value.get("per_bonus_if_target_poisoned", "0")
                     ),
+                    "actor_per_bonus": Decimal(value.get("actor_per_bonus", "0")),
+                    "actor_per_bonus_if_target_bleeding": Decimal(
+                        value.get("actor_per_bonus_if_target_bleeding", "0")
+                    ),
+                    "actor_per_bonus_if_target_hp_fraction_at_most": Decimal(
+                        value.get("actor_per_bonus_if_target_hp_fraction_at_most", "0")
+                    ),
+                    "actor_per_bonus_hp_fraction_threshold": Decimal(
+                        value.get("actor_per_bonus_hp_fraction_threshold", "0.40")
+                    ),
                     "self_barrier_coefficient": Decimal(
                         value.get("self_barrier_coefficient", "0")
                     ),

@@ -7,7 +7,18 @@ from html import escape
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
-from asterion.application.road import BOSQUE, CHARNECA, REFUGE, ROAD, RUINS, RoadView
+from asterion.application.road import (
+    BOSQUE,
+    CHARNECA,
+    REFUGE,
+    ROAD,
+    RUINS,
+    VDE_GARGANTA,
+    VDE_MATA,
+    VDE_REGION,
+    VDE_VIGILIA,
+    RoadView,
+)
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 from asterion.domain.road import LOCATION_LEVEL_BANDS
@@ -42,9 +53,17 @@ def _reward_block(view) -> str:
 
 
 def _location_copy(location: str) -> tuple[str, str]:
-    icon = "🌑" if location == CHARNECA else "🌲" if location == BOSQUE else "🪨" if location == RUINS else "🔥"
+    icon = (
+        "🌑" if location == CHARNECA else
+        "🌲" if location == BOSQUE else
+        "🪨" if location == RUINS else
+        "🪢" if location == VDE_GARGANTA else
+        "🌫️" if location == VDE_VIGILIA else
+        "🌿" if location == VDE_MATA else "🔥"
+    )
     low, high = LOCATION_LEVEL_BANDS.get(location, (1, 10))
-    return f"{icon} {location}", f"Terras do Ocaso · Nv. {low}–{high}"
+    region = VDE_REGION if location in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA} else "Terras do Ocaso"
+    return f"{icon} {location}", f"{region} · Nv. {low}–{high}"
 
 
 def _recovery_route(view) -> InlineKeyboardButton | None:
@@ -109,7 +128,13 @@ def _round_screen(view) -> Screen | None:
     if view.kind == "round_select":
         return render_round_selection(view)
     token = _round_token(view)
-    if view.location == CHARNECA:
+    if view.location == VDE_GARGANTA:
+        place = "Garganta dos Laços\nVales dos Enforcados · Nv. 11–14"
+        local_line = "Garganta dos Laços · Vales dos Enforcados"
+    elif view.location == VDE_MATA:
+        place = "Mata Suspensa\nVales dos Enforcados · Nv. 13–17"
+        local_line = "Mata Suspensa · Vales dos Enforcados"
+    elif view.location == CHARNECA:
         place = "🌑 Charneca da Fuligem\nTerras do Ocaso · Nv. 3–5"
         local_line = "Charneca da Fuligem · Terras do Ocaso"
     elif view.location == BOSQUE:
@@ -608,7 +633,10 @@ def render_road(view: RoadView) -> Screen:
             InlineKeyboardMarkup(inline_keyboard=[[_local_return(view.location)]]),
             parse_mode="HTML",
         )
-    if view.kind in {"road", "refuge", "charneca", "bosque", "ruinas"}:
+    if view.kind in {
+        "road", "refuge", "charneca", "bosque", "ruinas",
+        "vde_garganta", "vde_vigilia", "vde_mata",
+    }:
         return render_current_local(
             view,
             explore_state="available" if view.explore_available else None,
@@ -647,16 +675,22 @@ def render_current_local(
         bar(view.vigor, view.max_vigor, "🟨"),
     ]
     keyboard: list[list[InlineKeyboardButton]] = []
-    if view.location in {ROAD, CHARNECA, BOSQUE, RUINS}:
-        lines.extend(["", "🦌 Caçada · Disponível"])
-        keyboard.append([InlineKeyboardButton(text="Caçar", callback_data="road:hunt")])
-        keyboard.append([InlineKeyboardButton(text="Grupo", callback_data="group:root")])
-        if view.familiar:
+    if view.location in {ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA}:
+        lines.append("")
+        if view.hunt_enabled:
+            lines.append("🦌 Caçada · Disponível")
+            keyboard.append([InlineKeyboardButton(text="Caçar", callback_data="road:hunt")])
+            keyboard.append([InlineKeyboardButton(text="Grupo", callback_data="group:root")])
+        else:
+            lines.append("🔒 Caçada · Aguardando tabela canônica de recompensas regionais")
+        if view.familiar and view.hunt_enabled:
             lines.append("🏕️ Ronda de Caça · Disponível")
             keyboard.append([InlineKeyboardButton(text="Ronda", callback_data="world:round")])
-        else:
+        elif view.hunt_enabled:
             lines.append("🔒 Ronda de Caça · Vença uma Caçada neste Local")
-        if explore_state == "available":
+        if not view.explore_enabled:
+            lines.append("🔒 Desbravar · Aguardando tabela canônica de recompensas regionais")
+        elif explore_state == "available":
             lines.append("🧭 Desbravar · Disponível")
             keyboard.append(
                 [InlineKeyboardButton(text="Desbravar", callback_data="road:explore:start")]
@@ -673,6 +707,16 @@ def render_current_local(
             )
         else:
             lines.append("🚫 Desbravar · Indisponível neste Local")
+    if view.location in {VDE_GARGANTA, VDE_MATA}:
+        for destination in view.route_destinations:
+            route_key, label = {
+                (VDE_GARGANTA, VDE_VIGILIA): ("vde_vigilia", "Seguir para a Vigília do Vale"),
+                (VDE_VIGILIA, VDE_GARGANTA): ("vde_garganta", "Retornar à Garganta dos Laços"),
+                (VDE_VIGILIA, VDE_MATA): ("vde_mata", "Seguir para a Mata Suspensa"),
+                (VDE_MATA, VDE_VIGILIA): ("vde_vigilia", "Retornar à Vigília do Vale"),
+            }.get((view.location, destination), (None, None))
+            if route_key is not None:
+                keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])
         if view.brazier_label:
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
         elif view.location != ROAD:
@@ -688,6 +732,19 @@ def render_current_local(
             keyboard.append(
                 [InlineKeyboardButton(text="Missões", callback_data="world:missions")]
             )
+    elif view.location == VDE_VIGILIA:
+        lines.extend(["", "🏘️ Hub seguro", "🚫 Caçadas · Indisponíveis neste Local"])
+        for destination in view.route_destinations:
+            route_key, label = {
+                (VDE_VIGILIA, VDE_GARGANTA): ("vde_garganta", "Retornar à Garganta dos Laços"),
+                (VDE_VIGILIA, VDE_MATA): ("vde_mata", "Seguir para a Mata Suspensa"),
+            }.get((view.location, destination), (None, None))
+            if route_key is not None:
+                keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])
+        if view.brazier_label:
+            lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        if mission_available:
+            keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     else:
         lines.extend(["", "Local narrativo seguro."])
         if view.brazier_label:

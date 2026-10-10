@@ -31,6 +31,9 @@ ROAD_LOCATION = "tdo.location.estrada_das_cinzas"
 CHARNECA_LOCATION = "tdo.location.charneca_da_fuligem"
 BOSQUE_LOCATION = "tdo.location.bosque_calcinado"
 RUINS_LOCATION = "tdo.location.ruinas_do_vigia"
+VDE_GARGANTA_LOCATION = "vde.location.garganta_dos_lacos"
+VDE_VIGILIA_LOCATION = "vde.location.vigilia_do_vale"
+VDE_MATA_LOCATION = "vde.location.mata_suspensa"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
 BOSQUE_BRAZIER = "tdo.brazier.galhos_mortos"
@@ -50,6 +53,15 @@ RUINS_HUNT_UNLOCK = "hunt_manual.ruinas_do_vigia"
 RUINS_EXPLORE_UNLOCK = "explore.ruinas_do_vigia"
 RUINS_ROUND_FAMILIARITY = "hunt_round.ruinas_do_vigia"
 RUINS_ROUTE_UNLOCK = "route.tdo.bosque_ruinas"
+VDE_GARGANTA_BRAZIER = "vde.brazier.garganta_dos_lacos"
+VDE_GARGANTA_HUNT_UNLOCK = "hunt.manual.vde.garganta_dos_lacos"
+VDE_GARGANTA_EXPLORE_UNLOCK = "explore.vde.garganta_dos_lacos"
+VDE_GARGANTA_ROUND_FAMILIARITY = "hunt_round.vde.garganta_dos_lacos"
+VDE_GARGANTA_VIGILIA_ROUTE = "route.vde.garganta_vigilia"
+VDE_VIGILIA_MATA_ROUTE = "route.vde.vigilia_mata"
+VDE_MATA_HUNT_UNLOCK = "hunt.manual.vde.mata_suspensa"
+VDE_MATA_EXPLORE_UNLOCK = "explore.vde.mata_suspensa"
+VDE_MATA_ROUND_FAMILIARITY = "hunt_round.vde.mata_suspensa"
 EXPLORATION_CATEGORY_WEIGHTS = {
     "great_discovery": 8,
     "knowledge": 22,
@@ -411,6 +423,102 @@ CREATURE_CATALOG = (
     CUSTODIO_PRIMEIRO_SELO,
 )
 
+VDE_MOSS_WOLF = Creature(
+    "lobo_musgoso", "Lobo Musgoso", "common", "predator", 11, 14, 34,
+    ("mordida_umida", "rasgo_alcateia", "bote_raizes"),
+    (
+        ("mordida_umida", "Mordida Úmida", D("1.00"), 0, D(0), 0),
+        ("rasgo_alcateia", "Rasgo da Alcateia", D("0.90"), 0, D(0), 0, "bleed", 1, False, 2),
+        ("bote_raizes", "Bote entre Raízes", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+    ),
+    ai_priority=("rasgo_alcateia", "bote_raizes"),
+)
+VDE_VALLEY_CROW = Creature(
+    "gralha_vale", "Gralha do Vale", "common", "predator", 11, 14, 33,
+    ("bicada_escura", "rasante_vale", "assedio"),
+    (
+        ("bicada_escura", "Bicada Escura", D("0.95"), 0, D(0), 0),
+        ("rasante_vale", "Rasante do Vale", D("1.05"), 0, D(0), 0, None, 0, False, 2),
+        (
+            "assedio", "Assédio", D("0.80"), 0, D(0), 0, None, 0, False, 3,
+            None, D(0), D(0), 0, False, "opponent", None, None, None, (), (),
+            D("0.50"), D(0), D(0), D(0), D("0.10"), D("0.40"), 0,
+        ),
+    ),
+    ai_priority=("assedio",),
+)
+VDE_TANGLED_PILGRIM = Creature(
+    "peregrino_enredado", "Peregrino Enredado", "uncommon", "balanced", 11, 15, 30,
+    ("golpe_enredado", "laco_improvisado", "defend"),
+    (
+        ("golpe_enredado", "Golpe Enredado", D("1.00"), 0, D(0), 0),
+        ("laco_improvisado", "Laço Improvisado", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "agility"),
+    ),
+    ai_priority=("laco_improvisado",),
+)
+VDE_VINE_SPIDER = Creature(
+    "aranha_cipo", "Aranha de Cipó", "common", "controller", 13, 16, 0,
+    ("picada_cipo", "fio_tenso", "mordida_cipo"),
+    (
+        ("picada_cipo", "Picada de Cipó", D("0.80"), 0, D(0), 0, "poison", 1, False, 2),
+        ("fio_tenso", "Fio Tenso", D("0.75"), 0, D("0.12"), 2, None, 0, False, 3, "agility"),
+        ("mordida_cipo", "Mordida", D("0.95"), 0, D(0), 0),
+    ),
+    damage_taken_modifiers=(("burn", D("1.10")), ("poison", D("0.90"))),
+)
+VDE_KNOT_DEER = Creature(
+    "cervo_no", "Cervo do Nó", "common", "brute", 13, 17, 0,
+    ("chifrada_nodosa", "pisoteio_no", "investida_galhos"),
+    (
+        ("chifrada_nodosa", "Chifrada Nodosa", D("1.05"), 0, D(0), 0),
+        ("pisoteio_no", "Pisoteio", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+        ("investida_galhos", "Investida dos Galhos", D("1.70"), 0, D(0), 0, None, 0, True, 4),
+    ),
+)
+VDE_FEROCIOUS_KNOT = Creature(
+    "no_feroz", "Nó-Feroz", "elite", "predator", 13, 14, 0,
+    ("mordida_feroz", "rasgo_raizes", "cacada_ferido", "salto_no"),
+    (
+        ("mordida_feroz", "Mordida Feroz", D("1.00"), 0, D(0), 0),
+        ("rasgo_raizes", "Rasgo das Raízes", D("0.90"), 0, D(0), 0, "bleed", 1, False, 2),
+        (
+            "cacada_ferido", "Caçada do Ferido", D("1.30"), 0, D(0), 0,
+            None, 0, False, 3, None, D(0), D(0), 0, False, "opponent", None,
+            None, None, (), (), D("0.50"), D(0), D(0), D("0.10"), D(0),
+            D("0.40"), 0,
+        ),
+        ("salto_no", "Salto do Nó", D("1.70"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("rasgo_raizes", "cacada_ferido", "salto_no"),
+)
+VDE_VINE_WIDOW = Creature(
+    "viuva_cipos", "Viúva dos Cipós", "elite", "controller", 15, 17, 0,
+    ("picada_viuva", "trama_cipos", "veneno_concentrado", "bote_suspenso"),
+    (
+        ("picada_viuva", "Picada da Viúva", D("0.80"), 0, D(0), 0, "poison", 1, False, 2),
+        ("trama_cipos", "Trama dos Cipós", D("0.75"), 0, D("0.15"), 2, None, 0, False, 3, "agility"),
+        (
+            "veneno_concentrado", "Veneno Concentrado", D("0.95"), 0, D(0),
+            0, "poison", 1, False, 3, None, D(0), D(0), 0, False,
+            "opponent", None, None, None, (), (), D("0.50"), D(0), D(0),
+            D(0), D(0), D("0.40"), 1,
+        ),
+        ("bote_suspenso", "Bote Suspenso", D("1.55"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("picada_viuva", "trama_cipos", "veneno_concentrado", "bote_suspenso"),
+)
+
+VDE_CREATURES = (
+    VDE_MOSS_WOLF,
+    VDE_VALLEY_CROW,
+    VDE_TANGLED_PILGRIM,
+    VDE_VINE_SPIDER,
+    VDE_KNOT_DEER,
+    VDE_FEROCIOUS_KNOT,
+    VDE_VINE_WIDOW,
+)
+CREATURE_CATALOG = (*CREATURE_CATALOG, *VDE_CREATURES)
+
 VARIANTS = {
     "furious": StatMultipliers(D(1), D("1.08"), D("0.92"), D(1)),
     "resistant": StatMultipliers(D(1), D("0.94"), D("1.10"), D(1)),
@@ -431,6 +539,13 @@ VARIANT_POOL = {
     "vigia_rachado": ("resistant", "furious"),
     "custodio_sem_rosto": ("resistant", "agile"),
     "custodio_poente": (),
+    "lobo_musgoso": ("furious", "agile", "hemorrhagic"),
+    "gralha_vale": ("agile", "furious"),
+    "peregrino_enredado": ("furious", "resistant", "agile"),
+    "aranha_cipo": ("venomous", "agile"),
+    "cervo_no": ("furious", "resistant"),
+    "no_feroz": (),
+    "viuva_cipos": (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -554,6 +669,8 @@ LOCATION_LEVEL_BANDS = {
     "Charneca da Fuligem": (3, 5),
     "Bosque Calcinado": (5, 8),
     "Ruínas do Vigia": (8, 10),
+    "Garganta dos Laços": (11, 13),
+    "Mata Suspensa": (13, 16),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -596,6 +713,39 @@ RUINS_PROFILE = HuntLocationProfile(
     hunt_unlock=RUINS_HUNT_UNLOCK,
     round_familiarity=RUINS_ROUND_FAMILIARITY,
     explore_unlock=RUINS_EXPLORE_UNLOCK,
+)
+
+VDE_GARGANTA_PROFILE = HuntLocationProfile(
+    local_id=VDE_GARGANTA_LOCATION,
+    label="Garganta dos Laços",
+    creature_weights=(
+        ("lobo_musgoso", 34),
+        ("gralha_vale", 33),
+        ("peregrino_enredado", 30),
+        ("no_feroz", 3),
+    ),
+    variant_chance=10,
+    hunt_unlock=VDE_GARGANTA_HUNT_UNLOCK,
+    round_familiarity=VDE_GARGANTA_ROUND_FAMILIARITY,
+    explore_unlock=VDE_GARGANTA_EXPLORE_UNLOCK,
+)
+
+VDE_MATA_PROFILE = HuntLocationProfile(
+    local_id=VDE_MATA_LOCATION,
+    label="Mata Suspensa",
+    creature_weights=(
+        ("lobo_musgoso", 20),
+        ("gralha_vale", 17),
+        ("peregrino_enredado", 15),
+        ("aranha_cipo", 21),
+        ("cervo_no", 23),
+        ("no_feroz", 2),
+        ("viuva_cipos", 2),
+    ),
+    variant_chance=12,
+    hunt_unlock=VDE_MATA_HUNT_UNLOCK,
+    round_familiarity=VDE_MATA_ROUND_FAMILIARITY,
+    explore_unlock=VDE_MATA_EXPLORE_UNLOCK,
 )
 
 
@@ -713,11 +863,60 @@ RUINS_EXPLORATION_PROFILE = ExplorationLocationProfile(
     ),
 )
 
+VDE_GARGANTA_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=VDE_GARGANTA_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("marco_lacos", "great_discovery", "explore.vde.garganta.marco_dos_lacos", 100, "Marco dos Laços · vestígio de uma rota antiga construída antes das passagens atuais.", min_level=11, unique=True),
+        ExplorationResultDefinition("pegadas_barranco", "knowledge", "explore.vde.garganta.pegadas_no_barranco", 60, "Pegadas foram encontradas no barranco."),
+        ExplorationResultDefinition("cordas_arrastadas", "knowledge", "explore.vde.garganta.cordas_arrastadas", 40, "Cordas arrastadas foram observadas junto à antiga rota."),
+        ExplorationResultDefinition("sinos_sem_maos", "narrative", "explore.vde.garganta.sinos_sem_maos", 70, "Sinos sem Mãos foram observados.", min_level=11, unique=True),
+        ExplorationResultDefinition("nevoa_paredoes", "narrative", "explore.vde.garganta.nevoa_entre_paredoes", 30, "A névoa se mantém entre os paredões."),
+        ExplorationResultDefinition("lobo_musgoso", "combat", "explore.vde.garganta.combat.lobo_musgoso", 40, "Um Lobo Musgoso surge entre as raízes.", min_level=11, creature_id="lobo_musgoso"),
+        ExplorationResultDefinition("gralha_vale", "combat", "explore.vde.garganta.combat.gralha_vale", 35, "Uma Gralha do Vale cruza a névoa.", min_level=11, creature_id="gralha_vale"),
+        ExplorationResultDefinition("peregrino_enredado", "combat", "explore.vde.garganta.combat.peregrino_enredado", 25, "Um Peregrino Enredado bloqueia a passagem.", min_level=11, creature_id="peregrino_enredado"),
+        ExplorationResultDefinition("ferro", "resource", "explore.vde.garganta.ferro_enredado", 30, "Ferro Enredado pode ser recolhido na Garganta.", min_level=11),
+        ExplorationResultDefinition("couro", "resource", "explore.vde.garganta.couro_musgoso", 30, "Couro Musgoso pode ser recolhido na Garganta.", min_level=11),
+        ExplorationResultDefinition("erva", "resource", "explore.vde.garganta.erva_de_turfa", 25, "Erva de Turfa pode ser recolhida na Garganta.", min_level=11),
+        ExplorationResultDefinition("resina", "resource", "explore.vde.garganta.resina_enredada", 15, "Resina Enredada pode ser recolhida na Garganta.", min_level=11),
+        ExplorationResultDefinition("pedra_musgo", "atmospheric", "explore.vde.garganta.pedra_coberta_de_musgo", 34, "Pedra coberta de musgo ocupa a margem do caminho."),
+        ExplorationResultDefinition("ponte_sem_caminho", "atmospheric", "explore.vde.garganta.ponte_sem_caminho", 33, "Uma ponte sem caminho visível atravessa a névoa."),
+        ExplorationResultDefinition("cordas_abismo", "atmospheric", "explore.vde.garganta.cordas_sobre_abismo", 33, "Cordas antigas passam sobre o abismo."),
+    ),
+)
+
+VDE_MATA_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=VDE_MATA_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("brazier_copas", "great_discovery", "explore.vde.mata.braseiro_das_copas", 50, "Braseiro das Copas Suspensas encontrado.", min_level=13, unique=True),
+        ExplorationResultDefinition("fosso_raizes", "great_discovery", "explore.vde.mata.entrada_fosso_raizes", 50, "A entrada do Fosso das Raízes foi encontrada.", min_level=13, unique=True),
+        ExplorationResultDefinition("passarela_partida", "knowledge", "explore.vde.mata.passarela_partida", 55, "A Passarela Partida foi examinada.", min_level=13, unique=True),
+        ExplorationResultDefinition("rastros_copas", "knowledge", "explore.vde.mata.rastros_nas_copas", 45, "Rastros foram observados nas copas."),
+        ExplorationResultDefinition("madeira_geme", "narrative", "explore.vde.mata.madeira_que_geme", 55, "A madeira geme sob o movimento dos galhos."),
+        ExplorationResultDefinition("galhos_sem_vento", "narrative", "explore.vde.mata.galhos_sem_vento", 45, "Galhos se movem sem vento aparente."),
+        ExplorationResultDefinition("lobo_musgoso", "combat", "explore.vde.mata.combat.lobo_musgoso", 20, "Um Lobo Musgoso surge entre os troncos.", min_level=11, creature_id="lobo_musgoso"),
+        ExplorationResultDefinition("gralha_vale", "combat", "explore.vde.mata.combat.gralha_vale", 15, "Uma Gralha do Vale desce sobre a passarela.", min_level=11, creature_id="gralha_vale"),
+        ExplorationResultDefinition("peregrino_enredado", "combat", "explore.vde.mata.combat.peregrino_enredado", 15, "Um Peregrino Enredado aparece entre as raízes.", min_level=11, creature_id="peregrino_enredado"),
+        ExplorationResultDefinition("aranha_cipo", "combat", "explore.vde.mata.combat.aranha_cipo", 25, "Uma Aranha de Cipó desce dos galhos.", min_level=13, creature_id="aranha_cipo"),
+        ExplorationResultDefinition("cervo_no", "combat", "explore.vde.mata.combat.cervo_no", 25, "Um Cervo do Nó ocupa a passagem.", min_level=13, creature_id="cervo_no"),
+        ExplorationResultDefinition("couro", "resource", "explore.vde.mata.couro_musgoso", 35, "Couro Musgoso pode ser recolhido na Mata Suspensa.", min_level=13),
+        ExplorationResultDefinition("erva", "resource", "explore.vde.mata.erva_de_turfa", 30, "Erva de Turfa pode ser recolhida na Mata Suspensa.", min_level=13),
+        ExplorationResultDefinition("resina", "resource", "explore.vde.mata.resina_enredada", 25, "Resina Enredada pode ser recolhida na Mata Suspensa.", min_level=13),
+        ExplorationResultDefinition("ferro", "resource", "explore.vde.mata.ferro_enredado", 10, "Ferro Enredado pode ser recolhido na Mata Suspensa.", min_level=13),
+        ExplorationResultDefinition("troncos_vazio", "atmospheric", "explore.vde.mata.troncos_sobre_vazio", 34, "Troncos atravessam o vazio entre as copas."),
+        ExplorationResultDefinition("folhas_nao_caem", "atmospheric", "explore.vde.mata.folhas_que_nao_caem", 33, "Folhas permanecem suspensas entre os galhos."),
+        ExplorationResultDefinition("ruina_copas", "atmospheric", "explore.vde.mata.ruina_entre_copas", 33, "Uma ruína aparece entre as copas."),
+    ),
+)
+
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
     CHARNECA_LOCATION: CHARNECA_EXPLORATION_PROFILE,
     BOSQUE_LOCATION: BOSQUE_EXPLORATION_PROFILE,
     RUINS_LOCATION: RUINS_EXPLORATION_PROFILE,
+    VDE_GARGANTA_LOCATION: VDE_GARGANTA_EXPLORATION_PROFILE,
+    VDE_MATA_LOCATION: VDE_MATA_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
@@ -725,6 +924,8 @@ HUNT_PROFILES = {
     CHARNECA_LOCATION: CHARNECA_PROFILE,
     BOSQUE_LOCATION: BOSQUE_PROFILE,
     RUINS_LOCATION: RUINS_PROFILE,
+    VDE_GARGANTA_LOCATION: VDE_GARGANTA_PROFILE,
+    VDE_MATA_LOCATION: VDE_MATA_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -1128,6 +1329,19 @@ def _creature_actions(creature: Creature, prefix: str = "") -> tuple[dict[str, A
         requires_defeated_fighter_keys = tuple(specification[20]) if len(specification) > 20 else ()
         revive_hp_fraction = D(specification[21]) if len(specification) > 21 else D("0.50")
         self_barrier_hp_fraction = D(specification[22]) if len(specification) > 22 else D(0)
+        actor_per_bonus = D(specification[23]) if len(specification) > 23 else D(0)
+        actor_per_bonus_if_target_bleeding = (
+            D(specification[24]) if len(specification) > 24 else D(0)
+        )
+        actor_per_bonus_if_target_hp_fraction_at_most = (
+            D(specification[25]) if len(specification) > 25 else D(0)
+        )
+        actor_per_bonus_hp_fraction_threshold = (
+            D(specification[26]) if len(specification) > 26 else D("0.40")
+        )
+        native_dot_stacks_if_target_poisoned = (
+            specification[27] if len(specification) > 27 else 0
+        )
         actions[actual_key] = Action(
             actual_key,
             label,
@@ -1152,6 +1366,13 @@ def _creature_actions(creature: Creature, prefix: str = "") -> tuple[dict[str, A
             requires_defeated_fighter_keys=requires_defeated_fighter_keys,
             revive_hp_fraction=revive_hp_fraction,
             self_barrier_hp_fraction=self_barrier_hp_fraction,
+            actor_per_bonus=actor_per_bonus,
+            actor_per_bonus_if_target_bleeding=actor_per_bonus_if_target_bleeding,
+            actor_per_bonus_if_target_hp_fraction_at_most=(
+                actor_per_bonus_if_target_hp_fraction_at_most
+            ),
+            actor_per_bonus_hp_fraction_threshold=actor_per_bonus_hp_fraction_threshold,
+            native_dot_stacks_if_target_poisoned=native_dot_stacks_if_target_poisoned,
         )
     cycle = tuple(key_map[key] for key in creature.ai if key in key_map)
     priority = tuple(key_map[key] for key in creature.ai_priority if key in key_map)

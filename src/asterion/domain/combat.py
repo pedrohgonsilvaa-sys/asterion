@@ -141,6 +141,11 @@ class Action:
     revive_hp_fraction: Decimal = D("0.50")
     requires_defeated_fighter_keys: tuple[str, ...] = ()
     self_barrier_hp_fraction: Decimal = ZERO
+    actor_per_bonus: Decimal = ZERO
+    actor_per_bonus_if_target_bleeding: Decimal = ZERO
+    actor_per_bonus_if_target_hp_fraction_at_most: Decimal = ZERO
+    actor_per_bonus_hp_fraction_threshold: Decimal = D("0.40")
+    native_dot_stacks_if_target_poisoned: int = 0
 
     def __post_init__(self) -> None:
         if self.hit_count < 1:
@@ -2746,6 +2751,18 @@ def _perform(
                 for dot in state.dot_states.get(target.id, ())
             )
             else ZERO
+        ) + action.actor_per_bonus + (
+            action.actor_per_bonus_if_target_bleeding
+            if any(
+                dot.kind == "bleed" and dot.stacks > 0 and dot.remaining > 0
+                for dot in state.dot_states.get(target.id, ())
+            )
+            else ZERO
+        ) + (
+            action.actor_per_bonus_if_target_hp_fraction_at_most
+            if target.stats.hp > ZERO
+            and target.hp <= target.stats.hp * action.actor_per_bonus_hp_fraction_threshold
+            else ZERO
         ) + D(target_path.get("per_bonus", ZERO))
         damage = (
             direct_damage(
@@ -2960,6 +2977,11 @@ def _perform(
             ) if enemy_actor else None
             native_kind = action.native_dot_kind
             native_stacks = action.native_dot_stacks
+            if native_kind == "poison" and any(
+                dot.kind == "poison" and dot.stacks > 0 and dot.remaining > 0
+                for dot in state.dot_states.get(target.id, ())
+            ):
+                native_stacks += action.native_dot_stacks_if_target_poisoned
             if (
                 enemy_actor
                 and native_kind is None

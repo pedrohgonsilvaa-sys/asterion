@@ -64,7 +64,7 @@ def p7_router(service: P7Service, images: dict[str, str]) -> Router:
     @router.callback_query(F.data.in_({"world:missions", "world:principal"}))
     async def mission_shortcut(query: CallbackQuery) -> None:
         view = await service.resume(query.from_user.id)
-        if view is None:
+        if view is None or view.status != "active":
             raise SkipHandler()
         await show(query, view)
 

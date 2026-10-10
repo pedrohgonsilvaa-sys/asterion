@@ -40,6 +40,10 @@ MATERIAL_LABELS = {
     "material.tdo.nucleo_vigia_partido": "Núcleo do Vigia Partido",
     "material.tdo.nucleo_cripta_ocaso": "Núcleo da Cripta do Ocaso",
     "material.tdo.nucleo_galerias_vigia": "Núcleo das Galerias do Vigia",
+    "material.vde.ferro_enredado": "Ferro Enredado",
+    "material.vde.couro_musgoso": "Couro Musgoso",
+    "material.vde.erva_de_turfa": "Erva de Turfa",
+    "material.vde.resina_enredada": "Resina Enredada",
 }
 
 @dataclass(frozen=True)
