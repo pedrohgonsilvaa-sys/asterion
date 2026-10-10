@@ -1,6 +1,8 @@
 """P5 campaign mission composed from persistent quests and shared combat."""
 # ruff: noqa: E501
 
+import hashlib
+import json
 from dataclasses import dataclass, replace
 from uuid import UUID
 
@@ -8,6 +10,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.bestiary import BestiaryRecorder
+from asterion.application.campaign_coop import (
+    CampaignRosterMember,
+    campaign_action_intent,
+    campaign_actor_key,
+    campaign_combat_for_activity,
+    create_campaign_boss_profile,
+    create_campaign_encounter,
+    lock_campaign_encounter,
+    resolve_campaign_action,
+)
+from asterion.application.groups import ActivityEligibility, GroupError, GroupService
 from asterion.application.progression import consolidate_character_level
 from asterion.application.road import REFUGE, REGION, RUINS, RoadService
 from asterion.application.scripted_combat import (
@@ -17,19 +30,25 @@ from asterion.application.scripted_combat import (
     materialize,
     normalize_character_hp,
 )
+from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
 from asterion.domain.road import RUINS_LOCATION, SUNSET_CUSTODIAN, enemy_xp
 from asterion.infrastructure.db.combat_codec import decode
 from asterion.infrastructure.db.models import (
     BestiaryEntry,
+    CampaignSharedEncounterMember,
     Character,
     CodexEntry,
     CodexFragment,
     CombatRecord,
+    ConsumableStack,
     Encounter,
     GameActivity,
+    GroupActivityParticipant,
     Quest,
     RewardComponent,
     RewardEvent,
+    SocialGroup,
+    SocialGroupMember,
     WorldState,
 )
 
@@ -78,14 +97,24 @@ class P5View:
     consumable_notice: str | None = None
     ready_consumable_option: object | None = None
     xp: int = 0
+    combat_actor_key: str | None = None
+    group_size: int = 1
+    proposal_id: UUID | None = None
+    proposal_status: str | None = None
 
 
 class P5Service:
     """Owns P5 transitions; movement and combat remain shared services."""
 
-    def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
+    def __init__(
+        self,
+        sessions: async_sessionmaker[AsyncSession],
+        server_id: str,
+        groups: GroupService | None = None,
+    ):
         self.sessions = sessions
         self.server_id = server_id
+        self.groups = groups
         self.bestiary = BestiaryRecorder()
         self.road = RoadService(sessions, server_id)
 
@@ -172,6 +201,187 @@ class P5Service:
             await session.flush()
             return await self._view(session, character, quest, world)
 
+    async def propose_group_combat(self, actor: int, version: int):
+        if self.groups is None:
+            return await self.resume(actor)
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            quest = await self._quest(session, character.id) if character else None
+            world = await self._world(session, character.id) if character else None
+            if (
+                character is None
+                or not self._valid(quest, version, step=3)
+                or not self._at(world, RUINS)
+                or await self._foreground(session, character.id)
+            ):
+                return await self._view(session, character, quest, world)
+            membership = await session.get(SocialGroupMember, character.id)
+            if membership is None:
+                return await self._view(session, character, quest, world)
+            participants = tuple(
+                (
+                    await session.scalars(
+                        select(SocialGroupMember.character_id)
+                        .where(SocialGroupMember.group_id == membership.group_id)
+                        .order_by(SocialGroupMember.joined_at, SocialGroupMember.character_id)
+                    )
+                ).all()
+            )
+        await self.groups.propose_activity(
+            actor,
+            activity_type="campaign_p5",
+            participant_character_ids=participants,
+            eligibility_resolver=self._p5_combat_eligibility,
+            journey_reference_character_id=character.id,
+            context_payload={
+                "title": P5_TITLE,
+                "quest_id": P5_ID,
+                "checkpoint": "p5.custodio_poente",
+                "location": RUINS,
+            },
+        )
+        return await self.resume(actor)
+
+    async def start_group_combat(
+        self,
+        actor: int,
+        proposal_id: UUID,
+        *,
+        expected_revision: int,
+    ) -> P5View | None:
+        if self.groups is None:
+            return await self.resume(actor)
+        await self.groups.start_activity(
+            actor,
+            proposal_id,
+            expected_revision=expected_revision,
+            eligibility_resolver=self._p5_combat_eligibility,
+            create_activity=self._create_p5_group_combat,
+        )
+        return await self.resume(actor)
+
+    async def _p5_combat_eligibility(self, session, character, payload):
+        quest = await session.scalar(
+            select(Quest).where(
+                Quest.character_id == character.id,
+                Quest.quest_id == P5_ID,
+            )
+        )
+        world = await self._world(session, character.id)
+        active = await self._foreground(session, character.id)
+        same_location = self._at(world, payload.get("location")) and payload.get(
+            "location"
+        ) == RUINS
+        if (
+            active is not None
+            or not same_location
+            or quest is None
+            or quest.content_version != P5_VERSION
+        ):
+            role = "ineligible"
+        elif (
+            quest.status == "active"
+            and quest.step == 3
+            and bool((quest.progress or {}).get("door_known"))
+        ):
+            role = "eligible"
+        elif quest.status == "completed" or quest.step > 3:
+            role = "helper"
+        else:
+            role = "ineligible"
+        snapshot = {
+            "character_id": str(character.id),
+            "role": role,
+            "quest_status": quest.status if quest else None,
+            "quest_step": quest.step if quest else None,
+            "quest_version": quest.state_version if quest else None,
+            "quest_content_version": quest.content_version if quest else None,
+            "location": world.location if world else None,
+            "region": world.region if world else None,
+            "active_activity": str(active.id) if active else None,
+            "combat_configuration_version": character.combat_configuration_version,
+            "level": character.level,
+        }
+        fingerprint = hashlib.sha256(
+            json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        return ActivityEligibility(role, fingerprint, snapshot)
+
+    async def _create_p5_group_combat(self, session, proposal, characters):
+        participant_rows = list(
+            (
+                await session.scalars(
+                    select(GroupActivityParticipant)
+                    .where(GroupActivityParticipant.proposal_id == proposal.id)
+                    .order_by(GroupActivityParticipant.ordinal)
+                )
+            ).all()
+        )
+        roles = {row.character_id: row.eligibility for row in participant_rows}
+        group = await session.get(SocialGroup, proposal.group_id)
+        if group is None:
+            raise GroupError("not_in_group")
+        combat = await create_campaign_boss_profile(
+            session,
+            characters,
+            SUNSET_CUSTODIAN,
+            9,
+            flavor="Uma figura blindada se ergue diante da Porta do Poente.",
+            opening_log="🛡️ Custódio do Poente · Nv.9 guarda a estrutura deliberadamente protegida.",
+        )
+        roster = tuple(
+            CampaignRosterMember(
+                character=character,
+                actor_key=campaign_actor_key(index, len(characters)),
+                role=roles[character.id],
+                checkpoint="p5.custodio_poente",
+            )
+            for index, character in enumerate(characters, start=1)
+        )
+        encounter = await create_campaign_encounter(
+            session,
+            group=group,
+            proposal=proposal,
+            roster=roster,
+            quest_id=P5_ID,
+            content_id=P5_CONTENT_ID,
+            combat=combat,
+            ruleset_version=combat.ruleset,
+            checkpoint="p5.custodio_poente",
+            campaign_boss=True,
+        )
+        activities = list(
+            (
+                await session.scalars(
+                    select(CampaignSharedEncounterMember).where(
+                        CampaignSharedEncounterMember.shared_encounter_id == encounter.id
+                    )
+                )
+            ).all()
+        )
+        for member in activities:
+            quest = await session.scalar(
+                select(Quest)
+                .where(
+                    Quest.character_id == member.character_id,
+                    Quest.quest_id == P5_ID,
+                )
+                .with_for_update()
+            )
+            if quest is None:
+                raise GroupError("eligibility_changed")
+            progress = dict(quest.progress or {})
+            progress.update(
+                combat_activity_id=str(member.game_activity_id),
+                combat_result=None,
+                awaiting_retry=False,
+            )
+            quest.progress = progress
+            if member.role == "eligible":
+                quest.step = 3
+                quest.state_version += 1
+        return str(encounter.id)
+
     async def action(
         self,
         actor: int,
@@ -194,14 +404,13 @@ class P5Service:
                 progress["door_known"] = True
                 progress["ruins_updated"] = True
                 quest.step = 3
-                quest.progress = progress
-                activity = await self._materialize(session, character, quest)
-                if activity is None:
-                    quest.step = 2
-                    progress.pop("door_known", None)
-                    progress.pop("ruins_updated", None)
-                    return await self._view(session, character, quest, world)
                 await self._ensure_codex_fragment(session, character.id, P5_DOOR_FRAGMENT)
+            elif operation == "start_boss" and quest.step == 3 and self._at(world, RUINS):
+                if not progress.get("door_known") or progress.get("awaiting_retry"):
+                    return await self._view(session, character, quest, world)
+                quest.progress = progress
+                if await self._materialize(session, character, quest) is None:
+                    return await self._view(session, character, quest, world)
                 progress = dict(quest.progress or progress)
             elif (
                 operation == "retry"
@@ -260,6 +469,17 @@ class P5Service:
         target_id: str | None = None,
         effect_id: str | None = None,
     ) -> P5View | None:
+        shared_view = await self._shared_action(
+            actor,
+            activity_id,
+            version,
+            action,
+            consumable_id=consumable_id,
+            target_id=target_id,
+            effect_id=effect_id,
+        )
+        if shared_view is not None:
+            return shared_view
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor)
             if character is None or quest is None:
@@ -357,6 +577,173 @@ class P5Service:
             quest.state_version += 1
             return await self._view(session, character, quest, world)
 
+    async def campaign_action(
+        self, actor: int, activity_id: UUID, version: int, action_index: int, target_code: str
+    ):
+        view = await self.resume(actor)
+        if (
+            view is None
+            or view.activity_id != activity_id
+            or view.combat is None
+            or view.combat.version != version
+            or view.combat_actor_key is None
+        ):
+            return None
+        intent = campaign_action_intent(
+            view.combat, view.combat_actor_key, action_index, target_code
+        )
+        if intent is None:
+            return view
+        action, target_id = intent
+        return await self.action_combat(actor, activity_id, version, action, target_id=target_id)
+
+    async def _shared_action(
+        self,
+        actor: int,
+        activity_id: UUID,
+        version: int,
+        action: str | None,
+        *,
+        consumable_id: str | None = None,
+        target_id: str | None = None,
+        effect_id: str | None = None,
+    ) -> P5View | None:
+        async with self.sessions.begin() as session:
+            seed = await self._character(session, actor)
+            if seed is None:
+                return None
+            encounter_seed, member_seed, _ = await campaign_combat_for_activity(
+                session, activity_id, seed.id
+            )
+            if member_seed is None:
+                return None
+            locked = await lock_campaign_encounter(session, activity_id, seed.id)
+            if locked is None or locked.encounter.quest_id != P5_ID:
+                return None
+            character = locked.characters.get(seed.id)
+            member = next(
+                (row for row in locked.members if row.game_activity_id == activity_id), None
+            )
+            if character is None or member is None:
+                return None
+            quest_rows = list(
+                (
+                    await session.scalars(
+                        select(Quest)
+                        .where(
+                            Quest.character_id.in_(locked.characters),
+                            Quest.quest_id == P5_ID,
+                        )
+                        .order_by(Quest.character_id)
+                        .with_for_update()
+                    )
+                ).all()
+            )
+            quests = {row.character_id: row for row in quest_rows}
+            quest = quests.get(character.id)
+            activity = locked.activities.get(activity_id)
+            world = await self._world(session, character.id)
+            if quest is None or activity is None or (action is None) == (consumable_id is None):
+                return await self._view(session, character, quest, world)
+            if (
+                locked.encounter.content_id != P5_CONTENT_ID
+                or locked.encounter.state_version != version
+                or activity.state_version != version
+                or activity.status != "active"
+            ):
+                return await self._view(session, character, quest, world)
+            stack = None
+            if consumable_id is not None:
+                stack = await session.scalar(
+                    select(ConsumableStack)
+                    .where(
+                        ConsumableStack.character_id == character.id,
+                        ConsumableStack.consumable_id == consumable_id,
+                        ConsumableStack.quantity > 0,
+                    )
+                    .with_for_update()
+                )
+                if stack is None:
+                    return await self._view(session, character, quest, world)
+            updated = resolve_campaign_action(
+                locked,
+                activity_id=activity_id,
+                version=version,
+                action=action,
+                consumable_id=consumable_id,
+                target_id=target_id,
+                effect_id=effect_id,
+                consumable_budget=ENCOUNTER_CONSUMABLE_LIMITS.get(
+                    SUNSET_CUSTODIAN.category, 0
+                ),
+            )
+            if updated.version == version:
+                return await self._view(session, character, quest, world)
+            if stack is not None:
+                stack.quantity -= 1
+            member_by_character = {row.character_id: row for row in locked.members}
+            for character_id, participant in locked.characters.items():
+                roster_member = member_by_character[character_id]
+                participant_quest = quests.get(character_id)
+                observed = await session.scalar(
+                    select(BestiaryEntry.id).where(
+                        BestiaryEntry.character_id == character_id,
+                        BestiaryEntry.creature_id == SUNSET_CUSTODIAN.creature_id,
+                    )
+                )
+                if observed is None:
+                    await self.bestiary.record(
+                        session,
+                        character_id,
+                        SUNSET_CUSTODIAN.creature_id,
+                        elite=True,
+                        observation_category="elite",
+                    )
+                await self.bestiary.record_combat_events(
+                    session, character_id, SUNSET_CUSTODIAN.creature_id, None, updated
+                )
+                if updated.result == "victory":
+                    await self.bestiary.record(
+                        session,
+                        character_id,
+                        SUNSET_CUSTODIAN.creature_id,
+                        victory=True,
+                        elite=True,
+                        observation_category="elite",
+                    )
+                    await self._grant_enemy_xp(
+                        session, participant, locked.activities[roster_member.game_activity_id]
+                    )
+                    await consolidate_character_level(session, participant)
+                if roster_member.role == "eligible" and participant_quest is not None:
+                    progress = dict(participant_quest.progress or {})
+                    if updated.result == "victory":
+                        participant_quest.step = 4
+                        progress.update(combat_result="victory", awaiting_retry=False)
+                    elif updated.result == "defeat":
+                        participant_world = await self._world(session, character_id)
+                        brazier, location = await self.road.recover_normal_pve_defeat(
+                            session, participant, RUINS_LOCATION, participant_world
+                        )
+                        progress.update(
+                            combat_result="defeat",
+                            awaiting_retry=True,
+                            defeat_activity_id=str(roster_member.game_activity_id),
+                            recovery_brazier=brazier,
+                            recovery_location=location,
+                        )
+                    if updated.result:
+                        participant_quest.progress = progress
+                        participant_quest.state_version += 1
+            if updated.result:
+                await self._settle_campaign_activity(session, locked, updated.result)
+            return await self._view(session, character, quest, world)
+
+    async def _settle_campaign_activity(self, session, locked, result: str) -> None:
+        from asterion.application.campaign_coop import settle_campaign_encounter
+
+        await settle_campaign_encounter(session, locked, result)
+
     async def consumable_selection(
         self,
         actor: int,
@@ -368,6 +755,17 @@ class P5Service:
         target_id: str | None = None,
         parent: str = "items",
     ) -> P5View | None:
+        shared = await self.resume(actor)
+        if shared is not None and shared.activity_id == activity_id and shared.combat is not None:
+            if shared.combat.version != version:
+                return replace(shared, consumable_notice="⚠️ O combate foi atualizado.")
+            return derive_consumable_selection(
+                shared,
+                screen=screen,
+                item_id=item_id,
+                target_id=target_id,
+                parent=parent,
+            )
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor)
             if character is None or quest is None:
@@ -519,7 +917,21 @@ class P5Service:
             stored_id = UUID(stored) if stored else None
         except (TypeError, ValueError):
             stored_id = None
+        actor_key = None
+        group_size = 1
+        shared = None
         if stored_id is not None:
+            shared, shared_member, shared_combat = await campaign_combat_for_activity(
+                session, stored_id, character.id
+            )
+            if shared is not None:
+                activity = await session.get(GameActivity, stored_id)
+                combat = shared_combat if shared.status == "active" else None
+                encounter = shared
+                record = None
+                actor_key = shared_member.actor_key
+                group_size = shared.roster_size
+        if stored_id is not None and shared is None:
             activity = await session.scalar(
                 select(GameActivity).where(
                     GameActivity.id == stored_id,
@@ -551,10 +963,10 @@ class P5Service:
             kind = requested_kind
         elif quest is None:
             kind = "offer" if can_offer and self._at(world, REFUGE) else "unavailable"
-        elif status == "completed":
-            kind = "completed"
         elif combat is not None:
             kind = "combat"
+        elif status == "completed":
+            kind = "completed"
         elif status != "active":
             kind = "unavailable"
         elif quest.step == 3 and progress.get("awaiting_retry"):
@@ -577,7 +989,11 @@ class P5Service:
         budget = 0
         if activity is not None and activity.status == "active" and combat is not None:
             options, quantities, budget = await consumable_state(
-                session, character, combat, SUNSET_CUSTODIAN.category
+                session,
+                character,
+                combat,
+                SUNSET_CUSTODIAN.category,
+                actor_key=actor_key,
             )
         return P5View(
             character_id=character.id,
@@ -599,6 +1015,10 @@ class P5Service:
             consumable_quantities=quantities,
             consumable_budget_limit=budget,
             xp=character.xp,
+            combat_actor_key=actor_key,
+            group_size=group_size,
+            proposal_id=UUID(progress["group_proposal_id"]) if progress.get("group_proposal_id") else None,
+            proposal_status=progress.get("group_proposal_status"),
         )
 
     async def _eligible(self, session, character):

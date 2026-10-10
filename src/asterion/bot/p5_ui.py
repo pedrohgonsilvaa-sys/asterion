@@ -43,6 +43,7 @@ def _combat(view: P5View) -> Screen:
             consumable_quantities=view.consumable_quantities,
             consumable_budget_limit=view.consumable_budget_limit,
             ready_consumable_option=view.ready_consumable_option,
+            combat_actor_key=view.combat_actor_key,
         )
     )
     return Screen(
@@ -185,15 +186,25 @@ def render_p5(view: P5View) -> Screen:
             ),
         )
     if view.kind == "combat_pending":
+        rows = []
+        if view.progress.get("awaiting_retry"):
+            rows.append([_button("Nova tentativa Solo", f"p5:{version}:retry")])
+        else:
+            rows.append([_button("Enfrentar Solo", f"p5:{version}:start_boss")])
+        if view.progress.get("door_known") and view.location == RUINS:
+            rows.append([_button("Formar Grupo", f"p5:{version}:group")])
+        rows.extend([[_button("Grupo", "group:root")], [_button("← Missões", "world:missions")]])
         return Screen(
-            f"📜 {P5_TITLE} · Em Andamento\n🎯 O encontro será reconstruído a partir do estado persistido.",
+            f"📜 {P5_TITLE} · Em Andamento\n🎯 Enfrentar o Custódio do Poente.\n\n"
+            "Você pode seguir sozinho ou confirmar uma formação cooperativa.",
             "p5",
-            _keyboard([[_button("Atualizar", "p5:resume")], [_button("← Missões", "world:missions")]]),
+            _keyboard(rows),
         )
     if view.kind == "recovery":
         rows = []
         if view.location == RUINS:
             rows.append([_button("Nova tentativa", f"p5:{version}:retry")])
+            rows.append([_button("Formar Grupo", f"p5:{version}:group")])
         else:
             rows.append([_route_back_to_ruins(view)])
         rows.append([_button("← Missões", "world:missions")])

@@ -438,6 +438,7 @@ class Combat:
     pressure_stacks: int = 0
     stat_auras: tuple[CombatStatAura, ...] = ()
     player_actions_by_fighter: dict[str, dict[str, Action]] = field(default_factory=dict)
+    player_configuration_snapshots: dict[str, dict[str, Any]] = field(default_factory=dict)
     party_mode: bool = False
     damage_auras: tuple[CombatDamageAura, ...] = ()
     phase_triggers: tuple[CombatPhaseTrigger, ...] = ()

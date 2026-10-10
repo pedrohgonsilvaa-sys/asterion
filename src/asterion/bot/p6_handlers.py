@@ -3,6 +3,7 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
+from asterion.application.groups import GroupError
 from asterion.application.p6 import P6_CHOICES, P6Service
 from asterion.bot.creation_handlers import present
 from asterion.bot.p6_ui import render_p6
@@ -35,6 +36,15 @@ def p6_router(service: P6Service, images: dict[str, str]) -> Router:
                     "report_alda", "report_oren",
                 }:
                     view = await service.action(actor, version, operation)
+                elif len(parts) == 3 and operation == "group":
+                    try:
+                        view = await service.propose_group_combat(actor, version)
+                    except GroupError:
+                        await query.answer(
+                            "Não foi possível preparar o Grupo. Atualize a tela.",
+                            show_alert=True,
+                        )
+                        return
         if view is None:
             view = await service.resume(actor)
         await query.answer()

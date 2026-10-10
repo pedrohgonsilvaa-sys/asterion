@@ -26,7 +26,9 @@ def _parse_revision(value: str) -> int:
     return int(value, 36)
 
 
-def groups_router(service: GroupService, images: dict[str, str]) -> Router:
+def groups_router(
+    service: GroupService, images: dict[str, str], p1=None, p5=None, p6=None, s6=None
+) -> Router:
     router = Router(name="groups")
     router.message.filter(F.chat.type == "private")
     router.callback_query.filter(F.message.chat.type == "private")
@@ -46,11 +48,12 @@ def groups_router(service: GroupService, images: dict[str, str]) -> Router:
 
     async def show_group(target: Message | CallbackQuery) -> None:
         group = await service.group(target.from_user.id)
+        proposals = await service.activity_proposals(target.from_user.id)
         message = target if isinstance(target, Message) else target.message
         if isinstance(message, Message):
             await present(
                 message,
-                render_group(group),
+                render_group(group, proposals),
                 images,
                 edit=isinstance(target, CallbackQuery),
             )
@@ -207,7 +210,7 @@ def groups_router(service: GroupService, images: dict[str, str]) -> Router:
             parts = (query.data or "").split(":")
             if len(parts) != 4:
                 raise ValueError("invalid callback")
-            group = await service.kick(
+            await service.kick(
                 query.from_user.id,
                 UUID(hex=parts[2]),
                 expected_group_revision=_parse_revision(parts[3]),
@@ -220,7 +223,7 @@ def groups_router(service: GroupService, images: dict[str, str]) -> Router:
             return
         await query.answer("Integrante removido.")
         if isinstance(query.message, Message):
-            await present(query.message, render_group(group), images, edit=True)
+            await show_group(query)
 
     @router.callback_query(F.data.startswith("group:lead:"))
     async def group_transfer(query: CallbackQuery) -> None:
@@ -228,7 +231,7 @@ def groups_router(service: GroupService, images: dict[str, str]) -> Router:
             parts = (query.data or "").split(":")
             if len(parts) != 4:
                 raise ValueError("invalid callback")
-            group = await service.transfer_leadership(
+            await service.transfer_leadership(
                 query.from_user.id,
                 UUID(hex=parts[2]),
                 expected_group_revision=_parse_revision(parts[3]),
@@ -241,7 +244,69 @@ def groups_router(service: GroupService, images: dict[str, str]) -> Router:
             return
         await query.answer("Liderança transferida.")
         if isinstance(query.message, Message):
-            await present(query.message, render_group(group), images, edit=True)
+            await show_group(query)
+
+    @router.callback_query(F.data.startswith("group:proposal:"))
+    async def activity_proposal_action(query: CallbackQuery) -> None:
+        parts = (query.data or "").split(":")
+        try:
+            if len(parts) != 5 or parts[2] not in {"yes", "no", "start"}:
+                raise ValueError("invalid activity proposal callback")
+            proposal_id = UUID(hex=parts[3])
+            revision = _parse_revision(parts[4])
+            if parts[2] in {"yes", "no"}:
+                await service.respond_activity(
+                    query.from_user.id,
+                    proposal_id,
+                    expected_revision=revision,
+                    accept=parts[2] == "yes",
+                )
+                await query.answer(
+                    "Atividade confirmada." if parts[2] == "yes" else "Atividade recusada."
+                )
+                await show_group(query)
+                return
+            proposal = await service.activity_proposal(query.from_user.id, proposal_id)
+            service_by_type = {
+                "campaign_p1": p1,
+                "campaign_p5": p5,
+                "campaign_p6": p6,
+                "campaign_s6": s6,
+            }
+            campaign_service = service_by_type.get(proposal.activity_type)
+            if campaign_service is None:
+                await query.answer(
+                    "Esta atividade não pode ser iniciada por esta tela.", show_alert=True
+                )
+                return
+            await campaign_service.start_group_combat(
+                query.from_user.id, proposal_id, expected_revision=revision
+            )
+            await query.answer("Confronto da Jornada iniciado.")
+            if isinstance(query.message, Message):
+                view = await campaign_service.resume(query.from_user.id)
+                if proposal.activity_type == "campaign_p1":
+                    from asterion.bot.p1_ui import render_p1
+
+                    screen = render_p1(view)
+                elif proposal.activity_type == "campaign_p5":
+                    from asterion.bot.p5_ui import render_p5
+
+                    screen = render_p5(view)
+                elif proposal.activity_type == "campaign_p6":
+                    from asterion.bot.p6_ui import render_p6
+
+                    screen = render_p6(view)
+                else:
+                    from asterion.bot.s6_ui import render_s6
+
+                    screen = render_s6(view)
+                await present(query.message, screen, images, edit=True)
+        except (ValueError, GroupError) as exc:
+            if isinstance(exc, GroupError) and exc.code not in {"stale", "proposal_expired"}:
+                await query.answer(_error_text(exc.code), show_alert=True)
+                return
+            await stale(query)
 
     return router
 

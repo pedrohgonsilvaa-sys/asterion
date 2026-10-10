@@ -61,7 +61,7 @@ async def test_0014_selected_path_defaults_null_enforces_values_and_downgrades_s
         )
         await connection.run_sync(lambda sync: _migrate(sync, "head"))
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261008_0022"
+            "20261008_0023"
         )
         assert await connection.scalar(
             text("SELECT selected_path FROM characters WHERE id = :id"), {"id": character_id}
@@ -90,7 +90,7 @@ async def test_0014_selected_path_defaults_null_enforces_values_and_downgrades_s
 
     async with engine.begin() as connection:
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261008_0022"
+            "20261008_0023"
         )
         await connection.execute(
             text("DELETE FROM characters WHERE id = :id"), {"id": character_id}

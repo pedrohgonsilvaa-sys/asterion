@@ -106,6 +106,8 @@ class ActivityProposalView:
     created_at: datetime
     expires_at: datetime
     participants: tuple[ActivityParticipantView, ...]
+    viewer_eligibility: str | None = None
+    viewer_response: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -891,6 +893,43 @@ class GroupService:
                 await self._release_proposal(session, proposal.id)
             return await self._proposal_view(session, character.id, proposal)
 
+    async def activity_proposals(
+        self, actor: int, *, now: datetime | None = None
+    ) -> tuple[ActivityProposalView, ...]:
+        """List current confirmations addressed to this character's social group."""
+        now = _utcnow(now)
+        async with self.sessions.begin() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                return ()
+            proposals = list(
+                (
+                    await session.scalars(
+                        select(GroupActivityProposal)
+                        .join(
+                            GroupActivityParticipant,
+                            GroupActivityParticipant.proposal_id == GroupActivityProposal.id,
+                        )
+                        .where(
+                            GroupActivityParticipant.character_id == character.id,
+                            GroupActivityParticipant.reservation_state == "active",
+                            GroupActivityProposal.status.in_(("pending", "ready")),
+                        )
+                        .order_by(GroupActivityProposal.created_at, GroupActivityProposal.id)
+                        .with_for_update(of=GroupActivityProposal)
+                    )
+                ).all()
+            )
+            views = []
+            for proposal in proposals:
+                if now >= proposal.expires_at:
+                    proposal.status = "expired"
+                    proposal.revision += 1
+                    proposal.cancel_reason = "confirmation_expired"
+                    await self._release_proposal(session, proposal.id)
+                views.append(await self._proposal_view(session, character.id, proposal))
+            return tuple(views)
+
     async def _character(
         self, session: AsyncSession, actor: int, *, lock: bool = False
     ) -> Character | None:
@@ -1024,6 +1063,14 @@ class GroupService:
                 .order_by(GroupActivityParticipant.ordinal)
             )
         ).all()
+        viewer = next(
+            (
+                participant
+                for participant, _character in rows
+                if participant.character_id == viewer_id
+            ),
+            None,
+        )
         return ActivityProposalView(
             proposal_id=proposal.id,
             group_id=proposal.group_id,
@@ -1047,6 +1094,8 @@ class GroupService:
                 )
                 for participant, character in rows
             ),
+            viewer_eligibility=viewer.eligibility if viewer is not None else None,
+            viewer_response=viewer.response if viewer is not None else None,
         )
 
 

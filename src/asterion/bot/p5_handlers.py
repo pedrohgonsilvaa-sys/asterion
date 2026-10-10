@@ -3,6 +3,7 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
+from asterion.application.groups import GroupError
 from asterion.application.p5 import P5_ELEMENTS, P5Service
 from asterion.application.p6 import P6Service
 from asterion.bot.creation_handlers import present
@@ -43,6 +44,17 @@ def p5_router(service: P5Service, images: dict[str, str], *, p6: P6Service | Non
                     view = await service.action(actor, version, "follow_structures")
                 elif operation == "door" and len(parts) == 3:
                     view = await service.action(actor, version, "find_door")
+                elif operation == "start_boss" and len(parts) == 3:
+                    view = await service.action(actor, version, "start_boss")
+                elif operation == "group" and len(parts) == 3:
+                    try:
+                        view = await service.propose_group_combat(actor, version)
+                    except GroupError:
+                        await query.answer(
+                            "Não foi possível preparar o Grupo. Atualize a tela.",
+                            show_alert=True,
+                        )
+                        return
                 elif operation == "retry" and len(parts) == 3:
                     view = await service.action(actor, version, "retry")
                 elif operation == "symbol" and len(parts) == 3:

@@ -84,7 +84,8 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher = Dispatcher(disable_fsm=True)
     prologue = PrologueService(SessionFactory, settings.server_id, PROFILE)
     world = WorldService(SessionFactory, settings.server_id)
-    p1 = P1Service(SessionFactory, settings.server_id)
+    groups = GroupService(SessionFactory, settings.server_id)
+    p1 = P1Service(SessionFactory, settings.server_id, groups=groups)
     p2 = P2Service(SessionFactory, settings.server_id)
     road = RoundService(SessionFactory, settings.server_id)
     inventory = InventoryService(SessionFactory, settings.server_id)
@@ -99,9 +100,9 @@ def get_bot_runtime() -> BotRuntime:
     s4 = S4Service(SessionFactory, settings.server_id)
     s5 = S5Service(SessionFactory, settings.server_id)
     p4 = P4Service(SessionFactory, settings.server_id)
-    p5 = P5Service(SessionFactory, settings.server_id)
-    p6 = P6Service(SessionFactory, settings.server_id)
-    s6 = S6Service(SessionFactory, settings.server_id)
+    p5 = P5Service(SessionFactory, settings.server_id, groups=groups)
+    p6 = P6Service(SessionFactory, settings.server_id, groups=groups)
+    s6 = S6Service(SessionFactory, settings.server_id, groups=groups)
     class_trials = ClassTrialService(SessionFactory, settings.server_id)
     paths = PathSelectionService(SessionFactory, settings.server_id)
     active_arts = ActiveArtService(SessionFactory, settings.server_id)
@@ -112,7 +113,6 @@ def get_bot_runtime() -> BotRuntime:
     character_surfaces = CharacterSurfacesService(SessionFactory, settings.server_id)
     cosmetics = CosmeticService(SessionFactory, settings.server_id)
     doctrines = DoctrineService(SessionFactory, settings.server_id)
-    groups = GroupService(SessionFactory, settings.server_id)
     account = AccountService(
         SessionFactory,
         settings.server_id,
@@ -126,9 +126,13 @@ def get_bot_runtime() -> BotRuntime:
     )
     dispatcher.include_router(cosmetics_router(cosmetics, settings.creation_images))
     dispatcher.include_router(doctrines_router(doctrines, settings.creation_images))
-    dispatcher.include_router(groups_router(groups, settings.creation_images))
+    dispatcher.include_router(
+        groups_router(groups, settings.creation_images, p1=p1, p5=p5, p6=p6, s6=s6)
+    )
     dispatcher.include_router(p2_router(p2, settings.creation_images, s3=s3, p4=p4, p5=p5, p6=p6))
-    dispatcher.include_router(p1_router(p1, settings.creation_images))
+    dispatcher.include_router(
+        p1_router(p1, settings.creation_images, p5=p5, p6=p6, s6=s6)
+    )
     dispatcher.include_router(s1_router(s1, settings.creation_images))
     dispatcher.include_router(s2_router(s2, settings.creation_images))
     dispatcher.include_router(p3_router(p3, settings.creation_images, s3=s3))

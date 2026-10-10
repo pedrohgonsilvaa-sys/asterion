@@ -120,7 +120,7 @@ async def apply_action(
     return updated
 
 
-async def consumable_state(session, character, combat, category):
+async def consumable_state(session, character, combat, category, *, actor_key=None):
     stacks = (
         await session.scalars(
             select(ConsumableStack)
@@ -137,6 +137,7 @@ async def consumable_state(session, character, combat, category):
         combat,
         tuple(stack.consumable_id for stack in stacks),
         budget_limit=budget,
+        actor_key=actor_key,
     )
     return options, quantities, budget
 
