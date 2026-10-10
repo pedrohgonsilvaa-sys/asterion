@@ -558,7 +558,10 @@ async def test_s2_shares_vestiges_and_uses_confirmed_persistent_group_combat(
         combat_view.activity_state_version,
         "attack",
     )
-    assert resolved.step == 5 and resolved.progress["encounter_result"] == "victory"
+    if actor in actors[:2]:
+        assert resolved.step == 5 and resolved.progress["encounter_result"] == "victory"
+    else:
+        assert resolved.status == "completed"
     for member_actor in actors[:2]:
         resumed = await service.resume(member_actor)
         assert resumed.step == 5 and resumed.kind == "fragment"

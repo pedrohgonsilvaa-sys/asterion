@@ -35,6 +35,7 @@ def _combat(view: S5View) -> Screen:
             consumable_quantities=view.consumable_quantities,
             consumable_budget_limit=view.consumable_budget_limit,
             ready_consumable_option=view.ready_consumable_option,
+            combat_actor_key=view.combat_actor_key,
         )
     )
     return Screen(
@@ -155,14 +156,32 @@ def render_s5(view: S5View) -> Screen:
         )
         return Screen(text, "s5", _keyboard(rows))
     if view.kind == "combat_pending":
+        if view.proposal_id is not None:
+            return Screen(
+                f"📜 {S5_TITLE} · Confirmação de Grupo\n\n"
+                "A proposta para investigar o fenômeno está ativa. "
+                "Confira elegibilidade e confirme a entrada na tela do Grupo.",
+                "s5",
+                _keyboard([
+                    [_button("Abrir Grupo", "group:root")],
+                    [_button("Atualizar", "s5:resume")],
+                ]),
+            )
+        rows = []
+        if view.group_size > 1:
+            rows.append([_button("Propor encontro em Grupo", f"s5:{version}:group")])
+        rows.append([_button("Investigar Solo", f"s5:{version}:solo")])
+        rows.append([_button("← Missões", "world:missions")])
         return Screen(
-            f"📜 {S5_TITLE} · Em Andamento\n🎯 O encontro será reconstruído.",
-            "s5", _keyboard([[_button("Atualizar", "s5:resume")]]),
+            f"📜 {S5_TITLE} · Em Andamento\n🎯 O fenômeno aguarda nas Ruínas.",
+            "s5", _keyboard(rows),
         )
     if view.kind == "recovery":
         rows = []
         if view.location == RUINS:
             rows.append([_button("Tentar novamente", f"s5:{version}:retry")])
+            if view.group_size > 1:
+                rows.append([_button("Propor tentativa em Grupo", f"s5:{version}:group")])
         else:
             rows.extend(_routes(view))
         rows.append([_button("← Missões", "world:missions")])
