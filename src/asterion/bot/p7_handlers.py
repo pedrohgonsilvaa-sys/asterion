@@ -1,4 +1,5 @@
 """Telegram intent adapter for P7: A Estrada Estrangulada."""
+# ruff: noqa: B904,E501
 
 from uuid import UUID
 
