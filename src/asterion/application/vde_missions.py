@@ -273,6 +273,7 @@ class VDEMissionService:
             members = await self._present(session, character.id, P8_ID, step=1, location=MATA)
             for member in members:
                 await self._ensure_location(session, member.character.id, MATA_LOCATION_ID)
+                await self._ensure_unlock(session, member.character.id, MATA_EXPLORE_UNLOCK)
                 member.quest.step = 2
                 member.quest.progress = {
                     **(member.quest.progress or {}),

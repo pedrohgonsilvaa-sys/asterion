@@ -24,9 +24,14 @@ from asterion.application.p7 import (
 from asterion.application.p7 import (
     VIGILIA as VDE_VIGILIA,
 )
-from asterion.application.road import VDE_MATA, RoadService
+from asterion.application.road import (
+    VDE_EXPLORATION_UNIQUE_XP,
+    VDE_MATA,
+    RoadService,
+)
 from asterion.application.round import RoundService
 from asterion.application.vde_missions import (
+    MATA_EXPLORE_UNLOCK,
     P8_ID,
     P8_REWARD_SOURCE,
     S7_ID,
@@ -35,6 +40,7 @@ from asterion.application.vde_missions import (
 )
 from asterion.bot.road_ui import render_current_local
 from asterion.domain.road import (
+    EXPLORATION_CATEGORY_WEIGHTS,
     EXPLORATION_PROFILES,
     HUNT_PROFILES,
     MATERIAL_POOLS,
@@ -42,9 +48,11 @@ from asterion.domain.road import (
     VDE_CREATURES,
     VDE_GARGANTA_LOCATION,
     VDE_GARGANTA_ROUND_FAMILIARITY,
+    VDE_MATA_BRAZIER,
     VDE_MATA_LOCATION,
     create_road_combat,
     creature_for,
+    select_exploration_result,
 )
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
@@ -54,6 +62,7 @@ from asterion.infrastructure.db.models import (
     Character,
     CodexEntry,
     CodexFragment,
+    ExplorationAttempt,
     LocationDiscovery,
     MaterialStack,
     Quest,
@@ -102,7 +111,9 @@ async def _seed_vde_ready(database, actor: int, *, level: int = 13):
 
 
 @pytest.mark.asyncio
-async def test_vde_creature_pools_are_canonical_and_activities_wait_for_material_table(database):
+async def test_vde_exploration_is_available_while_hunt_round_wait_for_material_table(
+    database, monkeypatch
+):
     actor = 999731
     character_id, sessions = await _seed_vde_ready(database, actor)
     async with sessions.begin() as session:
@@ -156,25 +167,141 @@ async def test_vde_creature_pools_are_canonical_and_activities_wait_for_material
     assert VARIANT_POOL["lobo_musgoso"] == ("furious", "agile", "hemorrhagic")
 
     explore = EXPLORATION_PROFILES[VDE_GARGANTA_LOCATION]
+    mata_explore = EXPLORATION_PROFILES[VDE_MATA_LOCATION]
+    assert dict(explore.category_weights) == EXPLORATION_CATEGORY_WEIGHTS
+    assert dict(mata_explore.category_weights) == EXPLORATION_CATEGORY_WEIGHTS
+
+    def weights(profile, category):
+        return {
+            item.key: item.weight for item in profile.results if item.category == category
+        }
+
+    assert weights(explore, "great_discovery") == {"marco_lacos": 100}
+    assert weights(explore, "knowledge") == {"pegadas_barranco": 60, "cordas_arrastadas": 40}
+    assert weights(explore, "narrative") == {"sinos_sem_maos": 70, "nevoa_paredoes": 30}
+    assert weights(explore, "combat") == {
+        "lobo_musgoso": 40,
+        "gralha_vale": 35,
+        "peregrino_enredado": 25,
+    }
     resource_weights = {
         result.key: result.weight for result in explore.results if result.category == "resource"
     }
     assert resource_weights == {"ferro": 30, "couro": 30, "erva": 25, "resina": 15}
+    assert weights(explore, "atmospheric") == {
+        "pedra_musgo": 34,
+        "ponte_sem_caminho": 33,
+        "cordas_abismo": 33,
+    }
+    assert weights(mata_explore, "great_discovery") == {
+        "brazier_copas": 50,
+        "fosso_raizes": 50,
+    }
+    assert weights(mata_explore, "knowledge") == {
+        "passarela_partida": 55,
+        "rastros_copas": 45,
+    }
+    assert weights(mata_explore, "narrative") == {
+        "madeira_geme": 55,
+        "galhos_sem_vento": 45,
+    }
+    assert weights(mata_explore, "combat") == {
+        "lobo_musgoso": 20,
+        "gralha_vale": 15,
+        "peregrino_enredado": 15,
+        "aranha_cipo": 25,
+        "cervo_no": 25,
+    }
+    assert not any(
+        creature_for(result.creature_id).category == "elite"
+        for result in mata_explore.results
+        if result.category == "combat" and result.creature_id is not None
+    )
     mata_resources = {
         result.key: result.weight
-        for result in EXPLORATION_PROFILES[VDE_MATA_LOCATION].results
+        for result in mata_explore.results
         if result.category == "resource"
     }
     assert mata_resources == {"couro": 35, "erva": 30, "resina": 25, "ferro": 10}
+    assert weights(mata_explore, "atmospheric") == {
+        "troncos_vazio": 34,
+        "folhas_nao_caem": 33,
+        "ruina_copas": 33,
+    }
+    unique_xp = {
+        item.result_id: (item.unique, item.min_level)
+        for profile in (explore, mata_explore)
+        for item in profile.results
+        if item.unique
+    }
+    assert unique_xp == {
+        "explore.vde.garganta.marco_dos_lacos": (True, 11),
+        "explore.vde.garganta.sinos_sem_maos": (True, 11),
+        "explore.vde.mata.braseiro_das_copas": (True, 13),
+        "explore.vde.mata.entrada_fosso_raizes": (True, 13),
+        "explore.vde.mata.passarela_partida": (True, 13),
+    }
+    assert VDE_EXPLORATION_UNIQUE_XP == {
+        "explore.vde.garganta.marco_dos_lacos": 1536,
+        "explore.vde.garganta.sinos_sem_maos": 480,
+        "explore.vde.mata.braseiro_das_copas": 1832,
+        "explore.vde.mata.entrada_fosso_raizes": 1832,
+        "explore.vde.mata.passarela_partida": 573,
+    }
+    assert select_exploration_result(
+        "repeat-test",
+        13,
+        excluded=("explore.vde.mata.braseiro_das_copas",),
+        profile=mata_explore,
+    ) != "brazier_copas"
 
     road = RoadService(sessions, "ocaso")
     current = await road.resume(actor)
     assert current is not None and current.kind == "vde_garganta"
-    assert current.hunt_enabled is False and current.explore_enabled is False
+    assert current.hunt_enabled is False and current.explore_enabled is True
     assert await road.prepare_hunt(actor) is None
     assert await road.start_hunt(actor) is None
-    assert await road.prepare_explore(actor) is None
-    assert await road.explore(actor) is None
+    prepared = await road.prepare_explore(actor)
+    assert prepared is not None and prepared.kind == "explore_prepare"
+    screen = render_current_local(current, explore_state="available")
+    callbacks = [button.callback_data for row in screen.keyboard.inline_keyboard for button in row]
+    assert "road:explore:start" in callbacks
+    assert "Caçada · Indisponível no momento" in screen.text
+    assert "Aguardando tabela canônica" not in screen.text
+
+    import asterion.application.road as road_application
+
+    monkeypatch.setattr(
+        road_application,
+        "_explore_result",
+        lambda *args, **kwargs: (
+            "resource",
+            "explore.vde.garganta.ferro_enredado",
+            "Ferro Enredado pode ser recolhido na Garganta.",
+        ),
+    )
+    result = await road.explore(actor)
+    assert result is not None and result.kind == "exploration"
+    assert result.result_id == "explore.vde.garganta.ferro_enredado"
+    async with sessions() as session:
+        assert (
+            await session.scalar(
+                select(MaterialStack.quantity).where(
+                    MaterialStack.character_id == character_id,
+                    MaterialStack.material_id == "material.vde.ferro_enredado",
+                )
+            )
+            == 1
+        )
+        assert (
+            await session.scalar(
+                select(RewardEvent.id).where(
+                    RewardEvent.character_id == character_id,
+                    RewardEvent.source_id == f"explore:{result.attempt_id}",
+                )
+            )
+            is not None
+        )
 
     round_service = RoundService(sessions, "ocaso")
     assert await round_service.prepare_round(actor, 5) is None
@@ -239,7 +366,131 @@ async def test_vigilia_is_safe_hub_without_hunt_or_round(database):
     callbacks = [button.callback_data for row in screen.keyboard.inline_keyboard for button in row]
     assert "Caçadas · Indisponíveis neste Local" in screen.text
     assert "road:hunt" not in callbacks
+    assert "road:explore:start" not in callbacks
     assert "world:round" not in callbacks
+
+
+@pytest.mark.asyncio
+async def test_mata_desbravar_discovers_brazier_once_and_enables_brazier_travel(
+    database, monkeypatch
+):
+    import asterion.application.road as road_application
+
+    actor = 999738
+    character_id, sessions = await _seed_vde_ready(database, actor, level=13)
+    missions = VDEMissionService(sessions, "ocaso")
+    road = RoadService(sessions, "ocaso")
+
+    p8 = await missions.start(actor, P8_ID)
+    assert p8 is not None and p8.kind == "enter_mata"
+    assert await road.travel_route(actor, VDE_MATA) is not None
+    p8 = await missions.enter_mata(actor, p8.state_version)
+    assert p8 is not None and p8.step == 2
+
+    available = await road.resume(actor)
+    assert available is not None and available.location == VDE_MATA
+    assert available.explore_enabled is True
+    assert available.hunt_enabled is False
+    assert await road.prepare_explore(actor) is not None
+    async with sessions() as session:
+        assert (
+            await session.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == character_id,
+                    Unlock.unlock_id == MATA_EXPLORE_UNLOCK,
+                )
+            )
+            is not None
+        )
+
+    monkeypatch.setattr(
+        road_application,
+        "_explore_result",
+        lambda *args, **kwargs: (
+            "great_discovery",
+            "explore.vde.mata.braseiro_das_copas",
+            "Braseiro das Copas Suspensas encontrado.",
+        ),
+    )
+    result = await road.explore(actor)
+    assert result is not None and result.kind == "exploration"
+    assert result.result_id == "explore.vde.mata.braseiro_das_copas"
+
+    async with sessions() as session:
+        assert (
+            await session.scalar(
+                select(Brazier.id).where(
+                    Brazier.character_id == character_id,
+                    Brazier.brazier_id == VDE_MATA_BRAZIER,
+                )
+            )
+            is not None
+        )
+        assert (
+            await session.scalar(
+                select(LocationDiscovery.id).where(
+                    LocationDiscovery.character_id == character_id,
+                    LocationDiscovery.location_id == VDE_MATA_LOCATION,
+                )
+            )
+            is not None
+        )
+        event = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == f"explore:{result.attempt_id}",
+            )
+        )
+        assert event is not None
+        components = list(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(RewardComponent.reward_event_id == event.id)
+                )
+            ).all()
+        )
+        assert {(item.kind, item.quantity) for item in components} == {
+            ("xp", 1832),
+            ("brazier", 1),
+        }
+        attempt = await session.get(ExplorationAttempt, result.attempt_id)
+        character = await session.get(Character, character_id)
+        assert attempt is not None and character is not None
+        async with session.begin_nested():
+            await road._settle_vde_exploration(session, character, attempt, "Braseiro encontrado.")
+        assert (
+            await session.scalar(
+                select(func.count(RewardEvent.id)).where(
+                    RewardEvent.character_id == character_id,
+                    RewardEvent.source_id == f"explore:{result.attempt_id}",
+                )
+            )
+            == 1
+        )
+        assert (
+            await session.scalar(
+                select(func.count(RewardComponent.id)).where(
+                    RewardComponent.reward_event_id == event.id,
+                    RewardComponent.kind == "xp",
+                    RewardComponent.quantity == 1832,
+                )
+            )
+            == 1
+        )
+
+    await road.acknowledge_result(actor, result.attempt_id)
+    back = await road.travel_route(actor, VDE_VIGILIA)
+    assert back is not None and back.location == VDE_VIGILIA
+    vigilia = await road.resume(actor)
+    assert vigilia is not None
+    assert (
+        VDE_MATA_BRAZIER,
+        "Braseiro das Copas Suspensas",
+        VDE_MATA,
+    ) in vigilia.brazier_destinations
+    assert await road.travel_brazier(actor, VDE_MATA_BRAZIER) is not None
+    returned = await road.resume(actor)
+    assert returned is not None and returned.location == VDE_MATA
 
 
 @pytest.mark.asyncio

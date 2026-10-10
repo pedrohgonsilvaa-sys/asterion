@@ -682,14 +682,14 @@ def render_current_local(
             keyboard.append([InlineKeyboardButton(text="Caçar", callback_data="road:hunt")])
             keyboard.append([InlineKeyboardButton(text="Grupo", callback_data="group:root")])
         else:
-            lines.append("🔒 Caçada · Aguardando tabela canônica de recompensas regionais")
+            lines.append("🔒 Caçada · Indisponível no momento")
         if view.familiar and view.hunt_enabled:
             lines.append("🏕️ Ronda de Caça · Disponível")
             keyboard.append([InlineKeyboardButton(text="Ronda", callback_data="world:round")])
         elif view.hunt_enabled:
             lines.append("🔒 Ronda de Caça · Vença uma Caçada neste Local")
         if not view.explore_enabled:
-            lines.append("🔒 Desbravar · Aguardando tabela canônica de recompensas regionais")
+            lines.append("🔒 Desbravar · Indisponível no momento")
         elif explore_state == "available":
             lines.append("🧭 Desbravar · Disponível")
             keyboard.append(

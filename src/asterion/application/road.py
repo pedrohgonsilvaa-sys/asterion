@@ -50,6 +50,8 @@ from asterion.domain.road import (
     VDE_GARGANTA_BRAZIER,
     VDE_GARGANTA_LOCATION,
     VDE_GARGANTA_VIGILIA_ROUTE,
+    VDE_MATA_BRAZIER,
+    VDE_MATA_EXPLORE_UNLOCK,
     VDE_MATA_LOCATION,
     VDE_VIGILIA_MATA_ROUTE,
     create_road_combat,
@@ -131,6 +133,7 @@ BRAZIER_FOR_LOCATION = {
     RUINS: RUINS_BRAZIER,
     VDE_GARGANTA: VDE_GARGANTA_BRAZIER,
     VDE_VIGILIA: "vde.brazier.vigilia_do_vale",
+    VDE_MATA: VDE_MATA_BRAZIER,
 }
 BRAZIER_DETAILS = {
     "tdo.brazier.estrada": (ROAD, "Braseiro da Estrada"),
@@ -140,6 +143,7 @@ BRAZIER_DETAILS = {
     RUINS_BRAZIER: (RUINS, "Braseiro do Poente"),
     VDE_GARGANTA_BRAZIER: (VDE_GARGANTA, "Braseiro dos Laços"),
     "vde.brazier.vigilia_do_vale": (VDE_VIGILIA, "Braseiro da Vigília"),
+    VDE_MATA_BRAZIER: (VDE_MATA, "Braseiro das Copas Suspensas"),
 }
 HUNT_CONTENT = "road_manual_hunt"
 GROUP_HUNT_CONTENT = "road_group_hunt"
@@ -168,6 +172,27 @@ MATERIAL_LABELS = {
     "material.tdo.couro_escoriado": "Couro Escoriado",
     "material.tdo.erva_cinzenta": "Erva Cinzenta",
     "material.tdo.residuo_ocaso": "Resíduo do Ocaso",
+    "material.vde.ferro_enredado": "Ferro Enredado",
+    "material.vde.couro_musgoso": "Couro Musgoso",
+    "material.vde.erva_de_turfa": "Erva de Turfa",
+    "material.vde.resina_enredada": "Resina Enredada",
+}
+VDE_EXPLORATION_RESOURCE_MATERIALS = {
+    "explore.vde.garganta.ferro_enredado": "material.vde.ferro_enredado",
+    "explore.vde.garganta.couro_musgoso": "material.vde.couro_musgoso",
+    "explore.vde.garganta.erva_de_turfa": "material.vde.erva_de_turfa",
+    "explore.vde.garganta.resina_enredada": "material.vde.resina_enredada",
+    "explore.vde.mata.couro_musgoso": "material.vde.couro_musgoso",
+    "explore.vde.mata.erva_de_turfa": "material.vde.erva_de_turfa",
+    "explore.vde.mata.resina_enredada": "material.vde.resina_enredada",
+    "explore.vde.mata.ferro_enredado": "material.vde.ferro_enredado",
+}
+VDE_EXPLORATION_UNIQUE_XP = {
+    "explore.vde.garganta.marco_dos_lacos": 1536,
+    "explore.vde.garganta.sinos_sem_maos": 480,
+    "explore.vde.mata.braseiro_das_copas": 1832,
+    "explore.vde.mata.entrada_fosso_raizes": 1832,
+    "explore.vde.mata.passarela_partida": 573,
 }
 
 
@@ -462,7 +487,7 @@ class RoadService:
                     if not await self._p7_completed(s, c.id):
                         return None
                 if world.location == VDE_MATA or destination == VDE_MATA:
-                    if not await self._p8_completed(s, c.id):
+                    if not await self._p8_started_or_completed(s, c.id):
                         return None
                 elif not await self._p1_completed(s, c.id):
                     return None
@@ -1613,6 +1638,9 @@ class RoadService:
         if attempt.local_id == RUINS_LOCATION:
             await self._settle_ruins_exploration(s, c, attempt, base_text)
             return
+        if attempt.local_id in {VDE_GARGANTA_LOCATION, VDE_MATA_LOCATION}:
+            await self._settle_vde_exploration(s, c, attempt, base_text)
+            return
         if attempt.category == "combat" and attempt.activity_id is not None:
             context = await s.scalar(
                 select(HuntContext).where(HuntContext.game_activity_id == attempt.activity_id)
@@ -1815,6 +1843,138 @@ class RoadService:
         }
         attempt.completed_at = attempt.completed_at or datetime.now(UTC)
         await consolidate_character_level(s, c)
+
+    async def _settle_vde_exploration(self, s, c, attempt, base_text: str) -> None:
+        """Settle VDE Desbravar without requiring Hunt/Round creature drops.
+
+        Regional resource outcomes name their own material. Exploration combat
+        retains its normal XP, crown, and Bestiary effects, but does not invent
+        a creature-to-material mapping absent from the regional source.
+        """
+        source_id = f"explore:{attempt.id}"
+        existing = await s.scalar(
+            select(RewardEvent)
+            .where(
+                RewardEvent.character_id == c.id,
+                RewardEvent.source_id == source_id,
+            )
+            .with_for_update()
+        )
+        if existing is not None:
+            return
+        event = RewardEvent(character_id=c.id, source_id=source_id)
+        s.add(event)
+        await s.flush()
+        components: list[tuple[str, str | None, int, dict]] = []
+        lines = [base_text]
+        should_consolidate = False
+
+        if attempt.category == "combat" and attempt.activity_id is not None:
+            context = await s.scalar(
+                select(HuntContext)
+                .where(HuntContext.game_activity_id == attempt.activity_id)
+                .with_for_update()
+            )
+            if context is None:
+                raise RuntimeError("Vales exploration combat is missing HuntContext")
+            enough = c.vigor >= 4
+            xp = enemy_xp(
+                context.enemy_level,
+                context.category,
+                Decimal(1) if enough else Decimal("0.25"),
+                player_level=c.level,
+            )
+            c.xp += xp
+            components.append(("xp", None, xp, {}))
+            lines.append(f"✨ XP · {xp}")
+            if enough:
+                c.vigor -= 4
+                award = int(
+                    (
+                        (Decimal(100 + 15 * context.enemy_level) * Decimal("0.15"))
+                        / 10
+                    ).quantize(Decimal(1), rounding=ROUND_HALF_EVEN)
+                    * 10
+                )
+                c.crowns += award
+                components.append(("crowns", None, award, {}))
+                lines.append(f"🪙 Coroas · {award}")
+            bestiary = await self._bestiary(
+                s,
+                c.id,
+                context.creature_id,
+                victory=True,
+                elite=context.category == "elite",
+                observation_category=context.category,
+            )
+            if bestiary is not None:
+                components.append(("bestiary", context.creature_id, 1, bestiary))
+                lines.append(
+                    f"📖 Bestiário · {bestiary['creature_name']} · {bestiary['stage_label']}"
+                )
+            should_consolidate = True
+
+        elif attempt.category == "resource":
+            material_id = VDE_EXPLORATION_RESOURCE_MATERIALS.get(attempt.result_id)
+            if material_id is None:
+                raise RuntimeError(
+                    f"unknown Vales exploration resource result {attempt.result_id!r}"
+                )
+            if c.vigor >= 4:
+                c.vigor -= 4
+                award = int(
+                    (
+                        (Decimal(100 + 15 * c.level) * Decimal("0.10"))
+                        / 10
+                    ).quantize(Decimal(1), rounding=ROUND_HALF_EVEN)
+                    * 10
+                )
+                c.crowns += award
+                components.extend(
+                    (
+                        ("crowns", None, award, {}),
+                        ("material", material_id, 1, {"material_id": material_id}),
+                    )
+                )
+                lines.extend(
+                    (f"🪙 Coroas · {award}", f"📦 {MATERIAL_LABELS[material_id]} · 1")
+                )
+                await self._deliver_material(
+                    s, c, material_id, 1, f"explore:{attempt.id}:resource"
+                )
+
+        else:
+            xp = VDE_EXPLORATION_UNIQUE_XP.get(attempt.result_id, 0)
+            if xp:
+                c.xp += xp
+                components.append(("xp", None, xp, {}))
+                lines.append(f"✨ XP · {xp}")
+                should_consolidate = True
+            if attempt.result_id == "explore.vde.mata.braseiro_das_copas":
+                await self._ensure(s, Brazier, character_id=c.id, brazier_id=VDE_MATA_BRAZIER)
+                await self._ensure(
+                    s, LocationDiscovery, character_id=c.id, location_id=VDE_MATA_LOCATION
+                )
+                components.append(("brazier", VDE_MATA_BRAZIER, 1, {}))
+
+        for kind, item_id, quantity, payload in components:
+            s.add(
+                RewardComponent(
+                    reward_event_id=event.id,
+                    kind=kind,
+                    item_id=item_id,
+                    quantity=quantity,
+                    payload=payload,
+                )
+            )
+        attempt.progress = {
+            **(attempt.progress or {}),
+            "receipt_text": "\n\n".join(lines),
+            "settled": True,
+        }
+        attempt.completed_at = attempt.completed_at or datetime.now(UTC)
+        if should_consolidate:
+            await consolidate_character_level(s, c)
 
     async def _settle_charneca_exploration(self, s, c, attempt, base_text: str):
         source_id = f"explore:{attempt.id}"
@@ -2579,7 +2739,11 @@ class RoadService:
             if not await self._p7_completed(s, c.id):
                 return None
         elif profile.local_id == VDE_MATA_LOCATION:
-            if c.level < 13 or not await self._p8_completed(s, c.id):
+            if c.level < 13:
+                return None
+            if activity_kind == "hunt" and not await self._p8_completed(s, c.id):
+                return None
+            if activity_kind == "explore" and not await self._p8_started_or_completed(s, c.id):
                 return None
         unlock_id = profile.hunt_unlock if activity_kind == "hunt" else profile.explore_unlock
         if not await s.scalar(
@@ -2589,12 +2753,14 @@ class RoadService:
             )
         ):
             return None
-        if profile.local_id in {VDE_GARGANTA_LOCATION, VDE_MATA_LOCATION} and any(
+        if activity_kind == "hunt" and profile.local_id in {
+            VDE_GARGANTA_LOCATION,
+            VDE_MATA_LOCATION,
+        } and any(
             creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
         ):
-            # The regional source lists predominant material sources but does
-            # not define creature drop weights; do not materialize an
-            # unconfigurable combat reward.
+            # The regional source does not define creature drop weights, so
+            # block only Hunt/Round material settlement, not Desbravar.
             return None
         return profile
 
@@ -3064,7 +3230,7 @@ class RoadService:
             for candidate_id, (location, label) in BRAZIER_DETAILS.items()
             if candidate_id in known_brazier_ids and location != world.location
             and (location not in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA} or p7_complete)
-            and (location != VDE_MATA or p8_complete)
+            and (location != VDE_MATA or p8_started_or_complete)
         )
         active_p3 = await s.scalar(
             select(Quest.id).where(
@@ -3153,7 +3319,7 @@ class RoadService:
             elif world.location == VDE_MATA and p7_complete:
                 route_destinations.append(VDE_VIGILIA)
         route_available = bool(route_destinations)
-        profile_ready = bool(
+        material_table_ready = bool(
             hunt_profile
             and all(
                 creature_id in MATERIAL_POOLS
@@ -3161,7 +3327,7 @@ class RoadService:
             )
         )
         if world.location == VDE_GARGANTA:
-            hunt_enabled = p7_complete and profile_ready and bool(
+            hunt_enabled = p7_complete and material_table_ready and bool(
                 await s.scalar(
                     select(Unlock.id).where(
                         Unlock.character_id == c.id,
@@ -3169,7 +3335,7 @@ class RoadService:
                     )
                 )
             )
-            explore_enabled = p7_complete and profile_ready and bool(
+            explore_enabled = p7_complete and bool(
                 await s.scalar(
                     select(Unlock.id).where(
                         Unlock.character_id == c.id,
@@ -3178,8 +3344,27 @@ class RoadService:
                 )
             )
         elif world.location == VDE_MATA:
-            hunt_enabled = p8_complete and profile_ready and c.level >= 13
-            explore_enabled = hunt_enabled
+            hunt_enabled = p8_complete and material_table_ready and c.level >= 13 and bool(
+                hunt_profile
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == hunt_profile.hunt_unlock,
+                    )
+                )
+            )
+            explore_enabled = (
+                p8_started_or_complete
+                and c.level >= 13
+                and bool(
+                    await s.scalar(
+                        select(Unlock.id).where(
+                            Unlock.character_id == c.id,
+                            Unlock.unlock_id == VDE_MATA_EXPLORE_UNLOCK,
+                        )
+                    )
+                )
+            )
         elif world.location == VDE_VIGILIA:
             # Vigília do Vale is a safe hub, never a generic hunt/explore local.
             hunt_enabled = False
