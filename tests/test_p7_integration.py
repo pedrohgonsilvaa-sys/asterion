@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from asterion.application.p7 import (
     COURO_MUSGOSO,
     FERRO_ENREDADO,
+    GARGANTA_BRAZIER,
     GARGANTA,
     GARGANTA_EXPLORE_UNLOCK,
     GARGANTA_HUNT_UNLOCK,
@@ -115,6 +116,22 @@ async def test_p7_full_solo_flow_reward_and_unlocks_are_idempotent(database, mon
                 LocationDiscovery.location_id == GARGANTA_LOCATION_ID,
             )
         ) is not None
+        assert await session.scalar(
+            select(Brazier.id).where(
+                Brazier.character_id == character_id,
+                Brazier.brazier_id == GARGANTA_BRAZIER,
+            )
+        ) is not None
+
+    resumed_entry = await service.enter_vales(actor)
+    assert resumed_entry is not None and resumed_entry.status == "active"
+    async with sessions() as session:
+        assert await session.scalar(
+            select(func.count(Brazier.id)).where(
+                Brazier.character_id == character_id,
+                Brazier.brazier_id == GARGANTA_BRAZIER,
+            )
+        ) == 1
 
     first = await service.examine_road_point(actor, entered.state_version, "a")
     assert first is not None and first.step == 2

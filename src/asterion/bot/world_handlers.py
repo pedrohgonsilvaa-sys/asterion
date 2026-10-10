@@ -16,13 +16,23 @@ from asterion.application.p4 import P4Service
 from asterion.application.p5 import P5Service
 from asterion.application.p6 import P6Service
 from asterion.application.prologue import PrologueService
-from asterion.application.road import BOSQUE, REFUGE, ROAD, RUINS, RoadService
+from asterion.application.road import (
+    BOSQUE,
+    REFUGE,
+    ROAD,
+    RUINS,
+    VDE_GARGANTA,
+    VDE_MATA,
+    VDE_VIGILIA,
+    RoadService,
+)
 from asterion.application.s1 import S1Service
 from asterion.application.s2 import S2Service
 from asterion.application.s3 import S3Service
 from asterion.application.s4 import S4Service
 from asterion.application.s5 import S5Service
 from asterion.application.s6 import S6Service
+from asterion.application.vde_missions import P8_ID, S7_ID, VDEMissionService
 from asterion.application.world import WorldService
 from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
@@ -42,6 +52,7 @@ from asterion.bot.s3_ui import render_s3
 from asterion.bot.s4_ui import render_s4
 from asterion.bot.s5_ui import render_s5
 from asterion.bot.s6_ui import render_s6
+from asterion.bot.vde_missions_ui import render_vde_mission
 from asterion.bot.world_ui import render_adventure, render_world
 
 
@@ -66,6 +77,7 @@ def world_router(
     s6: S6Service | None = None,
     p6: P6Service | None = None,
     dungeons: DungeonService | None = None,
+    vde_missions: VDEMissionService | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -1020,6 +1032,9 @@ def world_router(
             "road:route:refuge": REFUGE,
             "road:route:bosque": BOSQUE,
             "road:route:ruinas": RUINS,
+            "road:route:vde_garganta": VDE_GARGANTA,
+            "road:route:vde_vigilia": VDE_VIGILIA,
+            "road:route:vde_mata": VDE_MATA,
         }.get(route_key)
         route_attempt_id = exploration_callback_attempt_id(query)
         route_has_attempt_id = len(route_parts) == 4
@@ -1220,6 +1235,9 @@ def world_router(
         s2_view = await s2.resume(query.from_user.id) if s2 else None
         if s2_view is None and s2 is not None:
             s2_view = await s2.offer(query.from_user.id)
+        vde_s7_view = vde_p8_view = None
+        if vde_missions is not None and await vde_missions.region_access(query.from_user.id):
+            vde_s7_view, vde_p8_view = await vde_missions.board(query.from_user.id)
         text = "📜 Missões\n\nAcompanhe sua Missão Principal e as Missões Secundárias conhecidas."
         keyboard = []
         if p1_view is not None and p1_view.status == "active":
@@ -1327,6 +1345,16 @@ def world_router(
             secondary_entries.append(
                 (f"📜 Onde os Nomes Terminaram · {state}", f"s6:{action}" if action else None)
             )
+        if vde_s7_view is not None:
+            if vde_s7_view.status == "active":
+                state, action = "Em Andamento", f"vde:{S7_ID}:resume"
+            elif vde_s7_view.status == "completed":
+                state, action = "Concluída", f"vde:{S7_ID}:resume"
+            elif vde_s7_view.available:
+                state, action = "Disponível", f"vde:{S7_ID}:start"
+            else:
+                state, action = "Requer Nv.12 · Garganta dos Laços", None
+            secondary_entries.append((f"📜 Cordas na Névoa · {state}", action))
         if secondary_entries:
             secondary_lines = []
             secondary_buttons = []
@@ -1356,6 +1384,18 @@ def world_router(
         if p6_view is not None and p6_view.status == "completed":
             text += "\n\n✅ O Vigia Partido · Concluída"
             keyboard.append([InlineKeyboardButton(text="O Vigia Partido", callback_data="p6:resume")])
+        if vde_p8_view is not None:
+            if vde_p8_view.status == "active":
+                text += "\n\n🔥 Missão Principal · Entre Galhos Suspensos · Em Andamento"
+                keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
+            elif vde_p8_view.status == "completed":
+                text += "\n\n✅ Entre Galhos Suspensos · Concluída"
+                keyboard.append([InlineKeyboardButton(text="Entre Galhos Suspensos", callback_data=f"vde:{P8_ID}:resume")])
+            elif vde_p8_view.available:
+                text += "\n\n🔥 Missão Principal · Entre Galhos Suspensos · Disponível"
+                keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
+            else:
+                text += "\n\n🔒 Entre Galhos Suspensos · Requer Nv.13 · Vigília do Vale"
         keyboard.append(
             [InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")]
         )
@@ -1556,6 +1596,13 @@ def world_router(
         if p6_view is not None and p6_view.status == "active":
             await present(query.message, render_p6(p6_view), images, edit=True)
             return
+        if vde_missions is not None:
+            vde_p8_view = await vde_missions.resume(query.from_user.id, P8_ID)
+            if vde_p8_view is not None and (
+                vde_p8_view.status in {"active", "completed"} or vde_p8_view.available
+            ):
+                await present(query.message, render_vde_mission(vde_p8_view), images, edit=True)
+                return
         p5_view = await p5.resume(query.from_user.id) if p5 else None
         if p5_view is not None and p5_view.status == "active":
             await present(query.message, render_p5_detail(p5_view), images, edit=True)
@@ -1700,6 +1747,11 @@ def world_router(
             or (p4_view.status == "active" and (p4_view.progress or {}).get("ruins_discovered"))
         ):
             known.add(RUINS)
+        if vde_missions is not None and await vde_missions.region_access(actor):
+            known.update((VDE_GARGANTA, VDE_VIGILIA))
+            vde_p8_view = await vde_missions.resume(actor, P8_ID)
+            if vde_p8_view is not None and vde_p8_view.status in {"active", "completed"}:
+                known.add(VDE_MATA)
         current = None
         road_view = None
         if road is not None:
@@ -1719,14 +1771,17 @@ def world_router(
         return known, current, road_view, p2_view, p3_view, p4_view
 
     async def current_local_screen(actor: int, view=None) -> Screen | None:
-        local_kinds = {"road", "refuge", "charneca", "bosque", "ruinas"}
+        local_kinds = {
+            "road", "refuge", "charneca", "bosque", "ruinas",
+            "vde_garganta", "vde_vigilia", "vde_mata",
+        }
         if view is None and road is not None:
             view = await road.resume(actor)
         if road is None or view is None or view.kind not in local_kinds:
             return None
         explore_state = None
         explore_message = None
-        if view.location in {ROAD, CHARNECA, BOSQUE, RUINS}:
+        if view.location in {ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA} and view.explore_enabled:
             explore_view = await road.prepare_explore(actor)
             if explore_view is not None:
                 if explore_view.kind == "explore_prepare":
@@ -1799,7 +1854,7 @@ def world_router(
         if not isinstance(query.message, Message) or road is None:
             return
         view = await road.resume(query.from_user.id)
-        if view is None or view.kind not in {"road", "charneca", "bosque", "ruinas"}:
+        if view is None or view.kind not in {"road", "charneca", "bosque", "ruinas", "vde_garganta", "vde_mata"} or not view.hunt_enabled:
             await restore_context(query)
             return
         await present(
@@ -1810,7 +1865,12 @@ def world_router(
         )
 
     async def map_local_detail(actor: int, key: str, *, from_local: bool) -> Screen | None:
-        names = {"road": ROAD, "refuge": REFUGE, "charneca": CHARNECA, "bosque": BOSQUE, "ruinas": RUINS}
+        names = {
+            "road": ROAD, "refuge": REFUGE, "charneca": CHARNECA,
+            "bosque": BOSQUE, "ruinas": RUINS,
+            "vde_garganta": VDE_GARGANTA, "vde_vigilia": VDE_VIGILIA,
+            "vde_mata": VDE_MATA,
+        }
         name = names.get(key)
         if name is None:
             return None
@@ -1818,17 +1878,24 @@ def world_router(
         if name not in known:
             return None
         is_current = name == current
-        icon = {"road": "🔥", "refuge": "🏚️", "charneca": "🌑", "bosque": "🌲", "ruinas": "🪨"}[key]
+        icon = {
+            "road": "🔥", "refuge": "🏚️", "charneca": "🌑", "bosque": "🌲", "ruinas": "🪨",
+            "vde_garganta": "🪢", "vde_vigilia": "🌫️", "vde_mata": "🌲",
+        }[key]
         level_band = {
             "road": "Nv. 1–10",
             "refuge": "Nv. 1–10",
             "charneca": "Nv. 3–5",
             "bosque": "Nv. 5–8",
             "ruinas": "Nv. 8–10",
+            "vde_garganta": "Nv. 11–14",
+            "vde_vigilia": "Hub seguro",
+            "vde_mata": "Nv. 13–17",
         }[key]
-        lines = [f"{icon} {name}" + (" · Local Atual" if is_current else ""), f"Terras do Ocaso · {level_band}"]
+        region = "Vales dos Enforcados" if key.startswith("vde_") else "Terras do Ocaso"
+        lines = [f"{icon} {name}" + (" · Local Atual" if is_current else ""), f"{region} · {level_band}"]
         keyboard: list[list[InlineKeyboardButton]] = []
-        if key in {"charneca", "bosque", "ruinas"}:
+        if key in {"charneca", "bosque", "ruinas", "vde_garganta", "vde_vigilia", "vde_mata"}:
             known_brazier = None
             if is_current and road_view is not None and road_view.location == name:
                 known_brazier = road_view.brazier_label
@@ -1854,6 +1921,9 @@ def world_router(
                     CHARNECA: "road:route:charneca",
                     BOSQUE: "road:route:bosque",
                     RUINS: "road:route:ruinas",
+                    VDE_GARGANTA: "road:route:vde_garganta",
+                    VDE_VIGILIA: "road:route:vde_vigilia",
+                    VDE_MATA: "road:route:vde_mata",
                 }
                 for destination in road_view.route_destinations:
                     if destination == current:
@@ -1870,6 +1940,14 @@ def world_router(
                         label = "Seguir para as Ruínas"
                     elif current == RUINS and destination == BOSQUE:
                         label = "Retornar ao Bosque"
+                    elif current == VDE_GARGANTA and destination == VDE_VIGILIA:
+                        label = "Seguir para a Vigília do Vale"
+                    elif current == VDE_VIGILIA and destination == VDE_GARGANTA:
+                        label = "Retornar à Garganta dos Laços"
+                    elif current == VDE_VIGILIA and destination == VDE_MATA:
+                        label = "Seguir para a Mata Suspensa"
+                    elif current == VDE_MATA and destination == VDE_VIGILIA:
+                        label = "Retornar à Vigília do Vale"
                     else:
                         continue
                     keyboard.append([
@@ -1877,17 +1955,23 @@ def world_router(
                     ])
         else:
             route_callback = {
-                REFUGE: "road:route:refuge",
-                CHARNECA: "road:route:charneca",
-                BOSQUE: "road:route:bosque",
-                RUINS: "road:route:ruinas",
-            }.get(name)
+                    REFUGE: "road:route:refuge",
+                    CHARNECA: "road:route:charneca",
+                    BOSQUE: "road:route:bosque",
+                    RUINS: "road:route:ruinas",
+                    VDE_GARGANTA: "road:route:vde_garganta",
+                    VDE_VIGILIA: "road:route:vde_vigilia",
+                    VDE_MATA: "road:route:vde_mata",
+                }.get(name)
             if road_view is not None and route_callback and name in road_view.route_destinations:
                 route_label = {
                     REFUGE: "Retornar ao Refúgio",
                     CHARNECA: "Seguir para a Charneca",
                     BOSQUE: "Seguir para o Bosque",
                     RUINS: "Seguir para as Ruínas",
+                    VDE_GARGANTA: "Retornar à Garganta dos Laços",
+                    VDE_VIGILIA: "Seguir para a Vigília do Vale",
+                    VDE_MATA: "Seguir para a Mata Suspensa",
                 }[name]
                 lines.extend(["", "🧭 Rota terrestre · Disponível"])
                 keyboard.append([InlineKeyboardButton(text=route_label, callback_data=route_callback)])
@@ -1924,8 +2008,9 @@ def world_router(
                 for row in keyboard
             ):
                 lines.extend(["", "🧭 Deslocamento · Indisponível a partir do Local atual"])
-        region_callback = "world:map:region:tdo:fromlocal" if from_local else "world:map:region:tdo"
-        keyboard.append([InlineKeyboardButton(text="← Terras do Ocaso", callback_data=region_callback)])
+        region_key = "vde" if key.startswith("vde_") else "tdo"
+        region_callback = f"world:map:region:{region_key}" + (":fromlocal" if from_local else "")
+        keyboard.append([InlineKeyboardButton(text=f"← {region}", callback_data=region_callback)])
         return Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard))
 
     @router.callback_query(F.data.in_({"world:map", "world:map:fromlocal"}))
@@ -1944,20 +2029,29 @@ def world_router(
             keyboard = [[InlineKeyboardButton(text=f"← {'Local Atual' if from_local else 'Aventura'}", callback_data=parent_callback)]]
         else:
             current_icon = (
-                "🌑" if current == CHARNECA else "🌲" if current == BOSQUE else "🪨" if current == RUINS else "🔥"
+                "🌑" if current in {CHARNECA, VDE_GARGANTA} else
+                "🌲" if current in {BOSQUE, VDE_MATA} else
+                "🪨" if current == RUINS else
+                "🌫️" if current == VDE_VIGILIA else "🔥"
             )
+            known_regions = ["Terras do Ocaso"]
+            if VDE_GARGANTA in known or VDE_VIGILIA in known:
+                known_regions.append("Vales dos Enforcados")
             current_line = f"{current_icon} {current} · Local Atual" if current else ""
             text = (
                 "🗺️ Mapa\n\n"
-                "🌑 Terras do Ocaso · Nv. 1–10\n"
                 f"{current_line}\n\n"
                 "🗺️ Regiões Conhecidas\n\n"
-                "1 🌑 Terras do Ocaso · Nv. 1–10"
+                + "\n".join(
+                    f"{index} {'🌑' if name == 'Terras do Ocaso' else '🪢'} {name}"
+                    for index, name in enumerate(known_regions, start=1)
+                )
             )
-            keyboard = [
-                [InlineKeyboardButton(text="1", callback_data=f"world:map:region:tdo{':fromlocal' if from_local else ''}")],
-                [InlineKeyboardButton(text=f"← {'Local Atual' if from_local else 'Aventura'}", callback_data=parent_callback)],
+            region_buttons = [
+                [InlineKeyboardButton(text=str(index), callback_data=f"world:map:region:{'tdo' if name == 'Terras do Ocaso' else 'vde'}{':fromlocal' if from_local else ''}")]
+                for index, name in enumerate(known_regions, start=1)
             ]
+            keyboard = region_buttons + [[InlineKeyboardButton(text=f"← {'Local Atual' if from_local else 'Aventura'}", callback_data=parent_callback)]]
         await present(
             query.message,
             Screen(text, "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
@@ -2033,6 +2127,40 @@ def world_router(
             edit=True,
         )
 
+    @router.callback_query(
+        F.data.in_({"world:map:region:vde", "world:map:region:vde:fromlocal"})
+    )
+    async def map_region_vde(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        await query.answer()
+        if not isinstance(query.message, Message) or vde_missions is None:
+            return
+        if not await vde_missions.region_access(query.from_user.id):
+            await restore_context(query)
+            return
+        from_local = (query.data or "").endswith(":fromlocal")
+        map_callback = "world:map:fromlocal" if from_local else "world:map"
+        known, current, road_view, _p2_view, _p3_view, _p4_view = await map_state(query.from_user.id)
+        ordered = ((VDE_VIGILIA, "vde_vigilia"), (VDE_GARGANTA, "vde_garganta"), (VDE_MATA, "vde_mata"))
+        visible = [(name, key) for name, key in ordered if name in known]
+        lines = ["🪢 Vales dos Enforcados", ""]
+        buttons = []
+        for index, (name, key) in enumerate(visible, start=1):
+            reachable = bool(road_view is not None and name in road_view.route_destinations)
+            state = "Local Atual" if name == current else "Acessível" if reachable else "Conhecido"
+            icon = "🌫️" if name == VDE_VIGILIA else "🪢" if name == VDE_GARGANTA else "🌲"
+            lines.append(f"{index} {icon} {name} · {state}")
+            buttons.append(InlineKeyboardButton(text=str(index), callback_data=f"world:map:local:{key}{':fromlocal' if from_local else ''}"))
+        keyboard = ([buttons] if buttons else []) + [[InlineKeyboardButton(text="← Mapa", callback_data=map_callback)]]
+        await present(
+            query.message,
+            Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+            images,
+            edit=True,
+        )
+
     @router.callback_query(F.data.startswith("world:map:local:"))
     async def map_local(query: CallbackQuery):
         if await foreground(query):
@@ -2075,6 +2203,9 @@ def world_router(
             "charneca": CHARNECA,
             "bosque": BOSQUE,
             "ruinas": RUINS,
+            "vde_garganta": VDE_GARGANTA,
+            "vde_vigilia": VDE_VIGILIA,
+            "vde_mata": VDE_MATA,
         }
         destination = names.get(key)
         if destination is None:

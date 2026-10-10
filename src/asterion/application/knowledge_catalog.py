@@ -84,6 +84,20 @@ CODEX_ENTRIES = (
         "codex.history.ordens_que_permanecem", "Ordens que Permanecem", "history", 100
     ),
     CodexPresentation("codex.mystery.ancora_do_poente", "Âncora do Poente", "mysteries", 30),
+    CodexPresentation("codex.route.rotas_dos_vales", "Rotas dos Vales", "regions", 90),
+    CodexPresentation(
+        "codex.location.mata_suspensa",
+        "Mata Suspensa",
+        "regions",
+        100,
+        "vde.location.mata_suspensa",
+    ),
+    CodexPresentation(
+        "codex.mystery.raizes_que_seguem_pedra",
+        "Raízes que Seguem Pedra",
+        "mysteries",
+        40,
+    ),
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -172,6 +186,21 @@ CODEX_FRAGMENTS = {
     ),
     "codex.fragment.ancora_do_poente.outras_ancoras": FragmentPresentation(
         "Outras Âncoras", "Registros indicam que outras Âncoras existiram."
+    ),
+    "codex.fragment.vales.routes.garganta_vigilia": FragmentPresentation(
+        "Rota da Garganta à Vigília",
+        "A rota conhecida liga a Garganta dos Laços à Vigília do Vale.",
+    ),
+    "codex.fragment.vales.routes.s7_marker_shift": FragmentPresentation(
+        "Marcações deslocadas",
+        "As raízes alteraram fisicamente o terreno e deslocaram marcações da rota.",
+    ),
+    "codex.fragment.mata.entrada_registrada": FragmentPresentation(
+        "Entrada", "A Mata Suspensa foi alcançada pela rota aberta durante a missão."
+    ),
+    "codex.fragment.mata.raizes_sob_a_pedra": FragmentPresentation(
+        "Raízes sob a pedra",
+        "As raízes convergem para linhas antigas sob o solo; o crescimento não parece aleatório.",
     ),
     "codex.fragment.camara_do_poente.estrutura_chamada_ancora": FragmentPresentation(
         "Estrutura central", "A estrutura central recebeu o nome Âncora do Poente."

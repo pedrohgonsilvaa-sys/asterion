@@ -36,6 +36,7 @@ from asterion.application.s4 import S4Service
 from asterion.application.s5 import S5Service
 from asterion.application.s6 import S6Service
 from asterion.application.talents import TalentService
+from asterion.application.vde_missions import VDEMissionService
 from asterion.application.world import WorldService
 from asterion.bot.character_progression_handlers import character_progression_router
 from asterion.bot.character_surfaces_handlers import character_surfaces_router
@@ -64,6 +65,7 @@ from asterion.bot.s4_handlers import s4_router
 from asterion.bot.s5_handlers import s5_router
 from asterion.bot.s6_handlers import s6_router
 from asterion.bot.settings_handlers import settings_router
+from asterion.bot.vde_missions_handlers import vde_missions_router
 from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
 from asterion.domain.creation import NamePolicy
@@ -105,6 +107,7 @@ def get_bot_runtime() -> BotRuntime:
     p5 = P5Service(SessionFactory, settings.server_id, groups=groups)
     p6 = P6Service(SessionFactory, settings.server_id, groups=groups)
     p7 = P7Service(SessionFactory, settings.server_id, groups=groups)
+    vde_missions = VDEMissionService(SessionFactory, settings.server_id, groups=groups)
     s6 = S6Service(SessionFactory, settings.server_id, groups=groups)
     class_trials = ClassTrialService(SessionFactory, settings.server_id)
     paths = PathSelectionService(SessionFactory, settings.server_id)
@@ -133,6 +136,7 @@ def get_bot_runtime() -> BotRuntime:
     # its self-contained regional callbacks can fall through safely when they
     # do not belong to P7.
     dispatcher.include_router(p7_router(p7, settings.creation_images))
+    dispatcher.include_router(vde_missions_router(vde_missions, settings.creation_images))
     dispatcher.include_router(
         groups_router(
             groups,
@@ -241,6 +245,7 @@ def get_bot_runtime() -> BotRuntime:
             s6=s6,
             p6=p6,
             dungeons=dungeons,
+            vde_missions=vde_missions,
         )
     )
     dispatcher.include_router(

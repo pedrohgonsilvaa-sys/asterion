@@ -47,9 +47,12 @@ from asterion.domain.equipment_stats import (
 from asterion.domain.road import (
     BOSQUE_LOCATION,
     CHARNECA_LOCATION,
+    MATERIAL_POOLS,
     ROAD_LOCATION,
     RUINS_LOCATION,
     RULESET,
+    VDE_GARGANTA_LOCATION,
+    VDE_MATA_LOCATION,
     create_road_combat,
     creature_for,
     hunt_profile_for_local_id,
@@ -165,6 +168,16 @@ class RoundService(RoadService):
                 return None
             if not await self._has_location(s, c.id, RUINS_LOCATION):
                 return None
+        elif profile.local_id == VDE_GARGANTA_LOCATION:
+            if not await self._p7_completed(s, c.id):
+                return None
+        elif profile.local_id == VDE_MATA_LOCATION:
+            if c.level < 13 or not await self._p8_completed(s, c.id):
+                return None
+        if profile.local_id in {VDE_GARGANTA_LOCATION, VDE_MATA_LOCATION} and any(
+            creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
+        ):
+            return None
         return profile
 
     async def _inventory_slots(self, s, character_id):
