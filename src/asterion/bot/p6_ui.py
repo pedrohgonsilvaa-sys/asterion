@@ -107,11 +107,17 @@ def render_p6(view: P6View) -> Screen:
         return _guidance_screen(view)
     if view.kind == "completed" or view.status == "completed":
         name = P6_CHOICES.get(p.get("reward_choice"), ("Equipamento Épico", ""))[0]
+        rows = []
+        if view.level >= 11:
+            rows.append([_b("🪢 Entrar nos Vales", "p7:enter")])
+        rows.append([_b("← Refúgio", "road:local")])
+        requirement = "" if view.level >= 11 else "\n\n🪢 Vales dos Enforcados · Requer Nv.11."
         return Screen(f"✅ {P6_TITLE} · Concluída\nMissão Principal · Terras do Ocaso\n\n"
                       "✨ XP · 14.220\n🪙 Coroas · 500\n📦 Ferro de Fuligem · 4 · Vinculado\n"
                       f"📦 Resíduo do Ocaso · 4 · Vinculado\n🎁 {name} · Épico Nv.10 · Vinculado\n"
-                      "📖 Âncora do Poente · Descoberta\n📜 Eco do Vigia Partido · Receita Revelada",
-                      "p6", _kb([[_b("← Refúgio", "road:local")]]))
+                      "📖 Âncora do Poente · Descoberta\n📜 Eco do Vigia Partido · Receita Revelada"
+                      f"{requirement}",
+                      "p6", _kb(rows))
     if view.kind == "unavailable":
         return Screen(f"📜 {P6_TITLE} · Indisponível\nA Campanha final requer P5 concluída e Nv.10.",
                       "p6", _kb([[_b("← Missões", "world:missions")]]))

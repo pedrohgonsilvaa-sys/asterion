@@ -24,6 +24,7 @@ from asterion.application.p3 import P3Service
 from asterion.application.p4 import P4Service
 from asterion.application.p5 import P5Service
 from asterion.application.p6 import P6Service
+from asterion.application.p7 import P7Service
 from asterion.application.path_selection import PathSelectionService
 from asterion.application.professions import ProfessionService
 from asterion.application.prologue import PrologueService
@@ -53,6 +54,7 @@ from asterion.bot.p3_handlers import p3_router
 from asterion.bot.p4_handlers import p4_router
 from asterion.bot.p5_handlers import p5_router
 from asterion.bot.p6_handlers import p6_router
+from asterion.bot.p7_handlers import p7_router
 from asterion.bot.path_handlers import path_router
 from asterion.bot.profession_handlers import profession_router
 from asterion.bot.s1_handlers import s1_router
@@ -102,6 +104,7 @@ def get_bot_runtime() -> BotRuntime:
     p4 = P4Service(SessionFactory, settings.server_id, groups=groups)
     p5 = P5Service(SessionFactory, settings.server_id, groups=groups)
     p6 = P6Service(SessionFactory, settings.server_id, groups=groups)
+    p7 = P7Service(SessionFactory, settings.server_id, groups=groups)
     s6 = S6Service(SessionFactory, settings.server_id, groups=groups)
     class_trials = ClassTrialService(SessionFactory, settings.server_id)
     paths = PathSelectionService(SessionFactory, settings.server_id)
@@ -126,6 +129,10 @@ def get_bot_runtime() -> BotRuntime:
     )
     dispatcher.include_router(cosmetics_router(cosmetics, settings.creation_images))
     dispatcher.include_router(doctrines_router(doctrines, settings.creation_images))
+    # P7 is deliberately placed before the shared Group/Combat/World routers so
+    # its self-contained regional callbacks can fall through safely when they
+    # do not belong to P7.
+    dispatcher.include_router(p7_router(p7, settings.creation_images))
     dispatcher.include_router(
         groups_router(
             groups,
