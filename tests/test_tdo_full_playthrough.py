@@ -228,12 +228,14 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     monkeypatch.setattr(vigor_module, "add_vigor_state", tracked_add_vigor)
     import asterion.application.consumables as consumables_module
     import asterion.application.dungeons as dungeons_module
+    import asterion.application.pvpve as pvpve_module
 
     # Both modules import utcnow directly and pass explicit anchors into
     # Vigor reconciliation. Keep every temporal boundary on the same
     # simulated clock so a wall-clock anchor cannot overlap simulated time.
     monkeypatch.setattr(consumables_module, "utcnow", driver.clock.now)
     monkeypatch.setattr(dungeons_module, "utcnow", driver.clock.now)
+    monkeypatch.setattr(pvpve_module, "_utcnow", lambda: driver.clock.now(UTC))
     monkeypatch.setattr(consumables_module, "add_vigor_state", tracked_add_vigor)
     monkeypatch.setattr(dungeons_module, "add_vigor_state", tracked_add_vigor)
     await driver.snapshot("personagem criado pelo fluxo público")
@@ -310,10 +312,22 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     road = RoadService(sessions, "ocaso")
     location = await road.travel(actor, ROAD)
     assert location is not None and location.location == ROAD
+    async def start_manual_hunt(service, label):
+        view = await service.start_hunt(actor)
+        if view is not None and view.kind == "hunt_queue":
+            assert view.pvpve_queue_id is not None
+            view = await service.pvpve.continue_queue(actor, view.pvpve_queue_id)
+            assert view is not None, f"fila manual não pôde seguir para PvE · {label}"
+        return view
+
     hunt = None
     for attempt in range(12):
-        hunt = await road.start_hunt(actor)
-        assert hunt is not None and hunt.kind == "combat", driver.diagnostic()
+        hunt = await start_manual_hunt(road, f"Caçada Manual · tentativa {attempt + 1}")
+        if hunt is None or hunt.kind != "combat":
+            mark = await driver.snapshot(
+                f"Caçada Manual bloqueada · tentativa {attempt + 1}"
+            )
+            raise AssertionError(f"{hunt!r}; snapshot={mark.state!r}\n{driver.diagnostic()}")
         hunt = await driver.combat_to_result(
             hunt,
             lambda current, action: road.action(
@@ -350,22 +364,33 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         f"{driver.diagnostic()}"
     )
     started = await rounds.start_round(actor, prepared.round_id, prepared.state_version)
-    assert started is not None and started.kind in {"round_active", "round_interrupted"}
+    assert started is not None and started.kind in {
+        "round_active",
+        "round_interrupted",
+        "hunt_queue",
+    }
     resumed_round = await RoundService(sessions, "ocaso").resume(actor)
-    assert resumed_round is not None and resumed_round.round_id == started.round_id
+    assert resumed_round is not None
+    if started.kind == "hunt_queue":
+        assert resumed_round.kind == "hunt_queue"
+        assert resumed_round.activity_id == started.activity_id
+    else:
+        assert resumed_round.round_id == prepared.round_id
     blocked_hunt = await rounds.start_hunt(actor)
-    assert blocked_hunt is not None and blocked_hunt.kind.startswith("round_")
-    if started.kind == "round_active":
+    assert blocked_hunt is not None and (
+        blocked_hunt.kind.startswith("round_") or blocked_hunt.kind == "hunt_queue"
+    )
+    if started.kind in {"round_active", "hunt_queue"}:
         round_result = await driver.clock.process_round_cadence(rounds, actor)
     else:
         round_result = started
     assert round_result is not None
-    completed_round_encounters = round_result.completed_encounters
+    completed_round_encounters = getattr(round_result, "completed_encounters", 0)
     round_terminal_kind = round_result.kind
-    round_end_reason = round_result.end_reason
-    if round_result.kind == "round_interrupted":
+    round_end_reason = getattr(round_result, "end_reason", None)
+    while round_result.kind == "round_interrupted":
         elite = await rounds.engage_round_elite(
-            actor, started.round_id, round_result.state_version
+            actor, prepared.round_id, round_result.state_version
         )
         assert elite is not None and elite.combat is not None
         elite = await driver.combat_to_result(
@@ -381,9 +406,20 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         else:
             assert elite.kind == "hunt_defeat", elite
             await RoundService(sessions, "ocaso").acknowledge_defeat(actor)
-        round_result = await rounds.round_back(actor, started.round_id)
-    elif round_result.kind in {"round_completed", "round_ended", "round_defeated"}:
-        round_result = await rounds.round_back(actor, started.round_id)
+        round_result = await rounds.round_back(actor, prepared.round_id)
+        if round_result is not None and round_result.kind in {"round_active", "hunt_queue"}:
+            round_result = await driver.clock.process_round_cadence(rounds, actor)
+    if round_result is not None and hasattr(round_result, "completed_encounters"):
+        completed_round_encounters = round_result.completed_encounters
+        round_terminal_kind = round_result.kind
+        round_end_reason = round_result.end_reason
+    if round_result is not None and round_result.kind in {
+        "round_completed",
+        "round_ended",
+        "round_defeated",
+    }:
+        round_result = await rounds.round_back(actor, prepared.round_id)
+    assert round_result is not None
     assert round_result is not None and round_result.kind not in {
         "round_active",
         "round_interrupted",
@@ -405,7 +441,7 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         )
         service = RoadService(sessions, "ocaso")
         for _receipt in range(6):
-            view = await service.start_hunt(actor)
+            view = await start_manual_hunt(service, label)
             if view is None:
                 mark = await driver.snapshot(f"{label} · start_hunt indisponível")
                 raise AssertionError(
@@ -422,7 +458,11 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
                 if capture:
                     await driver.snapshot(f"{label} · recibo de vitória reconhecido")
                 return view
-            assert view is not None and view.kind == "combat", (view, driver.diagnostic())
+            if view is None or view.kind != "combat":
+                mark = await driver.snapshot(f"Caçada bloqueada · {label}")
+                raise AssertionError(
+                    f"{view!r}; snapshot={mark.state!r}\n{driver.diagnostic()}"
+                )
             view = await driver.combat_to_result(
                 view,
                 lambda current, action: RoadService(sessions, "ocaso").action(
@@ -1139,6 +1179,8 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         )
     await travel_to_refuge()
     await driver.snapshot("Nv.4+ · Cripta concluída ou derrota legítima registrada")
+    crypt_recovery = await WorldService(sessions, "ocaso").rest(actor)
+    assert crypt_recovery is not None and crypt_recovery.hp == crypt_recovery.max_hp
 
     # Continue with level-appropriate public hunts until P3's level gate is met.
     # A defeat or low HP uses the normal Refuge recovery; this never restores Vigor.
@@ -1786,6 +1828,8 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     await travel_to_ruins()
     p5_view = await p5.action(actor, p5_view.state_version, "follow_structures")
     p5_view = await p5.action(actor, p5_view.state_version, "find_door")
+    assert p5_view is not None and p5_view.kind == "combat_pending"
+    p5_view = await p5.action(actor, p5_view.state_version, "start_boss")
     assert p5_view is not None and p5_view.kind == "combat" and p5_view.combat is not None
 
     for attempt in range(12):
@@ -2045,6 +2089,19 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     assert path_choice is not None and path_choice.changed
     await driver.snapshot("Caminho inicial escolhido após a Provação")
 
+    # Prepare S6 with resources and equipment already earned through the public
+    # journey.  The first diagnostic run exposed that the previous harness
+    # entered this optional boss after P5 at low HP and without usable healing.
+    await travel_to_refuge()
+    await craft_torso_if_available("S6 · preparação legítima de equipamento")
+    s6_gear = await equip_best_available_combat_gear()
+    rested_before_s6 = await WorldService(sessions, "ocaso").rest(actor)
+    assert rested_before_s6 is not None and rested_before_s6.hp == rested_before_s6.max_hp
+    await refill_p5_healing_stock(target_quantity=5)
+    await driver.snapshot(
+        f"S6 · preparação no Refúgio · equipamento={s6_gear!r} · consumíveis conferidos"
+    )
+
     # S6 is a legitimate Nv.10 secondary-quest reward source and is part of
     # the journey requested for the regional campaign. Its materials also
     # let the character use the ordinary alchemy recipe before P6.
@@ -2061,6 +2118,8 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         assert s6_view is not None
     assert s6_view.step == 3
     s6_view = await s6.action(actor, s6_view.state_version, "shelter")
+    assert s6_view is not None and s6_view.kind == "combat_pending"
+    s6_view = await s6.action(actor, s6_view.state_version, "start_boss")
     assert s6_view is not None and s6_view.kind == "combat" and s6_view.combat is not None
     await driver.snapshot("S6 · Custódio Sem Rosto materializado")
 
@@ -2122,6 +2181,10 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         assert s6_view.progress.get("combat_result") == "defeat", driver.diagnostic()
         await driver.snapshot(f"S6 · derrota legítima · tentativa {attempt + 1}")
         if attempt < 7:
+            await travel_to_refuge_from_ruins()
+            rested = await WorldService(sessions, "ocaso").rest(actor)
+            assert rested is not None and rested.hp == rested.max_hp
+            await refill_p5_healing_stock(target_quantity=5)
             await travel_to_ruins()
             s6_view = await s6.action(actor, s6_view.state_version, "retry")
             assert s6_view is not None and s6_view.kind == "combat"
@@ -2174,22 +2237,37 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             actor, round_items.round_id, round_items.state_version, "consumable.heal"
         )
         assert round_items is not None and round_items.prepared_heal
-    round_active = await rounds.start_round(
+    round_started = await rounds.start_round(
         actor, round_items.round_id, round_items.state_version
     )
-    assert round_active is not None and round_active.kind in {"round_active", "round_interrupted"}
-    round_reconnected = await RoundService(sessions, "ocaso").resume(actor)
-    assert round_reconnected is not None and round_reconnected.round_id == round_active.round_id
-    if round_active.kind == "round_active":
+    assert round_started is not None and round_started.kind in {
+        "round_active",
+        "round_interrupted",
+        "hunt_queue",
+    }
+    round_id = round_prep.round_id
+    if round_started.kind == "hunt_queue":
+        assert round_started.pvpve_round_queue and round_started.activity_id is not None
+        round_reconnected = await RoundService(sessions, "ocaso").resume(actor)
+        assert (
+            round_reconnected is not None
+            and round_reconnected.kind == "hunt_queue"
+            and round_reconnected.activity_id == round_started.activity_id
+        )
         prepared_round_result = await driver.clock.process_round_cadence(rounds, actor)
     else:
-        prepared_round_result = round_active
+        round_reconnected = await RoundService(sessions, "ocaso").resume(actor)
+        assert round_reconnected is not None and round_reconnected.round_id == round_id
+        if round_started.kind == "round_active":
+            prepared_round_result = await driver.clock.process_round_cadence(rounds, actor)
+        else:
+            prepared_round_result = round_started
     assert prepared_round_result is not None
     prepared_round_completed = prepared_round_result.completed_encounters
     prepared_round_end_reason = prepared_round_result.end_reason
     if prepared_round_result.kind == "round_interrupted":
         elite = await rounds.engage_round_elite(
-            actor, round_active.round_id, prepared_round_result.state_version
+            actor, round_id, prepared_round_result.state_version
         )
         assert elite is not None and elite.combat is not None
         elite = await driver.combat_to_result(
@@ -2205,9 +2283,9 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         else:
             assert elite.kind == "hunt_defeat", elite
             await RoundService(sessions, "ocaso").acknowledge_defeat(actor)
-        prepared_round_result = await rounds.round_back(actor, round_active.round_id)
+        prepared_round_result = await rounds.round_back(actor, round_id)
     elif prepared_round_result.kind in {"round_completed", "round_ended", "round_defeated"}:
-        prepared_round_result = await rounds.round_back(actor, round_active.round_id)
+        prepared_round_result = await rounds.round_back(actor, round_id)
     print(
         "RONDA PREPARADA · "
         f"resultado={prepared_round_result.kind if prepared_round_result else None} · "
