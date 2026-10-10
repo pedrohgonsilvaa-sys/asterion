@@ -366,6 +366,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 ),
                 "phase_triggered_ids": set(payload.get("phase_triggered_ids", ())),
                 "party_mode": bool(payload.get("party_mode", False)),
+                "manual_sides": tuple(payload.get("manual_sides", ())),
                 "order": tuple(payload["order"]),
                 "tutorial": tutorial,
                 "events": [combat_event(event) for event in payload["events"]],

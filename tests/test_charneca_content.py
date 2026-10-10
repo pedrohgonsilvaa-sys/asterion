@@ -60,6 +60,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
+from tests.helpers.pvpve import start_manual_hunt_after_no_match
 
 
 async def _seed_charneca(
@@ -348,7 +349,7 @@ async def test_charneca_overland_route_and_hunt_freeze_local(database, monkeypat
 
     monkeypatch.setattr(road_application, "select_creature", lambda seed, level, profile: SPIDER)
     monkeypatch.setattr(road_application, "select_variant", lambda seed, creature, profile: None)
-    combat = await service.start_hunt(actor)
+    combat = await start_manual_hunt_after_no_match(service, actor, monkeypatch)
     assert combat.kind == "combat"
     assert combat.location == CHARNECA
     assert combat.combat.fighters["enemy"].name == "Aranha de Cinza"
@@ -484,7 +485,7 @@ async def test_charneca_hunt_defeat_recovers_at_discovered_brazier_and_persists(
         )
         await session.commit()
 
-    encounter = await service.start_hunt(actor)
+    encounter = await start_manual_hunt_after_no_match(service, actor, monkeypatch)
     assert encounter is not None and encounter.kind == "combat"
 
     heal = await service.action(

@@ -21,10 +21,13 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
+from tests.helpers.pvpve import start_manual_hunt_after_no_match
 
 
 @pytest.mark.asyncio
-async def test_level_ten_progression_freezes_path_talents_and_active_arts_in_hunt(database):
+async def test_level_ten_progression_freezes_path_talents_and_active_arts_in_hunt(
+    database, monkeypatch
+):
     actor = 772399
     _, sessions = database
     character_id = uuid4()
@@ -149,7 +152,7 @@ async def test_level_ten_progression_freezes_path_talents_and_active_arts_in_hun
     road = RoadService(sessions, "ocaso")
     traveled = await road.travel(actor, ROAD)
     assert traveled is not None and traveled.location == ROAD
-    combat_view = await road.start_hunt(actor)
+    combat_view = await start_manual_hunt_after_no_match(road, actor, monkeypatch)
     assert combat_view is not None and combat_view.kind == "combat"
     combat = combat_view.combat
 

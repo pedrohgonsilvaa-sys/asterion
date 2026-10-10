@@ -443,6 +443,7 @@ class Combat:
     damage_auras: tuple[CombatDamageAura, ...] = ()
     phase_triggers: tuple[CombatPhaseTrigger, ...] = ()
     phase_triggered_ids: set[str] = field(default_factory=set)
+    manual_sides: tuple[str, ...] = ()
 
     @property
     def tutorial_stage(self) -> str:
@@ -490,21 +491,24 @@ def _fighter_defeat_on_zero(state: Combat, key: str) -> bool:
 
 
 def active_player_key(state: Combat) -> str | None:
-    """Return the player-side fighter whose opportunity is currently open."""
+    """Return the manually controlled fighter whose opportunity is open."""
     if not state.order:
         return None
     key = state.order[state.turn_index]
-    is_player_turn = (
-        _fighter_side(state, key) == "player" if state.party_mode else key == "player"
-    )
+    is_player_turn = _is_player_turn_actor(state, key)
     if key in state.fighters and is_player_turn:
         return key
     return None
 
 
 def _is_player_turn_actor(state: Combat, key: str) -> bool:
-    """Keep legacy 1v1 turns on `player`; party runs allow every active member."""
-    return _fighter_side(state, key) == "player" if state.party_mode else key == "player"
+    """Identify sides whose turns are submitted by a player rather than AI."""
+    if not state.party_mode:
+        return key == "player"
+    side = _fighter_side(state, key)
+    if state.manual_sides:
+        return side in state.manual_sides
+    return side == "player"
 
 
 def player_actions_for(state: Combat, fighter_key: str | None = None) -> dict[str, Action]:
@@ -638,7 +642,7 @@ def action_target_ids(
     """Return deterministic, alive target entity IDs selectable for one action."""
     actions = (
         player_actions_for(state, actor_key)
-        if _fighter_side(state, actor_key) == "player"
+        if _is_player_turn_actor(state, actor_key)
         else state.enemy_actions
     )
     action = actions.get(action_id)
@@ -1237,7 +1241,7 @@ def combat_consumable_options(
         elif item.family == ConsumableFamily.DISPELLER:
             for target_id, target in state.fighters.items():
                 if (
-                    _fighter_side(state, target_id) != "enemy"
+                    _fighter_side(state, target_id) == _fighter_side(state, actor_key)
                     or target_id == actor_key
                     or target.hp <= 0
                 ):
@@ -2011,25 +2015,25 @@ def _path_effect_duration(actor: Fighter, effect: ActionEffect, duration: int) -
 def _record_devastador_charge(
     state: Combat, actor_key: str, event_start: int, action_id: str
 ) -> None:
-    player = state.fighters.get("player")
-    if player is None or player.selected_path != "devastador":
-        return
-    hp_loss = sum(
-        (
-            D(event.effective_damage)
-            for event in state.events[event_start:]
-            if event.actor == actor_key
-            and event.target == player.id
-            and event.action == action_id
-            and not event.action.startswith("dot:")
-        ),
-        ZERO,
-    )
-    if hp_loss >= player.stats.hp * D("0.08") and hp_loss > ZERO:
-        player.path_state["devastador_charge"] = {
-            "expires_opportunity": player.opportunity + 2,
-            "source_action": action_id,
-        }
+    for target in state.fighters.values():
+        if target.selected_path != "devastador":
+            continue
+        hp_loss = sum(
+            (
+                D(event.effective_damage)
+                for event in state.events[event_start:]
+                if event.actor == actor_key
+                and event.target == target.id
+                and event.action == action_id
+                and not event.action.startswith("dot:")
+            ),
+            ZERO,
+        )
+        if hp_loss >= target.stats.hp * D("0.08") and hp_loss > ZERO:
+            target.path_state["devastador_charge"] = {
+                "expires_opportunity": target.opportunity + 2,
+                "source_action": action_id,
+            }
 
 def _perform(
     state: Combat,
@@ -2095,8 +2099,8 @@ def _perform(
         return True
 
     actions = (
-        state.player_actions
-        if _fighter_side(state, actor_id) == "player"
+        player_actions_for(state, actor_id)
+        if _is_player_turn_actor(state, actor_id)
         else state.enemy_actions
     )
     action = actions.get(action_id)
@@ -2247,7 +2251,7 @@ def _perform(
         action.prepared is None and action_id == "leap"
     )
     if (
-        _fighter_side(state, actor_id) == "enemy"
+        not _is_player_turn_actor(state, actor_id)
         and prepared
         and not state.resolving_prepared
     ):
@@ -3608,7 +3612,7 @@ def consumable_available(state: Combat, actor_key: str | None = None) -> bool:
     if state.result or not state.order or state.order[state.turn_index] != actor_key:
         return False
     player = state.fighters.get(actor_key)
-    if player is None or _fighter_side(state, actor_key) != "player":
+    if player is None or not _is_player_turn_actor(state, actor_key):
         return False
     return player.cooldowns.get(CONSUMABLE_COOLDOWN_KEY, 0) <= player.opportunity
 
@@ -3822,7 +3826,7 @@ def combat_consumable_usable(
         or state.tutorial_stage != "normal"
         or not consumable_available(state, actor_key)
         or actor is None
-        or _fighter_side(state, actor_key) != "player"
+        or not _is_player_turn_actor(state, actor_key)
         or actor.hp <= 0
         or (budget_limit is not None and state.consumable_uses >= budget_limit)
     ):
@@ -3841,7 +3845,7 @@ def combat_consumable_usable(
         if item.family == ConsumableFamily.DISPELLER:
             if (
                 target_id is None
-                or _fighter_side(state, target_id) != "enemy"
+                or _fighter_side(state, target_id) == _fighter_side(state, actor_key)
                 or target_id == actor_key
             ):
                 return False
@@ -3990,9 +3994,11 @@ def act(
         updated = deepcopy(state)
         if updated.tutorial and updated.tutorial_stage != "normal":
             updated.pending_response = updated.tutorial.responses.get(action)
+        event_start = len(updated.events)
         committed = _perform(updated, actor_key, action, target_id=target_id)
         if not committed:
             return state
+        _record_devastador_charge(updated, actor_key, event_start, action)
         updated.used_attack |= action == "attack"
         updated.used_defend |= action == "defend"
         updated.used_art |= action == "art"

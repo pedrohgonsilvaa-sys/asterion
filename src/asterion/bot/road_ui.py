@@ -385,6 +385,30 @@ def render_road(view: RoadView) -> Screen:
     round_screen = _round_screen(view)
     if round_screen is not None:
         return round_screen
+    if view.kind == "hunt_queue":
+        text = (
+            "🦌 Caçada · Busca por Rival\n\n"
+            f"{_location_copy(view.location)[0]} · Terras do Ocaso\n\n"
+            f"{escape(view.result_text or 'Procurando um grupo compatível…')}\n\n"
+            "⚡ Vigor · Será verificado ao formar o encontro"
+        )
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Atualizar Busca",
+                        callback_data=f"road:pvpve:refresh:{view.activity_id.hex}",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Cancelar Busca",
+                        callback_data=f"road:pvpve:cancel:{view.activity_id.hex}",
+                    )
+                ],
+            ]
+        )
+        return Screen(text, "hunt_queue", keyboard, parse_mode="HTML")
     if view.kind == "combat" and view.combat is not None:
         return render_combat(
             CombatView(
@@ -394,7 +418,8 @@ def render_road(view: RoadView) -> Screen:
                 view.combat,
                 "road",
                 0,
-                context="road",
+                context=view.combat_context,
+                combat_actor_key=view.combat_actor_key,
                 consumable_options=view.consumable_options,
                 consumable_screen=view.consumable_screen,
                 selected_consumable_id=view.selected_consumable_id,
@@ -407,12 +432,18 @@ def render_road(view: RoadView) -> Screen:
             )
         )
     if view.kind == "hunt_defeat":
+        heading = (
+            "💀 PvPvE · Derrota"
+            if view.combat_context == "pvpve"
+            else "💀 Caçada · Derrota"
+        )
+        result_line = f"\n\n{escape(view.result_text)}" if view.result_text else ""
         if view.recovery_brazier and view.recovery_location:
             text = (
-                "💀 Caçada · Derrota\n\n"
+                f"{heading}\n\n"
                 f"🔥 {view.recovery_brazier}\n"
                 f"{view.recovery_location} · Terras do Ocaso\n\n"
-                "❤️ HP · Restaurado\n\n🦌 Caçada · Encerrada"
+                f"❤️ HP · Restaurado{result_line}"
             )
             keyboard = []
             route_button = _recovery_route(view)
@@ -421,8 +452,8 @@ def render_road(view: RoadView) -> Screen:
             keyboard.append([InlineKeyboardButton(text=f"← {view.recovery_location}", callback_data="road:local")])
         else:
             text = (
-                "💀 Derrota\n\n🔥 Braseiro da Estrada\nEstrada das Cinzas · Terras do Ocaso\n\n"
-                "❤️ HP · Restaurado\n\n🦌 Caçada · Encerrada"
+                f"{heading}\n\n🔥 Braseiro da Estrada\nEstrada das Cinzas · Terras do Ocaso\n\n"
+                f"❤️ HP · Restaurado{result_line}"
             )
             keyboard = [[_local_return(ROAD)]]
         return Screen(text, "road_defeat", InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -437,6 +468,7 @@ def render_road(view: RoadView) -> Screen:
         )
         keyboard = [
             [InlineKeyboardButton(text="Caçar", callback_data="road:hunt")],
+            [InlineKeyboardButton(text="Grupo", callback_data="group:root")],
             [_local_return(view.location)],
         ]
         return Screen(text, "hunt_prepare", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
@@ -453,7 +485,7 @@ def render_road(view: RoadView) -> Screen:
         keyboard = [
             *(
                 [[InlineKeyboardButton(text="Caçar Novamente", callback_data=f"road:repeat:{view.activity_id.hex}")]]
-                if view.activity_id is not None
+                if view.activity_id is not None and view.combat_context != "group_hunt"
                 else []
             ),
             [_local_return(view.location)],
@@ -574,6 +606,7 @@ def render_current_local(
     if view.location in {ROAD, CHARNECA, BOSQUE, RUINS}:
         lines.extend(["", "🦌 Caçada · Disponível"])
         keyboard.append([InlineKeyboardButton(text="Caçar", callback_data="road:hunt")])
+        keyboard.append([InlineKeyboardButton(text="Grupo", callback_data="group:root")])
         if view.familiar:
             lines.append("🏕️ Ronda de Caça · Disponível")
             keyboard.append([InlineKeyboardButton(text="Ronda", callback_data="world:round")])

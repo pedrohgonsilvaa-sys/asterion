@@ -141,11 +141,22 @@ def get_bot_runtime() -> BotRuntime:
             s4=s4,
             s5=s5,
             s6=s6,
+            road=road,
         )
     )
     dispatcher.include_router(p2_router(p2, settings.creation_images, s3=s3, p4=p4, p5=p5, p6=p6))
     dispatcher.include_router(
-        p1_router(p1, settings.creation_images, p2=p2, p3=p3, p4=p4, p5=p5, p6=p6, s6=s6)
+        p1_router(
+            p1,
+            settings.creation_images,
+            p2=p2,
+            p3=p3,
+            p4=p4,
+            p5=p5,
+            p6=p6,
+            s6=s6,
+            road=road,
+        )
     )
     dispatcher.include_router(s1_router(s1, settings.creation_images))
     dispatcher.include_router(s2_router(s2, settings.creation_images))

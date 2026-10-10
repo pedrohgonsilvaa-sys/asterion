@@ -31,6 +31,8 @@ from asterion.infrastructure.db.models import (
     HuntContext,
     MaterialStack,
     PendingItem,
+    PvpveQueue,
+    PvpveQueueMember,
     Quest,
     RewardComponent,
     RewardEvent,
@@ -128,7 +130,39 @@ async def _seed_road(
             ]
         )
         await session.commit()
-    return actor, RoadService(sessions, "ocaso")
+    service = RoadService(sessions, "ocaso")
+    materialize_without_rival = service.pvpve.queue_manual_hunt
+
+    async def start_pve_when_test_has_no_rival(session, character, world, profile):
+        view = await materialize_without_rival(session, character, world, profile)
+        if view.kind != "hunt_queue":
+            return view
+        queue = await session.scalar(
+            select(PvpveQueue)
+            .join(PvpveQueueMember)
+            .where(PvpveQueueMember.game_activity_id == view.activity_id)
+            .with_for_update()
+        )
+        members, characters, activities = await service.pvpve._lock_queue_roster(
+            session, queue.id
+        )
+        now = datetime.now(UTC)
+        queue.expires_at = now - timedelta(seconds=1)
+        await service.pvpve._materialize_queue_pve(
+            session, queue, members, characters, activities, now=now
+        )
+        activity = await session.get(GameActivity, view.activity_id, populate_existing=True)
+        if activity is not None and activity.status == "active":
+            return await service._combat_view(session, character, activity)
+        return await service._result_view_for_activity(
+            session,
+            character,
+            activity,
+            world,
+        )
+
+    service.pvpve.queue_manual_hunt = start_pve_when_test_has_no_rival
+    return actor, service
 
 
 async def _seed_hunt_receipts(database, actor, receipts):

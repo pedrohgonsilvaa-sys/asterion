@@ -142,6 +142,11 @@ def render_group(
     )
     rows.extend(
         [
+            *(
+                [[InlineKeyboardButton(text="Caçada em Grupo", callback_data="group:hunt:open")]]
+                if len(group.members) >= 2
+                else []
+            ),
             [InlineKeyboardButton(text="Convites", callback_data="group:inbox")],
             [
                 InlineKeyboardButton(
@@ -152,6 +157,61 @@ def render_group(
             [InlineKeyboardButton(text="← Vínculos", callback_data="links:root")],
         ]
     )
+    return Screen("\n".join(lines), "links", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def render_hunt_roster(
+    group: GroupView | None,
+    selected_mask: int | None = None,
+    *,
+    stale: bool = False,
+) -> Screen:
+    if group is None or len(group.members) < 2:
+        return Screen(
+            "🦌 Caçada em Grupo\n\nÉ necessário estar em um Grupo com pelo menos dois integrantes.",
+            "links",
+            InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="← Grupo", callback_data="group:root")]
+                ]
+            ),
+        )
+    all_mask = (1 << len(group.members)) - 1
+    selected_mask = all_mask if selected_mask is None else selected_mask & all_mask
+    lines = ["🦌 Caçada em Grupo", "", "Escolha quem participará desta Caçada.", ""]
+    rows = []
+    for index, member in enumerate(group.members):
+        selected = bool(selected_mask & (1 << index))
+        lines.append(
+            f"{'✅' if selected else '▫️'} {escape(member.name)} · Nv. {member.level}"
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=("Remover · " if selected else "Incluir · ") + member.name[:18],
+                    callback_data=(
+                        f"group:hunt:t:{index}:{selected_mask}:"
+                        f"{revision36(group.revision)}"
+                    ),
+                )
+            ]
+        )
+    if stale:
+        lines.extend(["", "⏳ O Grupo mudou. Revise o roster antes de continuar."])
+    if selected_mask.bit_count() < 2:
+        lines.extend(["", "Selecione pelo menos dois integrantes."])
+    else:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="Pedir confirmação",
+                    callback_data=(
+                        f"group:hunt:p:{selected_mask}:{revision36(group.revision)}"
+                    ),
+                )
+            ]
+        )
+    rows.append([InlineKeyboardButton(text="← Grupo", callback_data="group:root")])
     return Screen("\n".join(lines), "links", InlineKeyboardMarkup(inline_keyboard=rows))
 
 

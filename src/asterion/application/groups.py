@@ -669,6 +669,8 @@ class GroupService:
                     )
                 if eligible_count == 0:
                     raise GroupError("empty_eligible_roster")
+                if activity_type == "hunt_group" and eligible_count < 2:
+                    raise GroupError("group_roster_size_invalid")
                 await session.flush()
                 remaining = await self._pending_response_count(session, proposal.id)
                 if remaining == 0:
