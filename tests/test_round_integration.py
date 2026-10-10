@@ -36,7 +36,9 @@ from asterion.infrastructure.db.models import (
 from tests.test_road_integration import _seed_road
 
 
-async def _seed_round(database, actor: int, *, vigor: int = 100):
+async def _seed_round(
+    database, actor: int, *, vigor: int = 100, pvpve: bool = False
+):
     await _seed_road(database, actor, vigor=vigor)
     sessions = database[1]
     async with sessions() as session:
@@ -46,6 +48,11 @@ async def _seed_round(database, actor: int, *, vigor: int = 100):
         session.add(Unlock(character_id=character.id, unlock_id=ROUND_FAMILIARITY))
         await session.commit()
     service = RoundService(sessions, "ocaso")
+    if not pvpve:
+        async def no_round_match(*_args, **_kwargs):
+            return False
+
+        service.pvpve.queue_round_hunt = no_round_match
     await service.travel(actor, ROAD)
     return actor, service
 

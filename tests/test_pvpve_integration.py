@@ -6,7 +6,7 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from asterion.application.groups import GroupService
 from asterion.application.road import HUNT_CONTENT, RoadService
@@ -435,9 +435,7 @@ async def test_pvp_winner_materializes_one_prey_and_freezes_domain_eligibility(d
 
 
 @pytest.mark.asyncio
-async def test_unmatched_manual_queue_falls_back_to_normal_pve_without_spending_vigor(
-    database, monkeypatch
-):
+async def test_unmatched_manual_queue_continues_to_pve_without_ttl_wait(database):
     characters, road = await _seed_hunters(database)
     queue_view = await road.start_hunt(ACTORS[0])
     assert queue_view is not None and queue_view.kind == "hunt_queue"
@@ -454,21 +452,32 @@ async def test_unmatched_manual_queue_falls_back_to_normal_pve_without_spending_
             .where(PvpveQueueMember.game_activity_id == activity_id)
         )
         assert queue is not None
-        expires_at = queue.expires_at
+        assert queue.expires_at > datetime.now(UTC)
+        assert queue.expires_at > queue.created_at
+        assert "00:" not in queue_view.result_text
 
-    monkeypatch.setattr(
-        "asterion.application.pvpve._utcnow",
-        lambda: expires_at.replace(tzinfo=UTC) + timedelta(seconds=1),
+    resumed = await road.pvpve.continue_queue(
+        ACTORS[0], queue_view.pvpve_queue_id
     )
-    assert await road.pvpve.refresh_queue(ACTORS[0], activity_id)
-    resumed = await road.resume(ACTORS[0])
     assert resumed is not None and resumed.kind == "combat"
     assert resumed.combat_context == "road"
+    duplicate = await road.pvpve.continue_queue(
+        ACTORS[0], queue_view.pvpve_queue_id
+    )
+    assert duplicate is not None and duplicate.kind == "combat"
+    assert duplicate.activity_id == resumed.activity_id
     async with database[1]() as session:
         character = await session.get(Character, characters[ACTORS[0]])
         activity = await session.get(GameActivity, activity_id)
         assert character.vigor == 100
         assert activity.content_id == HUNT_CONTENT
+        queue = await session.scalar(
+            select(PvpveQueue)
+            .join(PvpveQueueMember)
+            .where(PvpveQueueMember.game_activity_id == activity_id)
+        )
+        assert queue.status == "expired"
+        assert await session.scalar(select(func.count(Encounter.id))) == 1
 
 
 @pytest.mark.asyncio
@@ -486,10 +495,27 @@ async def test_waiting_queue_can_be_cancelled_without_cost_or_collision(database
     assert callbacks
     assert all(len(callback.encode()) < 64 for callback in callbacks)
     assert any(callback.startswith("road:pvpve:cancel:") for callback in callbacks)
+    assert any(callback.startswith("road:pvpve:continue:q:") for callback in callbacks)
+    assert any(
+        button.text == "Continuar sem Rival"
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+    )
+    assert queue_view.pvpve_queue_id is not None
+    continue_callback = next(
+        callback
+        for callback in callbacks
+        if callback.startswith("road:pvpve:continue:q:")
+    )
+    assert continue_callback.endswith(queue_view.pvpve_queue_id.hex)
 
-    cancelled = await road.pvpve.cancel_queue(ACTORS[0], queue_view.activity_id)
+    cancelled = await road.pvpve.cancel_queue(
+        ACTORS[0], queue_id=queue_view.pvpve_queue_id
+    )
     assert cancelled is not None and cancelled.kind == "road"
-    duplicate = await road.pvpve.cancel_queue(ACTORS[0], queue_view.activity_id)
+    duplicate = await road.pvpve.cancel_queue(
+        ACTORS[0], queue_id=queue_view.pvpve_queue_id
+    )
     assert duplicate is not None and duplicate.kind == "road"
     async with database[1]() as session:
         character = await session.get(Character, characters[ACTORS[0]])

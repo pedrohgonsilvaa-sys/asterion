@@ -1620,9 +1620,9 @@ class PvpveQueueMember(Base):
     __tablename__ = "pvpve_queue_members"
     __table_args__ = (
         PrimaryKeyConstraint("queue_id", "character_id"),
-        UniqueConstraint("game_activity_id", name="uq_pvpve_queue_activity"),
         CheckConstraint("ordinal BETWEEN 1 AND 4", name="ck_pvpve_queue_ordinal"),
         Index("ix_pvpve_queue_member_character", "character_id", "queue_id"),
+        Index("ix_pvpve_queue_member_activity", "game_activity_id", "character_id"),
     )
 
     queue_id: Mapped[UUID] = mapped_column(
@@ -1724,6 +1724,9 @@ class PvpveCollisionMember(Base):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
     domain_eligible: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    round_takeover: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
     result_acknowledged: Mapped[bool] = mapped_column(

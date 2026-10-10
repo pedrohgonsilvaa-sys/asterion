@@ -322,6 +322,7 @@ def _round_screen(view) -> Screen | None:
         text = (
             "💀 Ronda de Caça · Derrota\n\n"
             f"{recovery}"
+            f"{'⚔️ PvPvE · Derrota\n' if view.end_reason == 'pvpve_defeat' else ''}"
             f"⚔️ Encontros · {view.completed_encounters}/{view.batch_size}\n"
             "❤️ HP · Restaurado"
             f"{_reward_block(view)}"
@@ -342,6 +343,8 @@ def _round_screen(view) -> Screen | None:
             reason = "❤️ HP · Abaixo do Limite Seguro"
         elif view.end_reason == "vigor":
             reason = "⚡ Vigor · Insuficiente"
+        elif view.end_reason == "pvpve_context_changed":
+            reason = "⚠️ Contexto da busca por rival indisponível"
         elif view.end_reason in {"inventory", "pending", "inventory_pending"}:
             parts = []
             if view.inventory_blocked:
@@ -386,31 +389,47 @@ def render_road(view: RoadView) -> Screen:
     if round_screen is not None:
         return round_screen
     if view.kind == "hunt_queue":
+        heading = (
+            "🛡️ Ronda · Exposta ao PvPvE"
+            if view.pvpve_round_queue
+            else "🦌 Caçada · Exposta ao PvPvE"
+        )
         text = (
-            "🦌 Caçada · Busca por Rival\n\n"
+            f"{heading}\n\n"
             f"{_location_copy(view.location)[0]} · Terras do Ocaso\n\n"
             f"{escape(view.result_text or 'Procurando um grupo compatível…')}\n\n"
+            "Sem rival compatível, a jornada segue para a presa PvE.\n"
             "⚡ Vigor · Será verificado ao formar o encontro"
         )
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="Atualizar Busca",
-                        callback_data=f"road:pvpve:refresh:{view.activity_id.hex}",
+                        text="Buscar Rival",
+                        callback_data=f"road:pvpve:refresh:q:{view.pvpve_queue_id.hex}",
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        text="Cancelar Busca",
-                        callback_data=f"road:pvpve:cancel:{view.activity_id.hex}",
+                        text="Continuar sem Rival",
+                        callback_data=f"road:pvpve:continue:q:{view.pvpve_queue_id.hex}",
                     )
                 ],
+                *(
+                    []
+                    if view.pvpve_round_queue
+                    else [[
+                        InlineKeyboardButton(
+                            text="Cancelar Caçada",
+                            callback_data=f"road:pvpve:cancel:q:{view.pvpve_queue_id.hex}",
+                        )
+                    ]]
+                ),
             ]
         )
         return Screen(text, "hunt_queue", keyboard, parse_mode="HTML")
     if view.kind == "combat" and view.combat is not None:
-        return render_combat(
+        screen = render_combat(
             CombatView(
                 view.activity_id,
                 view.encounter_id,
@@ -431,6 +450,31 @@ def render_road(view: RoadView) -> Screen:
                 ready_consumable_option=view.ready_consumable_option,
             )
         )
+        if view.pvpve_round_ai:
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="Assumir Combate",
+                            callback_data=f"road:pvpve:takeover:{view.activity_id.hex}",
+                        )
+                    ]
+                ]
+            )
+            return Screen(
+                f"{screen.text}\n\n🤖 A Ronda está sob controle automático.",
+                screen.image_key,
+                keyboard,
+                screen.parse_mode,
+            )
+        if view.pvpve_round_takeover:
+            return Screen(
+                f"{screen.text}\n\n✅ Controle assumido · você agirá na próxima oportunidade.",
+                screen.image_key,
+                screen.keyboard,
+                screen.parse_mode,
+            )
+        return screen
     if view.kind == "hunt_defeat":
         heading = (
             "💀 PvPvE · Derrota"

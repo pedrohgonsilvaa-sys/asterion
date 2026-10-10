@@ -19,7 +19,10 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
-from tests.helpers.pvpve import start_manual_hunt_after_no_match
+from tests.helpers.pvpve import (
+    disable_round_pvpve_for_test,
+    start_manual_hunt_after_no_match,
+)
 from tests.test_road_integration import _seed_road
 
 
@@ -74,7 +77,11 @@ async def _seed_bosque(
                 *(Brazier(character_id=character.id, brazier_id=item) for item in braziers),
             )
         )
-    return character.id, RoadService(sessions, "ocaso"), RoundService(sessions, "ocaso")
+    return (
+        character.id,
+        RoadService(sessions, "ocaso"),
+        disable_round_pvpve_for_test(RoundService(sessions, "ocaso")),
+    )
 
 
 def _terminal(result: str):

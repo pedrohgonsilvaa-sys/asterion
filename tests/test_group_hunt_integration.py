@@ -152,28 +152,22 @@ async def _ready_group_hunt(groups, road, actors, ids, group):
         create_activity=road.group_hunts.create_activity,
         now=NOW + timedelta(seconds=2),
     )
-    await _materialize_group_queue_without_opponent(road, proposal.proposal_id)
+    await _materialize_group_queue_without_opponent(
+        road, actors[NAMES[0]], proposal.proposal_id
+    )
     return started
 
 
-async def _materialize_group_queue_without_opponent(road, proposal_id):
-    """Advance the configured no-rival queue to its normal PvE fallback in tests."""
-    async with road.sessions.begin() as session:
+async def _materialize_group_queue_without_opponent(road, actor, proposal_id):
+    """Use the public immediate no-rival continuation for a group Hunt."""
+    async with road.sessions() as session:
         queue = await session.scalar(
-            select(PvpveQueue)
-            .where(PvpveQueue.proposal_id == proposal_id)
-            .with_for_update()
+            select(PvpveQueue).where(PvpveQueue.proposal_id == proposal_id)
         )
-        if queue is None or queue.status != "waiting":
-            return
-        members, characters, activities = await road.pvpve._lock_queue_roster(
-            session, queue.id
-        )
-        now = datetime.now(UTC)
-        queue.expires_at = now - timedelta(seconds=1)
-        await road.pvpve._materialize_queue_pve(
-            session, queue, members, characters, activities, now=now
-        )
+    if queue is None or queue.status != "waiting":
+        return
+    view = await road.pvpve.continue_queue(actor, queue.id)
+    assert view is not None
 
 
 @pytest.mark.asyncio
@@ -247,7 +241,9 @@ async def test_group_hunt_ready_check_freezes_roster_and_reconnects(
         now=NOW + timedelta(seconds=2),
     )
     assert started.started
-    await _materialize_group_queue_without_opponent(road, proposal.proposal_id)
+    await _materialize_group_queue_without_opponent(
+        road, actors[NAMES[0]], proposal.proposal_id
+    )
 
     async with database[1]() as session:
         encounter = await session.scalar(

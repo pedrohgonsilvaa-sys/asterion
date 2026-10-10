@@ -595,27 +595,69 @@ def world_router(
                 await present(query.message, render_road(view), images, edit=True)
 
     @router.callback_query(
-        F.data.regexp(r"^road:pvpve:refresh:[0-9a-fA-F]{32}$")
+        F.data.regexp(r"^road:pvpve:refresh:(?:q:)?[0-9a-fA-F]{32}$")
     )
     async def refresh_pvpve_queue(query: CallbackQuery):
         if road is None or not isinstance(query.message, Message):
             await query.answer()
             return
         try:
-            activity_id = UUID(hex=(query.data or "").rsplit(":", 1)[1])
+            parts = (query.data or "").split(":")
+            token_id = UUID(hex=parts[-1])
         except (IndexError, TypeError, ValueError):
             await query.answer()
             return
-        await road.pvpve.refresh_queue(query.from_user.id, activity_id)
+        if len(parts) == 5 and parts[-2] == "q":
+            await road.pvpve.refresh_queue(query.from_user.id, queue_id=token_id)
+        else:
+            await road.pvpve.refresh_queue(query.from_user.id, token_id)
         view = await road.resume(query.from_user.id)
         await query.answer()
         if view is not None:
             await present(query.message, render_road(view), images, edit=True)
 
     @router.callback_query(
-        F.data.regexp(r"^road:pvpve:cancel:[0-9a-fA-F]{32}$")
+        F.data.regexp(r"^road:pvpve:continue:q:[0-9a-fA-F]{32}$")
+    )
+    async def continue_pvpve_queue(query: CallbackQuery):
+        if road is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        try:
+            queue_id = UUID(hex=(query.data or "").rsplit(":", 1)[1])
+        except (IndexError, TypeError, ValueError):
+            await query.answer()
+            return
+        view = await road.pvpve.continue_queue(query.from_user.id, queue_id)
+        await query.answer()
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(
+        F.data.regexp(r"^road:pvpve:cancel:(?:q:)?[0-9a-fA-F]{32}$")
     )
     async def cancel_pvpve_queue(query: CallbackQuery):
+        if road is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        try:
+            parts = (query.data or "").split(":")
+            token_id = UUID(hex=parts[-1])
+        except (IndexError, TypeError, ValueError):
+            await query.answer()
+            return
+        if len(parts) == 5 and parts[-2] == "q":
+            view = await road.pvpve.cancel_queue(query.from_user.id, queue_id=token_id)
+        else:
+            view = await road.pvpve.cancel_queue(query.from_user.id, token_id)
+        await query.answer()
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(
+        F.data.regexp(r"^road:pvpve:takeover:[0-9a-fA-F]{32}$")
+    )
+    async def takeover_pvpve_round(query: CallbackQuery):
         if road is None or not isinstance(query.message, Message):
             await query.answer()
             return
@@ -624,8 +666,8 @@ def world_router(
         except (IndexError, TypeError, ValueError):
             await query.answer()
             return
-        view = await road.pvpve.cancel_queue(query.from_user.id, activity_id)
-        await query.answer()
+        view = await road.pvpve.assume_round_control(query.from_user.id, activity_id)
+        await query.answer("Você assumirá o combate na próxima oportunidade.")
         if view is not None:
             await present(query.message, render_road(view), images, edit=True)
 
