@@ -223,8 +223,12 @@ def rarity_with_pity(
     return rarity, legendary_progress, mythic_progress
 
 
-def material_for_ordinal(seed: str, ordinal: int) -> str:
-    return BASIC_MATERIALS[stable_draw(seed, f"material.basic.{ordinal}", len(BASIC_MATERIALS))]
+def material_for_ordinal(
+    seed: str, ordinal: int, pool: tuple[str, ...] = BASIC_MATERIALS
+) -> str:
+    if not pool:
+        raise ValueError("Dungeon basic-material pools cannot be empty.")
+    return pool[stable_draw(seed, f"material.basic.{ordinal}", len(pool))]
 
 
 def rune_grade(reference_level: int) -> int:

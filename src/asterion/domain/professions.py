@@ -81,6 +81,13 @@ CRYPT_CORE = "material.tdo.nucleo_cripta_ocaso"
 GALLERIES_CORE = "material.tdo.nucleo_galerias_vigia"
 VIGIA_CORE = "material.tdo.nucleo_vigia_partido"
 MATRIARCH_CORE = "material.vde.nucleo_matriarca_das_raizes"
+FOSSO_CORE = "material.vde.nucleo_fosso_raizes"
+VDE_IRON = "material.vde.ferro_enredado"
+VDE_LEATHER = "material.vde.couro_musgoso"
+VDE_HERB = "material.vde.erva_de_turfa"
+VDE_RESIN = "material.vde.resina_enredada"
+VDE_CATALYST_II = "material.vde.catalisador_elite_ii"
+VDE_FRAGMENT_II = "material.vde.fragmento_aprimoramento_ii"
 
 MATERIAL_NAMES = {
     IRON: "Ferro de Fuligem",
@@ -93,6 +100,13 @@ MATERIAL_NAMES = {
     GALLERIES_CORE: "Núcleo das Galerias do Vigia",
     VIGIA_CORE: "Núcleo do Vigia Partido",
     MATRIARCH_CORE: "Núcleo da Matriarca das Raízes",
+    FOSSO_CORE: "Núcleo do Fosso das Raízes",
+    VDE_IRON: "Ferro Enredado",
+    VDE_LEATHER: "Couro Musgoso",
+    VDE_HERB: "Erva de Turfa",
+    VDE_RESIN: "Resina Enredada",
+    VDE_CATALYST_II: "Catalisador de Elite II",
+    VDE_FRAGMENT_II: "Fragmento de Aprimoramento II",
 }
 
 SLOT_ECONOMY_SW = {
@@ -313,6 +327,27 @@ def _special_recipes() -> list[RecipeDefinition]:
             creation_enabled=False,
             unlock_id="recipe.vde.matriarca.seiva",
             description="Encantamento Épico de HP · Grau II",
+        ),
+        RecipeDefinition(
+            recipe_id="recipe.vde.fosso.relicario_cordas_mortas",
+            profession_id="jeweler",
+            name="Relicário das Cordas Mortas",
+            output_kind="equipment",
+            required_level=5,
+            grade=2,
+            rarity="Raro",
+            output_name="Relicário das Cordas Mortas",
+            output_slot="Artefato",
+            output_id="vde_fosso_relicario_cordas_mortas",
+            sw=2,
+            fixed_materials=(
+                MaterialRequirement(VDE_IRON, 10),
+                MaterialRequirement(VDE_RESIN, 6),
+                MaterialRequirement(VDE_FRAGMENT_II, 8, False),
+                MaterialRequirement(FOSSO_CORE, 1),
+            ),
+            unlock_id="recipe.vde.fosso.relicario_cordas_mortas",
+            description="Artefato · Raro · Grau II · SW2",
         ),
     ]
 

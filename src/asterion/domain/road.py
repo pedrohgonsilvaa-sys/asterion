@@ -636,6 +636,48 @@ VDE_MATRIARCH = Creature(
     ),
 )
 
+# Masmorra A — the creatures are registered in the shared Bestiário catalog,
+# but are not added to any world-hunt pool.
+VDE_PIT_WEAVER = Creature(
+    "tecela_fosso",
+    "Tecelã do Fosso",
+    "elite",
+    "controller",
+    16,
+    16,
+    0,
+    ("picada_profunda", "fio_arrasto", "casulo_breve", "queda_tecela"),
+    (
+        ("picada_profunda", "Picada Profunda", D("0.85"), 0, D(0), 0, "poison", 1, False, 2),
+        ("fio_arrasto", "Fio de Arrasto", D("0.80"), 0, D("0.15"), 2, None, 0, False, 3, "agility"),
+        ("casulo_breve", "Casulo Breve", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D("0.75"), 2, True),
+        ("queda_tecela", "Queda da Tecelã", D("1.65"), 0, D(0), 0, None, 0, True, 4),
+    ),
+)
+VDE_PIT_HANGER = Creature(
+    "o_que_pende",
+    "O Que Pende",
+    "boss",
+    "controller",
+    17,
+    17,
+    0,
+    ("garra_suspensa", "laco_fosso", "seiva_escura", "varredura_cordas", "despencar"),
+    (
+        ("garra_suspensa", "Garra Suspensa", D("1.00"), 0, D(0), 0),
+        ("laco_fosso", "Laço do Fosso", D("0.90"), 0, D("0.12"), 2, None, 0, False, 3, "agility"),
+        ("seiva_escura", "Seiva Escura", D("0.80"), 0, D(0), 0, "poison", 1, False, 2),
+        ("varredura_cordas", "Varredura das Cordas", D("0.80"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+        ("despencar", "Despencar", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+    ),
+)
+VDE_PULSING_NODE = Creature(
+    "fosso_no_pulsante", "Nó Pulsante", "common", "balanced", 16, 16, 0, (), ()
+)
+VDE_HANGING_ROOT = Creature(
+    "fosso_raiz_sustentacao", "Raiz de Sustentação", "common", "balanced", 17, 17, 0, (), ()
+)
+
 VDE_CREATURES = (
     VDE_MOSS_WOLF,
     VDE_VALLEY_CROW,
@@ -649,6 +691,8 @@ VDE_CREATURES = (
     VDE_GREEN_DUSK_MOTH,
     VDE_ROOTED_WATCHER,
     VDE_BARK_EXECUTIONER,
+    VDE_PIT_WEAVER,
+    VDE_PIT_HANGER,
 )
 CAMPAIGN_BOSS_CREATURES = (VDE_MATRIARCH,)
 CREATURE_CATALOG = (*CREATURE_CATALOG, *VDE_CREATURES, *CAMPAIGN_BOSS_CREATURES)

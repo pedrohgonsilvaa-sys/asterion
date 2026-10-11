@@ -80,6 +80,9 @@ from asterion.domain.road import (
     select_variant,
     weighted_choice,
 )
+from asterion.domain.tdo_fosso import (
+    FOSSO_DISCOVERY_UNLOCK,
+)
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
@@ -2097,6 +2100,17 @@ class RoadService:
                     character_id=c.id,
                     entry_id="codex.mystery.o_no_antigo",
                     fragment_id="codex.fragment.no_antigo.entrada_santuario_descoberta",
+                )
+            elif attempt.result_id == "explore.vde.mata.entrada_fosso_raizes":
+                if await self._ensure(
+                    s, Unlock, character_id=c.id, unlock_id=FOSSO_DISCOVERY_UNLOCK
+                ):
+                    components.append(("unlock", FOSSO_DISCOVERY_UNLOCK, 1, {}))
+                await self._ensure(
+                    s,
+                    CodexEntry,
+                    character_id=c.id,
+                    entry_id="codex.location.fosso_das_raizes",
                 )
 
         for kind, item_id, quantity, payload in components:

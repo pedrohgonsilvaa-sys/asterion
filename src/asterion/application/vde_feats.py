@@ -27,6 +27,7 @@ VDE_CAMPAIGN_LOCATIONS = frozenset(
     }
 )
 SANCTUARY_STABLE_CLEAR = "dungeon.vde.santuario_no_antigo.first_clear.stable"
+FOSSO_STABLE_CLEAR = "dungeon.vde.fosso_raizes.first_clear.stable"
 MATRIARCH_EVIDENCE = "matriarca_raizes"
 
 
@@ -79,6 +80,7 @@ async def reconcile_vde_feats(
         ).all()
     )
     conditions = {
+        "feat.vde.aquilo_que_pende": FOSSO_STABLE_CLEAR in unlocks,
         "feat.vde.o_berco_silencia": "first_victory" in evidence,
         "feat.vde.vales_dos_enforcados": (
             p12 is not None and character.level >= 20 and VDE_CAMPAIGN_LOCATIONS <= locations
