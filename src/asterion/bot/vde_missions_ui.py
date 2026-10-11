@@ -7,9 +7,11 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.prologue import CombatView
 from asterion.application.vde_missions import (
     P9_ID,
+    P10_ID,
     S7_ID,
     S8_ID,
     S9_ID,
+    S10_ID,
     VDEMissionView,
 )
 from asterion.bot.combat_ui import render_combat
@@ -52,7 +54,7 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
                 combat_actor_key=view.combat_actor_key,
             )
         )
-        kind = "secondary" if quest in {S7_ID, S8_ID, S9_ID} else "principal"
+        kind = "secondary" if quest in {S7_ID, S8_ID, S9_ID, S10_ID} else "principal"
         return Screen(
             f"📜 {title} · Vales dos Enforcados\n⚔️ Encontro Roteirizado · {location}\n\n{hud.text}",
             f"vde_{kind}",
@@ -79,9 +81,12 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             S8_ID: "P8 concluída · Nv.14 · Mata Suspensa",
             P9_ID: "P8 concluída · Nv.15 · Mata Suspensa",
             S9_ID: "P9 ativa ou concluída · Nv.15 · Baixios Enredados",
+            P10_ID: "P9 concluída · Nv.17 · Baixios Enredados",
+            S10_ID: "P10 ativa ou concluída · Nv.17 · Baixios Enredados",
         }[quest]
         return _screen(
-            f"📜 {title}\nMissão {('Secundária' if quest == S7_ID else 'Principal')} · "
+            f"📜 {title}\nMissão "
+            f"{('Secundária' if quest in {S7_ID, S8_ID, S9_ID, S10_ID} else 'Principal')} · "
             "Vales dos Enforcados\n\n"
             f"Requer · {gate}\n\n"
             "Acompanhe os sinais e os caminhos registrados nesta etapa.",
@@ -98,6 +103,8 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             S8_ID: "P8 concluída, Nv.14 e estar na Mata Suspensa",
             P9_ID: "P8 concluída, Nv.15 e estar na Mata Suspensa",
             S9_ID: "P9 ativa ou concluída, Nv.15 e estar nos Baixios Enredados",
+            P10_ID: "P9 concluída, Nv.17 e estar nos Baixios Enredados",
+            S10_ID: "P10 ativa ou concluída, Nv.17 e estar nos Baixios Enredados",
         }[quest]
         return _screen(
             f"📜 {title} · Indisponível\n\nRequer {gate}.",
@@ -134,6 +141,17 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
                 "✨ 4.980 XP · 🪙 170 Coroas\n"
                 "📦 Couro Musgoso · 2 · Vinculado"
             ),
+            P10_ID: (
+                "✨ 14.600 XP · 🪙 450 Coroas\n"
+                "📦 Ferro Enredado · 2 · Vinculado\n"
+                "📦 Resina Enredada · 2 · Vinculada"
+            ),
+            S10_ID: (
+                "✨ 10.220 XP · 🪙 270 Coroas\n"
+                "📦 Ferro Enredado · 2 · Vinculado\n"
+                "📦 Couro Musgoso · 1 · Vinculado\n"
+                "📦 Resina Enredada · 1 · Vinculada"
+            ),
         }.get(quest, "")
         return _screen(
             f"✅ {title} · Concluída\n\n{reward}",
@@ -151,16 +169,40 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
         ):
             if point not in found:
                 rows.append([_button(label, f"vde:{quest}:{version}:ex:{point}")])
+        if quest == S10_ID:
+            text = (
+                f"📜 {title} · Baixios Enredados\n\n"
+                "🎯 Seguir três marcadores deixados por exploradores desaparecidos.\n"
+                f"Progresso · {len(found)}/3"
+            )
+        else:
+            text = (
+                f"📜 {title} · Garganta dos Laços\n\n"
+                "🎯 Examinar três marcações de rota.\n"
+                f"Progresso · {len(found)}/3"
+            )
+    elif view.kind == "inscriptions":
+        found = set(progress.get("inscriptions", ()))
+        for point, label in (("a", "Examinar inscrição 1"), ("b", "Examinar inscrição 2")):
+            if point not in found:
+                rows.append([_button(label, f"vde:{quest}:{version}:ex:{point}")])
         text = (
-            f"📜 {title} · Garganta dos Laços\n\n"
-            "🎯 Examinar três marcações de rota.\n"
-            f"Progresso · {len(found)}/3"
+            f"📜 {title} · Claustro das Raízes\n\n"
+            "🎯 Examinar duas inscrições preservadas.\n"
+            f"Progresso · {len(found)}/2"
         )
     elif view.kind == "combat_start":
-        text = (
-            f"📜 {title} · {location}\n\n🎯 Derrotar a criatura que ocupa o ponto investigado.\n\n"
-            "O conteúdo regional não identifica uma espécie para este encontro."
-        )
+        if quest == S10_ID:
+            objective = (
+                "Enfrentar o encontro roteirizado na região inundada. "
+                "A espécie não é identificada pelo registro."
+            )
+        else:
+            objective = (
+                "Derrotar a criatura que ocupa o ponto investigado. "
+                "O conteúdo regional não identifica uma espécie para este encontro."
+            )
+        text = f"📜 {title} · {location}\n\n🎯 {objective}"
         rows.extend(
             [
                 [_button("Enfrentar Solo", f"vde:{quest}:{version}:solo")],
@@ -240,11 +282,24 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
         )
         rows.append([_button("Registrar no Códice", f"vde:{quest}:{version}:record")])
     elif view.kind == "return_vigilia":
-        text = f"📜 {title}\n\n🎯 Retornar à Vigília do Vale."
-        if view.location == "Mata Suspensa":
-            rows.append([_button("Retornar à Vigília", "road:route:vde_vigilia")])
-        elif view.location == "Vigília do Vale":
-            rows.append([_button("Relatar a Dara Venn", f"vde:{quest}:{version}:return")])
+        if quest == S10_ID:
+            text = (
+                f"📜 {title}\n\nUm explorador foi encontrado vivo. "
+                "O segundo permanece desaparecido.\n\n"
+                "🎯 Retornar com ele à rota da Vigília."
+            )
+            if view.location == "Baixios Enredados":
+                rows.append([_button("Retornar à Mata Suspensa", "road:route:vde_mata")])
+            elif view.location == "Mata Suspensa":
+                rows.append([_button("Seguir para a Vigília", "road:route:vde_vigilia")])
+            elif view.location == "Vigília do Vale":
+                rows.append([_button("Relatar a Dara Venn", f"vde:{quest}:{version}:report")])
+        else:
+            text = f"📜 {title}\n\n🎯 Retornar à Vigília do Vale."
+            if view.location == "Mata Suspensa":
+                rows.append([_button("Retornar à Vigília", "road:route:vde_vigilia")])
+            elif view.location == "Vigília do Vale":
+                rows.append([_button("Relatar a Dara Venn", f"vde:{quest}:{version}:return")])
     elif view.kind == "passage":
         text = (
             f"📜 {title} · Mata Suspensa\n\n"
@@ -286,14 +341,21 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
         if view.location == "Mata Suspensa":
             rows.append([_button("Marcar rota alternativa", f"vde:{quest}:{version}:route")])
     elif view.kind == "follow":
-        text = (
-            f"📜 {title} · Mata Suspensa\n\n"
-            "🎯 Seguir o traçado encontrado durante a investigação anterior."
-        )
-        if view.location == "Mata Suspensa":
-            rows.append([_button("Seguir o traçado", f"vde:{quest}:{version}:follow")])
+        if quest == P10_ID:
+            text = (
+                f"📜 {title} · Baixios Enredados\n\n"
+                "🎯 Seguir os marcos identificados durante P9."
+            )
+            rows.append([_button("Seguir os marcos", f"vde:{quest}:{version}:follow")])
         else:
-            rows.append([_button("Retornar à Mata Suspensa", "road:route:vde_mata")])
+            text = (
+                f"📜 {title} · Mata Suspensa\n\n"
+                "🎯 Seguir o traçado encontrado durante a investigação anterior."
+            )
+            if view.location == "Mata Suspensa":
+                rows.append([_button("Seguir o traçado", f"vde:{quest}:{version}:follow")])
+            else:
+                rows.append([_button("Retornar à Mata Suspensa", "road:route:vde_mata")])
     elif view.kind == "enter_baixios":
         text = f"📜 {title}\n\n🎯 Alcançar os Baixios Enredados."
         if view.location == "Mata Suspensa":
@@ -337,6 +399,53 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
     elif view.kind == "sample":
         text = f"📜 {title} · Baixios Enredados\n\n🎯 Recuperar uma amostra sem valor econômico."
         rows.append([_button("Recuperar amostra", f"vde:{quest}:{version}:sample")])
+    elif view.kind == "open_claustro":
+        text = f"📜 {title} · Baixios Enredados\n\n🎯 Abrir passagem até o Claustro das Raízes."
+        rows.append([_button("Abrir passagem", f"vde:{quest}:{version}:passage")])
+    elif view.kind == "structure" and quest == P10_ID:
+        text = (
+            f"📜 {title} · Claustro das Raízes\n\n"
+            "🎯 Inspecionar a estrutura protegida pelo Vigia Enraizado."
+        )
+        rows.append([_button("Inspecionar estrutura", f"vde:{quest}:{version}:structure")])
+    elif view.kind == "sanctuary":
+        text = (
+            f"📜 {title} · Claustro das Raízes\n\n"
+            "A entrada do Santuário do Nó Antigo foi localizada. "
+            "A descoberta não exige explorar a masmorra.\n\n"
+            "🎯 Registrar a informação e retornar a Iven Raal."
+        )
+        rows.append([_button("Registrar a entrada", f"vde:{quest}:{version}:sanctuary")])
+    elif view.kind == "zone":
+        text = (
+            f"📜 {title} · Baixios Enredados\n\n"
+            "🎯 Atravessar a zona ocupada por Sanguessugas de Turfa."
+        )
+        rows.append([_button("Atravessar a zona", f"vde:{quest}:{version}:zone")])
+    elif view.kind == "bag":
+        text = f"📜 {title} · Baixios Enredados\n\n🎯 Encontrar a bolsa abandonada."
+        rows.append([_button("Examinar a bolsa", f"vde:{quest}:{version}:bag")])
+    elif view.kind == "tracks":
+        text = f"📜 {title} · Baixios Enredados\n\n🎯 Seguir as pegadas até a região inundada."
+        rows.append([_button("Seguir pegadas", f"vde:{quest}:{version}:tracks")])
+    elif view.kind == "survivor":
+        text = (
+            f"📜 {title} · Baixios Enredados\n\n"
+            "🎯 Encontrar um dos exploradores em posição segura. "
+            "O destino do segundo permanece desconhecido."
+        )
+        rows.append([_button("Ajudar o explorador", f"vde:{quest}:{version}:survivor")])
+    elif view.kind == "report" and quest == P10_ID:
+        text = (
+            f"📜 {title} · Baixios Enredados\n\n"
+            "As inscrições indicam alguma forma de organização ou ligação entre diferentes pontos; "
+            "a função da rede permanece desconhecida.\n\n"
+            "🎯 Registrar a informação com Iven Raal."
+        )
+        if view.location == "Baixios Enredados":
+            rows.append([_button("Relatar a Iven Raal", f"vde:{quest}:{version}:report")])
+        else:
+            rows.append([_button("Retornar aos Baixios", "road:route:vde_baixios")])
     elif view.kind == "report" and quest == S8_ID:
         text = (
             f"📜 {title} · Vigília do Vale\n\n"

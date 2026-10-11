@@ -99,8 +99,21 @@ CODEX_ENTRIES = (
         110,
         "vde.location.baixios_enredados",
     ),
+    CodexPresentation(
+        "codex.location.claustro_das_raizes",
+        "Claustro das Raízes",
+        "regions",
+        120,
+        "vde.location.claustro_das_raizes",
+    ),
     CodexPresentation("codex.figure.iven_raal", "Iven Raal", "figures", 30),
     CodexPresentation("codex.mystery.o_no_antigo", "O Nó Antigo", "mysteries", 50),
+    CodexPresentation(
+        "codex.mystery.estruturas_interligadas",
+        "Estruturas Interligadas",
+        "mysteries",
+        60,
+    ),
     CodexPresentation(
         "codex.mystery.raizes_que_seguem_pedra",
         "Raízes que Seguem Pedra",
@@ -232,6 +245,24 @@ CODEX_FRAGMENTS = {
         "Um termo pode significar nó, junção ou ponto de ligação; "
         "a leitura permanece uma hipótese documental.",
     ),
+    "codex.fragment.claustro.entry_recorded": FragmentPresentation(
+        "Entrada do Claustro",
+        "O Claustro das Raízes foi alcançado seguindo os marcos dos Baixios.",
+    ),
+    "codex.fragment.claustro.structures_linked": FragmentPresentation(
+        "Estruturas interligadas",
+        "Estruturas encontradas em diferentes Regiões não eram completamente isoladas; "
+        "os registros apontam alguma forma de ligação entre pontos.",
+    ),
+    "codex.fragment.no_antigo.network_relation": FragmentPresentation(
+        "Relação entre pontos",
+        "Inscrições preservadas indicam organização ou ligação entre diferentes pontos; "
+        "a função da rede permanece desconhecida.",
+    ),
+    "codex.fragment.no_antigo.entrada_santuario_descoberta": FragmentPresentation(
+        "Entrada descoberta",
+        "A entrada do Santuário do Nó Antigo foi descoberta no Claustro das Raízes.",
+    ),
     "codex.fragment.mata.casca_camadas_externas": FragmentPresentation(
         "Camada externa",
         "A camada externa da Casca Errante possui propriedades próximas de matéria vegetal; "
@@ -361,6 +392,7 @@ VDE_LOCATIONS = {
     "vde.location.vigilia_do_vale": "Vigília do Vale",
     "vde.location.mata_suspensa": "Mata Suspensa",
     "vde.location.baixios_enredados": "Baixios Enredados",
+    "vde.location.claustro_das_raizes": "Claustro das Raízes",
 }
 LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS
 HABITAT_EVIDENCE_TO_LOCATION = {
@@ -374,6 +406,7 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     "Vigília do Vale": "vde.location.vigilia_do_vale",
     "Mata Suspensa": "vde.location.mata_suspensa",
     "Baixios Enredados": "vde.location.baixios_enredados",
+    "Claustro das Raízes": "vde.location.claustro_das_raizes",
     **{location_id: location_id for location_id in VDE_LOCATIONS},
 }
 MATERIAL_LABELS = {

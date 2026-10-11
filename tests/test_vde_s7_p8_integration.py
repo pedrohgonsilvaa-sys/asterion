@@ -372,6 +372,9 @@ async def test_vde_garganta_hunt_and_exploration_are_available_after_p7(
         "explore.vde.baixios.braseiro_turfa_fria": 2336,
         "explore.vde.baixios.galeria_afogada": 2336,
         "explore.vde.baixios.marcas_sob_a_agua": 730,
+        "explore.vde.claustro.braseiro_pedras_enlacadas": 2704,
+        "explore.vde.claustro.entrada_santuario_no_antigo": 2704,
+        "explore.vde.claustro.tracado_do_no": 845,
     }
     assert select_exploration_result(
         "repeat-test",
