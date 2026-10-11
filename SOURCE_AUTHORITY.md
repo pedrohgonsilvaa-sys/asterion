@@ -1,19 +1,19 @@
 # Autoridade das Fontes
 
-**Índice atualizado:** 2026-10-10. As notas de implementação mais abaixo preservam snapshots históricos anteriores e não substituem as Fontes oficiais vigentes nem o estado atual do repositório.
+**Índice atualizado:** 2026-10-11. As notas de implementação mais abaixo preservam snapshots históricos anteriores e não substituem as Fontes oficiais vigentes nem o estado atual do repositório.
 
 ## Fonte Mestra vigente
 
 A implementação do Asterion deve usar como autoridade principal:
 
-**ASTERION — GDD Estrutural v1.5.0 — Fonte Mestra Consolidada**
+**ASTERION — GDD Estrutural v1.6.0 — Fonte Mestra Consolidada**
 
-Arquivo vigente: `ASTERION_GDD_Estrutural_v1.5.0_Fonte_Mestra.md`.
+Arquivo vigente: `ASTERION_GDD_Estrutural_v1.6.0_Fonte_Mestra.md`.
 
 Estado oficial:
 
-- a v1.5.0 substitui integralmente a v1.4.9 e versões anteriores;
-- a v1.5.0 formaliza Grupo persistente, Campanha cooperativa, escala de Chefes de Campanha, sequência PvPvE e lock de Domínio do Rastro sem reabrir os demais valores da Baseline Numérica v1.0;
+- a v1.6.0 substitui integralmente a v1.5.0 e versões anteriores;
+- a v1.6.0 preserva as regras de Grupo persistente, Campanha cooperativa, escala de Chefes de Campanha, sequência PvPvE e lock de Domínio do Rastro; complementa com Referência da Jornada, Caçada multialvo como encontro e unidade econômica, composição da presa congelada antes do desfecho PvPvE, Armas × Artes, `weapon_requirement`, Mercado, Guildas e as máquinas de estado das seis Classes, sem reabrir os valores publicados da Baseline Numérica v1.0;
 - a Baseline Numérica v1.0 está fechada para implementação e testes;
 - a v1.4.9 formaliza o fechamento único de `HP Máximo`, `ATQ`, `DEF` e `AGI` estáticos finais em pontos inteiros com `round_half_up`, além de HP atual inteiro; não altera percentuais, curvas, custos, recompensas ou parâmetros de balanceamento;
 - a reabertura anterior da conversão absoluta da unidade de XP de inimigo foi encerrada na v1.4.3;
@@ -33,15 +33,17 @@ Ela define Locais, Braseiros permanentes, Missões, Feitos, Bestiário, inimigos
 
 Quando a Fonte Regional especificar conteúdo dentro de parâmetros sistêmicos da Fonte Mestra, ambas devem ser aplicadas em conjunto. Em conflito estrutural ou numérico, a Fonte Mestra prevalece; em conteúdo regional fechado, a revisão vigente prevalece sobre rascunhos ou versões regionais anteriores.
 
-A segunda região usa a autoridade de conteúdo **Vales dos Enforcados v1.0.4 FINAL**, em `ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.4_FINAL.md`. A revisão fecha somente os pools ponderados de Material Básico por criatura para Caçada/Ronda; os demais fatos regionais permanecem os da v1.0.3.
+A segunda região usa a autoridade de conteúdo **Vales dos Enforcados v1.0.5 FINAL**, em `ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.5_FINAL.md`. A v1.0.5 atualiza somente referências editoriais de autoridade; o conteúdo regional da v1.0.4 permanece integralmente igual.
 
 ## Fonte Visual/UI
 
 A apresentação player-facing deve seguir:
 
-**ASTERION — Consolidação de Visual & UI — atualização 2026-10-08, sincronizada com Fonte Mestra v1.5.0 + Terras do Ocaso v1.0.15 + Vales dos Enforcados v1.0.3**
+**ASTERION — Consolidação de Visual & UI — atualização 2026-10-11, sincronizada com Fonte Mestra v1.6.0 + Terras do Ocaso v1.0.15 + Vales dos Enforcados v1.0.5**
 
-Arquivo vigente: `ASTERION_UI_DECISOES_2026-10-08_FINAL_SYNC_v1.5.0_TDO_v1.0.15_VALES_v1.0.3.md`.
+Arquivo vigente: `ASTERION_UI_DECISOES_2026-10-11_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.5.md.
+
+Esta revisão inclui a HUD compacta de Retaliação, Oportunismo, Mira, Trama, Presságio e Fulgor/Julgamento, além do aviso de Arte inválida por falta de armamento compatível. A interface segue subordinada à regra mecânica da Fonte Mestra.
 
 Ela define nomenclatura, texto, estrutura de telas, navegação, estados visuais e UX do Bot do Telegram. É subordinada à Fonte Mestra para regras mecânicas/números e à Fonte Regional para conteúdo regional oficial.
 
@@ -49,7 +51,7 @@ Exemplos de mockup não criam regra mecânica ou conteúdo canônico quando a au
 
 ## Regras cooperativas e roadmap técnico vigentes
 
-A regra normativa de Grupo, Campanha cooperativa, Caçada em Grupo, PvPvE, Domínio do Rastro e integração com Ronda está incorporada à Fonte Mestra v1.5.0, §§51–54. A autoridade regional TDO v1.0.15 aplica essa regra à P1 e à S6; o conteúdo regional dos Vales v1.0.4 preserva as regras globais por referência, alterando somente os pools de Material Básico por criatura.
+A regra normativa de Grupo, Campanha cooperativa, Caçada em Grupo, PvPvE, Domínio do Rastro e integração com Ronda está incorporada à Fonte Mestra v1.6.0, §§51–57. A autoridade regional TDO v1.0.15 aplica essa regra à P1 e à S6; Vales v1.0.5 mantém o conteúdo regional v1.0.4 e apenas corrige referências editoriais de autoridade.
 
 A especificação técnica `docs/specs/MMO_PVPVE_FINAL_SPEC_V1.md` e os roadmaps `docs/specs/COOPERATIVE_MULTIPLAYER_ROADMAP_V2.md` e `docs/specs/OPTIONAL_SIDE_QUEST_BOSSES_V2.md` orientam entrega e verificação, sempre subordinados às Fontes oficiais. O antigo Decision Register MMO/PvPvE é histórico/supersedido e não é autoridade vigente.
 

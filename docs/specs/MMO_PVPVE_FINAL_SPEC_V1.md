@@ -1,10 +1,10 @@
 # ASTERION — Especificação Final do Núcleo MMO/PvPvE
 
 **Versão:** 1.0 · 2026-10-08
-**Estado:** decisões aprovadas e incorporadas normativamente à Fonte Mestra v1.5.0; esta especificação técnica é subordinada à Fonte Mestra para regras globais.
+**Estado:** decisões registradas na auditoria de 2026-10-08 e incorporadas à Fonte Mestra v1.5.0 naquela revisão; a autoridade normativa atual é a Fonte Mestra v1.6.0, e esta especificação técnica permanece subordinada a ela para regras globais.
 **Escopo:** Grupo persistente, progressão cooperativa, Caçada em Grupo, PvPvE, Ronda, Desbravar, navegação, telemetria e roadmap de Crônicas.
 
-> Esta especificação registra o escopo e os critérios de implementação aprovados. A Fonte Mestra v1.5.0 é a autoridade normativa vigente; a matriz abaixo é um snapshot de auditoria de 2026-10-08 e não redefine regras de produto.
+> Esta especificação registra o escopo e os critérios de implementação aprovados. A autoridade normativa vigente é a Fonte Mestra v1.6.0; a matriz abaixo é um snapshot de auditoria de 2026-10-08 e não redefine regras de produto.
 
 ## 1. Princípios
 
@@ -237,4 +237,4 @@ Nenhuma. As decisões player-facing do núcleo MMO/PvPvE estão encerradas e for
 2. **S12:** falta ficha numérica/kit; bloquear somente a implementação do combate S12, não a arquitetura coop.
 3. **QA pré-merge:** quatro falhas conhecidas em test_combat_ui.py não têm atribuição comprovada; comparar com baseline limpa e corrigir regressões reais.
 4. **Isolamento de trabalho:** worktree contém alterações preexistentes misturadas; inventariar e isolar por área antes de commits, sem descartar nada.
-**Decisões de produto encerradas. Esta especificação técnica permanece subordinada à Fonte Mestra v1.5.0.**
+**Decisões de produto encerradas. Esta especificação técnica permanece subordinada à Fonte Mestra v1.6.0.**

@@ -1,6 +1,6 @@
 # ASTERION — Cooperação e PvPvE · Roadmap técnico v2
 
-**Estado:** plano técnico aprovado, subordinado à Fonte Mestra v1.5.0 e à especificação `MMO_PVPVE_FINAL_SPEC_V1.md`.
+**Estado:** plano técnico aprovado, subordinado à Fonte Mestra v1.6.0 e à especificação `MMO_PVPVE_FINAL_SPEC_V1.md`.
 
 ## Sequência de entrega
 
