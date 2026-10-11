@@ -51,6 +51,8 @@ from asterion.domain.road import (
     ROAD_LOCATION,
     RUINS_LOCATION,
     RULESET,
+    VDE_BAIXIOS_LOCATION,
+    VDE_CLAUSTRO_LOCATION,
     VDE_GARGANTA_LOCATION,
     VDE_MATA_LOCATION,
     create_road_combat,
@@ -174,7 +176,18 @@ class RoundService(RoadService):
         elif profile.local_id == VDE_MATA_LOCATION:
             if c.level < 13 or not await self._p8_completed(s, c.id):
                 return None
-        if profile.local_id in {VDE_GARGANTA_LOCATION, VDE_MATA_LOCATION} and any(
+        elif profile.local_id == VDE_BAIXIOS_LOCATION:
+            if c.level < 15 or not await self._p9_started_or_completed(s, c.id):
+                return None
+        elif profile.local_id == VDE_CLAUSTRO_LOCATION:
+            if c.level < 18 or not await self._p10_completed(s, c.id):
+                return None
+        if profile.local_id in {
+            VDE_GARGANTA_LOCATION,
+            VDE_MATA_LOCATION,
+            VDE_BAIXIOS_LOCATION,
+            VDE_CLAUSTRO_LOCATION,
+        } and any(
             creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
         ):
             return None

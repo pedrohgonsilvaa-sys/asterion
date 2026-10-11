@@ -35,6 +35,7 @@ VDE_GARGANTA_LOCATION = "vde.location.garganta_dos_lacos"
 VDE_VIGILIA_LOCATION = "vde.location.vigilia_do_vale"
 VDE_MATA_LOCATION = "vde.location.mata_suspensa"
 VDE_BAIXIOS_LOCATION = "vde.location.baixios_enredados"
+VDE_CLAUSTRO_LOCATION = "vde.location.claustro_das_raizes"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
 BOSQUE_BRAZIER = "tdo.brazier.galhos_mortos"
@@ -69,6 +70,12 @@ VDE_BAIXIOS_HUNT_UNLOCK = "hunt.manual.vde.baixios_enredados"
 VDE_BAIXIOS_EXPLORE_UNLOCK = "explore.vde.baixios_enredados"
 VDE_BAIXIOS_ROUND_FAMILIARITY = "hunt_round.vde.baixios_enredados"
 VDE_MATA_BAIXIOS_ROUTE = "route.vde.mata_baixios"
+VDE_CLAUSTRO_BRAZIER = "vde.brazier.pedras_enlacadas"
+VDE_CLAUSTRO_HUNT_UNLOCK = "hunt.manual.vde.claustro_das_raizes"
+VDE_CLAUSTRO_EXPLORE_UNLOCK = "explore.vde.claustro_das_raizes"
+VDE_CLAUSTRO_ROUND_FAMILIARITY = "hunt_round.vde.claustro_das_raizes"
+VDE_BAIXIOS_CLAUSTRO_ROUTE = "route.vde.baixios_claustro"
+VDE_SANCTUARY_UNLOCK = "dungeon.vde.santuario_no_antigo"
 EXPLORATION_CATEGORY_WEIGHTS = {
     "great_discovery": 8,
     "knowledge": 22,
@@ -740,6 +747,7 @@ LOCATION_LEVEL_BANDS = {
     "Garganta dos Laços": (11, 13),
     "Mata Suspensa": (13, 16),
     "Baixios Enredados": (15, 18),
+    "Claustro das Raízes": (18, 20),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -828,6 +836,20 @@ VDE_BAIXIOS_PROFILE = HuntLocationProfile(
     hunt_unlock=VDE_BAIXIOS_HUNT_UNLOCK,
     round_familiarity=VDE_BAIXIOS_ROUND_FAMILIARITY,
     explore_unlock=VDE_BAIXIOS_EXPLORE_UNLOCK,
+)
+VDE_CLAUSTRO_PROFILE = HuntLocationProfile(
+    local_id=VDE_CLAUSTRO_LOCATION,
+    label="Claustro das Raízes",
+    creature_weights=(
+        ("casca_errante", 35),
+        ("mariposa_breu_verde", 30),
+        ("vigia_enraizado", 32),
+        ("carrasco_casca", 3),
+    ),
+    variant_chance=18,
+    hunt_unlock=VDE_CLAUSTRO_HUNT_UNLOCK,
+    round_familiarity=VDE_CLAUSTRO_ROUND_FAMILIARITY,
+    explore_unlock=VDE_CLAUSTRO_EXPLORE_UNLOCK,
 )
 
 
@@ -1017,6 +1039,29 @@ VDE_BAIXIOS_EXPLORATION_PROFILE = ExplorationLocationProfile(
     ),
 )
 
+VDE_CLAUSTRO_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=VDE_CLAUSTRO_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("brazier_pedras_enlacadas", "great_discovery", "explore.vde.claustro.braseiro_pedras_enlacadas", 50, "Braseiro das Pedras Enlaçadas encontrado.", unique=True),
+        ExplorationResultDefinition("santuario_no_antigo", "great_discovery", "explore.vde.claustro.entrada_santuario_no_antigo", 50, "A entrada do Santuário do Nó Antigo foi descoberta.", unique=True),
+        ExplorationResultDefinition("tracado_no", "knowledge", "explore.vde.claustro.tracado_do_no", 60, "O Traçado do Nó foi registrado.", unique=True),
+        ExplorationResultDefinition("passos_vigia", "knowledge", "explore.vde.claustro.passos_de_vigia", 40, "Passos de Vigia foram observados."),
+        ExplorationResultDefinition("pedra_sob_madeira", "narrative", "explore.vde.claustro.pedra_sob_madeira", 55, "Pedra antiga permanece sob a madeira e as raízes."),
+        ExplorationResultDefinition("corredores_persistem", "narrative", "explore.vde.claustro.corredores_que_persistem", 45, "Corredores antigos continuam atravessando o Claustro."),
+        ExplorationResultDefinition("casca_errante", "combat", "explore.vde.claustro.combat.casca_errante", 35, "Uma Casca Errante atravessa o corredor.", min_level=15, creature_id="casca_errante"),
+        ExplorationResultDefinition("mariposa_breu_verde", "combat", "explore.vde.claustro.combat.mariposa_breu_verde", 30, "Uma Mariposa do Breu Verde se agita sob a pedra.", min_level=16, creature_id="mariposa_breu_verde"),
+        ExplorationResultDefinition("vigia_enraizado", "combat", "explore.vde.claustro.combat.vigia_enraizado", 35, "Um Vigia Enraizado ocupa a passagem.", min_level=18, creature_id="vigia_enraizado"),
+        ExplorationResultDefinition("ferro", "resource", "explore.vde.claustro.ferro_enredado", 35, "Ferro Enredado pode ser recolhido no Claustro.", min_level=18),
+        ExplorationResultDefinition("resina", "resource", "explore.vde.claustro.resina_enredada", 35, "Resina Enredada pode ser recolhida no Claustro.", min_level=18),
+        ExplorationResultDefinition("erva", "resource", "explore.vde.claustro.erva_de_turfa", 20, "Erva de Turfa pode ser recolhida no Claustro.", min_level=18),
+        ExplorationResultDefinition("couro", "resource", "explore.vde.claustro.couro_musgoso", 10, "Couro Musgoso pode ser recolhido no Claustro.", min_level=18),
+        ExplorationResultDefinition("colunas_estranguladas", "atmospheric", "explore.vde.claustro.colunas_estranguladas", 34, "Colunas antigas permanecem estranguladas por raízes."),
+        ExplorationResultDefinition("portas_sem_passagem", "atmospheric", "explore.vde.claustro.portas_sem_passagem", 33, "Portas antigas não oferecem passagem."),
+        ExplorationResultDefinition("raizes_dentro_pedra", "atmospheric", "explore.vde.claustro.raizes_dentro_da_pedra", 33, "Raízes atravessam a pedra do Claustro."),
+    ),
+)
+
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
     CHARNECA_LOCATION: CHARNECA_EXPLORATION_PROFILE,
@@ -1025,6 +1070,7 @@ EXPLORATION_PROFILES = {
     VDE_GARGANTA_LOCATION: VDE_GARGANTA_EXPLORATION_PROFILE,
     VDE_MATA_LOCATION: VDE_MATA_EXPLORATION_PROFILE,
     VDE_BAIXIOS_LOCATION: VDE_BAIXIOS_EXPLORATION_PROFILE,
+    VDE_CLAUSTRO_LOCATION: VDE_CLAUSTRO_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
@@ -1035,6 +1081,7 @@ HUNT_PROFILES = {
     VDE_GARGANTA_LOCATION: VDE_GARGANTA_PROFILE,
     VDE_MATA_LOCATION: VDE_MATA_PROFILE,
     VDE_BAIXIOS_LOCATION: VDE_BAIXIOS_PROFILE,
+    VDE_CLAUSTRO_LOCATION: VDE_CLAUSTRO_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()

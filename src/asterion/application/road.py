@@ -49,8 +49,11 @@ from asterion.domain.road import (
     RUINS_ROUTE_UNLOCK,
     RULESET,
     VDE_BAIXIOS_BRAZIER,
+    VDE_BAIXIOS_CLAUSTRO_ROUTE,
     VDE_BAIXIOS_LOCATION,
     VDE_BASIC_MATERIAL_CREATURE_IDS,
+    VDE_CLAUSTRO_BRAZIER,
+    VDE_CLAUSTRO_LOCATION,
     VDE_GARGANTA_BRAZIER,
     VDE_GARGANTA_LOCATION,
     VDE_GARGANTA_VIGILIA_ROUTE,
@@ -58,6 +61,7 @@ from asterion.domain.road import (
     VDE_MATA_BRAZIER,
     VDE_MATA_EXPLORE_UNLOCK,
     VDE_MATA_LOCATION,
+    VDE_SANCTUARY_UNLOCK,
     VDE_VIGILIA_MATA_ROUTE,
     create_road_combat,
     creature_for,
@@ -111,9 +115,10 @@ VDE_GARGANTA = "Garganta dos Laços"
 VDE_VIGILIA = "Vigília do Vale"
 VDE_MATA = "Mata Suspensa"
 VDE_BAIXIOS = "Baixios Enredados"
+VDE_CLAUSTRO = "Claustro das Raízes"
 REGION = "Terras do Ocaso"
 VDE_REGION = "Vales dos Enforcados"
-VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS))
+VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO))
 P2_QUEST_ID = "P2"
 P3_QUEST_ID = "P3"
 P4_QUEST_ID = "P4"
@@ -124,6 +129,7 @@ BOSQUE_RUINS_ROUTE_ENDPOINTS = frozenset((BOSQUE, RUINS))
 VDE_GARGANTA_VIGILIA_ROUTE_ENDPOINTS = frozenset((VDE_GARGANTA, VDE_VIGILIA))
 VDE_VIGILIA_MATA_ROUTE_ENDPOINTS = frozenset((VDE_VIGILIA, VDE_MATA))
 VDE_MATA_BAIXIOS_ROUTE_ENDPOINTS = frozenset((VDE_MATA, VDE_BAIXIOS))
+VDE_BAIXIOS_CLAUSTRO_ROUTE_ENDPOINTS = frozenset((VDE_BAIXIOS, VDE_CLAUSTRO))
 OVERLAND_ROUTE_PAIRS = (
     CHARNECA_ROUTE_ENDPOINTS,
     BOSQUE_ROUTE_ENDPOINTS,
@@ -131,8 +137,9 @@ OVERLAND_ROUTE_PAIRS = (
     VDE_GARGANTA_VIGILIA_ROUTE_ENDPOINTS,
     VDE_VIGILIA_MATA_ROUTE_ENDPOINTS,
     VDE_MATA_BAIXIOS_ROUTE_ENDPOINTS,
+    VDE_BAIXIOS_CLAUSTRO_ROUTE_ENDPOINTS,
 )
-TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS))
+TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO))
 BRAZIER_FOR_LOCATION = {
     ROAD: "tdo.brazier.estrada",
     REFUGE: "tdo.brazier.refugio_do_ocaso",
@@ -143,6 +150,7 @@ BRAZIER_FOR_LOCATION = {
     VDE_VIGILIA: "vde.brazier.vigilia_do_vale",
     VDE_MATA: VDE_MATA_BRAZIER,
     VDE_BAIXIOS: VDE_BAIXIOS_BRAZIER,
+    VDE_CLAUSTRO: VDE_CLAUSTRO_BRAZIER,
 }
 BRAZIER_DETAILS = {
     "tdo.brazier.estrada": (ROAD, "Braseiro da Estrada"),
@@ -154,6 +162,7 @@ BRAZIER_DETAILS = {
     "vde.brazier.vigilia_do_vale": (VDE_VIGILIA, "Braseiro da Vigília"),
     VDE_MATA_BRAZIER: (VDE_MATA, "Braseiro das Copas Suspensas"),
     VDE_BAIXIOS_BRAZIER: (VDE_BAIXIOS, "Braseiro da Turfa Fria"),
+    VDE_CLAUSTRO_BRAZIER: (VDE_CLAUSTRO, "Braseiro das Pedras Enlaçadas"),
 }
 HUNT_CONTENT = "road_manual_hunt"
 GROUP_HUNT_CONTENT = "road_group_hunt"
@@ -202,6 +211,10 @@ VDE_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.vde.baixios.resina_enredada": "material.vde.resina_enredada",
     "explore.vde.baixios.couro_musgoso": "material.vde.couro_musgoso",
     "explore.vde.baixios.ferro_enredado": "material.vde.ferro_enredado",
+    "explore.vde.claustro.ferro_enredado": "material.vde.ferro_enredado",
+    "explore.vde.claustro.resina_enredada": "material.vde.resina_enredada",
+    "explore.vde.claustro.erva_de_turfa": "material.vde.erva_de_turfa",
+    "explore.vde.claustro.couro_musgoso": "material.vde.couro_musgoso",
 }
 VDE_EXPLORATION_UNIQUE_XP = {
     "explore.vde.garganta.marco_dos_lacos": 1536,
@@ -212,6 +225,9 @@ VDE_EXPLORATION_UNIQUE_XP = {
     "explore.vde.baixios.braseiro_turfa_fria": 2336,
     "explore.vde.baixios.galeria_afogada": 2336,
     "explore.vde.baixios.marcas_sob_a_agua": 730,
+    "explore.vde.claustro.braseiro_pedras_enlacadas": 2704,
+    "explore.vde.claustro.entrada_santuario_no_antigo": 2704,
+    "explore.vde.claustro.tracado_do_no": 845,
 }
 
 
@@ -353,12 +369,14 @@ class RoadService:
                     return None
                 if not await self._has_location(s, c.id, RUINS_LOCATION):
                     return None
-            elif world.location in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS}:
+            elif world.location in VDE_LOCATIONS:
                 if not await self._p7_completed(s, c.id):
                     return None
                 if world.location == VDE_MATA and not await self._p8_started_or_completed(s, c.id):
                     return None
                 if world.location == VDE_BAIXIOS and not await self._p9_started_or_completed(s, c.id):
+                    return None
+                if world.location == VDE_CLAUSTRO and not await self._p10_started_or_completed(s, c.id):
                     return None
             elif not await self._p1_completed(s, c.id):
                 return None
@@ -474,6 +492,9 @@ class RoadService:
                 elif pair == VDE_MATA_BAIXIOS_ROUTE_ENDPOINTS:
                     gate_ok = await self._p9_started_or_completed(s, c.id)
                     route_unlock = VDE_MATA_BAIXIOS_ROUTE
+                elif pair == VDE_BAIXIOS_CLAUSTRO_ROUTE_ENDPOINTS:
+                    gate_ok = await self._p10_started_or_completed(s, c.id)
+                    route_unlock = VDE_BAIXIOS_CLAUSTRO_ROUTE
                 elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
                     gate_ok = (
                         await self._p4_completed(s, c.id)
@@ -516,8 +537,7 @@ class RoadService:
                     ):
                         return None
                 if world.location in {VDE_GARGANTA, VDE_VIGILIA} or destination in {
-                    VDE_GARGANTA,
-                    VDE_VIGILIA,
+                    VDE_GARGANTA, VDE_VIGILIA,
                 }:
                     if not await self._p7_completed(s, c.id):
                         return None
@@ -526,6 +546,9 @@ class RoadService:
                         return None
                 if world.location == VDE_BAIXIOS or destination == VDE_BAIXIOS:
                     if not await self._p9_started_or_completed(s, c.id):
+                        return None
+                if world.location == VDE_CLAUSTRO or destination == VDE_CLAUSTRO:
+                    if not await self._p10_started_or_completed(s, c.id):
                         return None
                 elif not await self._p1_completed(s, c.id):
                     return None
@@ -1262,6 +1285,16 @@ class RoadService:
                     )
                 ).all()
             )
+            if hunt_profile.local_id == VDE_CLAUSTRO_LOCATION and await s.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == VDE_SANCTUARY_UNLOCK,
+                )
+            ):
+                # P10 and Desbravar claim the same canonical entrance. Once
+                # either path records it, the unique exploration result is
+                # exhausted and cannot grant its discovery XP again.
+                resolved_unique = (*resolved_unique, "explore.vde.claustro.entrada_santuario_no_antigo")
             result = _explore_result(
                 seed,
                 c.level,
@@ -1686,7 +1719,12 @@ class RoadService:
         if attempt.local_id == RUINS_LOCATION:
             await self._settle_ruins_exploration(s, c, attempt, base_text)
             return
-        if attempt.local_id in {VDE_GARGANTA_LOCATION, VDE_MATA_LOCATION, VDE_BAIXIOS_LOCATION}:
+        if attempt.local_id in {
+            VDE_GARGANTA_LOCATION,
+            VDE_MATA_LOCATION,
+            VDE_BAIXIOS_LOCATION,
+            VDE_CLAUSTRO_LOCATION,
+        }:
             await self._settle_vde_exploration(s, c, attempt, base_text)
             return
         if attempt.category == "combat" and attempt.activity_id is not None:
@@ -2010,6 +2048,22 @@ class RoadService:
                     s, LocationDiscovery, character_id=c.id, location_id=VDE_BAIXIOS_LOCATION
                 )
                 components.append(("brazier", VDE_BAIXIOS_BRAZIER, 1, {}))
+            elif attempt.result_id == "explore.vde.claustro.braseiro_pedras_enlacadas":
+                await self._ensure(s, Brazier, character_id=c.id, brazier_id=VDE_CLAUSTRO_BRAZIER)
+                await self._ensure(
+                    s, LocationDiscovery, character_id=c.id, location_id=VDE_CLAUSTRO_LOCATION
+                )
+                components.append(("brazier", VDE_CLAUSTRO_BRAZIER, 1, {}))
+            elif attempt.result_id == "explore.vde.claustro.entrada_santuario_no_antigo":
+                await self._ensure(s, Unlock, character_id=c.id, unlock_id=VDE_SANCTUARY_UNLOCK)
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id="codex.mystery.o_no_antigo")
+                await self._ensure(
+                    s,
+                    CodexFragment,
+                    character_id=c.id,
+                    entry_id="codex.mystery.o_no_antigo",
+                    fragment_id="codex.fragment.no_antigo.entrada_santuario_descoberta",
+                )
 
         for kind, item_id, quantity, payload in components:
             s.add(
@@ -2770,6 +2824,28 @@ class RoadService:
             )
         )
 
+    async def _p10_completed(self, s, character_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Quest.id).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == "P10",
+                    Quest.status == "completed",
+                )
+            )
+        )
+
+    async def _p10_started_or_completed(self, s, character_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Quest.id).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == "P10",
+                    Quest.status.in_(("active", "completed")),
+                )
+            )
+        )
+
     async def _ruins_route_level_gate(self, s, character) -> bool:
         if character.level >= 8:
             return True
@@ -2826,6 +2902,11 @@ class RoadService:
                 return None
             if activity_kind == "hunt" and not await self._p9_completed(s, c.id):
                 return None
+        elif profile.local_id == VDE_CLAUSTRO_LOCATION:
+            if c.level < 18 or not await self._p10_started_or_completed(s, c.id):
+                return None
+            if activity_kind == "hunt" and not await self._p10_completed(s, c.id):
+                return None
         unlock_id = profile.hunt_unlock if activity_kind == "hunt" else profile.explore_unlock
         if not await s.scalar(
             select(Unlock).where(
@@ -2838,6 +2919,7 @@ class RoadService:
             VDE_GARGANTA_LOCATION,
             VDE_MATA_LOCATION,
             VDE_BAIXIOS_LOCATION,
+            VDE_CLAUSTRO_LOCATION,
         } and any(
             creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
         ):
@@ -3306,6 +3388,8 @@ class RoadService:
         p8_started_or_complete = await self._p8_started_or_completed(s, c.id)
         p9_complete = await self._p9_completed(s, c.id)
         p9_started_or_complete = await self._p9_started_or_completed(s, c.id)
+        p10_complete = await self._p10_completed(s, c.id)
+        p10_started_or_complete = await self._p10_started_or_completed(s, c.id)
         current_brazier = BRAZIER_FOR_LOCATION.get(world.location)
         brazier_id = current_brazier if current_brazier in known_brazier_ids else None
         brazier_label = BRAZIER_DETAILS[brazier_id][1] if brazier_id is not None else None
@@ -3316,6 +3400,7 @@ class RoadService:
             and (location not in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS} or p7_complete)
             and (location != VDE_MATA or p8_started_or_complete)
             and (location != VDE_BAIXIOS or p9_started_or_complete)
+            and (location != VDE_CLAUSTRO or p10_started_or_complete)
         )
         active_p3 = await s.scalar(
             select(Quest.id).where(
@@ -3412,6 +3497,20 @@ class RoadService:
                     route_destinations.append(VDE_BAIXIOS)
             elif world.location == VDE_BAIXIOS and p9_started_or_complete:
                 route_destinations.append(VDE_MATA)
+                if p10_started_or_complete and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == VDE_BAIXIOS_CLAUSTRO_ROUTE,
+                    )
+                ):
+                    route_destinations.append(VDE_CLAUSTRO)
+            elif world.location == VDE_CLAUSTRO and p10_started_or_complete and await s.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == VDE_BAIXIOS_CLAUSTRO_ROUTE,
+                )
+            ):
+                route_destinations.append(VDE_BAIXIOS)
         route_available = bool(route_destinations)
         material_table_ready = bool(
             hunt_profile
@@ -3477,6 +3576,25 @@ class RoadService:
                     )
                 )
             )
+        elif world.location == VDE_CLAUSTRO:
+            hunt_enabled = c.level >= 18 and p10_complete and material_table_ready and bool(
+                hunt_profile
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == hunt_profile.hunt_unlock,
+                    )
+                )
+            )
+            explore_enabled = c.level >= 18 and p10_started_or_complete and bool(
+                hunt_profile
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == hunt_profile.explore_unlock,
+                    )
+                )
+            )
         elif world.location == VDE_VIGILIA:
             # Vigília do Vale is a safe hub, never a generic hunt/explore local.
             hunt_enabled = False
@@ -3502,6 +3620,8 @@ class RoadService:
                 if world.location == VDE_MATA
                 else "vde_baixios"
                 if world.location == VDE_BAIXIOS
+                else "vde_claustro"
+                if world.location == VDE_CLAUSTRO
                 else "refuge"
             ),
             c.id,
