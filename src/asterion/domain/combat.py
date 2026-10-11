@@ -146,12 +146,15 @@ class Action:
     actor_per_bonus_if_target_hp_fraction_at_most: Decimal = ZERO
     actor_per_bonus_hp_fraction_threshold: Decimal = D("0.40")
     native_dot_stacks_if_target_poisoned: int = 0
+    vampirism_fraction: Decimal = ZERO
 
     def __post_init__(self) -> None:
         if self.hit_count < 1:
             raise ValueError("An action must resolve at least one hit.")
         if self.chain_power_bonus < ZERO:
             raise ValueError("Action chain power bonus cannot be negative.")
+        if not ZERO <= self.vampirism_fraction <= D(1):
+            raise ValueError("Action vampirism must be between zero and one.")
         if any(
             bonus is not None and bonus < ZERO
             for bonus in (
@@ -3298,6 +3301,35 @@ def _perform(
                 applied_actor_effect.kind if applied_actor_effect else ""
             ),
         )
+
+    # Content vampirism is applied from eligible direct HP damage for this action.
+    action_vamp_healed = D(0)
+    if (
+        _fighter_side(state, actor_id) == "enemy"
+        and action.vampirism_fraction > ZERO
+        and total_vamp_damage > ZERO
+    ):
+        action_vamp_healed = min(
+            (total_vamp_damage * action.vampirism_fraction).to_integral_value(
+                rounding=ROUND_FLOOR
+            ),
+            actor.stats.hp - actor.hp,
+        )
+        action_vamp_healed = max(ZERO, action_vamp_healed)
+        actor.hp += action_vamp_healed
+        if action_vamp_healed > ZERO and action_event_indices:
+            event_index = next(
+                (
+                    index
+                    for index in action_event_indices
+                    if state.events[index].effective_damage > 0
+                ),
+                action_event_indices[0],
+            )
+            state.events[event_index] = replace(
+                state.events[event_index],
+                healed=state.events[event_index].healed + action_vamp_healed,
+            )
 
     # Hemário vampirism is per action, including AoE: aggregate eligible HP damage
     # and apply the existing 3% HP-Max cap once.

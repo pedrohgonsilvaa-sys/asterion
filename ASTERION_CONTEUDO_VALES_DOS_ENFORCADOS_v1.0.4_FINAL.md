@@ -3,11 +3,11 @@
 
 **Data de consolidação:** 2026-10-04
 **Escopo:** segunda jornada / Nv.11–20, com saída para Nv.21  
-**Autoridade estrutural:** `ASTERION_GDD_Estrutural_v1.4.9_Fonte_Mestra.md`
+**Autoridade estrutural:** `ASTERION_GDD_Estrutural_v1.5.0_Fonte_Mestra.md`
 **Autoridade regional anterior:** `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.13_FINAL.md` como referência de organização, sem autoridade sobre conteúdo dos Vales  
 **Autoridade Visual/UI geral:** `ASTERION_UI_DECISOES_2026-10-05_FINAL_SYNC_v1.4.9_TDO_v1.0.13_VALES_v1.0.3.md` — autoridade vigente de apresentação geral e específica dos Vales dos Enforcados.
 
-> Esta Fonte contém **conteúdo regional**. Não redefine sistemas globais. Em conflito estrutural ou numérico global, prevalece a Fonte Mestra v1.4.9. Em conflito de apresentação geral, prevalece a Fonte Visual/UI vigente; apresentação/iconografia específica dos Vales permanece em sua própria frente de Visual/UI.
+> Esta Fonte contém **conteúdo regional**. Não redefine sistemas globais. Em conflito estrutural ou numérico global, prevalece a Fonte Mestra v1.5.0. Em conflito de apresentação geral, prevalece a Fonte Visual/UI vigente; apresentação/iconografia específica dos Vales permanece em sua própria frente de Visual/UI.
 
 > **Status FINAL:** conteúdo regional dos Vales dos Enforcados fechado para implementação e posterior QA/telemetria. Esta revisão **v1.0.4** substitui `v1.0.3 FINAL` como autoridade regional vigente e altera somente a tabela de Material Básico de Caçada/Ronda abaixo. Todo o restante do conteúdo, requisitos, flags, condições, segredos, narrativa, economia, progressão e correções anteriores permanece integralmente vigente.
 
@@ -796,7 +796,7 @@ Aplicar integralmente a regra global:
 
 `Local → criatura elegível → Variante opcional → encontro persistido`
 
-O jogador não escolhe diretamente o inimigo. Em Solo, `enemy_level = min(player_level, max_enemy_level)` respeitando unlock mínimo. Em Grupo, nível, unlock individual e congelamento do encontro seguem a política global da Fonte Mestra v1.4.9.
+O jogador não escolhe diretamente o inimigo. Em Solo, `enemy_level = min(player_level, max_enemy_level)` respeitando unlock mínimo. Em Grupo, nível, unlock individual e congelamento do encontro seguem a política global da Fonte Mestra v1.5.0.
 
 ## 10.2 Garganta dos Laços
 
@@ -1718,7 +1718,7 @@ Limites de Consumíveis por encontro/run permanecem globais.
 
 Efeito: `floor(12% × HP Máximo)` de Barreira por `2T`.
 
-Segue integralmente as regras globais da família **Preparado de Proteção** da Fonte Mestra v1.4.9.
+Segue integralmente as regras globais da família **Preparado de Proteção** da Fonte Mestra v1.5.0.
 
 ---
 
@@ -1936,7 +1936,7 @@ Ainda pertencem a produção/implementação e não a lacunas desta Fonte:
 
 # 27. Autoridade e manutenção
 
-1. Em conflito mecânico/global, prevalece `ASTERION_GDD_Estrutural_v1.4.9_Fonte_Mestra.md`.
+1. Em conflito mecânico/global, prevalece `ASTERION_GDD_Estrutural_v1.5.0_Fonte_Mestra.md`.
 2. Em conflito de apresentação, prevalece a Fonte Visual/UI vigente.
 3. Esta Fonte é autoridade de conteúdo para **Vales dos Enforcados v1.0.4 FINAL**.
 4. Terras do Ocaso não deve ser usada para sobrescrever conteúdo dos Vales; serve apenas como precedente documental quando a regra global for a mesma.

@@ -8,7 +8,11 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, Message
 
 from asterion.application.groups import GroupError
-from asterion.application.vde_missions import S7_ID, VDEMissionService
+from asterion.application.vde_missions import (
+    MISSION_TITLES,
+    P9_ID,
+    VDEMissionService,
+)
 from asterion.bot.combat_ui import (
     CampaignCombatCallback,
     CombatCallback,
@@ -56,7 +60,7 @@ def vde_missions_router(service: VDEMissionService, images: dict[str, str]) -> R
     @router.callback_query(F.data.startswith("vde:"))
     async def mission_action(query: CallbackQuery) -> None:
         parts = (query.data or "").split(":")
-        if len(parts) not in {3, 4, 5} or parts[1] not in {S7_ID, "P8"}:
+        if len(parts) not in {3, 4, 5} or parts[1] not in MISSION_TITLES:
             raise SkipHandler()
         quest_id = parts[1]
         try:
@@ -80,17 +84,26 @@ def vde_missions_router(service: VDEMissionService, images: dict[str, str]) -> R
                         return
                 elif action == "enter":
                     view = await service.enter_mata(query.from_user.id, version)
+                elif action == "baixios":
+                    view = await service.enter_baixios(query.from_user.id, version)
                 elif action == "return":
                     view = await service.return_vigilia(query.from_user.id, version)
-                elif action in {"rope", "report", "compare", "masonry", "record"}:
+                elif action in {
+                    "rope", "report", "compare", "masonry", "record", "passage",
+                    "hardware", "route", "follow", "inscription", "fragment", "locate",
+                    "fragments", "sample",
+                }:
                     view = await service.advance(query.from_user.id, quest_id, version, action)
                 else:
                     raise ValueError("invalid mission action")
             else:
                 version = int(parts[2])
-                if parts[3] != "ex" or parts[4] not in {"a", "b", "c"}:
+                if parts[3] == "ex" and parts[4] in {"a", "b", "c"}:
+                    view = await service.examine(query.from_user.id, quest_id, version, parts[4])
+                elif quest_id == P9_ID and parts[3] == "ch" and parts[4] in {"1", "2", "3"}:
+                    view = await service.choose_p9_reward(query.from_user.id, version, parts[4])
+                else:
                     raise ValueError("invalid objective callback")
-                view = await service.examine(query.from_user.id, quest_id, version, parts[4])
         except (ValueError, GroupError):
             await query.answer("A ação expirou ou o estado do Grupo mudou.", show_alert=True)
             return

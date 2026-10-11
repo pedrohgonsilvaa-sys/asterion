@@ -13,6 +13,7 @@ from asterion.application.road import (
     REFUGE,
     ROAD,
     RUINS,
+    VDE_BAIXIOS,
     VDE_GARGANTA,
     VDE_MATA,
     VDE_REGION,
@@ -59,10 +60,11 @@ def _location_copy(location: str) -> tuple[str, str]:
         "🪨" if location == RUINS else
         "🪢" if location == VDE_GARGANTA else
         "🌫️" if location == VDE_VIGILIA else
-        "🌿" if location == VDE_MATA else "🔥"
+        "🌿" if location == VDE_MATA else
+        "🌫️" if location == VDE_BAIXIOS else "🔥"
     )
     low, high = LOCATION_LEVEL_BANDS.get(location, (1, 10))
-    region = VDE_REGION if location in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA} else "Terras do Ocaso"
+    region = VDE_REGION if location in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS} else "Terras do Ocaso"
     return f"{icon} {location}", f"{region} · Nv. {low}–{high}"
 
 
@@ -134,6 +136,9 @@ def _round_screen(view) -> Screen | None:
     elif view.location == VDE_MATA:
         place = "Mata Suspensa\nVales dos Enforcados · Nv. 13–17"
         local_line = "Mata Suspensa · Vales dos Enforcados"
+    elif view.location == VDE_BAIXIOS:
+        place = "Baixios Enredados\nVales dos Enforcados · Nv. 15–18"
+        local_line = "Baixios Enredados · Vales dos Enforcados"
     elif view.location == CHARNECA:
         place = "🌑 Charneca da Fuligem\nTerras do Ocaso · Nv. 3–5"
         local_line = "Charneca da Fuligem · Terras do Ocaso"
@@ -635,7 +640,7 @@ def render_road(view: RoadView) -> Screen:
         )
     if view.kind in {
         "road", "refuge", "charneca", "bosque", "ruinas",
-        "vde_garganta", "vde_vigilia", "vde_mata",
+        "vde_garganta", "vde_vigilia", "vde_mata", "vde_baixios",
     }:
         return render_current_local(
             view,
@@ -675,7 +680,7 @@ def render_current_local(
         bar(view.vigor, view.max_vigor, "🟨"),
     ]
     keyboard: list[list[InlineKeyboardButton]] = []
-    if view.location in {ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA}:
+    if view.location in {ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS}:
         lines.append("")
         if view.hunt_enabled:
             lines.append("🦌 Caçada · Disponível")
@@ -707,13 +712,15 @@ def render_current_local(
             )
         else:
             lines.append("🚫 Desbravar · Indisponível neste Local")
-    if view.location in {VDE_GARGANTA, VDE_MATA}:
+    if view.location in {VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS}:
         for destination in view.route_destinations:
             route_key, label = {
                 (VDE_GARGANTA, VDE_VIGILIA): ("vde_vigilia", "Seguir para a Vigília do Vale"),
                 (VDE_VIGILIA, VDE_GARGANTA): ("vde_garganta", "Retornar à Garganta dos Laços"),
                 (VDE_VIGILIA, VDE_MATA): ("vde_mata", "Seguir para a Mata Suspensa"),
                 (VDE_MATA, VDE_VIGILIA): ("vde_vigilia", "Retornar à Vigília do Vale"),
+                (VDE_MATA, VDE_BAIXIOS): ("vde_baixios", "Descer aos Baixios Enredados"),
+                (VDE_BAIXIOS, VDE_MATA): ("vde_mata", "Retornar à Mata Suspensa"),
             }.get((view.location, destination), (None, None))
             if route_key is not None:
                 keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])

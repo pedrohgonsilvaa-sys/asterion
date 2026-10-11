@@ -44,10 +44,13 @@ from asterion.application.scripted_combat import (
 from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
 from asterion.domain.road import (
     RULESET,
+    VDE_KNOT_DEER,
+    VDE_WANDERING_BARK,
     Creature,
     CreatureCombatantSpec,
     PlayerCombatantSpec,
     create_creature_party_combat,
+    materialize_equipment,
 )
 from asterion.infrastructure.db.combat_codec import decode
 from asterion.infrastructure.db.models import (
@@ -58,6 +61,7 @@ from asterion.infrastructure.db.models import (
     CombatRecord,
     ConsumableStack,
     Encounter,
+    EquipmentItem,
     GameActivity,
     GroupActivityParticipant,
     LocationDiscovery,
@@ -73,22 +77,71 @@ REGION = "Vales dos Enforcados"
 GARGANTA = "Garganta dos Laços"
 VIGILIA = "Vigília do Vale"
 MATA = "Mata Suspensa"
+BAIXIOS = "Baixios Enredados"
 P7_ID = "P7"
 S7_ID = "S7"
 P8_ID = "P8"
+S8_ID = "S8"
+P9_ID = "P9"
+S9_ID = "S9"
 CONTENT_VERSION = "vales-1.0.3"
+CONTENT_VERSION_MID = "vales-1.0.4"
 S7_TITLE = "Cordas na Névoa"
 P8_TITLE = "Entre Galhos Suspensos"
+S8_TITLE = "O Peso da Passagem"
+P9_TITLE = "Sob a Madeira Morta"
+S9_TITLE = "Sob a Casca"
 S7_CHECKPOINT = "vde.s7.cordas_na_nevoa"
 P8_CHECKPOINT = "vde.p8.entre_galhos_suspensos"
+S8_CHECKPOINT = "vde.s8.peso_da_passagem"
+P9_CHECKPOINT = "vde.p9.sob_a_madeira_morta"
+S9_CHECKPOINT = "vde.s9.sob_a_casca"
 S7_CONTENT = "vde_s7_scripted_combat"
 P8_CONTENT = "vde_p8_scripted_combat"
+S8_CONTENT = "vde_s8_cervo_no"
+P9_CONTENT = "vde_p9_casca_errante"
+S9_CONTENT = "vde_s9_casca_errante"
 S7_REWARD_SOURCE = "s7.cordas_na_nevoa"
 P8_REWARD_SOURCE = "p8.entre_galhos_suspensos"
+S8_REWARD_SOURCE = "s8.peso_da_passagem"
+P9_REWARD_SOURCE = "p9.sob_a_madeira_morta"
+S9_REWARD_SOURCE = "s9.sob_a_casca"
 MATA_LOCATION_ID = "vde.location.mata_suspensa"
+BAIXIOS_LOCATION_ID = "vde.location.baixios_enredados"
 MATA_ROUTE_UNLOCK = "route.vde.vigilia_mata"
 MATA_HUNT_UNLOCK = "hunt.manual.vde.mata_suspensa"
 MATA_EXPLORE_UNLOCK = "explore.vde.mata_suspensa"
+BAIXIOS_ROUTE_UNLOCK = "route.vde.mata_baixios"
+BAIXIOS_HUNT_UNLOCK = "hunt.manual.vde.baixios_enredados"
+BAIXIOS_EXPLORE_UNLOCK = "explore.vde.baixios_enredados"
+
+MISSION_TITLES = {
+    S7_ID: S7_TITLE,
+    P8_ID: P8_TITLE,
+    S8_ID: S8_TITLE,
+    P9_ID: P9_TITLE,
+    S9_ID: S9_TITLE,
+}
+MISSION_VERSIONS = {S7_ID: CONTENT_VERSION, P8_ID: CONTENT_VERSION}
+MISSION_CONTENT_IDS = {
+    S7_ID: S7_CONTENT,
+    P8_ID: P8_CONTENT,
+    S8_ID: S8_CONTENT,
+    P9_ID: P9_CONTENT,
+    S9_ID: S9_CONTENT,
+}
+MISSION_CHECKPOINTS = {
+    S7_ID: S7_CHECKPOINT,
+    P8_ID: P8_CHECKPOINT,
+    S8_ID: S8_CHECKPOINT,
+    P9_ID: P9_CHECKPOINT,
+    S9_ID: S9_CHECKPOINT,
+}
+P9_REWARD_CHOICES = {
+    "1": ("Capuz das Copas Suspensas", "Cabeça"),
+    "2": ("Selo do Caminho Enredado", "Acessório"),
+    "3": ("Relicário do Nó Velado", "Artefato"),
+}
 
 # The regional text leaves the scripted species unnamed. This internal common
 # combatant uses the global common/balanced level curve and never enters the
@@ -104,6 +157,13 @@ _SCRIPTED_FAUNA = Creature(
     ("investida_instintiva",),
     (("investida_instintiva", "Investida Instintiva", Decimal("1.00"), 0, Decimal(0), 0),),
 )
+MISSION_COMBAT = {
+    S7_ID: (2, GARGANTA, 12, _SCRIPTED_FAUNA),
+    P8_ID: (3, MATA, 13, _SCRIPTED_FAUNA),
+    S8_ID: (3, MATA, 14, VDE_KNOT_DEER),
+    P9_ID: (4, BAIXIOS, 15, VDE_WANDERING_BARK),
+    S9_ID: (2, BAIXIOS, 15, VDE_WANDERING_BARK),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,7 +211,7 @@ class VDEMissionService:
         self.road = RoadService(sessions, server_id)
 
     async def resume(self, actor: int, quest_id: str) -> VDEMissionView | None:
-        if quest_id not in {S7_ID, P8_ID}:
+        if quest_id not in MISSION_TITLES:
             return None
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor, quest_id)
@@ -169,7 +229,7 @@ class VDEMissionService:
                 .where(
                     GameActivity.character_id == character.id,
                     GameActivity.status == "active",
-                    GameActivity.content_id.in_((S7_CONTENT, P8_CONTENT)),
+                    GameActivity.content_id.in_(tuple(MISSION_CONTENT_IDS.values())),
                 )
                 .with_for_update()
             )
@@ -184,14 +244,16 @@ class VDEMissionService:
                     return await self._view(
                         session, character, quest, await self._world(session, character.id)
                     )
-        s7 = await self.resume(actor, S7_ID)
-        if s7 is not None and s7.status == "active":
-            return s7
-        p8 = await self.resume(actor, P8_ID)
-        return p8 if p8 is not None and p8.status == "active" else None
+        for quest_id in (S7_ID, P8_ID, S8_ID, P9_ID, S9_ID):
+            view = await self.resume(actor, quest_id)
+            if view is not None and view.status == "active":
+                return view
+        return None
 
-    async def board(self, actor: int) -> tuple[VDEMissionView | None, VDEMissionView | None]:
-        return await self.resume(actor, S7_ID), await self.resume(actor, P8_ID)
+    async def board(self, actor: int) -> tuple[VDEMissionView | None, ...]:
+        return tuple(
+            [await self.resume(actor, quest_id) for quest_id in (S7_ID, P8_ID, S8_ID, P9_ID, S9_ID)]
+        )
 
     async def region_access(self, actor: int) -> bool:
         async with self.sessions() as session:
@@ -209,7 +271,7 @@ class VDEMissionService:
             )
 
     async def start(self, actor: int, quest_id: str) -> VDEMissionView | None:
-        if quest_id not in {S7_ID, P8_ID}:
+        if quest_id not in MISSION_TITLES:
             return None
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor, quest_id)
@@ -219,17 +281,37 @@ class VDEMissionService:
                 return await self._view(
                     session, character, quest, world, requested_quest_id=quest_id
                 )
-            p7 = await session.scalar(
+            prerequisite_id = {
+                S7_ID: P7_ID,
+                P8_ID: P7_ID,
+                S8_ID: P8_ID,
+                P9_ID: P8_ID,
+                S9_ID: P9_ID,
+            }[quest_id]
+            prerequisite = await session.scalar(
                 select(Quest).where(
                     Quest.character_id == character.id,
-                    Quest.quest_id == P7_ID,
+                    Quest.quest_id == prerequisite_id,
                     Quest.status == "completed",
                 )
             )
-            required_level = 12 if quest_id == S7_ID else 13
-            required_location = GARGANTA if quest_id == S7_ID else VIGILIA
+            if quest_id == S9_ID and prerequisite is None:
+                prerequisite = await session.scalar(
+                    select(Quest).where(
+                        Quest.character_id == character.id,
+                        Quest.quest_id == P9_ID,
+                        Quest.status == "active",
+                    )
+                )
+            required_level, required_location = {
+                S7_ID: (12, GARGANTA),
+                P8_ID: (13, VIGILIA),
+                S8_ID: (14, MATA),
+                P9_ID: (15, MATA),
+                S9_ID: (15, BAIXIOS),
+            }[quest_id]
             if (
-                p7 is None
+                prerequisite is None
                 or character.level < required_level
                 or world.region != REGION
                 or world.location != required_location
@@ -238,14 +320,20 @@ class VDEMissionService:
                 return await self._view(
                     session, character, None, world, requested_quest_id=quest_id
                 )
-            progress = {"markers": []} if quest_id == S7_ID else {"roots": []}
+            progress = {
+                S7_ID: {"markers": []},
+                P8_ID: {"roots": []},
+                S8_ID: {"structures": [], "hardware_sets": []},
+                P9_ID: {"structures": []},
+                S9_ID: {},
+            }[quest_id]
             quest = Quest(
                 character_id=character.id,
                 quest_id=quest_id,
-                title=S7_TITLE if quest_id == S7_ID else P8_TITLE,
+                title=MISSION_TITLES[quest_id],
                 status="active",
                 step=1,
-                content_version=CONTENT_VERSION,
+                content_version=self._content_version(quest_id),
                 state_version=0,
                 progress=progress,
             )
@@ -253,6 +341,9 @@ class VDEMissionService:
             await session.flush()
             if quest_id == P8_ID:
                 await self._ensure_unlock(session, character.id, MATA_ROUTE_UNLOCK)
+            elif quest_id == P9_ID:
+                await self._ensure_unlock(session, character.id, BAIXIOS_ROUTE_UNLOCK)
+                await self._ensure_unlock(session, character.id, BAIXIOS_EXPLORE_UNLOCK)
             await record_campaign_objective_credit(
                 session,
                 character_id=character.id,
@@ -291,20 +382,52 @@ class VDEMissionService:
                 )
             return await self._view(session, character, quest, world)
 
+    async def enter_baixios(self, actor: int, version: int) -> VDEMissionView | None:
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor, P9_ID)
+            if not self._valid(quest, version, step=2) or character is None or world is None:
+                return await self._view(session, character, quest, world)
+            if world.region != REGION or world.location != BAIXIOS:
+                return await self._view(session, character, quest, world)
+            members = await self._present(session, character.id, P9_ID, step=2, location=BAIXIOS)
+            for member in members:
+                await self._ensure_location(session, member.character.id, BAIXIOS_LOCATION_ID)
+                member.quest.step = 3
+                member.quest.progress = {
+                    **(member.quest.progress or {}),
+                    "entered_baixios": True,
+                    "structures": [],
+                }
+                member.quest.state_version += 1
+                await record_campaign_objective_credit(
+                    session,
+                    character_id=member.character.id,
+                    quest_id=P9_ID,
+                    objective_id="p9.enter_baixios",
+                    source_key="p9.enter_baixios:first_entry",
+                    evidence={"region": REGION, "location": BAIXIOS, "shared": len(members) > 1},
+                )
+            return await self._view(session, character, quest, world)
+
     async def examine(
         self, actor: int, quest_id: str, version: int, point: str
     ) -> VDEMissionView | None:
-        if quest_id not in {S7_ID, P8_ID}:
+        if quest_id not in MISSION_TITLES:
             return None
         if point not in {"a", "b", "c"}:
             return await self.resume(actor, quest_id)
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor, quest_id)
-            quest_step = 1 if quest_id == S7_ID else 2
+            quest_step, location, key, next_step = {
+                S7_ID: (1, GARGANTA, "markers", 2),
+                P8_ID: (2, MATA, "roots", 3),
+                S8_ID: (2, MATA, "structures", 3),
+                P9_ID: (3, BAIXIOS, "structures", 4),
+            }.get(quest_id, (0, "", "", 0))
             if character is None or not self._valid(quest, version, step=quest_step):
                 return await self._view(session, character, quest, world)
-            location = GARGANTA if quest_id == S7_ID else MATA
-            key = "markers" if quest_id == S7_ID else "roots"
+            if quest_id not in {S7_ID, P8_ID, S8_ID, P9_ID}:
+                return await self._view(session, character, quest, world)
             members = await self._present(
                 session,
                 character.id,
@@ -321,7 +444,7 @@ class VDEMissionService:
                 progress[key] = sorted(points)
                 member.quest.progress = progress
                 if len(points) >= 3:
-                    member.quest.step = 2 if quest_id == S7_ID else 3
+                    member.quest.step = next_step
                 member.quest.state_version += 1
                 await record_campaign_objective_credit(
                     session,
@@ -339,9 +462,21 @@ class VDEMissionService:
         steps = {
             (S7_ID, "rope"): (3, GARGANTA, 4, "s7.find_rope"),
             (S7_ID, "report"): (4, VIGILIA, 5, "s7.report_dara"),
+            (S8_ID, "hardware"): (4, MATA, 4, "s8.hardware_sets"),
             (P8_ID, "compare"): (4, MATA, 5, "p8.compare_roots"),
             (P8_ID, "masonry"): (5, MATA, 6, "p8.find_masonry"),
             (P8_ID, "record"): (6, MATA, 7, "p8.record_find"),
+            (S8_ID, "passage"): (1, MATA, 2, "s8.supply_passage"),
+            (S8_ID, "route"): (5, MATA, 6, "s8.alternate_route"),
+            (S8_ID, "report"): (6, VIGILIA, 7, "s8.report_dara"),
+            (P9_ID, "follow"): (1, MATA, 2, "p9.follow_trace"),
+            (P9_ID, "inscription"): (5, BAIXIOS, 6, "p9.damaged_inscription"),
+            (P9_ID, "fragment"): (6, BAIXIOS, 7, "p9.structural_fragment"),
+            (P9_ID, "report"): (7, BAIXIOS, 8, "p9.report_iven"),
+            (S9_ID, "locate"): (1, BAIXIOS, 2, "s9.locate_bark"),
+            (S9_ID, "fragments"): (3, BAIXIOS, 4, "s9.inspect_fragments"),
+            (S9_ID, "sample"): (4, BAIXIOS, 5, "s9.collect_sample"),
+            (S9_ID, "report"): (5, BAIXIOS, 6, "s9.report_iven"),
         }
         config = steps.get((quest_id, action))
         if config is None:
@@ -360,7 +495,30 @@ class VDEMissionService:
                 if quest_id == S7_ID and action == "report":
                     await self._complete_s7(session, member.character, member.quest)
                     continue
+                if quest_id == S8_ID and action == "report":
+                    await self._complete_s8(session, member.character, member.quest)
+                    continue
+                if quest_id == S9_ID and action == "report":
+                    await self._complete_s9(session, member.character, member.quest)
+                    continue
                 progress = dict(member.quest.progress or {})
+                if quest_id == S8_ID and action == "hardware":
+                    hardware = set(progress.get("hardware_sets", ()))
+                    hardware.add("a" if "a" not in hardware else "b")
+                    progress["hardware_sets"] = sorted(hardware)
+                    if len(hardware) >= 2:
+                        member.quest.step = 5
+                    member.quest.progress = progress
+                    member.quest.state_version += 1
+                    await record_campaign_objective_credit(
+                        session,
+                        character_id=member.character.id,
+                        quest_id=quest_id,
+                        objective_id=f"s8.hardware_set.{len(hardware)}",
+                        source_key=f"s8.hardware_set.{len(hardware)}:{world.location}",
+                        evidence={"location": location, "shared": len(members) > 1},
+                    )
+                    continue
                 progress[action] = True
                 member.quest.progress = progress
                 member.quest.step = next_step
@@ -384,6 +542,11 @@ class VDEMissionService:
                         "codex.mystery.raizes_que_seguem_pedra",
                         "codex.fragment.mata.raizes_sob_a_pedra",
                     )
+                if quest_id == P9_ID and action == "report":
+                    await self._record_p9_codex(session, member.character.id)
+                if quest_id == S9_ID and action == "sample":
+                    progress["sample_recovered"] = True
+                    member.quest.progress = progress
                 await record_campaign_objective_credit(
                     session,
                     character_id=member.character.id,
@@ -406,11 +569,107 @@ class VDEMissionService:
                 await self._complete_p8(session, member.character, member.quest)
             return await self._view(session, character, quest, world)
 
+    async def choose_p9_reward(self, actor: int, version: int, choice: str):
+        if choice not in P9_REWARD_CHOICES:
+            return await self.resume(actor, P9_ID)
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor, P9_ID)
+            if (
+                character is None
+                or world is None
+                or not self._valid(quest, version, step=8)
+                or world.region != REGION
+                or world.location != BAIXIOS
+                or await self._foreground(session, character.id) is not None
+            ):
+                return await self._view(session, character, quest, world)
+            event = await session.scalar(
+                select(RewardEvent)
+                .where(
+                    RewardEvent.character_id == character.id,
+                    RewardEvent.source_id == P9_REWARD_SOURCE,
+                )
+                .with_for_update()
+            )
+            if event is None:
+                name, slot = P9_REWARD_CHOICES[choice]
+                payload = materialize_equipment(
+                    f"{P9_REWARD_SOURCE}:{character.id}:{choice}",
+                    "Raro",
+                    15,
+                    forced_name=name,
+                    forced_slot=slot,
+                    bound=True,
+                )
+                event = RewardEvent(character_id=character.id, source_id=P9_REWARD_SOURCE)
+                session.add(event)
+                await session.flush()
+                character.xp += 12450
+                character.crowns += 330
+                session.add_all(
+                    (
+                        RewardComponent(
+                            reward_event_id=event.id,
+                            kind="xp",
+                            item_id=None,
+                            quantity=12450,
+                        ),
+                        RewardComponent(
+                            reward_event_id=event.id,
+                            kind="crowns",
+                            item_id=None,
+                            quantity=330,
+                        ),
+                        RewardComponent(
+                            reward_event_id=event.id,
+                            kind="equipment",
+                            item_id=None,
+                            quantity=1,
+                            payload=payload | {"choice": choice},
+                        ),
+                    )
+                )
+                source_key = f"{P9_REWARD_SOURCE}:equipment:{choice}"
+                if await self.road._inventory_slots(session, character.id) < 60:
+                    from asterion.application.equipment import equipment_instance_payload
+
+                    item_id, instance = equipment_instance_payload(payload)
+                    session.add(
+                        EquipmentItem(
+                            id=item_id,
+                            character_id=character.id,
+                            source_key=source_key,
+                            item_name=instance["item_name"],
+                            rarity=instance["rarity"],
+                            slot=instance["slot"],
+                            item_level=instance["item_level"],
+                            bound=True,
+                            payload=instance,
+                        )
+                    )
+                else:
+                    await self.road._pending(
+                        session, character.id, source_key, "equipment", payload
+                    )
+            await self._ensure_unlock(session, character.id, BAIXIOS_HUNT_UNLOCK)
+            quest.status = "completed"
+            quest.step = 8
+            quest.progress = {
+                **(quest.progress or {}),
+                "completed": True,
+                "reward_choice": choice,
+            }
+            quest.state_version += 1
+            await consolidate_character_level(session, character)
+            return await self._view(session, character, quest, world)
+
     async def start_solo_combat(
         self, actor: int, quest_id: str, version: int
     ) -> VDEMissionView | None:
-        step = 2 if quest_id == S7_ID else 3
-        location = GARGANTA if quest_id == S7_ID else MATA
+        config = MISSION_COMBAT.get(quest_id)
+        if config is None:
+            return await self.resume(actor, quest_id)
+        step, location, level, creature = config
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor, quest_id)
             if character is None or world is None or not self._valid(quest, version, step=step):
@@ -421,20 +680,26 @@ class VDEMissionService:
                 or await self._foreground(session, character.id)
             ):
                 return await self._view(session, character, quest, world)
-            level = 12 if quest_id == S7_ID else 13
-            content_id = S7_CONTENT if quest_id == S7_ID else P8_CONTENT
+            content_id = MISSION_CONTENT_IDS[quest_id]
             activity = await materialize(
                 session,
                 character,
                 content_id,
-                _SCRIPTED_FAUNA,
+                creature,
                 level,
-                flavor="A criatura bloqueia o ponto examinado entre as raízes.",
+                flavor=self._combat_flavor(quest_id),
                 opening_log=(
-                    "⚔️ Uma criatura se move entre as raízes; "
-                    "a missão não identifica uma espécie."
+                    self._combat_flavor(quest_id)
                 ),
             )
+            if creature is not _SCRIPTED_FAUNA:
+                await self.road._bestiary(
+                    session,
+                    character.id,
+                    creature.creature_id,
+                    victory=False,
+                    observation_category=creature.category,
+                )
             progress = dict(quest.progress or {})
             progress.update(activity_id=str(activity.id), awaiting_retry=False)
             quest.progress = progress
@@ -443,7 +708,10 @@ class VDEMissionService:
 
     async def propose_group_combat(self, actor: int, quest_id: str, version: int):
         initial = await self.resume(actor, quest_id)
-        step = 2 if quest_id == S7_ID else 3
+        config = MISSION_COMBAT.get(quest_id)
+        if config is None:
+            return initial
+        step, location, _level, creature = config
         if initial is None or initial.status != "active" or initial.step != step:
             return initial
         if self.groups is None:
@@ -458,10 +726,11 @@ class VDEMissionService:
             eligibility_resolver=self._combat_eligibility,
             context_payload={
                 "quest_id": quest_id,
-                "checkpoint": S7_CHECKPOINT if quest_id == S7_ID else P8_CHECKPOINT,
+                "checkpoint": MISSION_CHECKPOINTS[quest_id],
                 "title": f"{initial.title} · Encontro Roteirizado",
                 "reference_character_id": str(initial.character_id),
-                "location": GARGANTA if quest_id == S7_ID else MATA,
+                "location": location,
+                "creature_id": creature.creature_id,
             },
             journey_reference_character_id=initial.character_id,
         )
@@ -514,7 +783,7 @@ class VDEMissionService:
                 .where(
                     GameActivity.id == activity_id,
                     GameActivity.character_id == character.id,
-                    GameActivity.content_id.in_((S7_CONTENT, P8_CONTENT)),
+                    GameActivity.content_id.in_(tuple(MISSION_CONTENT_IDS.values())),
                 )
                 .with_for_update()
             )
@@ -531,7 +800,7 @@ class VDEMissionService:
                 consumable_id=consumable_id,
                 target_id=target_id,
                 effect_id=effect_id,
-                category=_SCRIPTED_FAUNA.category,
+                category=self._creature_for_quest(quest.quest_id).category,
             )
             if updated is None or updated.version == version:
                 return current
@@ -549,6 +818,15 @@ class VDEMissionService:
                     source_key=f"{quest.quest_id.lower()}.combat:{activity.id}",
                     evidence={"result": "victory", "location": world.location if world else None},
                 )
+                creature = self._creature_for_quest(quest.quest_id)
+                if creature is not _SCRIPTED_FAUNA:
+                    await self.road._bestiary(
+                        session,
+                        character.id,
+                        creature.creature_id,
+                        victory=True,
+                        observation_category=creature.category,
+                    )
             elif updated.result == "defeat":
                 activity.status = "failed"
                 character.hp = character.max_hp
@@ -600,8 +878,9 @@ class VDEMissionService:
             if member_seed is None:
                 return None
             locked = await lock_campaign_encounter(session, activity_id, seed.id)
-            if locked is None or locked.encounter.quest_id not in {S7_ID, P8_ID}:
+            if locked is None or locked.encounter.quest_id not in MISSION_TITLES:
                 return None
+            mission_creature = self._creature_for_quest(locked.encounter.quest_id)
             character = locked.characters.get(seed.id)
             member = next(
                 (row for row in locked.members if row.game_activity_id == activity_id), None
@@ -630,7 +909,7 @@ class VDEMissionService:
                 consumable_id=consumable_id,
                 target_id=target_id,
                 effect_id=effect_id,
-                consumable_budget=ENCOUNTER_CONSUMABLE_LIMITS.get(_SCRIPTED_FAUNA.category, 0),
+                consumable_budget=ENCOUNTER_CONSUMABLE_LIMITS.get(mission_creature.category, 0),
             )
             if updated.version == version:
                 return await self._view_for_character_activity(session, character, activity_id)
@@ -655,6 +934,14 @@ class VDEMissionService:
                 participant_quest = quests.get(character_id)
                 if updated.result == "victory":
                     await normalize_character_hp(session, participant)
+                    if mission_creature is not _SCRIPTED_FAUNA:
+                        await self.road._bestiary(
+                            session,
+                            participant.id,
+                            mission_creature.creature_id,
+                            victory=True,
+                            observation_category=mission_creature.category,
+                        )
                     if roster_row.role == "eligible" and participant_quest is not None:
                         participant_quest.step += 1
                         participant_quest.state_version += 1
@@ -687,6 +974,7 @@ class VDEMissionService:
 
     async def _combat_eligibility(self, session, character, payload) -> ActivityEligibility:
         quest_id = payload.get("quest_id")
+        combat_config = MISSION_COMBAT.get(quest_id)
         quest = await session.scalar(
             select(Quest).where(Quest.character_id == character.id, Quest.quest_id == quest_id)
         )
@@ -696,9 +984,13 @@ class VDEMissionService:
                 GameActivity.character_id == character.id, GameActivity.status == "active"
             )
         )
-        quest_step = 2 if quest_id == S7_ID else 3
+        quest_step = combat_config[0] if combat_config is not None else -1
         same_location = bool(
-            world and world.region == REGION and world.location == payload.get("location")
+            world
+            and world.region == REGION
+            and world.location == payload.get("location")
+            and combat_config is not None
+            and world.location == combat_config[1]
         )
         if active is not None or not same_location:
             role = "ineligible"
@@ -726,9 +1018,12 @@ class VDEMissionService:
 
     async def _create_group_combat(self, session, proposal, characters) -> str:
         quest_id = proposal.context_payload.get("quest_id")
-        content_id = S7_CONTENT if quest_id == S7_ID else P8_CONTENT
-        checkpoint = S7_CHECKPOINT if quest_id == S7_ID else P8_CHECKPOINT
-        level = 12 if quest_id == S7_ID else 13
+        combat_config = MISSION_COMBAT.get(quest_id)
+        if combat_config is None:
+            raise GroupError("invalid_activity")
+        _step, location, level, creature = combat_config
+        content_id = MISSION_CONTENT_IDS[quest_id]
+        checkpoint = MISSION_CHECKPOINTS[quest_id]
         participant_rows = list(
             (
                 await session.scalars(
@@ -781,15 +1076,12 @@ class VDEMissionService:
             lead.character_class,
             lead.race,
             lead.hp,
-            (CreatureCombatantSpec(_SCRIPTED_FAUNA, level, "enemy"),),
+            (CreatureCombatantSpec(creature, level, "enemy"),),
             player_level=lead.level,
             equipment_configuration=party[0].equipment_configuration,
             ruleset_version=RULESET,
-            flavor="Uma criatura bloqueia o ponto examinado entre as raízes.",
-            opening_log=(
-                "⚔️ Uma criatura se move entre as raízes; "
-                "a missão não identifica uma espécie."
-            ),
+            flavor=self._combat_flavor(quest_id),
+            opening_log=self._combat_flavor(quest_id),
             active_art_ids=party[0].active_art_ids,
             party=tuple(party),
         )
@@ -805,6 +1097,15 @@ class VDEMissionService:
             checkpoint=checkpoint,
             campaign_boss=False,
         )
+        if creature is not _SCRIPTED_FAUNA:
+            for member in roster:
+                await self.road._bestiary(
+                    session,
+                    member.character.id,
+                    creature.creature_id,
+                    victory=False,
+                    observation_category=creature.category,
+                )
         for member in roster:
             if member.role == "eligible":
                 quest = await session.scalar(
@@ -857,6 +1158,81 @@ class VDEMissionService:
         quest.state_version += 1
         await consolidate_character_level(session, character)
 
+    async def _complete_s8(self, session, character, quest):
+        materials = (
+            ("material.vde.erva_de_turfa", 1),
+            ("material.vde.resina_enredada", 1),
+        )
+        await self._reward(session, character, quest, S8_REWARD_SOURCE, 8015, 230, materials)
+        await self._ensure_codex(session, character.id, "codex.location.mata_suspensa")
+        await self._ensure_codex_fragment(
+            session,
+            character.id,
+            "codex.location.mata_suspensa",
+            "codex.fragment.mata.rotas_adaptadas",
+        )
+        await self._ensure_codex(session, character.id, "codex.route.rotas_dos_vales")
+        await self._ensure_codex_fragment(
+            session,
+            character.id,
+            "codex.route.rotas_dos_vales",
+            "codex.fragment.vales.routes.s8_alternate_passage",
+        )
+        quest.status = "completed"
+        quest.step = 7
+        quest.progress = {**(quest.progress or {}), "completed": True}
+        quest.state_version += 1
+        await consolidate_character_level(session, character)
+
+    async def _complete_s9(self, session, character, quest):
+        materials = (("material.vde.couro_musgoso", 2),)
+        await self._reward(session, character, quest, S9_REWARD_SOURCE, 4980, 170, materials)
+        await self._ensure_codex(session, character.id, "codex.mystery.raizes_que_seguem_pedra")
+        await self._ensure_codex_fragment(
+            session,
+            character.id,
+            "codex.mystery.raizes_que_seguem_pedra",
+            "codex.fragment.mata.casca_camadas_externas",
+        )
+        quest.status = "completed"
+        quest.step = 6
+        quest.progress = {**(quest.progress or {}), "completed": True}
+        quest.state_version += 1
+        await consolidate_character_level(session, character)
+
+    async def _record_p9_codex(self, session, character_id):
+        entries = (
+            (
+                "codex.location.baixios_enredados",
+                "codex.fragment.baixios.entry_recorded",
+            ),
+            ("codex.figure.iven_raal", "codex.fragment.iven.regional_register"),
+            (
+                "codex.mystery.o_no_antigo",
+                "codex.fragment.no_antigo.translation_hypothesis",
+            ),
+        )
+        for entry_id, fragment_id in entries:
+            await self._ensure_codex_fragment(session, character_id, entry_id, fragment_id)
+
+    @staticmethod
+    def _creature_for_quest(quest_id):
+        config = MISSION_COMBAT.get(quest_id)
+        return config[3] if config is not None else _SCRIPTED_FAUNA
+
+    @staticmethod
+    def _combat_flavor(quest_id):
+        return {
+            S7_ID: "Uma criatura ocupa a marcação de rota; a espécie não é identificada.",
+            P8_ID: (
+                "Criaturas ocupam o ponto investigado entre as raízes; "
+                "a missão não identifica uma espécie."
+            ),
+            S8_ID: "Um Cervo do Nó bloqueia a passagem de suprimentos.",
+            P9_ID: "Uma Casca Errante guarda as estruturas parcialmente soterradas.",
+            S9_ID: "Uma Casca Errante foi localizada nos Baixios.",
+        }.get(quest_id, "Um encontro roteirizado bloqueia o caminho.")
+
     async def _reward(self, session, character, quest, source_id, xp, crowns, materials):
         event = await session.scalar(
             select(RewardEvent)
@@ -902,7 +1278,7 @@ class VDEMissionService:
             session,
             character_ids=await campaign_roster_ids(session, character_id),
             quest_id=quest_id,
-            content_version=CONTENT_VERSION,
+            content_version=self._content_version(quest_id),
             step=step,
             region=REGION,
             location=location,
@@ -911,7 +1287,7 @@ class VDEMissionService:
     async def _view(self, session, character, quest, world, *, requested_quest_id=None):
         progress = dict(quest.progress or {}) if quest else {}
         quest_id = quest.quest_id if quest else (requested_quest_id or S7_ID)
-        title = S7_TITLE if quest_id == S7_ID else P8_TITLE
+        title = MISSION_TITLES.get(quest_id, S7_TITLE)
         activity = combat = encounter = record = None
         actor_key = None
         group_size = 1
@@ -930,7 +1306,7 @@ class VDEMissionService:
                 actor_key = shared_member.actor_key if shared_member else None
                 group_size = shared.roster_size
             else:
-                content_id = S7_CONTENT if quest_id == S7_ID else P8_CONTENT
+                content_id = MISSION_CONTENT_IDS.get(quest_id)
                 activity = await session.scalar(
                     select(GameActivity).where(
                         GameActivity.id == activity_id,
@@ -957,52 +1333,55 @@ class VDEMissionService:
                             )
         available = False
         if quest is None:
-            required_level = 12 if quest_id == S7_ID else 13
-            required_location = GARGANTA if quest_id == S7_ID else VIGILIA
-            p7 = (
-                await session.scalar(
-                    select(Quest.id).where(
-                        Quest.character_id == character.id,
-                        Quest.quest_id == P7_ID,
-                        Quest.status == "completed",
-                    )
-                )
-                if character is not None
-                else None
-            )
-            available = bool(
-                character is not None
-                and world is not None
-                and p7 is not None
-                and character.level >= required_level
-                and world.region == REGION
-                and world.location == required_location
-                and await self._foreground(session, character.id) is None
-            )
+            available = await self._can_start(session, character, world, quest_id)
             kind = "offer" if available else "unavailable"
         elif combat is not None:
             kind = "combat"
         elif quest.status == "completed":
             kind = "completed"
-        elif quest_id == S7_ID:
-            if quest.step == 1:
-                kind = "markers"
-            elif quest.step == 2:
-                kind = "retry" if progress.get("awaiting_retry") else "combat_start"
-            elif quest.step == 3:
-                kind = "rope"
-            else:
-                kind = "report"
         else:
             kind = {
-                1: "enter_mata",
-                2: "roots",
-                3: "retry" if progress.get("awaiting_retry") else "combat_start",
-                4: "compare",
-                5: "masonry",
-                6: "record",
-                7: "return_vigilia",
-            }.get(quest.step, "unavailable")
+                S7_ID: {
+                    1: "markers",
+                    2: "retry" if progress.get("awaiting_retry") else "combat_start",
+                    3: "rope",
+                    4: "report",
+                },
+                P8_ID: {
+                    1: "enter_mata",
+                    2: "roots",
+                    3: "retry" if progress.get("awaiting_retry") else "combat_start",
+                    4: "compare",
+                    5: "masonry",
+                    6: "record",
+                    7: "return_vigilia",
+                },
+                S8_ID: {
+                    1: "passage",
+                    2: "structures",
+                    3: "retry" if progress.get("awaiting_retry") else "combat_start",
+                    4: "hardware",
+                    5: "alternate_route",
+                    6: "report",
+                },
+                P9_ID: {
+                    1: "follow",
+                    2: "enter_baixios",
+                    3: "structures",
+                    4: "retry" if progress.get("awaiting_retry") else "combat_start",
+                    5: "inscription",
+                    6: "fragment",
+                    7: "report",
+                    8: "choice",
+                },
+                S9_ID: {
+                    1: "locate",
+                    2: "retry" if progress.get("awaiting_retry") else "combat_start",
+                    3: "fragments",
+                    4: "sample",
+                    5: "report",
+                },
+            }.get(quest_id, {}).get(quest.step, "unavailable")
         options = quantities = ()
         budget = 0
         if (
@@ -1012,7 +1391,11 @@ class VDEMissionService:
             and character is not None
         ):
             options, quantities, budget = await consumable_state(
-                session, character, combat, _SCRIPTED_FAUNA.category, actor_key=actor_key
+                session,
+                character,
+                combat,
+                self._creature_for_quest(quest_id).category,
+                actor_key=actor_key,
             )
         return VDEMissionView(
             character_id=character.id if character else UUID(int=0),
@@ -1052,7 +1435,7 @@ class VDEMissionService:
         )
         world = await self._world(session, character.id)
         if quest is None:
-            title = S7_TITLE if shared.quest_id == S7_ID else P8_TITLE
+            title = MISSION_TITLES.get(shared.quest_id, S7_TITLE)
             base = VDEMissionView(
                 character_id=character.id,
                 quest_id=shared.quest_id,
@@ -1074,7 +1457,7 @@ class VDEMissionService:
                 session,
                 character,
                 combat,
-                _SCRIPTED_FAUNA.category,
+                self._creature_for_quest(shared.quest_id).category,
                 actor_key=member.actor_key,
             )
         if shared.status != "active":
@@ -1152,7 +1535,7 @@ class VDEMissionService:
             select(Quest)
             .where(
                 Quest.character_id == character_id,
-                Quest.quest_id.in_((S7_ID, P8_ID)),
+                Quest.quest_id.in_(tuple(MISSION_TITLES)),
                 Quest.status == "active",
             )
             .with_for_update()
@@ -1163,9 +1546,48 @@ class VDEMissionService:
         return bool(
             quest
             and quest.status == "active"
-            and quest.content_version == CONTENT_VERSION
+            and quest.content_version == VDEMissionService._content_version(quest.quest_id)
             and quest.state_version == version
             and quest.step == step
+        )
+
+    @staticmethod
+    def _content_version(quest_id):
+        return MISSION_VERSIONS.get(quest_id, CONTENT_VERSION_MID)
+
+    async def _can_start(self, session, character, world, quest_id):
+        if character is None or world is None or quest_id not in MISSION_TITLES:
+            return False
+        required_level, required_location = {
+            S7_ID: (12, GARGANTA),
+            P8_ID: (13, VIGILIA),
+            S8_ID: (14, MATA),
+            P9_ID: (15, MATA),
+            S9_ID: (15, BAIXIOS),
+        }[quest_id]
+        prerequisite_id = {
+            S7_ID: P7_ID,
+            P8_ID: P7_ID,
+            S8_ID: P8_ID,
+            P9_ID: P8_ID,
+            S9_ID: P9_ID,
+        }[quest_id]
+        status_filter = ("completed",)
+        if quest_id == S9_ID:
+            status_filter = ("active", "completed")
+        prerequisite = await session.scalar(
+            select(Quest.id).where(
+                Quest.character_id == character.id,
+                Quest.quest_id == prerequisite_id,
+                Quest.status.in_(status_filter),
+            )
+        )
+        return bool(
+            prerequisite is not None
+            and character.level >= required_level
+            and world.region == REGION
+            and world.location == required_location
+            and await self._foreground(session, character.id) is None
         )
 
     async def _ensure_location(self, session, character_id, location_id):

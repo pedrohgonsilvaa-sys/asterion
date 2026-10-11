@@ -5,7 +5,13 @@ from html import escape
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
-from asterion.application.vde_missions import S7_ID, VDEMissionView
+from asterion.application.vde_missions import (
+    P9_ID,
+    S7_ID,
+    S8_ID,
+    S9_ID,
+    VDEMissionView,
+)
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 
@@ -46,7 +52,7 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
                 combat_actor_key=view.combat_actor_key,
             )
         )
-        kind = "secondary" if quest == S7_ID else "principal"
+        kind = "secondary" if quest in {S7_ID, S8_ID, S9_ID} else "principal"
         return Screen(
             f"📜 {title} · Vales dos Enforcados\n⚔️ Encontro Roteirizado · {location}\n\n{hud.text}",
             f"vde_{kind}",
@@ -67,11 +73,13 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
         )
 
     if view.kind == "offer":
-        gate = (
-            "P7 concluída · Nv.12 · Garganta dos Laços"
-            if quest == S7_ID
-            else "P7 concluída · Nv.13 · Vigília do Vale"
-        )
+        gate = {
+            S7_ID: "P7 concluída · Nv.12 · Garganta dos Laços",
+            "P8": "P7 concluída · Nv.13 · Vigília do Vale",
+            S8_ID: "P8 concluída · Nv.14 · Mata Suspensa",
+            P9_ID: "P8 concluída · Nv.15 · Mata Suspensa",
+            S9_ID: "P9 ativa ou concluída · Nv.15 · Baixios Enredados",
+        }[quest]
         return _screen(
             f"📜 {title}\nMissão {('Secundária' if quest == S7_ID else 'Principal')} · "
             "Vales dos Enforcados\n\n"
@@ -84,27 +92,49 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
         )
 
     if view.kind == "unavailable":
-        gate = (
-            "P7 concluída, Nv.12 e estar na Garganta dos Laços"
-            if quest == S7_ID
-            else "P7 concluída, Nv.13 e estar na Vigília do Vale"
-        )
+        gate = {
+            S7_ID: "P7 concluída, Nv.12 e estar na Garganta dos Laços",
+            "P8": "P7 concluída, Nv.13 e estar na Vigília do Vale",
+            S8_ID: "P8 concluída, Nv.14 e estar na Mata Suspensa",
+            P9_ID: "P8 concluída, Nv.15 e estar na Mata Suspensa",
+            S9_ID: "P9 ativa ou concluída, Nv.15 e estar nos Baixios Enredados",
+        }[quest]
         return _screen(
             f"📜 {title} · Indisponível\n\nRequer {gate}.",
             [[_button("← Missões", "world:missions")]],
         )
 
     if view.kind == "completed":
-        reward = (
-            "✨ 3.840 XP · 🪙 140 Coroas"
-            if quest == S7_ID
-            else (
+        reward = {
+            S7_ID: "✨ 3.840 XP · 🪙 140 Coroas",
+            "P8": (
                 "✨ 10.500 XP · 🪙 300 Coroas\n"
                 "📦 Ferro Enredado · 1 · Vinculado\n"
                 "📦 Erva de Turfa · 2 · Vinculada\n"
                 "📦 Resina Enredada · 1 · Vinculada"
-            )
-        )
+            ),
+            S8_ID: (
+                "✨ 8.015 XP · 🪙 230 Coroas\n"
+                "📦 Erva de Turfa · 1 · Vinculada\n"
+                "📦 Resina Enredada · 1 · Vinculada"
+            ),
+            P9_ID: (
+                "✨ 12.450 XP · 🪙 330 Coroas\n"
+                "🎁 "
+                + escape(
+                    {
+                        "1": "Capuz das Copas Suspensas",
+                        "2": "Selo do Caminho Enredado",
+                        "3": "Relicário do Nó Velado",
+                    }.get(str((view.progress or {}).get("reward_choice")), "Equipamento Raro Nv.15")
+                )
+                + " · Vinculado"
+            ),
+            S9_ID: (
+                "✨ 4.980 XP · 🪙 170 Coroas\n"
+                "📦 Couro Musgoso · 2 · Vinculado"
+            ),
+        }.get(quest, "")
         return _screen(
             f"✅ {title} · Concluída\n\n{reward}",
             [[_button("← Missões", "world:missions")]],
@@ -155,7 +185,7 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             "🎯 Encontrar a corda ainda presa à estrutura acima do caminho."
         )
         rows.append([_button("Examinar a corda", f"vde:{quest}:{version}:rope")])
-    elif view.kind == "report":
+    elif view.kind == "report" and quest == S7_ID:
         text = (
             f"📜 {title} · Vigília do Vale\n\n"
             "🎯 Retornar a Dara Venn.\n\n"
@@ -215,6 +245,122 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             rows.append([_button("Retornar à Vigília", "road:route:vde_vigilia")])
         elif view.location == "Vigília do Vale":
             rows.append([_button("Relatar a Dara Venn", f"vde:{quest}:{version}:return")])
+    elif view.kind == "passage":
+        text = (
+            f"📜 {title} · Mata Suspensa\n\n"
+            "🎯 Alcançar uma passagem de suprimentos entre as passarelas."
+        )
+        if view.location == "Mata Suspensa":
+            rows.append([_button("Examinar a passagem", f"vde:{quest}:{version}:passage")])
+        else:
+            rows.append([_button("Seguir para a Mata", "road:route:vde_mata")])
+    elif view.kind == "structures":
+        found_key = "structures"
+        found = set(progress.get(found_key, ()))
+        for point, label in (
+            ("a", "Examinar ponto estrutural 1"),
+            ("b", "Examinar ponto estrutural 2"),
+            ("c", "Examinar ponto estrutural 3"),
+        ):
+            if point not in found:
+                rows.append([_button(label, f"vde:{quest}:{version}:ex:{point}")])
+        objective = (
+            "Examinar três pontos estruturais."
+            if quest == S8_ID
+            else "Examinar três estruturas parcialmente soterradas."
+        )
+        text = f"📜 {title} · {location}\n\n🎯 {objective}\nProgresso · {len(found)}/3"
+    elif view.kind == "hardware":
+        found = len((progress or {}).get("hardware_sets", ()))
+        text = (
+            f"📜 {title} · Mata Suspensa\n\n"
+            "🎯 Recuperar dois conjuntos de ferragens antigas ainda utilizáveis.\n"
+            f"Progresso · {found}/2"
+        )
+        if view.location == "Mata Suspensa":
+            rows.append(
+                [_button("Recuperar conjunto de ferragens", f"vde:{quest}:{version}:hardware")]
+            )
+    elif view.kind == "alternate_route":
+        text = f"📜 {title} · Mata Suspensa\n\n🎯 Marcar uma rota alternativa segura."
+        if view.location == "Mata Suspensa":
+            rows.append([_button("Marcar rota alternativa", f"vde:{quest}:{version}:route")])
+    elif view.kind == "follow":
+        text = (
+            f"📜 {title} · Mata Suspensa\n\n"
+            "🎯 Seguir o traçado encontrado durante a investigação anterior."
+        )
+        if view.location == "Mata Suspensa":
+            rows.append([_button("Seguir o traçado", f"vde:{quest}:{version}:follow")])
+        else:
+            rows.append([_button("Retornar à Mata Suspensa", "road:route:vde_mata")])
+    elif view.kind == "enter_baixios":
+        text = f"📜 {title}\n\n🎯 Alcançar os Baixios Enredados."
+        if view.location == "Mata Suspensa":
+            rows.append([_button("Descer aos Baixios", "road:route:vde_baixios")])
+        elif view.location == "Baixios Enredados":
+            rows.append([_button("Registrar chegada", f"vde:{quest}:{version}:baixios")])
+    elif view.kind == "inscription":
+        text = (
+            f"📜 {title} · Baixios Enredados\n\n"
+            "🎯 Encontrar uma inscrição asteriana danificada."
+        )
+        rows.append([_button("Examinar a inscrição", f"vde:{quest}:{version}:inscription")])
+    elif view.kind == "fragment":
+        text = (
+            f"📜 {title} · Baixios Enredados\n\n"
+            "🎯 Recuperar um fragmento de marcação estrutural."
+        )
+        rows.append([_button("Recuperar fragmento", f"vde:{quest}:{version}:fragment")])
+    elif view.kind == "choice":
+        text = (
+            f"📜 {title} · Baixios Enredados\n\n"
+            "O registro foi levado a Iven Raal. Escolha uma recompensa individual.\n\n"
+            "✨ 12.450 XP · 🪙 330 Coroas\n"
+            "🎁 1 Equipamento Raro · Nv.15 · Vinculado"
+        )
+        for choice, label in (
+            ("1", "Capuz das Copas Suspensas · Cabeça"),
+            ("2", "Selo do Caminho Enredado · Acessório"),
+            ("3", "Relicário do Nó Velado · Artefato"),
+        ):
+            rows.append([_button(label, f"vde:{quest}:{version}:ch:{choice}")])
+    elif view.kind == "locate":
+        text = f"📜 {title} · Baixios Enredados\n\n🎯 Localizar uma Casca Errante."
+        rows.append([_button("Investigar os rastros", f"vde:{quest}:{version}:locate")])
+    elif view.kind == "fragments":
+        text = (
+            f"📜 {title} · Baixios Enredados\n\n"
+            "🎯 Examinar os fragmentos deixados pela criatura."
+        )
+        rows.append([_button("Examinar fragmentos", f"vde:{quest}:{version}:fragments")])
+    elif view.kind == "sample":
+        text = f"📜 {title} · Baixios Enredados\n\n🎯 Recuperar uma amostra sem valor econômico."
+        rows.append([_button("Recuperar amostra", f"vde:{quest}:{version}:sample")])
+    elif view.kind == "report" and quest == S8_ID:
+        text = (
+            f"📜 {title} · Vigília do Vale\n\n"
+            "🎯 Retornar a Dara Venn. As rotas e passarelas foram adaptadas ao avanço das raízes."
+        )
+        if view.location == "Vigília do Vale":
+            rows.append([_button("Relatar a Dara Venn", f"vde:{quest}:{version}:report")])
+        else:
+            rows.append([_button("Seguir para a Vigília", "road:route:vde_vigilia")])
+    elif view.kind == "report" and quest == P9_ID:
+        text = (
+            f"📜 {title} · Baixios Enredados\n\n"
+            "🎯 Levar o registro a Iven Raal. "
+            "A tradução aproximada permanece uma hipótese documental."
+        )
+        rows.append([_button("Entregar registro a Iven", f"vde:{quest}:{version}:report")])
+    elif view.kind == "report" and quest == S9_ID:
+        text = (
+            f"📜 {title} · Baixios Enredados\n\n"
+            "A camada externa possui propriedades próximas de matéria vegetal. "
+            "O interior não permite concluir com segurança o que a criatura era anteriormente.\n\n"
+            "🎯 Retornar a Iven Raal."
+        )
+        rows.append([_button("Relatar a Iven", f"vde:{quest}:{version}:report")])
     else:
         text = f"📜 {title} · Em Andamento\n\nLocal · {location}"
         rows.append([_button("Atualizar", f"vde:{quest}:resume")])

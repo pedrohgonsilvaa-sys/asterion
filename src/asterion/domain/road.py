@@ -34,6 +34,7 @@ RUINS_LOCATION = "tdo.location.ruinas_do_vigia"
 VDE_GARGANTA_LOCATION = "vde.location.garganta_dos_lacos"
 VDE_VIGILIA_LOCATION = "vde.location.vigilia_do_vale"
 VDE_MATA_LOCATION = "vde.location.mata_suspensa"
+VDE_BAIXIOS_LOCATION = "vde.location.baixios_enredados"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
 BOSQUE_BRAZIER = "tdo.brazier.galhos_mortos"
@@ -55,6 +56,7 @@ RUINS_ROUND_FAMILIARITY = "hunt_round.ruinas_do_vigia"
 RUINS_ROUTE_UNLOCK = "route.tdo.bosque_ruinas"
 VDE_GARGANTA_BRAZIER = "vde.brazier.garganta_dos_lacos"
 VDE_MATA_BRAZIER = "vde.brazier.mata_suspensa"
+VDE_BAIXIOS_BRAZIER = "vde.brazier.turfa_fria"
 VDE_GARGANTA_HUNT_UNLOCK = "hunt.manual.vde.garganta_dos_lacos"
 VDE_GARGANTA_EXPLORE_UNLOCK = "explore.vde.garganta_dos_lacos"
 VDE_GARGANTA_ROUND_FAMILIARITY = "hunt_round.vde.garganta_dos_lacos"
@@ -63,6 +65,10 @@ VDE_VIGILIA_MATA_ROUTE = "route.vde.vigilia_mata"
 VDE_MATA_HUNT_UNLOCK = "hunt.manual.vde.mata_suspensa"
 VDE_MATA_EXPLORE_UNLOCK = "explore.vde.mata_suspensa"
 VDE_MATA_ROUND_FAMILIARITY = "hunt_round.vde.mata_suspensa"
+VDE_BAIXIOS_HUNT_UNLOCK = "hunt.manual.vde.baixios_enredados"
+VDE_BAIXIOS_EXPLORE_UNLOCK = "explore.vde.baixios_enredados"
+VDE_BAIXIOS_ROUND_FAMILIARITY = "hunt_round.vde.baixios_enredados"
+VDE_MATA_BAIXIOS_ROUTE = "route.vde.mata_baixios"
 EXPLORATION_CATEGORY_WEIGHTS = {
     "great_discovery": 8,
     "knowledge": 22,
@@ -508,6 +514,57 @@ VDE_VINE_WIDOW = Creature(
     ),
     ai_priority=("picada_viuva", "trama_cipos", "veneno_concentrado", "bote_suspenso"),
 )
+VDE_TURF_LEECH = Creature(
+    "sanguessuga_turfa", "Sanguessuga de Turfa", "common", "balanced", 15, 18, 0,
+    ("mordida_lodosa", "succao", "inchar"),
+    (
+        ("mordida_lodosa", "Mordida Lodosa", D("0.95"), 0, D(0), 0),
+        ("succao", "Sucção", D("0.85"), 0, D(0), 0, None, 0, False, 2, None, D(0), D(0), 0, False, "opponent", None, None, None, (), (), D("0.50"), D(0), D(0), D(0), D(0), D("0.40"), 0, D("0.30")),
+        ("inchar", "Inchar", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), 0, False, "self", None, D("0.40"), None, (), (), D("0.50"), D(0), D(0), D(0), D(0), D("0.40"), 0, D(0), D("0.55")),
+    ),
+    damage_taken_modifiers=(("burn", D("1.10")),),
+)
+VDE_WANDERING_BARK = Creature(
+    "casca_errante", "Casca Errante", "uncommon", "armored", 15, 19, 0,
+    ("braco_casca", "casca_fechada", "estilhaco_organico"),
+    (
+        ("braco_casca", "Braço de Casca", D("1.00"), 0, D(0), 0),
+        ("casca_fechada", "Casca Fechada", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.85"), 2, True),
+        ("estilhaco_organico", "Estilhaço Orgânico", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+    ),
+    damage_taken_modifiers=(("burn", D("1.10")), ("bleed", D("0.90"))),
+)
+VDE_GREEN_DUSK_MOTH = Creature(
+    "mariposa_breu_verde", "Mariposa do Breu Verde", "common", "caster", 16, 19, 0,
+    ("po_breu", "toque_verde", "clarao_noturno"),
+    (
+        ("po_breu", "Pó do Breu", D("0.75"), 0, D("0.08"), 2, None, 0, False, 3, "attack"),
+        ("toque_verde", "Toque Verde", D("0.90"), 0, D(0), 0, "poison", 1, False, 2),
+        ("clarao_noturno", "Clarão Noturno", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+    ),
+)
+VDE_ROOTED_WATCHER = Creature(
+    "vigia_enraizado", "Vigia Enraizado", "uncommon", "armored", 18, 20, 0,
+    ("golpe_enraizado", "egide_enredada", "marca_raizes", "peso_antigo"),
+    (
+        ("golpe_enraizado", "Golpe Enraizado", D("1.00"), 0, D(0), 0),
+        ("egide_enredada", "Égide Enredada", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.90"), 2, True),
+        ("marca_raizes", "Marca das Raízes", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+        ("peso_antigo", "Peso Antigo", D("1.60"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("egide_enredada", "marca_raizes", "peso_antigo"),
+)
+VDE_BARK_EXECUTIONER = Creature(
+    "carrasco_casca", "Carrasco de Casca", "elite", "armored", 18, 20, 0,
+    ("golpe_carrasco", "couraça_enrijecida", "fenda_casca", "queda_tronco"),
+    (
+        ("golpe_carrasco", "Golpe do Carrasco", D("1.05"), 0, D(0), 0),
+        ("couraça_enrijecida", "Couraça Enrijecida", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("1.00"), 2, True),
+        ("fenda_casca", "Fenda de Casca", D("1.35"), 0, D(0), 0, None, 0, False, 3),
+        ("queda_tronco", "Queda do Tronco", D("1.80"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    damage_taken_modifiers=(("burn", D("1.10")), ("bleed", D("0.90"))),
+)
 
 VDE_CREATURES = (
     VDE_MOSS_WOLF,
@@ -517,6 +574,11 @@ VDE_CREATURES = (
     VDE_KNOT_DEER,
     VDE_FEROCIOUS_KNOT,
     VDE_VINE_WIDOW,
+    VDE_TURF_LEECH,
+    VDE_WANDERING_BARK,
+    VDE_GREEN_DUSK_MOTH,
+    VDE_ROOTED_WATCHER,
+    VDE_BARK_EXECUTIONER,
 )
 CREATURE_CATALOG = (*CREATURE_CATALOG, *VDE_CREATURES)
 
@@ -547,6 +609,11 @@ VARIANT_POOL = {
     "cervo_no": ("furious", "resistant"),
     "no_feroz": (),
     "viuva_cipos": (),
+    "sanguessuga_turfa": ("resistant", "venomous"),
+    "casca_errante": ("resistant", "furious"),
+    "mariposa_breu_verde": ("venomous", "agile", "furious"),
+    "vigia_enraizado": ("resistant", "furious"),
+    "carrasco_casca": (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -672,6 +739,7 @@ LOCATION_LEVEL_BANDS = {
     "Ruínas do Vigia": (8, 10),
     "Garganta dos Laços": (11, 13),
     "Mata Suspensa": (13, 16),
+    "Baixios Enredados": (15, 18),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -747,6 +815,19 @@ VDE_MATA_PROFILE = HuntLocationProfile(
     hunt_unlock=VDE_MATA_HUNT_UNLOCK,
     round_familiarity=VDE_MATA_ROUND_FAMILIARITY,
     explore_unlock=VDE_MATA_EXPLORE_UNLOCK,
+)
+VDE_BAIXIOS_PROFILE = HuntLocationProfile(
+    local_id=VDE_BAIXIOS_LOCATION,
+    label="Baixios Enredados",
+    creature_weights=(
+        ("aranha_cipo", 22), ("cervo_no", 20), ("sanguessuga_turfa", 22),
+        ("casca_errante", 18), ("mariposa_breu_verde", 15),
+        ("viuva_cipos", 1), ("carrasco_casca", 2),
+    ),
+    variant_chance=15,
+    hunt_unlock=VDE_BAIXIOS_HUNT_UNLOCK,
+    round_familiarity=VDE_BAIXIOS_ROUND_FAMILIARITY,
+    explore_unlock=VDE_BAIXIOS_EXPLORE_UNLOCK,
 )
 
 
@@ -911,6 +992,31 @@ VDE_MATA_EXPLORATION_PROFILE = ExplorationLocationProfile(
     ),
 )
 
+VDE_BAIXIOS_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=VDE_BAIXIOS_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("brazier_turfa", "great_discovery", "explore.vde.baixios.braseiro_turfa_fria", 50, "Braseiro da Turfa Fria encontrado.", min_level=15, unique=True),
+        ExplorationResultDefinition("galeria_afogada", "great_discovery", "explore.vde.baixios.galeria_afogada", 50, "A Galeria Afogada confirma apenas uma estrutura antiga sob os Baixios.", min_level=15, unique=True),
+        ExplorationResultDefinition("marcas_agua", "knowledge", "explore.vde.baixios.marcas_sob_a_agua", 60, "Marcas sob a Água foram registradas.", min_level=15, unique=True),
+        ExplorationResultDefinition("rastros_turfa", "knowledge", "explore.vde.baixios.rastros_na_turfa", 40, "Rastros foram encontrados na turfa.", min_level=15),
+        ExplorationResultDefinition("agua_sem_reflexo", "narrative", "explore.vde.baixios.agua_sem_reflexo", 55, "A água dos Baixios não devolve um reflexo nítido.", min_level=15),
+        ExplorationResultDefinition("raizes_lama", "narrative", "explore.vde.baixios.raizes_sob_a_lama", 45, "Raízes atravessam a lama sob a água.", min_level=15),
+        ExplorationResultDefinition("aranha_cipo", "combat", "explore.vde.baixios.combat.aranha_cipo", 22, "Uma Aranha de Cipó surge entre as raízes submersas.", min_level=15, creature_id="aranha_cipo"),
+        ExplorationResultDefinition("cervo_no", "combat", "explore.vde.baixios.combat.cervo_no", 20, "Um Cervo do Nó ocupa a passagem alagada.", min_level=15, creature_id="cervo_no"),
+        ExplorationResultDefinition("sanguessuga_turfa", "combat", "explore.vde.baixios.combat.sanguessuga_turfa", 23, "Uma Sanguessuga de Turfa se aproxima.", min_level=15, creature_id="sanguessuga_turfa"),
+        ExplorationResultDefinition("casca_errante", "combat", "explore.vde.baixios.combat.casca_errante", 18, "Uma Casca Errante bloqueia a passagem.", min_level=15, creature_id="casca_errante"),
+        ExplorationResultDefinition("mariposa_breu_verde", "combat", "explore.vde.baixios.combat.mariposa_breu_verde", 17, "Uma Mariposa do Breu Verde cruza a água escura.", min_level=16, creature_id="mariposa_breu_verde"),
+        ExplorationResultDefinition("erva", "resource", "explore.vde.baixios.erva_de_turfa", 35, "Erva de Turfa pode ser recolhida nos Baixios.", min_level=15),
+        ExplorationResultDefinition("resina", "resource", "explore.vde.baixios.resina_enredada", 30, "Resina Enredada pode ser recolhida nos Baixios.", min_level=15),
+        ExplorationResultDefinition("couro", "resource", "explore.vde.baixios.couro_musgoso", 25, "Couro Musgoso pode ser recolhido nos Baixios.", min_level=15),
+        ExplorationResultDefinition("ferro", "resource", "explore.vde.baixios.ferro_enredado", 10, "Ferro Enredado pode ser recolhido nos Baixios.", min_level=15),
+        ExplorationResultDefinition("agua_negra", "atmospheric", "explore.vde.baixios.agua_negra", 34, "Água negra ocupa uma depressão entre as raízes."),
+        ExplorationResultDefinition("troncos_submersos", "atmospheric", "explore.vde.baixios.troncos_submersos", 33, "Troncos permanecem submersos sob a turfa."),
+        ExplorationResultDefinition("luz_turfa", "atmospheric", "explore.vde.baixios.luz_sob_a_turfa", 33, "Uma luz tênue aparece sob a turfa e logo se apaga."),
+    ),
+)
+
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
     CHARNECA_LOCATION: CHARNECA_EXPLORATION_PROFILE,
@@ -918,6 +1024,7 @@ EXPLORATION_PROFILES = {
     RUINS_LOCATION: RUINS_EXPLORATION_PROFILE,
     VDE_GARGANTA_LOCATION: VDE_GARGANTA_EXPLORATION_PROFILE,
     VDE_MATA_LOCATION: VDE_MATA_EXPLORATION_PROFILE,
+    VDE_BAIXIOS_LOCATION: VDE_BAIXIOS_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
@@ -927,6 +1034,7 @@ HUNT_PROFILES = {
     RUINS_LOCATION: RUINS_PROFILE,
     VDE_GARGANTA_LOCATION: VDE_GARGANTA_PROFILE,
     VDE_MATA_LOCATION: VDE_MATA_PROFILE,
+    VDE_BAIXIOS_LOCATION: VDE_BAIXIOS_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -1404,6 +1512,8 @@ def _creature_actions(creature: Creature, prefix: str = "") -> tuple[dict[str, A
         native_dot_stacks_if_target_poisoned = (
             specification[27] if len(specification) > 27 else 0
         )
+        vampirism_fraction = D(specification[28]) if len(specification) > 28 else D(0)
+        heal_coefficient = D(specification[29]) if len(specification) > 29 else D(0)
         actions[actual_key] = Action(
             actual_key,
             label,
@@ -1435,6 +1545,8 @@ def _creature_actions(creature: Creature, prefix: str = "") -> tuple[dict[str, A
             ),
             actor_per_bonus_hp_fraction_threshold=actor_per_bonus_hp_fraction_threshold,
             native_dot_stacks_if_target_poisoned=native_dot_stacks_if_target_poisoned,
+            vampirism_fraction=vampirism_fraction,
+            heal_coefficient=heal_coefficient,
         )
     cycle = tuple(key_map[key] for key in creature.ai if key in key_map)
     priority = tuple(key_map[key] for key in creature.ai_priority if key in key_map)

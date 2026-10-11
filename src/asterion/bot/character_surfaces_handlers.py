@@ -79,7 +79,7 @@ def character_surfaces_router(service: CharacterSurfacesService, images: dict[st
             rendered = (
                 render_codex_detail(view, entry)
                 if entry is not None
-                else render_codex_region(view, "tdo")
+                else render_codex_category(view, "regions")
             )
         elif screen == "entry":
             entry_id = CODEX_ENTRY_BY_KEY.get(key or "")
