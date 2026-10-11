@@ -57,6 +57,12 @@ from tests.test_creation_ui import callback_update
 from tests.test_road_integration import _seed_road
 
 FEAT_IDS = {item.achievement_id for item in ACHIEVEMENTS if item.player_facing}
+TDO_FEAT_IDS = {item for item in FEAT_IDS if item.startswith("feat.tdo.")}
+TDO_COSMETIC_BY_ACHIEVEMENT = {
+    achievement_id: cosmetic
+    for achievement_id, cosmetic in COSMETIC_BY_ACHIEVEMENT.items()
+    if achievement_id.startswith("feat.tdo.")
+}
 EXPECTED_MISSING = {
     "prologue": {"feat.tdo.cinzas_na_estrada"},
     "wanderer": {"feat.tdo.andarilho_das_cinzas"},
@@ -367,7 +373,7 @@ async def test_all_thirteen_tdo_feats_reconcile_from_facts_and_backfill_cosmetic
             character = await session.get(Character, character_id)
             awarded = await reconcile_tdo_feats(session, character)
             if omission == "complete":
-                assert set(awarded) == FEAT_IDS
+                assert set(awarded) == TDO_FEAT_IDS
             else:
                 assert not EXPECTED_MISSING[omission].intersection(awarded)
             assert len(set(awarded)) == len(awarded)
@@ -383,7 +389,7 @@ async def test_all_thirteen_tdo_feats_reconcile_from_facts_and_backfill_cosmetic
                 ).all()
             )
             expected_missing = EXPECTED_MISSING[omission]
-            assert FEAT_IDS - expected_missing <= found, omission
+            assert TDO_FEAT_IDS - expected_missing <= found, omission
             assert not (expected_missing & found)
             cosmetics = list(
                 (
@@ -394,8 +400,8 @@ async def test_all_thirteen_tdo_feats_reconcile_from_facts_and_backfill_cosmetic
                     )
                 ).all()
             )
-            expected_cosmetics = len(COSMETIC_BY_ACHIEVEMENT) - len(
-                expected_missing.intersection(COSMETIC_BY_ACHIEVEMENT)
+            expected_cosmetics = len(TDO_COSMETIC_BY_ACHIEVEMENT) - len(
+                expected_missing.intersection(TDO_COSMETIC_BY_ACHIEVEMENT)
             )
             assert len(cosmetics) == expected_cosmetics
             character = await session.get(Character, character_id)
@@ -405,8 +411,8 @@ async def test_all_thirteen_tdo_feats_reconcile_from_facts_and_backfill_cosmetic
             character = await session.get(Character, character_id)
             assert await reconcile_tdo_feats(session, character) == ()
 
-    assert len(FEAT_IDS) == 13
-    assert len(COSMETICS) == 12
+    assert len(TDO_FEAT_IDS) == 13
+    assert len([item for item in COSMETICS if item.achievement_id.startswith("feat.tdo.")]) == 12
 
 
 @pytest.mark.asyncio

@@ -98,6 +98,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                         if value.get("enemy_hp_fraction_at_most") is not None
                         else None
                     ),
+                    "phase_ids": tuple(value.get("phase_ids", ())),
                     "self_effects": tuple(
                         ActionEffect(
                             **(effect | {"magnitude": Decimal(effect["magnitude"])})
@@ -370,12 +371,14 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                                 "revive_hp_fraction": Decimal(
                                     trigger.get("revive_hp_fraction", "0.50")
                                 ),
+                                "phase_id": trigger.get("phase_id"),
                             }
                         )
                     )
                     for trigger in payload.get("phase_triggers", ())
                 ),
                 "phase_triggered_ids": set(payload.get("phase_triggered_ids", ())),
+                "phase_id": payload.get("phase_id", "default"),
                 "party_mode": bool(payload.get("party_mode", False)),
                 "manual_sides": tuple(payload.get("manual_sides", ())),
                 "order": tuple(payload["order"]),

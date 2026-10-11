@@ -80,6 +80,7 @@ FRAGMENT_I = "material.tdo.fragmento_aprimoramento_i"
 CRYPT_CORE = "material.tdo.nucleo_cripta_ocaso"
 GALLERIES_CORE = "material.tdo.nucleo_galerias_vigia"
 VIGIA_CORE = "material.tdo.nucleo_vigia_partido"
+MATRIARCH_CORE = "material.vde.nucleo_matriarca_das_raizes"
 
 MATERIAL_NAMES = {
     IRON: "Ferro de Fuligem",
@@ -91,6 +92,7 @@ MATERIAL_NAMES = {
     CRYPT_CORE: "Núcleo da Cripta do Ocaso",
     GALLERIES_CORE: "Núcleo das Galerias do Vigia",
     VIGIA_CORE: "Núcleo do Vigia Partido",
+    MATRIARCH_CORE: "Núcleo da Matriarca das Raízes",
 }
 
 SLOT_ECONOMY_SW = {
@@ -289,6 +291,28 @@ def _special_recipes() -> list[RecipeDefinition]:
             creation_enabled=False,
             unlock_id="recipe.tdo.vigia_partido.eco",
             description="Encantamento Épico de PER · Grau I",
+        ),
+        RecipeDefinition(
+            recipe_id="recipe.vde.matriarca.seiva",
+            profession_id="artificer",
+            name="Seiva da Matriarca",
+            output_kind="enchantment",
+            required_level=10,
+            grade=2,
+            rarity="Épico",
+            output_id="HP",
+            output_family="Seiva da Matriarca",
+            sw=2,
+            fixed_materials=(
+                MaterialRequirement("material.vde.resina_enredada", 5),
+                MaterialRequirement("material.vde.ferro_enredado", 2),
+                MaterialRequirement("material.vde.catalisador_elite_ii", 1, False),
+                MaterialRequirement(MATRIARCH_CORE, 1),
+            ),
+            fixed_crown_cost=160,
+            creation_enabled=False,
+            unlock_id="recipe.vde.matriarca.seiva",
+            description="Encantamento Épico de HP · Grau II",
         ),
     ]
 

@@ -38,6 +38,7 @@ MATERIAL_LABELS = {
     "material.tdo.catalisador_elite_i": "Catalisador de Elite I",
     "material.tdo.fragmento_aprimoramento_i": "Fragmento de Aprimoramento I",
     "material.tdo.nucleo_vigia_partido": "Núcleo do Vigia Partido",
+    "material.vde.nucleo_matriarca_das_raizes": "Núcleo da Matriarca das Raízes",
     "material.tdo.nucleo_cripta_ocaso": "Núcleo da Cripta do Ocaso",
     "material.tdo.nucleo_galerias_vigia": "Núcleo das Galerias do Vigia",
     "material.vde.ferro_enredado": "Ferro Enredado",

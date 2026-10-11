@@ -119,7 +119,26 @@ class BestiaryRecorder:
                 )
             ).all()
         )
-        if creature_id == "vigia_partido" or observation_category == "boss":
+        if creature_id == "matriarca_raizes":
+            required = {
+                "first_victory",
+                "p12_completed",
+                "phase:a_rede",
+                "phase:aquilo_que_permanece",
+                "mechanic:conexoes_radicular_observadas",
+                "action:abraco_do_berco",
+                "action:estrangulamento_do_vale",
+            }
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
+        elif creature_id == "vigia_partido" or observation_category == "boss":
             required = {
                 "first_victory",
                 "p6_completed",
@@ -200,7 +219,26 @@ class BestiaryRecorder:
                 )
             ).all()
         )
-        if creature_id == "vigia_partido" or observation_category == "boss":
+        if creature_id == "matriarca_raizes":
+            required = {
+                "first_victory",
+                "p12_completed",
+                "phase:a_rede",
+                "phase:aquilo_que_permanece",
+                "mechanic:conexoes_radicular_observadas",
+                "action:abraco_do_berco",
+                "action:estrangulamento_do_vale",
+            }
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
+        elif creature_id == "vigia_partido" or observation_category == "boss":
             required = {
                 "first_victory",
                 "p6_completed",
@@ -397,14 +435,26 @@ class BestiaryRecorder:
                 )
             ).all()
         )
-        required = {
-            "first_victory",
-            "p6_completed",
-            "phase:a_fratura",
-            "phase:o_ultimo_posto",
-            "action:egide_partida",
-            "action:queda_ocaso",
-        }
+        required = (
+            {
+                "first_victory",
+                "p12_completed",
+                "phase:a_rede",
+                "phase:aquilo_que_permanece",
+                "mechanic:conexoes_radicular_observadas",
+                "action:abraco_do_berco",
+                "action:estrangulamento_do_vale",
+            }
+            if creature_id == "matriarca_raizes"
+            else {
+                "first_victory",
+                "p6_completed",
+                "phase:a_fratura",
+                "phase:o_ultimo_posto",
+                "action:egide_partida",
+                "action:queda_ocaso",
+            }
+        )
         previous_stage = entry.stage
         entry.stage = (
             "dominated"

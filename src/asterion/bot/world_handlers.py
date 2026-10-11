@@ -40,6 +40,7 @@ from asterion.application.vde_missions import (
     P9_ID,
     P10_ID,
     P11_ID,
+    P12_ID,
     S7_ID,
     S10_ID,
     S11_ID,
@@ -1251,7 +1252,7 @@ def world_router(
         if s2_view is None and s2 is not None:
             s2_view = await s2.offer(query.from_user.id)
         vde_s7_view = vde_p8_view = vde_s8_view = vde_p9_view = vde_s9_view = None
-        vde_p10_view = vde_s10_view = vde_s11_view = vde_p11_view = None
+        vde_p10_view = vde_s10_view = vde_s11_view = vde_p11_view = vde_p12_view = None
         if vde_missions is not None and await vde_missions.region_access(query.from_user.id):
             (
                 vde_s7_view,
@@ -1263,6 +1264,7 @@ def world_router(
                 vde_s10_view,
                 vde_s11_view,
                 vde_p11_view,
+                vde_p12_view,
             ) = await vde_missions.board(query.from_user.id)
         text = "📜 Missões\n\nAcompanhe sua Missão Principal e as Missões Secundárias conhecidas."
         keyboard = []
@@ -1285,6 +1287,15 @@ def world_router(
         elif p6_view is not None and p6_view.status == "active":
             text += "\n\n🔥 Missão Principal\n\n📜 O Vigia Partido · Em Andamento\nTerras do Ocaso · Nv.10"
             keyboard.append([InlineKeyboardButton(text="Principal", callback_data="p6:resume")])
+        elif vde_p12_view is not None and vde_p12_view.status == "active":
+            text += (
+                "\n\n🔥 Missão Principal\n\n"
+                "📜 A Matriarca das Raízes · Em Andamento\nVales dos Enforcados · Nv.20"
+            )
+            keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
+        elif vde_p12_view is not None and vde_p12_view.status == "completed":
+            text += "\n\n🔥 Missão Principal\n\n✅ Campanha dos Vales · Concluída"
+            keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
         elif p4_view is not None and p4_view.status == "active":
             text += (
                 "\n\n🔥 Missão Principal\n\n"
@@ -1690,6 +1701,15 @@ def world_router(
             await present(query.message, render_p6(p6_view), images, edit=True)
             return
         if vde_missions is not None:
+            vde_p12_view = await vde_missions.resume(query.from_user.id, P12_ID)
+            if vde_p12_view is not None and vde_p12_view.status in {"active", "completed"}:
+                await present(
+                    query.message,
+                    render_vde_mission(vde_p12_view),
+                    images,
+                    edit=True,
+                )
+                return
             vde_p11_view = await vde_missions.resume(query.from_user.id, P11_ID)
             if vde_p11_view is not None and (
                 vde_p11_view.status == "active" or vde_p11_view.available
