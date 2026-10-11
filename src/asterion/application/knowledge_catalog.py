@@ -106,6 +106,13 @@ CODEX_ENTRIES = (
         120,
         "vde.location.claustro_das_raizes",
     ),
+    CodexPresentation(
+        "codex.location.berco_da_matriarca",
+        "Berço da Matriarca",
+        "regions",
+        130,
+        "vde.location.berco_da_matriarca",
+    ),
     CodexPresentation("codex.figure.iven_raal", "Iven Raal", "figures", 30),
     CodexPresentation("codex.mystery.o_no_antigo", "O Nó Antigo", "mysteries", 50),
     CodexPresentation(
@@ -113,6 +120,18 @@ CODEX_ENTRIES = (
         "Estruturas Interligadas",
         "mysteries",
         60,
+    ),
+    CodexPresentation(
+        "codex.mystery.a_rede_sob_os_vales",
+        "A Rede sob os Vales",
+        "mysteries",
+        70,
+    ),
+    CodexPresentation(
+        "codex.mystery.rotinas_que_permanecem",
+        "Rotinas que Permanecem",
+        "mysteries",
+        80,
     ),
     CodexPresentation(
         "codex.mystery.raizes_que_seguem_pedra",
@@ -263,6 +282,21 @@ CODEX_FRAGMENTS = {
         "Entrada descoberta",
         "A entrada do Santuário do Nó Antigo foi descoberta no Claustro das Raízes.",
     ),
+    "codex.fragment.vigia.rotinas_que_permanecem": FragmentPresentation(
+        "Rotinas que Permanecem",
+        "Alguns Vigias continuam executando rotinas antigas mesmo deformados e "
+        "atravessados por raízes.",
+    ),
+    "codex.fragment.berco.access_opened": FragmentPresentation(
+        "Acesso aberto",
+        "O acesso ao Berço da Matriarca foi aberto a partir do Claustro das Raízes.",
+    ),
+    "codex.fragment.vales.network_and_matriarch": FragmentPresentation(
+        "Convergência das raízes",
+        "A estrutura asteriana é mais antiga que o crescimento atual. A Matriarca não "
+        "construiu aquilo que existe sob os Vales. Quase todas as raízes anormais "
+        "convergem para a área onde ela está.",
+    ),
     "codex.fragment.mata.casca_camadas_externas": FragmentPresentation(
         "Camada externa",
         "A camada externa da Casca Errante possui propriedades próximas de matéria vegetal; "
@@ -393,6 +427,7 @@ VDE_LOCATIONS = {
     "vde.location.mata_suspensa": "Mata Suspensa",
     "vde.location.baixios_enredados": "Baixios Enredados",
     "vde.location.claustro_das_raizes": "Claustro das Raízes",
+    "vde.location.berco_da_matriarca": "Berço da Matriarca",
 }
 LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS
 HABITAT_EVIDENCE_TO_LOCATION = {
@@ -407,6 +442,7 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     "Mata Suspensa": "vde.location.mata_suspensa",
     "Baixios Enredados": "vde.location.baixios_enredados",
     "Claustro das Raízes": "vde.location.claustro_das_raizes",
+    "Berço da Matriarca": "vde.location.berco_da_matriarca",
     **{location_id: location_id for location_id in VDE_LOCATIONS},
 }
 MATERIAL_LABELS = {

@@ -52,6 +52,8 @@ from asterion.domain.road import (
     VDE_BAIXIOS_CLAUSTRO_ROUTE,
     VDE_BAIXIOS_LOCATION,
     VDE_BASIC_MATERIAL_CREATURE_IDS,
+    VDE_BERCO_LOCATION,
+    VDE_CLAUSTRO_BERCO_ROUTE,
     VDE_CLAUSTRO_BRAZIER,
     VDE_CLAUSTRO_LOCATION,
     VDE_GARGANTA_BRAZIER,
@@ -116,9 +118,10 @@ VDE_VIGILIA = "Vigília do Vale"
 VDE_MATA = "Mata Suspensa"
 VDE_BAIXIOS = "Baixios Enredados"
 VDE_CLAUSTRO = "Claustro das Raízes"
+VDE_BERCO = "Berço da Matriarca"
 REGION = "Terras do Ocaso"
 VDE_REGION = "Vales dos Enforcados"
-VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO))
+VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO))
 P2_QUEST_ID = "P2"
 P3_QUEST_ID = "P3"
 P4_QUEST_ID = "P4"
@@ -130,6 +133,7 @@ VDE_GARGANTA_VIGILIA_ROUTE_ENDPOINTS = frozenset((VDE_GARGANTA, VDE_VIGILIA))
 VDE_VIGILIA_MATA_ROUTE_ENDPOINTS = frozenset((VDE_VIGILIA, VDE_MATA))
 VDE_MATA_BAIXIOS_ROUTE_ENDPOINTS = frozenset((VDE_MATA, VDE_BAIXIOS))
 VDE_BAIXIOS_CLAUSTRO_ROUTE_ENDPOINTS = frozenset((VDE_BAIXIOS, VDE_CLAUSTRO))
+VDE_CLAUSTRO_BERCO_ROUTE_ENDPOINTS = frozenset((VDE_CLAUSTRO, VDE_BERCO))
 OVERLAND_ROUTE_PAIRS = (
     CHARNECA_ROUTE_ENDPOINTS,
     BOSQUE_ROUTE_ENDPOINTS,
@@ -138,8 +142,9 @@ OVERLAND_ROUTE_PAIRS = (
     VDE_VIGILIA_MATA_ROUTE_ENDPOINTS,
     VDE_MATA_BAIXIOS_ROUTE_ENDPOINTS,
     VDE_BAIXIOS_CLAUSTRO_ROUTE_ENDPOINTS,
+    VDE_CLAUSTRO_BERCO_ROUTE_ENDPOINTS,
 )
-TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO))
+TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO))
 BRAZIER_FOR_LOCATION = {
     ROAD: "tdo.brazier.estrada",
     REFUGE: "tdo.brazier.refugio_do_ocaso",
@@ -378,6 +383,23 @@ class RoadService:
                     return None
                 if world.location == VDE_CLAUSTRO and not await self._p10_started_or_completed(s, c.id):
                     return None
+                if world.location == VDE_BERCO and not (
+                    await self._has_location(s, c.id, VDE_BERCO_LOCATION)
+                    and await s.scalar(
+                        select(Unlock.id).where(
+                            Unlock.character_id == c.id,
+                            Unlock.unlock_id == VDE_CLAUSTRO_BERCO_ROUTE,
+                        )
+                    )
+                    and await s.scalar(
+                        select(Quest.id).where(
+                            Quest.character_id == c.id,
+                            Quest.quest_id == "P11",
+                            Quest.status == "completed",
+                        )
+                    )
+                ):
+                    return None
             elif not await self._p1_completed(s, c.id):
                 return None
             return await self._view_for_world(s, c, world)
@@ -495,6 +517,18 @@ class RoadService:
                 elif pair == VDE_BAIXIOS_CLAUSTRO_ROUTE_ENDPOINTS:
                     gate_ok = await self._p10_started_or_completed(s, c.id)
                     route_unlock = VDE_BAIXIOS_CLAUSTRO_ROUTE
+                elif pair == VDE_CLAUSTRO_BERCO_ROUTE_ENDPOINTS:
+                    gate_ok = bool(
+                        await self._has_location(s, c.id, VDE_BERCO_LOCATION)
+                        and await s.scalar(
+                            select(Quest.id).where(
+                                Quest.character_id == c.id,
+                                Quest.quest_id == "P11",
+                                Quest.status == "completed",
+                            )
+                        )
+                    )
+                    route_unlock = VDE_CLAUSTRO_BERCO_ROUTE
                 elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
                     gate_ok = (
                         await self._p4_completed(s, c.id)
@@ -3390,6 +3424,22 @@ class RoadService:
         p9_started_or_complete = await self._p9_started_or_completed(s, c.id)
         p10_complete = await self._p10_completed(s, c.id)
         p10_started_or_complete = await self._p10_started_or_completed(s, c.id)
+        berco_access = bool(
+            await self._has_location(s, c.id, VDE_BERCO_LOCATION)
+            and await s.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == VDE_CLAUSTRO_BERCO_ROUTE,
+                )
+            )
+            and await s.scalar(
+                select(Quest.id).where(
+                    Quest.character_id == c.id,
+                    Quest.quest_id == "P11",
+                    Quest.status == "completed",
+                )
+            )
+        )
         current_brazier = BRAZIER_FOR_LOCATION.get(world.location)
         brazier_id = current_brazier if current_brazier in known_brazier_ids else None
         brazier_label = BRAZIER_DETAILS[brazier_id][1] if brazier_id is not None else None
@@ -3401,7 +3451,7 @@ class RoadService:
             and (location != VDE_MATA or p8_started_or_complete)
             and (location != VDE_BAIXIOS or p9_started_or_complete)
             and (location != VDE_CLAUSTRO or p10_started_or_complete)
-        )
+        ) if world.location != VDE_BERCO else ()
         active_p3 = await s.scalar(
             select(Quest.id).where(
                 Quest.character_id == c.id,
@@ -3511,6 +3561,10 @@ class RoadService:
                 )
             ):
                 route_destinations.append(VDE_BAIXIOS)
+                if berco_access:
+                    route_destinations.append(VDE_BERCO)
+            elif world.location == VDE_BERCO and berco_access:
+                route_destinations.append(VDE_CLAUSTRO)
         route_available = bool(route_destinations)
         material_table_ready = bool(
             hunt_profile
@@ -3599,6 +3653,10 @@ class RoadService:
             # Vigília do Vale is a safe hub, never a generic hunt/explore local.
             hunt_enabled = False
             explore_enabled = False
+        elif world.location == VDE_BERCO:
+            # The Berço is a campaign climax location with no generic activity profile.
+            hunt_enabled = False
+            explore_enabled = False
         else:
             hunt_enabled = True
             explore_enabled = True
@@ -3622,6 +3680,8 @@ class RoadService:
                 if world.location == VDE_BAIXIOS
                 else "vde_claustro"
                 if world.location == VDE_CLAUSTRO
+                else "vde_berco"
+                if world.location == VDE_BERCO
                 else "refuge"
             ),
             c.id,

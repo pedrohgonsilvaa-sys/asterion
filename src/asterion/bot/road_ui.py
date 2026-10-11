@@ -14,6 +14,7 @@ from asterion.application.road import (
     ROAD,
     RUINS,
     VDE_BAIXIOS,
+    VDE_BERCO,
     VDE_CLAUSTRO,
     VDE_GARGANTA,
     VDE_MATA,
@@ -65,6 +66,8 @@ def _location_copy(location: str) -> tuple[str, str]:
         "🌫️" if location == VDE_BAIXIOS else
         "🪨" if location == VDE_CLAUSTRO else "🔥"
     )
+    if location == VDE_BERCO:
+        return f"🌿 {location}", f"{VDE_REGION} · Local de clímax"
     low, high = LOCATION_LEVEL_BANDS.get(location, (1, 10))
     region = VDE_REGION if location in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO} else "Terras do Ocaso"
     return f"{icon} {location}", f"{region} · Nv. {low}–{high}"
@@ -645,7 +648,7 @@ def render_road(view: RoadView) -> Screen:
         )
     if view.kind in {
         "road", "refuge", "charneca", "bosque", "ruinas",
-        "vde_garganta", "vde_vigilia", "vde_mata", "vde_baixios", "vde_claustro",
+        "vde_garganta", "vde_vigilia", "vde_mata", "vde_baixios", "vde_claustro", "vde_berco",
     }:
         return render_current_local(
             view,
@@ -728,13 +731,16 @@ def render_current_local(
                 (VDE_BAIXIOS, VDE_MATA): ("vde_mata", "Retornar à Mata Suspensa"),
                 (VDE_BAIXIOS, VDE_CLAUSTRO): ("vde_claustro", "Seguir para o Claustro das Raízes"),
                 (VDE_CLAUSTRO, VDE_BAIXIOS): ("vde_baixios", "Retornar aos Baixios Enredados"),
+                (VDE_CLAUSTRO, VDE_BERCO): ("vde_berco", "Seguir para o Berço da Matriarca"),
+                (VDE_BERCO, VDE_CLAUSTRO): ("vde_claustro", "Retornar ao Claustro das Raízes"),
             }.get((view.location, destination), (None, None))
             if route_key is not None:
                 keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])
-        if view.brazier_label:
-            lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
-        elif view.location != ROAD:
-            lines.append("🔥 Braseiro · Não descoberto")
+        if view.location != VDE_BERCO:
+            if view.brazier_label:
+                lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+            elif view.location != ROAD:
+                lines.append("🔥 Braseiro · Não descoberto")
         if dungeon is not None:
             dungeon_name, dungeon_callback = dungeon
             lines.append(f"⛓️ {escape(dungeon_name)} · Conhecida")
@@ -757,6 +763,15 @@ def render_current_local(
                 keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])
         if view.brazier_label:
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        if mission_available:
+            keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
+    elif view.location == VDE_BERCO:
+        lines.extend(["", "Local de clímax · Acesso aberto pela Campanha."])
+        for destination in view.route_destinations:
+            if destination == VDE_CLAUSTRO:
+                keyboard.append(
+                    [InlineKeyboardButton(text="Retornar ao Claustro das Raízes", callback_data="road:route:vde_claustro")]
+                )
         if mission_available:
             keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     else:
