@@ -22,6 +22,12 @@ BESTIARY_STAGE_LABELS = {
     "dominated": "Dominado",
 }
 
+VDE_IMPORTANT_FIRST_VICTORY_XP = {
+    "no_feroz": (14, 687),
+    "viuva_cipos": (17, 876),
+    "carrasco_casca": (20, 1086),
+}
+
 
 class BestiaryRecorder:
     """Record shared first-contact, evidence, victory, and stage semantics."""
@@ -193,6 +199,17 @@ class BestiaryRecorder:
                         creature_id,
                         reference_level=10,
                         configured_xp=474,
+                    )
+                elif creature_id in VDE_IMPORTANT_FIRST_VICTORY_XP:
+                    reference_level, configured_xp = VDE_IMPORTANT_FIRST_VICTORY_XP[
+                        creature_id
+                    ]
+                    await self._grant_regional_victory_xp(
+                        session,
+                        character_id,
+                        creature_id,
+                        reference_level=reference_level,
+                        configured_xp=configured_xp,
                     )
                 elif creature_id == "matriarca_raizes":
                     await self._grant_regional_victory_xp(
