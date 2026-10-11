@@ -93,6 +93,7 @@ def vde_missions_router(service: VDEMissionService, images: dict[str, str]) -> R
                     "hardware", "route", "follow", "inscription", "fragment", "locate",
                     "fragments", "sample",
                     "structure", "sanctuary", "zone", "bag", "tracks", "survivor",
+                    "return_place", "roots", "chamber", "traces", "convergence", "open_berco",
                 }:
                     view = await service.advance(query.from_user.id, quest_id, version, action)
                 else:

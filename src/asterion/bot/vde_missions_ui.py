@@ -6,12 +6,15 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
 from asterion.application.vde_missions import (
+    CLAUSTRO,
     P9_ID,
     P10_ID,
+    P11_ID,
     S7_ID,
     S8_ID,
     S9_ID,
     S10_ID,
+    S11_ID,
     VDEMissionView,
 )
 from asterion.bot.combat_ui import render_combat
@@ -54,7 +57,7 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
                 combat_actor_key=view.combat_actor_key,
             )
         )
-        kind = "secondary" if quest in {S7_ID, S8_ID, S9_ID, S10_ID} else "principal"
+        kind = "secondary" if quest in {S7_ID, S8_ID, S9_ID, S10_ID, S11_ID} else "principal"
         return Screen(
             f"📜 {title} · Vales dos Enforcados\n⚔️ Encontro Roteirizado · {location}\n\n{hud.text}",
             f"vde_{kind}",
@@ -83,10 +86,13 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             S9_ID: "P9 ativa ou concluída · Nv.15 · Baixios Enredados",
             P10_ID: "P9 concluída · Nv.17 · Baixios Enredados",
             S10_ID: "P10 ativa ou concluída · Nv.17 · Baixios Enredados",
+            S11_ID: "Claustro das Raízes descoberto · Nv.18",
+            P11_ID: "P10 concluída · Nv.19 · Claustro das Raízes",
         }[quest]
         return _screen(
             f"📜 {title}\nMissão "
-            f"{('Secundária' if quest in {S7_ID, S8_ID, S9_ID, S10_ID} else 'Principal')} · "
+            f"{('Secundária' if quest in {S7_ID, S8_ID, S9_ID, S10_ID, S11_ID} else 'Principal')} "
+            "· "
             "Vales dos Enforcados\n\n"
             f"Requer · {gate}\n\n"
             "Acompanhe os sinais e os caminhos registrados nesta etapa.",
@@ -105,6 +111,8 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             S9_ID: "P9 ativa ou concluída, Nv.15 e estar nos Baixios Enredados",
             P10_ID: "P9 concluída, Nv.17 e estar nos Baixios Enredados",
             S10_ID: "P10 ativa ou concluída, Nv.17 e estar nos Baixios Enredados",
+            S11_ID: "Claustro das Raízes descoberto, Nv.18 e estar no Claustro",
+            P11_ID: "P10 concluída, Nv.19 e estar no Claustro das Raízes",
         }[quest]
         return _screen(
             f"📜 {title} · Indisponível\n\nRequer {gate}.",
@@ -152,11 +160,36 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
                 "📦 Couro Musgoso · 1 · Vinculado\n"
                 "📦 Resina Enredada · 1 · Vinculada"
             ),
+            S11_ID: (
+                "✨ 10.990 XP · 🪙 280 Coroas\n"
+                "📦 Ferro Enredado · 1 · Vinculado\n"
+                "📦 Erva de Turfa · 1 · Vinculada\n"
+                "📦 Resina Enredada · 2 · Vinculadas"
+            ),
+            P11_ID: (
+                "✨ 16.900 XP · 🪙 490 Coroas\n"
+                "📦 Ferro Enredado · 3 · Vinculado\n"
+                "📦 Resina Enredada · 1 · Vinculada"
+            ),
         }.get(quest, "")
-        return _screen(
-            f"✅ {title} · Concluída\n\n{reward}",
-            [[_button("← Missões", "world:missions")]],
-        )
+        text = f"✅ {title} · Concluída\n\n{reward}"
+        rows = []
+        if quest == S11_ID:
+            text += (
+                "\n\nAlguns Vigias continuam executando rotinas antigas mesmo "
+                "deformados e atravessados por raízes."
+            )
+        elif quest == P11_ID:
+            text += (
+                "\n\nA estrutura asteriana é mais antiga que o crescimento atual. "
+                "A Matriarca não construiu aquilo que existe sob os Vales. "
+                "Quase todas as raízes anormais convergem para a área onde ela está.\n\n"
+                "🧭 Acesso aberto · Berço da Matriarca"
+            )
+            if view.location == CLAUSTRO:
+                rows.append([_button("Seguir para o Berço", "road:route:vde_berco")])
+        rows.append([_button("← Missões", "world:missions")])
+        return _screen(text, rows)
 
     progress = view.progress or {}
     rows: list[list[InlineKeyboardButton]] = []
@@ -191,10 +224,40 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             "🎯 Examinar duas inscrições preservadas.\n"
             f"Progresso · {len(found)}/2"
         )
+    elif view.kind == "patrols":
+        found = set(progress.get("patrols", ()))
+        for point, label in (
+            ("a", "Observar ponto de patrulha 1"),
+            ("b", "Observar ponto de patrulha 2"),
+        ):
+            if point not in found:
+                rows.append([_button(label, f"vde:{quest}:{version}:ex:{point}")])
+        text = (
+            f"📜 {title} · Claustro das Raízes\n\n"
+            "🎯 Observar dois pontos de patrulha.\n"
+            f"Progresso · {len(found)}/2"
+        )
+    elif view.kind == "pressure_points":
+        found = set(progress.get("pressure_points", ()))
+        for point, label in (
+            ("a", "Investigar ponto de pressão 1"),
+            ("b", "Investigar ponto de pressão 2"),
+            ("c", "Investigar ponto de pressão 3"),
+        ):
+            if point not in found:
+                rows.append([_button(label, f"vde:{quest}:{version}:ex:{point}")])
+        text = (
+            f"📜 {title} · Claustro das Raízes\n\n"
+            "🎯 Investigar três pontos de pressão.\n"
+            f"Progresso · {len(found)}/3"
+        )
     elif view.kind == "combat_start":
-        if quest == S10_ID:
+        if quest == S11_ID:
+            objective = "Derrotar o Vigia Enraizado que patrulha o Claustro."
+        elif quest in {S10_ID, P11_ID}:
+            location_text = "na região inundada" if quest == S10_ID else "no Claustro das Raízes"
             objective = (
-                "Enfrentar o encontro roteirizado na região inundada. "
+                f"Enfrentar o encontro roteirizado {location_text}. "
                 "A espécie não é identificada pelo registro."
             )
         else:
@@ -227,6 +290,29 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             "🎯 Encontrar a corda ainda presa à estrutura acima do caminho."
         )
         rows.append([_button("Examinar a corda", f"vde:{quest}:{version}:rope")])
+    elif view.kind == "return_place":
+        text = (
+            f"📜 {title} · Claustro das Raízes\n\n"
+            "🎯 Examinar o lugar para onde o Vigia Enraizado retornava."
+        )
+        rows.append([_button("Examinar o local", f"vde:{quest}:{version}:return_place")])
+    elif view.kind == "fragments" and quest == S11_ID:
+        found = len(progress.get("marking_fragments", ()))
+        text = (
+            f"📜 {title} · Claustro das Raízes\n\n"
+            "🎯 Recuperar três fragmentos de marcação.\n"
+            f"Progresso · {found}/3"
+        )
+        if found < 3:
+            rows.append([_button("Recuperar fragmento", f"vde:{quest}:{version}:fragment")])
+    elif view.kind == "report" and quest == S11_ID:
+        text = (
+            f"📜 {title} · Claustro das Raízes\n\n"
+            "Alguns Vigias continuam executando rotinas antigas mesmo deformados e "
+            "atravessados por raízes.\n\n"
+            "🎯 Entregar os registros a Iven Raal."
+        )
+        rows.append([_button("Entregar os registros", f"vde:{quest}:{version}:report")])
     elif view.kind == "report" and quest == S7_ID:
         text = (
             f"📜 {title} · Vigília do Vale\n\n"
@@ -416,6 +502,39 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             "🎯 Registrar a informação e retornar a Iven Raal."
         )
         rows.append([_button("Registrar a entrada", f"vde:{quest}:{version}:sanctuary")])
+    elif view.kind == "clear_roots":
+        text = (
+            f"📜 {title} · Claustro das Raízes\n\n"
+            "🎯 Superar as raízes que bloqueiam o caminho e prosseguir."
+        )
+        rows.append([_button("Prosseguir pelo caminho", f"vde:{quest}:{version}:roots")])
+    elif view.kind == "chamber":
+        text = (
+            f"📜 {title} · Claustro das Raízes\n\n"
+            "🎯 Examinar a câmara deformada pelo crescimento."
+        )
+        rows.append([_button("Examinar a câmara", f"vde:{quest}:{version}:chamber")])
+    elif view.kind == "traces":
+        text = (
+            f"📜 {title} · Claustro das Raízes\n\n"
+            "🎯 Registrar os vestígios de uma criatura muito maior."
+        )
+        rows.append([_button("Registrar vestígios", f"vde:{quest}:{version}:traces")])
+    elif view.kind == "convergence":
+        text = (
+            f"📜 {title} · Claustro das Raízes\n\n"
+            "🎯 Seguir a convergência das raízes."
+        )
+        rows.append([_button("Seguir a convergência", f"vde:{quest}:{version}:convergence")])
+    elif view.kind == "open_berco":
+        text = (
+            f"📜 {title} · Claustro das Raízes\n\n"
+            "A estrutura asteriana é mais antiga que o crescimento atual. A Matriarca "
+            "não construiu aquilo que existe sob os Vales. Quase todas as raízes "
+            "anormais convergem para a área onde ela está.\n\n"
+            "🎯 Abrir acesso ao Berço da Matriarca."
+        )
+        rows.append([_button("Abrir acesso ao Berço", f"vde:{quest}:{version}:open_berco")])
     elif view.kind == "zone":
         text = (
             f"📜 {title} · Baixios Enredados\n\n"
