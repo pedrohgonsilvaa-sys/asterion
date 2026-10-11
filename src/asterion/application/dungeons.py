@@ -1029,7 +1029,7 @@ class DungeonService:
                     character,
                     kind="detail",
                     difficulty_gates=tuple(gates.items()),
-                    reason=gates.get(difficulty) or "gate",
+                    reason="level" if gates.get(difficulty) == "level" else "gate",
                     family_id=family.family_id,
                 )
             active_activity = await session.scalar(
