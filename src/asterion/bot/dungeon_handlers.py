@@ -41,6 +41,13 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
     async def fosso(query: CallbackQuery):
         await show(query, await service.detail(query.from_user.id, "dungeon.vde.fosso_raizes"))
 
+    @router.callback_query(F.data == "dungeon:sanctuary")
+    async def sanctuary(query: CallbackQuery):
+        await show(
+            query,
+            await service.detail(query.from_user.id, "dungeon.vde.santuario_no_antigo"),
+        )
+
     @router.callback_query(F.data.startswith("dungeon:group:"))
     async def prepare_group(query: CallbackQuery):
         try:
@@ -49,6 +56,7 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "c": "dungeon.tdo.cripta_ocaso",
                 "g": "dungeon.tdo.galerias_vigia",
                 "f": "dungeon.vde.fosso_raizes",
+                "s": "dungeon.vde.santuario_no_antigo",
             }[family_key]
             difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
                 difficulty_key
@@ -66,6 +74,7 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "c": "dungeon.tdo.cripta_ocaso",
                 "g": "dungeon.tdo.galerias_vigia",
                 "f": "dungeon.vde.fosso_raizes",
+                "s": "dungeon.vde.santuario_no_antigo",
             }[family_key]
             difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
                 difficulty_key
@@ -143,6 +152,7 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "c": "dungeon.tdo.cripta_ocaso",
                 "g": "dungeon.tdo.galerias_vigia",
                 "f": "dungeon.vde.fosso_raizes",
+                "s": "dungeon.vde.santuario_no_antigo",
             }.get(pieces[2])
             suffix = pieces[3]
         else:

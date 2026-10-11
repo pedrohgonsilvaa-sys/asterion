@@ -678,7 +678,68 @@ VDE_HANGING_ROOT = Creature(
     "fosso_raiz_sustentacao", "Raiz de Sustentação", "common", "balanced", 17, 17, 0, (), ()
 )
 
-VDE_DUNGEON_CREATURES = (VDE_PIT_WEAVER, VDE_PIT_HANGER)
+# Masmorra B — catalogued dungeon creatures do not enter open-world Vales pools.
+VDE_TANGLED_CUSTODIAN = Creature(
+    "custodio_enredado", "Custódio Enredado", "elite", "armored", 19, 19, 0,
+    ("impacto_guarda", "egide_tomada", "marca_constritiva", "peso_no"),
+    (
+        ("impacto_guarda", "Impacto de Guarda", D("1.00"), 0, D(0), 0),
+        ("egide_tomada", "Égide Tomada", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.90"), 2, True, "self"),
+        ("marca_constritiva", "Marca Constritiva", D("0.90"), 0, D("0.12"), 2, None, 0, False, 3, "defense"),
+        ("peso_no", "Peso do Nó", D("1.70"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("egide_tomada", "marca_constritiva", "peso_no"),
+)
+VDE_ROOTED_PRELATE = Creature(
+    "prelado_enraizado", "Prelado Enraizado", "elite", "controller", 19, 19, 0,
+    ("golpe_liturgico", "seiva_restritiva", "restabelecer_raiz"),
+    (
+        ("golpe_liturgico", "Golpe Litúrgico", D("1.00"), 0, D(0), 0),
+        ("seiva_restritiva", "Seiva Restritiva", D("0.80"), 0, D("0.10"), 2, None, 0, False, 3, "attack"),
+        (
+            "restabelecer_raiz", "Restabelecer Raiz", D(0), 0, D(0), 0, None, 0,
+            False, None, None, D(0), D(0), 0, False, "self", None, None, 1,
+            ("root_1", "root_2", "root_3", "root_4"),
+            ("root_1", "root_2", "root_3", "root_4"), D("0.50"),
+        ),
+    ),
+    ai_priority=("restabelecer_raiz", "seiva_restritiva"),
+)
+VDE_OLD_KNOT_GUARDIAN = Creature(
+    "guardiao_no_antigo", "Guardião do Nó Antigo", "boss", "armored", 20, 20, 0,
+    (
+        "golpe_no", "marca_de_constricao", "egide_raizes", "varredura_enredada",
+        "fechamento_no",
+    ),
+    (
+        ("golpe_no", "Golpe do Nó", D("1.00"), 0, D(0), 0),
+        ("marca_de_constricao", "Marca de Constrição", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+        (
+            "egide_raizes", "Égide das Raízes", D(0), 0, D(0), 0, None, 0,
+            False, 4, None, D(0), D(0), 2, True, "self", None, None, 2,
+            (), (), D("0.50"), D("0.08"),
+        ),
+        ("varredura_enredada", "Varredura Enredada", D("0.85"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+        ("fechamento_no", "Fechamento do Nó", D("1.80"), 0, D(0), 0, None, 0, True),
+    ),
+    ai_priority=("fechamento_no", "egide_raizes", "varredura_enredada", "marca_de_constricao"),
+)
+
+# Mechanical targets are combatants, never Bestiário/catalog entities.
+VDE_ROOT_CONTAINMENT = Creature(
+    "vde_root_containment_mechanic", "Raiz de Contenção", "common", "balanced", 19, 19, 0, (), ()
+)
+VDE_RADICULAR_SEAL = Creature(
+    "vde_radicular_seal_mechanic", "Selo Radicular", "common", "balanced", 20, 20, 0, (), ()
+)
+
+VDE_DUNGEON_CREATURES = (
+    VDE_PIT_WEAVER,
+    VDE_PIT_HANGER,
+    VDE_TANGLED_CUSTODIAN,
+    VDE_ROOTED_PRELATE,
+    VDE_OLD_KNOT_GUARDIAN,
+)
 
 VDE_CREATURES = (
     VDE_MOSS_WOLF,

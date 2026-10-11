@@ -27,6 +27,7 @@ def render_dungeons(view: DungeonView) -> Screen:
                 "dungeon.tdo.cripta_ocaso": "dungeon:crypt",
                 "dungeon.tdo.galerias_vigia": "dungeon:galleries",
                 "dungeon.vde.fosso_raizes": "dungeon:fosso",
+                "dungeon.vde.santuario_no_antigo": "dungeon:sanctuary",
             }.get(family_id, "dungeon:known")
             rows.append([_button(f"{name} · {level_range}", callback)])
             details.append(f"{name} · {level_range}\n{region} · {location}")
@@ -60,6 +61,7 @@ def render_dungeons(view: DungeonView) -> Screen:
             "dungeon.tdo.cripta_ocaso": "c",
             "dungeon.tdo.galerias_vigia": "g",
             "dungeon.vde.fosso_raizes": "f",
+            "dungeon.vde.santuario_no_antigo": "s",
         }.get(view.family_id, "c")
         if stable_gate == "available":
             rows.append(

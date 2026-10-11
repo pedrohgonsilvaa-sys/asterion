@@ -48,6 +48,7 @@ MATERIAL_LABELS = {
     "material.vde.catalisador_elite_ii": "Catalisador de Elite II",
     "material.vde.fragmento_aprimoramento_ii": "Fragmento de Aprimoramento II",
     "material.vde.nucleo_fosso_raizes": "Núcleo do Fosso das Raízes",
+    "material.vde.nucleo_no_antigo": "Núcleo do Nó Antigo",
 }
 
 @dataclass(frozen=True)

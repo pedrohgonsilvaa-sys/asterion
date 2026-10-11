@@ -103,6 +103,29 @@ from asterion.domain.vde_fosso import (
     fosso_encounter_specs,
     fosso_enemy_rewards,
 )
+from asterion.domain.vde_santuario import (
+    SANCTUARY_BASIC_MATERIALS,
+    SANCTUARY_BRAZIER_LABEL,
+    SANCTUARY_CATALYST,
+    SANCTUARY_CODEX_ENTRY,
+    SANCTUARY_CONTENT_VERSION,
+    SANCTUARY_CORE_ID,
+    SANCTUARY_CORE_NAME,
+    SANCTUARY_DISCOVERY_UNLOCK,
+    SANCTUARY_ENTRY_LOCATION,
+    SANCTUARY_ENVIRONMENTS,
+    SANCTUARY_FAMILY_ID,
+    SANCTUARY_FIRST_CLEAR_PREFIX,
+    SANCTUARY_FRAGMENT,
+    SANCTUARY_KNOWN_PATH_UNLOCK,
+    SANCTUARY_LOCATION,
+    SANCTUARY_RECIPE_UNLOCK,
+    SANCTUARY_REWARD_PREFIX,
+    SANCTUARY_RULESET_VERSION,
+    create_sanctuary_combat,
+    sanctuary_encounter_specs,
+    sanctuary_enemy_rewards,
+)
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
@@ -246,16 +269,49 @@ DUNGEON_FAMILIES = {
         fragment_material=FOSSO_FRAGMENT,
         recipe_name="Relicário das Cordas Mortas",
     ),
+    SANCTUARY_FAMILY_ID: DungeonFamily(
+        SANCTUARY_FAMILY_ID,
+        SANCTUARY_LOCATION,
+        "Nv.18–20",
+        SANCTUARY_ENTRY_LOCATION,
+        SANCTUARY_ENTRY_LOCATION,
+        SANCTUARY_DISCOVERY_UNLOCK,
+        SANCTUARY_KNOWN_PATH_UNLOCK,
+        SANCTUARY_FIRST_CLEAR_PREFIX,
+        SANCTUARY_REWARD_PREFIX,
+        "dungeon_sanctuary_encounter",
+        SANCTUARY_CONTENT_VERSION,
+        SANCTUARY_RULESET_VERSION,
+        19,
+        18,
+        SANCTUARY_CODEX_ENTRY,
+        SANCTUARY_CORE_ID,
+        SANCTUARY_CORE_NAME,
+        SANCTUARY_RECIPE_UNLOCK,
+        SANCTUARY_BRAZIER_LABEL,
+        region_display="Vales dos Enforcados",
+        encounter_count=5,
+        basic_material_pool=SANCTUARY_BASIC_MATERIALS,
+        catalyst_material=SANCTUARY_CATALYST,
+        fragment_material=SANCTUARY_FRAGMENT,
+        recipe_name="Guarda do Nó Antigo",
+    ),
 }
 
 
 def _family(family_id: str | None) -> DungeonFamily:
-    return DUNGEON_FAMILIES.get(family_id or CRYPT_FAMILY_ID, DUNGEON_FAMILIES[CRYPT_FAMILY_ID])
+    selected_id = family_id or CRYPT_FAMILY_ID
+    try:
+        return DUNGEON_FAMILIES[selected_id]
+    except KeyError as exc:
+        raise ValueError(f"Unknown dungeon family: {selected_id}") from exc
 
 
 def _encounter_count(family_id: str) -> int:
     family = DUNGEON_FAMILIES.get(family_id)
-    return family.encounter_count if family is not None else len(CRYPT_ENCOUNTERS)
+    if family is None:
+        raise ValueError(f"Unknown dungeon family: {family_id}")
+    return family.encounter_count
 
 
 def _encounter_environment(family_id: str, ordinal: int) -> str:
@@ -263,13 +319,17 @@ def _encounter_environment(family_id: str, ordinal: int) -> str:
         return CRYPT_ENCOUNTERS[ordinal].environment
     if family_id == FOSSO_FAMILY_ID:
         return FOSSO_ENVIRONMENTS[ordinal]
-    return {
-        1: "Corredor de Guarda",
-        2: "Junção dos Vigias",
-        3: "Vigia Íntegro",
-        4: "Câmara dos Condutores",
-        5: "Custódio do Primeiro Selo",
-    }[ordinal]
+    if family_id == SANCTUARY_FAMILY_ID:
+        return SANCTUARY_ENVIRONMENTS[ordinal]
+    if family_id == GALLERIES_FAMILY_ID:
+        return {
+            1: "Corredor de Guarda",
+            2: "Junção dos Vigias",
+            3: "Vigia Íntegro",
+            4: "Câmara dos Condutores",
+            5: "Custódio do Primeiro Selo",
+        }[ordinal]
+    raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
 def _encounter_specs(run, ordinal: int):
@@ -280,9 +340,15 @@ def _encounter_specs(run, ordinal: int):
         return fosso_encounter_specs(
             ordinal, run.difficulty, run.initial_group_size, run.reference_level
         )
-    return gallery_encounter_specs(
-        ordinal, run.difficulty, run.initial_group_size, run.reference_level
-    )
+    if family_id == SANCTUARY_FAMILY_ID:
+        return sanctuary_encounter_specs(
+            ordinal, run.difficulty, run.initial_group_size, run.reference_level
+        )
+    if family_id == GALLERIES_FAMILY_ID:
+        return gallery_encounter_specs(
+            ordinal, run.difficulty, run.initial_group_size, run.reference_level
+        )
+    raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
 def _enemy_rewards_for(run, ordinal: int):
@@ -290,12 +356,18 @@ def _enemy_rewards_for(run, ordinal: int):
         return enemy_rewards(ordinal)
     if run.dungeon_family_id == FOSSO_FAMILY_ID:
         return fosso_enemy_rewards(ordinal)
-    return gallery_enemy_rewards(ordinal)
+    if run.dungeon_family_id == SANCTUARY_FAMILY_ID:
+        return sanctuary_enemy_rewards(ordinal)
+    if run.dungeon_family_id == GALLERIES_FAMILY_ID:
+        return gallery_enemy_rewards(ordinal)
+    raise ValueError(f"Unknown dungeon family: {run.dungeon_family_id}")
 
 
 def _encounter_definition(family_id: str, ordinal: int) -> str:
     if family_id == CRYPT_FAMILY_ID:
         return CRYPT_ENCOUNTERS[ordinal].definition_id
+    if family_id not in DUNGEON_FAMILIES:
+        raise ValueError(f"Unknown dungeon family: {family_id}")
     return f"{family_id}.encounter.{ordinal}"
 
 
@@ -1329,7 +1401,24 @@ class DungeonService:
                     initial_group_size=run.initial_group_size,
                     party=group,
                 )
-            else:
+            elif run.dungeon_family_id == SANCTUARY_FAMILY_ID:
+                combat = create_sanctuary_combat(
+                    uuid4(),
+                    name=primary_character.name,
+                    character_class=primary_character.character_class,
+                    race=primary_character.race,
+                    hp=primary_member.hp,
+                    level=primary_character.level,
+                    difficulty=run.difficulty,
+                    reference_level=run.reference_level,
+                    equipment=equipment,
+                    active_art_ids=active_arts,
+                    ordinal=run.current_encounter_ordinal,
+                    run_seed=run.seed,
+                    initial_group_size=run.initial_group_size,
+                    party=group,
+                )
+            elif run.dungeon_family_id == GALLERIES_FAMILY_ID:
                 combat = create_galleries_combat(
                     uuid4(),
                     name=primary_character.name,
@@ -1346,6 +1435,8 @@ class DungeonService:
                     initial_group_size=run.initial_group_size,
                     party=group,
                 )
+            else:
+                raise ValueError(f"Unknown dungeon family: {run.dungeon_family_id}")
             combat.configuration_snapshot = (combat.configuration_snapshot or {}) | {
                 "members": [
                     {
@@ -2117,6 +2208,8 @@ class DungeonService:
                         await self._refresh_crypt_boss_mastery(session, character.id)
                     elif run.dungeon_family_id == GALLERIES_FAMILY_ID:
                         await self._refresh_galleries_boss_mastery(session, character.id)
+                    elif run.dungeon_family_id == SANCTUARY_FAMILY_ID:
+                        await self._refresh_sanctuary_boss_mastery(session, character.id)
             else:
                 first_clear_by_character[str(character.id)] = False
             if run.dungeon_family_id == CRYPT_FAMILY_ID:
@@ -2125,6 +2218,8 @@ class DungeonService:
                 await self._record_galleries_codex_completion(session, character.id)
             elif run.dungeon_family_id == FOSSO_FAMILY_ID:
                 await self._record_fosso_codex_completion(session, character.id)
+            elif run.dungeon_family_id == SANCTUARY_FAMILY_ID:
+                await self._record_sanctuary_codex_completion(session, character.id)
             session.add_all(components)
             reward_lines_by_character[str(character.id)] = self._reward_lines(
                 total_xp,
@@ -2364,6 +2459,8 @@ class DungeonService:
             if family_id == CRYPT_FAMILY_ID
             else "o_que_pende"
             if family_id == FOSSO_FAMILY_ID
+            else "guardiao_no_antigo"
+            if family_id == SANCTUARY_FAMILY_ID
             else "custodio_primeiro_selo"
         )
         for event in after.events[cursor:]:
@@ -2472,6 +2569,41 @@ class DungeonService:
                     "phase",
                     5,
                 )
+            elif event.action == "phase:sanctuary.phase.ii":
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    "guardiao_no_antigo",
+                    "phase:o_no_se_fecha",
+                    "phase",
+                    5,
+                )
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    "guardiao_no_antigo",
+                    "mechanic:selos_radicular",
+                    "mechanic",
+                    5,
+                )
+                await self._ensure_codex_entry(
+                    session, character.id, "codex.history.selos_radicular"
+                )
+                await self._ensure_fragment(
+                    session,
+                    character.id,
+                    "codex.history.selos_radicular",
+                    "codex.fragment.sanctuary.radicular_seals",
+                )
+            elif event.action == "phase:sanctuary.phase.iii":
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    "guardiao_no_antigo",
+                    "phase:raiz_e_pedra",
+                    "phase",
+                    5,
+                )
         member_cursors[str(character.id)] = {
             "event": len(after.events),
             "mechanic": len(mechanic_events),
@@ -2485,6 +2617,8 @@ class DungeonService:
                 await self._refresh_crypt_boss_mastery(session, character.id)
             elif family_id == GALLERIES_FAMILY_ID:
                 await self._refresh_galleries_boss_mastery(session, character.id)
+            elif family_id == SANCTUARY_FAMILY_ID:
+                await self._refresh_sanctuary_boss_mastery(session, character.id)
 
     async def _add_bestiary_evidence(
         self, session, character_id, creature_id, evidence_id, category, value
@@ -2535,6 +2669,42 @@ class DungeonService:
         }
         entry.stage = "dominated" if required.issubset(evidence) else entry.stage
 
+    async def _refresh_sanctuary_boss_mastery(self, session, character_id):
+        if not await self._has_unlock(
+            session, character_id, SANCTUARY_FIRST_CLEAR_PREFIX + "stable"
+        ):
+            return
+        entry = await session.scalar(
+            select(BestiaryEntry)
+            .where(
+                BestiaryEntry.character_id == character_id,
+                BestiaryEntry.creature_id == "guardiao_no_antigo",
+            )
+            .with_for_update()
+        )
+        if entry is None:
+            return
+        evidence = set(
+            (
+                await session.scalars(
+                    select(BestiaryEvidence.evidence_id).where(
+                        BestiaryEvidence.character_id == character_id,
+                        BestiaryEvidence.creature_id == "guardiao_no_antigo",
+                    )
+                )
+            ).all()
+        )
+        required = {
+            "first_victory",
+            "phase:o_no_se_fecha",
+            "phase:raiz_e_pedra",
+            "mechanic:selos_radicular",
+            "action:egide_raizes",
+            "action:fechamento_no",
+        }
+        if required.issubset(evidence):
+            entry.stage = "dominated"
+
     async def _phase_evidence(self, session, character_id, hp_ratio):
         entry = await session.scalar(
             select(BestiaryEntry)
@@ -2580,6 +2750,35 @@ class DungeonService:
             if values is not None:
                 await self._ensure_codex_entry(session, character_id, values[0])
                 await self._ensure_fragment(session, character_id, values[0], values[1])
+            return
+        if family_id == SANCTUARY_FAMILY_ID:
+            fragments = {
+                1: (
+                    "codex.location.santuario_do_no_antigo",
+                    "codex.fragment.sanctuary.entry",
+                ),
+                3: (
+                    "codex.history.protocolos_sepultados",
+                    "codex.fragment.sanctuary.protocols",
+                ),
+                4: (
+                    "codex.history.camara_das_quatro_raizes",
+                    "codex.fragment.sanctuary.chamber",
+                ),
+                5: (
+                    "codex.history.guardiao_no_antigo",
+                    "codex.fragment.sanctuary.guardian",
+                ),
+            }
+            values = fragments.get(ordinal)
+            if values is not None:
+                await self._ensure_codex_entry(session, character_id, values[0])
+                await self._ensure_fragment(session, character_id, values[0], values[1])
+            if ordinal in {1, 5}:
+                await self._ensure_codex_entry(session, character_id, "codex.mystery.o_no_antigo")
+                await self._ensure_codex_entry(
+                    session, character_id, "codex.mystery.estruturas_interligadas"
+                )
             return
         if family_id == GALLERIES_FAMILY_ID:
             fragments = {
@@ -2629,6 +2828,20 @@ class DungeonService:
             (
                 "codex.history.profundezas_suspensas",
                 "codex.fragment.fosso.profundezas_suspensas",
+            ),
+        ):
+            await self._ensure_codex_entry(session, character_id, entry_id)
+            await self._ensure_fragment(session, character_id, entry_id, fragment_id)
+
+    async def _record_sanctuary_codex_completion(self, session, character_id):
+        for entry_id, fragment_id in (
+            (
+                "codex.mystery.o_no_antigo",
+                "codex.fragment.sanctuary.ancient_knot",
+            ),
+            (
+                "codex.mystery.estruturas_interligadas",
+                "codex.fragment.sanctuary.interlinked_structures",
             ),
         ):
             await self._ensure_codex_entry(session, character_id, entry_id)

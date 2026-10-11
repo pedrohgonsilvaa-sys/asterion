@@ -2101,6 +2101,9 @@ class RoadService:
                     entry_id="codex.mystery.o_no_antigo",
                     fragment_id="codex.fragment.no_antigo.entrada_santuario_descoberta",
                 )
+                from asterion.application.vde_feats import reconcile_vde_feats
+
+                await reconcile_vde_feats(s, c)
             elif attempt.result_id == "explore.vde.mata.entrada_fosso_raizes":
                 if await self._ensure(
                     s, Unlock, character_id=c.id, unlock_id=FOSSO_DISCOVERY_UNLOCK
@@ -2112,6 +2115,9 @@ class RoadService:
                     character_id=c.id,
                     entry_id="codex.location.fosso_das_raizes",
                 )
+                from asterion.application.vde_feats import reconcile_vde_feats
+
+                await reconcile_vde_feats(s, c)
 
         for kind, item_id, quantity, payload in components:
             s.add(
