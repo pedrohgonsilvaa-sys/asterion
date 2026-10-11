@@ -1,6 +1,6 @@
 # ASTERION — Chefes de Missões Secundárias · Regra técnica v2
 
-**Autoridade:** Fonte Mestra v1.5.0; conteúdo regional FINAL vigente. Esta especificação técnica substitui propostas antigas incompatíveis.
+**Autoridade:** Fonte Mestra v1.6.0; conteúdo regional FINAL vigente. Esta especificação técnica substitui propostas antigas incompatíveis.
 
 ## Regra geral
 

@@ -3,8 +3,8 @@
 
 **Data de consolidação:** 2026-10-08<br>
 **Escopo:** vertical slice / primeira jornada / Nv.1–10, com saída para Nv.11<br>
-**Autoridade estrutural:** `ASTERION_GDD_Estrutural_v1.5.0_Fonte_Mestra.md`<br>
-**Autoridade Visual/UI:** `ASTERION_UI_DECISOES_2026-10-08_FINAL_SYNC_v1.5.0_TDO_v1.0.15_VALES_v1.0.3.md`<br>
+**Autoridade estrutural:** `ASTERION_GDD_Estrutural_v1.6.0_Fonte_Mestra.md`<br>
+**Autoridade Visual/UI:** `ASTERION_UI_DECISOES_2026-10-11_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.5.md`<br>
 
 > Esta Fonte contém **conteúdo regional**, não redefine sistemas globais. Em conflito estrutural, prevalece a Fonte Mestra vigente. Em conflito de apresentação, prevalece a Fonte Visual/UI vigente.
 
@@ -3432,7 +3432,7 @@ Terras do Ocaso não exige para saída:
 
 # 26. Sincronização com a Fonte Visual/UI
 
-A Fonte `ASTERION_UI_DECISOES_2026-10-08_FINAL_SYNC_v1.5.0_TDO_v1.0.15_VALES_v1.0.3.md` é a autoridade player-facing vigente. Esta revisão aplica a regra global de Grupo e atualiza a compatibilidade de P1 e o formato cooperativo de S6; as demais decisões de apresentação permanecem na Fonte Visual/UI. A Fonte Mestra vigente é v1.5.0.
+A Fonte `ASTERION_UI_DECISOES_2026-10-11_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.5.md` é a autoridade player-facing vigente. Esta revisão aplica a regra global de Grupo e atualiza a compatibilidade de P1 e o formato cooperativo de S6; as demais decisões de apresentação permanecem na Fonte Visual/UI. A Fonte Mestra vigente é v1.6.0.
 
 As decisões gerais de interface já consolidadas — padrão de Missões, HUD de combate, Menu Principal, Braseiros, Códice, navegação, P1 e apresentação de Equipamentos/Runas — continuam válidas.
 
@@ -3728,7 +3728,7 @@ A direção detalhada está consolidada em `ASTERION_BESTIARIO_VISUAL_E_BIOMAS_v
 
 # 32. Sincronização cooperativa v1.0.15
 
-Esta seção aplica a regra global de Campanha cooperativa da Fonte Mestra v1.5.0 sem substituir o conteúdo regional detalhado. P1 é cooperativa depois do Prólogo Solo: os dois sinais, o encontro roteirizado do Cão Cinéreo, a chegada válida ao Refúgio e a descoberta do Braseiro podem registrar progresso próprio para participantes elegíveis e presentes. Diálogo, respostas e flags pessoais continuam individuais. O encontro do Cão mantém exatamente sua identidade, template, kit, Vigor e ausência de recompensa econômica própria; por não ser um Chefe de Campanha, não recebe automaticamente o novo multiplicador reservado a esses Chefes.
+Esta seção aplica a regra global de Campanha cooperativa da Fonte Mestra v1.6.0 sem substituir o conteúdo regional detalhado. P1 é cooperativa depois do Prólogo Solo: os dois sinais, o encontro roteirizado do Cão Cinéreo, a chegada válida ao Refúgio e a descoberta do Braseiro podem registrar progresso próprio para participantes elegíveis e presentes. Diálogo, respostas e flags pessoais continuam individuais. O encontro do Cão mantém exatamente sua identidade, template, kit, Vigor e ausência de recompensa econômica própria; por não ser um Chefe de Campanha, não recebe automaticamente o novo multiplicador reservado a esses Chefes.
 
 S6 — Onde os Nomes Terminaram aceita Solo ou Grupo de 1–4. O Guardião do Último Rastro conserva a ficha Solo, Artes, ausência de Variante, Cura, Barreira e adds, Lore, gates e recompensa de S6. Em Grupo aplica-se somente o scaling global de Chefe de Campanha do GDD v1.5.0, congelado na criação; não existe scaling adicional de fases/Artes nem alteração de conteúdo regional.
 
