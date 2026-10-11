@@ -706,6 +706,70 @@ def action_target_ids(
     return tuple(state.fighters[key].id for key in keys)
 
 
+_CLASS_MECHANIC_STATE_KEYS = (
+    "luminar_state",
+    "trama_state",
+    "omen_offensive",
+    "omen_defensive",
+    "guard_prepared_barrier",
+    "guard_integrity_debuff",
+    "trama_next_per",
+    "aim_next_per",
+    "aim_current_target_id",
+)
+_CLASS_MECHANIC_COMBAT_FLAGS = (
+    "vigilia_retaliation_triggered",
+    "trama_expiry_renewed",
+    "omen_flexible_used",
+    "luminar_cycle_used",
+    "aim_acquisition_used",
+)
+
+
+def _clear_class_mechanics_for_death(state: Combat, fighter_key: str) -> None:
+    dead = state.fighters.get(fighter_key)
+    if dead is None:
+        return
+    _clear_retaliation(dead)
+    for key in _CLASS_MECHANIC_STATE_KEYS:
+        dead.path_state.pop(key, None)
+    dead.path_state.pop("aim_from", None)
+    dead.effects = [effect for effect in dead.effects if not _is_class_mechanic_effect(effect)]
+
+    for fighter in state.fighters.values():
+        aim_from = fighter.path_state.get("aim_from")
+        if isinstance(aim_from, dict):
+            aim_from.pop(dead.id, None)
+            if not aim_from:
+                fighter.path_state.pop("aim_from", None)
+        for key in ("omen_offensive", "omen_defensive"):
+            omens = fighter.path_state.get(key)
+            if isinstance(omens, dict):
+                omens.pop(dead.id, None)
+
+
+def _clear_class_mechanics_at_combat_end(state: Combat) -> None:
+    for fighter in state.fighters.values():
+        _clear_retaliation(fighter)
+        for key in (*_CLASS_MECHANIC_STATE_KEYS, *_CLASS_MECHANIC_COMBAT_FLAGS, "aim_from"):
+            fighter.path_state.pop(key, None)
+        fighter.effects = [
+            effect for effect in fighter.effects if not _is_class_mechanic_effect(effect)
+        ]
+
+
+def _is_class_mechanic_effect(effect: Effect) -> bool:
+    return effect.id.startswith("class_mechanic.") or effect.id == (
+        "talent.sentinela.ritmo_de_guarda.agility"
+    )
+
+
+def _finish_combat(state: Combat, result: str) -> None:
+    state.result = result
+    _clear_prepared_action(state)
+    _clear_class_mechanics_at_combat_end(state)
+
+
 def _refresh_result(state: Combat) -> None:
     if state.party_mode:
         if not any(
@@ -714,15 +778,13 @@ def _refresh_result(state: Combat) -> None:
             and fighter.takes_turn
             for key, fighter in state.fighters.items()
         ):
-            state.result = "defeat"
-            _clear_prepared_action(state)
+            _finish_combat(state, "defeat")
             return
     if any(
         fighter.hp <= 0 and _fighter_defeat_on_zero(state, key)
         for key, fighter in state.fighters.items()
     ):
-        state.result = "defeat"
-        _clear_prepared_action(state)
+        _finish_combat(state, "defeat")
         return
     required_enemies = [
         key
@@ -731,8 +793,7 @@ def _refresh_result(state: Combat) -> None:
         and _fighter_required_for_victory(state, key)
     ]
     if required_enemies and all(state.fighters[key].hp <= 0 for key in required_enemies):
-        state.result = "victory"
-        _clear_prepared_action(state)
+        _finish_combat(state, "victory")
 
 
 def initiative(state: Combat) -> tuple[str, ...]:
@@ -1326,6 +1387,24 @@ def _deal_damage(target: Fighter, amount: Decimal | int) -> tuple[Decimal, Decim
     return hp_damage, absorbed
 
 
+def _deal_combat_damage(
+    state: Combat,
+    target_key: str,
+    amount: Decimal | int,
+    *,
+    source_key: str | None = None,
+) -> tuple[Decimal, Decimal]:
+    target = state.fighters[target_key]
+    hp_before = target.hp
+    actual_damage, barrier_absorbed = _deal_damage(target, amount)
+    threshold = target.stats.hp * D("0.50")
+    if hp_before > threshold and target.hp <= threshold:
+        _grant_vigilia_retaliation(state, target_key, source_key)
+    if hp_before > ZERO and target.hp <= ZERO:
+        _clear_class_mechanics_for_death(state, target_key)
+    return actual_damage, barrier_absorbed
+
+
 def _begin_turn(state: Combat) -> None:
     if state.result or not state.order:
         return
@@ -1333,6 +1412,15 @@ def _begin_turn(state: Combat) -> None:
     actor = state.fighters[actor_key]
     actor.opportunity += 1
     actor.defending = False
+    guard_integrity = actor.path_state.get("guard_integrity_debuff")
+    if (
+        isinstance(guard_integrity, dict)
+        and actor.opportunity >= int(guard_integrity.get("expires_opportunity", 0))
+    ):
+        actor.path_state.pop("guard_integrity_debuff", None)
+    for fighter_key, fighter in state.fighters.items():
+        if fighter.hp > ZERO and fighter.hp <= fighter.stats.hp * D("0.50"):
+            _grant_vigilia_retaliation(state, fighter_key)
     if _is_player_turn_actor(state, actor_key) and state.prepared_action is not None:
         state.response_window_seen = True
 
@@ -1352,8 +1440,43 @@ def _cooldown_deadline(actor: Fighter, action: Action) -> int:
     return actor.opportunity + action.blocked_opportunities + 1
 
 
+def _has_talent(actor: Fighter, slug: str) -> bool:
+    return f"talent.{actor.character_class}.{slug}" in actor.talent_ids
+
+
+def _apply_class_mechanic_buff(
+    actor: Fighter,
+    *,
+    mechanic: str,
+    stat: str,
+    magnitude: Decimal,
+    duration: int = 1,
+    effect_id: str | None = None,
+) -> None:
+    resolved_effect_id = effect_id or f"class_mechanic.{mechanic}.{stat}"
+    existing = next(
+        (effect for effect in actor.effects if effect.id == resolved_effect_id), None
+    )
+    if existing is None:
+        actor.effects.append(
+            Effect(
+                resolved_effect_id,
+                stat,
+                magnitude,
+                duration,
+                actor.opportunity,
+                kind="buff",
+            )
+        )
+        return
+    existing.magnitude = magnitude
+    existing.remaining = duration
+    existing.applied_opportunity = actor.opportunity
+
+
 def _retaliation_duration(actor: Fighter) -> int:
-    return max(1, 1 + max(0, actor.retaliation_duration_bonus))
+    talent_bonus = 1 if _has_talent(actor, "retaliacao_persistente") else 0
+    return max(1, 1 + max(0, actor.retaliation_duration_bonus, talent_bonus))
 
 
 def _retaliation_active(actor: Fighter) -> bool:
@@ -1410,11 +1533,12 @@ def _grant_retaliation(
     source_type: str = "defender",
 ) -> None:
     target = state.fighters[target_key]
-    if target.character_class != "sentinela":
+    if target.character_class != "sentinela" or target.hp <= ZERO:
         return
     duration = _retaliation_duration(target)
     if _retaliation_active(target):
-        target.retaliation_remaining = max(target.retaliation_remaining, duration)
+        target.retaliation_charges = 1
+        target.retaliation_remaining = duration
         target.retaliation_applied_opportunity = target.opportunity
         target.retaliation_source_type = source_type
         target.retaliation_source_event_id = source_event_id
@@ -1442,25 +1566,15 @@ def _grant_retaliation(
         source_actor_id=target.retaliation_source_actor_id,
         remaining=target.retaliation_remaining,
     )
-    if "talent.sentinela.ritmo_de_guarda" in target.talent_ids:
-        effect_id = "talent.sentinela.ritmo_de_guarda.agility"
-        existing = next((effect for effect in target.effects if effect.id == effect_id), None)
-        if existing is None:
-            target.effects.append(
-                Effect(
-                    effect_id,
-                    "agility",
-                    D("0.05"),
-                    1,
-                    target.opportunity,
-                    kind="buff",
-                )
-            )
-        else:
-            existing.magnitude = D("0.05")
-            existing.remaining = 1
-            existing.applied_opportunity = target.opportunity
-    if target.selected_path == "bastiao":
+    if _has_talent(target, "ritmo_de_guarda"):
+        _apply_class_mechanic_buff(
+            target,
+            mechanic="sentinela.ritmo_de_guarda",
+            stat="agility",
+            magnitude=D("0.05"),
+            effect_id="talent.sentinela.ritmo_de_guarda.agility",
+        )
+    if source_type == "defender" and target.selected_path == "bastiao":
         source = "path.bastiao.fortaleza"
         if not (
             target.barrier > ZERO
@@ -1492,21 +1606,78 @@ def _grant_retaliation(
                 )
 
 
-def _action_is_offensive(action: Action) -> bool:
-    return bool(
-        action.coefficient > ZERO
-        or action.attack_debuff > ZERO
-        or action.native_dot_stacks > 0
+def _grant_defender_retaliation(
+    state: Combat,
+    *,
+    target_key: str,
+    source_actor: Fighter,
+    source_event_id: str,
+) -> None:
+    target = state.fighters[target_key]
+    if target.hp <= ZERO or target.character_class != "sentinela":
+        return
+    _grant_retaliation(
+        state,
+        target_key=target_key,
+        source_actor=source_actor,
+        source_event_id=source_event_id,
+    )
+    if _has_talent(target, "guarda_preparada"):
+        target.path_state["guard_prepared_barrier"] = {
+            "remaining": 2,
+            "applied_opportunity": target.opportunity,
+        }
+    if _has_talent(target, "guarda_integra"):
+        target.path_state["guard_integrity_debuff"] = {
+            "expires_opportunity": target.opportunity + 1,
+        }
+
+
+def _grant_vigilia_retaliation(
+    state: Combat,
+    target_key: str,
+    source_key: str | None = None,
+) -> None:
+    target = state.fighters[target_key]
+    if (
+        target.hp <= ZERO
+        or target.character_class != "sentinela"
+        or target.hp > target.stats.hp * D("0.50")
+        or not _has_talent(target, "vigilia")
+        or target.path_state.get("vigilia_retaliation_triggered")
+    ):
+        return
+    target.path_state["vigilia_retaliation_triggered"] = True
+    source = state.fighters.get(source_key or "", target)
+    _grant_retaliation(
+        state,
+        target_key=target_key,
+        source_actor=source,
+        source_event_id=f"{state.id.hex}:{state.version}:{len(state.events)}:vigilia",
+        source_type="vigilia",
     )
 
 
 def _consume_retaliation(
-    state: Combat, actor_key: str, actor: Fighter, action: Action
+    state: Combat,
+    actor_key: str,
+    actor: Fighter,
+    action_id: str,
+    action: Action,
+    target_keys: tuple[str, ...],
 ) -> dict[str, str | bool | int]:
+    targets_enemy = any(
+        _fighter_side(state, target_key) != _fighter_side(state, actor_key)
+        for target_key in target_keys
+    )
+    eligible = targets_enemy and (
+        action_id == "attack"
+        or (_is_art_action(action_id, action) and action.coefficient > ZERO)
+    )
     if (
         actor.character_class != "sentinela"
         or not _retaliation_active(actor)
-        or not _action_is_offensive(action)
+        or not eligible
     ):
         return {"used": False}
     context: dict[str, str | bool | int] = {
@@ -1536,6 +1707,13 @@ def _retaliation_action_resolved(
 ) -> None:
     if not context.get("used"):
         return
+    if _has_talent(actor, "contrapeso"):
+        _apply_class_mechanic_buff(
+            actor,
+            mechanic="sentinela.contrapeso",
+            stat="defense",
+            magnitude=D("0.04"),
+        )
     _retaliation_event(
         state,
         actor_key=actor_key,
@@ -1604,7 +1782,6 @@ def _end_turn(state: Combat) -> None:
                     )
                 ),
             )
-        actor_key = _resolve_fighter_key(state, actor.id)
         aura_reduction = (
             _damage_aura_reduction(state, actor_key) if actor_key is not None else ZERO
         )
@@ -1614,7 +1791,9 @@ def _end_turn(state: Combat) -> None:
                     rounding=ROUND_FLOOR
                 )
             )
-        actual_damage, barrier_absorbed = _deal_damage(actor, damage)
+        actual_damage, barrier_absorbed = _deal_combat_damage(
+            state, actor_key, damage, source_key=source_key
+        )
         if actual_damage > ZERO:
             _resolve_phase_triggers(state)
         source_actor = source.id if source is not None else dot.source
@@ -1757,20 +1936,12 @@ def _is_art_action(action_id: str, action: Action) -> bool:
 def _has_valid_negative_effect(state: Combat, target: Fighter) -> bool:
     return any(
         effect.kind == "debuff"
-        and effect.removable
-        and not effect.unremovable
-        and not effect.protected
         and not effect.fixed_mechanic
-        and not effect.boss_protected
         and effect.remaining > 0
         and effect.stacks > 0
         for effect in target.effects
     ) or any(
-        dot.removable
-        and not dot.unremovable
-        and not dot.protected
-        and not dot.fixed_mechanic
-        and not dot.boss_protected
+        not dot.fixed_mechanic
         and dot.remaining > 0
         and dot.stacks > 0
         for dot in state.dot_states.get(target.id, ())
@@ -1778,11 +1949,27 @@ def _has_valid_negative_effect(state: Combat, target: Fighter) -> bool:
 
 
 def _aim_entry(target: Fighter, source: Fighter) -> dict | None:
-    entries = target.path_state.setdefault("aim_from", {})
+    entries = target.path_state.get("aim_from", {})
+    if not isinstance(entries, dict):
+        return None
     entry = entries.get(source.id)
-    if not isinstance(entry, dict) or int(entry.get("remaining", 0)) <= 0:
+    if (
+        source.hp <= ZERO
+        or target.hp <= ZERO
+        or not isinstance(entry, dict)
+        or int(entry.get("remaining", 0)) <= 0
+    ):
         return None
     return entry
+
+
+def _remove_aim_entry(target: Fighter, source_id: str) -> None:
+    entries = target.path_state.get("aim_from")
+    if not isinstance(entries, dict):
+        return
+    entries.pop(source_id, None)
+    if not entries:
+        target.path_state.pop("aim_from", None)
 
 
 def _grant_aim(
@@ -1791,44 +1978,83 @@ def _grant_aim(
     target_key: str,
     *,
     trigger: str,
-    action_targets: set[str] | None = None,
 ) -> int:
     source = state.fighters[source_key]
     target = state.fighters[target_key]
+    if (
+        source.hp <= ZERO
+        or target.hp <= ZERO
+        or source.character_class != "vigia"
+        or _fighter_side(state, source_key) == _fighter_side(state, target_key)
+    ):
+        return 0
     specialization = source.selected_path if source.character_class == "vigia" else None
     maximum = 4 if specialization == "atirador" else 2 if specialization == "rastreador" else 3
-    target_id = target.id
-    if specialization != "rastreador":
-        # Baseline Mira follows one offensive target; Atirador retains only the
-        # selected target as well. Stable fighter order makes AoE deterministic.
-        retained_ids = action_targets or {target_id}
-        for other in state.fighters.values():
-            if other.id not in retained_ids:
-                other.path_state.setdefault("aim_from", {}).pop(source.id, None)
-    else:
+    current_entry = _aim_entry(target, source)
+    if specialization == "rastreador":
         current_targets = [
             fighter
             for fighter in state.fighters.values()
-            if (entry := _aim_entry(fighter, source)) is not None
+            if _aim_entry(fighter, source) is not None
         ]
-        if _aim_entry(target, source) is None and len(current_targets) >= 3:
+        if current_entry is None and len(current_targets) >= 3:
             return 0
     entries = target.path_state.setdefault("aim_from", {})
-    entry = entries.get(source.id)
-    stacks = min(maximum, int(entry.get("stacks", 0)) + 1) if isinstance(entry, dict) else 1
+    stacks = min(maximum, int(current_entry.get("stacks", 0)) + 1) if current_entry else 1
     entries[source.id] = {
         "stacks": stacks,
-        "remaining": 2,
-        "applied_opportunity": target.opportunity,
+        "remaining": 3 if _has_talent(source, "mira_estavel") else 2,
+        "applied_opportunity": source.opportunity,
         "trigger": trigger,
     }
     return stacks
 
 
+def _switch_aim_target(
+    state: Combat, source_key: str, primary_target_id: str | None
+) -> None:
+    source = state.fighters[source_key]
+    if (
+        source.character_class != "vigia"
+        or source.selected_path == "rastreador"
+        or primary_target_id is None
+    ):
+        return
+    previous_target_id = source.path_state.get("aim_current_target_id")
+    for other in state.fighters.values():
+        if other.id == primary_target_id:
+            continue
+        entry = _aim_entry(other, source)
+        if entry is None:
+            _remove_aim_entry(other, source.id)
+            continue
+        if (
+            _has_talent(source, "visao_persistente")
+            and other.id == previous_target_id
+        ):
+            other.path_state.setdefault("aim_from", {})[source.id] = {
+                "stacks": 1,
+                "remaining": 1,
+                "applied_opportunity": source.opportunity,
+                "trigger": "visao_persistente",
+            }
+        else:
+            _remove_aim_entry(other, source.id)
+    source.path_state["aim_current_target_id"] = primary_target_id
+
+
 def _tick_path_resources(state: Combat, actor_key: str) -> None:
     actor = state.fighters[actor_key]
     state_data = actor.path_state
-    for key in ("luminar_state", "manifestation_state", "devastador_charge"):
+    for key in (
+        "luminar_state",
+        "trama_state",
+        "guard_prepared_barrier",
+        "trama_next_per",
+        "aim_next_per",
+        "manifestation_state",
+        "devastador_charge",
+    ):
         entry = state_data.get(key)
         if not isinstance(entry, dict):
             continue
@@ -1841,7 +2067,25 @@ def _tick_path_resources(state: Combat, actor_key: str) -> None:
             continue
         remaining = max(0, int(entry.get("remaining", 0)) - 1)
         if remaining <= 0:
-            state_data.pop(key, None)
+            renewal_talent = {
+                "luminar_state": "ciclo_luminoso",
+                "trama_state": "fio_persistente",
+            }.get(key)
+            renewal_flag = {
+                "luminar_state": "luminar_cycle_used",
+                "trama_state": "trama_expiry_renewed",
+            }.get(key)
+            if (
+                renewal_talent
+                and renewal_flag
+                and _has_talent(actor, renewal_talent)
+                and not state_data.get(renewal_flag)
+            ):
+                state_data[renewal_flag] = True
+                entry["remaining"] = 1
+                entry["applied_opportunity"] = actor.opportunity
+            else:
+                state_data.pop(key, None)
         else:
             entry["remaining"] = remaining
     for key in ("omen_offensive", "omen_defensive"):
@@ -1856,26 +2100,106 @@ def _tick_path_resources(state: Combat, actor_key: str) -> None:
             if actor.opportunity > applied:
                 entry["remaining"] = max(0, int(entry.get("remaining", 0)) - 1)
             if int(entry.get("remaining", 0)) <= 0:
-                entries.pop(target_id, None)
-    incoming = actor.path_state.get("aim_from", {})
-    if isinstance(incoming, dict):
-        for source_id, entry in tuple(incoming.items()):
-            if not isinstance(entry, dict):
-                incoming.pop(source_id, None)
-                continue
-            applied = int(entry.get("applied_opportunity", actor.opportunity))
-            if actor.opportunity > applied:
-                entry["remaining"] = max(0, int(entry.get("remaining", 0)) - 1)
-            if int(entry.get("remaining", 0)) <= 0:
-                incoming.pop(source_id, None)
+                target = next(
+                    (fighter for fighter in state.fighters.values() if fighter.id == target_id),
+                    None,
+                )
+                if (
+                    target is not None
+                    and _has_talent(actor, "pressagio_flexivel")
+                    and not state_data.get("omen_flexible_used")
+                ):
+                    state_data["omen_flexible_used"] = True
+                    entry["remaining"] = 1
+                    entry["applied_opportunity"] = actor.opportunity
+                else:
+                    entries.pop(target_id, None)
+    for target in state.fighters.values():
+        incoming = target.path_state.get("aim_from")
+        if not isinstance(incoming, dict):
+            continue
+        entry = incoming.get(actor.id)
+        if not isinstance(entry, dict):
+            continue
+        if actor.hp <= ZERO or target.hp <= ZERO:
+            incoming.pop(actor.id, None)
+            continue
+        applied = int(entry.get("applied_opportunity", actor.opportunity))
+        if actor.opportunity > applied:
+            entry["remaining"] = max(0, int(entry.get("remaining", 0)) - 1)
+            entry["applied_opportunity"] = actor.opportunity
+        if int(entry.get("remaining", 0)) <= 0:
+            incoming.pop(actor.id, None)
+        if not incoming:
+            target.path_state.pop("aim_from", None)
 
 
 def _new_omen(actor: Fighter, kind: str, target: Fighter) -> None:
+    if target.hp <= ZERO:
+        return
     key = "omen_offensive" if kind == "offensive" else "omen_defensive"
     actor.path_state.setdefault(key, {})[target.id] = {
-        "remaining": 2,
+        "remaining": 3 if _has_talent(actor, "sinal_persistente") else 2,
         "applied_opportunity": actor.opportunity,
     }
+
+
+def _is_named_art(action_id: str, action: Action, slug: str) -> bool:
+    return any(
+        value.casefold().endswith(slug)
+        for value in (action_id, action.id)
+        if value
+    )
+
+
+def _primary_target_key(
+    state: Combat,
+    actor_id: str,
+    action: Action,
+    target_keys: tuple[str, ...],
+    requested_target: str | None,
+) -> str | None:
+    if action.target_mode in {"all_opponents", "all_allies"}:
+        requested_key = _resolve_fighter_key(state, requested_target)
+        return requested_key if requested_key in target_keys else None
+    return target_keys[0] if target_keys else actor_id if action.target_mode == "self" else None
+
+
+def _action_has_barrier(action: Action) -> bool:
+    return bool(
+        action.self_barrier_coefficient > ZERO
+        or action.self_barrier_hp_fraction > ZERO
+        or action.target_barrier_coefficient > ZERO
+    )
+
+
+def _action_has_support(action: Action) -> bool:
+    return action.heal_coefficient > ZERO or _action_has_barrier(action)
+
+
+def _guard_integrity_can_reduce(target: Fighter, effect: ActionEffect | Effect) -> bool:
+    token = target.path_state.get("guard_integrity_debuff")
+    return bool(
+        target.character_class == "sentinela"
+        and isinstance(token, dict)
+        and target.opportunity < int(token.get("expires_opportunity", 0))
+        and effect.kind == "debuff"
+        and effect.magnitude > ZERO
+        and (hasattr(target.stats, effect.stat) or effect.stat == "healing_received")
+        and getattr(effect, "removable", True)
+        and not getattr(effect, "unremovable", False)
+        and not getattr(effect, "protected", False)
+        and not getattr(effect, "fixed_mechanic", False)
+        and not getattr(effect, "hard_cc", False)
+    )
+
+
+def _trama_component_bonus(actor: Fighter, component: str) -> Decimal:
+    if actor.selected_path == "conjurador":
+        return D("0.15") if component == "damage" else D("0.06")
+    if actor.selected_path == "runico":
+        return D("0.06") if component == "damage" else D("0.15")
+    return D("0.10")
 
 
 def _prepare_path_action(
@@ -1884,27 +2208,36 @@ def _prepare_path_action(
     action_id: str,
     action: Action,
     target_keys: tuple[str, ...],
+    requested_target: str | None = None,
 ) -> dict:
     actor = state.fighters[actor_id]
     is_art = _is_art_action(action_id, action)
     direct = action.coefficient > ZERO
-    support = action.heal_coefficient > ZERO or (
-        action.self_barrier_coefficient > ZERO
-        or action.self_barrier_hp_fraction > ZERO
-        or action.target_barrier_coefficient > ZERO
+    support = _action_has_support(action)
+    primary_key = _primary_target_key(
+        state, actor_id, action, target_keys, requested_target
     )
+    primary_target = state.fighters.get(primary_key) if primary_key else None
     context = {
         "by_target": {},
         "target_ids": {state.fighters[key].id for key in target_keys},
+        "primary_target_id": primary_target.id if primary_target else None,
+        "primary_target_key": primary_key,
         "luminar_consumed": False,
-        "luminar_generated": None,
+        "trama_consumed": False,
+        "class_resources_committed": False,
+        "omen_consumptions": [],
+        "generated_triggers": [],
+        "oportunism_triggered": False,
+        "aim_terminal_target_id": None,
         "action_instance_id": "",
     }
-    if actor.character_class == "vigia" and direct and actor.selected_path != "rastreador":
-        target_ids = {state.fighters[key].id for key in target_keys}
-        for other in state.fighters.values():
-            if other.id not in target_ids:
-                other.path_state.setdefault("aim_from", {}).pop(actor.id, None)
+    terminal = _is_named_art(action_id, action, "disparo_terminal")
+    if terminal and primary_target is not None:
+        aim = _aim_entry(primary_target, actor) if actor.character_class == "vigia" else None
+        if aim is not None and int(aim.get("stacks", 0)) >= 4:
+            context["aim_terminal_target_id"] = primary_target.id
+
     for target_key in target_keys:
         target = state.fighters[target_key]
         aim = _aim_entry(target, actor) if actor.character_class == "vigia" else None
@@ -1921,12 +2254,39 @@ def _prepare_path_action(
             "oportunism": (
                 actor.character_class == "errante"
                 and direct
+                and _fighter_side(state, actor_id) != _fighter_side(state, target_key)
                 and _has_valid_negative_effect(state, target)
             ),
         }
         if entry["oportunism"]:
-            entry["final_damage_bonus"] += D("0.08")
+            entry["final_damage_bonus"] += (
+                D("0.10") if _has_talent(actor, "oportunismo_ampliado") else D("0.08")
+            )
             entry["triggers"].append("oportunismo")
+            context["oportunism_triggered"] = True
+            if _has_talent(actor, "brecha_exposta"):
+                entry["per_bonus"] += D(4)
+        if actor.character_class == "vigia":
+            if stacks >= 2 and _has_talent(actor, "alvo_exposto"):
+                entry["final_damage_bonus"] += D("0.03")
+                entry["triggers"].append("vigia.alvo_exposto")
+            if stacks >= 3 and _has_talent(actor, "ponto_fraco"):
+                entry["crit_bonus"] += D(2)
+                entry["triggers"].append("vigia.ponto_fraco")
+            if direct and terminal and context["aim_terminal_target_id"] == target.id:
+                entry["crit_bonus"] += D(15)
+                entry["triggers"].append("atirador.disparo_terminal")
+        if direct:
+            for key, slug in (("trama_next_per", "tecelao"), ("aim_next_per", "vigia")):
+                next_bonus = actor.path_state.get(key)
+                if (
+                    actor.character_class == slug
+                    and isinstance(next_bonus, dict)
+                    and int(next_bonus.get("remaining", 0)) > 0
+                ):
+                    entry["per_bonus"] += D(next_bonus.get("magnitude", 3))
+                    entry["triggers"].append(f"{slug}.proximo_dano_consumido")
+
         if (
             actor.selected_path == "devastador"
             and is_art
@@ -1940,55 +2300,146 @@ def _prepare_path_action(
             context["devastador_consumed"] = True
 
         if actor.character_class == "oraculo" and is_art:
-            if direct:
-                omen = actor.path_state.setdefault("omen_offensive", {}).pop(target.id, None)
-                if omen is not None and int(omen.get("remaining", 0)) > 0:
+            if direct and _fighter_side(state, actor_id) != _fighter_side(state, target_key):
+                omen = actor.path_state.get("omen_offensive", {}).get(target.id)
+                if isinstance(omen, dict) and int(omen.get("remaining", 0)) > 0:
                     entry["damage_power"] *= (
                         D("1.16")
                         if actor.selected_path == "agoureiro"
                         else D("1.12")
                     )
+                    if _has_talent(actor, "profecia_dolorosa"):
+                        entry["damage_power"] *= D("1.02")
+                    if _has_talent(actor, "pressagio_cortante"):
+                        entry["per_bonus"] += D(2)
+                    if _has_talent(actor, "sinais_convergentes"):
+                        entry["crit_bonus"] += D(2)
                     entry["triggers"].append("pressagio.ofensivo_consumido")
-            if support:
-                omen = actor.path_state.setdefault("omen_defensive", {}).pop(target.id, None)
-                if omen is not None and int(omen.get("remaining", 0)) > 0:
-                    entry["healing_power"] *= D("1.12")
-                    entry["barrier_power"] *= D("1.12")
+                    context["omen_consumptions"].append(("offensive", target.id))
+            if support and _fighter_side(state, actor_id) == _fighter_side(state, target_key):
+                omen = actor.path_state.get("omen_defensive", {}).get(target.id)
+                if isinstance(omen, dict) and int(omen.get("remaining", 0)) > 0:
+                    multiplier = D("1.12")
+                    if _has_talent(actor, "sinais_convergentes"):
+                        multiplier *= D("1.03")
+                    entry["healing_power"] *= multiplier
+                    entry["barrier_power"] *= multiplier
                     entry["triggers"].append("pressagio.defensivo_consumido")
-        context["by_target"][target.id] = entry
+                    context["omen_consumptions"].append(("defensive", target.id))
 
-    if context.get("devastador_consumed"):
-        actor.path_state.pop("devastador_charge", None)
+        guard_barrier = actor.path_state.get("guard_prepared_barrier")
+        if support and _action_has_barrier(action) and isinstance(guard_barrier, dict):
+            if int(guard_barrier.get("remaining", 0)) > 0:
+                entry["barrier_power"] *= D("1.06")
+                entry["triggers"].append("sentinela.guarda_preparada")
+                context["guard_prepared_consumed"] = True
+
+        context["by_target"][target.id] = entry
 
     if actor.character_class == "luminar" and is_art:
         state_entry = actor.path_state.get("luminar_state")
-        expected_kind = "fulgor" if support and not direct else "julgamento" if direct else None
-        if isinstance(state_entry, dict) and expected_kind is not None:
-            if (
-                state_entry.get("kind") == expected_kind
-                and int(state_entry.get("remaining", 0)) > 0
-            ):
-                percent = (
-                    D("0.15")
-                    if actor.selected_path == "guardiao" and expected_kind == "fulgor"
-                    else D("0.06")
-                    if actor.selected_path == "guardiao" and expected_kind == "julgamento"
-                    else D("0.06")
-                    if actor.selected_path == "inquisidor" and expected_kind == "fulgor"
-                    else D("0.15")
-                    if actor.selected_path == "inquisidor" and expected_kind == "julgamento"
-                    else D("0.10")
-                )
-                multiplier = D(1) + percent
-                for entry in context["by_target"].values():
-                    if expected_kind == "julgamento":
-                        entry["damage_power"] *= multiplier
-                    else:
-                        entry["healing_power"] *= multiplier
-                        entry["barrier_power"] *= multiplier
-                    entry["triggers"].append(f"luminar.{expected_kind}_consumido")
-                actor.path_state.pop("luminar_state", None)
-                context["luminar_consumed"] = True
+        expected_kind = (
+            "fulgor"
+            if support and not direct
+            else "julgamento"
+            if direct and not support
+            else None
+        )
+        if (
+            isinstance(state_entry, dict)
+            and expected_kind is not None
+            and state_entry.get("kind") == expected_kind
+            and int(state_entry.get("remaining", 0)) > 0
+        ):
+            percent = (
+                D("0.15")
+                if actor.selected_path == "guardiao" and expected_kind == "fulgor"
+                else D("0.06")
+                if actor.selected_path == "guardiao" and expected_kind == "julgamento"
+                else D("0.06")
+                if actor.selected_path == "inquisidor" and expected_kind == "fulgor"
+                else D("0.15")
+                if actor.selected_path == "inquisidor" and expected_kind == "julgamento"
+                else D("0.10")
+            )
+            multiplier = D(1) + percent
+            if expected_kind == "fulgor" and _has_talent(actor, "contraluz_perfeita"):
+                multiplier += D("0.02")
+            for entry in context["by_target"].values():
+                if expected_kind == "julgamento":
+                    entry["damage_power"] *= multiplier
+                    if _has_talent(actor, "julgamento_preciso"):
+                        entry["crit_bonus"] += D(2)
+                    if _has_talent(actor, "veredito_ardente"):
+                        entry["damage_power"] *= D("1.02")
+                    if _has_talent(actor, "contraluz_perfeita"):
+                        entry["per_bonus"] += D(2)
+                else:
+                    entry["healing_power"] *= multiplier
+                    entry["barrier_power"] *= multiplier
+                entry["triggers"].append(f"luminar.{expected_kind}_consumido")
+            context["luminar_consumed"] = True
+            context["luminar_consumed_kind"] = expected_kind
+
+    trama_state = actor.path_state.get("trama_state")
+    trial_chain = (
+        action.prepares_chain == "trama_encadeada"
+        or action.consumes_chain == "trama_encadeada"
+    )
+    if (
+        actor.character_class == "tecelao"
+        and is_art
+        and (direct or support)
+        and not trial_chain
+        and isinstance(trama_state, dict)
+        and int(trama_state.get("remaining", 0)) > 0
+        and trama_state.get("origin_art") != action.id
+    ):
+        context["trama_consumed"] = True
+        context["trama_consumed_origin"] = str(trama_state.get("origin_art", ""))
+        for entry in context["by_target"].values():
+            if direct:
+                bonus = _trama_component_bonus(actor, "damage")
+                if _has_talent(actor, "trama_agressiva"):
+                    bonus += D("0.02")
+                if _has_talent(actor, "sobrecarga_controlada"):
+                    target_id = next(
+                        target_id
+                        for target_id, target_context in context["by_target"].items()
+                        if target_context is entry
+                    )
+                    target = next(
+                        fighter
+                        for fighter in state.fighters.values()
+                        if fighter.id == target_id
+                    )
+                    if target.stats.hp > ZERO and target.hp <= target.stats.hp * D("0.40"):
+                        bonus += D("0.04")
+                entry["damage_power"] *= D(1) + bonus
+                if _has_talent(actor, "trama_precisa"):
+                    entry["crit_bonus"] += D(2)
+                entry["triggers"].append("tecelao.trama_dano_consumida")
+            if action.heal_coefficient > ZERO:
+                bonus = _trama_component_bonus(actor, "healing")
+                if _has_talent(actor, "trama_precisa"):
+                    bonus += D("0.02")
+                entry["healing_power"] *= D(1) + bonus
+                entry["triggers"].append("tecelao.trama_cura_consumida")
+            if _action_has_barrier(action):
+                bonus = _trama_component_bonus(actor, "barrier")
+                if _has_talent(actor, "trama_precisa"):
+                    bonus += D("0.02")
+                entry["barrier_power"] *= D(1) + bonus
+                entry["triggers"].append("tecelao.trama_barreira_consumida")
+
+    if actor.character_class == "tecelao" and direct and not context["trama_consumed"]:
+        trama_next_per = actor.path_state.get("trama_next_per")
+        if isinstance(trama_next_per, dict) and int(trama_next_per.get("remaining", 0)) > 0:
+            context["trama_next_per_consumed"] = True
+    if actor.character_class == "vigia" and direct:
+        aim_next_per = actor.path_state.get("aim_next_per")
+        if isinstance(aim_next_per, dict) and int(aim_next_per.get("remaining", 0)) > 0:
+            context["aim_next_per_consumed"] = True
 
     if (
         actor.selected_path == "invocador"
@@ -2016,6 +2467,88 @@ def _prepare_path_action(
     return context
 
 
+def _commit_path_action(
+    state: Combat,
+    actor_id: str,
+    action_id: str,
+    action: Action,
+    context: dict,
+) -> None:
+    if context.get("class_resources_committed"):
+        return
+    actor = state.fighters[actor_id]
+    aim_primary_target = (
+        context.get("primary_target_id") if action.coefficient > ZERO else None
+    )
+    _switch_aim_target(state, actor_id, aim_primary_target)
+    if context.get("devastador_consumed"):
+        actor.path_state.pop("devastador_charge", None)
+    if context.get("guard_prepared_consumed"):
+        actor.path_state.pop("guard_prepared_barrier", None)
+    if context.get("trama_consumed"):
+        actor.path_state.pop("trama_state", None)
+        if _has_talent(actor, "alternancia_fluida"):
+            _apply_class_mechanic_buff(
+                actor,
+                mechanic="tecelao.alternancia_fluida",
+                stat="agility",
+                magnitude=D("0.05"),
+            )
+    if context.get("luminar_consumed"):
+        actor.path_state.pop("luminar_state", None)
+        if _has_talent(actor, "alternancia_radiante"):
+            _apply_class_mechanic_buff(
+                actor,
+                mechanic="luminar.alternancia_radiante",
+                stat="agility",
+                magnitude=D("0.04"),
+            )
+    consumed_omen = False
+    for kind, target_id in context.get("omen_consumptions", ()):
+        key = "omen_offensive" if kind == "offensive" else "omen_defensive"
+        omen = actor.path_state.get(key, {}).get(target_id)
+        if isinstance(omen, dict) and int(omen.get("remaining", 0)) > 0:
+            actor.path_state[key].pop(target_id, None)
+            if not actor.path_state[key]:
+                actor.path_state.pop(key, None)
+            consumed_omen = True
+    if consumed_omen and _has_talent(actor, "sequencia_profetica"):
+        _apply_class_mechanic_buff(
+            actor,
+            mechanic="oraculo.sequencia_profetica",
+            stat="agility",
+            magnitude=D("0.03"),
+        )
+    if context.get("trama_next_per_consumed"):
+        actor.path_state.pop("trama_next_per", None)
+    if context.get("aim_next_per_consumed"):
+        actor.path_state.pop("aim_next_per", None)
+    context["class_resources_committed"] = True
+
+
+def _record_class_path_trigger(
+    state: Combat,
+    context: dict,
+    trigger: str,
+    target_id: str | None = None,
+) -> None:
+    actor_id = context.get("actor_entity_id")
+    action_instance_id = context.get("action_instance_id")
+    indices = [
+        index
+        for index, event in enumerate(state.events)
+        if event.actor_entity_id == actor_id
+        and event.action_instance_id == action_instance_id
+        and (target_id is None or event.target == target_id)
+    ]
+    if not indices:
+        return
+    index = indices[0]
+    event = state.events[index]
+    if trigger not in event.path_triggers:
+        state.events[index] = replace(event, path_triggers=event.path_triggers + (trigger,))
+
+
 def _finalize_path_action(
     state: Combat,
     actor_id: str,
@@ -2024,26 +2557,156 @@ def _finalize_path_action(
     context: dict,
 ) -> str | None:
     actor = state.fighters[actor_id]
-    if actor.character_class != "luminar" or not _is_art_action(action_id, action):
+    if state.result:
         return None
-    if context.get("luminar_consumed"):
-        return None
-    if action.coefficient > ZERO:
-        kind = "fulgor"
-    elif (
-        action.heal_coefficient > ZERO
-        or action.self_barrier_coefficient > ZERO
-        or action.target_barrier_coefficient > ZERO
+    generated: list[tuple[str, str | None]] = []
+    for kind in ("offensive", "defensive"):
+        target_id = context.get(f"omen_{kind}_applied_target_id")
+        if (
+            actor.character_class == "oraculo"
+            and _is_art_action(action_id, action)
+            and target_id
+        ):
+            target = next(
+                (fighter for fighter in state.fighters.values() if fighter.id == target_id),
+                None,
+            )
+            if target is not None and target.hp > ZERO:
+                _new_omen(actor, kind, target)
+                generated.append((f"oraculo.pressagio_{kind}_criado", target.id))
+                target_key = next(
+                    (key for key, fighter in state.fighters.items() if fighter.id == target.id),
+                    None,
+                )
+                if (
+                    kind == "offensive"
+                    and target_key is not None
+                    and _fighter_side(state, target_key) != _fighter_side(state, actor_id)
+                    and _has_talent(actor, "leitura_dos_sinais")
+                ):
+                    _apply_class_mechanic_buff(
+                        actor,
+                        mechanic="oraculo.leitura_dos_sinais",
+                        stat="agility",
+                        magnitude=D("0.05"),
+                    )
+                    generated.append(("oraculo.leitura_dos_sinais", None))
+
+    is_art = _is_art_action(action_id, action)
+    direct = action.coefficient > ZERO
+    support = _action_has_support(action)
+    if actor.character_class == "luminar" and is_art and not context.get("luminar_consumed"):
+        kind = (
+            "fulgor"
+            if direct and not support
+            else "julgamento"
+            if support and not direct
+            else None
+        )
+        if kind:
+            actor.path_state["luminar_state"] = {
+                "kind": kind,
+                "remaining": 3 if _has_talent(actor, "contraluz_persistente") else 2,
+                "applied_opportunity": actor.opportunity,
+            }
+            generated.append((f"luminar.{kind}_gerado", None))
+    if (
+        actor.character_class == "tecelao"
+        and is_art
+        and not context.get("trama_consumed")
+        and not (
+            action.prepares_chain == "trama_encadeada"
+            or action.consumes_chain == "trama_encadeada"
+        )
+        and not (
+            isinstance(actor.path_state.get("trama_state"), dict)
+            and int(actor.path_state["trama_state"].get("remaining", 0)) > 0
+        )
     ):
-        kind = "julgamento"
-    else:
-        return None
-    actor.path_state["luminar_state"] = {
-        "kind": kind,
-        "remaining": 2,
-        "applied_opportunity": actor.opportunity,
-    }
-    return f"luminar.{kind}_gerado"
+        origin_art = action.id if action.id.startswith(("class_art.", "path_art.")) else action_id
+        actor.path_state["trama_state"] = {
+            "origin_art": origin_art,
+            "remaining": 3 if _has_talent(actor, "trama_duradoura") else 2,
+            "applied_opportunity": actor.opportunity,
+        }
+        generated.append(("tecelao.trama_gerada", None))
+    if context.get("oportunism_triggered") and _has_talent(actor, "ritmo_predatorio"):
+        _apply_class_mechanic_buff(
+            actor,
+            mechanic="errante.ritmo_predatorio",
+            stat="agility",
+            magnitude=D("0.05"),
+        )
+        generated.append(("errante.ritmo_predatorio", None))
+    if context.get("rastreador_agility_applied") and _has_talent(actor, "leitura_de_movimento"):
+        _apply_class_mechanic_buff(
+            actor,
+            mechanic="vigia.leitura_de_movimento",
+            stat="agility",
+            magnitude=D("0.05"),
+        )
+        generated.append(("vigia.leitura_de_movimento", None))
+    aim_max_hit_target_id = context.get("aim_max_hit_target_id")
+    if aim_max_hit_target_id and _has_talent(actor, "cacada_metodica"):
+        actor.path_state["aim_next_per"] = {
+            "magnitude": 3,
+            "remaining": 2,
+            "applied_opportunity": actor.opportunity,
+        }
+        generated.append(("vigia.cacada_metodica", None))
+    if context.get("trama_consumed") and _has_talent(actor, "eco_de_alternancia"):
+        actor.path_state["trama_next_per"] = {
+            "magnitude": 3,
+            "remaining": 2,
+            "applied_opportunity": actor.opportunity,
+        }
+        generated.append(("tecelao.eco_de_alternancia", None))
+    if (
+        context.get("luminar_consumed_kind") == "fulgor"
+        and _has_talent(actor, "fluxo_restaurador")
+    ):
+        events = [
+            event
+            for event in state.events
+            if event.actor_entity_id == actor.id
+            and event.action_instance_id == context.get("action_instance_id")
+            and event.effective_healing > ZERO
+        ]
+        if events:
+            target = next(
+                (fighter for fighter in state.fighters.values() if fighter.id == events[0].target),
+                None,
+            )
+            if target is not None:
+                _apply_class_mechanic_buff(
+                    target,
+                    mechanic="luminar.fluxo_restaurador",
+                    stat="defense",
+                    magnitude=D("0.04"),
+                )
+                generated.append(("luminar.fluxo_restaurador", target.id))
+
+    terminal_target_id = context.get("aim_terminal_target_id")
+    if terminal_target_id:
+        target = next(
+            (fighter for fighter in state.fighters.values() if fighter.id == terminal_target_id),
+            None,
+        )
+        if target is not None:
+            aim_from = target.path_state.get("aim_from", {})
+            entry = aim_from.get(actor.id) if isinstance(aim_from, dict) else None
+            if isinstance(entry, dict):
+                entry["stacks"] = max(0, int(entry.get("stacks", 0)) - 4)
+                if entry["stacks"] == 0:
+                    aim_from.pop(actor.id, None)
+                if not aim_from:
+                    target.path_state.pop("aim_from", None)
+        generated.append(("atirador.disparo_terminal_miras_consumidas", terminal_target_id))
+
+    context["actor_entity_id"] = actor.id
+    for trigger, target_id in generated:
+        _record_class_path_trigger(state, context, trigger, target_id)
+    return None
 
 
 def _path_effect_duration(actor: Fighter, effect: ActionEffect, duration: int) -> int:
@@ -2141,7 +2804,7 @@ def _perform(
             recoil = (sum(snapshots, D(0)) * D("0.03")).to_integral_value(
                 rounding=ROUND_FLOOR
             )
-            _deal_damage(actor, recoil)
+            _deal_combat_damage(state, actor_id, recoil, source_key=actor_id)
     if actor.hp == 0:
         _refresh_result(state)
         return True
@@ -2162,9 +2825,19 @@ def _perform(
     target_keys = _resolve_action_targets(state, actor_id, action, target_id)
     if not target_keys:
         return False
+    if actor.character_class == "vigia" and _is_named_art(
+        action_id, action, "disparo_terminal"
+    ):
+        primary_key = _primary_target_key(
+            state, actor_id, action, target_keys, target_id
+        )
+        primary = state.fighters.get(primary_key) if primary_key else None
+        aim = _aim_entry(primary, actor) if primary is not None else None
+        if aim is None or int(aim.get("stacks", 0)) < 4:
+            return False
     if _path_resolution is None:
         _path_resolution = _prepare_path_action(
-            state, actor_id, action_id, action, target_keys
+            state, actor_id, action_id, action, target_keys, target_id
         )
 
     if action.hit_count > 1 and _hit_index is None:
@@ -2267,7 +2940,7 @@ def _perform(
                 for target_entity_id, index in first_by_target.items():
                     target_key = _resolve_fighter_key(state, target_entity_id)
                     if target_key is not None:
-                        _grant_retaliation(
+                        _grant_defender_retaliation(
                             state,
                             target_key=target_key,
                             source_actor=actor,
@@ -2330,6 +3003,7 @@ def _perform(
         f"{state.id.hex}:{state.version}:{len(state.events)}:{actor.id}:{action_id}"
     )
     _path_resolution["action_instance_id"] = action_instance_id
+    _path_resolution["actor_entity_id"] = actor.id
     chain_key = action.consumes_chain or action.prepares_chain
     if _chain_resolution is None:
         chain_state = actor.action_chains.get(chain_key, {}) if chain_key else {}
@@ -2441,6 +3115,7 @@ def _perform(
     }.get(power_component, D(1))
 
     if action.self_barrier_coefficient > ZERO or action.self_barrier_hp_fraction > ZERO:
+        _commit_path_action(state, actor_id, action_id, action, _path_resolution)
         self_context = _path_target_context(_path_resolution, actor)
         path_barrier_multiplier = D(self_context.get("barrier_power", D(1)))
         if actor.selected_path == "bastiao":
@@ -2522,27 +3197,14 @@ def _perform(
                     "remaining": action.prepares_chain_duration,
                     "applied_opportunity": actor.opportunity,
                 }
-        generated_path_trigger = (
-            _finalize_path_action(state, actor_id, action_id, action, _path_resolution)
-            if _hit_index is None
-            else None
-        )
-        if generated_path_trigger:
-            state.events[-1] = replace(
-                state.events[-1],
-                path_triggers=state.events[-1].path_triggers + (generated_path_trigger,),
-            )
         if (
-            actor.barrier > ZERO
+            value > ZERO
             and actor.character_class == "oraculo"
             and _is_art_action(action_id, action)
         ):
-            _new_omen(actor, "defensive", actor)
-            state.events[-1] = replace(
-                state.events[-1],
-                path_triggers=state.events[-1].path_triggers
-                + ("oraculo.pressagio_defensivo_criado",),
-            )
+            _path_resolution["omen_defensive_applied_target_id"] = actor.id
+        if _hit_index is None:
+            _finalize_path_action(state, actor_id, action_id, action, _path_resolution)
         state.resolving_prepared = False
         return True
 
@@ -2575,7 +3237,13 @@ def _perform(
             if effect.remaining > 0
         )
     )
-    retaliation_context = _consume_retaliation(state, actor_id, actor, action)
+    _commit_path_action(state, actor_id, action_id, action, _path_resolution)
+    retaliation_context = _path_resolution.get("retaliation_context")
+    if not isinstance(retaliation_context, dict):
+        retaliation_context = _consume_retaliation(
+            state, actor_id, actor, action_id, action, target_keys
+        )
+        _path_resolution["retaliation_context"] = retaliation_context
     retaliation_used = bool(retaliation_context.get("used"))
     retaliation_source_type = str(retaliation_context.get("source_type", ""))
     retaliation_source_actor_id = str(retaliation_context.get("source_actor_id", ""))
@@ -2808,7 +3476,13 @@ def _perform(
             if target.stats.hp > ZERO
             and target.hp <= target.stats.hp * action.actor_per_bonus_hp_fraction_threshold
             else ZERO
-        ) + D(target_path.get("per_bonus", ZERO))
+        ) + D(target_path.get("per_bonus", ZERO)) + (
+            D(4)
+            if retaliation_used
+            and actor.character_class == "sentinela"
+            and _has_talent(actor, "ponta_revidada")
+            else ZERO
+        )
         damage = (
             direct_damage(
                 actor.stat("attack"),
@@ -2905,23 +3579,84 @@ def _perform(
             else 0
         )
 
-        actual_damage, barrier_absorbed = _deal_damage(target, damage)
+        actual_damage, barrier_absorbed = _deal_combat_damage(
+            state, target_key, damage, source_key=actor_id
+        )
         if actual_damage > 0:
             _resolve_phase_triggers(state)
-        if direct_eligible and damage > 0 and actor.character_class == "vigia":
+        if (
+            direct_eligible
+            and damage > 0
+            and actor.character_class == "vigia"
+            and _fighter_side(state, actor_id) != _fighter_side(state, target_key)
+        ):
             generated = _path_resolution.setdefault("aim_generated_targets", set())
-            if target.id not in generated:
+            snapshot_stacks = int(target_path.get("aim_stacks", 0))
+            maximum = (
+                4
+                if actor.selected_path == "atirador"
+                else 2
+                if actor.selected_path == "rastreador"
+                else 3
+            )
+            if (
+                snapshot_stacks >= maximum
+                and _has_talent(actor, "cacada_metodica")
+                and not _path_resolution.get("aim_max_hit_target_id")
+            ):
+                _path_resolution["aim_max_hit_target_id"] = target.id
+
+            is_rastros_area = (
+                actor.selected_path == "rastreador"
+                and _is_named_art(action_id, action, "chuva_de_rastros")
+            )
+            primary_target_id = _path_resolution.get("primary_target_id")
+            can_generate_base = target.id == primary_target_id or is_rastros_area
+            stacks = 0
+            if target.id not in generated and can_generate_base:
                 stacks = _grant_aim(
                     state,
                     actor_id,
                     target_key,
-                    trigger="direct",
-                    action_targets=_path_resolution.get("target_ids"),
+                    trigger="chuva_de_rastros" if is_rastros_area else "direct",
                 )
+
+            used_acquisition = actor.path_state.setdefault("aim_acquisition_used", {})
+            if (
+                target.id not in generated
+                and snapshot_stacks == 0
+                and _has_talent(actor, "aquisicao_rapida")
+                and isinstance(used_acquisition, dict)
+                and not used_acquisition.get(target.id)
+            ):
+                extra_stacks = _grant_aim(
+                    state,
+                    actor_id,
+                    target_key,
+                    trigger="aquisicao_rapida",
+                )
+                if extra_stacks:
+                    used_acquisition[target.id] = True
+                    stacks = extra_stacks
+
+            if (
+                target.id not in generated
+                and can_generate_base
+                and actor.selected_path == "atirador"
+                and _is_named_art(action_id, action, "fixar_alvo")
+            ):
+                extra_stacks = _grant_aim(
+                    state,
+                    actor_id,
+                    target_key,
+                    trigger="fixar_alvo",
+                )
+                stacks = extra_stacks or stacks
+
+            if stacks:
                 generated.add(target.id)
-                if stacks:
-                    path_triggers.append("vigia.mira_gerada")
-                    target_path["aim_stacks_after"] = stacks
+                path_triggers.append("vigia.mira_gerada")
+                target_path["aim_stacks_after"] = stacks
         if direct_eligible and protection_layers_before > 0:
             target.protection_layers -= 1
         protection_layers_after = target.protection_layers
@@ -2941,23 +3676,30 @@ def _perform(
                 f"{state.id.hex}:{state.version}:{len(state.events)}:effect:"
                 f"{applied_effect_id}:{target.id}"
             )
+            attack_debuff_effect = Effect(
+                id=applied_effect_id,
+                stat=action.effect_stat or "attack",
+                magnitude=action.attack_debuff,
+                remaining=(
+                    min(3, action.duration + 1)
+                    if actor.selected_path == "sabotador" and action.duration in {1, 2}
+                    else action.duration
+                ),
+                applied_opportunity=target.opportunity,
+            )
+            guard_integrity_applied = _guard_integrity_can_reduce(
+                target, attack_debuff_effect
+            )
+            if guard_integrity_applied:
+                attack_debuff_effect.magnitude *= D("0.90")
             status_applied = apply_effect(
                 state,
                 target,
-                Effect(
-                    id=applied_effect_id,
-                    stat=action.effect_stat or "attack",
-                    magnitude=action.attack_debuff,
-                    remaining=(
-                        min(3, action.duration + 1)
-                        if actor.selected_path == "sabotador"
-                        and action.duration in {1, 2}
-                        else action.duration
-                    ),
-                    applied_opportunity=target.opportunity,
-                ),
+                attack_debuff_effect,
                 application_event=effect_application_event_id,
             )
+            if status_applied and guard_integrity_applied:
+                target.path_state.pop("guard_integrity_debuff", None)
             if had_ward and not status_applied and target.ward_charges == 0:
                 ward_blocked.append(action.id)
             if not status_applied:
@@ -2977,11 +3719,23 @@ def _perform(
                 f"{state.id.hex}:{state.version}:{len(state.events)}:target-effects:"
                 f"{action.id}:{target.id}"
             )
+            guard_effect_index = next(
+                (
+                    index
+                    for index, effect in enumerate(action.target_effects)
+                    if _guard_integrity_can_reduce(target, effect)
+                ),
+                None,
+            )
             target_effects = tuple(
                 Effect(
                     id=effect.id,
                     stat=effect.stat,
-                    magnitude=effect.magnitude,
+                    magnitude=(
+                        effect.magnitude * D("0.90")
+                        if index == guard_effect_index
+                        else effect.magnitude
+                    ),
                     remaining=_path_effect_duration(
                         actor, effect, effect.duration
                     ),
@@ -2993,7 +3747,7 @@ def _perform(
                     fixed_mechanic=effect.fixed_mechanic,
                     hard_cc=effect.hard_cc,
                 )
-                for effect in action.target_effects
+                for index, effect in enumerate(action.target_effects)
             )
             target_effects_applied = apply_effect_batch(
                 state, target, target_effects, application_event=application_id
@@ -3010,6 +3764,15 @@ def _perform(
                     ),
                     None,
                 )
+                if guard_effect_index is not None:
+                    guarded_id = action.target_effects[guard_effect_index].id
+                    guarded_effect_applied = any(
+                        effect.application_event == application_id
+                        and effect.id == guarded_id
+                        for effect in target.effects
+                    )
+                    if guarded_effect_applied:
+                        target.path_state.pop("guard_integrity_debuff", None)
 
         if damage > 0 and target.hp > 0:
             enemy_actor = _fighter_side(state, actor_id) == "enemy"
@@ -3057,18 +3820,24 @@ def _perform(
                 if had_ward and not applied and target.ward_charges == 0:
                     ward_blocked.append(chosen)
 
-        if actor.character_class == "vigia" and actor.selected_path == "rastreador":
+        agility_debuff_applied = False
+        if actor.character_class == "vigia":
             agility_debuff_applied = any(
                 effect.application_event == target_effects_application_id
                 and effect.stat == "agility"
                 and effect.kind == "debuff"
                 and effect.remaining > 0
+                and not effect.fixed_mechanic
                 for effect in target.effects
             ) or bool(
                 applied_effect is not None
                 and applied_effect.stat == "agility"
                 and applied_effect.kind == "debuff"
+                and not applied_effect.fixed_mechanic
             )
+            if agility_debuff_applied:
+                _path_resolution["rastreador_agility_applied"] = True
+        if actor.character_class == "vigia" and actor.selected_path == "rastreador":
             if dot_application_event_id or agility_debuff_applied:
                 generated = _path_resolution.setdefault("aim_generated_targets", set())
                 if target.id not in generated:
@@ -3077,7 +3846,6 @@ def _perform(
                         actor_id,
                         target_key,
                         trigger="status",
-                        action_targets=_path_resolution.get("target_ids"),
                     )
                     generated.add(target.id)
                     if stacks:
@@ -3138,21 +3906,28 @@ def _perform(
                 effect
                 for effect in target.effects
                 if effect.remaining > 0
+                and not effect.fixed_mechanic
                 and (
                     effect.application_event == effect_application_event_id
                     or effect.application_event == target_effects_application_id
                 )
             ]
-            if dot_application_event_id or any(
-                effect.kind == "debuff" for effect in applied_target_effects
-            ):
-                _new_omen(actor, "offensive", target)
-                path_triggers.append("oraculo.pressagio_ofensivo_criado")
-            if target_barrier > ZERO or any(
-                effect.kind == "buff" for effect in applied_target_effects
-            ):
-                _new_omen(actor, "defensive", target)
-                path_triggers.append("oraculo.pressagio_defensivo_criado")
+            if target.id == _path_resolution.get("primary_target_id"):
+                if (
+                    _fighter_side(state, actor_id) != _fighter_side(state, target_key)
+                    and (dot_application_event_id or any(
+                    effect.kind == "debuff" for effect in applied_target_effects
+                    ))
+                ):
+                    _path_resolution["omen_offensive_applied_target_id"] = target.id
+                if (
+                    _fighter_side(state, actor_id) == _fighter_side(state, target_key)
+                    and (
+                        target_barrier > ZERO
+                        or any(effect.kind == "buff" for effect in applied_target_effects)
+                    )
+                ):
+                    _path_resolution["omen_defensive_applied_target_id"] = target.id
 
         action_event_sequence = len(state.events)
         state.events.append(
@@ -3271,7 +4046,7 @@ def _perform(
             and target.character_class == "sentinela"
             and _grant_action_retaliation
         ):
-            _grant_retaliation(
+            _grant_defender_retaliation(
                 state,
                 target_key=target_key,
                 source_actor=actor,
@@ -3304,16 +4079,10 @@ def _perform(
             if effect.id in applied_actor_effect_ids
             and effect.kind == "buff"
             and effect.remaining > 0
+            and not effect.fixed_mechanic
         ]
         if applied_actor_buffs:
-            _new_omen(actor, "defensive", actor)
-            if action_event_indices:
-                first = action_event_indices[0]
-                state.events[first] = replace(
-                    state.events[first],
-                    path_triggers=state.events[first].path_triggers
-                    + ("oraculo.pressagio_defensivo_criado",),
-                )
+            _path_resolution["omen_defensive_applied_target_id"] = actor.id
     if applied_actor_effect_ids and action_event_indices:
         first = action_event_indices[0]
         applied_actor_effect = next(
@@ -3428,7 +4197,8 @@ def _perform(
         actor.next_direct_crit_bonus = ZERO
         actor.next_direct_crit_expires_opportunity = None
         actor.next_direct_crit_effect_id = ""
-    _retaliation_action_resolved(state, actor_id, actor, retaliation_context)
+    if _hit_index is None or _hit_index == _hit_count:
+        _retaliation_action_resolved(state, actor_id, actor, retaliation_context)
     if action.revive_fighter_keys and _hit_index in {None, 1}:
         defeated = sorted(
             (

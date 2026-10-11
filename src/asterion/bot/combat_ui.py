@@ -842,7 +842,125 @@ def _fighter_side(state: Combat, key: str) -> str:
     return fighter.side or ("player" if key == "player" else "enemy")
 
 
-def _status_lines(state: Combat, fighter, *, player: bool = False) -> list[str]:
+def _has_normal_negative_effect(state: Combat, fighter) -> bool:
+    return any(
+        effect.kind == "debuff"
+        and not effect.fixed_mechanic
+        and effect.remaining > 0
+        and effect.stacks > 0
+        for effect in fighter.effects
+    ) or any(
+        not dot.fixed_mechanic and dot.remaining > 0 and dot.stacks > 0
+        for dot in state.dot_states.get(fighter.id, ())
+    )
+
+
+def _class_mechanic_status_lines(
+    state: Combat, fighter_key: str, viewer_key: str
+) -> list[str]:
+    """Show the viewer's team resources and its own target marks."""
+    fighter = state.fighters.get(fighter_key)
+    viewer = state.fighters.get(viewer_key)
+    if fighter is None or viewer is None:
+        return []
+
+    viewer_side = _fighter_side(state, viewer_key)
+    fighter_side = _fighter_side(state, fighter_key)
+    same_side = fighter_side == viewer_side
+    lines: list[str] = []
+
+    if same_side:
+        if fighter.character_class == "sentinela" and fighter.retaliation_charges > 0:
+            lines.append(
+                f"🛡️ Retaliação · <code>{fighter.retaliation_remaining}T</code>"
+            )
+        trama = fighter.path_state.get("trama_state")
+        if (
+            fighter.character_class == "tecelao"
+            and isinstance(trama, dict)
+            and int(trama.get("remaining", 0)) > 0
+        ):
+            lines.append(f"🪄 Trama · <code>{int(trama['remaining'])}T</code>")
+        luminar = fighter.path_state.get("luminar_state")
+        if (
+            fighter.character_class == "luminar"
+            and isinstance(luminar, dict)
+            and int(luminar.get("remaining", 0)) > 0
+        ):
+            kind = luminar.get("kind")
+            label = "Fulgor" if kind == "fulgor" else "Julgamento" if kind == "julgamento" else None
+            if label:
+                icon = "☀️" if kind == "fulgor" else "⚖️"
+                lines.append(f"{icon} {label} · <code>{int(luminar['remaining'])}T</code>")
+
+        for owner_key, owner in state.fighters.items():
+            if (
+                fighter.hp <= 0
+                or owner.hp <= 0
+                or owner.character_class != "oraculo"
+                or _fighter_side(state, owner_key) != viewer_side
+            ):
+                continue
+            marks = owner.path_state.get("omen_defensive", {})
+            omen = marks.get(fighter.id) if isinstance(marks, dict) else None
+            if isinstance(omen, dict) and int(omen.get("remaining", 0)) > 0:
+                lines.append(
+                    f"🔮 Presságio Defensivo · <code>{int(omen['remaining'])}T</code>"
+                )
+
+    # Internal marks are shown only when a living character on the viewer's
+    # side applied them. This keeps an opponent's private class state hidden.
+    if not same_side:
+        for owner_key, owner in state.fighters.items():
+            if owner.hp <= 0 or _fighter_side(state, owner_key) != viewer_side:
+                continue
+            if owner.character_class == "vigia":
+                aim_from = fighter.path_state.get("aim_from", {})
+                aim = aim_from.get(owner.id) if isinstance(aim_from, dict) else None
+                if isinstance(aim, dict) and int(aim.get("remaining", 0)) > 0:
+                    maximum = (
+                        4
+                        if owner.selected_path == "atirador"
+                        else 2
+                        if owner.selected_path == "rastreador"
+                        else 3
+                    )
+                    lines.append(
+                        f"🎯 Mira · {int(aim.get('stacks', 0))}/{maximum} · "
+                        f"<code>{int(aim['remaining'])}T</code>"
+                    )
+            if owner.character_class == "oraculo":
+                for key, label in (
+                    ("omen_offensive", "Presságio Ofensivo"),
+                    ("omen_defensive", "Presságio Defensivo"),
+                ):
+                    marks = owner.path_state.get(key, {})
+                    omen = marks.get(fighter.id) if isinstance(marks, dict) else None
+                    if isinstance(omen, dict) and int(omen.get("remaining", 0)) > 0:
+                        lines.append(
+                            f"🔮 {label} · <code>{int(omen['remaining'])}T</code>"
+                        )
+        if (
+            any(
+                owner.hp > 0
+                and owner.character_class == "errante"
+                and _fighter_side(state, owner_key) == viewer_side
+                for owner_key, owner in state.fighters.items()
+            )
+            and _has_normal_negative_effect(state, fighter)
+        ):
+            lines.append("🗡️ Oportunismo · elegível")
+
+    return lines
+
+
+def _status_lines(
+    state: Combat,
+    fighter,
+    *,
+    player: bool = False,
+    viewer_key: str = "player",
+) -> list[str]:
     name = escape(fighter.name)
     lines: list[str] = []
     if fighter.barrier > 0 and fighter.barrier_remaining > 0:
@@ -880,10 +998,17 @@ def _status_lines(state: Combat, fighter, *, player: bool = False) -> list[str]:
             f"🛡️ Resguardo · <code>{fighter.ward_remaining}T</code> · "
             f"<code>{fighter.ward_charges} Carga(s)</code>"
         )
+    class_lines = _class_mechanic_status_lines(state, fighter.id, viewer_key)
+    if class_lines:
+        if lines:
+            lines.append("")
+        lines.extend(class_lines)
     return lines
 
 
-def _trial_fighter_card(state: Combat, key: str, *, icon: str) -> list[str]:
+def _trial_fighter_card(
+    state: Combat, key: str, *, icon: str, viewer_key: str
+) -> list[str]:
     fighter = state.fighters[key]
     name = escape(fighter.name)
     lines = [
@@ -891,7 +1016,14 @@ def _trial_fighter_card(state: Combat, key: str, *, icon: str) -> list[str]:
         f"❤️ <code>{number(fighter.hp)} / {number(fighter.stats.hp)}</code>",
         hp_bar(fighter.hp, fighter.stats.hp),
     ]
-    lines.extend(_status_lines(state, fighter, player=(key == "player")))
+    lines.extend(
+        _status_lines(
+            state,
+            fighter,
+            player=(_fighter_side(state, key) == _fighter_side(state, viewer_key)),
+            viewer_key=viewer_key,
+        )
+    )
     lines.append("")
     return lines
 
@@ -973,7 +1105,9 @@ def render_combat(view: CombatView) -> Screen:
                 if prepared_source is state.fighters[key]
                 else ("🐺" if state.fighters[key].takes_turn else "✦")
             )
-            lines.extend(_trial_fighter_card(state, key, icon=marker))
+            lines.extend(
+                _trial_fighter_card(state, key, icon=marker, viewer_key=player_key)
+            )
         if state.prepared_action:
             prepared = state.enemy_actions.get(state.prepared_action)
             source = _fighter_for_event(state, state.prepared_source)
@@ -993,7 +1127,9 @@ def render_combat(view: CombatView) -> Screen:
                 if key == active_key
                 else "✨"
             )
-            lines.extend(_trial_fighter_card(state, key, icon=fighter_icon))
+            lines.extend(
+                _trial_fighter_card(state, key, icon=fighter_icon, viewer_key=player_key)
+            )
         lines.extend(["📜 Registro de Combate · Recentes", "", "\n".join(recent[-4:]), ""])
     else:
         enemy = state.fighters["enemy"]
@@ -1003,19 +1139,22 @@ def render_combat(view: CombatView) -> Screen:
             f"<b>🐺 {escape(enemy.name)}</b>",
             f"❤️ <code>{number(enemy.hp)} / {number(enemy.stats.hp)}</code>",
             hp_bar(enemy.hp, enemy.stats.hp),
-            "",
-            state.flavor,
-            "",
-            f"👉 {icon} <b>{escape(player.name)}</b>",
-            f"❤️ <code>{number(player.hp)} / {number(player.stats.hp)}</code>",
-            hp_bar(player.hp, player.stats.hp),
-            "",
-            "📜 Registro de Combate · Recentes",
-            "",
-            "\n".join(recent[-4:]),
-            "",
         ]
-        status_lines = []
+        enemy_class_lines = _class_mechanic_status_lines(state, "enemy", player_key)
+        if enemy_class_lines:
+            lines.extend(enemy_class_lines)
+        lines.extend(
+            [
+                "",
+                state.flavor,
+                "",
+                f"👉 {icon} <b>{escape(player.name)}</b>",
+                f"❤️ <code>{number(player.hp)} / {number(player.stats.hp)}</code>",
+                hp_bar(player.hp, player.stats.hp),
+            ]
+        )
+        lines.extend(["", "📜 Registro de Combate · Recentes", "", "\n".join(recent[-4:]), ""])
+        status_lines: list[str] = []
         if enemy.barrier > 0 and enemy.barrier_remaining > 0:
             status_lines.append(
                 f"🛡️ Barreira de {escape(enemy.name)} · "
@@ -1030,8 +1169,14 @@ def render_combat(view: CombatView) -> Screen:
             status_lines.append(
                 f"🛡️ Resguardo · <code>{player.ward_remaining}T</code> · <code>1 Carga</code>"
             )
+        player_class_lines = _class_mechanic_status_lines(state, player_key, player_key)
+        if player_class_lines:
+            if status_lines:
+                status_lines.append("")
+            status_lines.extend(player_class_lines)
         if status_lines:
-            lines[11:11] = status_lines
+            insert_at = lines.index("📜 Registro de Combate · Recentes")
+            lines[insert_at:insert_at] = status_lines
         if view.consumable_notice:
             lines[8:8] = [escape(view.consumable_notice), ""]
 
