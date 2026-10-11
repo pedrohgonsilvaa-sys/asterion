@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from asterion.application.group_hunts import group_hunt_scaling
 from asterion.application.groups import GroupError, GroupService
+from asterion.application.p7 import GARGANTA, GARGANTA_HUNT_UNLOCK, P7_ID, REGION
 from asterion.application.road import ROAD, RoadService
 from asterion.bot.groups_ui import render_hunt_roster
 from asterion.domain.combat import active_player_key
@@ -23,6 +24,7 @@ from asterion.infrastructure.db.models import (
     HuntContext,
     PvpveQueue,
     Quest,
+    RewardComponent,
     RewardEvent,
     Unlock,
     WorldState,
@@ -425,6 +427,110 @@ async def test_group_hunt_victory_uses_individual_settlement_and_duplicate_callb
             len([event for event in rewards_after if event.source_id.startswith("activity:")])
             == 2
         )
+
+
+@pytest.mark.asyncio
+async def test_vde_group_hunt_uses_the_same_material_table_for_each_participant(
+    database, monkeypatch
+):
+    actors, ids = await _seed_hunters(database, count=2)
+    async with database[1].begin() as session:
+        for name in NAMES[:2]:
+            character = await session.get(Character, ids[name])
+            world = await session.get(WorldState, ids[name])
+            assert character is not None and world is not None
+            character.level = 13
+            character.ruleset_version = "vales-1.0.3"
+            world.region = REGION
+            world.location = GARGANTA
+            session.add(
+                Quest(
+                    character_id=character.id,
+                    quest_id=P7_ID,
+                    title="A Estrada Estrangulada",
+                    status="completed",
+                    step=7,
+                    content_version="vales-1.0.3",
+                    progress={"completed": True},
+                )
+            )
+            session.add(
+                Unlock(
+                    character_id=character.id,
+                    unlock_id=GARGANTA_HUNT_UNLOCK,
+                )
+            )
+
+    groups = GroupService(database[1], "ocaso")
+    road = RoadService(database[1], "ocaso")
+    group = await _join_group(groups, actors, count=2)
+    monkeypatch.setattr(
+        "asterion.application.group_hunts.select_creature",
+        lambda _seed, _level, profile=None: creature_for("peregrino_enredado"),
+    )
+    monkeypatch.setattr(
+        "asterion.application.group_hunts.select_variant",
+        lambda _seed, _creature, profile=None: None,
+    )
+    started = await _ready_group_hunt(groups, road, actors, ids, group)
+    assert started.started
+    view = await road.resume(actors[NAMES[0]])
+    assert view is not None and view.kind == "combat"
+
+    async with database[1]() as session:
+        members = list(
+            (
+                await session.scalars(
+                    select(GroupHuntMember).where(
+                        GroupHuntMember.group_hunt_encounter_id == view.encounter_id
+                    )
+                )
+            ).all()
+        )
+    actor_by_fighter = {
+        member.actor_key: next(
+            actor for name, actor in actors.items() if ids[name] == member.character_id
+        )
+        for member in members
+    }
+    for _ in range(120):
+        if view.kind != "combat":
+            break
+        actor = actor_by_fighter[active_player_key(view.combat)]
+        member = next(row for row in members if row.actor_key == active_player_key(view.combat))
+        current = await road.resume(actor)
+        assert current is not None and current.kind == "combat"
+        view = await road.action(
+            actor, member.game_activity_id, current.state_version, "attack"
+        )
+        assert view is not None
+    assert view.kind == "hunt_victory"
+
+    async with database[1]() as session:
+        for member in members:
+            rows = list(
+                (
+                    await session.scalars(
+                        select(RewardComponent)
+                        .join(RewardEvent)
+                        .where(
+                            RewardEvent.character_id == member.character_id,
+                            RewardEvent.source_id == f"activity:{member.game_activity_id}",
+                            RewardComponent.kind == "material",
+                        )
+                        .order_by(RewardComponent.id)
+                    )
+                ).all()
+            )
+            assert 1 <= len(rows) <= 2
+            assert all(
+                row.item_id
+                in {
+                    "material.vde.ferro_enredado",
+                    "material.vde.resina_enredada",
+                }
+                for row in rows
+            )
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,7 @@ Fundação técnica do **Asterion**, RPG/MMORPG dark fantasy para Telegram.
 Este repositório começou do zero em setembro de 2026. As fontes autoritativas
 vigentes e sua hierarquia estão listadas em [`docs/SOURCE_AUTHORITY.md`](docs/SOURCE_AUTHORITY.md).
 Nesta sincronização, elas são a Fonte Mestra v1.5.0, Terras do Ocaso v1.0.15,
-Vales dos Enforcados v1.0.3 e a consolidação Visual/UI v1.5.0 de 2026-10-08.
+Vales dos Enforcados v1.0.4 e a consolidação Visual/UI v1.5.0 de 2026-10-08.
 
 A primeira meta de produção é uma **vertical slice das Terras do Ocaso**, antes da produção integral do conteúdo de lançamento.
 

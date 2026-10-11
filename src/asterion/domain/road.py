@@ -1088,6 +1088,23 @@ def crowns(level: int, category: str) -> int:
     return int(((value * factor) / 10).quantize(D(1), rounding="ROUND_HALF_EVEN") * 10)
 
 
+VDE_BASIC_MATERIAL_CREATURE_IDS = frozenset(
+    {
+        "lobo_musgoso",
+        "gralha_vale",
+        "peregrino_enredado",
+        "aranha_cipo",
+        "cervo_no",
+        "sanguessuga_turfa",
+        "casca_errante",
+        "mariposa_breu_verde",
+        "vigia_enraizado",
+        "no_feroz",
+        "viuva_cipos",
+        "carrasco_casca",
+    }
+)
+
 MATERIAL_POOLS = {
     "dog_cinereo": (("material.tdo.couro_escoriado", 100),),
     "alfa_cinereo": (("material.tdo.couro_escoriado", 100),),
@@ -1116,6 +1133,50 @@ MATERIAL_POOLS = {
     "vigia_rachado": (("material.tdo.ferro_de_fuligem", 50), ("material.tdo.residuo_ocaso", 50)),
     "custodio_sem_rosto": (("material.tdo.ferro_de_fuligem", 50), ("material.tdo.residuo_ocaso", 50)),
     "custodio_poente": (("material.tdo.ferro_de_fuligem", 50), ("material.tdo.residuo_ocaso", 50)),
+    # The Vales table selects the identity of each already-awarded basic
+    # material unit. The caller supplies an independent stable seed per unit.
+    "lobo_musgoso": (("material.vde.couro_musgoso", 100),),
+    "gralha_vale": (
+        ("material.vde.erva_de_turfa", 70),
+        ("material.vde.resina_enredada", 30),
+    ),
+    "peregrino_enredado": (
+        ("material.vde.ferro_enredado", 70),
+        ("material.vde.resina_enredada", 30),
+    ),
+    "aranha_cipo": (
+        ("material.vde.erva_de_turfa", 60),
+        ("material.vde.resina_enredada", 40),
+    ),
+    "cervo_no": (("material.vde.couro_musgoso", 100),),
+    "sanguessuga_turfa": (
+        ("material.vde.erva_de_turfa", 80),
+        ("material.vde.resina_enredada", 20),
+    ),
+    "casca_errante": (
+        ("material.vde.resina_enredada", 80),
+        ("material.vde.erva_de_turfa", 20),
+    ),
+    "mariposa_breu_verde": (
+        ("material.vde.erva_de_turfa", 65),
+        ("material.vde.resina_enredada", 35),
+    ),
+    "vigia_enraizado": (
+        ("material.vde.ferro_enredado", 90),
+        ("material.vde.resina_enredada", 10),
+    ),
+    "no_feroz": (
+        ("material.vde.couro_musgoso", 80),
+        ("material.vde.resina_enredada", 20),
+    ),
+    "viuva_cipos": (
+        ("material.vde.erva_de_turfa", 60),
+        ("material.vde.resina_enredada", 40),
+    ),
+    "carrasco_casca": (
+        ("material.vde.resina_enredada", 70),
+        ("material.vde.ferro_enredado", 30),
+    ),
 }
 
 

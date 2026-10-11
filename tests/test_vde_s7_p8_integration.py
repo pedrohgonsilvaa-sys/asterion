@@ -1,5 +1,6 @@
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -25,6 +26,7 @@ from asterion.application.p7 import (
     VIGILIA as VDE_VIGILIA,
 )
 from asterion.application.road import (
+    HUNT_CONTENT,
     VDE_EXPLORATION_UNIQUE_XP,
     VDE_MATA,
     RoadService,
@@ -32,6 +34,7 @@ from asterion.application.road import (
 from asterion.application.round import RoundService
 from asterion.application.vde_missions import (
     MATA_EXPLORE_UNLOCK,
+    MATA_HUNT_UNLOCK,
     P8_ID,
     P8_REWARD_SOURCE,
     S7_ID,
@@ -39,12 +42,14 @@ from asterion.application.vde_missions import (
     VDEMissionService,
 )
 from asterion.bot.road_ui import render_current_local
+from asterion.domain.combat_math import Stats
 from asterion.domain.road import (
     EXPLORATION_CATEGORY_WEIGHTS,
     EXPLORATION_PROFILES,
     HUNT_PROFILES,
     MATERIAL_POOLS,
     VARIANT_POOL,
+    VDE_BASIC_MATERIAL_CREATURE_IDS,
     VDE_CREATURES,
     VDE_GARGANTA_LOCATION,
     VDE_GARGANTA_ROUND_FAMILIARITY,
@@ -52,7 +57,9 @@ from asterion.domain.road import (
     VDE_MATA_LOCATION,
     create_road_combat,
     creature_for,
+    material_for,
     select_exploration_result,
+    weighted_choice,
 )
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
@@ -63,8 +70,16 @@ from asterion.infrastructure.db.models import (
     CodexEntry,
     CodexFragment,
     ExplorationAttempt,
+    GameActivity,
+    HuntContext,
+    HuntRound,
+    HuntRoundEncounter,
     LocationDiscovery,
     MaterialStack,
+    PvpveCollision,
+    PvpveCollisionMember,
+    PvpveDomainGrant,
+    PvpveQueue,
     Quest,
     RewardComponent,
     RewardEvent,
@@ -73,8 +88,101 @@ from asterion.infrastructure.db.models import (
 )
 from tests.test_p7_integration import _seed_p7_ready, _terminal
 
+VDE_BASIC_MATERIAL_POOLS = {
+    "lobo_musgoso": (("material.vde.couro_musgoso", 100),),
+    "gralha_vale": (
+        ("material.vde.erva_de_turfa", 70),
+        ("material.vde.resina_enredada", 30),
+    ),
+    "peregrino_enredado": (
+        ("material.vde.ferro_enredado", 70),
+        ("material.vde.resina_enredada", 30),
+    ),
+    "aranha_cipo": (
+        ("material.vde.erva_de_turfa", 60),
+        ("material.vde.resina_enredada", 40),
+    ),
+    "cervo_no": (("material.vde.couro_musgoso", 100),),
+    "sanguessuga_turfa": (
+        ("material.vde.erva_de_turfa", 80),
+        ("material.vde.resina_enredada", 20),
+    ),
+    "casca_errante": (
+        ("material.vde.resina_enredada", 80),
+        ("material.vde.erva_de_turfa", 20),
+    ),
+    "mariposa_breu_verde": (
+        ("material.vde.erva_de_turfa", 65),
+        ("material.vde.resina_enredada", 35),
+    ),
+    "vigia_enraizado": (
+        ("material.vde.ferro_enredado", 90),
+        ("material.vde.resina_enredada", 10),
+    ),
+    "no_feroz": (
+        ("material.vde.couro_musgoso", 80),
+        ("material.vde.resina_enredada", 20),
+    ),
+    "viuva_cipos": (
+        ("material.vde.erva_de_turfa", 60),
+        ("material.vde.resina_enredada", 40),
+    ),
+    "carrasco_casca": (
+        ("material.vde.resina_enredada", 70),
+        ("material.vde.ferro_enredado", 30),
+    ),
+}
 
-async def _seed_vde_ready(database, actor: int, *, level: int = 13):
+
+def test_vde_basic_material_pools_match_the_regional_authority():
+    assert VDE_BASIC_MATERIAL_CREATURE_IDS == frozenset(VDE_BASIC_MATERIAL_POOLS)
+    for creature_id, expected_pool in VDE_BASIC_MATERIAL_POOLS.items():
+        assert MATERIAL_POOLS[creature_id] == expected_pool
+        assert sum(weight for _, weight in expected_pool) == 100
+        allowed = {material for material, _ in expected_pool}
+        assert {
+            material_for(creature_id, f"vde-pool-check:{index}")
+            for index in range(256)
+        } <= allowed
+
+    assert material_for("lobo_musgoso", "seed-a") == "material.vde.couro_musgoso"
+    assert material_for("cervo_no", "seed-b") == "material.vde.couro_musgoso"
+    assert MATERIAL_POOLS["vigia_enraizado"] == (
+        ("material.vde.ferro_enredado", 90),
+        ("material.vde.resina_enredada", 10),
+    )
+    assert MATERIAL_POOLS["casca_errante"] == (
+        ("material.vde.resina_enredada", 80),
+        ("material.vde.erva_de_turfa", 20),
+    )
+
+
+def test_vde_material_unit_subdraws_are_ordinal_deterministic_and_allow_repeats():
+    base_seed = "persisted-economic-seed"
+    pool = VDE_BASIC_MATERIAL_POOLS["peregrino_enredado"]
+    actual = tuple(
+        material_for("peregrino_enredado", f"{base_seed}:material.basic.{ordinal}")
+        for ordinal in range(4)
+    )
+    expected = tuple(
+        weighted_choice(f"{base_seed}:material.basic.{ordinal}", pool)
+        for ordinal in range(4)
+    )
+    assert actual == expected
+    assert actual == tuple(
+        material_for("peregrino_enredado", f"{base_seed}:material.basic.{ordinal}")
+        for ordinal in range(4)
+    )
+    repeatable = tuple(
+        material_for("lobo_musgoso", f"{base_seed}:material:{ordinal}")
+        for ordinal in range(4)
+    )
+    assert repeatable == ("material.vde.couro_musgoso",) * 4
+
+
+async def _seed_vde_ready(
+    database, actor: int, *, level: int = 13, round_ready: bool = True
+):
     character_id, sessions = await _seed_p7_ready(database, actor, level=level)
     async with sessions.begin() as session:
         world = await session.get(WorldState, character_id)
@@ -92,6 +200,16 @@ async def _seed_vde_ready(database, actor: int, *, level: int = 13):
                 progress={"completed": True},
             )
         )
+        round_unlocks = (
+            [
+                Unlock(
+                    character_id=character_id,
+                    unlock_id=VDE_GARGANTA_ROUND_FAMILIARITY,
+                )
+            ]
+            if round_ready
+            else []
+        )
         session.add_all(
             [
                 Unlock(character_id=character_id, unlock_id=GARGANTA_VIGILIA_ROUTE),
@@ -101,21 +219,20 @@ async def _seed_vde_ready(database, actor: int, *, level: int = 13):
                 LocationDiscovery(character_id=character_id, location_id=VIGILIA_LOCATION_ID),
                 Unlock(character_id=character_id, unlock_id=GARGANTA_HUNT_UNLOCK),
                 Unlock(character_id=character_id, unlock_id=GARGANTA_EXPLORE_UNLOCK),
-                Unlock(
-                    character_id=character_id,
-                    unlock_id=VDE_GARGANTA_ROUND_FAMILIARITY,
-                ),
+                *round_unlocks,
             ]
         )
     return character_id, sessions
 
 
 @pytest.mark.asyncio
-async def test_vde_exploration_is_available_while_hunt_round_wait_for_material_table(
+async def test_vde_garganta_hunt_and_exploration_are_available_after_p7(
     database, monkeypatch
 ):
     actor = 999731
-    character_id, sessions = await _seed_vde_ready(database, actor)
+    character_id, sessions = await _seed_vde_ready(
+        database, actor, round_ready=False
+    )
     async with sessions.begin() as session:
         world = await session.get(WorldState, character_id)
         assert world is not None
@@ -143,7 +260,7 @@ async def test_vde_exploration_is_available_while_hunt_round_wait_for_material_t
     assert {creature.creature_id for creature in VDE_CREATURES} >= {
         creature_id for creature_id, _ in hunt.creature_weights
     }
-    assert any(creature_id not in MATERIAL_POOLS for creature_id, _ in hunt.creature_weights)
+    assert all(creature_id in MATERIAL_POOLS for creature_id, _ in hunt.creature_weights)
     creatures = {creature.creature_id: creature for creature in VDE_CREATURES}
     assert {
         creature_id: (
@@ -258,15 +375,23 @@ async def test_vde_exploration_is_available_while_hunt_round_wait_for_material_t
     road = RoadService(sessions, "ocaso")
     current = await road.resume(actor)
     assert current is not None and current.kind == "vde_garganta"
-    assert current.hunt_enabled is False and current.explore_enabled is True
-    assert await road.prepare_hunt(actor) is None
-    assert await road.start_hunt(actor) is None
+    assert current.hunt_enabled is True and current.explore_enabled is True
+    prepared_hunt = await road.prepare_hunt(actor)
+    assert prepared_hunt is not None and prepared_hunt.kind == "hunt_prepare"
     prepared = await road.prepare_explore(actor)
     assert prepared is not None and prepared.kind == "explore_prepare"
+    round_gate = await RoundService(sessions, "ocaso").prepare_round(actor, 5)
+    assert round_gate is not None and round_gate.kind == "vde_garganta"
+    assert round_gate.familiar is False
     screen = render_current_local(current, explore_state="available")
     callbacks = [button.callback_data for row in screen.keyboard.inline_keyboard for button in row]
     assert "road:explore:start" in callbacks
-    assert "Caçada · Indisponível no momento" in screen.text
+    assert "Caçada · Disponível" in screen.text
+    assert any(
+        button.callback_data == "road:hunt"
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+    )
     assert "Aguardando tabela canônica" not in screen.text
 
     import asterion.application.road as road_application
@@ -303,8 +428,475 @@ async def test_vde_exploration_is_available_while_hunt_round_wait_for_material_t
             is not None
         )
 
+    # Ronda's safety preflight requires the character to be healthy enough to
+    # begin its automatic encounter; the test is about the unlock and regional
+    # settlement profile, so restore the fixture's HP between activities.
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        assert character is not None
+        character.hp = character.max_hp
+
+@pytest.mark.asyncio
+async def test_vde_first_manual_victory_unlocks_ronda_and_ronda_can_start(
+    database, monkeypatch
+):
+    import asterion.application.pvpve as pvpve_application
+    import asterion.application.road as road_application
+    import asterion.application.round as round_application
+    import asterion.application.vigor as vigor_application
+
+    actor = 999741
+    character_id, sessions = await _seed_vde_ready(database, actor, round_ready=False)
+    road = RoadService(sessions, "ocaso")
+    assert await road.travel_route(actor, VDE_GARGANTA) is not None
+    monkeypatch.setattr(
+        road_application,
+        "select_creature",
+        lambda _seed, _level, profile=None: creature_for("lobo_musgoso"),
+    )
+
+    before = await road.resume(actor)
+    assert before is not None and before.kind == "vde_garganta"
+    assert before.hunt_enabled and not before.familiar
+    queued = await road.start_hunt(actor)
+    assert queued is not None and queued.kind == "hunt_queue"
+    assert queued.pvpve_queue_id is not None
+    combat = await road.pvpve.continue_queue(actor, queued.pvpve_queue_id)
+    assert combat is not None and combat.kind == "combat"
+
+    for _ in range(120):
+        if combat.kind != "combat":
+            break
+        combat = await road.action(
+            actor,
+            combat.activity_id,
+            combat.combat.version,
+            "attack",
+        )
+        assert combat is not None
+    assert combat.kind == "hunt_victory"
+    await road.acknowledge_result(actor)
+
+    # The Ronda's PvPvE exposure ends at its official three-minute frontier.
+    # A controlled clock keeps the integration test deterministic without
+    # shortening the production cadence.
+    round_start = datetime.now(UTC)
+
+    class ControlledDateTime(datetime):
+        current = round_start
+
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return cls.current.replace(tzinfo=None)
+            return cls.current.astimezone(tz)
+
+    monkeypatch.setattr(round_application, "datetime", ControlledDateTime)
+    monkeypatch.setattr(vigor_application, "utcnow", lambda: ControlledDateTime.current)
+    monkeypatch.setattr(pvpve_application, "_utcnow", lambda: ControlledDateTime.current)
+    monkeypatch.setattr(
+        round_application,
+        "select_creature",
+        lambda _seed, _level, profile=None: creature_for("lobo_musgoso"),
+    )
+    original_create_road_combat = round_application.create_road_combat
+
+    def safe_round_combat(*args, **kwargs):
+        state = original_create_road_combat(*args, **kwargs)
+        enemy = state.fighters["enemy"]
+        enemy.stats = Stats(
+            enemy.stats.hp,
+            Decimal(1),
+            enemy.stats.defense,
+            enemy.stats.agility,
+        )
+        return state
+
+    monkeypatch.setattr(round_application, "create_road_combat", safe_round_combat)
+    original_draw_int = road_application._draw_int
+    monkeypatch.setattr(
+        road_application,
+        "_draw_int",
+        lambda seed, purpose, upper: (
+            0 if purpose == "material-roll" else original_draw_int(seed, purpose, upper)
+        ),
+    )
+
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        assert character is not None
+        character.hp = character.max_hp
+        before_material = await session.scalar(
+            select(MaterialStack.quantity).where(
+                MaterialStack.character_id == character_id,
+                MaterialStack.material_id == "material.vde.couro_musgoso",
+            )
+        ) or 0
+
     round_service = RoundService(sessions, "ocaso")
-    assert await round_service.prepare_round(actor, 5) is None
+    prepared = await round_service.prepare_round(actor, 5)
+    assert prepared is not None and prepared.kind == "round_prepare"
+    started = await round_service.start_round(
+        actor, prepared.round_id, prepared.state_version
+    )
+    assert started is not None and started.kind == "hunt_queue"
+    assert started.pvpve_queue_id is not None
+    resumed_queue = await round_service.resume(actor)
+    assert resumed_queue is not None
+    assert resumed_queue.kind == "hunt_queue"
+    assert resumed_queue.pvpve_queue_id == started.pvpve_queue_id
+    async with sessions() as session:
+        active_round = await session.scalar(
+            select(HuntRound).where(
+                HuntRound.character_id == character_id,
+                HuntRound.status == "active",
+            )
+        )
+        assert active_round is not None
+        round_id = active_round.id
+        waiting_queue = await session.get(PvpveQueue, started.pvpve_queue_id)
+        assert waiting_queue is not None and waiting_queue.status == "waiting"
+
+    ControlledDateTime.current += timedelta(minutes=3)
+    assert await round_service.advance_due_rounds() == 1
+    after_frontier = await round_service.resume(actor)
+    assert after_frontier is not None
+    assert after_frontier.kind in {"hunt_queue", "round_active"}
+    async with sessions() as session:
+        state = await session.get(HuntRound, round_id)
+        assert state is not None and state.completed_encounters == 1
+        encounter = await session.scalar(
+            select(HuntRoundEncounter).where(
+                HuntRoundEncounter.round_id == round_id,
+                HuntRoundEncounter.ordinal == 1,
+            )
+        )
+        assert encounter is not None and encounter.status == "completed"
+        after_material = await session.scalar(
+            select(MaterialStack.quantity).where(
+                MaterialStack.character_id == character_id,
+                MaterialStack.material_id == "material.vde.couro_musgoso",
+            )
+        ) or 0
+        assert after_material == before_material + 1
+    assert MATERIAL_POOLS["lobo_musgoso"] == VDE_BASIC_MATERIAL_POOLS["lobo_musgoso"]
+
+
+@pytest.mark.asyncio
+async def test_vde_hunt_keeps_global_material_quantities_and_settlement_idempotent(
+    database,
+):
+    from asterion.application.road import _draw_int
+
+    def seed_for(purpose: str, modulo: int, result: int) -> str:
+        for index in range(100_000):
+            seed = f"vde-quantity-{purpose}-{result}-{index}"
+            if _draw_int(seed, purpose, modulo) == result:
+                return seed
+        raise AssertionError("could not derive a deterministic loot test seed")
+
+    actor = 999742
+    character_id, sessions = await _seed_vde_ready(database, actor)
+    road = RoadService(sessions, "ocaso")
+    cases = (
+        ("common", "lobo_musgoso", 13, seed_for("material-roll", 100, 79), 1),
+        ("common", "lobo_musgoso", 13, seed_for("material-roll", 100, 80), 0),
+        ("uncommon", "peregrino_enredado", 13, seed_for("uncommon-materials", 2, 0), 1),
+        ("uncommon", "peregrino_enredado", 13, seed_for("uncommon-materials", 2, 1), 2),
+        ("elite", "no_feroz", 13, seed_for("elite-materials", 2, 0), 3),
+        ("elite", "no_feroz", 13, seed_for("elite-materials", 2, 1), 4),
+    )
+    expected_per_activity = {}
+
+    async with sessions.begin() as session:
+        character = await session.scalar(
+            select(Character)
+            .where(Character.id == character_id)
+            .with_for_update()
+        )
+        assert character is not None
+        for index, (category, creature_id, level, seed, material_count) in enumerate(
+            cases, start=1
+        ):
+            activity = GameActivity(
+                character_id=character.id,
+                content_id=HUNT_CONTENT,
+                status="completed",
+                state_version=0,
+                ruleset_version="gdd-1.5.0-baseline-1.0",
+            )
+            session.add(activity)
+            await session.flush()
+            session.add(
+                HuntContext(
+                    game_activity_id=activity.id,
+                    character_id=character.id,
+                    local_id=VDE_GARGANTA_LOCATION,
+                    creature_id=creature_id,
+                    category=category,
+                    enemy_level=level,
+                    seed=seed,
+                    loot_profile="hunt",
+                )
+            )
+            await session.flush()
+            expected_per_activity[activity.id] = material_count
+
+            await road._settle_hunt(session, character, activity, UUID(int=index))
+            vigor_after_first_commit = character.vigor
+            rows = list(
+                (
+                    await session.scalars(
+                        select(RewardComponent)
+                        .join(RewardEvent)
+                        .where(
+                            RewardEvent.character_id == character.id,
+                            RewardEvent.source_id == f"activity:{activity.id}",
+                            RewardComponent.kind == "material",
+                        )
+                    )
+                ).all()
+            )
+            assert len(rows) == material_count
+            expected_materials = [
+                material_for(
+                    creature_id,
+                    f"{seed}:material.basic.{ordinal}",
+                )
+                for ordinal in range(material_count)
+            ]
+            assert sorted(row.item_id for row in rows) == sorted(expected_materials)
+
+            if category == "elite":
+                catalyst = await session.scalar(
+                    select(RewardComponent)
+                    .join(RewardEvent)
+                    .where(
+                        RewardEvent.character_id == character.id,
+                        RewardEvent.source_id == f"activity:{activity.id}",
+                        RewardComponent.kind == "catalyst",
+                    )
+                )
+                assert catalyst is not None
+                assert catalyst.item_id == "material.vde.catalisador_elite_ii"
+
+            # Duplicate settlement cannot re-roll units, re-spend Vigor, or
+            # create a second reward receipt for the same persisted activity.
+            await road._settle_hunt(session, character, activity, UUID(int=index))
+            assert character.vigor == vigor_after_first_commit
+            assert len(
+                (
+                    await session.scalars(
+                        select(RewardComponent)
+                        .join(RewardEvent)
+                        .where(
+                            RewardEvent.character_id == character.id,
+                            RewardEvent.source_id == f"activity:{activity.id}",
+                            RewardComponent.kind == "material",
+                        )
+                    )
+                ).all()
+            ) == material_count
+
+    # Reconnect reads persisted receipts; it does not invoke a second material draw.
+    await road.resume(actor)
+    async with sessions() as session:
+        for activity_id, material_count in expected_per_activity.items():
+            assert (
+                await session.scalar(
+                    select(func.count(RewardComponent.id))
+                    .join(RewardEvent)
+                    .where(
+                        RewardEvent.character_id == character_id,
+                        RewardEvent.source_id == f"activity:{activity_id}",
+                        RewardComponent.kind == "material",
+                    )
+                )
+                == material_count
+            )
+
+
+@pytest.mark.asyncio
+async def test_vde_pvpve_domain_adds_a_separate_material_after_normal_prey_settlement(
+    database,
+):
+    winner_actor = 999744
+    opponent_actor = 999745
+    winner_id, sessions = await _seed_vde_ready(database, winner_actor)
+    opponent_id, _ = await _seed_vde_ready(database, opponent_actor)
+    road = RoadService(sessions, "ocaso")
+    collision_id = uuid4()
+    queue_a_id = uuid4()
+    queue_b_id = uuid4()
+    prey_activity_id = uuid4()
+    opponent_activity_id = uuid4()
+    context_seed = "vde-pvpve-prey-economic-seed"
+
+    async with sessions.begin() as session:
+        winner = await session.get(Character, winner_id)
+        opponent = await session.get(Character, opponent_id)
+        assert winner is not None and opponent is not None
+        now = datetime.now(UTC)
+        session.add_all(
+            [
+                PvpveQueue(
+                    id=queue_a_id,
+                    server_id="ocaso",
+                    local_id=VDE_GARGANTA_LOCATION,
+                    roster_size=1,
+                    source_type="manual",
+                    roster_snapshot=[winner.id.hex],
+                    status="matched",
+                    created_at=now,
+                    expires_at=now + timedelta(minutes=20),
+                ),
+                PvpveQueue(
+                    id=queue_b_id,
+                    server_id="ocaso",
+                    local_id=VDE_GARGANTA_LOCATION,
+                    roster_size=1,
+                    source_type="manual",
+                    roster_snapshot=[opponent.id.hex],
+                    status="matched",
+                    created_at=now,
+                    expires_at=now + timedelta(minutes=20),
+                ),
+                GameActivity(
+                    id=prey_activity_id,
+                    character_id=winner.id,
+                    content_id=HUNT_CONTENT,
+                    status="completed",
+                    state_version=0,
+                    ruleset_version="gdd-1.5.0-baseline-1.0",
+                ),
+                GameActivity(
+                    id=opponent_activity_id,
+                    character_id=opponent.id,
+                    content_id=HUNT_CONTENT,
+                    status="failed",
+                    state_version=0,
+                    ruleset_version="gdd-1.5.0-baseline-1.0",
+                ),
+            ]
+        )
+        await session.flush()
+        session.add(
+            PvpveCollision(
+                id=collision_id,
+                server_id="ocaso",
+                local_id=VDE_GARGANTA_LOCATION,
+                roster_size=1,
+                queue_a_id=queue_a_id,
+                queue_b_id=queue_b_id,
+                combat_id=uuid4(),
+                ruleset_version="gdd-1.5.0-baseline-1.0",
+                state_version=0,
+                combat_snapshot={},
+                status="prey",
+                winner_side="a",
+                prey_reference_level=13,
+                created_at=now,
+                resolved_at=now,
+            )
+        )
+        await session.flush()
+        session.add_all(
+            [
+                PvpveCollisionMember(
+                    collision_id=collision_id,
+                    character_id=winner.id,
+                    account_id=winner_actor,
+                    game_activity_id=prey_activity_id,
+                    actor_key="a1",
+                    side="a",
+                    contributed=True,
+                    domain_eligible=True,
+                    status="prey",
+                ),
+                PvpveCollisionMember(
+                    collision_id=collision_id,
+                    character_id=opponent.id,
+                    account_id=opponent_actor,
+                    game_activity_id=opponent_activity_id,
+                    actor_key="b1",
+                    side="b",
+                    contributed=True,
+                    domain_eligible=False,
+                    status="defeated",
+                ),
+                HuntContext(
+                    game_activity_id=prey_activity_id,
+                    character_id=winner.id,
+                    local_id=VDE_GARGANTA_LOCATION,
+                    creature_id="peregrino_enredado",
+                    category="uncommon",
+                    enemy_level=13,
+                    seed=context_seed,
+                    loot_profile="hunt",
+                    pvpve_collision_id=collision_id,
+                    pvpve_reference_level=13,
+                    pvpve_domain_eligible=True,
+                ),
+            ]
+        )
+        await session.flush()
+        vigor_before = winner.vigor
+        prey_activity = await session.get(GameActivity, prey_activity_id)
+        assert prey_activity is not None
+        await road._settle_hunt(session, winner, prey_activity, uuid4())
+        event = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == winner.id,
+                RewardEvent.source_id == f"activity:{prey_activity_id}",
+            )
+        )
+        assert event is not None
+        components = list(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(RewardComponent.reward_event_id == event.id)
+                )
+            ).all()
+        )
+        normal_materials = [
+            component
+            for component in components
+            if component.kind == "material"
+            and component.payload.get("source") != "dominio_do_rastro"
+        ]
+        domain_materials = [
+            component
+            for component in components
+            if component.kind == "material"
+            and component.payload.get("source") == "dominio_do_rastro"
+        ]
+        legal_materials = {
+            "material.vde.ferro_enredado",
+            "material.vde.resina_enredada",
+        }
+        assert 1 <= len(normal_materials) <= 2
+        assert all(row.item_id in legal_materials for row in normal_materials)
+        assert len(domain_materials) == 1
+        assert domain_materials[0].item_id in legal_materials
+        grant = await session.get(PvpveDomainGrant, (collision_id, winner.id))
+        assert grant is not None and grant.status == "granted"
+        assert grant.material_id == domain_materials[0].item_id
+        assert grant.material_id == material_for(
+            "peregrino_enredado", f"pvpve-domain:{collision_id.hex}:{winner.id.hex}"
+        )
+        assert winner.vigor == vigor_before - 2
+
+        # Repeating the same settlement cannot add a prey unit or Domain unit.
+        await road._settle_hunt(
+            session, winner, await session.get(GameActivity, prey_activity_id), uuid4()
+        )
+        assert len(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(RewardComponent.reward_event_id == event.id)
+                )
+            ).all()
+        ) == len(components)
 
 
 def test_vde_conditional_creature_actions_survive_combat_snapshot_round_trip():
@@ -491,6 +1083,36 @@ async def test_mata_desbravar_discovers_brazier_once_and_enables_brazier_travel(
     assert await road.travel_brazier(actor, VDE_MATA_BRAZIER) is not None
     returned = await road.resume(actor)
     assert returned is not None and returned.location == VDE_MATA
+
+
+@pytest.mark.asyncio
+async def test_mata_hunt_is_available_after_p8_and_level_gate(database):
+    actor = 999743
+    character_id, sessions = await _seed_vde_ready(database, actor, level=13)
+    async with sessions.begin() as session:
+        world = await session.get(WorldState, character_id)
+        assert world is not None
+        world.location = VDE_MATA
+        session.add(
+            Quest(
+                character_id=character_id,
+                quest_id=P8_ID,
+                title="Entre Galhos Suspensos",
+                status="completed",
+                step=7,
+                content_version="vales-1.0.3",
+                progress={"completed": True, "returned_vigilia": True},
+            )
+        )
+        session.add(Unlock(character_id=character_id, unlock_id=MATA_HUNT_UNLOCK))
+        session.add(Unlock(character_id=character_id, unlock_id=MATA_EXPLORE_UNLOCK))
+
+    road = RoadService(sessions, "ocaso")
+    view = await road.resume(actor)
+    assert view is not None and view.kind == "vde_mata"
+    assert view.hunt_enabled is True and view.explore_enabled is True
+    prepared = await road.prepare_hunt(actor)
+    assert prepared is not None and prepared.kind == "hunt_prepare"
 
 
 @pytest.mark.asyncio

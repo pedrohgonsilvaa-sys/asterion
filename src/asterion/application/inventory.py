@@ -44,6 +44,8 @@ MATERIAL_LABELS = {
     "material.vde.couro_musgoso": "Couro Musgoso",
     "material.vde.erva_de_turfa": "Erva de Turfa",
     "material.vde.resina_enredada": "Resina Enredada",
+    "material.vde.catalisador_elite_ii": "Catalisador de Elite II",
+    "material.vde.fragmento_aprimoramento_ii": "Fragmento de Aprimoramento II",
 }
 
 @dataclass(frozen=True)
