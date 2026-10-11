@@ -574,6 +574,67 @@ VDE_BARK_EXECUTIONER = Creature(
     ),
     damage_taken_modifiers=(("burn", D("1.10")), ("bleed", D("0.90"))),
 )
+VDE_MATRIARCH = Creature(
+    "matriarca_raizes",
+    "Matriarca das Raízes",
+    "boss",
+    "brute",
+    20,
+    20,
+    0,
+    (
+        "golpe_matriarca",
+        "raiz_constritiva",
+        "seiva_corrompida",
+        "chicote_radicular",
+    ),
+    (
+        ("golpe_matriarca", "Golpe da Matriarca", D("1.00"), 0, D(0), 0),
+        (
+            "raiz_constritiva",
+            "Raiz Constritiva",
+            D("0.90"),
+            0,
+            D("0.10"),
+            2,
+            None,
+            0,
+            False,
+            3,
+            "agility",
+        ),
+        (
+            "seiva_corrompida",
+            "Seiva Corrompida",
+            D("0.80"),
+            0,
+            D(0),
+            0,
+            "poison",
+            1,
+            False,
+            3,
+        ),
+        (
+            "chicote_radicular",
+            "Chicote Radicular",
+            D("1.30"),
+            0,
+            D(0),
+            0,
+            None,
+            0,
+            False,
+            3,
+        ),
+    ),
+    ai_priority=(
+        "raiz_constritiva",
+        "seiva_corrompida",
+        "chicote_radicular",
+        "golpe_matriarca",
+    ),
+)
 
 VDE_CREATURES = (
     VDE_MOSS_WOLF,
@@ -589,7 +650,8 @@ VDE_CREATURES = (
     VDE_ROOTED_WATCHER,
     VDE_BARK_EXECUTIONER,
 )
-CREATURE_CATALOG = (*CREATURE_CATALOG, *VDE_CREATURES)
+CAMPAIGN_BOSS_CREATURES = (VDE_MATRIARCH,)
+CREATURE_CATALOG = (*CREATURE_CATALOG, *VDE_CREATURES, *CAMPAIGN_BOSS_CREATURES)
 
 VARIANTS = {
     "furious": StatMultipliers(D(1), D("1.08"), D("0.92"), D(1)),

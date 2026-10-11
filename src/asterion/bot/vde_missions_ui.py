@@ -6,10 +6,13 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
 from asterion.application.vde_missions import (
+    BERCO,
     CLAUSTRO,
     P9_ID,
     P10_ID,
     P11_ID,
+    P12_ID,
+    P12_REWARD_CHOICES,
     S7_ID,
     S8_ID,
     S9_ID,
@@ -58,8 +61,9 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             )
         )
         kind = "secondary" if quest in {S7_ID, S8_ID, S9_ID, S10_ID, S11_ID} else "principal"
+        encounter_type = "Chefe de Campanha" if quest == P12_ID else "Encontro Roteirizado"
         return Screen(
-            f"📜 {title} · Vales dos Enforcados\n⚔️ Encontro Roteirizado · {location}\n\n{hud.text}",
+            f"📜 {title} · Vales dos Enforcados\n⚔️ {encounter_type} · {location}\n\n{hud.text}",
             f"vde_{kind}",
             hud.keyboard,
             parse_mode=hud.parse_mode,
@@ -88,6 +92,7 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             S10_ID: "P10 ativa ou concluída · Nv.17 · Baixios Enredados",
             S11_ID: "Claustro das Raízes descoberto · Nv.18",
             P11_ID: "P10 concluída · Nv.19 · Claustro das Raízes",
+            P12_ID: "P11 concluída · Nv.20 · Berço da Matriarca",
         }[quest]
         return _screen(
             f"📜 {title}\nMissão "
@@ -113,13 +118,31 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             S10_ID: "P10 ativa ou concluída, Nv.17 e estar nos Baixios Enredados",
             S11_ID: "Claustro das Raízes descoberto, Nv.18 e estar no Claustro",
             P11_ID: "P10 concluída, Nv.19 e estar no Claustro das Raízes",
+            P12_ID: "P11 concluída e Nv.20",
         }[quest]
         return _screen(
             f"📜 {title} · Indisponível\n\nRequer {gate}.",
             [[_button("← Missões", "world:missions")]],
         )
 
+    if view.kind == "choice" and quest == P12_ID:
+        text = (
+            f"📜 {title} · Berço da Matriarca\n\n"
+            "A Campanha dos Vales foi concluída. Escolha individualmente um equipamento Épico.\n\n"
+            "✨ 32.580 XP · 🪙 800 Coroas\n"
+            "📦 Ferro Enredado · 4 · Vinculado\n"
+            "📦 Resina Enredada · 4 · Vinculada\n"
+            "🧭 O Berço permanece acessível."
+        )
+        rows = [
+            [_button(f"{name} · {slot}", f"vde:{quest}:{version}:ch:{choice}")]
+            for choice, (name, slot) in P12_REWARD_CHOICES.items()
+        ]
+        rows.append([_button("← Missões", "world:missions")])
+        return _screen(text, rows, "vde_missions")
+
     if view.kind == "completed":
+        progress = view.progress or {}
         reward = {
             S7_ID: "✨ 3.840 XP · 🪙 140 Coroas",
             "P8": (
@@ -171,6 +194,18 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
                 "📦 Ferro Enredado · 3 · Vinculado\n"
                 "📦 Resina Enredada · 1 · Vinculada"
             ),
+            P12_ID: (
+                "✨ 32.580 XP · 🪙 800 Coroas\n"
+                "📦 Ferro Enredado · 4 · Vinculado\n"
+                "📦 Resina Enredada · 4 · Vinculada\n"
+                "🎁 "
+                + escape(
+                    P12_REWARD_CHOICES.get(
+                        str(progress.get("reward_choice")), ("Equipamento Épico", "")
+                    )[0]
+                )
+                + " · Épico · Nv.20 · Vinculado"
+            ),
         }.get(quest, "")
         text = f"✅ {title} · Concluída\n\n{reward}"
         rows = []
@@ -188,12 +223,107 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             )
             if view.location == CLAUSTRO:
                 rows.append([_button("Seguir para o Berço", "road:route:vde_berco")])
+        elif quest == P12_ID:
+            text += "\n\nA Campanha dos Vales foi concluída. O Berço permanece acessível."
         rows.append([_button("← Missões", "world:missions")])
         return _screen(text, rows)
 
     progress = view.progress or {}
     rows: list[list[InlineKeyboardButton]] = []
-    if view.kind == "markers":
+    if view.kind == "enter_berco" and quest == P12_ID:
+        text = (
+            f"📜 {title} · {BERCO}\n\n"
+            "🎯 Entrar no Berço da Matriarca e avançar pela rede exterior."
+        )
+        if view.location == CLAUSTRO:
+            rows.append([_button("Seguir para o Berço", "road:route:vde_berco")])
+        elif view.location == BERCO:
+            rows.append([_button("Entrar no Berço", f"vde:{quest}:{version}:enter_berco")])
+        else:
+            rows.append([_button("Retornar ao Claustro", "road:route:vde_claustro")])
+    elif view.kind == "advance_network" and quest == P12_ID:
+        text = (
+            f"📜 {title} · {BERCO}\n\n"
+            "🎯 Avançar através da rede exterior até as três conexões que bloqueiam o acesso."
+        )
+        rows.append(
+            [
+                _button(
+                    "Avançar pela rede"
+                    if view.location == BERCO
+                    else "Seguir para o Berço",
+                    f"vde:{quest}:{version}:advance_network"
+                    if view.location == BERCO
+                    else "road:route:vde_berco",
+                )
+            ]
+        )
+    elif view.kind == "connections" and quest == P12_ID:
+        found = set(progress.get("external_connections", ()))
+        if view.location == BERCO:
+            for point, label in (
+                ("a", "Romper conexão exterior 1"),
+                ("b", "Romper conexão exterior 2"),
+                ("c", "Romper conexão exterior 3"),
+            ):
+                if point not in found:
+                    rows.append([_button(label, f"vde:{quest}:{version}:ex:{point}")])
+        else:
+            rows.append([_button("Seguir para o Berço", "road:route:vde_berco")])
+        text = (
+            f"📜 {title} · {BERCO}\n\n"
+            "🎯 Romper as três grandes conexões exteriores.\n"
+            f"Progresso · {len(found)}/3"
+        )
+    elif view.kind == "central_chamber" and quest == P12_ID:
+        text = f"📜 {title} · {BERCO}\n\n🎯 Alcançar a câmara central."
+        rows.append(
+            [
+                _button(
+                    "Alcançar a câmara central"
+                    if view.location == BERCO
+                    else "Seguir para o Berço",
+                    f"vde:{quest}:{version}:central_chamber"
+                    if view.location == BERCO
+                    else "road:route:vde_berco",
+                )
+            ]
+        )
+    elif view.kind == "examine_center" and quest == P12_ID:
+        text = (
+            f"📜 {title} · {BERCO}\n\n"
+            "A Matriarca foi derrotada. Examine o centro da câmara e registre a descoberta final."
+        )
+        rows.append(
+            [
+                _button(
+                    "Examinar o centro"
+                    if view.location == BERCO
+                    else "Seguir para o Berço",
+                    f"vde:{quest}:{version}:examine_center"
+                    if view.location == BERCO
+                    else "road:route:vde_berco",
+                )
+            ]
+        )
+    elif view.kind == "register" and quest == P12_ID:
+        text = (
+            f"📜 {title} · {BERCO}\n\n"
+            "🎯 Registrar a descoberta e concluir a Campanha dos Vales."
+        )
+        rows.append(
+            [
+                _button(
+                    "Registrar descoberta"
+                    if view.location == BERCO
+                    else "Seguir para o Berço",
+                    f"vde:{quest}:{version}:register"
+                    if view.location == BERCO
+                    else "road:route:vde_berco",
+                )
+            ]
+        )
+    elif view.kind == "markers":
         found = set(progress.get("markers", ()))
         for point, label in (
             ("a", "Examinar marcação 1"),
@@ -252,7 +382,9 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             f"Progresso · {len(found)}/3"
         )
     elif view.kind == "combat_start":
-        if quest == S11_ID:
+        if quest == P12_ID:
+            objective = "Enfrentar a Matriarca das Raízes, Chefe de Campanha do Berço."
+        elif quest == S11_ID:
             objective = "Derrotar o Vigia Enraizado que patrulha o Claustro."
         elif quest in {S10_ID, P11_ID}:
             location_text = "na região inundada" if quest == S10_ID else "no Claustro das Raízes"

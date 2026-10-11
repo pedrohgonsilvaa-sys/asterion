@@ -2051,8 +2051,10 @@ class DungeonService:
             )
             await consolidate_character_level(session, character)
             from asterion.application.tdo_feats import reconcile_tdo_feats
+            from asterion.application.vde_feats import reconcile_vde_feats
 
             await reconcile_tdo_feats(session, character)
+            await reconcile_vde_feats(session, character)
         progress.update(
             internal_xp=0,
             internal_rewards=[],

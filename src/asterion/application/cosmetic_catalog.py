@@ -88,6 +88,24 @@ COSMETICS = (
         "Ocaso",
         "feat.tdo.terras_do_ocaso",
     ),
+    CosmeticDefinition(
+        "cosmetic.title.vde.sobrevivente_do_berco",
+        "title",
+        "Sobrevivente do Berço",
+        "feat.vde.o_berco_silencia",
+    ),
+    CosmeticDefinition(
+        "cosmetic.frame.vde.vales_dos_enforcados",
+        "frame",
+        "Vales dos Enforcados",
+        "feat.vde.vales_dos_enforcados",
+    ),
+    CosmeticDefinition(
+        "cosmetic.frame.vde.pedra_enlacada",
+        "frame",
+        "Pedra Enlaçada",
+        "feat.vde.a_rede_nao_dorme",
+    ),
 )
 
 COSMETICS_BY_ID = {item.cosmetic_id: item for item in COSMETICS}

@@ -46,13 +46,46 @@ def test_catalog_contains_tdo_equipment_alchemy_runes_and_special_recipes():
     assert len(runes) == 16
     assert {recipe.rarity for recipe in runes} == {"Rara", "Épica"}
     assert {recipe.required_level for recipe in runes} == {5, 10}
-    assert len([recipe for recipe in RECIPE_DEFINITIONS if recipe.unlock_id]) == 3
+    assert len(
+        [
+            recipe
+            for recipe in RECIPE_DEFINITIONS
+            if recipe.unlock_id and recipe.recipe_id.startswith("recipe.tdo.")
+        ]
+    ) == 3
     echo = next(
         recipe
         for recipe in RECIPE_DEFINITIONS
         if recipe.unlock_id == "recipe.tdo.vigia_partido.eco"
     )
     assert echo.creation_enabled is False
+    matriarch = next(
+        recipe
+        for recipe in RECIPE_DEFINITIONS
+        if recipe.recipe_id == "recipe.vde.matriarca.seiva"
+    )
+    assert matriarch.unlock_id == "recipe.vde.matriarca.seiva"
+    assert (matriarch.profession_id, matriarch.required_level, matriarch.grade) == (
+        "artificer",
+        10,
+        2,
+    )
+    assert (matriarch.output_kind, matriarch.output_id, matriarch.rarity) == (
+        "enchantment",
+        "HP",
+        "Épico",
+    )
+    assert tuple(
+        (material.material_id, material.quantity)
+        for material in recipe_materials(matriarch, 20)
+    ) == (
+        ("material.vde.resina_enredada", 5),
+        ("material.vde.ferro_enredado", 2),
+        ("material.vde.catalisador_elite_ii", 1),
+        ("material.vde.nucleo_matriarca_das_raizes", 1),
+    )
+    assert recipe_crown_cost(matriarch, 20) == 160
+    assert matriarch.creation_enabled is False
     assert MATERIAL_NAMES[IRON] == "Ferro de Fuligem"
     assert MATERIAL_NAMES[RESIDUE] == "Resíduo do Ocaso"
     assert MATERIAL_NAMES[CATALYST_I] == "Catalisador de Elite I"

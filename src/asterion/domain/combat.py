@@ -147,6 +147,11 @@ class Action:
     actor_per_bonus_hp_fraction_threshold: Decimal = D("0.40")
     native_dot_stacks_if_target_poisoned: int = 0
     vampirism_fraction: Decimal = ZERO
+    # Optional shared-engine encounter constraints. Empty values preserve the
+    # legacy action contract used by existing combat content.
+    phase_ids: tuple[str, ...] = ()
+    skip_if_target_effect_active: str | None = None
+    skip_if_target_dot_at_cap: str | None = None
 
     def __post_init__(self) -> None:
         if self.hit_count < 1:
@@ -385,6 +390,7 @@ class CombatPhaseTrigger:
     activate_fighter_keys: tuple[str, ...] = ()
     revive_fighter_keys: tuple[str, ...] = ()
     revive_hp_fraction: Decimal = D("0.50")
+    phase_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -451,6 +457,7 @@ class Combat:
     damage_auras: tuple[CombatDamageAura, ...] = ()
     phase_triggers: tuple[CombatPhaseTrigger, ...] = ()
     phase_triggered_ids: set[str] = field(default_factory=set)
+    phase_id: str = "default"
     manual_sides: tuple[str, ...] = ()
 
     @property
@@ -534,6 +541,8 @@ def _resolve_phase_triggers(state: Combat) -> None:
             continue
         if source.hp > source.stats.hp * trigger.hp_fraction_at_most:
             continue
+        if trigger.phase_id is not None:
+            state.phase_id = trigger.phase_id
         for key in trigger.activate_fighter_keys:
             fighter = state.fighters.get(key)
             if fighter is not None and fighter.hp <= ZERO:
@@ -1576,7 +1585,19 @@ def _end_turn(state: Combat) -> None:
                     )
                 ),
             )
+        actor_key = _resolve_fighter_key(state, actor.id)
+        aura_reduction = (
+            _damage_aura_reduction(state, actor_key) if actor_key is not None else ZERO
+        )
+        if aura_reduction > ZERO and damage > 0:
+            damage = int(
+                (D(damage) * (D(1) - aura_reduction)).to_integral_value(
+                    rounding=ROUND_FLOOR
+                )
+            )
         actual_damage, barrier_absorbed = _deal_damage(actor, damage)
+        if actual_damage > ZERO:
+            _resolve_phase_triggers(state)
         source_actor = source.id if source is not None else dot.source
         state.mechanic_events.append(
             CombatEvent(
@@ -3508,9 +3529,51 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
         return "hold"
     enemy = state.fighters[actor_key]
 
+    def current_target_key() -> str | None:
+        candidates = [
+            key
+            for key, fighter in state.fighters.items()
+            if fighter.hp > ZERO and _fighter_side(state, key) != _fighter_side(state, actor_key)
+        ]
+        candidates.sort(key=lambda key: (state.fighters[key].id, key))
+        if state.ai_target_cycle:
+            requested = state.ai_target_cycle[
+                state.ai_target_position % len(state.ai_target_cycle)
+            ]
+            requested_key = _resolve_fighter_key(state, requested)
+            if requested_key in candidates:
+                return requested_key
+        player_candidates = [key for key in candidates if _fighter_side(state, key) == "player"]
+        if player_candidates:
+            return player_candidates[0]
+        return candidates[0] if candidates else None
+
+    def target_condition_blocks(action: Action) -> bool:
+        target_key = current_target_key()
+        if target_key is None:
+            return False
+        target = state.fighters[target_key]
+        if action.skip_if_target_effect_active and any(
+            effect.id == action.skip_if_target_effect_active and effect.remaining > 0
+            for effect in target.effects
+        ):
+            return True
+        if action.skip_if_target_dot_at_cap:
+            cap = _DOT_STACK_CAPS.get(action.skip_if_target_dot_at_cap, 3)
+            if any(
+                dot.kind == action.skip_if_target_dot_at_cap
+                and dot.remaining > 0
+                and dot.stacks >= cap
+                for dot in state.dot_states.get(target.id, ())
+            ):
+                return True
+        return False
+
     def ready(action_id: str) -> bool:
         action = state.enemy_actions.get(action_id)
         if action is None or enemy.cooldowns.get(action_id, 0) > enemy.opportunity:
+            return False
+        if action.phase_ids and state.phase_id not in action.phase_ids:
             return False
         if (
             action.max_uses_per_combat is not None
@@ -3531,6 +3594,8 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
             action.enemy_hp_fraction_at_most is not None
             and enemy.hp > enemy.stats.hp * action.enemy_hp_fraction_at_most
         ):
+            return False
+        if target_condition_blocks(action):
             return False
         return not (
             action.skip_if_barrier_active

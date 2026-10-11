@@ -64,7 +64,7 @@ async def create_campaign_boss_profile(
         reconcile_character_hp(character, equipment)
         party.append(
             PlayerCombatantSpec(
-                fighter_key=f"p{index}",
+                fighter_key=campaign_actor_key(index, len(characters)),
                 character_id=str(character.id),
                 name=character.name,
                 character_class=character.character_class,

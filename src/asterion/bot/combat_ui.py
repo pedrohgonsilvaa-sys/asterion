@@ -951,6 +951,7 @@ def render_combat(view: CombatView) -> Screen:
                 for key in state.fighters
                 if _fighter_side(state, key) != viewer_side
                 and (is_pvpve or _fighter_side(state, key) == "enemy")
+                and state.fighters[key].hp > 0
             ),
             key=lambda key: (state.fighters[key].id, key),
         )
@@ -1101,7 +1102,7 @@ def render_combat(view: CombatView) -> Screen:
                 or definition.target_mode in {"self", "all_opponents", "all_allies"}
                 else action_target_ids(state, action, actor_key=action_actor_key or "player")
             )
-            if is_pvpve and len(targets) > 1:
+            if len(targets) > 1:
                 for target_index, target_id in enumerate(targets):
                     target = next(
                         (

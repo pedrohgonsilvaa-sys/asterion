@@ -11,6 +11,7 @@ from asterion.application.groups import GroupError
 from asterion.application.vde_missions import (
     MISSION_TITLES,
     P9_ID,
+    P12_ID,
     VDEMissionService,
 )
 from asterion.bot.combat_ui import (
@@ -94,6 +95,8 @@ def vde_missions_router(service: VDEMissionService, images: dict[str, str]) -> R
                     "fragments", "sample",
                     "structure", "sanctuary", "zone", "bag", "tracks", "survivor",
                     "return_place", "roots", "chamber", "traces", "convergence", "open_berco",
+                    "enter_berco", "advance_network", "central_chamber",
+                    "examine_center", "register",
                 }:
                     view = await service.advance(query.from_user.id, quest_id, version, action)
                 else:
@@ -104,6 +107,8 @@ def vde_missions_router(service: VDEMissionService, images: dict[str, str]) -> R
                     view = await service.examine(query.from_user.id, quest_id, version, parts[4])
                 elif quest_id == P9_ID and parts[3] == "ch" and parts[4] in {"1", "2", "3"}:
                     view = await service.choose_p9_reward(query.from_user.id, version, parts[4])
+                elif quest_id == P12_ID and parts[3] == "ch" and parts[4] in {"1", "2", "3"}:
+                    view = await service.choose_p12_reward(query.from_user.id, version, parts[4])
                 else:
                     raise ValueError("invalid objective callback")
         except (ValueError, GroupError):

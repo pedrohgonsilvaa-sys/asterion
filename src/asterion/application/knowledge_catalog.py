@@ -128,6 +128,12 @@ CODEX_ENTRIES = (
         70,
     ),
     CodexPresentation(
+        "codex.mystery.pulsacao_sob_a_pedra",
+        "Pulsação sob a Pedra",
+        "mysteries",
+        75,
+    ),
+    CodexPresentation(
         "codex.mystery.rotinas_que_permanecem",
         "Rotinas que Permanecem",
         "mysteries",
@@ -291,11 +297,33 @@ CODEX_FRAGMENTS = {
         "Acesso aberto",
         "O acesso ao Berço da Matriarca foi aberto a partir do Claustro das Raízes.",
     ),
+    "codex.fragment.berco.matriarca_antiga_viva": FragmentPresentation(
+        "A Matriarca",
+        "A Matriarca é uma criatura viva antiga que se integrou progressivamente à rede "
+        "de raízes; ela não era a origem completa do fenômeno.",
+    ),
     "codex.fragment.vales.network_and_matriarch": FragmentPresentation(
         "Convergência das raízes",
         "A estrutura asteriana é mais antiga que o crescimento atual. A Matriarca não "
         "construiu aquilo que existe sob os Vales. Quase todas as raízes anormais "
         "convergem para a área onde ela está.",
+    ),
+    "codex.fragment.vales.pulsacao_estrutura_ativa": FragmentPresentation(
+        "Pulsação sob a Pedra",
+        "Após a queda da Matriarca, a estrutura antiga continua ativa. A correlação entre "
+        "a estrutura e o crescimento anormal está registrada, mas a causalidade final "
+        "permanece sem explicação.",
+    ),
+    "codex.fragment.vales.pos_vitoria": FragmentPresentation(
+        "Após a Matriarca",
+        "Após sua morte, as raízes pararam de reagir agressivamente. A estrutura asteriana "
+        "sob o Berço permaneceu ativa. A correlação com o crescimento anormal é comprovada, "
+        "mas a causalidade final não foi explicada.",
+    ),
+    "codex.fragment.vales.continuidade_nareth": FragmentPresentation(
+        "Indício de continuidade",
+        "Registros apontam indícios de continuidade da antiga rede em direção às Planícies "
+        "de Nareth.",
     ),
     "codex.fragment.mata.casca_camadas_externas": FragmentPresentation(
         "Camada externa",
@@ -397,6 +425,21 @@ ACHIEVEMENTS = (
         "feat.tdo.terras_do_ocaso", "Terras do Ocaso", "exploration",
         "Concluiu a campanha principal das Terras do Ocaso.",
         "Banner · Ocaso",
+    ),
+    AchievementPresentation(
+        "feat.vde.o_berco_silencia", "O Berço Silencia", "combat",
+        "Derrotou a Matriarca das Raízes pela primeira vez.",
+        "Título · Sobrevivente do Berço",
+    ),
+    AchievementPresentation(
+        "feat.vde.vales_dos_enforcados", "Vales dos Enforcados", "exploration",
+        "Concluiu a campanha dos Vales no Nv.20 e descobriu seus cinco Locais principais.",
+        "Moldura · Vales dos Enforcados",
+    ),
+    AchievementPresentation(
+        "feat.vde.a_rede_nao_dorme", "A Rede Não Dorme", "secrets",
+        "Concluiu o Santuário após registrar os conhecimentos disponíveis sobre a rede.",
+        "Moldura · Pedra Enlaçada", hidden=True,
     ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(

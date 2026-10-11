@@ -17,6 +17,7 @@ from asterion.application.campaign_coop import (
     campaign_action_intent,
     campaign_actor_key,
     campaign_combat_for_activity,
+    create_campaign_boss_profile,
     create_campaign_encounter,
     lock_campaign_encounter,
     resolve_campaign_action,
@@ -47,6 +48,7 @@ from asterion.domain.road import (
     VDE_BERCO_LOCATION,
     VDE_CLAUSTRO_BERCO_ROUTE,
     VDE_KNOT_DEER,
+    VDE_MATRIARCH,
     VDE_ROOTED_WATCHER,
     VDE_TURF_LEECH,
     VDE_WANDERING_BARK,
@@ -56,8 +58,14 @@ from asterion.domain.road import (
     create_creature_party_combat,
     materialize_equipment,
 )
+from asterion.domain.vde_matriarch import (
+    configure_matriarch_combat,
+    matriarch_phase_evidence,
+)
 from asterion.infrastructure.db.combat_codec import decode
+from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
+    BestiaryEntry,
     CampaignSharedEncounterMember,
     Character,
     CodexEntry,
@@ -94,8 +102,10 @@ P10_ID = "P10"
 S10_ID = "S10"
 S11_ID = "S11"
 P11_ID = "P11"
+P12_ID = "P12"
 CONTENT_VERSION = "vales-1.0.3"
 CONTENT_VERSION_MID = "vales-1.0.4"
+CONTENT_VERSION_CLIMAX = "vales-1.0.4"
 S7_TITLE = "Cordas na Névoa"
 P8_TITLE = "Entre Galhos Suspensos"
 S8_TITLE = "O Peso da Passagem"
@@ -105,6 +115,7 @@ P10_TITLE = "Pedra sob as Raízes"
 S10_TITLE = "Água sem Reflexo"
 S11_TITLE = "A Guarda que Não Dorme"
 P11_TITLE = "Onde Tudo se Enreda"
+P12_TITLE = "A Matriarca das Raízes"
 S7_CHECKPOINT = "vde.s7.cordas_na_nevoa"
 P8_CHECKPOINT = "vde.p8.entre_galhos_suspensos"
 S8_CHECKPOINT = "vde.s8.peso_da_passagem"
@@ -114,6 +125,7 @@ P10_CHECKPOINT = "vde.p10.pedra_sob_as_raizes"
 S10_CHECKPOINT = "vde.s10.agua_sem_reflexo"
 S11_CHECKPOINT = "vde.s11.guarda_que_nao_dorme"
 P11_CHECKPOINT = "vde.p11.onde_tudo_se_enreda"
+P12_CHECKPOINT = "vde.p12.a_matriarca_das_raizes"
 S7_CONTENT = "vde_s7_scripted_combat"
 P8_CONTENT = "vde_p8_scripted_combat"
 S8_CONTENT = "vde_s8_cervo_no"
@@ -123,6 +135,7 @@ P10_CONTENT = "vde_p10_vigia_enraizado"
 S10_CONTENT = "vde_s10_scripted_combat"
 S11_CONTENT = "vde_s11_vigia_enraizado"
 P11_CONTENT = "vde_p11_scripted_combat"
+P12_CONTENT = "vde_p12_matriarch"
 S7_REWARD_SOURCE = "s7.cordas_na_nevoa"
 P8_REWARD_SOURCE = "p8.entre_galhos_suspensos"
 S8_REWARD_SOURCE = "s8.peso_da_passagem"
@@ -132,6 +145,12 @@ P10_REWARD_SOURCE = "p10.pedra_sob_as_raizes"
 S10_REWARD_SOURCE = "s10.agua_sem_reflexo"
 S11_REWARD_SOURCE = "s11.guarda_que_nao_dorme"
 P11_REWARD_SOURCE = "p11.onde_tudo_se_enreda"
+P12_REWARD_SOURCE = "p12.a_matriarca_das_raizes"
+P12_NUCLEUS = "material.vde.nucleo_matriarca_das_raizes"
+P12_NUCLEUS_SOURCE = "p12.matriarca.nucleo:first_victory"
+P12_RECIPE_UNLOCK = "recipe.vde.matriarca.seiva"
+VDE_CAMPAIGN_UNLOCK = "campaign.vde.completed"
+NARETH_UNLOCK = "region.nareth.available"
 MATA_LOCATION_ID = "vde.location.mata_suspensa"
 BAIXIOS_LOCATION_ID = "vde.location.baixios_enredados"
 MATA_ROUTE_UNLOCK = "route.vde.vigilia_mata"
@@ -158,6 +177,7 @@ MISSION_TITLES = {
     S10_ID: S10_TITLE,
     S11_ID: S11_TITLE,
     P11_ID: P11_TITLE,
+    P12_ID: P12_TITLE,
 }
 MISSION_VERSIONS = {S7_ID: CONTENT_VERSION, P8_ID: CONTENT_VERSION}
 MISSION_CONTENT_IDS = {
@@ -170,6 +190,7 @@ MISSION_CONTENT_IDS = {
     S10_ID: S10_CONTENT,
     S11_ID: S11_CONTENT,
     P11_ID: P11_CONTENT,
+    P12_ID: P12_CONTENT,
 }
 MISSION_CHECKPOINTS = {
     S7_ID: S7_CHECKPOINT,
@@ -181,11 +202,17 @@ MISSION_CHECKPOINTS = {
     S10_ID: S10_CHECKPOINT,
     S11_ID: S11_CHECKPOINT,
     P11_ID: P11_CHECKPOINT,
+    P12_ID: P12_CHECKPOINT,
 }
 P9_REWARD_CHOICES = {
     "1": ("Capuz das Copas Suspensas", "Cabeça"),
     "2": ("Selo do Caminho Enredado", "Acessório"),
     "3": ("Relicário do Nó Velado", "Artefato"),
+}
+P12_REWARD_CHOICES = {
+    "1": ("Guarda do Berço Silente", "Torso"),
+    "2": ("Selo da Rede Antiga", "Acessório"),
+    "3": ("Relicário da Pedra Pulsante", "Artefato"),
 }
 
 # The regional text leaves the scripted species unnamed. This internal common
@@ -212,6 +239,7 @@ MISSION_COMBAT = {
     S10_ID: (5, BAIXIOS, 17, _SCRIPTED_FAUNA),
     S11_ID: (2, CLAUSTRO, 18, VDE_ROOTED_WATCHER),
     P11_ID: (3, CLAUSTRO, 19, _SCRIPTED_FAUNA),
+    P12_ID: (5, BERCO, 20, VDE_MATRIARCH),
 }
 
 
@@ -266,13 +294,30 @@ class VDEMissionService:
             character, quest, world = await self._locked_state(session, actor, quest_id)
             if character is None:
                 return None
+            if quest_id == P12_ID and quest is not None and quest.status == "completed":
+                await self._ensure_nareth_gate(session, character, quest)
             return await self._view(session, character, quest, world, requested_quest_id=quest_id)
 
     async def resume_active(self, actor: int) -> VDEMissionView | None:
         async with self.sessions.begin() as session:
-            character = await self._character(session, actor)
+            character = await session.scalar(
+                select(Character)
+                .where(
+                    Character.telegram_id == actor,
+                    Character.server_id == self.server_id,
+                )
+                .with_for_update()
+            )
             if character is None:
                 return None
+            await self._ensure_p12_started(session, character)
+            p12 = await session.scalar(
+                select(Quest)
+                .where(Quest.character_id == character.id, Quest.quest_id == P12_ID)
+                .with_for_update()
+            )
+            if p12 is not None and p12.status == "completed":
+                await self._ensure_nareth_gate(session, character, p12)
             activity = await session.scalar(
                 select(GameActivity)
                 .where(
@@ -312,10 +357,13 @@ class VDEMissionService:
                         session, character, quest, await self._world(session, character.id)
                     )
         for quest_id in (
-            P11_ID, S11_ID, P10_ID, S10_ID, S7_ID, P8_ID, S8_ID, P9_ID, S9_ID
+            P12_ID, P11_ID, S11_ID, P10_ID, S10_ID, S7_ID, P8_ID, S8_ID, P9_ID, S9_ID
         ):
             view = await self.resume(actor, quest_id)
-            if view is not None and view.status == "active":
+            if view is not None and (
+                view.status == "active"
+                or (view.quest_id == P12_ID and view.kind == "choice")
+            ):
                 return view
         return None
 
@@ -324,7 +372,7 @@ class VDEMissionService:
             [
                 await self.resume(actor, quest_id)
                 for quest_id in (
-                    S7_ID, P8_ID, S8_ID, P9_ID, S9_ID, P10_ID, S10_ID, S11_ID, P11_ID
+                    S7_ID, P8_ID, S8_ID, P9_ID, S9_ID, P10_ID, S10_ID, S11_ID, P11_ID, P12_ID
                 )
             ]
         )
@@ -365,6 +413,7 @@ class VDEMissionService:
                 S10_ID: P10_ID,
                 S11_ID: P10_ID,
                 P11_ID: P10_ID,
+                P12_ID: P11_ID,
             }[quest_id]
             prerequisite = await session.scalar(
                 select(Quest).where(
@@ -401,6 +450,7 @@ class VDEMissionService:
                 S10_ID: (17, BAIXIOS),
                 S11_ID: (18, CLAUSTRO),
                 P11_ID: (19, CLAUSTRO),
+                P12_ID: (20, BERCO),
             }[quest_id]
             if quest_id == S11_ID:
                 prerequisite = await session.scalar(
@@ -429,6 +479,7 @@ class VDEMissionService:
                 S10_ID: {"markers": []},
                 S11_ID: {"patrols": [], "marking_fragments": []},
                 P11_ID: {"pressure_points": []},
+                P12_ID: {"external_connections": [], "reward_choice": None},
             }[quest_id]
             quest = Quest(
                 character_id=character.id,
@@ -567,11 +618,12 @@ class VDEMissionService:
                 S10_ID: (1, BAIXIOS, "markers", 2),
                 S11_ID: (1, CLAUSTRO, "patrols", 2),
                 P11_ID: (1, CLAUSTRO, "pressure_points", 2),
+                P12_ID: (3, BERCO, "external_connections", 4),
             }.get(quest_id, (0, "", "", 0))
             if character is None or not self._valid(quest, version, step=quest_step):
                 return await self._view(session, character, quest, world)
             if quest_id not in {
-                S7_ID, P8_ID, S8_ID, P9_ID, P10_ID, S10_ID, S11_ID, P11_ID
+                S7_ID, P8_ID, S8_ID, P9_ID, P10_ID, S10_ID, S11_ID, P11_ID, P12_ID
             }:
                 return await self._view(session, character, quest, world)
             if quest_id == P10_ID and point == "c":
@@ -645,6 +697,11 @@ class VDEMissionService:
             (P11_ID, "traces"): (5, CLAUSTRO, 6, "p11.record_large_creature_traces"),
             (P11_ID, "convergence"): (6, CLAUSTRO, 7, "p11.follow_root_convergence"),
             (P11_ID, "open_berco"): (7, CLAUSTRO, 8, "p11.open_berco_access"),
+            (P12_ID, "enter_berco"): (1, BERCO, 2, "p12.enter_berco"),
+            (P12_ID, "advance_network"): (2, BERCO, 3, "p12.advance_external_network"),
+            (P12_ID, "central_chamber"): (4, BERCO, 5, "p12.reach_central_chamber"),
+            (P12_ID, "examine_center"): (6, BERCO, 7, "p12.examine_center"),
+            (P12_ID, "register"): (7, BERCO, 7, "p12.register_regional_discovery"),
         }
         config = steps.get((quest_id, action))
         if config is None:
@@ -698,6 +755,35 @@ class VDEMissionService:
                         objective_id=objective_id,
                         source_key=f"{objective_id}:{location}",
                         evidence={"location": BERCO, "shared": len(members) > 1},
+                    )
+                    continue
+                if quest_id == P12_ID and action == "register":
+                    await self._complete_p12(session, member.character, member.quest)
+                    await record_campaign_objective_credit(
+                        session,
+                        character_id=member.character.id,
+                        quest_id=P12_ID,
+                        objective_id=objective_id,
+                        source_key=f"{objective_id}:{member.character.id}",
+                        evidence={"location": BERCO, "shared": len(members) > 1},
+                    )
+                    continue
+                if quest_id == P12_ID and action == "enter_berco":
+                    await self._ensure_location(
+                        session, member.character.id, BERCO_LOCATION_ID
+                    )
+                    progress = dict(member.quest.progress or {})
+                    progress["entered_berco"] = True
+                    member.quest.progress = progress
+                    member.quest.step = next_step
+                    member.quest.state_version += 1
+                    await record_campaign_objective_credit(
+                        session,
+                        character_id=member.character.id,
+                        quest_id=P12_ID,
+                        objective_id=objective_id,
+                        source_key=f"{objective_id}:{member.character.id}",
+                        evidence={"location": BERCO},
                     )
                     continue
                 progress = dict(member.quest.progress or {})
@@ -928,6 +1014,81 @@ class VDEMissionService:
             await consolidate_character_level(session, character)
             return await self._view(session, character, quest, world)
 
+    async def choose_p12_reward(self, actor: int, version: int, choice: str):
+        """Persist one individual, one-time Epic choice after P12 completion."""
+        if choice not in P12_REWARD_CHOICES:
+            return await self.resume(actor, P12_ID)
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor, P12_ID)
+            if character is None:
+                return None
+            progress = dict(quest.progress or {}) if quest is not None else {}
+            if (
+                quest is None
+                or quest.status != "completed"
+                or quest.state_version != version
+                or progress.get("reward_choice")
+                or await self._foreground(session, character.id) is not None
+            ):
+                return await self._view(session, character, quest, world)
+            source_id = f"{P12_REWARD_SOURCE}:equipment"
+            event = await session.scalar(
+                select(RewardEvent)
+                .where(
+                    RewardEvent.character_id == character.id,
+                    RewardEvent.source_id == source_id,
+                )
+                .with_for_update()
+            )
+            if event is None:
+                name, slot = P12_REWARD_CHOICES[choice]
+                payload = materialize_equipment(
+                    f"{source_id}:{character.id}:{choice}",
+                    "Épico",
+                    20,
+                    forced_name=name,
+                    forced_slot=slot,
+                    bound=True,
+                )
+                event = RewardEvent(character_id=character.id, source_id=source_id)
+                session.add(event)
+                await session.flush()
+                session.add(
+                    RewardComponent(
+                        reward_event_id=event.id,
+                        kind="equipment",
+                        item_id=None,
+                        quantity=1,
+                        payload=payload | {"choice": choice},
+                    )
+                )
+                source_key = f"{source_id}:{choice}"
+                if await self.road._inventory_slots(session, character.id) < 60:
+                    from asterion.application.equipment import equipment_instance_payload
+
+                    item_id, instance = equipment_instance_payload(payload)
+                    session.add(
+                        EquipmentItem(
+                            id=item_id,
+                            character_id=character.id,
+                            source_key=source_key,
+                            item_name=instance["item_name"],
+                            rarity=instance["rarity"],
+                            slot=instance["slot"],
+                            item_level=instance["item_level"],
+                            bound=True,
+                            payload=instance,
+                        )
+                    )
+                else:
+                    await self.road._pending(
+                        session, character.id, source_key, "equipment", payload
+                    )
+            progress["reward_choice"] = choice
+            quest.progress = progress
+            quest.state_version += 1
+            return await self._view(session, character, quest, world)
+
     async def start_solo_combat(
         self, actor: int, quest_id: str, version: int
     ) -> VDEMissionView | None:
@@ -946,25 +1107,45 @@ class VDEMissionService:
             ):
                 return await self._view(session, character, quest, world)
             content_id = MISSION_CONTENT_IDS[quest_id]
-            activity = await materialize(
-                session,
-                character,
-                content_id,
-                creature,
-                level,
-                flavor=self._combat_flavor(quest_id),
-                opening_log=(
-                    self._combat_flavor(quest_id)
-                ),
-            )
-            if creature is not _SCRIPTED_FAUNA:
+            if quest_id == P12_ID:
+                combat = await create_campaign_boss_profile(
+                    session,
+                    (character,),
+                    VDE_MATRIARCH,
+                    20,
+                    flavor=self._combat_flavor(P12_ID),
+                    opening_log=self._combat_flavor(P12_ID),
+                )
+                combat = configure_matriarch_combat(combat, shared=False)
+                activity, _, _ = await CombatRepository(session).create(
+                    character, content_id, combat
+                )
                 await self.road._bestiary(
                     session,
                     character.id,
-                    creature.creature_id,
+                    VDE_MATRIARCH.creature_id,
                     victory=False,
-                    observation_category=creature.category,
+                    observation_category="boss",
                 )
+            else:
+                activity = await materialize(
+                    session,
+                    character,
+                    content_id,
+                    creature,
+                    level,
+                    flavor=self._combat_flavor(quest_id),
+                    opening_log=self._combat_flavor(quest_id),
+                )
+            if creature is not _SCRIPTED_FAUNA:
+                if quest_id != P12_ID:
+                    await self.road._bestiary(
+                        session,
+                        character.id,
+                        creature.creature_id,
+                        victory=False,
+                        observation_category=creature.category,
+                    )
             progress = dict(quest.progress or {})
             progress.update(activity_id=str(activity.id), awaiting_retry=False)
             quest.progress = progress
@@ -1087,11 +1268,26 @@ class VDEMissionService:
             )
             if updated is None or updated.version == version:
                 return current
+            if quest_id == P12_ID:
+                await self._record_matriarch_bestiary(
+                    session,
+                    character.id,
+                    updated,
+                    victory=updated.result == "victory",
+                )
             progress = dict(quest.progress or {})
             if updated.result == "victory":
                 activity.status = "completed"
                 await normalize_character_hp(session, character)
-                quest.step += 1
+                if quest_id == P12_ID:
+                    quest.step = 6
+                    progress["boss_defeated"] = True
+                    await self._grant_p12_nucleus(session, character)
+                    from asterion.application.vde_feats import reconcile_vde_feats
+
+                    await reconcile_vde_feats(session, character)
+                else:
+                    quest.step += 1
                 progress.update(activity_id=None, awaiting_retry=False, combat_victory=True)
                 await record_campaign_objective_credit(
                     session,
@@ -1102,7 +1298,7 @@ class VDEMissionService:
                     evidence={"result": "victory", "location": world.location if world else None},
                 )
                 creature = self._creature_for_quest(quest.quest_id)
-                if creature is not _SCRIPTED_FAUNA:
+                if creature is not _SCRIPTED_FAUNA and quest_id != P12_ID:
                     await self.road._bestiary(
                         session,
                         character.id,
@@ -1196,6 +1392,14 @@ class VDEMissionService:
             )
             if updated.version == version:
                 return await self._view_for_character_activity(session, character, activity_id)
+            if locked.encounter.quest_id == P12_ID:
+                for participant in locked.characters.values():
+                    await self._record_matriarch_bestiary(
+                        session,
+                        participant.id,
+                        updated,
+                        victory=updated.result == "victory",
+                    )
             if stack is not None:
                 stack.quantity -= 1
             roster_by_id = {row.character_id: row for row in locked.members}
@@ -1217,7 +1421,12 @@ class VDEMissionService:
                 participant_quest = quests.get(character_id)
                 if updated.result == "victory":
                     await normalize_character_hp(session, participant)
-                    if mission_creature is not _SCRIPTED_FAUNA:
+                    if locked.encounter.quest_id == P12_ID:
+                        await self._grant_p12_nucleus(session, participant)
+                        from asterion.application.vde_feats import reconcile_vde_feats
+
+                        await reconcile_vde_feats(session, participant)
+                    elif mission_creature is not _SCRIPTED_FAUNA:
                         await self.road._bestiary(
                             session,
                             participant.id,
@@ -1226,13 +1435,21 @@ class VDEMissionService:
                             observation_category=mission_creature.category,
                         )
                     if roster_row.role == "eligible" and participant_quest is not None:
-                        participant_quest.step += 1
+                        participant_quest.step = (
+                            6 if locked.encounter.quest_id == P12_ID
+                            else participant_quest.step + 1
+                        )
                         participant_quest.state_version += 1
                         participant_quest.progress = {
                             **(participant_quest.progress or {}),
                             "activity_id": None,
                             "awaiting_retry": False,
                             "combat_victory": True,
+                            "boss_defeated": (
+                                True
+                                if locked.encounter.quest_id == P12_ID
+                                else (participant_quest.progress or {}).get("boss_defeated")
+                            ),
                         }
                         await record_campaign_objective_credit(
                             session,
@@ -1353,21 +1570,32 @@ class VDEMissionService:
                 )
             )
         lead = characters[0]
-        combat = create_creature_party_combat(
-            uuid4(),
-            lead.name,
-            lead.character_class,
-            lead.race,
-            lead.hp,
-            (CreatureCombatantSpec(creature, level, "enemy"),),
-            player_level=lead.level,
-            equipment_configuration=party[0].equipment_configuration,
-            ruleset_version=RULESET,
-            flavor=self._combat_flavor(quest_id),
-            opening_log=self._combat_flavor(quest_id),
-            active_art_ids=party[0].active_art_ids,
-            party=tuple(party),
-        )
+        if quest_id == P12_ID:
+            combat = await create_campaign_boss_profile(
+                session,
+                characters,
+                VDE_MATRIARCH,
+                20,
+                flavor=self._combat_flavor(P12_ID),
+                opening_log=self._combat_flavor(P12_ID),
+            )
+            combat = configure_matriarch_combat(combat, shared=True)
+        else:
+            combat = create_creature_party_combat(
+                uuid4(),
+                lead.name,
+                lead.character_class,
+                lead.race,
+                lead.hp,
+                (CreatureCombatantSpec(creature, level, "enemy"),),
+                player_level=lead.level,
+                equipment_configuration=party[0].equipment_configuration,
+                ruleset_version=RULESET,
+                flavor=self._combat_flavor(quest_id),
+                opening_log=self._combat_flavor(quest_id),
+                active_art_ids=party[0].active_art_ids,
+                party=tuple(party),
+            )
         encounter = await create_campaign_encounter(
             session,
             group=group,
@@ -1378,9 +1606,9 @@ class VDEMissionService:
             combat=combat,
             ruleset_version=RULESET,
             checkpoint=checkpoint,
-            campaign_boss=False,
+            campaign_boss=quest_id == P12_ID,
         )
-        if creature is not _SCRIPTED_FAUNA:
+        if creature is not _SCRIPTED_FAUNA and quest_id != P12_ID:
             for member in roster:
                 await self.road._bestiary(
                     session,
@@ -1388,6 +1616,15 @@ class VDEMissionService:
                     creature.creature_id,
                     victory=False,
                     observation_category=creature.category,
+                )
+        elif quest_id == P12_ID:
+            for member in roster:
+                await self.road._bestiary(
+                    session,
+                    member.character.id,
+                    VDE_MATRIARCH.creature_id,
+                    victory=False,
+                    observation_category="boss",
                 )
         for member in roster:
             if member.role == "eligible":
@@ -1550,6 +1787,7 @@ class VDEMissionService:
         }
         quest.state_version += 1
         await consolidate_character_level(session, character)
+        await self._ensure_p12_started(session, character)
 
     async def _record_p11_codex(self, session, character_id):
         for entry_id, fragment_id in (
@@ -1563,6 +1801,192 @@ class VDEMissionService:
             ),
         ):
             await self._ensure_codex_fragment(session, character_id, entry_id, fragment_id)
+
+    async def _complete_p12(self, session, character, quest):
+        materials = (
+            ("material.vde.ferro_enredado", 4),
+            ("material.vde.resina_enredada", 4),
+        )
+        await self._reward(
+            session, character, quest, P12_REWARD_SOURCE, 32580, 800, materials
+        )
+        for entry_id, fragment_id in (
+            (
+                "codex.location.berco_da_matriarca",
+                "codex.fragment.berco.matriarca_antiga_viva",
+            ),
+            (
+                "codex.mystery.a_rede_sob_os_vales",
+                "codex.fragment.vales.matriarca_nao_origem",
+            ),
+            (
+                "codex.mystery.a_rede_sob_os_vales",
+                "codex.fragment.vales.pos_vitoria",
+            ),
+            (
+                "codex.mystery.pulsacao_sob_a_pedra",
+                "codex.fragment.vales.pulsacao_estrutura_ativa",
+            ),
+            (
+                "codex.mystery.estruturas_interligadas",
+                "codex.fragment.vales.continuidade_nareth",
+            ),
+        ):
+            await self._ensure_codex_fragment(
+                session, character.id, entry_id, fragment_id
+            )
+        await self._ensure_unlock(session, character.id, P12_RECIPE_UNLOCK)
+        await self._ensure_unlock(session, character.id, VDE_CAMPAIGN_UNLOCK)
+        quest.status = "completed"
+        quest.step = 7
+        quest.progress = {
+            **(quest.progress or {}),
+            "completed": True,
+            "regional_campaign_completed": True,
+        }
+        quest.state_version += 1
+        await consolidate_character_level(session, character)
+        await self._ensure_nareth_gate(session, character, quest)
+        await self._record_matriarch_completion_evidence(session, character.id)
+        from asterion.application.vde_feats import reconcile_vde_feats
+
+        await reconcile_vde_feats(session, character)
+
+    async def _record_matriarch_completion_evidence(self, session, character_id):
+        entry = await session.scalar(
+            select(BestiaryEntry)
+            .where(
+                BestiaryEntry.character_id == character_id,
+                BestiaryEntry.creature_id == VDE_MATRIARCH.creature_id,
+            )
+            .with_for_update()
+        )
+        if entry is None:
+            await self.road._bestiary(
+                session,
+                character_id,
+                VDE_MATRIARCH.creature_id,
+                observation_category="boss",
+            )
+            entry = await session.scalar(
+                select(BestiaryEntry)
+                .where(
+                    BestiaryEntry.character_id == character_id,
+                    BestiaryEntry.creature_id == VDE_MATRIARCH.creature_id,
+                )
+                .with_for_update()
+            )
+        if entry is None:
+            return
+        await self.road.bestiary.add_evidence(
+            session,
+            entry,
+            character_id,
+            VDE_MATRIARCH.creature_id,
+            "p12_completed",
+            "campaign",
+            5,
+        )
+        await self.road.bestiary.refresh_boss_mastery(
+            session, character_id, VDE_MATRIARCH.creature_id
+        )
+
+    async def _record_matriarch_bestiary(
+        self, session, character_id, combat, *, victory
+    ):
+        entry = await session.scalar(
+            select(BestiaryEntry)
+            .where(
+                BestiaryEntry.character_id == character_id,
+                BestiaryEntry.creature_id == VDE_MATRIARCH.creature_id,
+            )
+            .with_for_update()
+        )
+        if entry is None:
+            await self.road._bestiary(
+                session,
+                character_id,
+                VDE_MATRIARCH.creature_id,
+                observation_category="boss",
+            )
+            entry = await session.scalar(
+                select(BestiaryEntry)
+                .where(
+                    BestiaryEntry.character_id == character_id,
+                    BestiaryEntry.creature_id == VDE_MATRIARCH.creature_id,
+                )
+                .with_for_update()
+            )
+        if entry is None:
+            return
+        await self.road.bestiary.record_combat_events(
+            session, character_id, VDE_MATRIARCH.creature_id, None, combat
+        )
+        evidence_categories = {
+            "phase": "phase",
+            "mechanic": "mechanic",
+            "action": "behavior",
+        }
+        for evidence_id in matriarch_phase_evidence(combat):
+            prefix = evidence_id.split(":", 1)[0]
+            await self.road.bestiary.add_evidence(
+                session,
+                entry,
+                character_id,
+                VDE_MATRIARCH.creature_id,
+                evidence_id,
+                evidence_categories[prefix],
+                5 if prefix == "mechanic" else 4,
+            )
+        await self.road.bestiary.record(
+            session,
+            character_id,
+            VDE_MATRIARCH.creature_id,
+            victory=victory,
+            observation_category="boss",
+        )
+        from asterion.application.vde_feats import reconcile_vde_feats
+
+        character = await session.scalar(
+            select(Character).where(Character.id == character_id)
+        )
+        if character is not None:
+            await reconcile_vde_feats(session, character)
+
+    async def _grant_p12_nucleus(self, session, character):
+        event = await session.scalar(
+            select(RewardEvent)
+            .where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == P12_NUCLEUS_SOURCE,
+            )
+            .with_for_update()
+        )
+        if event is not None:
+            return
+        event = RewardEvent(
+            character_id=character.id,
+            source_id=P12_NUCLEUS_SOURCE,
+        )
+        session.add(event)
+        await session.flush()
+        session.add(
+            RewardComponent(
+                reward_event_id=event.id,
+                kind="material",
+                item_id=P12_NUCLEUS,
+                quantity=1,
+                payload={"material_id": P12_NUCLEUS, "bound": True, "first_victory": True},
+            )
+        )
+        await self.road.deliver_material(
+            session,
+            character,
+            P12_NUCLEUS,
+            1,
+            f"{P12_NUCLEUS_SOURCE}:material",
+            bound=True,
+        )
 
     async def _record_p9_codex(self, session, character_id):
         entries = (
@@ -1707,7 +2131,11 @@ class VDEMissionService:
         elif combat is not None:
             kind = "combat"
         elif quest.status == "completed":
-            kind = "completed"
+            kind = (
+                "choice"
+                if quest_id == P12_ID and not progress.get("reward_choice")
+                else "completed"
+            )
         else:
             kind = {
                 S7_ID: {
@@ -1784,6 +2212,15 @@ class VDEMissionService:
                     6: "convergence",
                     7: "open_berco",
                 },
+                P12_ID: {
+                    1: "enter_berco",
+                    2: "advance_network",
+                    3: "connections",
+                    4: "central_chamber",
+                    5: "retry" if progress.get("awaiting_retry") else "combat_start",
+                    6: "examine_center",
+                    7: "register",
+                },
             }.get(quest_id, {}).get(quest.step, "unavailable")
         options = quantities = ()
         budget = 0
@@ -1800,6 +2237,8 @@ class VDEMissionService:
                 self._creature_for_quest(quest_id).category,
                 actor_key=actor_key,
             )
+        if quest_id == P12_ID and combat is not None and actor_key is None:
+            actor_key = "player"
         return VDEMissionView(
             character_id=character.id if character else UUID(int=0),
             quest_id=quest_id,
@@ -1911,8 +2350,59 @@ class VDEMissionService:
             .where(Quest.character_id == character.id, Quest.quest_id == quest_id)
             .with_for_update()
         )
+        if quest_id == P12_ID and quest is None:
+            quest = await self._ensure_p12_started(session, character)
+        elif quest_id == P12_ID and quest is not None and quest.status == "completed":
+            await self._ensure_nareth_gate(session, character, quest)
         world = await self._world(session, character.id)
         return character, quest, world
+
+    async def _ensure_p12_started(self, session, character):
+        """Lazily materialize the automatic P12 quest at its individual gate."""
+        quest = await session.scalar(
+            select(Quest)
+            .where(Quest.character_id == character.id, Quest.quest_id == P12_ID)
+            .with_for_update()
+        )
+        if quest is not None or character.level < 20:
+            return quest
+        p11 = await session.scalar(
+            select(Quest.id).where(
+                Quest.character_id == character.id,
+                Quest.quest_id == P11_ID,
+                Quest.status == "completed",
+            )
+        )
+        if p11 is None:
+            return None
+        quest = Quest(
+            character_id=character.id,
+            quest_id=P12_ID,
+            title=P12_TITLE,
+            status="active",
+            step=1,
+            content_version=CONTENT_VERSION_CLIMAX,
+            state_version=0,
+            progress={"external_connections": [], "reward_choice": None},
+        )
+        session.add(quest)
+        await session.flush()
+        await record_campaign_objective_credit(
+            session,
+            character_id=character.id,
+            quest_id=P12_ID,
+            objective_id="p12.started_automatically",
+            source_key=f"p12:auto:{character.id}",
+            evidence={"level": character.level, "p11_completed": True},
+        )
+        return quest
+
+    async def _ensure_nareth_gate(self, session, character, quest):
+        if quest.status != "completed":
+            return
+        await self._ensure_unlock(session, character.id, VDE_CAMPAIGN_UNLOCK)
+        if character.level >= 21:
+            await self._ensure_unlock(session, character.id, NARETH_UNLOCK)
 
     async def _character(self, session, actor):
         return await session.scalar(
@@ -1971,6 +2461,7 @@ class VDEMissionService:
             S10_ID: (17, BAIXIOS),
             S11_ID: (18, CLAUSTRO),
             P11_ID: (19, CLAUSTRO),
+            P12_ID: (20, BERCO),
         }[quest_id]
         prerequisite_id = {
             S7_ID: P7_ID,
@@ -1982,6 +2473,7 @@ class VDEMissionService:
             S10_ID: P10_ID,
             P11_ID: P10_ID,
             S11_ID: P10_ID,
+            P12_ID: P11_ID,
         }[quest_id]
         status_filter = ("completed",)
         if quest_id in {S9_ID, S10_ID}:
