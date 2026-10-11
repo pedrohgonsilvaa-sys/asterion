@@ -7,6 +7,11 @@ from sqlalchemy import func, select
 
 from asterion.application.bestiary import BestiaryRecorder
 from asterion.application.dungeons import DUNGEON_FAMILIES, DungeonService, DungeonView
+from asterion.application.knowledge_catalog import (
+    CODEX_BY_ID,
+    CODEX_FRAGMENTS,
+    CREATURE_PRESENTATION,
+)
 from asterion.application.road import RoadService
 from asterion.application.vde_missions import MATA_EXPLORE_UNLOCK, P8_ID
 from asterion.bot.dungeon_ui import render_dungeons
@@ -20,14 +25,18 @@ from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.professions import RECIPE_BY_ID
 from asterion.domain.road import (
     CREATURE_CATALOG,
+    HUNT_PROFILES,
+    VDE_CREATURES,
+    VDE_DUNGEON_CREATURES,
     VDE_HANGING_ROOT,
     VDE_PIT_HANGER,
     VDE_PIT_WEAVER,
     VDE_PULSING_NODE,
     VDE_VINE_SPIDER,
+    creature_for,
     road_enemy_stats,
 )
-from asterion.domain.tdo_fosso import (
+from asterion.domain.vde_fosso import (
     FOSSO_BASIC_MATERIALS,
     FOSSO_DISCOVERY_UNLOCK,
     FOSSO_FAMILY_ID,
@@ -38,6 +47,8 @@ from asterion.domain.tdo_fosso import (
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
     Character,
+    CodexEntry,
+    CodexFragment,
     DungeonRun,
     DungeonRunMember,
     ExplorationAttempt,
@@ -89,6 +100,67 @@ def test_fosso_encounters_use_the_canonical_roster_without_variants(ordinal, exp
     specs = fosso_encounter_specs(ordinal, "stable", 1, 16)
     assert tuple(spec.creature.creature_id for spec in specs) == expected
     assert all(spec.variant is None for spec in specs)
+
+
+def test_fosso_creatures_are_cataloged_without_expanding_world_open_vales_pool():
+    expected_open_world_ids = {
+        "lobo_musgoso",
+        "gralha_vale",
+        "peregrino_enredado",
+        "aranha_cipo",
+        "cervo_no",
+        "no_feroz",
+        "viuva_cipos",
+        "sanguessuga_turfa",
+        "casca_errante",
+        "mariposa_breu_verde",
+        "vigia_enraizado",
+        "carrasco_casca",
+    }
+    world_open_ids = {creature.creature_id for creature in VDE_CREATURES}
+    assert len(VDE_CREATURES) == 12
+    assert world_open_ids == expected_open_world_ids
+
+    dungeon_creatures = {creature.creature_id: creature for creature in VDE_DUNGEON_CREATURES}
+    assert set(dungeon_creatures) == {"tecela_fosso", "o_que_pende"}
+    assert world_open_ids.isdisjoint(dungeon_creatures)
+    assert all(
+        creature_for(creature_id) is creature
+        for creature_id, creature in dungeon_creatures.items()
+    )
+    assert all(creature in CREATURE_CATALOG for creature in dungeon_creatures.values())
+    assert all(
+        not (
+            {"tecela_fosso", "o_que_pende"}
+            & {creature_id for creature_id, _ in profile.creature_weights}
+        )
+        for profile in HUNT_PROFILES.values()
+    )
+
+    mechanical_ids = {"fosso_no_pulsante", "fosso_raiz_sustentacao"}
+    assert mechanical_ids.isdisjoint(creature.creature_id for creature in CREATURE_CATALOG)
+
+
+def test_fosso_codex_uses_canonical_titles_and_categories():
+    cordas = CODEX_BY_ID["codex.mystery.cordas_sob_a_mata"]
+    assert (cordas.title, cordas.category) == ("Cordas sob a Mata", "mysteries")
+    assert "codex.history.cordas_sob_a_mata" not in CODEX_BY_ID
+
+    aquilo = CODEX_BY_ID["codex.history.aquilo_que_pende"]
+    assert aquilo.title == "Aquilo que Pende"
+    assert "codex.history.o_que_pende" not in CODEX_BY_ID
+    assert not any(entry.title == "O Que Pende" for entry in CODEX_BY_ID.values())
+    assert creature_for("o_que_pende").name == "O Que Pende"
+    assert CREATURE_PRESENTATION["o_que_pende"].habitats == ("vde.location.fosso_das_raizes",)
+    assert "codex.fragment.fosso.o_que_pende" not in CODEX_FRAGMENTS
+    assert (
+        CODEX_FRAGMENTS["codex.fragment.fosso.aquilo_que_pende"].title
+        == "Aquilo que Pende"
+    )
+    assert (
+        CODEX_FRAGMENTS["codex.fragment.fosso.cordas_sob_a_mata"].title
+        == "Cordas sob a Mata"
+    )
 
 
 def test_fosso_family_and_grade_ii_reward_configuration_are_canonical():
@@ -484,6 +556,44 @@ async def test_fosso_minimum_level_is_enforced_without_materializing_a_run(datab
     async with sessions() as session:
         assert await session.scalar(select(DungeonRun.id)) is None
         assert await session.scalar(select(DungeonRunMember.run_id)) is None
+
+
+@pytest.mark.asyncio
+async def test_fosso_codex_progression_persists_canonical_entries(database):
+    actor = 881104
+    character_id, sessions = await _seed_vde_ready(database, actor, level=17, round_ready=False)
+    service = DungeonService(sessions, "ocaso")
+    async with sessions.begin() as session:
+        await service._ensure_codex_for_encounter(
+            session, character_id, 2, family_id=FOSSO_FAMILY_ID
+        )
+        await service._ensure_codex_for_encounter(
+            session, character_id, 5, family_id=FOSSO_FAMILY_ID
+        )
+
+    async with sessions() as session:
+        entry_ids = set(
+            (
+                await session.scalars(
+                    select(CodexEntry.entry_id).where(CodexEntry.character_id == character_id)
+                )
+            ).all()
+        )
+        fragment_ids = set(
+            (
+                await session.scalars(
+                    select(CodexFragment.fragment_id).where(
+                        CodexFragment.character_id == character_id
+                    )
+                )
+            ).all()
+        )
+    assert "codex.mystery.cordas_sob_a_mata" in entry_ids
+    assert "codex.history.aquilo_que_pende" in entry_ids
+    assert "codex.history.cordas_sob_a_mata" not in entry_ids
+    assert "codex.history.o_que_pende" not in entry_ids
+    assert "codex.fragment.fosso.cordas_sob_a_mata" in fragment_ids
+    assert "codex.fragment.fosso.aquilo_que_pende" in fragment_ids
 
 
 @pytest.mark.asyncio

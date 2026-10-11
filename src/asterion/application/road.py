@@ -80,7 +80,7 @@ from asterion.domain.road import (
     select_variant,
     weighted_choice,
 )
-from asterion.domain.tdo_fosso import (
+from asterion.domain.vde_fosso import (
     FOSSO_DISCOVERY_UNLOCK,
 )
 from asterion.infrastructure.db.combat_codec import decode, encode

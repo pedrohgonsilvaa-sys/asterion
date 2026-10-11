@@ -636,8 +636,8 @@ VDE_MATRIARCH = Creature(
     ),
 )
 
-# Masmorra A — the creatures are registered in the shared Bestiário catalog,
-# but are not added to any world-hunt pool.
+# Masmorra A — creature entries are registered in the shared Bestiário
+# catalog, but are not part of the world-open Vales creature contract/pools.
 VDE_PIT_WEAVER = Creature(
     "tecela_fosso",
     "Tecelã do Fosso",
@@ -678,6 +678,8 @@ VDE_HANGING_ROOT = Creature(
     "fosso_raiz_sustentacao", "Raiz de Sustentação", "common", "balanced", 17, 17, 0, (), ()
 )
 
+VDE_DUNGEON_CREATURES = (VDE_PIT_WEAVER, VDE_PIT_HANGER)
+
 VDE_CREATURES = (
     VDE_MOSS_WOLF,
     VDE_VALLEY_CROW,
@@ -691,11 +693,14 @@ VDE_CREATURES = (
     VDE_GREEN_DUSK_MOTH,
     VDE_ROOTED_WATCHER,
     VDE_BARK_EXECUTIONER,
-    VDE_PIT_WEAVER,
-    VDE_PIT_HANGER,
 )
 CAMPAIGN_BOSS_CREATURES = (VDE_MATRIARCH,)
-CREATURE_CATALOG = (*CREATURE_CATALOG, *VDE_CREATURES, *CAMPAIGN_BOSS_CREATURES)
+CREATURE_CATALOG = (
+    *CREATURE_CATALOG,
+    *VDE_CREATURES,
+    *VDE_DUNGEON_CREATURES,
+    *CAMPAIGN_BOSS_CREATURES,
+)
 
 VARIANTS = {
     "furious": StatMultipliers(D(1), D("1.08"), D("0.92"), D(1)),

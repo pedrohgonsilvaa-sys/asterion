@@ -65,7 +65,22 @@ from asterion.domain.tdo_crypt import (
     encounter_specs,
     enemy_rewards,
 )
-from asterion.domain.tdo_fosso import (
+from asterion.domain.tdo_galleries import (
+    GALLERIES_BRAZIER_LABEL,
+    GALLERIES_CONTENT_VERSION,
+    GALLERIES_CORE_ID,
+    GALLERIES_DISCOVERY_UNLOCK,
+    GALLERIES_FAMILY_ID,
+    GALLERIES_FIRST_CLEAR_PREFIX,
+    GALLERIES_KNOWN_PATH_UNLOCK,
+    GALLERIES_RECIPE_UNLOCK,
+    GALLERIES_REWARD_PREFIX,
+    GALLERIES_RULESET_VERSION,
+    create_galleries_combat,
+    gallery_encounter_specs,
+    gallery_enemy_rewards,
+)
+from asterion.domain.vde_fosso import (
     FOSSO_BASIC_MATERIALS,
     FOSSO_BRAZIER_LABEL,
     FOSSO_CATALYST,
@@ -87,21 +102,6 @@ from asterion.domain.tdo_fosso import (
     create_fosso_combat,
     fosso_encounter_specs,
     fosso_enemy_rewards,
-)
-from asterion.domain.tdo_galleries import (
-    GALLERIES_BRAZIER_LABEL,
-    GALLERIES_CONTENT_VERSION,
-    GALLERIES_CORE_ID,
-    GALLERIES_DISCOVERY_UNLOCK,
-    GALLERIES_FAMILY_ID,
-    GALLERIES_FIRST_CLEAR_PREFIX,
-    GALLERIES_KNOWN_PATH_UNLOCK,
-    GALLERIES_RECIPE_UNLOCK,
-    GALLERIES_REWARD_PREFIX,
-    GALLERIES_RULESET_VERSION,
-    create_galleries_combat,
-    gallery_encounter_specs,
-    gallery_enemy_rewards,
 )
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
@@ -1029,7 +1029,7 @@ class DungeonService:
                     character,
                     kind="detail",
                     difficulty_gates=tuple(gates.items()),
-                    reason="gate",
+                    reason=gates.get(difficulty) or "gate",
                     family_id=family.family_id,
                 )
             active_activity = await session.scalar(
@@ -2564,7 +2564,7 @@ class DungeonService:
                     "codex.fragment.fosso.entry",
                 ),
                 2: (
-                    "codex.history.cordas_sob_a_mata",
+                    "codex.mystery.cordas_sob_a_mata",
                     "codex.fragment.fosso.cordas_sob_a_mata",
                 ),
                 4: (
@@ -2572,8 +2572,8 @@ class DungeonService:
                     "codex.fragment.fosso.nos_pulsantes",
                 ),
                 5: (
-                    "codex.history.o_que_pende",
-                    "codex.fragment.fosso.o_que_pende",
+                    "codex.history.aquilo_que_pende",
+                    "codex.fragment.fosso.aquilo_que_pende",
                 ),
             }
             values = fragments.get(ordinal)

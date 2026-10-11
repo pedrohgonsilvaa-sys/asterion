@@ -153,10 +153,15 @@ CODEX_ENTRIES = (
         40,
     ),
     CodexPresentation(
-        "codex.history.cordas_sob_a_mata", "Cordas sob a Mata", "history", 105
+        "codex.mystery.cordas_sob_a_mata",
+        "Cordas sob a Mata",
+        "mysteries",
+        105,
     ),
     CodexPresentation("codex.history.nos_pulsantes", "Nós Pulsantes", "history", 106),
-    CodexPresentation("codex.history.o_que_pende", "O Que Pende", "history", 107),
+    CodexPresentation(
+        "codex.history.aquilo_que_pende", "Aquilo que Pende", "history", 107
+    ),
     CodexPresentation(
         "codex.history.profundezas_suspensas",
         "Profundezas Suspensas",
@@ -251,8 +256,8 @@ CODEX_FRAGMENTS = {
         "Nós Pulsantes",
         "Nós ativos alteram a barreira recebida pela Casca Errante no Coração do Emaranhado.",
     ),
-    "codex.fragment.fosso.o_que_pende": FragmentPresentation(
-        "O Que Pende",
+    "codex.fragment.fosso.aquilo_que_pende": FragmentPresentation(
+        "Aquilo que Pende",
         "Uma criatura ocupa as profundezas e usa raízes e cordas para se sustentar.",
     ),
     "codex.fragment.fosso.profundezas_suspensas": FragmentPresentation(

@@ -1,4 +1,4 @@
-"""Canonical Fosso das Raízes encounters on the shared dungeon engine."""
+"""Canonical Vales Fosso das Raízes encounters on the shared dungeon engine."""
 
 from __future__ import annotations
 
