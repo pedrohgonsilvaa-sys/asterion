@@ -26,6 +26,7 @@ VDE_IMPORTANT_FIRST_VICTORY_XP = {
     "no_feroz": (14, 687),
     "viuva_cipos": (17, 876),
     "carrasco_casca": (20, 1086),
+    "o_que_pende": (17, 876),
 }
 
 
@@ -125,7 +126,40 @@ class BestiaryRecorder:
                 )
             ).all()
         )
-        if creature_id == "matriarca_raizes":
+        if creature_id == "tecela_fosso":
+            required = {
+                "first_victory",
+                "action:fio_arrasto",
+                "action:casulo_breve",
+                "action:queda_tecela",
+            }
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 25
+                else "known"
+                if entry.bkp >= 10
+                else "observed"
+            )
+        elif creature_id == "o_que_pende":
+            required = {
+                "first_victory",
+                "phase:cordas_tensas",
+                "phase:nada_sustenta",
+                "mechanic:raizes_sustentacao",
+                "action:despencar",
+            }
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
+        elif creature_id == "matriarca_raizes":
             required = {
                 "first_victory",
                 "p12_completed",
@@ -244,7 +278,40 @@ class BestiaryRecorder:
                 )
             ).all()
         )
-        if creature_id == "matriarca_raizes":
+        if creature_id == "tecela_fosso":
+            required = {
+                "first_victory",
+                "action:fio_arrasto",
+                "action:casulo_breve",
+                "action:queda_tecela",
+            }
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 25
+                else "known"
+                if entry.bkp >= 10
+                else "observed"
+            )
+        elif creature_id == "o_que_pende":
+            required = {
+                "first_victory",
+                "phase:cordas_tensas",
+                "phase:nada_sustenta",
+                "mechanic:raizes_sustentacao",
+                "action:despencar",
+            }
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
+        elif creature_id == "matriarca_raizes":
             required = {
                 "first_victory",
                 "p12_completed",

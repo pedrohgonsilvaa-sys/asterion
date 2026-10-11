@@ -349,6 +349,12 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                                 "reduction_per_source": Decimal(
                                     aura.get("reduction_per_source", "0")
                                 ),
+                                "reduction_mode": aura.get(
+                                    "reduction_mode", "per_source"
+                                ),
+                                "barrier_received_per_source": Decimal(
+                                    aura.get("barrier_received_per_source", "0")
+                                ),
                             }
                         )
                     )

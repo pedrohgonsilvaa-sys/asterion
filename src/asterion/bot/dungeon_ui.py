@@ -22,14 +22,14 @@ def render_dungeons(view: DungeonView) -> Screen:
     if view.kind == "known":
         rows = []
         details = []
-        for family_id, name, level_range, location in view.known_dungeons:
-            callback = (
-                "dungeon:crypt"
-                if family_id == "dungeon.tdo.cripta_ocaso"
-                else "dungeon:galleries"
-            )
+        for family_id, name, level_range, location, region in view.known_dungeons:
+            callback = {
+                "dungeon.tdo.cripta_ocaso": "dungeon:crypt",
+                "dungeon.tdo.galerias_vigia": "dungeon:galleries",
+                "dungeon.vde.fosso_raizes": "dungeon:fosso",
+            }.get(family_id, "dungeon:known")
             rows.append([_button(f"{name} · {level_range}", callback)])
-            details.append(f"{name} · {level_range}\nTerras do Ocaso · {location}")
+            details.append(f"{name} · {level_range}\n{region} · {location}")
         text = "⛓️ Masmorras Conhecidas\n\n" + "\n\n".join(details)
         rows.append([_button("← Aventura", "world:adventure")])
         keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -43,7 +43,7 @@ def render_dungeons(view: DungeonView) -> Screen:
     if view.kind == "detail":
         text = (
             f"⛓️ {view.dungeon_name} · {view.range_label}\n"
-            f"Terras do Ocaso · {view.entry_display}\n\n"
+            f"{view.region_display} · {view.entry_display}\n\n"
             f"{escape(view.character_name)} · Nv.{view.level}\n"
             f"❤️ HP · {view.hp} / {view.max_hp}\n"
             f"⚡ Vigor · {view.vigor} / {view.max_vigor}"
@@ -56,7 +56,11 @@ def render_dungeons(view: DungeonView) -> Screen:
         fractured_gate = dict(view.difficulty_gates).get("fractured", "first_stable")
         rupture_gate = dict(view.difficulty_gates).get("rupture", "level")
         rows = []
-        family_key = "g" if view.family_id == "dungeon.tdo.galerias_vigia" else "c"
+        family_key = {
+            "dungeon.tdo.cripta_ocaso": "c",
+            "dungeon.tdo.galerias_vigia": "g",
+            "dungeon.vde.fosso_raizes": "f",
+        }.get(view.family_id, "c")
         if stable_gate == "available":
             rows.append(
                 [
@@ -66,7 +70,13 @@ def render_dungeons(view: DungeonView) -> Screen:
                 ]
             )
         else:
-            rows.append([_button("🔒 Estável · Requer Nv.4", "dungeon:noop")])
+            rows.append(
+                [
+                    _button(
+                        f"🔒 Estável · Requer Nv.{view.minimum_level}", "dungeon:noop"
+                    )
+                ]
+            )
         if fractured_gate == "available":
             rows.append(
                 [
@@ -76,7 +86,11 @@ def render_dungeons(view: DungeonView) -> Screen:
                 ]
             )
         else:
-            reason = "Requer Nv.4" if fractured_gate == "level" else "Concluir Estável"
+            reason = (
+                f"Requer Nv.{view.minimum_level}"
+                if fractured_gate == "level"
+                else "Concluir Estável"
+            )
             rows.append([_button(f"🔒 Fraturada · {reason}", "dungeon:noop")])
         if rupture_gate == "available":
             rows.append(
@@ -222,11 +236,7 @@ def render_dungeons(view: DungeonView) -> Screen:
     if view.kind == "combat" and view.combat is not None:
         return render_combat(view)
     title = f"⛓️ {escape(view.dungeon_name)} · {escape(view.difficulty_label or '')}"
-    brazier_label = (
-        "Braseiro da Vigília"
-        if view.family_id == "dungeon.tdo.galerias_vigia"
-        else "Braseiro do Silêncio"
-    )
+    brazier_label = view.brazier_label
     if view.kind == "brazier":
         text = (
             f"{title}\n\n🔥 {brazier_label}\n"

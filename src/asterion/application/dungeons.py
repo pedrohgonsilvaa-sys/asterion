@@ -19,7 +19,7 @@ from asterion.application.equipment_configuration import (
     reconcile_character_hp,
 )
 from asterion.application.progression import consolidate_character_level
-from asterion.application.road import CHARNECA, REGION, RUINS, RoadService
+from asterion.application.road import CHARNECA, RUINS, RoadService
 from asterion.application.vigor import add_vigor_state, reconcile_character_vigor, utcnow
 from asterion.domain.combat import (
     CombatConsumableOption,
@@ -31,9 +31,11 @@ from asterion.domain.combat import (
 from asterion.domain.consumables import ConsumableFamily
 from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.dungeons import (
+    BASIC_MATERIALS,
     CRYPT_FAMILY_ID,
     CRYPT_RULESET_VERSION,
     DIFFICULTIES,
+    catalyst_material_id,
     difficulty_gate,
     dungeon_completion_xp,
     dungeon_crowns,
@@ -77,6 +79,29 @@ from asterion.domain.tdo_galleries import (
     create_galleries_combat,
     gallery_encounter_specs,
     gallery_enemy_rewards,
+)
+from asterion.domain.vde_fosso import (
+    FOSSO_BASIC_MATERIALS,
+    FOSSO_BRAZIER_LABEL,
+    FOSSO_CATALYST,
+    FOSSO_CODEX_ENTRY,
+    FOSSO_CONTENT_VERSION,
+    FOSSO_CORE_ID,
+    FOSSO_CORE_NAME,
+    FOSSO_DISCOVERY_UNLOCK,
+    FOSSO_ENTRY_LOCATION,
+    FOSSO_ENVIRONMENTS,
+    FOSSO_FAMILY_ID,
+    FOSSO_FIRST_CLEAR_PREFIX,
+    FOSSO_FRAGMENT,
+    FOSSO_KNOWN_PATH_UNLOCK,
+    FOSSO_LOCATION,
+    FOSSO_RECIPE_UNLOCK,
+    FOSSO_REWARD_PREFIX,
+    FOSSO_RULESET_VERSION,
+    create_fosso_combat,
+    fosso_encounter_specs,
+    fosso_enemy_rewards,
 )
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
@@ -143,6 +168,12 @@ class DungeonFamily:
     core_name: str
     recipe_unlock: str
     brazier_label: str
+    region_display: str = "Terras do Ocaso"
+    encounter_count: int = 5
+    basic_material_pool: tuple[str, ...] | None = None
+    catalyst_material: str | None = None
+    fragment_material: str | None = None
+    recipe_name: str | None = None
 
 
 DUNGEON_FAMILIES = {
@@ -188,6 +219,33 @@ DUNGEON_FAMILIES = {
         GALLERIES_RECIPE_UNLOCK,
         GALLERIES_BRAZIER_LABEL,
     ),
+    FOSSO_FAMILY_ID: DungeonFamily(
+        FOSSO_FAMILY_ID,
+        FOSSO_LOCATION,
+        "Nv.14–17",
+        FOSSO_ENTRY_LOCATION,
+        FOSSO_ENTRY_LOCATION,
+        FOSSO_DISCOVERY_UNLOCK,
+        FOSSO_KNOWN_PATH_UNLOCK,
+        FOSSO_FIRST_CLEAR_PREFIX,
+        FOSSO_REWARD_PREFIX,
+        "dungeon_fosso_encounter",
+        FOSSO_CONTENT_VERSION,
+        FOSSO_RULESET_VERSION,
+        16,
+        14,
+        FOSSO_CODEX_ENTRY,
+        FOSSO_CORE_ID,
+        FOSSO_CORE_NAME,
+        FOSSO_RECIPE_UNLOCK,
+        FOSSO_BRAZIER_LABEL,
+        region_display="Vales dos Enforcados",
+        encounter_count=5,
+        basic_material_pool=FOSSO_BASIC_MATERIALS,
+        catalyst_material=FOSSO_CATALYST,
+        fragment_material=FOSSO_FRAGMENT,
+        recipe_name="Relicário das Cordas Mortas",
+    ),
 }
 
 
@@ -196,12 +254,15 @@ def _family(family_id: str | None) -> DungeonFamily:
 
 
 def _encounter_count(family_id: str) -> int:
-    return len(CRYPT_ENCOUNTERS) if family_id == CRYPT_FAMILY_ID else 5
+    family = DUNGEON_FAMILIES.get(family_id)
+    return family.encounter_count if family is not None else len(CRYPT_ENCOUNTERS)
 
 
 def _encounter_environment(family_id: str, ordinal: int) -> str:
     if family_id == CRYPT_FAMILY_ID:
         return CRYPT_ENCOUNTERS[ordinal].environment
+    if family_id == FOSSO_FAMILY_ID:
+        return FOSSO_ENVIRONMENTS[ordinal]
     return {
         1: "Corredor de Guarda",
         2: "Junção dos Vigias",
@@ -215,17 +276,27 @@ def _encounter_specs(run, ordinal: int):
     family_id = getattr(run, "dungeon_family_id", CRYPT_FAMILY_ID)
     if family_id == CRYPT_FAMILY_ID:
         return encounter_specs(ordinal, run.difficulty)
+    if family_id == FOSSO_FAMILY_ID:
+        return fosso_encounter_specs(
+            ordinal, run.difficulty, run.initial_group_size, run.reference_level
+        )
     return gallery_encounter_specs(
         ordinal, run.difficulty, run.initial_group_size, run.reference_level
     )
 
 
 def _enemy_rewards_for(run, ordinal: int):
-    return (
-        enemy_rewards(ordinal)
-        if run.dungeon_family_id == CRYPT_FAMILY_ID
-        else gallery_enemy_rewards(ordinal)
-    )
+    if run.dungeon_family_id == CRYPT_FAMILY_ID:
+        return enemy_rewards(ordinal)
+    if run.dungeon_family_id == FOSSO_FAMILY_ID:
+        return fosso_enemy_rewards(ordinal)
+    return gallery_enemy_rewards(ordinal)
+
+
+def _encounter_definition(family_id: str, ordinal: int) -> str:
+    if family_id == CRYPT_FAMILY_ID:
+        return CRYPT_ENCOUNTERS[ordinal].definition_id
+    return f"{family_id}.encounter.{ordinal}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,7 +344,10 @@ class DungeonView:
     dungeon_name: str = "Cripta do Ocaso"
     range_label: str = "Nv.4–7"
     entry_display: str = "Charneca da Fuligem"
-    known_dungeons: tuple[tuple[str, str, str, str], ...] = ()
+    region_display: str = "Terras do Ocaso"
+    minimum_level: int = 4
+    brazier_label: str = "Braseiro do Silêncio"
+    known_dungeons: tuple[tuple[str, str, str, str, str], ...] = ()
     lobby_id: UUID | None = None
     lobby_mode: str | None = None
     party_members: tuple[tuple[str, int, Decimal, Decimal, int, str], ...] = ()
@@ -310,6 +384,7 @@ class DungeonService:
                             family.name,
                             family.range_label,
                             family.entry_display,
+                            family.region_display,
                         )
                     )
             return self._view(
@@ -954,7 +1029,7 @@ class DungeonService:
                     character,
                     kind="detail",
                     difficulty_gates=tuple(gates.items()),
-                    reason="gate",
+                    reason="level" if gates.get(difficulty) == "level" else "gate",
                     family_id=family.family_id,
                 )
             active_activity = await session.scalar(
@@ -1020,23 +1095,19 @@ class DungeonService:
                 DungeonRunEncounter(
                     run_id=run_id,
                     encounter_ordinal=ordinal,
-                    definition_id=(
-                        CRYPT_ENCOUNTERS[ordinal].definition_id
-                        if family.family_id == CRYPT_FAMILY_ID
-                        else f"galleries.encounter.{ordinal}"
-                    ),
+                    definition_id=_encounter_definition(family.family_id, ordinal),
                     status="pending",
                     activity_id=None,
                     attempt_count=0,
                     progress={},
                     reward_settled=False,
                 )
-                for ordinal in range(1, 6)
+                for ordinal in range(1, _encounter_count(family.family_id) + 1)
             )
             await session.flush()
             await self._create_lobby_activity(session, character, run)
             await self._ensure_codex_entry(session, character.id, family.codex_entry)
-            world.region = REGION
+            world.region = family.region_display
             world.location = family.name
             return await self._run_view(session, character, run, member)
 
@@ -1225,8 +1296,8 @@ class DungeonService:
             equipment = equipment_configuration_from_data(primary_member.combat_configuration)
             active_arts = party_specs[primary_member.position - 1].active_art_ids
             group = tuple(party_specs) if run.initial_group_size > 1 else None
-            combat = (
-                create_crypt_combat(
+            if run.dungeon_family_id == CRYPT_FAMILY_ID:
+                combat = create_crypt_combat(
                     uuid4(),
                     name=primary_character.name,
                     character_class=primary_character.character_class,
@@ -1241,8 +1312,8 @@ class DungeonService:
                     initial_group_size=run.initial_group_size,
                     party=group,
                 )
-                if run.dungeon_family_id == CRYPT_FAMILY_ID
-                else create_galleries_combat(
+            elif run.dungeon_family_id == FOSSO_FAMILY_ID:
+                combat = create_fosso_combat(
                     uuid4(),
                     name=primary_character.name,
                     character_class=primary_character.character_class,
@@ -1258,7 +1329,23 @@ class DungeonService:
                     initial_group_size=run.initial_group_size,
                     party=group,
                 )
-            )
+            else:
+                combat = create_galleries_combat(
+                    uuid4(),
+                    name=primary_character.name,
+                    character_class=primary_character.character_class,
+                    race=primary_character.race,
+                    hp=primary_member.hp,
+                    level=primary_character.level,
+                    difficulty=run.difficulty,
+                    reference_level=run.reference_level,
+                    equipment=equipment,
+                    active_art_ids=active_arts,
+                    ordinal=run.current_encounter_ordinal,
+                    run_seed=run.seed,
+                    initial_group_size=run.initial_group_size,
+                    party=group,
+                )
             combat.configuration_snapshot = (combat.configuration_snapshot or {}) | {
                 "members": [
                     {
@@ -1716,13 +1803,7 @@ class DungeonService:
             await self._record_combat_events(
                 session, participant_character, run, encounter, combat, combat
             )
-        specs = (
-            encounter_specs(ordinal, run.difficulty)
-            if run.dungeon_family_id == CRYPT_FAMILY_ID
-            else gallery_encounter_specs(
-                ordinal, run.difficulty, run.initial_group_size, run.reference_level
-            )
-        )
+        specs = _encounter_specs(run, ordinal)
         for participant in members:
             participant_character = character_by_id[participant.character_id]
             if self._participation_factor(participant, members) <= 0:
@@ -1751,16 +1832,13 @@ class DungeonService:
                             spec.creature.creature_id,
                             fixed_xp=474,
                         )
+
         encounter.status = "completed"
         encounter.reward_settled = True
         encounter.completed_at = datetime.now(UTC)
         activity.status = "completed"
         progress = dict(run.progress or {})
-        encounter_rewards = (
-            enemy_rewards(ordinal)
-            if run.dungeon_family_id == CRYPT_FAMILY_ID
-            else gallery_enemy_rewards(ordinal)
-        )
+        encounter_rewards = _enemy_rewards_for(run, ordinal)
         earned = sum(
             enemy_xp(level, category, powerlevel_factor=D("0.25"))
             for _, level, category in encounter_rewards
@@ -1932,11 +2010,17 @@ class DungeonService:
             member_seed = f"{run.seed}:member:{character.id.hex}"
             material_counts: dict[str, int] = {}
             for ordinal in range(profile.basic_materials):
-                material_id = material_for_ordinal(member_seed, ordinal)
+                material_id = material_for_ordinal(
+                    member_seed,
+                    ordinal,
+                    family.basic_material_pool or BASIC_MATERIALS,
+                )
                 material_counts[material_id] = material_counts.get(material_id, 0) + 1
-            material_counts["material.tdo.catalisador_elite_i"] = profile.catalysts
+            catalyst_id = family.catalyst_material or catalyst_material_id(run.reference_level)
+            fragment_id = family.fragment_material or fragment_material_id(run.reference_level)
+            material_counts[catalyst_id] = profile.catalysts
             material_counts[family.core_id] = profile.cores
-            material_counts[fragment_material_id(run.reference_level)] = profile.fragments
+            material_counts[fragment_id] = profile.fragments
             for material_id, quantity in sorted(material_counts.items()):
                 material_source = f"{source}:material:{material_id}"
                 if len(material_source) > 96:
@@ -2031,14 +2115,16 @@ class DungeonService:
                 if run.difficulty == "stable":
                     if run.dungeon_family_id == CRYPT_FAMILY_ID:
                         await self._refresh_crypt_boss_mastery(session, character.id)
-                    else:
+                    elif run.dungeon_family_id == GALLERIES_FAMILY_ID:
                         await self._refresh_galleries_boss_mastery(session, character.id)
             else:
                 first_clear_by_character[str(character.id)] = False
             if run.dungeon_family_id == CRYPT_FAMILY_ID:
                 await self._record_crypt_codex_completion(session, character.id)
-            else:
+            elif run.dungeon_family_id == GALLERIES_FAMILY_ID:
                 await self._record_galleries_codex_completion(session, character.id)
+            elif run.dungeon_family_id == FOSSO_FAMILY_ID:
+                await self._record_fosso_codex_completion(session, character.id)
             session.add_all(components)
             reward_lines_by_character[str(character.id)] = self._reward_lines(
                 total_xp,
@@ -2101,6 +2187,12 @@ class DungeonService:
             "material.tdo.catalisador_elite_i": "Catalisador de Elite I",
             family.core_id: family.core_name,
             "material.tdo.fragmento_aprimoramento_i": "Fragmento de Aprimoramento I",
+            "material.vde.ferro_enredado": "Ferro Enredado",
+            "material.vde.couro_musgoso": "Couro Musgoso",
+            "material.vde.erva_de_turfa": "Erva de Turfa",
+            "material.vde.resina_enredada": "Resina Enredada",
+            "material.vde.catalisador_elite_ii": "Catalisador de Elite II",
+            "material.vde.fragmento_aprimoramento_ii": "Fragmento de Aprimoramento II",
         }
         for material_id, quantity in sorted(materials.items()):
             lines.append(f"📦 {labels.get(material_id, material_id)} · {quantity}")
@@ -2110,7 +2202,7 @@ class DungeonService:
         if rune:
             lines.append(f"🔷 Runa · {rune['family']} · {rune['rarity']} · Grau {rune['grade']}")
         if recipe:
-            label = (
+            label = family.recipe_name or (
                 "Guarda do Primeiro Selo"
                 if family.family_id == GALLERIES_FAMILY_ID
                 else "Relicário dos Sem-Nome"
@@ -2267,7 +2359,13 @@ class DungeonService:
             "enemy",
         )
         boss = after.fighters.get(boss_key) if encounter.encounter_ordinal == 5 else None
-        boss_creature_id = "sem_nome" if family_id == CRYPT_FAMILY_ID else "custodio_primeiro_selo"
+        boss_creature_id = (
+            "sem_nome"
+            if family_id == CRYPT_FAMILY_ID
+            else "o_que_pende"
+            if family_id == FOSSO_FAMILY_ID
+            else "custodio_primeiro_selo"
+        )
         for event in after.events[cursor:]:
             if boss is not None:
                 for fighter_id, hp in event.fighter_hp_after:
@@ -2275,7 +2373,7 @@ class DungeonService:
                         ratio = D(hp) / D(boss.stats.hp)
                         if family_id == CRYPT_FAMILY_ID:
                             await self._phase_evidence(session, character.id, ratio)
-                        elif ratio <= D("0.35"):
+                        elif family_id == GALLERIES_FAMILY_ID and ratio <= D("0.35"):
                             await self._add_bestiary_evidence(
                                 session,
                                 character.id,
@@ -2284,7 +2382,7 @@ class DungeonService:
                                 "phase",
                                 5,
                             )
-                        elif ratio < D("0.70"):
+                        elif family_id == GALLERIES_FAMILY_ID and ratio < D("0.70"):
                             await self._add_bestiary_evidence(
                                 session,
                                 character.id,
@@ -2330,7 +2428,33 @@ class DungeonService:
                     )
 
         for event in mechanic_events[mechanic_cursor:]:
-            if event.action == "phase:galleries.order_of_containment":
+            if event.action == "phase:fosso.phase.ii":
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    boss_creature_id,
+                    "phase:cordas_tensas",
+                    "phase",
+                    5,
+                )
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    boss_creature_id,
+                    "mechanic:raizes_sustentacao",
+                    "mechanic",
+                    5,
+                )
+            elif event.action == "phase:fosso.phase.iii":
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    boss_creature_id,
+                    "phase:nada_sustenta",
+                    "phase",
+                    5,
+                )
+            elif event.action == "phase:galleries.order_of_containment":
                 await self._add_bestiary_evidence(
                     session,
                     character.id,
@@ -2359,7 +2483,7 @@ class DungeonService:
         if encounter.encounter_ordinal == 5:
             if family_id == CRYPT_FAMILY_ID:
                 await self._refresh_crypt_boss_mastery(session, character.id)
-            else:
+            elif family_id == GALLERIES_FAMILY_ID:
                 await self._refresh_galleries_boss_mastery(session, character.id)
 
     async def _add_bestiary_evidence(
@@ -2433,6 +2557,30 @@ class DungeonService:
     async def _ensure_codex_for_encounter(
         self, session, character_id, ordinal, *, family_id=CRYPT_FAMILY_ID
     ):
+        if family_id == FOSSO_FAMILY_ID:
+            fragments = {
+                1: (
+                    "codex.location.fosso_das_raizes",
+                    "codex.fragment.fosso.entry",
+                ),
+                2: (
+                    "codex.mystery.cordas_sob_a_mata",
+                    "codex.fragment.fosso.cordas_sob_a_mata",
+                ),
+                4: (
+                    "codex.history.nos_pulsantes",
+                    "codex.fragment.fosso.nos_pulsantes",
+                ),
+                5: (
+                    "codex.history.aquilo_que_pende",
+                    "codex.fragment.fosso.aquilo_que_pende",
+                ),
+            }
+            values = fragments.get(ordinal)
+            if values is not None:
+                await self._ensure_codex_entry(session, character_id, values[0])
+                await self._ensure_fragment(session, character_id, values[0], values[1])
+            return
         if family_id == GALLERIES_FAMILY_ID:
             fragments = {
                 1: ("codex.location.galerias_do_vigia", "codex.fragment.galleries.entry"),
@@ -2472,6 +2620,16 @@ class DungeonService:
         for entry_id, fragment_id in (
             ("codex.history.primeiro_selo", "codex.fragment.galleries.first_seal"),
             ("codex.history.ordens_que_permanecem", "codex.fragment.galleries.orders_remain"),
+        ):
+            await self._ensure_codex_entry(session, character_id, entry_id)
+            await self._ensure_fragment(session, character_id, entry_id, fragment_id)
+
+    async def _record_fosso_codex_completion(self, session, character_id):
+        for entry_id, fragment_id in (
+            (
+                "codex.history.profundezas_suspensas",
+                "codex.fragment.fosso.profundezas_suspensas",
+            ),
         ):
             await self._ensure_codex_entry(session, character_id, entry_id)
             await self._ensure_fragment(session, character_id, entry_id, fragment_id)
@@ -2737,7 +2895,7 @@ class DungeonService:
                 select(WorldState).where(WorldState.character_id == character.id).with_for_update()
             )
             if world is not None:
-                world.region = REGION
+                world.region = family.region_display
                 world.location = family.name
             session.add(
                 DungeonRunMember(
@@ -2761,18 +2919,14 @@ class DungeonService:
             DungeonRunEncounter(
                 run_id=run_id,
                 encounter_ordinal=ordinal,
-                definition_id=(
-                    CRYPT_ENCOUNTERS[ordinal].definition_id
-                    if family.family_id == CRYPT_FAMILY_ID
-                    else f"galleries.encounter.{ordinal}"
-                ),
+                definition_id=_encounter_definition(family.family_id, ordinal),
                 status="pending",
                 activity_id=None,
                 attempt_count=0,
                 progress={},
                 reward_settled=False,
             )
-            for ordinal in range(1, 6)
+            for ordinal in range(1, _encounter_count(family.family_id) + 1)
         )
         await session.flush()
         return run
@@ -2999,6 +3153,9 @@ class DungeonService:
             dungeon_name=family.name,
             range_label=family.range_label,
             entry_display=family.entry_display,
+            region_display=family.region_display,
+            minimum_level=family.minimum_level,
+            brazier_label=family.brazier_label,
             known_dungeons=tuple(known_dungeons),
             lobby_id=lobby_id,
             lobby_mode=lobby_mode,
@@ -3163,7 +3320,7 @@ class DungeonService:
             select(WorldState).where(WorldState.character_id == character_id).with_for_update()
         )
         if world is not None:
-            world.region = REGION
+            world.region = _family(family_id).region_display
             world.location = _family(family_id).entry_location
 
     @staticmethod

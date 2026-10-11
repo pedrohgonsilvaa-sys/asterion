@@ -378,6 +378,8 @@ class CombatDamageAura:
     source_fighter_keys: tuple[str, ...]
     target_fighter_keys: tuple[str, ...]
     reduction_per_source: Decimal
+    reduction_mode: str = "per_source"
+    barrier_received_per_source: Decimal = ZERO
 
 
 @dataclass(frozen=True, slots=True)
@@ -575,8 +577,25 @@ def _damage_aura_reduction(state: Combat, target_key: str) -> Decimal:
             for key in aura.source_fighter_keys
             if key in state.fighters
         )
-        reduction += aura.reduction_per_source * active_sources
+        if aura.reduction_mode == "any_source":
+            reduction += aura.reduction_per_source if active_sources else ZERO
+        else:
+            reduction += aura.reduction_per_source * active_sources
     return min(D(1), max(ZERO, reduction))
+
+
+def _barrier_received_multiplier(state: Combat, target_key: str) -> Decimal:
+    multiplier = D(1)
+    for aura in state.damage_auras:
+        if target_key not in aura.target_fighter_keys or aura.barrier_received_per_source <= ZERO:
+            continue
+        active_sources = sum(
+            state.fighters[key].hp > ZERO
+            for key in aura.source_fighter_keys
+            if key in state.fighters
+        )
+        multiplier += aura.barrier_received_per_source * active_sources
+    return multiplier
 
 
 def _fighter_required_for_victory(state: Combat, key: str) -> bool:
@@ -2432,12 +2451,14 @@ def _perform(
                 * action.self_barrier_hp_fraction
                 * barrier_power_multiplier
                 * path_barrier_multiplier
+                * _barrier_received_multiplier(state, actor_id)
             ).to_integral_value(rounding=ROUND_FLOOR)
         else:
             barrier_coefficient = (
                 action.self_barrier_coefficient
                 * barrier_power_multiplier
                 * path_barrier_multiplier
+                * _barrier_received_multiplier(state, actor_id)
             )
             value = (actor.stat("attack") * barrier_coefficient).to_integral_value(
                 rounding=ROUND_FLOOR
@@ -3100,6 +3121,7 @@ def _perform(
                 actor.stat("attack")
                 * action.target_barrier_coefficient
                 * target_barrier_power
+                * _barrier_received_multiplier(state, target_key)
             ).to_integral_value(rounding=ROUND_FLOOR)
             target_barrier = max(ZERO, target_barrier)
             if target_barrier > ZERO:

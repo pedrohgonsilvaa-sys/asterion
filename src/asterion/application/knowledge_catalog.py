@@ -93,6 +93,13 @@ CODEX_ENTRIES = (
         "vde.location.mata_suspensa",
     ),
     CodexPresentation(
+        "codex.location.fosso_das_raizes",
+        "Fosso das Raízes",
+        "regions",
+        105,
+        "vde.location.fosso_das_raizes",
+    ),
+    CodexPresentation(
         "codex.location.baixios_enredados",
         "Baixios Enredados",
         "regions",
@@ -144,6 +151,22 @@ CODEX_ENTRIES = (
         "Raízes que Seguem Pedra",
         "mysteries",
         40,
+    ),
+    CodexPresentation(
+        "codex.mystery.cordas_sob_a_mata",
+        "Cordas sob a Mata",
+        "mysteries",
+        105,
+    ),
+    CodexPresentation("codex.history.nos_pulsantes", "Nós Pulsantes", "history", 106),
+    CodexPresentation(
+        "codex.history.aquilo_que_pende", "Aquilo que Pende", "history", 107
+    ),
+    CodexPresentation(
+        "codex.history.profundezas_suspensas",
+        "Profundezas Suspensas",
+        "history",
+        108,
     ),
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
@@ -221,6 +244,25 @@ CODEX_FRAGMENTS = {
     ),
     "codex.fragment.galleries.orders_remain": FragmentPresentation(
         "Ordens que Permanecem", "Fragmentos registram ordens que permanecem."
+    ),
+    "codex.fragment.fosso.entry": FragmentPresentation(
+        "Entrada", "O Fosso das Raízes foi explorado sob a Mata Suspensa."
+    ),
+    "codex.fragment.fosso.cordas_sob_a_mata": FragmentPresentation(
+        "Cordas sob a Mata",
+        "Troncos, passarelas e raízes atravessam o vazio nas profundezas sob a Mata.",
+    ),
+    "codex.fragment.fosso.nos_pulsantes": FragmentPresentation(
+        "Nós Pulsantes",
+        "Nós ativos alteram a barreira recebida pela Casca Errante no Coração do Emaranhado.",
+    ),
+    "codex.fragment.fosso.aquilo_que_pende": FragmentPresentation(
+        "Aquilo que Pende",
+        "Uma criatura ocupa as profundezas e usa raízes e cordas para se sustentar.",
+    ),
+    "codex.fragment.fosso.profundezas_suspensas": FragmentPresentation(
+        "Profundezas Suspensas",
+        "Os registros do Fosso descrevem estruturas e raízes que atravessam o vazio sob a Mata.",
     ),
     "codex.fragment.antigos_asterianos.outras_ancoras_existiram": FragmentPresentation(
         "Outras estruturas", "Registros indicam que outras estruturas chamadas Âncoras existiram."
@@ -432,6 +474,12 @@ ACHIEVEMENTS = (
         "Título · Sobrevivente do Berço",
     ),
     AchievementPresentation(
+        "feat.vde.aquilo_que_pende",
+        "Aquilo que Pende",
+        "pve",
+        "Concluiu o Fosso das Raízes em dificuldade Estável pela primeira vez.",
+    ),
+    AchievementPresentation(
         "feat.vde.vales_dos_enforcados", "Vales dos Enforcados", "exploration",
         "Concluiu a campanha dos Vales no Nv.20 e descobriu seus cinco Locais principais.",
         "Moldura · Vales dos Enforcados",
@@ -471,6 +519,7 @@ VDE_LOCATIONS = {
     "vde.location.baixios_enredados": "Baixios Enredados",
     "vde.location.claustro_das_raizes": "Claustro das Raízes",
     "vde.location.berco_da_matriarca": "Berço da Matriarca",
+    "vde.location.fosso_das_raizes": "Fosso das Raízes",
 }
 LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS
 HABITAT_EVIDENCE_TO_LOCATION = {
@@ -498,6 +547,7 @@ MATERIAL_LABELS = {
     "material.vde.couro_musgoso": "Couro Musgoso",
     "material.vde.erva_de_turfa": "Erva de Turfa",
     "material.vde.resina_enredada": "Resina Enredada",
+    "material.vde.nucleo_fosso_raizes": "Núcleo do Fosso das Raízes",
 }
 
 
@@ -577,6 +627,12 @@ CREATURE_PRESENTATION = {
     ),
     "vigia_enraizado": CreaturePresentation(VDE_REGION_ID, ("vde.location.baixios_enredados",)),
     "carrasco_casca": CreaturePresentation(VDE_REGION_ID, ("vde.location.baixios_enredados",)),
+    "tecela_fosso": CreaturePresentation(
+        VDE_REGION_ID, ("vde.location.fosso_das_raizes",)
+    ),
+    "o_que_pende": CreaturePresentation(
+        VDE_REGION_ID, ("vde.location.fosso_das_raizes",)
+    ),
 }
 CREATURE_NOTES = {
     # The regional source explicitly leaves this creature's origin and nature unconfirmed.
