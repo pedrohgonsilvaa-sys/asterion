@@ -1,5 +1,6 @@
 from decimal import Decimal
-from uuid import uuid4
+from itertools import count
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -9,6 +10,7 @@ from asterion.application.combat_configuration_guard import (
     CombatConfigurationLocked,
     lock_for_combat_configuration_mutation,
 )
+from asterion.domain import class_trials as class_trials_domain
 from asterion.domain.arts import (
     LUMINAR_ART_IDS,
     ORACULO_ART_IDS,
@@ -357,12 +359,38 @@ def _next_trial_action(view, combat):
     return LUMINAR_ART_IDS["fulgor"], hostile
 
 
-async def _fight_to_checkpoint(service, actor: int, active):
+async def _fight_to_checkpoint(
+    service, actor: int, active, *, include_diagnostics: bool = False
+):
     stage = active.current_stage
+    combat_id = active.combat_id
+    expected_state = f"ready at checkpoint for stage {stage + 1}"
+
+    def failure_details(final_result, obtained_state):
+        return (
+            f"Combat.id={combat_id}; stage={stage}; final_result={final_result!r}; "
+            f"expected_state={expected_state}; obtained_state={obtained_state!r}"
+        )
+
+    async def current_result(view):
+        if view.attempt_id is None:
+            return None
+        current_combat = await service.combat(actor, view.attempt_id)
+        return current_combat.result if current_combat is not None else None
+
     for _ in range(100):
-        assert active.kind == "active"
+        if active.kind != "active":
+            details = failure_details(await current_result(active), active.kind)
+            if include_diagnostics:
+                pytest.fail(f"Class Trial simulation ended before checkpoint: {details}")
+            pytest.fail(f"Class Trial simulation ended before checkpoint: {active.kind}")
         combat = await service.combat(actor, active.attempt_id)
-        assert combat is not None and combat.result is None
+        if combat is None or combat.result is not None:
+            result = combat.result if combat is not None else None
+            details = failure_details(result, "combat unavailable or already finished")
+            if include_diagnostics:
+                pytest.fail(f"Class Trial simulation cannot continue: {details}")
+            pytest.fail("Class Trial combat is unavailable or already finished")
         action, target = _next_trial_action(active, combat)
         if action not in allowed_actions(combat):
             action, target = "attack", next(
@@ -378,12 +406,26 @@ async def _fight_to_checkpoint(service, actor: int, active):
             target_id=target,
         )
         if updated.kind != "active":
-            assert (
-                updated.current_stage == stage + 1 or updated.kind == "completed"
+            if updated.current_stage == stage + 1 or updated.kind == "completed":
+                return updated
+            final_combat = await service.combat(actor, active.attempt_id)
+            result = final_combat.result if final_combat is not None else None
+            details = failure_details(result, updated.kind)
+            if include_diagnostics:
+                pytest.fail(f"Class Trial simulation did not checkpoint: {details}")
+            pytest.fail(
+                f"Class Trial stage {stage} did not checkpoint: obtained {updated.kind}"
             )
-            return updated
-        assert updated.combat_version != active.combat_version
+        if updated.combat_version == active.combat_version:
+            details = failure_details(combat.result, "active combat version did not advance")
+            if include_diagnostics:
+                pytest.fail(f"Class Trial simulation stopped advancing: {details}")
+            pytest.fail("Class Trial combat version did not advance")
         active = updated
+    result = await current_result(active)
+    details = failure_details(result, active.kind)
+    if include_diagnostics:
+        pytest.fail(f"Class Trial simulation exceeded its action limit: {details}")
     pytest.fail(f"{active.character_class} Trial stage {stage} did not checkpoint")
 
 
@@ -426,15 +468,41 @@ async def test_trial_gate_and_begin_are_persistent_without_creating_a_quest(data
 
 
 @pytest.mark.asyncio
-async def test_stage_checkpoint_is_idempotent_and_reconnects_between_stages(database):
+async def test_stage_checkpoint_is_idempotent_and_reconnects_between_stages(
+    database, monkeypatch
+):
     actor = 997304
+    generated_uuids = []
+    next_uuid = count(1)
+
+    def deterministic_uuid4():
+        value = UUID(int=next(next_uuid))
+        generated_uuids.append(value)
+        return value
+
+    # create_luminar_trial_combat makes a template id, then reset_trial_combat
+    # assigns the live Combat.id. Keep these UUIDs unique and reproducible.
     _, _, service = await _seed_trial(
         database,
         actor,
         active_art_ids=(LUMINAR_ART_IDS["renovacao"], LUMINAR_ART_IDS["fulgor"]),
     )
-    active = await _start_stage(service, actor, 1)
+    with monkeypatch.context() as deterministic_ids:
+        deterministic_ids.setattr(
+            class_trials_domain, "uuid4", deterministic_uuid4
+        )
+        active = await _start_stage(service, actor, 1)
     assert active.attempt_id is not None
+    assert active.combat_id == UUID(int=2), (
+        "Unexpected Luminar seed: Combat.id="
+        f"{active.combat_id}; stage={active.current_stage}; final_result=None; "
+        "expected_state=active stage 1 using UUID(int=2); "
+        f"obtained_state={active.kind}; generated_uuids={generated_uuids}"
+    )
+    assert generated_uuids == [UUID(int=1), UUID(int=2)], (
+        f"Unexpected deterministic UUID sequence for Combat.id={active.combat_id}; "
+        f"stage={active.current_stage}; generated_uuids={generated_uuids}"
+    )
     duplicate_start = await service.start_attempt(actor, active.state_version - 1)
     assert duplicate_start.attempt_id == active.attempt_id
 
@@ -457,17 +525,37 @@ async def test_stage_checkpoint_is_idempotent_and_reconnects_between_stages(data
         "attack",
         target_id=hostile,
     )
-    assert duplicate.combat_version == first.combat_version
-    assert duplicate.attempt_state["events"] == first.attempt_state["events"]
-    checkpoint = await _fight_to_checkpoint(service, actor, first)
+    duplicate_context = (
+        f"Combat.id={active.combat_id}; stage=1; final_result=None; "
+        "expected_state=duplicate action is idempotent; "
+        f"obtained_state=version {duplicate.combat_version}, "
+        f"first version {first.combat_version}"
+    )
+    assert duplicate.combat_version == first.combat_version, duplicate_context
+    assert duplicate.attempt_state["events"] == first.attempt_state["events"], (
+        duplicate_context
+    )
+    checkpoint = await _fight_to_checkpoint(
+        service, actor, first, include_diagnostics=True
+    )
     stale = await service.complete_stage(
         actor, active.attempt_id, active.state_version
     )
     resumed = await service.resume(actor)
-    assert checkpoint.kind == "ready"
-    assert checkpoint.current_stage == 2 and checkpoint.completed_stages == (1,)
-    assert stale.current_stage == 2 and stale.completed_stages == (1,)
-    assert resumed.current_stage == 2 and resumed.completed_stages == (1,)
+    final_combat = await service.combat(actor, active.attempt_id)
+    final_result = final_combat.result if final_combat is not None else None
+    checkpoint_context = (
+        f"Combat.id={active.combat_id}; stage=1; final_result={final_result!r}; "
+        "expected_state=ready at stage 2 with completed_stages=(1,); "
+        f"obtained_state=kind {checkpoint.kind}, stage {checkpoint.current_stage}, "
+        f"completed_stages={checkpoint.completed_stages}"
+    )
+    assert checkpoint.kind == "ready", checkpoint_context
+    assert (
+        checkpoint.current_stage == 2 and checkpoint.completed_stages == (1,)
+    ), checkpoint_context
+    assert stale.current_stage == 2 and stale.completed_stages == (1,), checkpoint_context
+    assert resumed.current_stage == 2 and resumed.completed_stages == (1,), checkpoint_context
     assert resumed.attempt_id is None and resumed.attempt_state is None
 
 
