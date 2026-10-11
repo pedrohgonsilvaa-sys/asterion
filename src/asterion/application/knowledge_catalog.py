@@ -93,6 +93,15 @@ CODEX_ENTRIES = (
         "vde.location.mata_suspensa",
     ),
     CodexPresentation(
+        "codex.location.baixios_enredados",
+        "Baixios Enredados",
+        "regions",
+        110,
+        "vde.location.baixios_enredados",
+    ),
+    CodexPresentation("codex.figure.iven_raal", "Iven Raal", "figures", 30),
+    CodexPresentation("codex.mystery.o_no_antigo", "O Nó Antigo", "mysteries", 50),
+    CodexPresentation(
         "codex.mystery.raizes_que_seguem_pedra",
         "Raízes que Seguem Pedra",
         "mysteries",
@@ -202,6 +211,32 @@ CODEX_FRAGMENTS = {
         "Raízes sob a pedra",
         "As raízes convergem para linhas antigas sob o solo; o crescimento não parece aleatório.",
     ),
+    "codex.fragment.mata.rotas_adaptadas": FragmentPresentation(
+        "Passagens adaptadas",
+        "Os habitantes adaptam rotas e passarelas conforme as raízes avançam pelo terreno.",
+    ),
+    "codex.fragment.vales.routes.s8_alternate_passage": FragmentPresentation(
+        "Rota alternativa",
+        "Uma rota alternativa foi marcada após a passagem de suprimentos ser reorganizada.",
+    ),
+    "codex.fragment.baixios.entry_recorded": FragmentPresentation(
+        "Baixios Enredados",
+        "O fundo úmido dos Vales reúne água escura, turfa, raízes densas e caminhos sufocados.",
+    ),
+    "codex.fragment.iven.regional_register": FragmentPresentation(
+        "Iven Raal",
+        "Iven Raal registra os Vales e investiga as estruturas antigas.",
+    ),
+    "codex.fragment.no_antigo.translation_hypothesis": FragmentPresentation(
+        "Inscrição danificada",
+        "Um termo pode significar nó, junção ou ponto de ligação; "
+        "a leitura permanece uma hipótese documental.",
+    ),
+    "codex.fragment.mata.casca_camadas_externas": FragmentPresentation(
+        "Camada externa",
+        "A camada externa da Casca Errante possui propriedades próximas de matéria vegetal; "
+        "sua origem permanece desconhecida.",
+    ),
     "codex.fragment.camara_do_poente.estrutura_chamada_ancora": FragmentPresentation(
         "Estrutura central", "A estrutura central recebeu o nome Âncora do Poente."
     ),
@@ -309,6 +344,8 @@ ACHIEVEMENT_BY_ID = {entry.achievement_id: entry for entry in ACHIEVEMENTS}
 
 TDO_REGION_ID = "tdo"
 TDO_REGION_LABEL = "🌑 Terras do Ocaso · Nv. 1–10"
+VDE_REGION_ID = "vde"
+VDE_REGION_LABEL = "🪢 Vales dos Enforcados · Nv. 11–20"
 TDO_LOCATIONS = {
     "tdo.location.estrada_das_cinzas": "Estrada das Cinzas",
     "tdo.location.refugio_do_ocaso": "Refúgio do Ocaso",
@@ -319,6 +356,13 @@ TDO_LOCATIONS = {
     "tdo.location.cripta_do_ocaso": "Cripta do Ocaso",
     "tdo.location.galerias_do_vigia": "Galerias do Vigia",
 }
+VDE_LOCATIONS = {
+    "vde.location.garganta_dos_lacos": "Garganta dos Laços",
+    "vde.location.vigilia_do_vale": "Vigília do Vale",
+    "vde.location.mata_suspensa": "Mata Suspensa",
+    "vde.location.baixios_enredados": "Baixios Enredados",
+}
+LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS
 HABITAT_EVIDENCE_TO_LOCATION = {
     "estrada": "tdo.location.estrada_das_cinzas",
     "Estrada das Cinzas": "tdo.location.estrada_das_cinzas",
@@ -326,6 +370,11 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     "Bosque Calcinado": "tdo.location.bosque_calcinado",
     "Ruínas do Vigia": "tdo.location.ruinas_do_vigia",
     **{location_id: location_id for location_id in TDO_LOCATIONS},
+    "Garganta dos Laços": "vde.location.garganta_dos_lacos",
+    "Vigília do Vale": "vde.location.vigilia_do_vale",
+    "Mata Suspensa": "vde.location.mata_suspensa",
+    "Baixios Enredados": "vde.location.baixios_enredados",
+    **{location_id: location_id for location_id in VDE_LOCATIONS},
 }
 MATERIAL_LABELS = {
     "material.tdo.ferro_de_fuligem": "Ferro de Fuligem",
@@ -333,6 +382,10 @@ MATERIAL_LABELS = {
     "material.tdo.erva_cinzenta": "Erva Cinzenta",
     "material.tdo.residuo_ocaso": "Resíduo do Ocaso",
     "material.tdo.fragmento_aprimoramento_i": "Fragmento de Aprimoramento I",
+    "material.vde.ferro_enredado": "Ferro Enredado",
+    "material.vde.couro_musgoso": "Couro Musgoso",
+    "material.vde.erva_de_turfa": "Erva de Turfa",
+    "material.vde.resina_enredada": "Resina Enredada",
 }
 
 
@@ -383,6 +436,35 @@ CREATURE_PRESENTATION = {
     "custodio_primeiro_selo": CreaturePresentation(
         TDO_REGION_ID, ("tdo.location.galerias_do_vigia",)
     ),
+    "lobo_musgoso": CreaturePresentation(
+        VDE_REGION_ID,
+        ("vde.location.garganta_dos_lacos", "vde.location.mata_suspensa"),
+    ),
+    "gralha_vale": CreaturePresentation(
+        VDE_REGION_ID,
+        ("vde.location.garganta_dos_lacos", "vde.location.mata_suspensa"),
+    ),
+    "peregrino_enredado": CreaturePresentation(
+        VDE_REGION_ID,
+        ("vde.location.garganta_dos_lacos", "vde.location.mata_suspensa"),
+    ),
+    "aranha_cipo": CreaturePresentation(
+        VDE_REGION_ID,
+        ("vde.location.mata_suspensa", "vde.location.baixios_enredados"),
+    ),
+    "cervo_no": CreaturePresentation(
+        VDE_REGION_ID,
+        ("vde.location.mata_suspensa", "vde.location.baixios_enredados"),
+    ),
+    "sanguessuga_turfa": CreaturePresentation(VDE_REGION_ID, ("vde.location.baixios_enredados",)),
+    "casca_errante": CreaturePresentation(VDE_REGION_ID, ("vde.location.baixios_enredados",)),
+    "mariposa_breu_verde": CreaturePresentation(VDE_REGION_ID, ("vde.location.baixios_enredados",)),
+    "viuva_cipos": CreaturePresentation(
+        VDE_REGION_ID,
+        ("vde.location.mata_suspensa", "vde.location.baixios_enredados"),
+    ),
+    "vigia_enraizado": CreaturePresentation(VDE_REGION_ID, ("vde.location.baixios_enredados",)),
+    "carrasco_casca": CreaturePresentation(VDE_REGION_ID, ("vde.location.baixios_enredados",)),
 }
 CREATURE_NOTES = {
     # The regional source explicitly leaves this creature's origin and nature unconfirmed.

@@ -50,6 +50,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "per_bonus_if_target_poisoned": Decimal(
                         value.get("per_bonus_if_target_poisoned", "0")
                     ),
+                    "vampirism_fraction": Decimal(value.get("vampirism_fraction", "0")),
                     "actor_per_bonus": Decimal(value.get("actor_per_bonus", "0")),
                     "actor_per_bonus_if_target_bleeding": Decimal(
                         value.get("actor_per_bonus_if_target_bleeding", "0")

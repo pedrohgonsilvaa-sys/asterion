@@ -278,6 +278,11 @@ async def test_vde_garganta_hunt_and_exploration_are_available_after_p7(
         "cervo_no": ("common", "brute", 13, 17),
         "no_feroz": ("elite", "predator", 13, 14),
         "viuva_cipos": ("elite", "controller", 15, 17),
+        "sanguessuga_turfa": ("common", "balanced", 15, 18),
+        "casca_errante": ("uncommon", "armored", 15, 19),
+        "mariposa_breu_verde": ("common", "caster", 16, 19),
+        "vigia_enraizado": ("uncommon", "armored", 18, 20),
+        "carrasco_casca": ("elite", "armored", 18, 20),
     }
     assert VARIANT_POOL["no_feroz"] == ()
     assert VARIANT_POOL["viuva_cipos"] == ()
@@ -364,6 +369,9 @@ async def test_vde_garganta_hunt_and_exploration_are_available_after_p7(
         "explore.vde.mata.braseiro_das_copas": 1832,
         "explore.vde.mata.entrada_fosso_raizes": 1832,
         "explore.vde.mata.passarela_partida": 573,
+        "explore.vde.baixios.braseiro_turfa_fria": 2336,
+        "explore.vde.baixios.galeria_afogada": 2336,
+        "explore.vde.baixios.marcas_sob_a_agua": 730,
     }
     assert select_exploration_result(
         "repeat-test",

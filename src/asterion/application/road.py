@@ -48,10 +48,13 @@ from asterion.domain.road import (
     RUINS_LOCATION,
     RUINS_ROUTE_UNLOCK,
     RULESET,
+    VDE_BAIXIOS_BRAZIER,
+    VDE_BAIXIOS_LOCATION,
     VDE_BASIC_MATERIAL_CREATURE_IDS,
     VDE_GARGANTA_BRAZIER,
     VDE_GARGANTA_LOCATION,
     VDE_GARGANTA_VIGILIA_ROUTE,
+    VDE_MATA_BAIXIOS_ROUTE,
     VDE_MATA_BRAZIER,
     VDE_MATA_EXPLORE_UNLOCK,
     VDE_MATA_LOCATION,
@@ -107,9 +110,10 @@ RUINS = "Ruínas do Vigia"
 VDE_GARGANTA = "Garganta dos Laços"
 VDE_VIGILIA = "Vigília do Vale"
 VDE_MATA = "Mata Suspensa"
+VDE_BAIXIOS = "Baixios Enredados"
 REGION = "Terras do Ocaso"
 VDE_REGION = "Vales dos Enforcados"
-VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA))
+VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS))
 P2_QUEST_ID = "P2"
 P3_QUEST_ID = "P3"
 P4_QUEST_ID = "P4"
@@ -119,14 +123,16 @@ BOSQUE_ROUTE_ENDPOINTS = frozenset((CHARNECA, BOSQUE))
 BOSQUE_RUINS_ROUTE_ENDPOINTS = frozenset((BOSQUE, RUINS))
 VDE_GARGANTA_VIGILIA_ROUTE_ENDPOINTS = frozenset((VDE_GARGANTA, VDE_VIGILIA))
 VDE_VIGILIA_MATA_ROUTE_ENDPOINTS = frozenset((VDE_VIGILIA, VDE_MATA))
+VDE_MATA_BAIXIOS_ROUTE_ENDPOINTS = frozenset((VDE_MATA, VDE_BAIXIOS))
 OVERLAND_ROUTE_PAIRS = (
     CHARNECA_ROUTE_ENDPOINTS,
     BOSQUE_ROUTE_ENDPOINTS,
     BOSQUE_RUINS_ROUTE_ENDPOINTS,
     VDE_GARGANTA_VIGILIA_ROUTE_ENDPOINTS,
     VDE_VIGILIA_MATA_ROUTE_ENDPOINTS,
+    VDE_MATA_BAIXIOS_ROUTE_ENDPOINTS,
 )
-TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA))
+TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS))
 BRAZIER_FOR_LOCATION = {
     ROAD: "tdo.brazier.estrada",
     REFUGE: "tdo.brazier.refugio_do_ocaso",
@@ -136,6 +142,7 @@ BRAZIER_FOR_LOCATION = {
     VDE_GARGANTA: VDE_GARGANTA_BRAZIER,
     VDE_VIGILIA: "vde.brazier.vigilia_do_vale",
     VDE_MATA: VDE_MATA_BRAZIER,
+    VDE_BAIXIOS: VDE_BAIXIOS_BRAZIER,
 }
 BRAZIER_DETAILS = {
     "tdo.brazier.estrada": (ROAD, "Braseiro da Estrada"),
@@ -146,6 +153,7 @@ BRAZIER_DETAILS = {
     VDE_GARGANTA_BRAZIER: (VDE_GARGANTA, "Braseiro dos Laços"),
     "vde.brazier.vigilia_do_vale": (VDE_VIGILIA, "Braseiro da Vigília"),
     VDE_MATA_BRAZIER: (VDE_MATA, "Braseiro das Copas Suspensas"),
+    VDE_BAIXIOS_BRAZIER: (VDE_BAIXIOS, "Braseiro da Turfa Fria"),
 }
 HUNT_CONTENT = "road_manual_hunt"
 GROUP_HUNT_CONTENT = "road_group_hunt"
@@ -190,6 +198,10 @@ VDE_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.vde.mata.erva_de_turfa": "material.vde.erva_de_turfa",
     "explore.vde.mata.resina_enredada": "material.vde.resina_enredada",
     "explore.vde.mata.ferro_enredado": "material.vde.ferro_enredado",
+    "explore.vde.baixios.erva_de_turfa": "material.vde.erva_de_turfa",
+    "explore.vde.baixios.resina_enredada": "material.vde.resina_enredada",
+    "explore.vde.baixios.couro_musgoso": "material.vde.couro_musgoso",
+    "explore.vde.baixios.ferro_enredado": "material.vde.ferro_enredado",
 }
 VDE_EXPLORATION_UNIQUE_XP = {
     "explore.vde.garganta.marco_dos_lacos": 1536,
@@ -197,6 +209,9 @@ VDE_EXPLORATION_UNIQUE_XP = {
     "explore.vde.mata.braseiro_das_copas": 1832,
     "explore.vde.mata.entrada_fosso_raizes": 1832,
     "explore.vde.mata.passarela_partida": 573,
+    "explore.vde.baixios.braseiro_turfa_fria": 2336,
+    "explore.vde.baixios.galeria_afogada": 2336,
+    "explore.vde.baixios.marcas_sob_a_agua": 730,
 }
 
 
@@ -338,10 +353,12 @@ class RoadService:
                     return None
                 if not await self._has_location(s, c.id, RUINS_LOCATION):
                     return None
-            elif world.location in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA}:
+            elif world.location in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS}:
                 if not await self._p7_completed(s, c.id):
                     return None
                 if world.location == VDE_MATA and not await self._p8_started_or_completed(s, c.id):
+                    return None
+                if world.location == VDE_BAIXIOS and not await self._p9_started_or_completed(s, c.id):
                     return None
             elif not await self._p1_completed(s, c.id):
                 return None
@@ -454,6 +471,9 @@ class RoadService:
                         and await self._p8_started_or_completed(s, c.id)
                     )
                     route_unlock = VDE_VIGILIA_MATA_ROUTE
+                elif pair == VDE_MATA_BAIXIOS_ROUTE_ENDPOINTS:
+                    gate_ok = await self._p9_started_or_completed(s, c.id)
+                    route_unlock = VDE_MATA_BAIXIOS_ROUTE
                 elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
                     gate_ok = (
                         await self._p4_completed(s, c.id)
@@ -504,6 +524,9 @@ class RoadService:
                 if world.location == VDE_MATA or destination == VDE_MATA:
                     if not await self._p8_started_or_completed(s, c.id):
                         return None
+                if world.location == VDE_BAIXIOS or destination == VDE_BAIXIOS:
+                    if not await self._p9_started_or_completed(s, c.id):
+                        return None
                 elif not await self._p1_completed(s, c.id):
                     return None
                 source_known = await s.scalar(
@@ -547,6 +570,13 @@ class RoadService:
             if blocking is not None:
                 return blocking
             world.location = destination
+            if destination == VDE_BAIXIOS:
+                await self._ensure(
+                    s,
+                    LocationDiscovery,
+                    character_id=c.id,
+                    location_id=VDE_BAIXIOS_LOCATION,
+                )
             return await self._view_for_world(s, c, world)
 
     async def start_hunt(self, actor: int) -> RoadView | None:
@@ -1656,7 +1686,7 @@ class RoadService:
         if attempt.local_id == RUINS_LOCATION:
             await self._settle_ruins_exploration(s, c, attempt, base_text)
             return
-        if attempt.local_id in {VDE_GARGANTA_LOCATION, VDE_MATA_LOCATION}:
+        if attempt.local_id in {VDE_GARGANTA_LOCATION, VDE_MATA_LOCATION, VDE_BAIXIOS_LOCATION}:
             await self._settle_vde_exploration(s, c, attempt, base_text)
             return
         if attempt.category == "combat" and attempt.activity_id is not None:
@@ -1974,6 +2004,12 @@ class RoadService:
                     s, LocationDiscovery, character_id=c.id, location_id=VDE_MATA_LOCATION
                 )
                 components.append(("brazier", VDE_MATA_BRAZIER, 1, {}))
+            elif attempt.result_id == "explore.vde.baixios.braseiro_turfa_fria":
+                await self._ensure(s, Brazier, character_id=c.id, brazier_id=VDE_BAIXIOS_BRAZIER)
+                await self._ensure(
+                    s, LocationDiscovery, character_id=c.id, location_id=VDE_BAIXIOS_LOCATION
+                )
+                components.append(("brazier", VDE_BAIXIOS_BRAZIER, 1, {}))
 
         for kind, item_id, quantity, payload in components:
             s.add(
@@ -2712,6 +2748,28 @@ class RoadService:
             )
         )
 
+    async def _p9_completed(self, s, character_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Quest).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == "P9",
+                    Quest.status == "completed",
+                )
+            )
+        )
+
+    async def _p9_started_or_completed(self, s, character_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Quest.id).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == "P9",
+                    Quest.status.in_(("active", "completed")),
+                )
+            )
+        )
+
     async def _ruins_route_level_gate(self, s, character) -> bool:
         if character.level >= 8:
             return True
@@ -2763,6 +2821,11 @@ class RoadService:
                 return None
             if activity_kind == "explore" and not await self._p8_started_or_completed(s, c.id):
                 return None
+        elif profile.local_id == VDE_BAIXIOS_LOCATION:
+            if c.level < 15 or not await self._p9_started_or_completed(s, c.id):
+                return None
+            if activity_kind == "hunt" and not await self._p9_completed(s, c.id):
+                return None
         unlock_id = profile.hunt_unlock if activity_kind == "hunt" else profile.explore_unlock
         if not await s.scalar(
             select(Unlock).where(
@@ -2774,6 +2837,7 @@ class RoadService:
         if activity_kind == "hunt" and profile.local_id in {
             VDE_GARGANTA_LOCATION,
             VDE_MATA_LOCATION,
+            VDE_BAIXIOS_LOCATION,
         } and any(
             creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
         ):
@@ -3240,6 +3304,8 @@ class RoadService:
         p7_complete = await self._p7_completed(s, c.id)
         p8_complete = await self._p8_completed(s, c.id)
         p8_started_or_complete = await self._p8_started_or_completed(s, c.id)
+        p9_complete = await self._p9_completed(s, c.id)
+        p9_started_or_complete = await self._p9_started_or_completed(s, c.id)
         current_brazier = BRAZIER_FOR_LOCATION.get(world.location)
         brazier_id = current_brazier if current_brazier in known_brazier_ids else None
         brazier_label = BRAZIER_DETAILS[brazier_id][1] if brazier_id is not None else None
@@ -3247,8 +3313,9 @@ class RoadService:
             (candidate_id, label, location)
             for candidate_id, (location, label) in BRAZIER_DETAILS.items()
             if candidate_id in known_brazier_ids and location != world.location
-            and (location not in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA} or p7_complete)
+            and (location not in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS} or p7_complete)
             and (location != VDE_MATA or p8_started_or_complete)
+            and (location != VDE_BAIXIOS or p9_started_or_complete)
         )
         active_p3 = await s.scalar(
             select(Quest.id).where(
@@ -3336,6 +3403,15 @@ class RoadService:
                     route_destinations.append(VDE_MATA)
             elif world.location == VDE_MATA and p7_complete:
                 route_destinations.append(VDE_VIGILIA)
+                if p9_started_or_complete and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == VDE_MATA_BAIXIOS_ROUTE,
+                    )
+                ):
+                    route_destinations.append(VDE_BAIXIOS)
+            elif world.location == VDE_BAIXIOS and p9_started_or_complete:
+                route_destinations.append(VDE_MATA)
         route_available = bool(route_destinations)
         material_table_ready = bool(
             hunt_profile
@@ -3383,6 +3459,24 @@ class RoadService:
                     )
                 )
             )
+        elif world.location == VDE_BAIXIOS:
+            hunt_enabled = p9_complete and material_table_ready and c.level >= 15 and bool(
+                hunt_profile
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == hunt_profile.hunt_unlock,
+                    )
+                )
+            )
+            explore_enabled = p9_started_or_complete and c.level >= 15 and bool(
+                await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == hunt_profile.explore_unlock,
+                    )
+                )
+            )
         elif world.location == VDE_VIGILIA:
             # Vigília do Vale is a safe hub, never a generic hunt/explore local.
             hunt_enabled = False
@@ -3406,6 +3500,8 @@ class RoadService:
                 if world.location == VDE_VIGILIA
                 else "vde_mata"
                 if world.location == VDE_MATA
+                else "vde_baixios"
+                if world.location == VDE_BAIXIOS
                 else "refuge"
             ),
             c.id,
