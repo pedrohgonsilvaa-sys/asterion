@@ -381,6 +381,8 @@ async def test_p11_shared_pressure_points_and_helper_reward_safety(database, mon
     result = await missions.action_combat(
         turn_owner, active_view.activity_id, active_view.combat.version, "attack"
     )
+    if result is not None and result.kind == "combat_result":
+        result = await missions.resume(leader, P11_ID)
     assert result is not None and result.kind == "chamber"
     async with sessions() as session:
         for character_id in (leader_id, eligible_id):
@@ -395,5 +397,121 @@ async def test_p11_shared_pressure_points_and_helper_reward_safety(database, mon
             select(RewardEvent.id).where(
                 RewardEvent.character_id == helper_id,
                 RewardEvent.source_id == P11_REWARD_SOURCE,
+            )
+        ) is None
+
+
+@pytest.mark.asyncio
+async def test_s11_group_helper_reconnect_and_one_time_rewards(database, monkeypatch):
+    import asterion.application.campaign_coop as campaign_coop
+
+    leader, eligible, helper = 998808, 998809, 998810
+    leader_id, sessions = await _seed_claustro(database, leader, level=18)
+    eligible_id, _ = await _seed_claustro(database, eligible, level=18)
+    helper_id, _ = await _seed_claustro(database, helper, level=18)
+    async with sessions() as session:
+        eligible_row = await session.get(Character, eligible_id)
+        helper_row = await session.get(Character, helper_id)
+        assert eligible_row is not None and helper_row is not None
+        eligible_name, helper_name = eligible_row.name, helper_row.name
+
+    groups = GroupService(sessions, "ocaso")
+    group = await groups.create_group(leader)
+    invite = await groups.invite(leader, eligible_name, expected_group_revision=group.revision)
+    await groups.respond_invite(
+        eligible, invite.invite_id, expected_revision=invite.revision, accept=True
+    )
+    group = await groups.group(leader)
+    invite = await groups.invite(leader, helper_name, expected_group_revision=group.revision)
+    await groups.respond_invite(
+        helper, invite.invite_id, expected_revision=invite.revision, accept=True
+    )
+
+    missions = VDEMissionService(sessions, "ocaso", groups)
+    for actor in (leader, eligible):
+        view = await missions.start(actor, S11_ID)
+        assert view is not None and view.status == "active" and view.kind == "patrols"
+
+    view = await missions.resume(leader, S11_ID)
+    for point in ("a", "b"):
+        view = await missions.examine(leader, S11_ID, view.state_version, point)
+    assert view is not None and view.kind == "combat_start"
+    async with sessions() as session:
+        for character_id in (leader_id, eligible_id):
+            quest = await session.scalar(
+                select(Quest).where(Quest.character_id == character_id, Quest.quest_id == S11_ID)
+            )
+            assert quest is not None and quest.step == 2
+            assert quest.progress["patrols"] == ["a", "b"]
+
+    proposal_view = await missions.propose_group_combat(leader, S11_ID, view.state_version)
+    assert proposal_view is not None and proposal_view.proposal_id is not None
+    proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
+    for actor in (eligible, helper):
+        await groups.respond_activity(
+            actor,
+            proposal.proposal_id,
+            expected_revision=proposal.revision,
+            accept=True,
+        )
+        proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
+    started = await missions.start_group_combat(
+        leader, proposal.proposal_id, expected_revision=proposal.revision
+    )
+    assert started is not None and started.kind == "combat" and started.group_size == 3
+
+    # Reconnect through the persisted shared encounter for both an eligible player and helper.
+    leader_view = await missions.resume_active(leader)
+    eligible_view = await missions.resume_active(eligible)
+    helper_view = await missions.resume_active(helper)
+    assert leader_view is not None and leader_view.encounter_id == started.encounter_id
+    assert eligible_view is not None and eligible_view.encounter_id == started.encounter_id
+    assert helper_view is not None and helper_view.encounter_id == started.encounter_id
+    monkeypatch.setattr(campaign_coop, "act", _terminal("victory"))
+    active_key = active_player_key(started.combat)
+    assert active_key is not None
+    views_by_actor = {leader: leader_view, eligible: eligible_view, helper: helper_view}
+    turn_owner = next(
+        actor
+        for actor, participant_view in views_by_actor.items()
+        if participant_view.combat_actor_key == active_key
+    )
+    active_view = views_by_actor[turn_owner]
+    result = await missions.action_combat(
+        turn_owner, active_view.activity_id, active_view.combat.version, "attack"
+    )
+    if result is not None and result.kind == "combat_result":
+        result = await missions.resume(leader, S11_ID)
+    assert result is not None and result.kind == "return_place"
+
+    view = await missions.advance(leader, S11_ID, result.state_version, "return_place")
+    assert view is not None and view.kind == "fragments"
+    for _ in range(3):
+        view = await missions.advance(leader, S11_ID, view.state_version, "fragment")
+    assert view is not None and view.kind == "report"
+    stale_version = view.state_version
+    completed = await missions.advance(leader, S11_ID, stale_version, "report")
+    assert completed is not None and completed.status == "completed"
+    await missions.advance(leader, S11_ID, stale_version, "report")
+
+    async with sessions() as session:
+        for character_id in (leader_id, eligible_id):
+            quest = await session.scalar(
+                select(Quest).where(Quest.character_id == character_id, Quest.quest_id == S11_ID)
+            )
+            assert quest is not None and quest.status == "completed"
+            assert await session.scalar(
+                select(func.count(RewardEvent.id)).where(
+                    RewardEvent.character_id == character_id,
+                    RewardEvent.source_id == S11_REWARD_SOURCE,
+                )
+            ) == 1
+        assert await session.scalar(
+            select(Quest.id).where(Quest.character_id == helper_id, Quest.quest_id == S11_ID)
+        ) is None
+        assert await session.scalar(
+            select(RewardEvent.id).where(
+                RewardEvent.character_id == helper_id,
+                RewardEvent.source_id == S11_REWARD_SOURCE,
             )
         ) is None
