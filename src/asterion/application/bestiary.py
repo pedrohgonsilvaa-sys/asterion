@@ -194,6 +194,14 @@ class BestiaryRecorder:
                         reference_level=10,
                         configured_xp=474,
                     )
+                elif creature_id == "matriarca_raizes":
+                    await self._grant_regional_victory_xp(
+                        session,
+                        character_id,
+                        creature_id,
+                        reference_level=20,
+                        configured_xp=1086,
+                    )
             else:
                 entry.bkp += _repeat_bkp(
                     entry.wins, elite, observation_category
