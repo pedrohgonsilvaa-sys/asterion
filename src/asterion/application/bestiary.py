@@ -30,6 +30,20 @@ VDE_IMPORTANT_FIRST_VICTORY_XP = {
     "guardiao_no_antigo": (20, 1086),
 }
 
+VDE_DISTINCTIVE_ELITE_MASTERY = {
+    "custodio_enredado": {
+        "first_victory",
+        "action:egide_tomada",
+        "action:marca_constritiva",
+        "action:peso_no",
+    },
+    "prelado_enraizado": {
+        "first_victory",
+        "action:seiva_restritiva",
+        "action:restabelecer_raiz",
+    },
+}
+
 
 class BestiaryRecorder:
     """Record shared first-contact, evidence, victory, and stage semantics."""
@@ -197,6 +211,20 @@ class BestiaryRecorder:
                 if entry.bkp >= 8
                 else "observed"
             )
+        elif creature_id in VDE_DISTINCTIVE_ELITE_MASTERY:
+            await self.add_evidence(
+                session, entry, character_id, creature_id, "elite", "elite", 8
+            )
+            if victory:
+                await self.add_evidence(
+                    session,
+                    entry,
+                    character_id,
+                    creature_id,
+                    "elite_victory",
+                    "elite_victory",
+                    6,
+                )
         elif creature_id == "vigia_partido" or observation_category == "boss":
             required = {
                 "first_victory",
@@ -383,6 +411,17 @@ class BestiaryRecorder:
                 if entry.bkp >= 22
                 else "known"
                 if entry.bkp >= 8
+                else "observed"
+            )
+        elif creature_id in VDE_DISTINCTIVE_ELITE_MASTERY:
+            required = VDE_DISTINCTIVE_ELITE_MASTERY[creature_id]
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 25
+                else "known"
+                if entry.bkp >= 10
                 else "observed"
             )
         elif elite:

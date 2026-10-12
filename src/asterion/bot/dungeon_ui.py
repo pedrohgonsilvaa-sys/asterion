@@ -62,7 +62,15 @@ def render_dungeons(view: DungeonView) -> Screen:
             "dungeon.tdo.galerias_vigia": "g",
             "dungeon.vde.fosso_raizes": "f",
             "dungeon.vde.santuario_no_antigo": "s",
-        }.get(view.family_id, "c")
+        }.get(view.family_id)
+        if family_key is None:
+            return Screen(
+                "⛓️ Masmorra indisponível\n\nEsta Masmorra não está disponível.",
+                "dungeon_crypt",
+                InlineKeyboardMarkup(
+                    inline_keyboard=[[_button("← Masmorras", "dungeon:known")]]
+                ),
+            )
         if stable_gate == "available":
             rows.append(
                 [

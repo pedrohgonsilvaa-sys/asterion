@@ -196,12 +196,6 @@ def create_sanctuary_combat(
             ),
         )
     elif ordinal == 5:
-        combat.enemy_actions["e0_egide_raizes"] = replace(
-            combat.enemy_actions["e0_egide_raizes"], phase_ids=("II", "III")
-        )
-        combat.enemy_actions["e0_varredura_enredada"] = replace(
-            combat.enemy_actions["e0_varredura_enredada"], phase_ids=("II", "III")
-        )
         combat.enemy_actions["e0_fechamento_no"] = replace(
             combat.enemy_actions["e0_fechamento_no"], phase_ids=("III",)
         )

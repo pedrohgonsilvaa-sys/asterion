@@ -1,3 +1,4 @@
+from dataclasses import replace
 from decimal import Decimal
 from uuid import uuid4
 
@@ -10,6 +11,7 @@ from asterion.application.knowledge_catalog import CODEX_BY_ID, CODEX_FRAGMENTS
 from asterion.bot.dungeon_ui import render_dungeons
 from asterion.domain.combat import (
     _damage_aura_reduction,
+    _enemy_action,
     _fighter_stat,
     _resolve_phase_triggers,
     action_target_ids,
@@ -41,6 +43,7 @@ from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
     Achievement,
     BestiaryEntry,
+    BestiaryEvidence,
     Character,
     CodexEntry,
     CodexFragment,
@@ -216,13 +219,18 @@ def test_guardian_phase_targets_scaling_reduction_and_retry_state_are_persisted(
     assert actions["e0_egide_raizes"].cooldown == 4
     assert actions["e0_egide_raizes"].self_barrier_duration == 2
     assert actions["e0_egide_raizes"].max_uses_per_combat == 2
-    assert actions["e0_egide_raizes"].phase_ids == ("II", "III")
+    assert actions["e0_egide_raizes"].phase_ids == ()
     assert actions["e0_varredura_enredada"].coefficient == D("0.85")
     assert actions["e0_varredura_enredada"].target_mode == "all_opponents"
-    assert actions["e0_varredura_enredada"].phase_ids == ("II", "III")
+    assert actions["e0_varredura_enredada"].phase_ids == ()
     assert actions["e0_fechamento_no"].coefficient == D("1.80")
     assert actions["e0_fechamento_no"].prepared is True
     assert actions["e0_fechamento_no"].phase_ids == ("III",)
+
+    combat.ai_priorities["guardian"] = ("e0_egide_raizes",)
+    assert _enemy_action(combat, "guardian") == "e0_egide_raizes"
+    combat.ai_priorities["guardian"] = ("e0_varredura_enredada",)
+    assert _enemy_action(combat, "guardian") == "e0_varredura_enredada"
 
     guardian.hp = guardian.stats.hp * D("0.70")
     _resolve_phase_triggers(combat)
@@ -243,7 +251,8 @@ def test_guardian_phase_targets_scaling_reduction_and_retry_state_are_persisted(
     assert seals[1].hp == surviving_hp
     assert seals[2].hp == seals[2].stats.hp
     assert _damage_aura_reduction(combat, "guardian") == D("0.12")
-    assert actions["e0_egide_raizes"].phase_ids == ("II", "III")
+    assert actions["e0_egide_raizes"].phase_ids == ()
+    assert actions["e0_varredura_enredada"].phase_ids == ()
     assert actions["e0_fechamento_no"].phase_ids == ("III",)
 
     restored = decode(encode(combat), combat.id, combat.ruleset, combat.version)
@@ -376,6 +385,17 @@ def test_sanctuary_is_player_visible_with_a_live_callback():
     assert "dungeon:start:s:s" in callbacks
     assert "dungeon:group:s:s" in callbacks
     assert "dungeon:queue:s:s" in callbacks
+
+    unknown_screen = render_dungeons(
+        replace(detail, family_id="dungeon.vde.not_a_real_family")
+    )
+    unknown_callbacks = {
+        button.callback_data
+        for row in unknown_screen.keyboard.inline_keyboard
+        for button in row
+    }
+    assert "Masmorra indisponível" in unknown_screen.text
+    assert unknown_callbacks == {"dungeon:known"}
 
 
 @pytest.mark.asyncio
@@ -587,3 +607,109 @@ async def test_guardian_first_victory_milestone_is_fixed_and_idempotent(database
             )
         ).all()
         assert len(events) == 1
+
+
+@pytest.mark.parametrize(
+    ("creature_id", "distinctive_actions"),
+    (
+        (
+            "custodio_enredado",
+            (
+                "action:egide_tomada",
+                "action:marca_constritiva",
+                "action:peso_no",
+            ),
+        ),
+        (
+            "prelado_enraizado",
+            ("action:seiva_restritiva", "action:restabelecer_raiz"),
+        ),
+    ),
+)
+@pytest.mark.asyncio
+async def test_sanctuary_elite_mastery_requires_distinctive_actions(
+    database, creature_id, distinctive_actions
+):
+    recorder = BestiaryRecorder()
+
+    generic_actor = 991820 + (creature_id == "prelado_enraizado")
+    generic_character_id, generic_sessions = await _seed_vde_ready(
+        database, generic_actor, level=20, round_ready=False
+    )
+    generic_evidence = {
+        "first_victory": "victory",
+        "elite": "elite",
+        "elite_victory": "elite_victory",
+        "mechanic:generic": "mechanic",
+    }
+    async with generic_sessions.begin() as session:
+        session.add(
+            BestiaryEntry(
+                character_id=generic_character_id,
+                creature_id=creature_id,
+                bkp=45,
+                wins=1,
+            )
+        )
+        session.add_all(
+            BestiaryEvidence(
+                character_id=generic_character_id,
+                creature_id=creature_id,
+                evidence_id=evidence_id,
+                category=category,
+            )
+            for evidence_id, category in generic_evidence.items()
+        )
+        await session.flush()
+        await recorder.record(
+            session,
+            generic_character_id,
+            creature_id,
+            elite=True,
+            observation_category="elite",
+        )
+        entry = await session.scalar(
+            select(BestiaryEntry).where(
+                BestiaryEntry.character_id == generic_character_id,
+                BestiaryEntry.creature_id == creature_id,
+            )
+        )
+        assert entry is not None and entry.stage == "studied"
+
+    specific_actor = 991822 + (creature_id == "prelado_enraizado")
+    specific_character_id, specific_sessions = await _seed_vde_ready(
+        database, specific_actor, level=20, round_ready=False
+    )
+    async with specific_sessions.begin() as session:
+        session.add(
+            BestiaryEntry(
+                character_id=specific_character_id,
+                creature_id=creature_id,
+                bkp=0,
+                wins=1,
+            )
+        )
+        session.add_all(
+            BestiaryEvidence(
+                character_id=specific_character_id,
+                creature_id=creature_id,
+                evidence_id=evidence_id,
+                category="behavior" if evidence_id.startswith("action:") else "victory",
+            )
+            for evidence_id in ("first_victory", *distinctive_actions)
+        )
+        await session.flush()
+        await recorder.record(
+            session,
+            specific_character_id,
+            creature_id,
+            elite=True,
+            observation_category="elite",
+        )
+        entry = await session.scalar(
+            select(BestiaryEntry).where(
+                BestiaryEntry.character_id == specific_character_id,
+                BestiaryEntry.creature_id == creature_id,
+            )
+        )
+        assert entry is not None and entry.stage == "dominated"
