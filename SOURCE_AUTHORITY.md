@@ -35,6 +35,8 @@ Quando a Fonte Regional especificar conteúdo dentro de parâmetros sistêmicos 
 
 A segunda região usa a autoridade de conteúdo **Vales dos Enforcados v1.0.6 FINAL**, em `ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.6_FINAL.md`. A v1.0.6 sucede a v1.0.5 exclusivamente para fechar o perfil numérico do encontro roteirizado da Etapa 7 de S12 — Os Nomes Presos à Madeira. Não altera economia, progressão, narrativa regional, demais criaturas, pools, Caçada, Ronda, Masmorras ou recompensas regionais.
 
+A terceira região usa como autoridade de conteúdo **Planícies de Nareth v1.0.0 FINAL**, em `ASTERION_CONTEUDO_PLANICIES_DE_NARETH_v1.0.0_FINAL.md`. Ela rege exclusivamente o conteúdo regional das Planícies de Nareth, no mesmo nível hierárquico regional de Terras do Ocaso e Vales dos Enforcados, subordinada à Fonte Mestra e sem prevalecer sobre outras Regiões fora de seu próprio escopo.
+
 ## Fonte Visual/UI
 
 A apresentação player-facing deve seguir:
