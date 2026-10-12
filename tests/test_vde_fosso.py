@@ -122,7 +122,7 @@ def test_fosso_creatures_are_cataloged_without_expanding_world_open_vales_pool()
     assert world_open_ids == expected_open_world_ids
 
     dungeon_creatures = {creature.creature_id: creature for creature in VDE_DUNGEON_CREATURES}
-    assert set(dungeon_creatures) == {"tecela_fosso", "o_que_pende"}
+    assert {"tecela_fosso", "o_que_pende"} <= set(dungeon_creatures)
     assert world_open_ids.isdisjoint(dungeon_creatures)
     assert all(
         creature_for(creature_id) is creature

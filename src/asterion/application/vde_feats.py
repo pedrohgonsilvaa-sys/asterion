@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from asterion.application.cosmetic_catalog import COSMETIC_BY_ACHIEVEMENT
 from asterion.infrastructure.db.models import (
     Achievement,
+    BestiaryEntry,
     BestiaryEvidence,
     Character,
     CharacterCosmetic,
@@ -27,8 +28,19 @@ VDE_CAMPAIGN_LOCATIONS = frozenset(
     }
 )
 SANCTUARY_STABLE_CLEAR = "dungeon.vde.santuario_no_antigo.first_clear.stable"
+SANCTUARY_FRACTURED_CLEAR = "dungeon.vde.santuario_no_antigo.first_clear.fractured"
 FOSSO_STABLE_CLEAR = "dungeon.vde.fosso_raizes.first_clear.stable"
+FOSSO_FRACTURED_CLEAR = "dungeon.vde.fosso_raizes.first_clear.fractured"
+SANCTUARY_UNLOCK = "dungeon.vde.santuario_no_antigo"
+FOSSO_UNLOCK = "dungeon.vde.fosso_raizes"
 MATRIARCH_EVIDENCE = "matriarca_raizes"
+VDE_STUDIED_BESTIARY_CREATURES = (
+    "vigia_enraizado",
+    "custodio_enredado",
+    "prelado_enraizado",
+    "guardiao_no_antigo",
+)
+BESTIARY_STAGE_ORDER = {"observed": 0, "known": 1, "studied": 2, "dominated": 3}
 
 
 async def reconcile_vde_feats(
@@ -79,8 +91,29 @@ async def reconcile_vde_feats(
             )
         ).all()
     )
+    bestiary_stages = dict(
+        (
+            await session.execute(
+                select(BestiaryEntry.creature_id, BestiaryEntry.stage).where(
+                    BestiaryEntry.character_id == character_id,
+                    BestiaryEntry.creature_id.in_(VDE_STUDIED_BESTIARY_CREATURES),
+                )
+            )
+        ).all()
+    )
+    both_fractured = {
+        FOSSO_FRACTURED_CLEAR,
+        SANCTUARY_FRACTURED_CLEAR,
+    } <= unlocks
     conditions = {
         "feat.vde.aquilo_que_pende": FOSSO_STABLE_CLEAR in unlocks,
+        "feat.vde.sob_as_raizes": {FOSSO_UNLOCK, SANCTUARY_UNLOCK} <= unlocks,
+        "feat.vde.o_no_antigo": SANCTUARY_STABLE_CLEAR in unlocks,
+        "feat.vde.raizes_fraturadas": both_fractured,
+        "feat.vde.a_pedra_que_ainda_guarda": all(
+            BESTIARY_STAGE_ORDER.get(bestiary_stages.get(creature_id, "observed"), 0) >= 2
+            for creature_id in VDE_STUDIED_BESTIARY_CREATURES
+        ),
         "feat.vde.o_berco_silencia": "first_victory" in evidence,
         "feat.vde.vales_dos_enforcados": (
             p12 is not None and character.level >= 20 and VDE_CAMPAIGN_LOCATIONS <= locations

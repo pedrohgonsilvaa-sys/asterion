@@ -45,6 +45,7 @@ from asterion.domain.road import (
     creature_for,
 )
 from asterion.infrastructure.db.models import (
+    Achievement,
     BestiaryEntry,
     Brazier,
     CampaignSharedEncounter,
@@ -182,6 +183,13 @@ async def test_p10_opens_claustro_discovers_shared_sanctuary_and_rewards_once(
 
     actor = 998710
     character_id, sessions = await _seed_late_region(database, actor, level=18)
+    async with sessions.begin() as session:
+        session.add(
+            Unlock(
+                character_id=character_id,
+                unlock_id="dungeon.vde.fosso_raizes",
+            )
+        )
     missions = VDEMissionService(sessions, "ocaso")
     road = RoadService(sessions, "ocaso")
     monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
@@ -271,6 +279,12 @@ async def test_p10_opens_claustro_discovers_shared_sanctuary_and_rewards_once(
                 RewardEvent.source_id == P10_REWARD_SOURCE,
             )
         ) == 1
+        assert await session.scalar(
+            select(Achievement.id).where(
+                Achievement.character_id == character_id,
+                Achievement.achievement_id == "feat.vde.sob_as_raizes",
+            )
+        ) is not None
 
     # P10's canonical entrance unlock suppresses only the equivalent unique
     # Desbravar reward; it cannot pay entrance discovery XP again.

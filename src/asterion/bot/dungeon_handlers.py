@@ -41,6 +41,13 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
     async def fosso(query: CallbackQuery):
         await show(query, await service.detail(query.from_user.id, "dungeon.vde.fosso_raizes"))
 
+    @router.callback_query(F.data == "dungeon:sanctuary")
+    async def sanctuary(query: CallbackQuery):
+        await show(
+            query,
+            await service.detail(query.from_user.id, "dungeon.vde.santuario_no_antigo"),
+        )
+
     @router.callback_query(F.data.startswith("dungeon:group:"))
     async def prepare_group(query: CallbackQuery):
         try:
@@ -49,6 +56,7 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "c": "dungeon.tdo.cripta_ocaso",
                 "g": "dungeon.tdo.galerias_vigia",
                 "f": "dungeon.vde.fosso_raizes",
+                "s": "dungeon.vde.santuario_no_antigo",
             }[family_key]
             difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
                 difficulty_key
@@ -66,6 +74,7 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "c": "dungeon.tdo.cripta_ocaso",
                 "g": "dungeon.tdo.galerias_vigia",
                 "f": "dungeon.vde.fosso_raizes",
+                "s": "dungeon.vde.santuario_no_antigo",
             }[family_key]
             difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
                 difficulty_key
@@ -138,19 +147,23 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
     @router.callback_query(F.data.startswith("dungeon:start:"))
     async def start(query: CallbackQuery):
         pieces = (query.data or "").split(":")
-        if len(pieces) == 4:
+        if len(pieces) == 3 and pieces[2] in {"s", "f", "r"}:
+            # Legacy callback shape belongs to the original Crypt dungeon.
+            family = "dungeon.tdo.cripta_ocaso"
+            suffix = pieces[2]
+        elif len(pieces) == 4:
             family = {
                 "c": "dungeon.tdo.cripta_ocaso",
                 "g": "dungeon.tdo.galerias_vigia",
                 "f": "dungeon.vde.fosso_raizes",
+                "s": "dungeon.vde.santuario_no_antigo",
             }.get(pieces[2])
             suffix = pieces[3]
         else:
-            family = "dungeon.tdo.cripta_ocaso"
-            suffix = pieces[-1]
+            await show(query, await service.resume(query.from_user.id))
+            return
         if family is None or suffix not in {"s", "f", "r"}:
-            fallback = family or "dungeon.tdo.cripta_ocaso"
-            await show(query, await service.detail(query.from_user.id, fallback))
+            await show(query, await service.resume(query.from_user.id))
             return
         difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[suffix]
         await show(

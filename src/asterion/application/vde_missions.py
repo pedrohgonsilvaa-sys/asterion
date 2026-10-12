@@ -1733,6 +1733,9 @@ class VDEMissionService:
         quest.progress = {**(quest.progress or {}), "completed": True}
         quest.state_version += 1
         await consolidate_character_level(session, character)
+        from asterion.application.vde_feats import reconcile_vde_feats
+
+        await reconcile_vde_feats(session, character)
 
     async def _complete_s10(self, session, character, quest):
         materials = (

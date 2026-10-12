@@ -106,6 +106,12 @@ COSMETICS = (
         "Pedra Enlaçada",
         "feat.vde.a_rede_nao_dorme",
     ),
+    CosmeticDefinition(
+        "cosmetic.frame.vde.raiz_fraturada",
+        "frame",
+        "Raiz Fraturada",
+        "feat.vde.raizes_fraturadas",
+    ),
 )
 
 COSMETICS_BY_ID = {item.cosmetic_id: item for item in COSMETICS}

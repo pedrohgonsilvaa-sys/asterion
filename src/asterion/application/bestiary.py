@@ -27,6 +27,21 @@ VDE_IMPORTANT_FIRST_VICTORY_XP = {
     "viuva_cipos": (17, 876),
     "carrasco_casca": (20, 1086),
     "o_que_pende": (17, 876),
+    "guardiao_no_antigo": (20, 1086),
+}
+
+VDE_DISTINCTIVE_ELITE_MASTERY = {
+    "custodio_enredado": {
+        "first_victory",
+        "action:egide_tomada",
+        "action:marca_constritiva",
+        "action:peso_no",
+    },
+    "prelado_enraizado": {
+        "first_victory",
+        "action:seiva_restritiva",
+        "action:restabelecer_raiz",
+    },
 }
 
 
@@ -178,6 +193,38 @@ class BestiaryRecorder:
                 if entry.bkp >= 8
                 else "observed"
             )
+        elif creature_id == "guardiao_no_antigo":
+            required = {
+                "first_victory",
+                "phase:o_no_se_fecha",
+                "phase:raiz_e_pedra",
+                "mechanic:selos_radicular",
+                "action:egide_raizes",
+                "action:fechamento_no",
+            }
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
+        elif creature_id in VDE_DISTINCTIVE_ELITE_MASTERY:
+            await self.add_evidence(
+                session, entry, character_id, creature_id, "elite", "elite", 8
+            )
+            if victory:
+                await self.add_evidence(
+                    session,
+                    entry,
+                    character_id,
+                    creature_id,
+                    "elite_victory",
+                    "elite_victory",
+                    6,
+                )
         elif creature_id == "vigia_partido" or observation_category == "boss":
             required = {
                 "first_victory",
@@ -330,6 +377,24 @@ class BestiaryRecorder:
                 if entry.bkp >= 8
                 else "observed"
             )
+        elif creature_id == "guardiao_no_antigo":
+            required = {
+                "first_victory",
+                "phase:o_no_se_fecha",
+                "phase:raiz_e_pedra",
+                "mechanic:selos_radicular",
+                "action:egide_raizes",
+                "action:fechamento_no",
+            }
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
         elif creature_id == "vigia_partido" or observation_category == "boss":
             required = {
                 "first_victory",
@@ -346,6 +411,17 @@ class BestiaryRecorder:
                 if entry.bkp >= 22
                 else "known"
                 if entry.bkp >= 8
+                else "observed"
+            )
+        elif creature_id in VDE_DISTINCTIVE_ELITE_MASTERY:
+            required = VDE_DISTINCTIVE_ELITE_MASTERY[creature_id]
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 25
+                else "known"
+                if entry.bkp >= 10
                 else "observed"
             )
         elif elite:
@@ -397,6 +473,22 @@ class BestiaryRecorder:
             )
         ):
             await reconcile_tdo_feats_for_character(session, character_id)
+        if (
+            (previous_stage is not None and previous_stage != entry.stage)
+            or (
+                creature_id
+                in {
+                    "vigia_enraizado",
+                    "custodio_enredado",
+                    "prelado_enraizado",
+                    "guardiao_no_antigo",
+                }
+                and new_evidence_ids
+            )
+        ):
+            from asterion.application.vde_feats import reconcile_vde_feats_for_character
+
+            await reconcile_vde_feats_for_character(session, character_id)
         if (previous_stage is not None and previous_stage != entry.stage) or (
             victory and new_evidence_ids
         ):

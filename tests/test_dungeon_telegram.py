@@ -82,3 +82,41 @@ async def test_clicking_attack_in_crypt_routes_through_the_live_dungeon_service(
     after_forgery = await service.resume(actor)
     assert after_forgery is not None
     assert after_forgery.combat.version == resumed.combat.version
+
+
+@pytest.mark.asyncio
+async def test_explicit_unknown_dungeon_family_resumes_without_falling_back_to_crypt():
+    actor = 774410
+    service = AsyncMock()
+    service.resume.return_value = None
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(dungeon_router(service, {}))
+    bot = _telegram()
+
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update("dungeon:start:x:s", update_id=774411, actor=actor),
+    )
+
+    service.resume.assert_awaited_once_with(actor)
+    service.start_solo.assert_not_awaited()
+    service.detail.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_legacy_dungeon_start_callback_still_targets_the_crypt():
+    actor = 774412
+    service = AsyncMock()
+    service.start_solo.return_value = None
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(dungeon_router(service, {}))
+    bot = _telegram()
+
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update("dungeon:start:s", update_id=774413, actor=actor),
+    )
+
+    service.start_solo.assert_awaited_once_with(
+        actor, "stable", "dungeon.tdo.cripta_ocaso"
+    )

@@ -100,6 +100,13 @@ CODEX_ENTRIES = (
         "vde.location.fosso_das_raizes",
     ),
     CodexPresentation(
+        "codex.location.santuario_do_no_antigo",
+        "Santuário do Nó Antigo",
+        "regions",
+        106,
+        "vde.location.santuario_do_no_antigo",
+    ),
+    CodexPresentation(
         "codex.location.baixios_enredados",
         "Baixios Enredados",
         "regions",
@@ -146,6 +153,14 @@ CODEX_ENTRIES = (
         "mysteries",
         80,
     ),
+    CodexPresentation(
+        "codex.history.camara_das_quatro_raizes", "Câmara das Quatro Raízes", "history", 109
+    ),
+    CodexPresentation(
+        "codex.history.protocolos_sepultados", "Protocolos Sepultados", "history", 110
+    ),
+    CodexPresentation("codex.history.selos_radicular", "Selos Radiculares", "history", 111),
+    CodexPresentation("codex.history.guardiao_no_antigo", "Guardião do Nó Antigo", "history", 112),
     CodexPresentation(
         "codex.mystery.raizes_que_seguem_pedra",
         "Raízes que Seguem Pedra",
@@ -263,6 +278,35 @@ CODEX_FRAGMENTS = {
     "codex.fragment.fosso.profundezas_suspensas": FragmentPresentation(
         "Profundezas Suspensas",
         "Os registros do Fosso descrevem estruturas e raízes que atravessam o vazio sob a Mata.",
+    ),
+    "codex.fragment.sanctuary.entry": FragmentPresentation(
+        "Entrada", "O Santuário do Nó Antigo foi descoberto sob o Claustro das Raízes."
+    ),
+    "codex.fragment.sanctuary.chamber": FragmentPresentation(
+        "Câmara das Quatro Raízes",
+        "Quatro raízes atravessam a câmara e sustentam a presença do Prelado Enraizado.",
+    ),
+    "codex.fragment.sanctuary.protocols": FragmentPresentation(
+        "Protocolos Sepultados",
+        "Registros do Santuário descrevem protocolos preservados sob as raízes.",
+    ),
+    "codex.fragment.sanctuary.radicular_seals": FragmentPresentation(
+        "Selos Radiculares",
+        "Três selos foram ativados na câmara do Guardião e alteraram a proteção recebida por ele.",
+    ),
+    "codex.fragment.sanctuary.guardian": FragmentPresentation(
+        "Guardião do Nó Antigo",
+        "Um guardião protege a câmara mais profunda do Santuário.",
+    ),
+    "codex.fragment.sanctuary.ancient_knot": FragmentPresentation(
+        "O Nó Antigo",
+        "Os registros do Santuário ampliam a evidência de ligação entre estruturas antigas; "
+        "sua função permanece desconhecida.",
+    ),
+    "codex.fragment.sanctuary.interlinked_structures": FragmentPresentation(
+        "Estruturas Interligadas",
+        "Os registros do Santuário ampliam a evidência de ligação entre estruturas antigas; "
+        "sua função permanece desconhecida.",
     ),
     "codex.fragment.antigos_asterianos.outras_ancoras_existiram": FragmentPresentation(
         "Outras estruturas", "Registros indicam que outras estruturas chamadas Âncoras existiram."
@@ -480,6 +524,23 @@ ACHIEVEMENTS = (
         "Concluiu o Fosso das Raízes em dificuldade Estável pela primeira vez.",
     ),
     AchievementPresentation(
+        "feat.vde.sob_as_raizes", "Sob as Raízes", "secrets",
+        "Descobriu o Fosso das Raízes e o Santuário do Nó Antigo.", hidden=True,
+    ),
+    AchievementPresentation(
+        "feat.vde.o_no_antigo", "O Nó Antigo", "pve",
+        "Concluiu o Santuário do Nó Antigo em dificuldade Estável pela primeira vez.",
+    ),
+    AchievementPresentation(
+        "feat.vde.raizes_fraturadas", "Raízes Fraturadas", "pve",
+        "Concluiu o Fosso e o Santuário em dificuldade Fraturada.",
+        "Moldura · Raiz Fraturada",
+    ),
+    AchievementPresentation(
+        "feat.vde.a_pedra_que_ainda_guarda", "A Pedra que Ainda Guarda", "bestiary",
+        "Estudou o Vigia Enraizado, o Custódio, o Prelado e o Guardião do Nó Antigo.",
+    ),
+    AchievementPresentation(
         "feat.vde.vales_dos_enforcados", "Vales dos Enforcados", "exploration",
         "Concluiu a campanha dos Vales no Nv.20 e descobriu seus cinco Locais principais.",
         "Moldura · Vales dos Enforcados",
@@ -520,6 +581,7 @@ VDE_LOCATIONS = {
     "vde.location.claustro_das_raizes": "Claustro das Raízes",
     "vde.location.berco_da_matriarca": "Berço da Matriarca",
     "vde.location.fosso_das_raizes": "Fosso das Raízes",
+    "vde.location.santuario_do_no_antigo": "Santuário do Nó Antigo",
 }
 LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS
 HABITAT_EVIDENCE_TO_LOCATION = {
@@ -548,6 +610,7 @@ MATERIAL_LABELS = {
     "material.vde.erva_de_turfa": "Erva de Turfa",
     "material.vde.resina_enredada": "Resina Enredada",
     "material.vde.nucleo_fosso_raizes": "Núcleo do Fosso das Raízes",
+    "material.vde.nucleo_no_antigo": "Núcleo do Nó Antigo",
 }
 
 
@@ -632,6 +695,15 @@ CREATURE_PRESENTATION = {
     ),
     "o_que_pende": CreaturePresentation(
         VDE_REGION_ID, ("vde.location.fosso_das_raizes",)
+    ),
+    "custodio_enredado": CreaturePresentation(
+        VDE_REGION_ID, ("vde.location.santuario_do_no_antigo",)
+    ),
+    "prelado_enraizado": CreaturePresentation(
+        VDE_REGION_ID, ("vde.location.santuario_do_no_antigo",)
+    ),
+    "guardiao_no_antigo": CreaturePresentation(
+        VDE_REGION_ID, ("vde.location.santuario_do_no_antigo",)
     ),
 }
 CREATURE_NOTES = {

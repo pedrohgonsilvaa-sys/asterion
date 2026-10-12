@@ -82,6 +82,7 @@ GALLERIES_CORE = "material.tdo.nucleo_galerias_vigia"
 VIGIA_CORE = "material.tdo.nucleo_vigia_partido"
 MATRIARCH_CORE = "material.vde.nucleo_matriarca_das_raizes"
 FOSSO_CORE = "material.vde.nucleo_fosso_raizes"
+SANCTUARY_CORE = "material.vde.nucleo_no_antigo"
 VDE_IRON = "material.vde.ferro_enredado"
 VDE_LEATHER = "material.vde.couro_musgoso"
 VDE_HERB = "material.vde.erva_de_turfa"
@@ -101,6 +102,7 @@ MATERIAL_NAMES = {
     VIGIA_CORE: "Núcleo do Vigia Partido",
     MATRIARCH_CORE: "Núcleo da Matriarca das Raízes",
     FOSSO_CORE: "Núcleo do Fosso das Raízes",
+    SANCTUARY_CORE: "Núcleo do Nó Antigo",
     VDE_IRON: "Ferro Enredado",
     VDE_LEATHER: "Couro Musgoso",
     VDE_HERB: "Erva de Turfa",
@@ -348,6 +350,28 @@ def _special_recipes() -> list[RecipeDefinition]:
             ),
             unlock_id="recipe.vde.fosso.relicario_cordas_mortas",
             description="Artefato · Raro · Grau II · SW2",
+        ),
+        RecipeDefinition(
+            recipe_id="recipe.vde.santuario.guarda_no_antigo",
+            profession_id="blacksmith",
+            name="Guarda do Nó Antigo",
+            output_kind="equipment",
+            required_level=10,
+            grade=2,
+            rarity="Épico",
+            output_name="Guarda do Nó Antigo",
+            output_slot="Secundária",
+            output_id="vde_santuario_guarda_no_antigo",
+            sw=1,
+            fixed_materials=(
+                MaterialRequirement(VDE_IRON, 7),
+                MaterialRequirement(VDE_RESIN, 3),
+                MaterialRequirement(VDE_CATALYST_II, 2, False),
+                MaterialRequirement(VDE_FRAGMENT_II, 6, False),
+                MaterialRequirement(SANCTUARY_CORE, 1),
+            ),
+            unlock_id="recipe.vde.santuario.guarda_no_antigo",
+            description="Arma Secundária · Épico · Grau II · SW1",
         ),
     ]
 
