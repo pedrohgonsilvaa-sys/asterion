@@ -44,6 +44,7 @@ from asterion.application.vde_missions import (
     S7_ID,
     S10_ID,
     S11_ID,
+    S12_ID,
     VDEMissionService,
 )
 from asterion.application.world import WorldService
@@ -1253,6 +1254,7 @@ def world_router(
             s2_view = await s2.offer(query.from_user.id)
         vde_s7_view = vde_p8_view = vde_s8_view = vde_p9_view = vde_s9_view = None
         vde_p10_view = vde_s10_view = vde_s11_view = vde_p11_view = vde_p12_view = None
+        vde_s12_view = None
         if vde_missions is not None and await vde_missions.region_access(query.from_user.id):
             (
                 vde_s7_view,
@@ -1265,6 +1267,7 @@ def world_router(
                 vde_s11_view,
                 vde_p11_view,
                 vde_p12_view,
+                vde_s12_view,
             ) = await vde_missions.board(query.from_user.id)
         text = "📜 Missões\n\nAcompanhe sua Missão Principal e as Missões Secundárias conhecidas."
         keyboard = []
@@ -1424,6 +1427,16 @@ def world_router(
             else:
                 state, action = "Bloqueada · Requer Claustro descoberto e Nv.18", None
             secondary_entries.append((f"📜 {vde_s11_view.title} · {state}", action))
+        if vde_s12_view is not None:
+            if vde_s12_view.status == "active":
+                state, action = "Em Andamento", f"vde:{S12_ID}:resume"
+            elif vde_s12_view.status == "completed":
+                state, action = "Concluída", f"vde:{S12_ID}:resume"
+            elif vde_s12_view.available:
+                state, action = "Disponível", f"vde:{S12_ID}:start"
+            else:
+                state, action = "Bloqueada · Requer S10, P11 e Nv.20", None
+            secondary_entries.append((f"📜 {vde_s12_view.title} · {state}", action))
         if secondary_entries:
             secondary_lines = []
             secondary_buttons = []

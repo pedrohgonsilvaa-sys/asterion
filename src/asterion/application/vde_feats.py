@@ -13,12 +13,22 @@ from asterion.infrastructure.db.models import (
     Character,
     CharacterCosmetic,
     CodexEntry,
+    CodexFragment,
     LocationDiscovery,
     Quest,
     Unlock,
 )
 
 P12_ID = "P12"
+S10_ID = "S10"
+S12_ID = "S12"
+S12_CODEX_FRAGMENTS = frozenset(
+    {
+        "codex.fragment.vales.nomes.registro_s10",
+        "codex.fragment.vales.nomes.registro_final",
+        "codex.fragment.vales.nomes.registro_vigilia",
+    }
+)
 VDE_CAMPAIGN_LOCATIONS = frozenset(
     {
         "vde.location.garganta_dos_lacos",
@@ -99,6 +109,30 @@ async def reconcile_vde_feats(
             Quest.quest_id == P12_ID,
             Quest.status == "completed",
         )
+    )
+    s10 = await session.scalar(
+        select(Quest.id).where(
+            Quest.character_id == character_id,
+            Quest.quest_id == S10_ID,
+            Quest.status == "completed",
+        )
+    )
+    s12 = await session.scalar(
+        select(Quest.id).where(
+            Quest.character_id == character_id,
+            Quest.quest_id == S12_ID,
+            Quest.status == "completed",
+        )
+    )
+    names_fragments = set(
+        (
+            await session.scalars(
+                select(CodexFragment.fragment_id).where(
+                    CodexFragment.character_id == character_id,
+                    CodexFragment.fragment_id.in_(S12_CODEX_FRAGMENTS),
+                )
+            )
+        ).all()
     )
     evidence = set(
         (
@@ -197,6 +231,9 @@ async def reconcile_vde_feats(
                 "codex.mystery.a_rede_sob_os_vales",
             }
             <= codex
+        ),
+        "feat.vde.nomes_presos_madeira": (
+            s10 is not None and s12 is not None and S12_CODEX_FRAGMENTS <= names_fragments
         ),
     }
     existing = set(

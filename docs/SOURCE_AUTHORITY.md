@@ -1,6 +1,6 @@
 # Autoridade das Fontes
 
-**Índice atualizado:** 2026-10-11. As notas de implementação mais abaixo preservam snapshots históricos anteriores e não substituem as Fontes oficiais vigentes nem o estado atual do repositório.
+**Índice atualizado:** 2026-10-12. As notas de implementação mais abaixo preservam snapshots históricos anteriores e não substituem as Fontes oficiais vigentes nem o estado atual do repositório.
 
 ## Fonte Mestra vigente
 
@@ -33,7 +33,7 @@ Ela define Locais, Braseiros permanentes, Missões, Feitos, Bestiário, inimigos
 
 Quando a Fonte Regional especificar conteúdo dentro de parâmetros sistêmicos da Fonte Mestra, ambas devem ser aplicadas em conjunto. Em conflito estrutural ou numérico, a Fonte Mestra prevalece; em conteúdo regional fechado, a revisão vigente prevalece sobre rascunhos ou versões regionais anteriores.
 
-A segunda região usa a autoridade de conteúdo **Vales dos Enforcados v1.0.5 FINAL**, em `ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.5_FINAL.md`. A v1.0.5 atualiza somente referências editoriais de autoridade; o conteúdo regional da v1.0.4 permanece integralmente igual.
+A segunda região usa a autoridade de conteúdo **Vales dos Enforcados v1.0.6 FINAL**, em `ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.6_FINAL.md`. A v1.0.6 substitui a v1.0.5 somente para fechar o kit numérico do encontro roteirizado de S12; os demais conteúdos regionais permanecem iguais. A revisão regional não altera Visual/UI, cuja Fonte vigente continua sendo a edição de 2026-10-11.
 
 ## Fonte Visual/UI
 
@@ -51,11 +51,11 @@ Exemplos de mockup não criam regra mecânica ou conteúdo canônico quando a au
 
 ## Regras cooperativas e roadmap técnico vigentes
 
-A regra normativa de Grupo, Campanha cooperativa, Caçada em Grupo, PvPvE, Domínio do Rastro e integração com Ronda está incorporada à Fonte Mestra v1.6.0, §§51–57. A autoridade regional TDO v1.0.15 aplica essa regra à P1 e à S6; Vales v1.0.5 mantém o conteúdo regional v1.0.4 e apenas corrige referências editoriais de autoridade.
+A regra normativa de Grupo, Campanha cooperativa, Caçada em Grupo, PvPvE, Domínio do Rastro e integração com Ronda está incorporada à Fonte Mestra v1.6.0, §§51–57. A autoridade regional TDO v1.0.15 aplica essa regra à P1 e à S6; Vales v1.0.6 mantém o conteúdo regional de v1.0.5, exceto pelo fechamento numérico do encontro roteirizado de S12.
 
 A especificação técnica `docs/specs/MMO_PVPVE_FINAL_SPEC_V1.md` e os roadmaps `docs/specs/COOPERATIVE_MULTIPLAYER_ROADMAP_V2.md` e `docs/specs/OPTIONAL_SIDE_QUEST_BOSSES_V2.md` orientam entrega e verificação, sempre subordinados às Fontes oficiais. O antigo Decision Register MMO/PvPvE é histórico/supersedido e não é autoridade vigente.
 
-O kit numérico de combate de S12 continua sendo blocker de conteúdo; não deve ser inferido nem inventado.
+O kit numérico do encontro roteirizado de S12 foi fechado pela Vales v1.0.6. O Peregrino Enredado Nv.20 é uma exceção exclusiva desse encontro e não altera os parâmetros da criatura nos sistemas normais de mundo aberto.
 
 ## Fontes complementares de Lore e Direção Visual
 

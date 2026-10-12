@@ -97,6 +97,9 @@ def vde_missions_router(service: VDEMissionService, images: dict[str, str]) -> R
                     "return_place", "roots", "chamber", "traces", "convergence", "open_berco",
                     "enter_berco", "advance_network", "central_chamber",
                     "examine_center", "register",
+                    "read_record", "visit_garganta", "find_mark", "visit_mata",
+                    "recover_object", "visit_baixios", "examine_site", "visit_claustro",
+                    "last_record", "report_iven", "register_names",
                 }:
                     view = await service.advance(query.from_user.id, quest_id, version, action)
                 else:

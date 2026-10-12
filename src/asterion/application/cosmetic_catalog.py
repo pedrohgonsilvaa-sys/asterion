@@ -110,7 +110,7 @@ COSMETICS = (
         "cosmetic.title.vde.nome_entalhado",
         "title",
         "Nome Entalhado",
-        "feat.vde.nomes_presos_a_madeira",
+        "feat.vde.nomes_presos_madeira",
     ),
     CosmeticDefinition(
         "cosmetic.frame.vde.vales_dos_enforcados",
