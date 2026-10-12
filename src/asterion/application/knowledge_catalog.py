@@ -183,6 +183,9 @@ CODEX_ENTRIES = (
         "history",
         108,
     ),
+    CodexPresentation(
+        "codex.history.nomes_dos_vales", "Nomes dos Vales", "history", 130
+    ),
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -422,6 +425,21 @@ CODEX_FRAGMENTS = {
     "codex.fragment.ruinas_do_vigia.vigia_protegia_estrutura": FragmentPresentation(
         "Proteção do Vigia", "O Vigia Partido protegia a estrutura central."
     ),
+    "codex.fragment.vales.nomes.registro_s10": FragmentPresentation(
+        "Registro recuperado",
+        "O registro de S10 confirma que um explorador retornou vivo; "
+        "outra pessoa permanece desaparecida.",
+    ),
+    "codex.fragment.vales.nomes.registro_final": FragmentPresentation(
+        "Último registro legível",
+        "Marcas de passagem, um objeto pessoal e o último registro legível foram preservados. "
+        "O encontro com um Peregrino Enredado não permitiu identificar sua origem.",
+    ),
+    "codex.fragment.vales.nomes.registro_vigilia": FragmentPresentation(
+        "Nomes preservados",
+        "A Vigília mantém um registro permanente dos desaparecidos. "
+        "Alguns destinos são prováveis; outros permanecem sem resposta.",
+    ),
 }
 
 
@@ -549,6 +567,14 @@ ACHIEVEMENTS = (
         "feat.vde.a_rede_nao_dorme", "A Rede Não Dorme", "secrets",
         "Concluiu o Santuário após registrar os conhecimentos disponíveis sobre a rede.",
         "Moldura · Pedra Enlaçada", hidden=True,
+    ),
+    AchievementPresentation(
+        "feat.vde.nomes_presos_madeira",
+        "Nomes Presos à Madeira",
+        "secrets",
+        "Concluiu S10 e S12 após reunir os trechos disponíveis de Nomes dos Vales.",
+        "Título · Nome Entalhado",
+        hidden=True,
     ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(

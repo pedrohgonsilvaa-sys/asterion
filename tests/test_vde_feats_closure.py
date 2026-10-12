@@ -133,7 +133,7 @@ def test_vales_cosmetic_catalog_has_all_eight_regional_entitlements():
             "title",
             "Caçador dos Vales",
         ),
-        "feat.vde.nomes_presos_a_madeira": (
+        "feat.vde.nomes_presos_madeira": (
             "cosmetic.title.vde.nome_entalhado",
             "title",
             "Nome Entalhado",

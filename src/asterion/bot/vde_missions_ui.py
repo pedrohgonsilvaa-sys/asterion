@@ -6,8 +6,11 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
 from asterion.application.vde_missions import (
+    BAIXIOS,
     BERCO,
     CLAUSTRO,
+    GARGANTA,
+    MATA,
     P9_ID,
     P10_ID,
     P11_ID,
@@ -18,6 +21,8 @@ from asterion.application.vde_missions import (
     S9_ID,
     S10_ID,
     S11_ID,
+    S12_ID,
+    VIGILIA,
     VDEMissionView,
 )
 from asterion.bot.combat_ui import render_combat
@@ -30,6 +35,39 @@ def _button(label: str, callback: str) -> InlineKeyboardButton:
 
 def _screen(text: str, rows: list[list[InlineKeyboardButton]], image: str = "missions"):
     return Screen(text, image, InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def _route_toward(current: str, target: str) -> str | None:
+    edges = {
+        GARGANTA: (VIGILIA,),
+        VIGILIA: (GARGANTA, MATA),
+        MATA: (VIGILIA, BAIXIOS),
+        BAIXIOS: (MATA, CLAUSTRO),
+        CLAUSTRO: (BAIXIOS, BERCO),
+        BERCO: (CLAUSTRO,),
+    }
+    route_keys = {
+        GARGANTA: "vde_garganta",
+        VIGILIA: "vde_vigilia",
+        MATA: "vde_mata",
+        BAIXIOS: "vde_baixios",
+        CLAUSTRO: "vde_claustro",
+        BERCO: "vde_berco",
+    }
+    if current == target or current not in edges or target not in edges:
+        return None
+    queue = [(current, None)]
+    visited = {current}
+    for location, first_hop in queue:
+        for neighbor in edges[location]:
+            if neighbor in visited:
+                continue
+            next_hop = neighbor if first_hop is None else first_hop
+            if neighbor == target:
+                return f"road:route:{route_keys[next_hop]}"
+            visited.add(neighbor)
+            queue.append((neighbor, next_hop))
+    return None
 
 
 def render_vde_mission(view: VDEMissionView) -> Screen:
@@ -60,7 +98,11 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
                 combat_actor_key=view.combat_actor_key,
             )
         )
-        kind = "secondary" if quest in {S7_ID, S8_ID, S9_ID, S10_ID, S11_ID} else "principal"
+        kind = (
+            "secondary"
+            if quest in {S7_ID, S8_ID, S9_ID, S10_ID, S11_ID, S12_ID}
+            else "principal"
+        )
         encounter_type = "Chefe de Campanha" if quest == P12_ID else "Encontro Roteirizado"
         return Screen(
             f"📜 {title} · Vales dos Enforcados\n⚔️ {encounter_type} · {location}\n\n{hud.text}",
@@ -93,6 +135,7 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             S11_ID: "Claustro das Raízes descoberto · Nv.18",
             P11_ID: "P10 concluída · Nv.19 · Claustro das Raízes",
             P12_ID: "P11 concluída · Nv.20 · Berço da Matriarca",
+            S12_ID: "S10 e P11 concluídas · Nv.20 · Claustro das Raízes",
         }[quest]
         return _screen(
             f"📜 {title}\nMissão "
@@ -119,6 +162,7 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             S11_ID: "Claustro das Raízes descoberto, Nv.18 e estar no Claustro",
             P11_ID: "P10 concluída, Nv.19 e estar no Claustro das Raízes",
             P12_ID: "P11 concluída e Nv.20",
+            S12_ID: "S10 e P11 concluídas, Nv.20 e estar no Claustro das Raízes",
         }[quest]
         return _screen(
             f"📜 {title} · Indisponível\n\nRequer {gate}.",
@@ -206,6 +250,13 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
                 )
                 + " · Épico · Nv.20 · Vinculado"
             ),
+            S12_ID: (
+                "✨ 18.100 XP · 🪙 500 Coroas\n"
+                "📦 Ferro Enredado · 2 · Vinculado\n"
+                "📦 Couro Musgoso · 2 · Vinculado\n"
+                "📦 Erva de Turfa · 2 · Vinculada\n"
+                "📦 Resina Enredada · 2 · Vinculada"
+            ),
         }.get(quest, "")
         text = f"✅ {title} · Concluída\n\n{reward}"
         rows = []
@@ -225,6 +276,12 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
                 rows.append([_button("Seguir para o Berço", "road:route:vde_berco")])
         elif quest == P12_ID:
             text += "\n\nA Campanha dos Vales foi concluída. O Berço permanece acessível."
+        elif quest == S12_ID:
+            text += (
+                "\n\nAlguns desaparecimentos receberam um destino provável; "
+                "outros seguem sem resposta. A Vigília manterá um registro "
+                "permanente daqueles que desapareceram mantendo os caminhos abertos."
+            )
         rows.append([_button("← Missões", "world:missions")])
         return _screen(text, rows)
 
@@ -323,6 +380,69 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
                 )
             ]
         )
+    elif quest == S12_ID and view.kind in {
+        "read_record", "visit_garganta", "find_mark", "visit_mata", "recover_object",
+        "visit_baixios", "examine_site", "visit_claustro", "last_record", "report_iven",
+        "register_names",
+    }:
+        stage = {
+            "read_record": (
+                "Claustro das Raízes", "Ler o registro recuperado durante S10.",
+                "Ler o registro", "read_record", CLAUSTRO, "road:route:vde_claustro",
+            ),
+            "visit_garganta": (
+                "Garganta dos Laços", "Visitar a Garganta dos Laços.",
+                "Registrar visita", "visit_garganta", "Garganta dos Laços",
+                "road:route:vde_garganta",
+            ),
+            "find_mark": (
+                "Garganta dos Laços", "Encontrar uma antiga marca de passagem.",
+                "Examinar a marca", "find_mark", "Garganta dos Laços", "road:route:vde_garganta",
+            ),
+            "visit_mata": (
+                "Mata Suspensa", "Visitar a Mata Suspensa.",
+                "Registrar visita", "visit_mata", "Mata Suspensa", "road:route:vde_mata",
+            ),
+            "recover_object": (
+                "Mata Suspensa", "Recuperar um objeto pessoal sem valor econômico.",
+                "Recuperar o objeto", "recover_object", "Mata Suspensa", "road:route:vde_mata",
+            ),
+            "visit_baixios": (
+                "Baixios Enredados", "Visitar os Baixios Enredados.",
+                "Registrar visita", "visit_baixios", "Baixios Enredados", "road:route:vde_baixios",
+            ),
+            "examine_site": (
+                "Baixios Enredados",
+                "Examinar o local da marca. O encontro não identifica o Peregrino "
+                "como uma pessoa desaparecida.",
+                "Examinar o local", "examine_site", "Baixios Enredados",
+                "road:route:vde_baixios",
+            ),
+            "visit_claustro": (
+                "Claustro das Raízes", "Ir ao Claustro das Raízes.",
+                "Registrar chegada", "visit_claustro", CLAUSTRO, "road:route:vde_claustro",
+            ),
+            "last_record": (
+                "Claustro das Raízes", "Encontrar o último registro ainda legível.",
+                "Examinar o registro", "last_record", CLAUSTRO, "road:route:vde_claustro",
+            ),
+            "report_iven": (
+                "Claustro das Raízes", "Retornar a Iven Raal com os registros.",
+                "Relatar a Iven", "report_iven", CLAUSTRO, "road:route:vde_claustro",
+            ),
+            "register_names": (
+                "Vigília do Vale", "Registrar na Vigília os nomes preservados.",
+                "Registrar os nomes", "register_names", "Vigília do Vale", "road:route:vde_vigilia",
+            ),
+        }[view.kind]
+        stage_location, objective, label, action, required_location, _route = stage
+        text = f"📜 {title} · {stage_location}\n\n🎯 {objective}"
+        if view.location == required_location:
+            rows.append([_button(label, f"vde:{quest}:{version}:{action}")])
+        else:
+            route = _route_toward(view.location, required_location)
+            if route is not None:
+                rows.append([_button(f"Seguir para {stage_location}", route)])
     elif view.kind == "markers":
         found = set(progress.get("markers", ()))
         for point, label in (
@@ -386,6 +506,8 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
             objective = "Enfrentar a Matriarca das Raízes, Chefe de Campanha do Berço."
         elif quest == S11_ID:
             objective = "Derrotar o Vigia Enraizado que patrulha o Claustro."
+        elif quest == S12_ID:
+            objective = "Derrotar 1 Peregrino Enredado Nv.20 junto a outra marca de passagem."
         elif quest in {S10_ID, P11_ID}:
             location_text = "na região inundada" if quest == S10_ID else "no Claustro das Raízes"
             objective = (
