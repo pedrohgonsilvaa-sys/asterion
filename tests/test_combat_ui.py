@@ -70,6 +70,172 @@ async def test_first_hud_matches_authoritative_shape(prologue, database):
     )
 
 
+def _class_mechanic_combat_view(
+    character_class: str,
+    selected_path: str | None = None,
+    *,
+    context: str = "road",
+    party_mode: bool = False,
+):
+    state = PROFILE.create(
+        uuid4(),
+        "Luiken",
+        character_class,
+        "remanescente",
+        Decimal("500"),
+    )
+    state.tutorial = None
+    state.party_mode = party_mode
+    state.fighters["player"].selected_path = selected_path
+    state.fighters["player"].side = "player"
+    state.fighters["enemy"].side = "enemy"
+    return CombatView(
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        state,
+        "combat",
+        0,
+        context=context,
+    )
+
+
+@pytest.mark.parametrize(
+    ("character_class", "selected_path", "path_state", "expected"),
+    [
+        ("sentinela", None, {}, "🛡️ Retaliação · <code>2T</code>"),
+        (
+            "tecelao",
+            "conjurador",
+            {
+                "trama_state": {
+                    "origin_art": "class_art.tecelao.preparo",
+                    "remaining": 2,
+                }
+            },
+            "🪄 Trama · <code>2T</code>",
+        ),
+        (
+            "luminar",
+            "guardiao",
+            {"luminar_state": {"kind": "fulgor", "remaining": 2}},
+            "☀️ Fulgor · <code>2T</code>",
+        ),
+        (
+            "luminar",
+            "inquisidor",
+            {"luminar_state": {"kind": "julgamento", "remaining": 1}},
+            "⚖️ Julgamento · <code>1T</code>",
+        ),
+    ],
+)
+def test_class_resource_indicators_are_compact_and_separate(
+    character_class, selected_path, path_state, expected
+):
+    view = _class_mechanic_combat_view(character_class, selected_path)
+    player = view.combat.fighters["player"]
+    player.path_state.update(path_state)
+    player.retaliation_charges = 1 if character_class == "sentinela" else 0
+    player.retaliation_remaining = 2 if character_class == "sentinela" else 0
+    if character_class == "sentinela":
+        player.barrier = Decimal("100")
+        player.barrier_remaining = 2
+
+    text = render_combat(view).text
+
+    assert expected in text
+    assert "Origem ·" not in text
+    if character_class == "sentinela":
+        assert (
+            "🔰 Barreira · <code>100</code> · <code>2T</code>\n\n"
+            "🛡️ Retaliação · <code>2T</code>"
+        ) in text
+
+
+def test_target_markers_appear_on_the_relevant_target_card():
+    view = _class_mechanic_combat_view("vigia", "atirador")
+    enemy = view.combat.fighters["enemy"]
+    enemy.path_state["aim_from"] = {
+        "player": {"stacks": 2, "remaining": 2},
+    }
+    screen = render_combat(view)
+    aim = "🎯 Mira · 2/4 · <code>2T</code>"
+    assert aim in screen.text
+    assert screen.text.index("<b>🐺 Cão Cinéreo</b>") < screen.text.index(aim)
+    assert screen.text.index(aim) < screen.text.index(view.combat.flavor)
+
+    view = _class_mechanic_combat_view("oraculo", "agoureiro")
+    view.combat.fighters["player"].path_state["omen_offensive"] = {
+        "enemy": {"remaining": 2},
+    }
+    screen = render_combat(view)
+    omen = "🔮 Presságio Ofensivo · <code>2T</code>"
+    assert omen in screen.text
+    assert screen.text.index("<b>🐺 Cão Cinéreo</b>") < screen.text.index(omen)
+    assert screen.text.index(omen) < screen.text.index(view.combat.flavor)
+
+    view = _class_mechanic_combat_view("oraculo", "agoureiro")
+    view.combat.fighters["player"].path_state["omen_defensive"] = {
+        "player": {"remaining": 2},
+    }
+    screen = render_combat(view)
+    defensive_omen = "🔮 Presságio Defensivo · <code>2T</code>"
+    assert defensive_omen in screen.text
+    assert screen.text.index("👉 🔮 <b>Luiken</b>") < screen.text.index(defensive_omen)
+    assert screen.text.index(defensive_omen) < screen.text.index("📜 Registro de Combate")
+
+    view = _class_mechanic_combat_view("errante")
+    view.combat.fighters["enemy"].effects.append(
+        Effect(
+            "slow",
+            "agility",
+            Decimal("0.10"),
+            2,
+            0,
+            kind="debuff",
+        )
+    )
+    screen = render_combat(view)
+    opportunity = "🗡️ Oportunismo · elegível"
+    assert opportunity in screen.text
+    assert screen.text.index("<b>🐺 Cão Cinéreo</b>") < screen.text.index(opportunity)
+    assert screen.text.index(opportunity) < screen.text.index(view.combat.flavor)
+
+    view.combat.fighters["enemy"].effects[0] = Effect(
+        "fixed.slow",
+        "agility",
+        Decimal("0.10"),
+        2,
+        0,
+        kind="debuff",
+        fixed_mechanic=True,
+    )
+    assert "Oportunismo · elegível" not in render_combat(view).text
+
+
+def test_competitive_hud_hides_opponent_owned_class_state():
+    view = _class_mechanic_combat_view(
+        "sentinela",
+        context="pvpve",
+        party_mode=True,
+    )
+    player = view.combat.fighters["player"]
+    enemy = view.combat.fighters["enemy"]
+    player.retaliation_charges = 1
+    player.retaliation_remaining = 2
+    enemy.character_class = "sentinela"
+    enemy.retaliation_charges = 1
+    enemy.retaliation_remaining = 3
+    enemy.path_state["luminar_state"] = {"kind": "fulgor", "remaining": 2}
+
+    screen = render_combat(view)
+
+    assert screen.text.count("🛡️ Retaliação ·") == 1
+    assert "🛡️ Retaliação · <code>2T</code>" in screen.text
+    assert "🛡️ Retaliação · <code>3T</code>" not in screen.text
+    assert "☀️ Fulgor · <code>2T</code>" not in screen.text
+
+
 def test_hp_bar_is_derived_from_real_values():
     from decimal import Decimal
 

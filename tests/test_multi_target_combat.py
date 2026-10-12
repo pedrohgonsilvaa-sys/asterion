@@ -93,7 +93,7 @@ def test_passive_manifestation_has_hp_and_targetability_but_no_turn():
 
 def test_aoe_freezes_target_set_and_commits_cooldown_and_retaliation_once():
     action = Action(
-        "ruptura",
+        "class_art.sentinela.ruptura",
         "Ruptura",
         D("0.80"),
         cooldown=3,
