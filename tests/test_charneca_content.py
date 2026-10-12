@@ -25,6 +25,7 @@ from asterion.domain.road import (
     CHARNECA_PROFILE,
     CREATURE_CATALOG,
     EXPLORATION_CATEGORY_WEIGHTS,
+    MATERIAL_POOLS,
     ROAD_PROFILE,
     SPIDER,
     ExplorationLocationProfile,
@@ -287,6 +288,31 @@ def test_uncommon_equipment_rarity_boundaries(draw, expected, monkeypatch):
 def test_uncommon_global_xp_and_crowns_factors():
     assert enemy_xp(3, "uncommon", player_level=3) == 370
     assert crowns(3, "uncommon") == 10
+
+
+def test_tdo_material_pools_match_v1016_regional_authority():
+    assert MATERIAL_POOLS["corvo_fuligem"] == (
+        ("material.tdo.residuo_ocaso", 100),
+    )
+    assert MATERIAL_POOLS["alfa_cinereo"] == (
+        ("material.tdo.couro_escoriado", 100),
+    )
+
+    peregrino_pool = dict(MATERIAL_POOLS["peregrino_calcinado"])
+    total_weight = sum(peregrino_pool.values())
+    normalized_percentages = {
+        material_id: weight * 100 // total_weight
+        for material_id, weight in peregrino_pool.items()
+    }
+    assert normalized_percentages == {
+        "material.tdo.ferro_de_fuligem": 50,
+        "material.tdo.erva_cinzenta": 50,
+    }
+
+    assert material_for("corvo_fuligem", "regional-pool") == "material.tdo.residuo_ocaso"
+    assert material_for("alfa_cinereo", "regional-pool") == (
+        "material.tdo.couro_escoriado"
+    )
 
 
 def test_spider_material_ordinal_rolls_allow_independent_same_results():
