@@ -25,11 +25,13 @@ Estado oficial:
 
 A vertical slice Nv.1–10 usa como autoridade de conteúdo:
 
-**ASTERION — Conteúdo: Terras do Ocaso v1.0.15 FINAL**
+**ASTERION — Conteúdo: Terras do Ocaso v1.0.16 FINAL**
 
-Arquivo vigente: `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.15_FINAL.md`.
+Arquivo vigente: `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.16_FINAL.md`.
 
 Ela define Locais, Braseiros permanentes, Missões, Feitos, Bestiário, inimigos, descobertas e demais conteúdo regional consolidado das Terras do Ocaso.
+
+A v1.0.16 sucede a v1.0.15 exclusivamente para formalizar os pools temáticos de Material Básico do Corvo de Fuligem, do Alfa Cinéreo e do Peregrino Calcinado. Os pesos escolhem somente a identidade de cada unidade depois que a chance e a quantidade globais do contexto já foram resolvidas; não alteram Catalisadores, XP, Coroas, Equipamentos, Caçadas, Rondas, Desbravar ou qualquer outra regra econômica.
 
 Quando a Fonte Regional especificar conteúdo dentro de parâmetros sistêmicos da Fonte Mestra, ambas devem ser aplicadas em conjunto. Em conflito estrutural ou numérico, a Fonte Mestra prevalece; em conteúdo regional fechado, a revisão vigente prevalece sobre rascunhos ou versões regionais anteriores.
 
@@ -43,7 +45,7 @@ A apresentação player-facing deve seguir:
 
 Arquivo vigente: `ASTERION_UI_DECISOES_2026-10-11_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.5.md.
 
-A Fonte Visual/UI v1.6.0 permanece vigente. A revisão regional Vales v1.0.6 não altera apresentação e não exige nova versão Visual/UI; o documento atual, sincronizado com Vales v1.0.5, continua aplicável à apresentação.
+A Fonte Visual/UI v1.6.0 permanece vigente. A revisão regional Vales v1.0.6 não altera apresentação e não exige nova versão Visual/UI; o documento atual, sincronizado com Vales v1.0.5, continua aplicável à apresentação. A revisão TDO v1.0.16 também não altera regras ou estrutura de apresentação; a mesma Fonte Visual/UI v1.6.0 continua aplicável sem nova versão.
 
 Esta revisão inclui a HUD compacta de Retaliação, Oportunismo, Mira, Trama, Presságio e Fulgor/Julgamento, além do aviso de Arte inválida por falta de armamento compatível. A interface segue subordinada à regra mecânica da Fonte Mestra.
 
@@ -53,7 +55,7 @@ Exemplos de mockup não criam regra mecânica ou conteúdo canônico quando a au
 
 ## Regras cooperativas e roadmap técnico vigentes
 
-A regra normativa de Grupo, Campanha cooperativa, Caçada em Grupo, PvPvE, Domínio do Rastro e integração com Ronda está incorporada à Fonte Mestra v1.6.0, §§51–57. A autoridade regional TDO v1.0.15 aplica essa regra à P1 e à S6; Vales v1.0.6 preserva o conteúdo regional vigente e fecha exclusivamente o perfil numérico do encontro roteirizado de S12.
+A regra normativa de Grupo, Campanha cooperativa, Caçada em Grupo, PvPvE, Domínio do Rastro e integração com Ronda está incorporada à Fonte Mestra v1.6.0, §§51–57. A autoridade regional TDO v1.0.16 aplica essa regra à P1 e à S6; Vales v1.0.6 preserva o conteúdo regional vigente e fecha exclusivamente o perfil numérico do encontro roteirizado de S12.
 
 A especificação técnica `docs/specs/MMO_PVPVE_FINAL_SPEC_V1.md` e os roadmaps `docs/specs/COOPERATIVE_MULTIPLAYER_ROADMAP_V2.md` e `docs/specs/OPTIONAL_SIDE_QUEST_BOSSES_V2.md` orientam entrega e verificação, sempre subordinados às Fontes oficiais. O antigo Decision Register MMO/PvPvE é histórico/supersedido e não é autoridade vigente.
 
