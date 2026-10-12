@@ -89,10 +89,28 @@ COSMETICS = (
         "feat.tdo.terras_do_ocaso",
     ),
     CosmeticDefinition(
+        "cosmetic.title.vde.andarilho_dos_vales",
+        "title",
+        "Andarilho dos Vales",
+        "feat.vde.andarilho_dos_vales",
+    ),
+    CosmeticDefinition(
         "cosmetic.title.vde.sobrevivente_do_berco",
         "title",
         "Sobrevivente do Berço",
         "feat.vde.o_berco_silencia",
+    ),
+    CosmeticDefinition(
+        "cosmetic.title.vde.cacador_dos_vales",
+        "title",
+        "Caçador dos Vales",
+        "feat.vde.cacador_dos_vales",
+    ),
+    CosmeticDefinition(
+        "cosmetic.title.vde.nome_entalhado",
+        "title",
+        "Nome Entalhado",
+        "feat.vde.nomes_presos_a_madeira",
     ),
     CosmeticDefinition(
         "cosmetic.frame.vde.vales_dos_enforcados",
@@ -111,6 +129,12 @@ COSMETICS = (
         "frame",
         "Raiz Fraturada",
         "feat.vde.raizes_fraturadas",
+    ),
+    CosmeticDefinition(
+        "cosmetic.appearance.vde.sobrevivente_dos_vales",
+        "appearance",
+        "Sobrevivente dos Vales",
+        "feat.vde.entre_galhos_e_presas",
     ),
 )
 

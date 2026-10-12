@@ -9,6 +9,7 @@ from asterion.infrastructure.db.models import (
     Achievement,
     BestiaryEntry,
     BestiaryEvidence,
+    Brazier,
     Character,
     CharacterCosmetic,
     CodexEntry,
@@ -27,6 +28,30 @@ VDE_CAMPAIGN_LOCATIONS = frozenset(
         "vde.location.berco_da_matriarca",
     }
 )
+VDE_PERMANENT_BRAZIERS = frozenset(
+    {
+        "vde.brazier.garganta_dos_lacos",
+        "vde.brazier.vigilia_do_vale",
+        "vde.brazier.mata_suspensa",
+        "vde.brazier.turfa_fria",
+        "vde.brazier.pedras_enlacadas",
+    }
+)
+VDE_BASE_CREATURES = frozenset(
+    {
+        "lobo_musgoso",
+        "gralha_vale",
+        "peregrino_enredado",
+        "aranha_cipo",
+        "cervo_no",
+        "sanguessuga_turfa",
+        "casca_errante",
+        "mariposa_breu_verde",
+        "vigia_enraizado",
+    }
+)
+VDE_WORLD_ELITES = frozenset({"no_feroz", "viuva_cipos", "carrasco_casca"})
+VDE_VARIANT_TYPES = frozenset({"furious", "resistant", "agile", "hemorrhagic", "venomous"})
 SANCTUARY_STABLE_CLEAR = "dungeon.vde.santuario_no_antigo.first_clear.stable"
 SANCTUARY_FRACTURED_CLEAR = "dungeon.vde.santuario_no_antigo.first_clear.fractured"
 FOSSO_STABLE_CLEAR = "dungeon.vde.fosso_raizes.first_clear.stable"
@@ -58,6 +83,16 @@ async def reconcile_vde_feats(
             )
         ).all()
     )
+    braziers = set(
+        (
+            await session.scalars(
+                select(Brazier.brazier_id).where(
+                    Brazier.character_id == character_id,
+                    Brazier.brazier_id.in_(VDE_PERMANENT_BRAZIERS),
+                )
+            )
+        ).all()
+    )
     p12 = await session.scalar(
         select(Quest).where(
             Quest.character_id == character_id,
@@ -75,6 +110,19 @@ async def reconcile_vde_feats(
             )
         ).all()
     )
+    variant_evidence = set(
+        (
+            await session.scalars(
+                select(BestiaryEvidence.evidence_id).where(
+                    BestiaryEvidence.character_id == character_id,
+                    BestiaryEvidence.evidence_id.like("variant:%"),
+                )
+            )
+        ).all()
+    )
+    discovered_variant_types = {
+        evidence_id.removeprefix("variant:") for evidence_id in variant_evidence
+    }
     codex = set(
         (
             await session.scalars(
@@ -91,25 +139,47 @@ async def reconcile_vde_feats(
             )
         ).all()
     )
+    feat_bestiary_creatures = (
+        VDE_BASE_CREATURES
+        | VDE_WORLD_ELITES
+        | frozenset(VDE_STUDIED_BESTIARY_CREATURES)
+    )
     bestiary_stages = dict(
         (
             await session.execute(
                 select(BestiaryEntry.creature_id, BestiaryEntry.stage).where(
                     BestiaryEntry.character_id == character_id,
-                    BestiaryEntry.creature_id.in_(VDE_STUDIED_BESTIARY_CREATURES),
+                    BestiaryEntry.creature_id.in_(feat_bestiary_creatures),
                 )
             )
         ).all()
     )
+    dominated = {
+        creature_id
+        for creature_id, stage in bestiary_stages.items()
+        if stage == "dominated"
+    }
+    bases_dominated = VDE_BASE_CREATURES <= dominated
+    three_elites_dominated = VDE_WORLD_ELITES <= dominated
     both_fractured = {
         FOSSO_FRACTURED_CLEAR,
         SANCTUARY_FRACTURED_CLEAR,
     } <= unlocks
     conditions = {
+        "feat.vde.andarilho_dos_vales": (
+            VDE_CAMPAIGN_LOCATIONS <= locations
+            and VDE_PERMANENT_BRAZIERS <= braziers
+        ),
         "feat.vde.aquilo_que_pende": FOSSO_STABLE_CLEAR in unlocks,
         "feat.vde.sob_as_raizes": {FOSSO_UNLOCK, SANCTUARY_UNLOCK} <= unlocks,
         "feat.vde.o_no_antigo": SANCTUARY_STABLE_CLEAR in unlocks,
         "feat.vde.raizes_fraturadas": both_fractured,
+        "feat.vde.cacador_dos_vales": bases_dominated,
+        "feat.vde.entre_galhos_e_presas": (
+            bases_dominated
+            and three_elites_dominated
+            and VDE_VARIANT_TYPES <= discovered_variant_types
+        ),
         "feat.vde.a_pedra_que_ainda_guarda": all(
             BESTIARY_STAGE_ORDER.get(bestiary_stages.get(creature_id, "observed"), 0) >= 2
             for creature_id in VDE_STUDIED_BESTIARY_CREATURES
