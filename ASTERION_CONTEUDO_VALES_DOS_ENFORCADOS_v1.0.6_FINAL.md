@@ -9,7 +9,7 @@
 
 > Esta Fonte contém **conteúdo regional**. Não redefine sistemas globais. Em conflito estrutural ou numérico global, prevalece a Fonte Mestra v1.6.0. Em conflito de apresentação geral, prevalece a Fonte Visual/UI vigente; apresentação/iconografia específica dos Vales permanece em sua própria frente de Visual/UI.
 
-> **Status FINAL:** conteúdo regional dos Vales dos Enforcados fechado para implementação e posterior QA/telemetria. Esta revisão **v1.0.6** substitui `v1.0.5 FINAL` somente para fechar os números do encontro roteirizado de S12 descritos na seção 5.15. Nenhum outro conteúdo regional é alterado.
+> **Status FINAL:** conteúdo regional dos Vales dos Enforcados permanece fechado para implementação e posterior QA/telemetria. Esta revisão **v1.0.6** sucede v1.0.5 e fecha exclusivamente o perfil numérico do encontro roteirizado da Etapa 7 de S12. Não altera economia, progressão, narrativa regional, demais criaturas, pools, Caçada, Ronda, Masmorras ou recompensas regionais. A Fonte Mestra vigente continua sendo v1.6.0.
 
 > **Correção de consolidação:** durante a revisão final, os valores monetários de P7, P9, P11 e S9 foram recalculados pela fórmula autoritativa `C(n)=round_10(100+15n)` e pela tabela de UC da Fonte Mestra. Os valores corretos são P7 `270`, P9 `330`, P11 `490` e S9 `170` Coroas. Total regional de Missões: `4.230 Coroas`.
 
@@ -19,7 +19,7 @@
 
 **Correção v1.0.5:** atualiza apenas as referências editoriais à Fonte Mestra e à Fonte Visual/UI. Nenhum conteúdo regional foi alterado.
 
-**Correção v1.0.6:** fecha exclusivamente o kit numérico do Peregrino Enredado Nv.20 do encontro roteirizado de S12. Faixa, pools e configuração normal da criatura permanecem inalterados.
+**Correção v1.0.6:** fecha exclusivamente o perfil numérico do encontro roteirizado da Etapa 7 de S12, sob a fórmula e as regras globais da Fonte Mestra v1.6.0. Não constitui rebalance global do Peregrino Enredado e não altera economia, progressão, narrativa regional, demais criaturas, pools, Caçada, Ronda, Masmorras ou recompensas regionais.
 
 ---
 
@@ -501,25 +501,184 @@ Etapas:
 11. Retornar a Iven.
 12. Registrar na Vigília os nomes preservados.
 
+### Encontro roteirizado da Etapa 7 — Peregrino Enredado
+
+Na Etapa 7 de `S12 — Os Nomes Presos à Madeira`, o encontro instancia:
+
+- exatamente `1 Peregrino Enredado`;
+- nível `Nv.20`;
+- categoria `Incomum`;
+- perfil técnico de Bestiário `RARE`;
+- arquétipo `Equilibrado`;
+- sem Variante.
+
+Essa ocorrência de `Nv.20` é uma exceção explícita e exclusiva de S12.
+
+Ela NÃO altera:
+
+- a faixa normal `Nv.11–15` do Peregrino Enredado;
+- unlocks;
+- pesos;
+- pools de Caçada;
+- Ronda;
+- elegibilidade de mundo aberto;
+- ocorrência normal da criatura;
+- Variantes normais da criatura.
+
+Não torna Peregrino Enredado `Nv.16–20` elegível fora desta ocorrência roteirizada.
+
+### Materialização
+
+Os atributos do encontro usam a fórmula global vigente da Fonte Mestra para:
+
+`Incomum / Equilibrado / Nv.20`
+
+com:
+
+- nenhuma Variante;
+- nenhum multiplicador especial adicional de HP;
+- nenhum multiplicador especial adicional de ATQ;
+- nenhum multiplicador especial adicional de DEF;
+- nenhum multiplicador especial adicional de AGI.
+
+Não criar tabela paralela ou curva própria de S12.
+
+Para QA, a aplicação da fórmula pode ser conferida pelo vetor derivado `856 HP / 143 ATQ / 109 DEF / 119 AGI`. Esse vetor é consequência da fórmula global, não uma tabela de S12.
+
+A implementação deve preferir a materialização sistêmica autoritativa, não hardcode paralelo desses quatro valores quando a arquitetura já fornecer a fórmula global.
+
+### Kit
+
+Usar EXATAMENTE o kit publicado do Peregrino Enredado:
+
+`Golpe Enredado`
+
+- `100% ATQ`
+
+`Laço Improvisado`
+
+- `85% ATQ`
+- `AGI −10%`
+- `2T`
+- `CD3`
+
+`Defender`
+
+- conforme IA global vigente.
+
+Preservar:
+
+- não possui Stun;
+- não reaplica Laço apenas para renovar duração ainda relevante.
+
+Não adicionar:
+
+- terceira Arte;
+- Cura;
+- Barreira própria;
+- Hard CC;
+- Ação Preparada;
+- telegraph especial;
+- fase;
+- adds;
+- gimmick;
+- mecânica exclusiva.
+
+### Variante
+
+A ocorrência de S12 usa:
+
+`Variante: nenhuma`
+
+Não sortear:
+
+- Resistente;
+- Furioso;
+- Ágil;
+- Variante futura.
+
+### Grupo
+
+S12 segue a política global vigente de Campanha cooperativa:
+
+- Solo ou Grupo de `1–4`;
+- requisitos, progresso, elegibilidade, Ajudante, conhecimento e recompensa continuam individuais conforme Fonte Mestra;
+- evidência compartilhável válida de derrota pode creditar os participantes elegíveis e presentes.
+
+Este encontro continua contendo EXATAMENTE:
+
+`1 Peregrino Enredado Nv.20`
+
+independentemente de roster 1/2/3/4.
+
+Não usar:
+
+- composição multialvo de Caçada em Grupo;
+- scaling de Caçada;
+- scaling de Chefe de Campanha.
+
+Não criar scaling exclusivo de S12.
+
+### Recompensa própria do combate
+
+Este encontro roteirizado concede:
+
+- `0 XP` próprio de inimigo;
+- `0 Coroas` próprias;
+- `0 Saque`;
+- `0 Materiais`;
+- `0 Equipamento`;
+- `0 Runas`.
+
+Não participa de settlement econômico normal de Caçada.
+Não participa de pity econômico.
+
+A recompensa econômica permanece integralmente a recompensa já publicada de S12:
+
+- `18.100 XP`;
+- `500 Coroas`;
+- `2 Ferros Enredados`;
+- `2 Couros Musgosos`;
+- `2 Ervas de Turfa`;
+- `2 Resinas Enredadas`;
+- sem Equipamento garantido.
+
+Não alterar esses números.
+
+### Bestiário
+
+A ocorrência utiliza a entrada já existente:
+
+`Peregrino Enredado`
+
+Pode registrar normalmente, quando elegível pelas regras globais:
+
+- observação;
+- combate;
+- vitória;
+- comportamento/Arte legitimamente observada;
+- progresso normal de conhecimento.
+
+Não criar:
+
+- nova entrada;
+- subtipo;
+- forma especial;
+- Variante;
+- mastery próprio;
+- requisito adicional de Dominado;
+- marco especial exclusivo de primeira vitória de S12;
+- BKP extra exclusivo de S12.
+
+Qualquer recompensa/progresso global de Bestiário que seja legitimamente devido continua pertencendo ao sistema de Bestiário e não constitui XP próprio do inimigo de S12.
+
+### Limite narrativo
+
+Preservar explicitamente:
+
+Derrotar esse Peregrino NÃO declara, confirma nem implica que ele era uma das pessoas desaparecidas procuradas em S12.
+
 Conclusão: alguns desaparecimentos recebem destino provável; outros permanecem sem resposta. A Vigília passa a manter um registro permanente daqueles que desapareceram mantendo os caminhos abertos.
-
-### Fechamento numérico de S12 — Peregrino Enredado roteirizado
-
-Na etapa 7, o encontro usa **1 Peregrino Enredado Nv.20**. Este nível é uma exceção exclusiva do encontro roteirizado de S12: não altera a faixa normal Nv.11–15, os pools, pesos, unlocks, Caçada, Ronda ou elegibilidade de mundo aberto da criatura.
-
-O Peregrino permanece **Incomum / RARE técnico / Balanced**, sem Variante. Usa somente:
-
-- **Golpe Enredado** — `100% ATQ`;
-- **Laço Improvisado** — `85% ATQ`, AGI `−10%` por `2T`, `CD3`;
-- **Defender** conforme a IA global.
-
-Aplicam-se os atributos derivados da fórmula global para criatura Incomum, arquétipo Balanced, Nv.20, sem modificadores adicionais. A IA não renova um debuff de AGI enquanto ele ainda for relevante.
-
-Não possui Stun, Cura, Barreira própria, hard CC, preparação, fases, adds ou mecânica especial. O Grupo enfrenta **um único Peregrino**, sem scaling de Chefe de Campanha ou de Caçada.
-
-O encontro concede **zero XP de inimigo, Coroas, loot, materiais, Equipamento, Runas, pity ou outra recompensa própria**. A observação e a vitória registram somente a evidência normal da entrada existente do Peregrino Enredado no Bestiário; não há evidência, mastery ou marco especial de S12.
-
-A vitória não identifica nem implica que o Peregrino seja uma das pessoas desaparecidas.
 
 ## 5.16 Conhecimento permitido ao fim da Campanha regional
 

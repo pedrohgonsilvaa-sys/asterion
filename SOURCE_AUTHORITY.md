@@ -33,7 +33,7 @@ Ela define Locais, Braseiros permanentes, Missões, Feitos, Bestiário, inimigos
 
 Quando a Fonte Regional especificar conteúdo dentro de parâmetros sistêmicos da Fonte Mestra, ambas devem ser aplicadas em conjunto. Em conflito estrutural ou numérico, a Fonte Mestra prevalece; em conteúdo regional fechado, a revisão vigente prevalece sobre rascunhos ou versões regionais anteriores.
 
-A segunda região usa a autoridade de conteúdo **Vales dos Enforcados v1.0.6 FINAL**, em `ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.6_FINAL.md`. A v1.0.6 substitui a v1.0.5 somente para fechar o kit numérico do encontro roteirizado de S12; os demais conteúdos regionais permanecem iguais. A revisão regional não altera Visual/UI, cuja Fonte vigente continua sendo a edição de 2026-10-11.
+A segunda região usa a autoridade de conteúdo **Vales dos Enforcados v1.0.6 FINAL**, em `ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.6_FINAL.md`. A v1.0.6 sucede a v1.0.5 exclusivamente para fechar o perfil numérico do encontro roteirizado da Etapa 7 de S12 — Os Nomes Presos à Madeira. Não altera economia, progressão, narrativa regional, demais criaturas, pools, Caçada, Ronda, Masmorras ou recompensas regionais.
 
 ## Fonte Visual/UI
 
@@ -43,6 +43,8 @@ A apresentação player-facing deve seguir:
 
 Arquivo vigente: `ASTERION_UI_DECISOES_2026-10-11_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.5.md.
 
+A Fonte Visual/UI v1.6.0 permanece vigente. A revisão regional Vales v1.0.6 não altera apresentação e não exige nova versão Visual/UI; o documento atual, sincronizado com Vales v1.0.5, continua aplicável à apresentação.
+
 Esta revisão inclui a HUD compacta de Retaliação, Oportunismo, Mira, Trama, Presságio e Fulgor/Julgamento, além do aviso de Arte inválida por falta de armamento compatível. A interface segue subordinada à regra mecânica da Fonte Mestra.
 
 Ela define nomenclatura, texto, estrutura de telas, navegação, estados visuais e UX do Bot do Telegram. É subordinada à Fonte Mestra para regras mecânicas/números e à Fonte Regional para conteúdo regional oficial.
@@ -51,11 +53,11 @@ Exemplos de mockup não criam regra mecânica ou conteúdo canônico quando a au
 
 ## Regras cooperativas e roadmap técnico vigentes
 
-A regra normativa de Grupo, Campanha cooperativa, Caçada em Grupo, PvPvE, Domínio do Rastro e integração com Ronda está incorporada à Fonte Mestra v1.6.0, §§51–57. A autoridade regional TDO v1.0.15 aplica essa regra à P1 e à S6; Vales v1.0.6 mantém o conteúdo regional de v1.0.5, exceto pelo fechamento numérico do encontro roteirizado de S12.
+A regra normativa de Grupo, Campanha cooperativa, Caçada em Grupo, PvPvE, Domínio do Rastro e integração com Ronda está incorporada à Fonte Mestra v1.6.0, §§51–57. A autoridade regional TDO v1.0.15 aplica essa regra à P1 e à S6; Vales v1.0.6 preserva o conteúdo regional vigente e fecha exclusivamente o perfil numérico do encontro roteirizado de S12.
 
 A especificação técnica `docs/specs/MMO_PVPVE_FINAL_SPEC_V1.md` e os roadmaps `docs/specs/COOPERATIVE_MULTIPLAYER_ROADMAP_V2.md` e `docs/specs/OPTIONAL_SIDE_QUEST_BOSSES_V2.md` orientam entrega e verificação, sempre subordinados às Fontes oficiais. O antigo Decision Register MMO/PvPvE é histórico/supersedido e não é autoridade vigente.
 
-O kit numérico do encontro roteirizado de S12 foi fechado pela Vales v1.0.6. O Peregrino Enredado Nv.20 é uma exceção exclusiva desse encontro e não altera os parâmetros da criatura nos sistemas normais de mundo aberto.
+O blocker do perfil numérico do encontro de S12 está encerrado pela Fonte Regional Vales v1.0.6, exclusivamente para o encontro roteirizado da Etapa 7. A materialização continua subordinada à fórmula e às regras globais da Fonte Mestra v1.6.0.
 
 ## Fontes complementares de Lore e Direção Visual
 
