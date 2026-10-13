@@ -1,7 +1,7 @@
 """Pure equipment modification rules shared by services and combat snapshots.
 
 No inventory or currency is changed here. Values and rounding come from the
-GDD 24–25 and 49, with the regional Grade I component tables from TDO 19–20.
+GDD 24–25 and 49, with regional component families from TDO and Vales.
 """
 
 from __future__ import annotations
@@ -72,6 +72,14 @@ RUNE_FAMILIES = {
     "Persistência": ("HP", "Runa da Persistência"),
     "Desvio": ("Esquiva", "Runa do Desvio"),
     "Guarda": ("Bloqueio", "Runa da Guarda"),
+    "Espinho": ("ATQ", "Runa do Espinho"),
+    "Casca": ("DEF", "Runa da Casca"),
+    "Copas": ("AGI", "Runa das Copas"),
+    "Nó": ("PER", "Runa do Nó"),
+    "Caçada": ("CRIT", "Runa da Caçada"),
+    "Seiva": ("HP", "Runa da Seiva"),
+    "Névoa": ("Esquiva", "Runa da Névoa"),
+    "Raízes": ("Bloqueio", "Runa das Raízes"),
 }
 ENCHANTMENT_FAMILIES = {
     "Fio Cinéreo": "ATQ",
@@ -83,6 +91,15 @@ ENCHANTMENT_FAMILIES = {
     "Véu de Desvio": "Esquiva",
     "Selo de Guarda": "Bloqueio",
     "Eco do Vigia Partido": "PER",
+    "Fio Enredado": "ATQ",
+    "Pele de Casca": "DEF",
+    "Passo das Copas": "AGI",
+    "Marca do Nó": "PER",
+    "Eco da Caçada": "CRIT",
+    "Sopro de Seiva": "HP",
+    "Véu da Mata": "Esquiva",
+    "Selo das Raízes": "Bloqueio",
+    "Seiva da Matriarca": "HP",
 }
 RUNE_GRADE_VI = {
     "HP": (D("0.60"), D("0.80"), D("1.00")),
@@ -246,7 +263,7 @@ def _scaled_potency(
     else:
         unit = D("0.25") if attribute in POINT_ATTRIBUTES else D("0.05")
         amount = grade_vi[attribute][index] * GRADE_Q[grade - 1]
-        amount = max(unit, (amount / unit).quantize(D(1), rounding=ROUND_HALF_EVEN) * unit)
+        amount = max(unit, (amount / unit).quantize(D(1), rounding=ROUND_HALF_UP) * unit)
     suffix = " p.p." if attribute in POINT_ATTRIBUTES else "%"
     return f"{amount:.2f}{suffix}"
 
