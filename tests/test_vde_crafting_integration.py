@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import select
 
 from asterion.application.crafting import CraftingErrorCode, CraftingService
-from asterion.application.professions import ProfessionService
+from asterion.application.professions import ProfessionMutationCode, ProfessionService
 from asterion.domain.professions import (
     VDE_FRAGMENT_II,
     VDE_HERB,
@@ -145,3 +145,22 @@ async def test_vde_crafting_is_available_at_vigilia_but_not_at_unsafe_vales_loca
     assert unsafe is not None
     assert not unsafe.available
     assert unsafe.reason == CraftingErrorCode.WRONG_LOCATION
+
+
+@pytest.mark.asyncio
+async def test_vde_profession_services_use_vigilia_as_safe_hub(database):
+    actor = 840133
+    character_id = await _seed_character(database, actor, level=20, crowns=5000)
+    service = ProfessionService(database[1], "ocaso")
+
+    await _set_location(database, character_id, VDE_VIGILIA)
+    selected = await service.initial_selection(actor, "alchemist", "blacksmith")
+    assert selected is not None
+    preview = await service.change_preview(actor, "swap")
+    assert preview is not None and preview.valid
+
+    await _set_location(database, character_id, VDE_GARGANTA)
+    unsafe = await service.change_preview(actor, "swap")
+    assert unsafe is not None
+    assert not unsafe.valid
+    assert unsafe.reason == ProfessionMutationCode.WRONG_LOCATION
