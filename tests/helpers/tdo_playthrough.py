@@ -984,6 +984,7 @@ class TDOPlaythrough:
         label: str,
         max_actions: int = 400,
         action_picker: Callable[[Any], str] | None = None,
+        action_target_picker: Callable[[Any, str], str | None] | None = None,
         trace_actions: bool = False,
     ):
         """Play a real combat and reconnect after the first committed action."""
@@ -1010,7 +1011,15 @@ class TDOPlaythrough:
                     budget_limit=getattr(current, "consumable_budget_limit", None),
                 )
                 if action.startswith("consumable:")
-                else act(combat, action)
+                else act(
+                    combat,
+                    action,
+                    target_id=(
+                        action_target_picker(current, action)
+                        if action_target_picker is not None
+                        else None
+                    ),
+                )
             )
             if trace_actions:
                 player = combat.fighters.get("player")

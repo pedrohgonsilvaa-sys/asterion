@@ -200,7 +200,14 @@ async def _free_p12_crafting_slot(inventory, modifications, actor):
     }
 
 
-async def _craft_vde_p12_preparation(sessions, crafting, actor):
+async def _craft_vde_p12_preparation(
+    sessions,
+    crafting,
+    actor,
+    *,
+    equipment_only=False,
+    skip_recipe_ids=(),
+):
     """Prepare only through public Grade II recipes and equipment services."""
     inventory = InventoryService(sessions, "ocaso")
     modifications = EquipmentModificationService(sessions, "ocaso")
@@ -217,27 +224,53 @@ async def _craft_vde_p12_preparation(sessions, crafting, actor):
         return recipe
 
     crafted_consumables = []
-    for recipe_id, limit in (
-        ("recipe.vde.alchemist.heal.vde.ii", 4),
-        ("recipe.vde.alchemist.antidote.vde.ii", 1),
-        ("recipe.vde.alchemist.protection.vde.ii", 1),
-        ("recipe.vde.alchemist.purification.vde.ii", 1),
-    ):
-        for _ in range(limit):
-            recipe = await available_recipe(recipe_id)
-            if recipe is None or not recipe.available:
-                unavailable_consumables.append(
-                    (recipe_id, None if recipe is None else recipe.reason)
-                )
-                break
-            preview = await crafting.preview(actor, recipe_id)
-            assert preview is not None
-            committed = await crafting.commit(actor, preview.receipt_id)
-            assert committed is not None and committed.status == "committed"
-            crafted_consumables.append(recipe_id)
+    if not equipment_only:
+        for recipe_id, limit in (
+            ("recipe.vde.alchemist.heal.vde.ii", 4),
+            ("recipe.vde.alchemist.antidote.vde.ii", 1),
+            ("recipe.vde.alchemist.protection.vde.ii", 1),
+            ("recipe.vde.alchemist.purification.vde.ii", 1),
+        ):
+            for _ in range(limit):
+                recipe = await available_recipe(recipe_id)
+                if recipe is None or not recipe.available:
+                    unavailable_consumables.append(
+                        (recipe_id, None if recipe is None else recipe.reason)
+                    )
+                    break
+                preview = await crafting.preview(actor, recipe_id)
+                assert preview is not None
+                committed = await crafting.commit(actor, preview.receipt_id)
+                assert committed is not None and committed.status == "committed"
+                crafted_consumables.append(recipe_id)
 
     rarity_rank = {"Comum": 1, "Raro": 2, "Épico": 3}
-    target_slots = ("Principal", "Secundária", "Cabeça", "Torso", "Mãos", "Pés")
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        main_item = await session.scalar(
+            select(EquipmentItem)
+            .join(
+                CharacterEquipmentSlot,
+                CharacterEquipmentSlot.equipment_item_id == EquipmentItem.id,
+            )
+            .where(
+                CharacterEquipmentSlot.character_id == character.id,
+                CharacterEquipmentSlot.slot == "Principal",
+            )
+        )
+    main_recipe_slot = (
+        "2H" if main_item is not None and main_item.slot == "2H" else "Principal"
+    )
+    hand_slots = (
+        ("2H",)
+        if main_recipe_slot == "2H"
+        else ("Principal", "Secundária")
+    )
+    target_slots = (*hand_slots, "Cabeça", "Torso", "Mãos", "Pés")
+    skipped = set(skip_recipe_ids)
     equipment_recipes = tuple(
         definition
         for definition in RECIPE_DEFINITIONS
@@ -259,6 +292,8 @@ async def _craft_vde_p12_preparation(sessions, crafting, actor):
             reverse=True,
         )
         for definition in candidates:
+            if definition.recipe_id in skipped:
+                continue
             recipe = await available_recipe(definition.recipe_id)
             if recipe is None:
                 unavailable.append((definition.recipe_id, "unknown_or_locked"))
@@ -299,6 +334,8 @@ async def _craft_vde_p12_preparation(sessions, crafting, actor):
             reverse=True,
         )
         for definition in candidates:
+            if definition.recipe_id in skipped:
+                continue
             recipe = await available_recipe(definition.recipe_id)
             if recipe is None or not recipe.available:
                 if recipe is not None:
@@ -380,7 +417,11 @@ async def _p12_preparation_snapshot(sessions, actor):
         ).all()
         professions = (
             await session.execute(
-                select(CharacterProfession.profession_id, CharacterProfession.level)
+                select(
+                    CharacterProfession.profession_id,
+                    CharacterProfession.level,
+                    CharacterProfession.pxp,
+                )
                 .where(CharacterProfession.character_id == character.id)
                 .order_by(CharacterProfession.slot)
             )
@@ -1048,8 +1089,47 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     # live service previews accept the earned profession, level and inventory.
     hub = await _move_to(road, actor, VDE_VIGILIA)
     assert hub.location == VDE_VIGILIA
-    p12_crafting = await _craft_vde_p12_preparation(sessions, crafting, actor)
+    initial_p12_crafting = await _craft_vde_p12_preparation(sessions, crafting, actor)
+    p12_crafting_passes = [initial_p12_crafting]
     p12_equipment_changes = await _equip_best_available_combat_gear(sessions, actor)
+    crafted_recipe_ids = {
+        recipe_id
+        for result in p12_crafting_passes
+        for recipe_id, *_details in (
+            *result["equipment"],
+            *result["higher_rarity_equipment"],
+        )
+    }
+    # Equipping a legitimate upgrade can free the displaced item slot. Make
+    # two bounded follow-up visits through the same public recipe previews so
+    # those newly available slots can be used for other actual upgrades. Each
+    # recipe is crafted at most once; this is not profession-level grinding.
+    for _ in range(2):
+        followup = await _craft_vde_p12_preparation(
+            sessions,
+            crafting,
+            actor,
+            equipment_only=True,
+            skip_recipe_ids=crafted_recipe_ids,
+        )
+        p12_crafting_passes.append(followup)
+        new_recipe_ids = {
+            recipe_id
+            for recipe_id, *_details in (
+                *followup["equipment"],
+                *followup["higher_rarity_equipment"],
+            )
+        }
+        if not new_recipe_ids:
+            break
+        crafted_recipe_ids.update(new_recipe_ids)
+        p12_equipment_changes.extend(
+            await _equip_best_available_combat_gear(sessions, actor)
+        )
+    p12_crafting = {
+        "passes": tuple(p12_crafting_passes),
+        "unique_recipes_crafted": tuple(sorted(crafted_recipe_ids)),
+    }
     p12_runes = await install_best_owned_runes(sessions, actor, server_id="ocaso")
     p12_modification_access = await _p12_modification_access(sessions, actor)
     print(f"VDE_P12_LEGITIMATE_CRAFTING={p12_crafting!r}", flush=True)
@@ -1129,6 +1209,18 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         "destroyed_connections": set(),
     }
 
+    def p12_action_target(current, action):
+        combat = current.combat
+        if combat is None:
+            return None
+        definition = combat.player_actions.get(action)
+        if definition is not None and definition.target_mode == "all_opponents":
+            return None
+        targets = action_target_ids(combat, action)
+        if "enemy" in targets:
+            return "enemy"
+        return targets[0] if targets else None
+
     async def p12_mutate(current, action):
         combat = current.combat
         if action.startswith("consumable:"):
@@ -1157,15 +1249,7 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
                 and combat.fighters[target_id].hp > 0
             )
             action_definition = combat.player_actions.get(action)
-            if action_definition is not None and action_definition.target_mode == "all_opponents":
-                target_id = None
-            elif connection_targets:
-                target_id = min(
-                    connection_targets,
-                    key=lambda target: (combat.fighters[target].hp, target),
-                )
-            else:
-                target_id = "enemy" if "enemy" in targets else (targets[0] if targets else None)
+            target_id = p12_action_target(current, action)
             assert target_id is None or target_id in targets, (action, target_id, targets)
             p12_attempt_metrics["actions"].append(action)
             if action_definition is not None and action_definition.target_mode == "all_opponents":
@@ -1191,7 +1275,7 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     def p12_policy(view):
         combat = view.combat
         available = allowed_actions(combat)
-        if combat.prepared_action is not None and "defend" in available:
+        if combat.prepared_action == "estrangulamento_vale" and "defend" in available:
             return "defend"
         player = combat.fighters["player"]
         hp_fraction = player.hp / player.stats.hp
@@ -1204,81 +1288,57 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             ),
             None,
         )
-        if healing_id is not None and hp_fraction <= Decimal("0.75"):
+        if healing_id is not None and hp_fraction <= Decimal("0.60"):
             return f"consumable:{healing_id}"
 
-        wall_id = SENTINEL_ART_IDS["muralha_breve"]
-        if (
-            wall_id in available
-            and (player.barrier <= 0 or player.barrier_remaining <= 0)
-        ):
-            return wall_id
-
-        if (
-            "consumable.protection.vde.ii" in item_ids
-            and (player.barrier <= 0 or player.barrier_remaining <= 0)
-        ):
-            return "consumable:consumable.protection.vde.ii"
-
-        # The service only exposes antidote/purification options when the
-        # corresponding negative effect is actually present. Preserve an
-        # urgent heal first; cleansing is useful when HP is already stable.
-        for consumable_id in (
-            "consumable.antidote.vde.ii",
-            "consumable.purification.vde.ii",
-        ):
-            if consumable_id in item_ids and hp_fraction > Decimal("0.75"):
-                return f"consumable:{consumable_id}"
-
-        connections = tuple(
-            key
-            for key in ("connection_a", "connection_b", "connection_c")
-            if (fighter := combat.fighters.get(key)) is not None and fighter.hp > 0
+        # Cleanse only meaningful persistent effects; an available option is
+        # not by itself a reason to spend a combat opportunity.
+        poison_stacks = sum(
+            dot.stacks
+            for dot in combat.dot_states.get(player.id, ())
+            if dot.kind == "poison"
         )
-        if connections:
-            # Connections never take turns and each living one reduces the
-            # Matriarch's final damage. Prefer a legal AoE that hits all
-            # opponents; otherwise focus the highest-direct-damage legal Art
-            # on one living Connection before returning to the boss.
-            connection_arts = []
-            for action in available:
-                definition = combat.player_actions.get(action)
-                if (
-                    definition is None
-                    or not action.startswith(("class_art.", "path_art."))
-                    or definition.coefficient <= 0
-                ):
-                    continue
-                targets = action_target_ids(combat, action)
-                if not any(target in connections for target in targets):
-                    continue
-                connection_arts.append(
-                    (
-                        definition.target_mode == "all_opponents",
-                        definition.coefficient,
-                        action,
-                    )
-                )
-            if connection_arts:
-                return max(connection_arts)[2]
-            if "attack" in available and any(
-                target in connections for target in action_target_ids(combat, "attack")
-            ):
-                return "attack"
+        if poison_stacks >= 2 and "consumable.antidote.vde.ii" in item_ids:
+            return "consumable:consumable.antidote.vde.ii"
+        agility_debuff = any(
+            effect.kind == "debuff"
+            and effect.stat == "agility"
+            and effect.remaining >= 2
+            and effect.removable
+            for effect in player.effects
+        )
+        if agility_debuff and "consumable.purification.vde.ii" in item_ids:
+            return "consumable:consumable.purification.vde.ii"
 
-        # Once no Connection remains, use the existing path-aware policy for
-        # Devastador, Retaliação, defense break and its actual charged window.
+        connections_alive = any(
+            (fighter := combat.fighters.get(key)) is not None and fighter.hp > 0
+            for key in ("connection_a", "connection_b", "connection_c")
+        )
+        if connections_alive:
+            # Connections are optional and each reduces final damage by 4%.
+            # Use a legal AoE that also hits the boss if available, but do not
+            # spend single-target opportunities on non-acting targets.
+            aoe_arts = [
+                action
+                for action in available
+                if action.startswith(("class_art.", "path_art."))
+                and (definition := combat.player_actions.get(action)) is not None
+                and definition.coefficient > 0
+                and definition.target_mode == "all_opponents"
+            ]
+            if aoe_arts:
+                return max(
+                    aoe_arts,
+                    key=lambda action: combat.player_actions[action].coefficient,
+                )
+
+        # Use Devastador's actual charge, Retaliação and DEF-break logic. The
+        # Devastador policy only spends a turn on Muralha at critical HP and
+        # allows safe ordinary hits to trigger Ímpeto Doloroso.
         return choose_p6_policy_action(
             combat,
-            "sentinela_devastador",
-            heal_count=next(
-                (
-                    quantity
-                    for item_id, quantity in view.consumable_quantities
-                    if item_id == "consumable.heal"
-                ),
-                0,
-            ),
+            "devastador",
+            heal_count=0,
             budget_limit=view.consumable_budget_limit,
         )
 
@@ -1307,6 +1367,7 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             label=f"Vales P12 · Matriarca das Raízes · tentativa {retry}",
             max_actions=700,
             action_picker=p12_policy,
+            action_target_picker=p12_action_target,
             trace_actions=True,
         )
         if after_boss.kind == "combat_result":
@@ -1329,6 +1390,10 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         attempt_report = {
             "attempt": retry,
             "result": final_combat.result,
+            "service_result_kind": after_boss.kind,
+            "service_awaiting_retry": bool(
+                (after_boss.progress or {}).get("awaiting_retry")
+            ),
             "level": p12_preparation["level"],
             "stats": {key: p12_preparation[key] for key in ("hp", "max_hp", "ATQ", "DEF", "AGI")},
             "equipment": p12_preparation["equipment"],
@@ -1345,6 +1410,17 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             "phase_reached": final_combat.phase_id or "I",
             "rounds": final_combat.round,
             "actions": len(p12_attempt_metrics["actions"]),
+            "defend_actions": sum(
+                action == "defend" for action in p12_attempt_metrics["actions"]
+            ),
+            "muralha_actions": sum(
+                action == SENTINEL_ART_IDS["muralha_breve"]
+                for action in p12_attempt_metrics["actions"]
+            ),
+            "devastador_charges_consumed": sum(
+                "devastador.impacto_consumido" in event.path_triggers
+                for event in events
+            ),
             "boss_hp_remaining": str(final_boss.hp),
             "boss_hp_max": str(final_boss.stats.hp),
             "player_hp_remaining": str(final_player.hp),
@@ -1353,6 +1429,9 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             "defeat_cause": (
                 "player_hp_zero"
                 if final_combat.result == "defeat" and final_player.hp <= 0
+                else "service_retry_without_terminal_snapshot"
+                if (after_boss.progress or {}).get("awaiting_retry")
+                and final_combat.result is None
                 else None
             ),
         }
