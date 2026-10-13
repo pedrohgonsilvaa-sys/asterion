@@ -9,11 +9,31 @@ from asterion.application.active_arts import ActiveArtService
 from asterion.application.combat_configuration_guard import CombatConfigurationLocked
 from asterion.application.equipment import equipment_instance_payload
 from asterion.application.progression import consolidate_level, level_xp
-from asterion.application.road import REFUGE, ROAD, RoadService
+from asterion.application.road import (
+    BOSQUE,
+    CHARNECA,
+    REFUGE,
+    ROAD,
+    RUINS,
+    VDE_BAIXIOS,
+    VDE_BERCO,
+    VDE_CLAUSTRO,
+    VDE_GARGANTA,
+    VDE_MATA,
+    VDE_VIGILIA,
+    RoadService,
+)
+from asterion.application.round import RoundService
 from asterion.domain.arts import FIRST_CLASS_ART_IDS, SENTINEL_ART_IDS
 from asterion.domain.combat import act, allowed_actions
 from asterion.domain.combat_math import resolve_combat_stats
-from asterion.domain.road import enemy_xp, materialize_equipment
+from asterion.domain.road import (
+    RUINS_LOCATION,
+    VDE_BERCO_LOCATION,
+    VDE_CLAUSTRO_BERCO_ROUTE,
+    enemy_xp,
+    materialize_equipment,
+)
 from asterion.domain.talents import TALENTS_BY_CLASS
 from asterion.infrastructure.db.models import (
     Account,
@@ -29,6 +49,8 @@ from asterion.infrastructure.db.models import (
     ExplorationAttempt,
     GameActivity,
     HuntContext,
+    HuntRound,
+    LocationDiscovery,
     MaterialStack,
     PendingItem,
     PvpveQueue,
@@ -163,6 +185,118 @@ async def _seed_road(
 
     service.pvpve.queue_manual_hunt = start_pve_when_test_has_no_rival
     return actor, service
+
+
+@pytest.mark.asyncio
+async def test_unknown_persisted_location_fails_closed_without_mutation(database):
+    actor, road = await _seed_road(database, actor=771199)
+    _, sessions = database
+    invalid_location = "corrupt.location.not_registered"
+    async with sessions.begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        character_id = character.id
+        world = await session.get(WorldState, character_id)
+        assert world is not None
+        world.location = invalid_location
+
+    view = await road.resume(actor)
+    assert view is not None and view.kind == "invalid_location"
+    assert view.location == invalid_location
+    assert view.hunt_enabled is False
+    assert view.explore_enabled is False
+    assert view.explore_available is False
+    assert view.route_available is False
+    assert view.route_destinations == ()
+    assert view.brazier_id is None and view.brazier_destinations == ()
+
+    # Stale activity callbacks remain harmless while the persisted Local is invalid.
+    assert await road.prepare_hunt(actor) is None
+    assert (await road.start_hunt(actor)).kind == "invalid_location"
+    assert await road.prepare_explore(actor) is None
+    assert (await road.explore(actor)).kind == "invalid_location"
+    assert await road.travel_route(actor, CHARNECA) is None
+    rounds = RoundService(sessions, "ocaso")
+    assert await rounds.prepare_round(actor, 5) is None
+
+    async with sessions() as session:
+        world = await session.get(WorldState, character_id)
+        assert world is not None and world.location == invalid_location
+        assert await session.scalar(
+            select(func.count(GameActivity.id)).where(
+                GameActivity.character_id == character_id,
+                GameActivity.status == "active",
+            )
+        ) == 0
+        assert await session.scalar(
+            select(func.count(ExplorationAttempt.id)).where(
+                ExplorationAttempt.character_id == character_id
+            )
+        ) == 0
+        assert await session.scalar(
+            select(func.count(HuntRound.id)).where(HuntRound.character_id == character_id)
+        ) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("location", "expected_kind"),
+    (
+        (ROAD, "road"),
+        (REFUGE, "refuge"),
+        (CHARNECA, "charneca"),
+        (BOSQUE, "bosque"),
+        (RUINS, "ruinas"),
+        (VDE_GARGANTA, "vde_garganta"),
+        (VDE_VIGILIA, "vde_vigilia"),
+        (VDE_MATA, "vde_mata"),
+        (VDE_BAIXIOS, "vde_baixios"),
+        (VDE_CLAUSTRO, "vde_claustro"),
+        (VDE_BERCO, "vde_berco"),
+    ),
+)
+async def test_all_known_tdo_and_vales_locations_keep_explicit_road_views(
+    database, location, expected_kind
+):
+    actor, road = await _seed_road(database, actor=771200)
+    _, sessions = database
+    async with sessions.begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        character.level = 20
+        world = await session.get(WorldState, character.id)
+        assert world is not None
+        world.location = location
+        if location in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO}:
+            world.region = "Vales dos Enforcados"
+        session.add_all(
+            Quest(
+                character_id=character.id,
+                quest_id=quest_id,
+                title=quest_id,
+                status="completed",
+                step=1,
+                content_version="audit-valid-location-test",
+            )
+            for quest_id in ("P2", "P3", "P4", "P7", "P8", "P9", "P10", "P11")
+        )
+        if location == RUINS:
+            session.add(LocationDiscovery(character_id=character.id, location_id=RUINS_LOCATION))
+        if location == VDE_BERCO:
+            session.add(
+                LocationDiscovery(character_id=character.id, location_id=VDE_BERCO_LOCATION)
+            )
+            session.add(
+                Unlock(character_id=character.id, unlock_id=VDE_CLAUSTRO_BERCO_ROUTE)
+            )
+
+    view = await road.resume(actor)
+    assert view is not None and view.kind == expected_kind
+    assert view.location == location
 
 
 async def _seed_hunt_receipts(database, actor, receipts):

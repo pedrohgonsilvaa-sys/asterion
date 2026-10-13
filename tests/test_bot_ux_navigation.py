@@ -18,7 +18,7 @@ from asterion.bot.road_ui import (
 )
 from asterion.bot.world_handlers import world_router
 from asterion.bot.world_ui import render_adventure, render_world
-from asterion.infrastructure.db.models import Character, LocationDiscovery
+from asterion.infrastructure.db.models import Character, LocationDiscovery, WorldState
 from tests.test_creation_ui import callback_update
 from tests.test_road_integration import _seed_road
 
@@ -272,6 +272,69 @@ async def test_telegram_adventure_local_hunt_and_map_callbacks_use_real_services
         for row in combat.reply_markup.inline_keyboard
         for button in row
     )
+
+
+@pytest.mark.asyncio
+async def test_stale_road_callbacks_on_unknown_location_only_restore_safe_menu(database):
+    actor = 883410
+    _, road = await _seed_road(database, actor=actor)
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        character_id = character.id
+        world_state = await session.get(WorldState, character_id)
+        assert world_state is not None
+        world_state.location = "corrupt.location.not_registered"
+
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        world_router(WorldService(database[1], "ocaso"), {}, road=road)
+    )
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(return_value=True)
+
+    for update_id, callback in enumerate(
+        ("road:hunt", "road:route:charneca", "road:explore:start", "world:round"),
+        start=883411,
+    ):
+        await dispatcher.feed_raw_update(
+            bot,
+            callback_update(callback, update_id=update_id, actor=actor),
+        )
+        response = next(
+            call.args[1]
+            for call in reversed(bot.session.make_request.call_args_list)
+            if getattr(call.args[1], "text", None) is not None
+        )
+        assert "⚠️ Local indisponível" in response.text
+        assert "Refúgio do Ocaso" not in response.text
+        assert "Terras do Ocaso" not in response.text
+        assert [
+            button.callback_data
+            for row in response.reply_markup.inline_keyboard
+            for button in row
+        ] == ["menu:back"]
+
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update("menu:back", update_id=883420, actor=actor),
+    )
+    menu = next(
+        call.args[1]
+        for call in reversed(bot.session.make_request.call_args_list)
+        if getattr(call.args[1], "text", None) is not None
+    )
+    assert "Menu está disponível em modo seguro" in menu.text
+    assert "Terras do Ocaso" not in menu.text
+    assert "Refúgio do Ocaso" not in menu.text
+    assert "Local Atual" not in menu.text
+
+    async with database[1]() as session:
+        world_state = await session.get(WorldState, character_id)
+        assert world_state is not None
+        assert world_state.location == "corrupt.location.not_registered"
 
 
 @pytest.mark.asyncio

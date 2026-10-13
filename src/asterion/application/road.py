@@ -340,19 +340,25 @@ class RoadService:
             )
             queued_activity_id = None
             if character_id is not None:
-                queued_activity_id = await read_session.scalar(
-                    select(GameActivity.id).where(
-                        GameActivity.character_id == character_id,
-                        GameActivity.status == "active",
-                        GameActivity.content_id == PVPVE_QUEUE_CONTENT,
-                    )
+                persisted_location = await read_session.scalar(
+                    select(WorldState.location).where(WorldState.character_id == character_id)
                 )
+                if persisted_location in TRAVEL_LOCATIONS:
+                    queued_activity_id = await read_session.scalar(
+                        select(GameActivity.id).where(
+                            GameActivity.character_id == character_id,
+                            GameActivity.status == "active",
+                            GameActivity.content_id == PVPVE_QUEUE_CONTENT,
+                        )
+                    )
         if queued_activity_id is not None:
             await self.pvpve.refresh_queue(actor, queued_activity_id)
         async with self.sessions.begin() as s:
-            c, _world = await self._locked_world(s, actor)
-            if c is None:
+            c, world = await self._locked_world(s, actor)
+            if c is None or world is None:
                 return None
+            if world.location not in TRAVEL_LOCATIONS:
+                return self._invalid_location_view(c, world)
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
@@ -362,9 +368,6 @@ class RoadService:
                 )
             )
             if active is not None:
-                return None
-            world = await s.scalar(select(WorldState).where(WorldState.character_id == c.id))
-            if world is None or world.location not in TRAVEL_LOCATIONS:
                 return None
             if world.location == CHARNECA:
                 if not await self._p2_completed(s, c.id):
@@ -644,6 +647,8 @@ class RoadService:
             c, world = await self._locked_world(s, actor)
             if c is None or world is None:
                 return None
+            if world.location not in TRAVEL_LOCATIONS:
+                return self._invalid_location_view(c, world)
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
@@ -1227,6 +1232,8 @@ class RoadService:
             c, world = await self._locked_world(s, actor)
             if c is None or world is None:
                 return None
+            if world.location not in TRAVEL_LOCATIONS:
+                return self._invalid_location_view(c, world)
             blocking = await self._road_blocking_view(s, c)
             if blocking is not None:
                 return blocking
@@ -3397,7 +3404,32 @@ class RoadService:
             consumable_budget_limit=budget_limit,
         )
 
+    @staticmethod
+    def _invalid_location_view(c, world) -> RoadView:
+        """Render an unknown persisted location without inventing recovery state."""
+        return RoadView(
+            "invalid_location",
+            c.id,
+            world.location,
+            vigor=c.vigor,
+            max_vigor=c.max_vigor,
+            name=c.name,
+            hp=c.hp,
+            max_hp=c.max_hp,
+            hunt_enabled=False,
+            explore_enabled=False,
+            retry_available=False,
+            explore_available=False,
+            route_available=False,
+            route_destinations=(),
+            brazier_id=None,
+            brazier_label=None,
+            brazier_destinations=(),
+        )
+
     async def _view_for_world(self, s, c, world):
+        if world.location not in TRAVEL_LOCATIONS:
+            return self._invalid_location_view(c, world)
         hunt_profile = hunt_profile_for_location(world.location)
         familiar = bool(
             hunt_profile
@@ -3677,33 +3709,27 @@ class RoadService:
             # The Berço is a campaign climax location with no generic activity profile.
             hunt_enabled = False
             explore_enabled = False
-        else:
+        elif world.location in {ROAD, REFUGE, CHARNECA, BOSQUE, RUINS}:
             hunt_enabled = True
             explore_enabled = True
+        else:
+            # Every other known travel location must be handled explicitly above.
+            return self._invalid_location_view(c, world)
+        kind_by_location = {
+            ROAD: "road",
+            REFUGE: "refuge",
+            CHARNECA: "charneca",
+            BOSQUE: "bosque",
+            RUINS: "ruinas",
+            VDE_GARGANTA: "vde_garganta",
+            VDE_VIGILIA: "vde_vigilia",
+            VDE_MATA: "vde_mata",
+            VDE_BAIXIOS: "vde_baixios",
+            VDE_CLAUSTRO: "vde_claustro",
+            VDE_BERCO: "vde_berco",
+        }
         return RoadView(
-            (
-                "road"
-                if world.location == ROAD
-                else "charneca"
-                if world.location == CHARNECA
-                else "bosque"
-                if world.location == BOSQUE
-                else "ruinas"
-                if world.location == RUINS
-                else "vde_garganta"
-                if world.location == VDE_GARGANTA
-                else "vde_vigilia"
-                if world.location == VDE_VIGILIA
-                else "vde_mata"
-                if world.location == VDE_MATA
-                else "vde_baixios"
-                if world.location == VDE_BAIXIOS
-                else "vde_claustro"
-                if world.location == VDE_CLAUSTRO
-                else "vde_berco"
-                if world.location == VDE_BERCO
-                else "refuge"
-            ),
+            kind_by_location[world.location],
             c.id,
             world.location,
             vigor=c.vigor,

@@ -1,6 +1,7 @@
 import os
 from datetime import UTC, timedelta
 from decimal import Decimal
+from hashlib import sha256
 from uuid import UUID, uuid4
 
 import pytest
@@ -49,6 +50,7 @@ from asterion.domain.road import (
     EXPLORATION_PROFILES,
     VIGIA_PARTIDO,
     create_creature_combat,
+    creature_for,
     select_exploration_result,
 )
 from asterion.domain.road import (
@@ -79,6 +81,89 @@ pytestmark = pytest.mark.skipif(
     os.getenv("ASTERION_RUN_TDO_FULL_PLAYTHROUGH") != "1",
     reason="playthrough diagnóstico longo; habilite ASTERION_RUN_TDO_FULL_PLAYTHROUGH=1",
 )
+
+
+def _seed_for_exploration_result(target_key, player_level, recent, excluded, profile):
+    """Find a deterministic seed without rebuilding the weighted pool per draw."""
+    recent_set = set(recent)
+    excluded_set = set(map(str, excluded))
+    eligible_categories = []
+    eligible_results = {}
+    target_category = None
+    target_result_range = None
+
+    for category, category_weight in profile.category_weights:
+        results = tuple(
+            result
+            for result in profile.results
+            if result.category == category
+            and player_level >= result.min_level
+            and (
+                result.creature_id is None
+                or player_level >= creature_for(result.creature_id).unlock_level
+            )
+            and result.key not in excluded_set
+            and result.result_id not in excluded_set
+        )
+        result_weights = []
+        for result in results:
+            if recent and result.key == recent[0]:
+                penalty = 0
+            elif result.key in recent_set:
+                penalty = 35
+            else:
+                penalty = 100
+            adjusted_weight = result.weight * penalty
+            if adjusted_weight > 0:
+                start = sum(weight for _key, weight in result_weights)
+                result_weights.append((result.key, adjusted_weight))
+                if result.key == target_key:
+                    target_category = category
+                    target_result_range = (start, start + adjusted_weight)
+        if not result_weights:
+            continue
+        category_penalty = (
+            0
+            if recent and category == recent[0]
+            else 35
+            if category in recent_set
+            else 100
+        )
+        adjusted_category_weight = category_weight * category_penalty
+        if adjusted_category_weight > 0:
+            eligible_categories.append((category, adjusted_category_weight))
+            eligible_results[category] = result_weights
+
+    if target_category is None or target_result_range is None:
+        return None
+    category_range_start = 0
+    category_range_end = None
+    for category, weight in eligible_categories:
+        if category == target_category:
+            category_range_end = category_range_start + weight
+            break
+        category_range_start += weight
+    if category_range_end is None:
+        return None
+    result_weights = eligible_results[target_category]
+    result_total = sum(weight for _key, weight in result_weights)
+
+    for candidate in range(500_000):
+        seed = f"{candidate:032x}"
+        category_draw = int.from_bytes(sha256(seed.encode()).digest(), "big") % sum(
+            weight for _category, weight in eligible_categories
+        )
+        if not category_range_start <= category_draw < category_range_end:
+            continue
+        result_draw = int.from_bytes(
+            sha256(f"{seed}:category:{target_category}".encode()).digest(), "big"
+        ) % result_total
+        if target_result_range[0] <= result_draw < target_result_range[1]:
+            assert select_exploration_result(
+                seed, player_level, recent, tuple(map(str, excluded)), profile
+            ) == target_key
+            return seed
+    return None
 
 
 def _compact_playthrough_report(driver, mark):
@@ -195,7 +280,7 @@ async def _create_remanescente_sentinela(driver: TDOPlaythrough) -> None:
 
 
 @pytest.mark.asyncio
-async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch):
+async def run_tdo_full_playthrough(database, monkeypatch):
     """Restart at Nv.1; all progression mutations use public services."""
     actor = 7_000_000_000_000 + uuid4().int % 100_000_000_000
     _, sessions = database
@@ -570,16 +655,8 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             for result in profile.results
             if result.result_id == target_result_id
         )
-        seed = next(
-            (
-                f"{candidate:032x}"
-                for candidate in range(500_000)
-                if select_exploration_result(
-                    f"{candidate:032x}", level, recent, tuple(map(str, excluded)), profile
-                )
-                == target_key
-            ),
-            None,
+        seed = _seed_for_exploration_result(
+            target_key, level, recent, tuple(map(str, excluded)), profile
         )
         if seed is None:
             raise AssertionError(
@@ -2694,3 +2771,9 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         f"elapsed={driver.clock.elapsed_seconds}s"
     )
     print(f"TDO_PLAYTHROUGH_REPORT={_compact_playthrough_report(driver, final_mark)!r}", flush=True)
+    return actor, driver
+
+
+@pytest.mark.asyncio
+async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch):
+    await run_tdo_full_playthrough(database, monkeypatch)

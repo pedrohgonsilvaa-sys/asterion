@@ -929,6 +929,15 @@ class TDOPlaythrough:
                 self._last_level = character.level
         mark = JourneyMark(label, state)
         self.marks.append(mark)
+        if "level" in state:
+            print(
+                "PLAYTHROUGH_PROGRESS "
+                f"{label} | Nv.{state['level']} XP={state.get('xp', 0)} "
+                f"XP_total={state.get('xp_received_total', 0)} "
+                f"hunt_count={state.get('manual_hunt_count', 0)} "
+                f"location={state.get('location')}",
+                flush=True,
+            )
         return mark
 
     def diagnostic(self) -> str:
