@@ -48,6 +48,7 @@ from asterion.infrastructure.db.models import (
 
 INVENTORY_CAPACITY = 60
 PENDING_CAPACITY = 20
+SAFE_CRAFTING_LOCATIONS = frozenset((REFUGE, "Vigília do Vale"))
 
 
 class CraftingErrorCode:
@@ -459,7 +460,7 @@ class CraftingService:
             reason = CraftingErrorCode.MATERIALS
         elif reason is None and character.crowns < cost:
             reason = CraftingErrorCode.CROWNS
-        elif reason is None and location != REFUGE:
+        elif reason is None and location not in SAFE_CRAFTING_LOCATIONS:
             reason = CraftingErrorCode.WRONG_LOCATION
         elif reason is None and foreground:
             reason = CraftingErrorCode.FOREGROUND
