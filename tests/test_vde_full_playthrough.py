@@ -1501,7 +1501,9 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
                 (after_boss.progress or {}).get("awaiting_retry")
             ),
             "level": attempt_preparation["level"],
-            "stats": {key: attempt_preparation[key] for key in ("hp", "max_hp", "ATQ", "DEF", "AGI")},
+            "stats": {
+                key: attempt_preparation[key] for key in ("hp", "max_hp", "ATQ", "DEF", "AGI")
+            },
             "equipment": attempt_preparation["equipment"],
             "arts": configured_p12_arts,
             "loadout": loadout_name,
