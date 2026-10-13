@@ -1,4 +1,4 @@
-"""Profession progression and the Terras do Ocaso C1 recipe catalog."""
+"""Profession progression and the canonical TDO/VDE recipe catalogs."""
 
 from __future__ import annotations
 
@@ -64,6 +64,8 @@ class RecipeDefinition:
     primary_ratio: Decimal = D("0.70")
     fragment_per_sw: int = 0
     catalyst_per_sw: int = 0
+    fragment_material_id: str | None = None
+    catalyst_material_id: str | None = None
     fixed_materials: tuple[MaterialRequirement, ...] = ()
     fixed_crown_cost: int | None = None
     creation_enabled: bool = True
@@ -203,46 +205,133 @@ def _equipment_recipes() -> list[RecipeDefinition]:
     return recipes
 
 
+def _vde_equipment_recipes() -> list[RecipeDefinition]:
+    """Normal Grade II equipment published by Vales dos Enforcados v1.0.6."""
+    rarity_ids = {"Comum": "comum", "Raro": "raro", "Épico": "epico"}
+    families = (
+        ("blacksmith", "vale_weapon", "Arma do Vale", "Principal", VDE_IRON, VDE_RESIN, D("0.70")),
+        ("blacksmith", "entwined_guard", "Guarda Enredada", "Secundária", VDE_IRON, VDE_RESIN, D("0.70")),
+        ("blacksmith", "bonds_greatweapon", "Arma Pesada dos Laços", "2H", VDE_IRON, VDE_RESIN, D("0.70")),
+        ("blacksmith", "entwined_helm", "Elmo Enlaçado", "Cabeça", VDE_IRON, VDE_RESIN, D("0.70")),
+        ("blacksmith", "vale_cuirass", "Couraça do Vale", "Torso", VDE_IRON, VDE_RESIN, D("0.70")),
+        ("blacksmith", "entwined_gauntlets", "Manoplas Enredadas", "Mãos", VDE_IRON, VDE_RESIN, D("0.70")),
+        ("blacksmith", "peat_greaves", "Grevas de Turfa", "Pés", VDE_IRON, VDE_RESIN, D("0.70")),
+        ("leatherworker", "moss_hood", "Capuz Musgoso", "Cabeça", VDE_LEATHER, VDE_HERB, D("0.70")),
+        ("leatherworker", "suspended_forest_vest", "Veste da Mata Suspensa", "Torso", VDE_LEATHER, VDE_HERB, D("0.70")),
+        ("leatherworker", "peat_gloves", "Luvas de Turfa", "Mãos", VDE_LEATHER, VDE_HERB, D("0.70")),
+        ("leatherworker", "bonds_boots", "Botas dos Laços", "Pés", VDE_LEATHER, VDE_HERB, D("0.70")),
+        ("jeweler", "bonds_seal", "Selo dos Laços", "Acessório", VDE_IRON, VDE_RESIN, D("0.60")),
+        ("jeweler", "entwined_reliquary", "Relicário Enredado", "Artefato", VDE_IRON, VDE_RESIN, D("0.60")),
+    )
+    recipes = []
+    for profession_id, family_id, name, slot, primary, secondary, ratio in families:
+        sw = SLOT_ECONOMY_SW[slot]
+        for rarity in ("Comum", "Raro", "Épico"):
+            recipes.append(
+                RecipeDefinition(
+                    recipe_id=f"recipe.vde.{profession_id}.{family_id}.{rarity_ids[rarity]}",
+                    profession_id=profession_id,
+                    name=name,
+                    output_kind="equipment",
+                    required_level=max(3, RARITY_REQUIREMENTS[rarity]),
+                    grade=2,
+                    rarity=rarity,
+                    output_name=name,
+                    output_slot=slot,
+                    sw=sw,
+                    basic_materials=RARITY_COSTS_PER_SW[rarity],
+                    primary_material_id=primary,
+                    secondary_material_id=secondary,
+                    primary_ratio=ratio,
+                    fragment_per_sw=4 if rarity == "Raro" else 6 if rarity == "Épico" else 0,
+                    catalyst_per_sw=2 if rarity == "Épico" else 0,
+                    fragment_material_id=VDE_FRAGMENT_II,
+                    catalyst_material_id=VDE_CATALYST_II,
+                    description=f"{rarity} · {slot} · Grau II",
+                )
+            )
+    return recipes
+
+
 def _alchemy_recipes() -> list[RecipeDefinition]:
     recipes = []
-    for item_id in (
-        "consumable.heal",
-        "consumable.purification",
-        "consumable.antidote.tdo.i",
-        "consumable.vigor.tdo.i",
-    ):
-        item = consumable_definition(item_id)
-        if item is None or item.region != "Terras do Ocaso":
-            raise RuntimeError(
-                f"TDO alchemy recipe {item_id!r} is missing from the canonical catalog"
-            )
-        materials = []
-        for ingredient in item.recipe.ingredients:
-            material_id = {
+    catalogs = (
+        (
+            "tdo",
+            "Terras do Ocaso",
+            (
+                "consumable.heal",
+                "consumable.purification",
+                "consumable.antidote.tdo.i",
+                "consumable.vigor.tdo.i",
+            ),
+            {
                 "Ervas Cinzentas": HERB,
                 "Erva Cinzenta": HERB,
                 "Resíduo do Ocaso": RESIDUE,
                 "Resíduos do Ocaso": RESIDUE,
                 "Catalisador de Elite I": CATALYST_I,
-            }.get(ingredient.name)
-            if material_id is None:
-                raise RuntimeError(f"No canonical TDO material ID for {ingredient.name!r}")
-            materials.append(
-                MaterialRequirement(material_id, ingredient.quantity, material_id != CATALYST_I)
+            },
+            frozenset({CATALYST_I}),
+        ),
+        (
+            "vde",
+            "Vales dos Enforcados",
+            (
+                "consumable.heal.vde.ii",
+                "consumable.purification.vde.ii",
+                "consumable.antidote.vde.ii",
+                "consumable.vigor.vde.ii",
+                "consumable.protection.vde.ii",
+            ),
+            {
+                "Ervas de Turfa": VDE_HERB,
+                "Erva de Turfa": VDE_HERB,
+                "Resina Enredada": VDE_RESIN,
+                "Resinas Enredadas": VDE_RESIN,
+                "Catalisador de Elite II": VDE_CATALYST_II,
+            },
+            frozenset({VDE_CATALYST_II}),
+        ),
+    )
+    for region_code, region_name, item_ids, material_ids, nonbinding in catalogs:
+        for item_id in item_ids:
+            item = consumable_definition(item_id)
+            if item is None or item.region != region_name:
+                raise RuntimeError(
+                    f"{region_code.upper()} alchemy recipe {item_id!r} is missing from the canonical catalog"
+                )
+            materials = []
+            for ingredient in item.recipe.ingredients:
+                material_id = material_ids.get(ingredient.name)
+                if material_id is None:
+                    raise RuntimeError(
+                        f"No canonical {region_code.upper()} material ID for {ingredient.name!r}"
+                    )
+                materials.append(
+                    MaterialRequirement(
+                        material_id,
+                        ingredient.quantity,
+                        material_id not in nonbinding,
+                    )
+                )
+            recipes.append(
+                RecipeDefinition(
+                    recipe_id=(
+                        f"recipe.{region_code}.alchemist."
+                        f"{item.id.removeprefix('consumable.')}"
+                    ),
+                    profession_id="alchemist",
+                    name=item.name,
+                    output_kind="consumable",
+                    required_level=item.recipe.profession_level,
+                    grade=item.grade,
+                    output_id=item.id,
+                    fixed_materials=tuple(materials),
+                    fixed_crown_cost=item.recipe.crown_cost,
+                    description=f"Consumível · Grau {item.grade}",
+                )
             )
-        recipes.append(
-            RecipeDefinition(
-                recipe_id=f"recipe.tdo.alchemist.{item.id.removeprefix('consumable.')}",
-                profession_id="alchemist",
-                name=item.name,
-                output_kind="consumable",
-                required_level=item.recipe.profession_level,
-                output_id=item.id,
-                fixed_materials=tuple(materials),
-                fixed_crown_cost=item.recipe.crown_cost,
-                description=f"Consumível · Grau {item.grade}",
-            )
-        )
     return recipes
 
 
@@ -320,9 +409,9 @@ def _special_recipes() -> list[RecipeDefinition]:
             output_family="Seiva da Matriarca",
             sw=2,
             fixed_materials=(
-                MaterialRequirement("material.vde.resina_enredada", 5),
-                MaterialRequirement("material.vde.ferro_enredado", 2),
-                MaterialRequirement("material.vde.catalisador_elite_ii", 1, False),
+                MaterialRequirement(VDE_RESIN, 5),
+                MaterialRequirement(VDE_IRON, 2),
+                MaterialRequirement(VDE_CATALYST_II, 1, False),
                 MaterialRequirement(MATRIARCH_CORE, 1),
             ),
             fixed_crown_cost=160,
@@ -421,6 +510,51 @@ def _enchantment_recipes() -> list[RecipeDefinition]:
     return result
 
 
+def _vde_enchantment_recipes() -> list[RecipeDefinition]:
+    families = (
+        ("fio_enredado", "Fio Enredado", "ATQ"),
+        ("pele_de_casca", "Pele de Casca", "DEF"),
+        ("passo_das_copas", "Passo das Copas", "AGI"),
+        ("marca_do_no", "Marca do Nó", "PER"),
+        ("eco_da_cacada", "Eco da Caçada", "CRIT"),
+        ("sopro_de_seiva", "Sopro de Seiva", "HP"),
+        ("veu_da_mata", "Véu da Mata", "Esquiva"),
+        ("selo_das_raizes", "Selo das Raízes", "Bloqueio"),
+    )
+    result = []
+    for family_id, name, stat in families:
+        for rarity, rarity_id, level, resin, iron, catalysts, cost in (
+            ("Raro", "raro", 5, 3, 1, 0, 80),
+            ("Épico", "epico", 10, 5, 2, 1, 160),
+        ):
+            result.append(
+                RecipeDefinition(
+                    recipe_id=f"recipe.vde.artificer.enchantment.{family_id}.{rarity_id}",
+                    profession_id="artificer",
+                    name=name,
+                    output_kind="enchantment",
+                    required_level=level,
+                    grade=2,
+                    rarity=rarity,
+                    output_id=stat,
+                    output_family=name,
+                    fixed_materials=(
+                        MaterialRequirement(VDE_RESIN, resin),
+                        MaterialRequirement(VDE_IRON, iron),
+                        *(
+                            (MaterialRequirement(VDE_CATALYST_II, catalysts, False),)
+                            if catalysts
+                            else ()
+                        ),
+                    ),
+                    fixed_crown_cost=cost,
+                    creation_enabled=False,
+                    description=f"Encantamento {rarity} · {stat} · Grau II",
+                )
+            )
+    return result
+
+
 def _rune_recipes() -> list[RecipeDefinition]:
     from asterion.domain.road import RUNE_FAMILIES
 
@@ -460,11 +594,59 @@ def _rune_recipes() -> list[RecipeDefinition]:
     return recipes
 
 
+def _vde_rune_recipes() -> list[RecipeDefinition]:
+    families = (
+        ("espinho", "Espinho", "Runa do Espinho", "ATQ"),
+        ("casca", "Casca", "Runa da Casca", "DEF"),
+        ("copas", "Copas", "Runa das Copas", "AGI"),
+        ("no", "Nó", "Runa do Nó", "PER"),
+        ("cacada", "Caçada", "Runa da Caçada", "CRIT"),
+        ("seiva", "Seiva", "Runa da Seiva", "HP"),
+        ("nevoa", "Névoa", "Runa da Névoa", "Esquiva"),
+        ("raizes", "Raízes", "Runa das Raízes", "Bloqueio"),
+    )
+    recipes = []
+    for family_id, family, name, stat in families:
+        for rarity, rarity_id, required_level, crowns, resin, iron, catalysts, fragments in (
+            ("Rara", "rara", 5, 120, 4, 2, 0, 2),
+            ("Épica", "epica", 10, 240, 7, 3, 1, 4),
+        ):
+            recipes.append(
+                RecipeDefinition(
+                    recipe_id=f"recipe.vde.artificer.rune.{family_id}.{rarity_id}",
+                    profession_id="artificer",
+                    name=name,
+                    output_kind="rune",
+                    required_level=required_level,
+                    grade=2,
+                    rarity=rarity,
+                    output_id=f"rune.vde.{family_id}",
+                    output_family=family,
+                    fixed_materials=(
+                        MaterialRequirement(VDE_RESIN, resin),
+                        MaterialRequirement(VDE_IRON, iron),
+                        *(
+                            (MaterialRequirement(VDE_CATALYST_II, catalysts, False),)
+                            if catalysts
+                            else ()
+                        ),
+                        MaterialRequirement(VDE_FRAGMENT_II, fragments, False),
+                    ),
+                    fixed_crown_cost=crowns,
+                    description=f"{rarity} · {stat} · Grau II",
+                )
+            )
+    return recipes
+
+
 RECIPE_DEFINITIONS = tuple(
     _equipment_recipes()
+    + _vde_equipment_recipes()
     + _alchemy_recipes()
     + _rune_recipes()
+    + _vde_rune_recipes()
     + _enchantment_recipes()
+    + _vde_enchantment_recipes()
     + _special_recipes()
 )
 RECIPE_BY_ID = {recipe.recipe_id: recipe for recipe in RECIPE_DEFINITIONS}
@@ -545,9 +727,21 @@ def recipe_materials(recipe: RecipeDefinition, item_level: int) -> tuple[Materia
         MaterialRequirement(recipe.secondary_material_id, total - primary),
     ]
     if recipe.catalyst_per_sw:
-        result.append(MaterialRequirement(CATALYST_I, recipe.catalyst_per_sw * recipe.sw, False))
+        result.append(
+            MaterialRequirement(
+                recipe.catalyst_material_id or CATALYST_I,
+                recipe.catalyst_per_sw * recipe.sw,
+                False,
+            )
+        )
     if recipe.fragment_per_sw:
-        result.append(MaterialRequirement(FRAGMENT_I, recipe.fragment_per_sw * recipe.sw, False))
+        result.append(
+            MaterialRequirement(
+                recipe.fragment_material_id or FRAGMENT_I,
+                recipe.fragment_per_sw * recipe.sw,
+                False,
+            )
+        )
     return tuple(item for item in result if item.quantity > 0)
 
 
