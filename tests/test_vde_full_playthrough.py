@@ -1200,10 +1200,8 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     for point in ("a", "b", "c"):
         p12 = await missions.examine(actor, P12_ID, p12.state_version, point)
     p12 = await missions.advance(actor, P12_ID, p12.state_version, "central_chamber")
-    # Use loadout C from the existing pure P6 matrix (Golpe de Guarda,
-    # Muralha Breve, Impacto Resoluto): the Devastador sample had 8/30 wins,
-    # compared with 2/30 for loadout B, which included Quebra-Postura. This is
-    # a test-policy choice based on observed legal builds, not a stat change.
+    # Begin with loadout C, then compare it against legal Quebra-Postura
+    # alternatives in the retry plan below. This changes only equipped Arts.
     active_arts = ActiveArtService(sessions, "ocaso")
     desired_p12_arts = (
         SENTINEL_ART_IDS["golpe_de_guarda"],
@@ -1263,6 +1261,47 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         "destroyed_connections": set(),
     }
 
+    p12_loadouts = {
+        "C": (
+            SENTINEL_ART_IDS["golpe_de_guarda"],
+            SENTINEL_ART_IDS["muralha_breve"],
+            SENTINEL_ART_IDS["impacto_resoluto"],
+        ),
+        "A": (
+            SENTINEL_ART_IDS["golpe_de_guarda"],
+            SENTINEL_ART_IDS["quebra_postura"],
+            SENTINEL_ART_IDS["impacto_resoluto"],
+        ),
+        "D": (
+            SENTINEL_ART_IDS["golpe_de_guarda"],
+            SENTINEL_ART_IDS["quebra_postura"],
+            SENTINEL_ART_IDS["muralha_breve"],
+        ),
+    }
+    p12_attempt_target_connections = False
+
+    async def configure_p12_arts(desired_p12_arts):
+        # The retry schedule only swaps the one Art that differs between each
+        # adjacent loadout, using the public configuration service.
+        for slot, art_id in enumerate(desired_p12_arts, start=1):
+            view = await active_arts.view(actor)
+            assert view is not None
+            current = next((entry.art_id for entry in view.slots if entry.slot == slot), None)
+            if current == art_id:
+                continue
+            changed = await active_arts.equip_art(
+                actor,
+                slot,
+                art_id,
+                expected_configuration_version=view.combat_configuration_version,
+            )
+            assert changed is not None and changed.changed
+        view = await active_arts.view(actor)
+        assert view is not None
+        configured = tuple(entry.art_id for entry in view.slots)
+        assert configured == desired_p12_arts
+        return configured
+
     def p12_action_target(current, action):
         combat = current.combat
         if combat is None:
@@ -1271,6 +1310,17 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         if definition is not None and definition.target_mode == "all_opponents":
             return None
         targets = action_target_ids(combat, action)
+        if p12_attempt_target_connections:
+            active_connections = tuple(
+                target_id
+                for target_id in targets
+                if target_id in {"connection_a", "connection_b", "connection_c"}
+                and combat.fighters[target_id].hp > 0
+            )
+            if active_connections:
+                # This diagnostic retry tests the value of clearing the
+                # lowest-HP active Connection against boss focus.
+                return min(active_connections, key=lambda key: combat.fighters[key].hp)
         if "enemy" in targets:
             return "enemy"
         return targets[0] if targets else None
@@ -1355,11 +1405,9 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         )
         if connections_alive:
             # Connections are optional and each reduces final damage by 4%.
-            # Use a legal AoE that also hits the boss if available, but do not
-            # spend single-target opportunities on non-acting targets. In the
-            # preceding six-attempt diagnostics, clearing all three with
-            # single-target actions left roughly 54-59% boss HP, while boss
-            # focus reached 26.6%; the policy follows that measured result.
+            # Use a legal AoE that also hits the boss if available. Otherwise
+            # the retry plan separately compares legal single-target attacks
+            # on active Connections with boss focus.
             aoe_arts = [
                 action
                 for action in available
@@ -1386,7 +1434,23 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
 
     after_boss = None
     p12_attempt_diagnostics = []
-    for retry in range(1, 7):
+    p12_retry_plan = (
+        ("C", False),
+        ("C", False),
+        ("A", False),
+        ("A", True),
+        ("D", False),
+        ("D", True),
+    )
+    for retry, (loadout_name, target_connections) in enumerate(p12_retry_plan, start=1):
+        configured_p12_arts = await configure_p12_arts(p12_loadouts[loadout_name])
+        p12_attempt_target_connections = target_connections
+        attempt_preparation = await _p12_preparation_snapshot(sessions, actor)
+        print(
+            f"VDE_P12_RETRY_PLAN_{retry}={{'loadout': {loadout_name!r}, "
+            f"'target_connections': {target_connections}, 'arts': {configured_p12_arts!r}}}",
+            flush=True,
+        )
         p12_attempt_metrics = {
             "actions": [],
             "consumables": [],
@@ -1436,10 +1500,12 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             "service_awaiting_retry": bool(
                 (after_boss.progress or {}).get("awaiting_retry")
             ),
-            "level": p12_preparation["level"],
-            "stats": {key: p12_preparation[key] for key in ("hp", "max_hp", "ATQ", "DEF", "AGI")},
-            "equipment": p12_preparation["equipment"],
+            "level": attempt_preparation["level"],
+            "stats": {key: attempt_preparation[key] for key in ("hp", "max_hp", "ATQ", "DEF", "AGI")},
+            "equipment": attempt_preparation["equipment"],
             "arts": configured_p12_arts,
+            "loadout": loadout_name,
+            "target_connections": target_connections,
             "path": p12_preparation["path"],
             "talents": p12_preparation["talents"],
             "player_hp_start": str(start_player.hp),
