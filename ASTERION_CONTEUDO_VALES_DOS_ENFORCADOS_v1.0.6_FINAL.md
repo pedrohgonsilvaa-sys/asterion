@@ -5,11 +5,13 @@
 **Escopo:** segunda jornada / Nv.11–20, com saída para Nv.21\
 **Autoridade estrutural:** `ASTERION_GDD_Estrutural_v1.6.0_Fonte_Mestra.md`
 **Autoridade regional anterior:** `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.15_FINAL.md` como referência de organização, sem autoridade sobre conteúdo dos Vales\
-**Autoridade Visual/UI geral:** `ASTERION_UI_DECISOES_2026-10-11_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.5.md` — autoridade vigente de apresentação geral e específica dos Vales dos Enforcados.
+**Autoridade Visual/UI geral:** `ASTERION_UI_DECISOES_2026-10-13_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.6.md` — autoridade vigente de apresentação geral e específica dos Vales dos Enforcados.
 
 > Esta Fonte contém **conteúdo regional**. Não redefine sistemas globais. Em conflito estrutural ou numérico global, prevalece a Fonte Mestra v1.6.0. Em conflito de apresentação geral, prevalece a Fonte Visual/UI vigente; apresentação/iconografia específica dos Vales permanece em sua própria frente de Visual/UI.
 
 > **Status FINAL:** conteúdo regional dos Vales dos Enforcados permanece fechado para implementação e posterior QA/telemetria. Esta revisão **v1.0.6** sucede v1.0.5 e fecha exclusivamente o perfil numérico do encontro roteirizado da Etapa 7 de S12. Não altera economia, progressão, narrativa regional, demais criaturas, pools, Caçada, Ronda, Masmorras ou recompensas regionais. A Fonte Mestra vigente continua sendo v1.6.0.
+
+> **Sincronização editorial 2026-10-13:** referência Visual/UI atualizada para o arquivo compatível com esta própria v1.0.6; nenhum conteúdo, número ou regra regional foi alterado.
 
 > **Correção de consolidação:** durante a revisão final, os valores monetários de P7, P9, P11 e S9 foram recalculados pela fórmula autoritativa `C(n)=round_10(100+15n)` e pela tabela de UC da Fonte Mestra. Os valores corretos são P7 `270`, P9 `330`, P11 `490` e S9 `170` Coroas. Total regional de Missões: `4.230 Coroas`.
 

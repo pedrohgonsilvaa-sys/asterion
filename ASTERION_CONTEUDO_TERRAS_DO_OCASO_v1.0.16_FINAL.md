@@ -4,11 +4,12 @@
 **Data de consolidação:** 2026-10-12<br>
 **Escopo:** vertical slice / primeira jornada / Nv.1–10, com saída para Nv.11<br>
 **Autoridade estrutural:** `ASTERION_GDD_Estrutural_v1.6.0_Fonte_Mestra.md`<br>
-**Autoridade Visual/UI:** `ASTERION_UI_DECISOES_2026-10-11_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.5.md`<br>
+**Autoridade Visual/UI:** `ASTERION_UI_DECISOES_2026-10-13_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.6.md`<br>
 
 > Esta Fonte contém **conteúdo regional**, não redefine sistemas globais. Em conflito estrutural, prevalece a Fonte Mestra vigente. Em conflito de apresentação, prevalece a Fonte Visual/UI vigente.
 
 > **Status FINAL:** conteúdo regional fechado para implementação da vertical slice. Esta revisão v1.0.16 substitui integralmente v1.0.15 FINAL como autoridade regional vigente. Preserva integralmente o conteúdo e os valores publicados em v1.0.15 e formaliza somente os pools temáticos de Material Básico do Corvo de Fuligem, do Alfa Cinéreo e do Peregrino Calcinado. Os pesos selecionam apenas a identidade de cada unidade depois que as regras globais resolvem chance e quantidade; não alteram chance, quantidade por categoria, Catalisadores, XP, Coroas, Equipamentos, Rondas, Caçadas, Desbravar ou qualquer outra regra econômica.
+> **Sincronização editorial 2026-10-13:** referência Visual/UI atualizada para o documento compatível com Vales v1.0.6; nenhuma regra ou conteúdo regional foi alterado.
 
 **Correções v1.0.1:** kits numéricos dos 3 Elites e do Vigia Partido; pools completos de Caçada/Variantes; Desbravar completo; Provações de Classe completas; configuração implementável do Bestiário; aquisição determinística do Núcleo/Receita do Vigia Partido; auditoria de XP da Cripta corrigida.
 
@@ -3440,7 +3441,7 @@ Terras do Ocaso não exige para saída:
 
 # 26. Sincronização com a Fonte Visual/UI
 
-A Fonte `ASTERION_UI_DECISOES_2026-10-11_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.5.md` é a autoridade player-facing vigente. Esta revisão aplica a regra global de Grupo e atualiza a compatibilidade de P1 e o formato cooperativo de S6; as demais decisões de apresentação permanecem na Fonte Visual/UI. A Fonte Mestra vigente é v1.6.0.
+A Fonte `ASTERION_UI_DECISOES_2026-10-13_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.6.md` é a autoridade player-facing vigente. Esta revisão aplica a regra global de Grupo e atualiza a compatibilidade de P1 e o formato cooperativo de S6; as demais decisões de apresentação permanecem na Fonte Visual/UI. A Fonte Mestra vigente é v1.6.0.
 
 As decisões gerais de interface já consolidadas — padrão de Missões, HUD de combate, Menu Principal, Braseiros, Códice, navegação, P1 e apresentação de Equipamentos/Runas — continuam válidas.
 

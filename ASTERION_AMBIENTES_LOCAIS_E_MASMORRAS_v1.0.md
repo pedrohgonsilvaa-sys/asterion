@@ -2,7 +2,8 @@
 
 **Estado:** Fonte visual/literária complementar para produção de cenários, imagens contextuais, fundos, telas de Local e Masmorras.  
 **Escopo:** seis Regiões de Asterion, seus Locais principais, hubs, clímax regionais, Masmorras, identidade ambiental, arquitetura, história visual, limites de spoiler e invariantes de geração.  
-**Complementa:** `ASTERION_BESTIARIO_VISUAL_E_BIOMAS_v1.0.md`.  
+**Complementa:** `ASTERION_BESTIARIO_VISUAL_E_BIOMAS_v1.1.md`.
+
 **Não substitui:** Fonte Mestra, Fontes Regionais FINAL de Terras do Ocaso e Vales dos Enforcados, nem Fonte Visual/UI vigente.
 
 > **Regra de autoridade:** em Terras do Ocaso e Vales dos Enforcados, nomes, progressão, conteúdo e revelações seguem as Fontes Regionais vigentes. Nas Regiões 3–6, este documento fecha a identidade literária/visual e a geografia de produção aprovada nesta frente de Lore, sem antecipar números de Balanceamento ou implementação.
@@ -1719,7 +1720,7 @@ Antes de aprovar qualquer cenário:
 
 # 14. FECHAMENTO
 
-Com esta Fonte + `ASTERION_BESTIARIO_VISUAL_E_BIOMAS_v1.0.md`, a produção visual passa a possuir uma referência conjunta para:
+Com esta Fonte + `ASTERION_BESTIARIO_VISUAL_E_BIOMAS_v1.1.md`, a produção visual passa a possuir uma referência conjunta para:
 
 - Regiões;
 - biomas;
