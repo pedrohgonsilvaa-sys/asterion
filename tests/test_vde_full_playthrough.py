@@ -659,6 +659,24 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     assert s12.status == "completed"
     await _round_trip_snapshot(driver, "Vales · S12 concluída antes de P12")
 
+    # Use the regional safe hub and only materials/crowns/profession progress
+    # earned by the public journey. If the Grade II recipe is not legitimately
+    # available for this character, the playthrough proceeds without seeding it.
+    crafted_grade_ii_heals = 0
+    for _ in range(4):
+        recipe = await crafting.recipe(actor, "recipe.vde.alchemist.heal.vde.ii")
+        if recipe is None or not recipe.available:
+            break
+        preview = await crafting.preview(actor, "recipe.vde.alchemist.heal.vde.ii")
+        assert preview is not None
+        committed = await crafting.commit(actor, preview.receipt_id)
+        assert committed is not None and committed.status == "committed"
+        crafted_grade_ii_heals += 1
+    print(
+        f"VDE_P12_LEGITIMATE_GRADE_II_HEALS_CRAFTED={crafted_grade_ii_heals}",
+        flush=True,
+    )
+
     p12 = await missions.resume(actor, P12_ID)
     assert p12 is not None and p12.status == "active" and p12.step == 1
     await _move_to(road, actor, VDE_BERCO)
@@ -713,15 +731,23 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
                 target_id=option.target_id,
                 effect_id=option.effect_id,
             )
+        # Suppress any active Radicular Connection before returning to the
+        # Matriarch. This uses the boss's authored optional targets and removes
+        # only their existing mitigation aura; no combat number is changed.
+        target_id = next(
+            (
+                key
+                for key in ("connection_a", "connection_b", "connection_c")
+                if (fighter := combat.fighters.get(key)) is not None and fighter.hp > 0
+            ),
+            "enemy",
+        )
         return await missions.action_combat(
             actor,
             current.activity_id,
             combat.version,
             action,
-            # The three Radicular Connections are optional mitigation targets,
-            # not a hard gate. Keep the campaign journey focused on the boss;
-            # target selection for the mechanical adds is covered separately.
-            target_id="enemy",
+            target_id=target_id,
         )
 
     def p12_policy(view):
@@ -729,6 +755,19 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         available = allowed_actions(combat)
         if combat.prepared_action is not None and "defend" in available:
             return "defend"
+        # Prefer a legitimately owned regional healing potion when the same
+        # Devastador safety threshold used by the shared policy is reached.
+        player = combat.fighters["player"]
+        grade_ii_heal_available = any(
+            option.item_id == "consumable.heal.vde.ii"
+            for option in view.consumable_options
+        )
+        if (
+            grade_ii_heal_available
+            and player.hp / player.stats.hp <= Decimal("0.48")
+        ):
+            return "consumable:consumable.heal.vde.ii"
+
         # Respect the authored telegraph. Preserve offensive turns for the
         # voluntary, non-prepared attacks; the path-aware policy below uses
         # real Sentinel and Devastador mechanics rather than guessed bonuses.
