@@ -728,15 +728,16 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         if combat.prepared_action is not None and "defend" in available:
             return "defend"
         # Respect the authored telegraph. Preserve offensive turns for the
-        # voluntary, non-prepared attacks; the Sentinel policy below uses its
-        # real Muralha mitigation instead of guessing from damage coefficients.
+        # voluntary, non-prepared attacks; the path-aware policy below uses
+        # real Sentinel and Devastador mechanics rather than guessed bonuses.
         action = choose_p6_policy_action(
             combat,
-            # Keep the character's actual Path and passive. The Sentinel-aware
-            # policy uses Muralha when it absorbs meaningful damage, respects
-            # prepared attacks and spends only Potions still present in the
-            # persisted inventory.
-            "sentinela",
+            # The character's actual Path is Devastador. Its passive grants a
+            # short damage window after a sufficiently large hit, so spend a
+            # charged direct-damage art before it expires. The policy still
+            # respects prepared attacks, critical HP, Muralha, and only uses
+            # Potions present in persisted inventory.
+            "devastador",
             heal_count=next(
                 (
                     quantity
