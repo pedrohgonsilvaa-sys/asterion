@@ -3,6 +3,7 @@
 import os
 from datetime import UTC
 from decimal import Decimal
+from uuid import UUID
 
 import pytest
 from sqlalchemy import func, select
@@ -18,6 +19,7 @@ from asterion.application.equipment_configuration import (
     resolve_character_combat_stats,
 )
 from asterion.application.equipment_modifications import EquipmentModificationService
+from asterion.application.inventory import InventoryService
 from asterion.application.p7 import (
     GARGANTA_BRAZIER,
     P7_ID,
@@ -102,8 +104,118 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-async def _craft_vde_p12_preparation(crafting, actor):
-    """Craft only Grade II items the normal recipe service marks available."""
+async def _free_p12_crafting_slot(inventory, modifications, actor):
+    """Dismantle one clearly inferior, unmodified item through the public service."""
+    root = await inventory.root(actor)
+    if root is None or root.used_slots < root.capacity:
+        return None
+    rarity_rank = {"Comum": 1, "Raro": 2, "Épico": 3, "Mítico": 4}
+    initial_slots = root.used_slots
+    dismantled = []
+    while root.used_slots >= root.capacity:
+        equipment_view = await inventory.category(actor, "equipment")
+        materials_view = await inventory.category(actor, "materials")
+        if equipment_view is None or materials_view is None:
+            break
+        equipped_by_slot = {
+            entry.slot: entry for entry in equipment_view.entries if entry.equipped
+        }
+        owned_materials = {(entry.key, entry.bound) for entry in materials_view.entries}
+        candidates = []
+        for entry in equipment_view.entries:
+            if entry.equipped or entry.slot not in equipped_by_slot or entry.item_level is None:
+                continue
+            current = equipped_by_slot[entry.slot]
+            if current.item_level is None:
+                continue
+            if (
+                rarity_rank.get(entry.rarity or "", 0)
+                > rarity_rank.get(current.rarity or "", 0)
+                or entry.item_level >= current.item_level
+            ):
+                continue
+            payload = entry.payload or {}
+            if (
+                payload.get("favorite")
+                or payload.get("locked")
+                or payload.get("runes")
+                or payload.get("rune")
+                or payload.get("enchantment")
+                or int(payload.get("enhancement", 0)) > 0
+            ):
+                continue
+            candidates.append(entry)
+
+        candidates.sort(
+            key=lambda entry: (
+                rarity_rank.get(entry.rarity or "", 0),
+                entry.item_level or 0,
+                entry.title,
+                entry.key,
+            )
+        )
+        made_progress = False
+        for entry in candidates:
+            preview = await modifications.dismantle_preview(actor, UUID(entry.key))
+            if preview is None or not preview.available:
+                continue
+            if preview.details.get("needs_mythic_confirmation"):
+                continue
+            outputs = tuple(preview.details.get("materials", ()))
+            # Only dismantle when every output merges into an already-owned stack,
+            # so the normal public action is guaranteed to free an Inventory slot.
+            if not outputs or any(
+                (output["material_id"], bool(output["bound"])) not in owned_materials
+                for output in outputs
+            ):
+                continue
+            await modifications.dismantle(
+                actor,
+                UUID(entry.key),
+                expected_item_version=preview.item_version,
+                expected_configuration_version=preview.combat_configuration_version,
+            )
+            after = await inventory.root(actor)
+            if after is not None and after.used_slots < root.used_slots:
+                dismantled.append(
+                    {
+                        "item": entry.title,
+                        "rarity": entry.rarity,
+                        "slot": entry.slot,
+                        "item_level": entry.item_level,
+                        "materials": outputs,
+                    }
+                )
+                root = after
+                made_progress = True
+                break
+        if not made_progress:
+            break
+    if not dismantled:
+        return None
+    return {
+        "items": tuple(dismantled),
+        "slots_freed": initial_slots - root.used_slots,
+        "has_room": root.used_slots < root.capacity,
+    }
+
+
+async def _craft_vde_p12_preparation(sessions, crafting, actor):
+    """Prepare only through public Grade II recipes and equipment services."""
+    inventory = InventoryService(sessions, "ocaso")
+    modifications = EquipmentModificationService(sessions, "ocaso")
+    dismantled = []
+    unavailable_consumables = []
+
+    async def available_recipe(recipe_id):
+        recipe = await crafting.recipe(actor, recipe_id)
+        if recipe is not None and not recipe.available and recipe.reason == "inventory_full":
+            freed = await _free_p12_crafting_slot(inventory, modifications, actor)
+            if freed is not None:
+                dismantled.append(freed)
+                recipe = await crafting.recipe(actor, recipe_id)
+        return recipe
+
     crafted_consumables = []
     for recipe_id, limit in (
         ("recipe.vde.alchemist.heal.vde.ii", 4),
@@ -112,8 +224,11 @@ async def _craft_vde_p12_preparation(crafting, actor):
         ("recipe.vde.alchemist.purification.vde.ii", 1),
     ):
         for _ in range(limit):
-            recipe = await crafting.recipe(actor, recipe_id)
+            recipe = await available_recipe(recipe_id)
             if recipe is None or not recipe.available:
+                unavailable_consumables.append(
+                    (recipe_id, None if recipe is None else recipe.reason)
+                )
                 break
             preview = await crafting.preview(actor, recipe_id)
             assert preview is not None
@@ -144,7 +259,7 @@ async def _craft_vde_p12_preparation(crafting, actor):
             reverse=True,
         )
         for definition in candidates:
-            recipe = await crafting.recipe(actor, definition.recipe_id)
+            recipe = await available_recipe(definition.recipe_id)
             if recipe is None:
                 unavailable.append((definition.recipe_id, "unknown_or_locked"))
                 continue
@@ -184,7 +299,7 @@ async def _craft_vde_p12_preparation(crafting, actor):
             reverse=True,
         )
         for definition in candidates:
-            recipe = await crafting.recipe(actor, definition.recipe_id)
+            recipe = await available_recipe(definition.recipe_id)
             if recipe is None or not recipe.available:
                 if recipe is not None:
                     unavailable.append((definition.recipe_id, recipe.reason))
@@ -199,9 +314,11 @@ async def _craft_vde_p12_preparation(crafting, actor):
             break
     return {
         "consumables": crafted_consumables,
+        "unavailable_consumables": unavailable_consumables,
         "equipment": crafted_equipment,
         "higher_rarity_equipment": upgraded_equipment,
         "unavailable_equipment_recipes": unavailable,
+        "dismantled_for_capacity": dismantled,
     }
 
 
@@ -931,7 +1048,7 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     # live service previews accept the earned profession, level and inventory.
     hub = await _move_to(road, actor, VDE_VIGILIA)
     assert hub.location == VDE_VIGILIA
-    p12_crafting = await _craft_vde_p12_preparation(crafting, actor)
+    p12_crafting = await _craft_vde_p12_preparation(sessions, crafting, actor)
     p12_equipment_changes = await _equip_best_available_combat_gear(sessions, actor)
     p12_runes = await install_best_owned_runes(sessions, actor, server_id="ocaso")
     p12_modification_access = await _p12_modification_access(sessions, actor)
