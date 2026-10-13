@@ -166,6 +166,29 @@ async def _craft_vde_p12_preparation(crafting, actor):
     }
 
 
+async def _craft_vde_p12_retry_consumables(crafting, actor):
+    """Restock only through recipes accepted by the public crafting service."""
+    crafted = []
+    unavailable = []
+    for recipe_id, limit in (
+        ("recipe.vde.alchemist.heal.vde.ii", 4),
+        ("recipe.vde.alchemist.antidote.vde.ii", 1),
+        ("recipe.vde.alchemist.protection.vde.ii", 1),
+        ("recipe.vde.alchemist.purification.vde.ii", 1),
+    ):
+        for _ in range(limit):
+            recipe = await crafting.recipe(actor, recipe_id)
+            if recipe is None or not recipe.available:
+                unavailable.append((recipe_id, None if recipe is None else recipe.reason))
+                break
+            preview = await crafting.preview(actor, recipe_id)
+            assert preview is not None
+            committed = await crafting.commit(actor, preview.receipt_id)
+            assert committed is not None and committed.status == "committed"
+            crafted.append(recipe_id)
+    return {"crafted": crafted, "unavailable": unavailable}
+
+
 async def _p12_preparation_snapshot(sessions, actor):
     async with sessions() as session:
         character = await session.scalar(
@@ -888,13 +911,12 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     for point in ("a", "b", "c"):
         p12 = await missions.examine(actor, P12_ID, p12.state_version, point)
     p12 = await missions.advance(actor, P12_ID, p12.state_version, "central_chamber")
-    # Use the legal offensive Sentinel loadout with a real DEF break. The
-    # Matriarch is a longer fight than P6; this avoids spending repeated
-    # player opportunities on a zero-damage barrier while keeping the
-    # character's actual Devastador Path and passive.
+    # Keep DEF break and Impacto Resoluto while including Muralha Breve for
+    # the long campaign-boss fight. The Devastador passive remains real and is
+    # consumed by the shared defensive path-aware policy.
     active_arts = ActiveArtService(sessions, "ocaso")
     desired_p12_arts = (
-        SENTINEL_ART_IDS["golpe_de_guarda"],
+        SENTINEL_ART_IDS["muralha_breve"],
         SENTINEL_ART_IDS["quebra_postura"],
         SENTINEL_ART_IDS["impacto_resoluto"],
     )
@@ -1015,6 +1037,13 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             and hp_fraction <= Decimal("0.90")
         ):
             return "consumable:consumable.protection.vde.ii"
+        wall_id = SENTINEL_ART_IDS["muralha_breve"]
+        if (
+            wall_id in available
+            and hp_fraction < Decimal("0.90")
+            and (player.barrier <= 0 or player.barrier_remaining <= 0)
+        ):
+            return wall_id
 
         connections = tuple(
             key
@@ -1056,7 +1085,7 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         # Devastador, Retaliação, defense break and its actual charged window.
         return choose_p6_policy_action(
             combat,
-            "devastador",
+            "sentinela_devastador",
             heal_count=next(
                 (
                     quantity
@@ -1150,6 +1179,16 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             f"Matriarca encerrou em estado inesperado: {after_boss!r}"
         )
         p12 = after_boss
+        if retry < 6:
+            # Retry recovery restores HP through the campaign service. Travel
+            # back to the safe hub and restock only what public crafting still
+            # accepts from resources actually earned by this playthrough.
+            await _move_to(road, actor, VDE_VIGILIA)
+            restock = await _craft_vde_p12_retry_consumables(crafting, actor)
+            print(f"VDE_P12_RETRY_RESTOCK_{retry}={restock!r}", flush=True)
+            await _move_to(road, actor, VDE_BERCO)
+            p12 = await missions.resume(actor, P12_ID)
+            assert p12 is not None and p12.progress.get("awaiting_retry")
     assert after_boss is not None and after_boss.kind == "examine_center", (
         f"Matriarca não concluiu vitória persistida: {after_boss!r}; "
         f"diagnóstico por tentativa={p12_attempt_diagnostics!r}\n{driver.diagnostic()}"

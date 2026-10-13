@@ -2229,7 +2229,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
         combat = current.combat
         return choose_p6_policy_action(
             combat,
-            "devastador",
+            "sentinela_devastador",
             heal_count=next(
                 (
                     quantity

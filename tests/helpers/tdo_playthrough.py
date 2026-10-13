@@ -1142,12 +1142,13 @@ def choose_p6_policy_action(combat, policy, *, heal_count, budget_limit):
     )
     can_heal = bool(heal_options)
     charge = player.path_state.get("devastador_charge")
+    uses_devastador_passive = policy in {"devastador", "sentinela_devastador"}
     has_devastador_charge = (
-        policy == "devastador"
+        uses_devastador_passive
         and isinstance(charge, dict)
         and player.opportunity <= int(charge.get("expires_opportunity", -1))
     )
-    if has_devastador_charge and hp_fraction > 0.20:
+    if policy == "devastador" and has_devastador_charge and hp_fraction > 0.20:
         charged_art = _p6_best_art(combat)
         if charged_art is not None:
             return charged_art
@@ -1156,9 +1157,18 @@ def choose_p6_policy_action(combat, policy, *, heal_count, budget_limit):
         "baseline": Decimal("0.40"),
         "sentinela": Decimal("0.55"),
         "devastador": Decimal("0.48"),
+        "sentinela_devastador": Decimal("0.55"),
     }[policy]
     if can_heal and hp_fraction <= heal_threshold:
         return "consumable:consumable.heal"
+    if (
+        policy == "sentinela_devastador"
+        and has_devastador_charge
+        and hp_fraction > Decimal("0.20")
+    ):
+        charged_art = _p6_best_art(combat)
+        if charged_art is not None:
+            return charged_art
 
     if policy == "baseline":
         art = _p6_best_art(combat)
@@ -1174,7 +1184,7 @@ def choose_p6_policy_action(combat, policy, *, heal_count, budget_limit):
         wall = _p6_available_art(combat, "muralha_breve")
 
         if (
-            policy == "sentinela"
+            policy in {"sentinela", "sentinela_devastador"}
             and wall is not None
             and (player.barrier <= 0 or player.barrier_remaining <= 0)
             and hp_fraction < Decimal("0.90")
