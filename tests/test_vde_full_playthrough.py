@@ -1061,29 +1061,6 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     await _round_trip_snapshot(driver, "Vales · P11 concluída e Berço descoberto")
 
     await _hunt_to_level(road, driver, actor, 20, counts)
-    s12 = await missions.start(actor, S12_ID)
-    assert s12 is not None and s12.kind == "read_record"
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "read_record")
-    await _move_to(road, actor, VDE_GARGANTA)
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_garganta")
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "find_mark")
-    await _move_to(road, actor, VDE_MATA)
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_mata")
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "recover_object")
-    await _move_to(road, actor, VDE_BAIXIOS)
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_baixios")
-    s12 = await _complete_mission_combat(missions, driver, actor, S12_ID, s12, "Vales S12")
-    assert s12.kind == "examine_site"
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "examine_site")
-    await _move_to(road, actor, VDE_CLAUSTRO)
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_claustro")
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "last_record")
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "report_iven")
-    await _move_to(road, actor, VDE_VIGILIA)
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "register_names")
-    assert s12.status == "completed"
-    await _round_trip_snapshot(driver, "Vales · S12 concluída antes de P12")
-
     # The character already reached Vigília through the public route graph.
     # Reconfirm that safe-hub crafting is available and use only recipes whose
     # live service previews accept the earned profession, level and inventory.
@@ -1147,13 +1124,14 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     for point in ("a", "b", "c"):
         p12 = await missions.examine(actor, P12_ID, p12.state_version, point)
     p12 = await missions.advance(actor, P12_ID, p12.state_version, "central_chamber")
-    # Keep DEF break and Impacto Resoluto while including Muralha Breve for
-    # the long campaign-boss fight. The Devastador passive remains real and is
-    # consumed by the shared defensive path-aware policy.
+    # Use loadout C from the existing pure P6 matrix (Golpe de Guarda,
+    # Muralha Breve, Impacto Resoluto): the Devastador sample had 8/30 wins,
+    # compared with 2/30 for loadout B, which included Quebra-Postura. This is
+    # a test-policy choice based on observed legal builds, not a stat change.
     active_arts = ActiveArtService(sessions, "ocaso")
     desired_p12_arts = (
+        SENTINEL_ART_IDS["golpe_de_guarda"],
         SENTINEL_ART_IDS["muralha_breve"],
-        SENTINEL_ART_IDS["quebra_postura"],
         SENTINEL_ART_IDS["impacto_resoluto"],
     )
     art_view = await active_arts.view(actor)
@@ -1317,7 +1295,10 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         if connections_alive:
             # Connections are optional and each reduces final damage by 4%.
             # Use a legal AoE that also hits the boss if available, but do not
-            # spend single-target opportunities on non-acting targets.
+            # spend single-target opportunities on non-acting targets. In the
+            # preceding six-attempt diagnostics, clearing all three with
+            # single-target actions left roughly 54-59% boss HP, while boss
+            # focus reached 26.6%; the policy follows that measured result.
             aoe_arts = [
                 action
                 for action in available
@@ -1463,6 +1444,34 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     p12 = await missions.choose_p12_reward(actor, p12.state_version, "2")
     assert p12 is not None and p12.kind == "completed"
     await _round_trip_snapshot(driver, "Vales · P12 concluída com escolha individual")
+
+    # S12 is optional and may canonically be completed on either side of P12.
+    # Run its combat after the regional climax so the boss attempt begins with
+    # the character's natural HP instead of carrying damage from that separate
+    # optional encounter. No recovery or HP adjustment is invented here.
+    await _move_to(road, actor, VDE_CLAUSTRO)
+    s12 = await missions.start(actor, S12_ID)
+    assert s12 is not None and s12.kind == "read_record"
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "read_record")
+    await _move_to(road, actor, VDE_GARGANTA)
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_garganta")
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "find_mark")
+    await _move_to(road, actor, VDE_MATA)
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_mata")
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "recover_object")
+    await _move_to(road, actor, VDE_BAIXIOS)
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_baixios")
+    s12 = await _complete_mission_combat(missions, driver, actor, S12_ID, s12, "Vales S12")
+    assert s12.kind == "examine_site"
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "examine_site")
+    await _move_to(road, actor, VDE_CLAUSTRO)
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_claustro")
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "last_record")
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "report_iven")
+    await _move_to(road, actor, VDE_VIGILIA)
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "register_names")
+    assert s12.status == "completed"
+    await _round_trip_snapshot(driver, "Vales · S12 concluída depois de P12")
 
     await _hunt_to_level(road, driver, actor, 21, counts)
     await _move_to(road, actor, VDE_CLAUSTRO)
