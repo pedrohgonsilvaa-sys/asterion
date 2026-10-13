@@ -23,7 +23,7 @@ from asterion.domain.professions import (
 )
 
 
-def test_catalog_contains_tdo_equipment_alchemy_runes_and_special_recipes():
+def test_catalog_contains_regional_equipment_alchemy_runes_and_special_recipes():
     assert PROFESSION_IDS == (
         "blacksmith",
         "artificer",
@@ -39,11 +39,11 @@ def test_catalog_contains_tdo_equipment_alchemy_runes_and_special_recipes():
                 if recipe.output_kind == "equipment" and recipe.unlock_id is None
             ]
         )
-        == 39
+        == 78
     )
-    assert len([recipe for recipe in RECIPE_DEFINITIONS if recipe.output_kind == "consumable"]) == 4
+    assert len([recipe for recipe in RECIPE_DEFINITIONS if recipe.output_kind == "consumable"]) == 9
     runes = [recipe for recipe in RECIPE_DEFINITIONS if recipe.output_kind == "rune"]
-    assert len(runes) == 16
+    assert len(runes) == 32
     assert {recipe.rarity for recipe in runes} == {"Rara", "Épica"}
     assert {recipe.required_level for recipe in runes} == {5, 10}
     assert len(
