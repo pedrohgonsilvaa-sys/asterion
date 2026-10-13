@@ -669,12 +669,14 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     p12 = await missions.advance(actor, P12_ID, p12.state_version, "central_chamber")
     p12_equipment_changes = await _equip_best_available_combat_gear(sessions, actor)
     print(f"VDE_P12_OFFICIAL_EQUIPMENT_CHANGES={p12_equipment_changes!r}", flush=True)
-    # Use a legal defensive Sentinel loadout that had the strongest
-    # representative solo results in the preceding P6 policy diagnostics.
+    # Use the legal offensive Sentinel loadout with a real DEF break. The
+    # Matriarch is a longer fight than P6; this avoids spending repeated
+    # player opportunities on a zero-damage barrier while keeping the
+    # character's actual Devastador Path and passive.
     active_arts = ActiveArtService(sessions, "ocaso")
     desired_p12_arts = (
         SENTINEL_ART_IDS["golpe_de_guarda"],
-        SENTINEL_ART_IDS["muralha_breve"],
+        SENTINEL_ART_IDS["quebra_postura"],
         SENTINEL_ART_IDS["impacto_resoluto"],
     )
     art_view = await active_arts.view(actor)
