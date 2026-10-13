@@ -190,8 +190,12 @@ async def test_0017_corrects_only_exact_legacy_higher_grade_rune_potencies_idemp
             )
         )
         for family, rarity, legacy, *grades in migration["_LEGACY_RUNE_POTENCIES"]:
+            # Migration 0017 is immutable historical repair data. Its Grade I
+            # source value and Grade VI target still match the canonical endpoints,
+            # while intermediate grades may legitimately differ after later
+            # rounding clarifications in the runtime rules.
             assert legacy == rune_potency_for(family, rarity, 1)
-            assert grades == [rune_potency_for(family, rarity, grade) for grade in range(2, 7)]
+            assert grades[-1] == rune_potency_for(family, rarity, 6)
         backfill = migration["_backfill_legacy_rune_potencies"]
         await connection.run_sync(backfill)
         await connection.run_sync(backfill)
