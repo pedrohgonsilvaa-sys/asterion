@@ -159,9 +159,48 @@ async def _craft_vde_p12_preparation(crafting, actor):
                 (definition.recipe_id, definition.rarity, definition.output_slot)
             )
             break
+    # The first pass can raise Blacksmith while making legitimate Common
+    # equipment. Recheck higher rarities afterward instead of leaving a
+    # newly unlocked public recipe unused merely because it was unavailable
+    # earlier in the same preparation visit.
+    upgraded_equipment = []
+    for slot in target_slots:
+        if any(
+            crafted_slot == slot and rarity in {"Raro", "Épico"}
+            for _, rarity, crafted_slot in crafted_equipment
+        ):
+            continue
+        candidates = sorted(
+            (
+                recipe
+                for recipe in equipment_recipes
+                if recipe.output_slot == slot and recipe.rarity in {"Raro", "Épico"}
+            ),
+            key=lambda recipe: (
+                rarity_rank.get(recipe.rarity or "", 0),
+                recipe.required_level,
+                recipe.recipe_id,
+            ),
+            reverse=True,
+        )
+        for definition in candidates:
+            recipe = await crafting.recipe(actor, definition.recipe_id)
+            if recipe is None or not recipe.available:
+                if recipe is not None:
+                    unavailable.append((definition.recipe_id, recipe.reason))
+                continue
+            preview = await crafting.preview(actor, definition.recipe_id)
+            assert preview is not None
+            committed = await crafting.commit(actor, preview.receipt_id)
+            assert committed is not None and committed.status == "committed"
+            upgraded_equipment.append(
+                (definition.recipe_id, definition.rarity, definition.output_slot)
+            )
+            break
     return {
         "consumables": crafted_consumables,
         "equipment": crafted_equipment,
+        "higher_rarity_equipment": upgraded_equipment,
         "unavailable_equipment_recipes": unavailable,
     }
 
@@ -1040,14 +1079,6 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         player = combat.fighters["player"]
         hp_fraction = player.hp / player.stats.hp
         item_ids = {option.item_id for option in view.consumable_options}
-        # The service only exposes antidote/purification options when the
-        # corresponding negative effect is actually present.
-        for consumable_id in (
-            "consumable.antidote.vde.ii",
-            "consumable.purification.vde.ii",
-        ):
-            if consumable_id in item_ids and hp_fraction > Decimal("0.38"):
-                return f"consumable:{consumable_id}"
         healing_id = next(
             (
                 item_id
@@ -1056,21 +1087,31 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             ),
             None,
         )
-        if healing_id is not None and hp_fraction <= Decimal("0.60"):
+        if healing_id is not None and hp_fraction <= Decimal("0.75"):
             return f"consumable:{healing_id}"
-        if (
-            "consumable.protection.vde.ii" in item_ids
-            and player.barrier <= 0
-            and hp_fraction <= Decimal("0.90")
-        ):
-            return "consumable:consumable.protection.vde.ii"
+
         wall_id = SENTINEL_ART_IDS["muralha_breve"]
         if (
             wall_id in available
-            and hp_fraction < Decimal("0.90")
             and (player.barrier <= 0 or player.barrier_remaining <= 0)
         ):
             return wall_id
+
+        if (
+            "consumable.protection.vde.ii" in item_ids
+            and (player.barrier <= 0 or player.barrier_remaining <= 0)
+        ):
+            return "consumable:consumable.protection.vde.ii"
+
+        # The service only exposes antidote/purification options when the
+        # corresponding negative effect is actually present. Preserve an
+        # urgent heal first; cleansing is useful when HP is already stable.
+        for consumable_id in (
+            "consumable.antidote.vde.ii",
+            "consumable.purification.vde.ii",
+        ):
+            if consumable_id in item_ids and hp_fraction > Decimal("0.75"):
+                return f"consumable:{consumable_id}"
 
         connections = tuple(
             key
