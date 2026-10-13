@@ -1485,6 +1485,21 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     )
     assert nv7_mark.state.get("level", 0) >= 7, driver.diagnostic()
 
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        world = await session.get(WorldState, character.id) if character else None
+        assert character is not None and world is not None
+        p4_start_location = world.location
+    if p4_start_location == BOSQUE:
+        await road.travel_route(actor, CHARNECA)
+        p4_start_location = CHARNECA
+    if p4_start_location == CHARNECA:
+        await road.travel_route(actor, REFUGE)
+        p4_start_location = REFUGE
+    assert p4_start_location == REFUGE, (p4_start_location, driver.diagnostic())
+
     p4 = P4Service(sessions, "ocaso")
     p4_offer = await p4.offer(actor)
     assert p4_offer is not None and p4_offer.available, (p4_offer, driver.diagnostic())

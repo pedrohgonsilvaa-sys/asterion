@@ -922,10 +922,37 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     )
     art_view = await active_arts.view(actor)
     assert art_view is not None
+    initial_slots = {entry.slot: entry.art_id for entry in art_view.slots}
+    initial_art_ids = set(initial_slots.values())
+    for target_slot, art_id in enumerate(desired_p12_arts, start=1):
+        source_slot = next(
+            (entry.slot for entry in art_view.slots if entry.art_id == art_id), None
+        )
+        if source_slot is None or source_slot == target_slot:
+            continue
+        replacement = desired_p12_arts[source_slot - 1]
+        if replacement not in initial_art_ids:
+            # Free the slot with the Art destined for that slot before moving
+            # an equipped Art into the target slot; duplicate slots are invalid.
+            moved = await active_arts.equip_art(
+                actor,
+                source_slot,
+                replacement,
+                expected_configuration_version=art_view.combat_configuration_version,
+            )
+            assert moved is not None and moved.changed
+            art_view = await active_arts.view(actor)
+            assert art_view is not None
+            initial_slots[source_slot] = replacement
+            initial_art_ids.add(replacement)
+            break
     for slot, art_id in enumerate(desired_p12_arts, start=1):
         art_view = await active_arts.view(actor)
         assert art_view is not None
-        if next((entry.art_id for entry in art_view.slots if entry.slot == slot), None) != art_id:
+        current_target = next(
+            (entry.art_id for entry in art_view.slots if entry.slot == slot), None
+        )
+        if current_target != art_id:
             await active_arts.equip_art(
                 actor,
                 slot,
