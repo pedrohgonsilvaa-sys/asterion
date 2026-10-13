@@ -210,18 +210,74 @@ def _vde_equipment_recipes() -> list[RecipeDefinition]:
     rarity_ids = {"Comum": "comum", "Raro": "raro", "Épico": "epico"}
     families = (
         ("blacksmith", "vale_weapon", "Arma do Vale", "Principal", VDE_IRON, VDE_RESIN, D("0.70")),
-        ("blacksmith", "entwined_guard", "Guarda Enredada", "Secundária", VDE_IRON, VDE_RESIN, D("0.70")),
-        ("blacksmith", "bonds_greatweapon", "Arma Pesada dos Laços", "2H", VDE_IRON, VDE_RESIN, D("0.70")),
+        (
+            "blacksmith",
+            "entwined_guard",
+            "Guarda Enredada",
+            "Secundária",
+            VDE_IRON,
+            VDE_RESIN,
+            D("0.70"),
+        ),
+        (
+            "blacksmith",
+            "bonds_greatweapon",
+            "Arma Pesada dos Laços",
+            "2H",
+            VDE_IRON,
+            VDE_RESIN,
+            D("0.70"),
+        ),
         ("blacksmith", "entwined_helm", "Elmo Enlaçado", "Cabeça", VDE_IRON, VDE_RESIN, D("0.70")),
         ("blacksmith", "vale_cuirass", "Couraça do Vale", "Torso", VDE_IRON, VDE_RESIN, D("0.70")),
-        ("blacksmith", "entwined_gauntlets", "Manoplas Enredadas", "Mãos", VDE_IRON, VDE_RESIN, D("0.70")),
+        (
+            "blacksmith",
+            "entwined_gauntlets",
+            "Manoplas Enredadas",
+            "Mãos",
+            VDE_IRON,
+            VDE_RESIN,
+            D("0.70"),
+        ),
         ("blacksmith", "peat_greaves", "Grevas de Turfa", "Pés", VDE_IRON, VDE_RESIN, D("0.70")),
         ("leatherworker", "moss_hood", "Capuz Musgoso", "Cabeça", VDE_LEATHER, VDE_HERB, D("0.70")),
-        ("leatherworker", "suspended_forest_vest", "Veste da Mata Suspensa", "Torso", VDE_LEATHER, VDE_HERB, D("0.70")),
-        ("leatherworker", "peat_gloves", "Luvas de Turfa", "Mãos", VDE_LEATHER, VDE_HERB, D("0.70")),
-        ("leatherworker", "bonds_boots", "Botas dos Laços", "Pés", VDE_LEATHER, VDE_HERB, D("0.70")),
+        (
+            "leatherworker",
+            "suspended_forest_vest",
+            "Veste da Mata Suspensa",
+            "Torso",
+            VDE_LEATHER,
+            VDE_HERB,
+            D("0.70"),
+        ),
+        (
+            "leatherworker",
+            "peat_gloves",
+            "Luvas de Turfa",
+            "Mãos",
+            VDE_LEATHER,
+            VDE_HERB,
+            D("0.70"),
+        ),
+        (
+            "leatherworker",
+            "bonds_boots",
+            "Botas dos Laços",
+            "Pés",
+            VDE_LEATHER,
+            VDE_HERB,
+            D("0.70"),
+        ),
         ("jeweler", "bonds_seal", "Selo dos Laços", "Acessório", VDE_IRON, VDE_RESIN, D("0.60")),
-        ("jeweler", "entwined_reliquary", "Relicário Enredado", "Artefato", VDE_IRON, VDE_RESIN, D("0.60")),
+        (
+            "jeweler",
+            "entwined_reliquary",
+            "Relicário Enredado",
+            "Artefato",
+            VDE_IRON,
+            VDE_RESIN,
+            D("0.60"),
+        ),
     )
     recipes = []
     for profession_id, family_id, name, slot, primary, secondary, ratio in families:
@@ -299,7 +355,8 @@ def _alchemy_recipes() -> list[RecipeDefinition]:
             item = consumable_definition(item_id)
             if item is None or item.region != region_name:
                 raise RuntimeError(
-                    f"{region_code.upper()} alchemy recipe {item_id!r} is missing from the canonical catalog"
+                    f"{region_code.upper()} alchemy recipe {item_id!r} is missing "
+                    "from the canonical catalog"
                 )
             materials = []
             for ingredient in item.recipe.ingredients:
