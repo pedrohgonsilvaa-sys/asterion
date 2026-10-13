@@ -1282,14 +1282,33 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     p12_attempt_policy = "devastador"
 
     async def configure_p12_arts(desired_p12_arts):
-        # The retry schedule only swaps the one Art that differs between each
-        # adjacent loadout, using the public configuration service.
-        for slot, art_id in enumerate(desired_p12_arts, start=1):
+        # Equip an Art only after it is no longer occupying another slot.
+        # Adjacent loadouts differ by one Art, so the missing Art opens a safe
+        # slot transition without bypassing the public configuration service.
+        while True:
             view = await active_arts.view(actor)
             assert view is not None
-            current = next((entry.art_id for entry in view.slots if entry.slot == slot), None)
-            if current == art_id:
-                continue
+            current = {entry.slot: entry.art_id for entry in view.slots}
+            pending = [
+                (slot, art_id)
+                for slot, art_id in enumerate(desired_p12_arts, start=1)
+                if current.get(slot) != art_id
+            ]
+            if not pending:
+                break
+            next_change = next(
+                (
+                    (slot, art_id)
+                    for slot, art_id in pending
+                    if art_id not in current.values()
+                ),
+                None,
+            )
+            assert next_change is not None, (
+                f"Nenhuma troca segura para o loadout P12: "
+                f"atual={current!r}, desejado={desired_p12_arts!r}"
+            )
+            slot, art_id = next_change
             changed = await active_arts.equip_art(
                 actor,
                 slot,
