@@ -17,6 +17,7 @@ from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     resolve_character_combat_stats,
 )
+from asterion.application.equipment_modifications import EquipmentModificationService
 from asterion.application.p7 import (
     GARGANTA_BRAZIER,
     P7_ID,
@@ -62,8 +63,9 @@ from asterion.application.vde_missions import (
     VDEMissionService,
 )
 from asterion.domain.arts import SENTINEL_ART_IDS
-from asterion.domain.combat import allowed_actions
+from asterion.domain.combat import action_target_ids, allowed_actions
 from asterion.domain.equipment import assignment_for_item_slot, parse_equipment_slot
+from asterion.domain.professions import RECIPE_DEFINITIONS
 from asterion.domain.road import (
     EXPLORATION_PROFILES,
     LOCATION_LEVEL_BANDS,
@@ -73,8 +75,12 @@ from asterion.infrastructure.db.models import (
     BestiaryEntry,
     Brazier,
     Character,
+    CharacterActiveArtSlot,
     CharacterEquipmentSlot,
+    CharacterProfession,
+    CharacterTalentChoice,
     CodexEntry,
+    ConsumableStack,
     DungeonRun,
     EquipmentItem,
     LocationDiscovery,
@@ -84,13 +90,212 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
-from tests.helpers.tdo_playthrough import choose_p6_policy_action
+from tests.helpers.tdo_playthrough import (
+    choose_p6_policy_action,
+    install_best_owned_runes,
+)
 from tests.test_tdo_full_playthrough import run_tdo_full_playthrough
 
 pytestmark = pytest.mark.skipif(
     os.getenv("ASTERION_RUN_VDE_FULL_PLAYTHROUGH") != "1",
     reason="playthrough regional longo; habilite ASTERION_RUN_VDE_FULL_PLAYTHROUGH=1",
 )
+
+
+async def _craft_vde_p12_preparation(crafting, actor):
+    """Craft only Grade II items the normal recipe service marks available."""
+    crafted_consumables = []
+    for recipe_id, limit in (
+        ("recipe.vde.alchemist.heal.vde.ii", 4),
+        ("recipe.vde.alchemist.antidote.vde.ii", 1),
+        ("recipe.vde.alchemist.protection.vde.ii", 1),
+        ("recipe.vde.alchemist.purification.vde.ii", 1),
+    ):
+        for _ in range(limit):
+            recipe = await crafting.recipe(actor, recipe_id)
+            if recipe is None or not recipe.available:
+                break
+            preview = await crafting.preview(actor, recipe_id)
+            assert preview is not None
+            committed = await crafting.commit(actor, preview.receipt_id)
+            assert committed is not None and committed.status == "committed"
+            crafted_consumables.append(recipe_id)
+
+    rarity_rank = {"Comum": 1, "Raro": 2, "Épico": 3}
+    target_slots = ("Principal", "Secundária", "Cabeça", "Torso", "Mãos", "Pés")
+    equipment_recipes = tuple(
+        definition
+        for definition in RECIPE_DEFINITIONS
+        if definition.recipe_id.startswith("recipe.vde.")
+        and definition.output_kind == "equipment"
+        and definition.output_slot in target_slots
+        and definition.unlock_id is None
+    )
+    crafted_equipment = []
+    unavailable = []
+    for slot in target_slots:
+        candidates = sorted(
+            (recipe for recipe in equipment_recipes if recipe.output_slot == slot),
+            key=lambda recipe: (
+                rarity_rank.get(recipe.rarity or "", 0),
+                recipe.required_level,
+                recipe.recipe_id,
+            ),
+            reverse=True,
+        )
+        for definition in candidates:
+            recipe = await crafting.recipe(actor, definition.recipe_id)
+            if recipe is None:
+                unavailable.append((definition.recipe_id, "unknown_or_locked"))
+                continue
+            if not recipe.available:
+                unavailable.append((definition.recipe_id, recipe.reason))
+                continue
+            preview = await crafting.preview(actor, definition.recipe_id)
+            assert preview is not None
+            committed = await crafting.commit(actor, preview.receipt_id)
+            assert committed is not None and committed.status == "committed"
+            crafted_equipment.append(
+                (definition.recipe_id, definition.rarity, definition.output_slot)
+            )
+            break
+    return {
+        "consumables": crafted_consumables,
+        "equipment": crafted_equipment,
+        "unavailable_equipment_recipes": unavailable,
+    }
+
+
+async def _p12_preparation_snapshot(sessions, actor):
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        configuration = await load_equipment_configuration(session, character)
+        stats = resolve_character_combat_stats(character, configuration)
+        equipment_rows = (
+            await session.execute(
+                select(CharacterEquipmentSlot.slot, EquipmentItem)
+                .join(
+                    EquipmentItem,
+                    EquipmentItem.id == CharacterEquipmentSlot.equipment_item_id,
+                )
+                .where(CharacterEquipmentSlot.character_id == character.id)
+                .order_by(CharacterEquipmentSlot.slot)
+            )
+        ).all()
+        arts = (
+            await session.scalars(
+                select(CharacterActiveArtSlot.art_id)
+                .where(CharacterActiveArtSlot.character_id == character.id)
+                .order_by(CharacterActiveArtSlot.slot)
+            )
+        ).all()
+        talents = (
+            await session.scalars(
+                select(CharacterTalentChoice.talent_id)
+                .where(CharacterTalentChoice.character_id == character.id)
+                .order_by(CharacterTalentChoice.point_slot)
+            )
+        ).all()
+        professions = (
+            await session.execute(
+                select(CharacterProfession.profession_id, CharacterProfession.level)
+                .where(CharacterProfession.character_id == character.id)
+                .order_by(CharacterProfession.slot)
+            )
+        ).all()
+        consumables = (
+            await session.execute(
+                select(ConsumableStack.consumable_id, ConsumableStack.quantity)
+                .where(
+                    ConsumableStack.character_id == character.id,
+                    ConsumableStack.quantity > 0,
+                )
+                .order_by(ConsumableStack.consumable_id)
+            )
+        ).all()
+        equipment = tuple(
+            {
+                "slot": slot,
+                "name": item.item_name,
+                "rarity": item.rarity,
+                "item_level": item.item_level,
+                "runes": (item.payload or {}).get("runes") or (item.payload or {}).get("rune"),
+                "enchantment": (item.payload or {}).get("enchantment"),
+            }
+            for slot, item in equipment_rows
+        )
+        return {
+            "level": character.level,
+            "hp": str(character.hp),
+            "max_hp": str(stats.hp),
+            "ATQ": str(stats.attack),
+            "DEF": str(stats.defense),
+            "AGI": str(stats.agility),
+            "PER": str(stats.per),
+            "CRIT": str(stats.crit),
+            "Esquiva": str(stats.evasion),
+            "Bloqueio": str(stats.block),
+            "class": character.character_class,
+            "path": character.selected_path,
+            "talents": tuple(talents),
+            "professions": tuple(professions),
+            "arts": tuple(arts),
+            "equipment": equipment,
+            "consumables": tuple(consumables),
+        }
+
+
+async def _p12_modification_access(sessions, actor):
+    """Record public rune/enchantment service availability at the safe hub."""
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        equipped = (
+            await session.execute(
+                select(CharacterEquipmentSlot.slot, EquipmentItem.id)
+                .join(
+                    EquipmentItem,
+                    EquipmentItem.id == CharacterEquipmentSlot.equipment_item_id,
+                )
+                .where(CharacterEquipmentSlot.character_id == character.id)
+                .order_by(CharacterEquipmentSlot.slot)
+            )
+        ).all()
+    service = EquipmentModificationService(sessions, "ocaso")
+    result = []
+    for slot, item_id in equipped:
+        rune_view = await service.runes(actor, item_id, "A")
+        enchantment_view = await service.enchantments(actor, item_id)
+        result.append(
+            {
+                "slot": slot,
+                "runes": None
+                if rune_view is None
+                else {
+                    "available": rune_view.available,
+                    "reason": rune_view.reason,
+                    "owned_candidates": len(rune_view.details.get("candidates", ())),
+                    "current": rune_view.details.get("current"),
+                },
+                "enchantments": None
+                if enchantment_view is None
+                else {
+                    "available": enchantment_view.available,
+                    "reason": enchantment_view.reason,
+                    "craftable_candidates": sum(
+                        bool(candidate.get("craftable"))
+                        for candidate in enchantment_view.details.get("candidates", ())
+                    ),
+                    "current": enchantment_view.details.get("current"),
+                },
+            }
+        )
+    return tuple(result)
 
 
 async def _character(sessions, actor):
@@ -659,23 +864,21 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     assert s12.status == "completed"
     await _round_trip_snapshot(driver, "Vales · S12 concluída antes de P12")
 
-    # Use the regional safe hub and only materials/crowns/profession progress
-    # earned by the public journey. If the Grade II recipe is not legitimately
-    # available for this character, the playthrough proceeds without seeding it.
-    crafted_grade_ii_heals = 0
-    for _ in range(4):
-        recipe = await crafting.recipe(actor, "recipe.vde.alchemist.heal.vde.ii")
-        if recipe is None or not recipe.available:
-            break
-        preview = await crafting.preview(actor, "recipe.vde.alchemist.heal.vde.ii")
-        assert preview is not None
-        committed = await crafting.commit(actor, preview.receipt_id)
-        assert committed is not None and committed.status == "committed"
-        crafted_grade_ii_heals += 1
-    print(
-        f"VDE_P12_LEGITIMATE_GRADE_II_HEALS_CRAFTED={crafted_grade_ii_heals}",
-        flush=True,
-    )
+    # The character already reached Vigília through the public route graph.
+    # Reconfirm that safe-hub crafting is available and use only recipes whose
+    # live service previews accept the earned profession, level and inventory.
+    hub = await _move_to(road, actor, VDE_VIGILIA)
+    assert hub.location == VDE_VIGILIA
+    p12_crafting = await _craft_vde_p12_preparation(crafting, actor)
+    p12_equipment_changes = await _equip_best_available_combat_gear(sessions, actor)
+    p12_runes = await install_best_owned_runes(sessions, actor, server_id="ocaso")
+    p12_modification_access = await _p12_modification_access(sessions, actor)
+    print(f"VDE_P12_LEGITIMATE_CRAFTING={p12_crafting!r}", flush=True)
+    print(f"VDE_P12_OFFICIAL_EQUIPMENT_CHANGES={p12_equipment_changes!r}", flush=True)
+    print(f"VDE_P12_OFFICIAL_RUNES_INSTALLED={p12_runes!r}", flush=True)
+    print(f"VDE_P12_MODIFICATION_ACCESS={p12_modification_access!r}", flush=True)
+    p12_preparation = await _p12_preparation_snapshot(sessions, actor)
+    print(f"VDE_P12_PREPARATION={p12_preparation!r}", flush=True)
 
     p12 = await missions.resume(actor, P12_ID)
     assert p12 is not None and p12.status == "active" and p12.step == 1
@@ -685,8 +888,6 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     for point in ("a", "b", "c"):
         p12 = await missions.examine(actor, P12_ID, p12.state_version, point)
     p12 = await missions.advance(actor, P12_ID, p12.state_version, "central_chamber")
-    p12_equipment_changes = await _equip_best_available_combat_gear(sessions, actor)
-    print(f"VDE_P12_OFFICIAL_EQUIPMENT_CHANGES={p12_equipment_changes!r}", flush=True)
     # Use the legal offensive Sentinel loadout with a real DEF break. The
     # Matriarch is a longer fight than P6; this avoids spending repeated
     # player opportunities on a zero-damage barrier while keeping the
@@ -714,6 +915,15 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     configured_p12_arts = tuple(entry.art_id for entry in final_art_view.slots)
     assert configured_p12_arts == desired_p12_arts
     print(f"VDE_P12_OFFICIAL_ACTIVE_ARTS={configured_p12_arts!r}", flush=True)
+    p12_preparation = await _p12_preparation_snapshot(sessions, actor)
+    print(f"VDE_P12_FINAL_PREPARATION={p12_preparation!r}", flush=True)
+    p12_attempt_metrics = {
+        "actions": [],
+        "consumables": [],
+        "target_ids": [],
+        "destroyed_connections": set(),
+    }
+
     async def p12_mutate(current, action):
         combat = current.combat
         if action.startswith("consumable:"):
@@ -723,7 +933,9 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
                 for option in current.consumable_options
                 if option.item_id == consumable_id
             )
-            return await missions.action_combat(
+            p12_attempt_metrics["consumables"].append(consumable_id)
+            p12_attempt_metrics["actions"].append(action)
+            updated = await missions.action_combat(
                 actor,
                 current.activity_id,
                 combat.version,
@@ -731,53 +943,119 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
                 target_id=option.target_id,
                 effect_id=option.effect_id,
             )
-        # Suppress any active Radicular Connection before returning to the
-        # Matriarch. This uses the boss's authored optional targets and removes
-        # only their existing mitigation aura; no combat number is changed.
-        target_id = next(
-            (
-                key
-                for key in ("connection_a", "connection_b", "connection_c")
-                if (fighter := combat.fighters.get(key)) is not None and fighter.hp > 0
-            ),
-            "enemy",
-        )
-        return await missions.action_combat(
-            actor,
-            current.activity_id,
-            combat.version,
-            action,
-            target_id=target_id,
-        )
+        else:
+            targets = action_target_ids(combat, action)
+            connection_targets = tuple(
+                target_id
+                for target_id in targets
+                if target_id in {"connection_a", "connection_b", "connection_c"}
+                and combat.fighters[target_id].hp > 0
+            )
+            action_definition = combat.player_actions.get(action)
+            if action_definition is not None and action_definition.target_mode == "all_opponents":
+                target_id = None
+            elif connection_targets:
+                target_id = min(
+                    connection_targets,
+                    key=lambda target: (combat.fighters[target].hp, target),
+                )
+            else:
+                target_id = "enemy" if "enemy" in targets else (targets[0] if targets else None)
+            assert target_id is None or target_id in targets, (action, target_id, targets)
+            p12_attempt_metrics["actions"].append(action)
+            if action_definition is not None and action_definition.target_mode == "all_opponents":
+                p12_attempt_metrics["target_ids"].extend(connection_targets)
+            elif target_id is not None and target_id in connection_targets:
+                p12_attempt_metrics["target_ids"].append(target_id)
+            updated = await missions.action_combat(
+                actor,
+                current.activity_id,
+                combat.version,
+                action,
+                target_id=target_id,
+            )
+        next_combat = getattr(updated, "combat", None)
+        if next_combat is not None:
+            for key in ("connection_a", "connection_b", "connection_c"):
+                before = combat.fighters.get(key)
+                after = next_combat.fighters.get(key)
+                if before is not None and after is not None and before.hp > 0 and after.hp <= 0:
+                    p12_attempt_metrics["destroyed_connections"].add(key)
+        return updated
 
     def p12_policy(view):
         combat = view.combat
         available = allowed_actions(combat)
         if combat.prepared_action is not None and "defend" in available:
             return "defend"
-        # Prefer a legitimately owned regional healing potion when the same
-        # Devastador safety threshold used by the shared policy is reached.
         player = combat.fighters["player"]
-        grade_ii_heal_available = any(
-            option.item_id == "consumable.heal.vde.ii"
-            for option in view.consumable_options
-        )
-        if (
-            grade_ii_heal_available
-            and player.hp / player.stats.hp <= Decimal("0.48")
+        hp_fraction = player.hp / player.stats.hp
+        item_ids = {option.item_id for option in view.consumable_options}
+        # The service only exposes antidote/purification options when the
+        # corresponding negative effect is actually present.
+        for consumable_id in (
+            "consumable.antidote.vde.ii",
+            "consumable.purification.vde.ii",
         ):
-            return "consumable:consumable.heal.vde.ii"
+            if consumable_id in item_ids and hp_fraction > Decimal("0.38"):
+                return f"consumable:{consumable_id}"
+        healing_id = next(
+            (
+                item_id
+                for item_id in ("consumable.heal.vde.ii", "consumable.heal")
+                if item_id in item_ids
+            ),
+            None,
+        )
+        if healing_id is not None and hp_fraction <= Decimal("0.60"):
+            return f"consumable:{healing_id}"
+        if (
+            "consumable.protection.vde.ii" in item_ids
+            and player.barrier <= 0
+            and hp_fraction <= Decimal("0.90")
+        ):
+            return "consumable:consumable.protection.vde.ii"
 
-        # Respect the authored telegraph. Preserve offensive turns for the
-        # voluntary, non-prepared attacks; the path-aware policy below uses
-        # real Sentinel and Devastador mechanics rather than guessed bonuses.
-        action = choose_p6_policy_action(
+        connections = tuple(
+            key
+            for key in ("connection_a", "connection_b", "connection_c")
+            if (fighter := combat.fighters.get(key)) is not None and fighter.hp > 0
+        )
+        if connections:
+            # Connections never take turns and each living one reduces the
+            # Matriarch's final damage. Prefer a legal AoE that hits all
+            # opponents; otherwise focus the highest-direct-damage legal Art
+            # on one living Connection before returning to the boss.
+            connection_arts = []
+            for action in available:
+                definition = combat.player_actions.get(action)
+                if (
+                    definition is None
+                    or not action.startswith(("class_art.", "path_art."))
+                    or definition.coefficient <= 0
+                ):
+                    continue
+                targets = action_target_ids(combat, action)
+                if not any(target in connections for target in targets):
+                    continue
+                connection_arts.append(
+                    (
+                        definition.target_mode == "all_opponents",
+                        definition.coefficient,
+                        action,
+                    )
+                )
+            if connection_arts:
+                return max(connection_arts)[2]
+            if "attack" in available and any(
+                target in connections for target in action_target_ids(combat, "attack")
+            ):
+                return "attack"
+
+        # Once no Connection remains, use the existing path-aware policy for
+        # Devastador, Retaliação, defense break and its actual charged window.
+        return choose_p6_policy_action(
             combat,
-            # The character's actual Path is Devastador. Its passive grants a
-            # short damage window after a sufficiently large hit, so spend a
-            # charged direct-damage art before it expires. The policy still
-            # respects prepared attacks, critical HP, Muralha, and only uses
-            # Potions present in persisted inventory.
             "devastador",
             heal_count=next(
                 (
@@ -789,15 +1067,25 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             ),
             budget_limit=view.consumable_budget_limit,
         )
-        return action
 
     after_boss = None
+    p12_attempt_diagnostics = []
     for retry in range(1, 7):
+        p12_attempt_metrics = {
+            "actions": [],
+            "consumables": [],
+            "target_ids": [],
+            "destroyed_connections": set(),
+        }
         fight = await missions.start_solo_combat(actor, P12_ID, p12.state_version)
         if fight is not None and fight.progress.get("awaiting_retry"):
             p12 = fight
             continue
         assert fight is not None and fight.kind == "combat" and fight.activity_id is not None
+        starting_combat = fight.combat
+        assert starting_combat is not None
+        start_player = starting_combat.fighters["player"]
+        start_boss = starting_combat.fighters["enemy"]
         after_boss = await driver.combat_to_result(
             fight,
             p12_mutate,
@@ -809,6 +1097,53 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         )
         if after_boss.kind == "combat_result":
             after_boss = await missions.resume(actor, P12_ID)
+        final_combat = getattr(after_boss, "combat", None) or driver.last_combat
+        assert final_combat is not None
+        final_player = final_combat.fighters["player"]
+        final_boss = final_combat.fighters["enemy"]
+        events = tuple(final_combat.events) + tuple(final_combat.mechanic_events)
+        player_damage = sum(
+            event.effective_damage
+            for event in events
+            if event.target == start_player.id and event.effective_damage > 0
+        )
+        boss_damage = sum(
+            event.effective_damage
+            for event in events
+            if event.target == start_boss.id and event.effective_damage > 0
+        )
+        attempt_report = {
+            "attempt": retry,
+            "result": final_combat.result,
+            "level": p12_preparation["level"],
+            "stats": {key: p12_preparation[key] for key in ("hp", "max_hp", "ATQ", "DEF", "AGI")},
+            "equipment": p12_preparation["equipment"],
+            "arts": configured_p12_arts,
+            "path": p12_preparation["path"],
+            "talents": p12_preparation["talents"],
+            "player_hp_start": str(start_player.hp),
+            "player_hp_max": str(start_player.stats.hp),
+            "boss_hp_start": str(start_boss.hp),
+            "consumables_start": tuple(fight.consumable_quantities),
+            "consumables_used": tuple(p12_attempt_metrics["consumables"]),
+            "connection_targets": tuple(p12_attempt_metrics["target_ids"]),
+            "connections_destroyed": tuple(sorted(p12_attempt_metrics["destroyed_connections"])),
+            "phase_reached": final_combat.phase_id or "I",
+            "rounds": final_combat.round,
+            "actions": len(p12_attempt_metrics["actions"]),
+            "boss_hp_remaining": str(final_boss.hp),
+            "boss_hp_max": str(final_boss.stats.hp),
+            "player_hp_remaining": str(final_player.hp),
+            "damage_to_boss": str(boss_damage),
+            "damage_received": str(player_damage),
+            "defeat_cause": (
+                "player_hp_zero"
+                if final_combat.result == "defeat" and final_player.hp <= 0
+                else None
+            ),
+        }
+        p12_attempt_diagnostics.append(attempt_report)
+        print(f"VDE_P12_ATTEMPT_DIAGNOSTIC={attempt_report!r}", flush=True)
         if after_boss is not None and after_boss.kind == "examine_center":
             break
         assert after_boss is not None and after_boss.progress.get("awaiting_retry"), (
@@ -816,7 +1151,8 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         )
         p12 = after_boss
     assert after_boss is not None and after_boss.kind == "examine_center", (
-        f"Matriarca não concluiu vitória persistida: {after_boss!r}\n{driver.diagnostic()}"
+        f"Matriarca não concluiu vitória persistida: {after_boss!r}; "
+        f"diagnóstico por tentativa={p12_attempt_diagnostics!r}\n{driver.diagnostic()}"
     )
     p12 = await missions.advance(actor, P12_ID, after_boss.state_version, "examine_center")
     p12 = await missions.advance(actor, P12_ID, p12.state_version, "register")

@@ -1,6 +1,10 @@
 # Autoridade das Fontes
 
-**Índice atualizado:** 2026-10-12. As notas de implementação mais abaixo preservam snapshots históricos anteriores e não substituem as Fontes oficiais vigentes nem o estado atual do repositório.
+**Índice atualizado:** 2026-10-13.
+
+> **Índice geral único:** `SOURCE_AUTHORITY.md` é o registro de governança que seleciona as versões autoritativas por escopo. Patches de sincronização são artefatos operacionais e não constituem uma segunda autoridade. Em conflito com índices/patches anteriores, este arquivo prevalece quanto à seleção de versões, sem alterar o conteúdo interno das Fontes.
+
+> **Sincronização 2026-10-13:** este índice registra Fonte Mestra v1.6.0, Terras do Ocaso v1.0.16 FINAL, Vales dos Enforcados v1.0.6 FINAL, Planícies de Nareth v1.0.1 FINAL, Várzeas Carmesins v1.0.0 FINAL, Lore v1.2, Visual/UI de 2026-10-13 e anatomia racial v2.0. Notas históricas mais abaixo podem citar versões anteriores apenas como registro; não reativam autoridade superada.
 
 ## Fonte Mestra vigente
 
@@ -13,7 +17,6 @@ Arquivo vigente: `ASTERION_GDD_Estrutural_v1.6.0_Fonte_Mestra.md`.
 Estado oficial:
 
 - a v1.6.0 substitui integralmente a v1.5.0 e versões anteriores;
-- a v1.6.0 preserva as regras de Grupo persistente, Campanha cooperativa, escala de Chefes de Campanha, sequência PvPvE e lock de Domínio do Rastro; complementa com Referência da Jornada, Caçada multialvo como encontro e unidade econômica, composição da presa congelada antes do desfecho PvPvE, Armas × Artes, `weapon_requirement`, Mercado, Guildas e as máquinas de estado das seis Classes, sem reabrir os valores publicados da Baseline Numérica v1.0;
 - a Baseline Numérica v1.0 está fechada para implementação e testes;
 - a v1.4.9 formaliza o fechamento único de `HP Máximo`, `ATQ`, `DEF` e `AGI` estáticos finais em pontos inteiros com `round_half_up`, além de HP atual inteiro; não altera percentuais, curvas, custos, recompensas ou parâmetros de balanceamento;
 - a reabertura anterior da conversão absoluta da unidade de XP de inimigo foi encerrada na v1.4.3;
@@ -21,47 +24,57 @@ Estado oficial:
 - a v1.4.9 formaliza que HP Máximo, ATQ, DEF e AGI estáticos finais fecham uma única vez com `round_half_up` após toda a composição estática; HP atual autoritativo é inteiro e HP legado fracionário é fechado para baixo em fronteira segura;
 - Cosméticos possui três categorias oficiais: Aparência, Título e Moldura.
 
-## Fonte regional vigente
+## Fontes regionais vigentes
 
-A vertical slice Nv.1–10 usa como autoridade de conteúdo:
+As Fontes Regionais FINAL possuem o mesmo nível hierárquico entre si dentro de seus respectivos escopos. Todas permanecem subordinadas à Fonte Mestra v1.6.0 para sistemas globais e não podem sobrescrever conteúdo de outra Região.
+
+### Região 1 — Terras do Ocaso · Nv.1–10
 
 **ASTERION — Conteúdo: Terras do Ocaso v1.0.16 FINAL**
 
 Arquivo vigente: `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.16_FINAL.md`.
 
-Ela define Locais, Braseiros permanentes, Missões, Feitos, Bestiário, inimigos, descobertas e demais conteúdo regional consolidado das Terras do Ocaso.
+A v1.0.16 substitui integralmente a v1.0.15 como autoridade regional vigente. Preserva o conteúdo e os valores anteriores e fecha exclusivamente os pools temáticos de Material Básico do **Corvo de Fuligem**, **Alfa Cinéreo** e **Peregrino Calcinado**. Os pesos escolhem somente a identidade de cada unidade depois que chance e quantidade globais do contexto já foram resolvidas; não alteram Catalisadores, XP, Coroas, Equipamentos, Caçadas, Rondas, Desbravar ou qualquer outra regra econômica.
 
-A v1.0.16 sucede a v1.0.15 exclusivamente para formalizar os pools temáticos de Material Básico do Corvo de Fuligem, do Alfa Cinéreo e do Peregrino Calcinado. Os pesos escolhem somente a identidade de cada unidade depois que a chance e a quantidade globais do contexto já foram resolvidas; não alteram Catalisadores, XP, Coroas, Equipamentos, Caçadas, Rondas, Desbravar ou qualquer outra regra econômica.
+### Região 2 — Vales dos Enforcados · Nv.11–20
 
-Quando a Fonte Regional especificar conteúdo dentro de parâmetros sistêmicos da Fonte Mestra, ambas devem ser aplicadas em conjunto. Em conflito estrutural ou numérico, a Fonte Mestra prevalece; em conteúdo regional fechado, a revisão vigente prevalece sobre rascunhos ou versões regionais anteriores.
+**Vales dos Enforcados v1.0.6 FINAL**
 
-A segunda região usa a autoridade de conteúdo **Vales dos Enforcados v1.0.6 FINAL**, em `ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.6_FINAL.md`. A v1.0.6 sucede a v1.0.5 exclusivamente para fechar o perfil numérico do encontro roteirizado da Etapa 7 de S12 — Os Nomes Presos à Madeira. Não altera economia, progressão, narrativa regional, demais criaturas, pools, Caçada, Ronda, Masmorras ou recompensas regionais.
+Arquivo vigente: `ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.6_FINAL.md`.
 
-A terceira região usa como autoridade de conteúdo **Planícies de Nareth v1.0.0 FINAL**, em `ASTERION_CONTEUDO_PLANICIES_DE_NARETH_v1.0.0_FINAL.md`. Ela rege exclusivamente o conteúdo regional das Planícies de Nareth, no mesmo nível hierárquico regional de Terras do Ocaso e Vales dos Enforcados, subordinada à Fonte Mestra e sem prevalecer sobre outras Regiões fora de seu próprio escopo.
+A v1.0.6 sucede a v1.0.5 exclusivamente para fechar o perfil numérico do encontro roteirizado da Etapa 7 de S12 — Os Nomes Presos à Madeira. Não altera economia, progressão, narrativa regional, demais criaturas, pools, Caçada, Ronda, Masmorras ou recompensas regionais.
+
+### Região 3 — Planícies de Nareth · Nv.21–30
+
+**Planícies de Nareth v1.0.1 FINAL**
+
+Arquivo vigente: `ASTERION_CONTEUDO_PLANICIES_DE_NARETH_v1.0.1_FINAL.md`.
+
+A v1.0.1 sucede a v1.0.0 exclusivamente para fechar o mapeamento de Material Básico por criatura em Caçada/Ronda. Os pesos selecionam somente a identidade de cada unidade depois que chance e quantidade globais já foram resolvidas; não alteram pools de criaturas, XP, Coroas, Catalisadores, Fragmentos, Equipamentos, Runas, Desbravar, Masmorras, progressão ou narrativa.
+
+### Região 4 — Várzeas Carmesins · Nv.31–40
+
+**Várzeas Carmesins v1.0.0 FINAL**
+
+Arquivo vigente: `ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.0_FINAL.md`.
+
+Esta é a autoridade regional da quarta jornada, Nv.31–40 com saída para Nv.41. Fecha identidade regional, progressão, Locais, Braseiros, P19–P24, S19–S24, NPCs, Materiais Grau IV, mapeamento de Material por criatura, criaturas, Elites, Chefe opcional de S24, Caçada, Ronda, Desbravar, Masmorras, Matriz Rubra, Bestiário, Códice, Feitos, Cosméticos, Crafting Grau IV, Runas, Encantamentos, Consumíveis, Receitas especiais e auditoria regional de XP/Coroas/Materiais/gate Nv.41. Não cria novo sistema universal.
+
+Quando uma Fonte Regional especificar conteúdo dentro de parâmetros sistêmicos da Fonte Mestra, ambas devem ser aplicadas em conjunto. Em conflito estrutural ou numérico global, a Fonte Mestra prevalece; em conteúdo regional fechado dentro do próprio escopo, a revisão Regional vigente prevalece sobre rascunhos ou versões regionais anteriores.
 
 ## Fonte Visual/UI
 
 A apresentação player-facing deve seguir:
 
-**ASTERION — Consolidação de Visual & UI — atualização 2026-10-11, sincronizada com Fonte Mestra v1.6.0 + Terras do Ocaso v1.0.15 + Vales dos Enforcados v1.0.5**
+**ASTERION — Consolidação de Visual & UI v1.6.0 — sincronizada com Fonte Mestra v1.6.0 + Terras do Ocaso v1.0.15 + Vales dos Enforcados v1.0.6**
 
-Arquivo vigente: `ASTERION_UI_DECISOES_2026-10-11_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.5.md.
+Arquivo vigente: `ASTERION_UI_DECISOES_2026-10-13_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.6.md`.
 
-A Fonte Visual/UI v1.6.0 permanece vigente. A revisão regional Vales v1.0.6 não altera apresentação e não exige nova versão Visual/UI; o documento atual, sincronizado com Vales v1.0.5, continua aplicável à apresentação. A revisão TDO v1.0.16 também não altera regras ou estrutura de apresentação; a mesma Fonte Visual/UI v1.6.0 continua aplicável sem nova versão.
-
-Esta revisão inclui a HUD compacta de Retaliação, Oportunismo, Mira, Trama, Presságio e Fulgor/Julgamento, além do aviso de Arte inválida por falta de armamento compatível. A interface segue subordinada à regra mecânica da Fonte Mestra.
+A Fonte Visual/UI permanece o arquivo sincronizado em 2026-10-13 com Fonte Mestra v1.6.0, TDO v1.0.15 e Vales v1.0.6. As revisões regionais **TDO v1.0.16** e **Nareth v1.0.1**, bem como a formalização de **Várzeas v1.0.0**, não criam novo componente universal de apresentação nem alteram contrato de navegação, layout ou nomenclatura sistêmica; por isso este mesmo documento Visual/UI continua vigente.
 
 Ela define nomenclatura, texto, estrutura de telas, navegação, estados visuais e UX do Bot do Telegram. É subordinada à Fonte Mestra para regras mecânicas/números e à Fonte Regional para conteúdo regional oficial.
 
 Exemplos de mockup não criam regra mecânica ou conteúdo canônico quando a autoridade correspondente já definir outro valor/estado.
-
-## Regras cooperativas e roadmap técnico vigentes
-
-A regra normativa de Grupo, Campanha cooperativa, Caçada em Grupo, PvPvE, Domínio do Rastro e integração com Ronda está incorporada à Fonte Mestra v1.6.0, §§51–57. A autoridade regional TDO v1.0.16 aplica essa regra à P1 e à S6; Vales v1.0.6 preserva o conteúdo regional vigente e fecha exclusivamente o perfil numérico do encontro roteirizado de S12.
-
-A especificação técnica `docs/specs/MMO_PVPVE_FINAL_SPEC_V1.md` e os roadmaps `docs/specs/COOPERATIVE_MULTIPLAYER_ROADMAP_V2.md` e `docs/specs/OPTIONAL_SIDE_QUEST_BOSSES_V2.md` orientam entrega e verificação, sempre subordinados às Fontes oficiais. O antigo Decision Register MMO/PvPvE é histórico/supersedido e não é autoridade vigente.
-
-O blocker do perfil numérico do encontro de S12 está encerrado pela Fonte Regional Vales v1.0.6, exclusivamente para o encontro roteirizado da Etapa 7. A materialização continua subordinada à fórmula e às regras globais da Fonte Mestra v1.6.0.
 
 ## Fontes complementares de Lore e Direção Visual
 
@@ -69,23 +82,29 @@ As Fontes abaixo complementam as autoridades estrutural, regional e de Visual/UI
 
 ### Lore canônica complementar
 
-**Arquivo vigente:** `ASTERION_LORE_BIBLE_CANON_v1.1.md`
+**Arquivo vigente:** `ASTERION_LORE_BIBLE_CANON_v1.2.md`
 
-A v1.1 substitui a v1.0. Define verdade narrativa consolidada, cosmologia, relações históricas, famílias fenotípicas reconhecíveis das cinco Raças, limites de revelação e segredos de autor necessários para impedir contradições de Lore. Quando um fato já estiver definido em Fonte Mestra ou Regional vigente, essas Fontes superiores prevalecem.
+A v1.2 substitui a v1.1. Preserva a Lore consolidada e atualiza o fundamento fisiológico das cinco Raças para anatomia racial v2.0, mantendo nomes, mecânicas, compatibilidade biológica e núcleos narrativos. Quando um fato já estiver definido em Fonte Mestra ou Regional vigente, essas Fontes superiores prevalecem.
 
 ### Direção visual especializada — personagens humanoides
 
-**Arquivo vigente:** `ASTERION_BIBLIA_VISUAL_PERSONAGENS_RACAS_CLASSES_E_NPCS_v1.2.md`
+**Arquivo vigente:** `ASTERION_BIBLIA_VISUAL_PERSONAGENS_RACAS_CLASSES_E_NPCS_v2.0.md`
 
-A v1.2 substitui a v1.1 para produção futura. Define famílias fenotípicas legíveis das 5 Raças, fundos de herança, composição de fundos Raça × Classe, leitura das 6 Classes e 12 Caminhos, NPCs, adaptação regional, Aparências, estados de pose, composição e proibições de humanoides.
+A v2.0 substitui a v1.5 para toda produção/refação futura. Mantém Classes, Caminhos, NPCs e identidade individual, mas torna as cinco Raças imediatamente distinguíveis por anatomia/silhueta e atualiza as dez identidades canônicas das duas primeiras Regiões para a nova fisiologia.
+
+### Direção visual especializada — Aparência Errante das Cinzas
+
+**Arquivo vigente:** `ASTERION_APARENCIA_ERRANTE_DAS_CINZAS_FONTE_VISUAL_v1.3.md`
+
+A v1.3 é a autoridade visual específica da Aparência regional **Errante das Cinzas**. Define identidade de coleção, variação de poses/olhares, famílias de armamento permitidas no escopo cosmético, materiais, fundos e QA do lote de 60 assets. Em seu escopo, prevalece sobre instruções genéricas da Matriz de Produção quando houver divergência, sem criar ou alterar mecânica, proficiência, inventário, Classe, Raça ou conteúdo regional.
 
 ### Direção visual especializada — criaturas e biomas
 
 **Arquivo vigente:** `ASTERION_BESTIARIO_VISUAL_E_BIOMAS_v1.1.md`
 
-A v1.1 atualiza a direção visual de criaturas e biomas, incluindo o Guardião do Último Rastro, sem substituir mecânica ou conteúdo das Fontes Regionais FINAL.
-
 Define ecologia visual, anatomia, silhueta, materiais, escala, habitats, Variantes, Elites, criaturas de Masmorra e Chefes. Nas Regiões 1–2, mecânica e conteúdo continuam pertencendo às Fontes Regionais FINAL.
+
+A v1.1 substitui a v1.0 para produção futura e acrescenta o dossiê visual canônico do **Guardião do Último Rastro**, preservando ambiguidade de identidade/origem e diferenciação obrigatória de Peregrino Calcinado, Custódio Sem Rosto, Guardião das Lápides, O Sem-Nome e Vigia Partido.
 
 ### Direção visual especializada — ambientes
 
@@ -95,17 +114,47 @@ Define identidade ambiental, arquitetura, materiais, função histórica, Locais
 
 ### Especificação técnica de geração
 
-**Arquivo:** `ASTERION_BIBLIA_TECNICA_DE_GERACAO_DE_IMAGENS_v1.0.md`
+**Arquivo:** `ASTERION_BIBLIA_TECNICA_DE_GERACAO_DE_IMAGENS_v1.1.md`
 
 Define **como renderizar** o conteúdo já autorizado: canvas, proporção, pixel art, materiais, anatomia técnica, integridade de armas/focos, estados de pose, transparência, pós-processamento, nomenclatura e QA. Não cria Lore nem substitui as Bíblias especializadas.
 
 ### Controle operacional de produção
 
-**Arquivo:** `ASTERION_MATRIZ_DE_PRODUCAO_VISUAL_v1.1.md`
+**Arquivo:** `ASTERION_MATRIZ_DE_PRODUCAO_VISUAL_v2.0.md`
 
-Documento de produção, não Fonte de cânone. A v1.1 substitui a v1.0 e distribui as 10 âncoras raciais, as 60 âncoras Raça × Classe, fenótipos dentro das faixas canônicas, pose, estado de arma/foco e os 30 fundos-base Raça × Classe. Qualquer linha que conflite com Fonte autoritativa deve ser corrigida na Matriz, nunca na Fonte superior.
+Documento de produção, não Fonte de cânone. A v2.0 substitui a v1.3 e refaz as 10 âncoras raciais para anatomia v2.0, mantendo as 60 combinações Raça × Classe, armas, poses e fundos como estrutura operacional. Qualquer linha que conflite com Fonte autoritativa deve ser corrigida na Matriz, nunca na Fonte superior.
 
-## Decisão visual aprovada em 06/10/2026 — legibilidade racial e fundos
+### Padrão global de Aparências temáticas
+
+**Arquivo vigente:** `ASTERION_PADRAO_GLOBAL_SKINS_TEMATICAS_v1.1.md`
+
+A v1.1 substitui a v1.0 e torna a anatomia racial v2.0 obrigatória em todas as Aparências temáticas.
+
+### Direção visual especializada — Aparência Sobrevivente dos Vales
+
+**Arquivo vigente:** `ASTERION_APARENCIA_SOBREVIVENTE_DOS_VALES_FONTE_VISUAL_v1.1.md`
+
+A v1.1 substitui a v1.0 para incorporar anatomia racial v2.0 e referências documentais atualizadas; neste contêiner v2.0.1 também foi corrigido um carryover editorial indevido de exceções de armamento de `Errante das Cinzas`. `Sobrevivente dos Vales` segue as assinaturas globais de Classe; identidade regional e fundos permanecem.
+
+### Guia operacional Raça × Classe
+
+**Arquivo vigente:** `ASTERION_GUI_GERACAO_SKINS_RACA_CLASSE_v1.3.md`
+
+A v1.3 substitui a v1.2 e exige que Classe e equipamento acomodem fisicamente chifres/orelhas/proporções raciais.
+
+### Bundle Visual de recuperação
+
+**Arquivo vigente:** `ASTERION_BUNDLE_VISUAL_CHATGPT_v2.0.md`
+
+Espelho operacional dos documentos visuais vigentes para uso em Projeto ChatGPT. Não cria autoridade nova; em conflito prevalecem os documentos individuais acima.
+
+### Contêiner visual do Projeto ChatGPT
+
+**Arquivo vigente:** `ASTERION_CONSOLIDADO_RACAS_E_VISUAL_v2.0.2_PROJETO_FINAL.md`
+
+Contêiner documental para economizar slots de Fontes do Projeto. Incorpora o índice de autoridade e as Fontes visuais especializadas, preservando a precedência interna de cada documento. Não cria mecânica, Lore ou conteúdo regional novo.
+
+## Decisão visual vigente — legibilidade racial e anatomia v2.0
 
 Para assets de seleção e personagens jogáveis, a identidade racial não pode depender apenas de postura, roupa ou texto. As cinco Raças possuem famílias fenotípicas recorrentes, com exceções possíveis por descendência mista. Assets de seleção usam o centro fenotípico; skins Raça × Classe preservam ao menos dois marcadores raciais fortes.
 
@@ -123,6 +172,16 @@ Antes de gerar, refazer ou aprovar um asset:
 6. aplicar a Matriz de Produção quando houver âncora/linha correspondente;
 7. reprovar assets com anatomia quebrada, objeto impossível, spoiler ou identidade visual contraditória mesmo que a atmosfera geral esteja boa;
 8. não usar documentos antigos de prompts como autoridade quando divergirem das Fontes vigentes.
+
+## Decisão visual aprovada em 06/10/2026 — arma-assinatura de Classe
+
+Para as 60 Aparências padrão Raça × Classe, **toda skin deve exibir a arma-assinatura da Classe em leitura imediata**: Sentinela = arma de uma mão + escudo; Errante = duas armas curtas, preferencialmente uma em cada mão; Vigia = arco/besta; Tecelão = arma-foco de Trama; Oráculo = arma-foco simbólica/oracular; Luminar = cajado/bastão de combate-foco.
+
+Estados `mãos livres`, Repouso ou Contemplação podem mudar a posição do armamento, mas não eliminar a assinatura. Tecelão, Oráculo e Luminar devem permanecer distinguíveis também pela linguagem formal de seus focos: técnico/Trama, simbólico/possibilidades e centrado/Luz, respectivamente.
+
+As seis Classes da mesma Raça não podem reutilizar o mesmo traje-base como solução padrão. A diferenciação deve envolver arquitetura do torso, distribuição de equipamento, arma-assinatura e postura. Fundos monumentais genéricos repetidos — castelos, aquedutos, bandeiras e skylines épicos — devem ser rejeitados quando não vierem de fonte específica.
+
+Esta decisão é **direção visual**, não regra mecânica de equipamento, proficiência, dano, inventário ou loadout.
 
 ## Decisão adicional aprovada no projeto
 
@@ -152,7 +211,7 @@ Antes de implementar um sistema:
 
 ## Snapshot de implementação histórico — criação e primeiro combate
 
-As seções de implementação abaixo foram preservadas como registro histórico e não substituem as Fontes oficiais vigentes nem o estado atual do repositório.
+As seções de implementação abaixo foram preservadas como registro operacional e não substituem as Fontes oficiais vigentes nem o snapshot mais recente de `REPASSE_TECNICO.md`.
 
 O fluxo implementado permanece:
 
@@ -190,7 +249,7 @@ A especificação focada histórica da implementação desse limite está em `do
 
 ## Snapshot histórico — P1 Vozes na Estrada
 
-Neste snapshot histórico de P1, a Fonte Regional v1.0.13 e a Fonte Visual/UI de 2026-10-04 eram as referências vigentes naquele momento. O fluxo abaixo é uma nota de implementação preservada neste índice e não substitui as autoridades atuais definidas acima.
+A Fonte Regional v1.0.13 e a Fonte Visual/UI de 2026-10-04 eram as referências vigentes para P1 naquele momento. O fluxo abaixo é uma nota de implementação preservada como snapshot histórico e não substitui as autoridades atuais definidas acima.
 
 O fluxo autoritativo é:
 
@@ -216,10 +275,18 @@ A implementação jogável de P1 foi integrada ao `main` no commit squash `bc45b
 
 ## Próximo bloco aprovado — snapshot histórico
 
-O plano abaixo descreve uma etapa anterior do desenvolvimento e permanece apenas como snapshot histórico. Não deve ser usado para determinar o próximo bloco vigente de implementação.
+O plano abaixo descreve uma etapa anterior do desenvolvimento. Use `REPASSE_TECNICO.md` para o estado de implementação e próximos passos registrados mais recentemente.
 
 O próximo bloco de produção parte do estado pós-P1 e implementa **Travessia Refúgio ↔ Estrada + Caçada Manual Solo + familiaridade da Ronda + Desbravar da Estrada**, sem iniciar ainda a execução automática da Ronda, Caçada em Grupo, P2/S1 ou outro Local.
 
 A especificação técnica focada está em `docs/specs/ROAD_HUNT_EXPLORE_V1.4.3_TDO_V1.0.2.md`.
 
 Para este bloco, esse documento também registra as decisões adicionais já aprovadas e ainda pendentes de consolidação textual nas Fontes: materialização global de Equipamento/Runa de Saque; identidade regional de Materiais; textos/registro de Desbravar; UI pós-combate/exploração; IA PvE normal; Ação Preparada; e pacotes Hemorrágico/Venenoso. Essas decisões são autoridade de implementação **somente no escopo explicitamente fechado pela especificação** e não autorizam reabrir balanceamento ou extrapolar para conteúdo não coberto.
+
+---
+
+## Nota de escopo do pacote essencial
+
+Este consolidado é suficiente como autoridade de **design, Lore, direção visual e produção de assets** quando usado com Fonte Mestra, Fontes Regionais e Visual/UI do pacote essencial. Referências históricas a `REPASSE_TECNICO.md` e referências de implementação a `docs/specs/OPTIONAL_SIDE_QUEST_BOSSES_V2.md` permanecem externas: elas não foram fornecidas neste conjunto e não são reconstruídas por inferência. Para tarefas estritamente de estado de código/implementação ou da regra técnica específica de Chefe opcional de S18, anexar a especificação correspondente.
+
+---

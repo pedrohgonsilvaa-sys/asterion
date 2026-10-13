@@ -18,6 +18,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from asterion.application.equipment_modifications import EquipmentModificationService
 from asterion.application.progression import level_xp
 from asterion.domain.arts import SENTINEL_ART_IDS
 from asterion.domain.class_trials import sentinel_player_actions
@@ -1457,3 +1458,76 @@ def best_p6_diagnostic_configuration(summary):
             -choice[2]["median_turns"],
         ),
     )
+
+async def install_best_owned_runes(sessions, actor: int, *, server_id: str) -> list[dict[str, Any]]:
+    """Install the strongest already-owned compatible runes on equipped gear.
+
+    Inventory reads are diagnostic only. Every mutation is made through the
+    public EquipmentModificationService, including its foreground, ownership,
+    compatibility, capacity, and version checks.
+    """
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        if character is None:
+            return []
+        equipped = (
+            await session.execute(
+                select(CharacterEquipmentSlot.slot, EquipmentItem.id)
+                .join(
+                    EquipmentItem,
+                    EquipmentItem.id == CharacterEquipmentSlot.equipment_item_id,
+                )
+                .where(CharacterEquipmentSlot.character_id == character.id)
+                .order_by(CharacterEquipmentSlot.slot)
+            )
+        ).all()
+
+    service = EquipmentModificationService(sessions, server_id)
+    rarity_rank = {"comum": 1, "rara": 2, "raro": 2, "épica": 3, "epica": 3}
+    installed: list[dict[str, Any]] = []
+    for slot, item_id in equipped:
+        affinities = ("A", "B") if slot == "2H" else ("A",)
+        for affinity in affinities:
+            view = await service.runes(actor, item_id, affinity)
+            if view is None or not view.available or view.details.get("current") is not None:
+                continue
+            candidates = sorted(
+                view.details.get("candidates", ()),
+                key=lambda candidate: (
+                    int(candidate["grade"]),
+                    rarity_rank.get(str(candidate["rarity"]).casefold(), 0),
+                    str(candidate["family"]),
+                    str(candidate["stack_id"]),
+                ),
+                reverse=True,
+            )
+            for candidate in candidates:
+                preview = await service.rune_preview(
+                    actor, item_id, affinity, candidate["stack_id"]
+                )
+                if preview is None or not preview.available:
+                    continue
+                result = await service.install_rune(
+                    actor,
+                    item_id,
+                    affinity,
+                    candidate["stack_id"],
+                    expected_item_version=preview.item_version,
+                    expected_configuration_version=preview.combat_configuration_version,
+                )
+                if result is None:
+                    continue
+                installed.append(
+                    {
+                        "slot": slot,
+                        "affinity": affinity,
+                        "family": candidate["family"],
+                        "rarity": candidate["rarity"],
+                        "grade": candidate["grade"],
+                        "potency": candidate["potency"],
+                    }
+                )
+                break
+    return installed

@@ -74,6 +74,7 @@ from tests.helpers.tdo_playthrough import (
     TDOPlaythrough,
     best_p6_diagnostic_configuration,
     choose_p6_policy_action,
+    install_best_owned_runes,
     sample_p6_policies,
 )
 
@@ -2172,12 +2173,36 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     await travel_to_refuge()
     await craft_torso_if_available("S6 · preparação legítima de equipamento")
     s6_gear = await equip_best_available_combat_gear()
+    s6_runes = await install_best_owned_runes(sessions, actor, server_id="ocaso")
     rested_before_s6 = await WorldService(sessions, "ocaso").rest(actor)
     assert rested_before_s6 is not None and rested_before_s6.hp == rested_before_s6.max_hp
     await refill_p5_healing_stock(target_quantity=5)
     await driver.snapshot(
-        f"S6 · preparação no Refúgio · equipamento={s6_gear!r} · consumíveis conferidos"
+        f"S6 · preparação no Refúgio · equipamento={s6_gear!r} "
+        f"· runas={s6_runes!r} · consumíveis conferidos"
     )
+
+    s6_art_service = ActiveArtService(sessions, "ocaso")
+    desired_s6_arts = P6_DIAGNOSTIC_LOADOUTS["B"]
+    s6_art_view = await s6_art_service.view(actor)
+    assert s6_art_view is not None
+    for slot, art_id in enumerate(desired_s6_arts, start=1):
+        s6_art_view = await s6_art_service.view(actor)
+        assert s6_art_view is not None
+        equipped_art = next(
+            (entry.art_id for entry in s6_art_view.slots if entry.slot == slot),
+            None,
+        )
+        if equipped_art != art_id:
+            await s6_art_service.equip_art(
+                actor,
+                slot,
+                art_id,
+                expected_configuration_version=s6_art_view.combat_configuration_version,
+            )
+    final_s6_art_view = await s6_art_service.view(actor)
+    assert final_s6_art_view is not None
+    assert tuple(entry.art_id for entry in final_s6_art_view.slots) == desired_s6_arts
 
     # S6 is a legitimate Nv.10 secondary-quest reward source and is part of
     # the journey requested for the regional campaign. Its materials also
@@ -2202,34 +2227,19 @@ async def run_tdo_full_playthrough(database, monkeypatch):
 
     def s6_action(current):
         combat = current.combat
-        available = allowed_actions(combat)
-        player = combat.fighters["player"]
-        has_heal = any(
-            option.item_id == "consumable.heal" for option in current.consumable_options
-        )
-        if (
-            has_heal
-            and combat.prepared_action is None
-            and player.hp * 10 <= player.stats.hp * 5
-        ):
-            return "consumable:consumable.heal"
-        if combat.prepared_action is not None and "defend" in available:
-            return "defend"
-        damage_arts = [
-            action_id
-            for action_id in available
-            if action_id.startswith(("class_art.", "path_art."))
-            and combat.player_actions[action_id].coefficient > 0
-        ]
-        if damage_arts:
-            return max(
-                damage_arts,
-                key=lambda action_id: (
-                    combat.player_actions[action_id].coefficient,
-                    action_id,
+        return choose_p6_policy_action(
+            combat,
+            "devastador",
+            heal_count=next(
+                (
+                    quantity
+                    for item_id, quantity in current.consumable_quantities
+                    if item_id == "consumable.heal"
                 ),
-            )
-        return driver.combat_action(combat)
+                0,
+            ),
+            budget_limit=current.consumable_budget_limit,
+        )
 
     for attempt in range(8):
         async def s6_mutate(current, action):
