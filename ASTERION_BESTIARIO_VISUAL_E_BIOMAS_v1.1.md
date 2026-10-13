@@ -1,7 +1,7 @@
 # ASTERION — BÍBLIA VISUAL DE BIOMAS E BESTIÁRIO v1.1
 
 **Estado:** fechamento de Lore + direção visual para geração/refação de skins de criaturas.  
-**Base autoritativa preservada:** Fonte Mestra v1.6.0; Terras do Ocaso v1.0.15 FINAL; Vales dos Enforcados v1.0.5 FINAL; Consolidação Visual/UI 2026-10-11.\
+**Base autoritativa preservada:** Fonte Mestra v1.6.0; Terras do Ocaso v1.0.16 FINAL; Vales dos Enforcados v1.0.6 FINAL; Consolidação Visual/UI 2026-10-13.\
 **Escopo deste documento:** biomas, ecologia visual, anatomia, silhueta, materiais, escala, leitura combatente, sinais regionais, proibições visuais, Elites, criaturas de Masmorra e Chefes das seis Regiões.
 
 > Este documento NÃO reabre números de combate, economia, loot, níveis ou regras mecânicas já fechadas. Quando uma criatura das Regiões 1–2 já possui Categoria, Arquétipo, Habitat, Variante ou função definida na Fonte Regional, tudo isso permanece inalterado. As descrições visuais abaixo expandem essa identidade sem substituir a mecânica.
