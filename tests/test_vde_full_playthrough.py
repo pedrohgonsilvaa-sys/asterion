@@ -615,7 +615,9 @@ async def _equip_best_available_combat_gear(sessions, actor):
     return changed
 
 
-async def _complete_mission_combat(missions, driver, actor, quest_id, view, label):
+async def _complete_mission_combat(
+    missions, driver, actor, quest_id, view, label, *, action_picker=None
+):
     for retry in range(1, 6):
         fight = await missions.start_solo_combat(actor, quest_id, view.state_version)
         if fight is not None and fight.progress.get("awaiting_retry"):
@@ -624,17 +626,36 @@ async def _complete_mission_combat(missions, driver, actor, quest_id, view, labe
         assert fight is not None and fight.activity_id is not None and fight.combat is not None, (
             f"{label}: encontro não materializado\n{driver.diagnostic()}"
         )
-        result = await driver.combat_to_result(
-            fight,
-            lambda current, action: missions.action_combat(
+        async def mutate(current, action):
+            if action.startswith("consumable:"):
+                consumable_id = action.removeprefix("consumable:")
+                option = next(
+                    item
+                    for item in current.consumable_options
+                    if item.item_id == consumable_id
+                )
+                return await missions.action_combat(
+                    actor,
+                    current.activity_id,
+                    current.combat.version,
+                    consumable_id=consumable_id,
+                    target_id=option.target_id,
+                    effect_id=option.effect_id,
+                )
+            return await missions.action_combat(
                 actor,
                 current.activity_id,
                 current.combat.version,
                 action,
-            ),
+            )
+
+        result = await driver.combat_to_result(
+            fight,
+            mutate,
             lambda: missions.resume_active(actor),
             label=f"{label} · tentativa {retry}",
             max_actions=500,
+            action_picker=action_picker,
         )
         if result.kind == "combat_result":
             result = await missions.resume(actor, quest_id)
@@ -1061,6 +1082,61 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     await _round_trip_snapshot(driver, "Vales · P11 concluída e Berço descoberto")
 
     await _hunt_to_level(road, driver, actor, 20, counts)
+    s12 = await missions.start(actor, S12_ID)
+    assert s12 is not None and s12.kind == "read_record"
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "read_record")
+    await _move_to(road, actor, VDE_GARGANTA)
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_garganta")
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "find_mark")
+    await _move_to(road, actor, VDE_MATA)
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_mata")
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "recover_object")
+    await _move_to(road, actor, VDE_BAIXIOS)
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_baixios")
+
+    def s12_policy(view):
+        combat = view.combat
+        available = allowed_actions(combat)
+        if combat.prepared_action is not None and "defend" in available:
+            return "defend"
+        player = combat.fighters["player"]
+        if player.hp / player.stats.hp <= Decimal("0.60"):
+            for item_id in ("consumable.heal.vde.ii", "consumable.heal"):
+                if any(option.item_id == item_id for option in view.consumable_options):
+                    return f"consumable:{item_id}"
+        damaging_arts = [
+            action
+            for action in available
+            if action.startswith(("class_art.", "path_art."))
+            and combat.player_actions[action].coefficient > 0
+        ]
+        if damaging_arts:
+            return max(
+                damaging_arts,
+                key=lambda action: combat.player_actions[action].coefficient,
+            )
+        return driver.combat_action(combat)
+
+    s12 = await _complete_mission_combat(
+        missions,
+        driver,
+        actor,
+        S12_ID,
+        s12,
+        "Vales S12",
+        action_picker=s12_policy,
+    )
+    assert s12.kind == "examine_site"
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "examine_site")
+    await _move_to(road, actor, VDE_CLAUSTRO)
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_claustro")
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "last_record")
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "report_iven")
+    await _move_to(road, actor, VDE_VIGILIA)
+    s12 = await missions.advance(actor, S12_ID, s12.state_version, "register_names")
+    assert s12.status == "completed"
+    await _round_trip_snapshot(driver, "Vales · S12 concluída antes de P12")
+
     # The character already reached Vigília through the public route graph.
     # Reconfirm that safe-hub crafting is available and use only recipes whose
     # live service previews accept the earned profession, level and inventory.
@@ -1269,24 +1345,9 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         if healing_id is not None and hp_fraction <= Decimal("0.60"):
             return f"consumable:{healing_id}"
 
-        # Cleanse only meaningful persistent effects; an available option is
-        # not by itself a reason to spend a combat opportunity.
-        poison_stacks = sum(
-            dot.stacks
-            for dot in combat.dot_states.get(player.id, ())
-            if dot.kind == "poison"
-        )
-        if poison_stacks >= 2 and "consumable.antidote.vde.ii" in item_ids:
-            return "consumable:consumable.antidote.vde.ii"
-        agility_debuff = any(
-            effect.kind == "debuff"
-            and effect.stat == "agility"
-            and effect.remaining >= 2
-            and effect.removable
-            for effect in player.effects
-        )
-        if agility_debuff and "consumable.purification.vde.ii" in item_ids:
-            return "consumable:consumable.purification.vde.ii"
+        # P12 allows three combat consumables. Previous public-run diagnostics
+        # showed that spending those slots on cleansing left fewer 22%-HP heals
+        # and made less boss progress; this policy reserves them for healing.
 
         connections_alive = any(
             (fighter := combat.fighters.get(key)) is not None and fighter.hp > 0
@@ -1446,33 +1507,6 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     await _round_trip_snapshot(driver, "Vales · P12 concluída com escolha individual")
 
     # S12 is optional and may canonically be completed on either side of P12.
-    # Run its combat after the regional climax so the boss attempt begins with
-    # the character's natural HP instead of carrying damage from that separate
-    # optional encounter. No recovery or HP adjustment is invented here.
-    await _move_to(road, actor, VDE_CLAUSTRO)
-    s12 = await missions.start(actor, S12_ID)
-    assert s12 is not None and s12.kind == "read_record"
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "read_record")
-    await _move_to(road, actor, VDE_GARGANTA)
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_garganta")
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "find_mark")
-    await _move_to(road, actor, VDE_MATA)
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_mata")
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "recover_object")
-    await _move_to(road, actor, VDE_BAIXIOS)
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_baixios")
-    s12 = await _complete_mission_combat(missions, driver, actor, S12_ID, s12, "Vales S12")
-    assert s12.kind == "examine_site"
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "examine_site")
-    await _move_to(road, actor, VDE_CLAUSTRO)
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "visit_claustro")
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "last_record")
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "report_iven")
-    await _move_to(road, actor, VDE_VIGILIA)
-    s12 = await missions.advance(actor, S12_ID, s12.state_version, "register_names")
-    assert s12.status == "completed"
-    await _round_trip_snapshot(driver, "Vales · S12 concluída depois de P12")
-
     await _hunt_to_level(road, driver, actor, 21, counts)
     await _move_to(road, actor, VDE_CLAUSTRO)
     await missions.resume(actor, P12_ID)
