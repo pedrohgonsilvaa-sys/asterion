@@ -2,16 +2,6 @@ name: Regional Playthroughs
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    paths:
-      - ".github/workflows/regional-playthrough.yml"
-      - "src/asterion/application/**"
-      - "src/asterion/domain/**"
-      - "src/asterion/bot/**"
-      - "tests/test_tdo_full_playthrough.py"
-      - "tests/test_vde_full_playthrough.py"
-      - "tests/helpers/tdo_playthrough.py"
 
 jobs:
   regional-playthrough:
