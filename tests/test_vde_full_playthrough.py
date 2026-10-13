@@ -1279,6 +1279,7 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         ),
     }
     p12_attempt_target_connections = False
+    p12_attempt_policy = "devastador"
 
     async def configure_p12_arts(desired_p12_arts):
         # The retry schedule only swaps the one Art that differs between each
@@ -1427,7 +1428,7 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         # allows safe ordinary hits to trigger Ímpeto Doloroso.
         return choose_p6_policy_action(
             combat,
-            "devastador",
+            p12_attempt_policy,
             heal_count=0,
             budget_limit=view.consumable_budget_limit,
         )
@@ -1435,20 +1436,26 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     after_boss = None
     p12_attempt_diagnostics = []
     p12_retry_plan = (
-        ("C", False),
-        ("C", False),
-        ("A", False),
-        ("A", True),
-        ("D", False),
-        ("D", True),
+        ("C", False, "devastador"),
+        ("C", False, "devastador"),
+        ("A", False, "devastador"),
+        ("A", True, "devastador"),
+        ("D", False, "devastador"),
+        ("D", True, "devastador"),
+        ("C", False, "sentinela_devastador"),
+        ("C", False, "sentinela_devastador"),
     )
-    for retry, (loadout_name, target_connections) in enumerate(p12_retry_plan, start=1):
+    for retry, (loadout_name, target_connections, combat_policy) in enumerate(
+        p12_retry_plan, start=1
+    ):
         configured_p12_arts = await configure_p12_arts(p12_loadouts[loadout_name])
         p12_attempt_target_connections = target_connections
+        p12_attempt_policy = combat_policy
         attempt_preparation = await _p12_preparation_snapshot(sessions, actor)
         print(
             f"VDE_P12_RETRY_PLAN_{retry}={{'loadout': {loadout_name!r}, "
-            f"'target_connections': {target_connections}, 'arts': {configured_p12_arts!r}}}",
+            f"'target_connections': {target_connections}, 'policy': {combat_policy!r}, "
+            f"'arts': {configured_p12_arts!r}}}",
             flush=True,
         )
         p12_attempt_metrics = {
@@ -1508,6 +1515,7 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             "arts": configured_p12_arts,
             "loadout": loadout_name,
             "target_connections": target_connections,
+            "policy": combat_policy,
             "path": p12_preparation["path"],
             "talents": p12_preparation["talents"],
             "player_hp_start": str(start_player.hp),
@@ -1553,7 +1561,7 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             f"Matriarca encerrou em estado inesperado: {after_boss!r}"
         )
         p12 = after_boss
-        if retry < 6:
+        if retry < len(p12_retry_plan):
             # Retry recovery restores HP through the campaign service. Travel
             # back to the safe hub and restock only what public crafting still
             # accepts from resources actually earned by this playthrough.
