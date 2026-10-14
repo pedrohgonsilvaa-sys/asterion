@@ -37,6 +37,18 @@ VDE_MATA_LOCATION = "vde.location.mata_suspensa"
 VDE_BAIXIOS_LOCATION = "vde.location.baixios_enredados"
 VDE_CLAUSTRO_LOCATION = "vde.location.claustro_das_raizes"
 VDE_BERCO_LOCATION = "vde.location.berco_da_matriarca"
+NARETH_CAMPINAS_LOCATION = "nareth.location.campinas_do_meridiano"
+NARETH_POSTO_LOCATION = "nareth.location.posto_de_nareth"
+NARETH_CAMPINAS = "Campinas do Meridiano"
+NARETH_POSTO = "Posto de Nareth"
+NARETH_REGION = "Planícies de Nareth"
+NARETH_BRAZIER_HORIZONTE = "nareth.brazier.horizonte"
+NARETH_BRAZIER_POSTO = "nareth.brazier.posto"
+NARETH_HUNT_UNLOCK = "hunt.manual.nareth.campinas_do_meridiano"
+NARETH_EXPLORE_UNLOCK = "explore.nareth.campinas_do_meridiano"
+NARETH_ROUND_FAMILIARITY = "hunt_round.nareth.campinas_do_meridiano"
+NARETH_CAMPINAS_POSTO_ROUTE = "route.nareth.campinas_posto"
+NARETH_REGION_UNLOCK = "region.nareth.available"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
 BOSQUE_BRAZIER = "tdo.brazier.galhos_mortos"
@@ -574,6 +586,61 @@ VDE_BARK_EXECUTIONER = Creature(
     ),
     damage_taken_modifiers=(("burn", D("1.10")), ("bleed", D("0.90"))),
 )
+NARETH_MERIDIAN_HOUND = Creature(
+    "galgo_meridiano", "Galgo do Meridiano", "common", "predator", 21, 24, 34,
+    ("mordida_campo", "corte_passagem", "corrida_meridiano"),
+    (
+        ("mordida_campo", "Mordida de Campo", D("1.00"), 0, D(0), 0),
+        ("corte_passagem", "Corte de Passagem", D("0.90"), 0, D(0), 0, "bleed", 1, False, 2),
+        ("corrida_meridiano", "Corrida do Meridiano", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+    ),
+    ai_priority=("corte_passagem", "corrida_meridiano"),
+)
+NARETH_MARKER_VULTURE = Creature(
+    "abutre_marco", "Abutre de Marco", "common", "predator", 21, 24, 33,
+    ("bicada_marco", "rasante_longo", "oportunismo_horizonte"),
+    (
+        ("bicada_marco", "Bicada de Marco", D("0.95"), 0, D(0), 0),
+        ("rasante_longo", "Rasante Longo", D("1.05"), 0, D(0), 0, None, 0, False, 2),
+        (
+            "oportunismo_horizonte", "Oportunismo do Horizonte", D("0.80"), 0, D(0), 0,
+            None, 0, False, 3, None, D(0), D(0), 0, False, "opponent", None, None, None,
+            (), (), D("0.50"), D(0), D(0), D(0), D("0.10"), D("0.40"),
+        ),
+    ),
+    ai_priority=("oportunismo_horizonte", "rasante_longo"),
+)
+NARETH_DITCH_WANDERER = Creature(
+    "errante_valas", "Errante das Valas", "uncommon", "balanced", 21, 25, 30,
+    ("golpe_vala", "gancho_improvisado", "golpe_vala"),
+    (
+        ("golpe_vala", "Golpe de Vala", D("1.00"), 0, D(0), 0),
+        ("gancho_improvisado", "Gancho Improvisado", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "agility"),
+    ),
+    ai_priority=("gancho_improvisado",),
+)
+NARETH_HORIZON_ALPHA = Creature(
+    "alfa_horizonte", "Alfa do Horizonte", "elite", "predator", 23, 24, 3,
+    ("mordida_alfa", "rasgo_travessia", "cacada_campo", "corrida_sem_abrigo"),
+    (
+        ("mordida_alfa", "Mordida do Alfa", D("1.00"), 0, D(0), 0),
+        ("rasgo_travessia", "Rasgo de Travessia", D("0.90"), 0, D(0), 0, "bleed", 1, False, 2),
+        (
+            "cacada_campo", "Caçada de Campo", D("1.30"), 0, D(0), 0, None, 0, False, 3,
+            None, D(0), D(0), 0, False, "opponent", None, None, None, (), (), D("0.50"),
+            D(0), D(0), D("0.10"),
+        ),
+        ("corrida_sem_abrigo", "Corrida sem Abrigo", D("1.70"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("rasgo_travessia", "corrida_sem_abrigo"),
+)
+NARETH_CREATURES = (
+    NARETH_MERIDIAN_HOUND,
+    NARETH_MARKER_VULTURE,
+    NARETH_DITCH_WANDERER,
+    NARETH_HORIZON_ALPHA,
+)
+
 VDE_MATRIARCH = Creature(
     "matriarca_raizes",
     "Matriarca das Raízes",
@@ -760,6 +827,7 @@ CREATURE_CATALOG = (
     *CREATURE_CATALOG,
     *VDE_CREATURES,
     *VDE_DUNGEON_CREATURES,
+    *NARETH_CREATURES,
     *CAMPAIGN_BOSS_CREATURES,
 )
 
@@ -795,6 +863,10 @@ VARIANT_POOL = {
     "mariposa_breu_verde": ("venomous", "agile", "furious"),
     "vigia_enraizado": ("resistant", "furious"),
     "carrasco_casca": (),
+    "galgo_meridiano": ("furious", "agile", "hemorrhagic"),
+    "abutre_marco": ("agile", "furious"),
+    "errante_valas": ("resistant", "furious", "agile"),
+    "alfa_horizonte": (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -922,6 +994,8 @@ LOCATION_LEVEL_BANDS = {
     "Mata Suspensa": (13, 16),
     "Baixios Enredados": (15, 18),
     "Claustro das Raízes": (18, 20),
+    "Campinas do Meridiano": (21, 23),
+    "Posto de Nareth": (21, 23),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -1026,6 +1100,25 @@ VDE_CLAUSTRO_PROFILE = HuntLocationProfile(
     explore_unlock=VDE_CLAUSTRO_EXPLORE_UNLOCK,
 )
 
+
+NARETH_CAMPINAS_PROFILE = HuntLocationProfile(
+    local_id=NARETH_CAMPINAS_LOCATION,
+    label=NARETH_CAMPINAS,
+    creature_weights=(("galgo_meridiano", 34), ("abutre_marco", 33), ("errante_valas", 30), ("alfa_horizonte", 3)),
+    variant_chance=10,
+    hunt_unlock=NARETH_HUNT_UNLOCK,
+    round_familiarity=NARETH_ROUND_FAMILIARITY,
+    explore_unlock=NARETH_EXPLORE_UNLOCK,
+)
+NARETH_POSTO_PROFILE = HuntLocationProfile(
+    local_id=NARETH_POSTO_LOCATION,
+    label=NARETH_POSTO,
+    creature_weights=(),
+    variant_chance=0,
+    hunt_unlock=NARETH_HUNT_UNLOCK,
+    round_familiarity=NARETH_ROUND_FAMILIARITY,
+    explore_unlock=NARETH_EXPLORE_UNLOCK,
+)
 
 @dataclass(frozen=True)
 class ExplorationResultDefinition:
@@ -1236,6 +1329,28 @@ VDE_CLAUSTRO_EXPLORATION_PROFILE = ExplorationLocationProfile(
     ),
 )
 
+NARETH_CAMPINAS_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=NARETH_CAMPINAS_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("first_meridian", "great_discovery", "explore.nareth.campinas.marco_primeiro_meridiano", 100, "O Marco do Primeiro Meridiano confirma que a antiga estrada usava referências repetidas em intervalos regulares.", min_level=21, unique=True),
+        ExplorationResultDefinition("pegadas_alongadas", "knowledge", "explore.nareth.campinas.pegadas_alongadas", 60, "Pegadas alongadas foram registradas nas Campinas.", min_level=21),
+        ExplorationResultDefinition("medidas_pedra", "knowledge", "explore.nareth.campinas.medidas_na_pedra", 40, "Medidas antigas foram observadas na pedra.", min_level=21),
+        ExplorationResultDefinition("duas_medidas", "narrative", "explore.nareth.campinas.duas_medidas_mesma_estrada", 70, "Duas medidas para a mesma estrada divergem sem explicar a função das referências.", min_level=21, unique=True),
+        ExplorationResultDefinition("vento_palha", "narrative", "explore.nareth.campinas.vento_sobre_palha", 30, "O vento atravessa a palha alta das Campinas.", min_level=21),
+        ExplorationResultDefinition("galgo_meridiano", "combat", "explore.nareth.campinas.combat.galgo_meridiano", 40, "Um Galgo do Meridiano surge no campo.", min_level=21, creature_id="galgo_meridiano"),
+        ExplorationResultDefinition("abutre_marco", "combat", "explore.nareth.campinas.combat.abutre_marco", 35, "Um Abutre de Marco desce sobre a rota.", min_level=21, creature_id="abutre_marco"),
+        ExplorationResultDefinition("errante_valas", "combat", "explore.nareth.campinas.combat.errante_valas", 25, "Um Errante das Valas bloqueia a passagem.", min_level=21, creature_id="errante_valas"),
+        ExplorationResultDefinition("bronze_marco", "resource", "explore.nareth.campinas.bronze_de_marco", 30, "Bronze de Marco pode ser recolhido nas Campinas.", min_level=21),
+        ExplorationResultDefinition("couro_horizonte", "resource", "explore.nareth.campinas.couro_de_horizonte", 30, "Couro de Horizonte pode ser recolhido nas Campinas.", min_level=21),
+        ExplorationResultDefinition("erva_vento", "resource", "explore.nareth.campinas.erva_de_vento", 25, "Erva de Vento pode ser recolhida nas Campinas.", min_level=21),
+        ExplorationResultDefinition("po_eixo", "resource", "explore.nareth.campinas.po_de_eixo", 15, "Pó de Eixo pode ser recolhido nas Campinas.", min_level=21),
+        ExplorationResultDefinition("linha_relva", "atmospheric", "explore.nareth.campinas.linha_sob_relva", 34, "Uma linha de pedra permanece sob a relva.", min_level=21),
+        ExplorationResultDefinition("horizonte_sem_abrigo", "atmospheric", "explore.nareth.campinas.horizonte_sem_abrigo", 33, "O horizonte aberto não oferece abrigo.", min_level=21),
+        ExplorationResultDefinition("pedra_duas_sombras", "atmospheric", "explore.nareth.campinas.pedra_duas_sombras", 33, "Uma pedra projeta duas sombras alongadas.", min_level=21),
+    ),
+)
+
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
     CHARNECA_LOCATION: CHARNECA_EXPLORATION_PROFILE,
@@ -1245,6 +1360,7 @@ EXPLORATION_PROFILES = {
     VDE_MATA_LOCATION: VDE_MATA_EXPLORATION_PROFILE,
     VDE_BAIXIOS_LOCATION: VDE_BAIXIOS_EXPLORATION_PROFILE,
     VDE_CLAUSTRO_LOCATION: VDE_CLAUSTRO_EXPLORATION_PROFILE,
+    NARETH_CAMPINAS_LOCATION: NARETH_CAMPINAS_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
@@ -1256,6 +1372,8 @@ HUNT_PROFILES = {
     VDE_MATA_LOCATION: VDE_MATA_PROFILE,
     VDE_BAIXIOS_LOCATION: VDE_BAIXIOS_PROFILE,
     VDE_CLAUSTRO_LOCATION: VDE_CLAUSTRO_PROFILE,
+    NARETH_CAMPINAS_LOCATION: NARETH_CAMPINAS_PROFILE,
+    NARETH_POSTO_LOCATION: NARETH_POSTO_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -1434,6 +1552,23 @@ VDE_BASIC_MATERIAL_CREATURE_IDS = frozenset(
     }
 )
 
+NARETH_BASIC_MATERIAL_CREATURE_IDS = frozenset(
+    {
+        "galgo_meridiano",
+        "abutre_marco",
+        "errante_valas",
+        "escaravelho_canal",
+        "cervo_horizonte",
+        "serpe_campinas",
+        "casco_invertido",
+        "mariposa_eixo",
+        "vigia_meridiano",
+        "alfa_horizonte",
+        "serpe_eixo",
+        "custodio_invertido",
+    }
+)
+
 MATERIAL_POOLS = {
     "dog_cinereo": (("material.tdo.couro_escoriado", 100),),
     "alfa_cinereo": (("material.tdo.couro_escoriado", 100),),
@@ -1505,6 +1640,50 @@ MATERIAL_POOLS = {
     "carrasco_casca": (
         ("material.vde.resina_enredada", 70),
         ("material.vde.ferro_enredado", 30),
+    ),
+    # Nareth weights select each already-awarded basic material unit; the
+    # global chance and quantity are resolved before these independent draws.
+    "galgo_meridiano": (("material.nareth.couro_de_horizonte", 100),),
+    "abutre_marco": (
+        ("material.nareth.erva_de_vento", 65),
+        ("material.nareth.po_de_eixo", 35),
+    ),
+    "errante_valas": (
+        ("material.nareth.bronze_de_marco", 65),
+        ("material.nareth.po_de_eixo", 35),
+    ),
+    "escaravelho_canal": (
+        ("material.nareth.erva_de_vento", 55),
+        ("material.nareth.po_de_eixo", 45),
+    ),
+    "cervo_horizonte": (("material.nareth.couro_de_horizonte", 100),),
+    "serpe_campinas": (
+        ("material.nareth.erva_de_vento", 75),
+        ("material.nareth.couro_de_horizonte", 25),
+    ),
+    "casco_invertido": (
+        ("material.nareth.couro_de_horizonte", 80),
+        ("material.nareth.po_de_eixo", 20),
+    ),
+    "mariposa_eixo": (
+        ("material.nareth.po_de_eixo", 70),
+        ("material.nareth.erva_de_vento", 30),
+    ),
+    "vigia_meridiano": (
+        ("material.nareth.bronze_de_marco", 90),
+        ("material.nareth.po_de_eixo", 10),
+    ),
+    "alfa_horizonte": (
+        ("material.nareth.couro_de_horizonte", 85),
+        ("material.nareth.po_de_eixo", 15),
+    ),
+    "serpe_eixo": (
+        ("material.nareth.erva_de_vento", 60),
+        ("material.nareth.po_de_eixo", 40),
+    ),
+    "custodio_invertido": (
+        ("material.nareth.bronze_de_marco", 75),
+        ("material.nareth.po_de_eixo", 25),
     ),
 }
 

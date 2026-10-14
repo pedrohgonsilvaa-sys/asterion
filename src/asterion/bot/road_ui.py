@@ -10,6 +10,9 @@ from asterion.application.prologue import CombatView
 from asterion.application.road import (
     BOSQUE,
     CHARNECA,
+    NARETH_CAMPINAS,
+    NARETH_POSTO,
+    NARETH_REGION,
     REFUGE,
     ROAD,
     RUINS,
@@ -59,20 +62,28 @@ def _reward_block(view) -> str:
 def _location_copy(location: str) -> tuple[str, str]:
     if location not in TRAVEL_LOCATIONS:
         return "📍 Local indisponível", "Estado da jornada indisponível"
-    icon = (
-        "🌑" if location == CHARNECA else
-        "🌲" if location == BOSQUE else
-        "🪨" if location == RUINS else
-        "🪢" if location == VDE_GARGANTA else
-        "🌫️" if location == VDE_VIGILIA else
-        "🌿" if location == VDE_MATA else
-        "🌫️" if location == VDE_BAIXIOS else
-        "🪨" if location == VDE_CLAUSTRO else "🔥"
-    )
+    icon = {
+        CHARNECA: "🌑",
+        BOSQUE: "🌲",
+        RUINS: "🪨",
+        VDE_GARGANTA: "🪢",
+        VDE_VIGILIA: "🌫️",
+        VDE_MATA: "🌿",
+        VDE_BAIXIOS: "🌫️",
+        VDE_CLAUSTRO: "🪨",
+        NARETH_CAMPINAS: "🌾",
+        NARETH_POSTO: "🏘️",
+    }.get(location, "🔥")
     if location == VDE_BERCO:
         return f"🌿 {location}", f"{VDE_REGION} · Local de clímax"
     low, high = LOCATION_LEVEL_BANDS.get(location, (1, 10))
-    region = VDE_REGION if location in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO} else "Terras do Ocaso"
+    region = (
+        NARETH_REGION
+        if location in {NARETH_CAMPINAS, NARETH_POSTO}
+        else VDE_REGION
+        if location in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO}
+        else "Terras do Ocaso"
+    )
     return f"{icon} {location}", f"{region} · Nv. {low}–{high}"
 
 
@@ -663,6 +674,7 @@ def render_road(view: RoadView) -> Screen:
     if view.kind in {
         "road", "refuge", "charneca", "bosque", "ruinas",
         "vde_garganta", "vde_vigilia", "vde_mata", "vde_baixios", "vde_claustro", "vde_berco",
+        "nareth_campinas", "nareth_posto",
     }:
         return render_current_local(
             view,
@@ -713,7 +725,7 @@ def render_current_local(
         bar(view.vigor, view.max_vigor, "🟨"),
     ]
     keyboard: list[list[InlineKeyboardButton]] = []
-    if view.location in {ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO}:
+    if view.location in {ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, NARETH_CAMPINAS}:
         lines.append("")
         if view.hunt_enabled:
             lines.append("🦌 Caçada · Disponível")
@@ -745,7 +757,7 @@ def render_current_local(
             )
         else:
             lines.append("🚫 Desbravar · Indisponível neste Local")
-    if view.location in {VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO}:
+    if view.location in {VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, NARETH_CAMPINAS}:
         for destination in view.route_destinations:
             route_key, label = {
                 (VDE_GARGANTA, VDE_VIGILIA): ("vde_vigilia", "Seguir para a Vigília do Vale"),
@@ -758,6 +770,10 @@ def render_current_local(
                 (VDE_CLAUSTRO, VDE_BAIXIOS): ("vde_baixios", "Retornar aos Baixios Enredados"),
                 (VDE_CLAUSTRO, VDE_BERCO): ("vde_berco", "Seguir para o Berço da Matriarca"),
                 (VDE_BERCO, VDE_CLAUSTRO): ("vde_claustro", "Retornar ao Claustro das Raízes"),
+                (VDE_BERCO, NARETH_CAMPINAS): ("nareth_campinas", "Atravessar às Campinas do Meridiano"),
+                (NARETH_CAMPINAS, VDE_BERCO): ("vde_berco", "Retornar aos Vales dos Enforcados"),
+                (NARETH_CAMPINAS, NARETH_POSTO): ("nareth_posto", "Seguir para o Posto de Nareth"),
+                (NARETH_POSTO, NARETH_CAMPINAS): ("nareth_campinas", "Retornar às Campinas do Meridiano"),
             }.get((view.location, destination), (None, None))
             if route_key is not None:
                 keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])
@@ -797,6 +813,17 @@ def render_current_local(
                 keyboard.append(
                     [InlineKeyboardButton(text="Retornar ao Claustro das Raízes", callback_data="road:route:vde_claustro")]
                 )
+        if mission_available:
+            keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
+    elif view.location == NARETH_POSTO:
+        lines.extend(["", "🏘️ Posto seguro · Hub de Nareth"])
+        for destination in view.route_destinations:
+            if destination == NARETH_CAMPINAS:
+                keyboard.append(
+                    [InlineKeyboardButton(text="Retornar às Campinas do Meridiano", callback_data="road:route:nareth_campinas")]
+                )
+        if view.brazier_label:
+            lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
         if mission_available:
             keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     else:

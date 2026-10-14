@@ -49,6 +49,12 @@ MATERIAL_LABELS = {
     "material.vde.fragmento_aprimoramento_ii": "Fragmento de Aprimoramento II",
     "material.vde.nucleo_fosso_raizes": "Núcleo do Fosso das Raízes",
     "material.vde.nucleo_no_antigo": "Núcleo do Nó Antigo",
+    "material.nareth.bronze_de_marco": "Bronze de Marco",
+    "material.nareth.couro_de_horizonte": "Couro de Horizonte",
+    "material.nareth.erva_de_vento": "Erva de Vento",
+    "material.nareth.po_de_eixo": "Pó de Eixo",
+    "material.nareth.catalisador_elite_iii": "Catalisador de Elite III",
+    "material.nareth.fragmento_aprimoramento_iii": "Fragmento de Aprimoramento III",
 }
 
 @dataclass(frozen=True)

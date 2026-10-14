@@ -42,6 +42,16 @@ from asterion.domain.road import (
     CHARNECA_ROUTE_UNLOCK,
     EXPLORATION_PROFILES,
     MATERIAL_POOLS,
+    NARETH_BASIC_MATERIAL_CREATURE_IDS,
+    NARETH_BRAZIER_HORIZONTE,
+    NARETH_BRAZIER_POSTO,
+    NARETH_CAMPINAS,
+    NARETH_CAMPINAS_LOCATION,
+    NARETH_CAMPINAS_POSTO_ROUTE,
+    NARETH_EXPLORE_UNLOCK,
+    NARETH_POSTO,
+    NARETH_POSTO_LOCATION,
+    NARETH_REGION_UNLOCK,
     ROAD_EXPLORATION_PROFILE,
     ROAD_LOCATION,
     RUINS_BRAZIER,
@@ -122,9 +132,15 @@ VDE_MATA = "Mata Suspensa"
 VDE_BAIXIOS = "Baixios Enredados"
 VDE_CLAUSTRO = "Claustro das Raízes"
 VDE_BERCO = "Berço da Matriarca"
+NARETH_CAMPINAS_LABEL = NARETH_CAMPINAS
+NARETH_POSTO_LABEL = NARETH_POSTO
 REGION = "Terras do Ocaso"
 VDE_REGION = "Vales dos Enforcados"
+NARETH_REGION = "Planícies de Nareth"
 VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO))
+NARETH_LOCATIONS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL))
+NARETH_REGION_ROUTE_ENDPOINTS = frozenset((VDE_BERCO, NARETH_CAMPINAS_LABEL))
+NARETH_CAMPINAS_POSTO_ROUTE_ENDPOINTS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL))
 P2_QUEST_ID = "P2"
 P3_QUEST_ID = "P3"
 P4_QUEST_ID = "P4"
@@ -146,8 +162,10 @@ OVERLAND_ROUTE_PAIRS = (
     VDE_MATA_BAIXIOS_ROUTE_ENDPOINTS,
     VDE_BAIXIOS_CLAUSTRO_ROUTE_ENDPOINTS,
     VDE_CLAUSTRO_BERCO_ROUTE_ENDPOINTS,
+    NARETH_REGION_ROUTE_ENDPOINTS,
+    NARETH_CAMPINAS_POSTO_ROUTE_ENDPOINTS,
 )
-TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO))
+TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL))
 BRAZIER_FOR_LOCATION = {
     ROAD: "tdo.brazier.estrada",
     REFUGE: "tdo.brazier.refugio_do_ocaso",
@@ -159,6 +177,8 @@ BRAZIER_FOR_LOCATION = {
     VDE_MATA: VDE_MATA_BRAZIER,
     VDE_BAIXIOS: VDE_BAIXIOS_BRAZIER,
     VDE_CLAUSTRO: VDE_CLAUSTRO_BRAZIER,
+    NARETH_CAMPINAS_LABEL: NARETH_BRAZIER_HORIZONTE,
+    NARETH_POSTO_LABEL: NARETH_BRAZIER_POSTO,
 }
 BRAZIER_DETAILS = {
     "tdo.brazier.estrada": (ROAD, "Braseiro da Estrada"),
@@ -171,6 +191,8 @@ BRAZIER_DETAILS = {
     VDE_MATA_BRAZIER: (VDE_MATA, "Braseiro das Copas Suspensas"),
     VDE_BAIXIOS_BRAZIER: (VDE_BAIXIOS, "Braseiro da Turfa Fria"),
     VDE_CLAUSTRO_BRAZIER: (VDE_CLAUSTRO, "Braseiro das Pedras Enlaçadas"),
+    NARETH_BRAZIER_HORIZONTE: (NARETH_CAMPINAS_LABEL, "Braseiro do Horizonte"),
+    NARETH_BRAZIER_POSTO: (NARETH_POSTO_LABEL, "Braseiro do Posto"),
 }
 HUNT_CONTENT = "road_manual_hunt"
 GROUP_HUNT_CONTENT = "road_group_hunt"
@@ -205,6 +227,12 @@ MATERIAL_LABELS = {
     "material.vde.resina_enredada": "Resina Enredada",
     "material.vde.catalisador_elite_ii": "Catalisador de Elite II",
     "material.vde.fragmento_aprimoramento_ii": "Fragmento de Aprimoramento II",
+    "material.nareth.bronze_de_marco": "Bronze de Marco",
+    "material.nareth.couro_de_horizonte": "Couro de Horizonte",
+    "material.nareth.erva_de_vento": "Erva de Vento",
+    "material.nareth.po_de_eixo": "Pó de Eixo",
+    "material.nareth.catalisador_elite_iii": "Catalisador de Elite III",
+    "material.nareth.fragmento_aprimoramento_iii": "Fragmento de Aprimoramento III",
 }
 VDE_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.vde.garganta.ferro_enredado": "material.vde.ferro_enredado",
@@ -224,6 +252,12 @@ VDE_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.vde.claustro.erva_de_turfa": "material.vde.erva_de_turfa",
     "explore.vde.claustro.couro_musgoso": "material.vde.couro_musgoso",
 }
+NARETH_EXPLORATION_RESOURCE_MATERIALS = {
+    "explore.nareth.campinas.bronze_de_marco": "material.nareth.bronze_de_marco",
+    "explore.nareth.campinas.couro_de_horizonte": "material.nareth.couro_de_horizonte",
+    "explore.nareth.campinas.erva_de_vento": "material.nareth.erva_de_vento",
+    "explore.nareth.campinas.po_de_eixo": "material.nareth.po_de_eixo",
+}
 VDE_EXPLORATION_UNIQUE_XP = {
     "explore.vde.garganta.marco_dos_lacos": 1536,
     "explore.vde.garganta.sinos_sem_maos": 480,
@@ -236,6 +270,10 @@ VDE_EXPLORATION_UNIQUE_XP = {
     "explore.vde.claustro.braseiro_pedras_enlacadas": 2704,
     "explore.vde.claustro.entrada_santuario_no_antigo": 2704,
     "explore.vde.claustro.tracado_do_no": 845,
+}
+NARETH_EXPLORATION_UNIQUE_XP = {
+    "explore.nareth.campinas.marco_primeiro_meridiano": 3304,
+    "explore.nareth.campinas.duas_medidas_mesma_estrada": 1033,
 }
 
 
@@ -309,7 +347,7 @@ def _grade_catalyst_for_level(level: int) -> str:
 
 def _grade_material_for_level(level: int, material_kind: str) -> str:
     grade = equipment_grade(level)
-    regional_grade = {1: ("tdo", "i"), 2: ("vde", "ii")}.get(grade)
+    regional_grade = {1: ("tdo", "i"), 2: ("vde", "ii"), 3: ("nareth", "iii")}.get(grade)
     if regional_grade is not None:
         region, roman_grade = regional_grade
         return f"material.{region}.{material_kind}_{roman_grade}"
@@ -406,6 +444,17 @@ class RoadService:
                     )
                 ):
                     return None
+            elif world.location in NARETH_LOCATIONS:
+                if c.level < 21 or not await self._p12_completed(s, c.id):
+                    return None
+                await self._ensure(
+                    s, Unlock, character_id=c.id, unlock_id=NARETH_REGION_UNLOCK
+                )
+                if world.location == NARETH_POSTO_LABEL and not (
+                    await self._nareth_p13_started_or_completed(s, c.id)
+                    and await self._nareth_p13_route_open(s, c.id)
+                ):
+                    return None
             elif not await self._p1_completed(s, c.id):
                 return None
             return await self._view_for_world(s, c, world)
@@ -462,9 +511,7 @@ class RoadService:
                 or destination == world.location
             ):
                 return None
-            if mode == "brazier" and (
-                (world.location in VDE_LOCATIONS) != (destination in VDE_LOCATIONS)
-            ):
+            if mode == "brazier" and self._travel_region(world.location) != self._travel_region(destination):
                 return None
             active_p2 = await s.scalar(
                 select(Quest).where(
@@ -535,6 +582,14 @@ class RoadService:
                         )
                     )
                     route_unlock = VDE_CLAUSTRO_BERCO_ROUTE
+                elif pair == NARETH_REGION_ROUTE_ENDPOINTS:
+                    gate_ok = c.level >= 21 and await self._p12_completed(s, c.id)
+                    route_unlock = NARETH_REGION_UNLOCK
+                    if gate_ok:
+                        await self._ensure(s, Unlock, character_id=c.id, unlock_id=route_unlock)
+                elif pair == NARETH_CAMPINAS_POSTO_ROUTE_ENDPOINTS:
+                    gate_ok = await self._nareth_p13_route_open(s, c.id)
+                    route_unlock = NARETH_CAMPINAS_POSTO_ROUTE
                 elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
                     gate_ok = (
                         await self._p4_completed(s, c.id)
@@ -633,12 +688,27 @@ class RoadService:
             if blocking is not None:
                 return blocking
             world.location = destination
+            world.region = (
+                NARETH_REGION
+                if destination in NARETH_LOCATIONS
+                else VDE_REGION
+                if destination in VDE_LOCATIONS
+                else REGION
+            )
             if destination == VDE_BAIXIOS:
                 await self._ensure(
                     s,
                     LocationDiscovery,
                     character_id=c.id,
                     location_id=VDE_BAIXIOS_LOCATION,
+                )
+            elif destination == NARETH_CAMPINAS_LABEL:
+                await self._ensure(
+                    s, LocationDiscovery, character_id=c.id, location_id=NARETH_CAMPINAS_LOCATION
+                )
+            elif destination == NARETH_POSTO_LABEL:
+                await self._ensure(
+                    s, LocationDiscovery, character_id=c.id, location_id=NARETH_POSTO_LOCATION
                 )
             return await self._view_for_world(s, c, world)
 
@@ -1561,10 +1631,12 @@ class RoadService:
                 else 3 + _draw_int(context.seed, "elite-materials", 2)
             )
             for ordinal in range(material_count):
-                # Vales material units use explicit stable subdraw ordinals.
-                # Preserve the legacy deterministic stream for the existing
-                # Ocaso tables while the shared generator handles both regions.
-                if context.creature_id in VDE_BASIC_MATERIAL_CREATURE_IDS:
+                # Regional source tables select each already-awarded basic
+                # material unit with its own persisted-seed ordinal.
+                if (
+                    context.creature_id in VDE_BASIC_MATERIAL_CREATURE_IDS
+                    or context.creature_id in NARETH_BASIC_MATERIAL_CREATURE_IDS
+                ):
                     material_seed = f"{context.seed}:material.basic.{ordinal}"
                 elif context.category == "common" and ordinal == 0:
                     material_seed = context.seed
@@ -1762,6 +1834,9 @@ class RoadService:
             return
         if attempt.local_id == RUINS_LOCATION:
             await self._settle_ruins_exploration(s, c, attempt, base_text)
+            return
+        if attempt.local_id == NARETH_CAMPINAS_LOCATION:
+            await self._settle_nareth_exploration(s, c, attempt, base_text)
             return
         if attempt.local_id in {
             VDE_GARGANTA_LOCATION,
@@ -2141,6 +2216,131 @@ class RoadService:
             "receipt_text": "\n\n".join(lines),
             "settled": True,
         }
+        attempt.completed_at = attempt.completed_at or datetime.now(UTC)
+        if should_consolidate:
+            await consolidate_character_level(s, c)
+
+    async def _settle_nareth_exploration(self, s, c, attempt, base_text: str) -> None:
+        """Settle the authored Campinas outcomes without inventing creature drops."""
+        source_id = f"explore:{attempt.id}"
+        existing = await s.scalar(
+            select(RewardEvent)
+            .where(RewardEvent.character_id == c.id, RewardEvent.source_id == source_id)
+            .with_for_update()
+        )
+        if existing is not None:
+            return
+        event = RewardEvent(character_id=c.id, source_id=source_id)
+        s.add(event)
+        await s.flush()
+        components: list[tuple[str, str | None, int, dict]] = []
+        lines = [base_text]
+        should_consolidate = False
+
+        if attempt.category == "combat" and attempt.activity_id is not None:
+            context = await s.scalar(
+                select(HuntContext)
+                .where(HuntContext.game_activity_id == attempt.activity_id)
+                .with_for_update()
+            )
+            if context is None:
+                raise RuntimeError("Nareth exploration combat is missing HuntContext")
+            enough = c.vigor >= 4
+            xp = enemy_xp(
+                context.enemy_level,
+                context.category,
+                Decimal(1) if enough else Decimal("0.25"),
+                player_level=c.level,
+            )
+            c.xp += xp
+            components.append(("xp", None, xp, {}))
+            lines.append(f"✨ XP · {xp}")
+            if enough:
+                c.vigor -= 4
+                award = int(
+                    ((Decimal(100 + 15 * context.enemy_level) * Decimal("0.15")) / 10)
+                    .quantize(Decimal(1), rounding=ROUND_HALF_EVEN)
+                    * 10
+                )
+                c.crowns += award
+                components.append(("crowns", None, award, {}))
+                lines.append(f"🪙 Coroas · {award}")
+            bestiary = await self._bestiary(
+                s,
+                c.id,
+                context.creature_id,
+                victory=True,
+                elite=context.category == "elite",
+                observation_category=context.category,
+            )
+            if bestiary is not None:
+                components.append(("bestiary", context.creature_id, 1, bestiary))
+                lines.append(f"📖 Bestiário · {bestiary['creature_name']} · {bestiary['stage_label']}")
+            should_consolidate = True
+        elif attempt.category == "resource":
+            material_id = NARETH_EXPLORATION_RESOURCE_MATERIALS.get(attempt.result_id)
+            if material_id is None:
+                raise RuntimeError(f"unknown Nareth exploration resource {attempt.result_id!r}")
+            if c.vigor >= 4:
+                c.vigor -= 4
+                award = int(
+                    ((Decimal(100 + 15 * c.level) * Decimal("0.10")) / 10)
+                    .quantize(Decimal(1), rounding=ROUND_HALF_EVEN)
+                    * 10
+                )
+                c.crowns += award
+                components.extend(
+                    (
+                        ("crowns", None, award, {}),
+                        ("material", material_id, 1, {"material_id": material_id}),
+                    )
+                )
+                lines.extend((f"🪙 Coroas · {award}", f"📦 {MATERIAL_LABELS[material_id]} · 1"))
+                await self._deliver_material(s, c, material_id, 1, f"explore:{attempt.id}:resource")
+        else:
+            xp = NARETH_EXPLORATION_UNIQUE_XP.get(attempt.result_id, 0)
+            if xp:
+                c.xp += xp
+                components.append(("xp", None, xp, {}))
+                lines.append(f"✨ XP · {xp}")
+                should_consolidate = True
+            if attempt.result_id == "explore.nareth.campinas.marco_primeiro_meridiano":
+                await self._ensure(
+                    s,
+                    CodexEntry,
+                    character_id=c.id,
+                    entry_id="codex.location.campinas_do_meridiano",
+                )
+                await self._ensure(
+                    s,
+                    CodexFragment,
+                    character_id=c.id,
+                    entry_id="codex.location.campinas_do_meridiano",
+                    fragment_id="codex.fragment.nareth.campinas.meridian_marker",
+                )
+            elif attempt.result_id == "explore.nareth.campinas.duas_medidas_mesma_estrada":
+                await self._ensure(
+                    s, CodexEntry, character_id=c.id, entry_id="codex.route.rotas_de_nareth"
+                )
+                await self._ensure(
+                    s,
+                    CodexFragment,
+                    character_id=c.id,
+                    entry_id="codex.route.rotas_de_nareth",
+                    fragment_id="codex.fragment.nareth.campinas.divergent_measures",
+                )
+
+        for kind, item_id, quantity, payload in components:
+            s.add(
+                RewardComponent(
+                    reward_event_id=event.id,
+                    kind=kind,
+                    item_id=item_id,
+                    quantity=quantity,
+                    payload=payload,
+                )
+            )
+        attempt.progress = {**(attempt.progress or {}), "receipt_text": "\n\n".join(lines), "settled": True}
         attempt.completed_at = attempt.completed_at or datetime.now(UTC)
         if should_consolidate:
             await consolidate_character_level(s, c)
@@ -2907,6 +3107,67 @@ class RoadService:
             )
         )
 
+    async def _p12_completed(self, s, character_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Quest.id).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == "P12",
+                    Quest.status == "completed",
+                )
+            )
+        )
+
+    async def _nareth_region_open(self, s, character_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == character_id,
+                    Unlock.unlock_id == NARETH_REGION_UNLOCK,
+                )
+            )
+        )
+
+    async def _nareth_p13_completed(self, s, character_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Quest.id).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == "P13",
+                    Quest.status == "completed",
+                )
+            )
+        )
+
+    async def _nareth_p13_started_or_completed(self, s, character_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Quest.id).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == "P13",
+                    Quest.status.in_(("active", "completed")),
+                )
+            )
+        )
+
+    async def _nareth_p13_route_open(self, s, character_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == character_id,
+                    Unlock.unlock_id == NARETH_CAMPINAS_POSTO_ROUTE,
+                )
+            )
+        )
+
+    @staticmethod
+    def _travel_region(location: str) -> str:
+        if location in VDE_LOCATIONS:
+            return "vde"
+        if location in NARETH_LOCATIONS:
+            return "nareth"
+        return "tdo"
+
     async def _ruins_route_level_gate(self, s, character) -> bool:
         if character.level >= 8:
             return True
@@ -2968,6 +3229,18 @@ class RoadService:
                 return None
             if activity_kind == "hunt" and not await self._p10_completed(s, c.id):
                 return None
+        elif profile.local_id == NARETH_CAMPINAS_LOCATION:
+            if (
+                c.level < 21
+                or world.region != NARETH_REGION
+                or not await self._p12_completed(s, c.id)
+                or not await self._nareth_region_open(s, c.id)
+            ):
+                return None
+            if activity_kind == "hunt" and not await self._nareth_p13_completed(s, c.id):
+                return None
+        elif profile.local_id == NARETH_POSTO_LOCATION:
+            return None
         unlock_id = profile.hunt_unlock if activity_kind == "hunt" else profile.explore_unlock
         if not await s.scalar(
             select(Unlock).where(
@@ -2981,11 +3254,12 @@ class RoadService:
             VDE_MATA_LOCATION,
             VDE_BAIXIOS_LOCATION,
             VDE_CLAUSTRO_LOCATION,
+            NARETH_CAMPINAS_LOCATION,
         } and any(
             creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
         ):
-            # The regional source does not define creature drop weights, so
-            # block only Hunt/Round material settlement, not Desbravar.
+            # Fail closed if any regional Hunt/Round creature lacks its
+            # authoritative basic-material pool.
             return None
         return profile
 
@@ -3492,6 +3766,12 @@ class RoadService:
                 )
             )
         )
+        p12_complete = await self._p12_completed(s, c.id)
+        nareth_access = c.level >= 21 and p12_complete
+        nareth_p13_complete = await self._nareth_p13_completed(s, c.id)
+        if nareth_access:
+            await self._ensure(s, Unlock, character_id=c.id, unlock_id=NARETH_REGION_UNLOCK)
+        nareth_route_open = await self._nareth_p13_route_open(s, c.id)
         current_brazier = BRAZIER_FOR_LOCATION.get(world.location)
         brazier_id = current_brazier if current_brazier in known_brazier_ids else None
         brazier_label = BRAZIER_DETAILS[brazier_id][1] if brazier_id is not None else None
@@ -3499,6 +3779,7 @@ class RoadService:
             (candidate_id, label, location)
             for candidate_id, (location, label) in BRAZIER_DETAILS.items()
             if candidate_id in known_brazier_ids and location != world.location
+            and self._travel_region(location) == self._travel_region(world.location)
             and (location not in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS} or p7_complete)
             and (location != VDE_MATA or p8_started_or_complete)
             and (location != VDE_BAIXIOS or p9_started_or_complete)
@@ -3617,6 +3898,14 @@ class RoadService:
                     route_destinations.append(VDE_BERCO)
             elif world.location == VDE_BERCO and berco_access:
                 route_destinations.append(VDE_CLAUSTRO)
+                if nareth_access:
+                    route_destinations.append(NARETH_CAMPINAS_LABEL)
+            elif world.location == NARETH_CAMPINAS_LABEL and nareth_access:
+                route_destinations.append(VDE_BERCO)
+                if nareth_route_open:
+                    route_destinations.append(NARETH_POSTO_LABEL)
+            elif world.location == NARETH_POSTO_LABEL and nareth_access and nareth_route_open:
+                route_destinations.append(NARETH_CAMPINAS_LABEL)
         route_available = bool(route_destinations)
         material_table_ready = bool(
             hunt_profile
@@ -3712,6 +4001,32 @@ class RoadService:
         elif world.location in {ROAD, REFUGE, CHARNECA, BOSQUE, RUINS}:
             hunt_enabled = True
             explore_enabled = True
+        elif world.location == NARETH_CAMPINAS_LABEL:
+            hunt_enabled = bool(
+                nareth_access
+                and nareth_p13_complete
+                and material_table_ready
+                and hunt_profile
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == hunt_profile.hunt_unlock,
+                    )
+                )
+            )
+            explore_enabled = bool(
+                nareth_access
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == NARETH_EXPLORE_UNLOCK,
+                    )
+                )
+            )
+        elif world.location == NARETH_POSTO_LABEL:
+            # Posto de Nareth is a safe hub without generic activities.
+            hunt_enabled = False
+            explore_enabled = False
         else:
             # Every other known travel location must be handled explicitly above.
             return self._invalid_location_view(c, world)
@@ -3727,6 +4042,8 @@ class RoadService:
             VDE_BAIXIOS: "vde_baixios",
             VDE_CLAUSTRO: "vde_claustro",
             VDE_BERCO: "vde_berco",
+            NARETH_CAMPINAS_LABEL: "nareth_campinas",
+            NARETH_POSTO_LABEL: "nareth_posto",
         }
         return RoadView(
             kind_by_location[world.location],
@@ -4112,6 +4429,8 @@ class RoadService:
             "material.tdo.residuo_ocaso": "Resíduo do Ocaso",
             "material.tdo.catalisador_elite_i": "Catalisador de Elite I",
             "material.tdo.fragmento_aprimoramento_i": "Fragmento de Aprimoramento I",
+            "material.nareth.catalisador_elite_iii": "Catalisador de Elite III",
+            "material.nareth.fragmento_aprimoramento_iii": "Fragmento de Aprimoramento III",
         }
         reward_lines = []
         for row in rows:

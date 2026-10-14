@@ -86,6 +86,22 @@ CODEX_ENTRIES = (
     CodexPresentation("codex.mystery.ancora_do_poente", "Âncora do Poente", "mysteries", 30),
     CodexPresentation("codex.route.rotas_dos_vales", "Rotas dos Vales", "regions", 90),
     CodexPresentation(
+        "codex.location.campinas_do_meridiano",
+        "Campinas do Meridiano",
+        "regions",
+        140,
+        "nareth.location.campinas_do_meridiano",
+    ),
+    CodexPresentation(
+        "codex.location.posto_de_nareth",
+        "Posto de Nareth",
+        "regions",
+        150,
+        "nareth.location.posto_de_nareth",
+    ),
+    CodexPresentation("codex.figure.nera_voss", "Nera Voss", "figures", 40),
+    CodexPresentation("codex.route.rotas_de_nareth", "Rotas de Nareth", "regions", 160),
+    CodexPresentation(
         "codex.location.mata_suspensa",
         "Mata Suspensa",
         "regions",
@@ -323,6 +339,24 @@ CODEX_FRAGMENTS = {
     "codex.fragment.ancora_do_poente.outras_ancoras": FragmentPresentation(
         "Outras Âncoras", "Registros indicam que outras Âncoras existiram."
     ),
+    "codex.fragment.nareth.p13.routes_initial": FragmentPresentation(
+        "Rotas iniciais",
+        "As Campinas e o Posto foram conectados por uma rota usada por viajantes; "
+        "dois marcos não apontam na mesma direção.",
+    ),
+    "codex.fragment.nareth.s13.references": FragmentPresentation(
+        "Referências verificadas",
+        "Duas referências de passagem continuam úteis; a terceira não é confiável.",
+    ),
+    "codex.fragment.nareth.campinas.meridian_marker": FragmentPresentation(
+        "Marco do Primeiro Meridiano",
+        "A antiga estrada usava referências repetidas em intervalos regulares.",
+    ),
+    "codex.fragment.nareth.campinas.divergent_measures": FragmentPresentation(
+        "Duas medidas para a mesma estrada",
+        "Dois marcos que deveriam apontar a mesma rota divergem; "
+        "sua função permanece desconhecida.",
+    ),
     "codex.fragment.vales.routes.garganta_vigilia": FragmentPresentation(
         "Rota da Garganta à Vigília",
         "A rota conhecida liga a Garganta dos Laços à Vigília do Vale.",
@@ -531,6 +565,10 @@ ACHIEVEMENTS = (
         "Banner · Ocaso",
     ),
     AchievementPresentation(
+        "feat.nareth.primeiro_meridiano", "Primeiro Meridiano", "exploration",
+        "Concluiu Linhas no Horizonte (P13).",
+    ),
+    AchievementPresentation(
         "feat.vde.o_berco_silencia", "O Berço Silencia", "combat",
         "Derrotou a Matriarca das Raízes pela primeira vez.",
         "Título · Sobrevivente do Berço",
@@ -589,6 +627,8 @@ TDO_REGION_ID = "tdo"
 TDO_REGION_LABEL = "🌑 Terras do Ocaso · Nv. 1–10"
 VDE_REGION_ID = "vde"
 VDE_REGION_LABEL = "🪢 Vales dos Enforcados · Nv. 11–20"
+NARETH_REGION_ID = "nareth"
+NARETH_REGION_LABEL = "🌾 Planícies de Nareth · Nv. 21–30"
 TDO_LOCATIONS = {
     "tdo.location.estrada_das_cinzas": "Estrada das Cinzas",
     "tdo.location.refugio_do_ocaso": "Refúgio do Ocaso",
@@ -609,7 +649,11 @@ VDE_LOCATIONS = {
     "vde.location.fosso_das_raizes": "Fosso das Raízes",
     "vde.location.santuario_do_no_antigo": "Santuário do Nó Antigo",
 }
-LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS
+NARETH_LOCATIONS = {
+    "nareth.location.campinas_do_meridiano": "Campinas do Meridiano",
+    "nareth.location.posto_de_nareth": "Posto de Nareth",
+}
+LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS
 HABITAT_EVIDENCE_TO_LOCATION = {
     "estrada": "tdo.location.estrada_das_cinzas",
     "Estrada das Cinzas": "tdo.location.estrada_das_cinzas",
@@ -624,6 +668,9 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     "Claustro das Raízes": "vde.location.claustro_das_raizes",
     "Berço da Matriarca": "vde.location.berco_da_matriarca",
     **{location_id: location_id for location_id in VDE_LOCATIONS},
+    "Campinas do Meridiano": "nareth.location.campinas_do_meridiano",
+    "Posto de Nareth": "nareth.location.posto_de_nareth",
+    **{location_id: location_id for location_id in NARETH_LOCATIONS},
 }
 MATERIAL_LABELS = {
     "material.tdo.ferro_de_fuligem": "Ferro de Fuligem",
@@ -637,6 +684,10 @@ MATERIAL_LABELS = {
     "material.vde.resina_enredada": "Resina Enredada",
     "material.vde.nucleo_fosso_raizes": "Núcleo do Fosso das Raízes",
     "material.vde.nucleo_no_antigo": "Núcleo do Nó Antigo",
+    "material.nareth.bronze_de_marco": "Bronze de Marco",
+    "material.nareth.couro_de_horizonte": "Couro de Horizonte",
+    "material.nareth.erva_de_vento": "Erva de Vento",
+    "material.nareth.po_de_eixo": "Pó de Eixo",
 }
 
 
@@ -709,6 +760,18 @@ CREATURE_PRESENTATION = {
     ),
     "sanguessuga_turfa": CreaturePresentation(VDE_REGION_ID, ("vde.location.baixios_enredados",)),
     "casca_errante": CreaturePresentation(VDE_REGION_ID, ("vde.location.baixios_enredados",)),
+    "galgo_meridiano": CreaturePresentation(
+        NARETH_REGION_ID, ("nareth.location.campinas_do_meridiano",)
+    ),
+    "abutre_marco": CreaturePresentation(
+        NARETH_REGION_ID, ("nareth.location.campinas_do_meridiano",)
+    ),
+    "errante_valas": CreaturePresentation(
+        NARETH_REGION_ID, ("nareth.location.campinas_do_meridiano",)
+    ),
+    "alfa_horizonte": CreaturePresentation(
+        NARETH_REGION_ID, ("nareth.location.campinas_do_meridiano",)
+    ),
     "mariposa_breu_verde": CreaturePresentation(VDE_REGION_ID, ("vde.location.baixios_enredados",)),
     "viuva_cipos": CreaturePresentation(
         VDE_REGION_ID,
