@@ -2277,6 +2277,8 @@ class NarethMissionService:
                 S18_ID: {1: "read_cartography", 2: "visit_campinas", 3: "compare_old_markers", 4: "visit_canais", 5: "recover_route_plate", 6: "visit_campos", 7: "compare_travel_distances", 8: "visit_observatorio", 9: "follow_service_route", 10: "combat_start", 11: "inspect_broken_reference", 12: "return_posto", 13: "trace_modern_route", 14: "update_codex"},
             }
             kind = kinds[quest_id].get(quest.step, "active")
+            if quest_id == P17_ID and quest.step == 8 and location == CAMARA:
+                kind = "examine_incomplete_record"
         consumables = ((), (), 0)
         if activity is not None and combat is not None:
             consumables = await consumable_state(
@@ -2409,6 +2411,17 @@ class NarethMissionService:
                 select(Quest.id).where(
                     Quest.character_id == character_id,
                     Quest.quest_id == P13_ID,
+                    Quest.status == "completed",
+                )
+            )
+        )
+
+    async def _quest_completed(self, session, character_id, quest_id):
+        return bool(
+            await session.scalar(
+                select(Quest.id).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == quest_id,
                     Quest.status == "completed",
                 )
             )
