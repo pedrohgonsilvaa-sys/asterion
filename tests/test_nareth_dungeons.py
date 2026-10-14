@@ -745,4 +745,3 @@ async def test_nareth_dungeon_full_run_uses_global_settlement_and_run_scoped_bra
             ).all()
         )
         assert braziers_after == braziers_before
-

@@ -403,5 +403,3 @@ def nareth_dungeon_enemy_rewards(
         return rewards[family_id][ordinal]
     except KeyError as exc:
         raise ValueError("Unknown Nareth dungeon encounter.") from exc
-
-
