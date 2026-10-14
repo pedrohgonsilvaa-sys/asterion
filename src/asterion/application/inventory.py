@@ -53,6 +53,8 @@ MATERIAL_LABELS = {
     "material.nareth.couro_de_horizonte": "Couro de Horizonte",
     "material.nareth.erva_de_vento": "Erva de Vento",
     "material.nareth.po_de_eixo": "Pó de Eixo",
+    "material.nareth.catalisador_elite_iii": "Catalisador de Elite III",
+    "material.nareth.fragmento_aprimoramento_iii": "Fragmento de Aprimoramento III",
 }
 
 @dataclass(frozen=True)

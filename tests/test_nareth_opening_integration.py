@@ -1,3 +1,6 @@
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from sqlalchemy import func, select
 
@@ -26,13 +29,17 @@ from asterion.application.road import (
 from asterion.application.round import RoundService
 from asterion.bot.nareth_missions_ui import render_nareth_mission
 from asterion.bot.road_ui import render_current_local, render_road
+from asterion.domain.combat import allowed_actions
 from asterion.domain.road import (
     EXPLORATION_CATEGORY_WEIGHTS,
     EXPLORATION_PROFILES,
     HUNT_PROFILES,
     MATERIAL_POOLS,
+    NARETH_BASIC_MATERIAL_CREATURE_IDS,
     NARETH_CAMPINAS_LOCATION,
     NARETH_CREATURES,
+    creature_for,
+    material_for,
 )
 from asterion.infrastructure.db.models import (
     Achievement,
@@ -41,6 +48,9 @@ from asterion.infrastructure.db.models import (
     Character,
     CodexEntry,
     CodexFragment,
+    HuntContext,
+    HuntRound,
+    HuntRoundEncounter,
     LocationDiscovery,
     Quest,
     RewardComponent,
@@ -48,6 +58,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
+from tests.helpers.pvpve import start_manual_hunt_after_no_match
 from tests.test_s6_p6_integration import _seed_final_campaign
 
 
@@ -363,11 +374,67 @@ async def test_nareth_shared_p13_credit_is_persisted_individually(database):
             ) is not None
 
 
+def test_nareth_material_table_matches_authority_and_uses_independent_ordinals():
+    expected = {
+        "galgo_meridiano": (("material.nareth.couro_de_horizonte", 100),),
+        "abutre_marco": (("material.nareth.erva_de_vento", 65), ("material.nareth.po_de_eixo", 35)),
+        "errante_valas": (
+            ("material.nareth.bronze_de_marco", 65),
+            ("material.nareth.po_de_eixo", 35),
+        ),
+        "escaravelho_canal": (
+            ("material.nareth.erva_de_vento", 55),
+            ("material.nareth.po_de_eixo", 45),
+        ),
+        "cervo_horizonte": (("material.nareth.couro_de_horizonte", 100),),
+        "serpe_campinas": (
+            ("material.nareth.erva_de_vento", 75),
+            ("material.nareth.couro_de_horizonte", 25),
+        ),
+        "casco_invertido": (
+            ("material.nareth.couro_de_horizonte", 80),
+            ("material.nareth.po_de_eixo", 20),
+        ),
+        "mariposa_eixo": (
+            ("material.nareth.po_de_eixo", 70),
+            ("material.nareth.erva_de_vento", 30),
+        ),
+        "vigia_meridiano": (
+            ("material.nareth.bronze_de_marco", 90),
+            ("material.nareth.po_de_eixo", 10),
+        ),
+        "alfa_horizonte": (
+            ("material.nareth.couro_de_horizonte", 85),
+            ("material.nareth.po_de_eixo", 15),
+        ),
+        "serpe_eixo": (("material.nareth.erva_de_vento", 60), ("material.nareth.po_de_eixo", 40)),
+        "custodio_invertido": (
+            ("material.nareth.bronze_de_marco", 75),
+            ("material.nareth.po_de_eixo", 25),
+        ),
+    }
+    assert NARETH_BASIC_MATERIAL_CREATURE_IDS == frozenset(expected)
+    assert {creature_id: MATERIAL_POOLS[creature_id] for creature_id in expected} == expected
+
+    seed = "persisted-economic-seed"
+    creature_id = "abutre_marco"
+    results = tuple(
+        material_for(creature_id, f"{seed}:material.basic.{ordinal}") for ordinal in range(4)
+    )
+    assert results == tuple(
+        material_for(creature_id, f"{seed}:material.basic.{ordinal}") for ordinal in range(4)
+    )
+    assert all(
+        item_id in {material for material, _ in expected[creature_id]} for item_id in results
+    )
+
+
 @pytest.mark.asyncio
-async def test_nareth_desbravar_available_while_hunt_round_settlement_is_blocked(
+async def test_nareth_hunt_and_round_unlock_after_p13_and_desbravar_is_unchanged(
     database, monkeypatch
 ):
     import asterion.application.road as road_module
+    import asterion.application.round as round_module
 
     actor = 991321
     character_id, sessions = await _seed_nareth_entry(database, actor)
@@ -375,14 +442,6 @@ async def test_nareth_desbravar_available_while_hunt_round_settlement_is_blocked
     missions = NarethMissionService(sessions, "ocaso")
     p13 = await _enter_campinas(road, missions, actor)
     assert p13 is not None and p13.status == "active"
-
-    local = await road.resume(actor)
-    assert local is not None and local.kind == "nareth_campinas"
-    assert local.explore_enabled is True
-    assert local.hunt_enabled is False
-    assert await road.prepare_hunt(actor) is None
-    assert await road.start_hunt(actor) is None
-    assert await RoundService(sessions, "ocaso").prepare_round(actor, 5) is None
 
     assert NARETH_CAMPINAS_LOCATION in EXPLORATION_PROFILES
     explore_profile = EXPLORATION_PROFILES[NARETH_CAMPINAS_LOCATION]
@@ -399,23 +458,22 @@ async def test_nareth_desbravar_available_while_hunt_round_settlement_is_blocked
         "errante_valas",
         "alfa_horizonte",
     }
-    assert all(creature.creature_id not in MATERIAL_POOLS for creature in NARETH_CREATURES)
 
-    local_screen = render_current_local(local, explore_state="available")
+    before_p13 = await road.resume(actor)
+    assert before_p13 is not None and before_p13.kind == "nareth_campinas"
+    assert before_p13.explore_enabled is True and before_p13.hunt_enabled is False
+    assert await road.prepare_hunt(actor) is None
+    assert await road.start_hunt(actor) is None
+    assert await RoundService(sessions, "ocaso").prepare_round(actor, 5) is None
+
+    local_screen = render_current_local(before_p13, explore_state="available")
     assert "Desbravar" in local_screen.text
-    local_callbacks = {
-        button.callback_data
-        for row in local_screen.keyboard.inline_keyboard
-        for button in row
+    before_callbacks = {
+        button.callback_data for row in local_screen.keyboard.inline_keyboard for button in row
     }
-    assert "road:explore:start" in local_callbacks
-    assert "road:hunt" not in local_callbacks
-    assert "world:round" not in local_callbacks
-    assert "road:explore:start" in {
-        button.callback_data
-        for row in render_road(local).keyboard.inline_keyboard
-        for button in row
-    }
+    assert "road:explore:start" in before_callbacks
+    assert "road:hunt" not in before_callbacks
+    assert "world:round" not in before_callbacks
 
     monkeypatch.setattr(
         road_module,
@@ -426,37 +484,206 @@ async def test_nareth_desbravar_available_while_hunt_round_settlement_is_blocked
             "Marco do Primeiro Meridiano encontrado.",
         ),
     )
-    result = await road.explore(actor)
-    assert result is not None
-    assert result.result_id == "explore.nareth.campinas.marco_primeiro_meridiano"
-    assert result.kind == "exploration"
+    exploration = await road.explore(actor)
+    assert exploration is not None
+    assert exploration.result_id == "explore.nareth.campinas.marco_primeiro_meridiano"
+    assert exploration.kind == "exploration"
     async with sessions() as session:
-        character = await session.get(Character, character_id)
-        assert character is not None
-        assert await session.scalar(
-            select(func.count(RewardEvent.id)).where(
-                RewardEvent.character_id == character_id,
-                RewardEvent.source_id == f"explore:{result.attempt_id}",
+        assert (
+            await session.scalar(
+                select(func.count(RewardEvent.id)).where(
+                    RewardEvent.character_id == character_id,
+                    RewardEvent.source_id == f"explore:{exploration.attempt_id}",
+                )
             )
-        ) == 1
-        event = await session.scalar(
+            == 1
+        )
+        assert (
+            await session.scalar(
+                select(CodexFragment.id).where(
+                    CodexFragment.character_id == character_id,
+                    CodexFragment.fragment_id == "codex.fragment.nareth.campinas.meridian_marker",
+                )
+            )
+            is not None
+        )
+    await road.acknowledge_result(actor, exploration.attempt_id)
+
+    await _complete_p13(road, missions, actor)
+    posto = await road.resume(actor)
+    assert posto is not None and posto.kind == "nareth_posto"
+    assert posto.hunt_enabled is False and posto.explore_enabled is False
+    assert await road.prepare_hunt(actor) is None
+    assert await RoundService(sessions, "ocaso").prepare_round(actor, 5) is None
+
+    entered = await road.travel_route(actor, NARETH_CAMPINAS_LABEL)
+    assert entered is not None and entered.location == NARETH_CAMPINAS_LABEL
+    local = await road.resume(actor)
+    assert local is not None and local.kind == "nareth_campinas"
+    assert local.hunt_enabled is True and local.explore_enabled is True
+    assert local.familiar is False
+    prepared = await road.prepare_hunt(actor)
+    assert prepared is not None and prepared.kind == "hunt_prepare"
+    round_service = RoundService(sessions, "ocaso")
+    round_before_manual_win = await round_service.prepare_round(actor, 5)
+    assert round_before_manual_win is not None
+    assert round_before_manual_win.kind == "nareth_campinas"
+    callbacks = {
+        button.callback_data
+        for row in render_road(local).keyboard.inline_keyboard
+        for button in row
+    }
+    assert "road:hunt" in callbacks
+    assert "world:round" not in callbacks
+
+    # Keep the integration focused on settlement, while forcing an eligible
+    # canonical Campinas creature and a survivable combat in the test harness.
+    original_create = road_module.create_road_combat
+
+    def safe_combat(*args, **kwargs):
+        combat = original_create(*args, **kwargs)
+        enemy = combat.fighters["enemy"]
+        enemy.stats = replace(enemy.stats, attack=1)
+        return combat
+
+    monkeypatch.setattr(road_module, "create_road_combat", safe_combat)
+    monkeypatch.setattr(round_module, "create_road_combat", safe_combat)
+    monkeypatch.setattr(
+        road_module, "select_creature", lambda *_args, **_kwargs: creature_for("errante_valas")
+    )
+    monkeypatch.setattr(
+        round_module, "select_creature", lambda *_args, **_kwargs: creature_for("errante_valas")
+    )
+    manual = await start_manual_hunt_after_no_match(road, actor, monkeypatch)
+    assert manual is not None and manual.kind == "combat"
+    activity_id = manual.activity_id
+    submitted_version = manual.combat.version
+    for _ in range(100):
+        if manual.kind != "combat":
+            break
+        actions = allowed_actions(manual.combat)
+        action = "art" if "art" in actions else "attack"
+        submitted_version = manual.combat.version
+        manual = await road.action(actor, activity_id, submitted_version, action)
+    assert manual is not None and manual.kind == "hunt_victory"
+
+    async with sessions() as session:
+        context = await session.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == activity_id)
+        )
+        assert context is not None and context.creature_id == "errante_valas"
+        reward = await session.scalar(
             select(RewardEvent).where(
                 RewardEvent.character_id == character_id,
-                RewardEvent.source_id == f"explore:{result.attempt_id}",
+                RewardEvent.source_id == f"activity:{activity_id}",
             )
         )
-        assert event is not None
-        components = list(
+        assert reward is not None
+        manual_materials = list(
             (
                 await session.scalars(
-                    select(RewardComponent).where(RewardComponent.reward_event_id == event.id)
+                    select(RewardComponent)
+                    .where(
+                        RewardComponent.reward_event_id == reward.id,
+                        RewardComponent.kind == "material",
+                    )
+                    .order_by(RewardComponent.id)
                 )
             ).all()
         )
-        assert [(row.kind, row.quantity) for row in components] == [("xp", 3304)]
-        assert await session.scalar(
-            select(CodexFragment.id).where(
-                CodexFragment.character_id == character_id,
-                CodexFragment.fragment_id == "codex.fragment.nareth.campinas.meridian_marker",
+        assert len(manual_materials) in {1, 2}
+        expected_manual = [
+            material_for(context.creature_id, f"{context.seed}:material.basic.{ordinal}")
+            for ordinal in range(len(manual_materials))
+        ]
+        actual_manual = [row.item_id for row in manual_materials]
+        assert actual_manual == expected_manual, {
+            "seed": context.seed,
+            "actual": actual_manual,
+            "expected": expected_manual,
+            "legacy_first": material_for(context.creature_id, context.seed),
+            "legacy_ordinal": material_for(context.creature_id, f"{context.seed}:material:0"),
+            "basic_ordinal": material_for(
+                context.creature_id, f"{context.seed}:material.basic.0"
+            ),
+        }
+        assert (
+            await session.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == character_id,
+                    Unlock.unlock_id == HUNT_PROFILES[NARETH_CAMPINAS_LOCATION].round_familiarity,
+                )
             )
-        ) is not None
+            is not None
+        )
+
+    repeated = await road.action(actor, activity_id, submitted_version, "attack")
+    assert repeated is not None and repeated.kind == "hunt_victory"
+    async with sessions() as session:
+        assert (
+            await session.scalar(
+                select(func.count(RewardEvent.id)).where(
+                    RewardEvent.character_id == character_id,
+                    RewardEvent.source_id == f"activity:{activity_id}",
+                )
+            )
+            == 1
+        )
+    await road.acknowledge_result(actor)
+
+    # Ronda opens only after the first valid manual victory and settles through
+    # the same RoadService table/subdraw implementation.
+    async def no_round_match(*_args, **_kwargs):
+        return False
+
+    round_service.pvpve.queue_round_hunt = no_round_match
+    round_prepare = await round_service.prepare_round(actor, 5)
+    assert round_prepare is not None and round_prepare.kind == "round_prepare"
+    round_started = await round_service.start_round(
+        actor, round_prepare.round_id, round_prepare.state_version
+    )
+    assert round_started is not None and round_started.kind == "round_active"
+    async with sessions.begin() as session:
+        state = await session.get(HuntRound, round_started.round_id)
+        assert state is not None and state.next_resolution_at is not None
+        state.next_resolution_at = datetime.now(UTC) - timedelta(seconds=1)
+    await round_service.advance_due_rounds()
+    async with sessions() as session:
+        state = await session.get(HuntRound, round_started.round_id)
+        assert state is not None and state.completed_encounters == 1
+        round_encounter = await session.scalar(
+            select(HuntRoundEncounter).where(HuntRoundEncounter.round_id == state.id)
+        )
+        assert round_encounter is not None and round_encounter.status == "completed"
+        assert round_encounter.creature_id == "errante_valas"
+        round_context = await session.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == round_encounter.activity_id)
+        )
+        assert round_context is not None and round_context.loot_profile == "round"
+        round_reward = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == f"activity:{round_encounter.activity_id}",
+            )
+        )
+        assert round_reward is not None
+        round_materials = list(
+            (
+                await session.scalars(
+                    select(RewardComponent)
+                    .where(
+                        RewardComponent.reward_event_id == round_reward.id,
+                        RewardComponent.kind == "material",
+                    )
+                    .order_by(RewardComponent.id)
+                )
+            ).all()
+        )
+        assert len(round_materials) in {1, 2}
+        expected_round = [
+            material_for(
+                round_context.creature_id, f"{round_context.seed}:material.basic.{ordinal}"
+            )
+            for ordinal in range(len(round_materials))
+        ]
+        assert [row.item_id for row in round_materials] == expected_round

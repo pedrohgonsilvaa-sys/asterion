@@ -42,6 +42,7 @@ from asterion.domain.road import (
     CHARNECA_ROUTE_UNLOCK,
     EXPLORATION_PROFILES,
     MATERIAL_POOLS,
+    NARETH_BASIC_MATERIAL_CREATURE_IDS,
     NARETH_BRAZIER_HORIZONTE,
     NARETH_BRAZIER_POSTO,
     NARETH_CAMPINAS,
@@ -230,6 +231,8 @@ MATERIAL_LABELS = {
     "material.nareth.couro_de_horizonte": "Couro de Horizonte",
     "material.nareth.erva_de_vento": "Erva de Vento",
     "material.nareth.po_de_eixo": "Pó de Eixo",
+    "material.nareth.catalisador_elite_iii": "Catalisador de Elite III",
+    "material.nareth.fragmento_aprimoramento_iii": "Fragmento de Aprimoramento III",
 }
 VDE_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.vde.garganta.ferro_enredado": "material.vde.ferro_enredado",
@@ -344,7 +347,7 @@ def _grade_catalyst_for_level(level: int) -> str:
 
 def _grade_material_for_level(level: int, material_kind: str) -> str:
     grade = equipment_grade(level)
-    regional_grade = {1: ("tdo", "i"), 2: ("vde", "ii")}.get(grade)
+    regional_grade = {1: ("tdo", "i"), 2: ("vde", "ii"), 3: ("nareth", "iii")}.get(grade)
     if regional_grade is not None:
         region, roman_grade = regional_grade
         return f"material.{region}.{material_kind}_{roman_grade}"
@@ -1628,10 +1631,12 @@ class RoadService:
                 else 3 + _draw_int(context.seed, "elite-materials", 2)
             )
             for ordinal in range(material_count):
-                # Vales material units use explicit stable subdraw ordinals.
-                # Preserve the legacy deterministic stream for the existing
-                # Ocaso tables while the shared generator handles both regions.
-                if context.creature_id in VDE_BASIC_MATERIAL_CREATURE_IDS:
+                # Regional source tables select each already-awarded basic
+                # material unit with its own persisted-seed ordinal.
+                if (
+                    context.creature_id in VDE_BASIC_MATERIAL_CREATURE_IDS
+                    or context.creature_id in NARETH_BASIC_MATERIAL_CREATURE_IDS
+                ):
                     material_seed = f"{context.seed}:material.basic.{ordinal}"
                 elif context.category == "common" and ordinal == 0:
                     material_seed = context.seed
@@ -3253,8 +3258,8 @@ class RoadService:
         } and any(
             creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
         ):
-            # The regional source does not define creature drop weights, so
-            # block only Hunt/Round material settlement, not Desbravar.
+            # Fail closed if any regional Hunt/Round creature lacks its
+            # authoritative basic-material pool.
             return None
         return profile
 
@@ -3763,6 +3768,7 @@ class RoadService:
         )
         p12_complete = await self._p12_completed(s, c.id)
         nareth_access = c.level >= 21 and p12_complete
+        nareth_p13_complete = await self._nareth_p13_completed(s, c.id)
         if nareth_access:
             await self._ensure(s, Unlock, character_id=c.id, unlock_id=NARETH_REGION_UNLOCK)
         nareth_route_open = await self._nareth_p13_route_open(s, c.id)
@@ -3996,9 +4002,18 @@ class RoadService:
             hunt_enabled = True
             explore_enabled = True
         elif world.location == NARETH_CAMPINAS_LABEL:
-            # Grade III hunt settlement remains unavailable until its creature
-            # material table is authoritative; Desbravar uses authored result pools.
-            hunt_enabled = False
+            hunt_enabled = bool(
+                nareth_access
+                and nareth_p13_complete
+                and material_table_ready
+                and hunt_profile
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == hunt_profile.hunt_unlock,
+                    )
+                )
+            )
             explore_enabled = bool(
                 nareth_access
                 and await s.scalar(
@@ -4414,6 +4429,8 @@ class RoadService:
             "material.tdo.residuo_ocaso": "Resíduo do Ocaso",
             "material.tdo.catalisador_elite_i": "Catalisador de Elite I",
             "material.tdo.fragmento_aprimoramento_i": "Fragmento de Aprimoramento I",
+            "material.nareth.catalisador_elite_iii": "Catalisador de Elite III",
+            "material.nareth.fragmento_aprimoramento_iii": "Fragmento de Aprimoramento III",
         }
         reward_lines = []
         for row in rows:

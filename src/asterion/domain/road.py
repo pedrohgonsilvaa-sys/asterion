@@ -1552,6 +1552,23 @@ VDE_BASIC_MATERIAL_CREATURE_IDS = frozenset(
     }
 )
 
+NARETH_BASIC_MATERIAL_CREATURE_IDS = frozenset(
+    {
+        "galgo_meridiano",
+        "abutre_marco",
+        "errante_valas",
+        "escaravelho_canal",
+        "cervo_horizonte",
+        "serpe_campinas",
+        "casco_invertido",
+        "mariposa_eixo",
+        "vigia_meridiano",
+        "alfa_horizonte",
+        "serpe_eixo",
+        "custodio_invertido",
+    }
+)
+
 MATERIAL_POOLS = {
     "dog_cinereo": (("material.tdo.couro_escoriado", 100),),
     "alfa_cinereo": (("material.tdo.couro_escoriado", 100),),
@@ -1623,6 +1640,50 @@ MATERIAL_POOLS = {
     "carrasco_casca": (
         ("material.vde.resina_enredada", 70),
         ("material.vde.ferro_enredado", 30),
+    ),
+    # Nareth weights select each already-awarded basic material unit; the
+    # global chance and quantity are resolved before these independent draws.
+    "galgo_meridiano": (("material.nareth.couro_de_horizonte", 100),),
+    "abutre_marco": (
+        ("material.nareth.erva_de_vento", 65),
+        ("material.nareth.po_de_eixo", 35),
+    ),
+    "errante_valas": (
+        ("material.nareth.bronze_de_marco", 65),
+        ("material.nareth.po_de_eixo", 35),
+    ),
+    "escaravelho_canal": (
+        ("material.nareth.erva_de_vento", 55),
+        ("material.nareth.po_de_eixo", 45),
+    ),
+    "cervo_horizonte": (("material.nareth.couro_de_horizonte", 100),),
+    "serpe_campinas": (
+        ("material.nareth.erva_de_vento", 75),
+        ("material.nareth.couro_de_horizonte", 25),
+    ),
+    "casco_invertido": (
+        ("material.nareth.couro_de_horizonte", 80),
+        ("material.nareth.po_de_eixo", 20),
+    ),
+    "mariposa_eixo": (
+        ("material.nareth.po_de_eixo", 70),
+        ("material.nareth.erva_de_vento", 30),
+    ),
+    "vigia_meridiano": (
+        ("material.nareth.bronze_de_marco", 90),
+        ("material.nareth.po_de_eixo", 10),
+    ),
+    "alfa_horizonte": (
+        ("material.nareth.couro_de_horizonte", 85),
+        ("material.nareth.po_de_eixo", 15),
+    ),
+    "serpe_eixo": (
+        ("material.nareth.erva_de_vento", 60),
+        ("material.nareth.po_de_eixo", 40),
+    ),
+    "custodio_invertido": (
+        ("material.nareth.bronze_de_marco", 75),
+        ("material.nareth.po_de_eixo", 25),
     ),
 }
 
