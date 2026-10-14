@@ -28,6 +28,8 @@ def render_dungeons(view: DungeonView) -> Screen:
                 "dungeon.tdo.galerias_vigia": "dungeon:galleries",
                 "dungeon.vde.fosso_raizes": "dungeon:fosso",
                 "dungeon.vde.santuario_no_antigo": "dungeon:sanctuary",
+                "dungeon.nareth.galerias_meridiano": "dungeon:nareth-galleries",
+                "dungeon.nareth.observatorio_afundado": "dungeon:nareth-observatory",
             }.get(family_id, "dungeon:known")
             rows.append([_button(f"{name} · {level_range}", callback)])
             details.append(f"{name} · {level_range}\n{region} · {location}")
@@ -62,6 +64,8 @@ def render_dungeons(view: DungeonView) -> Screen:
             "dungeon.tdo.galerias_vigia": "g",
             "dungeon.vde.fosso_raizes": "f",
             "dungeon.vde.santuario_no_antigo": "s",
+            "dungeon.nareth.galerias_meridiano": "n",
+            "dungeon.nareth.observatorio_afundado": "o",
         }.get(view.family_id)
         if family_key is None:
             return Screen(

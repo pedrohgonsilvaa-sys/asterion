@@ -113,6 +113,14 @@ CODEX_ENTRIES = (
     CodexPresentation("codex.history.cartografia_do_erro", "Cartografia do Erro", "history", 200),
     CodexPresentation("codex.history.custodia_das_ancoras", "Custódia das Âncoras", "history", 210),
     CodexPresentation("codex.history.estabilidade_do_veu", "Estabilidade do Véu", "history", 220),
+    CodexPresentation("codex.history.juncao_circular", "Junção Circular", "history", 230),
+    CodexPresentation("codex.history.circuitos_de_servico", "Circuitos de Serviço", "history", 231),
+    CodexPresentation("codex.history.o_que_retorna", "O Que Retorna", "history", 232),
+    CodexPresentation("codex.history.marcos_de_retorno", "Marcos de Retorno", "history", 233),
+    CodexPresentation("codex.history.sala_de_recalibracao", "Sala de Recalibração", "history", 240),
+    CodexPresentation("codex.history.eixos_de_calibracao", "Eixos de Calibração", "history", 241),
+    CodexPresentation("codex.history.guardiao_referencia", "Guardião da Referência", "history", 242),
+    CodexPresentation("codex.history.referencias_afundadas", "Referências Afundadas", "history", 243),
     CodexPresentation("codex.route.os_caminhos_que_nao_coincidem", "Os Caminhos que Não Coincidem", "regions", 230),
     CodexPresentation(
         "codex.location.mata_suspensa",
@@ -387,6 +395,33 @@ CODEX_FRAGMENTS = {
     ),
     "codex.fragment.nareth.galerias.entry": FragmentPresentation(
         "Entrada", "Uma entrada das Galerias do Meridiano foi descoberta sob os Canais."
+    ),
+    "codex.fragment.nareth.galerias.circular_junction": FragmentPresentation(
+        "Junção Circular", "A junção circular foi registrada durante a travessia das galerias."
+    ),
+    "codex.fragment.nareth.galerias.service_circuits": FragmentPresentation(
+        "Circuitos de Serviço", "Balizas de serviço marcavam o circuito interno das galerias."
+    ),
+    "codex.fragment.nareth.galerias.returning_boss": FragmentPresentation(
+        "O Que Retorna", "O encontro central foi registrado sem atribuir função além do observado."
+    ),
+    "codex.fragment.nareth.galerias.return_markers": FragmentPresentation(
+        "Marcos de Retorno", "Marcos foram ativados durante a mudança de fase do encontro."
+    ),
+    "codex.fragment.nareth.galerias.return_resolved": FragmentPresentation(
+        "Retorno ao Marco", "A resolução dos marcos restantes foi observada no encontro."
+    ),
+    "codex.fragment.nareth.observatory.recalibration_room": FragmentPresentation(
+        "Sala de Recalibração", "Balizas de calibração estavam presentes na sala."
+    ),
+    "codex.fragment.nareth.observatory.calibration_axes": FragmentPresentation(
+        "Eixos de Calibração", "Três Eixos de Calibração foram ativados durante o encontro."
+    ),
+    "codex.fragment.nareth.observatory.reference_guardian": FragmentPresentation(
+        "Guardião da Referência", "O Guardião da Referência foi observado no encontro final."
+    ),
+    "codex.fragment.nareth.observatory.submerged_references": FragmentPresentation(
+        "Referências Afundadas", "As referências afundadas foram registradas após a conclusão."
     ),
     "codex.fragment.nareth.campos.entry": FragmentPresentation(
         "Campos Invertidos", "O Local foi alcançado para comparar referências e distâncias."
@@ -824,8 +859,10 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     "Campinas do Meridiano": "nareth.location.campinas_do_meridiano",
     "Posto de Nareth": "nareth.location.posto_de_nareth",
     "Canais Secos": "nareth.location.canais_secos",
+    "Galerias do Meridiano": "nareth.location.galerias_do_meridiano",
     "Campos Invertidos": "nareth.location.campos_invertidos",
     "Observatório do Eixo": "nareth.location.observatorio_do_eixo",
+    "Observatório Afundado": "nareth.location.observatorio_afundado",
     "Câmara do Arconte": "nareth.location.camara_do_arconte",
     **{location_id: location_id for location_id in NARETH_LOCATIONS},
 }
@@ -918,16 +955,87 @@ CREATURE_PRESENTATION = {
     "sanguessuga_turfa": CreaturePresentation(VDE_REGION_ID, ("vde.location.baixios_enredados",)),
     "casca_errante": CreaturePresentation(VDE_REGION_ID, ("vde.location.baixios_enredados",)),
     "galgo_meridiano": CreaturePresentation(
-        NARETH_REGION_ID, ("nareth.location.campinas_do_meridiano",)
+        NARETH_REGION_ID,
+        ("nareth.location.campinas_do_meridiano", "nareth.location.canais_secos"),
     ),
     "abutre_marco": CreaturePresentation(
-        NARETH_REGION_ID, ("nareth.location.campinas_do_meridiano",)
+        NARETH_REGION_ID,
+        ("nareth.location.campinas_do_meridiano", "nareth.location.canais_secos"),
     ),
     "errante_valas": CreaturePresentation(
-        NARETH_REGION_ID, ("nareth.location.campinas_do_meridiano",)
+        NARETH_REGION_ID,
+        ("nareth.location.campinas_do_meridiano", "nareth.location.canais_secos"),
     ),
     "alfa_horizonte": CreaturePresentation(
-        NARETH_REGION_ID, ("nareth.location.campinas_do_meridiano",)
+        NARETH_REGION_ID,
+        ("nareth.location.campinas_do_meridiano", "nareth.location.canais_secos"),
+    ),
+    "escaravelho_canal": CreaturePresentation(
+        NARETH_REGION_ID,
+        (
+            "nareth.location.canais_secos",
+            "nareth.location.campos_invertidos",
+            "nareth.location.galerias_do_meridiano",
+        ),
+    ),
+    "cervo_horizonte": CreaturePresentation(
+        NARETH_REGION_ID,
+        ("nareth.location.canais_secos", "nareth.location.campos_invertidos"),
+    ),
+    "serpe_campinas": CreaturePresentation(
+        NARETH_REGION_ID, ("nareth.location.campos_invertidos",)
+    ),
+    "casco_invertido": CreaturePresentation(
+        NARETH_REGION_ID,
+        (
+            "nareth.location.campos_invertidos",
+            "nareth.location.observatorio_do_eixo",
+            "nareth.location.galerias_do_meridiano",
+            "nareth.location.observatorio_afundado",
+        ),
+    ),
+    "mariposa_eixo": CreaturePresentation(
+        NARETH_REGION_ID,
+        ("nareth.location.campos_invertidos", "nareth.location.observatorio_do_eixo"),
+    ),
+    "vigia_meridiano": CreaturePresentation(
+        NARETH_REGION_ID,
+        (
+            "nareth.location.observatorio_do_eixo",
+            "nareth.location.observatorio_afundado",
+        ),
+    ),
+    "serpe_eixo": CreaturePresentation(
+        NARETH_REGION_ID,
+        ("nareth.location.canais_secos", "nareth.location.campos_invertidos"),
+    ),
+    "custodio_invertido": CreaturePresentation(
+        NARETH_REGION_ID,
+        (
+            "nareth.location.campos_invertidos",
+            "nareth.location.observatorio_do_eixo",
+        ),
+    ),
+    "custodio_sem_norte": CreaturePresentation(
+        NARETH_REGION_ID, ("nareth.location.observatorio_do_eixo",)
+    ),
+    "arconte_invertido": CreaturePresentation(
+        NARETH_REGION_ID, ("nareth.location.camara_do_arconte",)
+    ),
+    "escavador_eixo": CreaturePresentation(
+        NARETH_REGION_ID, ("nareth.location.galerias_do_meridiano",)
+    ),
+    "o_que_retorna": CreaturePresentation(
+        NARETH_REGION_ID, ("nareth.location.galerias_do_meridiano",)
+    ),
+    "custodio_meridiano": CreaturePresentation(
+        NARETH_REGION_ID, ("nareth.location.observatorio_afundado",)
+    ),
+    "preceptor_eixo": CreaturePresentation(
+        NARETH_REGION_ID, ("nareth.location.observatorio_afundado",)
+    ),
+    "guardiao_referencia": CreaturePresentation(
+        NARETH_REGION_ID, ("nareth.location.observatorio_afundado",)
     ),
     "mariposa_breu_verde": CreaturePresentation(VDE_REGION_ID, ("vde.location.baixios_enredados",)),
     "viuva_cipos": CreaturePresentation(

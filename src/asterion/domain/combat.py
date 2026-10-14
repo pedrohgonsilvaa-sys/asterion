@@ -393,6 +393,9 @@ class CombatPhaseTrigger:
     revive_fighter_keys: tuple[str, ...] = ()
     revive_hp_fraction: Decimal = D("0.50")
     phase_id: str | None = None
+    resolution_id: str | None = None
+    heal_source_per_active_fighter_fraction: Decimal = ZERO
+    consume_active_fighter_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -553,6 +556,20 @@ def _resolve_phase_triggers(state: Combat) -> None:
             fighter = state.fighters.get(key)
             if fighter is not None and fighter.hp <= ZERO:
                 fighter.hp = fighter.stats.hp * trigger.revive_hp_fraction
+        active_resolution_fighters = [
+            state.fighters[key]
+            for key in trigger.consume_active_fighter_keys
+            if key in state.fighters and state.fighters[key].hp > ZERO
+        ]
+        if active_resolution_fighters and trigger.heal_source_per_active_fighter_fraction > ZERO:
+            healing = (
+                source.stats.hp
+                * trigger.heal_source_per_active_fighter_fraction
+                * len(active_resolution_fighters)
+            )
+            source.hp = min(source.stats.hp, source.hp + healing)
+        for fighter in active_resolution_fighters:
+            fighter.hp = ZERO
         state.phase_triggered_ids.add(trigger.trigger_id)
         state.mechanic_events.append(
             CombatEvent(
@@ -565,6 +582,18 @@ def _resolve_phase_triggers(state: Combat) -> None:
                 internal=True,
             )
         )
+        if trigger.resolution_id is not None:
+            state.mechanic_events.append(
+                CombatEvent(
+                    len(state.mechanic_events),
+                    state.round,
+                    trigger.source_fighter_key,
+                    f"phase:{trigger.resolution_id}",
+                    target=source.id,
+                    actor_entity_id=source.id,
+                    internal=True,
+                )
+            )
 
 
 def _damage_aura_reduction(state: Combat, target_key: str) -> Decimal:

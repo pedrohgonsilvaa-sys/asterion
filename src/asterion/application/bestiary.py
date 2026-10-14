@@ -62,6 +62,42 @@ NARETH_DISTINCTIVE_BOSS_MASTERY = {
         "action:protocolo_continuidade",
         "action:retificacao_final",
     },
+    "o_que_retorna": {
+        "first_victory",
+        "phase:o_mesmo_trajeto",
+        "phase:o_trajeto_fecha",
+        "mechanic:marcos_retorno_observados",
+        "action:colisao_recorrente",
+        "mechanic:retorno_ao_marco_resolvido",
+    },
+    "guardiao_referencia": {
+        "first_victory",
+        "phase:corrigir_o_mundo",
+        "phase:referencia_absoluta",
+        "mechanic:eixos_calibracao_observados",
+        "action:ancora_local",
+        "action:referencia_absoluta",
+    },
+}
+
+NARETH_DISTINCTIVE_ELITE_MASTERY = {
+    "escavador_eixo": {
+        "first_victory",
+        "action:travar_trilho",
+        "action:corte_canal",
+        "action:broca_servico",
+    },
+    "custodio_meridiano": {
+        "first_victory",
+        "action:travar_referencia",
+        "action:ajuste_forcado",
+        "action:queda_prumo",
+    },
+    "preceptor_eixo": {
+        "first_victory",
+        "action:desvio_medido",
+        "action:recalibrar_baliza",
+    },
 }
 
 
@@ -256,6 +292,30 @@ class BestiaryRecorder:
                 if entry.bkp >= 8
                 else "observed"
             )
+        elif creature_id in NARETH_DISTINCTIVE_ELITE_MASTERY:
+            await self.add_evidence(
+                session, entry, character_id, creature_id, "elite", "elite", 8
+            )
+            if victory:
+                await self.add_evidence(
+                    session,
+                    entry,
+                    character_id,
+                    creature_id,
+                    "elite_victory",
+                    "elite_victory",
+                    6,
+                )
+            required = NARETH_DISTINCTIVE_ELITE_MASTERY[creature_id]
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 25
+                else "known"
+                if entry.bkp >= 10
+                else "observed"
+            )
         elif creature_id == "vigia_partido" or observation_category == "boss":
             required = {
                 "first_victory",
@@ -432,6 +492,28 @@ class BestiaryRecorder:
                 if entry.bkp >= 22
                 else "known"
                 if entry.bkp >= 8
+                else "observed"
+            )
+        elif creature_id in NARETH_DISTINCTIVE_BOSS_MASTERY:
+            required = NARETH_DISTINCTIVE_BOSS_MASTERY[creature_id]
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
+        elif creature_id in NARETH_DISTINCTIVE_ELITE_MASTERY:
+            required = NARETH_DISTINCTIVE_ELITE_MASTERY[creature_id]
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 25
+                else "known"
+                if entry.bkp >= 10
                 else "observed"
             )
         elif creature_id == "vigia_partido" or observation_category == "boss":

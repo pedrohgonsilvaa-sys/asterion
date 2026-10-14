@@ -773,6 +773,152 @@ NARETH_CREATURES = (
     NARETH_INVERTED_CUSTODIAN,
 )
 NARETH_CAMPAIGN_BOSSES = (NARETH_CUSTODIO_SEM_NORTE, NARETH_ARCONTE_INVERTIDO)
+NARETH_DUNGEON_BESTIARY_CREATURES = (
+    Creature(
+        "escavador_eixo",
+        "Escavador do Eixo",
+        "elite",
+        "armored",
+        26,
+        26,
+        0,
+        ("pancada_escavacao", "travar_trilho", "corte_canal", "broca_servico"),
+        (
+            ("pancada_escavacao", "Pancada de Escavação", D("1.05"), 0, D(0), 0),
+            (
+                "travar_trilho", "Travar Trilho", D(0), 0, D(0), 0, None, 0,
+                False, 3, None, D(0), D("0.85"), 2, True,
+            ),
+            ("corte_canal", "Corte de Canal", D("1.30"), 0, D(0), 0, None, 0, False, 3),
+            ("broca_servico", "Broca de Serviço", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+        ),
+        ai_priority=("travar_trilho", "corte_canal", "broca_servico"),
+    ),
+    Creature(
+        "o_que_retorna",
+        "O Que Retorna",
+        "boss",
+        "brute",
+        27,
+        27,
+        0,
+        (
+            "impacto_recorrente", "rastro_repetido", "curva_retorno",
+            "casco_ciclo", "colisao_recorrente",
+        ),
+        (
+            ("impacto_recorrente", "Impacto Recorrente", D("1.00"), 0, D(0), 0),
+            (
+                "rastro_repetido", "Rastro Repetido", D("0.85"), 0,
+                D("0.10"), 2, None, 0, False, 3, "defense",
+            ),
+            (
+                "curva_retorno", "Curva de Retorno", D("0.80"), 0, D(0), 0,
+                None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents",
+            ),
+            (
+                "casco_ciclo", "Casco de Ciclo", D(0), 0, D(0), 0,
+                None, 0, False, 4, None, D(0), D(0), 2, True, "opponent",
+                None, None, 2, (), (), D("0.50"), D("0.08"),
+            ),
+            (
+                "colisao_recorrente", "Colisão Recorrente", D("1.75"), 0,
+                D(0), 0, None, 0, True, 4,
+            ),
+        ),
+        ai_priority=(
+            "colisao_recorrente", "casco_ciclo", "rastro_repetido",
+            "curva_retorno", "impacto_recorrente",
+        ),
+    ),
+    Creature(
+        "custodio_meridiano",
+        "Custódio do Meridiano",
+        "elite",
+        "armored",
+        29,
+        29,
+        0,
+        ("impacto_calibracao", "travar_referencia", "ajuste_forcado", "queda_prumo"),
+        (
+            ("impacto_calibracao", "Impacto de Calibração", D("1.00"), 0, D(0), 0),
+            (
+                "travar_referencia", "Travar Referência", D(0), 0, D(0), 0,
+                None, 0, False, 3, None, D(0), D("0.90"), 2, True,
+            ),
+            (
+                "ajuste_forcado", "Ajuste Forçado", D("0.85"), 0,
+                D("0.12"), 2, None, 0, False, 3, "agility",
+            ),
+            ("queda_prumo", "Queda do Prumo", D("1.70"), 0, D(0), 0, None, 0, True, 4),
+        ),
+        ai_priority=("travar_referencia", "ajuste_forcado", "queda_prumo"),
+    ),
+    Creature(
+        "preceptor_eixo",
+        "Preceptor do Eixo",
+        "elite",
+        "caster",
+        29,
+        29,
+        0,
+        ("pulso_eixo", "desvio_medido", "recalibrar_baliza"),
+        (
+            ("pulso_eixo", "Pulso do Eixo", D("1.00"), 0, D(0), 0),
+            (
+                "desvio_medido", "Desvio Medido", D("0.80"), 0,
+                D("0.10"), 2, None, 0, False, 3, "attack",
+            ),
+            (
+                "recalibrar_baliza", "Recalibrar Baliza", D(0), 0, D(0), 0,
+                None, 0, False, 0, None, D(0), D(0), 0, False, "opponent",
+                None, None, 1,
+                ("calibration_1", "calibration_2", "calibration_3", "calibration_4"),
+                ("calibration_1", "calibration_2", "calibration_3", "calibration_4"),
+                D("0.50"),
+            ),
+        ),
+        ai_priority=("recalibrar_baliza", "desvio_medido", "pulso_eixo"),
+    ),
+    Creature(
+        "guardiao_referencia",
+        "Guardião da Referência",
+        "boss",
+        "armored",
+        30,
+        30,
+        0,
+        (
+            "impacto_referencia", "linha_correcao", "ancora_local",
+            "varredura_eixo", "referencia_absoluta",
+        ),
+        (
+            ("impacto_referencia", "Impacto de Referência", D("1.00"), 0, D(0), 0),
+            (
+                "linha_correcao", "Linha de Correção", D("0.90"), 0,
+                D("0.10"), 2, None, 0, False, 3, "defense",
+            ),
+            (
+                "ancora_local", "Âncora Local", D(0), 0, D(0), 0,
+                None, 0, False, 4, None, D(0), D(0), 2, True, "opponent",
+                None, None, 2, (), (), D("0.50"), D("0.08"),
+            ),
+            (
+                "varredura_eixo", "Varredura do Eixo", D("0.85"), 0,
+                D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False,
+                "all_opponents",
+            ),
+            (
+                "referencia_absoluta", "Referência Absoluta", D("1.80"), 0,
+                D(0), 0, None, 0, True, 5,
+            ),
+        ),
+        ai_priority=(
+            "referencia_absoluta", "ancora_local", "varredura_eixo",
+            "linha_correcao", "impacto_referencia",
+        ),
+    ),
+)
 
 VDE_MATRIARCH = Creature(
     "matriarca_raizes",
@@ -961,6 +1107,7 @@ CREATURE_CATALOG = (
     *VDE_CREATURES,
     *VDE_DUNGEON_CREATURES,
     *NARETH_CREATURES,
+    *NARETH_DUNGEON_BESTIARY_CREATURES,
     *CAMPAIGN_BOSS_CREATURES,
 )
 

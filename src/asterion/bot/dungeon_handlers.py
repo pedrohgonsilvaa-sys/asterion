@@ -48,6 +48,20 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
             await service.detail(query.from_user.id, "dungeon.vde.santuario_no_antigo"),
         )
 
+    @router.callback_query(F.data == "dungeon:nareth-galleries")
+    async def nareth_galleries(query: CallbackQuery):
+        await show(
+            query,
+            await service.detail(query.from_user.id, "dungeon.nareth.galerias_meridiano"),
+        )
+
+    @router.callback_query(F.data == "dungeon:nareth-observatory")
+    async def nareth_observatory(query: CallbackQuery):
+        await show(
+            query,
+            await service.detail(query.from_user.id, "dungeon.nareth.observatorio_afundado"),
+        )
+
     @router.callback_query(F.data.startswith("dungeon:group:"))
     async def prepare_group(query: CallbackQuery):
         try:
@@ -57,6 +71,8 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "g": "dungeon.tdo.galerias_vigia",
                 "f": "dungeon.vde.fosso_raizes",
                 "s": "dungeon.vde.santuario_no_antigo",
+                "n": "dungeon.nareth.galerias_meridiano",
+                "o": "dungeon.nareth.observatorio_afundado",
             }[family_key]
             difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
                 difficulty_key
@@ -75,6 +91,8 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "g": "dungeon.tdo.galerias_vigia",
                 "f": "dungeon.vde.fosso_raizes",
                 "s": "dungeon.vde.santuario_no_antigo",
+                "n": "dungeon.nareth.galerias_meridiano",
+                "o": "dungeon.nareth.observatorio_afundado",
             }[family_key]
             difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
                 difficulty_key
@@ -157,6 +175,8 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "g": "dungeon.tdo.galerias_vigia",
                 "f": "dungeon.vde.fosso_raizes",
                 "s": "dungeon.vde.santuario_no_antigo",
+                "n": "dungeon.nareth.galerias_meridiano",
+                "o": "dungeon.nareth.observatorio_afundado",
             }.get(pieces[2])
             suffix = pieces[3]
         else:

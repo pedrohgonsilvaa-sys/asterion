@@ -2080,6 +2080,14 @@ def world_router(
             CHARNECA: ("dungeon.tdo.cripta_ocaso", "dungeon:crypt"),
             RUINS: ("dungeon.tdo.galerias_vigia", "dungeon:galleries"),
             VDE_CLAUSTRO: ("dungeon.vde.santuario_no_antigo", "dungeon:sanctuary"),
+            NARETH_CANAIS: (
+                "dungeon.nareth.galerias_meridiano",
+                "dungeon:nareth-galleries",
+            ),
+            NARETH_OBSERVATORIO: (
+                "dungeon.nareth.observatorio_afundado",
+                "dungeon:nareth-observatory",
+            ),
         }
         family = family_by_location.get(view.location)
         if dungeons is not None and family is not None:
