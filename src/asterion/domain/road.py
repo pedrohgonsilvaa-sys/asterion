@@ -39,15 +39,27 @@ VDE_CLAUSTRO_LOCATION = "vde.location.claustro_das_raizes"
 VDE_BERCO_LOCATION = "vde.location.berco_da_matriarca"
 NARETH_CAMPINAS_LOCATION = "nareth.location.campinas_do_meridiano"
 NARETH_POSTO_LOCATION = "nareth.location.posto_de_nareth"
+NARETH_CANAIS_LOCATION = "nareth.location.canais_secos"
+NARETH_CAMPOS_LOCATION = "nareth.location.campos_invertidos"
+NARETH_OBSERVATORIO_LOCATION = "nareth.location.observatorio_do_eixo"
 NARETH_CAMPINAS = "Campinas do Meridiano"
 NARETH_POSTO = "Posto de Nareth"
+NARETH_CANAIS = "Canais Secos"
+NARETH_CAMPOS = "Campos Invertidos"
+NARETH_OBSERVATORIO = "Observatório do Eixo"
 NARETH_REGION = "Planícies de Nareth"
 NARETH_BRAZIER_HORIZONTE = "nareth.brazier.horizonte"
 NARETH_BRAZIER_POSTO = "nareth.brazier.posto"
+NARETH_BRAZIER_CANAIS = "nareth.brazier.canal_alto"
+NARETH_BRAZIER_CAMPOS = "nareth.brazier.linha_quebrada"
+NARETH_BRAZIER_OBSERVATORIO = "nareth.brazier.eixo"
 NARETH_HUNT_UNLOCK = "hunt.manual.nareth.campinas_do_meridiano"
 NARETH_EXPLORE_UNLOCK = "explore.nareth.campinas_do_meridiano"
 NARETH_ROUND_FAMILIARITY = "hunt_round.nareth.campinas_do_meridiano"
 NARETH_CAMPINAS_POSTO_ROUTE = "route.nareth.campinas_posto"
+NARETH_POSTO_CANAIS_ROUTE = "route.nareth.posto_canais"
+NARETH_CANAIS_CAMPOS_ROUTE = "route.nareth.canais_campos"
+NARETH_CAMPOS_OBSERVATORIO_ROUTE = "route.nareth.campos_observatorio"
 NARETH_REGION_UNLOCK = "region.nareth.available"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
@@ -634,11 +646,100 @@ NARETH_HORIZON_ALPHA = Creature(
     ),
     ai_priority=("rasgo_travessia", "corrida_sem_abrigo"),
 )
+NARETH_CHANNEL_SCARAB = Creature(
+    "escaravelho_canal", "Escaravelho de Canal", "common", "controller", 23, 26, 21,
+    ("mandibula_canal", "secrecao_irritante", "carapaca_baixa"),
+    (
+        ("mandibula_canal", "Mandíbula de Canal", D("0.95"), 0, D(0), 0),
+        ("secrecao_irritante", "Secreção Irritante", D("0.80"), 0, D("0.12"), 2, None, 0, False, 3, "agility"),
+        ("carapaca_baixa", "Carapaça Baixa", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D("0.70"), 2, True),
+    ),
+    ai_priority=("secrecao_irritante", "carapaca_baixa"),
+)
+NARETH_HORIZON_DEER = Creature(
+    "cervo_horizonte", "Cervo do Horizonte", "common", "brute", 23, 27, 23,
+    ("chifrada_horizonte", "pisoteio_campo", "carga_longa"),
+    (
+        ("chifrada_horizonte", "Chifrada do Horizonte", D("1.05"), 0, D(0), 0),
+        ("pisoteio_campo", "Pisoteio de Campo", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+        ("carga_longa", "Carga Longa", D("1.70"), 0, D(0), 0, None, 0, True, 4),
+    ),
+)
+NARETH_FIELD_SERPENT = Creature(
+    "serpe_campinas", "Serpe das Campinas", "common", "controller", 25, 28, 22,
+    ("bote_seco", "veneno_campinas", "enroscar_palha"),
+    (
+        ("bote_seco", "Bote Seco", D("0.95"), 0, D(0), 0),
+        ("veneno_campinas", "Veneno de Campinas", D("0.80"), 0, D(0), 0, "poison", 1, False, 2),
+        ("enroscar_palha", "Enroscar na Palha", D("0.75"), 0, D("0.12"), 2, None, 0, False, 3, "agility"),
+    ),
+    ai_priority=("veneno_campinas", "enroscar_palha"),
+)
+NARETH_INVERTED_HUSK = Creature(
+    "casco_invertido", "Casco Invertido", "uncommon", "armored", 25, 29, 18,
+    ("impacto_casco", "placas_contrarias", "reverso_peso"),
+    (
+        ("impacto_casco", "Impacto de Casco", D("1.00"), 0, D(0), 0),
+        ("placas_contrarias", "Placas Contrárias", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.85"), 2, True),
+        ("reverso_peso", "Reverso de Peso", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+    ),
+    damage_taken_modifiers=(("bleed", D("0.90")),),
+)
+NARETH_AXIS_MOTH = Creature(
+    "mariposa_eixo", "Mariposa do Eixo", "common", "caster", 26, 29, 15,
+    ("po_eixo", "toque_palida", "clarao_referencia"),
+    (
+        ("po_eixo", "Pó de Eixo", D("0.75"), 0, D("0.08"), 2, None, 0, False, 3, "attack"),
+        ("toque_palida", "Toque Pálido", D("0.90"), 0, D(0), 0),
+        ("clarao_referencia", "Clarão de Referência", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+    ),
+)
+NARETH_MERIDIAN_WATCHER = Creature(
+    "vigia_meridiano", "Vigia do Meridiano", "uncommon", "armored", 28, 30, 32,
+    ("golpe_medicao", "egide_meridiano", "marca_referencia", "prumo_descendente"),
+    (
+        ("golpe_medicao", "Golpe de Medição", D("1.00"), 0, D(0), 0),
+        ("egide_meridiano", "Égide do Meridiano", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.90"), 2, True),
+        ("marca_referencia", "Marca de Referência", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+        ("prumo_descendente", "Prumo Descendente", D("1.60"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("egide_meridiano", "marca_referencia", "prumo_descendente"),
+)
+NARETH_AXIS_SERPENT = Creature(
+    "serpe_eixo", "Serpe do Eixo", "elite", "controller", 25, 27, 2,
+    ("picada_eixo", "laco_escamas", "veneno_concentrado", "bote_marco"),
+    (
+        ("picada_eixo", "Picada do Eixo", D("0.80"), 0, D(0), 0, "poison", 1, False, 2),
+        ("laco_escamas", "Laço de Escamas", D("0.75"), 0, D("0.15"), 2, None, 0, False, 3, "agility"),
+        ("veneno_concentrado", "Veneno Concentrado", D("0.95"), 0, D(0), 0, "poison", 1, False, 3, None, D(0), D(0), 0, False, "opponent", None, None, None, (), (), D("0.50"), D(0), D(0), D(0), D(0), D("0.40"), 1),
+        ("bote_marco", "Bote do Marco", D("1.55"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("picada_eixo", "laco_escamas", "veneno_concentrado", "bote_marco"),
+)
+NARETH_INVERTED_CUSTODIAN = Creature(
+    "custodio_invertido", "Custódio Invertido", "elite", "armored", 28, 30, 2,
+    ("golpe_invertido", "couraça_referencia", "corte_eixo", "queda_prumo"),
+    (
+        ("golpe_invertido", "Golpe Invertido", D("1.05"), 0, D(0), 0),
+        ("couraça_referencia", "Couraça de Referência", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("1.00"), 2, True),
+        ("corte_eixo", "Corte de Eixo", D("1.35"), 0, D(0), 0, None, 0, False, 3),
+        ("queda_prumo", "Queda do Prumo", D("1.80"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("couraça_referencia", "corte_eixo", "queda_prumo"),
+)
 NARETH_CREATURES = (
     NARETH_MERIDIAN_HOUND,
     NARETH_MARKER_VULTURE,
     NARETH_DITCH_WANDERER,
+    NARETH_CHANNEL_SCARAB,
+    NARETH_HORIZON_DEER,
+    NARETH_FIELD_SERPENT,
+    NARETH_INVERTED_HUSK,
+    NARETH_AXIS_MOTH,
+    NARETH_MERIDIAN_WATCHER,
     NARETH_HORIZON_ALPHA,
+    NARETH_AXIS_SERPENT,
+    NARETH_INVERTED_CUSTODIAN,
 )
 
 VDE_MATRIARCH = Creature(
@@ -866,7 +967,15 @@ VARIANT_POOL = {
     "galgo_meridiano": ("furious", "agile", "hemorrhagic"),
     "abutre_marco": ("agile", "furious"),
     "errante_valas": ("resistant", "furious", "agile"),
+    "escaravelho_canal": ("resistant", "agile"),
+    "cervo_horizonte": ("furious", "resistant"),
+    "serpe_campinas": ("venomous", "agile"),
+    "casco_invertido": ("resistant", "furious"),
+    "mariposa_eixo": ("agile", "furious"),
+    "vigia_meridiano": ("resistant", "furious"),
     "alfa_horizonte": (),
+    "serpe_eixo": (),
+    "custodio_invertido": (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -1351,6 +1460,116 @@ NARETH_CAMPINAS_EXPLORATION_PROFILE = ExplorationLocationProfile(
     ),
 )
 
+NARETH_CANAIS_PROFILE = HuntLocationProfile(
+    local_id=NARETH_CANAIS_LOCATION,
+    label=NARETH_CANAIS,
+    creature_weights=(
+        ("galgo_meridiano", 20), ("abutre_marco", 17), ("errante_valas", 15),
+        ("escaravelho_canal", 21), ("cervo_horizonte", 23), ("alfa_horizonte", 2),
+        ("serpe_eixo", 2),
+    ),
+    variant_chance=12,
+    hunt_unlock="hunt.manual.nareth.canais_secos",
+    round_familiarity="hunt_round.nareth.canais_secos",
+    explore_unlock="explore.nareth.canais_secos",
+)
+NARETH_CAMPOS_PROFILE = HuntLocationProfile(
+    local_id=NARETH_CAMPOS_LOCATION,
+    label=NARETH_CAMPOS,
+    creature_weights=(
+        ("escaravelho_canal", 22), ("cervo_horizonte", 20), ("serpe_campinas", 22),
+        ("casco_invertido", 18), ("mariposa_eixo", 15), ("serpe_eixo", 1),
+        ("custodio_invertido", 2),
+    ),
+    variant_chance=15,
+    hunt_unlock="hunt.manual.nareth.campos_invertidos",
+    round_familiarity="hunt_round.nareth.campos_invertidos",
+    explore_unlock="explore.nareth.campos_invertidos",
+)
+NARETH_OBSERVATORIO_PROFILE = HuntLocationProfile(
+    local_id=NARETH_OBSERVATORIO_LOCATION,
+    label=NARETH_OBSERVATORIO,
+    creature_weights=(
+        ("casco_invertido", 35), ("mariposa_eixo", 30),
+        ("vigia_meridiano", 32), ("custodio_invertido", 3),
+    ),
+    variant_chance=18,
+    hunt_unlock="hunt.manual.nareth.observatorio_do_eixo",
+    round_familiarity="hunt_round.nareth.observatorio_do_eixo",
+    explore_unlock="explore.nareth.observatorio_do_eixo",
+)
+
+NARETH_CANAIS_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=NARETH_CANAIS_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("braseiro_canal_alto", "great_discovery", "explore.nareth.canais.braseiro_canal_alto", 50, "O Braseiro do Canal Alto foi descoberto entre as comportas secas.", min_level=23, unique=True),
+        ExplorationResultDefinition("entrada_galerias", "great_discovery", "explore.nareth.canais.entrada_galerias_meridiano", 50, "Uma entrada das Galerias do Meridiano foi encontrada sob o canal.", min_level=23, unique=True),
+        ExplorationResultDefinition("comporta_sem_agua", "knowledge", "explore.nareth.canais.comporta_sem_agua", 55, "A comporta foi registrada sem água e com marcas de medição.", min_level=23, unique=True),
+        ExplorationResultDefinition("marcas_vazao", "knowledge", "explore.nareth.canais.marcas_de_vazao", 45, "Marcas de vazão foram observadas no leito seco.", min_level=23),
+        ExplorationResultDefinition("pedra_raspada", "narrative", "explore.nareth.canais.pedra_raspada", 55, "A pedra do canal apresenta marcas de desgaste.", min_level=23),
+        ExplorationResultDefinition("ponte_seco", "narrative", "explore.nareth.canais.ponte_sobre_seco", 45, "Uma ponte atravessa o canal sem água.", min_level=23),
+        ExplorationResultDefinition("galgo", "combat", "explore.nareth.canais.combat.galgo_meridiano", 20, "Um Galgo do Meridiano surge no canal.", min_level=23, creature_id="galgo_meridiano"),
+        ExplorationResultDefinition("abutre", "combat", "explore.nareth.canais.combat.abutre_marco", 15, "Um Abutre de Marco desce sobre o canal.", min_level=23, creature_id="abutre_marco"),
+        ExplorationResultDefinition("errante", "combat", "explore.nareth.canais.combat.errante_valas", 15, "Um Errante das Valas bloqueia o canal.", min_level=23, creature_id="errante_valas"),
+        ExplorationResultDefinition("escaravelho", "combat", "explore.nareth.canais.combat.escaravelho_canal", 25, "Um Escaravelho de Canal ocupa a passagem.", min_level=23, creature_id="escaravelho_canal"),
+        ExplorationResultDefinition("cervo", "combat", "explore.nareth.canais.combat.cervo_horizonte", 25, "Um Cervo do Horizonte atravessa o leito.", min_level=23, creature_id="cervo_horizonte"),
+        ExplorationResultDefinition("bronze", "resource", "explore.nareth.canais.bronze_de_marco", 35, "Bronze de Marco pode ser recolhido entre as pedras.", min_level=23),
+        ExplorationResultDefinition("erva", "resource", "explore.nareth.canais.erva_de_vento", 30, "Erva de Vento cresce junto ao leito.", min_level=23),
+        ExplorationResultDefinition("po", "resource", "explore.nareth.canais.po_de_eixo", 25, "Pó de Eixo pode ser recolhido nas marcas antigas.", min_level=23),
+        ExplorationResultDefinition("couro", "resource", "explore.nareth.canais.couro_de_horizonte", 10, "Couro de Horizonte pode ser obtido nesta área.", min_level=23),
+        ExplorationResultDefinition("canal_some", "atmospheric", "explore.nareth.canais.canal_que_some", 34, "O leito do canal desaparece sob uma curva seca.", min_level=23),
+        ExplorationResultDefinition("eco_ponte", "atmospheric", "explore.nareth.canais.eco_sob_a_ponte", 33, "O vento devolve um eco sob a ponte.", min_level=23),
+        ExplorationResultDefinition("vento_comporta", "atmospheric", "explore.nareth.canais.vento_na_comporta", 33, "O vento atravessa a comporta vazia.", min_level=23),
+    ),
+)
+NARETH_CAMPOS_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=NARETH_CAMPOS_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("braseiro_linha_quebrada", "great_discovery", "explore.nareth.campos.braseiro_linha_quebrada", 50, "O Braseiro da Linha Quebrada foi descoberto nos Campos.", min_level=25, unique=True),
+        ExplorationResultDefinition("linha_nao_fecha", "great_discovery", "explore.nareth.campos.linha_que_nao_fecha", 50, "Uma linha de referência persiste sem fechar.", min_level=25, unique=True),
+        ExplorationResultDefinition("sombras_discordam", "knowledge", "explore.nareth.campos.sombras_que_discordam", 60, "Sombras discordantes foram registradas sem explicar o fenômeno.", min_level=25, unique=True),
+        ExplorationResultDefinition("rastros_capim", "knowledge", "explore.nareth.campos.rastros_no_capim", 40, "Rastros seguem pelo capim alto.", min_level=25),
+        ExplorationResultDefinition("marco_costas", "narrative", "explore.nareth.campos.marco_de_costas", 55, "Um marco parece voltado para longe da rota atual.", min_level=25),
+        ExplorationResultDefinition("distancia_silencio", "narrative", "explore.nareth.campos.distancia_em_silencio", 45, "A distância entre marcos deixa a área silenciosa.", min_level=25),
+        ExplorationResultDefinition("escaravelho", "combat", "explore.nareth.campos.combat.escaravelho_canal", 22, "Um Escaravelho de Canal ocupa o campo.", min_level=25, creature_id="escaravelho_canal"),
+        ExplorationResultDefinition("cervo", "combat", "explore.nareth.campos.combat.cervo_horizonte", 20, "Um Cervo do Horizonte cruza os Campos.", min_level=25, creature_id="cervo_horizonte"),
+        ExplorationResultDefinition("serpe", "combat", "explore.nareth.campos.combat.serpe_campinas", 23, "Uma Serpe das Campinas emerge do capim.", min_level=25, creature_id="serpe_campinas"),
+        ExplorationResultDefinition("casco", "combat", "explore.nareth.campos.combat.casco_invertido", 18, "Um Casco Invertido bloqueia a linha.", min_level=25, creature_id="casco_invertido"),
+        ExplorationResultDefinition("mariposa", "combat", "explore.nareth.campos.combat.mariposa_eixo", 17, "Uma Mariposa do Eixo cruza os Campos.", min_level=26, creature_id="mariposa_eixo"),
+        ExplorationResultDefinition("couro", "resource", "explore.nareth.campos.couro_de_horizonte", 30, "Couro de Horizonte pode ser recolhido nos Campos.", min_level=25),
+        ExplorationResultDefinition("erva", "resource", "explore.nareth.campos.erva_de_vento", 25, "Erva de Vento cresce nos Campos.", min_level=25),
+        ExplorationResultDefinition("po", "resource", "explore.nareth.campos.po_de_eixo", 30, "Pó de Eixo pode ser recolhido nos marcos.", min_level=25),
+        ExplorationResultDefinition("bronze", "resource", "explore.nareth.campos.bronze_de_marco", 15, "Bronze de Marco pode ser recolhido nos Campos.", min_level=25),
+        ExplorationResultDefinition("declive", "atmospheric", "explore.nareth.campos.declive_improvavel", 34, "O declive parece não corresponder à distância percorrida.", min_level=25),
+        ExplorationResultDefinition("ceu_grande", "atmospheric", "explore.nareth.campos.ceu_grande", 33, "O céu aberto ocupa quase todo o horizonte.", min_level=25),
+        ExplorationResultDefinition("duas_linhas", "atmospheric", "explore.nareth.campos.duas_linhas_mesmo_chao", 33, "Duas linhas permanecem visíveis no mesmo terreno.", min_level=25),
+    ),
+)
+NARETH_OBSERVATORIO_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=NARETH_OBSERVATORIO_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("braseiro_eixo", "great_discovery", "explore.nareth.observatorio.braseiro_do_eixo", 50, "O Braseiro do Eixo foi descoberto na plataforma.", min_level=27, unique=True),
+        ExplorationResultDefinition("observatorio_afundado", "great_discovery", "explore.nareth.observatorio.entrada_observatorio_afundado", 50, "Uma entrada para o Observatório Afundado foi registrada.", min_level=27, unique=True),
+        ExplorationResultDefinition("prumo_fora", "knowledge", "explore.nareth.observatorio.prumo_fora_do_centro", 60, "O prumo foi registrado fora do centro esperado.", min_level=27, unique=True),
+        ExplorationResultDefinition("placas_calibracao", "knowledge", "explore.nareth.observatorio.placas_calibracao", 40, "Placas de calibração foram observadas.", min_level=27),
+        ExplorationResultDefinition("bracos_imoveis", "narrative", "explore.nareth.observatorio.bracos_imoveis", 55, "Braços mecânicos permanecem imóveis.", min_level=27),
+        ExplorationResultDefinition("linha_gravada", "narrative", "explore.nareth.observatorio.linha_gravada", 45, "Uma linha antiga foi gravada na plataforma.", min_level=27),
+        ExplorationResultDefinition("casco", "combat", "explore.nareth.observatorio.combat.casco_invertido", 35, "Um Casco Invertido protege a plataforma.", min_level=27, creature_id="casco_invertido"),
+        ExplorationResultDefinition("mariposa", "combat", "explore.nareth.observatorio.combat.mariposa_eixo", 30, "Uma Mariposa do Eixo surge no observatório.", min_level=27, creature_id="mariposa_eixo"),
+        ExplorationResultDefinition("vigia", "combat", "explore.nareth.observatorio.combat.vigia_meridiano", 35, "Um Vigia do Meridiano guarda o observatório.", min_level=28, creature_id="vigia_meridiano"),
+        ExplorationResultDefinition("bronze", "resource", "explore.nareth.observatorio.bronze_de_marco", 35, "Bronze de Marco pode ser recolhido no observatório.", min_level=27),
+        ExplorationResultDefinition("po", "resource", "explore.nareth.observatorio.po_de_eixo", 35, "Pó de Eixo pode ser recolhido nas placas.", min_level=27),
+        ExplorationResultDefinition("erva", "resource", "explore.nareth.observatorio.erva_de_vento", 20, "Erva de Vento cresce nas fissuras.", min_level=27),
+        ExplorationResultDefinition("couro", "resource", "explore.nareth.observatorio.couro_de_horizonte", 10, "Couro de Horizonte pode ser obtido nesta área.", min_level=27),
+        ExplorationResultDefinition("piso_marcado", "atmospheric", "explore.nareth.observatorio.piso_marcado", 34, "O piso possui marcas de alinhamento.", min_level=27),
+        ExplorationResultDefinition("torre_baixa", "atmospheric", "explore.nareth.observatorio.torre_baixa", 33, "A torre parece baixa em relação aos marcos próximos.", min_level=27),
+        ExplorationResultDefinition("horizonte_medido", "atmospheric", "explore.nareth.observatorio.horizonte_medido", 33, "O horizonte é observado como referência de medição.", min_level=27),
+    ),
+)
+
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
     CHARNECA_LOCATION: CHARNECA_EXPLORATION_PROFILE,
@@ -1361,6 +1580,9 @@ EXPLORATION_PROFILES = {
     VDE_BAIXIOS_LOCATION: VDE_BAIXIOS_EXPLORATION_PROFILE,
     VDE_CLAUSTRO_LOCATION: VDE_CLAUSTRO_EXPLORATION_PROFILE,
     NARETH_CAMPINAS_LOCATION: NARETH_CAMPINAS_EXPLORATION_PROFILE,
+    NARETH_CANAIS_LOCATION: NARETH_CANAIS_EXPLORATION_PROFILE,
+    NARETH_CAMPOS_LOCATION: NARETH_CAMPOS_EXPLORATION_PROFILE,
+    NARETH_OBSERVATORIO_LOCATION: NARETH_OBSERVATORIO_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
@@ -1374,6 +1596,9 @@ HUNT_PROFILES = {
     VDE_CLAUSTRO_LOCATION: VDE_CLAUSTRO_PROFILE,
     NARETH_CAMPINAS_LOCATION: NARETH_CAMPINAS_PROFILE,
     NARETH_POSTO_LOCATION: NARETH_POSTO_PROFILE,
+    NARETH_CANAIS_LOCATION: NARETH_CANAIS_PROFILE,
+    NARETH_CAMPOS_LOCATION: NARETH_CAMPOS_PROFILE,
+    NARETH_OBSERVATORIO_LOCATION: NARETH_OBSERVATORIO_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()

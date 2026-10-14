@@ -1,9 +1,6 @@
-"""Presentation catalogs for knowledge already persisted by the game.
+"""Presentation catalogs for knowledge already persisted by the game."""
 
-Only IDs emitted by the current TDO vertical slice are listed here. The
-services still gate every entry, fragment, creature, variant, and achievement
-on the character's persisted knowledge.
-"""
+# ruff: noqa: E501
 
 from __future__ import annotations
 
@@ -101,6 +98,18 @@ CODEX_ENTRIES = (
     ),
     CodexPresentation("codex.figure.nera_voss", "Nera Voss", "figures", 40),
     CodexPresentation("codex.route.rotas_de_nareth", "Rotas de Nareth", "regions", 160),
+    CodexPresentation("codex.figure.talen_orm", "Talen Orm", "figures", 50),
+    CodexPresentation("codex.location.canais_secos", "Canais Secos", "regions", 170, "nareth.location.canais_secos"),
+    CodexPresentation("codex.location.galerias_do_meridiano", "Galerias do Meridiano", "regions", 175, "nareth.location.galerias_do_meridiano"),
+    CodexPresentation("codex.location.campos_invertidos", "Campos Invertidos", "regions", 180, "nareth.location.campos_invertidos"),
+    CodexPresentation("codex.location.observatorio_do_eixo", "Observatório do Eixo", "regions", 190, "nareth.location.observatorio_do_eixo"),
+    CodexPresentation("codex.location.observatorio_afundado", "Observatório Afundado", "regions", 195, "nareth.location.observatorio_afundado"),
+    CodexPresentation("codex.history.rede_de_medicao", "Rede de Medição", "history", 170),
+    CodexPresentation("codex.mystery.horizonte_discordante", "Horizonte Discordante", "mysteries", 180),
+    CodexPresentation("codex.mystery.linha_que_nao_fecha", "Linha que Não Fecha", "mysteries", 190),
+    CodexPresentation("codex.mystery.o_eixo", "O Eixo", "mysteries", 200),
+    CodexPresentation("codex.history.protocolos_de_referencia", "Protocolos de Referência", "history", 180),
+    CodexPresentation("codex.history.cartografia_do_erro", "Cartografia do Erro", "history", 200),
     CodexPresentation(
         "codex.location.mata_suspensa",
         "Mata Suspensa",
@@ -357,6 +366,57 @@ CODEX_FRAGMENTS = {
         "Dois marcos que deveriam apontar a mesma rota divergem; "
         "sua função permanece desconhecida.",
     ),
+    "codex.fragment.nareth.canais.entry": FragmentPresentation(
+        "Canais Secos", "O leito seco e a antiga infraestrutura de orientação foram registrados."
+    ),
+    "codex.fragment.nareth.canais.brazier": FragmentPresentation(
+        "Canal Alto", "O Braseiro do Canal Alto foi descoberto e registrado permanentemente."
+    ),
+    "codex.fragment.nareth.canais.measurement_gate": FragmentPresentation(
+        "Comporta sem água", "Marcas de medição permanecem junto à comporta seca."
+    ),
+    "codex.fragment.nareth.canais.p14_plate": FragmentPresentation(
+        "Placa de medição", "A placa de P14 registra termos de referência, desvio e estabilidade."
+    ),
+    "codex.fragment.nareth.canais.s14_route": FragmentPresentation(
+        "Passagem estável", "A rota de suprimentos pelos Canais foi marcada como a mais estável."
+    ),
+    "codex.fragment.nareth.galerias.entry": FragmentPresentation(
+        "Entrada", "Uma entrada das Galerias do Meridiano foi descoberta sob os Canais."
+    ),
+    "codex.fragment.nareth.campos.entry": FragmentPresentation(
+        "Campos Invertidos", "O Local foi alcançado para comparar referências e distâncias."
+    ),
+    "codex.fragment.nareth.campos.brazier": FragmentPresentation(
+        "Linha Quebrada", "O Braseiro da Linha Quebrada foi descoberto e registrado permanentemente."
+    ),
+    "codex.fragment.nareth.campos.line_does_not_close": FragmentPresentation(
+        "Linha que Não Fecha", "A discrepância persiste sem identificar sua causa."
+    ),
+    "codex.fragment.nareth.campos.p15_records": FragmentPresentation(
+        "Registros incompatíveis", "Registros históricos também divergiam após a Ruptura."
+    ),
+    "codex.fragment.nareth.campos.s15_routes": FragmentPresentation(
+        "Rotas de retorno", "Os viajantes foram encontrados sem evidência de desaparecimento temporal ou duplicação."
+    ),
+    "codex.fragment.nareth.observatory.entry": FragmentPresentation(
+        "Observatório do Eixo", "O Local contém uma plataforma de alinhamento e instrumentos mecânicos analógicos."
+    ),
+    "codex.fragment.nareth.observatory.brazier": FragmentPresentation(
+        "Braseiro do Eixo", "O Braseiro do Eixo foi descoberto e registrado permanentemente."
+    ),
+    "codex.fragment.nareth.observatory.submerged_entry": FragmentPresentation(
+        "Entrada", "A entrada do Observatório Afundado foi registrada como descoberta."
+    ),
+    "codex.fragment.nareth.observatory.off_center_plumb": FragmentPresentation(
+        "Prumo fora do centro", "A leitura do prumo não coincide com o centro esperado."
+    ),
+    "codex.fragment.nareth.observatory.p16_protocol": FragmentPresentation(
+        "Registro analógico", "O registro usa repetidamente termos de referência, desvio e estabilidade."
+    ),
+    "codex.fragment.nareth.observatory.s16_cartography": FragmentPresentation(
+        "Cartografia do Erro", "O mapa atual registra diferenças entre a cartografia antiga e o percurso observado."
+    ),
     "codex.fragment.vales.routes.garganta_vigilia": FragmentPresentation(
         "Rota da Garganta à Vigília",
         "A rota conhecida liga a Garganta dos Laços à Vigília do Vale.",
@@ -569,6 +629,11 @@ ACHIEVEMENTS = (
         "Concluiu Linhas no Horizonte (P13).",
     ),
     AchievementPresentation(
+        "feat.nareth.andarilho_de_nareth", "Andarilho de Nareth", "exploration",
+        "Descobriu os cinco Locais principais e os cinco Braseiros permanentes de Nareth.",
+        "Título · Andarilho de Nareth",
+    ),
+    AchievementPresentation(
         "feat.vde.o_berco_silencia", "O Berço Silencia", "combat",
         "Derrotou a Matriarca das Raízes pela primeira vez.",
         "Título · Sobrevivente do Berço",
@@ -652,6 +717,11 @@ VDE_LOCATIONS = {
 NARETH_LOCATIONS = {
     "nareth.location.campinas_do_meridiano": "Campinas do Meridiano",
     "nareth.location.posto_de_nareth": "Posto de Nareth",
+    "nareth.location.canais_secos": "Canais Secos",
+    "nareth.location.galerias_do_meridiano": "Galerias do Meridiano",
+    "nareth.location.campos_invertidos": "Campos Invertidos",
+    "nareth.location.observatorio_do_eixo": "Observatório do Eixo",
+    "nareth.location.observatorio_afundado": "Observatório Afundado",
 }
 LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS
 HABITAT_EVIDENCE_TO_LOCATION = {
@@ -670,6 +740,9 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     **{location_id: location_id for location_id in VDE_LOCATIONS},
     "Campinas do Meridiano": "nareth.location.campinas_do_meridiano",
     "Posto de Nareth": "nareth.location.posto_de_nareth",
+    "Canais Secos": "nareth.location.canais_secos",
+    "Campos Invertidos": "nareth.location.campos_invertidos",
+    "Observatório do Eixo": "nareth.location.observatorio_do_eixo",
     **{location_id: location_id for location_id in NARETH_LOCATIONS},
 }
 MATERIAL_LABELS = {

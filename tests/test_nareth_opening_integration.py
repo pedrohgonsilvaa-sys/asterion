@@ -456,7 +456,15 @@ async def test_nareth_hunt_and_round_unlock_after_p13_and_desbravar_is_unchanged
         "galgo_meridiano",
         "abutre_marco",
         "errante_valas",
+        "escaravelho_canal",
+        "cervo_horizonte",
+        "serpe_campinas",
+        "casco_invertido",
+        "mariposa_eixo",
+        "vigia_meridiano",
         "alfa_horizonte",
+        "serpe_eixo",
+        "custodio_invertido",
     }
 
     before_p13 = await road.resume(actor)

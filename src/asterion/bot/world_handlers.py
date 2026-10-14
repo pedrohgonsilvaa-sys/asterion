@@ -9,7 +9,10 @@ from asterion.application.class_trials import ClassTrialService
 from asterion.application.consumables import ConsumableService
 from asterion.application.dungeons import DungeonService
 from asterion.application.inventory import InventoryService
-from asterion.application.nareth_missions import P13_ID, S13_ID, NarethMissionService
+from asterion.application.nareth_missions import (
+    S13_ID,
+    NarethMissionService,
+)
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import CHARNECA, P2Service
 from asterion.application.p3 import P3Service
@@ -20,6 +23,9 @@ from asterion.application.prologue import PrologueService
 from asterion.application.road import (
     BOSQUE,
     NARETH_CAMPINAS,
+    NARETH_CAMPOS,
+    NARETH_CANAIS,
+    NARETH_OBSERVATORIO,
     NARETH_POSTO,
     NARETH_REGION,
     REFUGE,
@@ -1070,6 +1076,9 @@ def world_router(
             "road:route:vde_berco": VDE_BERCO,
             "road:route:nareth_campinas": NARETH_CAMPINAS,
             "road:route:nareth_posto": NARETH_POSTO,
+            "road:route:nareth_canais": NARETH_CANAIS,
+            "road:route:nareth_campos": NARETH_CAMPOS,
+            "road:route:nareth_observatorio": NARETH_OBSERVATORIO,
         }.get(route_key)
         route_attempt_id = exploration_callback_attempt_id(query)
         route_has_attempt_id = len(route_parts) == 4
@@ -1171,7 +1180,13 @@ def world_router(
                 await road.round_back(query.from_user.id, current.round_id)
         view = await road.travel_route(query.from_user.id, destination)
         if view is not None:
-            if nareth_missions is not None and destination in {NARETH_CAMPINAS, NARETH_POSTO}:
+            if nareth_missions is not None and destination in {
+                NARETH_CAMPINAS,
+                NARETH_POSTO,
+                NARETH_CANAIS,
+                NARETH_CAMPOS,
+                NARETH_OBSERVATORIO,
+            }:
                 await nareth_missions.on_location(query.from_user.id)
                 view = await road.resume(query.from_user.id) or view
                 nareth_mission_view = await nareth_missions.resume_active(query.from_user.id)
@@ -1285,7 +1300,7 @@ def world_router(
         vde_s7_view = vde_p8_view = vde_s8_view = vde_p9_view = vde_s9_view = None
         vde_p10_view = vde_s10_view = vde_s11_view = vde_p11_view = vde_p12_view = None
         vde_s12_view = None
-        nareth_p13_view = nareth_s13_view = None
+        nareth_views = (None,) * 8
         if vde_missions is not None and await vde_missions.region_access(query.from_user.id):
             (
                 vde_s7_view,
@@ -1301,7 +1316,17 @@ def world_router(
                 vde_s12_view,
             ) = await vde_missions.board(query.from_user.id)
         if nareth_missions is not None and await nareth_missions.region_access(query.from_user.id):
-            nareth_p13_view, nareth_s13_view = await nareth_missions.board(query.from_user.id)
+            nareth_views = await nareth_missions.board(query.from_user.id)
+        (
+            nareth_p13_view,
+            nareth_s13_view,
+            nareth_p14_view,
+            nareth_s14_view,
+            nareth_p15_view,
+            nareth_s15_view,
+            nareth_p16_view,
+            nareth_s16_view,
+        ) = nareth_views
         text = "📜 Missões\n\nAcompanhe sua Missão Principal e as Missões Secundárias conhecidas."
         keyboard = []
         if p1_view is not None and p1_view.status == "active":
@@ -1323,9 +1348,37 @@ def world_router(
         elif p6_view is not None and p6_view.status == "active":
             text += "\n\n🔥 Missão Principal\n\n📜 O Vigia Partido · Em Andamento\nTerras do Ocaso · Nv.10"
             keyboard.append([InlineKeyboardButton(text="Principal", callback_data="p6:resume")])
-        elif nareth_p13_view is not None and nareth_p13_view.status == "active":
-            text += "\n\n🔥 Missão Principal\n\n📜 Linhas no Horizonte · Em Andamento\nPlanícies de Nareth · Nv.21+"
+        elif any(
+            view is not None and view.status == "active"
+            for view in (nareth_p16_view, nareth_p15_view, nareth_p14_view, nareth_p13_view)
+        ):
+            active_nareth = next(
+                view for view in (nareth_p16_view, nareth_p15_view, nareth_p14_view, nareth_p13_view)
+                if view is not None and view.status == "active"
+            )
+            text += (
+                "\n\n🔥 Missão Principal\n\n"
+                f"📜 {active_nareth.title} · Em Andamento\nPlanícies de Nareth"
+            )
             keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
+        elif any(
+            view is not None and view.available
+            for view in (nareth_p16_view, nareth_p15_view, nareth_p14_view)
+        ):
+            available_nareth = next(
+                view for view in (nareth_p16_view, nareth_p15_view, nareth_p14_view)
+                if view is not None and view.available
+            )
+            text += (
+                "\n\n🔥 Missão Principal\n\n"
+                f"📜 {available_nareth.title} · Disponível\nPlanícies de Nareth"
+            )
+            keyboard.append([
+                InlineKeyboardButton(
+                    text="Iniciar Missão",
+                    callback_data=f"nareth:start:{available_nareth.quest_id}",
+                )
+            ])
         elif vde_p12_view is not None and vde_p12_view.status == "active":
             text += (
                 "\n\n🔥 Missão Principal\n\n"
@@ -1483,6 +1536,18 @@ def world_router(
             else:
                 state, action = "Bloqueada · Requer P13 e Nv.22 no Posto", None
             secondary_entries.append((f"📜 {nareth_s13_view.title} · {state}", action))
+        for mission_view in (nareth_s14_view, nareth_s15_view, nareth_s16_view):
+            if mission_view is None:
+                continue
+            if mission_view.status == "active":
+                state, action = "Em Andamento", f"nareth:mission:{mission_view.quest_id}"
+            elif mission_view.status == "completed":
+                state, action = "Concluída", f"nareth:mission:{mission_view.quest_id}"
+            elif mission_view.available:
+                state, action = "Disponível", f"nareth:start:{mission_view.quest_id}"
+            else:
+                state, action = "Indisponível", None
+            secondary_entries.append((f"📜 {mission_view.title} · {state}", action))
         if secondary_entries:
             secondary_lines = []
             secondary_buttons = []
@@ -1760,11 +1825,11 @@ def world_router(
             await present(query.message, render_p6(p6_view), images, edit=True)
             return
         if nareth_missions is not None:
-            nareth_p13_view = await nareth_missions.resume(query.from_user.id, P13_ID)
-            if nareth_p13_view is not None and nareth_p13_view.status == "active":
+            nareth_view = await nareth_missions.resume_active(query.from_user.id)
+            if nareth_view is not None:
                 await present(
                     query.message,
-                    render_nareth_mission(nareth_p13_view),
+                    render_nareth_mission(nareth_view),
                     images,
                     edit=True,
                 )
@@ -2070,7 +2135,11 @@ def world_router(
         if not isinstance(query.message, Message) or road is None:
             return
         view = await road.resume(query.from_user.id)
-        if view is None or view.kind not in {"road", "charneca", "bosque", "ruinas", "vde_garganta", "vde_mata", "vde_baixios", "vde_claustro"} or not view.hunt_enabled:
+        if view is None or view.kind not in {
+            "road", "charneca", "bosque", "ruinas", "vde_garganta", "vde_mata",
+            "vde_baixios", "vde_claustro", "nareth_campinas", "nareth_canais",
+            "nareth_campos", "nareth_observatorio",
+        } or not view.hunt_enabled:
             await restore_context(query)
             return
         await present(
@@ -2088,6 +2157,8 @@ def world_router(
             "vde_mata": VDE_MATA, "vde_baixios": VDE_BAIXIOS,
             "vde_claustro": VDE_CLAUSTRO, "vde_berco": VDE_BERCO,
             "nareth_campinas": NARETH_CAMPINAS, "nareth_posto": NARETH_POSTO,
+            "nareth_canais": NARETH_CANAIS, "nareth_campos": NARETH_CAMPOS,
+            "nareth_observatorio": NARETH_OBSERVATORIO,
         }
         name = names.get(key)
         if name is None:
@@ -2102,6 +2173,8 @@ def world_router(
             "vde_baixios": "🌫️", "vde_claustro": "🪨",
             "vde_berco": "🌿",
             "nareth_campinas": "🌾", "nareth_posto": "🏘️",
+            "nareth_canais": "〰️", "nareth_campos": "🌾",
+            "nareth_observatorio": "🧭",
         }[key]
         level_band = {
             "road": "Nv. 1–10",
@@ -2116,6 +2189,9 @@ def world_router(
             "vde_berco": "Local de clímax",
             "nareth_campinas": "Nv. 21–24",
             "nareth_posto": "Hub seguro",
+            "nareth_canais": "Nv. 23–26",
+            "nareth_campos": "Nv. 25–28",
+            "nareth_observatorio": "Nv. 27–30",
         }[key]
         region = (
             "Vales dos Enforcados"
@@ -2126,7 +2202,7 @@ def world_router(
         )
         lines = [f"{icon} {name}" + (" · Local Atual" if is_current else ""), f"{region} · {level_band}"]
         keyboard: list[list[InlineKeyboardButton]] = []
-        if key in {"charneca", "bosque", "ruinas", "vde_garganta", "vde_vigilia", "vde_mata", "vde_baixios", "vde_claustro", "nareth_campinas", "nareth_posto"}:
+        if key in {"charneca", "bosque", "ruinas", "vde_garganta", "vde_vigilia", "vde_mata", "vde_baixios", "vde_claustro", "nareth_campinas", "nareth_posto", "nareth_canais", "nareth_campos", "nareth_observatorio"}:
             known_brazier = None
             if is_current and road_view is not None and road_view.location == name:
                 known_brazier = road_view.brazier_label
@@ -2160,6 +2236,9 @@ def world_router(
                     VDE_BERCO: "road:route:vde_berco",
                     NARETH_CAMPINAS: "road:route:nareth_campinas",
                     NARETH_POSTO: "road:route:nareth_posto",
+                    NARETH_CANAIS: "road:route:nareth_canais",
+                    NARETH_CAMPOS: "road:route:nareth_campos",
+                    NARETH_OBSERVATORIO: "road:route:nareth_observatorio",
                 }
                 for destination in road_view.route_destinations:
                     if destination == current:
@@ -2204,6 +2283,18 @@ def world_router(
                         label = "Seguir para o Posto de Nareth"
                     elif current == NARETH_POSTO and destination == NARETH_CAMPINAS:
                         label = "Retornar às Campinas do Meridiano"
+                    elif current == NARETH_POSTO and destination == NARETH_CANAIS:
+                        label = "Seguir para os Canais Secos"
+                    elif current == NARETH_CANAIS and destination == NARETH_POSTO:
+                        label = "Retornar ao Posto de Nareth"
+                    elif current == NARETH_CANAIS and destination == NARETH_CAMPOS:
+                        label = "Seguir para os Campos Invertidos"
+                    elif current == NARETH_CAMPOS and destination == NARETH_CANAIS:
+                        label = "Retornar aos Canais Secos"
+                    elif current == NARETH_CAMPOS and destination == NARETH_OBSERVATORIO:
+                        label = "Seguir para o Observatório do Eixo"
+                    elif current == NARETH_OBSERVATORIO and destination == NARETH_CAMPOS:
+                        label = "Retornar aos Campos Invertidos"
                     else:
                         continue
                     keyboard.append([
@@ -2223,6 +2314,9 @@ def world_router(
                     VDE_BERCO: "road:route:vde_berco",
                     NARETH_CAMPINAS: "road:route:nareth_campinas",
                     NARETH_POSTO: "road:route:nareth_posto",
+                    NARETH_CANAIS: "road:route:nareth_canais",
+                    NARETH_CAMPOS: "road:route:nareth_campos",
+                    NARETH_OBSERVATORIO: "road:route:nareth_observatorio",
                 }.get(name)
             if road_view is not None and route_callback and name in road_view.route_destinations:
                 route_label = {
@@ -2238,6 +2332,9 @@ def world_router(
                     VDE_BERCO: "Seguir para o Berço da Matriarca",
                     NARETH_CAMPINAS: "Seguir para as Campinas do Meridiano",
                     NARETH_POSTO: "Seguir para o Posto de Nareth",
+                    NARETH_CANAIS: "Seguir para os Canais Secos",
+                    NARETH_CAMPOS: "Seguir para os Campos Invertidos",
+                    NARETH_OBSERVATORIO: "Seguir para o Observatório do Eixo",
                 }[name]
                 lines.extend(["", "🧭 Rota terrestre · Disponível"])
                 keyboard.append([InlineKeyboardButton(text=route_label, callback_data=route_callback)])
@@ -2464,9 +2561,15 @@ def world_router(
         known, current, road_view, _p2_view, _p3_view, _p4_view = await map_state(
             query.from_user.id
         )
-        ordered = ((NARETH_CAMPINAS, "nareth_campinas"), (NARETH_POSTO, "nareth_posto"))
+        ordered = (
+            (NARETH_CAMPINAS, "nareth_campinas"),
+            (NARETH_POSTO, "nareth_posto"),
+            (NARETH_CANAIS, "nareth_canais"),
+            (NARETH_CAMPOS, "nareth_campos"),
+            (NARETH_OBSERVATORIO, "nareth_observatorio"),
+        )
         visible = [(name, key) for name, key in ordered if name in known]
-        lines = ["🌾 Planícies de Nareth · Nv. 21–24", ""]
+        lines = ["🌾 Planícies de Nareth · Nv. 21–30", ""]
         buttons = []
         for index, (name, key) in enumerate(visible, start=1):
             route_open = bool(road_view is not None and name in road_view.route_destinations)
@@ -2475,7 +2578,13 @@ def world_router(
                 and any(destination == name for _id, _label, destination in road_view.brazier_destinations)
             )
             state = "Local Atual" if name == current else "Acessível" if route_open or brazier_open else "Conhecido"
-            icon = "🌾" if name == NARETH_CAMPINAS else "🏘️"
+            icon = {
+                NARETH_CAMPINAS: "🌾",
+                NARETH_POSTO: "🏘️",
+                NARETH_CANAIS: "〰️",
+                NARETH_CAMPOS: "🌾",
+                NARETH_OBSERVATORIO: "🧭",
+            }[name]
             lines.append(f"{index} {icon} {name} · {state}")
             buttons.append(
                 InlineKeyboardButton(
@@ -2542,6 +2651,9 @@ def world_router(
             "vde_claustro": VDE_CLAUSTRO,
             "nareth_campinas": NARETH_CAMPINAS,
             "nareth_posto": NARETH_POSTO,
+            "nareth_canais": NARETH_CANAIS,
+            "nareth_campos": NARETH_CAMPOS,
+            "nareth_observatorio": NARETH_OBSERVATORIO,
         }
         destination = names.get(key)
         if destination is None:

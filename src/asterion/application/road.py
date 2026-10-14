@@ -43,13 +43,25 @@ from asterion.domain.road import (
     EXPLORATION_PROFILES,
     MATERIAL_POOLS,
     NARETH_BASIC_MATERIAL_CREATURE_IDS,
+    NARETH_BRAZIER_CAMPOS,
+    NARETH_BRAZIER_CANAIS,
     NARETH_BRAZIER_HORIZONTE,
+    NARETH_BRAZIER_OBSERVATORIO,
     NARETH_BRAZIER_POSTO,
     NARETH_CAMPINAS,
     NARETH_CAMPINAS_LOCATION,
     NARETH_CAMPINAS_POSTO_ROUTE,
+    NARETH_CAMPOS,
+    NARETH_CAMPOS_LOCATION,
+    NARETH_CAMPOS_OBSERVATORIO_ROUTE,
+    NARETH_CANAIS,
+    NARETH_CANAIS_CAMPOS_ROUTE,
+    NARETH_CANAIS_LOCATION,
     NARETH_EXPLORE_UNLOCK,
+    NARETH_OBSERVATORIO,
+    NARETH_OBSERVATORIO_LOCATION,
     NARETH_POSTO,
+    NARETH_POSTO_CANAIS_ROUTE,
     NARETH_POSTO_LOCATION,
     NARETH_REGION_UNLOCK,
     ROAD_EXPLORATION_PROFILE,
@@ -138,9 +150,12 @@ REGION = "Terras do Ocaso"
 VDE_REGION = "Vales dos Enforcados"
 NARETH_REGION = "Planícies de Nareth"
 VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO))
-NARETH_LOCATIONS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL))
+NARETH_LOCATIONS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO))
 NARETH_REGION_ROUTE_ENDPOINTS = frozenset((VDE_BERCO, NARETH_CAMPINAS_LABEL))
 NARETH_CAMPINAS_POSTO_ROUTE_ENDPOINTS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL))
+NARETH_POSTO_CANAIS_ROUTE_ENDPOINTS = frozenset((NARETH_POSTO_LABEL, NARETH_CANAIS))
+NARETH_CANAIS_CAMPOS_ROUTE_ENDPOINTS = frozenset((NARETH_CANAIS, NARETH_CAMPOS))
+NARETH_CAMPOS_OBSERVATORIO_ROUTE_ENDPOINTS = frozenset((NARETH_CAMPOS, NARETH_OBSERVATORIO))
 P2_QUEST_ID = "P2"
 P3_QUEST_ID = "P3"
 P4_QUEST_ID = "P4"
@@ -164,8 +179,11 @@ OVERLAND_ROUTE_PAIRS = (
     VDE_CLAUSTRO_BERCO_ROUTE_ENDPOINTS,
     NARETH_REGION_ROUTE_ENDPOINTS,
     NARETH_CAMPINAS_POSTO_ROUTE_ENDPOINTS,
+    NARETH_POSTO_CANAIS_ROUTE_ENDPOINTS,
+    NARETH_CANAIS_CAMPOS_ROUTE_ENDPOINTS,
+    NARETH_CAMPOS_OBSERVATORIO_ROUTE_ENDPOINTS,
 )
-TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL))
+TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO))
 BRAZIER_FOR_LOCATION = {
     ROAD: "tdo.brazier.estrada",
     REFUGE: "tdo.brazier.refugio_do_ocaso",
@@ -179,6 +197,9 @@ BRAZIER_FOR_LOCATION = {
     VDE_CLAUSTRO: VDE_CLAUSTRO_BRAZIER,
     NARETH_CAMPINAS_LABEL: NARETH_BRAZIER_HORIZONTE,
     NARETH_POSTO_LABEL: NARETH_BRAZIER_POSTO,
+    NARETH_CANAIS: NARETH_BRAZIER_CANAIS,
+    NARETH_CAMPOS: NARETH_BRAZIER_CAMPOS,
+    NARETH_OBSERVATORIO: NARETH_BRAZIER_OBSERVATORIO,
 }
 BRAZIER_DETAILS = {
     "tdo.brazier.estrada": (ROAD, "Braseiro da Estrada"),
@@ -193,6 +214,9 @@ BRAZIER_DETAILS = {
     VDE_CLAUSTRO_BRAZIER: (VDE_CLAUSTRO, "Braseiro das Pedras Enlaçadas"),
     NARETH_BRAZIER_HORIZONTE: (NARETH_CAMPINAS_LABEL, "Braseiro do Horizonte"),
     NARETH_BRAZIER_POSTO: (NARETH_POSTO_LABEL, "Braseiro do Posto"),
+    NARETH_BRAZIER_CANAIS: (NARETH_CANAIS, "Braseiro do Canal Alto"),
+    NARETH_BRAZIER_CAMPOS: (NARETH_CAMPOS, "Braseiro da Linha Quebrada"),
+    NARETH_BRAZIER_OBSERVATORIO: (NARETH_OBSERVATORIO, "Braseiro do Eixo"),
 }
 HUNT_CONTENT = "road_manual_hunt"
 GROUP_HUNT_CONTENT = "road_group_hunt"
@@ -257,6 +281,18 @@ NARETH_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.nareth.campinas.couro_de_horizonte": "material.nareth.couro_de_horizonte",
     "explore.nareth.campinas.erva_de_vento": "material.nareth.erva_de_vento",
     "explore.nareth.campinas.po_de_eixo": "material.nareth.po_de_eixo",
+    "explore.nareth.canais.bronze_de_marco": "material.nareth.bronze_de_marco",
+    "explore.nareth.canais.erva_de_vento": "material.nareth.erva_de_vento",
+    "explore.nareth.canais.po_de_eixo": "material.nareth.po_de_eixo",
+    "explore.nareth.canais.couro_de_horizonte": "material.nareth.couro_de_horizonte",
+    "explore.nareth.campos.couro_de_horizonte": "material.nareth.couro_de_horizonte",
+    "explore.nareth.campos.erva_de_vento": "material.nareth.erva_de_vento",
+    "explore.nareth.campos.po_de_eixo": "material.nareth.po_de_eixo",
+    "explore.nareth.campos.bronze_de_marco": "material.nareth.bronze_de_marco",
+    "explore.nareth.observatorio.bronze_de_marco": "material.nareth.bronze_de_marco",
+    "explore.nareth.observatorio.po_de_eixo": "material.nareth.po_de_eixo",
+    "explore.nareth.observatorio.erva_de_vento": "material.nareth.erva_de_vento",
+    "explore.nareth.observatorio.couro_de_horizonte": "material.nareth.couro_de_horizonte",
 }
 VDE_EXPLORATION_UNIQUE_XP = {
     "explore.vde.garganta.marco_dos_lacos": 1536,
@@ -274,6 +310,16 @@ VDE_EXPLORATION_UNIQUE_XP = {
 NARETH_EXPLORATION_UNIQUE_XP = {
     "explore.nareth.campinas.marco_primeiro_meridiano": 3304,
     "explore.nareth.campinas.duas_medidas_mesma_estrada": 1033,
+    "explore.nareth.canais.braseiro_canal_alto": 3744,
+    "explore.nareth.canais.entrada_galerias_meridiano": 3744,
+    "explore.nareth.canais.comporta_sem_agua": 1170,
+    "explore.nareth.canais.pedra_raspada": 0,
+    "explore.nareth.campos.braseiro_linha_quebrada": 4448,
+    "explore.nareth.campos.linha_que_nao_fecha": 4448,
+    "explore.nareth.campos.sombras_que_discordam": 1390,
+    "explore.nareth.observatorio.braseiro_do_eixo": 4952,
+    "explore.nareth.observatorio.entrada_observatorio_afundado": 4952,
+    "explore.nareth.observatorio.prumo_fora_do_centro": 1548,
 }
 
 
@@ -455,6 +501,12 @@ class RoadService:
                     and await self._nareth_p13_route_open(s, c.id)
                 ):
                     return None
+                if world.location == NARETH_CANAIS and not await self._nareth_mission_started_or_completed(s, c.id, "P14"):
+                    return None
+                if world.location == NARETH_CAMPOS and not await self._nareth_mission_started_or_completed(s, c.id, "P15"):
+                    return None
+                if world.location == NARETH_OBSERVATORIO and not await self._nareth_mission_started_or_completed(s, c.id, "P16"):
+                    return None
             elif not await self._p1_completed(s, c.id):
                 return None
             return await self._view_for_world(s, c, world)
@@ -590,6 +642,15 @@ class RoadService:
                 elif pair == NARETH_CAMPINAS_POSTO_ROUTE_ENDPOINTS:
                     gate_ok = await self._nareth_p13_route_open(s, c.id)
                     route_unlock = NARETH_CAMPINAS_POSTO_ROUTE
+                elif pair == NARETH_POSTO_CANAIS_ROUTE_ENDPOINTS:
+                    gate_ok = await self._nareth_mission_started_or_completed(s, c.id, "P14")
+                    route_unlock = NARETH_POSTO_CANAIS_ROUTE
+                elif pair == NARETH_CANAIS_CAMPOS_ROUTE_ENDPOINTS:
+                    gate_ok = await self._nareth_mission_started_or_completed(s, c.id, "P15")
+                    route_unlock = NARETH_CANAIS_CAMPOS_ROUTE
+                elif pair == NARETH_CAMPOS_OBSERVATORIO_ROUTE_ENDPOINTS:
+                    gate_ok = await self._nareth_mission_started_or_completed(s, c.id, "P16")
+                    route_unlock = NARETH_CAMPOS_OBSERVATORIO_ROUTE
                 elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
                     gate_ok = (
                         await self._p4_completed(s, c.id)
@@ -710,6 +771,12 @@ class RoadService:
                 await self._ensure(
                     s, LocationDiscovery, character_id=c.id, location_id=NARETH_POSTO_LOCATION
                 )
+            elif destination == NARETH_CANAIS:
+                await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=NARETH_CANAIS_LOCATION)
+            elif destination == NARETH_CAMPOS:
+                await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=NARETH_CAMPOS_LOCATION)
+            elif destination == NARETH_OBSERVATORIO:
+                await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=NARETH_OBSERVATORIO_LOCATION)
             return await self._view_for_world(s, c, world)
 
     async def start_hunt(self, actor: int) -> RoadView | None:
@@ -1835,7 +1902,12 @@ class RoadService:
         if attempt.local_id == RUINS_LOCATION:
             await self._settle_ruins_exploration(s, c, attempt, base_text)
             return
-        if attempt.local_id == NARETH_CAMPINAS_LOCATION:
+        if attempt.local_id in {
+            NARETH_CAMPINAS_LOCATION,
+            NARETH_CANAIS_LOCATION,
+            NARETH_CAMPOS_LOCATION,
+            NARETH_OBSERVATORIO_LOCATION,
+        }:
             await self._settle_nareth_exploration(s, c, attempt, base_text)
             return
         if attempt.local_id in {
@@ -2329,6 +2401,41 @@ class RoadService:
                     entry_id="codex.route.rotas_de_nareth",
                     fragment_id="codex.fragment.nareth.campinas.divergent_measures",
                 )
+            elif attempt.result_id == "explore.nareth.canais.braseiro_canal_alto":
+                await self._ensure(s, Brazier, character_id=c.id, brazier_id=NARETH_BRAZIER_CANAIS)
+                await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=NARETH_CANAIS_LOCATION)
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id="codex.location.canais_secos")
+                await self._ensure(s, CodexFragment, character_id=c.id, entry_id="codex.location.canais_secos", fragment_id="codex.fragment.nareth.canais.brazier")
+                components.append(("brazier", NARETH_BRAZIER_CANAIS, 1, {}))
+            elif attempt.result_id == "explore.nareth.canais.entrada_galerias_meridiano":
+                await self._ensure(s, Unlock, character_id=c.id, unlock_id="dungeon.nareth.galerias_meridiano")
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id="codex.location.galerias_do_meridiano")
+                await self._ensure(s, CodexFragment, character_id=c.id, entry_id="codex.location.galerias_do_meridiano", fragment_id="codex.fragment.nareth.galerias.entry")
+            elif attempt.result_id == "explore.nareth.canais.comporta_sem_agua":
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id="codex.history.rede_de_medicao")
+                await self._ensure(s, CodexFragment, character_id=c.id, entry_id="codex.history.rede_de_medicao", fragment_id="codex.fragment.nareth.canais.measurement_gate")
+            elif attempt.result_id == "explore.nareth.campos.braseiro_linha_quebrada":
+                await self._ensure(s, Brazier, character_id=c.id, brazier_id=NARETH_BRAZIER_CAMPOS)
+                await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=NARETH_CAMPOS_LOCATION)
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id="codex.location.campos_invertidos")
+                await self._ensure(s, CodexFragment, character_id=c.id, entry_id="codex.location.campos_invertidos", fragment_id="codex.fragment.nareth.campos.brazier")
+                components.append(("brazier", NARETH_BRAZIER_CAMPOS, 1, {}))
+            elif attempt.result_id == "explore.nareth.campos.linha_que_nao_fecha":
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id="codex.mystery.linha_que_nao_fecha")
+                await self._ensure(s, CodexFragment, character_id=c.id, entry_id="codex.mystery.linha_que_nao_fecha", fragment_id="codex.fragment.nareth.campos.line_does_not_close")
+            elif attempt.result_id == "explore.nareth.observatorio.braseiro_do_eixo":
+                await self._ensure(s, Brazier, character_id=c.id, brazier_id=NARETH_BRAZIER_OBSERVATORIO)
+                await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=NARETH_OBSERVATORIO_LOCATION)
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id="codex.location.observatorio_do_eixo")
+                await self._ensure(s, CodexFragment, character_id=c.id, entry_id="codex.location.observatorio_do_eixo", fragment_id="codex.fragment.nareth.observatory.brazier")
+                components.append(("brazier", NARETH_BRAZIER_OBSERVATORIO, 1, {}))
+            elif attempt.result_id == "explore.nareth.observatorio.entrada_observatorio_afundado":
+                await self._ensure(s, Unlock, character_id=c.id, unlock_id="dungeon.nareth.observatorio_afundado")
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id="codex.location.observatorio_afundado")
+                await self._ensure(s, CodexFragment, character_id=c.id, entry_id="codex.location.observatorio_afundado", fragment_id="codex.fragment.nareth.observatory.submerged_entry")
+            elif attempt.result_id == "explore.nareth.observatorio.prumo_fora_do_centro":
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id="codex.mystery.o_eixo")
+                await self._ensure(s, CodexFragment, character_id=c.id, entry_id="codex.mystery.o_eixo", fragment_id="codex.fragment.nareth.observatory.off_center_plumb")
 
         for kind, item_id, quantity, payload in components:
             s.add(
@@ -3160,6 +3267,28 @@ class RoadService:
             )
         )
 
+    async def _nareth_mission_completed(self, s, character_id, quest_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Quest.id).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == quest_id,
+                    Quest.status == "completed",
+                )
+            )
+        )
+
+    async def _nareth_mission_started_or_completed(self, s, character_id, quest_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Quest.id).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == quest_id,
+                    Quest.status.in_(("active", "completed")),
+                )
+            )
+        )
+
     @staticmethod
     def _travel_region(location: str) -> str:
         if location in VDE_LOCATIONS:
@@ -3241,6 +3370,21 @@ class RoadService:
                 return None
         elif profile.local_id == NARETH_POSTO_LOCATION:
             return None
+        elif profile.local_id == NARETH_CANAIS_LOCATION:
+            if world.region != NARETH_REGION or not await self._nareth_mission_started_or_completed(s, c.id, "P14"):
+                return None
+            if activity_kind == "hunt" and not await self._nareth_mission_completed(s, c.id, "P14"):
+                return None
+        elif profile.local_id == NARETH_CAMPOS_LOCATION:
+            if world.region != NARETH_REGION or not await self._nareth_mission_started_or_completed(s, c.id, "P15"):
+                return None
+            if activity_kind == "hunt" and not await self._nareth_mission_completed(s, c.id, "P15"):
+                return None
+        elif profile.local_id == NARETH_OBSERVATORIO_LOCATION:
+            if world.region != NARETH_REGION or not await self._nareth_mission_started_or_completed(s, c.id, "P16"):
+                return None
+            if activity_kind == "hunt" and not await self._nareth_mission_completed(s, c.id, "P16"):
+                return None
         unlock_id = profile.hunt_unlock if activity_kind == "hunt" else profile.explore_unlock
         if not await s.scalar(
             select(Unlock).where(
@@ -3255,6 +3399,9 @@ class RoadService:
             VDE_BAIXIOS_LOCATION,
             VDE_CLAUSTRO_LOCATION,
             NARETH_CAMPINAS_LOCATION,
+            NARETH_CANAIS_LOCATION,
+            NARETH_CAMPOS_LOCATION,
+            NARETH_OBSERVATORIO_LOCATION,
         } and any(
             creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
         ):
@@ -3769,6 +3916,12 @@ class RoadService:
         p12_complete = await self._p12_completed(s, c.id)
         nareth_access = c.level >= 21 and p12_complete
         nareth_p13_complete = await self._nareth_p13_completed(s, c.id)
+        nareth_p14_open = await self._nareth_mission_started_or_completed(s, c.id, "P14")
+        nareth_p14_complete = await self._nareth_mission_completed(s, c.id, "P14")
+        nareth_p15_open = await self._nareth_mission_started_or_completed(s, c.id, "P15")
+        nareth_p15_complete = await self._nareth_mission_completed(s, c.id, "P15")
+        nareth_p16_open = await self._nareth_mission_started_or_completed(s, c.id, "P16")
+        nareth_p16_complete = await self._nareth_mission_completed(s, c.id, "P16")
         if nareth_access:
             await self._ensure(s, Unlock, character_id=c.id, unlock_id=NARETH_REGION_UNLOCK)
         nareth_route_open = await self._nareth_p13_route_open(s, c.id)
@@ -3784,6 +3937,9 @@ class RoadService:
             and (location != VDE_MATA or p8_started_or_complete)
             and (location != VDE_BAIXIOS or p9_started_or_complete)
             and (location != VDE_CLAUSTRO or p10_started_or_complete)
+            and (location != NARETH_CANAIS or nareth_p14_open)
+            and (location != NARETH_CAMPOS or nareth_p15_open)
+            and (location != NARETH_OBSERVATORIO or nareth_p16_open)
         ) if world.location != VDE_BERCO else ()
         active_p3 = await s.scalar(
             select(Quest.id).where(
@@ -3906,6 +4062,18 @@ class RoadService:
                     route_destinations.append(NARETH_POSTO_LABEL)
             elif world.location == NARETH_POSTO_LABEL and nareth_access and nareth_route_open:
                 route_destinations.append(NARETH_CAMPINAS_LABEL)
+                if nareth_p14_open:
+                    route_destinations.append(NARETH_CANAIS)
+            elif world.location == NARETH_CANAIS and nareth_access and nareth_p14_open:
+                route_destinations.append(NARETH_POSTO_LABEL)
+                if nareth_p15_open:
+                    route_destinations.append(NARETH_CAMPOS)
+            elif world.location == NARETH_CAMPOS and nareth_access and nareth_p15_open:
+                route_destinations.append(NARETH_CANAIS)
+                if nareth_p16_open:
+                    route_destinations.append(NARETH_OBSERVATORIO)
+            elif world.location == NARETH_OBSERVATORIO and nareth_access and nareth_p16_open:
+                route_destinations.append(NARETH_CAMPOS)
         route_available = bool(route_destinations)
         material_table_ready = bool(
             hunt_profile
@@ -4027,6 +4195,45 @@ class RoadService:
             # Posto de Nareth is a safe hub without generic activities.
             hunt_enabled = False
             explore_enabled = False
+        elif world.location == NARETH_CANAIS:
+            hunt_enabled = bool(
+                nareth_access and nareth_p14_complete and material_table_ready and hunt_profile
+                and await s.scalar(select(Unlock.id).where(
+                    Unlock.character_id == c.id, Unlock.unlock_id == hunt_profile.hunt_unlock
+                ))
+            )
+            explore_enabled = bool(
+                nareth_access and nareth_p14_open and hunt_profile
+                and await s.scalar(select(Unlock.id).where(
+                    Unlock.character_id == c.id, Unlock.unlock_id == hunt_profile.explore_unlock
+                ))
+            )
+        elif world.location == NARETH_CAMPOS:
+            hunt_enabled = bool(
+                nareth_access and nareth_p15_complete and material_table_ready and hunt_profile
+                and await s.scalar(select(Unlock.id).where(
+                    Unlock.character_id == c.id, Unlock.unlock_id == hunt_profile.hunt_unlock
+                ))
+            )
+            explore_enabled = bool(
+                nareth_access and nareth_p15_open and hunt_profile
+                and await s.scalar(select(Unlock.id).where(
+                    Unlock.character_id == c.id, Unlock.unlock_id == hunt_profile.explore_unlock
+                ))
+            )
+        elif world.location == NARETH_OBSERVATORIO:
+            hunt_enabled = bool(
+                nareth_access and nareth_p16_complete and material_table_ready and hunt_profile
+                and await s.scalar(select(Unlock.id).where(
+                    Unlock.character_id == c.id, Unlock.unlock_id == hunt_profile.hunt_unlock
+                ))
+            )
+            explore_enabled = bool(
+                nareth_access and nareth_p16_open and hunt_profile
+                and await s.scalar(select(Unlock.id).where(
+                    Unlock.character_id == c.id, Unlock.unlock_id == hunt_profile.explore_unlock
+                ))
+            )
         else:
             # Every other known travel location must be handled explicitly above.
             return self._invalid_location_view(c, world)
@@ -4044,6 +4251,9 @@ class RoadService:
             VDE_BERCO: "vde_berco",
             NARETH_CAMPINAS_LABEL: "nareth_campinas",
             NARETH_POSTO_LABEL: "nareth_posto",
+            NARETH_CANAIS: "nareth_canais",
+            NARETH_CAMPOS: "nareth_campos",
+            NARETH_OBSERVATORIO: "nareth_observatorio",
         }
         return RoadView(
             kind_by_location[world.location],
@@ -4101,6 +4311,19 @@ class RoadService:
                 from asterion.application.tdo_feats import reconcile_tdo_feats_for_character
 
                 await reconcile_tdo_feats_for_character(s, character_id)
+                from asterion.application.nareth_feats import (
+                    NARETH_BRAZIERS,
+                    NARETH_LOCATIONS,
+                    reconcile_nareth_feats_for_character,
+                )
+
+                nareth_source = (
+                    values.get("location_id") in NARETH_LOCATIONS
+                    if model is LocationDiscovery
+                    else values.get("brazier_id") in NARETH_BRAZIERS
+                )
+                if nareth_source:
+                    await reconcile_nareth_feats_for_character(s, character_id)
             return True
         return False
 
