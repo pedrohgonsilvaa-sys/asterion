@@ -97,9 +97,9 @@ def nareth_missions_router(
                         return
                 else:
                     raise ValueError("invalid combat mode")
-            elif action_type == "choice" and len(parts) == 5 and quest_id == "P15":
+            elif action_type == "choice" and len(parts) == 5 and quest_id in {"P15", "P18"}:
                 view = await service.choose_midgame_reward(
-                    query.from_user.id, int(parts[3]), parts[4]
+                    query.from_user.id, int(parts[3]), parts[4], quest_id
                 )
             else:
                 raise ValueError("invalid Nareth mission callback")

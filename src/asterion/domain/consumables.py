@@ -195,6 +195,7 @@ def _item(
 
 _TDO = "Terras do Ocaso"
 _VDE = "Vales dos Enforcados"
+_NARETH = "Planícies de Nareth"
 
 _CATALOG = (
     # These two IDs are persisted by the remote Ronda and Inventory runtime.
@@ -312,6 +313,82 @@ _CATALOG = (
             5,
             (_ingredient("Ervas de Turfa", 3), _ingredient("Resinas Enredadas", 2)),
             80,
+        ),
+    ),
+    _item(
+        "consumable.heal.nareth.iii",
+        ConsumableFamily.HEALING,
+        "Poção de Cura de Nareth",
+        3,
+        _NARETH,
+        _recipe(
+            6,
+            (_ingredient("Ervas de Vento", 3), _ingredient("Pó de Eixo", 1)),
+            60,
+        ),
+    ),
+    _item(
+        "consumable.purification.nareth.iii",
+        ConsumableFamily.PURIFICATION,
+        "Preparado de Purificação do Eixo",
+        3,
+        _NARETH,
+        _recipe(
+            6,
+            (_ingredient("Ervas de Vento", 2), _ingredient("Pós de Eixo", 2)),
+            80,
+        ),
+    ),
+    _item(
+        "consumable.antidote.nareth.iii",
+        ConsumableFamily.ANTIDOTE,
+        "Antídoto das Campinas",
+        3,
+        _NARETH,
+        _recipe(
+            6,
+            (_ingredient("Ervas de Vento", 4), _ingredient("Pó de Eixo", 1)),
+            80,
+        ),
+    ),
+    _item(
+        "consumable.vigor.nareth.iii",
+        ConsumableFamily.VIGOR,
+        "Poção de Vigor do Meridiano",
+        3,
+        _NARETH,
+        _recipe(
+            10,
+            (
+                _ingredient("Ervas de Vento", 6),
+                _ingredient("Pós de Eixo", 4),
+                _ingredient("Catalisador de Elite III", 1),
+            ),
+            280,
+        ),
+    ),
+    _item(
+        "consumable.protection.nareth.iii",
+        ConsumableFamily.PROTECTION,
+        "Preparado de Proteção do Prumo",
+        3,
+        _NARETH,
+        _recipe(
+            6,
+            (_ingredient("Ervas de Vento", 3), _ingredient("Pós de Eixo", 2)),
+            110,
+        ),
+    ),
+    _item(
+        "consumable.dispeller.nareth.iii",
+        ConsumableFamily.DISPELLER,
+        "Dissipador de Referência",
+        3,
+        _NARETH,
+        _recipe(
+            10,
+            (_ingredient("Ervas de Vento", 2), _ingredient("Pós de Eixo", 3)),
+            140,
         ),
     ),
     # These are generic family definitions. No regional Dissipador or Resguardo

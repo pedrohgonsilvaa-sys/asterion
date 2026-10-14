@@ -10,6 +10,7 @@ from asterion.application.prologue import CombatView
 from asterion.application.road import (
     BOSQUE,
     CHARNECA,
+    NARETH_CAMARA_LABEL,
     NARETH_CAMPINAS,
     NARETH_CAMPOS,
     NARETH_CANAIS,
@@ -85,7 +86,7 @@ def _location_copy(location: str) -> tuple[str, str]:
     low, high = LOCATION_LEVEL_BANDS.get(location, (1, 10))
     region = (
         NARETH_REGION
-        if location in {NARETH_CAMPINAS, NARETH_POSTO, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO}
+        if location in {NARETH_CAMPINAS, NARETH_POSTO, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL}
         else VDE_REGION
         if location in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO}
         else "Terras do Ocaso"
@@ -771,6 +772,7 @@ def render_current_local(
         VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO,
         NARETH_CAMPINAS, NARETH_POSTO, NARETH_CANAIS, NARETH_CAMPOS,
         NARETH_OBSERVATORIO,
+        NARETH_CAMARA_LABEL,
     }:
         for destination in view.route_destinations:
             route_key, label = {
@@ -794,10 +796,12 @@ def render_current_local(
                 (NARETH_CAMPOS, NARETH_CANAIS): ("nareth_canais", "Retornar aos Canais Secos"),
                 (NARETH_CAMPOS, NARETH_OBSERVATORIO): ("nareth_observatorio", "Seguir para o Observatório do Eixo"),
                 (NARETH_OBSERVATORIO, NARETH_CAMPOS): ("nareth_campos", "Retornar aos Campos Invertidos"),
+                (NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL): ("nareth_camara", "Entrar na Câmara do Arconte"),
+                (NARETH_CAMARA_LABEL, NARETH_OBSERVATORIO): ("nareth_observatorio", "Retornar ao Observatório do Eixo"),
             }.get((view.location, destination), (None, None))
             if route_key is not None:
                 keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])
-        if view.location != VDE_BERCO:
+        if view.location not in {VDE_BERCO, NARETH_CAMARA_LABEL}:
             if view.brazier_label:
                 lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
             elif view.location != ROAD:
@@ -832,6 +836,15 @@ def render_current_local(
             if destination == VDE_CLAUSTRO:
                 keyboard.append(
                     [InlineKeyboardButton(text="Retornar ao Claustro das Raízes", callback_data="road:route:vde_claustro")]
+                )
+        if mission_available:
+            keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
+    elif view.location == NARETH_CAMARA_LABEL:
+        lines.extend(["", "Local de clímax · Acesso aberto pela Campanha."])
+        for destination in view.route_destinations:
+            if destination == NARETH_OBSERVATORIO:
+                keyboard.append(
+                    [InlineKeyboardButton(text="Retornar ao Observatório do Eixo", callback_data="road:route:nareth_observatorio")]
                 )
         if mission_available:
             keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])

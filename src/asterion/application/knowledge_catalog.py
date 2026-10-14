@@ -104,12 +104,16 @@ CODEX_ENTRIES = (
     CodexPresentation("codex.location.campos_invertidos", "Campos Invertidos", "regions", 180, "nareth.location.campos_invertidos"),
     CodexPresentation("codex.location.observatorio_do_eixo", "Observatório do Eixo", "regions", 190, "nareth.location.observatorio_do_eixo"),
     CodexPresentation("codex.location.observatorio_afundado", "Observatório Afundado", "regions", 195, "nareth.location.observatorio_afundado"),
+    CodexPresentation("codex.location.camara_do_arconte", "Câmara do Arconte", "regions", 198, "nareth.location.camara_do_arconte"),
     CodexPresentation("codex.history.rede_de_medicao", "Rede de Medição", "history", 170),
     CodexPresentation("codex.mystery.horizonte_discordante", "Horizonte Discordante", "mysteries", 180),
     CodexPresentation("codex.mystery.linha_que_nao_fecha", "Linha que Não Fecha", "mysteries", 190),
     CodexPresentation("codex.mystery.o_eixo", "O Eixo", "mysteries", 200),
     CodexPresentation("codex.history.protocolos_de_referencia", "Protocolos de Referência", "history", 180),
     CodexPresentation("codex.history.cartografia_do_erro", "Cartografia do Erro", "history", 200),
+    CodexPresentation("codex.history.custodia_das_ancoras", "Custódia das Âncoras", "history", 210),
+    CodexPresentation("codex.history.estabilidade_do_veu", "Estabilidade do Véu", "history", 220),
+    CodexPresentation("codex.route.os_caminhos_que_nao_coincidem", "Os Caminhos que Não Coincidem", "regions", 230),
     CodexPresentation(
         "codex.location.mata_suspensa",
         "Mata Suspensa",
@@ -417,6 +421,33 @@ CODEX_FRAGMENTS = {
     "codex.fragment.nareth.observatory.s16_cartography": FragmentPresentation(
         "Cartografia do Erro", "O mapa atual registra diferenças entre a cartografia antiga e o percurso observado."
     ),
+    "codex.fragment.nareth.observatory.s17_plumb_protocol": FragmentPresentation(
+        "Leitura de prumo", "Uma ala cedida preserva referências geométricas e uma peça de calibração sem valor econômico."
+    ),
+    "codex.fragment.nareth.observatory.p17_anchor_custody": FragmentPresentation(
+        "Custódia das Âncoras", "Um registro institucional associa a custódia das Âncoras ao monitoramento da estabilidade regional."
+    ),
+    "codex.fragment.nareth.chamber.incomplete_stability_record": FragmentPresentation(
+        "Registro técnico incompleto", "O registro relaciona as Âncoras à estabilização do Véu, mas permanece incompleto."
+    ),
+    "codex.fragment.nareth.chamber.archon_identified": FragmentPresentation(
+        "Arconte", "O custódio é identificado como Arconte técnico-administrativo."
+    ),
+    "codex.fragment.nareth.chamber.anchors_stabilized_veil": FragmentPresentation(
+        "Estabilidade do Véu", "As Âncoras estabilizavam o Véu na região."
+    ),
+    "codex.fragment.nareth.chamber.regional_measurement": FragmentPresentation(
+        "Medição regional", "Nareth media e comparava referências para cumprir essa função regional."
+    ),
+    "codex.fragment.nareth.chamber.continuity_crimson_direction": FragmentPresentation(
+        "Continuidade logística", "Registros apontam uma direção logística para as Várzeas Carmesins."
+    ),
+    "codex.fragment.nareth.routes.s18_modern_route": FragmentPresentation(
+        "Os Caminhos que Não Coincidem", "Uma rota moderna foi traçada usando pontos verificados, sem resolver a causa das discrepâncias."
+    ),
+    "codex.fragment.nareth.routes.s18_verified_points": FragmentPresentation(
+        "Pontos verificados", "A rota registrada parte de referências verificadas nos diferentes Locais de Nareth."
+    ),
     "codex.fragment.vales.routes.garganta_vigilia": FragmentPresentation(
         "Rota da Garganta à Vigília",
         "A rota conhecida liga a Garganta dos Laços à Vigília do Vale.",
@@ -634,6 +665,57 @@ ACHIEVEMENTS = (
         "Título · Andarilho de Nareth",
     ),
     AchievementPresentation(
+        "feat.nareth.sob_o_mesmo_eixo", "Sob o Mesmo Eixo", "secrets",
+        "Descobriu as Galerias do Meridiano e o Observatório Afundado.", hidden=True,
+    ),
+    AchievementPresentation(
+        "feat.nareth.a_camara_se_cala", "A Câmara se Cala", "combat",
+        "Derrotou o Arconte Invertido pela primeira vez.",
+        "Título · Sobrevivente do Eixo",
+    ),
+    AchievementPresentation(
+        "feat.nareth.o_que_retorna", "O Que Retorna", "pve",
+        "Concluiu as Galerias do Meridiano em dificuldade Estável pela primeira vez.",
+    ),
+    AchievementPresentation(
+        "feat.nareth.referencia_afundada", "Referência Afundada", "pve",
+        "Concluiu o Observatório Afundado em dificuldade Estável pela primeira vez.",
+    ),
+    AchievementPresentation(
+        "feat.nareth.eixos_fraturados", "Eixos Fraturados", "pve",
+        "Concluiu as duas Masmorras de Nareth em dificuldade Fraturada.",
+        "Moldura · Eixo Fraturado",
+    ),
+    AchievementPresentation(
+        "feat.nareth.cacador_de_nareth", "Caçador de Nareth", "bestiary",
+        "Dominou as nove criaturas-base de Nareth.", "Título · Caçador de Nareth",
+    ),
+    AchievementPresentation(
+        "feat.nareth.horizonte_sem_norte", "Horizonte sem Norte", "secrets",
+        "Dominou as criaturas de Nareth e descobriu cinco tipos de Variante.",
+        "Aparência · Sobrevivente de Nareth", hidden=True,
+    ),
+    AchievementPresentation(
+        "feat.nareth.a_medida_que_permanece", "A Medida que Permanece", "bestiary",
+        "Estudou os cinco guardiões e referências regionais publicados.",
+    ),
+    AchievementPresentation(
+        "feat.nareth.os_caminhos_que_nao_coincidem",
+        "Os Caminhos que Não Coincidem", "secrets",
+        "Concluiu S16 e S18 após reunir os trechos disponíveis de Rotas e Cartografia.",
+        "Título · Sem Norte", hidden=True,
+    ),
+    AchievementPresentation(
+        "feat.nareth.a_rede_mede_ainda", "A Rede Mede Ainda", "secrets",
+        "Concluiu o Observatório Afundado em Estável após P18 e reuniu os registros disponíveis.",
+        "Moldura · Meridiano Antigo", hidden=True,
+    ),
+    AchievementPresentation(
+        "feat.nareth.planicies_de_nareth", "Planícies de Nareth", "exploration",
+        "Concluiu P18 no Nv.30 e descobriu os cinco Locais principais.",
+        "Moldura · Planícies de Nareth",
+    ),
+    AchievementPresentation(
         "feat.vde.o_berco_silencia", "O Berço Silencia", "combat",
         "Derrotou a Matriarca das Raízes pela primeira vez.",
         "Título · Sobrevivente do Berço",
@@ -722,6 +804,7 @@ NARETH_LOCATIONS = {
     "nareth.location.campos_invertidos": "Campos Invertidos",
     "nareth.location.observatorio_do_eixo": "Observatório do Eixo",
     "nareth.location.observatorio_afundado": "Observatório Afundado",
+    "nareth.location.camara_do_arconte": "Câmara do Arconte",
 }
 LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS
 HABITAT_EVIDENCE_TO_LOCATION = {
@@ -743,6 +826,7 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     "Canais Secos": "nareth.location.canais_secos",
     "Campos Invertidos": "nareth.location.campos_invertidos",
     "Observatório do Eixo": "nareth.location.observatorio_do_eixo",
+    "Câmara do Arconte": "nareth.location.camara_do_arconte",
     **{location_id: location_id for location_id in NARETH_LOCATIONS},
 }
 MATERIAL_LABELS = {

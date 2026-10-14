@@ -12,9 +12,14 @@ from asterion.application.nareth_missions import (
     P14_ID,
     P15_ID,
     P16_ID,
+    P17_ID,
+    P18_ID,
+    P18_REWARD_CHOICES,
     S14_ID,
     S15_ID,
     S16_ID,
+    S17_ID,
+    S18_ID,
     NarethMissionView,
 )
 from asterion.application.prologue import CombatView
@@ -40,7 +45,10 @@ def _route_to_expected_location(location: str, expected_location: str) -> str:
 
 def render_nareth_mission(view: NarethMissionView) -> Screen:
     quest_id = view.quest_id
-    if quest_id in {P14_ID, S14_ID, P15_ID, S15_ID, P16_ID, S16_ID}:
+    if quest_id in {
+        P14_ID, S14_ID, P15_ID, S15_ID, P16_ID, S16_ID,
+        S17_ID, P17_ID, P18_ID, S18_ID,
+    }:
         return _render_midgame_mission(view)
     title = escape(view.title)
     version = view.state_version
@@ -194,6 +202,7 @@ _MIDGAME_ROUTES = {
     "Canais Secos": ("nareth_canais", "🛤️"),
     "Campos Invertidos": ("nareth_campos", "🌾"),
     "Observatório do Eixo": ("nareth_observatorio", "🧭"),
+    "Câmara do Arconte": ("nareth_camara", "🏛️"),
 }
 
 
@@ -204,7 +213,9 @@ def _route_toward(current: str, target: str) -> str | None:
         "Canais Secos": ("Posto de Nareth", "Campos Invertidos"),
         "Campos Invertidos": ("Canais Secos", "Observatório do Eixo"),
         "Observatório do Eixo": ("Campos Invertidos",),
+        "Câmara do Arconte": ("Observatório do Eixo",),
     }
+    edges["Observatório do Eixo"] = ("Campos Invertidos", "Câmara do Arconte")
     if current not in edges or target not in edges:
         return None
     queue = [(current, None)]
@@ -285,6 +296,55 @@ _MIDGAME_STAGES = {
         7: ("Posto de Nareth", "Retornar a Nera.", None, "Retornar ao Posto"),
         8: ("Posto de Nareth", "Criar ou atualizar Cartografia do Erro no Códice.", "update_codex", "Atualizar Códice"),
     },
+    S17_ID: {
+        1: ("Posto de Nareth", "Falar com Talen sobre a leitura de prumo impossível.", "speak_talen", "Falar com Talen"),
+        2: ("Observatório do Eixo", "Visitar a ala cedida do Observatório.", None, "Seguir ao Observatório"),
+        3: ("Observatório do Eixo", "Examinar três referências geométricas.", "examine_references", "Examinar referência"),
+        4: ("Observatório do Eixo", "Localizar a entrada do Observatório Afundado após sua descoberta legítima.", "locate_submerged_entry", "Registrar entrada"),
+        5: ("Observatório do Eixo", "Recuperar a peça de calibração, sem valor econômico.", "recover_calibration_piece", "Recuperar peça"),
+        6: ("Posto de Nareth", "Retornar a Talen.", None, "Retornar ao Posto"),
+        7: ("Posto de Nareth", "Atualizar Protocolos de Referência.", "update_protocols", "Atualizar protocolos"),
+    },
+    P17_ID: {
+        1: ("Posto de Nareth", "Reunir Nera e Talen.", "gather_researchers", "Reunir Nera e Talen"),
+        2: ("Posto de Nareth", "Comparar registros dos Canais, Campos e Observatório.", "compare_records", "Comparar registros"),
+        3: ("Posto de Nareth", "Encontrar a designação institucional Custódia das Âncoras.", "record_custody", "Registrar custódia"),
+        4: ("Posto de Nareth", "Confirmar que Nareth monitorava estabilidade regional.", "confirm_stability_monitoring", "Confirmar monitoramento"),
+        5: ("Observatório do Eixo", "Seguir o eixo principal do Observatório.", None, "Seguir ao Observatório"),
+        6: ("Observatório do Eixo", "Derrotar um Custódio Invertido Nv.29.", "combat_start", "Iniciar encontro"),
+        7: ("Observatório do Eixo", "Abrir o acesso à Câmara do Arconte.", "open_chamber", "Abrir acesso"),
+        8: ("Câmara do Arconte", "Examinar o registro técnico incompleto.", "examine_incomplete_record", "Examinar registro"),
+        9: ("Observatório do Eixo", "Retornar ao ponto seguro do Observatório.", None, "Retornar ao Observatório"),
+        10: ("Observatório do Eixo", "Retornar ao ponto seguro do Observatório.", None, "Retornar ao Observatório"),
+        11: ("Observatório do Eixo", "Preparar o confronto com o Arconte.", "prepare_arconte", "Preparar confronto"),
+    },
+    P18_ID: {
+        1: ("Câmara do Arconte", "Entrar na Câmara do Arconte.", None, "Entrar na Câmara"),
+        2: ("Câmara do Arconte", "Examinar três linhas de referência contraditórias.", "examine_reference_lines", "Examinar referências"),
+        3: ("Câmara do Arconte", "Identificar o custódio como Arconte técnico-administrativo.", "identify_archon", "Identificar registro"),
+        4: ("Câmara do Arconte", "Enfrentar o Arconte Invertido.", "combat_start", "Iniciar encontro"),
+        6: ("Câmara do Arconte", "Examinar a Câmara após o protocolo agressivo cessar.", "examine_chamber_after_victory", "Examinar Câmara"),
+        7: ("Câmara do Arconte", "Registrar a função estabilizadora das Âncoras.", "record_anchor_function", "Registrar função"),
+        8: ("Câmara do Arconte", "Registrar que Nareth media e comparava referências.", "record_measurement_function", "Registrar medição"),
+        9: ("Câmara do Arconte", "Registrar a continuidade logística para as Várzeas Carmesins.", "record_logistics_direction", "Registrar direção"),
+        10: ("Câmara do Arconte", "Escolher exatamente um Equipamento Épico de P18.", None, "Escolher equipamento"),
+    },
+    S18_ID: {
+        1: ("Posto de Nareth", "Ler o mapa produzido em S16.", "read_cartography", "Ler mapa"),
+        2: ("Campinas do Meridiano", "Voltar às Campinas do Meridiano.", None, "Seguir às Campinas"),
+        3: ("Campinas do Meridiano", "Comparar um par antigo de marcos.", "compare_old_markers", "Comparar marcos"),
+        4: ("Canais Secos", "Visitar os Canais Secos.", None, "Seguir aos Canais"),
+        5: ("Canais Secos", "Recuperar uma placa de rota sem valor econômico.", "recover_route_plate", "Recuperar placa"),
+        6: ("Campos Invertidos", "Visitar os Campos Invertidos.", None, "Seguir aos Campos"),
+        7: ("Campos Invertidos", "Comparar duas distâncias registradas por viajantes.", "compare_travel_distances", "Comparar distâncias"),
+        8: ("Observatório do Eixo", "Visitar a borda do Observatório.", None, "Seguir ao Observatório"),
+        9: ("Observatório do Eixo", "Seguir a antiga rota de serviço até o posto abandonado.", "follow_service_route", "Seguir rota de serviço"),
+        10: ("Observatório do Eixo", "Derrotar o Custódio sem Norte.", "combat_start", "Iniciar encontro"),
+        11: ("Observatório do Eixo", "Examinar a referência de calibração quebrada.", "inspect_broken_reference", "Examinar referência"),
+        12: ("Posto de Nareth", "Retornar ao Posto.", None, "Retornar ao Posto"),
+        13: ("Posto de Nareth", "Traçar uma rota moderna usando pontos verificados.", "trace_modern_route", "Traçar rota"),
+        14: ("Posto de Nareth", "Registrar Os Caminhos que Não Coincidem e atualizar Rotas de Nareth.", "update_codex", "Atualizar Códice"),
+    },
 }
 
 
@@ -322,11 +382,12 @@ def _render_midgame_mission(view: NarethMissionView) -> Screen:
             parse_mode=hud.parse_mode,
         )
     if view.kind == "offer":
+        main_quest = quest in {P14_ID, P15_ID, P16_ID, P17_ID, P18_ID}
         return _screen(
-            f"📜 {title}\nMissão {'Principal' if quest in {P14_ID, P15_ID, P16_ID} else 'Secundária'}"
+            f"📜 {title}\nMissão {'Principal' if main_quest else 'Secundária'}"
             f" · Planícies de Nareth\n\nRequisitos atendidos. A jornada permanece individual "
             "para progresso e recompensas.",
-            [[_button("Iniciar Missão" if quest in {P14_ID, P15_ID, P16_ID} else "Aceitar Missão", f"nareth:start:{quest}")],
+            [[_button("Iniciar Missão" if main_quest else "Aceitar Missão", f"nareth:start:{quest}")],
              [_button("← Missões", "world:missions")]],
         )
     if view.kind == "unavailable":
@@ -337,19 +398,25 @@ def _render_midgame_mission(view: NarethMissionView) -> Screen:
             S15_ID: "Campos Invertidos acessíveis · P15 ativa/concluída · Nv.25",
             P16_ID: "P15 concluída · Nv.27 · Posto de Nareth",
             S16_ID: "P16 ativa/concluída · Nv.27 · Posto de Nareth",
+            S17_ID: "Observatório do Eixo descoberto · Nv.28 · Posto de Nareth",
+            P17_ID: "P16 concluída · Nv.29 · Posto de Nareth",
+            P18_ID: "P17 concluída · Nv.30 · início automático",
+            S18_ID: "S16 e P17 concluídas · Nv.30 · Posto de Nareth",
         }
         return _screen(
             f"📜 {title} · Indisponível\n\nRequer · {gates[quest]}.",
             [[_button("← Missões", "world:missions")]],
         )
-    if view.kind == "choice" and quest == P15_ID:
+    if view.kind == "choice" and quest in {P15_ID, P18_ID}:
+        choices = MISSION_REWARD_CHOICES if quest == P15_ID else P18_REWARD_CHOICES
+        rarity, level = ("Raro", 25) if quest == P15_ID else ("Épico", 30)
         rows = [
             [_button(f"{name} · {slot}", f"nareth:choice:{quest}:{version}:{choice}")]
-            for choice, (name, slot) in MISSION_REWARD_CHOICES.items()
+            for choice, (name, slot) in choices.items()
         ]
         rows.append([_button("← Missões", "world:missions")])
         return _screen(
-            f"📜 {title} · Escolha individual\n\nEscolha exatamente 1 equipamento Raro, Nv.25, +0 e vinculado.",
+            f"📜 {title} · Escolha individual\n\nEscolha exatamente 1 equipamento {rarity}, Nv.{level}, +0 e vinculado.",
             rows,
         )
     if view.kind == "completed":
@@ -360,6 +427,10 @@ def _render_midgame_mission(view: NarethMissionView) -> Screen:
             S15_ID: "9.920 XP · 240 Coroas · 2 Couros de Horizonte",
             P16_ID: "27.800 XP · 640 Coroas · 2 Bronzes de Marco · 2 Pós de Eixo",
             S16_ID: "19.460 XP · 380 Coroas · 2 Bronzes de Marco · 1 Couro de Horizonte · 1 Pó de Eixo",
+            S17_ID: "20.545 XP · 390 Coroas · 1 Bronze de Marco · 1 Erva de Vento · 2 Pós de Eixo",
+            P17_ID: "30.950 XP · 680 Coroas · 3 Bronzes de Marco · 1 Pó de Eixo",
+            P18_ID: "58.680 XP · 1.100 Coroas · 4 Bronzes de Marco · 4 Pós de Eixo · escolha Épica: " + P18_REWARD_CHOICES.get(str((view.progress or {}).get("reward_choice")), ("equipamento selecionado", ""))[0],
+            S18_ID: "32.600 XP · 690 Coroas · 2 de cada Material Básico Grau III",
         }
         return _screen(
             f"✅ {title} · Concluída\n\n{escape(rewards[quest])}",
@@ -396,6 +467,9 @@ def _render_midgame_mission(view: NarethMissionView) -> Screen:
                 [_button("Formar Grupo", f"nareth:combat:{quest}:{version}:group")],
             ]
         )
+    elif quest == S17_ID and step == 4 and not (view.progress or {}).get("submerged_entry_discovered"):
+        description = "A entrada ainda não foi descoberta. Registre-a por uma descoberta legítima no Observatório do Eixo."
+        rows.append([_button("📍 Local Atual", "world:local")])
     elif action:
         rows.append([_button(label, f"nareth:action:{quest}:{version}:{action}")])
     elif view.kind in {"travel_canais", "travel_campos", "travel_observatorio", "return_posto"}:

@@ -91,6 +91,15 @@ VDE_HERB = "material.vde.erva_de_turfa"
 VDE_RESIN = "material.vde.resina_enredada"
 VDE_CATALYST_II = "material.vde.catalisador_elite_ii"
 VDE_FRAGMENT_II = "material.vde.fragmento_aprimoramento_ii"
+NARETH_BRONZE = "material.nareth.bronze_de_marco"
+NARETH_LEATHER = "material.nareth.couro_de_horizonte"
+NARETH_HERB = "material.nareth.erva_de_vento"
+NARETH_POWDER = "material.nareth.po_de_eixo"
+NARETH_CATALYST_III = "material.nareth.catalisador_elite_iii"
+NARETH_FRAGMENT_III = "material.nareth.fragmento_aprimoramento_iii"
+NARETH_GALLERIES_CORE = "material.nareth.nucleo_galerias_meridiano"
+NARETH_OBSERVATORY_CORE = "material.nareth.nucleo_observatorio_afundado"
+NARETH_ARCHON_CORE = "material.nareth.nucleo_arconte_invertido"
 
 MATERIAL_NAMES = {
     IRON: "Ferro de Fuligem",
@@ -105,6 +114,15 @@ MATERIAL_NAMES = {
     MATRIARCH_CORE: "Núcleo da Matriarca das Raízes",
     FOSSO_CORE: "Núcleo do Fosso das Raízes",
     SANCTUARY_CORE: "Núcleo do Nó Antigo",
+    NARETH_BRONZE: "Bronze de Marco",
+    NARETH_LEATHER: "Couro de Horizonte",
+    NARETH_HERB: "Erva de Vento",
+    NARETH_POWDER: "Pó de Eixo",
+    NARETH_CATALYST_III: "Catalisador de Elite III",
+    NARETH_FRAGMENT_III: "Fragmento de Aprimoramento III",
+    NARETH_GALLERIES_CORE: "Núcleo das Galerias do Meridiano",
+    NARETH_OBSERVATORY_CORE: "Núcleo do Observatório Afundado",
+    NARETH_ARCHON_CORE: "Núcleo do Arconte Invertido",
     VDE_IRON: "Ferro Enredado",
     VDE_LEATHER: "Couro Musgoso",
     VDE_HERB: "Erva de Turfa",
@@ -309,6 +327,93 @@ def _vde_equipment_recipes() -> list[RecipeDefinition]:
     return recipes
 
 
+def _nareth_equipment_recipes() -> list[RecipeDefinition]:
+    """Normal Grade III equipment families published for Nareth."""
+    rarity_ids = {"Comum": "comum", "Raro": "raro", "Épico": "epico"}
+    families = (
+        (
+            "blacksmith", "meridian_weapon", "Arma do Meridiano", "Principal",
+            NARETH_BRONZE, NARETH_POWDER, D("0.70"),
+        ),
+        (
+            "blacksmith", "marker_guard", "Guarda de Marco", "Secundária",
+            NARETH_BRONZE, NARETH_POWDER, D("0.70"),
+        ),
+        (
+            "blacksmith", "horizon_greatweapon", "Arma Pesada do Horizonte", "2H",
+            NARETH_BRONZE, NARETH_POWDER, D("0.70"),
+        ),
+        (
+            "blacksmith", "plumb_helm", "Elmo do Prumo", "Cabeça",
+            NARETH_BRONZE, NARETH_POWDER, D("0.70"),
+        ),
+        (
+            "blacksmith", "nareth_cuirass", "Couraça de Nareth", "Torso",
+            NARETH_BRONZE, NARETH_POWDER, D("0.70"),
+        ),
+        (
+            "blacksmith", "line_gauntlets", "Manoplas de Linha", "Mãos",
+            NARETH_BRONZE, NARETH_POWDER, D("0.70"),
+        ),
+        (
+            "blacksmith", "channel_greaves", "Grevas de Canal", "Pés",
+            NARETH_BRONZE, NARETH_POWDER, D("0.70"),
+        ),
+        (
+            "leatherworker", "horizon_hood", "Capuz de Horizonte", "Cabeça",
+            NARETH_LEATHER, NARETH_HERB, D("0.70"),
+        ),
+        (
+            "leatherworker", "inverted_fields_vest", "Veste dos Campos Invertidos", "Torso",
+            NARETH_LEATHER, NARETH_HERB, D("0.70"),
+        ),
+        (
+            "leatherworker", "channel_gloves", "Luvas de Canal", "Mãos",
+            NARETH_LEATHER, NARETH_HERB, D("0.70"),
+        ),
+        (
+            "leatherworker", "meridian_boots", "Botas do Meridiano", "Pés",
+            NARETH_LEATHER, NARETH_HERB, D("0.70"),
+        ),
+        (
+            "jeweler", "axis_seal", "Selo do Eixo", "Acessório",
+            NARETH_BRONZE, NARETH_POWDER, D("0.60"),
+        ),
+        (
+            "jeweler", "reference_reliquary", "Relicário de Referência", "Artefato",
+            NARETH_BRONZE, NARETH_POWDER, D("0.60"),
+        ),
+    )
+    recipes = []
+    for profession_id, family_id, name, slot, primary, secondary, ratio in families:
+        sw = SLOT_ECONOMY_SW[slot]
+        for rarity in ("Comum", "Raro", "Épico"):
+            recipes.append(
+                RecipeDefinition(
+                    recipe_id=f"recipe.nareth.{profession_id}.{family_id}.{rarity_ids[rarity]}",
+                    profession_id=profession_id,
+                    name=name,
+                    output_kind="equipment",
+                    required_level=max(6, RARITY_REQUIREMENTS[rarity]),
+                    grade=3,
+                    rarity=rarity,
+                    output_name=name,
+                    output_slot=slot,
+                    sw=sw,
+                    basic_materials=RARITY_COSTS_PER_SW[rarity],
+                    primary_material_id=primary,
+                    secondary_material_id=secondary,
+                    primary_ratio=ratio,
+                    fragment_per_sw=4 if rarity == "Raro" else 6 if rarity == "Épico" else 0,
+                    catalyst_per_sw=2 if rarity == "Épico" else 0,
+                    fragment_material_id=NARETH_FRAGMENT_III,
+                    catalyst_material_id=NARETH_CATALYST_III,
+                    description=f"{rarity} · {slot} · Grau III",
+                )
+            )
+    return recipes
+
+
 def _alchemy_recipes() -> list[RecipeDefinition]:
     recipes = []
     catalogs = (
@@ -348,6 +453,26 @@ def _alchemy_recipes() -> list[RecipeDefinition]:
                 "Catalisador de Elite II": VDE_CATALYST_II,
             },
             frozenset({VDE_CATALYST_II}),
+        ),
+        (
+            "nareth",
+            "Planícies de Nareth",
+            (
+                "consumable.heal.nareth.iii",
+                "consumable.purification.nareth.iii",
+                "consumable.antidote.nareth.iii",
+                "consumable.vigor.nareth.iii",
+                "consumable.protection.nareth.iii",
+                "consumable.dispeller.nareth.iii",
+            ),
+            {
+                "Ervas de Vento": NARETH_HERB,
+                "Erva de Vento": NARETH_HERB,
+                "Pó de Eixo": NARETH_POWDER,
+                "Pós de Eixo": NARETH_POWDER,
+                "Catalisador de Elite III": NARETH_CATALYST_III,
+            },
+            frozenset({NARETH_CATALYST_III}),
         ),
     )
     for region_code, region_name, item_ids, material_ids, nonbinding in catalogs:
@@ -519,6 +644,70 @@ def _special_recipes() -> list[RecipeDefinition]:
             unlock_id="recipe.vde.santuario.guarda_no_antigo",
             description="Arma Secundária · Épico · Grau II · SW1",
         ),
+        RecipeDefinition(
+            recipe_id="recipe.nareth.galerias.relicario_circuito_retornado",
+            profession_id="jeweler",
+            name="Relicário do Circuito Retornado",
+            output_kind="equipment",
+            required_level=5,
+            grade=3,
+            rarity="Raro",
+            output_name="Relicário do Circuito Retornado",
+            output_slot="Artefato",
+            output_id="nareth_galerias_relicario_circuito_retornado",
+            sw=2,
+            fixed_materials=(
+                MaterialRequirement(NARETH_BRONZE, 10),
+                MaterialRequirement(NARETH_POWDER, 6),
+                MaterialRequirement(NARETH_FRAGMENT_III, 8, False),
+                MaterialRequirement(NARETH_GALLERIES_CORE, 1),
+            ),
+            unlock_id="recipe.nareth.galerias.relicario_circuito_retornado",
+            description="Artefato · Raro · Grau III · SW2",
+        ),
+        RecipeDefinition(
+            recipe_id="recipe.nareth.observatorio.guarda_referencia",
+            profession_id="blacksmith",
+            name="Guarda da Referência",
+            output_kind="equipment",
+            required_level=10,
+            grade=3,
+            rarity="Épico",
+            output_name="Guarda da Referência",
+            output_slot="Secundária",
+            output_id="nareth_observatorio_guarda_referencia",
+            sw=1,
+            fixed_materials=(
+                MaterialRequirement(NARETH_BRONZE, 7),
+                MaterialRequirement(NARETH_POWDER, 3),
+                MaterialRequirement(NARETH_CATALYST_III, 2, False),
+                MaterialRequirement(NARETH_FRAGMENT_III, 6, False),
+                MaterialRequirement(NARETH_OBSERVATORY_CORE, 1),
+            ),
+            unlock_id="recipe.nareth.observatorio.guarda_referencia",
+            description="Arma Secundária · Épico · Grau III · SW1",
+        ),
+        RecipeDefinition(
+            recipe_id="recipe.nareth.arconte.calibracao",
+            profession_id="artificer",
+            name="Calibração do Arconte",
+            output_kind="enchantment",
+            required_level=10,
+            grade=3,
+            rarity="Épico",
+            output_id="PER",
+            output_family="Calibração do Arconte",
+            fixed_materials=(
+                MaterialRequirement(NARETH_POWDER, 5),
+                MaterialRequirement(NARETH_BRONZE, 2),
+                MaterialRequirement(NARETH_CATALYST_III, 1, False),
+                MaterialRequirement(NARETH_ARCHON_CORE, 1),
+            ),
+            fixed_crown_cost=220,
+            creation_enabled=False,
+            unlock_id="recipe.nareth.calibracao_do_arconte",
+            description="Encantamento Épico de PER · Grau III",
+        ),
     ]
 
 
@@ -612,6 +801,52 @@ def _vde_enchantment_recipes() -> list[RecipeDefinition]:
     return result
 
 
+def _nareth_enchantment_recipes() -> list[RecipeDefinition]:
+    families = (
+        ("Fio do Meridiano", "ATQ"),
+        ("Pele do Prumo", "DEF"),
+        ("Passo do Horizonte", "AGI"),
+        ("Marca de Referência", "PER"),
+        ("Eco da Distância", "CRIT"),
+        ("Sopro do Posto", "HP"),
+        ("Véu do Desvio", "Esquiva"),
+        ("Selo do Eixo", "Bloqueio"),
+    )
+    recipes = []
+    for name, stat in families:
+        family_id = name.casefold().replace(" ", "_").replace("ó", "o").replace("ê", "e")
+        for rarity, rarity_id, level, powder, bronze, catalysts, cost in (
+            ("Raro", "raro", 5, 3, 1, 0, 110),
+            ("Épico", "epico", 10, 5, 2, 1, 220),
+        ):
+            recipes.append(
+                RecipeDefinition(
+                    recipe_id=f"recipe.nareth.artificer.enchantment.{family_id}.{rarity_id}",
+                    profession_id="artificer",
+                    name=name,
+                    output_kind="enchantment",
+                    required_level=level,
+                    grade=3,
+                    rarity=rarity,
+                    output_id=stat,
+                    output_family=name,
+                    fixed_materials=(
+                        MaterialRequirement(NARETH_POWDER, powder),
+                        MaterialRequirement(NARETH_BRONZE, bronze),
+                        *(
+                            (MaterialRequirement(NARETH_CATALYST_III, catalysts, False),)
+                            if catalysts
+                            else ()
+                        ),
+                    ),
+                    fixed_crown_cost=cost,
+                    creation_enabled=False,
+                    description=f"Encantamento {rarity} · {stat} · Grau III",
+                )
+            )
+    return recipes
+
+
 def _rune_recipes() -> list[RecipeDefinition]:
     from asterion.domain.road import RUNE_FAMILIES
 
@@ -696,14 +931,63 @@ def _vde_rune_recipes() -> list[RecipeDefinition]:
     return recipes
 
 
+def _nareth_rune_recipes() -> list[RecipeDefinition]:
+    families = (
+        ("Meridiano", "Runa do Meridiano", "ATQ"),
+        ("Prumo", "Runa do Prumo", "DEF"),
+        ("Horizonte", "Runa do Horizonte", "AGI"),
+        ("Marco", "Runa do Marco", "PER"),
+        ("Distância", "Runa da Distância", "CRIT"),
+        ("Abrigo", "Runa do Abrigo", "HP"),
+        ("Desvio", "Runa do Desvio", "Esquiva"),
+        ("Referência", "Runa da Referência", "Bloqueio"),
+    )
+    recipes = []
+    for family, name, stat in families:
+        family_id = family.casefold().replace("â", "a").replace("ê", "e").replace("ç", "c")
+        for rarity, rarity_id, level, crowns, powder, bronze, catalysts, fragments in (
+            ("Rara", "rara", 5, 160, 4, 2, 0, 2),
+            ("Épica", "epica", 10, 330, 7, 3, 1, 4),
+        ):
+            recipes.append(
+                RecipeDefinition(
+                    recipe_id=f"recipe.nareth.artificer.rune.{family_id}.{rarity_id}",
+                    profession_id="artificer",
+                    name=name,
+                    output_kind="rune",
+                    required_level=level,
+                    grade=3,
+                    rarity=rarity,
+                    output_id=f"rune.nareth.{family_id}",
+                    output_family=family,
+                    fixed_materials=(
+                        MaterialRequirement(NARETH_POWDER, powder),
+                        MaterialRequirement(NARETH_BRONZE, bronze),
+                        *(
+                            (MaterialRequirement(NARETH_CATALYST_III, catalysts, False),)
+                            if catalysts
+                            else ()
+                        ),
+                        MaterialRequirement(NARETH_FRAGMENT_III, fragments, False),
+                    ),
+                    fixed_crown_cost=crowns,
+                    description=f"{rarity} · {stat} · Grau III",
+                )
+            )
+    return recipes
+
+
 RECIPE_DEFINITIONS = tuple(
     _equipment_recipes()
     + _vde_equipment_recipes()
+    + _nareth_equipment_recipes()
     + _alchemy_recipes()
     + _rune_recipes()
     + _vde_rune_recipes()
+    + _nareth_rune_recipes()
     + _enchantment_recipes()
     + _vde_enchantment_recipes()
+    + _nareth_enchantment_recipes()
     + _special_recipes()
 )
 RECIPE_BY_ID = {recipe.recipe_id: recipe for recipe in RECIPE_DEFINITIONS}

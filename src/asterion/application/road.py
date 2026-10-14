@@ -48,6 +48,8 @@ from asterion.domain.road import (
     NARETH_BRAZIER_HORIZONTE,
     NARETH_BRAZIER_OBSERVATORIO,
     NARETH_BRAZIER_POSTO,
+    NARETH_CAMARA,
+    NARETH_CAMARA_LOCATION,
     NARETH_CAMPINAS,
     NARETH_CAMPINAS_LOCATION,
     NARETH_CAMPINAS_POSTO_ROUTE,
@@ -59,6 +61,7 @@ from asterion.domain.road import (
     NARETH_CANAIS_LOCATION,
     NARETH_EXPLORE_UNLOCK,
     NARETH_OBSERVATORIO,
+    NARETH_OBSERVATORIO_CAMARA_ROUTE,
     NARETH_OBSERVATORIO_LOCATION,
     NARETH_POSTO,
     NARETH_POSTO_CANAIS_ROUTE,
@@ -146,16 +149,18 @@ VDE_CLAUSTRO = "Claustro das Raízes"
 VDE_BERCO = "Berço da Matriarca"
 NARETH_CAMPINAS_LABEL = NARETH_CAMPINAS
 NARETH_POSTO_LABEL = NARETH_POSTO
+NARETH_CAMARA_LABEL = NARETH_CAMARA
 REGION = "Terras do Ocaso"
 VDE_REGION = "Vales dos Enforcados"
 NARETH_REGION = "Planícies de Nareth"
 VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO))
-NARETH_LOCATIONS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO))
+NARETH_LOCATIONS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL))
 NARETH_REGION_ROUTE_ENDPOINTS = frozenset((VDE_BERCO, NARETH_CAMPINAS_LABEL))
 NARETH_CAMPINAS_POSTO_ROUTE_ENDPOINTS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL))
 NARETH_POSTO_CANAIS_ROUTE_ENDPOINTS = frozenset((NARETH_POSTO_LABEL, NARETH_CANAIS))
 NARETH_CANAIS_CAMPOS_ROUTE_ENDPOINTS = frozenset((NARETH_CANAIS, NARETH_CAMPOS))
 NARETH_CAMPOS_OBSERVATORIO_ROUTE_ENDPOINTS = frozenset((NARETH_CAMPOS, NARETH_OBSERVATORIO))
+NARETH_OBSERVATORIO_CAMARA_ROUTE_ENDPOINTS = frozenset((NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL))
 P2_QUEST_ID = "P2"
 P3_QUEST_ID = "P3"
 P4_QUEST_ID = "P4"
@@ -182,8 +187,9 @@ OVERLAND_ROUTE_PAIRS = (
     NARETH_POSTO_CANAIS_ROUTE_ENDPOINTS,
     NARETH_CANAIS_CAMPOS_ROUTE_ENDPOINTS,
     NARETH_CAMPOS_OBSERVATORIO_ROUTE_ENDPOINTS,
+    NARETH_OBSERVATORIO_CAMARA_ROUTE_ENDPOINTS,
 )
-TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO))
+TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL))
 BRAZIER_FOR_LOCATION = {
     ROAD: "tdo.brazier.estrada",
     REFUGE: "tdo.brazier.refugio_do_ocaso",
@@ -257,6 +263,9 @@ MATERIAL_LABELS = {
     "material.nareth.po_de_eixo": "Pó de Eixo",
     "material.nareth.catalisador_elite_iii": "Catalisador de Elite III",
     "material.nareth.fragmento_aprimoramento_iii": "Fragmento de Aprimoramento III",
+    "material.nareth.nucleo_arconte_invertido": "Núcleo do Arconte Invertido",
+    "material.nareth.nucleo_galerias_meridiano": "Núcleo das Galerias do Meridiano",
+    "material.nareth.nucleo_observatorio_afundado": "Núcleo do Observatório Afundado",
 }
 VDE_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.vde.garganta.ferro_enredado": "material.vde.ferro_enredado",
@@ -507,6 +516,16 @@ class RoadService:
                     return None
                 if world.location == NARETH_OBSERVATORIO and not await self._nareth_mission_started_or_completed(s, c.id, "P16"):
                     return None
+                if world.location == NARETH_CAMARA_LABEL and not (
+                    await self._nareth_mission_started_or_completed(s, c.id, "P17")
+                    and await s.scalar(
+                        select(Unlock.id).where(
+                            Unlock.character_id == c.id,
+                            Unlock.unlock_id == "region.nareth.camara_arconte.available",
+                        )
+                    )
+                ):
+                    return None
             elif not await self._p1_completed(s, c.id):
                 return None
             return await self._view_for_world(s, c, world)
@@ -651,6 +670,9 @@ class RoadService:
                 elif pair == NARETH_CAMPOS_OBSERVATORIO_ROUTE_ENDPOINTS:
                     gate_ok = await self._nareth_mission_started_or_completed(s, c.id, "P16")
                     route_unlock = NARETH_CAMPOS_OBSERVATORIO_ROUTE
+                elif pair == NARETH_OBSERVATORIO_CAMARA_ROUTE_ENDPOINTS:
+                    gate_ok = await self._nareth_mission_started_or_completed(s, c.id, "P17")
+                    route_unlock = NARETH_OBSERVATORIO_CAMARA_ROUTE
                 elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
                     gate_ok = (
                         await self._p4_completed(s, c.id)
@@ -777,6 +799,8 @@ class RoadService:
                 await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=NARETH_CAMPOS_LOCATION)
             elif destination == NARETH_OBSERVATORIO:
                 await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=NARETH_OBSERVATORIO_LOCATION)
+            elif destination == NARETH_CAMARA_LABEL:
+                await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=NARETH_CAMARA_LOCATION)
             return await self._view_for_world(s, c, world)
 
     async def start_hunt(self, actor: int) -> RoadView | None:
@@ -3922,6 +3946,16 @@ class RoadService:
         nareth_p15_complete = await self._nareth_mission_completed(s, c.id, "P15")
         nareth_p16_open = await self._nareth_mission_started_or_completed(s, c.id, "P16")
         nareth_p16_complete = await self._nareth_mission_completed(s, c.id, "P16")
+        nareth_p17_open = await self._nareth_mission_started_or_completed(s, c.id, "P17")
+        nareth_chamber_open = bool(
+            nareth_p17_open
+            and await s.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == "region.nareth.camara_arconte.available",
+                )
+            )
+        )
         if nareth_access:
             await self._ensure(s, Unlock, character_id=c.id, unlock_id=NARETH_REGION_UNLOCK)
         nareth_route_open = await self._nareth_p13_route_open(s, c.id)
@@ -3940,7 +3974,7 @@ class RoadService:
             and (location != NARETH_CANAIS or nareth_p14_open)
             and (location != NARETH_CAMPOS or nareth_p15_open)
             and (location != NARETH_OBSERVATORIO or nareth_p16_open)
-        ) if world.location != VDE_BERCO else ()
+        ) if world.location not in {VDE_BERCO, NARETH_CAMARA_LABEL} else ()
         active_p3 = await s.scalar(
             select(Quest.id).where(
                 Quest.character_id == c.id,
@@ -4074,6 +4108,20 @@ class RoadService:
                     route_destinations.append(NARETH_OBSERVATORIO)
             elif world.location == NARETH_OBSERVATORIO and nareth_access and nareth_p16_open:
                 route_destinations.append(NARETH_CAMPOS)
+                if nareth_chamber_open and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == NARETH_OBSERVATORIO_CAMARA_ROUTE,
+                    )
+                ):
+                    route_destinations.append(NARETH_CAMARA_LABEL)
+            elif world.location == NARETH_CAMARA_LABEL and nareth_access and nareth_chamber_open and await s.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == NARETH_OBSERVATORIO_CAMARA_ROUTE,
+                )
+            ):
+                route_destinations.append(NARETH_OBSERVATORIO)
         route_available = bool(route_destinations)
         material_table_ready = bool(
             hunt_profile
@@ -4234,6 +4282,9 @@ class RoadService:
                     Unlock.character_id == c.id, Unlock.unlock_id == hunt_profile.explore_unlock
                 ))
             )
+        elif world.location == NARETH_CAMARA_LABEL:
+            hunt_enabled = False
+            explore_enabled = False
         else:
             # Every other known travel location must be handled explicitly above.
             return self._invalid_location_view(c, world)
@@ -4254,6 +4305,7 @@ class RoadService:
             NARETH_CANAIS: "nareth_canais",
             NARETH_CAMPOS: "nareth_campos",
             NARETH_OBSERVATORIO: "nareth_observatorio",
+            NARETH_CAMARA_LABEL: "nareth_camara",
         }
         return RoadView(
             kind_by_location[world.location],

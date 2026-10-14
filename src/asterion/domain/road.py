@@ -42,11 +42,13 @@ NARETH_POSTO_LOCATION = "nareth.location.posto_de_nareth"
 NARETH_CANAIS_LOCATION = "nareth.location.canais_secos"
 NARETH_CAMPOS_LOCATION = "nareth.location.campos_invertidos"
 NARETH_OBSERVATORIO_LOCATION = "nareth.location.observatorio_do_eixo"
+NARETH_CAMARA_LOCATION = "nareth.location.camara_do_arconte"
 NARETH_CAMPINAS = "Campinas do Meridiano"
 NARETH_POSTO = "Posto de Nareth"
 NARETH_CANAIS = "Canais Secos"
 NARETH_CAMPOS = "Campos Invertidos"
 NARETH_OBSERVATORIO = "Observatório do Eixo"
+NARETH_CAMARA = "Câmara do Arconte"
 NARETH_REGION = "Planícies de Nareth"
 NARETH_BRAZIER_HORIZONTE = "nareth.brazier.horizonte"
 NARETH_BRAZIER_POSTO = "nareth.brazier.posto"
@@ -60,6 +62,7 @@ NARETH_CAMPINAS_POSTO_ROUTE = "route.nareth.campinas_posto"
 NARETH_POSTO_CANAIS_ROUTE = "route.nareth.posto_canais"
 NARETH_CANAIS_CAMPOS_ROUTE = "route.nareth.canais_campos"
 NARETH_CAMPOS_OBSERVATORIO_ROUTE = "route.nareth.campos_observatorio"
+NARETH_OBSERVATORIO_CAMARA_ROUTE = "route.nareth.observatorio_camara"
 NARETH_REGION_UNLOCK = "region.nareth.available"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
@@ -727,6 +730,34 @@ NARETH_INVERTED_CUSTODIAN = Creature(
     ),
     ai_priority=("couraça_referencia", "corte_eixo", "queda_prumo"),
 )
+NARETH_CUSTODIO_SEM_NORTE = Creature(
+    "custodio_sem_norte",
+    "Custódio sem Norte",
+    "boss",
+    "controller",
+    30,
+    30,
+    0,
+    ("golpe_marco", "rota_negada", "correcao_cega", "queda_sem_norte"),
+    (
+        ("golpe_marco", "Golpe de Marco", D("1.00"), 0, D(0), 0),
+        ("rota_negada", "Rota Negada", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "agility"),
+        ("correcao_cega", "Correção Cega", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+        ("queda_sem_norte", "Queda sem Norte", D("1.70"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("queda_sem_norte", "rota_negada", "correcao_cega", "golpe_marco"),
+)
+NARETH_ARCONTE_INVERTIDO = Creature(
+    "arconte_invertido",
+    "Arconte Invertido",
+    "boss",
+    "armored",
+    30,
+    30,
+    0,
+    ("golpe_diretiva",),
+    (("golpe_diretiva", "Golpe de Diretiva", D("1.00"), 0, D(0), 0),),
+)
 NARETH_CREATURES = (
     NARETH_MERIDIAN_HOUND,
     NARETH_MARKER_VULTURE,
@@ -741,6 +772,7 @@ NARETH_CREATURES = (
     NARETH_AXIS_SERPENT,
     NARETH_INVERTED_CUSTODIAN,
 )
+NARETH_CAMPAIGN_BOSSES = (NARETH_CUSTODIO_SEM_NORTE, NARETH_ARCONTE_INVERTIDO)
 
 VDE_MATRIARCH = Creature(
     "matriarca_raizes",
@@ -923,7 +955,7 @@ VDE_CREATURES = (
     VDE_ROOTED_WATCHER,
     VDE_BARK_EXECUTIONER,
 )
-CAMPAIGN_BOSS_CREATURES = (VDE_MATRIARCH,)
+CAMPAIGN_BOSS_CREATURES = (VDE_MATRIARCH, *NARETH_CAMPAIGN_BOSSES)
 CREATURE_CATALOG = (
     *CREATURE_CATALOG,
     *VDE_CREATURES,
@@ -1105,6 +1137,7 @@ LOCATION_LEVEL_BANDS = {
     "Claustro das Raízes": (18, 20),
     "Campinas do Meridiano": (21, 23),
     "Posto de Nareth": (21, 23),
+    "Câmara do Arconte": (30, 30),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(

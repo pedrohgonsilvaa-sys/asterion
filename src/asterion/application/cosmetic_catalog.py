@@ -1,4 +1,4 @@
-"""Stable presentation metadata for the TDO cosmetic collection."""
+"""Stable presentation metadata for regional cosmetic collections."""
 
 from dataclasses import dataclass
 
@@ -21,6 +21,48 @@ COSMETICS = (
         "title",
         "Andarilho de Nareth",
         "feat.nareth.andarilho_de_nareth",
+    ),
+    CosmeticDefinition(
+        "cosmetic.title.nareth.sobrevivente_do_eixo",
+        "title",
+        "Sobrevivente do Eixo",
+        "feat.nareth.a_camara_se_cala",
+    ),
+    CosmeticDefinition(
+        "cosmetic.frame.nareth.eixo_fraturado",
+        "frame",
+        "Eixo Fraturado",
+        "feat.nareth.eixos_fraturados",
+    ),
+    CosmeticDefinition(
+        "cosmetic.title.nareth.cacador_de_nareth",
+        "title",
+        "Caçador de Nareth",
+        "feat.nareth.cacador_de_nareth",
+    ),
+    CosmeticDefinition(
+        "cosmetic.appearance.nareth.sobrevivente_de_nareth",
+        "appearance",
+        "Sobrevivente de Nareth",
+        "feat.nareth.horizonte_sem_norte",
+    ),
+    CosmeticDefinition(
+        "cosmetic.title.nareth.sem_norte",
+        "title",
+        "Sem Norte",
+        "feat.nareth.os_caminhos_que_nao_coincidem",
+    ),
+    CosmeticDefinition(
+        "cosmetic.frame.nareth.meridiano_antigo",
+        "frame",
+        "Meridiano Antigo",
+        "feat.nareth.a_rede_mede_ainda",
+    ),
+    CosmeticDefinition(
+        "cosmetic.frame.nareth.planicies_de_nareth",
+        "frame",
+        "Planícies de Nareth",
+        "feat.nareth.planicies_de_nareth",
     ),
     CosmeticDefinition(
         "cosmetic.title.tdo.andarilho_das_cinzas",

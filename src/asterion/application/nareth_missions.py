@@ -18,6 +18,7 @@ from asterion.application.campaign_coop import (
     campaign_action_intent,
     campaign_actor_key,
     campaign_combat_for_activity,
+    create_campaign_boss_profile,
     create_campaign_encounter,
     lock_campaign_encounter,
     resolve_campaign_action,
@@ -45,8 +46,12 @@ from asterion.application.scripted_combat import (
     normalize_character_hp,
 )
 from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
+from asterion.domain.nareth_bosses import configure_nareth_campaign_boss, nareth_boss_phase_evidence
 from asterion.domain.road import (
+    NARETH_ARCONTE_INVERTIDO,
     NARETH_CHANNEL_SCARAB,
+    NARETH_CUSTODIO_SEM_NORTE,
+    NARETH_INVERTED_CUSTODIAN,
     NARETH_INVERTED_HUSK,
     NARETH_MERIDIAN_WATCHER,
     RULESET,
@@ -56,8 +61,10 @@ from asterion.domain.road import (
     materialize_equipment,
 )
 from asterion.infrastructure.db.combat_codec import decode
+from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
     Achievement,
+    BestiaryEntry,
     Brazier,
     CampaignSharedEncounterMember,
     Character,
@@ -87,6 +94,10 @@ P15_ID = "P15"
 S15_ID = "S15"
 P16_ID = "P16"
 S16_ID = "S16"
+S17_ID = "S17"
+P17_ID = "P17"
+P18_ID = "P18"
+S18_ID = "S18"
 CONTENT_VERSION = "nareth-1.0.0"
 CONTENT_VERSION_MID = "nareth-1.0.1"
 P13_TITLE = "Linhas no Horizonte"
@@ -97,6 +108,10 @@ P15_TITLE = "A Distância Errada"
 S15_TITLE = "Sob o Mesmo Céu"
 P16_TITLE = "O Eixo sob a Terra"
 S16_TITLE = "Cartografia do Erro"
+S17_TITLE = "O Prumo Afundado"
+P17_TITLE = "Medir o que Permanece"
+P18_TITLE = "O Arconte Invertido"
+S18_TITLE = "Os Caminhos que Não Coincidem"
 P13_REWARD_SOURCE = "p13.linhas_no_horizonte"
 S13_REWARD_SOURCE = "s13.pedras_que_apontam"
 P14_REWARD_SOURCE = "p14.o_canal_sem_norte"
@@ -105,16 +120,22 @@ P15_REWARD_SOURCE = "p15.a_distancia_errada"
 S15_REWARD_SOURCE = "s15.sob_o_mesmo_ceu"
 P16_REWARD_SOURCE = "p16.o_eixo_sob_a_terra"
 S16_REWARD_SOURCE = "s16.cartografia_do_erro"
+S17_REWARD_SOURCE = "s17.o_prumo_afundado"
+P17_REWARD_SOURCE = "p17.medir_o_que_permanece"
+P18_REWARD_SOURCE = "p18.o_arconte_invertido"
+S18_REWARD_SOURCE = "s18.os_caminhos_que_nao_coincidem"
 CAMPINAS = "Campinas do Meridiano"
 POSTO = "Posto de Nareth"
 CANAIS = "Canais Secos"
 CAMPOS = "Campos Invertidos"
 OBSERVATORIO = "Observatório do Eixo"
+CAMARA = "Câmara do Arconte"
 CAMPINAS_LOCATION_ID = "nareth.location.campinas_do_meridiano"
 POSTO_LOCATION_ID = "nareth.location.posto_de_nareth"
 CANAIS_LOCATION_ID = "nareth.location.canais_secos"
 CAMPOS_LOCATION_ID = "nareth.location.campos_invertidos"
 OBSERVATORIO_LOCATION_ID = "nareth.location.observatorio_do_eixo"
+CAMARA_LOCATION_ID = "nareth.location.camara_do_arconte"
 REGION_UNLOCK = "region.nareth.available"
 EXPLORE_UNLOCK = "explore.nareth.campinas_do_meridiano"
 HUNT_UNLOCK = "hunt.manual.nareth.campinas_do_meridiano"
@@ -129,28 +150,49 @@ CODEX_INITIAL_FRAGMENT = "codex.fragment.nareth.p13.routes_initial"
 CODEX_S13_FRAGMENT = "codex.fragment.nareth.s13.references"
 P14_CODEX = "codex.history.rede_de_medicao"
 S16_CODEX = "codex.history.cartografia_do_erro"
+S17_CODEX = "codex.history.protocolos_de_referencia"
+P17_CODEX = "codex.history.custodia_das_ancoras"
+P18_CODEX = "codex.history.estabilidade_do_veu"
+S18_CODEX = "codex.route.os_caminhos_que_nao_coincidem"
+CHAMBER_UNLOCK = "region.nareth.camara_arconte.available"
+CHAMBER_ROUTE_UNLOCK = "route.nareth.observatorio_camara"
+CRIMSON_UNLOCK = "region.varzeas_carmesins.available"
 MISSION_TITLES = {
     P13_ID: P13_TITLE, S13_ID: S13_TITLE, P14_ID: P14_TITLE, S14_ID: S14_TITLE,
     P15_ID: P15_TITLE, S15_ID: S15_TITLE, P16_ID: P16_TITLE, S16_ID: S16_TITLE,
+    S17_ID: S17_TITLE, P17_ID: P17_TITLE, P18_ID: P18_TITLE, S18_ID: S18_TITLE,
 }
 MISSION_CHECKPOINTS = {
     P14_ID: "nareth.p14.canal_sem_norte", S14_ID: "nareth.s14.peso_da_distancia",
     P15_ID: "nareth.p15.distancia_errada", S15_ID: "nareth.s15.sob_o_mesmo_ceu",
     P16_ID: "nareth.p16.eixo_sob_a_terra", S16_ID: "nareth.s16.cartografia_do_erro",
+    S17_ID: "nareth.s17.o_prumo_afundado", P17_ID: "nareth.p17.medir_o_que_permanece",
+    P18_ID: "nareth.p18.arconte_invertido", S18_ID: "nareth.s18.caminhos_nao_coincidem",
 }
 MISSION_CONTENT_IDS = {
     P14_ID: "nareth_p14_escaravelho_canal", P15_ID: "nareth_p15_casco_invertido",
     P16_ID: "nareth_p16_vigia_meridiano",
+    P17_ID: "nareth_p17_custodio_invertido", P18_ID: "nareth_p18_arconte_invertido",
+    S18_ID: "nareth_s18_custodio_sem_norte",
 }
 MISSION_COMBAT = {
     P14_ID: (5, CANAIS, 23, NARETH_CHANNEL_SCARAB),
     P15_ID: (6, CAMPOS, 25, NARETH_INVERTED_HUSK),
     P16_ID: (7, OBSERVATORIO, 28, NARETH_MERIDIAN_WATCHER),
+    P17_ID: (6, OBSERVATORIO, 29, NARETH_INVERTED_CUSTODIAN),
+    P18_ID: (4, CAMARA, 30, NARETH_ARCONTE_INVERTIDO),
+    S18_ID: (10, OBSERVATORIO, 30, NARETH_CUSTODIO_SEM_NORTE),
 }
+MISSION_CAMPAIGN_BOSSES = frozenset((P18_ID, S18_ID))
 MISSION_REWARD_CHOICES = {
     "1": ("Capuz dos Marcos Longos", "Cabeça"),
     "2": ("Selo do Meridiano", "Acessório"),
     "3": ("Relicário da Distância Certa", "Artefato"),
+}
+P18_REWARD_CHOICES = {
+    "1": ("Guarda da Câmara Invertida", "Secundária"),
+    "2": ("Selo do Eixo Estável", "Acessório"),
+    "3": ("Relicário da Referência Perdida", "Artefato"),
 }
 MIDGAME_ACTIONS = {
     P14_ID: {
@@ -197,6 +239,40 @@ MIDGAME_ACTIONS = {
         "reject_old_route": (4, CANAIS, 5, "s16.nonclosing_route_rejected"),
         "record_difference": (6, OBSERVATORIO, 7, "s16.map_difference_recorded"),
         "update_codex": (8, POSTO, 9, "s16.codex_cartografia_atualizado"),
+    },
+    S17_ID: {
+        "speak_talen": (1, POSTO, 2, "s17.plumb_reading_received"),
+        "examine_references": (3, OBSERVATORIO, 3, "s17.geometric_reference_examined"),
+        "locate_submerged_entry": (4, OBSERVATORIO, 5, "s17.entry_checked"),
+        "recover_calibration_piece": (5, OBSERVATORIO, 6, "s17.calibration_piece_recovered"),
+        "update_protocols": (7, POSTO, 8, "s17.protocols_updated"),
+    },
+    P17_ID: {
+        "gather_researchers": (1, POSTO, 2, "p17.researchers_reunited"),
+        "compare_records": (2, POSTO, 3, "p17.records_compared"),
+        "record_custody": (3, POSTO, 4, "p17.anchor_custody_found"),
+        "confirm_stability_monitoring": (4, POSTO, 5, "p17.stability_monitoring_confirmed"),
+        "open_chamber": (7, OBSERVATORIO, 8, "p17.chamber_access_opened"),
+        "examine_incomplete_record": (8, CAMARA, 9, "p17.incomplete_record_examined"),
+        "prepare_arconte": (10, OBSERVATORIO, 11, "p17.climax_prepared"),
+    },
+    P18_ID: {
+        "examine_reference_lines": (2, CAMARA, 3, "p18.reference_lines_examined"),
+        "identify_archon": (3, CAMARA, 4, "p18.archon_record_identified"),
+        "examine_chamber_after_victory": (6, CAMARA, 7, "p18.chamber_examined_after_victory"),
+        "record_anchor_function": (7, CAMARA, 8, "p18.anchor_stability_recorded"),
+        "record_measurement_function": (8, CAMARA, 9, "p18.nareth_measurement_recorded"),
+        "record_logistics_direction": (9, CAMARA, 10, "p18.crimson_continuity_recorded"),
+    },
+    S18_ID: {
+        "read_cartography": (1, POSTO, 2, "s18.cartography_read"),
+        "compare_old_markers": (3, CAMPINAS, 4, "s18.old_markers_compared"),
+        "recover_route_plate": (5, CANAIS, 6, "s18.route_plate_recovered"),
+        "compare_travel_distances": (7, CAMPOS, 8, "s18.traveler_distances_compared"),
+        "follow_service_route": (9, OBSERVATORIO, 10, "s18.service_route_followed"),
+        "inspect_broken_reference": (11, OBSERVATORIO, 12, "s18.broken_reference_inspected"),
+        "trace_modern_route": (13, POSTO, 14, "s18.modern_route_traced"),
+        "update_codex": (14, POSTO, 15, "s18.codex_updated"),
     },
 }
 
@@ -267,6 +343,8 @@ class NarethMissionService:
                 return
             if character.level < 21 or not await self._p12_complete(session, character.id):
                 return
+            await self._ensure_auto_p18(session, character)
+            await self._reconcile_crimson_gate(session, character)
             if world.location == CAMPINAS:
                 await self._ensure_unlock(session, character.id, REGION_UNLOCK)
                 await self._ensure_location(session, character.id, CAMPINAS_LOCATION_ID)
@@ -448,6 +526,74 @@ class NarethMissionService:
                                 f"p16.observatory_discovered:{member.character.id}",
                                 {"location": OBSERVATORIO, "shared": len(members) > 1},
                             )
+            await self._process_climax_location(session, character, world)
+
+    async def _ensure_auto_p18(self, session, character) -> None:
+        if character.level < 30 or not await self._quest_completed(session, character.id, P17_ID):
+            return
+        quest = await self._quest(session, character.id, P18_ID)
+        if quest is None:
+            quest = Quest(
+                character_id=character.id,
+                quest_id=P18_ID,
+                title=P18_TITLE,
+                status="active",
+                step=1,
+                content_version=CONTENT_VERSION_MID,
+                state_version=0,
+                progress={"automatic_start": True},
+            )
+            session.add(quest)
+            await session.flush()
+            await self._credit(
+                session, character.id, P18_ID, "p18.started",
+                f"p18.started:{character.id}", {"automatic": True, "level": character.level},
+            )
+
+    async def _reconcile_crimson_gate(self, session, character) -> None:
+        quest = await self._quest(session, character.id, P18_ID)
+        if quest is not None and quest.status == "completed" and character.level >= 31:
+            await self._ensure_unlock(session, character.id, CRIMSON_UNLOCK)
+
+    async def _process_climax_location(self, session, character, world) -> None:
+        location_id = {
+            CAMARA: CAMARA_LOCATION_ID,
+        }.get(world.location)
+        if location_id and await session.scalar(
+            select(Unlock.id).where(
+                Unlock.character_id == character.id,
+                Unlock.unlock_id == CHAMBER_UNLOCK,
+            )
+        ):
+            await self._ensure_location(session, character.id, location_id)
+            await self._ensure_codex(session, character.id, "codex.location.camara_do_arconte")
+        transitions = {
+            (S17_ID, 2, OBSERVATORIO): 3,
+            (S17_ID, 6, POSTO): 7,
+            (P17_ID, 5, OBSERVATORIO): 6,
+            (P17_ID, 9, OBSERVATORIO): 10,
+            (P18_ID, 1, CAMARA): 2,
+            (S18_ID, 2, CAMPINAS): 3,
+            (S18_ID, 4, CANAIS): 5,
+            (S18_ID, 6, CAMPOS): 7,
+            (S18_ID, 8, OBSERVATORIO): 9,
+            (S18_ID, 12, POSTO): 13,
+        }
+        for quest_id in (S17_ID, P17_ID, P18_ID, S18_ID):
+            quest = await self._quest(session, character.id, quest_id)
+            next_step = transitions.get((quest_id, quest.step, world.location)) if quest else None
+            if next_step is None or quest.status != "active":
+                continue
+            members = await self._present(session, character.id, quest_id, quest.step, world.location)
+            for member in members:
+                member.quest.step = next_step
+                member.quest.state_version += 1
+                await self._credit(
+                    session, member.character.id, quest_id,
+                    f"{quest_id.lower()}.arrived.{world.location.lower().replace(' ', '_')}",
+                    f"{quest_id.lower()}.arrived:{world.location}:{member.character.id}",
+                    {"location": world.location, "shared": len(members) > 1},
+                )
 
     async def resume(self, actor: int, quest_id: str) -> NarethMissionView | None:
         if quest_id not in TITLES:
@@ -469,6 +615,10 @@ class NarethMissionService:
             return await self._view(session, character, quest, world, quest_id)
 
     async def resume_active(self, actor: int) -> NarethMissionView | None:
+        async with self.sessions.begin() as session:
+            character = await self._character(session, actor)
+            if character is not None and await self._world(session, character.id) is not None:
+                await self._reconcile_crimson_gate(session, character)
         async with self.sessions() as session:
             character = await self._character(session, actor)
             if character is not None:
@@ -485,15 +635,28 @@ class NarethMissionService:
                     return await self._view_for_character_activity(
                         session, character, shared_member.game_activity_id
                     )
-        for quest_id in (P16_ID, P15_ID, P14_ID, P13_ID, S16_ID, S15_ID, S14_ID, S13_ID):
+        for quest_id in (
+            P18_ID, P17_ID, S18_ID, S17_ID, P16_ID, P15_ID, P14_ID,
+            P13_ID, S16_ID, S15_ID, S14_ID, S13_ID,
+        ):
             view = await self.resume(actor, quest_id)
             if view is not None and view.status == "active":
                 return view
         return None
 
     async def board(self, actor: int) -> tuple[NarethMissionView | None, ...]:
+        async with self.sessions.begin() as session:
+            character = await self._character(session, actor)
+            if character is not None:
+                await self._reconcile_crimson_gate(session, character)
         return tuple(
-            [await self.resume(actor, quest_id) for quest_id in (P13_ID, S13_ID, P14_ID, S14_ID, P15_ID, S15_ID, P16_ID, S16_ID)]
+            [
+                await self.resume(actor, quest_id)
+                for quest_id in (
+                    P13_ID, S13_ID, P14_ID, S14_ID, P15_ID, S15_ID,
+                    P16_ID, S16_ID, S17_ID, P17_ID, P18_ID, S18_ID,
+                )
+            ]
         )
 
     async def region_access(self, actor: int) -> bool:
@@ -520,7 +683,7 @@ class NarethMissionService:
                         select(LocationDiscovery.location_id).where(
                             LocationDiscovery.character_id == character.id,
                             LocationDiscovery.location_id.in_(
-                                (CAMPINAS_LOCATION_ID, POSTO_LOCATION_ID, CANAIS_LOCATION_ID, CAMPOS_LOCATION_ID, OBSERVATORIO_LOCATION_ID)
+                                (CAMPINAS_LOCATION_ID, POSTO_LOCATION_ID, CANAIS_LOCATION_ID, CAMPOS_LOCATION_ID, OBSERVATORIO_LOCATION_ID, CAMARA_LOCATION_ID)
                             ),
                         )
                     )
@@ -534,6 +697,7 @@ class NarethMissionService:
                     (CANAIS_LOCATION_ID, CANAIS),
                     (CAMPOS_LOCATION_ID, CAMPOS),
                     (OBSERVATORIO_LOCATION_ID, OBSERVATORIO),
+                    (CAMARA_LOCATION_ID, CAMARA),
                 )
                 if location_id in location_ids
             }
@@ -769,6 +933,22 @@ class NarethMissionService:
             or await self._foreground(session, character.id) is not None
         ):
             return False
+        if quest_id == P18_ID:
+            return bool(
+                character.level >= 30
+                and await self._quest_completed(session, character.id, P17_ID)
+            )
+        if quest_id == S17_ID:
+            return bool(
+                character.level >= 28
+                and world.location == POSTO
+                and await session.scalar(
+                    select(LocationDiscovery.id).where(
+                        LocationDiscovery.character_id == character.id,
+                        LocationDiscovery.location_id == OBSERVATORIO_LOCATION_ID,
+                    )
+                )
+            )
         gates = {
             P14_ID: (23, POSTO, P13_ID, "completed"),
             S14_ID: (24, POSTO, P14_ID, "completed"),
@@ -776,12 +956,16 @@ class NarethMissionService:
             S15_ID: (25, CAMPOS, P15_ID, ("active", "completed")),
             P16_ID: (27, POSTO, P15_ID, "completed"),
             S16_ID: (27, POSTO, P16_ID, ("active", "completed")),
+            P17_ID: (29, POSTO, P16_ID, "completed"),
+            S18_ID: (30, POSTO, S16_ID, "completed"),
         }
+        if quest_id not in gates:
+            return False
         level, location, required_quest, status = gates[quest_id]
         if character.level < level or world.location != location:
             return False
         statuses = status if isinstance(status, tuple) else (status,)
-        return bool(
+        eligible = bool(
             await session.scalar(
                 select(Quest.id).where(
                     Quest.character_id == character.id,
@@ -790,6 +974,18 @@ class NarethMissionService:
                 )
             )
         )
+        if quest_id == S17_ID:
+            eligible = eligible and bool(
+                await session.scalar(
+                    select(LocationDiscovery.id).where(
+                        LocationDiscovery.character_id == character.id,
+                        LocationDiscovery.location_id == OBSERVATORIO_LOCATION_ID,
+                    )
+                )
+            )
+        if quest_id == S18_ID:
+            eligible = eligible and await self._quest_completed(session, character.id, P17_ID)
+        return eligible
 
     async def _advance_midgame(self, actor: int, quest_id: str, version: int, action: str):
         config = MIDGAME_ACTIONS[quest_id].get(action)
@@ -811,13 +1007,33 @@ class NarethMissionService:
                 or await self._foreground(session, character.id) is not None
             ):
                 return await self._view(session, character, quest, world, quest_id)
+            if quest_id == S17_ID and action == "locate_submerged_entry":
+                entry_unlocked = await session.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == character.id,
+                        Unlock.unlock_id == "dungeon.nareth.observatorio_afundado",
+                    )
+                )
+                if not entry_unlocked:
+                    return await self._view(session, character, quest, world, quest_id)
             members = await self._present(
                 session, character.id, quest_id, expected_step, expected_location
             )
             for member in members:
-                member.quest.step = next_step
-                member.quest.state_version += 1
                 progress = dict(member.quest.progress or {})
+                member_objective_id = objective_id
+                if quest_id == S17_ID and action == "examine_references":
+                    reference_count = min(
+                        int(progress.get("geometric_references_examined", 0)) + 1, 3
+                    )
+                    progress["geometric_references_examined"] = reference_count
+                    member.quest.step = 4 if reference_count == 3 else 3
+                    member_objective_id = f"s17.geometric_reference_{reference_count}"
+                elif quest_id == P18_ID and action == "examine_chamber_after_victory":
+                    member.quest.step = next_step
+                else:
+                    member.quest.step = next_step
+                member.quest.state_version += 1
                 progress[action] = True
                 member.quest.progress = progress
                 if quest_id == P14_ID and action == "receive_map":
@@ -864,13 +1080,79 @@ class NarethMissionService:
                         session, member.character.id, S16_CODEX,
                         "codex.fragment.nareth.observatory.s16_cartography",
                     )
+                elif quest_id == S17_ID and action == "update_protocols":
+                    await self._ensure_codex(session, member.character.id, S17_CODEX)
+                    await self._ensure_codex_fragment(
+                        session, member.character.id, S17_CODEX,
+                        "codex.fragment.nareth.observatory.s17_plumb_protocol",
+                    )
+                elif quest_id == P17_ID and action == "record_custody":
+                    await self._ensure_codex(session, member.character.id, P17_CODEX)
+                    await self._ensure_codex_fragment(
+                        session, member.character.id, P17_CODEX,
+                        "codex.fragment.nareth.observatory.p17_anchor_custody",
+                    )
+                elif quest_id == P17_ID and action == "open_chamber":
+                    await self._ensure_unlock(session, member.character.id, CHAMBER_UNLOCK)
+                    await self._ensure_unlock(session, member.character.id, CHAMBER_ROUTE_UNLOCK)
+                    await self._ensure_codex(
+                        session, member.character.id, "codex.location.camara_do_arconte"
+                    )
+                elif quest_id == P17_ID and action == "examine_incomplete_record":
+                    await self._ensure_codex(session, member.character.id, P18_CODEX)
+                    await self._ensure_codex_fragment(
+                        session, member.character.id, P18_CODEX,
+                        "codex.fragment.nareth.chamber.incomplete_stability_record",
+                    )
+                elif quest_id == P18_ID and action == "identify_archon":
+                    await self._ensure_codex(session, member.character.id, P18_CODEX)
+                    await self._ensure_codex_fragment(
+                        session, member.character.id, P18_CODEX,
+                        "codex.fragment.nareth.chamber.archon_identified",
+                    )
+                elif quest_id == P18_ID and action == "record_anchor_function":
+                    await self._ensure_codex(session, member.character.id, P18_CODEX)
+                    await self._ensure_codex_fragment(
+                        session, member.character.id, P18_CODEX,
+                        "codex.fragment.nareth.chamber.anchors_stabilized_veil",
+                    )
+                elif quest_id == P18_ID and action == "record_measurement_function":
+                    await self._ensure_codex_fragment(
+                        session, member.character.id, P18_CODEX,
+                        "codex.fragment.nareth.chamber.regional_measurement",
+                    )
+                elif quest_id == P18_ID and action == "record_logistics_direction":
+                    await self._ensure_codex_fragment(
+                        session, member.character.id, ROTAS_CODEX,
+                        "codex.fragment.nareth.chamber.continuity_crimson_direction",
+                    )
+                elif quest_id == S18_ID and action == "update_codex":
+                    await self._ensure_codex(session, member.character.id, S18_CODEX)
+                    await self._ensure_codex_fragment(
+                        session, member.character.id, S18_CODEX,
+                        "codex.fragment.nareth.routes.s18_modern_route",
+                    )
+                    await self._ensure_codex_fragment(
+                        session, member.character.id, ROTAS_CODEX,
+                        "codex.fragment.nareth.routes.s18_verified_points",
+                    )
+                if quest_id == P17_ID and action == "open_chamber":
+                    await self._ensure_location(session, member.character.id, CAMARA_LOCATION_ID)
                 await self._credit(
                     session,
                     member.character.id,
                     quest_id,
-                    objective_id,
-                    f"{objective_id}:{member.character.id}",
-                    {"location": expected_location, "shared": len(members) > 1},
+                    member_objective_id,
+                    f"{member_objective_id}:{member.character.id}",
+                    {
+                        "location": expected_location,
+                        "shared": len(members) > 1,
+                        **(
+                            {"ordinal": progress["geometric_references_examined"]}
+                            if quest_id == S17_ID and action == "examine_references"
+                            else {}
+                        ),
+                    },
                 )
                 if quest_id == P14_ID and action == "deliver_plate":
                     await self._complete_midgame(session, member.character, member.quest)
@@ -878,9 +1160,21 @@ class NarethMissionService:
                     await self._complete_midgame(session, member.character, member.quest)
                 elif quest_id == S16_ID and action == "update_codex":
                     await self._complete_midgame(session, member.character, member.quest)
+                elif quest_id == S17_ID and action == "update_protocols":
+                    await self._complete_midgame(session, member.character, member.quest)
+                elif quest_id == P17_ID and action == "prepare_arconte":
+                    await self._complete_midgame(session, member.character, member.quest)
+                elif quest_id == S18_ID and action == "update_codex":
+                    await self._complete_midgame(session, member.character, member.quest)
             return await self._view(session, character, quest, world, quest_id)
 
     async def _complete_midgame(self, session, character, quest):
+        if quest.quest_id in {P15_ID, P18_ID}:
+            quest.status = "active"
+            quest.step = 10
+            quest.progress = {**(quest.progress or {}), "awaiting_reward_choice": True}
+            quest.state_version += 1
+            return
         quest.status = "completed"
         quest.step = {
             P14_ID: 9,
@@ -889,6 +1183,10 @@ class NarethMissionService:
             P16_ID: 9,
             S15_ID: 7,
             S16_ID: 8,
+            S17_ID: 7,
+            P17_ID: 11,
+            P18_ID: 10,
+            S18_ID: 14,
         }[quest.quest_id]
         quest.progress = {**(quest.progress or {}), "completed": True}
         quest.state_version += 1
@@ -898,20 +1196,27 @@ class NarethMissionService:
             S15_ID: (S15_REWARD_SOURCE, 9920, 240, (("material.nareth.couro_de_horizonte", 2),)),
             P16_ID: (P16_REWARD_SOURCE, 27800, 640, (("material.nareth.bronze_de_marco", 2), ("material.nareth.po_de_eixo", 2))),
             S16_ID: (S16_REWARD_SOURCE, 19460, 380, (("material.nareth.bronze_de_marco", 2), ("material.nareth.couro_de_horizonte", 1), ("material.nareth.po_de_eixo", 1))),
+            S17_ID: (S17_REWARD_SOURCE, 20545, 390, (("material.nareth.bronze_de_marco", 1), ("material.nareth.erva_de_vento", 1), ("material.nareth.po_de_eixo", 2))),
+            P17_ID: (P17_REWARD_SOURCE, 30950, 680, (("material.nareth.bronze_de_marco", 3), ("material.nareth.po_de_eixo", 1))),
+            S18_ID: (S18_REWARD_SOURCE, 32600, 690, (("material.nareth.bronze_de_marco", 2), ("material.nareth.couro_de_horizonte", 2), ("material.nareth.erva_de_vento", 2), ("material.nareth.po_de_eixo", 2))),
         }
-        if quest.quest_id == P15_ID:
-            quest.status = "active"
-            quest.step = 10
-            quest.progress = {**(quest.progress or {}), "awaiting_reward_choice": True}
-            quest.state_version += 1
-            return
         source, xp, crowns, materials = rewards[quest.quest_id]
         await self._reward(session, character, quest, source, xp, crowns, materials)
         if quest.quest_id == P14_ID:
             await self._ensure_unlock(session, character.id, HUNT_UNLOCK.replace("campinas_do_meridiano", "canais_secos"))
         elif quest.quest_id == P16_ID:
             await self._ensure_unlock(session, character.id, "hunt.manual.nareth.observatorio_do_eixo")
+        elif quest.quest_id == P17_ID:
+            await self._ensure_unlock(session, character.id, CHAMBER_UNLOCK)
+            await self._ensure_location(session, character.id, OBSERVATORIO_LOCATION_ID)
+        elif quest.quest_id == S18_ID:
+            await self._ensure_codex(session, character.id, ROTAS_CODEX)
         await consolidate_character_level(session, character)
+        if quest.quest_id == P17_ID:
+            await self._ensure_auto_p18(session, character)
+        from asterion.application.nareth_feats import reconcile_nareth_feats
+
+        await reconcile_nareth_feats(session, character)
 
     async def start_solo_combat(
         self, actor: int, quest_id: str, version: int
@@ -936,16 +1241,29 @@ class NarethMissionService:
             ):
                 return await self._view(session, character, quest, world, quest_id)
             content_id = MISSION_CONTENT_IDS[quest_id]
-            activity = await materialize(
-                session,
-                character,
-                content_id,
-                creature,
-                level,
-                flavor=self._combat_flavor(quest_id),
-                opening_log=self._combat_flavor(quest_id),
-            )
-            opening_combat, _, _ = await current_combat(session, activity)
+            if quest_id in MISSION_CAMPAIGN_BOSSES:
+                opening_combat = await create_campaign_boss_profile(
+                    session, (character,), creature, level,
+                    flavor=self._combat_flavor(quest_id),
+                    opening_log=self._combat_flavor(quest_id),
+                )
+                opening_combat = configure_nareth_campaign_boss(
+                    opening_combat, creature.creature_id, shared=False
+                )
+                activity, _, _ = await CombatRepository(session).create(
+                    character, content_id, opening_combat
+                )
+            else:
+                activity = await materialize(
+                    session,
+                    character,
+                    content_id,
+                    creature,
+                    level,
+                    flavor=self._combat_flavor(quest_id),
+                    opening_log=self._combat_flavor(quest_id),
+                )
+                opening_combat, _, _ = await current_combat(session, activity)
             await self.road._bestiary(
                 session,
                 character.id,
@@ -1081,10 +1399,14 @@ class NarethMissionService:
             )
             if updated is None or updated.version == version:
                 return current
+            if quest_id in MISSION_CAMPAIGN_BOSSES:
+                await self._record_nareth_boss_evidence(
+                    session, character.id, MISSION_COMBAT[quest_id][3].creature_id, updated
+                )
             if updated.result == "victory":
                 activity.status = "completed"
                 await normalize_character_hp(session, character)
-                quest.step += 1
+                quest.step += 2 if quest_id == P18_ID else 1
                 quest.progress = {
                     **(quest.progress or {}),
                     "activity_id": None,
@@ -1098,6 +1420,8 @@ class NarethMissionService:
                     victory=True,
                     observation_category=MISSION_COMBAT[quest_id][3].category,
                 )
+                if quest_id == P18_ID:
+                    await self._grant_arconte_core(session, character)
                 await record_campaign_objective_credit(
                     session,
                     character_id=character.id,
@@ -1251,6 +1575,10 @@ class NarethMissionService:
             for character_id, participant in locked.characters.items():
                 roster_member = member_by_character[character_id]
                 quest = quests.get(character_id)
+                if quest_id in MISSION_CAMPAIGN_BOSSES:
+                    await self._record_nareth_boss_evidence(
+                        session, character_id, creature.creature_id, updated
+                    )
                 if updated.result == "victory":
                     await normalize_character_hp(session, participant)
                     await self.road._bestiary(
@@ -1260,8 +1588,10 @@ class NarethMissionService:
                         victory=True,
                         observation_category=creature.category,
                     )
+                    if quest_id == P18_ID and roster_member.role == "eligible":
+                        await self._grant_arconte_core(session, participant)
                     if roster_member.role == "eligible" and quest is not None:
-                        quest.step += 1
+                        quest.step += 2 if quest_id == P18_ID else 1
                         quest.state_version += 1
                         quest.progress = {
                             **(quest.progress or {}),
@@ -1386,21 +1716,29 @@ class NarethMissionService:
             )
         lead = characters[0]
         flavor = self._combat_flavor(quest_id)
-        combat = create_creature_party_combat(
-            uuid4(),
-            lead.name,
-            lead.character_class,
-            lead.race,
-            lead.hp,
-            (CreatureCombatantSpec(creature, level, "enemy"),),
-            player_level=lead.level,
-            equipment_configuration=party[0].equipment_configuration,
-            ruleset_version=RULESET,
-            flavor=flavor,
-            opening_log=flavor,
-            active_art_ids=party[0].active_art_ids,
-            party=tuple(party),
-        )
+        if quest_id in MISSION_CAMPAIGN_BOSSES:
+            combat = await create_campaign_boss_profile(
+                session, characters, creature, level, flavor=flavor, opening_log=flavor
+            )
+            combat = configure_nareth_campaign_boss(
+                combat, creature.creature_id, shared=True
+            )
+        else:
+            combat = create_creature_party_combat(
+                uuid4(),
+                lead.name,
+                lead.character_class,
+                lead.race,
+                lead.hp,
+                (CreatureCombatantSpec(creature, level, "enemy"),),
+                player_level=lead.level,
+                equipment_configuration=party[0].equipment_configuration,
+                ruleset_version=RULESET,
+                flavor=flavor,
+                opening_log=flavor,
+                active_art_ids=party[0].active_art_ids,
+                party=tuple(party),
+            )
         encounter = await create_campaign_encounter(
             session,
             group=group,
@@ -1411,6 +1749,7 @@ class NarethMissionService:
             combat=combat,
             ruleset_version=RULESET,
             checkpoint=MISSION_CHECKPOINTS[quest_id],
+            campaign_boss=quest_id in MISSION_CAMPAIGN_BOSSES,
         )
         for member in roster:
             await self.road._bestiary(
@@ -1528,44 +1867,76 @@ class NarethMissionService:
             P16_ID: "Um Vigia do Meridiano protege o Observatório do Eixo.",
         }.get(quest_id, "Um encontro roteirizado bloqueia o caminho.")
 
-    async def choose_midgame_reward(self, actor: int, version: int, choice: str):
-        if choice not in MISSION_REWARD_CHOICES:
-            return await self.resume(actor, P15_ID)
+    async def choose_midgame_reward(
+        self, actor: int, version: int, choice: str, quest_id: str = P15_ID
+    ):
+        choices = (
+            MISSION_REWARD_CHOICES if quest_id == P15_ID
+            else P18_REWARD_CHOICES if quest_id == P18_ID
+            else {}
+        )
+        if choice not in choices:
+            return await self.resume(actor, quest_id)
         async with self.sessions.begin() as session:
             character, _ids = await self._locked_state(session, actor)
             if character is None:
                 return None
-            quest = await self._quest(session, character.id, P15_ID)
+            quest = await self._quest(session, character.id, quest_id)
             world = await self._world(session, character.id)
+            expected_location = POSTO if quest_id == P15_ID else CAMARA
             if (
                 world is None or not self._valid_midgame(quest, version, 10)
-                or world.region != REGION or world.location != POSTO
+                or world.region != REGION or world.location != expected_location
                 or await self._foreground(session, character.id) is not None
             ):
-                return await self._view(session, character, quest, world, P15_ID)
+                return await self._view(session, character, quest, world, quest_id)
+            source_id = P15_REWARD_SOURCE if quest_id == P15_ID else P18_REWARD_SOURCE
             existing = await session.scalar(
                 select(RewardEvent).where(
                     RewardEvent.character_id == character.id,
-                    RewardEvent.source_id == P15_REWARD_SOURCE,
+                    RewardEvent.source_id == source_id,
                 ).with_for_update()
             )
+            selected = choice
             if existing is None:
-                name, slot = MISSION_REWARD_CHOICES[choice]
+                name, slot = choices[choice]
+                xp, crowns = (24800, 480) if quest_id == P15_ID else (58680, 1100)
+                rarity, item_level = ("Raro", 25) if quest_id == P15_ID else ("Épico", 30)
                 payload = materialize_equipment(
-                    f"{P15_REWARD_SOURCE}:{character.id}:{choice}",
-                    "Raro", 25, forced_name=name, forced_slot=slot, bound=True,
+                    f"{source_id}:{character.id}:{choice}", rarity, item_level,
+                    forced_name=name, forced_slot=slot, bound=True,
                 )
-                event = RewardEvent(character_id=character.id, source_id=P15_REWARD_SOURCE)
+                event = RewardEvent(character_id=character.id, source_id=source_id)
                 session.add(event)
                 await session.flush()
-                character.xp += 24800
-                character.crowns += 480
-                session.add_all((
-                    RewardComponent(reward_event_id=event.id, kind="xp", quantity=24800),
-                    RewardComponent(reward_event_id=event.id, kind="crowns", quantity=480),
-                    RewardComponent(reward_event_id=event.id, kind="equipment", quantity=1, payload=payload | {"choice": choice}),
-                ))
-                source_key = f"{P15_REWARD_SOURCE}:equipment:{choice}"
+                character.xp += xp
+                character.crowns += crowns
+                components = [
+                    RewardComponent(reward_event_id=event.id, kind="xp", quantity=xp),
+                    RewardComponent(reward_event_id=event.id, kind="crowns", quantity=crowns),
+                    RewardComponent(
+                        reward_event_id=event.id, kind="equipment", quantity=1,
+                        payload=payload | {"choice": choice},
+                    ),
+                ]
+                if quest_id == P18_ID:
+                    for material_id, quantity in (
+                        ("material.nareth.bronze_de_marco", 4),
+                        ("material.nareth.po_de_eixo", 4),
+                    ):
+                        components.append(
+                            RewardComponent(
+                                reward_event_id=event.id, kind="material",
+                                item_id=material_id, quantity=quantity,
+                                payload={"material_id": material_id, "bound": True},
+                            )
+                        )
+                        await self.road.deliver_material(
+                            session, character, material_id, quantity,
+                            f"{source_id}:material:{material_id}",
+                        )
+                session.add_all(components)
+                source_key = f"{source_id}:equipment:{choice}"
                 if await self.road._inventory_slots(session, character.id) < 60:
                     from asterion.application.equipment import equipment_instance_payload
 
@@ -1578,13 +1949,100 @@ class NarethMissionService:
                     ))
                 else:
                     await self.road._pending(session, character.id, source_key, "equipment", payload)
+            else:
+                saved = await session.scalar(
+                    select(RewardComponent).where(
+                        RewardComponent.reward_event_id == existing.id,
+                        RewardComponent.kind == "equipment",
+                    )
+                )
+                if saved is not None and isinstance(saved.payload, dict):
+                    selected = str(saved.payload.get("choice", choice))
             quest.status = "completed"
             quest.step = 10
-            quest.progress = {**(quest.progress or {}), "completed": True, "reward_choice": choice}
+            quest.progress = {
+                **(quest.progress or {}), "completed": True, "reward_choice": selected,
+            }
             quest.state_version += 1
-            await self._ensure_unlock(session, character.id, "hunt.manual.nareth.campos_invertidos")
+            if quest_id == P15_ID:
+                await self._ensure_unlock(session, character.id, "hunt.manual.nareth.campos_invertidos")
+            else:
+                await self._ensure_unlock(
+                    session, character.id, "recipe.nareth.arconte.calibracao"
+                )
+                entry = await session.scalar(
+                    select(BestiaryEntry).where(
+                        BestiaryEntry.character_id == character.id,
+                        BestiaryEntry.creature_id == "arconte_invertido",
+                    ).with_for_update()
+                )
+                if entry is not None:
+                    await self.road.bestiary.add_evidence(
+                        session, entry, character.id, "arconte_invertido",
+                        "p18_completed", "mission", 5,
+                    )
+                    await self.road.bestiary.refresh_boss_mastery(
+                        session, character.id, "arconte_invertido"
+                    )
             await consolidate_character_level(session, character)
-            return await self._view(session, character, quest, world, P15_ID)
+            await self._reconcile_crimson_gate(session, character)
+            from asterion.application.nareth_feats import reconcile_nareth_feats
+
+            await reconcile_nareth_feats(session, character)
+            return await self._view(session, character, quest, world, quest_id)
+
+    async def _grant_arconte_core(self, session, character) -> None:
+        source_id = "p18.arconte.first_victory.core"
+        existing = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == source_id,
+            ).with_for_update()
+        )
+        if existing is not None:
+            return
+        material_id = "material.nareth.nucleo_arconte_invertido"
+        event = RewardEvent(character_id=character.id, source_id=source_id)
+        session.add(event)
+        await session.flush()
+        session.add(
+            RewardComponent(
+                reward_event_id=event.id,
+                kind="material",
+                item_id=material_id,
+                quantity=1,
+                payload={"material_id": material_id, "bound": True},
+            )
+        )
+        await self.road.deliver_material(
+            session, character, material_id, 1,
+            f"{source_id}:material:{material_id}", bound=True,
+        )
+
+    async def _record_nareth_boss_evidence(
+        self, session, character_id, creature_id: str, combat
+    ) -> None:
+        await self.road.bestiary.record_combat_events(
+            session, character_id, creature_id, None, combat
+        )
+        entry = await session.scalar(
+            select(BestiaryEntry).where(
+                BestiaryEntry.character_id == character_id,
+                BestiaryEntry.creature_id == creature_id,
+            ).with_for_update()
+        )
+        if entry is None:
+            return
+        evidence_categories = {"phase": "phase", "mechanic": "mechanic", "action": "behavior"}
+        for evidence_id in nareth_boss_phase_evidence(combat):
+            prefix = evidence_id.split(":", 1)[0]
+            await self.road.bestiary.add_evidence(
+                session, entry, character_id, creature_id, evidence_id,
+                evidence_categories[prefix], 5 if prefix == "mechanic" else 4,
+            )
+        await self.road.bestiary.refresh_boss_mastery(
+            session, character_id, creature_id
+        )
 
     async def _complete_p13(self, session, character, quest):
         quest.status = "completed"
@@ -1742,6 +2200,15 @@ class NarethMissionService:
         quest_id = quest.quest_id if quest is not None else requested_quest_id
         location = world.location if world is not None else ""
         progress = dict(quest.progress or {}) if quest else {}
+        if quest_id == S17_ID and character is not None:
+            progress["submerged_entry_discovered"] = bool(
+                await session.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == character.id,
+                        Unlock.unlock_id == "dungeon.nareth.observatorio_afundado",
+                    )
+                )
+            )
         activity = combat = encounter = None
         actor_key = None
         group_size = 1
@@ -1794,7 +2261,7 @@ class NarethMissionService:
             kind = "combat"
         elif quest.status == "completed":
             kind = "completed"
-        elif quest_id == P15_ID and quest.step == 10:
+        elif quest_id in {P15_ID, P18_ID} and quest.step == 10:
             kind = "choice"
         else:
             kinds = {
@@ -1804,6 +2271,10 @@ class NarethMissionService:
                 S15_ID: {1: "receive_last_point", 2: "follow_tracks", 3: "find_cargo", 4: "find_travelers", 5: "confirm_no_displacement", 6: "mark_return_route", 7: "return_posto", 8: "report"},
                 P16_ID: {1: "receive_translation", 2: "travel_observatorio", 3: "discover_observatorio", 4: "examine_alignment", 5: "examine_arm", 6: "record_terms", 7: "combat_start", 8: "read_analog_panel", 9: "return_posto"},
                 S16_ID: {1: "receive_checkpoints", 2: "visit_campos", 3: "visit_canais", 4: "reject_old_route", 5: "visit_observatorio", 6: "record_difference", 7: "return_posto", 8: "update_codex"},
+                S17_ID: {1: "speak_talen", 2: "travel_observatorio", 3: "examine_references", 4: "locate_submerged_entry", 5: "recover_calibration_piece", 6: "return_posto", 7: "update_protocols"},
+                P17_ID: {1: "gather_researchers", 2: "compare_records", 3: "record_custody", 4: "confirm_stability_monitoring", 5: "travel_observatorio", 6: "combat_start", 7: "open_chamber", 8: "travel_chamber", 9: "examine_incomplete_record", 10: "return_observatorio", 11: "prepare_arconte"},
+                P18_ID: {1: "enter_chamber", 2: "examine_reference_lines", 3: "identify_archon", 4: "combat_start", 5: "defeat_archon", 6: "examine_chamber_after_victory", 7: "record_anchor_function", 8: "record_measurement_function", 9: "record_logistics_direction", 10: "choice"},
+                S18_ID: {1: "read_cartography", 2: "visit_campinas", 3: "compare_old_markers", 4: "visit_canais", 5: "recover_route_plate", 6: "visit_campos", 7: "compare_travel_distances", 8: "visit_observatorio", 9: "follow_service_route", 10: "combat_start", 11: "inspect_broken_reference", 12: "return_posto", 13: "trace_modern_route", 14: "update_codex"},
             }
             kind = kinds[quest_id].get(quest.step, "active")
         consumables = ((), (), 0)
@@ -1956,7 +2427,10 @@ class NarethMissionService:
         )
         if found is None:
             session.add(model(character_id=character_id, **{key: value}))
-            if model in {LocationDiscovery, Brazier}:
+            nareth_dungeon_unlock = (
+                model is Unlock and isinstance(value, str) and value.startswith("dungeon.nareth.")
+            )
+            if model in {LocationDiscovery, Brazier} or nareth_dungeon_unlock:
                 from asterion.application.nareth_feats import (
                     NARETH_BRAZIERS,
                     NARETH_LOCATIONS,
@@ -1967,6 +2441,8 @@ class NarethMissionService:
                     value in NARETH_LOCATIONS
                     if model is LocationDiscovery
                     else value in NARETH_BRAZIERS
+                    if model is Brazier
+                    else nareth_dungeon_unlock
                 )
                 if nareth_source:
                     await reconcile_nareth_feats_for_character(session, character_id)

@@ -22,6 +22,7 @@ from asterion.application.p6 import P6Service
 from asterion.application.prologue import PrologueService
 from asterion.application.road import (
     BOSQUE,
+    NARETH_CAMARA,
     NARETH_CAMPINAS,
     NARETH_CAMPOS,
     NARETH_CANAIS,
@@ -1079,6 +1080,7 @@ def world_router(
             "road:route:nareth_canais": NARETH_CANAIS,
             "road:route:nareth_campos": NARETH_CAMPOS,
             "road:route:nareth_observatorio": NARETH_OBSERVATORIO,
+            "road:route:nareth_camara": NARETH_CAMARA,
         }.get(route_key)
         route_attempt_id = exploration_callback_attempt_id(query)
         route_has_attempt_id = len(route_parts) == 4
@@ -1186,6 +1188,7 @@ def world_router(
                 NARETH_CANAIS,
                 NARETH_CAMPOS,
                 NARETH_OBSERVATORIO,
+                NARETH_CAMARA,
             }:
                 await nareth_missions.on_location(query.from_user.id)
                 view = await road.resume(query.from_user.id) or view
@@ -2159,6 +2162,7 @@ def world_router(
             "nareth_campinas": NARETH_CAMPINAS, "nareth_posto": NARETH_POSTO,
             "nareth_canais": NARETH_CANAIS, "nareth_campos": NARETH_CAMPOS,
             "nareth_observatorio": NARETH_OBSERVATORIO,
+            "nareth_camara": NARETH_CAMARA,
         }
         name = names.get(key)
         if name is None:
@@ -2175,6 +2179,7 @@ def world_router(
             "nareth_campinas": "🌾", "nareth_posto": "🏘️",
             "nareth_canais": "〰️", "nareth_campos": "🌾",
             "nareth_observatorio": "🧭",
+            "nareth_camara": "🏛️",
         }[key]
         level_band = {
             "road": "Nv. 1–10",
@@ -2192,6 +2197,7 @@ def world_router(
             "nareth_canais": "Nv. 23–26",
             "nareth_campos": "Nv. 25–28",
             "nareth_observatorio": "Nv. 27–30",
+            "nareth_camara": "Local de clímax",
         }[key]
         region = (
             "Vales dos Enforcados"
@@ -2214,6 +2220,8 @@ def world_router(
             lines.extend(["", f"🔥 {known_brazier} · Descoberto" if known_brazier else "🔥 Braseiro · Não descoberto"])
         elif key == "refuge":
             lines.extend(["", "🔥 Braseiro do Refúgio · Descoberto"])
+        elif key == "nareth_camara":
+            lines.extend(["", "Local de clímax · Acesso aberto pela Campanha."])
 
         fast_travel_allowed = (
             (p2_view is None or p2_view.status != "active")
@@ -2239,6 +2247,7 @@ def world_router(
                     NARETH_CANAIS: "road:route:nareth_canais",
                     NARETH_CAMPOS: "road:route:nareth_campos",
                     NARETH_OBSERVATORIO: "road:route:nareth_observatorio",
+                    NARETH_CAMARA: "road:route:nareth_camara",
                 }
                 for destination in road_view.route_destinations:
                     if destination == current:
@@ -2295,6 +2304,10 @@ def world_router(
                         label = "Seguir para o Observatório do Eixo"
                     elif current == NARETH_OBSERVATORIO and destination == NARETH_CAMPOS:
                         label = "Retornar aos Campos Invertidos"
+                    elif current == NARETH_OBSERVATORIO and destination == NARETH_CAMARA:
+                        label = "Entrar na Câmara do Arconte"
+                    elif current == NARETH_CAMARA and destination == NARETH_OBSERVATORIO:
+                        label = "Retornar ao Observatório do Eixo"
                     else:
                         continue
                     keyboard.append([
@@ -2317,6 +2330,7 @@ def world_router(
                     NARETH_CANAIS: "road:route:nareth_canais",
                     NARETH_CAMPOS: "road:route:nareth_campos",
                     NARETH_OBSERVATORIO: "road:route:nareth_observatorio",
+                    NARETH_CAMARA: "road:route:nareth_camara",
                 }.get(name)
             if road_view is not None and route_callback and name in road_view.route_destinations:
                 route_label = {
@@ -2335,6 +2349,7 @@ def world_router(
                     NARETH_CANAIS: "Seguir para os Canais Secos",
                     NARETH_CAMPOS: "Seguir para os Campos Invertidos",
                     NARETH_OBSERVATORIO: "Seguir para o Observatório do Eixo",
+                    NARETH_CAMARA: "Entrar na Câmara do Arconte",
                 }[name]
                 lines.extend(["", "🧭 Rota terrestre · Disponível"])
                 keyboard.append([InlineKeyboardButton(text=route_label, callback_data=route_callback)])
@@ -2567,6 +2582,7 @@ def world_router(
             (NARETH_CANAIS, "nareth_canais"),
             (NARETH_CAMPOS, "nareth_campos"),
             (NARETH_OBSERVATORIO, "nareth_observatorio"),
+            (NARETH_CAMARA, "nareth_camara"),
         )
         visible = [(name, key) for name, key in ordered if name in known]
         lines = ["🌾 Planícies de Nareth · Nv. 21–30", ""]
@@ -2584,6 +2600,7 @@ def world_router(
                 NARETH_CANAIS: "〰️",
                 NARETH_CAMPOS: "🌾",
                 NARETH_OBSERVATORIO: "🧭",
+                NARETH_CAMARA: "🏛️",
             }[name]
             lines.append(f"{index} {icon} {name} · {state}")
             buttons.append(
@@ -2654,6 +2671,7 @@ def world_router(
             "nareth_canais": NARETH_CANAIS,
             "nareth_campos": NARETH_CAMPOS,
             "nareth_observatorio": NARETH_OBSERVATORIO,
+            "nareth_camara": NARETH_CAMARA,
         }
         destination = names.get(key)
         if destination is None:

@@ -80,6 +80,13 @@ RUNE_FAMILIES = {
     "Seiva": ("HP", "Runa da Seiva"),
     "Névoa": ("Esquiva", "Runa da Névoa"),
     "Raízes": ("Bloqueio", "Runa das Raízes"),
+    "Meridiano": ("ATQ", "Runa do Meridiano"),
+    "Prumo": ("DEF", "Runa do Prumo"),
+    "Horizonte": ("AGI", "Runa do Horizonte"),
+    "Marco": ("PER", "Runa do Marco"),
+    "Distância": ("CRIT", "Runa da Distância"),
+    "Abrigo": ("HP", "Runa do Abrigo"),
+    "Referência": ("Bloqueio", "Runa da Referência"),
 }
 ENCHANTMENT_FAMILIES = {
     "Fio Cinéreo": "ATQ",
@@ -100,6 +107,15 @@ ENCHANTMENT_FAMILIES = {
     "Véu da Mata": "Esquiva",
     "Selo das Raízes": "Bloqueio",
     "Seiva da Matriarca": "HP",
+    "Fio do Meridiano": "ATQ",
+    "Pele do Prumo": "DEF",
+    "Passo do Horizonte": "AGI",
+    "Marca de Referência": "PER",
+    "Eco da Distância": "CRIT",
+    "Sopro do Posto": "HP",
+    "Véu do Desvio": "Esquiva",
+    "Selo do Eixo": "Bloqueio",
+    "Calibração do Arconte": "PER",
 }
 RUNE_GRADE_VI = {
     "HP": (D("0.60"), D("0.80"), D("1.00")),

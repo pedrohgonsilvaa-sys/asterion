@@ -44,6 +44,26 @@ VDE_DISTINCTIVE_ELITE_MASTERY = {
     },
 }
 
+NARETH_DISTINCTIVE_BOSS_MASTERY = {
+    "custodio_sem_norte": {
+        "first_victory",
+        "action:rota_negada",
+        "mechanic:queda_sem_norte_telegraph",
+        "mechanic:queda_sem_norte_resolved",
+    },
+    "arconte_invertido": {
+        "first_victory",
+        "p18_completed",
+        "phase:corrigir_o_que_permanece",
+        "phase:a_medida_impossivel",
+        "mechanic:eixo_carga_observado",
+        "mechanic:eixo_guarda_observado",
+        "mechanic:eixo_ritmo_observado",
+        "action:protocolo_continuidade",
+        "action:retificacao_final",
+    },
+}
+
 
 class BestiaryRecorder:
     """Record shared first-contact, evidence, victory, and stage semantics."""
@@ -225,6 +245,17 @@ class BestiaryRecorder:
                     "elite_victory",
                     6,
                 )
+        elif creature_id in NARETH_DISTINCTIVE_BOSS_MASTERY:
+            required = NARETH_DISTINCTIVE_BOSS_MASTERY[creature_id]
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
         elif creature_id == "vigia_partido" or observation_category == "boss":
             required = {
                 "first_victory",
@@ -299,6 +330,14 @@ class BestiaryRecorder:
                         creature_id,
                         reference_level=20,
                         configured_xp=1086,
+                    )
+                elif creature_id == "arconte_invertido":
+                    await self._grant_regional_victory_xp(
+                        session,
+                        character_id,
+                        creature_id,
+                        reference_level=30,
+                        configured_xp=1956,
                     )
             else:
                 entry.bkp += _repeat_bkp(
@@ -489,6 +528,14 @@ class BestiaryRecorder:
             from asterion.application.vde_feats import reconcile_vde_feats_for_character
 
             await reconcile_vde_feats_for_character(session, character_id)
+        if (
+            (previous_stage is not None and previous_stage != entry.stage)
+            or victory
+            or any(evidence.startswith("variant:") for evidence in new_evidence_ids)
+        ):
+            from asterion.application.nareth_feats import reconcile_nareth_feats_for_character
+
+            await reconcile_nareth_feats_for_character(session, character_id)
         if (previous_stage is not None and previous_stage != entry.stage) or (
             victory and new_evidence_ids
         ):
@@ -620,6 +667,9 @@ class BestiaryRecorder:
             ).all()
         )
         required = (
+            NARETH_DISTINCTIVE_BOSS_MASTERY[creature_id]
+            if creature_id in NARETH_DISTINCTIVE_BOSS_MASTERY
+            else
             {
                 "first_victory",
                 "p12_completed",
