@@ -17,6 +17,12 @@ class CosmeticDefinition:
 
 COSMETICS = (
     CosmeticDefinition(
+        "cosmetic.title.nareth.andarilho_de_nareth",
+        "title",
+        "Andarilho de Nareth",
+        "feat.nareth.andarilho_de_nareth",
+    ),
+    CosmeticDefinition(
         "cosmetic.title.tdo.andarilho_das_cinzas",
         "title",
         "Andarilho das Cinzas",

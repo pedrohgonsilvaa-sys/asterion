@@ -456,7 +456,15 @@ async def test_nareth_hunt_and_round_unlock_after_p13_and_desbravar_is_unchanged
         "galgo_meridiano",
         "abutre_marco",
         "errante_valas",
+        "escaravelho_canal",
+        "cervo_horizonte",
+        "serpe_campinas",
+        "casco_invertido",
+        "mariposa_eixo",
+        "vigia_meridiano",
         "alfa_horizonte",
+        "serpe_eixo",
+        "custodio_invertido",
     }
 
     before_p13 = await road.resume(actor)
@@ -597,7 +605,9 @@ async def test_nareth_hunt_and_round_unlock_after_p13_and_desbravar_is_unchanged
             for ordinal in range(len(manual_materials))
         ]
         actual_manual = [row.item_id for row in manual_materials]
-        assert actual_manual == expected_manual, {
+        # RewardComponent has random UUID ids, so ordering by that key does
+        # not preserve the stable material.basic.<ordinal> draw order.
+        assert sorted(actual_manual) == sorted(expected_manual), {
             "seed": context.seed,
             "actual": actual_manual,
             "expected": expected_manual,
