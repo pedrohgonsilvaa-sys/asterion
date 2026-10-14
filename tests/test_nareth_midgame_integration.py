@@ -144,6 +144,92 @@ async def _complete_p15_for_test(road, missions, actor, monkeypatch):
     return p15
 
 
+async def _exercise_nareth_local_activities(
+    road, actor, monkeypatch, creature_id: str, exploration_result_id: str
+):
+    from dataclasses import replace
+
+    import asterion.application.road as road_module
+    import asterion.application.round as round_module
+    from tests.helpers.pvpve import start_manual_hunt_after_no_match
+
+    local = await road.resume(actor)
+    assert local is not None and local.hunt_enabled and local.explore_enabled
+    rounds = RoundService(road.sessions, "ocaso")
+    locked = await rounds.prepare_round(actor, 5)
+    assert locked is not None and locked.familiar is False
+
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *_args, **_kwargs: (
+            "great_discovery",
+            exploration_result_id,
+            "A descoberta do Braseiro foi registrada.",
+        ),
+    )
+    exploration = await road.explore(actor)
+    assert exploration is not None and exploration.kind == "exploration"
+    await road.acknowledge_result(actor, exploration.attempt_id)
+
+    original_road_create = road_module.create_road_combat
+    original_round_create = round_module.create_road_combat
+
+    def safe_combat(create, *args, **kwargs):
+        combat = create(*args, **kwargs)
+        enemy = combat.fighters["enemy"]
+        enemy.stats = replace(enemy.stats, attack=1)
+        return combat
+
+    monkeypatch.setattr(
+        road_module,
+        "create_road_combat",
+        lambda *args, **kwargs: safe_combat(original_road_create, *args, **kwargs),
+    )
+    monkeypatch.setattr(
+        round_module,
+        "create_road_combat",
+        lambda *args, **kwargs: safe_combat(original_round_create, *args, **kwargs),
+    )
+    monkeypatch.setattr(
+        road_module, "select_creature", lambda *_args, **_kwargs: creature_for(creature_id)
+    )
+    monkeypatch.setattr(
+        round_module, "select_creature", lambda *_args, **_kwargs: creature_for(creature_id)
+    )
+    hunt = await start_manual_hunt_after_no_match(road, actor, monkeypatch)
+    assert hunt is not None and hunt.kind == "combat" and hunt.activity_id is not None
+    for _ in range(100):
+        if hunt.kind != "combat":
+            break
+        action = "art" if "art" in allowed_actions(hunt.combat) else "attack"
+        hunt = await road.action(actor, hunt.activity_id, hunt.combat.version, action)
+    assert hunt is not None and hunt.kind == "hunt_victory"
+    await road.acknowledge_result(actor)
+    ready = await rounds.prepare_round(actor, 5)
+    assert ready is not None and ready.kind == "round_prepare"
+
+    async def no_round_match(*_args, **_kwargs):
+        return False
+
+    rounds.pvpve.queue_round_hunt = no_round_match
+    started = await rounds.start_round(actor, ready.round_id, ready.state_version)
+    assert started is not None and started.kind == "round_active"
+    async with road.sessions.begin() as session:
+        state = await session.get(HuntRound, started.round_id)
+        assert state is not None
+        state.next_resolution_at = datetime.now(UTC) - timedelta(seconds=1)
+    await rounds.advance_due_rounds()
+    async with road.sessions() as session:
+        state = await session.get(HuntRound, started.round_id)
+        encounter = await session.scalar(
+            select(HuntRoundEncounter).where(HuntRoundEncounter.round_id == started.round_id)
+        )
+        assert state is not None and state.completed_encounters == 1
+        assert encounter is not None and encounter.status == "completed"
+        assert encounter.creature_id == creature_id
+
+
 @pytest.mark.asyncio
 async def test_nareth_p14_and_s14_public_flows_settle_once(database, monkeypatch):
     actor = 991401
@@ -903,6 +989,17 @@ async def test_nareth_p15_and_s15_public_flows_settle_choice_and_rewards_once(
             )
         ) == 1
 
+    assert await road.travel_route(actor, CANAIS) is not None
+    assert await road.travel_route(actor, CAMPOS) is not None
+    await missions.on_location(actor)
+    await _exercise_nareth_local_activities(
+        road,
+        actor,
+        monkeypatch,
+        "escaravelho_canal",
+        "explore.nareth.campos.braseiro_linha_quebrada",
+    )
+
 
 def test_nareth_observatorio_hunt_and_exploration_profiles_match_authority():
     profile = HUNT_PROFILES[NARETH_OBSERVATORIO_LOCATION]
@@ -1127,3 +1224,14 @@ async def test_nareth_p16_and_s16_public_flows_settle_campaign_and_codex_once(
                 CodexEntry.entry_id == "codex.history.cartografia_do_erro",
             )
         ) is not None
+
+    for destination in (CANAIS, CAMPOS, OBSERVATORIO):
+        assert await road.travel_route(actor, destination) is not None
+    await missions.on_location(actor)
+    await _exercise_nareth_local_activities(
+        road,
+        actor,
+        monkeypatch,
+        "casco_invertido",
+        "explore.nareth.observatorio.braseiro_do_eixo",
+    )
