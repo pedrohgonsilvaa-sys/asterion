@@ -18,6 +18,7 @@ from asterion.application.equipment_modifications import EquipmentModificationSe
 from asterion.application.equipment_view import EquipmentViewService
 from asterion.application.groups import GroupService
 from asterion.application.inventory import InventoryService
+from asterion.application.nareth_missions import NarethMissionService
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import P2Service
 from asterion.application.p3 import P3Service
@@ -49,6 +50,7 @@ from asterion.bot.dungeon_handlers import dungeon_router
 from asterion.bot.equipment_handlers import equipment_router
 from asterion.bot.equipment_modification_handlers import equipment_modification_router
 from asterion.bot.groups_handlers import groups_router
+from asterion.bot.nareth_missions_handlers import nareth_missions_router
 from asterion.bot.p1_handlers import p1_router
 from asterion.bot.p2_handlers import p2_router
 from asterion.bot.p3_handlers import p3_router
@@ -108,6 +110,7 @@ def get_bot_runtime() -> BotRuntime:
     p6 = P6Service(SessionFactory, settings.server_id, groups=groups)
     p7 = P7Service(SessionFactory, settings.server_id, groups=groups)
     vde_missions = VDEMissionService(SessionFactory, settings.server_id, groups=groups)
+    nareth_missions = NarethMissionService(SessionFactory, settings.server_id)
     s6 = S6Service(SessionFactory, settings.server_id, groups=groups)
     class_trials = ClassTrialService(SessionFactory, settings.server_id)
     paths = PathSelectionService(SessionFactory, settings.server_id)
@@ -137,6 +140,9 @@ def get_bot_runtime() -> BotRuntime:
     # do not belong to P7.
     dispatcher.include_router(p7_router(p7, settings.creation_images))
     dispatcher.include_router(vde_missions_router(vde_missions, settings.creation_images))
+    dispatcher.include_router(
+        nareth_missions_router(nareth_missions, settings.creation_images)
+    )
     dispatcher.include_router(
         groups_router(
             groups,
@@ -246,6 +252,7 @@ def get_bot_runtime() -> BotRuntime:
             p6=p6,
             dungeons=dungeons,
             vde_missions=vde_missions,
+            nareth_missions=nareth_missions,
         )
     )
     dispatcher.include_router(

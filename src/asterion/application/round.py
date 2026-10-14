@@ -48,6 +48,9 @@ from asterion.domain.road import (
     BOSQUE_LOCATION,
     CHARNECA_LOCATION,
     MATERIAL_POOLS,
+    NARETH_CAMPINAS_LOCATION,
+    NARETH_POSTO_LOCATION,
+    NARETH_REGION_UNLOCK,
     ROAD_LOCATION,
     RUINS_LOCATION,
     RULESET,
@@ -182,11 +185,26 @@ class RoundService(RoadService):
         elif profile.local_id == VDE_CLAUSTRO_LOCATION:
             if c.level < 18 or not await self._p10_completed(s, c.id):
                 return None
+        elif profile.local_id == NARETH_CAMPINAS_LOCATION:
+            if c.level < 21 or not await self._p12_completed(s, c.id):
+                return None
+            if not await s.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == NARETH_REGION_UNLOCK,
+                )
+            ):
+                return None
+            if not await self._nareth_p13_completed(s, c.id):
+                return None
+        elif profile.local_id == NARETH_POSTO_LOCATION:
+            return None
         if profile.local_id in {
             VDE_GARGANTA_LOCATION,
             VDE_MATA_LOCATION,
             VDE_BAIXIOS_LOCATION,
             VDE_CLAUSTRO_LOCATION,
+            NARETH_CAMPINAS_LOCATION,
         } and any(
             creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
         ):
