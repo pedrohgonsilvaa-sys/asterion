@@ -378,6 +378,15 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                                     trigger.get("revive_hp_fraction", "0.50")
                                 ),
                                 "phase_id": trigger.get("phase_id"),
+                                "resolution_id": trigger.get("resolution_id"),
+                                "heal_source_per_active_fighter_fraction": Decimal(
+                                    trigger.get(
+                                        "heal_source_per_active_fighter_fraction", "0"
+                                    )
+                                ),
+                                "consume_active_fighter_keys": tuple(
+                                    trigger.get("consume_active_fighter_keys", ())
+                                ),
                             }
                         )
                     )

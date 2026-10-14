@@ -49,6 +49,43 @@ from asterion.domain.dungeons import (
 from asterion.domain.equipment_stats import (
     equipment_configuration_from_data,
 )
+from asterion.domain.nareth_dungeons import (
+    NARETH_DUNGEON_BASIC_MATERIALS,
+    NARETH_DUNGEON_CATALYST,
+    NARETH_DUNGEON_FRAGMENT,
+    NARETH_GALLERIES_BRAZIER_LABEL,
+    NARETH_GALLERIES_CONTENT_VERSION,
+    NARETH_GALLERIES_CORE_ID,
+    NARETH_GALLERIES_CORE_NAME,
+    NARETH_GALLERIES_DISCOVERY_UNLOCK,
+    NARETH_GALLERIES_ENVIRONMENTS,
+    NARETH_GALLERIES_FAMILY_ID,
+    NARETH_GALLERIES_FIRST_CLEAR_PREFIX,
+    NARETH_GALLERIES_KNOWN_PATH_UNLOCK,
+    NARETH_GALLERIES_PHASE_II,
+    NARETH_GALLERIES_PHASE_III,
+    NARETH_GALLERIES_RECIPE_UNLOCK,
+    NARETH_GALLERIES_RETURN_RESOLVED,
+    NARETH_GALLERIES_REWARD_PREFIX,
+    NARETH_GALLERIES_RULESET_VERSION,
+    NARETH_OBSERVATORY_BRAZIER_LABEL,
+    NARETH_OBSERVATORY_CONTENT_VERSION,
+    NARETH_OBSERVATORY_CORE_ID,
+    NARETH_OBSERVATORY_CORE_NAME,
+    NARETH_OBSERVATORY_DISCOVERY_UNLOCK,
+    NARETH_OBSERVATORY_ENVIRONMENTS,
+    NARETH_OBSERVATORY_FAMILY_ID,
+    NARETH_OBSERVATORY_FIRST_CLEAR_PREFIX,
+    NARETH_OBSERVATORY_KNOWN_PATH_UNLOCK,
+    NARETH_OBSERVATORY_PHASE_II,
+    NARETH_OBSERVATORY_PHASE_III,
+    NARETH_OBSERVATORY_RECIPE_UNLOCK,
+    NARETH_OBSERVATORY_REWARD_PREFIX,
+    NARETH_OBSERVATORY_RULESET_VERSION,
+    create_nareth_dungeon_combat,
+    nareth_dungeon_encounter_specs,
+    nareth_dungeon_enemy_rewards,
+)
 from asterion.domain.road import (
     RULESET,
     PlayerCombatantSpec,
@@ -296,6 +333,60 @@ DUNGEON_FAMILIES = {
         fragment_material=SANCTUARY_FRAGMENT,
         recipe_name="Guarda do Nó Antigo",
     ),
+    NARETH_GALLERIES_FAMILY_ID: DungeonFamily(
+        NARETH_GALLERIES_FAMILY_ID,
+        "Galerias do Meridiano",
+        "Nv.24–27",
+        "Canais Secos",
+        "Canais Secos",
+        NARETH_GALLERIES_DISCOVERY_UNLOCK,
+        NARETH_GALLERIES_KNOWN_PATH_UNLOCK,
+        NARETH_GALLERIES_FIRST_CLEAR_PREFIX,
+        NARETH_GALLERIES_REWARD_PREFIX,
+        "dungeon_nareth_galleries_encounter",
+        NARETH_GALLERIES_CONTENT_VERSION,
+        NARETH_GALLERIES_RULESET_VERSION,
+        26,
+        24,
+        "codex.location.galerias_do_meridiano",
+        NARETH_GALLERIES_CORE_ID,
+        NARETH_GALLERIES_CORE_NAME,
+        NARETH_GALLERIES_RECIPE_UNLOCK,
+        NARETH_GALLERIES_BRAZIER_LABEL,
+        region_display="Planícies de Nareth",
+        encounter_count=5,
+        basic_material_pool=NARETH_DUNGEON_BASIC_MATERIALS,
+        catalyst_material=NARETH_DUNGEON_CATALYST,
+        fragment_material=NARETH_DUNGEON_FRAGMENT,
+        recipe_name="Relicário do Circuito Retornado",
+    ),
+    NARETH_OBSERVATORY_FAMILY_ID: DungeonFamily(
+        NARETH_OBSERVATORY_FAMILY_ID,
+        "Observatório Afundado",
+        "Nv.28–30",
+        "Observatório do Eixo",
+        "Observatório do Eixo",
+        NARETH_OBSERVATORY_DISCOVERY_UNLOCK,
+        NARETH_OBSERVATORY_KNOWN_PATH_UNLOCK,
+        NARETH_OBSERVATORY_FIRST_CLEAR_PREFIX,
+        NARETH_OBSERVATORY_REWARD_PREFIX,
+        "dungeon_nareth_observatory_encounter",
+        NARETH_OBSERVATORY_CONTENT_VERSION,
+        NARETH_OBSERVATORY_RULESET_VERSION,
+        29,
+        28,
+        "codex.location.observatorio_afundado",
+        NARETH_OBSERVATORY_CORE_ID,
+        NARETH_OBSERVATORY_CORE_NAME,
+        NARETH_OBSERVATORY_RECIPE_UNLOCK,
+        NARETH_OBSERVATORY_BRAZIER_LABEL,
+        region_display="Planícies de Nareth",
+        encounter_count=5,
+        basic_material_pool=NARETH_DUNGEON_BASIC_MATERIALS,
+        catalyst_material=NARETH_DUNGEON_CATALYST,
+        fragment_material=NARETH_DUNGEON_FRAGMENT,
+        recipe_name="Guarda da Referência",
+    ),
 }
 
 
@@ -329,6 +420,10 @@ def _encounter_environment(family_id: str, ordinal: int) -> str:
             4: "Câmara dos Condutores",
             5: "Custódio do Primeiro Selo",
         }[ordinal]
+    if family_id == NARETH_GALLERIES_FAMILY_ID:
+        return NARETH_GALLERIES_ENVIRONMENTS[ordinal]
+    if family_id == NARETH_OBSERVATORY_FAMILY_ID:
+        return NARETH_OBSERVATORY_ENVIRONMENTS[ordinal]
     raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
@@ -348,6 +443,10 @@ def _encounter_specs(run, ordinal: int):
         return gallery_encounter_specs(
             ordinal, run.difficulty, run.initial_group_size, run.reference_level
         )
+    if family_id in {NARETH_GALLERIES_FAMILY_ID, NARETH_OBSERVATORY_FAMILY_ID}:
+        return nareth_dungeon_encounter_specs(
+            family_id, ordinal, run.difficulty, run.initial_group_size, run.reference_level
+        )
     raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
@@ -360,6 +459,11 @@ def _enemy_rewards_for(run, ordinal: int):
         return sanctuary_enemy_rewards(ordinal)
     if run.dungeon_family_id == GALLERIES_FAMILY_ID:
         return gallery_enemy_rewards(ordinal)
+    if run.dungeon_family_id in {
+        NARETH_GALLERIES_FAMILY_ID,
+        NARETH_OBSERVATORY_FAMILY_ID,
+    }:
+        return nareth_dungeon_enemy_rewards(run.dungeon_family_id, ordinal)
     raise ValueError(f"Unknown dungeon family: {run.dungeon_family_id}")
 
 
@@ -1435,6 +1539,27 @@ class DungeonService:
                     initial_group_size=run.initial_group_size,
                     party=group,
                 )
+            elif run.dungeon_family_id in {
+                NARETH_GALLERIES_FAMILY_ID,
+                NARETH_OBSERVATORY_FAMILY_ID,
+            }:
+                combat = create_nareth_dungeon_combat(
+                    uuid4(),
+                    family_id=run.dungeon_family_id,
+                    name=primary_character.name,
+                    character_class=primary_character.character_class,
+                    race=primary_character.race,
+                    hp=primary_member.hp,
+                    level=primary_character.level,
+                    difficulty=run.difficulty,
+                    reference_level=run.reference_level,
+                    equipment=equipment,
+                    active_art_ids=active_arts,
+                    ordinal=run.current_encounter_ordinal,
+                    run_seed=run.seed,
+                    initial_group_size=run.initial_group_size,
+                    party=group,
+                )
             else:
                 raise ValueError(f"Unknown dungeon family: {run.dungeon_family_id}")
             combat.configuration_snapshot = (combat.configuration_snapshot or {}) | {
@@ -1923,6 +2048,26 @@ class DungeonService:
                             spec.creature.creature_id,
                             fixed_xp=474,
                         )
+                    elif spec.creature.creature_id == "o_que_retorna":
+                        await self._grant_boss_milestone(
+                            session,
+                            participant_character,
+                            run,
+                            spec.creature.creature_id,
+                            fixed_xp=1668,
+                        )
+                    elif spec.creature.creature_id == "guardiao_referencia":
+                        await self._grant_boss_milestone(
+                            session,
+                            participant_character,
+                            run,
+                            spec.creature.creature_id,
+                            fixed_xp=1956,
+                        )
+                    if spec.creature.category == "boss":
+                        await self.bestiary.refresh_boss_mastery(
+                            session, participant_character.id, spec.creature.creature_id
+                        )
 
         encounter.status = "completed"
         encounter.reward_settled = True
@@ -2220,6 +2365,13 @@ class DungeonService:
                 await self._record_fosso_codex_completion(session, character.id)
             elif run.dungeon_family_id == SANCTUARY_FAMILY_ID:
                 await self._record_sanctuary_codex_completion(session, character.id)
+            elif run.dungeon_family_id in {
+                NARETH_GALLERIES_FAMILY_ID,
+                NARETH_OBSERVATORY_FAMILY_ID,
+            }:
+                await self._record_nareth_codex_completion(
+                    session, character.id, run.dungeon_family_id
+                )
             session.add_all(components)
             reward_lines_by_character[str(character.id)] = self._reward_lines(
                 total_xp,
@@ -2231,11 +2383,13 @@ class DungeonService:
                 family=family,
             )
             await consolidate_character_level(session, character)
+            from asterion.application.nareth_feats import reconcile_nareth_feats
             from asterion.application.tdo_feats import reconcile_tdo_feats
             from asterion.application.vde_feats import reconcile_vde_feats
 
             await reconcile_tdo_feats(session, character)
             await reconcile_vde_feats(session, character)
+            await reconcile_nareth_feats(session, character)
         progress.update(
             internal_xp=0,
             internal_rewards=[],
@@ -2288,6 +2442,12 @@ class DungeonService:
             "material.vde.resina_enredada": "Resina Enredada",
             "material.vde.catalisador_elite_ii": "Catalisador de Elite II",
             "material.vde.fragmento_aprimoramento_ii": "Fragmento de Aprimoramento II",
+            "material.nareth.bronze_de_marco": "Bronze de Marco",
+            "material.nareth.couro_de_horizonte": "Couro de Horizonte",
+            "material.nareth.erva_de_vento": "Erva de Vento",
+            "material.nareth.po_de_eixo": "Pó de Eixo",
+            "material.nareth.catalisador_elite_iii": "Catalisador de Elite III",
+            "material.nareth.fragmento_aprimoramento_iii": "Fragmento de Aprimoramento III",
         }
         for material_id, quantity in sorted(materials.items()):
             lines.append(f"📦 {labels.get(material_id, material_id)} · {quantity}")
@@ -2461,6 +2621,10 @@ class DungeonService:
             if family_id == FOSSO_FAMILY_ID
             else "guardiao_no_antigo"
             if family_id == SANCTUARY_FAMILY_ID
+            else "o_que_retorna"
+            if family_id == NARETH_GALLERIES_FAMILY_ID
+            else "guardiao_referencia"
+            if family_id == NARETH_OBSERVATORY_FAMILY_ID
             else "custodio_primeiro_selo"
         )
         for event in after.events[cursor:]:
@@ -2604,6 +2768,81 @@ class DungeonService:
                     "phase",
                     5,
                 )
+            elif event.action == f"phase:{NARETH_GALLERIES_PHASE_II}":
+                await self._add_bestiary_evidence(
+                    session, character.id, "o_que_retorna", "phase:o_mesmo_trajeto", "phase", 5
+                )
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    "o_que_retorna",
+                    "mechanic:marcos_retorno_observados",
+                    "mechanic",
+                    5,
+                )
+                await self._ensure_codex_entry(
+                    session, character.id, "codex.history.marcos_de_retorno"
+                )
+                await self._ensure_fragment(
+                    session,
+                    character.id,
+                    "codex.history.marcos_de_retorno",
+                    "codex.fragment.nareth.galerias.return_markers",
+                )
+            elif event.action == f"phase:{NARETH_GALLERIES_PHASE_III}":
+                await self._add_bestiary_evidence(
+                    session, character.id, "o_que_retorna", "phase:o_trajeto_fecha", "phase", 5
+                )
+            elif event.action == f"phase:{NARETH_OBSERVATORY_PHASE_II}":
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    "guardiao_referencia",
+                    "phase:corrigir_o_mundo",
+                    "phase",
+                    5,
+                )
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    "guardiao_referencia",
+                    "mechanic:eixos_calibracao_observados",
+                    "mechanic",
+                    5,
+                )
+                await self._ensure_codex_entry(
+                    session, character.id, "codex.history.eixos_de_calibracao"
+                )
+                await self._ensure_fragment(
+                    session,
+                    character.id,
+                    "codex.history.eixos_de_calibracao",
+                    "codex.fragment.nareth.observatory.calibration_axes",
+                )
+            elif event.action == f"phase:{NARETH_OBSERVATORY_PHASE_III}":
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    "guardiao_referencia",
+                    "phase:referencia_absoluta",
+                    "phase",
+                    5,
+                )
+            elif event.action == f"phase:{NARETH_GALLERIES_RETURN_RESOLVED}":
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    "o_que_retorna",
+                    "mechanic:retorno_ao_marco_resolvido",
+                    "mechanic",
+                    5,
+                )
+                await self._ensure_fragment(
+                    session,
+                    character.id,
+                    "codex.history.marcos_de_retorno",
+                    "codex.fragment.nareth.galerias.return_resolved",
+                )
         member_cursors[str(character.id)] = {
             "event": len(after.events),
             "mechanic": len(mechanic_events),
@@ -2619,6 +2858,13 @@ class DungeonService:
                 await self._refresh_galleries_boss_mastery(session, character.id)
             elif family_id == SANCTUARY_FAMILY_ID:
                 await self._refresh_sanctuary_boss_mastery(session, character.id)
+            elif family_id in {
+                NARETH_GALLERIES_FAMILY_ID,
+                NARETH_OBSERVATORY_FAMILY_ID,
+            }:
+                await self.bestiary.refresh_boss_mastery(
+                    session, character.id, boss_creature_id
+                )
 
     async def _add_bestiary_evidence(
         self, session, character_id, creature_id, evidence_id, category, value
@@ -2793,6 +3039,50 @@ class DungeonService:
                 await self._ensure_codex_entry(session, character_id, values[0])
                 await self._ensure_fragment(session, character_id, values[0], values[1])
             return
+        if family_id == NARETH_GALLERIES_FAMILY_ID:
+            fragments = {
+                1: (
+                    "codex.location.galerias_do_meridiano",
+                    "codex.fragment.nareth.galerias.entry",
+                ),
+                2: (
+                    "codex.history.juncao_circular",
+                    "codex.fragment.nareth.galerias.circular_junction",
+                ),
+                3: (
+                    "codex.history.circuitos_de_servico",
+                    "codex.fragment.nareth.galerias.service_circuits",
+                ),
+                5: (
+                    "codex.history.o_que_retorna",
+                    "codex.fragment.nareth.galerias.returning_boss",
+                ),
+            }
+            values = fragments.get(ordinal)
+            if values is not None:
+                await self._ensure_codex_entry(session, character_id, values[0])
+                await self._ensure_fragment(session, character_id, values[0], values[1])
+            return
+        if family_id == NARETH_OBSERVATORY_FAMILY_ID:
+            fragments = {
+                1: (
+                    "codex.location.observatorio_afundado",
+                    "codex.fragment.nareth.observatory.submerged_entry",
+                ),
+                4: (
+                    "codex.history.sala_de_recalibracao",
+                    "codex.fragment.nareth.observatory.recalibration_room",
+                ),
+                5: (
+                    "codex.history.guardiao_referencia",
+                    "codex.fragment.nareth.observatory.reference_guardian",
+                ),
+            }
+            values = fragments.get(ordinal)
+            if values is not None:
+                await self._ensure_codex_entry(session, character_id, values[0])
+                await self._ensure_fragment(session, character_id, values[0], values[1])
+            return
         fragments = {
             1: ("codex.location.cripta_do_ocaso", "codex.fragment.crypt.entry"),
             3: ("codex.history.camadas_de_sepultamento", "codex.fragment.crypt.layers"),
@@ -2844,6 +3134,29 @@ class DungeonService:
                 "codex.fragment.sanctuary.interlinked_structures",
             ),
         ):
+            await self._ensure_codex_entry(session, character_id, entry_id)
+            await self._ensure_fragment(session, character_id, entry_id, fragment_id)
+
+    async def _record_nareth_codex_completion(self, session, character_id, family_id):
+        if family_id == NARETH_GALLERIES_FAMILY_ID:
+            records = (
+                (
+                    "codex.history.marcos_de_retorno",
+                    "codex.fragment.nareth.galerias.return_markers",
+                ),
+            )
+        else:
+            records = (
+                (
+                    "codex.history.eixos_de_calibracao",
+                    "codex.fragment.nareth.observatory.calibration_axes",
+                ),
+                (
+                    "codex.history.referencias_afundadas",
+                    "codex.fragment.nareth.observatory.submerged_references",
+                ),
+            )
+        for entry_id, fragment_id in records:
             await self._ensure_codex_entry(session, character_id, entry_id)
             await self._ensure_fragment(session, character_id, entry_id, fragment_id)
 

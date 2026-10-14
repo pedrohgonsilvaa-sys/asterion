@@ -25,6 +25,17 @@ from asterion.infrastructure.db.models import (
     RuneStack,
 )
 
+NARETH_RUNE_TITLES = {
+    "Meridiano": "Runa do Meridiano",
+    "Prumo": "Runa do Prumo",
+    "Horizonte": "Runa do Horizonte",
+    "Marco": "Runa do Marco",
+    "Distância": "Runa da Distância",
+    "Abrigo": "Runa do Abrigo",
+    "Desvio": "Runa do Desvio",
+    "Referência": "Runa da Referência",
+}
+
 INVENTORY_CAPACITY = 60
 PENDING_CAPACITY = 20
 
@@ -386,7 +397,7 @@ class InventoryService:
             InventoryEntry(
                 kind="rune",
                 key=str(row.id),
-                title=f"Runa de {row.family}",
+                title=NARETH_RUNE_TITLES.get(row.family, f"Runa de {row.family}"),
                 quantity=row.quantity,
                 rarity=row.rarity,
                 grade=row.grade,
@@ -414,7 +425,7 @@ class InventoryService:
             return InventoryEntry(
                 kind="rune",
                 key=str(row.id),
-                title=f"Runa de {family}",
+                title=NARETH_RUNE_TITLES.get(family, f"Runa de {family}"),
                 quantity=row.quantity,
                 rarity=payload.get("rarity"),
                 grade=payload.get("grade", 1),
