@@ -41,7 +41,7 @@ def test_catalog_has_all_seven_families_and_stable_item_ids():
         ConsumableFamily.DISPELLER,
         ConsumableFamily.WARDING,
     }
-    assert len(CONSUMABLE_CATALOG) == 11
+    assert len(CONSUMABLE_CATALOG) == 17
     assert len(CONSUMABLE_CATALOG) == len(set(CONSUMABLE_CATALOG))
     assert all(len(item_id) <= 64 for item_id in CONSUMABLE_CATALOG)
     assert all(family_definitions(family) for family in CONSUMABLE_FAMILIES)
@@ -100,6 +100,42 @@ def test_catalog_names_real_grades_regions_and_targets():
             "Vales dos Enforcados",
             ConsumableTarget.SELF,
         ),
+        "consumable.heal.nareth.iii": (
+            "Poção de Cura de Nareth",
+            3,
+            "Planícies de Nareth",
+            ConsumableTarget.SELF,
+        ),
+        "consumable.purification.nareth.iii": (
+            "Preparado de Purificação do Eixo",
+            3,
+            "Planícies de Nareth",
+            ConsumableTarget.SELF_NEGATIVE_EFFECT,
+        ),
+        "consumable.antidote.nareth.iii": (
+            "Antídoto das Campinas",
+            3,
+            "Planícies de Nareth",
+            ConsumableTarget.SELF_DOT,
+        ),
+        "consumable.vigor.nareth.iii": (
+            "Poção de Vigor do Meridiano",
+            3,
+            "Planícies de Nareth",
+            ConsumableTarget.SELF,
+        ),
+        "consumable.protection.nareth.iii": (
+            "Preparado de Proteção do Prumo",
+            3,
+            "Planícies de Nareth",
+            ConsumableTarget.SELF,
+        ),
+        "consumable.dispeller.nareth.iii": (
+            "Dissipador de Referência",
+            3,
+            "Planícies de Nareth",
+            ConsumableTarget.ENEMY_POSITIVE_EFFECT,
+        ),
         "consumable.dispeller.iii": ("Dissipador", 3, None, ConsumableTarget.ENEMY_POSITIVE_EFFECT),
         "consumable.warding.iv": ("Preparado de Resguardo", 4, None, ConsumableTarget.SELF),
     }
@@ -121,6 +157,8 @@ def test_only_healing_and_purification_are_round_eligible_and_combat_items_share
     }
     assert round_eligible("consumable.heal") is True
     assert round_eligible("consumable.purification") is True
+    assert round_eligible("consumable.heal.nareth.iii") is True
+    assert round_eligible("consumable.purification.nareth.iii") is True
     assert round_eligible("consumable.antidote.tdo.i") is False
     assert round_eligible("consumable.vigor.tdo.i") is False
     assert round_eligible("consumable.protection.vde.ii") is False
