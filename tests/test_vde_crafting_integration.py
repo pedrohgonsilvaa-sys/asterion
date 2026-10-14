@@ -1,20 +1,37 @@
 import pytest
 from sqlalchemy import select
 
-from asterion.application.crafting import CraftingService
-from asterion.application.professions import ProfessionService
+from asterion.application.crafting import CraftingErrorCode, CraftingService
+from asterion.application.professions import ProfessionMutationCode, ProfessionService
 from asterion.domain.professions import (
     VDE_FRAGMENT_II,
     VDE_HERB,
     VDE_IRON,
     VDE_RESIN,
 )
-from asterion.infrastructure.db.models import ConsumableStack, EquipmentItem, RuneStack
+from asterion.infrastructure.db.models import (
+    ConsumableStack,
+    EquipmentItem,
+    RuneStack,
+    WorldState,
+)
 from tests.test_professions_crafting_integration import (
     _add_materials,
     _seed_character,
     _set_profession_level,
 )
+
+VDE_VIGILIA = "Vigília do Vale"
+VDE_GARGANTA = "Garganta dos Laços"
+
+
+async def _set_location(database, character_id, location: str):
+    async with database[1].begin() as session:
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character_id)
+        )
+        assert world is not None
+        world.location = location
 
 
 @pytest.mark.asyncio
@@ -103,3 +120,47 @@ async def test_vde_grade_ii_alchemy_and_rune_use_existing_delivery_models(databa
         assert potion_stack is not None and potion_stack.quantity == 1
         assert rune_stack is not None and rune_stack.quantity == 1
         assert rune_stack.potency == "0.40%"
+
+
+@pytest.mark.asyncio
+async def test_vde_crafting_is_available_at_vigilia_but_not_at_unsafe_vales_location(database):
+    actor = 840132
+    character_id = await _seed_character(database, actor, level=20, crowns=5000)
+    professions = ProfessionService(database[1], "ocaso")
+    await professions.initial_selection(actor, "alchemist", "blacksmith")
+    await _set_profession_level(database, character_id, "alchemist", 3)
+    await _add_materials(database, character_id, {VDE_HERB: 6, VDE_RESIN: 2})
+    service = CraftingService(database[1], "ocaso")
+
+    await _set_location(database, character_id, VDE_VIGILIA)
+    vigilia = await service.recipe(actor, "recipe.vde.alchemist.heal.vde.ii")
+    assert vigilia is not None and vigilia.available
+    preview = await service.preview(actor, "recipe.vde.alchemist.heal.vde.ii")
+    assert preview is not None
+    committed = await service.commit(actor, preview.receipt_id)
+    assert committed is not None and committed.status == "committed"
+
+    await _set_location(database, character_id, VDE_GARGANTA)
+    unsafe = await service.recipe(actor, "recipe.vde.alchemist.heal.vde.ii")
+    assert unsafe is not None
+    assert not unsafe.available
+    assert unsafe.reason == CraftingErrorCode.WRONG_LOCATION
+
+
+@pytest.mark.asyncio
+async def test_vde_profession_services_use_vigilia_as_safe_hub(database):
+    actor = 840133
+    character_id = await _seed_character(database, actor, level=20, crowns=5000)
+    service = ProfessionService(database[1], "ocaso")
+
+    await _set_location(database, character_id, VDE_VIGILIA)
+    selected = await service.initial_selection(actor, "alchemist", "blacksmith")
+    assert selected is not None
+    preview = await service.change_preview(actor, "swap")
+    assert preview is not None and preview.valid
+
+    await _set_location(database, character_id, VDE_GARGANTA)
+    unsafe = await service.change_preview(actor, "swap")
+    assert unsafe is not None
+    assert not unsafe.valid
+    assert unsafe.reason == ProfessionMutationCode.WRONG_LOCATION

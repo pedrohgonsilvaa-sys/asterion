@@ -18,6 +18,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from asterion.application.equipment_modifications import EquipmentModificationService
 from asterion.application.progression import level_xp
 from asterion.domain.arts import SENTINEL_ART_IDS
 from asterion.domain.class_trials import sentinel_player_actions
@@ -929,6 +930,15 @@ class TDOPlaythrough:
                 self._last_level = character.level
         mark = JourneyMark(label, state)
         self.marks.append(mark)
+        if "level" in state:
+            print(
+                "PLAYTHROUGH_PROGRESS "
+                f"{label} | Nv.{state['level']} XP={state.get('xp', 0)} "
+                f"XP_total={state.get('xp_received_total', 0)} "
+                f"hunt_count={state.get('manual_hunt_count', 0)} "
+                f"location={state.get('location')}",
+                flush=True,
+            )
         return mark
 
     def diagnostic(self) -> str:
@@ -974,6 +984,7 @@ class TDOPlaythrough:
         label: str,
         max_actions: int = 400,
         action_picker: Callable[[Any], str] | None = None,
+        action_target_picker: Callable[[Any, str], str | None] | None = None,
         trace_actions: bool = False,
     ):
         """Play a real combat and reconnect after the first committed action."""
@@ -1000,7 +1011,15 @@ class TDOPlaythrough:
                     budget_limit=getattr(current, "consumable_budget_limit", None),
                 )
                 if action.startswith("consumable:")
-                else act(combat, action)
+                else act(
+                    combat,
+                    action,
+                    target_id=(
+                        action_target_picker(current, action)
+                        if action_target_picker is not None
+                        else None
+                    ),
+                )
             )
             if trace_actions:
                 player = combat.fighters.get("player")
@@ -1132,12 +1151,13 @@ def choose_p6_policy_action(combat, policy, *, heal_count, budget_limit):
     )
     can_heal = bool(heal_options)
     charge = player.path_state.get("devastador_charge")
+    uses_devastador_passive = policy in {"devastador", "sentinela_devastador"}
     has_devastador_charge = (
-        policy == "devastador"
+        uses_devastador_passive
         and isinstance(charge, dict)
         and player.opportunity <= int(charge.get("expires_opportunity", -1))
     )
-    if has_devastador_charge and hp_fraction > 0.20:
+    if policy == "devastador" and has_devastador_charge and hp_fraction > 0.20:
         charged_art = _p6_best_art(combat)
         if charged_art is not None:
             return charged_art
@@ -1146,9 +1166,18 @@ def choose_p6_policy_action(combat, policy, *, heal_count, budget_limit):
         "baseline": Decimal("0.40"),
         "sentinela": Decimal("0.55"),
         "devastador": Decimal("0.48"),
+        "sentinela_devastador": Decimal("0.55"),
     }[policy]
     if can_heal and hp_fraction <= heal_threshold:
         return "consumable:consumable.heal"
+    if (
+        policy == "sentinela_devastador"
+        and has_devastador_charge
+        and hp_fraction > Decimal("0.20")
+    ):
+        charged_art = _p6_best_art(combat)
+        if charged_art is not None:
+            return charged_art
 
     if policy == "baseline":
         art = _p6_best_art(combat)
@@ -1164,7 +1193,7 @@ def choose_p6_policy_action(combat, policy, *, heal_count, budget_limit):
         wall = _p6_available_art(combat, "muralha_breve")
 
         if (
-            policy == "sentinela"
+            policy in {"sentinela", "sentinela_devastador"}
             and wall is not None
             and (player.barrier <= 0 or player.barrier_remaining <= 0)
             and hp_fraction < Decimal("0.90")
@@ -1448,3 +1477,76 @@ def best_p6_diagnostic_configuration(summary):
             -choice[2]["median_turns"],
         ),
     )
+
+async def install_best_owned_runes(sessions, actor: int, *, server_id: str) -> list[dict[str, Any]]:
+    """Install the strongest already-owned compatible runes on equipped gear.
+
+    Inventory reads are diagnostic only. Every mutation is made through the
+    public EquipmentModificationService, including its foreground, ownership,
+    compatibility, capacity, and version checks.
+    """
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        if character is None:
+            return []
+        equipped = (
+            await session.execute(
+                select(CharacterEquipmentSlot.slot, EquipmentItem.id)
+                .join(
+                    EquipmentItem,
+                    EquipmentItem.id == CharacterEquipmentSlot.equipment_item_id,
+                )
+                .where(CharacterEquipmentSlot.character_id == character.id)
+                .order_by(CharacterEquipmentSlot.slot)
+            )
+        ).all()
+
+    service = EquipmentModificationService(sessions, server_id)
+    rarity_rank = {"comum": 1, "rara": 2, "raro": 2, "épica": 3, "epica": 3}
+    installed: list[dict[str, Any]] = []
+    for slot, item_id in equipped:
+        affinities = ("A", "B") if slot == "2H" else ("A",)
+        for affinity in affinities:
+            view = await service.runes(actor, item_id, affinity)
+            if view is None or not view.available or view.details.get("current") is not None:
+                continue
+            candidates = sorted(
+                view.details.get("candidates", ()),
+                key=lambda candidate: (
+                    int(candidate["grade"]),
+                    rarity_rank.get(str(candidate["rarity"]).casefold(), 0),
+                    str(candidate["family"]),
+                    str(candidate["stack_id"]),
+                ),
+                reverse=True,
+            )
+            for candidate in candidates:
+                preview = await service.rune_preview(
+                    actor, item_id, affinity, candidate["stack_id"]
+                )
+                if preview is None or not preview.available:
+                    continue
+                result = await service.install_rune(
+                    actor,
+                    item_id,
+                    affinity,
+                    candidate["stack_id"],
+                    expected_item_version=preview.item_version,
+                    expected_configuration_version=preview.combat_configuration_version,
+                )
+                if result is None:
+                    continue
+                installed.append(
+                    {
+                        "slot": slot,
+                        "affinity": affinity,
+                        "family": candidate["family"],
+                        "rarity": candidate["rarity"],
+                        "grade": candidate["grade"],
+                        "potency": candidate["potency"],
+                    }
+                )
+                break
+    return installed

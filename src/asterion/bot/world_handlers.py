@@ -60,7 +60,12 @@ from asterion.bot.p3_ui import render_p3, render_p3_detail
 from asterion.bot.p4_ui import render_p4, render_p4_detail
 from asterion.bot.p5_ui import render_p5, render_p5_detail
 from asterion.bot.p6_ui import render_p6
-from asterion.bot.road_ui import render_current_local, render_road, render_round_selection
+from asterion.bot.road_ui import (
+    render_current_local,
+    render_invalid_location_menu,
+    render_road,
+    render_round_selection,
+)
 from asterion.bot.s2_ui import render_s2
 from asterion.bot.s3_ui import render_s3
 from asterion.bot.s4_ui import render_s4
@@ -496,6 +501,10 @@ def world_router(
             await present(query.message, render_s5(s5_view), images, edit=True)
             return True
         road_view = await road.resume(query.from_user.id) if road else None
+        if road_view is not None and road_view.kind == "invalid_location":
+            if isinstance(query.message, Message):
+                await present(query.message, render_road(road_view), images, edit=True)
+            return True
         if road_view is not None and road_view.kind == "hunt_queue":
             if isinstance(query.message, Message):
                 await present(query.message, render_road(road_view), images, edit=True)
@@ -569,7 +578,8 @@ def world_router(
             return
         road_view = await road.resume(query.from_user.id) if road is not None else None
         if road_view is not None and (
-            road_view.kind in {"combat", "exploration", "hunt_victory", "hunt_defeat"}
+            road_view.kind == "invalid_location"
+            or road_view.kind in {"combat", "exploration", "hunt_victory", "hunt_defeat"}
             or road_view.kind.startswith("round_")
         ):
             await present(query.message, render_road(road_view), images, edit=True)
@@ -2498,6 +2508,17 @@ def world_router(
 
     @router.callback_query(F.data == "menu:back")
     async def back(query: CallbackQuery):
+        if road is not None and isinstance(query.message, Message):
+            road_view = await road.resume(query.from_user.id)
+            if road_view is not None and road_view.kind == "invalid_location":
+                await query.answer()
+                await present(
+                    query.message,
+                    render_invalid_location_menu(),
+                    images,
+                    edit=True,
+                )
+                return
         if await foreground(query):
             await query.answer()
             return

@@ -3,7 +3,12 @@ from uuid import uuid4
 
 from asterion.application.road import CHARNECA, REFUGE, ROAD, RoadView
 from asterion.application.round import RoundView
-from asterion.bot.road_ui import render_road, render_round_selection
+from asterion.bot.road_ui import (
+    _location_copy,
+    render_current_local,
+    render_road,
+    render_round_selection,
+)
 
 
 def _callbacks(screen):
@@ -72,6 +77,31 @@ def test_refuge_keeps_oren_accessible_after_p1():
     ]
     assert "Oren Cal" in labels
     assert "world:oren" in callbacks
+
+
+def test_invalid_persisted_location_has_only_safe_menu_recovery():
+    view = RoadView(
+        "invalid_location",
+        uuid4(),
+        "corrupt.location.not_registered",
+        hunt_enabled=False,
+        explore_enabled=False,
+        explore_available=False,
+    )
+    for screen in (render_road(view), render_current_local(view)):
+        assert "⚠️ Local indisponível" in screen.text
+        assert "não foi possível reconstruir este local" in screen.text.lower()
+        assert "Refúgio do Ocaso" not in screen.text
+        assert "Terras do Ocaso" not in screen.text
+        assert "Caçar" not in screen.text
+        assert "Desbravar" not in screen.text
+        assert "Ronda" not in screen.text
+        assert _callbacks(screen) == ["menu:back"]
+
+    # The location-label helper also has no generic TDO fallback.
+    title, subtitle = _location_copy("corrupt.location.not_registered")
+    assert title == "📍 Local indisponível"
+    assert "Terras do Ocaso" not in subtitle
 
 
 def test_charneca_local_exposes_only_unlocked_round_and_regional_route():

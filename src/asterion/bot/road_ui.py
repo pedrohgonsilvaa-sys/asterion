@@ -13,6 +13,7 @@ from asterion.application.road import (
     REFUGE,
     ROAD,
     RUINS,
+    TRAVEL_LOCATIONS,
     VDE_BAIXIOS,
     VDE_BERCO,
     VDE_CLAUSTRO,
@@ -56,6 +57,8 @@ def _reward_block(view) -> str:
 
 
 def _location_copy(location: str) -> tuple[str, str]:
+    if location not in TRAVEL_LOCATIONS:
+        return "📍 Local indisponível", "Estado da jornada indisponível"
     icon = (
         "🌑" if location == CHARNECA else
         "🌲" if location == BOSQUE else
@@ -423,6 +426,17 @@ def _round_screen(view) -> Screen | None:
 
 
 def render_road(view: RoadView) -> Screen:
+    if view.kind == "invalid_location":
+        return Screen(
+            "⚠️ Local indisponível\n\n"
+            "Não foi possível reconstruir este Local com o estado atual da jornada.",
+            "local_invalid",
+            InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="← Menu", callback_data="menu:back")]
+                ]
+            ),
+        )
     round_screen = _round_screen(view)
     if round_screen is not None:
         return round_screen
@@ -671,6 +685,17 @@ def render_current_local(
     mission_available: bool = False,
 ) -> Screen:
     """Render the current Local as the sole entry point for local activities."""
+    if view.kind == "invalid_location":
+        return Screen(
+            "⚠️ Local indisponível\n\n"
+            "Não foi possível reconstruir este Local com o estado atual da jornada.",
+            "local_invalid",
+            InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="← Menu", callback_data="menu:back")]
+                ]
+            ),
+        )
     title, subtitle = _location_copy(view.location)
     def bar(current, maximum, fill: str) -> str:
         value = min(10, max(0, int(current * 10 / maximum))) if maximum else 0
@@ -804,6 +829,27 @@ def render_current_local(
         "local_current",
         InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode="HTML",
+    )
+
+
+def render_invalid_location_menu() -> Screen:
+    return Screen(
+        "🌑 Asterion\n\n"
+        "O Menu está disponível em modo seguro. O Local atual não pôde ser reconstruído.",
+        "menu_invalid_location",
+        InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="Personagem", callback_data="character:root"),
+                    InlineKeyboardButton(text="Códice", callback_data="knowledge:codex"),
+                ],
+                [
+                    InlineKeyboardButton(text="Vínculos", callback_data="links:root"),
+                    InlineKeyboardButton(text="Configurações", callback_data="settings:root"),
+                ],
+                [InlineKeyboardButton(text="Aventura", callback_data="world:adventure")],
+            ]
+        ),
     )
 
 

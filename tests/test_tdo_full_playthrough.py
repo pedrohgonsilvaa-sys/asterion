@@ -1,6 +1,7 @@
 import os
 from datetime import UTC, timedelta
 from decimal import Decimal
+from hashlib import sha256
 from uuid import UUID, uuid4
 
 import pytest
@@ -49,6 +50,7 @@ from asterion.domain.road import (
     EXPLORATION_PROFILES,
     VIGIA_PARTIDO,
     create_creature_combat,
+    creature_for,
     select_exploration_result,
 )
 from asterion.domain.road import (
@@ -72,6 +74,7 @@ from tests.helpers.tdo_playthrough import (
     TDOPlaythrough,
     best_p6_diagnostic_configuration,
     choose_p6_policy_action,
+    install_best_owned_runes,
     sample_p6_policies,
 )
 
@@ -79,6 +82,89 @@ pytestmark = pytest.mark.skipif(
     os.getenv("ASTERION_RUN_TDO_FULL_PLAYTHROUGH") != "1",
     reason="playthrough diagnóstico longo; habilite ASTERION_RUN_TDO_FULL_PLAYTHROUGH=1",
 )
+
+
+def _seed_for_exploration_result(target_key, player_level, recent, excluded, profile):
+    """Find a deterministic seed without rebuilding the weighted pool per draw."""
+    recent_set = set(recent)
+    excluded_set = set(map(str, excluded))
+    eligible_categories = []
+    eligible_results = {}
+    target_category = None
+    target_result_range = None
+
+    for category, category_weight in profile.category_weights:
+        results = tuple(
+            result
+            for result in profile.results
+            if result.category == category
+            and player_level >= result.min_level
+            and (
+                result.creature_id is None
+                or player_level >= creature_for(result.creature_id).unlock_level
+            )
+            and result.key not in excluded_set
+            and result.result_id not in excluded_set
+        )
+        result_weights = []
+        for result in results:
+            if recent and result.key == recent[0]:
+                penalty = 0
+            elif result.key in recent_set:
+                penalty = 35
+            else:
+                penalty = 100
+            adjusted_weight = result.weight * penalty
+            if adjusted_weight > 0:
+                start = sum(weight for _key, weight in result_weights)
+                result_weights.append((result.key, adjusted_weight))
+                if result.key == target_key:
+                    target_category = category
+                    target_result_range = (start, start + adjusted_weight)
+        if not result_weights:
+            continue
+        category_penalty = (
+            0
+            if recent and category == recent[0]
+            else 35
+            if category in recent_set
+            else 100
+        )
+        adjusted_category_weight = category_weight * category_penalty
+        if adjusted_category_weight > 0:
+            eligible_categories.append((category, adjusted_category_weight))
+            eligible_results[category] = result_weights
+
+    if target_category is None or target_result_range is None:
+        return None
+    category_range_start = 0
+    category_range_end = None
+    for category, weight in eligible_categories:
+        if category == target_category:
+            category_range_end = category_range_start + weight
+            break
+        category_range_start += weight
+    if category_range_end is None:
+        return None
+    result_weights = eligible_results[target_category]
+    result_total = sum(weight for _key, weight in result_weights)
+
+    for candidate in range(500_000):
+        seed = f"{candidate:032x}"
+        category_draw = int.from_bytes(sha256(seed.encode()).digest(), "big") % sum(
+            weight for _category, weight in eligible_categories
+        )
+        if not category_range_start <= category_draw < category_range_end:
+            continue
+        result_draw = int.from_bytes(
+            sha256(f"{seed}:category:{target_category}".encode()).digest(), "big"
+        ) % result_total
+        if target_result_range[0] <= result_draw < target_result_range[1]:
+            assert select_exploration_result(
+                seed, player_level, recent, tuple(map(str, excluded)), profile
+            ) == target_key
+            return seed
+    return None
 
 
 def _compact_playthrough_report(driver, mark):
@@ -195,7 +281,7 @@ async def _create_remanescente_sentinela(driver: TDOPlaythrough) -> None:
 
 
 @pytest.mark.asyncio
-async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch):
+async def run_tdo_full_playthrough(database, monkeypatch):
     """Restart at Nv.1; all progression mutations use public services."""
     actor = 7_000_000_000_000 + uuid4().int % 100_000_000_000
     _, sessions = database
@@ -570,16 +656,8 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
             for result in profile.results
             if result.result_id == target_result_id
         )
-        seed = next(
-            (
-                f"{candidate:032x}"
-                for candidate in range(500_000)
-                if select_exploration_result(
-                    f"{candidate:032x}", level, recent, tuple(map(str, excluded)), profile
-                )
-                == target_key
-            ),
-            None,
+        seed = _seed_for_exploration_result(
+            target_key, level, recent, tuple(map(str, excluded)), profile
         )
         if seed is None:
             raise AssertionError(
@@ -1407,6 +1485,21 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     )
     assert nv7_mark.state.get("level", 0) >= 7, driver.diagnostic()
 
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        world = await session.get(WorldState, character.id) if character else None
+        assert character is not None and world is not None
+        p4_start_location = world.location
+    if p4_start_location == BOSQUE:
+        await road.travel_route(actor, CHARNECA)
+        p4_start_location = CHARNECA
+    if p4_start_location == CHARNECA:
+        await road.travel_route(actor, REFUGE)
+        p4_start_location = REFUGE
+    assert p4_start_location == REFUGE, (p4_start_location, driver.diagnostic())
+
     p4 = P4Service(sessions, "ocaso")
     p4_offer = await p4.offer(actor)
     assert p4_offer is not None and p4_offer.available, (p4_offer, driver.diagnostic())
@@ -2095,12 +2188,36 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
     await travel_to_refuge()
     await craft_torso_if_available("S6 · preparação legítima de equipamento")
     s6_gear = await equip_best_available_combat_gear()
+    s6_runes = await install_best_owned_runes(sessions, actor, server_id="ocaso")
     rested_before_s6 = await WorldService(sessions, "ocaso").rest(actor)
     assert rested_before_s6 is not None and rested_before_s6.hp == rested_before_s6.max_hp
     await refill_p5_healing_stock(target_quantity=5)
     await driver.snapshot(
-        f"S6 · preparação no Refúgio · equipamento={s6_gear!r} · consumíveis conferidos"
+        f"S6 · preparação no Refúgio · equipamento={s6_gear!r} "
+        f"· runas={s6_runes!r} · consumíveis conferidos"
     )
+
+    s6_art_service = ActiveArtService(sessions, "ocaso")
+    desired_s6_arts = P6_DIAGNOSTIC_LOADOUTS["B"]
+    s6_art_view = await s6_art_service.view(actor)
+    assert s6_art_view is not None
+    for slot, art_id in enumerate(desired_s6_arts, start=1):
+        s6_art_view = await s6_art_service.view(actor)
+        assert s6_art_view is not None
+        equipped_art = next(
+            (entry.art_id for entry in s6_art_view.slots if entry.slot == slot),
+            None,
+        )
+        if equipped_art != art_id:
+            await s6_art_service.equip_art(
+                actor,
+                slot,
+                art_id,
+                expected_configuration_version=s6_art_view.combat_configuration_version,
+            )
+    final_s6_art_view = await s6_art_service.view(actor)
+    assert final_s6_art_view is not None
+    assert tuple(entry.art_id for entry in final_s6_art_view.slots) == desired_s6_arts
 
     # S6 is a legitimate Nv.10 secondary-quest reward source and is part of
     # the journey requested for the regional campaign. Its materials also
@@ -2125,34 +2242,19 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
 
     def s6_action(current):
         combat = current.combat
-        available = allowed_actions(combat)
-        player = combat.fighters["player"]
-        has_heal = any(
-            option.item_id == "consumable.heal" for option in current.consumable_options
-        )
-        if (
-            has_heal
-            and combat.prepared_action is None
-            and player.hp * 10 <= player.stats.hp * 5
-        ):
-            return "consumable:consumable.heal"
-        if combat.prepared_action is not None and "defend" in available:
-            return "defend"
-        damage_arts = [
-            action_id
-            for action_id in available
-            if action_id.startswith(("class_art.", "path_art."))
-            and combat.player_actions[action_id].coefficient > 0
-        ]
-        if damage_arts:
-            return max(
-                damage_arts,
-                key=lambda action_id: (
-                    combat.player_actions[action_id].coefficient,
-                    action_id,
+        return choose_p6_policy_action(
+            combat,
+            "sentinela_devastador",
+            heal_count=next(
+                (
+                    quantity
+                    for item_id, quantity in current.consumable_quantities
+                    if item_id == "consumable.heal"
                 ),
-            )
-        return driver.combat_action(combat)
+                0,
+            ),
+            budget_limit=current.consumable_budget_limit,
+        )
 
     for attempt in range(8):
         async def s6_mutate(current, action):
@@ -2694,3 +2796,9 @@ async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch
         f"elapsed={driver.clock.elapsed_seconds}s"
     )
     print(f"TDO_PLAYTHROUGH_REPORT={_compact_playthrough_report(driver, final_mark)!r}", flush=True)
+    return actor, driver
+
+
+@pytest.mark.asyncio
+async def test_tdo_full_playthrough_restarts_and_continues(database, monkeypatch):
+    await run_tdo_full_playthrough(database, monkeypatch)

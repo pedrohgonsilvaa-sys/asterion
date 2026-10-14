@@ -3,9 +3,10 @@
 ## Autoridade das fontes
 
 A implementação deve consultar [`docs/SOURCE_AUTHORITY.md`](SOURCE_AUTHORITY.md)
-para identificar as Fontes vigentes e sua hierarquia. Nesta sincronização, são
-Fonte Mestra v1.4.9, Terras do Ocaso v1.0.13, Vales dos Enforcados v1.0.3 e a
-consolidação Visual/UI v1.4.9 de 2026-10-05.
+para identificar as Fontes vigentes e sua hierarquia. Este documento de
+arquitetura não mantém uma segunda lista autoritativa de versões. Snapshots
+históricos preservados abaixo não substituem as Fontes vigentes nem o estado
+atual do repositório.
 
 Este documento registra somente decisões de implementação da fundação. Ele não
 substitui as Fontes. Exemplos de mockup ainda podem usar `SIMULAR` quando não

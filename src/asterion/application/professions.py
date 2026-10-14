@@ -34,6 +34,7 @@ from asterion.infrastructure.db.models import (
 )
 
 REFUGE = "Refúgio do Ocaso"
+SAFE_PROFESSION_LOCATIONS = frozenset((REFUGE, "Vigília do Vale"))
 
 
 class ProfessionMutationCode:
@@ -437,7 +438,7 @@ class ProfessionService:
 
     async def _require_safe_idle(self, session: AsyncSession, character_id: UUID) -> None:
         location = await self._location(session, character_id, lock=True)
-        if location != REFUGE:
+        if location not in SAFE_PROFESSION_LOCATIONS:
             raise ProfessionMutationRejected(ProfessionMutationCode.WRONG_LOCATION)
         await self._require_no_foreground(session, character_id)
 
@@ -451,7 +452,7 @@ class ProfessionService:
     ):
         if len(state) != 2:
             return ProfessionMutationCode.NOT_CONFIGURED
-        if location != REFUGE:
+        if location not in SAFE_PROFESSION_LOCATIONS:
             return ProfessionMutationCode.WRONG_LOCATION
         if foreground:
             return ProfessionMutationCode.FOREGROUND

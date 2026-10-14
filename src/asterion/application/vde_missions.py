@@ -38,6 +38,7 @@ from asterion.application.road import RoadService
 from asterion.application.scripted_combat import (
     apply_action,
     consumable_state,
+    current_combat,
     derive_consumable_selection,
     materialize,
     normalize_character_hp,
@@ -1201,6 +1202,7 @@ class VDEMissionService:
                     victory=False,
                     observation_category="boss",
                 )
+                opening_combat = combat
             else:
                 activity = await materialize(
                     session,
@@ -1211,6 +1213,7 @@ class VDEMissionService:
                     flavor=self._combat_flavor(quest_id),
                     opening_log=self._combat_flavor(quest_id),
                 )
+                opening_combat, _, _ = await current_combat(session, activity)
             if creature is not _SCRIPTED_FAUNA:
                 if quest_id != P12_ID:
                     await self.road._bestiary(
@@ -1222,6 +1225,17 @@ class VDEMissionService:
                     )
             progress = dict(quest.progress or {})
             progress.update(activity_id=str(activity.id), awaiting_retry=False)
+            if opening_combat is not None and opening_combat.result == "defeat":
+                # Opening enemy actions are resolved during materialization. Settle
+                # an immediate defeat here so a dead player is not left in an
+                # active, unanswerable Campaign foreground.
+                activity.status = "failed"
+                character.hp = character.max_hp
+                progress.update(
+                    activity_id=None,
+                    awaiting_retry=True,
+                    opening_defeat=True,
+                )
             quest.progress = progress
             quest.state_version += 1
             return await self._view(session, character, quest, world)

@@ -35,6 +35,7 @@ from asterion.application.round import RoundService
 from asterion.application.vde_missions import (
     MATA_EXPLORE_UNLOCK,
     MATA_HUNT_UNLOCK,
+    MISSION_CONTENT_IDS,
     P8_ID,
     P8_REWARD_SOURCE,
     S7_ID,
@@ -1124,6 +1125,60 @@ async def test_mata_hunt_is_available_after_p8_and_level_gate(database):
     assert view.hunt_enabled is True and view.explore_enabled is True
     prepared = await road.prepare_hunt(actor)
     assert prepared is not None and prepared.kind == "hunt_prepare"
+
+
+@pytest.mark.asyncio
+async def test_p8_opening_defeat_is_settled_and_retryable(database):
+    actor = 999799
+    character_id, sessions = await _seed_vde_ready(database, actor, level=13)
+    missions = VDEMissionService(sessions, "ocaso")
+    road = RoadService(sessions, "ocaso")
+
+    p8 = await missions.start(actor, P8_ID)
+    assert p8 is not None and p8.kind == "enter_mata"
+    arrived = await road.travel_route(actor, VDE_MATA)
+    assert arrived is not None and arrived.location == VDE_MATA
+    p8 = await missions.enter_mata(actor, p8.state_version)
+    for point in ("a", "b", "c"):
+        p8 = await missions.examine(actor, P8_ID, p8.state_version, point)
+
+    # A very low but valid persistent HP snapshot makes the scripted creature's
+    # opening action terminal. This is test setup; settlement and retry remain
+    # public service operations.
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        assert character is not None
+        character.hp = Decimal("1")
+
+    p8 = await missions.start_solo_combat(actor, P8_ID, p8.state_version)
+    assert p8 is not None and p8.kind == "retry"
+    assert p8.progress["awaiting_retry"] is True
+    assert p8.progress.get("activity_id") is None
+    async with sessions() as session:
+        character = await session.get(Character, character_id)
+        assert character is not None and character.hp == character.max_hp
+        assert await session.scalar(
+            select(GameActivity.status).where(
+                GameActivity.character_id == character_id,
+                GameActivity.content_id == MISSION_CONTENT_IDS[P8_ID],
+            )
+        ) == "failed"
+        assert await session.scalar(
+            select(func.count(GameActivity.id)).where(
+                GameActivity.character_id == character_id,
+                GameActivity.status == "active",
+            )
+        ) == 0
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == P8_REWARD_SOURCE,
+            )
+        ) == 0
+
+    retried = await missions.start_solo_combat(actor, P8_ID, p8.state_version)
+    assert retried is not None and retried.kind == "combat"
+    assert retried.activity_id is not None and retried.combat is not None
 
 
 @pytest.mark.asyncio
