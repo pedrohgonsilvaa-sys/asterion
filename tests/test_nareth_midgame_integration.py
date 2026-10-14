@@ -5,11 +5,21 @@ from sqlalchemy import func, select
 
 from asterion.application.groups import GroupService
 from asterion.application.nareth_missions import (
+    CAMPOS,
     CANAIS,
+    OBSERVATORIO,
     P14_ID,
     P14_REWARD_SOURCE,
+    P15_ID,
+    P15_REWARD_SOURCE,
+    P16_ID,
+    P16_REWARD_SOURCE,
     S14_ID,
     S14_REWARD_SOURCE,
+    S15_ID,
+    S15_REWARD_SOURCE,
+    S16_ID,
+    S16_REWARD_SOURCE,
     NarethMissionService,
 )
 from asterion.application.road import (
@@ -25,8 +35,14 @@ from asterion.domain.road import (
     EXPLORATION_PROFILES,
     HUNT_PROFILES,
     MATERIAL_POOLS,
+    NARETH_CAMPOS_EXPLORATION_PROFILE,
+    NARETH_CAMPOS_LOCATION,
+    NARETH_CAMPOS_PROFILE,
     NARETH_CANAIS_LOCATION,
     NARETH_CANAIS_PROFILE,
+    NARETH_OBSERVATORIO_EXPLORATION_PROFILE,
+    NARETH_OBSERVATORIO_LOCATION,
+    NARETH_OBSERVATORIO_PROFILE,
     VARIANT_POOL,
     creature_for,
     material_for,
@@ -39,6 +55,7 @@ from asterion.infrastructure.db.models import (
     Character,
     CodexEntry,
     CodexFragment,
+    EquipmentItem,
     ExplorationAttempt,
     HuntContext,
     HuntRound,
@@ -88,6 +105,43 @@ async def _complete_p14(road, missions, actor, monkeypatch):
     p14 = await missions.resume(actor, P14_ID)
     assert p14 is not None and p14.step == 9
     return await missions.advance(actor, P14_ID, p14.state_version, "deliver_plate"), combat
+
+
+async def _complete_p15_for_test(road, missions, actor, monkeypatch):
+    import asterion.application.scripted_combat as scripted_combat
+
+    p15 = await missions.start(actor, P15_ID)
+    assert p15 is not None and p15.status == "active" and p15.step == 1
+    p15 = await missions.advance(actor, P15_ID, p15.state_version, "speak_talen")
+    assert await road.travel_route(actor, CANAIS) is not None
+    assert await road.travel_route(actor, CAMPOS) is not None
+    await missions.on_location(actor)
+    p15 = await missions.resume(actor, P15_ID)
+    assert p15 is not None and p15.step == 3
+    for action in (
+        "measure_short_distance",
+        "repeat_with_reference",
+        "review_historical_records",
+    ):
+        p15 = await missions.advance(actor, P15_ID, p15.state_version, action)
+    assert p15 is not None and p15.step == 6
+    combat = await missions.start_solo_combat(actor, P15_ID, p15.state_version)
+    assert combat is not None and combat.activity_id is not None
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
+    p15 = await missions.action_combat(
+        actor, combat.activity_id, combat.combat.version, "attack"
+    )
+    assert p15 is not None and p15.step == 7
+    for action in ("examine_natural_plates", "recover_marker"):
+        p15 = await missions.advance(actor, P15_ID, p15.state_version, action)
+    assert await road.travel_route(actor, CANAIS) is not None
+    assert await road.travel_route(actor, NARETH_POSTO_LABEL) is not None
+    await missions.on_location(actor)
+    p15 = await missions.resume(actor, P15_ID)
+    assert p15 is not None and p15.kind == "choice" and p15.step == 10
+    p15 = await missions.choose_midgame_reward(actor, p15.state_version, "2")
+    assert p15 is not None and p15.status == "completed"
+    return p15
 
 
 @pytest.mark.asyncio
@@ -617,3 +671,459 @@ async def test_nareth_canais_manual_hunt_unlocks_round_and_brazier_discovery(
                 ExplorationAttempt.status == "completed",
             )
         ) == 2
+
+
+def test_nareth_campos_hunt_and_exploration_profiles_match_authority():
+    profile = HUNT_PROFILES[NARETH_CAMPOS_LOCATION]
+    assert profile == NARETH_CAMPOS_PROFILE
+    assert profile.creature_weights == (
+        ("escaravelho_canal", 22),
+        ("cervo_horizonte", 20),
+        ("serpe_campinas", 22),
+        ("casco_invertido", 18),
+        ("mariposa_eixo", 15),
+        ("serpe_eixo", 1),
+        ("custodio_invertido", 2),
+    )
+    assert profile.variant_chance == 15
+    assert {
+        creature_id: (creature_for(creature_id).unlock_level, creature_for(creature_id).max_level)
+        for creature_id, _ in profile.creature_weights
+    } == {
+        "escaravelho_canal": (23, 26),
+        "cervo_horizonte": (23, 27),
+        "serpe_campinas": (25, 28),
+        "casco_invertido": (25, 29),
+        "mariposa_eixo": (26, 29),
+        "serpe_eixo": (25, 27),
+        "custodio_invertido": (28, 30),
+    }
+    assert VARIANT_POOL["escaravelho_canal"] == ("resistant", "agile")
+    assert VARIANT_POOL["cervo_horizonte"] == ("furious", "resistant")
+    assert VARIANT_POOL["serpe_campinas"] == ("venomous", "agile")
+    assert VARIANT_POOL["casco_invertido"] == ("resistant", "furious")
+    assert VARIANT_POOL["mariposa_eixo"] == ("agile", "furious")
+    assert VARIANT_POOL["serpe_eixo"] == ()
+    assert VARIANT_POOL["custodio_invertido"] == ()
+
+    explore = NARETH_CAMPOS_EXPLORATION_PROFILE
+    assert EXPLORATION_PROFILES[NARETH_CAMPOS_LOCATION] == explore
+    weights = {
+        category: {
+            result.key: result.weight
+            for result in explore.results
+            if result.category == category
+        }
+        for category in (
+            "great_discovery",
+            "knowledge",
+            "narrative",
+            "combat",
+            "resource",
+            "atmospheric",
+        )
+    }
+    assert weights == {
+        "great_discovery": {"braseiro_linha_quebrada": 50, "linha_nao_fecha": 50},
+        "knowledge": {"sombras_discordam": 60, "rastros_capim": 40},
+        "narrative": {"marco_costas": 55, "distancia_silencio": 45},
+        "combat": {
+            "escaravelho": 22,
+            "cervo": 20,
+            "serpe": 23,
+            "casco": 18,
+            "mariposa": 17,
+        },
+        "resource": {"couro": 30, "erva": 25, "po": 30, "bronze": 15},
+        "atmospheric": {"declive": 34, "ceu_grande": 33, "duas_linhas": 33},
+    }
+    assert NARETH_EXPLORATION_UNIQUE_XP["explore.nareth.campos.braseiro_linha_quebrada"] == 4448
+    assert NARETH_EXPLORATION_UNIQUE_XP["explore.nareth.campos.linha_que_nao_fecha"] == 4448
+    assert NARETH_EXPLORATION_UNIQUE_XP["explore.nareth.campos.sombras_que_discordam"] == 1390
+
+
+@pytest.mark.asyncio
+async def test_nareth_p15_and_s15_public_flows_settle_choice_and_rewards_once(
+    database, monkeypatch
+):
+    import asterion.application.scripted_combat as scripted_combat
+
+    actor = 991405
+    character_id, sessions = await _seed_nareth_entry(database, actor, level=25)
+    road = RoadService(sessions, "ocaso")
+    missions = NarethMissionService(sessions, "ocaso")
+    await _enter_campinas(road, missions, actor)
+    await _complete_p13(road, missions, actor)
+    await _complete_p14(road, missions, actor, monkeypatch)
+
+    offer = await missions.resume(actor, P15_ID)
+    assert offer is not None and offer.available
+    p15 = await missions.start(actor, P15_ID)
+    assert p15 is not None and p15.status == "active" and p15.step == 1
+    p15 = await missions.advance(actor, P15_ID, p15.state_version, "speak_talen")
+    assert p15 is not None and p15.step == 2
+    assert await road.travel_route(actor, CANAIS) is not None
+    assert await road.travel_route(actor, CAMPOS) is not None
+    await missions.on_location(actor)
+    p15 = await missions.resume(actor, P15_ID)
+    assert p15 is not None and p15.step == 3
+    for action in (
+        "measure_short_distance",
+        "repeat_with_reference",
+        "review_historical_records",
+    ):
+        p15 = await missions.advance(actor, P15_ID, p15.state_version, action)
+    assert p15 is not None and p15.kind == "combat_start" and p15.step == 6
+    combat = await missions.start_solo_combat(actor, P15_ID, p15.state_version)
+    assert combat is not None and combat.kind == "combat" and combat.activity_id is not None
+    assert combat.combat.variant is None
+    assert combat.combat.fighters["enemy"].level == 25
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
+    p15 = await missions.action_combat(
+        actor, combat.activity_id, combat.combat.version, "attack"
+    )
+    assert p15 is not None and p15.step == 7 and p15.progress["combat_victory"]
+    for action in ("examine_natural_plates", "recover_marker"):
+        p15 = await missions.advance(actor, P15_ID, p15.state_version, action)
+    assert p15 is not None and p15.kind == "return_posto" and p15.step == 9
+    assert await road.travel_route(actor, CANAIS) is not None
+    assert await road.travel_route(actor, NARETH_POSTO_LABEL) is not None
+    await missions.on_location(actor)
+    p15 = await missions.resume(actor, P15_ID)
+    assert p15 is not None and p15.kind == "choice" and p15.step == 10
+    chosen = await missions.choose_midgame_reward(actor, p15.state_version, "2")
+    assert chosen is not None and chosen.status == "completed"
+    duplicate = await missions.choose_midgame_reward(actor, p15.state_version, "2")
+    assert duplicate is not None and duplicate.status == "completed"
+
+    async with sessions() as session:
+        event = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == P15_REWARD_SOURCE,
+            )
+        )
+        assert event is not None
+        components = list(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(
+                        RewardComponent.reward_event_id == event.id
+                    )
+                )
+            ).all()
+        )
+        assert {(item.kind, item.item_id, item.quantity) for item in components} == {
+            ("xp", None, 24800),
+            ("crowns", None, 480),
+            ("equipment", None, 1),
+        }
+        equipment = await session.scalar(
+            select(EquipmentItem).where(
+                EquipmentItem.character_id == character_id,
+                EquipmentItem.source_key == f"{P15_REWARD_SOURCE}:equipment:2",
+            )
+        )
+        assert equipment is not None
+        assert (equipment.item_name, equipment.slot, equipment.rarity) == (
+            "Selo do Meridiano",
+            "Acessório",
+            "Raro",
+        )
+        assert equipment.item_level == 25 and equipment.bound
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == f"activity:{combat.activity_id}",
+            )
+        ) == 0
+        assert await session.scalar(
+            select(Unlock.id).where(
+                Unlock.character_id == character_id,
+                Unlock.unlock_id == "hunt.manual.nareth.campos_invertidos",
+            )
+        ) is not None
+        assert await session.scalar(
+            select(BestiaryEntry.id).where(
+                BestiaryEntry.character_id == character_id,
+                BestiaryEntry.creature_id == "casco_invertido",
+            )
+        ) is not None
+
+    assert await road.travel_route(actor, CANAIS) is not None
+    assert await road.travel_route(actor, CAMPOS) is not None
+    await missions.on_location(actor)
+    s15 = await missions.resume(actor, S15_ID)
+    assert s15 is not None and s15.available
+    s15 = await missions.start(actor, S15_ID)
+    assert s15 is not None and s15.status == "active" and s15.step == 1
+    for action in (
+        "receive_last_point",
+        "follow_tracks",
+        "find_cargo",
+        "find_travelers",
+        "confirm_no_displacement",
+        "mark_return_route",
+    ):
+        s15 = await missions.advance(actor, S15_ID, s15.state_version, action)
+    assert s15 is not None and s15.kind == "return_posto" and s15.step == 7
+    assert await road.travel_route(actor, CANAIS) is not None
+    assert await road.travel_route(actor, NARETH_POSTO_LABEL) is not None
+    await missions.on_location(actor)
+    s15 = await missions.resume(actor, S15_ID)
+    assert s15 is not None and s15.status == "completed"
+    await missions.advance(actor, S15_ID, s15.state_version - 1, "mark_return_route")
+
+    async with sessions() as session:
+        s15_event = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == S15_REWARD_SOURCE,
+            )
+        )
+        assert s15_event is not None
+        s15_components = list(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(
+                        RewardComponent.reward_event_id == s15_event.id
+                    )
+                )
+            ).all()
+        )
+        assert {(item.kind, item.item_id, item.quantity) for item in s15_components} == {
+            ("xp", None, 9920),
+            ("crowns", None, 240),
+            ("material", "material.nareth.couro_de_horizonte", 2),
+        }
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == S15_REWARD_SOURCE,
+            )
+        ) == 1
+
+
+def test_nareth_observatorio_hunt_and_exploration_profiles_match_authority():
+    profile = HUNT_PROFILES[NARETH_OBSERVATORIO_LOCATION]
+    assert profile == NARETH_OBSERVATORIO_PROFILE
+    assert profile.creature_weights == (
+        ("casco_invertido", 35),
+        ("mariposa_eixo", 30),
+        ("vigia_meridiano", 32),
+        ("custodio_invertido", 3),
+    )
+    assert profile.variant_chance == 18
+    assert {
+        creature_id: (creature_for(creature_id).unlock_level, creature_for(creature_id).max_level)
+        for creature_id, _ in profile.creature_weights
+    } == {
+        "casco_invertido": (25, 29),
+        "mariposa_eixo": (26, 29),
+        "vigia_meridiano": (28, 30),
+        "custodio_invertido": (28, 30),
+    }
+    assert VARIANT_POOL["vigia_meridiano"] == ("resistant", "furious")
+    assert VARIANT_POOL["custodio_invertido"] == ()
+
+    explore = NARETH_OBSERVATORIO_EXPLORATION_PROFILE
+    assert EXPLORATION_PROFILES[NARETH_OBSERVATORIO_LOCATION] == explore
+    weights = {
+        category: {
+            result.key: result.weight
+            for result in explore.results
+            if result.category == category
+        }
+        for category in (
+            "great_discovery",
+            "knowledge",
+            "narrative",
+            "combat",
+            "resource",
+            "atmospheric",
+        )
+    }
+    assert weights == {
+        "great_discovery": {"braseiro_eixo": 50, "observatorio_afundado": 50},
+        "knowledge": {"prumo_fora": 60, "placas_calibracao": 40},
+        "narrative": {"bracos_imoveis": 55, "linha_gravada": 45},
+        "combat": {"casco": 35, "mariposa": 30, "vigia": 35},
+        "resource": {"bronze": 35, "po": 35, "erva": 20, "couro": 10},
+        "atmospheric": {"piso_marcado": 34, "torre_baixa": 33, "horizonte_medido": 33},
+    }
+    assert NARETH_EXPLORATION_UNIQUE_XP["explore.nareth.observatorio.braseiro_do_eixo"] == 4952
+    assert (
+        NARETH_EXPLORATION_UNIQUE_XP[
+            "explore.nareth.observatorio.entrada_observatorio_afundado"
+        ]
+        == 4952
+    )
+    assert NARETH_EXPLORATION_UNIQUE_XP["explore.nareth.observatorio.prumo_fora_do_centro"] == 1548
+
+
+@pytest.mark.asyncio
+async def test_nareth_p16_and_s16_public_flows_settle_campaign_and_codex_once(
+    database, monkeypatch
+):
+    import asterion.application.scripted_combat as scripted_combat
+
+    actor = 991406
+    character_id, sessions = await _seed_nareth_entry(database, actor, level=27)
+    road = RoadService(sessions, "ocaso")
+    missions = NarethMissionService(sessions, "ocaso")
+    await _enter_campinas(road, missions, actor)
+    await _complete_p13(road, missions, actor)
+    await _complete_p14(road, missions, actor, monkeypatch)
+    await _complete_p15_for_test(road, missions, actor, monkeypatch)
+
+    offer = await missions.resume(actor, P16_ID)
+    assert offer is not None and offer.available
+    p16 = await missions.start(actor, P16_ID)
+    assert p16 is not None and p16.status == "active" and p16.step == 1
+    p16 = await missions.advance(actor, P16_ID, p16.state_version, "receive_translation")
+    assert p16 is not None and p16.step == 2
+    assert await road.travel_route(actor, CANAIS) is not None
+    assert await road.travel_route(actor, CAMPOS) is not None
+    assert await road.travel_route(actor, OBSERVATORIO) is not None
+    await missions.on_location(actor)
+    p16 = await missions.resume(actor, P16_ID)
+    assert p16 is not None and p16.step == 4
+    for action in ("examine_alignment", "examine_arm", "record_terms"):
+        p16 = await missions.advance(actor, P16_ID, p16.state_version, action)
+    assert p16 is not None and p16.kind == "combat_start" and p16.step == 7
+    combat = await missions.start_solo_combat(actor, P16_ID, p16.state_version)
+    assert combat is not None and combat.kind == "combat" and combat.activity_id is not None
+    assert combat.combat.variant is None
+    assert combat.combat.fighters["enemy"].name == "Vigia do Meridiano"
+    assert combat.combat.fighters["enemy"].level == 28
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
+    p16 = await missions.action_combat(
+        actor, combat.activity_id, combat.combat.version, "attack"
+    )
+    assert p16 is not None and p16.step == 8 and p16.progress["combat_victory"]
+    p16 = await missions.advance(actor, P16_ID, p16.state_version, "read_analog_panel")
+    assert p16 is not None and p16.step == 9
+    for destination in (CAMPOS, CANAIS, NARETH_POSTO_LABEL):
+        assert await road.travel_route(actor, destination) is not None
+    await missions.on_location(actor)
+    p16 = await missions.resume(actor, P16_ID)
+    assert p16 is not None and p16.status == "completed"
+    await missions.on_location(actor)
+
+    async with sessions() as session:
+        p16_event = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == P16_REWARD_SOURCE,
+            )
+        )
+        assert p16_event is not None
+        p16_components = list(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(
+                        RewardComponent.reward_event_id == p16_event.id
+                    )
+                )
+            ).all()
+        )
+        assert {(item.kind, item.item_id, item.quantity) for item in p16_components} == {
+            ("xp", None, 27800),
+            ("crowns", None, 640),
+            ("material", "material.nareth.bronze_de_marco", 2),
+            ("material", "material.nareth.po_de_eixo", 2),
+        }
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == f"activity:{combat.activity_id}",
+            )
+        ) == 0
+        assert await session.scalar(
+            select(BestiaryEntry.id).where(
+                BestiaryEntry.character_id == character_id,
+                BestiaryEntry.creature_id == "vigia_meridiano",
+            )
+        ) is not None
+        assert await session.scalar(
+            select(LocationDiscovery.id).where(
+                LocationDiscovery.character_id == character_id,
+                LocationDiscovery.location_id == NARETH_OBSERVATORIO_LOCATION,
+            )
+        ) is not None
+        assert await session.scalar(
+            select(CodexFragment.id).where(
+                CodexFragment.character_id == character_id,
+                CodexFragment.fragment_id == "codex.fragment.nareth.observatory.p16_protocol",
+            )
+        ) is not None
+
+    s16 = await missions.resume(actor, S16_ID)
+    assert s16 is not None and s16.available
+    s16 = await missions.start(actor, S16_ID)
+    assert s16 is not None and s16.status == "active" and s16.step == 1
+    s16 = await missions.advance(actor, S16_ID, s16.state_version, "receive_checkpoints")
+    assert s16 is not None and s16.step == 2
+    assert await road.travel_route(actor, CANAIS) is not None
+    assert await road.travel_route(actor, CAMPOS) is not None
+    await missions.on_location(actor)
+    s16 = await missions.resume(actor, S16_ID)
+    assert s16 is not None and s16.step == 3
+    assert await road.travel_route(actor, CANAIS) is not None
+    await missions.on_location(actor)
+    s16 = await missions.resume(actor, S16_ID)
+    assert s16 is not None and s16.step == 4
+    s16 = await missions.advance(actor, S16_ID, s16.state_version, "reject_old_route")
+    assert s16 is not None and s16.step == 5
+    assert await road.travel_route(actor, CAMPOS) is not None
+    assert await road.travel_route(actor, OBSERVATORIO) is not None
+    await missions.on_location(actor)
+    s16 = await missions.resume(actor, S16_ID)
+    assert s16 is not None and s16.step == 6
+    s16 = await missions.advance(actor, S16_ID, s16.state_version, "record_difference")
+    assert s16 is not None and s16.step == 7
+    for destination in (CAMPOS, CANAIS, NARETH_POSTO_LABEL):
+        assert await road.travel_route(actor, destination) is not None
+    await missions.on_location(actor)
+    s16 = await missions.resume(actor, S16_ID)
+    assert s16 is not None and s16.step == 8
+    s16 = await missions.advance(actor, S16_ID, s16.state_version, "update_codex")
+    assert s16 is not None and s16.status == "completed"
+    await missions.advance(actor, S16_ID, s16.state_version - 1, "update_codex")
+
+    async with sessions() as session:
+        s16_event = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == S16_REWARD_SOURCE,
+            )
+        )
+        assert s16_event is not None
+        s16_components = list(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(
+                        RewardComponent.reward_event_id == s16_event.id
+                    )
+                )
+            ).all()
+        )
+        assert {(item.kind, item.item_id, item.quantity) for item in s16_components} == {
+            ("xp", None, 19460),
+            ("crowns", None, 380),
+            ("material", "material.nareth.bronze_de_marco", 2),
+            ("material", "material.nareth.couro_de_horizonte", 1),
+            ("material", "material.nareth.po_de_eixo", 1),
+        }
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == S16_REWARD_SOURCE,
+            )
+        ) == 1
+        assert await session.scalar(
+            select(CodexEntry.id).where(
+                CodexEntry.character_id == character_id,
+                CodexEntry.entry_id == "codex.history.cartografia_do_erro",
+            )
+        ) is not None
