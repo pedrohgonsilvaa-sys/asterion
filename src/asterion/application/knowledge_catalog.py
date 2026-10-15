@@ -98,6 +98,10 @@ CODEX_ENTRIES = (
     ),
     CodexPresentation("codex.figure.nera_voss", "Nera Voss", "figures", 40),
     CodexPresentation("codex.route.rotas_de_nareth", "Rotas de Nareth", "regions", 160),
+    CodexPresentation("codex.route.rotas_das_varzeas", "Rotas das Várzeas", "regions", 250),
+    CodexPresentation("codex.figure.sera_morn", "Sera Morn", "figures", 60),
+    CodexPresentation("codex.location.diques_rubros", "Diques Rubros", "regions", 260, "varzeas.location.diques_rubros"),
+    CodexPresentation("codex.location.porto_da_salmoura", "Porto da Salmoura", "regions", 270, "varzeas.location.porto_da_salmoura"),
     CodexPresentation("codex.figure.talen_orm", "Talen Orm", "figures", 50),
     CodexPresentation("codex.location.canais_secos", "Canais Secos", "regions", 170, "nareth.location.canais_secos"),
     CodexPresentation("codex.location.galerias_do_meridiano", "Galerias do Meridiano", "regions", 175, "nareth.location.galerias_do_meridiano"),
@@ -600,6 +604,19 @@ CODEX_FRAGMENTS = {
         "A Vigília mantém um registro permanente dos desaparecidos. "
         "Alguns destinos são prováveis; outros permanecem sem resposta.",
     ),
+    "codex.fragment.varzeas.p19.rotas_initial": FragmentPresentation(
+        "Rotas iniciais",
+        "Uma passagem segura entre os Diques Rubros e o Porto da Salmoura foi registrada "
+        "a partir das indicações de viajantes atuais.",
+    ),
+    "codex.fragment.varzeas.diques.comporta_primeiro_dique": FragmentPresentation(
+        "Comporta do Primeiro Dique",
+        "Marcas de manutenção e níveis de água foram observados numa comporta parcialmente funcional.",
+    ),
+    "codex.fragment.varzeas.figure.sera_morn": FragmentPresentation(
+        "Coordenação civil",
+        "Sera Morn coordena a manutenção dos diques e a segurança das rotas.",
+    ),
 }
 
 
@@ -796,6 +813,18 @@ ACHIEVEMENTS = (
         "Título · Nome Entalhado",
         hidden=True,
     ),
+    AchievementPresentation(
+        "feat.varzeas.agua_de_ferro",
+        "Água de Ferro",
+        "exploration",
+        "Concluiu P19 — Águas de Ferro.",
+    ),
+    AchievementPresentation(
+        "feat.varzeas.entre_os_diques",
+        "Entre os Diques",
+        "exploration",
+        "Descobriu os resultados únicos publicados dos Diques Rubros.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
@@ -811,6 +840,8 @@ VDE_REGION_ID = "vde"
 VDE_REGION_LABEL = "🪢 Vales dos Enforcados · Nv. 11–20"
 NARETH_REGION_ID = "nareth"
 NARETH_REGION_LABEL = "🌾 Planícies de Nareth · Nv. 21–30"
+VARZEAS_REGION_ID = "varzeas"
+VARZEAS_REGION_LABEL = "🩸 Várzeas Carmesins · Nv. 31–40"
 TDO_LOCATIONS = {
     "tdo.location.estrada_das_cinzas": "Estrada das Cinzas",
     "tdo.location.refugio_do_ocaso": "Refúgio do Ocaso",
@@ -841,7 +872,11 @@ NARETH_LOCATIONS = {
     "nareth.location.observatorio_afundado": "Observatório Afundado",
     "nareth.location.camara_do_arconte": "Câmara do Arconte",
 }
-LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS
+VARZEAS_LOCATIONS = {
+    "varzeas.location.diques_rubros": "Diques Rubros",
+    "varzeas.location.porto_da_salmoura": "Porto da Salmoura",
+}
+LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS | VARZEAS_LOCATIONS
 HABITAT_EVIDENCE_TO_LOCATION = {
     "estrada": "tdo.location.estrada_das_cinzas",
     "Estrada das Cinzas": "tdo.location.estrada_das_cinzas",
@@ -865,6 +900,9 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     "Observatório Afundado": "nareth.location.observatorio_afundado",
     "Câmara do Arconte": "nareth.location.camara_do_arconte",
     **{location_id: location_id for location_id in NARETH_LOCATIONS},
+    "Diques Rubros": "varzeas.location.diques_rubros",
+    "Porto da Salmoura": "varzeas.location.porto_da_salmoura",
+    **{location_id: location_id for location_id in VARZEAS_LOCATIONS},
 }
 MATERIAL_LABELS = {
     "material.tdo.ferro_de_fuligem": "Ferro de Fuligem",
@@ -882,6 +920,12 @@ MATERIAL_LABELS = {
     "material.nareth.couro_de_horizonte": "Couro de Horizonte",
     "material.nareth.erva_de_vento": "Erva de Vento",
     "material.nareth.po_de_eixo": "Pó de Eixo",
+    "material.varzeas.ferro_de_salmoura": "Ferro de Salmoura",
+    "material.varzeas.couro_de_varzea": "Couro de Várzea",
+    "material.varzeas.junco_ferruginoso": "Junco Ferruginoso",
+    "material.varzeas.soro_antigo": "Soro Antigo",
+    "material.varzeas.catalisador_elite_iv": "Catalisador de Elite IV",
+    "material.varzeas.fragmento_aprimoramento_iv": "Fragmento de Aprimoramento IV",
 }
 
 
@@ -1019,6 +1063,10 @@ CREATURE_PRESENTATION = {
     "custodio_sem_norte": CreaturePresentation(
         NARETH_REGION_ID, ("nareth.location.observatorio_do_eixo",)
     ),
+    "cao_salmoura": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.diques_rubros",)),
+    "garca_ferruginosa": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.diques_rubros",)),
+    "portador_rubro": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.diques_rubros",)),
+    "alfa_salmoura": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.diques_rubros",)),
     "arconte_invertido": CreaturePresentation(
         NARETH_REGION_ID, ("nareth.location.camara_do_arconte",)
     ),

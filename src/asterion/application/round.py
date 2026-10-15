@@ -1527,6 +1527,8 @@ class RoundService(RoadService):
             "material.vde.fragmento_aprimoramento_ii": "Fragmento de Aprimoramento II",
             "material.nareth.catalisador_elite_iii": "Catalisador de Elite III",
             "material.nareth.fragmento_aprimoramento_iii": "Fragmento de Aprimoramento III",
+            "material.varzeas.catalisador_elite_iv": "Catalisador de Elite IV",
+            "material.varzeas.fragmento_aprimoramento_iv": "Fragmento de Aprimoramento IV",
         }
         resource_icons = {
             "material.tdo.ferro_de_fuligem": "⛏️",
@@ -1539,6 +1541,8 @@ class RoundService(RoadService):
             "material.vde.fragmento_aprimoramento_ii": "🪨",
             "material.nareth.catalisador_elite_iii": "⚗️",
             "material.nareth.fragmento_aprimoramento_iii": "🪨",
+            "material.varzeas.catalisador_elite_iv": "⚗️",
+            "material.varzeas.fragmento_aprimoramento_iv": "🪨",
         }
         for row in rows:
             payload = row.payload or {}

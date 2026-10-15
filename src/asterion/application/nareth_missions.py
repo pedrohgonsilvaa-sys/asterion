@@ -60,6 +60,7 @@ from asterion.domain.road import (
     create_creature_party_combat,
     materialize_equipment,
 )
+from asterion.domain.road import VARZEAS_REGION_ENTRY_UNLOCK as CRIMSON_UNLOCK
 from asterion.infrastructure.db.combat_codec import decode
 from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
@@ -156,7 +157,6 @@ P18_CODEX = "codex.history.estabilidade_do_veu"
 S18_CODEX = "codex.route.os_caminhos_que_nao_coincidem"
 CHAMBER_UNLOCK = "region.nareth.camara_arconte.available"
 CHAMBER_ROUTE_UNLOCK = "route.nareth.observatorio_camara"
-CRIMSON_UNLOCK = "region.varzeas_carmesins.available"
 MISSION_TITLES = {
     P13_ID: P13_TITLE, S13_ID: S13_TITLE, P14_ID: P14_TITLE, S14_ID: S14_TITLE,
     P15_ID: P15_TITLE, S15_ID: S15_TITLE, P16_ID: P16_TITLE, S16_ID: S16_TITLE,

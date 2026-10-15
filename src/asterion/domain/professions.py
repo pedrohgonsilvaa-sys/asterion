@@ -100,6 +100,12 @@ NARETH_FRAGMENT_III = "material.nareth.fragmento_aprimoramento_iii"
 NARETH_GALLERIES_CORE = "material.nareth.nucleo_galerias_meridiano"
 NARETH_OBSERVATORY_CORE = "material.nareth.nucleo_observatorio_afundado"
 NARETH_ARCHON_CORE = "material.nareth.nucleo_arconte_invertido"
+VARZEAS_IRON = "material.varzeas.ferro_de_salmoura"
+VARZEAS_LEATHER = "material.varzeas.couro_de_varzea"
+VARZEAS_REAGENT = "material.varzeas.junco_ferruginoso"
+VARZEAS_ESSENCE = "material.varzeas.soro_antigo"
+VARZEAS_CATALYST_IV = "material.varzeas.catalisador_elite_iv"
+VARZEAS_FRAGMENT_IV = "material.varzeas.fragmento_aprimoramento_iv"
 
 MATERIAL_NAMES = {
     IRON: "Ferro de Fuligem",
@@ -123,6 +129,12 @@ MATERIAL_NAMES = {
     NARETH_GALLERIES_CORE: "Núcleo das Galerias do Meridiano",
     NARETH_OBSERVATORY_CORE: "Núcleo do Observatório Afundado",
     NARETH_ARCHON_CORE: "Núcleo do Arconte Invertido",
+    VARZEAS_IRON: "Ferro de Salmoura",
+    VARZEAS_LEATHER: "Couro de Várzea",
+    VARZEAS_REAGENT: "Junco Ferruginoso",
+    VARZEAS_ESSENCE: "Soro Antigo",
+    VARZEAS_CATALYST_IV: "Catalisador de Elite IV",
+    VARZEAS_FRAGMENT_IV: "Fragmento de Aprimoramento IV",
     VDE_IRON: "Ferro Enredado",
     VDE_LEATHER: "Couro Musgoso",
     VDE_HERB: "Erva de Turfa",

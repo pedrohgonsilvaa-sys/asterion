@@ -37,6 +37,7 @@ from asterion.application.s4 import S4Service
 from asterion.application.s5 import S5Service
 from asterion.application.s6 import S6Service
 from asterion.application.talents import TalentService
+from asterion.application.varzeas_missions import VarzeasMissionService
 from asterion.application.vde_missions import VDEMissionService
 from asterion.application.world import WorldService
 from asterion.bot.character_progression_handlers import character_progression_router
@@ -67,6 +68,7 @@ from asterion.bot.s4_handlers import s4_router
 from asterion.bot.s5_handlers import s5_router
 from asterion.bot.s6_handlers import s6_router
 from asterion.bot.settings_handlers import settings_router
+from asterion.bot.varzeas_missions_handlers import varzeas_missions_router
 from asterion.bot.vde_missions_handlers import vde_missions_router
 from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
@@ -111,6 +113,7 @@ def get_bot_runtime() -> BotRuntime:
     p7 = P7Service(SessionFactory, settings.server_id, groups=groups)
     vde_missions = VDEMissionService(SessionFactory, settings.server_id, groups=groups)
     nareth_missions = NarethMissionService(SessionFactory, settings.server_id, groups=groups)
+    varzeas_missions = VarzeasMissionService(SessionFactory, settings.server_id)
     s6 = S6Service(SessionFactory, settings.server_id, groups=groups)
     class_trials = ClassTrialService(SessionFactory, settings.server_id)
     paths = PathSelectionService(SessionFactory, settings.server_id)
@@ -143,6 +146,7 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(
         nareth_missions_router(nareth_missions, settings.creation_images)
     )
+    dispatcher.include_router(varzeas_missions_router(varzeas_missions, settings.creation_images))
     dispatcher.include_router(
         groups_router(
             groups,
@@ -253,6 +257,7 @@ def get_bot_runtime() -> BotRuntime:
             dungeons=dungeons,
             vde_missions=vde_missions,
             nareth_missions=nareth_missions,
+            varzeas_missions=varzeas_missions,
         )
     )
     dispatcher.include_router(

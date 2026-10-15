@@ -43,6 +43,8 @@ NARETH_CANAIS_LOCATION = "nareth.location.canais_secos"
 NARETH_CAMPOS_LOCATION = "nareth.location.campos_invertidos"
 NARETH_OBSERVATORIO_LOCATION = "nareth.location.observatorio_do_eixo"
 NARETH_CAMARA_LOCATION = "nareth.location.camara_do_arconte"
+VARZEAS_DIQUES_LOCATION = "varzeas.location.diques_rubros"
+VARZEAS_PORTO_LOCATION = "varzeas.location.porto_da_salmoura"
 NARETH_CAMPINAS = "Campinas do Meridiano"
 NARETH_POSTO = "Posto de Nareth"
 NARETH_CANAIS = "Canais Secos"
@@ -50,6 +52,9 @@ NARETH_CAMPOS = "Campos Invertidos"
 NARETH_OBSERVATORIO = "Observatório do Eixo"
 NARETH_CAMARA = "Câmara do Arconte"
 NARETH_REGION = "Planícies de Nareth"
+VARZEAS_DIQUES = "Diques Rubros"
+VARZEAS_PORTO = "Porto da Salmoura"
+VARZEAS_REGION = "Várzeas Carmesins"
 NARETH_BRAZIER_HORIZONTE = "nareth.brazier.horizonte"
 NARETH_BRAZIER_POSTO = "nareth.brazier.posto"
 NARETH_BRAZIER_CANAIS = "nareth.brazier.canal_alto"
@@ -64,6 +69,13 @@ NARETH_CANAIS_CAMPOS_ROUTE = "route.nareth.canais_campos"
 NARETH_CAMPOS_OBSERVATORIO_ROUTE = "route.nareth.campos_observatorio"
 NARETH_OBSERVATORIO_CAMARA_ROUTE = "route.nareth.observatorio_camara"
 NARETH_REGION_UNLOCK = "region.nareth.available"
+VARZEAS_REGION_ENTRY_UNLOCK = "region.varzeas_carmesins.available"
+VARZEAS_DIQUES_BRAZIER = "varzeas.brazier.dique_alto"
+VARZEAS_PORTO_BRAZIER = "varzeas.brazier.porto"
+VARZEAS_DIQUES_HUNT_UNLOCK = "hunt.manual.varzeas.diques_rubros"
+VARZEAS_DIQUES_EXPLORE_UNLOCK = "explore.varzeas.diques_rubros"
+VARZEAS_DIQUES_ROUND_FAMILIARITY = "hunt_round.varzeas.diques_rubros"
+VARZEAS_DIQUES_PORTO_ROUTE = "route.varzeas.diques_porto"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
 BOSQUE_BRAZIER = "tdo.brazier.galhos_mortos"
@@ -758,6 +770,70 @@ NARETH_ARCONTE_INVERTIDO = Creature(
     ("golpe_diretiva",),
     (("golpe_diretiva", "Golpe de Diretiva", D("1.00"), 0, D(0), 0),),
 )
+VARZEAS_SALMOURA_HOUND = Creature(
+    "cao_salmoura", "Cão de Salmoura", "common", "predator", 31, 34, 34,
+    ("mordida_varzea", "rasgo_salgado", "investida_dique"),
+    (
+        ("mordida_varzea", "Mordida de Várzea", D("1.00"), 0, D(0), 0),
+        ("rasgo_salgado", "Rasgo Salgado", D("0.90"), 0, D(0), 0, "bleed", 1, False, 2),
+        ("investida_dique", "Investida de Dique", D("1.30"), 0, D(0), 0, None, 0, False, 3),
+    ),
+    ai_priority=("rasgo_salgado", "investida_dique"),
+)
+VARZEAS_IRON_HERON = Creature(
+    "garca_ferruginosa", "Garça Ferruginosa", "common", "predator", 31, 34, 33,
+    ("bicada_agua_rasa", "passo_longo", "perfuracao_oportunista"),
+    (
+        ("bicada_agua_rasa", "Bicada de Água Rasa", D("0.95"), 0, D(0), 0),
+        ("passo_longo", "Passo Longo", D("1.05"), 0, D(0), 0, None, 0, False, 2),
+        (
+            "perfuracao_oportunista", "Perfuração Oportunista", D("0.85"), 0, D(0), 0,
+            None, 0, False, 3, None, D(0), D(0), 0, False, "opponent", None,
+            None, None, (), (), D("0.50"), D(0), D(0), D(0), D("0.10"), D("0.40"),
+        ),
+    ),
+    ai_priority=("perfuracao_oportunista", "passo_longo"),
+)
+VARZEAS_CRIMSON_BEARER = Creature(
+    "portador_rubro", "Portador Rubro", "uncommon", "balanced", 31, 35, 30,
+    ("golpe_contencao", "ferramenta_quebrada", "persistencia_residual"),
+    (
+        ("golpe_contencao", "Golpe de Contenção", D("1.00"), 0, D(0), 0),
+        (
+            "ferramenta_quebrada", "Ferramenta Quebrada", D("0.90"), 0, D("0.10"), 2,
+            None, 0, False, 3, "defense",
+        ),
+        (
+            "persistencia_residual", "Persistência Residual", D(0), 0, D(0), 0,
+            None, 0, False, 5, None, D(0), D(0), 0, False, "self", None,
+            D("0.35"), 1, (), (), D("0.50"), D(0), D(0), D(0), D(0), D(0),
+            D("0.40"), 0, D(0), D("0.04"),
+        ),
+    ),
+    ai_priority=("persistencia_residual", "ferramenta_quebrada"),
+)
+VARZEAS_BRINE_ALPHA = Creature(
+    "alfa_salmoura", "Alfa de Salmoura", "elite", "predator", 33, 34, 3,
+    ("mordida_alfa_salmoura", "rasgo_salmoura", "cacada_margem", "corrida_dique"),
+    (
+        ("mordida_alfa_salmoura", "Mordida do Alfa", D("1.00"), 0, D(0), 0),
+        ("rasgo_salmoura", "Rasgo de Salmoura", D("0.90"), 0, D(0), 0, "bleed", 1, False, 2),
+        (
+            "cacada_margem", "Caçada de Margem", D("1.35"), 0, D(0), 0,
+            None, 0, False, 3, None, D(0), D(0), 0, False, "opponent", None,
+            None, None, (), (), D("0.50"), D(0), D(0), D("0.10"),
+        ),
+        ("corrida_dique", "Corrida pelo Dique", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("rasgo_salmoura", "cacada_margem", "corrida_dique"),
+)
+VARZEAS_CREATURES = (
+    VARZEAS_SALMOURA_HOUND,
+    VARZEAS_IRON_HERON,
+    VARZEAS_CRIMSON_BEARER,
+    VARZEAS_BRINE_ALPHA,
+)
+
 NARETH_CREATURES = (
     NARETH_MERIDIAN_HOUND,
     NARETH_MARKER_VULTURE,
@@ -1106,6 +1182,7 @@ CREATURE_CATALOG = (
     *CREATURE_CATALOG,
     *VDE_CREATURES,
     *VDE_DUNGEON_CREATURES,
+    *VARZEAS_CREATURES,
     *NARETH_CREATURES,
     *NARETH_DUNGEON_BESTIARY_CREATURES,
     *CAMPAIGN_BOSS_CREATURES,
@@ -1155,6 +1232,10 @@ VARIANT_POOL = {
     "alfa_horizonte": (),
     "serpe_eixo": (),
     "custodio_invertido": (),
+    "cao_salmoura": ("furious", "agile", "hemorrhagic"),
+    "garca_ferruginosa": ("agile", "furious"),
+    "portador_rubro": ("resistant", "furious", "agile"),
+    "alfa_salmoura": (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -1285,6 +1366,8 @@ LOCATION_LEVEL_BANDS = {
     "Campinas do Meridiano": (21, 23),
     "Posto de Nareth": (21, 23),
     "Câmara do Arconte": (30, 30),
+    "Diques Rubros": (31, 34),
+    "Porto da Salmoura": (31, 34),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -1678,6 +1761,20 @@ NARETH_OBSERVATORIO_PROFILE = HuntLocationProfile(
     round_familiarity="hunt_round.nareth.observatorio_do_eixo",
     explore_unlock="explore.nareth.observatorio_do_eixo",
 )
+VARZEAS_DIQUES_PROFILE = HuntLocationProfile(
+    local_id=VARZEAS_DIQUES_LOCATION,
+    label=VARZEAS_DIQUES,
+    creature_weights=(
+        ("cao_salmoura", 34),
+        ("garca_ferruginosa", 33),
+        ("portador_rubro", 30),
+        ("alfa_salmoura", 3),
+    ),
+    variant_chance=10,
+    hunt_unlock=VARZEAS_DIQUES_HUNT_UNLOCK,
+    round_familiarity=VARZEAS_DIQUES_ROUND_FAMILIARITY,
+    explore_unlock=VARZEAS_DIQUES_EXPLORE_UNLOCK,
+)
 
 NARETH_CANAIS_EXPLORATION_PROFILE = ExplorationLocationProfile(
     local_id=NARETH_CANAIS_LOCATION,
@@ -1750,6 +1847,28 @@ NARETH_OBSERVATORIO_EXPLORATION_PROFILE = ExplorationLocationProfile(
     ),
 )
 
+VARZEAS_DIQUES_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=VARZEAS_DIQUES_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("first_dike_gate", "great_discovery", "explore.varzeas.diques.comporta_primeiro_dique", 100, "A comporta do primeiro dique conserva marcas de manutenção e níveis de água.", min_level=31, unique=True),
+        ExplorationResultDefinition("level_marks", "knowledge", "explore.varzeas.diques.marcas_nivel", 60, "Marcas de nível ajudam a comparar o avanço da água ferruginosa.", min_level=31),
+        ExplorationResultDefinition("layered_rust", "knowledge", "explore.varzeas.diques.ferrugem_camadas", 40, "A ferrugem se acumula em camadas distintas ao longo das estruturas.", min_level=31),
+        ExplorationResultDefinition("water_without_rain", "narrative", "explore.varzeas.diques.agua_sobe_sem_chuva", 70, "A água sobe sem chuva recente observável.", min_level=31, unique=True),
+        ExplorationResultDefinition("salt_walkway", "narrative", "explore.varzeas.diques.passarela_sal", 30, "Uma passarela conserva depósitos de salmoura.", min_level=31),
+        ExplorationResultDefinition("cao_salmoura", "combat", "explore.varzeas.diques.combat.cao_salmoura", 40, "Um Cão de Salmoura surge entre os diques.", min_level=31, creature_id="cao_salmoura"),
+        ExplorationResultDefinition("garca_ferruginosa", "combat", "explore.varzeas.diques.combat.garca_ferruginosa", 35, "Uma Garça Ferruginosa ocupa a margem rasa.", min_level=31, creature_id="garca_ferruginosa"),
+        ExplorationResultDefinition("portador_rubro", "combat", "explore.varzeas.diques.combat.portador_rubro", 25, "Um Portador Rubro atravessa a passarela.", min_level=31, creature_id="portador_rubro"),
+        ExplorationResultDefinition("ferro_salmoura", "resource", "explore.varzeas.diques.ferro_salmoura", 35, "Ferro de Salmoura pode ser recolhido entre as peças do dique.", min_level=31),
+        ExplorationResultDefinition("couro_varzea", "resource", "explore.varzeas.diques.couro_varzea", 30, "Couro de Várzea pode ser recolhido nas margens.", min_level=31),
+        ExplorationResultDefinition("junco_ferruginoso", "resource", "explore.varzeas.diques.junco_ferruginoso", 25, "Junco Ferruginoso cresce junto à água.", min_level=31),
+        ExplorationResultDefinition("soro_antigo", "resource", "explore.varzeas.diques.soro_antigo", 10, "Soro Antigo pode ser obtido nas margens.", min_level=31),
+        ExplorationResultDefinition("stuck_gate", "atmospheric", "explore.varzeas.diques.comporta_travada", 34, "Uma comporta permanece travada apesar das marcas recentes de manutenção.", min_level=31),
+        ExplorationResultDefinition("salt_on_wood", "atmospheric", "explore.varzeas.diques.sal_madeira", 33, "O sal se acumula nas tábuas da passarela.", min_level=31),
+        ExplorationResultDefinition("red_water_gray_sky", "atmospheric", "explore.varzeas.diques.agua_vermelha_ceu_cinza", 33, "A água vermelha reflete apenas o céu cinzento.", min_level=31),
+    ),
+)
+
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
     CHARNECA_LOCATION: CHARNECA_EXPLORATION_PROFILE,
@@ -1763,6 +1882,7 @@ EXPLORATION_PROFILES = {
     NARETH_CANAIS_LOCATION: NARETH_CANAIS_EXPLORATION_PROFILE,
     NARETH_CAMPOS_LOCATION: NARETH_CAMPOS_EXPLORATION_PROFILE,
     NARETH_OBSERVATORIO_LOCATION: NARETH_OBSERVATORIO_EXPLORATION_PROFILE,
+    VARZEAS_DIQUES_LOCATION: VARZEAS_DIQUES_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
@@ -1779,6 +1899,7 @@ HUNT_PROFILES = {
     NARETH_CANAIS_LOCATION: NARETH_CANAIS_PROFILE,
     NARETH_CAMPOS_LOCATION: NARETH_CAMPOS_PROFILE,
     NARETH_OBSERVATORIO_LOCATION: NARETH_OBSERVATORIO_PROFILE,
+    VARZEAS_DIQUES_LOCATION: VARZEAS_DIQUES_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -1973,6 +2094,14 @@ NARETH_BASIC_MATERIAL_CREATURE_IDS = frozenset(
         "custodio_invertido",
     }
 )
+VARZEAS_BASIC_MATERIAL_CREATURE_IDS = frozenset(
+    {
+        "cao_salmoura",
+        "garca_ferruginosa",
+        "portador_rubro",
+        "alfa_salmoura",
+    }
+)
 
 MATERIAL_POOLS = {
     "dog_cinereo": (("material.tdo.couro_escoriado", 100),),
@@ -2089,6 +2218,19 @@ MATERIAL_POOLS = {
     "custodio_invertido": (
         ("material.nareth.bronze_de_marco", 75),
         ("material.nareth.po_de_eixo", 25),
+    ),
+    "cao_salmoura": (("material.varzeas.couro_de_varzea", 100),),
+    "garca_ferruginosa": (
+        ("material.varzeas.junco_ferruginoso", 70),
+        ("material.varzeas.soro_antigo", 30),
+    ),
+    "portador_rubro": (
+        ("material.varzeas.soro_antigo", 70),
+        ("material.varzeas.ferro_de_salmoura", 30),
+    ),
+    "alfa_salmoura": (
+        ("material.varzeas.couro_de_varzea", 80),
+        ("material.varzeas.soro_antigo", 20),
     ),
 }
 
@@ -2280,7 +2422,13 @@ def create_player_versus_player_combat(
     )
 
 
-def _creature_actions(creature: Creature, prefix: str = "") -> tuple[dict[str, Action], tuple[str, ...], tuple[str, ...]]:
+def _creature_actions(
+    creature: Creature,
+    prefix: str = "",
+    *,
+    actor_hp: Decimal | None = None,
+    actor_attack: Decimal | None = None,
+) -> tuple[dict[str, Action], tuple[str, ...], tuple[str, ...]]:
     actions: dict[str, Action] = {}
     key_map: dict[str, str] = {}
     for specification in creature.actions:
@@ -2319,6 +2467,11 @@ def _creature_actions(creature: Creature, prefix: str = "") -> tuple[dict[str, A
         )
         vampirism_fraction = D(specification[28]) if len(specification) > 28 else D(0)
         heal_coefficient = D(specification[29]) if len(specification) > 29 else D(0)
+        heal_hp_fraction = D(specification[30]) if len(specification) > 30 else D(0)
+        if heal_hp_fraction > 0:
+            if actor_hp is None or actor_attack is None or actor_attack <= 0:
+                raise ValueError("HP-fraction creature healing requires resolved actor stats.")
+            heal_coefficient = actor_hp * heal_hp_fraction / actor_attack
         actions[actual_key] = Action(
             actual_key,
             label,
@@ -2470,8 +2623,6 @@ def create_creature_party_combat(
             raise ValueError("Creature combat fighter keys must be unique.")
         creature = specification.creature
         prefix = "" if len(enemies) == 1 else f"e{index}_"
-        enemy_actions, cycle, priority = _creature_actions(creature, prefix)
-        actions.update(enemy_actions)
         base_stats = road_enemy_stats(
             creature, specification.level, specification.variant
         )
@@ -2485,6 +2636,13 @@ def create_creature_party_combat(
             base_stats = _apply_stat_multipliers(
                 base_stats, specification.stat_multipliers
             )
+        enemy_actions, cycle, priority = _creature_actions(
+            creature,
+            prefix,
+            actor_hp=base_stats.hp,
+            actor_attack=base_stats.attack,
+        )
+        actions.update(enemy_actions)
         fighters[specification.fighter_key] = Fighter(
             id=(
                 "enemy"

@@ -73,6 +73,17 @@ from asterion.domain.road import (
     RUINS_LOCATION,
     RUINS_ROUTE_UNLOCK,
     RULESET,
+    VARZEAS_BASIC_MATERIAL_CREATURE_IDS,
+    VARZEAS_DIQUES,
+    VARZEAS_DIQUES_BRAZIER,
+    VARZEAS_DIQUES_EXPLORE_UNLOCK,
+    VARZEAS_DIQUES_HUNT_UNLOCK,
+    VARZEAS_DIQUES_LOCATION,
+    VARZEAS_DIQUES_PORTO_ROUTE,
+    VARZEAS_PORTO,
+    VARZEAS_PORTO_BRAZIER,
+    VARZEAS_PORTO_LOCATION,
+    VARZEAS_REGION_ENTRY_UNLOCK,
     VDE_BAIXIOS_BRAZIER,
     VDE_BAIXIOS_CLAUSTRO_ROUTE,
     VDE_BAIXIOS_LOCATION,
@@ -153,9 +164,15 @@ NARETH_CAMARA_LABEL = NARETH_CAMARA
 REGION = "Terras do Ocaso"
 VDE_REGION = "Vales dos Enforcados"
 NARETH_REGION = "Planícies de Nareth"
+VARZEAS_REGION = "Várzeas Carmesins"
+VARZEAS_DIQUES_LABEL = VARZEAS_DIQUES
+VARZEAS_PORTO_LABEL = VARZEAS_PORTO
 VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO))
 NARETH_LOCATIONS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL))
+VARZEAS_LOCATIONS = frozenset((VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL))
 NARETH_REGION_ROUTE_ENDPOINTS = frozenset((VDE_BERCO, NARETH_CAMPINAS_LABEL))
+NARETH_VARZEAS_ROUTE_ENDPOINTS = frozenset((NARETH_CAMARA_LABEL, VARZEAS_DIQUES_LABEL))
+VARZEAS_DIQUES_PORTO_ROUTE_ENDPOINTS = frozenset((VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL))
 NARETH_CAMPINAS_POSTO_ROUTE_ENDPOINTS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL))
 NARETH_POSTO_CANAIS_ROUTE_ENDPOINTS = frozenset((NARETH_POSTO_LABEL, NARETH_CANAIS))
 NARETH_CANAIS_CAMPOS_ROUTE_ENDPOINTS = frozenset((NARETH_CANAIS, NARETH_CAMPOS))
@@ -188,8 +205,10 @@ OVERLAND_ROUTE_PAIRS = (
     NARETH_CANAIS_CAMPOS_ROUTE_ENDPOINTS,
     NARETH_CAMPOS_OBSERVATORIO_ROUTE_ENDPOINTS,
     NARETH_OBSERVATORIO_CAMARA_ROUTE_ENDPOINTS,
+    NARETH_VARZEAS_ROUTE_ENDPOINTS,
+    VARZEAS_DIQUES_PORTO_ROUTE_ENDPOINTS,
 )
-TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL))
+TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL, VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL))
 BRAZIER_FOR_LOCATION = {
     ROAD: "tdo.brazier.estrada",
     REFUGE: "tdo.brazier.refugio_do_ocaso",
@@ -206,6 +225,8 @@ BRAZIER_FOR_LOCATION = {
     NARETH_CANAIS: NARETH_BRAZIER_CANAIS,
     NARETH_CAMPOS: NARETH_BRAZIER_CAMPOS,
     NARETH_OBSERVATORIO: NARETH_BRAZIER_OBSERVATORIO,
+    VARZEAS_DIQUES_LABEL: VARZEAS_DIQUES_BRAZIER,
+    VARZEAS_PORTO_LABEL: VARZEAS_PORTO_BRAZIER,
 }
 BRAZIER_DETAILS = {
     "tdo.brazier.estrada": (ROAD, "Braseiro da Estrada"),
@@ -223,6 +244,8 @@ BRAZIER_DETAILS = {
     NARETH_BRAZIER_CANAIS: (NARETH_CANAIS, "Braseiro do Canal Alto"),
     NARETH_BRAZIER_CAMPOS: (NARETH_CAMPOS, "Braseiro da Linha Quebrada"),
     NARETH_BRAZIER_OBSERVATORIO: (NARETH_OBSERVATORIO, "Braseiro do Eixo"),
+    VARZEAS_DIQUES_BRAZIER: (VARZEAS_DIQUES_LABEL, "Braseiro do Dique Alto"),
+    VARZEAS_PORTO_BRAZIER: (VARZEAS_PORTO_LABEL, "Braseiro do Porto"),
 }
 HUNT_CONTENT = "road_manual_hunt"
 GROUP_HUNT_CONTENT = "road_group_hunt"
@@ -266,6 +289,12 @@ MATERIAL_LABELS = {
     "material.nareth.nucleo_arconte_invertido": "Núcleo do Arconte Invertido",
     "material.nareth.nucleo_galerias_meridiano": "Núcleo das Galerias do Meridiano",
     "material.nareth.nucleo_observatorio_afundado": "Núcleo do Observatório Afundado",
+    "material.varzeas.ferro_de_salmoura": "Ferro de Salmoura",
+    "material.varzeas.couro_de_varzea": "Couro de Várzea",
+    "material.varzeas.junco_ferruginoso": "Junco Ferruginoso",
+    "material.varzeas.soro_antigo": "Soro Antigo",
+    "material.varzeas.catalisador_elite_iv": "Catalisador de Elite IV",
+    "material.varzeas.fragmento_aprimoramento_iv": "Fragmento de Aprimoramento IV",
 }
 VDE_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.vde.garganta.ferro_enredado": "material.vde.ferro_enredado",
@@ -284,6 +313,16 @@ VDE_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.vde.claustro.resina_enredada": "material.vde.resina_enredada",
     "explore.vde.claustro.erva_de_turfa": "material.vde.erva_de_turfa",
     "explore.vde.claustro.couro_musgoso": "material.vde.couro_musgoso",
+}
+VARZEAS_EXPLORATION_RESOURCE_MATERIALS = {
+    "explore.varzeas.diques.ferro_salmoura": "material.varzeas.ferro_de_salmoura",
+    "explore.varzeas.diques.couro_varzea": "material.varzeas.couro_de_varzea",
+    "explore.varzeas.diques.junco_ferruginoso": "material.varzeas.junco_ferruginoso",
+    "explore.varzeas.diques.soro_antigo": "material.varzeas.soro_antigo",
+}
+VARZEAS_EXPLORATION_UNIQUE_XP = {
+    "explore.varzeas.diques.comporta_primeiro_dique": 5760,
+    "explore.varzeas.diques.agua_sobe_sem_chuva": 1800,
 }
 NARETH_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.nareth.campinas.bronze_de_marco": "material.nareth.bronze_de_marco",
@@ -402,7 +441,12 @@ def _grade_catalyst_for_level(level: int) -> str:
 
 def _grade_material_for_level(level: int, material_kind: str) -> str:
     grade = equipment_grade(level)
-    regional_grade = {1: ("tdo", "i"), 2: ("vde", "ii"), 3: ("nareth", "iii")}.get(grade)
+    regional_grade = {
+        1: ("tdo", "i"),
+        2: ("vde", "ii"),
+        3: ("nareth", "iii"),
+        4: ("varzeas", "iv"),
+    }.get(grade)
     if regional_grade is not None:
         region, roman_grade = regional_grade
         return f"material.{region}.{material_kind}_{roman_grade}"
@@ -673,6 +717,23 @@ class RoadService:
                 elif pair == NARETH_OBSERVATORIO_CAMARA_ROUTE_ENDPOINTS:
                     gate_ok = await self._nareth_mission_started_or_completed(s, c.id, "P17")
                     route_unlock = NARETH_OBSERVATORIO_CAMARA_ROUTE
+                elif pair == NARETH_VARZEAS_ROUTE_ENDPOINTS:
+                    gate_ok = bool(
+                        c.level >= 31
+                        and await self._nareth_mission_completed(s, c.id, "P18")
+                        and await s.scalar(
+                            select(Unlock.id).where(
+                                Unlock.character_id == c.id,
+                                Unlock.unlock_id == VARZEAS_REGION_ENTRY_UNLOCK,
+                            )
+                        )
+                    )
+                    route_unlock = VARZEAS_REGION_ENTRY_UNLOCK
+                elif pair == VARZEAS_DIQUES_PORTO_ROUTE_ENDPOINTS:
+                    gate_ok = bool(
+                        await self._nareth_mission_started_or_completed(s, c.id, "P19")
+                    )
+                    route_unlock = VARZEAS_DIQUES_PORTO_ROUTE
                 elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
                     gate_ok = (
                         await self._p4_completed(s, c.id)
@@ -772,6 +833,9 @@ class RoadService:
                 return blocking
             world.location = destination
             world.region = (
+                VARZEAS_REGION
+                if destination in VARZEAS_LOCATIONS
+                else
                 NARETH_REGION
                 if destination in NARETH_LOCATIONS
                 else VDE_REGION
@@ -801,6 +865,10 @@ class RoadService:
                 await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=NARETH_OBSERVATORIO_LOCATION)
             elif destination == NARETH_CAMARA_LABEL:
                 await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=NARETH_CAMARA_LOCATION)
+            elif destination == VARZEAS_DIQUES_LABEL:
+                await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=VARZEAS_DIQUES_LOCATION)
+            elif destination == VARZEAS_PORTO_LABEL:
+                await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=VARZEAS_PORTO_LOCATION)
             return await self._view_for_world(s, c, world)
 
     async def start_hunt(self, actor: int) -> RoadView | None:
@@ -1727,6 +1795,7 @@ class RoadService:
                 if (
                     context.creature_id in VDE_BASIC_MATERIAL_CREATURE_IDS
                     or context.creature_id in NARETH_BASIC_MATERIAL_CREATURE_IDS
+                    or context.creature_id in VARZEAS_BASIC_MATERIAL_CREATURE_IDS
                 ):
                     material_seed = f"{context.seed}:material.basic.{ordinal}"
                 elif context.category == "common" and ordinal == 0:
@@ -1933,6 +2002,9 @@ class RoadService:
             NARETH_OBSERVATORIO_LOCATION,
         }:
             await self._settle_nareth_exploration(s, c, attempt, base_text)
+            return
+        if attempt.local_id == VARZEAS_DIQUES_LOCATION:
+            await self._settle_varzeas_exploration(s, c, attempt, base_text)
             return
         if attempt.local_id in {
             VDE_GARGANTA_LOCATION,
@@ -2475,6 +2547,107 @@ class RoadService:
         attempt.completed_at = attempt.completed_at or datetime.now(UTC)
         if should_consolidate:
             await consolidate_character_level(s, c)
+
+    async def _settle_varzeas_exploration(self, s, c, attempt, base_text: str) -> None:
+        """Settle the published Diques outcomes with the shared road economy."""
+        source_id = f"explore:{attempt.id}"
+        existing = await s.scalar(
+            select(RewardEvent)
+            .where(RewardEvent.character_id == c.id, RewardEvent.source_id == source_id)
+            .with_for_update()
+        )
+        if existing is not None:
+            return
+        event = RewardEvent(character_id=c.id, source_id=source_id)
+        s.add(event)
+        await s.flush()
+        components: list[tuple[str, str | None, int, dict]] = []
+        lines = [base_text]
+        should_consolidate = False
+
+        if attempt.category == "combat" and attempt.activity_id is not None:
+            context = await s.scalar(
+                select(HuntContext)
+                .where(HuntContext.game_activity_id == attempt.activity_id)
+                .with_for_update()
+            )
+            if context is None:
+                raise RuntimeError("Varzeas exploration combat is missing HuntContext")
+            enough = c.vigor >= 4
+            xp = enemy_xp(
+                context.enemy_level,
+                context.category,
+                Decimal(1) if enough else Decimal("0.25"),
+                player_level=c.level,
+            )
+            c.xp += xp
+            components.append(("xp", None, xp, {}))
+            lines.append(f"✨ XP · {xp}")
+            if enough:
+                c.vigor -= 4
+                award = int(
+                    ((Decimal(100 + 15 * context.enemy_level) * Decimal("0.15")) / 10)
+                    .quantize(Decimal(1), rounding=ROUND_HALF_EVEN)
+                    * 10
+                )
+                c.crowns += award
+                components.append(("crowns", None, award, {}))
+                lines.append(f"🪙 Coroas · {award}")
+            bestiary = await self._bestiary(
+                s,
+                c.id,
+                context.creature_id,
+                victory=True,
+                elite=context.category == "elite",
+                observation_category=context.category,
+            )
+            if bestiary is not None:
+                components.append(("bestiary", context.creature_id, 1, bestiary))
+                lines.append(f"📖 Bestiário · {bestiary['creature_name']} · {bestiary['stage_label']}")
+            should_consolidate = True
+        elif attempt.category == "resource":
+            material_id = VARZEAS_EXPLORATION_RESOURCE_MATERIALS.get(attempt.result_id)
+            if material_id is None:
+                raise RuntimeError(f"unknown Varzeas exploration resource {attempt.result_id!r}")
+            if c.vigor >= 4:
+                c.vigor -= 4
+                award = int(
+                    ((Decimal(100 + 15 * c.level) * Decimal("0.10")) / 10)
+                    .quantize(Decimal(1), rounding=ROUND_HALF_EVEN)
+                    * 10
+                )
+                c.crowns += award
+                components.extend(
+                    (("crowns", None, award, {}), ("material", material_id, 1, {"material_id": material_id}))
+                )
+                lines.extend((f"🪙 Coroas · {award}", f"📦 {MATERIAL_LABELS[material_id]} · 1"))
+                await self._deliver_material(s, c, material_id, 1, f"explore:{attempt.id}:resource")
+        else:
+            xp = VARZEAS_EXPLORATION_UNIQUE_XP.get(attempt.result_id, 0)
+            if xp:
+                c.xp += xp
+                components.append(("xp", None, xp, {}))
+                lines.append(f"✨ XP · {xp}")
+                should_consolidate = True
+            if attempt.result_id == "explore.varzeas.diques.comporta_primeiro_dique":
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id="codex.location.diques_rubros")
+                await self._ensure(
+                    s,
+                    CodexFragment,
+                    character_id=c.id,
+                    entry_id="codex.location.diques_rubros",
+                    fragment_id="codex.fragment.varzeas.diques.comporta_primeiro_dique",
+                )
+
+        for kind, item_id, quantity, payload in components:
+            s.add(RewardComponent(reward_event_id=event.id, kind=kind, item_id=item_id, quantity=quantity, payload=payload))
+        attempt.progress = {**(attempt.progress or {}), "receipt_text": "\n\n".join(lines), "settled": True}
+        attempt.completed_at = attempt.completed_at or datetime.now(UTC)
+        if should_consolidate:
+            await consolidate_character_level(s, c)
+        from asterion.application.varzeas_feats import reconcile_varzeas_feats
+
+        await reconcile_varzeas_feats(s, c)
 
     async def _settle_charneca_exploration(self, s, c, attempt, base_text: str):
         source_id = f"explore:{attempt.id}"
@@ -3315,6 +3488,8 @@ class RoadService:
 
     @staticmethod
     def _travel_region(location: str) -> str:
+        if location in VARZEAS_LOCATIONS:
+            return "varzeas"
         if location in VDE_LOCATIONS:
             return "vde"
         if location in NARETH_LOCATIONS:
@@ -3409,6 +3584,13 @@ class RoadService:
                 return None
             if activity_kind == "hunt" and not await self._nareth_mission_completed(s, c.id, "P16"):
                 return None
+        elif profile.local_id == VARZEAS_DIQUES_LOCATION:
+            if (
+                world.region != VARZEAS_REGION
+                or c.level < 31
+                or not await self._nareth_mission_completed(s, c.id, "P19")
+            ):
+                return None
         unlock_id = profile.hunt_unlock if activity_kind == "hunt" else profile.explore_unlock
         if not await s.scalar(
             select(Unlock).where(
@@ -3426,6 +3608,7 @@ class RoadService:
             NARETH_CANAIS_LOCATION,
             NARETH_CAMPOS_LOCATION,
             NARETH_OBSERVATORIO_LOCATION,
+            VARZEAS_DIQUES_LOCATION,
         } and any(
             creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
         ):
@@ -3947,6 +4130,28 @@ class RoadService:
         nareth_p16_open = await self._nareth_mission_started_or_completed(s, c.id, "P16")
         nareth_p16_complete = await self._nareth_mission_completed(s, c.id, "P16")
         nareth_p17_open = await self._nareth_mission_started_or_completed(s, c.id, "P17")
+        nareth_p18_complete = await self._nareth_mission_completed(s, c.id, "P18")
+        varzeas_entry_open = bool(
+            c.level >= 31
+            and nareth_p18_complete
+            and await s.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == VARZEAS_REGION_ENTRY_UNLOCK,
+                )
+            )
+        )
+        varzeas_p19_open = await self._nareth_mission_started_or_completed(s, c.id, "P19")
+        varzeas_p19_complete = await self._nareth_mission_completed(s, c.id, "P19")
+        varzeas_inner_route_open = bool(
+            varzeas_p19_open
+            and await s.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == VARZEAS_DIQUES_PORTO_ROUTE,
+                )
+            )
+        )
         nareth_chamber_open = bool(
             nareth_p17_open
             and await s.scalar(
@@ -4122,6 +4327,14 @@ class RoadService:
                 )
             ):
                 route_destinations.append(NARETH_OBSERVATORIO)
+                if varzeas_entry_open:
+                    route_destinations.append(VARZEAS_DIQUES_LABEL)
+            elif world.location == VARZEAS_DIQUES_LABEL and varzeas_entry_open:
+                route_destinations.append(NARETH_CAMARA_LABEL)
+                if varzeas_inner_route_open:
+                    route_destinations.append(VARZEAS_PORTO_LABEL)
+            elif world.location == VARZEAS_PORTO_LABEL and varzeas_entry_open and varzeas_inner_route_open:
+                route_destinations.append(VARZEAS_DIQUES_LABEL)
         route_available = bool(route_destinations)
         material_table_ready = bool(
             hunt_profile
@@ -4285,6 +4498,31 @@ class RoadService:
         elif world.location == NARETH_CAMARA_LABEL:
             hunt_enabled = False
             explore_enabled = False
+        elif world.location == VARZEAS_DIQUES_LABEL:
+            hunt_enabled = bool(
+                varzeas_p19_complete
+                and c.level >= 31
+                and material_table_ready
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == VARZEAS_DIQUES_HUNT_UNLOCK,
+                    )
+                )
+            )
+            explore_enabled = bool(
+                varzeas_p19_complete
+                and c.level >= 31
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == VARZEAS_DIQUES_EXPLORE_UNLOCK,
+                    )
+                )
+            )
+        elif world.location == VARZEAS_PORTO_LABEL:
+            hunt_enabled = False
+            explore_enabled = False
         else:
             # Every other known travel location must be handled explicitly above.
             return self._invalid_location_view(c, world)
@@ -4306,6 +4544,8 @@ class RoadService:
             NARETH_CAMPOS: "nareth_campos",
             NARETH_OBSERVATORIO: "nareth_observatorio",
             NARETH_CAMARA_LABEL: "nareth_camara",
+            VARZEAS_DIQUES_LABEL: "varzeas_diques",
+            VARZEAS_PORTO_LABEL: "varzeas_porto",
         }
         return RoadView(
             kind_by_location[world.location],
@@ -4706,6 +4946,12 @@ class RoadService:
             "material.tdo.fragmento_aprimoramento_i": "Fragmento de Aprimoramento I",
             "material.nareth.catalisador_elite_iii": "Catalisador de Elite III",
             "material.nareth.fragmento_aprimoramento_iii": "Fragmento de Aprimoramento III",
+            "material.varzeas.ferro_de_salmoura": "Ferro de Salmoura",
+            "material.varzeas.couro_de_varzea": "Couro de Várzea",
+            "material.varzeas.junco_ferruginoso": "Junco Ferruginoso",
+            "material.varzeas.soro_antigo": "Soro Antigo",
+            "material.varzeas.catalisador_elite_iv": "Catalisador de Elite IV",
+            "material.varzeas.fragmento_aprimoramento_iv": "Fragmento de Aprimoramento IV",
         }
         reward_lines = []
         for row in rows:

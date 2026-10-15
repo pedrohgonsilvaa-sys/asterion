@@ -66,6 +66,12 @@ MATERIAL_LABELS = {
     "material.nareth.po_de_eixo": "Pó de Eixo",
     "material.nareth.catalisador_elite_iii": "Catalisador de Elite III",
     "material.nareth.fragmento_aprimoramento_iii": "Fragmento de Aprimoramento III",
+    "material.varzeas.ferro_de_salmoura": "Ferro de Salmoura",
+    "material.varzeas.couro_de_varzea": "Couro de Várzea",
+    "material.varzeas.junco_ferruginoso": "Junco Ferruginoso",
+    "material.varzeas.soro_antigo": "Soro Antigo",
+    "material.varzeas.catalisador_elite_iv": "Catalisador de Elite IV",
+    "material.varzeas.fragmento_aprimoramento_iv": "Fragmento de Aprimoramento IV",
 }
 
 @dataclass(frozen=True)
