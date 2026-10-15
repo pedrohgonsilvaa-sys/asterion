@@ -1,5 +1,6 @@
 from dataclasses import replace
 from decimal import Decimal
+from pathlib import Path
 from uuid import UUID, uuid4
 
 from asterion.application.bestiary import (
@@ -35,7 +36,7 @@ from asterion.application.varzeas_missions import (
     VarzeasMissionView,
 )
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
-from asterion.domain.combat import _perform
+from asterion.domain.combat import Action, _perform
 from asterion.domain.equipment_modifications import equipment_grade
 from asterion.domain.professions import MATERIAL_NAMES
 from asterion.domain.road import (
@@ -1014,3 +1015,26 @@ def test_varzeas_mission_screen_uses_versioned_player_actions():
     }
     assert "varzeas:action:P19:7:inspect_water" in callbacks
     assert "world:local" in callbacks
+
+
+def test_varzeas_v1_0_2_barrier_contract_and_source_authority_mirrors():
+    root = Path(__file__).resolve().parents[1]
+    authority = (root / "SOURCE_AUTHORITY.md").read_bytes()
+    assert authority == (root / "docs/SOURCE_AUTHORITY.md").read_bytes()
+    assert b"ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.2_FINAL.md" in authority
+
+    source = (root / "ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.2_FINAL.md").read_text(
+        encoding="utf-8"
+    )
+    published_barriers = (
+        "Casca de Suporte · Barreira `90% ATQ` por `2T`, CD3.",
+        "Placa Lavável · Barreira `95% ATQ` por `2T`, CD3.",
+        "Reservatório Blindado · Barreira `100% ATQ` por `2T`, CD3.",
+        "Placa de Procedimento · Barreira `100% ATQ` por `2T`, CD3.",
+        "Linha Pressurizada · Barreira `95% ATQ` por `2T`, CD3.",
+        "Membrana de Contenção · Barreira `8% HP Máximo` por `2T`, CD4.",
+        "Protocolo de Continuidade · Barreira igual a `8% HP Máximo` por `2T`, CD4.",
+    )
+    assert all(barrier in source for barrier in published_barriers)
+    assert "Revisão v1.0.2" in source
+    assert Action("duration-default", "duration-default", Decimal(0)).self_barrier_duration == 0

@@ -4,7 +4,7 @@
 
 > **Índice geral único:** `SOURCE_AUTHORITY.md` é o registro de governança que seleciona as versões autoritativas por escopo. Patches de sincronização são artefatos operacionais e não constituem uma segunda autoridade. Em conflito com índices/patches anteriores, este arquivo prevalece quanto à seleção de versões, sem alterar o conteúdo interno das Fontes.
 
-> **Sincronização 2026-10-15:** este índice registra Fonte Mestra v1.6.0, Terras do Ocaso v1.0.16 FINAL, Vales dos Enforcados v1.0.6 FINAL, Planícies de Nareth v1.0.2 FINAL, Várzeas Carmesins v1.0.1 FINAL, Lore v1.2, Visual/UI de 2026-10-13 e anatomia racial v2.0. Notas históricas mais abaixo podem citar versões anteriores apenas como registro; não reativam autoridade superada.
+> **Sincronização 2026-10-15:** este índice registra Fonte Mestra v1.6.0, Terras do Ocaso v1.0.16 FINAL, Vales dos Enforcados v1.0.6 FINAL, Planícies de Nareth v1.0.2 FINAL, Várzeas Carmesins v1.0.2 FINAL, Lore v1.2, Visual/UI de 2026-10-13 e anatomia racial v2.0. Notas históricas mais abaixo podem citar versões anteriores apenas como registro; não reativam autoridade superada.
 
 ## Fonte Mestra vigente
 
@@ -54,11 +54,11 @@ A v1.0.2 sucede a v1.0.1 exclusivamente para fechar em 2T as durações das nove
 
 ### Região 4 — Várzeas Carmesins · Nv.31–40
 
-**Várzeas Carmesins v1.0.1 FINAL**
+**Várzeas Carmesins v1.0.2 FINAL**
 
-Arquivo vigente: `ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.1_FINAL.md`.
+Arquivo vigente: `ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.2_FINAL.md`.
 
-A v1.0.1 substitui a v1.0.0 FINAL exclusivamente para fechar em `2T` as durações das seis Barreiras inimigas listadas; todo o conteúdo regional restante permanece inalterado. A Região cobre Nv.31–40 com saída para Nv.41 e define Locais, P19–P24, S19–S24, NPCs, Materiais Grau IV, criaturas, pools, economia, Crafting, Bestiário, Códice, Feitos e sistemas regionais, subordinados às regras globais da Fonte Mestra. Não cria regra universal de duração de Barreira.
+A v1.0.2 substitui a v1.0.1 exclusivamente para fechar em `2T` a duração do Protocolo de Continuidade, preservando as seis Barreiras já fechadas em `2T`; todo o restante do conteúdo regional permanece inalterado e nenhuma duração global de Barreira é criada. A Região cobre Nv.31–40 com saída para Nv.41 e define Locais, P19–P24, S19–S24, NPCs, Materiais Grau IV, criaturas, pools, economia, Crafting, Bestiário, Códice, Feitos e sistemas regionais, subordinados às regras globais da Fonte Mestra. Não cria regra universal de duração de Barreira.
 
 Quando uma Fonte Regional especificar conteúdo dentro de parâmetros sistêmicos da Fonte Mestra, ambas devem ser aplicadas em conjunto. Em conflito estrutural ou numérico global, a Fonte Mestra prevalece; em conteúdo regional fechado dentro do próprio escopo, a revisão Regional vigente prevalece sobre rascunhos ou versões regionais anteriores.
 
