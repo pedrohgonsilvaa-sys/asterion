@@ -54,11 +54,11 @@ A v1.0.2 sucede a v1.0.1 exclusivamente para fechar em 2T as durações das nove
 
 ### Região 4 — Várzeas Carmesins · Nv.31–40
 
-**Várzeas Carmesins v1.0.0 FINAL**
+**Várzeas Carmesins v1.0.1 FINAL**
 
-Arquivo vigente: `ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.0_FINAL.md`.
+Arquivo vigente: `ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.1_FINAL.md`.
 
-Esta é a autoridade regional da quarta jornada, Nv.31–40 com saída para Nv.41. Fecha identidade regional, progressão, Locais, Braseiros, P19–P24, S19–S24, NPCs, Materiais Grau IV, mapeamento de Material por criatura, criaturas, Elites, Chefe opcional de S24, Caçada, Ronda, Desbravar, Masmorras, Matriz Rubra, Bestiário, Códice, Feitos, Cosméticos, Crafting Grau IV, Runas, Encantamentos, Consumíveis, Receitas especiais e auditoria regional de XP/Coroas/Materiais/gate Nv.41. Não cria novo sistema universal.
+A v1.0.1 substitui a v1.0.0 FINAL exclusivamente para fechar em `2T` as durações das seis Barreiras inimigas listadas; todo o conteúdo regional restante permanece inalterado. A Região cobre Nv.31–40 com saída para Nv.41 e define Locais, P19–P24, S19–S24, NPCs, Materiais Grau IV, criaturas, pools, economia, Crafting, Bestiário, Códice, Feitos e sistemas regionais, subordinados às regras globais da Fonte Mestra. Não cria regra universal de duração de Barreira.
 
 Quando uma Fonte Regional especificar conteúdo dentro de parâmetros sistêmicos da Fonte Mestra, ambas devem ser aplicadas em conjunto. Em conflito estrutural ou numérico global, a Fonte Mestra prevalece; em conteúdo regional fechado dentro do próprio escopo, a revisão Regional vigente prevalece sobre rascunhos ou versões regionais anteriores.
 
