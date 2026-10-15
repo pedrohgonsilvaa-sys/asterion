@@ -70,7 +70,7 @@ A apresentação player-facing deve seguir:
 
 Arquivo vigente: `ASTERION_UI_DECISOES_2026-10-13_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.6.md`.
 
-A Fonte Visual/UI permanece o arquivo sincronizado em 2026-10-13 com Fonte Mestra v1.6.0, TDO v1.0.15 e Vales v1.0.6. As revisões regionais **TDO v1.0.16** e **Nareth v1.0.2**, bem como a revisão mecânica de **Várzeas v1.0.1** (que preserva a apresentação de v1.0.0), não criam novo componente universal nem alteram contrato de navegação, layout ou nomenclatura sistêmica; por isso este mesmo documento Visual/UI continua vigente.
+A Fonte Visual/UI permanece o arquivo sincronizado em 2026-10-13 com Fonte Mestra v1.6.0, TDO v1.0.15 e Vales v1.0.6. As revisões regionais **TDO v1.0.16** e **Nareth v1.0.2**, bem como a revisão mecânica de **Várzeas v1.0.2** (que preserva a apresentação de v1.0.0), não criam novo componente universal nem alteram contrato de navegação, layout ou nomenclatura sistêmica; por isso este mesmo documento Visual/UI continua vigente.
 
 Ela define nomenclatura, texto, estrutura de telas, navegação, estados visuais e UX do Bot do Telegram. É subordinada à Fonte Mestra para regras mecânicas/números e à Fonte Regional para conteúdo regional oficial.
 
