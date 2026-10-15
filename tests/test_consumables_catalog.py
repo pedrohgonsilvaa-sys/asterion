@@ -41,7 +41,7 @@ def test_catalog_has_all_seven_families_and_stable_item_ids():
         ConsumableFamily.DISPELLER,
         ConsumableFamily.WARDING,
     }
-    assert len(CONSUMABLE_CATALOG) == 17
+    assert len(CONSUMABLE_CATALOG) == 24
     assert len(CONSUMABLE_CATALOG) == len(set(CONSUMABLE_CATALOG))
     assert all(len(item_id) <= 64 for item_id in CONSUMABLE_CATALOG)
     assert all(family_definitions(family) for family in CONSUMABLE_FAMILIES)
@@ -138,6 +138,39 @@ def test_catalog_names_real_grades_regions_and_targets():
         ),
         "consumable.dispeller.iii": ("Dissipador", 3, None, ConsumableTarget.ENEMY_POSITIVE_EFFECT),
         "consumable.warding.iv": ("Preparado de Resguardo", 4, None, ConsumableTarget.SELF),
+        "consumable.heal.varzeas.iv": (
+            "Poção de Cura da Salmoura", 4, "Várzeas Carmesins", ConsumableTarget.SELF
+        ),
+        "consumable.purification.varzeas.iv": (
+            "Preparado de Purificação dos Juncos",
+            4,
+            "Várzeas Carmesins",
+            ConsumableTarget.SELF_NEGATIVE_EFFECT,
+        ),
+        "consumable.antidote.varzeas.iv": (
+            "Antídoto Ferruginoso", 4, "Várzeas Carmesins", ConsumableTarget.SELF_DOT
+        ),
+        "consumable.vigor.varzeas.iv": (
+            "Poção de Vigor do Porto", 4, "Várzeas Carmesins", ConsumableTarget.SELF
+        ),
+        "consumable.protection.varzeas.iv": (
+            "Preparado de Proteção do Dique",
+            4,
+            "Várzeas Carmesins",
+            ConsumableTarget.SELF,
+        ),
+        "consumable.dispeller.varzeas.iv": (
+            "Dissipador Hemaris",
+            4,
+            "Várzeas Carmesins",
+            ConsumableTarget.ENEMY_POSITIVE_EFFECT,
+        ),
+        "consumable.warding.varzeas.iv": (
+            "Preparado de Resguardo Clínico",
+            4,
+            "Várzeas Carmesins",
+            ConsumableTarget.SELF,
+        ),
     }
     assert set(expected) == set(CONSUMABLE_CATALOG)
     for item_id, (name, grade, region, target) in expected.items():

@@ -195,6 +195,7 @@ def _item(
 
 _TDO = "Terras do Ocaso"
 _VDE = "Vales dos Enforcados"
+_VARZEAS = "Várzeas Carmesins"
 _NARETH = "Planícies de Nareth"
 
 _CATALOG = (
@@ -416,6 +417,70 @@ _CATALOG = (
             (_ingredient("Reagentes · Grau IV", 4), _ingredient("Essências · Grau IV", 2)),
             210,
         ),
+    ),
+    _item(
+        "consumable.heal.varzeas.iv",
+        ConsumableFamily.HEALING,
+        "Poção de Cura da Salmoura",
+        4,
+        _VARZEAS,
+        _recipe(9, (_ingredient("Juncos Ferruginosos", 3), _ingredient("Soro Antigo", 1)), 70),
+    ),
+    _item(
+        "consumable.purification.varzeas.iv",
+        ConsumableFamily.PURIFICATION,
+        "Preparado de Purificação dos Juncos",
+        4,
+        _VARZEAS,
+        _recipe(9, (_ingredient("Juncos Ferruginosos", 2), _ingredient("Soros Antigos", 2)), 100),
+    ),
+    _item(
+        "consumable.antidote.varzeas.iv",
+        ConsumableFamily.ANTIDOTE,
+        "Antídoto Ferruginoso",
+        4,
+        _VARZEAS,
+        _recipe(9, (_ingredient("Juncos Ferruginosos", 4), _ingredient("Soro Antigo", 1)), 100),
+    ),
+    _item(
+        "consumable.vigor.varzeas.iv",
+        ConsumableFamily.VIGOR,
+        "Poção de Vigor do Porto",
+        4,
+        _VARZEAS,
+        _recipe(
+            10,
+            (
+                _ingredient("Juncos Ferruginosos", 6),
+                _ingredient("Soros Antigos", 4),
+                _ingredient("Catalisador de Elite IV", 1),
+            ),
+            350,
+        ),
+    ),
+    _item(
+        "consumable.protection.varzeas.iv",
+        ConsumableFamily.PROTECTION,
+        "Preparado de Proteção do Dique",
+        4,
+        _VARZEAS,
+        _recipe(9, (_ingredient("Juncos Ferruginosos", 3), _ingredient("Soros Antigos", 2)), 140),
+    ),
+    _item(
+        "consumable.dispeller.varzeas.iv",
+        ConsumableFamily.DISPELLER,
+        "Dissipador Hemaris",
+        4,
+        _VARZEAS,
+        _recipe(10, (_ingredient("Juncos Ferruginosos", 2), _ingredient("Soros Antigos", 3)), 180),
+    ),
+    _item(
+        "consumable.warding.varzeas.iv",
+        ConsumableFamily.WARDING,
+        "Preparado de Resguardo Clínico",
+        4,
+        _VARZEAS,
+        _recipe(12, (_ingredient("Juncos Ferruginosos", 4), _ingredient("Soros Antigos", 2)), 210),
     ),
 )
 

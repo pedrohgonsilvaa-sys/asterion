@@ -108,6 +108,7 @@ VARZEAS_CATALYST_IV = "material.varzeas.catalisador_elite_iv"
 VARZEAS_FRAGMENT_IV = "material.varzeas.fragmento_aprimoramento_iv"
 VARZEAS_INFIRMARY_CORE = "material.varzeas.nucleo_enfermaria_afundada"
 VARZEAS_CISTERN_CORE = "material.varzeas.nucleo_cisterna_transferencia"
+VARZEAS_MATRIX_CORE = "material.varzeas.nucleo_matriz_rubra"
 
 MATERIAL_NAMES = {
     IRON: "Ferro de Fuligem",
@@ -139,6 +140,7 @@ MATERIAL_NAMES = {
     VARZEAS_FRAGMENT_IV: "Fragmento de Aprimoramento IV",
     VARZEAS_INFIRMARY_CORE: "Núcleo da Enfermaria Afundada",
     VARZEAS_CISTERN_CORE: "Núcleo da Cisterna de Transferência",
+    VARZEAS_MATRIX_CORE: "Núcleo da Matriz Rubra",
     VDE_IRON: "Ferro Enredado",
     VDE_LEATHER: "Couro Musgoso",
     VDE_HERB: "Erva de Turfa",
@@ -430,6 +432,91 @@ def _nareth_equipment_recipes() -> list[RecipeDefinition]:
     return recipes
 
 
+def _varzeas_equipment_recipes() -> list[RecipeDefinition]:
+    rarity_ids = {"Comum": "comum", "Raro": "raro", "Épico": "epico"}
+    families = (
+        (
+            "blacksmith", "dike_weapon", "Arma do Dique", "Principal",
+            VARZEAS_IRON, VARZEAS_ESSENCE, D("0.70"),
+        ),
+        (
+            "blacksmith", "brine_guard", "Guarda de Salmoura", "Secundária",
+            VARZEAS_IRON, VARZEAS_ESSENCE, D("0.70"),
+        ),
+        (
+            "blacksmith", "transfer_greatweapon", "Arma Pesada de Transferência", "2H",
+            VARZEAS_IRON, VARZEAS_ESSENCE, D("0.70"),
+        ),
+        (
+            "blacksmith", "valve_helm", "Elmo das Válvulas", "Cabeça",
+            VARZEAS_IRON, VARZEAS_ESSENCE, D("0.70"),
+        ),
+        (
+            "blacksmith", "varzeas_cuirass", "Couraça das Várzeas", "Torso",
+            VARZEAS_IRON, VARZEAS_ESSENCE, D("0.70"),
+        ),
+        (
+            "blacksmith", "ferruginous_gauntlets", "Manoplas Ferruginosas", "Mãos",
+            VARZEAS_IRON, VARZEAS_ESSENCE, D("0.70"),
+        ),
+        (
+            "blacksmith", "porto_greaves", "Grevas do Porto", "Pés",
+            VARZEAS_IRON, VARZEAS_ESSENCE, D("0.70"),
+        ),
+        (
+            "leatherworker", "reed_hood", "Capuz de Junco", "Cabeça",
+            VARZEAS_LEATHER, VARZEAS_REAGENT, D("0.70"),
+        ),
+        (
+            "leatherworker", "waxed_vest", "Veste Encerada", "Torso",
+            VARZEAS_LEATHER, VARZEAS_REAGENT, D("0.70"),
+        ),
+        (
+            "leatherworker", "marsh_gloves", "Luvas de Várzea", "Mãos",
+            VARZEAS_LEATHER, VARZEAS_REAGENT, D("0.70"),
+        ),
+        (
+            "leatherworker", "brine_boots", "Botas da Salmoura", "Pés",
+            VARZEAS_LEATHER, VARZEAS_REAGENT, D("0.70"),
+        ),
+        (
+            "jeweler", "transfer_seal", "Selo de Transferência", "Acessório",
+            VARZEAS_IRON, VARZEAS_ESSENCE, D("0.60"),
+        ),
+        (
+            "jeweler", "restitution_reliquary", "Relicário de Restituição", "Artefato",
+            VARZEAS_IRON, VARZEAS_ESSENCE, D("0.60"),
+        ),
+    )
+    recipes = []
+    for profession_id, family_id, name, slot, primary, secondary, ratio in families:
+        for rarity in ("Comum", "Raro", "Épico"):
+            recipes.append(
+                RecipeDefinition(
+                    recipe_id=f"recipe.varzeas.{profession_id}.{family_id}.{rarity_ids[rarity]}",
+                    profession_id=profession_id,
+                    name=name,
+                    output_kind="equipment",
+                    required_level=max(9, RARITY_REQUIREMENTS[rarity]),
+                    grade=4,
+                    rarity=rarity,
+                    output_name=name,
+                    output_slot=slot,
+                    sw=SLOT_ECONOMY_SW[slot],
+                    basic_materials=RARITY_COSTS_PER_SW[rarity],
+                    primary_material_id=primary,
+                    secondary_material_id=secondary,
+                    primary_ratio=ratio,
+                    fragment_per_sw=4 if rarity == "Raro" else 6 if rarity == "Épico" else 0,
+                    catalyst_per_sw=2 if rarity == "Épico" else 0,
+                    fragment_material_id=VARZEAS_FRAGMENT_IV,
+                    catalyst_material_id=VARZEAS_CATALYST_IV,
+                    description=f"{rarity} · {slot} · Grau IV",
+                )
+            )
+    return recipes
+
+
 def _alchemy_recipes() -> list[RecipeDefinition]:
     recipes = []
     catalogs = (
@@ -489,6 +576,27 @@ def _alchemy_recipes() -> list[RecipeDefinition]:
                 "Catalisador de Elite III": NARETH_CATALYST_III,
             },
             frozenset({NARETH_CATALYST_III}),
+        ),
+        (
+            "varzeas",
+            "Várzeas Carmesins",
+            (
+                "consumable.heal.varzeas.iv",
+                "consumable.purification.varzeas.iv",
+                "consumable.antidote.varzeas.iv",
+                "consumable.vigor.varzeas.iv",
+                "consumable.protection.varzeas.iv",
+                "consumable.dispeller.varzeas.iv",
+                "consumable.warding.varzeas.iv",
+            ),
+            {
+                "Junco Ferruginoso": VARZEAS_REAGENT,
+                "Juncos Ferruginosos": VARZEAS_REAGENT,
+                "Soro Antigo": VARZEAS_ESSENCE,
+                "Soros Antigos": VARZEAS_ESSENCE,
+                "Catalisador de Elite IV": VARZEAS_CATALYST_IV,
+            },
+            frozenset({VARZEAS_CATALYST_IV}),
         ),
     )
     for region_code, region_name, item_ids, material_ids, nonbinding in catalogs:
@@ -725,6 +833,27 @@ def _special_recipes() -> list[RecipeDefinition]:
             description="Encantamento Épico de PER · Grau III",
         ),
         RecipeDefinition(
+            recipe_id="recipe.varzeas.matriz.regulacao",
+            profession_id="artificer",
+            name="Regulação da Matriz",
+            output_kind="enchantment",
+            required_level=10,
+            grade=4,
+            rarity="Épico",
+            output_id="HP",
+            output_family="Regulação da Matriz",
+            fixed_materials=(
+                MaterialRequirement(VARZEAS_ESSENCE, 5),
+                MaterialRequirement(VARZEAS_IRON, 2),
+                MaterialRequirement(VARZEAS_CATALYST_IV, 1, False),
+                MaterialRequirement(VARZEAS_MATRIX_CORE, 1),
+            ),
+            fixed_crown_cost=280,
+            creation_enabled=False,
+            unlock_id="recipe.varzeas.matriz.regulacao",
+            description="Encantamento Épico de HP · Grau IV · +0,30% HP",
+        ),
+        RecipeDefinition(
             recipe_id="recipe.varzeas.enfermaria.mascara_triagem_silenciosa",
             profession_id="leatherworker",
             name="Máscara da Triagem Silenciosa",
@@ -904,6 +1033,50 @@ def _nareth_enchantment_recipes() -> list[RecipeDefinition]:
     return recipes
 
 
+def _varzeas_enchantment_recipes() -> list[RecipeDefinition]:
+    families = (
+        ("dike_wire", "Fio do Dique", "ATQ"),
+        ("containment_skin", "Pele de Contenção", "DEF"),
+        ("reed_step", "Passo de Junco", "AGI"),
+        ("triage_mark", "Marca de Triagem", "PER"),
+        ("emergency_echo", "Eco de Emergência", "CRIT"),
+        ("restitution_breath", "Sopro de Restituição", "HP"),
+        ("margin_veil", "Véu da Margem", "Esquiva"),
+        ("valve_seal", "Selo da Válvula", "Bloqueio"),
+    )
+    recipes = []
+    for family_id, name, stat in families:
+        for rarity, rarity_id, level, essence, iron, catalyst, cost in (
+            ("Raro", "raro", 5, 3, 1, 0, 140),
+            ("Épico", "epico", 10, 5, 2, 1, 280),
+        ):
+            recipes.append(
+                RecipeDefinition(
+                    recipe_id=f"recipe.varzeas.artificer.enchantment.{family_id}.{rarity_id}",
+                    profession_id="artificer",
+                    name=name,
+                    output_kind="enchantment",
+                    required_level=level,
+                    grade=4,
+                    rarity=rarity,
+                    output_id=stat,
+                    output_family=name,
+                    fixed_materials=(
+                        MaterialRequirement(VARZEAS_ESSENCE, essence),
+                        MaterialRequirement(VARZEAS_IRON, iron),
+                        *(
+                            (MaterialRequirement(VARZEAS_CATALYST_IV, catalyst, False),)
+                            if catalyst else ()
+                        ),
+                    ),
+                    fixed_crown_cost=cost,
+                    creation_enabled=False,
+                    description=f"Encantamento {rarity} · {stat} · Grau IV",
+                )
+            )
+    return recipes
+
+
 def _rune_recipes() -> list[RecipeDefinition]:
     from asterion.domain.road import RUNE_FAMILIES
 
@@ -1034,17 +1207,64 @@ def _nareth_rune_recipes() -> list[RecipeDefinition]:
     return recipes
 
 
+def _varzeas_rune_recipes() -> list[RecipeDefinition]:
+    families = (
+        ("dike", "Dique", "Runa do Dique", "ATQ"),
+        ("containment", "Contenção", "Runa da Contenção", "DEF"),
+        ("reed", "Junco", "Runa do Junco", "AGI"),
+        ("triage", "Triagem", "Runa da Triagem", "PER"),
+        ("emergency", "Emergência", "Runa da Emergência", "CRIT"),
+        ("restitution", "Restituição", "Runa da Restituição", "HP"),
+        ("margin", "Margem", "Runa da Margem", "Esquiva"),
+        ("valve", "Válvula", "Runa da Válvula", "Bloqueio"),
+    )
+    recipes = []
+    for family_id, family, name, stat in families:
+        for rarity, rarity_id, level, essence, iron, catalyst, fragments, cost in (
+            ("Rara", "rara", 5, 4, 2, 0, 2, 210),
+            ("Épica", "epica", 10, 7, 3, 1, 4, 420),
+        ):
+            recipes.append(
+                RecipeDefinition(
+                    recipe_id=f"recipe.varzeas.artificer.rune.{family_id}.{rarity_id}",
+                    profession_id="artificer",
+                    name=name,
+                    output_kind="rune",
+                    required_level=level,
+                    grade=4,
+                    rarity=rarity,
+                    output_id=f"rune.varzeas.{family_id}",
+                    output_family=family,
+                    fixed_materials=(
+                        MaterialRequirement(VARZEAS_ESSENCE, essence),
+                        MaterialRequirement(VARZEAS_IRON, iron),
+                        *(
+                            (MaterialRequirement(VARZEAS_CATALYST_IV, catalyst, False),)
+                            if catalyst else ()
+                        ),
+                        MaterialRequirement(VARZEAS_FRAGMENT_IV, fragments, False),
+                    ),
+                    fixed_crown_cost=cost,
+                    description=f"{rarity} · {stat} · Grau IV",
+                )
+            )
+    return recipes
+
+
 RECIPE_DEFINITIONS = tuple(
     _equipment_recipes()
     + _vde_equipment_recipes()
     + _nareth_equipment_recipes()
+    + _varzeas_equipment_recipes()
     + _alchemy_recipes()
     + _rune_recipes()
     + _vde_rune_recipes()
     + _nareth_rune_recipes()
+    + _varzeas_rune_recipes()
     + _enchantment_recipes()
     + _vde_enchantment_recipes()
     + _nareth_enchantment_recipes()
+    + _varzeas_enchantment_recipes()
     + _special_recipes()
 )
 RECIPE_BY_ID = {recipe.recipe_id: recipe for recipe in RECIPE_DEFINITIONS}

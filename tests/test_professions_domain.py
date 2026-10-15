@@ -39,14 +39,14 @@ def test_catalog_contains_regional_equipment_alchemy_runes_and_special_recipes()
                 if recipe.output_kind == "equipment" and recipe.unlock_id is None
             ]
         )
-        == 117
+        == 156
     )
     consumables = [
         recipe for recipe in RECIPE_DEFINITIONS if recipe.output_kind == "consumable"
     ]
-    assert len(consumables) == 15
+    assert len(consumables) == 22
     runes = [recipe for recipe in RECIPE_DEFINITIONS if recipe.output_kind == "rune"]
-    assert len(runes) == 48
+    assert len(runes) == 64
     assert {recipe.rarity for recipe in runes} == {"Rara", "Épica"}
     assert {recipe.required_level for recipe in runes} == {5, 10}
     assert len(

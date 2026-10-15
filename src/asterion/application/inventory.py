@@ -25,7 +25,7 @@ from asterion.infrastructure.db.models import (
     RuneStack,
 )
 
-NARETH_RUNE_TITLES = {
+REGIONAL_RUNE_TITLES = {
     "Meridiano": "Runa do Meridiano",
     "Prumo": "Runa do Prumo",
     "Horizonte": "Runa do Horizonte",
@@ -34,6 +34,14 @@ NARETH_RUNE_TITLES = {
     "Abrigo": "Runa do Abrigo",
     "Desvio": "Runa do Desvio",
     "Referência": "Runa da Referência",
+    "Dique": "Runa do Dique",
+    "Contenção": "Runa da Contenção",
+    "Junco": "Runa do Junco",
+    "Triagem": "Runa da Triagem",
+    "Emergência": "Runa da Emergência",
+    "Restituição": "Runa da Restituição",
+    "Margem": "Runa da Margem",
+    "Válvula": "Runa da Válvula",
 }
 
 INVENTORY_CAPACITY = 60
@@ -74,6 +82,7 @@ MATERIAL_LABELS = {
     "material.varzeas.fragmento_aprimoramento_iv": "Fragmento de Aprimoramento IV",
     "material.varzeas.nucleo_enfermaria_afundada": "Núcleo da Enfermaria Afundada",
     "material.varzeas.nucleo_cisterna_transferencia": "Núcleo da Cisterna de Transferência",
+    "material.varzeas.nucleo_matriz_rubra": "Núcleo da Matriz Rubra",
 }
 
 @dataclass(frozen=True)
@@ -405,7 +414,7 @@ class InventoryService:
             InventoryEntry(
                 kind="rune",
                 key=str(row.id),
-                title=NARETH_RUNE_TITLES.get(row.family, f"Runa de {row.family}"),
+                title=REGIONAL_RUNE_TITLES.get(row.family, f"Runa de {row.family}"),
                 quantity=row.quantity,
                 rarity=row.rarity,
                 grade=row.grade,
@@ -433,7 +442,7 @@ class InventoryService:
             return InventoryEntry(
                 kind="rune",
                 key=str(row.id),
-                title=NARETH_RUNE_TITLES.get(family, f"Runa de {family}"),
+                title=REGIONAL_RUNE_TITLES.get(family, f"Runa de {family}"),
                 quantity=row.quantity,
                 rarity=payload.get("rarity"),
                 grade=payload.get("grade", 1),

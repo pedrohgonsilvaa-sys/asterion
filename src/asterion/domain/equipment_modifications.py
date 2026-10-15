@@ -87,6 +87,14 @@ RUNE_FAMILIES = {
     "Distância": ("CRIT", "Runa da Distância"),
     "Abrigo": ("HP", "Runa do Abrigo"),
     "Referência": ("Bloqueio", "Runa da Referência"),
+    "Dique": ("ATQ", "Runa do Dique"),
+    "Contenção": ("DEF", "Runa da Contenção"),
+    "Junco": ("AGI", "Runa do Junco"),
+    "Triagem": ("PER", "Runa da Triagem"),
+    "Emergência": ("CRIT", "Runa da Emergência"),
+    "Restituição": ("HP", "Runa da Restituição"),
+    "Margem": ("Esquiva", "Runa da Margem"),
+    "Válvula": ("Bloqueio", "Runa da Válvula"),
 }
 ENCHANTMENT_FAMILIES = {
     "Fio Cinéreo": "ATQ",
@@ -116,6 +124,15 @@ ENCHANTMENT_FAMILIES = {
     "Véu do Desvio": "Esquiva",
     "Selo do Eixo": "Bloqueio",
     "Calibração do Arconte": "PER",
+    "Fio do Dique": "ATQ",
+    "Pele de Contenção": "DEF",
+    "Passo de Junco": "AGI",
+    "Marca de Triagem": "PER",
+    "Eco de Emergência": "CRIT",
+    "Sopro de Restituição": "HP",
+    "Véu da Margem": "Esquiva",
+    "Selo da Válvula": "Bloqueio",
+    "Regulação da Matriz": "HP",
 }
 RUNE_GRADE_VI = {
     "HP": (D("0.60"), D("0.80"), D("1.00")),
