@@ -53,6 +53,9 @@ from asterion.domain.road import (
     VARZEAS_BREJOS_HORTOS_ROUTE,
     VARZEAS_BREJOS_HUNT_UNLOCK,
     VARZEAS_BREJOS_LOCATION,
+    VARZEAS_CAMARA,
+    VARZEAS_CAMARA_ACCESS_UNLOCK,
+    VARZEAS_CAMARA_LOCATION,
     VARZEAS_CRIMSON_BEARER,
     VARZEAS_DIQUES,
     VARZEAS_DIQUES_BRAZIER,
@@ -60,12 +63,13 @@ from asterion.domain.road import (
     VARZEAS_DIQUES_HUNT_UNLOCK,
     VARZEAS_DIQUES_LOCATION,
     VARZEAS_DIQUES_PORTO_ROUTE,
-    VARZEAS_GARDEN_GRAFT,
     VARZEAS_GALERIAS,
     VARZEAS_GALERIAS_BRAZIER,
+    VARZEAS_GALERIAS_CAMARA_ROUTE,
     VARZEAS_GALERIAS_EXPLORE_UNLOCK,
     VARZEAS_GALERIAS_HUNT_UNLOCK,
     VARZEAS_GALERIAS_LOCATION,
+    VARZEAS_GARDEN_GRAFT,
     VARZEAS_HEMARIS_WARDEN,
     VARZEAS_HORTOS,
     VARZEAS_HORTOS_EXPLORE_UNLOCK,
@@ -112,6 +116,8 @@ P21_ID = "P21"
 S21_ID = "S21"
 P22_ID = "P22"
 S22_ID = "S22"
+P23_ID = "P23"
+S23_ID = "S23"
 P19_TITLE = "Águas de Ferro"
 S19_TITLE = "Sal nas Feridas"
 P20_TITLE = "O Pulso sob a Lama"
@@ -120,6 +126,8 @@ P21_TITLE = "Os Hortos Vazios"
 S21_TITLE = "Cicatrizes de Cultivo"
 P22_TITLE = "Transferência"
 S22_TITLE = "Protocolos sem Paciente"
+P23_TITLE = "O Custo da Persistência"
+S23_TITLE = "Fluxo de Emergência"
 CONTENT_VERSION = "varzeas-1.0.0"
 P19_REWARD_SOURCE = "p19.aguas_de_ferro"
 S19_REWARD_SOURCE = "s19.sal_nas_feridas"
@@ -129,6 +137,8 @@ P21_REWARD_SOURCE = "p21.os_hortos_vazios"
 S21_REWARD_SOURCE = "s21.cicatrizes_de_cultivo"
 P22_REWARD_SOURCE = "p22.transferencia"
 S22_REWARD_SOURCE = "s22.protocolos_sem_paciente"
+P23_REWARD_SOURCE = "p23.o_custo_da_persistencia"
+S23_REWARD_SOURCE = "s23.fluxo_de_emergencia"
 ROTAS_CODEX = "codex.route.rotas_das_varzeas"
 ROTAS_FRAGMENT = "codex.fragment.varzeas.p19.rotas_initial"
 P20_CODEX = "codex.mystery.pulso_sob_a_lama"
@@ -139,6 +149,12 @@ P22_CODEX = "codex.history.transferencia"
 P22_FRAGMENT = "codex.fragment.varzeas.p22.transferencia"
 S22_CODEX = "codex.mystery.protocolos_sem_paciente"
 S22_FRAGMENT = "codex.fragment.varzeas.s22.protocolos_sem_paciente"
+S23_CODEX = "codex.history.protocolos_de_emergencia"
+S23_FRAGMENT = "codex.fragment.varzeas.s23.protocolos_emergencia"
+P23_COSTS_CODEX = "codex.history.projeto_hemaris_custos_da_emergencia"
+P23_COSTS_FRAGMENT = "codex.fragment.varzeas.p23.custos_emergencia"
+P23_ANCESTRY_CODEX = "codex.history.origem_ancestral_alteracoes_hemarias"
+P23_ANCESTRY_FRAGMENT = "codex.fragment.varzeas.p23.origem_ancestral"
 P21_REWARD_CHOICES = {
     "mask": ("Máscara da Salmoura", "Cabeça"),
     "seal": ("Selo dos Diques", "Acessório"),
@@ -149,12 +165,16 @@ MISSION_CONTENT_IDS = {
     S20_ID: "campaign.varzeas.s20.portador_rubro",
     P21_ID: "campaign.varzeas.p21.cervo_ferrugem",
     P22_ID: "campaign.varzeas.p22.vigia_hemaris",
+    P23_ID: "campaign.varzeas.p23.persistence_cost",
+    S23_ID: "campaign.varzeas.s23.emergency_flow",
 }
 MISSION_CHECKPOINTS = {
     P20_ID: "p20.pulse_spider",
     S20_ID: "s20.crimson_bearer",
     P21_ID: "p21.rust_deer",
     P22_ID: "p22.hemaris_warden",
+    P23_ID: "p23.persistence_cost",
+    S23_ID: "s23.emergency_flow",
 }
 
 
@@ -215,6 +235,7 @@ class VarzeasMissionService:
             world = await self._world(session, actor_row.id)
             if character is None or world is None or world.region != REGION:
                 return
+            await self._start_p23_for_present_roster(session, character_ids)
             if world.location == VARZEAS_DIQUES:
                 for member_id in character_ids:
                     member_world = await self._world(session, member_id)
@@ -436,6 +457,47 @@ class VarzeasMissionService:
                 for unlock_id in (VARZEAS_HORTOS_GALERIAS_ROUTE, VARZEAS_GALERIAS_EXPLORE_UNLOCK):
                     await self._ensure(session, Unlock, character_id=member_id, unlock_id=unlock_id)
 
+    async def _start_p23_for_present_roster(self, session, character_ids) -> None:
+        for member_id in character_ids:
+            member = await session.scalar(
+                select(Character).where(Character.id == member_id).with_for_update()
+            )
+            world = await self._world(session, member_id)
+            if (
+                member is None
+                or world is None
+                or world.region != REGION
+                or member.level < 39
+                or not await self._quest_completed(session, member_id, P22_ID)
+                or await self._foreground(session, member_id)
+                or await self._quest(session, member_id, P23_ID) is not None
+            ):
+                continue
+            quest = Quest(
+                character_id=member_id,
+                quest_id=P23_ID,
+                title=P23_TITLE,
+                status="active",
+                step=1,
+                content_version=CONTENT_VERSION,
+                state_version=0,
+                progress={
+                    "hortos_records": False,
+                    "enfermaria_record": False,
+                    "galerias_records": False,
+                },
+            )
+            session.add(quest)
+            await session.flush()
+            await self._credit(
+                session,
+                member_id,
+                P23_ID,
+                "p23.started_after_p22",
+                f"p23.started:{member_id}",
+                {"location": world.location, "level": member.level},
+            )
+
     async def _start_p20_for_present_roster(self, session, character_ids) -> None:
         for member_id in character_ids:
             member = await session.scalar(
@@ -567,7 +629,7 @@ class VarzeasMissionService:
                 )
 
     async def resume(self, actor: int, quest_id: str) -> VarzeasMissionView | None:
-        if quest_id not in {P19_ID, S19_ID, P20_ID, S20_ID, P21_ID, S21_ID, P22_ID, S22_ID}:
+        if quest_id not in {P19_ID, S19_ID, P20_ID, S20_ID, P21_ID, S21_ID, P22_ID, S22_ID, P23_ID, S23_ID}:
             return None
         await self.on_location(actor)
         async with self.sessions() as session:
@@ -581,7 +643,7 @@ class VarzeasMissionService:
 
     async def resume_active(self, actor: int) -> VarzeasMissionView | None:
         await self.on_location(actor)
-        for quest_id in (P22_ID, P21_ID, P20_ID, P19_ID, S22_ID, S21_ID, S20_ID, S19_ID):
+        for quest_id in (P23_ID, P22_ID, P21_ID, P20_ID, P19_ID, S23_ID, S22_ID, S21_ID, S20_ID, S19_ID):
             view = await self.resume(actor, quest_id)
             if view is not None and view.status == "active":
                 return view
@@ -598,11 +660,13 @@ class VarzeasMissionService:
                 await self.resume(actor, S21_ID),
                 await self.resume(actor, P22_ID),
                 await self.resume(actor, S22_ID),
+                await self.resume(actor, P23_ID),
+                await self.resume(actor, S23_ID),
             ]
         )
 
     async def start(self, actor: int, quest_id: str) -> VarzeasMissionView | None:
-        if quest_id not in {S19_ID, S20_ID, S21_ID, S22_ID}:
+        if quest_id not in {S19_ID, S20_ID, S21_ID, S22_ID, S23_ID}:
             return await self.resume(actor, quest_id)
         async with self.sessions.begin() as session:
             actor_row = await self._character(session, actor)
@@ -615,19 +679,22 @@ class VarzeasMissionService:
             world = await self._world(session, actor_row.id)
             if character is None or world is None:
                 return None
-            level_gate = 32 if quest_id == S19_ID else 34 if quest_id == S20_ID else 35 if quest_id == S21_ID else 37
-            prerequisite = P19_ID if quest_id == S19_ID else P20_ID if quest_id == S20_ID else P21_ID if quest_id == S21_ID else P22_ID
-            giver_location = VARZEAS_PORTO if quest_id in {S19_ID, S20_ID} else VARZEAS_HORTOS
+            level_gate = (
+                32 if quest_id == S19_ID else 34 if quest_id == S20_ID else
+                35 if quest_id == S21_ID else 37 if quest_id == S22_ID else 38
+            )
+            prerequisite = (
+                P19_ID if quest_id == S19_ID else P20_ID if quest_id == S20_ID else
+                P21_ID if quest_id == S21_ID else P22_ID
+            )
+            giver_location = VARZEAS_PORTO if quest_id in {S19_ID, S20_ID, S23_ID} else VARZEAS_HORTOS
             prerequisite_met = (
                 await self._quest_completed(session, character.id, prerequisite)
                 or quest_id in {S21_ID, S22_ID}
                 and await self._quest_started_or_completed(session, character.id, prerequisite)
             )
-            enfermaria_discovered = (
-                quest_id != S22_ID
-                or await self._has_unlock(
-                    session, character.id, "dungeon.varzeas.enfermaria_afundada.discovered"
-                )
+            enfermaria_discovered = quest_id != S22_ID or await self._has_unlock(
+                session, character.id, "dungeon.varzeas.enfermaria_afundada.discovered"
             )
             if (
                 world.region != REGION
@@ -666,7 +733,7 @@ class VarzeasMissionService:
                 quest = Quest(
                     character_id=member_id,
                     quest_id=quest_id,
-                    title={S19_ID: S19_TITLE, S20_ID: S20_TITLE, S21_ID: S21_TITLE, S22_ID: S22_TITLE}[quest_id],
+                    title={S19_ID: S19_TITLE, S20_ID: S20_TITLE, S21_ID: S21_TITLE, S22_ID: S22_TITLE, S23_ID: S23_TITLE}[quest_id],
                     status="active",
                     step=1,
                     content_version=CONTENT_VERSION,
@@ -679,6 +746,8 @@ class VarzeasMissionService:
                         else {"sector_examined": False, "grafts_observed": False}
                         if quest_id == S21_ID
                         else {"routines_examined": False, "preparation_recorded": False}
+                        if quest_id == S22_ID
+                        else {"transfer_lines_investigated": False, "emergency_markings_identified": False, "ethical_limits_recorded": False}
                     ),
                 )
                 session.add(quest)
@@ -695,6 +764,8 @@ class VarzeasMissionService:
                         else "s21.received_from_ilyan_korr"
                         if quest_id == S21_ID
                         else "s22.received_from_ilyan_korr"
+                        if quest_id == S22_ID
+                        else "s23.received_from_sera_morn"
                     ),
                     f"{quest_id.lower()}.started:{member_id}",
                     {"giver": "Ilyan Korr" if quest_id in {S21_ID, S22_ID} else "Sera Morn", "location": giver_location},
@@ -708,7 +779,7 @@ class VarzeasMissionService:
             )
 
     async def advance(self, actor: int, quest_id: str, version: int, action: str):
-        if quest_id not in {P19_ID, S19_ID, P20_ID, S20_ID, P21_ID, S21_ID, P22_ID, S22_ID}:
+        if quest_id not in {P19_ID, S19_ID, P20_ID, S20_ID, P21_ID, S21_ID, P22_ID, S22_ID, P23_ID, S23_ID}:
             return None
         await self.on_location(actor)
         async with self.sessions.begin() as session:
@@ -753,6 +824,10 @@ class VarzeasMissionService:
                 await self._advance_p22(session, members, world.location, action)
             elif quest_id == S22_ID:
                 await self._advance_s22(session, members, world.location, action)
+            elif quest_id == P23_ID:
+                await self._advance_p23(session, members, world.location, action)
+            elif quest_id == S23_ID:
+                await self._advance_s23(session, members, world.location, action)
             else:
                 await self._advance_s20(session, members, world.location, action)
             return await self._view(
@@ -1312,6 +1387,9 @@ class VarzeasMissionService:
                 )
                 await reconcile_varzeas_feats(session, member.character)
                 await consolidate_character_level(session, member.character)
+            await self._start_p23_for_present_roster(
+                session, [member.character.id for member in members]
+            )
 
     async def _advance_s22(self, session, members, location: str, action: str) -> None:
         if not members or location != VARZEAS_HORTOS:
@@ -1371,6 +1449,207 @@ class VarzeasMissionService:
                         ("material.varzeas.ferro_de_salmoura", 2),
                         ("material.varzeas.junco_ferruginoso", 1),
                         ("material.varzeas.soro_antigo", 1),
+                    ),
+                )
+                await consolidate_character_level(session, member.character)
+
+    async def _advance_p23(self, session, members, location: str, action: str) -> None:
+        if not members:
+            return
+        quest = members[0].quest
+        if quest.step == 1:
+            record_locations = {
+                (VARZEAS_HORTOS, "gather_hortos_records"): "hortos_records",
+                # P23 obtains an investigative record from the Enfermaria's
+                # known regional context; it does not require its optional run.
+                (VARZEAS_BREJOS, "investigate_enfermaria_record"): "enfermaria_record",
+                (VARZEAS_GALERIAS, "gather_galerias_records"): "galerias_records",
+            }
+            flag = record_locations.get((location, action))
+            if flag is None:
+                return
+            for member in members:
+                progress = {**(member.quest.progress or {}), flag: True}
+                member.quest.progress = progress
+                member.quest.state_version += 1
+                if all(
+                    progress.get(name)
+                    for name in (
+                        "hortos_records",
+                        "enfermaria_record",
+                        "galerias_records",
+                    )
+                ):
+                    member.quest.step = 2
+                await self._credit(
+                    session,
+                    member.character.id,
+                    P23_ID,
+                    f"p23.{flag}",
+                    f"p23.{flag}:{member.character.id}",
+                    {"location": location, "source": "campaign_investigation"},
+                )
+            return
+
+        transitions = {
+            (2, VARZEAS_GALERIAS, "identify_protocol_sequence"): (
+                3,
+                "protocol_sequence_identified",
+            ),
+            (3, VARZEAS_GALERIAS, "confirm_emergency_coercion"): (
+                4,
+                "coercion_and_external_life_recorded",
+            ),
+            (4, VARZEAS_GALERIAS, "record_hereditary_changes"): (
+                5,
+                "hereditary_changes_recorded",
+            ),
+            (5, VARZEAS_GALERIAS, "record_modern_hemary_distinction"): (
+                6,
+                "modern_hemaries_not_experiments_recorded",
+            ),
+            (6, VARZEAS_GALERIAS, "open_matrix_access"): (
+                7,
+                "matrix_access_opened",
+            ),
+        }
+        transition = transitions.get((quest.step, location, action))
+        if transition is not None:
+            next_step, flag = transition
+            for member in members:
+                member.quest.step = next_step
+                member.quest.state_version += 1
+                member.quest.progress = {**(member.quest.progress or {}), flag: True}
+                if flag == "matrix_access_opened":
+                    await self._ensure(
+                        session,
+                        Unlock,
+                        character_id=member.character.id,
+                        unlock_id=VARZEAS_CAMARA_ACCESS_UNLOCK,
+                    )
+                    await self._ensure(
+                        session,
+                        Unlock,
+                        character_id=member.character.id,
+                        unlock_id=VARZEAS_GALERIAS_CAMARA_ROUTE,
+                    )
+                await self._credit(
+                    session,
+                    member.character.id,
+                    P23_ID,
+                    f"p23.{flag}",
+                    f"p23.{flag}:{member.character.id}",
+                    {"location": location},
+                )
+            return
+
+        if quest.step == 7 and location == VARZEAS_GALERIAS and action == "prepare_entry_with_sera_and_ilyan":
+            for member in members:
+                member.quest.step = 8
+                member.quest.state_version += 1
+                member.quest.status = "completed"
+                member.quest.progress = {
+                    **(member.quest.progress or {}),
+                    "entry_prepared_with_sera_and_ilyan": True,
+                    "completed": True,
+                }
+                await self._ensure_codex(session, member.character.id, P23_COSTS_CODEX)
+                await self._ensure(
+                    session,
+                    CodexFragment,
+                    character_id=member.character.id,
+                    entry_id=P23_COSTS_CODEX,
+                    fragment_id=P23_COSTS_FRAGMENT,
+                )
+                await self._ensure_codex(session, member.character.id, P23_ANCESTRY_CODEX)
+                await self._ensure(
+                    session,
+                    CodexFragment,
+                    character_id=member.character.id,
+                    entry_id=P23_ANCESTRY_CODEX,
+                    fragment_id=P23_ANCESTRY_FRAGMENT,
+                )
+                await self._credit(
+                    session,
+                    member.character.id,
+                    P23_ID,
+                    "p23.prepared_entry_with_sera_and_ilyan",
+                    f"p23.completed:{member.character.id}",
+                    {"location": VARZEAS_GALERIAS, "companions": ("Sera Morn", "Ilyan Korr")},
+                )
+                await self._reward(
+                    session,
+                    member.character,
+                    P23_ID,
+                    P23_REWARD_SOURCE,
+                    49350,
+                    860,
+                    (
+                        ("material.varzeas.ferro_de_salmoura", 2),
+                        ("material.varzeas.junco_ferruginoso", 1),
+                        ("material.varzeas.soro_antigo", 1),
+                    ),
+                )
+                await reconcile_varzeas_feats(session, member.character)
+                await consolidate_character_level(session, member.character)
+
+    async def _advance_s23(self, session, members, location: str, action: str) -> None:
+        if not members:
+            return
+        quest = members[0].quest
+        transitions = {
+            (1, VARZEAS_GALERIAS, "investigate_transfer_lines"): (
+                2,
+                "transfer_lines_investigated",
+            ),
+            (2, VARZEAS_GALERIAS, "identify_emergency_markings"): (
+                3,
+                "emergency_markings_identified",
+            ),
+            (3, VARZEAS_GALERIAS, "record_progressive_ethical_limits"): (
+                4,
+                "progressive_ethical_limits_recorded",
+            ),
+            (4, VARZEAS_PORTO, "report_to_sera"): (5, "reported_to_sera"),
+        }
+        transition = transitions.get((quest.step, location, action))
+        if transition is None:
+            return
+        next_step, flag = transition
+        for member in members:
+            member.quest.step = next_step
+            member.quest.state_version += 1
+            member.quest.progress = {**(member.quest.progress or {}), flag: True}
+            await self._credit(
+                session,
+                member.character.id,
+                S23_ID,
+                f"s23.{flag}",
+                f"s23.{flag}:{member.character.id}",
+                {"location": location},
+            )
+            if next_step == 5:
+                member.quest.status = "completed"
+                member.quest.progress = {**member.quest.progress, "completed": True}
+                await self._ensure_codex(session, member.character.id, S23_CODEX)
+                await self._ensure(
+                    session,
+                    CodexFragment,
+                    character_id=member.character.id,
+                    entry_id=S23_CODEX,
+                    fragment_id=S23_FRAGMENT,
+                )
+                await self._reward(
+                    session,
+                    member.character,
+                    S23_ID,
+                    S23_REWARD_SOURCE,
+                    33110,
+                    500,
+                    (
+                        ("material.varzeas.ferro_de_salmoura", 1),
+                        ("material.varzeas.junco_ferruginoso", 1),
+                        ("material.varzeas.soro_antigo", 2),
                     ),
                 )
                 await consolidate_character_level(session, member.character)
@@ -1496,6 +1775,7 @@ class VarzeasMissionService:
                                     VARZEAS_BREJOS_LOCATION,
                                     VARZEAS_HORTOS_LOCATION,
                                     VARZEAS_GALERIAS_LOCATION,
+                                    VARZEAS_CAMARA_LOCATION,
                                 )
                             ),
                         )
@@ -1510,6 +1790,7 @@ class VarzeasMissionService:
                     (VARZEAS_BREJOS_LOCATION, VARZEAS_BREJOS),
                     (VARZEAS_HORTOS_LOCATION, VARZEAS_HORTOS),
                     (VARZEAS_GALERIAS_LOCATION, VARZEAS_GALERIAS),
+                    (VARZEAS_CAMARA_LOCATION, VARZEAS_CAMARA),
                 )
                 if key in ids
             }
@@ -1555,6 +1836,14 @@ class VarzeasMissionService:
                         "dungeon.varzeas.enfermaria_afundada.discovered",
                     )
                 )
+            elif quest_id == S23_ID:
+                available = bool(
+                    character.level >= 38
+                    and location == VARZEAS_PORTO
+                    and world is not None
+                    and world.region == REGION
+                    and await self._quest_completed(session, character.id, P22_ID)
+                )
             title = {
                 P19_ID: P19_TITLE,
                 S19_ID: S19_TITLE,
@@ -1564,6 +1853,8 @@ class VarzeasMissionService:
                 S21_ID: S21_TITLE,
                 P22_ID: P22_TITLE,
                 S22_ID: S22_TITLE,
+                P23_ID: P23_TITLE,
+                S23_ID: S23_TITLE,
             }[quest_id]
             return VarzeasMissionView(character.id, quest_id, title, "offer" if available else "unavailable", None, None, 0, {}, location, character.level, available)
         if quest.status == "completed":
@@ -1623,6 +1914,23 @@ class VarzeasMissionService:
                 2: "record_treatment_preparation",
                 3: "record_no_valid_patient",
                 4: "report_to_ilyan",
+            }.get(quest.step, "active")
+        elif quest_id == P23_ID:
+            kind = {
+                1: "gather_regional_records",
+                2: "identify_protocol_sequence",
+                3: "confirm_emergency_coercion",
+                4: "record_hereditary_changes",
+                5: "record_modern_hemary_distinction",
+                6: "open_matrix_access",
+                7: "prepare_entry_with_sera_and_ilyan",
+            }.get(quest.step, "active")
+        elif quest_id == S23_ID:
+            kind = {
+                1: "investigate_transfer_lines",
+                2: "identify_emergency_markings",
+                3: "record_progressive_ethical_limits",
+                4: "report_to_sera",
             }.get(quest.step, "active")
         elif quest.step == 1:
             kind = "corrosion_points"

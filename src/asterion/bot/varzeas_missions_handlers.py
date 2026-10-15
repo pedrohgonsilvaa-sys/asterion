@@ -13,10 +13,12 @@ from asterion.application.varzeas_missions import (
     P20_ID,
     P21_ID,
     P22_ID,
+    P23_ID,
     S19_ID,
     S20_ID,
     S21_ID,
     S22_ID,
+    S23_ID,
     VarzeasMissionService,
 )
 from asterion.bot.combat_ui import (
@@ -67,7 +69,8 @@ def varzeas_missions_router(service: VarzeasMissionService, images: dict[str, st
     async def mission_action(query: CallbackQuery) -> None:
         parts = (query.data or "").split(":")
         if len(parts) < 3 or parts[2] not in {
-            P19_ID, S19_ID, P20_ID, S20_ID, P21_ID, S21_ID, P22_ID, S22_ID
+            P19_ID, S19_ID, P20_ID, S20_ID, P21_ID, S21_ID, P22_ID, S22_ID,
+            P23_ID, S23_ID,
         }:
             raise SkipHandler()
         try:

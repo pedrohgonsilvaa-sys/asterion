@@ -12,15 +12,22 @@ from asterion.application.varzeas_missions import (
     P20_ID,
     P21_ID,
     P22_ID,
+    P23_ID,
     S19_ID,
     S20_ID,
     S21_ID,
     S22_ID,
+    S23_ID,
     VarzeasMissionView,
 )
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
-from asterion.domain.road import VARZEAS_GALERIAS, VARZEAS_PORTO
+from asterion.domain.road import (
+    VARZEAS_BREJOS,
+    VARZEAS_GALERIAS,
+    VARZEAS_HORTOS,
+    VARZEAS_PORTO,
+)
 
 
 def _button(text: str, callback: str) -> InlineKeyboardButton:
@@ -69,6 +76,8 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             S21_ID: "P21 ativa ou concluída, acesso aos Hortos e Nv.35",
             P22_ID: "P21 concluída, Nv.37 e acesso às Galerias de Transferência",
             S22_ID: "P22 ativa ou concluída, Enfermaria Afundada descoberta e Nv.37",
+            P23_ID: "P22 concluída e Nv.39 · início automático",
+            S23_ID: "P22 concluída e Nv.38 no Porto da Salmoura",
         }[view.quest_id]
         text = f"📜 {title} · Indisponível\n\nRequer {gate}."
         rows.append([_button("← Missões", "world:missions")])
@@ -78,8 +87,9 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             S20_ID: "P20 concluída · Nv.34 · Porto da Salmoura",
             S21_ID: "P21 ativa ou concluída · Nv.35 · Hortos Hemaris",
             S22_ID: "P22 ativa ou concluída · Enfermaria Afundada descoberta · Nv.37 · Hortos Hemaris",
+            S23_ID: "P22 concluída · Nv.38 · Porto da Salmoura",
         }[view.quest_id]
-        mission_type = "Missão Padrão" if view.quest_id in {S20_ID, S22_ID} else "Missão Curta"
+        mission_type = "Missão Padrão" if view.quest_id in {S20_ID, S22_ID, S23_ID} else "Missão Curta"
         text = f"📜 {title}\n{mission_type} · Várzeas Carmesins\n\nRequer {gate}."
         rows.extend(([_button("Aceitar Missão", f"varzeas:start:{view.quest_id}")], [_button("← Missões", "world:missions")]))
     elif view.kind == "completed":
@@ -92,6 +102,8 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             S21_ID: "16.580 XP · 320 Coroas · 2 Couros de Várzea",
             P22_ID: "45.300 XP · 830 Coroas · 2 Ferros de Salmoura · 2 Soros Antigos",
             S22_ID: "31.710 XP · 500 Coroas · 2 Ferros · Junco · Soro",
+            P23_ID: "49.350 XP · 860 Coroas · 2 Ferros · Junco · Soro",
+            S23_ID: "33.110 XP · 500 Coroas · Ferro · Junco · 2 Soros",
         }[view.quest_id]
         text = f"📜 {title} · Concluída\n\n✨ {reward}"
         rows.extend(([_button("← Missões", "world:missions")], [_button("🗺️ Mapa", "world:map")]))
@@ -227,6 +239,60 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
         description, label, action = prompts.get(view.kind, ("Investigue os protocolos observáveis nos Hortos.", None, None))
         if action is not None:
             rows.append([_button(label, f"varzeas:action:S22:{view.state_version}:{action}")])
+        text = f"📜 {title} · Várzeas Carmesins\n\n{description}\n\n📍 {escape(view.location)}"
+        rows.extend(([_button("📍 Local Atual", "world:local")], [_button("← Missões", "world:missions")]))
+    elif view.quest_id == P23_ID:
+        if view.kind == "gather_regional_records":
+            records = (
+                ("hortos_records", VARZEAS_HORTOS, "gather_hortos_records", "Registrar os registros dos Hortos", "varzeas_hortos"),
+                ("enfermaria_record", VARZEAS_BREJOS, "investigate_enfermaria_record", "Investigar o registro da Enfermaria", "varzeas_brejos"),
+                ("galerias_records", VARZEAS_GALERIAS, "gather_galerias_records", "Registrar os registros das Galerias", "varzeas_galerias"),
+            )
+            progress = view.progress or {}
+            pending = next((row for row in records if not progress.get(row[0])), None)
+            if pending is None:
+                description = "Os três conjuntos de registros foram reunidos."
+            else:
+                _flag, location, action, label, route = pending
+                description = f"Reúna registros dos Hortos, da Enfermaria e das Galerias. Próximo registro: {location}."
+                if view.location == location:
+                    rows.append([_button(label, f"varzeas:action:P23:{view.state_version}:{action}")])
+                else:
+                    rows.append([_button(f"Seguir para {location}", f"road:route:{route}")])
+        else:
+            prompts = {
+                "identify_protocol_sequence": ("Identifique a sequência Restituição, Persistência, Transferência e Emergência.", "Registrar sequência", "identify_protocol_sequence"),
+                "confirm_emergency_coercion": ("Registre a evidência de coerção e do uso de vida externa como recurso.", "Registrar evidência", "confirm_emergency_coercion"),
+                "record_hereditary_changes": ("Registre as alterações estáveis transmitidas por descendência em populações sobreviventes.", "Registrar evidência hereditária", "record_hereditary_changes"),
+                "record_modern_hemary_distinction": ("Registre que Hemários modernos não são experimentos, monstros por origem, doença ou portadores de culpa coletiva.", "Registrar distinção", "record_modern_hemary_distinction"),
+                "open_matrix_access": ("Abra o acesso à Câmara da Matriz para a próxima etapa da Campanha.", "Abrir acesso", "open_matrix_access"),
+                "prepare_entry_with_sera_and_ilyan": ("Prepare a entrada com Sera Morn e Ilyan Korr.", "Preparar entrada", "prepare_entry_with_sera_and_ilyan"),
+            }
+            description, label, action = prompts.get(
+                view.kind,
+                ("Continue a reunião dos registros da Campanha.", None, None),
+            )
+            if view.location != VARZEAS_GALERIAS:
+                rows.append([_button("Seguir às Galerias de Transferência", "road:route:varzeas_galerias")])
+            elif action is not None:
+                rows.append([_button(label, f"varzeas:action:P23:{view.state_version}:{action}")])
+        text = f"📜 {title} · Várzeas Carmesins\n\n{description}\n\n📍 {escape(view.location)}"
+        rows.extend(([_button("📍 Local Atual", "world:local")], [_button("← Missões", "world:missions")]))
+    elif view.quest_id == S23_ID:
+        prompts = {
+            "investigate_transfer_lines": ("Investigue linhas de Transferência abertas em contexto indevido.", "Investigar linhas", "investigate_transfer_lines", VARZEAS_GALERIAS, "varzeas_galerias"),
+            "identify_emergency_markings": ("Identifique marcações e registros de protocolos de Emergência.", "Registrar marcações", "identify_emergency_markings", VARZEAS_GALERIAS, "varzeas_galerias"),
+            "record_progressive_ethical_limits": ("Registre a evidência de redução progressiva dos limites éticos.", "Registrar evidência", "record_progressive_ethical_limits", VARZEAS_GALERIAS, "varzeas_galerias"),
+            "report_to_sera": ("Relate os fatos observados a Sera Morn.", "Relatar a Sera Morn", "report_to_sera", VARZEAS_PORTO, "varzeas_porto"),
+        }
+        description, label, action, location, route = prompts.get(
+            view.kind,
+            ("Continue a investigação das linhas de Transferência.", None, None, VARZEAS_GALERIAS, "varzeas_galerias"),
+        )
+        if view.location != location:
+            rows.append([_button(f"Seguir para {location}", f"road:route:{route}")])
+        elif action is not None:
+            rows.append([_button(label, f"varzeas:action:S23:{view.state_version}:{action}")])
         text = f"📜 {title} · Várzeas Carmesins\n\n{description}\n\n📍 {escape(view.location)}"
         rows.extend(([_button("📍 Local Atual", "world:local")], [_button("← Missões", "world:missions")]))
     else:

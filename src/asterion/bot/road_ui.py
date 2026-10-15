@@ -22,6 +22,7 @@ from asterion.application.road import (
     RUINS,
     TRAVEL_LOCATIONS,
     VARZEAS_BREJOS,
+    VARZEAS_CAMARA_LABEL,
     VARZEAS_DIQUES,
     VARZEAS_GALERIAS,
     VARZEAS_HORTOS,
@@ -94,6 +95,8 @@ def _location_copy(location: str) -> tuple[str, str]:
     }.get(location, "🔥")
     if location == VDE_BERCO:
         return f"🌿 {location}", f"{VDE_REGION} · Local de clímax"
+    if location == VARZEAS_CAMARA_LABEL:
+        return f"🏛️ {location}", f"{VARZEAS_REGION} · Local de clímax"
     low, high = LOCATION_LEVEL_BANDS.get(location, (1, 10))
     region = (
         NARETH_REGION
@@ -790,6 +793,7 @@ def render_current_local(
         VARZEAS_BREJOS,
         VARZEAS_HORTOS,
         VARZEAS_GALERIAS,
+        VARZEAS_CAMARA_LABEL,
     }:
         for destination in view.route_destinations:
             route_key, label = {
@@ -825,10 +829,12 @@ def render_current_local(
                 (VARZEAS_HORTOS, VARZEAS_BREJOS): ("varzeas_brejos", "Retornar aos Brejos do Pulso"),
                 (VARZEAS_HORTOS, VARZEAS_GALERIAS): ("varzeas_galerias", "Seguir às Galerias de Transferência"),
                 (VARZEAS_GALERIAS, VARZEAS_HORTOS): ("varzeas_hortos", "Retornar aos Hortos Hemaris"),
+                (VARZEAS_GALERIAS, VARZEAS_CAMARA_LABEL): ("varzeas_camara", "Seguir à Câmara da Matriz"),
+                (VARZEAS_CAMARA_LABEL, VARZEAS_GALERIAS): ("varzeas_galerias", "Retornar às Galerias de Transferência"),
             }.get((view.location, destination), (None, None))
             if route_key is not None:
                 keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])
-        if view.location not in {VDE_BERCO, NARETH_CAMARA_LABEL}:
+        if view.location not in {VDE_BERCO, NARETH_CAMARA_LABEL, VARZEAS_CAMARA_LABEL}:
             if view.brazier_label:
                 lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
             elif view.location != ROAD:
@@ -875,6 +881,15 @@ def render_current_local(
                 )
             elif destination == VARZEAS_DIQUES:
                 keyboard.append([InlineKeyboardButton(text="Atravessar para os Diques Rubros", callback_data="road:route:varzeas_diques")])
+        if mission_available:
+            keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
+    elif view.location == VARZEAS_CAMARA_LABEL:
+        lines.extend(["", "Local de clímax · Acesso aberto pela Campanha. Sem Caçada, Ronda ou Braseiro permanente."])
+        for destination in view.route_destinations:
+            if destination == VARZEAS_GALERIAS:
+                keyboard.append(
+                    [InlineKeyboardButton(text="Retornar às Galerias de Transferência", callback_data="road:route:varzeas_galerias")]
+                )
         if mission_available:
             keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     elif view.location == NARETH_POSTO:
