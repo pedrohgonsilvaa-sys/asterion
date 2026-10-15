@@ -62,4 +62,7 @@ def test_varzeas_source_authority_is_current_and_has_no_global_barrier_default()
     assert mirror == (root / "SOURCE_AUTHORITY.md").read_bytes()
     assert "**Várzeas Carmesins v1.0.1 FINAL**" in authority
     assert "ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.1_FINAL.md" in authority
+    assert "**Índice atualizado:** 2026-10-15." in authority
+    assert "Várzeas Carmesins v1.0.0 FINAL" not in authority
+    assert "Várzeas v1.0.1" in authority
     assert "Não cria regra universal de duração de Barreira." in authority
