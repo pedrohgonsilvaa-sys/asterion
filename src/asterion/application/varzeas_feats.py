@@ -1,4 +1,4 @@
-"""Idempotent Feat reconciliation for the published Várzeas opening."""
+"""Idempotent Feat reconciliation for published Várzeas content."""
 
 from sqlalchemy import select
 
@@ -20,6 +20,16 @@ async def reconcile_varzeas_feats(session, character) -> None:
     )
     if p19_complete:
         await _ensure(session, character.id, "feat.varzeas.agua_de_ferro")
+
+    p20_complete = await session.scalar(
+        select(Quest.id).where(
+            Quest.character_id == character.id,
+            Quest.quest_id == "P20",
+            Quest.status == "completed",
+        )
+    )
+    if p20_complete:
+        await _ensure(session, character.id, "feat.varzeas.o_pulso_sob_a_lama")
 
     resolved = set(
         (

@@ -21,6 +21,7 @@ from asterion.application.road import (
     ROAD,
     RUINS,
     TRAVEL_LOCATIONS,
+    VARZEAS_BREJOS,
     VARZEAS_DIQUES,
     VARZEAS_PORTO,
     VARZEAS_REGION,
@@ -85,6 +86,7 @@ def _location_copy(location: str) -> tuple[str, str]:
         NARETH_OBSERVATORIO: "🧭",
         VARZEAS_DIQUES: "🧱",
         VARZEAS_PORTO: "⚓",
+        VARZEAS_BREJOS: "🌫️",
     }.get(location, "🔥")
     if location == VDE_BERCO:
         return f"🌿 {location}", f"{VDE_REGION} · Local de clímax"
@@ -93,7 +95,7 @@ def _location_copy(location: str) -> tuple[str, str]:
         NARETH_REGION
         if location in {NARETH_CAMPINAS, NARETH_POSTO, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL}
         else VARZEAS_REGION
-        if location in {VARZEAS_DIQUES, VARZEAS_PORTO}
+        if location in {VARZEAS_DIQUES, VARZEAS_PORTO, VARZEAS_BREJOS}
         else VDE_REGION
         if location in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO}
         else "Terras do Ocaso"
@@ -742,7 +744,7 @@ def render_current_local(
     if view.location in {
         ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS,
         VDE_CLAUSTRO, NARETH_CAMPINAS, NARETH_CANAIS, NARETH_CAMPOS,
-        NARETH_OBSERVATORIO, VARZEAS_DIQUES,
+        NARETH_OBSERVATORIO, VARZEAS_DIQUES, VARZEAS_BREJOS,
     }:
         lines.append("")
         if view.hunt_enabled:
@@ -781,6 +783,7 @@ def render_current_local(
         NARETH_OBSERVATORIO,
         NARETH_CAMARA_LABEL,
         VARZEAS_DIQUES,
+        VARZEAS_BREJOS,
     }:
         for destination in view.route_destinations:
             route_key, label = {
@@ -810,6 +813,8 @@ def render_current_local(
                 (VARZEAS_DIQUES, NARETH_CAMARA_LABEL): ("nareth_camara", "Retornar à Câmara do Arconte"),
                 (VARZEAS_DIQUES, VARZEAS_PORTO): ("varzeas_porto", "Seguir para o Porto da Salmoura"),
                 (VARZEAS_PORTO, VARZEAS_DIQUES): ("varzeas_diques", "Retornar aos Diques Rubros"),
+                (VARZEAS_PORTO, VARZEAS_BREJOS): ("varzeas_brejos", "Seguir aos Brejos do Pulso"),
+                (VARZEAS_BREJOS, VARZEAS_PORTO): ("varzeas_porto", "Retornar ao Porto da Salmoura"),
             }.get((view.location, destination), (None, None))
             if route_key is not None:
                 keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])
@@ -881,6 +886,16 @@ def render_current_local(
         lines.extend(["", "⚓ Hub seguro · Porto da Salmoura", "🚫 Caçada, Ronda e Desbravar · Indisponíveis neste Local"])
         if VARZEAS_DIQUES in view.route_destinations:
             keyboard.append([InlineKeyboardButton(text="Retornar aos Diques Rubros", callback_data="road:route:varzeas_diques")])
+        if VARZEAS_BREJOS in view.route_destinations:
+            keyboard.append([InlineKeyboardButton(text="Seguir aos Brejos do Pulso", callback_data="road:route:varzeas_brejos")])
+        if view.brazier_label:
+            lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        if mission_available:
+            keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
+    elif view.location == VARZEAS_BREJOS:
+        for destination in view.route_destinations:
+            if destination == VARZEAS_PORTO:
+                keyboard.append([InlineKeyboardButton(text="Retornar ao Porto da Salmoura", callback_data="road:route:varzeas_porto")])
         if view.brazier_label:
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
         if mission_available:

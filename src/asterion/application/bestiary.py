@@ -44,6 +44,15 @@ VDE_DISTINCTIVE_ELITE_MASTERY = {
     },
 }
 
+VARZEAS_DISTINCTIVE_ELITE_MASTERY = {
+    "viuva_rubra": {
+        "first_victory",
+        "mechanic:poison",
+        "action:teia_junco",
+        "action:salto_agua",
+    },
+}
+
 NARETH_DISTINCTIVE_BOSS_MASTERY = {
     "custodio_sem_norte": {
         "first_victory",
@@ -267,7 +276,10 @@ class BestiaryRecorder:
                 if entry.bkp >= 8
                 else "observed"
             )
-        elif creature_id in VDE_DISTINCTIVE_ELITE_MASTERY:
+        elif (
+            creature_id in VDE_DISTINCTIVE_ELITE_MASTERY
+            or creature_id in VARZEAS_DISTINCTIVE_ELITE_MASTERY
+        ):
             await self.add_evidence(
                 session, entry, character_id, creature_id, "elite", "elite", 8
             )
@@ -545,6 +557,17 @@ class BestiaryRecorder:
                 if entry.bkp >= 10
                 else "observed"
             )
+        elif creature_id in VARZEAS_DISTINCTIVE_ELITE_MASTERY:
+            required = VARZEAS_DISTINCTIVE_ELITE_MASTERY[creature_id]
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 25
+                else "known"
+                if entry.bkp >= 10
+                else "observed"
+            )
         elif elite:
             if creature_id == "alfa_cinereo":
                 special = {
@@ -694,6 +717,20 @@ class BestiaryRecorder:
                         "mechanic:agility_reduction", "mechanic", 5,
                     ):
                         new_evidence_ids.add("mechanic:agility_reduction")
+            if creature_id == "viuva_rubra" and action_id in {
+                "picada_rubra",
+                "toxina_concentrada",
+            } and event.damage > 0:
+                if await self.add_evidence(
+                    session,
+                    entry,
+                    character_id,
+                    creature_id,
+                    "mechanic:poison",
+                    "mechanic",
+                    5,
+                ):
+                    new_evidence_ids.add("mechanic:poison")
         return new_evidence_ids
 
     async def add_evidence(

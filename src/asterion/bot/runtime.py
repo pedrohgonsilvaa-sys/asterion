@@ -113,7 +113,7 @@ def get_bot_runtime() -> BotRuntime:
     p7 = P7Service(SessionFactory, settings.server_id, groups=groups)
     vde_missions = VDEMissionService(SessionFactory, settings.server_id, groups=groups)
     nareth_missions = NarethMissionService(SessionFactory, settings.server_id, groups=groups)
-    varzeas_missions = VarzeasMissionService(SessionFactory, settings.server_id)
+    varzeas_missions = VarzeasMissionService(SessionFactory, settings.server_id, groups=groups)
     s6 = S6Service(SessionFactory, settings.server_id, groups=groups)
     class_trials = ClassTrialService(SessionFactory, settings.server_id)
     paths = PathSelectionService(SessionFactory, settings.server_id)

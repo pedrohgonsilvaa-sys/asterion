@@ -45,6 +45,7 @@ NARETH_OBSERVATORIO_LOCATION = "nareth.location.observatorio_do_eixo"
 NARETH_CAMARA_LOCATION = "nareth.location.camara_do_arconte"
 VARZEAS_DIQUES_LOCATION = "varzeas.location.diques_rubros"
 VARZEAS_PORTO_LOCATION = "varzeas.location.porto_da_salmoura"
+VARZEAS_BREJOS_LOCATION = "varzeas.location.brejos_do_pulso"
 NARETH_CAMPINAS = "Campinas do Meridiano"
 NARETH_POSTO = "Posto de Nareth"
 NARETH_CANAIS = "Canais Secos"
@@ -54,6 +55,7 @@ NARETH_CAMARA = "Câmara do Arconte"
 NARETH_REGION = "Planícies de Nareth"
 VARZEAS_DIQUES = "Diques Rubros"
 VARZEAS_PORTO = "Porto da Salmoura"
+VARZEAS_BREJOS = "Brejos do Pulso"
 VARZEAS_REGION = "Várzeas Carmesins"
 NARETH_BRAZIER_HORIZONTE = "nareth.brazier.horizonte"
 NARETH_BRAZIER_POSTO = "nareth.brazier.posto"
@@ -72,10 +74,15 @@ NARETH_REGION_UNLOCK = "region.nareth.available"
 VARZEAS_REGION_ENTRY_UNLOCK = "region.varzeas_carmesins.available"
 VARZEAS_DIQUES_BRAZIER = "varzeas.brazier.dique_alto"
 VARZEAS_PORTO_BRAZIER = "varzeas.brazier.porto"
+VARZEAS_BREJOS_BRAZIER = "varzeas.brazier.juncos_baixos"
 VARZEAS_DIQUES_HUNT_UNLOCK = "hunt.manual.varzeas.diques_rubros"
 VARZEAS_DIQUES_EXPLORE_UNLOCK = "explore.varzeas.diques_rubros"
 VARZEAS_DIQUES_ROUND_FAMILIARITY = "hunt_round.varzeas.diques_rubros"
 VARZEAS_DIQUES_PORTO_ROUTE = "route.varzeas.diques_porto"
+VARZEAS_BREJOS_HUNT_UNLOCK = "hunt.manual.varzeas.brejos_do_pulso"
+VARZEAS_BREJOS_EXPLORE_UNLOCK = "explore.varzeas.brejos_do_pulso"
+VARZEAS_BREJOS_ROUND_FAMILIARITY = "hunt_round.varzeas.brejos_do_pulso"
+VARZEAS_PORTO_BREJOS_ROUTE = "route.varzeas.porto_brejos"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
 BOSQUE_BRAZIER = "tdo.brazier.galhos_mortos"
@@ -827,11 +834,45 @@ VARZEAS_BRINE_ALPHA = Creature(
     ),
     ai_priority=("rasgo_salmoura", "cacada_margem", "corrida_dique"),
 )
+VARZEAS_REED_SPIDER = Creature(
+    "aranha_junco", "Aranha de Junco", "common", "controller", 33, 36, 20,
+    ("picada_junco", "fio_entre_hastes", "salto_margem"),
+    (
+        ("picada_junco", "Picada de Junco", D("0.80"), 0, D(0), 0, "poison", 1, False, 2),
+        ("fio_entre_hastes", "Fio entre Hastes", D("0.75"), 0, D("0.12"), 2, None, 0, False, 3, "agility"),
+        ("salto_margem", "Salto de Margem", D("1.15"), 0, D(0), 0, None, 0, False, 3),
+    ),
+    ai_priority=("picada_junco", "fio_entre_hastes", "salto_margem"),
+)
+VARZEAS_RUST_DEER = Creature(
+    "cervo_ferrugem", "Cervo Ferrugem", "common", "brute", 33, 37, 24,
+    ("chifrada_ferruginosa", "pisoteio_brejo", "carga_junco"),
+    (
+        ("chifrada_ferruginosa", "Chifrada Ferruginosa", D("1.05"), 0, D(0), 0),
+        ("pisoteio_brejo", "Pisoteio de Brejo", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+        ("carga_junco", "Carga de Junco", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("carga_junco", "pisoteio_brejo"),
+)
+VARZEAS_CRIMSON_WIDOW = Creature(
+    "viuva_rubra", "Viúva Rubra", "elite", "controller", 35, 37, 3,
+    ("picada_rubra", "teia_junco", "toxina_concentrada", "salto_agua"),
+    (
+        ("picada_rubra", "Picada Rubra", D("0.80"), 0, D(0), 0, "poison", 1, False, 2),
+        ("teia_junco", "Teia de Junco", D("0.75"), 0, D("0.15"), 2, None, 0, False, 3, "agility"),
+        ("toxina_concentrada", "Toxina Concentrada", D("0.95"), 0, D(0), 0, "poison", 0, False, 3, None, D(0), D(0), 0, False, "opponent", None, None, None, (), (), D("0.50"), D(0), D(0), D(0), D(0), D("0.40"), 1),
+        ("salto_agua", "Salto sobre a Água", D("1.60"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("picada_rubra", "teia_junco", "toxina_concentrada", "salto_agua"),
+)
 VARZEAS_CREATURES = (
     VARZEAS_SALMOURA_HOUND,
     VARZEAS_IRON_HERON,
     VARZEAS_CRIMSON_BEARER,
     VARZEAS_BRINE_ALPHA,
+    VARZEAS_REED_SPIDER,
+    VARZEAS_RUST_DEER,
+    VARZEAS_CRIMSON_WIDOW,
 )
 
 NARETH_CREATURES = (
@@ -1236,6 +1277,9 @@ VARIANT_POOL = {
     "garca_ferruginosa": ("agile", "furious"),
     "portador_rubro": ("resistant", "furious", "agile"),
     "alfa_salmoura": (),
+    "aranha_junco": ("venomous", "agile"),
+    "cervo_ferrugem": ("furious", "resistant"),
+    "viuva_rubra": (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -1368,6 +1412,7 @@ LOCATION_LEVEL_BANDS = {
     "Câmara do Arconte": (30, 30),
     "Diques Rubros": (31, 34),
     "Porto da Salmoura": (31, 34),
+    "Brejos do Pulso": (33, 37),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -1775,6 +1820,23 @@ VARZEAS_DIQUES_PROFILE = HuntLocationProfile(
     round_familiarity=VARZEAS_DIQUES_ROUND_FAMILIARITY,
     explore_unlock=VARZEAS_DIQUES_EXPLORE_UNLOCK,
 )
+VARZEAS_BREJOS_PROFILE = HuntLocationProfile(
+    local_id=VARZEAS_BREJOS_LOCATION,
+    label=VARZEAS_BREJOS,
+    creature_weights=(
+        ("cao_salmoura", 18),
+        ("garca_ferruginosa", 17),
+        ("portador_rubro", 15),
+        ("aranha_junco", 20),
+        ("cervo_ferrugem", 24),
+        ("alfa_salmoura", 3),
+        ("viuva_rubra", 3),
+    ),
+    variant_chance=13,
+    hunt_unlock=VARZEAS_BREJOS_HUNT_UNLOCK,
+    round_familiarity=VARZEAS_BREJOS_ROUND_FAMILIARITY,
+    explore_unlock=VARZEAS_BREJOS_EXPLORE_UNLOCK,
+)
 
 NARETH_CANAIS_EXPLORATION_PROFILE = ExplorationLocationProfile(
     local_id=NARETH_CANAIS_LOCATION,
@@ -1869,6 +1931,31 @@ VARZEAS_DIQUES_EXPLORATION_PROFILE = ExplorationLocationProfile(
     ),
 )
 
+VARZEAS_BREJOS_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=VARZEAS_BREJOS_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("braseiro_juncos_baixos", "great_discovery", "explore.varzeas.brejos.braseiro_juncos_baixos", 50, "O Braseiro dos Juncos Baixos foi descoberto entre as passarelas alagadas.", min_level=33, unique=True),
+        ExplorationResultDefinition("entrada_enfermaria", "great_discovery", "explore.varzeas.brejos.entrada_enfermaria_afundada", 50, "Uma entrada da Enfermaria Afundada foi descoberta sob a lama.", min_level=34, unique=True),
+        ExplorationResultDefinition("pulso_pressao", "knowledge", "explore.varzeas.brejos.pulso_de_pressao", 55, "A pressão sob a turfa coincide com pequenas elevações periódicas da água.", min_level=33, unique=True),
+        ExplorationResultDefinition("bolhas_turfa", "knowledge", "explore.varzeas.brejos.bolhas_sob_turfa", 45, "Bolhas surgem sob a turfa e desaparecem sem explicar a origem do movimento.", min_level=33),
+        ExplorationResultDefinition("junco_dobrado", "narrative", "explore.varzeas.brejos.junco_dobrado", 55, "Juncos dobrados acompanham a passagem da água.", min_level=33),
+        ExplorationResultDefinition("agua_respira", "narrative", "explore.varzeas.brejos.agua_que_respira", 45, "A água sobe e recua em intervalos perceptíveis.", min_level=33),
+        ExplorationResultDefinition("cao_salmoura", "combat", "explore.varzeas.brejos.combat.cao_salmoura", 18, "Um Cão de Salmoura surge entre os juncos.", min_level=33, creature_id="cao_salmoura"),
+        ExplorationResultDefinition("garca_ferruginosa", "combat", "explore.varzeas.brejos.combat.garca_ferruginosa", 17, "Uma Garça Ferruginosa ocupa a margem alagada.", min_level=33, creature_id="garca_ferruginosa"),
+        ExplorationResultDefinition("portador_rubro", "combat", "explore.varzeas.brejos.combat.portador_rubro", 15, "Um Portador Rubro cruza a água rasa.", min_level=33, creature_id="portador_rubro"),
+        ExplorationResultDefinition("aranha_junco", "combat", "explore.varzeas.brejos.combat.aranha_junco", 24, "Uma Aranha de Junco desce entre as hastes.", min_level=33, creature_id="aranha_junco"),
+        ExplorationResultDefinition("cervo_ferrugem", "combat", "explore.varzeas.brejos.combat.cervo_ferrugem", 26, "Um Cervo Ferrugem bloqueia a passagem entre os juncos.", min_level=33, creature_id="cervo_ferrugem"),
+        ExplorationResultDefinition("junco_ferruginoso", "resource", "explore.varzeas.brejos.junco_ferruginoso", 35, "Junco Ferruginoso pode ser recolhido junto à água.", min_level=33),
+        ExplorationResultDefinition("couro_varzea", "resource", "explore.varzeas.brejos.couro_varzea", 25, "Couro de Várzea pode ser obtido nas margens.", min_level=33),
+        ExplorationResultDefinition("soro_antigo", "resource", "explore.varzeas.brejos.soro_antigo", 25, "Soro Antigo pode ser recolhido entre os depósitos da turfa.", min_level=33),
+        ExplorationResultDefinition("ferro_salmoura", "resource", "explore.varzeas.brejos.ferro_salmoura", 15, "Ferro de Salmoura pode ser recolhido nas estruturas expostas.", min_level=33),
+        ExplorationResultDefinition("lama_circulos", "atmospheric", "explore.varzeas.brejos.lama_em_circulos", 34, "A lama conserva círculos concêntricos sem marca de impacto.", min_level=33),
+        ExplorationResultDefinition("nevoa_salobra", "atmospheric", "explore.varzeas.brejos.nevoa_salobra", 33, "Uma névoa salobra se mantém baixa sobre o brejo.", min_level=33),
+        ExplorationResultDefinition("estaca_submersa", "atmospheric", "explore.varzeas.brejos.estaca_submersa", 33, "Uma estaca parcialmente submersa marca a borda de uma passagem.", min_level=33),
+    ),
+)
+
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
     CHARNECA_LOCATION: CHARNECA_EXPLORATION_PROFILE,
@@ -1883,6 +1970,7 @@ EXPLORATION_PROFILES = {
     NARETH_CAMPOS_LOCATION: NARETH_CAMPOS_EXPLORATION_PROFILE,
     NARETH_OBSERVATORIO_LOCATION: NARETH_OBSERVATORIO_EXPLORATION_PROFILE,
     VARZEAS_DIQUES_LOCATION: VARZEAS_DIQUES_EXPLORATION_PROFILE,
+    VARZEAS_BREJOS_LOCATION: VARZEAS_BREJOS_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
@@ -1900,6 +1988,7 @@ HUNT_PROFILES = {
     NARETH_CAMPOS_LOCATION: NARETH_CAMPOS_PROFILE,
     NARETH_OBSERVATORIO_LOCATION: NARETH_OBSERVATORIO_PROFILE,
     VARZEAS_DIQUES_LOCATION: VARZEAS_DIQUES_PROFILE,
+    VARZEAS_BREJOS_LOCATION: VARZEAS_BREJOS_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -2100,6 +2189,9 @@ VARZEAS_BASIC_MATERIAL_CREATURE_IDS = frozenset(
         "garca_ferruginosa",
         "portador_rubro",
         "alfa_salmoura",
+        "aranha_junco",
+        "cervo_ferrugem",
+        "viuva_rubra",
     }
 )
 
@@ -2231,6 +2323,15 @@ MATERIAL_POOLS = {
     "alfa_salmoura": (
         ("material.varzeas.couro_de_varzea", 80),
         ("material.varzeas.soro_antigo", 20),
+    ),
+    "aranha_junco": (
+        ("material.varzeas.junco_ferruginoso", 65),
+        ("material.varzeas.soro_antigo", 35),
+    ),
+    "cervo_ferrugem": (("material.varzeas.couro_de_varzea", 100),),
+    "viuva_rubra": (
+        ("material.varzeas.junco_ferruginoso", 60),
+        ("material.varzeas.soro_antigo", 40),
     ),
 }
 

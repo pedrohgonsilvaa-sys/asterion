@@ -102,6 +102,8 @@ CODEX_ENTRIES = (
     CodexPresentation("codex.figure.sera_morn", "Sera Morn", "figures", 60),
     CodexPresentation("codex.location.diques_rubros", "Diques Rubros", "regions", 260, "varzeas.location.diques_rubros"),
     CodexPresentation("codex.location.porto_da_salmoura", "Porto da Salmoura", "regions", 270, "varzeas.location.porto_da_salmoura"),
+    CodexPresentation("codex.location.brejos_do_pulso", "Brejos do Pulso", "regions", 280, "varzeas.location.brejos_do_pulso"),
+    CodexPresentation("codex.mystery.pulso_sob_a_lama", "Pulso sob a Lama", "mysteries", 281),
     CodexPresentation("codex.figure.talen_orm", "Talen Orm", "figures", 50),
     CodexPresentation("codex.location.canais_secos", "Canais Secos", "regions", 170, "nareth.location.canais_secos"),
     CodexPresentation("codex.location.galerias_do_meridiano", "Galerias do Meridiano", "regions", 175, "nareth.location.galerias_do_meridiano"),
@@ -617,6 +619,22 @@ CODEX_FRAGMENTS = {
         "Coordenação civil",
         "Sera Morn coordena a manutenção dos diques e a segurança das rotas.",
     ),
+    "codex.fragment.varzeas.brejos.braseiro_juncos_baixos": FragmentPresentation(
+        "Braseiro dos Juncos Baixos",
+        "O Braseiro dos Juncos Baixos foi descoberto entre as passarelas alagadas.",
+    ),
+    "codex.fragment.varzeas.brejos.entrada_enfermaria_afundada": FragmentPresentation(
+        "Entrada sob a lama",
+        "Uma entrada da Enfermaria Afundada foi descoberta; seu interior ainda não foi explorado.",
+    ),
+    "codex.fragment.varzeas.brejos.pulso_de_pressao": FragmentPresentation(
+        "Pulso de pressão",
+        "A pressão sob a turfa coincide com pequenas elevações periódicas da água, sem determinar a origem do fenômeno.",
+    ),
+    "codex.fragment.varzeas.p20.pulso_sob_a_lama": FragmentPresentation(
+        "Interpretação de Sera",
+        "Os registros relacionam água, pressão, atividade biológica e infraestrutura antiga enterrada; sua origem permanece aberta.",
+    ),
 }
 
 
@@ -825,6 +843,12 @@ ACHIEVEMENTS = (
         "exploration",
         "Descobriu os resultados únicos publicados dos Diques Rubros.",
     ),
+    AchievementPresentation(
+        "feat.varzeas.o_pulso_sob_a_lama",
+        "O Pulso sob a Lama",
+        "exploration",
+        "Concluiu P20 — O Pulso sob a Lama.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
@@ -875,6 +899,7 @@ NARETH_LOCATIONS = {
 VARZEAS_LOCATIONS = {
     "varzeas.location.diques_rubros": "Diques Rubros",
     "varzeas.location.porto_da_salmoura": "Porto da Salmoura",
+    "varzeas.location.brejos_do_pulso": "Brejos do Pulso",
 }
 LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS | VARZEAS_LOCATIONS
 HABITAT_EVIDENCE_TO_LOCATION = {
@@ -902,6 +927,7 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     **{location_id: location_id for location_id in NARETH_LOCATIONS},
     "Diques Rubros": "varzeas.location.diques_rubros",
     "Porto da Salmoura": "varzeas.location.porto_da_salmoura",
+    "Brejos do Pulso": "varzeas.location.brejos_do_pulso",
     **{location_id: location_id for location_id in VARZEAS_LOCATIONS},
 }
 MATERIAL_LABELS = {
@@ -1067,6 +1093,9 @@ CREATURE_PRESENTATION = {
     "garca_ferruginosa": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.diques_rubros",)),
     "portador_rubro": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.diques_rubros",)),
     "alfa_salmoura": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.diques_rubros",)),
+    "aranha_junco": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.brejos_do_pulso",)),
+    "cervo_ferrugem": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.brejos_do_pulso",)),
+    "viuva_rubra": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.brejos_do_pulso",)),
     "arconte_invertido": CreaturePresentation(
         NARETH_REGION_ID, ("nareth.location.camara_do_arconte",)
     ),
