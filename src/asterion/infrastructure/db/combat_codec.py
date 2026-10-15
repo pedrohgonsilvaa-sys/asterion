@@ -51,6 +51,11 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                         value.get("per_bonus_if_target_poisoned", "0")
                     ),
                     "vampirism_fraction": Decimal(value.get("vampirism_fraction", "0")),
+                    "vampirism_cap_hp_fraction": (
+                        Decimal(value["vampirism_cap_hp_fraction"])
+                        if value.get("vampirism_cap_hp_fraction") is not None
+                        else None
+                    ),
                     "actor_per_bonus": Decimal(value.get("actor_per_bonus", "0")),
                     "actor_per_bonus_if_target_bleeding": Decimal(
                         value.get("actor_per_bonus_if_target_bleeding", "0")

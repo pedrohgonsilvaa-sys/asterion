@@ -2,7 +2,12 @@
 
 from sqlalchemy import select
 
-from asterion.infrastructure.db.models import Achievement, ExplorationAttempt, Quest
+from asterion.infrastructure.db.models import (
+    Achievement,
+    CodexEntry,
+    ExplorationAttempt,
+    Quest,
+)
 
 DIQUES_UNIQUES = (
     "explore.varzeas.diques.comporta_primeiro_dique",
@@ -30,6 +35,25 @@ async def reconcile_varzeas_feats(session, character) -> None:
     )
     if p20_complete:
         await _ensure(session, character.id, "feat.varzeas.o_pulso_sob_a_lama")
+
+    p21_complete = await session.scalar(
+        select(Quest.id).where(
+            Quest.character_id == character.id,
+            Quest.quest_id == "P21",
+            Quest.status == "completed",
+        )
+    )
+    if p21_complete:
+        await _ensure(session, character.id, "feat.varzeas.hortos_vazios")
+
+    hemaris_recorded = await session.scalar(
+        select(CodexEntry.id).where(
+            CodexEntry.character_id == character.id,
+            CodexEntry.entry_id == "codex.history.projeto_hemaris_registro_inicial",
+        )
+    )
+    if hemaris_recorded:
+        await _ensure(session, character.id, "feat.varzeas.nome_recuperado")
 
     resolved = set(
         (

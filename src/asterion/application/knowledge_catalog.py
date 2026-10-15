@@ -103,7 +103,10 @@ CODEX_ENTRIES = (
     CodexPresentation("codex.location.diques_rubros", "Diques Rubros", "regions", 260, "varzeas.location.diques_rubros"),
     CodexPresentation("codex.location.porto_da_salmoura", "Porto da Salmoura", "regions", 270, "varzeas.location.porto_da_salmoura"),
     CodexPresentation("codex.location.brejos_do_pulso", "Brejos do Pulso", "regions", 280, "varzeas.location.brejos_do_pulso"),
+    CodexPresentation("codex.location.hortos_hemaris", "Hortos Hemaris", "regions", 290, "varzeas.location.hortos_hemaris"),
     CodexPresentation("codex.mystery.pulso_sob_a_lama", "Pulso sob a Lama", "mysteries", 281),
+    CodexPresentation("codex.figure.ilyan_korr", "Ilyan Korr", "figures", 70),
+    CodexPresentation("codex.history.projeto_hemaris_registro_inicial", "Projeto Hemaris — Registro Inicial", "history", 300),
     CodexPresentation("codex.figure.talen_orm", "Talen Orm", "figures", 50),
     CodexPresentation("codex.location.canais_secos", "Canais Secos", "regions", 170, "nareth.location.canais_secos"),
     CodexPresentation("codex.location.galerias_do_meridiano", "Galerias do Meridiano", "regions", 175, "nareth.location.galerias_do_meridiano"),
@@ -635,6 +638,30 @@ CODEX_FRAGMENTS = {
         "Interpretação de Sera",
         "Os registros relacionam água, pressão, atividade biológica e infraestrutura antiga enterrada; sua origem permanece aberta.",
     ),
+    "codex.fragment.varzeas.hortos.braseiro_horto_seco": FragmentPresentation(
+        "Braseiro do Horto Seco",
+        "O Braseiro do Horto Seco foi descoberto entre os antigos canais de cultivo.",
+    ),
+    "codex.fragment.varzeas.hortos.estufa_technical": FragmentPresentation(
+        "Estufa de cultivo técnico",
+        "A estufa preserva estruturas de cultivo técnico antigo; nenhuma função terapêutica foi associada ainda.",
+    ),
+    "codex.fragment.varzeas.hortos.estufa_therapeutic": FragmentPresentation(
+        "Função terapêutica",
+        "Após o registro inicial de P21, os cultivos dos Hortos podem ser relacionados a suporte e recuperação dentro do Projeto Hemaris.",
+    ),
+    "codex.fragment.varzeas.hortos.canteiro_dupla_funcao": FragmentPresentation(
+        "Canteiro de Dupla Função",
+        "Um canteiro combina funções distintas de cultivo e suporte, sem esclarecer estágios posteriores do projeto.",
+    ),
+    "codex.fragment.varzeas.figure.ilyan_korr": FragmentPresentation(
+        "Registro de Ilyan Korr",
+        "Ilyan Korr recebeu os registros técnicos dos Hortos e validou a leitura inicial da placa.",
+    ),
+    "codex.fragment.varzeas.p21.projeto_hemaris_registro_inicial": FragmentPresentation(
+        "Placa técnica dos Hortos",
+        "Uma placa relaciona cultivo e recuperação ao Projeto Hemaris. O registro comprova uma finalidade terapêutica/biológica inicial, sem esclarecer a operação completa do projeto.",
+    ),
 }
 
 
@@ -849,6 +876,18 @@ ACHIEVEMENTS = (
         "exploration",
         "Concluiu P20 — O Pulso sob a Lama.",
     ),
+    AchievementPresentation(
+        "feat.varzeas.hortos_vazios",
+        "Hortos Vazios",
+        "exploration",
+        "Concluiu P21 — Os Hortos Vazios.",
+    ),
+    AchievementPresentation(
+        "feat.varzeas.nome_recuperado",
+        "Nome Recuperado",
+        "chronicles",
+        "Registrou legitimamente Projeto Hemaris no Códice.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
@@ -900,6 +939,7 @@ VARZEAS_LOCATIONS = {
     "varzeas.location.diques_rubros": "Diques Rubros",
     "varzeas.location.porto_da_salmoura": "Porto da Salmoura",
     "varzeas.location.brejos_do_pulso": "Brejos do Pulso",
+    "varzeas.location.hortos_hemaris": "Hortos Hemaris",
 }
 LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS | VARZEAS_LOCATIONS
 HABITAT_EVIDENCE_TO_LOCATION = {
@@ -1093,9 +1133,22 @@ CREATURE_PRESENTATION = {
     "garca_ferruginosa": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.diques_rubros",)),
     "portador_rubro": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.diques_rubros",)),
     "alfa_salmoura": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.diques_rubros",)),
-    "aranha_junco": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.brejos_do_pulso",)),
-    "cervo_ferrugem": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.brejos_do_pulso",)),
-    "viuva_rubra": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.brejos_do_pulso",)),
+    "aranha_junco": CreaturePresentation(
+        VARZEAS_REGION_ID,
+        ("varzeas.location.brejos_do_pulso", "varzeas.location.hortos_hemaris"),
+    ),
+    "cervo_ferrugem": CreaturePresentation(
+        VARZEAS_REGION_ID,
+        ("varzeas.location.brejos_do_pulso", "varzeas.location.hortos_hemaris"),
+    ),
+    "viuva_rubra": CreaturePresentation(
+        VARZEAS_REGION_ID,
+        ("varzeas.location.brejos_do_pulso", "varzeas.location.hortos_hemaris"),
+    ),
+    "lampreia_varzea": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.hortos_hemaris",)),
+    "enxerto_horto": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.hortos_hemaris",)),
+    "mariposa_soro": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.hortos_hemaris",)),
+    "coletor_hematico": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.hortos_hemaris",)),
     "arconte_invertido": CreaturePresentation(
         NARETH_REGION_ID, ("nareth.location.camara_do_arconte",)
     ),

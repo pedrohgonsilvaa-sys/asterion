@@ -10,8 +10,10 @@ from asterion.application.prologue import CombatView
 from asterion.application.varzeas_missions import (
     P19_ID,
     P20_ID,
+    P21_ID,
     S19_ID,
     S20_ID,
+    S21_ID,
     VarzeasMissionView,
 )
 from asterion.bot.combat_ui import render_combat
@@ -61,16 +63,18 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             S19_ID: "P19 concluída e Nv.32 no Porto da Salmoura",
             P20_ID: "P19 concluída e Nv.33 no Porto da Salmoura",
             S20_ID: "P20 concluída e Nv.34 no Porto da Salmoura",
+            P21_ID: "P20 concluída, Nv.35 e acesso aos Hortos Hemaris",
+            S21_ID: "P21 ativa ou concluída, acesso aos Hortos e Nv.35",
         }[view.quest_id]
         text = f"📜 {title} · Indisponível\n\nRequer {gate}."
         rows.append([_button("← Missões", "world:missions")])
     elif view.kind == "offer":
-        gate = (
-            "P19 concluída · Nv.32 · Porto da Salmoura"
-            if view.quest_id == S19_ID
-            else "P20 concluída · Nv.34 · Porto da Salmoura"
-        )
-        mission_type = "Missão Curta" if view.quest_id == S19_ID else "Missão Padrão"
+        gate = {
+            S19_ID: "P19 concluída · Nv.32 · Porto da Salmoura",
+            S20_ID: "P20 concluída · Nv.34 · Porto da Salmoura",
+            S21_ID: "P21 ativa ou concluída · Nv.35 · Hortos Hemaris",
+        }[view.quest_id]
+        mission_type = "Missão Padrão" if view.quest_id == S20_ID else "Missão Curta"
         text = f"📜 {title}\n{mission_type} · Várzeas Carmesins\n\nRequer {gate}."
         rows.extend(([_button("Aceitar Missão", f"varzeas:start:{view.quest_id}")], [_button("← Missões", "world:missions")]))
     elif view.kind == "completed":
@@ -79,6 +83,8 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             S19_ID: "14.400 XP · 290 Coroas",
             P20_ID: "37.800 XP · 600 Coroas · Ferro de Salmoura · 2 Juncos Ferruginosos · Soro Antigo",
             S20_ID: "27.720 XP · 460 Coroas · Junco Ferruginoso · Soro Antigo",
+            P21_ID: "41.450 XP · 630 Coroas · escolha de 1 Equipamento Raro Nv.35",
+            S21_ID: "16.580 XP · 320 Coroas · 2 Couros de Várzea",
         }[view.quest_id]
         text = f"📜 {title} · Concluída\n\n✨ {reward}"
         rows.extend(([_button("← Missões", "world:missions")], [_button("🗺️ Mapa", "world:map")]))
@@ -114,6 +120,55 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
         else:
             description = "Conclua com o reparo e o registro das observações."
             rows.append([_button("Registrar reparo", f"varzeas:action:S19:{view.state_version}:repair_and_record")])
+        text = f"📜 {title} · Várzeas Carmesins\n\n{description}\n\n📍 {escape(view.location)}"
+        rows.extend(([_button("📍 Local Atual", "world:local")], [_button("← Missões", "world:missions")]))
+    elif view.quest_id == P21_ID:
+        beds = set((view.progress or {}).get("beds_examined", []))
+        if view.kind == "travel_hortos":
+            description = "Entre nos Hortos Hemaris para examinar os cultivos antigos."
+            rows.append([_button("Seguir aos Hortos Hemaris", "road:route:varzeas_hortos")])
+        elif view.kind == "examine_beds":
+            description = "Examine os três canteiros antigos e registre as funções distintas observáveis."
+            for point in ("a", "b", "c"):
+                if point not in beds:
+                    rows.append([_button(f"Examinar canteiro {point.upper()}", f"varzeas:action:P21:{view.state_version}:examine_bed_{point}")])
+        elif view.kind == "combat_start":
+            description = "O Cervo Ferrugem bloqueia o setor. Prepare-se para a investida telegráfica."
+            rows.extend((
+                [_button("Enfrentar sozinho", f"varzeas:combat:P21:{view.state_version}:solo")],
+                [_button("Propor ao Grupo", f"varzeas:combat:P21:{view.state_version}:group")],
+            ))
+        elif view.kind == "find_technical_plate":
+            description = "Encontre a placa técnica que relaciona cultivo, recuperação e Hemaris."
+            rows.append([_button("Examinar placa técnica", f"varzeas:action:P21:{view.state_version}:find_technical_plate")])
+        elif view.kind == "report_to_ilyan":
+            description = "Leve o registro a Ilyan Korr."
+            rows.append([_button("Entregar registro a Ilyan", f"varzeas:action:P21:{view.state_version}:report_to_ilyan")])
+        elif view.kind == "record_project_hemaris":
+            description = "Registre no Códice Projeto Hemaris — Registro Inicial."
+            rows.append([_button("Registrar no Códice", f"varzeas:action:P21:{view.state_version}:record_project_hemaris")])
+        elif view.kind == "choose_reward":
+            description = "Escolha exatamente um Equipamento Raro Nv.35. A escolha será individual e permanente."
+            for key, label in (
+                ("mask", "Máscara da Salmoura · Cabeça"),
+                ("seal", "Selo dos Diques · Acessório"),
+                ("reliquary", "Relicário do Horto Estéril · Artefato"),
+            ):
+                rows.append([_button(label, f"varzeas:choice:P21:{view.state_version}:{key}")])
+        else:
+            description = "Continue a investigação dos Hortos Hemaris."
+        text = f"📜 {title} · Várzeas Carmesins\n\n{description}\n\n📍 {escape(view.location)}"
+        rows.extend(([_button("📍 Local Atual", "world:local")], [_button("← Missões", "world:missions")]))
+    elif view.quest_id == S21_ID:
+        descriptions = {
+            "examine_cultivation_sector": ("Examine o setor de cultivo tomado por Enxertos de Horto.", "Examinar setor", "examine_cultivation_sector"),
+            "observe_autonomous_grafts": ("Observe os sinais dos Enxertos e registre que as culturas de suporte se tornaram autônomas.", "Registrar observação", "observe_autonomous_grafts"),
+            "analyze_support_function": ("Registre a função de suporte e regeneração sem classificar os organismos como pessoas transformadas.", "Registrar análise", "analyze_support_function"),
+            "report_to_ilyan": ("Retorne a Ilyan Korr e conclua o registro.", "Concluir com Ilyan", "report_to_ilyan"),
+        }
+        description, label, action = descriptions.get(view.kind, ("Continue a investigação do setor de cultivo.", None, None))
+        if action is not None:
+            rows.append([_button(label, f"varzeas:action:S21:{view.state_version}:{action}")])
         text = f"📜 {title} · Várzeas Carmesins\n\n{description}\n\n📍 {escape(view.location)}"
         rows.extend(([_button("📍 Local Atual", "world:local")], [_button("← Missões", "world:missions")]))
     else:

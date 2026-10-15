@@ -1,11 +1,16 @@
+from dataclasses import replace
 from decimal import Decimal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from asterion.application.bestiary import VARZEAS_DISTINCTIVE_ELITE_MASTERY
+from asterion.application.bestiary import (
+    VARZEAS_DISTINCTIVE_ELITE_MASTERY,
+    VARZEAS_IMPORTANT_FIRST_VICTORY_XP,
+)
 from asterion.application.inventory import MATERIAL_LABELS as INVENTORY_MATERIAL_LABELS
 from asterion.application.knowledge_catalog import (
     CODEX_ENTRIES,
     CODEX_FRAGMENTS,
+    CREATURE_PRESENTATION,
     VARZEAS_REGION_LABEL,
 )
 from asterion.application.road import (
@@ -13,14 +18,24 @@ from asterion.application.road import (
     _grade_catalyst_for_level,
     _grade_fragment_for_level,
 )
-from asterion.application.varzeas_missions import P20_ID, S20_ID, VarzeasMissionView
+from asterion.application.varzeas_missions import (
+    P20_ID,
+    P21_FRAGMENT,
+    P21_ID,
+    P21_REWARD_CHOICES,
+    S20_ID,
+    S21_ID,
+    VarzeasMissionView,
+)
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
+from asterion.domain.combat import _perform
 from asterion.domain.equipment_modifications import equipment_grade
 from asterion.domain.professions import MATERIAL_NAMES
 from asterion.domain.road import (
     EXPLORATION_CATEGORY_WEIGHTS,
     EXPLORATION_PROFILES,
     HUNT_PROFILES,
+    LOCATION_LEVEL_BANDS,
     MATERIAL_POOLS,
     VARIANT_POOL,
     VARZEAS_BREJOS_EXPLORATION_PROFILE,
@@ -30,10 +45,18 @@ from asterion.domain.road import (
     VARZEAS_DIQUES_EXPLORATION_PROFILE,
     VARZEAS_DIQUES_LOCATION,
     VARZEAS_DIQUES_PROFILE,
+    VARZEAS_GARDEN_GRAFT,
+    VARZEAS_HEMATIC_COLLECTOR,
+    VARZEAS_HORTOS_EXPLORATION_PROFILE,
+    VARZEAS_HORTOS_LOCATION,
+    VARZEAS_HORTOS_PROFILE,
+    VARZEAS_MARSH_LAMPREY,
+    create_creature_combat,
     creature_for,
     hunt_pool,
     material_for,
 )
+from asterion.infrastructure.db.combat_codec import decode, encode
 
 
 def test_varzeas_global_settlement_supports_grade_iv_materials():
@@ -219,6 +242,343 @@ def test_varzeas_material_pools_and_per_unit_subdraws_match_source():
     )
 
 
+def test_varzeas_hortos_hunt_explore_variants_and_materials_match_source():
+    assert HUNT_PROFILES[VARZEAS_HORTOS_LOCATION] == VARZEAS_HORTOS_PROFILE
+    assert LOCATION_LEVEL_BANDS["Hortos Hemaris"] == (35, 39)
+    for creature_id in ("aranha_junco", "cervo_ferrugem", "viuva_rubra"):
+        assert "varzeas.location.hortos_hemaris" in CREATURE_PRESENTATION[
+            creature_id
+        ].habitats
+    assert "codex.fragment.varzeas.figure.ilyan_korr" in CODEX_FRAGMENTS
+    assert VARZEAS_HORTOS_PROFILE.creature_weights == (
+        ("aranha_junco", 22),
+        ("cervo_ferrugem", 19),
+        ("lampreia_varzea", 20),
+        ("enxerto_horto", 18),
+        ("mariposa_soro", 16),
+        ("viuva_rubra", 2),
+        ("coletor_hematico", 3),
+    )
+    assert VARZEAS_HORTOS_PROFILE.variant_chance == 16
+    assert {creature.creature_id for creature in hunt_pool(35, VARZEAS_HORTOS_PROFILE)} == {
+        "aranha_junco", "cervo_ferrugem", "lampreia_varzea", "enxerto_horto", "viuva_rubra"
+    }
+    assert {creature.creature_id for creature in hunt_pool(36, VARZEAS_HORTOS_PROFILE)} >= {
+        "mariposa_soro"
+    }
+    assert {creature.creature_id for creature in hunt_pool(38, VARZEAS_HORTOS_PROFILE)} >= {
+        "coletor_hematico"
+    }
+    assert {
+        creature.creature_id: (creature.min_level, creature.max_level)
+        for creature in VARZEAS_CREATURES
+        if creature.creature_id
+        in {
+            "aranha_junco", "cervo_ferrugem", "lampreia_varzea", "enxerto_horto",
+            "mariposa_soro", "viuva_rubra", "coletor_hematico",
+        }
+    } == {
+        "aranha_junco": (33, 36),
+        "cervo_ferrugem": (33, 37),
+        "lampreia_varzea": (35, 38),
+        "enxerto_horto": (35, 39),
+        "mariposa_soro": (36, 39),
+        "viuva_rubra": (35, 37),
+        "coletor_hematico": (38, 40),
+    }
+    assert VARIANT_POOL["viuva_rubra"] == VARIANT_POOL["coletor_hematico"] == ()
+    assert VARIANT_POOL["lampreia_varzea"] == ("hemorrhagic", "agile")
+    assert VARIANT_POOL["enxerto_horto"] == ("resistant", "furious")
+    assert VARIANT_POOL["mariposa_soro"] == ("agile", "furious")
+
+    expected_materials = {
+        "lampreia_varzea": (
+            ("material.varzeas.junco_ferruginoso", 75),
+            ("material.varzeas.soro_antigo", 25),
+        ),
+        "enxerto_horto": (
+            ("material.varzeas.soro_antigo", 80),
+            ("material.varzeas.junco_ferruginoso", 20),
+        ),
+        "mariposa_soro": (
+            ("material.varzeas.soro_antigo", 65),
+            ("material.varzeas.junco_ferruginoso", 35),
+        ),
+        "coletor_hematico": (
+            ("material.varzeas.soro_antigo", 70),
+            ("material.varzeas.ferro_de_salmoura", 30),
+        ),
+    }
+    assert {key: MATERIAL_POOLS[key] for key in expected_materials} == expected_materials
+    for creature_id, pool in expected_materials.items():
+        draws = [material_for(creature_id, f"persisted:material.basic.{i}") for i in range(4)]
+        assert draws == [
+            material_for(creature_id, f"persisted:material.basic.{i}") for i in range(4)
+        ]
+        assert set(draws) <= {material for material, _weight in pool}
+
+    profile = EXPLORATION_PROFILES[VARZEAS_HORTOS_LOCATION]
+    assert profile == VARZEAS_HORTOS_EXPLORATION_PROFILE
+    assert profile.category_weights == tuple(EXPLORATION_CATEGORY_WEIGHTS.items()) == (
+        ("great_discovery", 8),
+        ("knowledge", 22),
+        ("narrative", 15),
+        ("combat", 25),
+        ("resource", 10),
+        ("atmospheric", 20),
+    )
+    result_weights = {
+        result.result_id: (
+            result.category,
+            result.weight,
+            result.unique,
+            result.creature_id,
+            result.min_level,
+        )
+        for result in profile.results
+    }
+    assert result_weights == {
+        "explore.varzeas.hortos.braseiro_horto_seco": ("great_discovery", 50, True, None, 35),
+        "explore.varzeas.hortos.estufa_restituicao": ("great_discovery", 50, True, None, 35),
+        "explore.varzeas.hortos.canteiro_dupla_funcao": ("knowledge", 60, True, None, 35),
+        "explore.varzeas.hortos.fibras_suporte": ("knowledge", 40, False, None, 35),
+        "explore.varzeas.hortos.vidro_escurecido": ("narrative", 55, False, None, 35),
+        "explore.varzeas.hortos.raiz_em_bandeja": ("narrative", 45, False, None, 35),
+        "explore.varzeas.hortos.combat.aranha_junco": ("combat", 22, False, "aranha_junco", 35),
+        "explore.varzeas.hortos.combat.cervo_ferrugem": ("combat", 19, False, "cervo_ferrugem", 35),
+        "explore.varzeas.hortos.combat.lampreia_varzea": (
+            "combat", 21, False, "lampreia_varzea", 35
+        ),
+        "explore.varzeas.hortos.combat.enxerto_horto": ("combat", 20, False, "enxerto_horto", 35),
+        "explore.varzeas.hortos.combat.mariposa_soro": ("combat", 18, False, "mariposa_soro", 36),
+        "explore.varzeas.hortos.soro_antigo": ("resource", 35, False, None, 35),
+        "explore.varzeas.hortos.junco_ferruginoso": ("resource", 30, False, None, 35),
+        "explore.varzeas.hortos.couro_varzea": ("resource", 20, False, None, 35),
+        "explore.varzeas.hortos.ferro_salmoura": ("resource", 15, False, None, 35),
+        "explore.varzeas.hortos.etiquetas_sem_nome": ("atmospheric", 34, False, None, 35),
+        "explore.varzeas.hortos.canais_irrigacao": ("atmospheric", 33, False, None, 35),
+        "explore.varzeas.hortos.folhas_palidas": ("atmospheric", 33, False, None, 35),
+    }
+    assert {
+        result_id: VARZEAS_EXPLORATION_UNIQUE_XP[result_id]
+        for result_id in (
+            "explore.varzeas.hortos.braseiro_horto_seco",
+            "explore.varzeas.hortos.estufa_restituicao",
+            "explore.varzeas.hortos.canteiro_dupla_funcao",
+        )
+    } == {
+        "explore.varzeas.hortos.braseiro_horto_seco": 7248,
+        "explore.varzeas.hortos.estufa_restituicao": 7248,
+        "explore.varzeas.hortos.canteiro_dupla_funcao": 2265,
+    }
+
+
+def test_varzeas_horto_creature_actions_and_mastery_contract():
+    expected = {
+        "lampreia_varzea": ("Mordida Circular", "Drenagem de Lama", "Bote de Margem"),
+        "enxerto_horto": ("Pancada Fibrosa", "Casca de Suporte", "Regeneração Residual"),
+        "mariposa_soro": ("Escama Irritante", "Toque Pálido", "Clarão de Vidro"),
+        "coletor_hematico": (
+            "Impacto de Coleta", "Reservatório Blindado", "Marca de Extração", "Extração Forçada"
+        ),
+    }
+    for creature_id, labels in expected.items():
+        creature = creature_for(creature_id)
+        assert tuple(action[1] for action in creature.actions) == labels
+    assert creature_for("enxerto_horto").actions[1][12:15] == (
+        Decimal("0.90"), 2, True
+    )
+    healing = creature_for("enxerto_horto").actions[2]
+    assert healing[9] == 4 and healing[17] is None and healing[18] == 2
+    assert healing[30] == Decimal("0.04")
+    assert creature_for("lampreia_varzea").actions[0][2] == Decimal("0.95")
+    assert creature_for("lampreia_varzea").actions[2][2] == Decimal("1.30")
+    assert creature_for("mariposa_soro").actions[0][2:6] == (
+        Decimal("0.75"), 0, Decimal("0.10"), 2
+    )
+    assert creature_for("mariposa_soro").actions[0][9] == 3
+    assert creature_for("mariposa_soro").actions[1][2] == Decimal("0.90")
+    assert creature_for("mariposa_soro").actions[2][2] == Decimal("1.25")
+    assert creature_for("mariposa_soro").actions[2][9] == 3
+    assert creature_for("coletor_hematico").actions[1][12:14] == (
+        Decimal("1.00"), 2
+    )
+    assert creature_for("coletor_hematico").actions[1][9] == 3
+    assert creature_for("coletor_hematico").actions[2][2:6] == (
+        Decimal("0.85"), 0, Decimal("0.12"), 2
+    )
+    assert creature_for("coletor_hematico").actions[3][2] == Decimal("1.80")
+    assert creature_for("coletor_hematico").actions[3][8:10] == (True, 4)
+    lamprey_drain = creature_for("lampreia_varzea").actions[1]
+    assert lamprey_drain[28] == Decimal("0.30")
+    assert lamprey_drain[31] == Decimal("0.04")
+    assert VARZEAS_DISTINCTIVE_ELITE_MASTERY["coletor_hematico"] == {
+        "first_victory",
+        "action:reservatorio_blindado",
+        "action:marca_extracao",
+        "action:extracao_forcada",
+    }
+    assert VARZEAS_IMPORTANT_FIRST_VICTORY_XP["coletor_hematico"] == (40, 3084)
+    assert VARZEAS_IMPORTANT_FIRST_VICTORY_XP["viuva_rubra"] == (37, 2718)
+
+
+def test_horto_lamprey_vampirism_uses_effective_damage_and_hp_cap():
+    def combat(combat_id: int):
+        return create_creature_combat(
+            UUID(int=combat_id),
+            "Teste",
+            "sentinela",
+            "remanescente",
+            Decimal("100000"),
+            VARZEAS_MARSH_LAMPREY,
+            35,
+            None,
+            player_level=35,
+        )
+
+    state = combat(351)
+    action = state.enemy_actions["drenagem_lama"]
+    assert action.vampirism_fraction == Decimal("0.30")
+    assert action.vampirism_cap_hp_fraction == Decimal("0.04")
+    restored = decode(encode(state), state.id, state.ruleset, state.version)
+    assert restored.enemy_actions["drenagem_lama"].vampirism_cap_hp_fraction == Decimal(
+        "0.04"
+    )
+    legacy = encode(state)
+    legacy["enemy_actions"]["drenagem_lama"].pop("vampirism_cap_hp_fraction")
+    assert decode(legacy, state.id, state.ruleset, state.version).enemy_actions[
+        "drenagem_lama"
+    ].vampirism_cap_hp_fraction is None
+    enemy = state.fighters["enemy"]
+    enemy.hp = enemy.stats.hp / Decimal(2)
+    before = enemy.hp
+    player = state.fighters["player"]
+    player.stats = replace(player.stats, evasion=Decimal(0))
+    player.barrier = Decimal("100000")
+    player.barrier_remaining = 2
+    _perform(state, "enemy", "drenagem_lama")
+    assert state.events[-1].effective_damage == 0
+    assert enemy.hp == before
+
+    state = combat(352)
+    enemy = state.fighters["enemy"]
+    enemy.hp = enemy.stats.hp / Decimal(2)
+    before = enemy.hp
+    player = state.fighters["player"]
+    player.stats = replace(player.stats, evasion=Decimal(0))
+    player.hp = Decimal(1)
+    _perform(state, "enemy", "drenagem_lama")
+    assert state.events[-1].effective_damage == 1
+    assert enemy.hp == before
+
+    graft = create_creature_combat(
+        UUID(int=353),
+        "Teste",
+        "sentinela",
+        "remanescente",
+        Decimal("100000"),
+        VARZEAS_GARDEN_GRAFT,
+        35,
+        None,
+        player_level=35,
+    )
+    heal = graft.enemy_actions["regeneracao_residual"]
+    actor = graft.fighters["enemy"]
+    assert heal.max_uses_per_combat == 2
+    assert heal.cooldown == 4
+    assert abs(
+        heal.heal_coefficient * actor.stats.attack - actor.stats.hp * Decimal("0.04")
+    ) < Decimal("0.000001")
+    assert graft.enemy_actions["casca_suporte"].skip_if_barrier_active is True
+
+    collector = create_creature_combat(
+        UUID(int=354),
+        "Teste",
+        "sentinela",
+        "remanescente",
+        Decimal("100000"),
+        VARZEAS_HEMATIC_COLLECTOR,
+        38,
+        None,
+        player_level=38,
+    )
+    assert collector.enemy_actions["reservatorio_blindado"].skip_if_barrier_active is False
+
+
+def test_varzeas_p21_choice_screen_is_individual_and_explicit():
+    assert P21_REWARD_CHOICES == {
+        "mask": ("Máscara da Salmoura", "Cabeça"),
+        "seal": ("Selo dos Diques", "Acessório"),
+        "reliquary": ("Relicário do Horto Estéril", "Artefato"),
+    }
+    codex_text = CODEX_FRAGMENTS[P21_FRAGMENT].text
+    assert "Projeto Hemaris" in codex_text
+    assert not any(
+        forbidden in codex_text
+        for forbidden in (
+            "Transferência",
+            "Emergência",
+            "coerção",
+            "origem ancestral",
+            "Matriz Rubra",
+            "Regência",
+            "Desvelados",
+        )
+    )
+    view = VarzeasMissionView(
+        character_id=uuid4(),
+        quest_id=P21_ID,
+        title="Os Hortos Vazios",
+        kind="choose_reward",
+        status="active",
+        step=7,
+        state_version=12,
+        progress={},
+        location="Hortos Hemaris",
+        level=35,
+    )
+    screen = render_varzeas_mission(view)
+    callbacks = [
+        button.callback_data
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+    ]
+    assert "Escolha exatamente um Equipamento Raro Nv.35." in screen.text
+    assert {
+        "varzeas:choice:P21:12:mask",
+        "varzeas:choice:P21:12:seal",
+        "varzeas:choice:P21:12:reliquary",
+    } <= set(callbacks)
+    assert len(
+        [value for value in callbacks if value and value.startswith("varzeas:choice:P21:")]
+    ) == 3
+
+
+def test_varzeas_s21_screen_uses_only_the_published_investigation_beats():
+    view = VarzeasMissionView(
+        character_id=uuid4(),
+        quest_id=S21_ID,
+        title="Cicatrizes de Cultivo",
+        kind="observe_autonomous_grafts",
+        status="active",
+        step=2,
+        state_version=4,
+        progress={},
+        location="Hortos Hemaris",
+        level=35,
+    )
+    screen = render_varzeas_mission(view)
+    assert "culturas de suporte se tornaram autônomas" in screen.text
+    assert "pessoas transformadas" in screen.text
+    assert "Transferência" not in screen.text
+    assert "Emergência" not in screen.text
+    assert "varzeas:action:S21:4:observe_autonomous_grafts" in {
+        button.callback_data
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+    }
+
+
 def test_varzeas_diques_exploration_pools_and_unique_xp_match_source():
     profile = EXPLORATION_PROFILES[VARZEAS_DIQUES_LOCATION]
     assert profile == VARZEAS_DIQUES_EXPLORATION_PROFILE
@@ -335,14 +695,20 @@ def test_varzeas_brejos_exploration_pools_unique_gates_and_xp_match_source():
         for result in profile.results
     }
     assert actual == {
-        "explore.varzeas.brejos.braseiro_juncos_baixos": ("great_discovery", 50, True, None, 33),
-        "explore.varzeas.brejos.entrada_enfermaria_afundada": ("great_discovery", 50, True, None, 34),
+        "explore.varzeas.brejos.braseiro_juncos_baixos": (
+            "great_discovery", 50, True, None, 33
+        ),
+        "explore.varzeas.brejos.entrada_enfermaria_afundada": (
+            "great_discovery", 50, True, None, 34
+        ),
         "explore.varzeas.brejos.pulso_de_pressao": ("knowledge", 55, True, None, 33),
         "explore.varzeas.brejos.bolhas_sob_turfa": ("knowledge", 45, False, None, 33),
         "explore.varzeas.brejos.junco_dobrado": ("narrative", 55, False, None, 33),
         "explore.varzeas.brejos.agua_que_respira": ("narrative", 45, False, None, 33),
         "explore.varzeas.brejos.combat.cao_salmoura": ("combat", 18, False, "cao_salmoura", 33),
-        "explore.varzeas.brejos.combat.garca_ferruginosa": ("combat", 17, False, "garca_ferruginosa", 33),
+        "explore.varzeas.brejos.combat.garca_ferruginosa": (
+            "combat", 17, False, "garca_ferruginosa", 33
+        ),
         "explore.varzeas.brejos.combat.portador_rubro": ("combat", 15, False, "portador_rubro", 33),
         "explore.varzeas.brejos.combat.aranha_junco": ("combat", 24, False, "aranha_junco", 33),
         "explore.varzeas.brejos.combat.cervo_ferrugem": ("combat", 26, False, "cervo_ferrugem", 33),

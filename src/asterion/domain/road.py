@@ -46,6 +46,7 @@ NARETH_CAMARA_LOCATION = "nareth.location.camara_do_arconte"
 VARZEAS_DIQUES_LOCATION = "varzeas.location.diques_rubros"
 VARZEAS_PORTO_LOCATION = "varzeas.location.porto_da_salmoura"
 VARZEAS_BREJOS_LOCATION = "varzeas.location.brejos_do_pulso"
+VARZEAS_HORTOS_LOCATION = "varzeas.location.hortos_hemaris"
 NARETH_CAMPINAS = "Campinas do Meridiano"
 NARETH_POSTO = "Posto de Nareth"
 NARETH_CANAIS = "Canais Secos"
@@ -56,6 +57,7 @@ NARETH_REGION = "Planícies de Nareth"
 VARZEAS_DIQUES = "Diques Rubros"
 VARZEAS_PORTO = "Porto da Salmoura"
 VARZEAS_BREJOS = "Brejos do Pulso"
+VARZEAS_HORTOS = "Hortos Hemaris"
 VARZEAS_REGION = "Várzeas Carmesins"
 NARETH_BRAZIER_HORIZONTE = "nareth.brazier.horizonte"
 NARETH_BRAZIER_POSTO = "nareth.brazier.posto"
@@ -75,6 +77,7 @@ VARZEAS_REGION_ENTRY_UNLOCK = "region.varzeas_carmesins.available"
 VARZEAS_DIQUES_BRAZIER = "varzeas.brazier.dique_alto"
 VARZEAS_PORTO_BRAZIER = "varzeas.brazier.porto"
 VARZEAS_BREJOS_BRAZIER = "varzeas.brazier.juncos_baixos"
+VARZEAS_HORTOS_BRAZIER = "varzeas.brazier.horto_seco"
 VARZEAS_DIQUES_HUNT_UNLOCK = "hunt.manual.varzeas.diques_rubros"
 VARZEAS_DIQUES_EXPLORE_UNLOCK = "explore.varzeas.diques_rubros"
 VARZEAS_DIQUES_ROUND_FAMILIARITY = "hunt_round.varzeas.diques_rubros"
@@ -83,6 +86,10 @@ VARZEAS_BREJOS_HUNT_UNLOCK = "hunt.manual.varzeas.brejos_do_pulso"
 VARZEAS_BREJOS_EXPLORE_UNLOCK = "explore.varzeas.brejos_do_pulso"
 VARZEAS_BREJOS_ROUND_FAMILIARITY = "hunt_round.varzeas.brejos_do_pulso"
 VARZEAS_PORTO_BREJOS_ROUTE = "route.varzeas.porto_brejos"
+VARZEAS_BREJOS_HORTOS_ROUTE = "route.varzeas.brejos_hortos"
+VARZEAS_HORTOS_HUNT_UNLOCK = "hunt.manual.varzeas.hortos_hemaris"
+VARZEAS_HORTOS_EXPLORE_UNLOCK = "explore.varzeas.hortos_hemaris"
+VARZEAS_HORTOS_ROUND_FAMILIARITY = "hunt_round.varzeas.hortos_hemaris"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
 BOSQUE_BRAZIER = "tdo.brazier.galhos_mortos"
@@ -865,6 +872,57 @@ VARZEAS_CRIMSON_WIDOW = Creature(
     ),
     ai_priority=("picada_rubra", "teia_junco", "toxina_concentrada", "salto_agua"),
 )
+VARZEAS_MARSH_LAMPREY = Creature(
+    "lampreia_varzea", "Lampreia de Várzea", "common", "balanced", 35, 38, 20,
+    ("mordida_circular", "drenagem_lama", "bote_margem"),
+    (
+        ("mordida_circular", "Mordida Circular", D("0.95"), 0, D(0), 0),
+        (
+            "drenagem_lama", "Drenagem de Lama", D("0.95"), 0, D(0), 0,
+            None, 0, False, 3, None, D(0), D(0), 0, False, "opponent", None,
+            None, None, (), (), D("0.50"), D(0), D(0), D(0), D(0),
+            D("0.40"), 0, D("0.30"), D(0), D(0), D("0.04"),
+        ),
+        ("bote_margem", "Bote de Margem", D("1.30"), 0, D(0), 0, None, 0, False, 3),
+    ),
+    ai_priority=("drenagem_lama", "bote_margem"),
+)
+VARZEAS_GARDEN_GRAFT = Creature(
+    "enxerto_horto", "Enxerto de Horto", "uncommon", "armored", 35, 39, 18,
+    ("pancada_fibrosa", "casca_suporte", "regeneracao_residual"),
+    (
+        ("pancada_fibrosa", "Pancada Fibrosa", D("0.95"), 0, D(0), 0),
+        ("casca_suporte", "Casca de Suporte", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.90"), 2, True),
+        (
+            "regeneracao_residual", "Regeneração Residual", D(0), 0, D(0), 0,
+            None, 0, False, 4, None, D(0), D(0), 0, False, "self", None,
+            None, 2, (), (), D("0.50"), D(0), D(0), D(0), D(0), D("0.40"),
+            0, D(0), D(0), D("0.04"),
+        ),
+    ),
+    ai_priority=("casca_suporte", "regeneracao_residual"),
+)
+VARZEAS_SERUM_MOTH = Creature(
+    "mariposa_soro", "Mariposa de Soro", "common", "caster", 36, 39, 16,
+    ("escama_iritante", "toque_palida", "clarao_vidro"),
+    (
+        ("escama_iritante", "Escama Irritante", D("0.75"), 0, D("0.10"), 2, None, 0, False, 3, "attack"),
+        ("toque_palida", "Toque Pálido", D("0.90"), 0, D(0), 0),
+        ("clarao_vidro", "Clarão de Vidro", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+    ),
+    ai_priority=("escama_iritante", "clarao_vidro"),
+)
+VARZEAS_HEMATIC_COLLECTOR = Creature(
+    "coletor_hematico", "Coletor Hemático", "elite", "armored", 38, 40, 3,
+    ("impacto_coleta", "reservatorio_blindado", "marca_extracao", "extracao_forcada"),
+    (
+        ("impacto_coleta", "Impacto de Coleta", D("1.05"), 0, D(0), 0),
+        ("reservatorio_blindado", "Reservatório Blindado", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("1.00"), 2),
+        ("marca_extracao", "Marca de Extração", D("0.85"), 0, D("0.12"), 2, None, 0, False, 3, "defense"),
+        ("extracao_forcada", "Extração Forçada", D("1.80"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("reservatorio_blindado", "marca_extracao", "extracao_forcada"),
+)
 VARZEAS_CREATURES = (
     VARZEAS_SALMOURA_HOUND,
     VARZEAS_IRON_HERON,
@@ -873,6 +931,10 @@ VARZEAS_CREATURES = (
     VARZEAS_REED_SPIDER,
     VARZEAS_RUST_DEER,
     VARZEAS_CRIMSON_WIDOW,
+    VARZEAS_MARSH_LAMPREY,
+    VARZEAS_GARDEN_GRAFT,
+    VARZEAS_SERUM_MOTH,
+    VARZEAS_HEMATIC_COLLECTOR,
 )
 
 NARETH_CREATURES = (
@@ -1280,6 +1342,10 @@ VARIANT_POOL = {
     "aranha_junco": ("venomous", "agile"),
     "cervo_ferrugem": ("furious", "resistant"),
     "viuva_rubra": (),
+    "lampreia_varzea": ("hemorrhagic", "agile"),
+    "enxerto_horto": ("resistant", "furious"),
+    "mariposa_soro": ("agile", "furious"),
+    "coletor_hematico": (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -1413,6 +1479,7 @@ LOCATION_LEVEL_BANDS = {
     "Diques Rubros": (31, 34),
     "Porto da Salmoura": (31, 34),
     "Brejos do Pulso": (33, 37),
+    "Hortos Hemaris": (35, 39),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -1837,6 +1904,23 @@ VARZEAS_BREJOS_PROFILE = HuntLocationProfile(
     round_familiarity=VARZEAS_BREJOS_ROUND_FAMILIARITY,
     explore_unlock=VARZEAS_BREJOS_EXPLORE_UNLOCK,
 )
+VARZEAS_HORTOS_PROFILE = HuntLocationProfile(
+    local_id=VARZEAS_HORTOS_LOCATION,
+    label=VARZEAS_HORTOS,
+    creature_weights=(
+        ("aranha_junco", 22),
+        ("cervo_ferrugem", 19),
+        ("lampreia_varzea", 20),
+        ("enxerto_horto", 18),
+        ("mariposa_soro", 16),
+        ("viuva_rubra", 2),
+        ("coletor_hematico", 3),
+    ),
+    variant_chance=16,
+    hunt_unlock=VARZEAS_HORTOS_HUNT_UNLOCK,
+    round_familiarity=VARZEAS_HORTOS_ROUND_FAMILIARITY,
+    explore_unlock=VARZEAS_HORTOS_EXPLORE_UNLOCK,
+)
 
 NARETH_CANAIS_EXPLORATION_PROFILE = ExplorationLocationProfile(
     local_id=NARETH_CANAIS_LOCATION,
@@ -1955,6 +2039,30 @@ VARZEAS_BREJOS_EXPLORATION_PROFILE = ExplorationLocationProfile(
         ExplorationResultDefinition("estaca_submersa", "atmospheric", "explore.varzeas.brejos.estaca_submersa", 33, "Uma estaca parcialmente submersa marca a borda de uma passagem.", min_level=33),
     ),
 )
+VARZEAS_HORTOS_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=VARZEAS_HORTOS_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("braseiro_horto_seco", "great_discovery", "explore.varzeas.hortos.braseiro_horto_seco", 50, "O Braseiro do Horto Seco foi descoberto entre os canais de cultivo.", min_level=35, unique=True),
+        ExplorationResultDefinition("estufa_restituicao", "great_discovery", "explore.varzeas.hortos.estufa_restituicao", 50, "Uma estufa antiga conserva sinais de cultivo técnico.", min_level=35, unique=True),
+        ExplorationResultDefinition("canteiro_dupla_funcao", "knowledge", "explore.varzeas.hortos.canteiro_dupla_funcao", 60, "Um canteiro apresenta duas funções de cultivo registradas sem associação nominal antecipada.", min_level=35, unique=True),
+        ExplorationResultDefinition("fibras_suporte", "knowledge", "explore.varzeas.hortos.fibras_suporte", 40, "Fibras de suporte foram observadas nos canteiros antigos.", min_level=35),
+        ExplorationResultDefinition("vidro_escurecido", "narrative", "explore.varzeas.hortos.vidro_escurecido", 55, "O vidro escurecido ainda cobre parte dos cultivos.", min_level=35),
+        ExplorationResultDefinition("raiz_bandeja", "narrative", "explore.varzeas.hortos.raiz_em_bandeja", 45, "Uma raiz cresce dentro de uma bandeja técnica.", min_level=35),
+        ExplorationResultDefinition("aranha_junco", "combat", "explore.varzeas.hortos.combat.aranha_junco", 22, "Uma Aranha de Junco surge entre as bandejas.", min_level=35, creature_id="aranha_junco"),
+        ExplorationResultDefinition("cervo_ferrugem", "combat", "explore.varzeas.hortos.combat.cervo_ferrugem", 19, "Um Cervo Ferrugem atravessa o setor de cultivo.", min_level=35, creature_id="cervo_ferrugem"),
+        ExplorationResultDefinition("lampreia_varzea", "combat", "explore.varzeas.hortos.combat.lampreia_varzea", 21, "Uma Lampreia de Várzea emerge de um canal raso.", min_level=35, creature_id="lampreia_varzea"),
+        ExplorationResultDefinition("enxerto_horto", "combat", "explore.varzeas.hortos.combat.enxerto_horto", 20, "Um Enxerto de Horto se move entre as estruturas.", min_level=35, creature_id="enxerto_horto"),
+        ExplorationResultDefinition("mariposa_soro", "combat", "explore.varzeas.hortos.combat.mariposa_soro", 18, "Uma Mariposa de Soro cruza o vidro pálido.", min_level=36, creature_id="mariposa_soro"),
+        ExplorationResultDefinition("soro_antigo", "resource", "explore.varzeas.hortos.soro_antigo", 35, "Soro Antigo foi recolhido junto aos canais de cultivo.", min_level=35),
+        ExplorationResultDefinition("junco_ferruginoso", "resource", "explore.varzeas.hortos.junco_ferruginoso", 30, "Junco Ferruginoso cresce nos leitos úmidos.", min_level=35),
+        ExplorationResultDefinition("couro_varzea", "resource", "explore.varzeas.hortos.couro_varzea", 20, "Couro de Várzea pode ser obtido nesta área.", min_level=35),
+        ExplorationResultDefinition("ferro_salmoura", "resource", "explore.varzeas.hortos.ferro_salmoura", 15, "Ferro de Salmoura pode ser recolhido nas estruturas expostas.", min_level=35),
+        ExplorationResultDefinition("etiquetas_sem_nome", "atmospheric", "explore.varzeas.hortos.etiquetas_sem_nome", 34, "Etiquetas sem nomes permanecem junto aos cultivos.", min_level=35),
+        ExplorationResultDefinition("canais_irrigacao", "atmospheric", "explore.varzeas.hortos.canais_irrigacao", 33, "Canais de irrigação atravessam o setor de cultivo.", min_level=35),
+        ExplorationResultDefinition("folhas_palidas", "atmospheric", "explore.varzeas.hortos.folhas_palidas", 33, "Folhas pálidas cobrem uma bandeja seca.", min_level=35),
+    ),
+)
 
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
@@ -1971,6 +2079,7 @@ EXPLORATION_PROFILES = {
     NARETH_OBSERVATORIO_LOCATION: NARETH_OBSERVATORIO_EXPLORATION_PROFILE,
     VARZEAS_DIQUES_LOCATION: VARZEAS_DIQUES_EXPLORATION_PROFILE,
     VARZEAS_BREJOS_LOCATION: VARZEAS_BREJOS_EXPLORATION_PROFILE,
+    VARZEAS_HORTOS_LOCATION: VARZEAS_HORTOS_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
@@ -1989,6 +2098,7 @@ HUNT_PROFILES = {
     NARETH_OBSERVATORIO_LOCATION: NARETH_OBSERVATORIO_PROFILE,
     VARZEAS_DIQUES_LOCATION: VARZEAS_DIQUES_PROFILE,
     VARZEAS_BREJOS_LOCATION: VARZEAS_BREJOS_PROFILE,
+    VARZEAS_HORTOS_LOCATION: VARZEAS_HORTOS_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -2192,6 +2302,10 @@ VARZEAS_BASIC_MATERIAL_CREATURE_IDS = frozenset(
         "aranha_junco",
         "cervo_ferrugem",
         "viuva_rubra",
+        "lampreia_varzea",
+        "enxerto_horto",
+        "mariposa_soro",
+        "coletor_hematico",
     }
 )
 
@@ -2332,6 +2446,22 @@ MATERIAL_POOLS = {
     "viuva_rubra": (
         ("material.varzeas.junco_ferruginoso", 60),
         ("material.varzeas.soro_antigo", 40),
+    ),
+    "lampreia_varzea": (
+        ("material.varzeas.junco_ferruginoso", 75),
+        ("material.varzeas.soro_antigo", 25),
+    ),
+    "enxerto_horto": (
+        ("material.varzeas.soro_antigo", 80),
+        ("material.varzeas.junco_ferruginoso", 20),
+    ),
+    "mariposa_soro": (
+        ("material.varzeas.soro_antigo", 65),
+        ("material.varzeas.junco_ferruginoso", 35),
+    ),
+    "coletor_hematico": (
+        ("material.varzeas.soro_antigo", 70),
+        ("material.varzeas.ferro_de_salmoura", 30),
     ),
 }
 
@@ -2569,6 +2699,9 @@ def _creature_actions(
         vampirism_fraction = D(specification[28]) if len(specification) > 28 else D(0)
         heal_coefficient = D(specification[29]) if len(specification) > 29 else D(0)
         heal_hp_fraction = D(specification[30]) if len(specification) > 30 else D(0)
+        vampirism_cap_hp_fraction = (
+            D(specification[31]) if len(specification) > 31 else None
+        )
         if heal_hp_fraction > 0:
             if actor_hp is None or actor_attack is None or actor_attack <= 0:
                 raise ValueError("HP-fraction creature healing requires resolved actor stats.")
@@ -2605,6 +2738,7 @@ def _creature_actions(
             actor_per_bonus_hp_fraction_threshold=actor_per_bonus_hp_fraction_threshold,
             native_dot_stacks_if_target_poisoned=native_dot_stacks_if_target_poisoned,
             vampirism_fraction=vampirism_fraction,
+            vampirism_cap_hp_fraction=vampirism_cap_hp_fraction,
             heal_coefficient=heal_coefficient,
         )
     cycle = tuple(key_map[key] for key in creature.ai if key in key_map)

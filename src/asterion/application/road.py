@@ -77,16 +77,20 @@ from asterion.domain.road import (
     VARZEAS_BREJOS,
     VARZEAS_BREJOS_BRAZIER,
     VARZEAS_BREJOS_EXPLORE_UNLOCK,
+    VARZEAS_BREJOS_HORTOS_ROUTE,
     VARZEAS_BREJOS_HUNT_UNLOCK,
     VARZEAS_BREJOS_LOCATION,
-    VARZEAS_BREJOS_PROFILE,
-    VARZEAS_BREJOS_ROUND_FAMILIARITY,
     VARZEAS_DIQUES,
     VARZEAS_DIQUES_BRAZIER,
     VARZEAS_DIQUES_EXPLORE_UNLOCK,
     VARZEAS_DIQUES_HUNT_UNLOCK,
     VARZEAS_DIQUES_LOCATION,
     VARZEAS_DIQUES_PORTO_ROUTE,
+    VARZEAS_HORTOS,
+    VARZEAS_HORTOS_BRAZIER,
+    VARZEAS_HORTOS_EXPLORE_UNLOCK,
+    VARZEAS_HORTOS_HUNT_UNLOCK,
+    VARZEAS_HORTOS_LOCATION,
     VARZEAS_PORTO,
     VARZEAS_PORTO_BRAZIER,
     VARZEAS_PORTO_BREJOS_ROUTE,
@@ -176,13 +180,15 @@ VARZEAS_REGION = "Várzeas Carmesins"
 VARZEAS_DIQUES_LABEL = VARZEAS_DIQUES
 VARZEAS_PORTO_LABEL = VARZEAS_PORTO
 VARZEAS_BREJOS_LABEL = VARZEAS_BREJOS
+VARZEAS_HORTOS_LABEL = VARZEAS_HORTOS
 VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO))
 NARETH_LOCATIONS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL))
-VARZEAS_LOCATIONS = frozenset((VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL))
+VARZEAS_LOCATIONS = frozenset((VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL))
 NARETH_REGION_ROUTE_ENDPOINTS = frozenset((VDE_BERCO, NARETH_CAMPINAS_LABEL))
 NARETH_VARZEAS_ROUTE_ENDPOINTS = frozenset((NARETH_CAMARA_LABEL, VARZEAS_DIQUES_LABEL))
 VARZEAS_DIQUES_PORTO_ROUTE_ENDPOINTS = frozenset((VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL))
 VARZEAS_PORTO_BREJOS_ROUTE_ENDPOINTS = frozenset((VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL))
+VARZEAS_BREJOS_HORTOS_ROUTE_ENDPOINTS = frozenset((VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL))
 NARETH_CAMPINAS_POSTO_ROUTE_ENDPOINTS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL))
 NARETH_POSTO_CANAIS_ROUTE_ENDPOINTS = frozenset((NARETH_POSTO_LABEL, NARETH_CANAIS))
 NARETH_CANAIS_CAMPOS_ROUTE_ENDPOINTS = frozenset((NARETH_CANAIS, NARETH_CAMPOS))
@@ -218,8 +224,9 @@ OVERLAND_ROUTE_PAIRS = (
     NARETH_VARZEAS_ROUTE_ENDPOINTS,
     VARZEAS_DIQUES_PORTO_ROUTE_ENDPOINTS,
     VARZEAS_PORTO_BREJOS_ROUTE_ENDPOINTS,
+    VARZEAS_BREJOS_HORTOS_ROUTE_ENDPOINTS,
 )
-TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL, VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL))
+TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL, VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL))
 BRAZIER_FOR_LOCATION = {
     ROAD: "tdo.brazier.estrada",
     REFUGE: "tdo.brazier.refugio_do_ocaso",
@@ -239,6 +246,7 @@ BRAZIER_FOR_LOCATION = {
     VARZEAS_DIQUES_LABEL: VARZEAS_DIQUES_BRAZIER,
     VARZEAS_PORTO_LABEL: VARZEAS_PORTO_BRAZIER,
     VARZEAS_BREJOS_LABEL: VARZEAS_BREJOS_BRAZIER,
+    VARZEAS_HORTOS_LABEL: VARZEAS_HORTOS_BRAZIER,
 }
 BRAZIER_DETAILS = {
     "tdo.brazier.estrada": (ROAD, "Braseiro da Estrada"),
@@ -259,6 +267,7 @@ BRAZIER_DETAILS = {
     VARZEAS_DIQUES_BRAZIER: (VARZEAS_DIQUES_LABEL, "Braseiro do Dique Alto"),
     VARZEAS_PORTO_BRAZIER: (VARZEAS_PORTO_LABEL, "Braseiro do Porto"),
     VARZEAS_BREJOS_BRAZIER: (VARZEAS_BREJOS_LABEL, "Braseiro dos Juncos Baixos"),
+    VARZEAS_HORTOS_BRAZIER: (VARZEAS_HORTOS_LABEL, "Braseiro do Horto Seco"),
 }
 HUNT_CONTENT = "road_manual_hunt"
 GROUP_HUNT_CONTENT = "road_group_hunt"
@@ -336,6 +345,10 @@ VARZEAS_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.varzeas.brejos.couro_varzea": "material.varzeas.couro_de_varzea",
     "explore.varzeas.brejos.junco_ferruginoso": "material.varzeas.junco_ferruginoso",
     "explore.varzeas.brejos.soro_antigo": "material.varzeas.soro_antigo",
+    "explore.varzeas.hortos.soro_antigo": "material.varzeas.soro_antigo",
+    "explore.varzeas.hortos.junco_ferruginoso": "material.varzeas.junco_ferruginoso",
+    "explore.varzeas.hortos.couro_varzea": "material.varzeas.couro_de_varzea",
+    "explore.varzeas.hortos.ferro_salmoura": "material.varzeas.ferro_de_salmoura",
 }
 VARZEAS_EXPLORATION_UNIQUE_XP = {
     "explore.varzeas.diques.comporta_primeiro_dique": 5760,
@@ -343,6 +356,9 @@ VARZEAS_EXPLORATION_UNIQUE_XP = {
     "explore.varzeas.brejos.braseiro_juncos_baixos": 6336,
     "explore.varzeas.brejos.entrada_enfermaria_afundada": 6336,
     "explore.varzeas.brejos.pulso_de_pressao": 1980,
+    "explore.varzeas.hortos.braseiro_horto_seco": 7248,
+    "explore.varzeas.hortos.estufa_restituicao": 7248,
+    "explore.varzeas.hortos.canteiro_dupla_funcao": 2265,
 }
 NARETH_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.nareth.campinas.bronze_de_marco": "material.nareth.bronze_de_marco",
@@ -760,6 +776,13 @@ class RoadService:
                         and await self._nareth_mission_started_or_completed(s, c.id, "P20")
                     )
                     route_unlock = VARZEAS_PORTO_BREJOS_ROUTE
+                elif pair == VARZEAS_BREJOS_HORTOS_ROUTE_ENDPOINTS:
+                    gate_ok = bool(
+                        c.level >= 35
+                        and await self._nareth_mission_completed(s, c.id, "P20")
+                        and await self._nareth_mission_started_or_completed(s, c.id, "P21")
+                    )
+                    route_unlock = VARZEAS_BREJOS_HORTOS_ROUTE
                 elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
                     gate_ok = (
                         await self._p4_completed(s, c.id)
@@ -897,6 +920,8 @@ class RoadService:
                 await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=VARZEAS_PORTO_LOCATION)
             elif destination == VARZEAS_BREJOS_LABEL:
                 await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=VARZEAS_BREJOS_LOCATION)
+            elif destination == VARZEAS_HORTOS_LABEL:
+                await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=VARZEAS_HORTOS_LOCATION)
             return await self._view_for_world(s, c, world)
 
     async def start_hunt(self, actor: int) -> RoadView | None:
@@ -2031,7 +2056,7 @@ class RoadService:
         }:
             await self._settle_nareth_exploration(s, c, attempt, base_text)
             return
-        if attempt.local_id in {VARZEAS_DIQUES_LOCATION, VARZEAS_BREJOS_LOCATION}:
+        if attempt.local_id in {VARZEAS_DIQUES_LOCATION, VARZEAS_BREJOS_LOCATION, VARZEAS_HORTOS_LOCATION}:
             await self._settle_varzeas_exploration(s, c, attempt, base_text)
             return
         if attempt.local_id in {
@@ -2709,6 +2734,34 @@ class RoadService:
                         character_id=c.id,
                         entry_id="codex.mystery.pulso_sob_a_lama",
                         fragment_id="codex.fragment.varzeas.brejos.pulso_de_pressao",
+                    )
+            elif attempt.local_id == VARZEAS_HORTOS_LOCATION:
+                entry_id = "codex.location.hortos_hemaris"
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id=entry_id)
+                fragment_id = {
+                    "explore.varzeas.hortos.braseiro_horto_seco": "codex.fragment.varzeas.hortos.braseiro_horto_seco",
+                    "explore.varzeas.hortos.estufa_restituicao": (
+                        "codex.fragment.varzeas.hortos.estufa_therapeutic"
+                        if await s.scalar(
+                            select(CodexEntry.id).where(
+                                CodexEntry.character_id == c.id,
+                                CodexEntry.entry_id
+                                == "codex.history.projeto_hemaris_registro_inicial",
+                            )
+                        )
+                        else "codex.fragment.varzeas.hortos.estufa_technical"
+                    ),
+                    "explore.varzeas.hortos.canteiro_dupla_funcao": "codex.fragment.varzeas.hortos.canteiro_dupla_funcao",
+                }.get(attempt.result_id)
+                if attempt.result_id == "explore.varzeas.hortos.braseiro_horto_seco":
+                    await self._ensure(s, Brazier, character_id=c.id, brazier_id=VARZEAS_HORTOS_BRAZIER)
+                if fragment_id is not None:
+                    await self._ensure(
+                        s,
+                        CodexFragment,
+                        character_id=c.id,
+                        entry_id=entry_id,
+                        fragment_id=fragment_id,
                     )
 
         for kind, item_id, quantity, payload in components:
@@ -3670,6 +3723,13 @@ class RoadService:
                 or not await self._nareth_mission_completed(s, c.id, "P20")
             ):
                 return None
+        elif profile.local_id == VARZEAS_HORTOS_LOCATION:
+            if (
+                world.region != VARZEAS_REGION
+                or c.level < 35
+                or not await self._nareth_mission_started_or_completed(s, c.id, "P21")
+            ):
+                return None
         unlock_id = profile.hunt_unlock if activity_kind == "hunt" else profile.explore_unlock
         if not await s.scalar(
             select(Unlock).where(
@@ -3689,6 +3749,7 @@ class RoadService:
             NARETH_OBSERVATORIO_LOCATION,
             VARZEAS_DIQUES_LOCATION,
             VARZEAS_BREJOS_LOCATION,
+            VARZEAS_HORTOS_LOCATION,
         } and any(
             creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
         ):
@@ -4225,6 +4286,7 @@ class RoadService:
         varzeas_p19_complete = await self._nareth_mission_completed(s, c.id, "P19")
         varzeas_p20_open = await self._nareth_mission_started_or_completed(s, c.id, "P20")
         varzeas_p20_complete = await self._nareth_mission_completed(s, c.id, "P20")
+        varzeas_p21_open = await self._nareth_mission_started_or_completed(s, c.id, "P21")
         varzeas_inner_route_open = bool(
             varzeas_p19_open
             and await s.scalar(
@@ -4240,6 +4302,17 @@ class RoadService:
                 select(Unlock.id).where(
                     Unlock.character_id == c.id,
                     Unlock.unlock_id == VARZEAS_PORTO_BREJOS_ROUTE,
+                )
+            )
+        )
+        varzeas_hortos_route_open = bool(
+            c.level >= 35
+            and varzeas_p20_complete
+            and varzeas_p21_open
+            and await s.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == VARZEAS_BREJOS_HORTOS_ROUTE,
                 )
             )
         )
@@ -4430,6 +4503,10 @@ class RoadService:
                     route_destinations.append(VARZEAS_BREJOS_LABEL)
             elif world.location == VARZEAS_BREJOS_LABEL and varzeas_entry_open and varzeas_brejos_route_open:
                 route_destinations.append(VARZEAS_PORTO_LABEL)
+                if varzeas_hortos_route_open:
+                    route_destinations.append(VARZEAS_HORTOS_LABEL)
+            elif world.location == VARZEAS_HORTOS_LABEL and varzeas_hortos_route_open:
+                route_destinations.append(VARZEAS_BREJOS_LABEL)
         route_available = bool(route_destinations)
         material_table_ready = bool(
             hunt_profile
@@ -4640,6 +4717,28 @@ class RoadService:
                     )
                 )
             )
+        elif world.location == VARZEAS_HORTOS_LABEL:
+            hunt_enabled = bool(
+                varzeas_p21_open
+                and c.level >= 35
+                and material_table_ready
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == VARZEAS_HORTOS_HUNT_UNLOCK,
+                    )
+                )
+            )
+            explore_enabled = bool(
+                varzeas_p21_open
+                and c.level >= 35
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == VARZEAS_HORTOS_EXPLORE_UNLOCK,
+                    )
+                )
+            )
         else:
             # Every other known travel location must be handled explicitly above.
             return self._invalid_location_view(c, world)
@@ -4664,6 +4763,7 @@ class RoadService:
             VARZEAS_DIQUES_LABEL: "varzeas_diques",
             VARZEAS_PORTO_LABEL: "varzeas_porto",
             VARZEAS_BREJOS_LABEL: "varzeas_brejos",
+            VARZEAS_HORTOS_LABEL: "varzeas_hortos",
         }
         return RoadView(
             kind_by_location[world.location],

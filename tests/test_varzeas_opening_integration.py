@@ -21,12 +21,16 @@ from asterion.application.varzeas_missions import (
     P19_REWARD_SOURCE,
     P20_ID,
     P20_REWARD_SOURCE,
+    P21_ID,
+    P21_REWARD_SOURCE,
     REGION,
     ROTAS_CODEX,
     S19_ID,
     S19_REWARD_SOURCE,
     S20_ID,
     S20_REWARD_SOURCE,
+    S21_ID,
+    S21_REWARD_SOURCE,
     VarzeasMissionService,
 )
 from asterion.bot.road_ui import render_current_local
@@ -35,16 +39,22 @@ from asterion.domain.combat import allowed_actions
 from asterion.domain.road import (
     VARZEAS_BREJOS_BRAZIER,
     VARZEAS_BREJOS_EXPLORE_UNLOCK,
+    VARZEAS_BREJOS_HORTOS_ROUTE,
     VARZEAS_BREJOS_HUNT_UNLOCK,
     VARZEAS_BREJOS_LOCATION,
     VARZEAS_BREJOS_PROFILE,
-    VARZEAS_BREJOS_ROUND_FAMILIARITY,
     VARZEAS_DIQUES_BRAZIER,
     VARZEAS_DIQUES_EXPLORE_UNLOCK,
     VARZEAS_DIQUES_HUNT_UNLOCK,
     VARZEAS_DIQUES_LOCATION,
     VARZEAS_DIQUES_PORTO_ROUTE,
     VARZEAS_DIQUES_PROFILE,
+    VARZEAS_HORTOS,
+    VARZEAS_HORTOS_BRAZIER,
+    VARZEAS_HORTOS_EXPLORE_UNLOCK,
+    VARZEAS_HORTOS_HUNT_UNLOCK,
+    VARZEAS_HORTOS_LOCATION,
+    VARZEAS_HORTOS_ROUND_FAMILIARITY,
     VARZEAS_PORTO_BRAZIER,
     VARZEAS_PORTO_BREJOS_ROUTE,
     VARZEAS_REGION_ENTRY_UNLOCK,
@@ -61,6 +71,7 @@ from asterion.infrastructure.db.models import (
     CodexEntry,
     CodexFragment,
     DungeonRun,
+    EquipmentItem,
     ExplorationAttempt,
     HuntContext,
     HuntRound,
@@ -76,8 +87,8 @@ from tests.helpers.pvpve import (
     disable_round_pvpve_for_test,
     start_manual_hunt_after_no_match,
 )
-from tests.test_s6_p6_integration import _seed_final_campaign
 from tests.test_s4_s5_integration import _terminal
+from tests.test_s6_p6_integration import _seed_final_campaign
 
 
 async def _seed_nareth_exit(database, actor: int, *, level: int, p18: bool = True):
@@ -142,8 +153,14 @@ async def _seed_varzeas_porto(
                 [
                     Unlock(character_id=character_id, unlock_id=VARZEAS_DIQUES_PORTO_ROUTE),
                     Brazier(character_id=character_id, brazier_id=VARZEAS_PORTO_BRAZIER),
-                    LocationDiscovery(character_id=character_id, location_id="varzeas.location.diques_rubros"),
-                    LocationDiscovery(character_id=character_id, location_id="varzeas.location.porto_da_salmoura"),
+                    LocationDiscovery(
+                        character_id=character_id,
+                        location_id="varzeas.location.diques_rubros",
+                    ),
+                    LocationDiscovery(
+                        character_id=character_id,
+                        location_id="varzeas.location.porto_da_salmoura",
+                    ),
                 ]
             )
         if p20:
@@ -163,9 +180,51 @@ async def _seed_varzeas_porto(
                     Unlock(character_id=character_id, unlock_id=VARZEAS_PORTO_BREJOS_ROUTE),
                     Unlock(character_id=character_id, unlock_id=VARZEAS_BREJOS_HUNT_UNLOCK),
                     Unlock(character_id=character_id, unlock_id=VARZEAS_BREJOS_EXPLORE_UNLOCK),
-                    LocationDiscovery(character_id=character_id, location_id=VARZEAS_BREJOS_LOCATION),
+                    LocationDiscovery(
+                        character_id=character_id,
+                        location_id=VARZEAS_BREJOS_LOCATION,
+                    ),
                 ]
             )
+    return character_id, sessions
+
+
+async def _seed_varzeas_hortos(
+    database,
+    actor: int,
+    *,
+    level: int = 35,
+    p21_step: int = 2,
+    p21_status: str = "active",
+):
+    character_id, sessions = await _seed_varzeas_porto(
+        database, actor, level=level, p19=True, p20=True
+    )
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        world = await session.get(WorldState, character_id)
+        assert character is not None and world is not None
+        character.level = level
+        world.location = VARZEAS_HORTOS
+        session.add(
+            Quest(
+                character_id=character_id,
+                quest_id=P21_ID,
+                title="Os Hortos Vazios",
+                status=p21_status,
+                step=p21_step,
+                content_version="varzeas-1.0.0",
+                progress={"beds_examined": []},
+            )
+        )
+        session.add_all(
+            [
+                Unlock(character_id=character_id, unlock_id=VARZEAS_BREJOS_HORTOS_ROUTE),
+                Unlock(character_id=character_id, unlock_id=VARZEAS_HORTOS_HUNT_UNLOCK),
+                Unlock(character_id=character_id, unlock_id=VARZEAS_HORTOS_EXPLORE_UNLOCK),
+                LocationDiscovery(character_id=character_id, location_id=VARZEAS_HORTOS_LOCATION),
+            ]
+        )
     return character_id, sessions
 
 
@@ -1535,3 +1594,535 @@ async def test_varzeas_p20_scripted_spider_uses_shared_campaign_combat(database)
             )
             assert quest is not None and quest.step == 4
             assert quest.progress["activity_id"]
+
+
+@pytest.mark.asyncio
+async def test_varzeas_p21_gate_journey_choice_and_rewards_are_idempotent(database, monkeypatch):
+    import asterion.application.scripted_combat as scripted_combat
+
+    blocked_actor = 993220
+    blocked_id, blocked_sessions = await _seed_varzeas_porto(
+        database, blocked_actor, level=35, p19=True, p20=False
+    )
+    blocked_road = RoadService(blocked_sessions, "ocaso")
+    blocked_missions = VarzeasMissionService(blocked_sessions, "ocaso")
+    assert (await blocked_missions.resume(blocked_actor, P21_ID)).available is False
+    assert await blocked_road.travel_route(blocked_actor, VARZEAS_BREJOS) is None
+    assert await sessionless_quest(blocked_sessions, blocked_id, P21_ID) is None
+
+    actor = 993221
+    character_id, sessions = await _seed_varzeas_porto(
+        database, actor, level=34, p19=True, p20=True
+    )
+    road = RoadService(sessions, "ocaso")
+    missions = VarzeasMissionService(sessions, "ocaso")
+
+    # P20 alone is insufficient below Nv.35; the new route is not exposed.
+    assert await road.travel_route(actor, VARZEAS_BREJOS) is not None
+    await missions.on_location(actor)
+    p21 = await missions.resume(actor, P21_ID)
+    assert p21 is not None and p21.available is False
+    assert await sessionless_quest(sessions, character_id, P21_ID) is None
+    assert await road.travel_route(actor, VARZEAS_HORTOS) is None
+
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        assert character is not None
+        character.level = 35
+    await missions.on_location(actor)
+    p21 = await missions.resume(actor, P21_ID)
+    assert p21 is not None and p21.status == "active" and p21.step == 1
+    assert p21.kind == "travel_hortos"
+    assert await road.travel_route(actor, VARZEAS_HORTOS) is not None
+    await missions.on_location(actor)
+    p21 = await missions.resume(actor, P21_ID)
+    assert p21 is not None and p21.step == 2
+    assert p21.kind == "examine_beds"
+    local = await road.resume(actor)
+    assert local is not None and local.kind == "varzeas_hortos"
+    assert local.hunt_enabled and local.explore_enabled
+    async with sessions() as session:
+        assert await session.scalar(
+            select(LocationDiscovery.id).where(
+                LocationDiscovery.character_id == character_id,
+                LocationDiscovery.location_id == VARZEAS_HORTOS_LOCATION,
+            )
+        ) is not None
+        assert await session.scalar(
+            select(Brazier.id).where(
+                Brazier.character_id == character_id,
+                Brazier.brazier_id == VARZEAS_HORTOS_BRAZIER,
+            )
+        ) is None
+
+    p21 = await missions.advance(actor, P21_ID, p21.state_version, "examine_bed_a")
+    assert p21 is not None and p21.step == 2
+    duplicate = await missions.advance(
+        actor, P21_ID, p21.state_version, "examine_bed_a"
+    )
+    assert duplicate is not None and duplicate.state_version == p21.state_version
+    p21 = await missions.advance(actor, P21_ID, duplicate.state_version, "examine_bed_b")
+    p21 = await missions.advance(actor, P21_ID, p21.state_version, "examine_bed_c")
+    assert p21 is not None and p21.step == 3
+    assert creature_for("cervo_ferrugem").actions[2][8] is True
+
+    combat = await missions.start_solo_combat(actor, P21_ID, p21.state_version)
+    assert combat is not None and combat.kind == "combat"
+    assert combat.combat.fighters["enemy"].name == "Cervo Ferrugem"
+    assert combat.combat.fighters["enemy"].level == 35
+    assert combat.combat.variant is None
+    assert combat.activity_id is not None
+    async with sessions() as session:
+        assert await session.scalar(
+            select(RewardEvent.id).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == f"activity:{combat.activity_id}",
+            )
+        ) is None
+    await missions.resume(actor, P21_ID)
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
+    victory = await missions.action_combat(
+        actor, combat.activity_id, combat.combat.version, "attack"
+    )
+    assert victory is not None and victory.step == 4
+    async with sessions() as session:
+        assert await session.scalar(
+            select(RewardEvent.id).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == f"activity:{combat.activity_id}",
+            )
+        ) is None
+        assert await session.scalar(
+            select(BestiaryEvidence.id).where(
+                BestiaryEvidence.character_id == character_id,
+                BestiaryEvidence.creature_id == "cervo_ferrugem",
+                BestiaryEvidence.evidence_id == "first_victory",
+            )
+        ) is not None
+
+    p21 = await missions.advance(actor, P21_ID, victory.state_version, "find_technical_plate")
+    p21 = await missions.advance(actor, P21_ID, p21.state_version, "report_to_ilyan")
+    p21 = await missions.advance(actor, P21_ID, p21.state_version, "record_project_hemaris")
+    assert p21 is not None and p21.step == 7 and p21.status == "active"
+    async with sessions() as session:
+        assert await session.scalar(
+            select(CodexEntry.id).where(
+                CodexEntry.character_id == character_id,
+                CodexEntry.entry_id == "codex.history.projeto_hemaris_registro_inicial",
+            )
+        ) is not None
+        assert await session.scalar(
+            select(Achievement.id).where(
+                Achievement.character_id == character_id,
+                Achievement.achievement_id == "feat.varzeas.nome_recuperado",
+            )
+        ) is not None
+        assert await session.scalar(
+            select(Achievement.id).where(
+                Achievement.character_id == character_id,
+                Achievement.achievement_id == "feat.varzeas.hortos_vazios",
+            )
+        ) is None
+
+    choice_version = p21.state_version
+    completed = await missions.choose_p21_reward(actor, choice_version, "seal")
+    repeated = await missions.choose_p21_reward(actor, choice_version, "mask")
+    assert completed is not None and completed.status == "completed"
+    assert completed.progress["reward_choice"] == "seal"
+    assert repeated is not None and repeated.status == "completed"
+    assert repeated.progress["reward_choice"] == "seal"
+    async with sessions() as session:
+        event = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == P21_REWARD_SOURCE,
+            )
+        )
+        assert event is not None
+        components = list(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(RewardComponent.reward_event_id == event.id)
+                )
+            ).all()
+        )
+        assert {(row.kind, row.quantity) for row in components} == {
+            ("xp", 41450), ("crowns", 630), ("equipment", 1)
+        }
+        equipment = [row for row in components if row.kind == "equipment"]
+        assert len(equipment) == 1 and equipment[0].payload["choice"] == "seal"
+        item = await session.scalar(
+            select(EquipmentItem).where(
+                EquipmentItem.character_id == character_id,
+                EquipmentItem.source_key == f"{P21_REWARD_SOURCE}:equipment:seal",
+            )
+        )
+        assert item is not None
+        assert (item.item_name, item.rarity, item.slot, item.item_level, item.bound) == (
+            "Selo dos Diques", "Raro", "Acessório", 35, True
+        )
+        assert item.payload["enhancement"] == 0
+        assert await session.scalar(
+            select(RewardEvent.id).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == P21_REWARD_SOURCE,
+            )
+        ) == event.id
+        assert await session.scalar(
+            select(Achievement.id).where(
+                Achievement.character_id == character_id,
+                Achievement.achievement_id == "feat.varzeas.hortos_vazios",
+            )
+        ) is not None
+
+
+@pytest.mark.asyncio
+async def test_varzeas_p21_shared_objective_credit_is_individual_for_present_group_members(
+    database,
+):
+    leader, helper = 993227, 993228
+    leader_id, sessions = await _seed_varzeas_hortos(database, leader)
+    helper_id, _ = await _seed_varzeas_hortos(database, helper)
+    async with sessions() as session:
+        helper_character = await session.get(Character, helper_id)
+        assert helper_character is not None
+        helper_name = helper_character.name
+
+    groups = GroupService(sessions, "ocaso")
+    group = await groups.create_group(leader)
+    invitation = await groups.invite(
+        leader, helper_name, expected_group_revision=group.revision
+    )
+    await groups.respond_invite(
+        helper,
+        invitation.invite_id,
+        expected_revision=invitation.revision,
+        accept=True,
+    )
+    missions = VarzeasMissionService(sessions, "ocaso", groups=groups)
+    leader_view = await missions.resume(leader, P21_ID)
+    helper_view = await missions.resume(helper, P21_ID)
+    assert leader_view is not None and leader_view.step == 2
+    assert helper_view is not None and helper_view.step == 2
+
+    result = await missions.advance(
+        leader, P21_ID, leader_view.state_version, "examine_bed_a"
+    )
+    assert result is not None and result.step == 2
+    async with sessions() as session:
+        for character_id in (leader_id, helper_id):
+            quest = await session.scalar(
+                select(Quest).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == P21_ID,
+                )
+            )
+            assert quest is not None and quest.progress["beds_examined"] == ["a"]
+            assert await session.scalar(
+                select(CampaignObjectiveCredit.id).where(
+                    CampaignObjectiveCredit.character_id == character_id,
+                    CampaignObjectiveCredit.quest_id == P21_ID,
+                    CampaignObjectiveCredit.objective_id == "p21.examined_bed_a",
+                )
+            ) is not None
+
+
+@pytest.mark.asyncio
+async def test_varzeas_s21_published_investigation_and_reward_are_idempotent(database):
+    blocked_actor = 993226
+    blocked_id, blocked_sessions = await _seed_varzeas_hortos(database, blocked_actor)
+    async with blocked_sessions.begin() as session:
+        quest = await session.scalar(
+            select(Quest).where(
+                Quest.character_id == blocked_id,
+                Quest.quest_id == P21_ID,
+            )
+        )
+        assert quest is not None
+        await session.delete(quest)
+    blocked_missions = VarzeasMissionService(blocked_sessions, "ocaso")
+    blocked_offer = await blocked_missions.resume(blocked_actor, S21_ID)
+    assert blocked_offer is not None and not blocked_offer.available
+
+    actor = 993222
+    character_id, sessions = await _seed_varzeas_hortos(database, actor)
+    missions = VarzeasMissionService(sessions, "ocaso")
+
+    offer = await missions.resume(actor, S21_ID)
+    assert offer is not None and offer.available
+    s21 = await missions.start(actor, S21_ID)
+    assert s21 is not None and s21.status == "active" and s21.step == 1
+    for action, expected_step in (
+        ("examine_cultivation_sector", 2),
+        ("observe_autonomous_grafts", 3),
+        ("analyze_support_function", 4),
+    ):
+        s21 = await missions.advance(actor, S21_ID, s21.state_version, action)
+        assert s21 is not None and s21.step == expected_step
+    async with sessions() as session:
+        assert await session.scalar(
+            select(BestiaryEntry.id).where(
+                BestiaryEntry.character_id == character_id,
+                BestiaryEntry.creature_id == "enxerto_horto",
+            )
+        ) is not None
+        assert await session.scalar(
+            select(BestiaryEvidence.id).where(
+                BestiaryEvidence.character_id == character_id,
+                BestiaryEvidence.creature_id == "enxerto_horto",
+                BestiaryEvidence.evidence_id == "first_observation",
+            )
+        ) is not None
+
+    version = s21.state_version
+    completed = await missions.advance(actor, S21_ID, version, "report_to_ilyan")
+    repeated = await missions.advance(actor, S21_ID, version, "report_to_ilyan")
+    assert completed is not None and completed.status == "completed"
+    assert repeated is not None and repeated.status == "completed"
+    async with sessions() as session:
+        event = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == S21_REWARD_SOURCE,
+            )
+        )
+        assert event is not None
+        components = list(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(RewardComponent.reward_event_id == event.id)
+                )
+            ).all()
+        )
+        assert {(row.kind, row.item_id, row.quantity) for row in components} == {
+            ("xp", None, 16580),
+            ("crowns", None, 320),
+            ("material", "material.varzeas.couro_de_varzea", 2),
+        }
+        assert await session.scalar(
+            select(RewardEvent.id).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == S21_REWARD_SOURCE,
+            )
+        ) == event.id
+
+
+@pytest.mark.asyncio
+async def test_varzeas_hortos_discovery_gates_and_estufa_codex_are_persistent(
+    database, monkeypatch
+):
+    import asterion.application.road as road_module
+
+    actor_before, actor_after = 993223, 993224
+    before_id, before_sessions = await _seed_varzeas_hortos(database, actor_before)
+    after_id, after_sessions = await _seed_varzeas_hortos(database, actor_after)
+    async with after_sessions.begin() as session:
+        session.add(
+            CodexEntry(
+                character_id=after_id,
+                entry_id="codex.history.projeto_hemaris_registro_inicial",
+            )
+        )
+
+    async def discover_estufa(actor, sessions, character_id, expected_fragment):
+        road = RoadService(sessions, "ocaso")
+        assert (await road.resume(actor)).explore_enabled
+        monkeypatch.setattr(
+            road_module,
+            "_explore_result",
+            lambda *_args, **_kwargs: (
+                "great_discovery",
+                "explore.varzeas.hortos.estufa_restituicao",
+                "Estufa de Restituição descoberta.",
+            ),
+        )
+        view = await road.explore(actor)
+        assert view is not None and view.result_id == "explore.varzeas.hortos.estufa_restituicao"
+        await road.acknowledge_result(actor, view.attempt_id)
+        async with sessions() as session:
+            assert await session.scalar(
+                select(CodexFragment.id).where(
+                    CodexFragment.character_id == character_id,
+                    CodexFragment.fragment_id == expected_fragment,
+                )
+            ) is not None
+
+    await discover_estufa(
+        actor_before,
+        before_sessions,
+        before_id,
+        "codex.fragment.varzeas.hortos.estufa_technical",
+    )
+    await discover_estufa(
+        actor_after,
+        after_sessions,
+        after_id,
+        "codex.fragment.varzeas.hortos.estufa_therapeutic",
+    )
+
+
+@pytest.mark.asyncio
+async def test_varzeas_hortos_brazier_and_round_gate_use_local_hunt_settlement(
+    database, monkeypatch
+):
+    import asterion.application.road as road_module
+    import asterion.application.round as round_module
+
+    actor = 993225
+    character_id, sessions = await _seed_varzeas_hortos(database, actor)
+    road = RoadService(sessions, "ocaso")
+    rounds = RoundService(sessions, "ocaso")
+    local = await road.resume(actor)
+    assert local is not None and local.kind == "varzeas_hortos"
+    assert local.hunt_enabled and local.explore_enabled
+    assert await road.prepare_hunt(actor) is not None
+    assert await rounds.prepare_round(actor, 5) is None
+    async with sessions() as session:
+        assert await session.scalar(
+            select(Brazier.id).where(
+                Brazier.character_id == character_id,
+                Brazier.brazier_id == VARZEAS_HORTOS_BRAZIER,
+            )
+        ) is None
+
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *_args, **_kwargs: (
+            "great_discovery",
+            "explore.varzeas.hortos.braseiro_horto_seco",
+            "Braseiro do Horto Seco descoberto.",
+        ),
+    )
+    discovery = await road.explore(actor)
+    assert discovery is not None and discovery.attempt_id is not None
+    await road.acknowledge_result(actor, discovery.attempt_id)
+    async with sessions() as session:
+        assert await session.scalar(
+            select(Brazier.id).where(
+                Brazier.character_id == character_id,
+                Brazier.brazier_id == VARZEAS_HORTOS_BRAZIER,
+            )
+        ) is not None
+        assert await session.scalar(
+            select(CodexFragment.id).where(
+                CodexFragment.character_id == character_id,
+                CodexFragment.fragment_id
+                == "codex.fragment.varzeas.hortos.braseiro_horto_seco",
+            )
+        ) is not None
+
+    original_create = road_module.create_road_combat
+
+    def weak_enemy(*args, **kwargs):
+        combat = original_create(*args, **kwargs)
+        combat.fighters["enemy"].stats = replace(
+            combat.fighters["enemy"].stats, attack=1
+        )
+        return combat
+
+    monkeypatch.setattr(road_module, "create_road_combat", weak_enemy)
+    monkeypatch.setattr(round_module, "create_road_combat", weak_enemy)
+    monkeypatch.setattr(
+        road_module,
+        "select_creature",
+        lambda *_args, **_kwargs: creature_for("cervo_ferrugem"),
+    )
+    monkeypatch.setattr(
+        round_module,
+        "select_creature",
+        lambda *_args, **_kwargs: creature_for("cervo_ferrugem"),
+    )
+    manual = await start_manual_hunt_after_no_match(road, actor, monkeypatch)
+    assert manual is not None and manual.kind == "combat"
+    activity_id = manual.activity_id
+    assert activity_id is not None
+    for _ in range(100):
+        if manual.kind != "combat":
+            break
+        actions = allowed_actions(manual.combat)
+        action = "art" if "art" in actions else "attack"
+        manual = await road.action(actor, activity_id, manual.combat.version, action)
+    assert manual is not None and manual.kind == "hunt_victory"
+    async with sessions() as session:
+        context = await session.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == activity_id)
+        )
+        assert context is not None and context.creature_id == "cervo_ferrugem"
+        assert await session.scalar(
+            select(Unlock.id).where(
+                Unlock.character_id == character_id,
+                Unlock.unlock_id == VARZEAS_HORTOS_ROUND_FAMILIARITY,
+            )
+        ) is not None
+        reward = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == f"activity:{activity_id}",
+            )
+        )
+        assert reward is not None
+        materials = list(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(
+                        RewardComponent.reward_event_id == reward.id,
+                        RewardComponent.kind == "material",
+                    )
+                )
+            ).all()
+        )
+        assert materials
+        assert {row.item_id for row in materials} == {
+            "material.varzeas.couro_de_varzea"
+        }
+    await road.acknowledge_result(actor)
+
+    disable_round_pvpve_for_test(rounds)
+    preparing = await rounds.prepare_round(actor, 5)
+    assert preparing is not None and preparing.kind == "round_prepare"
+    active = await rounds.start_round(
+        actor, preparing.round_id, preparing.state_version
+    )
+    assert active is not None and active.kind == "round_active"
+    async with sessions.begin() as session:
+        state = await session.get(HuntRound, active.round_id)
+        assert state is not None
+        state.next_resolution_at = datetime.now(UTC) - timedelta(seconds=1)
+    await rounds.advance_due_rounds()
+    async with sessions() as session:
+        state = await session.get(HuntRound, active.round_id)
+        assert state is not None and state.completed_encounters == 1
+        encounter = await session.scalar(
+            select(HuntRoundEncounter).where(
+                HuntRoundEncounter.round_id == state.id
+            )
+        )
+        assert encounter is not None and encounter.creature_id == "cervo_ferrugem"
+        context = await session.scalar(
+            select(HuntContext).where(
+                HuntContext.game_activity_id == encounter.activity_id
+            )
+        )
+        assert context is not None and context.loot_profile == "round"
+        round_reward = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == f"activity:{encounter.activity_id}",
+            )
+        )
+        assert round_reward is not None
+        round_materials = list(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(
+                        RewardComponent.reward_event_id == round_reward.id,
+                        RewardComponent.kind == "material",
+                    )
+                )
+            ).all()
+        )
+        assert round_materials
+        assert {row.item_id for row in round_materials} == {
+            "material.varzeas.couro_de_varzea"
+        }

@@ -152,6 +152,7 @@ class Action:
     phase_ids: tuple[str, ...] = ()
     skip_if_target_effect_active: str | None = None
     skip_if_target_dot_at_cap: str | None = None
+    vampirism_cap_hp_fraction: Decimal | None = None
 
     def __post_init__(self) -> None:
         if self.hit_count < 1:
@@ -160,6 +161,11 @@ class Action:
             raise ValueError("Action chain power bonus cannot be negative.")
         if not ZERO <= self.vampirism_fraction <= D(1):
             raise ValueError("Action vampirism must be between zero and one.")
+        if (
+            self.vampirism_cap_hp_fraction is not None
+            and not ZERO <= self.vampirism_cap_hp_fraction <= D(1)
+        ):
+            raise ValueError("Action vampirism HP cap must be between zero and one.")
         if any(
             bonus is not None and bonus < ZERO
             for bonus in (
@@ -4150,11 +4156,17 @@ def _perform(
         and action.vampirism_fraction > ZERO
         and total_vamp_damage > ZERO
     ):
+        action_vamp_cap = (
+            actor.stats.hp * action.vampirism_cap_hp_fraction
+            if action.vampirism_cap_hp_fraction is not None
+            else actor.stats.hp - actor.hp
+        )
         action_vamp_healed = min(
             (total_vamp_damage * action.vampirism_fraction).to_integral_value(
                 rounding=ROUND_FLOOR
             ),
             actor.stats.hp - actor.hp,
+            action_vamp_cap,
         )
         action_vamp_healed = max(ZERO, action_vamp_healed)
         actor.hp += action_vamp_healed

@@ -11,8 +11,10 @@ from asterion.application.groups import GroupError
 from asterion.application.varzeas_missions import (
     P19_ID,
     P20_ID,
+    P21_ID,
     S19_ID,
     S20_ID,
+    S21_ID,
     VarzeasMissionService,
 )
 from asterion.bot.combat_ui import (
@@ -62,7 +64,9 @@ def varzeas_missions_router(service: VarzeasMissionService, images: dict[str, st
     @router.callback_query(F.data.startswith("varzeas:"))
     async def mission_action(query: CallbackQuery) -> None:
         parts = (query.data or "").split(":")
-        if len(parts) < 3 or parts[2] not in {P19_ID, S19_ID, P20_ID, S20_ID}:
+        if len(parts) < 3 or parts[2] not in {
+            P19_ID, S19_ID, P20_ID, S20_ID, P21_ID, S21_ID
+        }:
             raise SkipHandler()
         try:
             if parts[1] == "mission" and len(parts) == 3:
@@ -84,6 +88,10 @@ def varzeas_missions_router(service: VarzeasMissionService, images: dict[str, st
                         return
                 else:
                     raise ValueError("invalid combat mode")
+            elif parts[1] == "choice" and len(parts) == 5 and parts[2] == P21_ID:
+                view = await service.choose_p21_reward(
+                    query.from_user.id, int(parts[3]), parts[4]
+                )
             else:
                 raise ValueError("invalid Várzeas mission callback")
         except (TypeError, ValueError, GroupError):
@@ -115,7 +123,9 @@ def varzeas_missions_router(service: VarzeasMissionService, images: dict[str, st
                     expected_revision=revision,
                     accept=parts[2] == "yes",
                 )
-                await query.answer("Atividade confirmada." if parts[2] == "yes" else "Atividade recusada.")
+                await query.answer(
+                    "Atividade confirmada." if parts[2] == "yes" else "Atividade recusada."
+                )
                 await show_group(query)
                 return
             view = await service.start_group_combat(
@@ -202,12 +212,21 @@ def varzeas_missions_router(service: VarzeasMissionService, images: dict[str, st
                 query.from_user.id, callback.activity_id, version,
                 screen="choose_item", item_id=callback.item_id,
             )
-        elif callback.step == "t" and callback.item_id is not None and callback.target_id is not None:
+        elif (
+            callback.step == "t"
+            and callback.item_id is not None
+            and callback.target_id is not None
+        ):
             view = await service.consumable_selection(
                 query.from_user.id, callback.activity_id, version,
                 screen="choose_target", item_id=callback.item_id, target_id=callback.target_id,
             )
-        elif callback.step == "e" and callback.item_id is not None and callback.target_id is not None and callback.effect_id:
+        elif (
+            callback.step == "e"
+            and callback.item_id is not None
+            and callback.target_id is not None
+            and callback.effect_id
+        ):
             view = await service.action_combat(
                 query.from_user.id, callback.activity_id, version,
                 consumable_id=callback.item_id, target_id=callback.target_id,

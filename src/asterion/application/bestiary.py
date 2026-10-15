@@ -30,6 +30,11 @@ VDE_IMPORTANT_FIRST_VICTORY_XP = {
     "guardiao_no_antigo": (20, 1086),
 }
 
+VARZEAS_IMPORTANT_FIRST_VICTORY_XP = {
+    "viuva_rubra": (37, 2718),
+    "coletor_hematico": (40, 3084),
+}
+
 VDE_DISTINCTIVE_ELITE_MASTERY = {
     "custodio_enredado": {
         "first_victory",
@@ -50,6 +55,12 @@ VARZEAS_DISTINCTIVE_ELITE_MASTERY = {
         "mechanic:poison",
         "action:teia_junco",
         "action:salto_agua",
+    },
+    "coletor_hematico": {
+        "first_victory",
+        "action:reservatorio_blindado",
+        "action:marca_extracao",
+        "action:extracao_forcada",
     },
 }
 
@@ -395,6 +406,17 @@ class BestiaryRecorder:
                         reference_level=reference_level,
                         configured_xp=configured_xp,
                     )
+                elif creature_id in VARZEAS_IMPORTANT_FIRST_VICTORY_XP:
+                    reference_level, configured_xp = VARZEAS_IMPORTANT_FIRST_VICTORY_XP[
+                        creature_id
+                    ]
+                    await self._grant_regional_victory_xp(
+                        session,
+                        character_id,
+                        creature_id,
+                        reference_level=reference_level,
+                        configured_xp=configured_xp,
+                    )
                 elif creature_id == "matriarca_raizes":
                     await self._grant_regional_victory_xp(
                         session,
@@ -641,6 +663,19 @@ class BestiaryRecorder:
             from asterion.application.nareth_feats import reconcile_nareth_feats_for_character
 
             await reconcile_nareth_feats_for_character(session, character_id)
+        if (
+            creature_id in VARZEAS_DISTINCTIVE_ELITE_MASTERY
+            and (
+                (previous_stage is not None and previous_stage != entry.stage)
+                or victory
+                or bool(new_evidence_ids)
+            )
+        ):
+            from asterion.application.varzeas_feats import reconcile_varzeas_feats
+
+            character = await session.get(Character, character_id)
+            if character is not None:
+                await reconcile_varzeas_feats(session, character)
         if (previous_stage is not None and previous_stage != entry.stage) or (
             victory and new_evidence_ids
         ):
