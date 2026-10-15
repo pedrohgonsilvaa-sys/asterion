@@ -1,4 +1,6 @@
+from dataclasses import replace
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import uuid4
 
 from asterion.application.cosmetic_catalog import COSMETICS_BY_ID
@@ -7,6 +9,7 @@ from asterion.application.knowledge_catalog import (
     CODEX_BY_ID,
     CODEX_FRAGMENTS,
 )
+from asterion.application.prologue import CombatView
 from asterion.application.varzeas_feats import (
     VARZEAS_BASE_CREATURES,
     VARZEAS_UNIQUE_EXPLORATION,
@@ -14,11 +17,12 @@ from asterion.application.varzeas_feats import (
 from asterion.application.varzeas_missions import (
     P24_ID,
     S24_ID,
+    VarzeasMissionService,
     VarzeasMissionView,
 )
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
 from asterion.domain.campaign_combat import scale_campaign_boss_stats
-from asterion.domain.combat import _resolve_phase_triggers
+from asterion.domain.combat import CombatEvent, _resolve_phase_triggers
 from asterion.domain.equipment_modifications import (
     ENCHANTMENT_FAMILIES,
     RUNE_FAMILIES,
@@ -612,3 +616,95 @@ def test_p24_reward_and_s24_offer_ui_keep_choices_and_optional_gate_clear():
     offer = render_varzeas_mission(s24)
     assert "S22 e P23 concluídas" in offer.text
     assert "P24" not in offer.text
+
+
+def test_matrix_reservoir_windows_are_one_shot_and_capped_at_three():
+    event = CombatEvent(
+        sequence=0,
+        round=1,
+        actor="enemy",
+        action="transferencia_externa",
+        prepared_resolution=True,
+        prepared_action_instance_id="transfer-window-1",
+    )
+    previous = SimpleNamespace(events=[])
+    updated = SimpleNamespace(events=[event, event])
+    assert VarzeasMissionService._matrix_transfer_windows_resolved(
+        previous, updated
+    ) == ("transfer-window-1",)
+
+    progress = {"reservoirs_used": []}
+    assert VarzeasMissionService._next_matrix_reservoir(progress) == "a"
+    progress["reservoirs_used"].append("a")
+    assert VarzeasMissionService._next_matrix_reservoir(progress) == "b"
+    progress["reservoirs_used"].append("b")
+    assert VarzeasMissionService._next_matrix_reservoir(progress) == "c"
+    progress["reservoirs_used"].append("c")
+    assert VarzeasMissionService._next_matrix_reservoir(progress) is None
+
+
+def test_matrix_reservoir_ui_offers_contextual_action_and_shows_persisted_outcome(
+    monkeypatch,
+):
+    hud = SimpleNamespace(text="combate", keyboard=None, parse_mode="HTML")
+    monkeypatch.setitem(
+        render_varzeas_mission.__globals__, "render_combat", lambda _view: hud
+    )
+    activity_id = uuid4()
+    character_id = uuid4()
+    combat = SimpleNamespace(
+        prepared_action="transferencia_externa",
+        prepared_action_instance_id="transfer-window-1",
+        version=8,
+    )
+    available = VarzeasMissionView(
+        character_id, P24_ID, "A Matriz Rubra", "combat", "active", 4, 2,
+        {}, "Câmara da Matriz", 40, combat=combat, activity_id=activity_id,
+        encounter_id=uuid4(),
+    )
+    screen = render_varzeas_mission(available)
+    callbacks = {
+        button.callback_data
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+    }
+    assert (
+        f"varzeas:reservoir:{activity_id.hex}:8:a" in callbacks
+    )
+    assert "Resolver Reservatório A" in screen.text
+    assert "165% ATQ" in screen.text
+    assert "sem efeito numérico adicional" in screen.text
+
+    combat.prepared_action = None
+    combat.prepared_action_instance_id = None
+    for outcome, expected in (
+        ("resolved", "sucesso contextual registrado"),
+        ("failed", "janela não resolvida; falha contextual registrada"),
+    ):
+        view = replace(
+            available,
+            progress={
+                "reservoirs_used": ["a"],
+                "recorded_transfer_windows": ["transfer-window-1"],
+                "resolved_transfer_windows": ["transfer-window-1"],
+                "reservoir_window_results": {
+                    "transfer-window-1": {
+                        "reservoir_id": "a",
+                        "state": outcome,
+                        "consumed": True,
+                    }
+                },
+            },
+        )
+        screen = render_varzeas_mission(view)
+        assert expected in screen.text
+        assert "Reservatório A consumido" in screen.text
+        assert "165% ATQ" in screen.text
+
+    combat.prepared_action = "transferencia_externa"
+    combat.prepared_action_instance_id = "transfer-window-4"
+    exhausted = replace(available, progress={"reservoirs_used": ["a", "b", "c"]})
+    screen = render_varzeas_mission(exhausted)
+    assert "Resolver Reservatório" not in screen.text
+    assert "não recebe outro Reservatório" in screen.text
+    assert "165% ATQ" in screen.text

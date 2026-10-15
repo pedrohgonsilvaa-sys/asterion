@@ -1046,6 +1046,9 @@ def test_varzeas_v1_0_3_barrier_and_matrix_reservoir_contract():
     assert "exatamente **3** Reservatórios Operacionais" in reservoir_section
     assert "até três ocorrências elegíveis" in reservoir_section
     assert "Transferência Externa continua resolvendo com `165% ATQ`" in reservoir_section
+    assert reservoir_section.count(
+        "Transferência Externa continua resolvendo com `165% ATQ`"
+    ) == 2
     assert "sucesso contextual" in reservoir_section
     assert "resultado contextual não resolvido/falha" in reservoir_section
     assert "o Reservatório usado não retorna" in reservoir_section

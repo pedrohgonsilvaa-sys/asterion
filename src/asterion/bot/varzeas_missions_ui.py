@@ -96,6 +96,21 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             f"{escape(view.location)}\n\n{hud.text}"
         )
         keyboard = hud.keyboard
+        progress = view.progress or {}
+        reservoir_results = progress.get("reservoir_window_results", {})
+        for window_id in progress.get("recorded_transfer_windows", ()):
+            result = reservoir_results.get(window_id)
+            if result is None:
+                continue
+            result_label = (
+                "sucesso contextual registrado"
+                if result.get("state") == "resolved"
+                else "janela não resolvida; falha contextual registrada"
+            )
+            text += (
+                f"\n\nReservatório {result['reservoir_id'].upper()} consumido; "
+                f"{result_label}. Transferência Externa mantém `165% ATQ`."
+            )
         if (
             view.quest_id == P24_ID
             and view.status == "active"
@@ -104,20 +119,30 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             and view.combat.prepared_action_instance_id
         ):
             window_id = view.combat.prepared_action_instance_id
-            resolved = set((view.progress or {}).get("resolved_transfer_windows", ()))
-            used = set((view.progress or {}).get("reservoirs_used", ()))
+            recorded = set(progress.get("recorded_transfer_windows", ()))
+            recorded.update(progress.get("resolved_transfer_windows", ()))
+            recorded.update(progress.get("failed_transfer_windows", ()))
+            recorded.update(progress.get("reservoir_window_results", {}))
+            used = set(progress.get("reservoirs_used", ()))
             available = next((item for item in ("a", "b", "c") if item not in used), None)
-            if window_id not in resolved and available is not None:
+            if window_id not in recorded and available is not None:
                 row = [_button(
-                    f"Acionar Reservatório {available.upper()}",
+                    f"Resolver Reservatório {available.upper()}",
                     f"varzeas:reservoir:{view.activity_id.hex}:{view.combat.version}:{available}",
                 )]
                 keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[*(keyboard.inline_keyboard if keyboard else []), row]
                 )
                 text += (
-                    f"\n\n🛠️ Janela contextual disponível: Reservatório {available.upper()}. "
-                    "A ação registra a resolução; a potência publicada de Transferência Externa permanece."
+                    f"\n\n🛠️ Telegraph contextual: Reservatório {available.upper()}. "
+                    "Resolver registra sucesso e consome o Reservatório. Se a ação for omitida até a ocorrência, "
+                    "a janela será registrada como falha e o Reservatório também será consumido. "
+                    "Em ambos os casos, Transferência Externa resolve com `165% ATQ`, sem efeito numérico adicional."
+                )
+            elif window_id not in recorded and available is None:
+                text += (
+                    "\n\nOs três Reservatórios Operacionais já foram consumidos. "
+                    "Esta janela não recebe outro Reservatório; Transferência Externa resolve com `165% ATQ`."
                 )
         return Screen(
             text,

@@ -579,7 +579,13 @@ class VarzeasMissionService:
                 step=1,
                 content_version=CONTENT_VERSION,
                 state_version=0,
-                progress={"reservoirs_used": [], "resolved_transfer_windows": []},
+                progress={
+                    "reservoirs_used": [],
+                    "resolved_transfer_windows": [],
+                    "recorded_transfer_windows": [],
+                    "failed_transfer_windows": [],
+                    "reservoir_window_results": {},
+                },
             )
             session.add(quest)
             await session.flush()
@@ -1958,13 +1964,7 @@ class VarzeasMissionService:
     async def resolve_matrix_reservoir(
         self, actor: int, activity_id: UUID, version: int, reservoir_id: str
     ):
-        """Record one contextual reservoir resolution for a prepared window.
-
-        The published source supplies no numeric bonus to cancel. This action
-        therefore persists only which of the three one-time interactions was
-        used for the current Transferência Externa window; it does not change
-        the attack's published coefficient or combat state.
-        """
+        """Persist successful contextual use without changing combat numbers."""
         if reservoir_id not in {"a", "b", "c"}:
             return await self.combat_view_for_actor(actor, activity_id)
         async with self.sessions.begin() as session:
@@ -2004,7 +2004,8 @@ class VarzeasMissionService:
                     return await self._view_for_activity(session, seed, activity_id)
                 for participant, quest in eligible:
                     await self._save_reservoir_resolution(
-                        session, participant.id, quest, window_id, reservoir_id
+                        session, participant.id, quest, window_id, reservoir_id,
+                        outcome="resolved",
                     )
                 return await self._view_for_activity(session, seed, activity_id)
 
@@ -2038,9 +2039,58 @@ class VarzeasMissionService:
             if self._reservoir_already_used(((character, quest),), window_id, reservoir_id):
                 return await self._view_for_activity(session, seed, activity_id)
             await self._save_reservoir_resolution(
-                session, character.id, quest, window_id, reservoir_id
+                session, character.id, quest, window_id, reservoir_id,
+                outcome="resolved",
             )
             return await self._view_for_activity(session, character, activity_id)
+
+    @staticmethod
+    def _matrix_transfer_windows_resolved(previous, updated) -> tuple[str, ...]:
+        """Return new completed Transferência Externa telegraphs in combat."""
+        new_events = updated.events[len(previous.events):]
+        return tuple(dict.fromkeys(
+            event.prepared_action_instance_id
+            for event in new_events
+            if event.prepared_resolution
+            and event.action == "transferencia_externa"
+            and event.prepared_action_instance_id
+        ))
+
+    async def _record_matrix_reservoir_failures(
+        self, session, character_id, quest, previous, updated
+    ) -> None:
+        if quest is None or quest.status != "active" or quest.step != 4:
+            return
+        for window_id in self._matrix_transfer_windows_resolved(previous, updated):
+            progress = quest.progress or {}
+            if self._matrix_reservoir_window_recorded(progress, window_id):
+                continue
+            reservoir_id = self._next_matrix_reservoir(progress)
+            if reservoir_id is None:
+                continue
+            await self._save_reservoir_resolution(
+                session,
+                character_id,
+                quest,
+                window_id,
+                reservoir_id,
+                outcome="failed",
+            )
+
+    @staticmethod
+    def _matrix_reservoir_window_recorded(progress, window_id: str) -> bool:
+        results = progress.get("reservoir_window_results", {})
+        return (
+            window_id in results
+            or window_id in progress.get("recorded_transfer_windows", ())
+            or window_id in progress.get("resolved_transfer_windows", ())
+            or window_id in progress.get("failed_transfer_windows", ())
+        )
+
+    @staticmethod
+    def _next_matrix_reservoir(progress) -> str | None:
+        used = set(progress.get("reservoirs_used", ()))
+        return next((item for item in ("a", "b", "c") if item not in used), None)
 
     @staticmethod
     def _reservoir_already_used(members, window_id: str, reservoir_id: str) -> bool:
@@ -2048,22 +2098,46 @@ class VarzeasMissionService:
             progress = quest.progress or {}
             if reservoir_id in progress.get("reservoirs_used", ()):
                 return True
-            if window_id in progress.get("resolved_transfer_windows", ()):
+            if VarzeasMissionService._matrix_reservoir_window_recorded(
+                progress, window_id
+            ):
                 return True
         return False
 
     async def _save_reservoir_resolution(
-        self, session, character_id, quest, window_id: str, reservoir_id: str
+        self, session, character_id, quest, window_id: str, reservoir_id: str,
+        *, outcome: str,
     ) -> None:
         progress = quest.progress or {}
+        if outcome not in {"resolved", "failed"}:
+            raise ValueError("invalid matrix reservoir outcome")
+        if self._matrix_reservoir_window_recorded(progress, window_id):
+            return
         reservoirs = list(progress.get("reservoirs_used", ()))
-        windows = list(progress.get("resolved_transfer_windows", ()))
+        resolved_windows = list(progress.get("resolved_transfer_windows", ()))
+        recorded_windows = list(progress.get("recorded_transfer_windows", ()))
+        failures = list(progress.get("failed_transfer_windows", ()))
+        results = dict(progress.get("reservoir_window_results", {}))
+        if reservoir_id in reservoirs:
+            return
         reservoirs.append(reservoir_id)
-        windows.append(window_id)
+        if outcome == "failed":
+            failures.append(window_id)
+        else:
+            resolved_windows.append(window_id)
+        recorded_windows.append(window_id)
+        results[window_id] = {
+            "reservoir_id": reservoir_id,
+            "state": outcome,
+            "consumed": True,
+        }
         quest.progress = {
             **progress,
             "reservoirs_used": reservoirs,
-            "resolved_transfer_windows": windows,
+            "resolved_transfer_windows": resolved_windows,
+            "recorded_transfer_windows": recorded_windows,
+            "failed_transfer_windows": failures,
+            "reservoir_window_results": results,
         }
         quest.state_version += 1
         await self._credit(
@@ -2072,7 +2146,12 @@ class VarzeasMissionService:
             P24_ID,
             "p24.reservoir_window_recorded",
             f"p24.reservoir_window:{character_id}:{window_id}",
-            {"reservoir": reservoir_id, "window_id": window_id},
+            {
+                "reservoir": reservoir_id,
+                "window_id": window_id,
+                "outcome": outcome,
+                "reservoir_state": "consumed",
+            },
         )
 
     async def _grant_p24_reward(self, session, character, choice: str) -> None:
@@ -2910,6 +2989,10 @@ class VarzeasMissionService:
             if updated is None or updated.version == version:
                 current = await self._view(session, character, quest, world, quest_id)
                 return await self._attach_combat(session, character, quest, world, current)
+            if quest_id == P24_ID:
+                await self._record_matrix_reservoir_failures(
+                    session, character.id, quest, combat, updated
+                )
             if quest_id in {P24_ID, S24_ID}:
                 await self._record_varzeas_boss_evidence(
                     session, character.id, config[3].creature_id, updated
@@ -2983,6 +3066,7 @@ class VarzeasMissionService:
                 )
                 if stack is None:
                     return await self._view_for_activity(session, character, activity_id)
+            previous_combat = locked.combat
             updated = resolve_campaign_action(
                 locked,
                 activity_id=activity_id,
@@ -3007,6 +3091,17 @@ class VarzeasMissionService:
                 roster_member = next(row for row in locked.members if row.character_id == character_id)
                 quest = await self._quest(session, character_id, quest_id)
                 quests[character_id] = quest
+                if (
+                    quest_id == P24_ID
+                    and roster_member.role == "eligible"
+                ):
+                    await self._record_matrix_reservoir_failures(
+                        session,
+                        character_id,
+                        quest,
+                        previous_combat,
+                        updated,
+                    )
                 if updated.result == "victory":
                     await normalize_character_hp(session, participant)
                     await self.road._bestiary(session, character_id, config[3].creature_id, victory=True, observation_category=config[3].category)

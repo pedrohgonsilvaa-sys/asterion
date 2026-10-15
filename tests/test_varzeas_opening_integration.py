@@ -1,6 +1,7 @@
 from collections import Counter
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import func, select
@@ -3144,6 +3145,193 @@ async def test_varzeas_p24_autostarts_at_level_40_without_optional_quests_or_dun
                 Quest.quest_id == P23_ID,
             )
         ) == "completed"
+
+
+@pytest.mark.asyncio
+async def test_matrix_reservoir_success_and_omission_are_persisted_once_without_rewards(database):
+    actor = 993613
+    character_id, sessions = await _seed_varzeas_p23_endgame(
+        database,
+        actor,
+        level=40,
+        location=VARZEAS_CAMARA,
+    )
+    async with sessions.begin() as session:
+        session.add(
+            Quest(
+                character_id=character_id,
+                quest_id=P24_ID,
+                title="A Matriz Rubra",
+                status="active",
+                step=4,
+                state_version=1,
+                content_version="varzeas-1.0.0",
+                progress={},
+            )
+        )
+    missions = VarzeasMissionService(sessions, "ocaso")
+    async with sessions() as session:
+        character = await session.get(Character, character_id)
+        assert character is not None
+        initial_economy = (character.xp, character.crowns)
+    success_window = SimpleNamespace(
+        action="transferencia_externa",
+        prepared_resolution=True,
+        prepared_action_instance_id="transfer-window-success",
+    )
+    failed_window = SimpleNamespace(
+        action="transferencia_externa",
+        prepared_resolution=True,
+        prepared_action_instance_id="transfer-window-failed",
+    )
+    third_window = SimpleNamespace(
+        action="transferencia_externa",
+        prepared_resolution=True,
+        prepared_action_instance_id="transfer-window-third",
+    )
+    fourth_window = SimpleNamespace(
+        action="transferencia_externa",
+        prepared_resolution=True,
+        prepared_action_instance_id="transfer-window-fourth",
+    )
+
+    async with sessions.begin() as session:
+        quest = await session.scalar(
+            select(Quest).where(
+                Quest.character_id == character_id,
+                Quest.quest_id == P24_ID,
+            ).with_for_update()
+        )
+        assert quest is not None
+        await missions._save_reservoir_resolution(
+            session,
+            character_id,
+            quest,
+            "transfer-window-success",
+            "a",
+            outcome="resolved",
+        )
+        # A stale duplicate callback cannot create a second result.
+        await missions._save_reservoir_resolution(
+            session,
+            character_id,
+            quest,
+            "transfer-window-success",
+            "a",
+            outcome="resolved",
+        )
+        # The attack occurrence preserves a previously successful result.
+        await missions._record_matrix_reservoir_failures(
+            session,
+            character_id,
+            quest,
+            SimpleNamespace(events=[]),
+            SimpleNamespace(events=[success_window]),
+        )
+        await missions._record_matrix_reservoir_failures(
+            session,
+            character_id,
+            quest,
+            SimpleNamespace(events=[success_window]),
+            SimpleNamespace(events=[success_window, failed_window]),
+        )
+        # Reprocessing the same event is idempotent.
+        await missions._record_matrix_reservoir_failures(
+            session,
+            character_id,
+            quest,
+            SimpleNamespace(events=[success_window]),
+            SimpleNamespace(events=[success_window, failed_window]),
+        )
+        await missions._record_matrix_reservoir_failures(
+            session,
+            character_id,
+            quest,
+            SimpleNamespace(events=[success_window, failed_window]),
+            SimpleNamespace(events=[success_window, failed_window, third_window]),
+        )
+        await missions._record_matrix_reservoir_failures(
+            session,
+            character_id,
+            quest,
+            SimpleNamespace(events=[success_window, failed_window, third_window]),
+            SimpleNamespace(events=[success_window, failed_window, third_window, fourth_window]),
+        )
+
+        assert quest.progress["reservoirs_used"] == ["a", "b", "c"]
+        assert quest.progress["resolved_transfer_windows"] == [
+            "transfer-window-success",
+        ]
+        assert quest.progress["recorded_transfer_windows"] == [
+            "transfer-window-success",
+            "transfer-window-failed",
+            "transfer-window-third",
+        ]
+        assert quest.progress["failed_transfer_windows"] == [
+            "transfer-window-failed",
+            "transfer-window-third",
+        ]
+        assert quest.progress["reservoir_window_results"] == {
+            "transfer-window-success": {
+                "reservoir_id": "a",
+                "state": "resolved",
+                "consumed": True,
+            },
+            "transfer-window-failed": {
+                "reservoir_id": "b",
+                "state": "failed",
+                "consumed": True,
+            },
+            "transfer-window-third": {
+                "reservoir_id": "c",
+                "state": "failed",
+                "consumed": True,
+            },
+        }
+
+    async with sessions() as session:
+        character = await session.get(Character, character_id)
+        assert character is not None
+        assert (character.xp, character.crowns) == initial_economy
+        credits = list(
+            (
+                await session.scalars(
+                    select(CampaignObjectiveCredit).where(
+                        CampaignObjectiveCredit.character_id == character_id,
+                        CampaignObjectiveCredit.quest_id == P24_ID,
+                        CampaignObjectiveCredit.objective_id
+                        == "p24.reservoir_window_recorded",
+                    )
+                )
+            ).all()
+        )
+        assert {
+            (
+                row.evidence["window_id"],
+                row.evidence["reservoir"],
+                row.evidence["outcome"],
+                row.evidence["reservoir_state"],
+            )
+            for row in credits
+        } == {
+            ("transfer-window-success", "a", "resolved", "consumed"),
+            ("transfer-window-failed", "b", "failed", "consumed"),
+            ("transfer-window-third", "c", "failed", "consumed"),
+        }
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id.in_(
+                    (P24_REWARD_SOURCE, "p24.matriz_rubra.first_victory.core")
+                ),
+            )
+        ) == 0
+        assert await session.scalar(
+            select(BestiaryEvidence.id).where(
+                BestiaryEvidence.character_id == character_id,
+                BestiaryEvidence.creature_id == "matriz_rubra",
+            )
+        ) is None
 
 
 @pytest.mark.asyncio
