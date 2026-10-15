@@ -106,6 +106,8 @@ VARZEAS_REAGENT = "material.varzeas.junco_ferruginoso"
 VARZEAS_ESSENCE = "material.varzeas.soro_antigo"
 VARZEAS_CATALYST_IV = "material.varzeas.catalisador_elite_iv"
 VARZEAS_FRAGMENT_IV = "material.varzeas.fragmento_aprimoramento_iv"
+VARZEAS_INFIRMARY_CORE = "material.varzeas.nucleo_enfermaria_afundada"
+VARZEAS_CISTERN_CORE = "material.varzeas.nucleo_cisterna_transferencia"
 
 MATERIAL_NAMES = {
     IRON: "Ferro de Fuligem",
@@ -135,6 +137,8 @@ MATERIAL_NAMES = {
     VARZEAS_ESSENCE: "Soro Antigo",
     VARZEAS_CATALYST_IV: "Catalisador de Elite IV",
     VARZEAS_FRAGMENT_IV: "Fragmento de Aprimoramento IV",
+    VARZEAS_INFIRMARY_CORE: "Núcleo da Enfermaria Afundada",
+    VARZEAS_CISTERN_CORE: "Núcleo da Cisterna de Transferência",
     VDE_IRON: "Ferro Enredado",
     VDE_LEATHER: "Couro Musgoso",
     VDE_HERB: "Erva de Turfa",
@@ -719,6 +723,47 @@ def _special_recipes() -> list[RecipeDefinition]:
             creation_enabled=False,
             unlock_id="recipe.nareth.calibracao_do_arconte",
             description="Encantamento Épico de PER · Grau III",
+        ),
+        RecipeDefinition(
+            recipe_id="recipe.varzeas.enfermaria.mascara_triagem_silenciosa",
+            profession_id="leatherworker",
+            name="Máscara da Triagem Silenciosa",
+            output_kind="equipment",
+            required_level=9,
+            grade=4,
+            rarity="Raro",
+            output_name="Máscara da Triagem Silenciosa",
+            output_slot="Cabeça",
+            sw=1,
+            fixed_materials=(
+                MaterialRequirement(VARZEAS_LEATHER, 6),
+                MaterialRequirement(VARZEAS_REAGENT, 2),
+                MaterialRequirement(VARZEAS_FRAGMENT_IV, 4, False),
+                MaterialRequirement(VARZEAS_INFIRMARY_CORE, 1),
+            ),
+            unlock_id="recipe.varzeas.enfermaria.mascara_triagem_silenciosa",
+            description="Cabeça · Raro · Grau IV · SW1",
+        ),
+        RecipeDefinition(
+            recipe_id="recipe.varzeas.cisterna.peitoral_fluxo_contido",
+            profession_id="blacksmith",
+            name="Peitoral do Fluxo Contido",
+            output_kind="equipment",
+            required_level=10,
+            grade=4,
+            rarity="Épico",
+            output_name="Peitoral do Fluxo Contido",
+            output_slot="Torso",
+            sw=2,
+            fixed_materials=(
+                MaterialRequirement(VARZEAS_IRON, 14),
+                MaterialRequirement(VARZEAS_ESSENCE, 6),
+                MaterialRequirement(VARZEAS_CATALYST_IV, 4, False),
+                MaterialRequirement(VARZEAS_FRAGMENT_IV, 12, False),
+                MaterialRequirement(VARZEAS_CISTERN_CORE, 1),
+            ),
+            unlock_id="recipe.varzeas.cisterna.peitoral_fluxo_contido",
+            description="Torso · Épico · Grau IV · SW2",
         ),
     ]
 

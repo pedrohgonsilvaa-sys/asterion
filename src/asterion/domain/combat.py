@@ -153,6 +153,7 @@ class Action:
     skip_if_target_effect_active: str | None = None
     skip_if_target_dot_at_cap: str | None = None
     vampirism_cap_hp_fraction: Decimal | None = None
+    skip_if_self_effect_active: str | None = None
 
     def __post_init__(self) -> None:
         if self.hit_count < 1:
@@ -4411,6 +4412,11 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
         if (
             action.max_uses_per_combat is not None
             and enemy.action_use_counts.get(action_id, 0) >= action.max_uses_per_combat
+        ):
+            return False
+        if action.skip_if_self_effect_active and any(
+            effect.id == action.skip_if_self_effect_active and effect.remaining > 0
+            for effect in enemy.effects
         ):
             return False
         if action.requires_defeated_fighter_keys and not any(

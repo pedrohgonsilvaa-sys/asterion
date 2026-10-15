@@ -117,6 +117,48 @@ from asterion.domain.tdo_galleries import (
     gallery_encounter_specs,
     gallery_enemy_rewards,
 )
+from asterion.domain.varzeas_dungeons import (
+    VARZEAS_CISTERN_BRAZIER_LABEL,
+    VARZEAS_CISTERN_CODEX_ENTRY,
+    VARZEAS_CISTERN_CONTENT_VERSION,
+    VARZEAS_CISTERN_CORE_ID,
+    VARZEAS_CISTERN_CORE_NAME,
+    VARZEAS_CISTERN_DISCOVERY_UNLOCK,
+    VARZEAS_CISTERN_ENTRY_LOCATION,
+    VARZEAS_CISTERN_ENVIRONMENTS,
+    VARZEAS_CISTERN_FAMILY_ID,
+    VARZEAS_CISTERN_FIRST_CLEAR_PREFIX,
+    VARZEAS_CISTERN_KNOWN_PATH_UNLOCK,
+    VARZEAS_CISTERN_RECIPE_NAME,
+    VARZEAS_CISTERN_RECIPE_UNLOCK,
+    VARZEAS_CISTERN_REWARD_PREFIX,
+    VARZEAS_CISTERN_RULESET_VERSION,
+    VARZEAS_DUNGEON_BASIC_MATERIALS,
+    VARZEAS_DUNGEON_CATALYST,
+    VARZEAS_DUNGEON_FRAGMENT,
+    VARZEAS_HEART_PHASE_II,
+    VARZEAS_HEART_PHASE_III,
+    VARZEAS_INFIRMARY_BRAZIER_LABEL,
+    VARZEAS_INFIRMARY_CODEX_ENTRY,
+    VARZEAS_INFIRMARY_CONTENT_VERSION,
+    VARZEAS_INFIRMARY_CORE_ID,
+    VARZEAS_INFIRMARY_CORE_NAME,
+    VARZEAS_INFIRMARY_DISCOVERY_UNLOCK,
+    VARZEAS_INFIRMARY_ENTRY_LOCATION,
+    VARZEAS_INFIRMARY_ENVIRONMENTS,
+    VARZEAS_INFIRMARY_FAMILY_ID,
+    VARZEAS_INFIRMARY_FIRST_CLEAR_PREFIX,
+    VARZEAS_INFIRMARY_KNOWN_PATH_UNLOCK,
+    VARZEAS_INFIRMARY_RECIPE_NAME,
+    VARZEAS_INFIRMARY_RECIPE_UNLOCK,
+    VARZEAS_INFIRMARY_REWARD_PREFIX,
+    VARZEAS_INFIRMARY_RULESET_VERSION,
+    VARZEAS_PERSISTENT_PHASE_II,
+    VARZEAS_PERSISTENT_PHASE_III,
+    create_varzeas_dungeon_combat,
+    varzeas_dungeon_encounter_specs,
+    varzeas_dungeon_enemy_rewards,
+)
 from asterion.domain.vde_fosso import (
     FOSSO_BASIC_MATERIALS,
     FOSSO_BRAZIER_LABEL,
@@ -387,6 +429,60 @@ DUNGEON_FAMILIES = {
         fragment_material=NARETH_DUNGEON_FRAGMENT,
         recipe_name="Guarda da Referência",
     ),
+    VARZEAS_INFIRMARY_FAMILY_ID: DungeonFamily(
+        VARZEAS_INFIRMARY_FAMILY_ID,
+        "Enfermaria Afundada",
+        "Nv.34–37",
+        VARZEAS_INFIRMARY_ENTRY_LOCATION,
+        VARZEAS_INFIRMARY_ENTRY_LOCATION,
+        VARZEAS_INFIRMARY_DISCOVERY_UNLOCK,
+        VARZEAS_INFIRMARY_KNOWN_PATH_UNLOCK,
+        VARZEAS_INFIRMARY_FIRST_CLEAR_PREFIX,
+        VARZEAS_INFIRMARY_REWARD_PREFIX,
+        "dungeon_varzeas_infirmary_encounter",
+        VARZEAS_INFIRMARY_CONTENT_VERSION,
+        VARZEAS_INFIRMARY_RULESET_VERSION,
+        37,
+        34,
+        VARZEAS_INFIRMARY_CODEX_ENTRY,
+        VARZEAS_INFIRMARY_CORE_ID,
+        VARZEAS_INFIRMARY_CORE_NAME,
+        VARZEAS_INFIRMARY_RECIPE_UNLOCK,
+        VARZEAS_INFIRMARY_BRAZIER_LABEL,
+        region_display="Várzeas Carmesins",
+        encounter_count=5,
+        basic_material_pool=VARZEAS_DUNGEON_BASIC_MATERIALS,
+        catalyst_material=VARZEAS_DUNGEON_CATALYST,
+        fragment_material=VARZEAS_DUNGEON_FRAGMENT,
+        recipe_name=VARZEAS_INFIRMARY_RECIPE_NAME,
+    ),
+    VARZEAS_CISTERN_FAMILY_ID: DungeonFamily(
+        VARZEAS_CISTERN_FAMILY_ID,
+        "Cisterna de Transferência",
+        "Nv.38–40",
+        VARZEAS_CISTERN_ENTRY_LOCATION,
+        VARZEAS_CISTERN_ENTRY_LOCATION,
+        VARZEAS_CISTERN_DISCOVERY_UNLOCK,
+        VARZEAS_CISTERN_KNOWN_PATH_UNLOCK,
+        VARZEAS_CISTERN_FIRST_CLEAR_PREFIX,
+        VARZEAS_CISTERN_REWARD_PREFIX,
+        "dungeon_varzeas_cistern_encounter",
+        VARZEAS_CISTERN_CONTENT_VERSION,
+        VARZEAS_CISTERN_RULESET_VERSION,
+        40,
+        38,
+        VARZEAS_CISTERN_CODEX_ENTRY,
+        VARZEAS_CISTERN_CORE_ID,
+        VARZEAS_CISTERN_CORE_NAME,
+        VARZEAS_CISTERN_RECIPE_UNLOCK,
+        VARZEAS_CISTERN_BRAZIER_LABEL,
+        region_display="Várzeas Carmesins",
+        encounter_count=5,
+        basic_material_pool=VARZEAS_DUNGEON_BASIC_MATERIALS,
+        catalyst_material=VARZEAS_DUNGEON_CATALYST,
+        fragment_material=VARZEAS_DUNGEON_FRAGMENT,
+        recipe_name=VARZEAS_CISTERN_RECIPE_NAME,
+    ),
 }
 
 
@@ -424,6 +520,10 @@ def _encounter_environment(family_id: str, ordinal: int) -> str:
         return NARETH_GALLERIES_ENVIRONMENTS[ordinal]
     if family_id == NARETH_OBSERVATORY_FAMILY_ID:
         return NARETH_OBSERVATORY_ENVIRONMENTS[ordinal]
+    if family_id == VARZEAS_INFIRMARY_FAMILY_ID:
+        return VARZEAS_INFIRMARY_ENVIRONMENTS[ordinal]
+    if family_id == VARZEAS_CISTERN_FAMILY_ID:
+        return VARZEAS_CISTERN_ENVIRONMENTS[ordinal]
     raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
@@ -447,6 +547,14 @@ def _encounter_specs(run, ordinal: int):
         return nareth_dungeon_encounter_specs(
             family_id, ordinal, run.difficulty, run.initial_group_size, run.reference_level
         )
+    if family_id in {VARZEAS_INFIRMARY_FAMILY_ID, VARZEAS_CISTERN_FAMILY_ID}:
+        return varzeas_dungeon_encounter_specs(
+            family_id,
+            ordinal,
+            run.difficulty,
+            run.initial_group_size,
+            DUNGEON_FAMILIES[family_id].reference_level,
+        )
     raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
@@ -464,6 +572,12 @@ def _enemy_rewards_for(run, ordinal: int):
         NARETH_OBSERVATORY_FAMILY_ID,
     }:
         return nareth_dungeon_enemy_rewards(run.dungeon_family_id, ordinal)
+    if run.dungeon_family_id in {VARZEAS_INFIRMARY_FAMILY_ID, VARZEAS_CISTERN_FAMILY_ID}:
+        return varzeas_dungeon_enemy_rewards(
+            run.dungeon_family_id,
+            ordinal,
+            DUNGEON_FAMILIES[run.dungeon_family_id].reference_level,
+        )
     raise ValueError(f"Unknown dungeon family: {run.dungeon_family_id}")
 
 
@@ -1560,6 +1674,27 @@ class DungeonService:
                     initial_group_size=run.initial_group_size,
                     party=group,
                 )
+            elif run.dungeon_family_id in {
+                VARZEAS_INFIRMARY_FAMILY_ID,
+                VARZEAS_CISTERN_FAMILY_ID,
+            }:
+                combat = create_varzeas_dungeon_combat(
+                    uuid4(),
+                    family_id=run.dungeon_family_id,
+                    name=primary_character.name,
+                    character_class=primary_character.character_class,
+                    race=primary_character.race,
+                    hp=primary_member.hp,
+                    level=primary_character.level,
+                    difficulty=run.difficulty,
+                    reference_level=family.reference_level,
+                    equipment=equipment,
+                    active_art_ids=active_arts,
+                    ordinal=run.current_encounter_ordinal,
+                    run_seed=run.seed,
+                    initial_group_size=run.initial_group_size,
+                    party=group,
+                )
             else:
                 raise ValueError(f"Unknown dungeon family: {run.dungeon_family_id}")
             combat.configuration_snapshot = (combat.configuration_snapshot or {}) | {
@@ -2064,6 +2199,22 @@ class DungeonService:
                             spec.creature.creature_id,
                             fixed_xp=1956,
                         )
+                    elif spec.creature.creature_id == "o_persistente":
+                        await self._grant_boss_milestone(
+                            session,
+                            participant_character,
+                            run,
+                            spec.creature.creature_id,
+                            fixed_xp=2718,
+                        )
+                    elif spec.creature.creature_id == "coracao_transferencia":
+                        await self._grant_boss_milestone(
+                            session,
+                            participant_character,
+                            run,
+                            spec.creature.creature_id,
+                            fixed_xp=3084,
+                        )
                     if spec.creature.category == "boss":
                         await self.bestiary.refresh_boss_mastery(
                             session, participant_character.id, spec.creature.creature_id
@@ -2372,6 +2523,13 @@ class DungeonService:
                 await self._record_nareth_codex_completion(
                     session, character.id, run.dungeon_family_id
                 )
+            elif run.dungeon_family_id in {
+                VARZEAS_INFIRMARY_FAMILY_ID,
+                VARZEAS_CISTERN_FAMILY_ID,
+            }:
+                await self._record_varzeas_codex_completion(
+                    session, character.id, run.dungeon_family_id
+                )
             session.add_all(components)
             reward_lines_by_character[str(character.id)] = self._reward_lines(
                 total_xp,
@@ -2390,6 +2548,9 @@ class DungeonService:
             await reconcile_tdo_feats(session, character)
             await reconcile_vde_feats(session, character)
             await reconcile_nareth_feats(session, character)
+            from asterion.application.varzeas_feats import reconcile_varzeas_feats
+
+            await reconcile_varzeas_feats(session, character)
         progress.update(
             internal_xp=0,
             internal_rewards=[],
@@ -2448,6 +2609,12 @@ class DungeonService:
             "material.nareth.po_de_eixo": "Pó de Eixo",
             "material.nareth.catalisador_elite_iii": "Catalisador de Elite III",
             "material.nareth.fragmento_aprimoramento_iii": "Fragmento de Aprimoramento III",
+            "material.varzeas.ferro_de_salmoura": "Ferro de Salmoura",
+            "material.varzeas.couro_de_varzea": "Couro de Várzea",
+            "material.varzeas.junco_ferruginoso": "Junco Ferruginoso",
+            "material.varzeas.soro_antigo": "Soro Antigo",
+            "material.varzeas.catalisador_elite_iv": "Catalisador de Elite IV",
+            "material.varzeas.fragmento_aprimoramento_iv": "Fragmento de Aprimoramento IV",
         }
         for material_id, quantity in sorted(materials.items()):
             lines.append(f"📦 {labels.get(material_id, material_id)} · {quantity}")
@@ -2625,6 +2792,10 @@ class DungeonService:
             if family_id == NARETH_GALLERIES_FAMILY_ID
             else "guardiao_referencia"
             if family_id == NARETH_OBSERVATORY_FAMILY_ID
+            else "o_persistente"
+            if family_id == VARZEAS_INFIRMARY_FAMILY_ID
+            else "coracao_transferencia"
+            if family_id == VARZEAS_CISTERN_FAMILY_ID
             else "custodio_primeiro_selo"
         )
         for event in after.events[cursor:]:
@@ -2828,6 +2999,32 @@ class DungeonService:
                     "phase",
                     5,
                 )
+            elif event.action == f"phase:{VARZEAS_PERSISTENT_PHASE_II}":
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    "o_persistente",
+                    "phase:persistencia",
+                    "phase",
+                    5,
+                )
+            elif event.action == f"phase:{VARZEAS_PERSISTENT_PHASE_III}":
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    "o_persistente",
+                    "phase:sem_alta",
+                    "phase",
+                    5,
+                )
+            elif event.action == f"phase:{VARZEAS_HEART_PHASE_II}":
+                await self._ensure_codex_entry(
+                    session, character.id, "codex.mystery.linhas_transferencia_ativas"
+                )
+            elif event.action == f"phase:{VARZEAS_HEART_PHASE_III}":
+                await self._ensure_codex_entry(
+                    session, character.id, "codex.mystery.linhas_transferencia_ativas"
+                )
             elif event.action == f"phase:{NARETH_GALLERIES_RETURN_RESOLVED}":
                 await self._add_bestiary_evidence(
                     session,
@@ -2861,6 +3058,13 @@ class DungeonService:
             elif family_id in {
                 NARETH_GALLERIES_FAMILY_ID,
                 NARETH_OBSERVATORY_FAMILY_ID,
+            }:
+                await self.bestiary.refresh_boss_mastery(
+                    session, character.id, boss_creature_id
+                )
+            elif family_id in {
+                VARZEAS_INFIRMARY_FAMILY_ID,
+                VARZEAS_CISTERN_FAMILY_ID,
             }:
                 await self.bestiary.refresh_boss_mastery(
                     session, character.id, boss_creature_id
@@ -3154,6 +3358,33 @@ class DungeonService:
                 (
                     "codex.history.referencias_afundadas",
                     "codex.fragment.nareth.observatory.submerged_references",
+                ),
+            )
+        for entry_id, fragment_id in records:
+            await self._ensure_codex_entry(session, character_id, entry_id)
+            await self._ensure_fragment(session, character_id, entry_id, fragment_id)
+
+    async def _record_varzeas_codex_completion(self, session, character_id, family_id):
+        if family_id == VARZEAS_INFIRMARY_FAMILY_ID:
+            records = (
+                (
+                    VARZEAS_INFIRMARY_CODEX_ENTRY,
+                    "codex.fragment.varzeas.enfermaria.afundada",
+                ),
+                (
+                    "codex.history.restituicao_e_persistencia",
+                    "codex.fragment.varzeas.enfermaria.rotinas_de_suporte",
+                ),
+            )
+        else:
+            records = (
+                (
+                    VARZEAS_CISTERN_CODEX_ENTRY,
+                    "codex.fragment.varzeas.cisterna.transferencia",
+                ),
+                (
+                    "codex.mystery.linhas_transferencia_ativas",
+                    "codex.fragment.varzeas.cisterna.linhas_ativas",
                 ),
             )
         for entry_id, fragment_id in records:

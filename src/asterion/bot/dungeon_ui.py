@@ -30,6 +30,8 @@ def render_dungeons(view: DungeonView) -> Screen:
                 "dungeon.vde.santuario_no_antigo": "dungeon:sanctuary",
                 "dungeon.nareth.galerias_meridiano": "dungeon:nareth-galleries",
                 "dungeon.nareth.observatorio_afundado": "dungeon:nareth-observatory",
+                "dungeon.varzeas.enfermaria_afundada": "dungeon:varzeas-infirmary",
+                "dungeon.varzeas.cisterna_transferencia": "dungeon:varzeas-cistern",
             }.get(family_id, "dungeon:known")
             rows.append([_button(f"{name} · {level_range}", callback)])
             details.append(f"{name} · {level_range}\n{region} · {location}")
@@ -66,6 +68,8 @@ def render_dungeons(view: DungeonView) -> Screen:
             "dungeon.vde.santuario_no_antigo": "s",
             "dungeon.nareth.galerias_meridiano": "n",
             "dungeon.nareth.observatorio_afundado": "o",
+            "dungeon.varzeas.enfermaria_afundada": "i",
+            "dungeon.varzeas.cisterna_transferencia": "t",
         }.get(view.family_id)
         if family_key is None:
             return Screen(

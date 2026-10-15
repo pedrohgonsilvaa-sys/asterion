@@ -48,6 +48,9 @@ VARZEAS_PORTO_LOCATION = "varzeas.location.porto_da_salmoura"
 VARZEAS_BREJOS_LOCATION = "varzeas.location.brejos_do_pulso"
 VARZEAS_HORTOS_LOCATION = "varzeas.location.hortos_hemaris"
 VARZEAS_GALERIAS_LOCATION = "varzeas.location.galerias_transferencia"
+VARZEAS_CAMARA = "Câmara da Matriz"
+VARZEAS_CAMARA_LOCATION = "varzeas.location.camara_da_matriz"
+VARZEAS_CAMARA_ACCESS_UNLOCK = "region.varzeas.camara_matriz.available"
 NARETH_CAMPINAS = "Campinas do Meridiano"
 NARETH_POSTO = "Posto de Nareth"
 NARETH_CANAIS = "Canais Secos"
@@ -97,6 +100,7 @@ VARZEAS_GALERIAS_HUNT_UNLOCK = "hunt.manual.varzeas.galerias_transferencia"
 VARZEAS_GALERIAS_EXPLORE_UNLOCK = "explore.varzeas.galerias_transferencia"
 VARZEAS_GALERIAS_ROUND_FAMILIARITY = "hunt_round.varzeas.galerias_transferencia"
 VARZEAS_HORTOS_GALERIAS_ROUTE = "route.varzeas.hortos_galerias_transferencia"
+VARZEAS_GALERIAS_CAMARA_ROUTE = "route.varzeas.galerias_camara_matriz"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
 BOSQUE_BRAZIER = "tdo.brazier.galhos_mortos"
@@ -941,6 +945,79 @@ VARZEAS_HEMARIS_WARDEN = Creature(
     ),
     ai_priority=("placa_lavavel", "marca_triagem", "queda_suporte"),
 )
+VARZEAS_DUNGEON_TRANSFUSED = Creature(
+    "transfundido", "Transfundido", "common", "balanced", 37, 37, 0,
+    ("golpe_assimetrico", "ferida_reaberta"),
+    (
+        ("golpe_assimetrico", "Golpe Assimétrico", D("1.00"), 0, D(0), 0),
+        ("ferida_reaberta", "Ferida Reaberta", D("0.90"), 0, D(0), 0, "bleed", 1, False, 2),
+    ),
+)
+VARZEAS_DUNGEON_CURATOR = Creature(
+    "curador_vazio", "Curador Vazio", "elite", "controller", 37, 37, 0,
+    ("braco_suporte", "cauterizacao_inadequada", "placa_procedimento", "intervencao_brusca"),
+    (
+        ("braco_suporte", "Braço de Suporte", D("1.00"), 0, D(0), 0),
+        ("cauterizacao_inadequada", "Cauterização Inadequada", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "attack"),
+        ("placa_procedimento", "Placa de Procedimento", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("1.00"), 2, True),
+        ("intervencao_brusca", "Intervenção Brusca", D("1.70"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("placa_procedimento", "cauterizacao_inadequada", "intervencao_brusca"),
+)
+VARZEAS_DUNGEON_PERSISTENT = Creature(
+    "o_persistente", "O Persistente", "boss", "balanced", 37, 37, 0,
+    ("golpe_mantido", "sutura_forcada", "protocolo_continuidade", "manutencao_repetida", "intervencao_final"),
+    (
+        ("golpe_mantido", "Golpe Mantido", D("1.00"), 0, D(0), 0),
+        ("sutura_forcada", "Sutura Forçada", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+        ("protocolo_continuidade", "Protocolo de Continuidade", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), 2, True, "self", None, None, None, (), (), D("0.50"), D("0.08")),
+        ("manutencao_repetida", "Manutenção Repetida", D(0), 0, D(0), 0, None, 0, False, 5, None, D(0), D(0), 0, False, "self", None, D("0.65"), 2, (), (), D("0.50"), D(0), D(0), D(0), D(0), D("0.40"), 0, D(0), D(0), D("0.05")),
+        ("intervencao_final", "Intervenção Final", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("intervencao_final", "manutencao_repetida", "protocolo_continuidade", "sutura_forcada"),
+)
+VARZEAS_DUNGEON_CONDUCTOR = Creature(
+    "condutor_rubro", "Condutor Rubro", "elite", "armored", 40, 40, 0,
+    ("impacto_valvula", "linha_pressurizada", "descarga_fluxo", "fecho_seguranca"),
+    (
+        ("impacto_valvula", "Impacto de Válvula", D("1.05"), 0, D(0), 0),
+        ("linha_pressurizada", "Linha Pressurizada", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.95"), 2, True),
+        ("descarga_fluxo", "Descarga de Fluxo", D("1.30"), 0, D(0), 0, None, 0, False, 3),
+        ("fecho_seguranca", "Fecho de Segurança", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("linha_pressurizada", "fecho_seguranca", "descarga_fluxo"),
+)
+VARZEAS_DUNGEON_EXECUTOR = Creature(
+    "executor_hemaris", "Executor de Hemaris", "elite", "brute", 40, 40, 0,
+    ("golpe_contencao_executor", "fixar_incidente", "resposta_emergencia", "imobilizacao_pesada"),
+    (
+        ("golpe_contencao_executor", "Golpe de Contenção", D("1.10"), 0, D(0), 0),
+        ("fixar_incidente", "Fixar Incidente", D("0.90"), 0, D("0.15"), 2, None, 0, False, 3, "agility"),
+        ("resposta_emergencia", "Resposta de Emergência", D("1.40"), 0, D(0), 0, None, 0, False, 3),
+        ("imobilizacao_pesada", "Imobilização Pesada", D("1.80"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("imobilizacao_pesada", "fixar_incidente", "resposta_emergencia"),
+)
+VARZEAS_DUNGEON_TRANSFER_HEART = Creature(
+    "coracao_transferencia", "Coração de Transferência", "boss", "controller", 40, 40, 0,
+    ("pulso_bomba", "pressao_linha", "linha_aberta", "linha_fechada", "transferencia_final"),
+    (
+        ("pulso_bomba", "Pulso de Bomba", D("0.80"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+        ("pressao_linha", "Pressão de Linha", D("1.00"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+        ("linha_aberta", "Linha Aberta", D(0), 0, D(0), 0, None, 0, False, 5, None, D(0), D(0), 0, False, "self"),
+        ("linha_fechada", "Linha Fechada", D(0), 0, D(0), 0, None, 0, False, 5, None, D(0), D(0), 2, True, "self", None, None, None, (), (), D("0.50"), D("0.08")),
+        ("transferencia_final", "Transferência Final", D("1.10"), 0, D(0), 0, None, 0, True, 5, None, D(0), D(0), 0, False, "all_opponents"),
+    ),
+    ai_priority=("transferencia_final", "linha_fechada", "linha_aberta", "pressao_linha", "pulso_bomba"),
+)
+VARZEAS_DUNGEON_CREATURES = (
+    VARZEAS_DUNGEON_TRANSFUSED,
+    VARZEAS_DUNGEON_CURATOR,
+    VARZEAS_DUNGEON_PERSISTENT,
+    VARZEAS_DUNGEON_CONDUCTOR,
+    VARZEAS_DUNGEON_EXECUTOR,
+    VARZEAS_DUNGEON_TRANSFER_HEART,
+)
 VARZEAS_CREATURES = (
     VARZEAS_SALMOURA_HOUND,
     VARZEAS_IRON_HERON,
@@ -1305,6 +1382,7 @@ CREATURE_CATALOG = (
     *VDE_CREATURES,
     *VDE_DUNGEON_CREATURES,
     *VARZEAS_CREATURES,
+    *VARZEAS_DUNGEON_CREATURES,
     *NARETH_CREATURES,
     *NARETH_DUNGEON_BESTIARY_CREATURES,
     *CAMPAIGN_BOSS_CREATURES,

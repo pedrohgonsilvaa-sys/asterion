@@ -7,6 +7,7 @@ from asterion.infrastructure.db.models import (
     CodexEntry,
     ExplorationAttempt,
     Quest,
+    Unlock,
 )
 
 DIQUES_UNIQUES = (
@@ -55,6 +56,37 @@ async def reconcile_varzeas_feats(session, character) -> None:
     )
     if p22_complete:
         await _ensure(session, character.id, "feat.varzeas.transferencia")
+
+    p23_complete = await session.scalar(
+        select(Quest.id).where(
+            Quest.character_id == character.id,
+            Quest.quest_id == "P23",
+            Quest.status == "completed",
+        )
+    )
+    if p23_complete:
+        await _ensure(session, character.id, "feat.varzeas.persistencia_tem_preco")
+
+    for family_id, feat_id in (
+        (
+            "dungeon.varzeas.enfermaria_afundada",
+            "feat.varzeas.sem_paciente",
+        ),
+        (
+            "dungeon.varzeas.cisterna_transferencia",
+            "feat.varzeas.fluxo_contido",
+        ),
+    ):
+        first_clear = await session.scalar(
+            select(Unlock.id)
+            .where(
+                Unlock.character_id == character.id,
+                Unlock.unlock_id.like(f"{family_id}.first_clear.%"),
+            )
+            .limit(1)
+        )
+        if first_clear:
+            await _ensure(session, character.id, feat_id)
 
     hemaris_recorded = await session.scalar(
         select(CodexEntry.id).where(

@@ -120,3 +120,29 @@ async def test_legacy_dungeon_start_callback_still_targets_the_crypt():
     service.start_solo.assert_awaited_once_with(
         actor, "stable", "dungeon.tdo.cripta_ocaso"
     )
+
+
+@pytest.mark.parametrize(
+    ("family_key", "family_id"),
+    (
+        ("i", "dungeon.varzeas.enfermaria_afundada"),
+        ("t", "dungeon.varzeas.cisterna_transferencia"),
+    ),
+)
+@pytest.mark.asyncio
+async def test_varzeas_dungeon_start_callback_resolves_family(family_key, family_id):
+    actor = 774414
+    service = AsyncMock()
+    service.start_solo.return_value = None
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(dungeon_router(service, {}))
+    bot = _telegram()
+
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update(
+            f"dungeon:start:{family_key}:s", update_id=774415, actor=actor
+        ),
+    )
+
+    service.start_solo.assert_awaited_once_with(actor, "stable", family_id)

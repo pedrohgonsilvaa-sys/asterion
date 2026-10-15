@@ -62,6 +62,20 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
             await service.detail(query.from_user.id, "dungeon.nareth.observatorio_afundado"),
         )
 
+    @router.callback_query(F.data == "dungeon:varzeas-infirmary")
+    async def varzeas_infirmary(query: CallbackQuery):
+        await show(
+            query,
+            await service.detail(query.from_user.id, "dungeon.varzeas.enfermaria_afundada"),
+        )
+
+    @router.callback_query(F.data == "dungeon:varzeas-cistern")
+    async def varzeas_cistern(query: CallbackQuery):
+        await show(
+            query,
+            await service.detail(query.from_user.id, "dungeon.varzeas.cisterna_transferencia"),
+        )
+
     @router.callback_query(F.data.startswith("dungeon:group:"))
     async def prepare_group(query: CallbackQuery):
         try:
@@ -73,6 +87,8 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "s": "dungeon.vde.santuario_no_antigo",
                 "n": "dungeon.nareth.galerias_meridiano",
                 "o": "dungeon.nareth.observatorio_afundado",
+                "i": "dungeon.varzeas.enfermaria_afundada",
+                "t": "dungeon.varzeas.cisterna_transferencia",
             }[family_key]
             difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
                 difficulty_key
@@ -93,6 +109,8 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "s": "dungeon.vde.santuario_no_antigo",
                 "n": "dungeon.nareth.galerias_meridiano",
                 "o": "dungeon.nareth.observatorio_afundado",
+                "i": "dungeon.varzeas.enfermaria_afundada",
+                "t": "dungeon.varzeas.cisterna_transferencia",
             }[family_key]
             difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
                 difficulty_key
@@ -177,6 +195,8 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "s": "dungeon.vde.santuario_no_antigo",
                 "n": "dungeon.nareth.galerias_meridiano",
                 "o": "dungeon.nareth.observatorio_afundado",
+                "i": "dungeon.varzeas.enfermaria_afundada",
+                "t": "dungeon.varzeas.cisterna_transferencia",
             }.get(pieces[2])
             suffix = pieces[3]
         else:

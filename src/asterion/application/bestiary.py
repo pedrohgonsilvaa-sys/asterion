@@ -62,6 +62,41 @@ VARZEAS_DISTINCTIVE_ELITE_MASTERY = {
         "action:marca_extracao",
         "action:extracao_forcada",
     },
+    "curador_vazio": {
+        "first_victory",
+        "action:cauterizacao_inadequada",
+        "action:placa_procedimento",
+        "action:intervencao_brusca",
+    },
+    "condutor_rubro": {
+        "first_victory",
+        "action:linha_pressurizada",
+        "action:descarga_fluxo",
+        "action:fecho_seguranca",
+    },
+    "executor_hemaris": {
+        "first_victory",
+        "action:fixar_incidente",
+        "action:resposta_emergencia",
+        "action:imobilizacao_pesada",
+    },
+}
+
+VARZEAS_DISTINCTIVE_BOSS_MASTERY = {
+    "o_persistente": {
+        "first_victory",
+        "phase:persistencia",
+        "phase:sem_alta",
+        "action:protocolo_continuidade",
+        "action:manutencao_repetida",
+        "action:intervencao_final",
+    },
+    "coracao_transferencia": {
+        "first_victory",
+        "action:linha_aberta",
+        "action:linha_fechada",
+        "action:transferencia_final",
+    },
 }
 
 NARETH_DISTINCTIVE_BOSS_MASTERY = {
@@ -315,6 +350,17 @@ class BestiaryRecorder:
                 if entry.bkp >= 8
                 else "observed"
             )
+        elif creature_id in VARZEAS_DISTINCTIVE_BOSS_MASTERY:
+            required = VARZEAS_DISTINCTIVE_BOSS_MASTERY[creature_id]
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
         elif creature_id in NARETH_DISTINCTIVE_ELITE_MASTERY:
             await self.add_evidence(
                 session, entry, character_id, creature_id, "elite", "elite", 8
@@ -530,6 +576,17 @@ class BestiaryRecorder:
             )
         elif creature_id in NARETH_DISTINCTIVE_BOSS_MASTERY:
             required = NARETH_DISTINCTIVE_BOSS_MASTERY[creature_id]
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
+        elif creature_id in VARZEAS_DISTINCTIVE_BOSS_MASTERY:
+            required = VARZEAS_DISTINCTIVE_BOSS_MASTERY[creature_id]
             entry.stage = (
                 "dominated"
                 if required.issubset(evidence_ids)
@@ -821,7 +878,9 @@ class BestiaryRecorder:
             ).all()
         )
         required = (
-            NARETH_DISTINCTIVE_BOSS_MASTERY[creature_id]
+            VARZEAS_DISTINCTIVE_BOSS_MASTERY[creature_id]
+            if creature_id in VARZEAS_DISTINCTIVE_BOSS_MASTERY
+            else NARETH_DISTINCTIVE_BOSS_MASTERY[creature_id]
             if creature_id in NARETH_DISTINCTIVE_BOSS_MASTERY
             else
             {

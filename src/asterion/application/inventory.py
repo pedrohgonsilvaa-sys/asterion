@@ -72,6 +72,8 @@ MATERIAL_LABELS = {
     "material.varzeas.soro_antigo": "Soro Antigo",
     "material.varzeas.catalisador_elite_iv": "Catalisador de Elite IV",
     "material.varzeas.fragmento_aprimoramento_iv": "Fragmento de Aprimoramento IV",
+    "material.varzeas.nucleo_enfermaria_afundada": "Núcleo da Enfermaria Afundada",
+    "material.varzeas.nucleo_cisterna_transferencia": "Núcleo da Cisterna de Transferência",
 }
 
 @dataclass(frozen=True)

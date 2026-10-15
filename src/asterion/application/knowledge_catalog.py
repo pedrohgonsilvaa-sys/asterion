@@ -111,6 +111,12 @@ CODEX_ENTRIES = (
     CodexPresentation("codex.history.projeto_hemaris_registro_inicial", "Projeto Hemaris — Registro Inicial", "history", 300),
     CodexPresentation("codex.history.transferencia", "Transferência", "history", 310),
     CodexPresentation("codex.mystery.protocolos_sem_paciente", "Protocolos sem Paciente", "mysteries", 311),
+    CodexPresentation("codex.location.enfermaria_afundada", "Enfermaria Afundada", "regions", 312, "varzeas.location.enfermaria_afundada"),
+    CodexPresentation("codex.history.restituicao_e_persistencia", "Restituição e Persistência", "history", 313),
+    CodexPresentation("codex.mystery.linhas_transferencia_ativas", "Linhas de Transferência Ativas", "mysteries", 315),
+    CodexPresentation("codex.history.protocolos_de_emergencia", "Protocolos de Emergência", "history", 316),
+    CodexPresentation("codex.history.projeto_hemaris_custos_da_emergencia", "Projeto Hemaris — Custos da Emergência", "history", 317),
+    CodexPresentation("codex.history.origem_ancestral_alteracoes_hemarias", "Origem Ancestral das Alterações Hemárias", "history", 318),
     CodexPresentation("codex.figure.talen_orm", "Talen Orm", "figures", 50),
     CodexPresentation("codex.location.canais_secos", "Canais Secos", "regions", 170, "nareth.location.canais_secos"),
     CodexPresentation("codex.location.galerias_do_meridiano", "Galerias do Meridiano", "regions", 175, "nareth.location.galerias_do_meridiano"),
@@ -686,6 +692,34 @@ CODEX_FRAGMENTS = {
         "Rotinas sem paciente válido",
         "As rotinas observadas continuavam preparando tratamento sem paciente válido. O registro descreve a ausência de contexto humano adequado sem estabelecer a origem ou o desfecho desses protocolos.",
     ),
+    "codex.fragment.varzeas.enfermaria.afundada": FragmentPresentation(
+        "Ala de triagem submersa",
+        "A Enfermaria Afundada continha salas de triagem, retenção e persistência. As rotinas e equipamentos mostram manutenção clínica repetida, sem identificar responsáveis políticos.",
+    ),
+    "codex.fragment.varzeas.enfermaria.rotinas_de_suporte": FragmentPresentation(
+        "Rotinas de suporte",
+        "Registros da Enfermaria descrevem procedimentos de suporte que continuavam depois que o contexto de atendimento se perdeu.",
+    ),
+    "codex.fragment.varzeas.cisterna.transferencia": FragmentPresentation(
+        "Canais da Cisterna",
+        "A Cisterna armazenava e redistribuía recursos biológicos por linhas técnicas. O nome funcional não implica transferência espiritual ou necromancia.",
+    ),
+    "codex.fragment.varzeas.cisterna.linhas_ativas": FragmentPresentation(
+        "Linhas ativas",
+        "As linhas ainda mantinham estados de fluxo e contenção. A observação não determina por si só quem operava os protocolos.",
+    ),
+    "codex.fragment.varzeas.s23.protocolos_emergencia": FragmentPresentation(
+        "Registros de emergência",
+        "Marcações de emergência aparecem em linhas de transferência abertas fora do contexto normal. Os limites registrados foram reduzidos progressivamente; os documentos aqui reunidos ainda não identificam responsáveis políticos nem a cadeia integral dos acontecimentos.",
+    ),
+    "codex.fragment.varzeas.p23.custos_emergencia": FragmentPresentation(
+        "Custos da emergência",
+        "Os registros recompõem Restituição, Persistência, Transferência e Emergência. As práticas de emergência admitiram coerção e o uso de vida externa como recurso.",
+    ),
+    "codex.fragment.varzeas.p23.origem_ancestral": FragmentPresentation(
+        "Alterações herdadas",
+        "Evidências indicam alterações estáveis transmitidas por descendência em populações sobreviventes e sua contribuição aos ancestrais dos Hemários modernos. Hemários modernos não são experimentos, monstros, doença nem portadores de culpa coletiva; essa história não é prova de vampirismo.",
+    ),
 }
 
 
@@ -918,6 +952,24 @@ ACHIEVEMENTS = (
         "chronicles",
         "Concluiu P22 — Transferência.",
     ),
+    AchievementPresentation(
+        "feat.varzeas.sem_paciente",
+        "Sem Paciente",
+        "pve",
+        "Concluiu a Enfermaria Afundada pela primeira vez em uma dificuldade elegível.",
+    ),
+    AchievementPresentation(
+        "feat.varzeas.fluxo_contido",
+        "Fluxo Contido",
+        "pve",
+        "Concluiu a Cisterna de Transferência pela primeira vez em uma dificuldade elegível.",
+    ),
+    AchievementPresentation(
+        "feat.varzeas.persistencia_tem_preco",
+        "Persistência tem Preço",
+        "chronicles",
+        "Concluiu P23 — O Custo da Persistência.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
@@ -972,6 +1024,8 @@ VARZEAS_LOCATIONS = {
     "varzeas.location.hortos_hemaris": "Hortos Hemaris",
     "varzeas.location.galerias_transferencia": "Galerias de Transferência",
     "varzeas.location.cisterna_transferencia": "Cisterna de Transferência",
+    "varzeas.location.enfermaria_afundada": "Enfermaria Afundada",
+    "varzeas.location.camara_da_matriz": "Câmara da Matriz",
 }
 LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS | VARZEAS_LOCATIONS
 HABITAT_EVIDENCE_TO_LOCATION = {
@@ -1002,6 +1056,8 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     "Brejos do Pulso": "varzeas.location.brejos_do_pulso",
     "Galerias de Transferência": "varzeas.location.galerias_transferencia",
     "Cisterna de Transferência": "varzeas.location.cisterna_transferencia",
+    "Enfermaria Afundada": "varzeas.location.enfermaria_afundada",
+    "Câmara da Matriz": "varzeas.location.camara_da_matriz",
     **{location_id: location_id for location_id in VARZEAS_LOCATIONS},
 }
 MATERIAL_LABELS = {
@@ -1026,6 +1082,8 @@ MATERIAL_LABELS = {
     "material.varzeas.soro_antigo": "Soro Antigo",
     "material.varzeas.catalisador_elite_iv": "Catalisador de Elite IV",
     "material.varzeas.fragmento_aprimoramento_iv": "Fragmento de Aprimoramento IV",
+    "material.varzeas.nucleo_enfermaria_afundada": "Núcleo da Enfermaria Afundada",
+    "material.varzeas.nucleo_cisterna_transferencia": "Núcleo da Cisterna de Transferência",
 }
 
 
