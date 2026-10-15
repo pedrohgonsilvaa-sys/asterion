@@ -23,6 +23,7 @@ from asterion.application.road import (
     TRAVEL_LOCATIONS,
     VARZEAS_BREJOS,
     VARZEAS_DIQUES,
+    VARZEAS_GALERIAS,
     VARZEAS_HORTOS,
     VARZEAS_PORTO,
     VARZEAS_REGION,
@@ -89,6 +90,7 @@ def _location_copy(location: str) -> tuple[str, str]:
         VARZEAS_PORTO: "⚓",
         VARZEAS_BREJOS: "🌫️",
         VARZEAS_HORTOS: "🌱",
+        VARZEAS_GALERIAS: "🧱",
     }.get(location, "🔥")
     if location == VDE_BERCO:
         return f"🌿 {location}", f"{VDE_REGION} · Local de clímax"
@@ -97,7 +99,7 @@ def _location_copy(location: str) -> tuple[str, str]:
         NARETH_REGION
         if location in {NARETH_CAMPINAS, NARETH_POSTO, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL}
         else VARZEAS_REGION
-        if location in {VARZEAS_DIQUES, VARZEAS_PORTO, VARZEAS_BREJOS, VARZEAS_HORTOS}
+        if location in {VARZEAS_DIQUES, VARZEAS_PORTO, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS}
         else VDE_REGION
         if location in {VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO}
         else "Terras do Ocaso"
@@ -746,7 +748,7 @@ def render_current_local(
     if view.location in {
         ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS,
         VDE_CLAUSTRO, NARETH_CAMPINAS, NARETH_CANAIS, NARETH_CAMPOS,
-        NARETH_OBSERVATORIO, VARZEAS_DIQUES, VARZEAS_BREJOS, VARZEAS_HORTOS,
+        NARETH_OBSERVATORIO, VARZEAS_DIQUES, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS,
     }:
         lines.append("")
         if view.hunt_enabled:
@@ -787,6 +789,7 @@ def render_current_local(
         VARZEAS_DIQUES,
         VARZEAS_BREJOS,
         VARZEAS_HORTOS,
+        VARZEAS_GALERIAS,
     }:
         for destination in view.route_destinations:
             route_key, label = {
@@ -820,6 +823,8 @@ def render_current_local(
                 (VARZEAS_BREJOS, VARZEAS_PORTO): ("varzeas_porto", "Retornar ao Porto da Salmoura"),
                 (VARZEAS_BREJOS, VARZEAS_HORTOS): ("varzeas_hortos", "Seguir aos Hortos Hemaris"),
                 (VARZEAS_HORTOS, VARZEAS_BREJOS): ("varzeas_brejos", "Retornar aos Brejos do Pulso"),
+                (VARZEAS_HORTOS, VARZEAS_GALERIAS): ("varzeas_galerias", "Seguir às Galerias de Transferência"),
+                (VARZEAS_GALERIAS, VARZEAS_HORTOS): ("varzeas_hortos", "Retornar aos Hortos Hemaris"),
             }.get((view.location, destination), (None, None))
             if route_key is not None:
                 keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])

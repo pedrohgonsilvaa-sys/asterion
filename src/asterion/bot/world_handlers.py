@@ -34,6 +34,7 @@ from asterion.application.road import (
     RUINS,
     VARZEAS_BREJOS,
     VARZEAS_DIQUES,
+    VARZEAS_GALERIAS,
     VARZEAS_HORTOS,
     VARZEAS_PORTO,
     VARZEAS_REGION,
@@ -52,8 +53,10 @@ from asterion.application.s4 import S4Service
 from asterion.application.s5 import S5Service
 from asterion.application.s6 import S6Service
 from asterion.application.varzeas_missions import (
+    P22_ID,
     S19_ID,
     S20_ID,
+    S22_ID,
     VarzeasMissionService,
 )
 from asterion.application.vde_missions import (
@@ -1097,6 +1100,7 @@ def world_router(
             "road:route:varzeas_porto": VARZEAS_PORTO,
             "road:route:varzeas_brejos": VARZEAS_BREJOS,
             "road:route:varzeas_hortos": VARZEAS_HORTOS,
+            "road:route:varzeas_galerias": VARZEAS_GALERIAS,
         }.get(route_key)
         route_attempt_id = exploration_callback_attempt_id(query)
         route_has_attempt_id = len(route_parts) == 4
@@ -1217,7 +1221,7 @@ def world_router(
                         edit=True,
                     )
                     return
-            if varzeas_missions is not None and destination in {VARZEAS_DIQUES, VARZEAS_PORTO, VARZEAS_BREJOS, VARZEAS_HORTOS}:
+            if varzeas_missions is not None and destination in {VARZEAS_DIQUES, VARZEAS_PORTO, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS}:
                 await varzeas_missions.on_location(query.from_user.id)
                 view = await road.resume(query.from_user.id) or view
                 varzeas_view = await varzeas_missions.resume_active(query.from_user.id)
@@ -1329,7 +1333,7 @@ def world_router(
         vde_p10_view = vde_s10_view = vde_s11_view = vde_p11_view = vde_p12_view = None
         vde_s12_view = None
         nareth_views = (None,) * 8
-        varzeas_views = (None, None, None, None, None, None)
+        varzeas_views = (None,) * 8
         if varzeas_missions is not None and await varzeas_missions.region_access(query.from_user.id):
             varzeas_views = await varzeas_missions.board(query.from_user.id)
         (
@@ -1339,6 +1343,8 @@ def world_router(
             varzeas_s20_view,
             varzeas_p21_view,
             varzeas_s21_view,
+            varzeas_p22_view,
+            varzeas_s22_view,
         ) = varzeas_views
         if vde_missions is not None and await vde_missions.region_access(query.from_user.id):
             (
@@ -1387,6 +1393,9 @@ def world_router(
         elif p6_view is not None and p6_view.status == "active":
             text += "\n\n🔥 Missão Principal\n\n📜 O Vigia Partido · Em Andamento\nTerras do Ocaso · Nv.10"
             keyboard.append([InlineKeyboardButton(text="Principal", callback_data="p6:resume")])
+        elif varzeas_p22_view is not None and varzeas_p22_view.status == "active":
+            text += "\n\n🔥 Missão Principal\n\n📜 Transferência · Em Andamento\nVárzeas Carmesins · Nv.37"
+            keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
         elif varzeas_p21_view is not None and varzeas_p21_view.status == "active":
             text += "\n\n🔥 Missão Principal\n\n📜 Os Hortos Vazios · Em Andamento\nVárzeas Carmesins · Nv.35"
             keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
@@ -1626,6 +1635,16 @@ def world_router(
             else:
                 state, action = "Requer acesso aos Hortos, P21 ativa ou concluída e Nv.35", None
             secondary_entries.append((f"📜 {varzeas_s21_view.title} · {state}", action))
+        if varzeas_s22_view is not None:
+            if varzeas_s22_view.status == "active":
+                state, action = "Em Andamento", f"varzeas:mission:{S22_ID}"
+            elif varzeas_s22_view.status == "completed":
+                state, action = "Concluída", f"varzeas:mission:{S22_ID}"
+            elif varzeas_s22_view.available:
+                state, action = "Disponível", f"varzeas:start:{S22_ID}"
+            else:
+                state, action = "Requer P22 ativa/concluída, Enfermaria descoberta e Nv.37", None
+            secondary_entries.append((f"📜 {varzeas_s22_view.title} · {state}", action))
         if secondary_entries:
             secondary_lines = []
             secondary_buttons = []
@@ -2147,7 +2166,7 @@ def world_router(
             return None
         explore_state = None
         explore_message = None
-        if view.location in {ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, NARETH_CAMPINAS, VARZEAS_DIQUES, VARZEAS_BREJOS, VARZEAS_HORTOS} and view.explore_enabled:
+        if view.location in {ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, NARETH_CAMPINAS, VARZEAS_DIQUES, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS} and view.explore_enabled:
             explore_view = await road.prepare_explore(actor)
             if explore_view is not None:
                 if explore_view.kind == "explore_prepare":
@@ -2235,6 +2254,7 @@ def world_router(
             "nareth_campos", "nareth_observatorio",
             "varzeas_brejos",
             "varzeas_hortos",
+            "varzeas_galerias",
         } or not view.hunt_enabled:
             await restore_context(query)
             return
@@ -2259,6 +2279,7 @@ def world_router(
             "varzeas_diques": VARZEAS_DIQUES, "varzeas_porto": VARZEAS_PORTO,
             "varzeas_brejos": VARZEAS_BREJOS,
             "varzeas_hortos": VARZEAS_HORTOS,
+            "varzeas_galerias": VARZEAS_GALERIAS,
         }
         name = names.get(key)
         if name is None:
@@ -2276,7 +2297,7 @@ def world_router(
             "nareth_canais": "〰️", "nareth_campos": "🌾",
             "nareth_observatorio": "🧭",
             "nareth_camara": "🏛️",
-            "varzeas_diques": "🧱", "varzeas_porto": "⚓", "varzeas_brejos": "🌫️", "varzeas_hortos": "🌱",
+            "varzeas_diques": "🧱", "varzeas_porto": "⚓", "varzeas_brejos": "🌫️", "varzeas_hortos": "🌱", "varzeas_galerias": "🧱",
         }[key]
         level_band = {
             "road": "Nv. 1–10",
@@ -2299,6 +2320,7 @@ def world_router(
             "varzeas_porto": "Hub seguro",
             "varzeas_brejos": "Nv. 33–37",
             "varzeas_hortos": "Nv. 35–39",
+            "varzeas_galerias": "Nv. 37–40",
         }[key]
         region = (
             "Vales dos Enforcados"
@@ -2311,7 +2333,7 @@ def world_router(
         )
         lines = [f"{icon} {name}" + (" · Local Atual" if is_current else ""), f"{region} · {level_band}"]
         keyboard: list[list[InlineKeyboardButton]] = []
-        if key in {"charneca", "bosque", "ruinas", "vde_garganta", "vde_vigilia", "vde_mata", "vde_baixios", "vde_claustro", "nareth_campinas", "nareth_posto", "nareth_canais", "nareth_campos", "nareth_observatorio", "varzeas_diques", "varzeas_porto", "varzeas_brejos", "varzeas_hortos"}:
+        if key in {"charneca", "bosque", "ruinas", "vde_garganta", "vde_vigilia", "vde_mata", "vde_baixios", "vde_claustro", "nareth_campinas", "nareth_posto", "nareth_canais", "nareth_campos", "nareth_observatorio", "varzeas_diques", "varzeas_porto", "varzeas_brejos", "varzeas_hortos", "varzeas_galerias"}:
             known_brazier = None
             if is_current and road_view is not None and road_view.location == name:
                 known_brazier = road_view.brazier_label
@@ -2355,6 +2377,7 @@ def world_router(
                     VARZEAS_PORTO: "road:route:varzeas_porto",
                     VARZEAS_BREJOS: "road:route:varzeas_brejos",
                     VARZEAS_HORTOS: "road:route:varzeas_hortos",
+                    VARZEAS_GALERIAS: "road:route:varzeas_galerias",
                 }
                 for destination in road_view.route_destinations:
                     if destination == current:
@@ -2431,6 +2454,10 @@ def world_router(
                         label = "Seguir aos Hortos Hemaris"
                     elif current == VARZEAS_HORTOS and destination == VARZEAS_BREJOS:
                         label = "Retornar aos Brejos do Pulso"
+                    elif current == VARZEAS_HORTOS and destination == VARZEAS_GALERIAS:
+                        label = "Seguir às Galerias de Transferência"
+                    elif current == VARZEAS_GALERIAS and destination == VARZEAS_HORTOS:
+                        label = "Retornar aos Hortos Hemaris"
                     else:
                         continue
                     keyboard.append([
@@ -2480,6 +2507,7 @@ def world_router(
                     VARZEAS_PORTO: "Seguir para o Porto da Salmoura",
                     VARZEAS_BREJOS: "Seguir aos Brejos do Pulso",
                     VARZEAS_HORTOS: "Seguir aos Hortos Hemaris",
+                    VARZEAS_GALERIAS: "Seguir às Galerias de Transferência",
                 }[name]
                 lines.extend(["", "🧭 Rota terrestre · Disponível"])
                 keyboard.append([InlineKeyboardButton(text=route_label, callback_data=route_callback)])
@@ -2777,6 +2805,7 @@ def world_router(
             (VARZEAS_PORTO, "varzeas_porto"),
             (VARZEAS_BREJOS, "varzeas_brejos"),
             (VARZEAS_HORTOS, "varzeas_hortos"),
+            (VARZEAS_GALERIAS, "varzeas_galerias"),
         )
         visible = [(name, key) for name, key in ordered if name in known]
         lines = ["🥀 Várzeas Carmesins · Nv. 31–40", ""]
@@ -2788,7 +2817,7 @@ def world_router(
                 and any(destination == name for _id, _label, destination in road_view.brazier_destinations)
             )
             state = "Local Atual" if name == current else "Acessível" if route_open or brazier_open else "Conhecido"
-            icon = "🧱" if name == VARZEAS_DIQUES else "⚓" if name == VARZEAS_PORTO else "🌱" if name == VARZEAS_HORTOS else "🌫️"
+            icon = "🧱" if name in {VARZEAS_DIQUES, VARZEAS_GALERIAS} else "⚓" if name == VARZEAS_PORTO else "🌱" if name == VARZEAS_HORTOS else "🌫️"
             lines.append(f"{index} {icon} {name} · {state}")
             buttons.append(
                 InlineKeyboardButton(
@@ -2863,6 +2892,7 @@ def world_router(
             "varzeas_porto": VARZEAS_PORTO,
             "varzeas_brejos": VARZEAS_BREJOS,
             "varzeas_hortos": VARZEAS_HORTOS,
+            "varzeas_galerias": VARZEAS_GALERIAS,
         }
         destination = names.get(key)
         if destination is None:

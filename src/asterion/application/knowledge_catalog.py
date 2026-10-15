@@ -104,9 +104,13 @@ CODEX_ENTRIES = (
     CodexPresentation("codex.location.porto_da_salmoura", "Porto da Salmoura", "regions", 270, "varzeas.location.porto_da_salmoura"),
     CodexPresentation("codex.location.brejos_do_pulso", "Brejos do Pulso", "regions", 280, "varzeas.location.brejos_do_pulso"),
     CodexPresentation("codex.location.hortos_hemaris", "Hortos Hemaris", "regions", 290, "varzeas.location.hortos_hemaris"),
+    CodexPresentation("codex.location.galerias_transferencia", "Galerias de Transferência", "regions", 295, "varzeas.location.galerias_transferencia"),
+    CodexPresentation("codex.location.cisterna_transferencia", "Cisterna de Transferência", "regions", 296, "varzeas.location.cisterna_transferencia"),
     CodexPresentation("codex.mystery.pulso_sob_a_lama", "Pulso sob a Lama", "mysteries", 281),
     CodexPresentation("codex.figure.ilyan_korr", "Ilyan Korr", "figures", 70),
     CodexPresentation("codex.history.projeto_hemaris_registro_inicial", "Projeto Hemaris — Registro Inicial", "history", 300),
+    CodexPresentation("codex.history.transferencia", "Transferência", "history", 310),
+    CodexPresentation("codex.mystery.protocolos_sem_paciente", "Protocolos sem Paciente", "mysteries", 311),
     CodexPresentation("codex.figure.talen_orm", "Talen Orm", "figures", 50),
     CodexPresentation("codex.location.canais_secos", "Canais Secos", "regions", 170, "nareth.location.canais_secos"),
     CodexPresentation("codex.location.galerias_do_meridiano", "Galerias do Meridiano", "regions", 175, "nareth.location.galerias_do_meridiano"),
@@ -662,6 +666,26 @@ CODEX_FRAGMENTS = {
         "Placa técnica dos Hortos",
         "Uma placa relaciona cultivo e recuperação ao Projeto Hemaris. O registro comprova uma finalidade terapêutica/biológica inicial, sem esclarecer a operação completa do projeto.",
     ),
+    "codex.fragment.varzeas.galerias.braseiro_valvulas": FragmentPresentation(
+        "Braseiro das Válvulas",
+        "O Braseiro das Válvulas foi registrado junto aos reservatórios das Galerias de Transferência.",
+    ),
+    "codex.fragment.varzeas.galerias.entrada_cisterna": FragmentPresentation(
+        "Entrada da Cisterna",
+        "Uma entrada da Cisterna de Transferência foi registrada; sua descoberta não significa que o interior foi explorado.",
+    ),
+    "codex.fragment.varzeas.galerias.linha_retorno": FragmentPresentation(
+        "Linha de Retorno",
+        "Uma linha de retorno foi identificada entre os reservatórios, sem determinar por si só todo o funcionamento do sistema.",
+    ),
+    "codex.fragment.varzeas.p22.transferencia": FragmentPresentation(
+        "Registro técnico das Galerias",
+        "O termo Transferência aparece como função técnica. Os registros indicam que recursos biológicos externos podiam sustentar organismos em colapso, sem estabelecer a extensão da coerção ou os protocolos posteriores.",
+    ),
+    "codex.fragment.varzeas.s22.protocolos_sem_paciente": FragmentPresentation(
+        "Rotinas sem paciente válido",
+        "As rotinas observadas continuavam preparando tratamento sem paciente válido. O registro descreve a ausência de contexto humano adequado sem estabelecer a origem ou o desfecho desses protocolos.",
+    ),
 }
 
 
@@ -888,6 +912,12 @@ ACHIEVEMENTS = (
         "chronicles",
         "Registrou legitimamente Projeto Hemaris no Códice.",
     ),
+    AchievementPresentation(
+        "feat.varzeas.transferencia",
+        "Transferência",
+        "chronicles",
+        "Concluiu P22 — Transferência.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
@@ -940,6 +970,8 @@ VARZEAS_LOCATIONS = {
     "varzeas.location.porto_da_salmoura": "Porto da Salmoura",
     "varzeas.location.brejos_do_pulso": "Brejos do Pulso",
     "varzeas.location.hortos_hemaris": "Hortos Hemaris",
+    "varzeas.location.galerias_transferencia": "Galerias de Transferência",
+    "varzeas.location.cisterna_transferencia": "Cisterna de Transferência",
 }
 LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS | VARZEAS_LOCATIONS
 HABITAT_EVIDENCE_TO_LOCATION = {
@@ -968,6 +1000,8 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     "Diques Rubros": "varzeas.location.diques_rubros",
     "Porto da Salmoura": "varzeas.location.porto_da_salmoura",
     "Brejos do Pulso": "varzeas.location.brejos_do_pulso",
+    "Galerias de Transferência": "varzeas.location.galerias_transferencia",
+    "Cisterna de Transferência": "varzeas.location.cisterna_transferencia",
     **{location_id: location_id for location_id in VARZEAS_LOCATIONS},
 }
 MATERIAL_LABELS = {
@@ -1149,6 +1183,7 @@ CREATURE_PRESENTATION = {
     "enxerto_horto": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.hortos_hemaris",)),
     "mariposa_soro": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.hortos_hemaris",)),
     "coletor_hematico": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.hortos_hemaris",)),
+    "vigia_hemaris": CreaturePresentation(VARZEAS_REGION_ID, ("varzeas.location.galerias_transferencia",)),
     "arconte_invertido": CreaturePresentation(
         NARETH_REGION_ID, ("nareth.location.camara_do_arconte",)
     ),

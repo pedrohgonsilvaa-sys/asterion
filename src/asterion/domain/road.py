@@ -47,6 +47,7 @@ VARZEAS_DIQUES_LOCATION = "varzeas.location.diques_rubros"
 VARZEAS_PORTO_LOCATION = "varzeas.location.porto_da_salmoura"
 VARZEAS_BREJOS_LOCATION = "varzeas.location.brejos_do_pulso"
 VARZEAS_HORTOS_LOCATION = "varzeas.location.hortos_hemaris"
+VARZEAS_GALERIAS_LOCATION = "varzeas.location.galerias_transferencia"
 NARETH_CAMPINAS = "Campinas do Meridiano"
 NARETH_POSTO = "Posto de Nareth"
 NARETH_CANAIS = "Canais Secos"
@@ -58,6 +59,7 @@ VARZEAS_DIQUES = "Diques Rubros"
 VARZEAS_PORTO = "Porto da Salmoura"
 VARZEAS_BREJOS = "Brejos do Pulso"
 VARZEAS_HORTOS = "Hortos Hemaris"
+VARZEAS_GALERIAS = "Galerias de Transferência"
 VARZEAS_REGION = "Várzeas Carmesins"
 NARETH_BRAZIER_HORIZONTE = "nareth.brazier.horizonte"
 NARETH_BRAZIER_POSTO = "nareth.brazier.posto"
@@ -78,6 +80,7 @@ VARZEAS_DIQUES_BRAZIER = "varzeas.brazier.dique_alto"
 VARZEAS_PORTO_BRAZIER = "varzeas.brazier.porto"
 VARZEAS_BREJOS_BRAZIER = "varzeas.brazier.juncos_baixos"
 VARZEAS_HORTOS_BRAZIER = "varzeas.brazier.horto_seco"
+VARZEAS_GALERIAS_BRAZIER = "varzeas.brazier.valvulas"
 VARZEAS_DIQUES_HUNT_UNLOCK = "hunt.manual.varzeas.diques_rubros"
 VARZEAS_DIQUES_EXPLORE_UNLOCK = "explore.varzeas.diques_rubros"
 VARZEAS_DIQUES_ROUND_FAMILIARITY = "hunt_round.varzeas.diques_rubros"
@@ -90,6 +93,10 @@ VARZEAS_BREJOS_HORTOS_ROUTE = "route.varzeas.brejos_hortos"
 VARZEAS_HORTOS_HUNT_UNLOCK = "hunt.manual.varzeas.hortos_hemaris"
 VARZEAS_HORTOS_EXPLORE_UNLOCK = "explore.varzeas.hortos_hemaris"
 VARZEAS_HORTOS_ROUND_FAMILIARITY = "hunt_round.varzeas.hortos_hemaris"
+VARZEAS_GALERIAS_HUNT_UNLOCK = "hunt.manual.varzeas.galerias_transferencia"
+VARZEAS_GALERIAS_EXPLORE_UNLOCK = "explore.varzeas.galerias_transferencia"
+VARZEAS_GALERIAS_ROUND_FAMILIARITY = "hunt_round.varzeas.galerias_transferencia"
+VARZEAS_HORTOS_GALERIAS_ROUTE = "route.varzeas.hortos_galerias_transferencia"
 ROAD_BRAZIER = "tdo.brazier.estrada"
 CHARNECA_BRAZIER = "tdo.brazier.vento_morto"
 BOSQUE_BRAZIER = "tdo.brazier.galhos_mortos"
@@ -923,6 +930,17 @@ VARZEAS_HEMATIC_COLLECTOR = Creature(
     ),
     ai_priority=("reservatorio_blindado", "marca_extracao", "extracao_forcada"),
 )
+VARZEAS_HEMARIS_WARDEN = Creature(
+    "vigia_hemaris", "Vigia Hemaris", "uncommon", "armored", 38, 40, 33,
+    ("golpe_contencao", "placa_lavavel", "marca_triagem", "queda_suporte"),
+    (
+        ("golpe_contencao", "Golpe de Contenção", D("1.00"), 0, D(0), 0),
+        ("placa_lavavel", "Placa Lavável", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.95"), 2),
+        ("marca_triagem", "Marca de Triagem", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+        ("queda_suporte", "Queda de Suporte", D("1.65"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("placa_lavavel", "marca_triagem", "queda_suporte"),
+)
 VARZEAS_CREATURES = (
     VARZEAS_SALMOURA_HOUND,
     VARZEAS_IRON_HERON,
@@ -935,6 +953,7 @@ VARZEAS_CREATURES = (
     VARZEAS_GARDEN_GRAFT,
     VARZEAS_SERUM_MOTH,
     VARZEAS_HEMATIC_COLLECTOR,
+    VARZEAS_HEMARIS_WARDEN,
 )
 
 NARETH_CREATURES = (
@@ -1346,6 +1365,7 @@ VARIANT_POOL = {
     "enxerto_horto": ("resistant", "furious"),
     "mariposa_soro": ("agile", "furious"),
     "coletor_hematico": (),
+    "vigia_hemaris": ("resistant", "furious"),
 }
 
 EQUIPMENT_CATALOG = (
@@ -1480,6 +1500,7 @@ LOCATION_LEVEL_BANDS = {
     "Porto da Salmoura": (31, 34),
     "Brejos do Pulso": (33, 37),
     "Hortos Hemaris": (35, 39),
+    "Galerias de Transferência": (37, 40),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -1921,6 +1942,20 @@ VARZEAS_HORTOS_PROFILE = HuntLocationProfile(
     round_familiarity=VARZEAS_HORTOS_ROUND_FAMILIARITY,
     explore_unlock=VARZEAS_HORTOS_EXPLORE_UNLOCK,
 )
+VARZEAS_GALERIAS_PROFILE = HuntLocationProfile(
+    local_id=VARZEAS_GALERIAS_LOCATION,
+    label=VARZEAS_GALERIAS,
+    creature_weights=(
+        ("enxerto_horto", 34),
+        ("mariposa_soro", 30),
+        ("vigia_hemaris", 33),
+        ("coletor_hematico", 3),
+    ),
+    variant_chance=18,
+    hunt_unlock=VARZEAS_GALERIAS_HUNT_UNLOCK,
+    round_familiarity=VARZEAS_GALERIAS_ROUND_FAMILIARITY,
+    explore_unlock=VARZEAS_GALERIAS_EXPLORE_UNLOCK,
+)
 
 NARETH_CANAIS_EXPLORATION_PROFILE = ExplorationLocationProfile(
     local_id=NARETH_CANAIS_LOCATION,
@@ -2063,6 +2098,28 @@ VARZEAS_HORTOS_EXPLORATION_PROFILE = ExplorationLocationProfile(
         ExplorationResultDefinition("folhas_palidas", "atmospheric", "explore.varzeas.hortos.folhas_palidas", 33, "Folhas pálidas cobrem uma bandeja seca.", min_level=35),
     ),
 )
+VARZEAS_GALERIAS_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=VARZEAS_GALERIAS_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition("braseiro_valvulas", "great_discovery", "explore.varzeas.galerias.braseiro_valvulas", 50, "O Braseiro das Válvulas foi descoberto junto aos reservatórios.", min_level=37, unique=True),
+        ExplorationResultDefinition("entrada_cisterna", "great_discovery", "explore.varzeas.galerias.entrada_cisterna_transferencia", 50, "Uma entrada da Cisterna de Transferência foi descoberta; seu interior permanece fechado.", min_level=37, unique=True),
+        ExplorationResultDefinition("linha_retorno", "knowledge", "explore.varzeas.galerias.linha_retorno", 60, "Uma linha de retorno foi identificada entre os reservatórios.", min_level=37, unique=True),
+        ExplorationResultDefinition("reservatorio_vazio", "knowledge", "explore.varzeas.galerias.reservatorio_vazio", 40, "Um reservatório permanece vazio apesar das marcas de uso.", min_level=37),
+        ExplorationResultDefinition("valvula_marcada", "narrative", "explore.varzeas.galerias.valvula_marcada", 55, "Uma válvula conserva marcas de manutenção.", min_level=37),
+        ExplorationResultDefinition("tubo_parede", "narrative", "explore.varzeas.galerias.tubo_sob_parede", 45, "Um tubo segue sob a parede entre duas salas.", min_level=37),
+        ExplorationResultDefinition("enxerto_horto", "combat", "explore.varzeas.galerias.combat.enxerto_horto", 34, "Um Enxerto de Horto se move entre as estruturas.", min_level=37, creature_id="enxerto_horto"),
+        ExplorationResultDefinition("mariposa_soro", "combat", "explore.varzeas.galerias.combat.mariposa_soro", 30, "Uma Mariposa de Soro cruza a passagem.", min_level=37, creature_id="mariposa_soro"),
+        ExplorationResultDefinition("vigia_hemaris", "combat", "explore.varzeas.galerias.combat.vigia_hemaris", 36, "Um Vigia Hemaris guarda a linha de transporte.", min_level=37, creature_id="vigia_hemaris"),
+        ExplorationResultDefinition("ferro_salmoura", "resource", "explore.varzeas.galerias.ferro_salmoura", 35, "Ferro de Salmoura pode ser recolhido nas válvulas.", min_level=37),
+        ExplorationResultDefinition("soro_antigo", "resource", "explore.varzeas.galerias.soro_antigo", 35, "Soro Antigo permanece nos reservatórios.", min_level=37),
+        ExplorationResultDefinition("junco_ferruginoso", "resource", "explore.varzeas.galerias.junco_ferruginoso", 20, "Junco Ferruginoso pode ser recolhido junto aos canais.", min_level=37),
+        ExplorationResultDefinition("couro_varzea", "resource", "explore.varzeas.galerias.couro_varzea", 10, "Couro de Várzea pode ser obtido nesta área.", min_level=37),
+        ExplorationResultDefinition("eco_reservatorio", "atmospheric", "explore.varzeas.galerias.eco_reservatorio", 34, "Um eco curto retorna do reservatório.", min_level=37),
+        ExplorationResultDefinition("goteira_escura", "atmospheric", "explore.varzeas.galerias.goteira_escura", 33, "Uma goteira escura atravessa a parede.", min_level=37),
+        ExplorationResultDefinition("pressao_sem_fluxo", "atmospheric", "explore.varzeas.galerias.pressao_sem_fluxo", 33, "Há pressão no tubo sem fluxo visível.", min_level=37),
+    ),
+)
 
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
@@ -2080,6 +2137,7 @@ EXPLORATION_PROFILES = {
     VARZEAS_DIQUES_LOCATION: VARZEAS_DIQUES_EXPLORATION_PROFILE,
     VARZEAS_BREJOS_LOCATION: VARZEAS_BREJOS_EXPLORATION_PROFILE,
     VARZEAS_HORTOS_LOCATION: VARZEAS_HORTOS_EXPLORATION_PROFILE,
+    VARZEAS_GALERIAS_LOCATION: VARZEAS_GALERIAS_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
@@ -2099,6 +2157,7 @@ HUNT_PROFILES = {
     VARZEAS_DIQUES_LOCATION: VARZEAS_DIQUES_PROFILE,
     VARZEAS_BREJOS_LOCATION: VARZEAS_BREJOS_PROFILE,
     VARZEAS_HORTOS_LOCATION: VARZEAS_HORTOS_PROFILE,
+    VARZEAS_GALERIAS_LOCATION: VARZEAS_GALERIAS_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -2306,6 +2365,7 @@ VARZEAS_BASIC_MATERIAL_CREATURE_IDS = frozenset(
         "enxerto_horto",
         "mariposa_soro",
         "coletor_hematico",
+        "vigia_hemaris",
     }
 )
 
@@ -2462,6 +2522,10 @@ MATERIAL_POOLS = {
     "coletor_hematico": (
         ("material.varzeas.soro_antigo", 70),
         ("material.varzeas.ferro_de_salmoura", 30),
+    ),
+    "vigia_hemaris": (
+        ("material.varzeas.ferro_de_salmoura", 90),
+        ("material.varzeas.soro_antigo", 10),
     ),
 }
 

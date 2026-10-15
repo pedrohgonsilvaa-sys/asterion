@@ -23,8 +23,15 @@ from asterion.application.varzeas_missions import (
     P21_FRAGMENT,
     P21_ID,
     P21_REWARD_CHOICES,
+    P22_CODEX,
+    P22_FRAGMENT,
+    P22_ID,
     S20_ID,
     S21_ID,
+    S22_CODEX,
+    S22_FRAGMENT,
+    S22_ID,
+    VarzeasMissionService,
     VarzeasMissionView,
 )
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
@@ -45,7 +52,11 @@ from asterion.domain.road import (
     VARZEAS_DIQUES_EXPLORATION_PROFILE,
     VARZEAS_DIQUES_LOCATION,
     VARZEAS_DIQUES_PROFILE,
+    VARZEAS_GALERIAS_EXPLORATION_PROFILE,
+    VARZEAS_GALERIAS_LOCATION,
+    VARZEAS_GALERIAS_PROFILE,
     VARZEAS_GARDEN_GRAFT,
+    VARZEAS_HEMARIS_WARDEN,
     VARZEAS_HEMATIC_COLLECTOR,
     VARZEAS_HORTOS_EXPLORATION_PROFILE,
     VARZEAS_HORTOS_LOCATION,
@@ -419,6 +430,168 @@ def test_varzeas_horto_creature_actions_and_mastery_contract():
         "action:extracao_forcada",
     }
     assert VARZEAS_IMPORTANT_FIRST_VICTORY_XP["coletor_hematico"] == (40, 3084)
+
+
+def test_varzeas_transfer_galleries_hunt_explore_and_vigia_match_source():
+    profile = VARZEAS_GALERIAS_PROFILE
+    assert HUNT_PROFILES[VARZEAS_GALERIAS_LOCATION] == profile
+    assert LOCATION_LEVEL_BANDS["Galerias de Transferência"] == (37, 40)
+    assert profile.creature_weights == (
+        ("enxerto_horto", 34),
+        ("mariposa_soro", 30),
+        ("vigia_hemaris", 33),
+        ("coletor_hematico", 3),
+    )
+    assert profile.variant_chance == 18
+    assert {creature.creature_id for creature in hunt_pool(37, profile)} == {
+        "enxerto_horto",
+        "mariposa_soro",
+    }
+    assert {creature.creature_id for creature in hunt_pool(38, profile)} == {
+        "enxerto_horto",
+        "mariposa_soro",
+        "vigia_hemaris",
+        "coletor_hematico",
+    }
+    assert VARZEAS_HEMARIS_WARDEN in VARZEAS_CREATURES
+    warden = creature_for("vigia_hemaris")
+    assert (warden.category, warden.archetype, warden.unlock_level, warden.max_level) == (
+        "uncommon", "armored", 38, 40
+    )
+    assert tuple(action[1] for action in warden.actions) == (
+        "Golpe de Contenção",
+        "Placa Lavável",
+        "Marca de Triagem",
+        "Queda de Suporte",
+    )
+    assert warden.actions[1][12:14] == (Decimal("0.95"), 2)
+    assert warden.actions[1][9] == 3
+    assert warden.actions[2][2:6] == (
+        Decimal("0.85"), 0, Decimal("0.10"), 2
+    )
+    assert warden.actions[3][2] == Decimal("1.65")
+    assert warden.actions[3][8:10] == (True, 4)
+    assert VARIANT_POOL["vigia_hemaris"] == ("resistant", "furious")
+
+    expected_materials = {
+        "vigia_hemaris": (
+            ("material.varzeas.ferro_de_salmoura", 90),
+            ("material.varzeas.soro_antigo", 10),
+        ),
+        "coletor_hematico": (
+            ("material.varzeas.soro_antigo", 70),
+            ("material.varzeas.ferro_de_salmoura", 30),
+        ),
+    }
+    assert {key: MATERIAL_POOLS[key] for key in expected_materials} == expected_materials
+    for creature_id, pool in expected_materials.items():
+        draws = [
+            material_for(creature_id, f"persisted:material.basic.{ordinal}")
+            for ordinal in range(4)
+        ]
+        assert draws == [
+            material_for(creature_id, f"persisted:material.basic.{ordinal}")
+            for ordinal in range(4)
+        ]
+        assert set(draws) <= {material_id for material_id, _weight in pool}
+
+    exploration = VARZEAS_GALERIAS_EXPLORATION_PROFILE
+    assert EXPLORATION_PROFILES[VARZEAS_GALERIAS_LOCATION] == exploration
+    assert exploration.category_weights == tuple(EXPLORATION_CATEGORY_WEIGHTS.items())
+    actual = {
+        result.result_id: (result.category, result.weight, result.unique, result.creature_id)
+        for result in exploration.results
+    }
+    assert actual == {
+        "explore.varzeas.galerias.braseiro_valvulas": ("great_discovery", 50, True, None),
+        "explore.varzeas.galerias.entrada_cisterna_transferencia": (
+            "great_discovery",
+            50,
+            True,
+            None,
+        ),
+        "explore.varzeas.galerias.linha_retorno": ("knowledge", 60, True, None),
+        "explore.varzeas.galerias.reservatorio_vazio": ("knowledge", 40, False, None),
+        "explore.varzeas.galerias.valvula_marcada": ("narrative", 55, False, None),
+        "explore.varzeas.galerias.tubo_sob_parede": ("narrative", 45, False, None),
+        "explore.varzeas.galerias.combat.enxerto_horto": ("combat", 34, False, "enxerto_horto"),
+        "explore.varzeas.galerias.combat.mariposa_soro": ("combat", 30, False, "mariposa_soro"),
+        "explore.varzeas.galerias.combat.vigia_hemaris": ("combat", 36, False, "vigia_hemaris"),
+        "explore.varzeas.galerias.ferro_salmoura": ("resource", 35, False, None),
+        "explore.varzeas.galerias.soro_antigo": ("resource", 35, False, None),
+        "explore.varzeas.galerias.junco_ferruginoso": ("resource", 20, False, None),
+        "explore.varzeas.galerias.couro_varzea": ("resource", 10, False, None),
+        "explore.varzeas.galerias.eco_reservatorio": ("atmospheric", 34, False, None),
+        "explore.varzeas.galerias.goteira_escura": ("atmospheric", 33, False, None),
+        "explore.varzeas.galerias.pressao_sem_fluxo": ("atmospheric", 33, False, None),
+    }
+    assert {
+        result_id: VARZEAS_EXPLORATION_UNIQUE_XP[result_id]
+        for result_id in (
+            "explore.varzeas.galerias.braseiro_valvulas",
+            "explore.varzeas.galerias.entrada_cisterna_transferencia",
+            "explore.varzeas.galerias.linha_retorno",
+        )
+    } == {
+        "explore.varzeas.galerias.braseiro_valvulas": 7896,
+        "explore.varzeas.galerias.entrada_cisterna_transferencia": 7896,
+        "explore.varzeas.galerias.linha_retorno": 2468,
+    }
+    assert VarzeasMissionService._combat_config(P22_ID)[1:] == (
+        "Galerias de Transferência", 37, VARZEAS_HEMARIS_WARDEN
+    )
+
+
+def test_varzeas_p22_s22_codex_and_screens_stay_within_published_scope():
+    assert any(entry.entry_id == P22_CODEX for entry in CODEX_ENTRIES)
+    assert CODEX_FRAGMENTS[P22_FRAGMENT].title == "Registro técnico das Galerias"
+    assert any(entry.entry_id == S22_CODEX for entry in CODEX_ENTRIES)
+    assert CODEX_FRAGMENTS[S22_FRAGMENT].title == "Rotinas sem paciente válido"
+    assert "Emergência" not in CODEX_FRAGMENTS[P22_FRAGMENT].text
+    assert "Hemário moderno" not in CODEX_FRAGMENTS[S22_FRAGMENT].text
+
+    p22 = VarzeasMissionView(
+        character_id=uuid4(),
+        quest_id=P22_ID,
+        title="Transferência",
+        kind="combat_start",
+        status="active",
+        step=4,
+        state_version=7,
+        progress={},
+        location="Galerias de Transferência",
+        level=37,
+    )
+    p22_screen = render_varzeas_mission(p22)
+    assert "Vigia Hemaris Nv.37" in p22_screen.text
+    p22_callbacks = {
+        button.callback_data
+        for row in p22_screen.keyboard.inline_keyboard
+        for button in row
+    }
+    assert "varzeas:combat:P22:7:solo" in p22_callbacks
+    assert "varzeas:combat:P22:7:group" in p22_callbacks
+
+    s22 = VarzeasMissionView(
+        character_id=uuid4(),
+        quest_id=S22_ID,
+        title="Protocolos sem Paciente",
+        kind="inspect_automated_routines",
+        status="active",
+        step=1,
+        state_version=3,
+        progress={},
+        location="Hortos Hemaris",
+        level=37,
+    )
+    s22_screen = render_varzeas_mission(s22)
+    assert "Inspecione as rotinas automatizadas" in s22_screen.text
+    assert "Curador Vazio" not in s22_screen.text
+    assert not any(
+        button.callback_data.startswith("varzeas:combat:S22:")
+        for row in s22_screen.keyboard.inline_keyboard
+        for button in row
+    )
     assert VARZEAS_IMPORTANT_FIRST_VICTORY_XP["viuva_rubra"] == (37, 2718)
 
 

@@ -26,6 +26,7 @@ from asterion.application.road import (
     ROAD,
     RUINS,
     VARIANT_LABELS,
+    VARZEAS_REGION,
     RoadService,
     RoadView,
 )
@@ -58,6 +59,7 @@ from asterion.domain.road import (
     VDE_CLAUSTRO_LOCATION,
     VDE_GARGANTA_LOCATION,
     VDE_MATA_LOCATION,
+    VARZEAS_GALERIAS_LOCATION,
     create_road_combat,
     creature_for,
     hunt_profile_for_local_id,
@@ -197,6 +199,13 @@ class RoundService(RoadService):
                 return None
             if not await self._nareth_p13_completed(s, c.id):
                 return None
+        elif profile.local_id == VARZEAS_GALERIAS_LOCATION:
+            if (
+                world.region != VARZEAS_REGION
+                or c.level < 37
+                or not await self._nareth_mission_completed(s, c.id, "P22")
+            ):
+                return None
         elif profile.local_id == NARETH_POSTO_LOCATION:
             return None
         if profile.local_id in {
@@ -205,6 +214,7 @@ class RoundService(RoadService):
             VDE_BAIXIOS_LOCATION,
             VDE_CLAUSTRO_LOCATION,
             NARETH_CAMPINAS_LOCATION,
+            VARZEAS_GALERIAS_LOCATION,
         } and any(
             creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
         ):

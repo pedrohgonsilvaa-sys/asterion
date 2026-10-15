@@ -46,6 +46,16 @@ async def reconcile_varzeas_feats(session, character) -> None:
     if p21_complete:
         await _ensure(session, character.id, "feat.varzeas.hortos_vazios")
 
+    p22_complete = await session.scalar(
+        select(Quest.id).where(
+            Quest.character_id == character.id,
+            Quest.quest_id == "P22",
+            Quest.status == "completed",
+        )
+    )
+    if p22_complete:
+        await _ensure(session, character.id, "feat.varzeas.transferencia")
+
     hemaris_recorded = await session.scalar(
         select(CodexEntry.id).where(
             CodexEntry.character_id == character.id,
