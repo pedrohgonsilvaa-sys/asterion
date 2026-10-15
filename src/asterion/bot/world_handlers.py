@@ -2502,7 +2502,7 @@ def world_router(
                 f"{current_line}\n\n"
                 "🗺️ Regiões Conhecidas\n\n"
                 + "\n".join(
-                    f"{index} {'🌑' if name == 'Terras do Ocaso' else '🪢' if name == 'Vales dos Enforcados' else '🌾' if name == NARETH_REGION else '🩸'} {name}"
+                    f"{index} {'🌑' if name == 'Terras do Ocaso' else '🪢' if name == 'Vales dos Enforcados' else '🌾' if name == NARETH_REGION else '🥀'} {name}"
                     for index, name in enumerate(known_regions, start=1)
                 )
             )
@@ -2713,7 +2713,7 @@ def world_router(
         )
         ordered = ((VARZEAS_DIQUES, "varzeas_diques"), (VARZEAS_PORTO, "varzeas_porto"))
         visible = [(name, key) for name, key in ordered if name in known]
-        lines = ["🩸 Várzeas Carmesins · Nv. 31–40", ""]
+        lines = ["🥀 Várzeas Carmesins · Nv. 31–40", ""]
         buttons = []
         for index, (name, key) in enumerate(visible, start=1):
             route_open = bool(road_view is not None and name in road_view.route_destinations)

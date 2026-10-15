@@ -2,6 +2,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 from asterion.application.inventory import MATERIAL_LABELS as INVENTORY_MATERIAL_LABELS
+from asterion.application.knowledge_catalog import VARZEAS_REGION_LABEL
 from asterion.application.road import (
     _grade_catalyst_for_level,
     _grade_fragment_for_level,
@@ -40,6 +41,10 @@ def test_varzeas_global_settlement_supports_grade_iv_materials():
     }.items():
         assert MATERIAL_NAMES[material_id] == label
         assert INVENTORY_MATERIAL_LABELS[material_id] == label
+
+
+def test_varzeas_region_label_uses_canonical_global_icon():
+    assert VARZEAS_REGION_LABEL == "🥀 Várzeas Carmesins · Nv. 31–40"
 
 
 def test_varzeas_diques_hunt_pool_levels_weights_and_variants_match_source():

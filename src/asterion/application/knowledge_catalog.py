@@ -841,7 +841,7 @@ VDE_REGION_LABEL = "🪢 Vales dos Enforcados · Nv. 11–20"
 NARETH_REGION_ID = "nareth"
 NARETH_REGION_LABEL = "🌾 Planícies de Nareth · Nv. 21–30"
 VARZEAS_REGION_ID = "varzeas"
-VARZEAS_REGION_LABEL = "🩸 Várzeas Carmesins · Nv. 31–40"
+VARZEAS_REGION_LABEL = "🥀 Várzeas Carmesins · Nv. 31–40"
 TDO_LOCATIONS = {
     "tdo.location.estrada_das_cinzas": "Estrada das Cinzas",
     "tdo.location.refugio_do_ocaso": "Refúgio do Ocaso",
