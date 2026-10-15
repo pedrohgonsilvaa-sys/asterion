@@ -9,7 +9,6 @@ from asterion.application.knowledge_catalog import (
     CODEX_BY_ID,
     CODEX_FRAGMENTS,
 )
-from asterion.application.prologue import CombatView
 from asterion.application.varzeas_feats import (
     VARZEAS_BASE_CREATURES,
     VARZEAS_UNIQUE_EXPLORATION,

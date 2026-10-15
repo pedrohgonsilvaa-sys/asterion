@@ -58,7 +58,6 @@ from asterion.application.varzeas_missions import (
     S20_ID,
     S22_ID,
     S23_ID,
-    P24_ID,
     S24_ID,
     VarzeasMissionService,
 )
