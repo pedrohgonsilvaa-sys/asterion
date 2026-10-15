@@ -412,7 +412,10 @@ async def test_all_thirteen_tdo_feats_reconcile_from_facts_and_backfill_cosmetic
             assert await reconcile_tdo_feats(session, character) == ()
 
     assert len(TDO_FEAT_IDS) == 13
-    assert len([item for item in COSMETICS if item.achievement_id.startswith("feat.tdo.")]) == 12
+    assert len([
+        item for item in COSMETICS
+        if item.achievement_id is not None and item.achievement_id.startswith("feat.tdo.")
+    ]) == 12
 
 
 @pytest.mark.asyncio

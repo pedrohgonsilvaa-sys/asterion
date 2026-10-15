@@ -154,6 +154,7 @@ class Action:
     skip_if_target_dot_at_cap: str | None = None
     vampirism_cap_hp_fraction: Decimal | None = None
     skip_if_self_effect_active: str | None = None
+    skip_if_actor_last_action: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.hit_count < 1:
@@ -4408,6 +4409,8 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
         if action is None or enemy.cooldowns.get(action_id, 0) > enemy.opportunity:
             return False
         if action.phase_ids and state.phase_id not in action.phase_ids:
+            return False
+        if enemy.last_action in action.skip_if_actor_last_action:
             return False
         if (
             action.max_uses_per_combat is not None

@@ -13,21 +13,53 @@ from asterion.application.varzeas_missions import (
     P21_ID,
     P22_ID,
     P23_ID,
+    P24_ID,
     S19_ID,
     S20_ID,
     S21_ID,
     S22_ID,
     S23_ID,
+    S24_ID,
     VarzeasMissionView,
 )
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 from asterion.domain.road import (
     VARZEAS_BREJOS,
+    VARZEAS_CAMARA,
+    VARZEAS_DIQUES,
     VARZEAS_GALERIAS,
     VARZEAS_HORTOS,
     VARZEAS_PORTO,
 )
+
+_VARZEAS_ROUTE_EDGES = {
+    VARZEAS_DIQUES: ((VARZEAS_PORTO, "varzeas_porto"),),
+    VARZEAS_PORTO: ((VARZEAS_DIQUES, "varzeas_diques"), (VARZEAS_BREJOS, "varzeas_brejos")),
+    VARZEAS_BREJOS: ((VARZEAS_PORTO, "varzeas_porto"), (VARZEAS_HORTOS, "varzeas_hortos")),
+    VARZEAS_HORTOS: ((VARZEAS_BREJOS, "varzeas_brejos"), (VARZEAS_GALERIAS, "varzeas_galerias")),
+    VARZEAS_GALERIAS: ((VARZEAS_HORTOS, "varzeas_hortos"), (VARZEAS_CAMARA, "varzeas_camara")),
+    VARZEAS_CAMARA: ((VARZEAS_GALERIAS, "varzeas_galerias"),),
+}
+
+
+def _varzeas_route_callback(current: str, destination: str) -> str | None:
+    """Return the first published adjacent route hop toward a regional goal."""
+    pending = [(current, None)]
+    visited = {current}
+    cursor = 0
+    while cursor < len(pending):
+        location, first_hop = pending[cursor]
+        cursor += 1
+        for neighbor, route_key in _VARZEAS_ROUTE_EDGES.get(location, ()):
+            if neighbor in visited:
+                continue
+            hop = route_key if first_hop is None else first_hop
+            if neighbor == destination:
+                return hop
+            visited.add(neighbor)
+            pending.append((neighbor, hop))
+    return None
 
 
 def _button(text: str, callback: str) -> InlineKeyboardButton:
@@ -59,11 +91,38 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
                 combat_actor_key=view.combat_actor_key,
             )
         )
-        return Screen(
+        text = (
             f"📜 {title} · Várzeas Carmesins\n⚔️ Encontro Roteirizado · "
-            f"{escape(view.location)}\n\n{hud.text}",
+            f"{escape(view.location)}\n\n{hud.text}"
+        )
+        keyboard = hud.keyboard
+        if (
+            view.quest_id == P24_ID
+            and view.status == "active"
+            and view.step == 4
+            and view.combat.prepared_action == "transferencia_externa"
+            and view.combat.prepared_action_instance_id
+        ):
+            window_id = view.combat.prepared_action_instance_id
+            resolved = set((view.progress or {}).get("resolved_transfer_windows", ()))
+            used = set((view.progress or {}).get("reservoirs_used", ()))
+            available = next((item for item in ("a", "b", "c") if item not in used), None)
+            if window_id not in resolved and available is not None:
+                row = [_button(
+                    f"Acionar Reservatório {available.upper()}",
+                    f"varzeas:reservoir:{view.activity_id.hex}:{view.combat.version}:{available}",
+                )]
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[*(keyboard.inline_keyboard if keyboard else []), row]
+                )
+                text += (
+                    f"\n\n🛠️ Janela contextual disponível: Reservatório {available.upper()}. "
+                    "A ação registra a resolução; a potência publicada de Transferência Externa permanece."
+                )
+        return Screen(
+            text,
             "missions",
-            hud.keyboard,
+            keyboard,
             parse_mode=hud.parse_mode,
         )
     if view.kind == "unavailable":
@@ -78,6 +137,8 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             S22_ID: "P22 ativa ou concluída, Enfermaria Afundada descoberta e Nv.37",
             P23_ID: "P22 concluída e Nv.39 · início automático",
             S23_ID: "P22 concluída e Nv.38 no Porto da Salmoura",
+            P24_ID: "P23 concluída, Nv.40 e acesso à Câmara da Matriz · início automático",
+            S24_ID: "S22 e P23 concluídas, Nv.40 nos Hortos Hemaris",
         }[view.quest_id]
         text = f"📜 {title} · Indisponível\n\nRequer {gate}."
         rows.append([_button("← Missões", "world:missions")])
@@ -88,8 +149,9 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             S21_ID: "P21 ativa ou concluída · Nv.35 · Hortos Hemaris",
             S22_ID: "P22 ativa ou concluída · Enfermaria Afundada descoberta · Nv.37 · Hortos Hemaris",
             S23_ID: "P22 concluída · Nv.38 · Porto da Salmoura",
+            S24_ID: "S22 e P23 concluídas · Nv.40 · Hortos Hemaris",
         }[view.quest_id]
-        mission_type = "Missão Padrão" if view.quest_id in {S20_ID, S22_ID, S23_ID} else "Missão Curta"
+        mission_type = "Missão Longa" if view.quest_id == S24_ID else "Missão Padrão" if view.quest_id in {S20_ID, S22_ID, S23_ID} else "Missão Curta"
         text = f"📜 {title}\n{mission_type} · Várzeas Carmesins\n\nRequer {gate}."
         rows.extend(([_button("Aceitar Missão", f"varzeas:start:{view.quest_id}")], [_button("← Missões", "world:missions")]))
     elif view.kind == "completed":
@@ -104,6 +166,8 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             S22_ID: "31.710 XP · 500 Coroas · 2 Ferros · Junco · Soro",
             P23_ID: "49.350 XP · 860 Coroas · 2 Ferros · Junco · Soro",
             S23_ID: "33.110 XP · 500 Coroas · Ferro · Junco · 2 Soros",
+            P24_ID: "92.520 XP · 1.400 Coroas · 4 Ferros · 4 Soros · escolha de 1 Épico Nv.40",
+            S24_ID: "51.400 XP · 880 Coroas · 2 Ferros · 2 Couros · 2 Juncos · 2 Soros",
         }[view.quest_id]
         text = f"📜 {title} · Concluída\n\n✨ {reward}"
         rows.extend(([_button("← Missões", "world:missions")], [_button("🗺️ Mapa", "world:map")]))
@@ -293,6 +357,72 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             rows.append([_button(f"Seguir para {location}", f"road:route:{route}")])
         elif action is not None:
             rows.append([_button(label, f"varzeas:action:S23:{view.state_version}:{action}")])
+        text = f"📜 {title} · Várzeas Carmesins\n\n{description}\n\n📍 {escape(view.location)}"
+        rows.extend(([_button("📍 Local Atual", "world:local")], [_button("← Missões", "world:missions")]))
+    elif view.quest_id == P24_ID:
+        if view.kind == "enter_matrix_chamber":
+            description = "Acesse a Câmara da Matriz pela rota já aberta após P23."
+            route_key = _varzeas_route_callback(view.location, VARZEAS_CAMARA)
+            route = f"road:route:{route_key}" if route_key else "world:map"
+            rows.append([_button("Seguir à Câmara da Matriz", route)])
+        elif view.kind == "identify_rings_and_reservoirs":
+            description = "Identifique os anéis de regulação e os três Reservatórios ainda ativos."
+            action = "identify_rings_and_reservoirs"
+            rows.append([_button("Registrar leitura da Câmara", f"varzeas:action:P24:{view.state_version}:{action}")])
+        elif view.kind == "record_matrix_as_system":
+            description = "Registre explicitamente a Matriz Rubra como um sistema biológico central de regulação."
+            rows.append([_button("Registrar a Matriz como sistema", f"varzeas:action:P24:{view.state_version}:record_matrix_as_system")])
+        elif view.kind == "combat_start":
+            description = "A Matriz Rubra Nv.40 continua ativa."
+            rows.extend((
+                [_button("Enfrentar sozinho", f"varzeas:combat:P24:{view.state_version}:solo")],
+                [_button("Propor ao Grupo", f"varzeas:combat:P24:{view.state_version}:group")],
+            ))
+        elif view.kind == "register_matrix_core":
+            description = "A primeira vitória válida registra um Núcleo da Matriz Rubra. Confirme o registro individual."
+            rows.append([_button("Registrar o Núcleo", f"varzeas:action:P24:{view.state_version}:register_matrix_core")])
+        elif view.kind == "record_matrix_function":
+            description = "Registre a função central e o estado pós-Ruptura sem atribuir consciência ou natureza pessoal à Matriz."
+            rows.append([_button("Atualizar o Códice", f"varzeas:action:P24:{view.state_version}:record_matrix_function")])
+        elif view.kind == "choose_reward":
+            description = "Escolha exatamente um Épico Nv.40. A escolha é individual e permanente."
+            for key, label in (
+                ("guard", "Guarda de Transferência · Arma Secundária"),
+                ("seal", "Selo da Matriz Estável · Acessório"),
+                ("reliquary", "Relicário da Persistência · Artefato"),
+            ):
+                rows.append([_button(label, f"varzeas:choice:P24:{view.state_version}:{key}")])
+        else:
+            description = "A Câmara está registrada; conclua o clímax da Campanha."
+            rows.append([_button("Concluir P24", f"varzeas:action:P24:{view.state_version}:complete_climax")])
+        text = f"📜 {title} · Clímax das Várzeas\n\n{description}\n\n📍 {escape(view.location)}"
+        rows.extend(([_button("📍 Local Atual", "world:local")], [_button("← Missões", "world:missions")]))
+    elif view.quest_id == S24_ID:
+        steps = {
+            "find_dique_record": (VARZEAS_DIQUES, "Localize o registro fragmentado nos Diques Rubros.", "find_dique_record"),
+            "find_hortos_record": (VARZEAS_HORTOS, "Localize o registro fragmentado nos Hortos Hemaris.", "find_hortos_record"),
+            "find_galerias_record": (VARZEAS_GALERIAS, "Localize o registro fragmentado nas Galerias de Transferência.", "find_galerias_record"),
+            "confirm_biological_containment": (VARZEAS_GALERIAS, "Confirme que o protocolo histórico era de contenção biológica, não punição moral.", "confirm_biological_containment"),
+            "reconstruct_safe_route": (VARZEAS_GALERIAS, "Reconstrua a rota segura até o posto lacrado.", "reconstruct_safe_route"),
+            "open_quarantine_door": (VARZEAS_GALERIAS, "Abra a porta da quarentena sem atribuir culpa coletiva.", "open_quarantine_door"),
+            "record_observed_facts": (VARZEAS_GALERIAS, "Registre os fatos observáveis no Bestiário após o encontro.", "record_observed_facts"),
+            "conclude_with_ilyan": (VARZEAS_HORTOS, "Conclua o registro com Ilyan Korr.", "conclude_with_ilyan"),
+        }
+        if view.kind == "combat_start":
+            description = "O Custódio de Quarentena Nv.40 guarda o posto lacrado."
+            rows.extend((
+                [_button("Enfrentar sozinho", f"varzeas:combat:S24:{view.state_version}:solo")],
+                [_button("Propor ao Grupo", f"varzeas:combat:S24:{view.state_version}:group")],
+            ))
+        else:
+            location, description, action = steps.get(
+                view.kind, (VARZEAS_HORTOS, "Continue a investigação da quarentena.", "")
+            )
+            if view.location != location:
+                route_key = _varzeas_route_callback(view.location, location)
+                rows.append([_button(f"Seguir para {location}", f"road:route:{route_key}" if route_key else "world:map")])
+            elif action:
+                rows.append([_button("Registrar etapa", f"varzeas:action:S24:{view.state_version}:{action}")])
         text = f"📜 {title} · Várzeas Carmesins\n\n{description}\n\n📍 {escape(view.location)}"
         rows.extend(([_button("📍 Local Atual", "world:local")], [_button("← Missões", "world:missions")]))
     else:

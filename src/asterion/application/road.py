@@ -337,6 +337,7 @@ MATERIAL_LABELS = {
     "material.varzeas.fragmento_aprimoramento_iv": "Fragmento de Aprimoramento IV",
     "material.varzeas.nucleo_enfermaria_afundada": "Núcleo da Enfermaria Afundada",
     "material.varzeas.nucleo_cisterna_transferencia": "Núcleo da Cisterna de Transferência",
+    "material.varzeas.nucleo_matriz_rubra": "Núcleo da Matriz Rubra",
 }
 VDE_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.vde.garganta.ferro_enredado": "material.vde.ferro_enredado",

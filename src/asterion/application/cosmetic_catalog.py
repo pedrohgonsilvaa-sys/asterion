@@ -8,11 +8,13 @@ class CosmeticDefinition:
     cosmetic_id: str
     cosmetic_type: str
     name: str
-    achievement_id: str
+    achievement_id: str | None
 
     @property
     def origin(self) -> str:
-        return f"Feito · {self.achievement_id}"
+        if self.achievement_id:
+            return f"Feito · {self.achievement_id}"
+        return "Concessão não definida pela Fonte"
 
 
 COSMETICS = (
@@ -184,10 +186,57 @@ COSMETICS = (
         "Sobrevivente dos Vales",
         "feat.vde.entre_galhos_e_presas",
     ),
+    CosmeticDefinition(
+        "cosmetic.title.varzeas.andarilho_da_salmoura",
+        "title",
+        "Andarilho da Salmoura",
+        None,
+    ),
+    CosmeticDefinition(
+        "cosmetic.title.varzeas.guardiao_dos_diques",
+        "title",
+        "Guardião dos Diques",
+        None,
+    ),
+    CosmeticDefinition(
+        "cosmetic.title.varzeas.testemunha_de_hemaris",
+        "title",
+        "Testemunha de Hemaris",
+        None,
+    ),
+    CosmeticDefinition(
+        "cosmetic.title.varzeas.persistente_sem_protocolo",
+        "title",
+        "Persistente sem Protocolo",
+        None,
+    ),
+    CosmeticDefinition(
+        "cosmetic.frame.varzeas.ferruginosa", "frame", "Moldura Ferruginosa", None
+    ),
+    CosmeticDefinition(
+        "cosmetic.frame.varzeas.vidro_escurecido",
+        "frame",
+        "Moldura de Vidro Escurecido",
+        None,
+    ),
+    CosmeticDefinition(
+        "cosmetic.appearance.varzeas.sobrevivente",
+        "appearance",
+        "Sobrevivente das Várzeas",
+        None,
+    ),
+    CosmeticDefinition(
+        "cosmetic.appearance.varzeas.capa_porto_salmoura",
+        "appearance",
+        "Capa do Porto da Salmoura",
+        None,
+    ),
 )
 
 COSMETICS_BY_ID = {item.cosmetic_id: item for item in COSMETICS}
-COSMETIC_BY_ACHIEVEMENT = {item.achievement_id: item for item in COSMETICS}
+COSMETIC_BY_ACHIEVEMENT = {
+    item.achievement_id: item for item in COSMETICS if item.achievement_id is not None
+}
 COSMETIC_TYPES = ("appearance", "title", "emblem", "frame", "banner")
 COSMETIC_TYPE_LABELS = {
     "appearance": "🧍 Aparência · Visual",

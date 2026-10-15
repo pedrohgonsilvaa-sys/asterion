@@ -25,7 +25,7 @@ class CosmeticItemView:
     cosmetic_id: str
     cosmetic_type: str
     name: str
-    source_achievement_id: str
+    source_achievement_id: str | None
 
 
 @dataclass(frozen=True, slots=True)

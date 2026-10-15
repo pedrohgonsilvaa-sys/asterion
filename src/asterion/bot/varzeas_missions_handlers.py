@@ -14,11 +14,13 @@ from asterion.application.varzeas_missions import (
     P21_ID,
     P22_ID,
     P23_ID,
+    P24_ID,
     S19_ID,
     S20_ID,
     S21_ID,
     S22_ID,
     S23_ID,
+    S24_ID,
     VarzeasMissionService,
 )
 from asterion.bot.combat_ui import (
@@ -68,9 +70,25 @@ def varzeas_missions_router(service: VarzeasMissionService, images: dict[str, st
     @router.callback_query(F.data.startswith("varzeas:"))
     async def mission_action(query: CallbackQuery) -> None:
         parts = (query.data or "").split(":")
+        if len(parts) == 5 and parts[1] == "reservoir":
+            try:
+                view = await service.resolve_matrix_reservoir(
+                    query.from_user.id,
+                    UUID(hex=parts[2]),
+                    int(parts[3]),
+                    parts[4],
+                )
+            except (TypeError, ValueError, GroupError):
+                await query.answer("A janela expirou ou o encontro mudou.", show_alert=True)
+                return
+            if view is None:
+                await query.answer("A janela expirou ou o encontro mudou.", show_alert=True)
+                return
+            await show(query, view)
+            return
         if len(parts) < 3 or parts[2] not in {
             P19_ID, S19_ID, P20_ID, S20_ID, P21_ID, S21_ID, P22_ID, S22_ID,
-            P23_ID, S23_ID,
+            P23_ID, S23_ID, P24_ID, S24_ID,
         }:
             raise SkipHandler()
         try:
@@ -95,6 +113,10 @@ def varzeas_missions_router(service: VarzeasMissionService, images: dict[str, st
                     raise ValueError("invalid combat mode")
             elif parts[1] == "choice" and len(parts) == 5 and parts[2] == P21_ID:
                 view = await service.choose_p21_reward(
+                    query.from_user.id, int(parts[3]), parts[4]
+                )
+            elif parts[1] == "choice" and len(parts) == 5 and parts[2] == P24_ID:
+                view = await service.choose_p24_reward(
                     query.from_user.id, int(parts[3]), parts[4]
                 )
             else:

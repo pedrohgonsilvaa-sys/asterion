@@ -104,6 +104,9 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                         else None
                     ),
                     "phase_ids": tuple(value.get("phase_ids", ())),
+                    "skip_if_actor_last_action": tuple(
+                        value.get("skip_if_actor_last_action", ())
+                    ),
                     "self_effects": tuple(
                         ActionEffect(
                             **(effect | {"magnitude": Decimal(effect["magnitude"])})

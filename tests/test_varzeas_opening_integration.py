@@ -29,6 +29,8 @@ from asterion.application.varzeas_missions import (
     P22_REWARD_SOURCE,
     P23_ID,
     P23_REWARD_SOURCE,
+    P24_ID,
+    P24_REWARD_SOURCE,
     REGION,
     ROTAS_CODEX,
     S19_ID,
@@ -43,6 +45,8 @@ from asterion.application.varzeas_missions import (
     S22_REWARD_SOURCE,
     S23_ID,
     S23_REWARD_SOURCE,
+    S24_ID,
+    S24_REWARD_SOURCE,
     VarzeasMissionService,
 )
 from asterion.bot.road_ui import render_current_local
@@ -246,6 +250,68 @@ async def _seed_varzeas_hortos(
                 LocationDiscovery(character_id=character_id, location_id=VARZEAS_HORTOS_LOCATION),
             ]
         )
+    return character_id, sessions
+
+
+async def _seed_varzeas_p23_endgame(
+    database,
+    actor: int,
+    *,
+    level: int = 40,
+    location: str = VARZEAS_HORTOS,
+    s22_completed: bool = False,
+):
+    character_id, sessions = await _seed_varzeas_hortos(
+        database,
+        actor,
+        level=level,
+        p21_step=8,
+        p21_status="completed",
+    )
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        world = await session.get(WorldState, character_id)
+        assert character is not None and world is not None
+        character.level = level
+        world.location = location
+        session.add_all(
+            (
+                Quest(
+                    character_id=character_id,
+                    quest_id=P22_ID,
+                    title="Transferência",
+                    status="completed",
+                    step=8,
+                    content_version="varzeas-1.0.0",
+                    progress={"completed": True},
+                ),
+                Quest(
+                    character_id=character_id,
+                    quest_id=P23_ID,
+                    title="O Custo da Persistência",
+                    status="completed",
+                    step=8,
+                    content_version="varzeas-1.0.0",
+                    progress={"completed": True},
+                ),
+                Unlock(
+                    character_id=character_id,
+                    unlock_id=VARZEAS_CAMARA_ACCESS_UNLOCK,
+                ),
+            )
+        )
+        if s22_completed:
+            session.add(
+                Quest(
+                    character_id=character_id,
+                    quest_id=S22_ID,
+                    title="Protocolos sem Paciente",
+                    status="completed",
+                    step=6,
+                    content_version="varzeas-1.0.0",
+                    progress={"completed": True},
+                )
+            )
     return character_id, sessions
 
 
@@ -3037,3 +3103,259 @@ async def test_varzeas_p23_requires_p22_and_level_39(database, level, p22_comple
     view = await missions.resume(actor, P23_ID)
     assert view is not None and view.status is None
     assert await sessionless_quest(sessions, character_id, P23_ID) is None
+
+
+@pytest.mark.asyncio
+async def test_varzeas_p24_autostarts_at_level_40_without_optional_quests_or_dungeons(database):
+    actor = 993610
+    character_id, sessions = await _seed_varzeas_p23_endgame(
+        database,
+        actor,
+        level=39,
+        location=VARZEAS_CAMARA,
+    )
+    missions = VarzeasMissionService(sessions, "ocaso")
+    below_gate = await missions.resume(actor, P24_ID)
+    assert below_gate is not None and below_gate.kind == "unavailable"
+    assert await sessionless_quest(sessions, character_id, P24_ID) is None
+
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        assert character is not None
+        character.level = 40
+    started = await missions.resume(actor, P24_ID)
+    assert started is not None and started.status == "active" and started.step == 2
+
+    async with sessions() as session:
+        assert await session.scalar(
+            select(Quest.id).where(
+                Quest.character_id == character_id,
+                Quest.quest_id.in_((S22_ID, S23_ID, S24_ID)),
+            )
+        ) is None
+        assert await session.scalar(
+            select(func.count(DungeonRun.id)).where(
+                DungeonRun.character_id == character_id
+            )
+        ) == 0
+        assert await session.scalar(
+            select(Quest.status).where(
+                Quest.character_id == character_id,
+                Quest.quest_id == P23_ID,
+            )
+        ) == "completed"
+
+
+@pytest.mark.asyncio
+async def test_varzeas_p24_choice_reward_and_matrix_core_are_individual_and_idempotent(database):
+    actor = 993611
+    character_id, sessions = await _seed_varzeas_p23_endgame(
+        database,
+        actor,
+        level=40,
+        location=VARZEAS_CAMARA,
+    )
+    async with sessions.begin() as session:
+        session.add(
+            Quest(
+                character_id=character_id,
+                quest_id=P24_ID,
+                title="A Matriz Rubra",
+                status="active",
+                step=7,
+                state_version=4,
+                content_version="varzeas-1.0.0",
+                progress={"reservoirs_used": ["a"], "resolved_transfer_windows": []},
+            )
+        )
+    missions = VarzeasMissionService(sessions, "ocaso")
+
+    chosen = await missions.choose_p24_reward(actor, 4, "guard")
+    stale_choice = await missions.choose_p24_reward(actor, 4, "seal")
+    assert chosen is not None and chosen.step == 8 and chosen.progress["reward_choice"] == "guard"
+    assert stale_choice is not None and stale_choice.step == 8
+    assert stale_choice.progress["reward_choice"] == "guard"
+
+    completed = await missions.advance(actor, P24_ID, 5, "complete_climax")
+    stale_complete = await missions.advance(actor, P24_ID, 5, "complete_climax")
+    assert completed is not None and completed.status == "completed"
+    assert stale_complete is not None and stale_complete.status == "completed"
+
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        assert character is not None
+        await missions._grant_matrix_core(session, character)
+        await missions._grant_matrix_core(session, character)
+
+    async with sessions() as session:
+        reward = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == P24_REWARD_SOURCE,
+            )
+        )
+        assert reward is not None
+        components = list(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(
+                        RewardComponent.reward_event_id == reward.id
+                    )
+                )
+            ).all()
+        )
+        assert {(row.kind, row.item_id, row.quantity) for row in components} == {
+            ("xp", None, 92520),
+            ("crowns", None, 1400),
+            ("equipment", None, 1),
+            ("material", "material.varzeas.ferro_de_salmoura", 4),
+            ("material", "material.varzeas.soro_antigo", 4),
+        }
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == P24_REWARD_SOURCE,
+            )
+        ) == 1
+        core_event = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == "p24.matriz_rubra.first_victory.core",
+            )
+        )
+        assert core_event is not None
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == "p24.matriz_rubra.first_victory.core",
+            )
+        ) == 1
+        equipment = await session.scalar(
+            select(EquipmentItem).where(
+                EquipmentItem.character_id == character_id,
+                EquipmentItem.source_key == f"{P24_REWARD_SOURCE}:equipment:guard",
+            )
+        )
+        assert equipment is not None
+        assert (equipment.item_name, equipment.rarity, equipment.slot, equipment.item_level) == (
+            "Guarda de Transferência", "Épico", "Secundária", 40
+        )
+        assert equipment.bound is True
+        assert await session.scalar(
+            select(Unlock.id).where(
+                Unlock.character_id == character_id,
+                Unlock.unlock_id == "recipe.varzeas.matriz.regulacao",
+            )
+        ) is not None
+        assert await session.scalar(
+            select(Achievement.id).where(
+                Achievement.character_id == character_id,
+                Achievement.achievement_id == "feat.varzeas.matriz_silenciada",
+            )
+        ) is not None
+
+
+@pytest.mark.asyncio
+async def test_varzeas_s24_can_complete_before_p24_and_rewards_once(database):
+    actor = 993612
+    character_id, sessions = await _seed_varzeas_p23_endgame(
+        database,
+        actor,
+        level=40,
+        location=VARZEAS_HORTOS,
+        s22_completed=True,
+    )
+    missions = VarzeasMissionService(sessions, "ocaso")
+    offer = await missions.resume(actor, S24_ID)
+    assert offer is not None and offer.available is True
+    started = await missions.start(actor, S24_ID)
+    assert started is not None and started.status == "active"
+
+    async with sessions.begin() as session:
+        quest = await session.scalar(
+            select(Quest).where(
+                Quest.character_id == character_id,
+                Quest.quest_id == S24_ID,
+            )
+        )
+        assert quest is not None
+        quest.step = 9
+        quest.state_version = 8
+        quest.progress = {
+            "dique_record": True,
+            "hortos_record": True,
+            "galerias_record": True,
+            "containment_context_confirmed": True,
+            "safe_route_reconstructed": True,
+            "quarantine_door_opened": True,
+            "combat_victory": True,
+            "observed_facts_recorded": True,
+        }
+
+    completed = await missions.advance(actor, S24_ID, 8, "conclude_with_ilyan")
+    repeated = await missions.advance(actor, S24_ID, 8, "conclude_with_ilyan")
+    assert completed is not None and completed.status == "completed"
+    assert repeated is not None and repeated.status == "completed"
+
+    async with sessions() as session:
+        assert await session.scalar(
+            select(Quest.status).where(
+                Quest.character_id == character_id,
+                Quest.quest_id == P24_ID,
+            )
+        ) == "active"
+        event = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == S24_REWARD_SOURCE,
+            )
+        )
+        assert event is not None
+        components = list(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(
+                        RewardComponent.reward_event_id == event.id
+                    )
+                )
+            ).all()
+        )
+        assert {(row.kind, row.item_id, row.quantity) for row in components} == {
+            ("xp", None, 51400),
+            ("crowns", None, 880),
+            ("material", "material.varzeas.ferro_de_salmoura", 2),
+            ("material", "material.varzeas.couro_de_varzea", 2),
+            ("material", "material.varzeas.junco_ferruginoso", 2),
+            ("material", "material.varzeas.soro_antigo", 2),
+        }
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id == S24_REWARD_SOURCE,
+            )
+        ) == 1
+        assert await session.scalar(
+            select(Achievement.id).where(
+                Achievement.character_id == character_id,
+                Achievement.achievement_id == "feat.varzeas.quarentena_encerrada",
+            )
+        ) is not None
+        assert await session.scalar(
+            select(CodexFragment.id).where(
+                CodexFragment.character_id == character_id,
+                CodexFragment.entry_id == "codex.mystery.quarentena_sem_supervisao",
+                CodexFragment.fragment_id == "codex.fragment.varzeas.s24.quarentena_sem_supervisao",
+            )
+        ) is not None
+        assert await session.scalar(
+            select(BestiaryEvidence.id).where(
+                BestiaryEvidence.character_id == character_id,
+                BestiaryEvidence.creature_id == "custodio_quarentena",
+                BestiaryEvidence.evidence_id == "s24_observed_facts",
+            )
+        ) is not None
+        assert await session.scalar(
+            select(func.count(DungeonRun.id)).where(
+                DungeonRun.character_id == character_id
+            )
+        ) == 0

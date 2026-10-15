@@ -4,6 +4,7 @@ from sqlalchemy import select
 
 from asterion.infrastructure.db.models import (
     Achievement,
+    BestiaryEntry,
     CodexEntry,
     ExplorationAttempt,
     Quest,
@@ -13,6 +14,29 @@ from asterion.infrastructure.db.models import (
 DIQUES_UNIQUES = (
     "explore.varzeas.diques.comporta_primeiro_dique",
     "explore.varzeas.diques.agua_sobe_sem_chuva",
+)
+VARZEAS_UNIQUE_EXPLORATION = (
+    *DIQUES_UNIQUES,
+    "explore.varzeas.brejos.braseiro_juncos_baixos",
+    "explore.varzeas.brejos.entrada_enfermaria_afundada",
+    "explore.varzeas.brejos.pulso_de_pressao",
+    "explore.varzeas.hortos.braseiro_horto_seco",
+    "explore.varzeas.hortos.estufa_restituicao",
+    "explore.varzeas.hortos.canteiro_dupla_funcao",
+    "explore.varzeas.galerias.braseiro_valvulas",
+    "explore.varzeas.galerias.entrada_cisterna_transferencia",
+    "explore.varzeas.galerias.linha_retorno",
+)
+VARZEAS_BASE_CREATURES = (
+    "cao_salmoura",
+    "garca_ferruginosa",
+    "portador_rubro",
+    "aranha_junco",
+    "cervo_ferrugem",
+    "lampreia_varzea",
+    "enxerto_horto",
+    "mariposa_soro",
+    "vigia_hemaris",
 )
 
 
@@ -67,6 +91,20 @@ async def reconcile_varzeas_feats(session, character) -> None:
     if p23_complete:
         await _ensure(session, character.id, "feat.varzeas.persistencia_tem_preco")
 
+    for quest_id, feat_id in (
+        ("P24", "feat.varzeas.matriz_silenciada"),
+        ("S24", "feat.varzeas.quarentena_encerrada"),
+    ):
+        complete = await session.scalar(
+            select(Quest.id).where(
+                Quest.character_id == character.id,
+                Quest.quest_id == quest_id,
+                Quest.status == "completed",
+            )
+        )
+        if complete:
+            await _ensure(session, character.id, feat_id)
+
     for family_id, feat_id in (
         (
             "dungeon.varzeas.enfermaria_afundada",
@@ -111,6 +149,34 @@ async def reconcile_varzeas_feats(session, character) -> None:
     )
     if set(DIQUES_UNIQUES).issubset(resolved):
         await _ensure(session, character.id, "feat.varzeas.entre_os_diques")
+
+    all_unique = set(
+        (
+            await session.scalars(
+                select(ExplorationAttempt.result_id).where(
+                    ExplorationAttempt.character_id == character.id,
+                    ExplorationAttempt.status == "completed",
+                    ExplorationAttempt.result_id.in_(VARZEAS_UNIQUE_EXPLORATION),
+                )
+            )
+        ).all()
+    )
+    if set(VARZEAS_UNIQUE_EXPLORATION).issubset(all_unique):
+        await _ensure(session, character.id, "feat.varzeas.cartografo_carmesim")
+
+    dominated = set(
+        (
+            await session.scalars(
+                select(BestiaryEntry.creature_id).where(
+                    BestiaryEntry.character_id == character.id,
+                    BestiaryEntry.stage == "dominated",
+                    BestiaryEntry.creature_id.in_(VARZEAS_BASE_CREATURES),
+                )
+            )
+        ).all()
+    )
+    if set(VARZEAS_BASE_CREATURES).issubset(dominated):
+        await _ensure(session, character.id, "feat.varzeas.naturalista_das_varzeas")
 
 
 async def _ensure(session, character_id, achievement_id: str) -> None:

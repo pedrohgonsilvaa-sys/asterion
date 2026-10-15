@@ -58,6 +58,8 @@ from asterion.application.varzeas_missions import (
     S20_ID,
     S22_ID,
     S23_ID,
+    P24_ID,
+    S24_ID,
     VarzeasMissionService,
 )
 from asterion.application.vde_missions import (
@@ -1223,7 +1225,14 @@ def world_router(
                         edit=True,
                     )
                     return
-            if varzeas_missions is not None and destination in {VARZEAS_DIQUES, VARZEAS_PORTO, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS}:
+            if varzeas_missions is not None and destination in {
+                VARZEAS_DIQUES,
+                VARZEAS_PORTO,
+                VARZEAS_BREJOS,
+                VARZEAS_HORTOS,
+                VARZEAS_GALERIAS,
+                VARZEAS_CAMARA,
+            }:
                 await varzeas_missions.on_location(query.from_user.id)
                 view = await road.resume(query.from_user.id) or view
                 varzeas_view = await varzeas_missions.resume_active(query.from_user.id)
@@ -1335,7 +1344,7 @@ def world_router(
         vde_p10_view = vde_s10_view = vde_s11_view = vde_p11_view = vde_p12_view = None
         vde_s12_view = None
         nareth_views = (None,) * 8
-        varzeas_views = (None,) * 10
+        varzeas_views = (None,) * 12
         if varzeas_missions is not None and await varzeas_missions.region_access(query.from_user.id):
             varzeas_views = await varzeas_missions.board(query.from_user.id)
         (
@@ -1349,6 +1358,8 @@ def world_router(
             varzeas_s22_view,
             varzeas_p23_view,
             varzeas_s23_view,
+            varzeas_p24_view,
+            varzeas_s24_view,
         ) = varzeas_views
         if vde_missions is not None and await vde_missions.region_access(query.from_user.id):
             (
@@ -1397,6 +1408,27 @@ def world_router(
         elif p6_view is not None and p6_view.status == "active":
             text += "\n\n🔥 Missão Principal\n\n📜 O Vigia Partido · Em Andamento\nTerras do Ocaso · Nv.10"
             keyboard.append([InlineKeyboardButton(text="Principal", callback_data="p6:resume")])
+        elif varzeas_p24_view is not None and varzeas_p24_view.status == "active":
+            text += (
+                "\n\n🔥 Missão Principal\n\n📜 A Matriz Rubra · Em Andamento"
+                "\nVárzeas Carmesins · Nv.40"
+            )
+            keyboard.append(
+                [InlineKeyboardButton(text="Principal", callback_data="world:principal")]
+            )
+        elif varzeas_p24_view is not None and varzeas_p24_view.available:
+            text += (
+                "\n\n🔥 Missão Principal\n\n📜 A Matriz Rubra · Disponível"
+                "\nVárzeas Carmesins · Nv.40"
+            )
+            keyboard.append(
+                [InlineKeyboardButton(text="Principal", callback_data="world:principal")]
+            )
+        elif varzeas_p24_view is not None and varzeas_p24_view.status == "completed":
+            text += "\n\n🔥 Missão Principal\n\n✅ Campanha das Várzeas · Concluída"
+            keyboard.append(
+                [InlineKeyboardButton(text="Principal", callback_data="world:principal")]
+            )
         elif varzeas_p23_view is not None and varzeas_p23_view.status == "active":
             text += "\n\n🔥 Missão Principal\n\n📜 O Custo da Persistência · Em Andamento\nVárzeas Carmesins · Nv.39"
             keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
@@ -1662,6 +1694,16 @@ def world_router(
             else:
                 state, action = "Requer P22 concluída e Nv.38 no Porto", None
             secondary_entries.append((f"📜 {varzeas_s23_view.title} · {state}", action))
+        if varzeas_s24_view is not None:
+            if varzeas_s24_view.status == "active":
+                state, action = "Em Andamento", f"varzeas:mission:{S24_ID}"
+            elif varzeas_s24_view.status == "completed":
+                state, action = "Concluída", f"varzeas:mission:{S24_ID}"
+            elif varzeas_s24_view.available:
+                state, action = "Disponível", f"varzeas:start:{S24_ID}"
+            else:
+                state, action = "Bloqueada · Requer S22, P23 e Nv.40", None
+            secondary_entries.append((f"📜 {varzeas_s24_view.title} · {state}", action))
         if secondary_entries:
             secondary_lines = []
             secondary_buttons = []

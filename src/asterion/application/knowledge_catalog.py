@@ -106,6 +106,13 @@ CODEX_ENTRIES = (
     CodexPresentation("codex.location.hortos_hemaris", "Hortos Hemaris", "regions", 290, "varzeas.location.hortos_hemaris"),
     CodexPresentation("codex.location.galerias_transferencia", "Galerias de Transferência", "regions", 295, "varzeas.location.galerias_transferencia"),
     CodexPresentation("codex.location.cisterna_transferencia", "Cisterna de Transferência", "regions", 296, "varzeas.location.cisterna_transferencia"),
+    CodexPresentation(
+        "codex.location.camara_da_matriz",
+        "Câmara da Matriz",
+        "regions",
+        297,
+        "varzeas.location.camara_da_matriz",
+    ),
     CodexPresentation("codex.mystery.pulso_sob_a_lama", "Pulso sob a Lama", "mysteries", 281),
     CodexPresentation("codex.figure.ilyan_korr", "Ilyan Korr", "figures", 70),
     CodexPresentation("codex.history.projeto_hemaris_registro_inicial", "Projeto Hemaris — Registro Inicial", "history", 300),
@@ -117,6 +124,18 @@ CODEX_ENTRIES = (
     CodexPresentation("codex.history.protocolos_de_emergencia", "Protocolos de Emergência", "history", 316),
     CodexPresentation("codex.history.projeto_hemaris_custos_da_emergencia", "Projeto Hemaris — Custos da Emergência", "history", 317),
     CodexPresentation("codex.history.origem_ancestral_alteracoes_hemarias", "Origem Ancestral das Alterações Hemárias", "history", 318),
+    CodexPresentation(
+        "codex.history.queda_operacional_matriz_rubra",
+        "Queda Operacional da Matriz Rubra",
+        "history",
+        319,
+    ),
+    CodexPresentation(
+        "codex.mystery.quarentena_sem_supervisao",
+        "Quarentena sem Supervisão",
+        "mysteries",
+        320,
+    ),
     CodexPresentation("codex.figure.talen_orm", "Talen Orm", "figures", 50),
     CodexPresentation("codex.location.canais_secos", "Canais Secos", "regions", 170, "nareth.location.canais_secos"),
     CodexPresentation("codex.location.galerias_do_meridiano", "Galerias do Meridiano", "regions", 175, "nareth.location.galerias_do_meridiano"),
@@ -720,6 +739,18 @@ CODEX_FRAGMENTS = {
         "Alterações herdadas",
         "Evidências indicam alterações estáveis transmitidas por descendência em populações sobreviventes e sua contribuição aos ancestrais dos Hemários modernos. Hemários modernos não são experimentos, monstros, doença nem portadores de culpa coletiva; essa história não é prova de vampirismo.",
     ),
+    "codex.fragment.varzeas.p24.queda_operacional_matriz_rubra": FragmentPresentation(
+        "Estado pós-Ruptura",
+        "A Matriz Rubra era um sistema biológico central de regulação do Projeto "
+        "Hemaris e continuou operando após a Ruptura. Os registros descrevem a "
+        "sequência de protocolos e o uso de recursos biológicos externos, sem "
+        "identificar responsáveis políticos nem explicar a cadeia completa da Ruptura.",
+    ),
+    "codex.fragment.varzeas.s24.quarentena_sem_supervisao": FragmentPresentation(
+        "Registro do posto lacrado",
+        "Os registros indicam contenção biológica histórica, não punição moral. "
+        "A observação não atribui culpa a Hemários modernos nem os trata como doença.",
+    ),
 }
 
 
@@ -970,6 +1001,30 @@ ACHIEVEMENTS = (
         "chronicles",
         "Concluiu P23 — O Custo da Persistência.",
     ),
+    AchievementPresentation(
+        "feat.varzeas.quarentena_encerrada",
+        "Quarentena Encerrada",
+        "pve",
+        "Concluiu S24 — A Porta de Quarentena.",
+    ),
+    AchievementPresentation(
+        "feat.varzeas.matriz_silenciada",
+        "Matriz Silenciada",
+        "combat",
+        "Concluiu P24 — A Matriz Rubra.",
+    ),
+    AchievementPresentation(
+        "feat.varzeas.naturalista_das_varzeas",
+        "Naturalista das Várzeas",
+        "bestiary",
+        "Dominou o conhecimento das nove criaturas-base das Várzeas Carmesins.",
+    ),
+    AchievementPresentation(
+        "feat.varzeas.cartografo_carmesim",
+        "Cartógrafo Carmesim",
+        "exploration",
+        "Concluiu todos os resultados únicos de Desbravar das Várzeas Carmesins.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
@@ -1084,6 +1139,7 @@ MATERIAL_LABELS = {
     "material.varzeas.fragmento_aprimoramento_iv": "Fragmento de Aprimoramento IV",
     "material.varzeas.nucleo_enfermaria_afundada": "Núcleo da Enfermaria Afundada",
     "material.varzeas.nucleo_cisterna_transferencia": "Núcleo da Cisterna de Transferência",
+    "material.varzeas.nucleo_matriz_rubra": "Núcleo da Matriz Rubra",
 }
 
 

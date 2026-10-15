@@ -70,7 +70,8 @@ def render_cosmetic_category(category: CosmeticCategoryView) -> Screen:
         for index, item in enumerate(category.items, 1):
             lines.append(f"{index} {item.name}")
             source = ACHIEVEMENT_BY_ID.get(item.source_achievement_id)
-            lines.append(f"Origem · Feito {source.name if source else 'TDO'}")
+            origin = f"Feito {source.name}" if source else "Concessão não definida pela Fonte"
+            lines.append(f"Origem · {origin}")
             rows.append([_button(str(index), f"cos:d:{COSMETIC_INDEX[item.cosmetic_id]}")])
     rows.append([_button("← Cosméticos", "cos:r")])
     return Screen("\n".join(lines), "character", _markup(rows))
@@ -93,7 +94,7 @@ def render_cosmetic_detail(view: CosmeticsView, item_index: int) -> Screen:
     source = ACHIEVEMENT_BY_ID.get(definition.achievement_id)
     text = (
         f"🎨 {definition.name}\n{COSMETIC_TYPE_NOUNS[definition.cosmetic_type]}"
-        f"\n\nOrigem · Feito {source.name if source else 'TDO'}"
+        f"\n\nOrigem · {f'Feito {source.name}' if source else 'Concessão não definida pela Fonte'}"
     )
     selected_id = category.selected.cosmetic_id if category.selected else None
     rows = []

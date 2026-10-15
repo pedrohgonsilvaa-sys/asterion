@@ -1033,6 +1033,19 @@ VARZEAS_CREATURES = (
     VARZEAS_HEMARIS_WARDEN,
 )
 
+# Campaign bosses are globally lookupable for Bestiário, but never enter a
+# regional Hunt, Round, or Explore pool.
+VARZEAS_CAMPAIGN_BOSSES = (
+    Creature(
+        "matriz_rubra", "Matriz Rubra", "boss", "controller", 40, 40, 0,
+        (), (),
+    ),
+    Creature(
+        "custodio_quarentena", "Custódio de Quarentena", "boss", "controller", 40, 40, 0,
+        (), (),
+    ),
+)
+
 NARETH_CREATURES = (
     NARETH_MERIDIAN_HOUND,
     NARETH_MARKER_VULTURE,
@@ -1376,7 +1389,11 @@ VDE_CREATURES = (
     VDE_ROOTED_WATCHER,
     VDE_BARK_EXECUTIONER,
 )
-CAMPAIGN_BOSS_CREATURES = (VDE_MATRIARCH, *NARETH_CAMPAIGN_BOSSES)
+CAMPAIGN_BOSS_CREATURES = (
+    VDE_MATRIARCH,
+    *NARETH_CAMPAIGN_BOSSES,
+    *VARZEAS_CAMPAIGN_BOSSES,
+)
 CREATURE_CATALOG = (
     *CREATURE_CATALOG,
     *VDE_CREATURES,

@@ -33,7 +33,15 @@ VDE_IMPORTANT_FIRST_VICTORY_XP = {
 VARZEAS_IMPORTANT_FIRST_VICTORY_XP = {
     "viuva_rubra": (37, 2718),
     "coletor_hematico": (40, 3084),
+    "matriz_rubra": (40, 3084),
 }
+VARZEAS_BASE_CREATURES = frozenset(
+    {
+        "cao_salmoura", "garca_ferruginosa", "portador_rubro",
+        "aranha_junco", "cervo_ferrugem", "lampreia_varzea",
+        "enxerto_horto", "mariposa_soro", "vigia_hemaris",
+    }
+)
 
 VDE_DISTINCTIVE_ELITE_MASTERY = {
     "custodio_enredado": {
@@ -96,6 +104,21 @@ VARZEAS_DISTINCTIVE_BOSS_MASTERY = {
         "action:linha_aberta",
         "action:linha_fechada",
         "action:transferencia_final",
+    },
+    "matriz_rubra": {
+        "first_victory",
+        "p24_completed",
+        "phase:persistencia",
+        "phase:emergencia",
+        "action:transferencia_externa",
+        "action:regulacao_emergencia",
+        "action:sobrecarga_matriz",
+    },
+    "custodio_quarentena": {
+        "first_victory",
+        "s24_completed",
+        "action:rota_selada",
+        "action:fecho_quarentena",
     },
 }
 
@@ -721,7 +744,10 @@ class BestiaryRecorder:
 
             await reconcile_nareth_feats_for_character(session, character_id)
         if (
-            creature_id in VARZEAS_DISTINCTIVE_ELITE_MASTERY
+            (
+                creature_id in VARZEAS_BASE_CREATURES
+                or creature_id in VARZEAS_DISTINCTIVE_ELITE_MASTERY
+            )
             and (
                 (previous_stage is not None and previous_stage != entry.stage)
                 or victory
