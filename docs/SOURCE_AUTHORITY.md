@@ -4,7 +4,7 @@
 
 > **Índice geral único:** `SOURCE_AUTHORITY.md` é o registro de governança que seleciona as versões autoritativas por escopo. Patches de sincronização são artefatos operacionais e não constituem uma segunda autoridade. Em conflito com índices/patches anteriores, este arquivo prevalece quanto à seleção de versões, sem alterar o conteúdo interno das Fontes.
 
-> **Sincronização 2026-10-15:** este índice registra Fonte Mestra v1.6.0, Terras do Ocaso v1.0.16 FINAL, Vales dos Enforcados v1.0.6 FINAL, Planícies de Nareth v1.0.2 FINAL, Várzeas Carmesins v1.0.2 FINAL, Lore v1.2, Visual/UI de 2026-10-13 e anatomia racial v2.0. Notas históricas mais abaixo podem citar versões anteriores apenas como registro; não reativam autoridade superada.
+> **Sincronização 2026-10-15:** este índice registra Fonte Mestra v1.6.0, Terras do Ocaso v1.0.16 FINAL, Vales dos Enforcados v1.0.6 FINAL, Planícies de Nareth v1.0.2 FINAL, Várzeas Carmesins v1.0.3 FINAL, Lore v1.2, Visual/UI de 2026-10-13 e anatomia racial v2.0. Notas históricas mais abaixo podem citar versões anteriores apenas como registro; não reativam autoridade superada.
 
 ## Fonte Mestra vigente
 
@@ -54,11 +54,11 @@ A v1.0.2 sucede a v1.0.1 exclusivamente para fechar em 2T as durações das nove
 
 ### Região 4 — Várzeas Carmesins · Nv.31–40
 
-**Várzeas Carmesins v1.0.2 FINAL**
+**Várzeas Carmesins v1.0.3 FINAL**
 
-Arquivo vigente: `ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.2_FINAL.md`.
+Arquivo vigente: `ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.3_FINAL.md`.
 
-A v1.0.2 substitui a v1.0.1 exclusivamente para fechar em `2T` a duração do Protocolo de Continuidade, preservando as seis Barreiras já fechadas em `2T`; todo o restante do conteúdo regional permanece inalterado e nenhuma duração global de Barreira é criada. A Região cobre Nv.31–40 com saída para Nv.41 e define Locais, P19–P24, S19–S24, NPCs, Materiais Grau IV, criaturas, pools, economia, Crafting, Bestiário, Códice, Feitos e sistemas regionais, subordinados às regras globais da Fonte Mestra. Não cria regra universal de duração de Barreira.
+A v1.0.3 sucede a v1.0.2 exclusivamente para esclarecer que sucesso ou falha/omissão na ação contextual dos Reservatórios Operacionais não altera a potência publicada de Transferência Externa (`165% ATQ`) nem cria consequências numéricas ou econômicas; cada Reservatório usado é consumido e não retorna, até o máximo publicado de três. Preserva todas as durações regionais de Barreira em `2T` e não cria default ou sistema universal. Todo o restante do conteúdo regional permanece inalterado. A Região cobre Nv.31–40 com saída para Nv.41 e define Locais, P19–P24, S19–S24, NPCs, Materiais Grau IV, criaturas, pools, economia, Crafting, Bestiário, Códice, Feitos e sistemas regionais, subordinados às regras globais da Fonte Mestra.
 
 Quando uma Fonte Regional especificar conteúdo dentro de parâmetros sistêmicos da Fonte Mestra, ambas devem ser aplicadas em conjunto. Em conflito estrutural ou numérico global, a Fonte Mestra prevalece; em conteúdo regional fechado dentro do próprio escopo, a revisão Regional vigente prevalece sobre rascunhos ou versões regionais anteriores.
 
@@ -70,7 +70,7 @@ A apresentação player-facing deve seguir:
 
 Arquivo vigente: `ASTERION_UI_DECISOES_2026-10-13_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.6.md`.
 
-A Fonte Visual/UI permanece o arquivo sincronizado em 2026-10-13 com Fonte Mestra v1.6.0, TDO v1.0.15 e Vales v1.0.6. As revisões regionais **TDO v1.0.16** e **Nareth v1.0.2**, bem como a revisão mecânica de **Várzeas v1.0.2** (que preserva a apresentação de v1.0.0), não criam novo componente universal nem alteram contrato de navegação, layout ou nomenclatura sistêmica; por isso este mesmo documento Visual/UI continua vigente.
+A Fonte Visual/UI permanece o arquivo sincronizado em 2026-10-13 com Fonte Mestra v1.6.0, TDO v1.0.15 e Vales v1.0.6. As revisões regionais **TDO v1.0.16** e **Nareth v1.0.2**, bem como as revisões mecânicas de **Várzeas v1.0.2** (durações de Barreira) e **v1.0.3** (estado contextual de encontro, sem novo contrato universal de UI), não criam novo componente universal nem alteram o contrato geral de navegação, layout ou nomenclatura sistêmica; por isso este mesmo documento Visual/UI continua vigente.
 
 Ela define nomenclatura, texto, estrutura de telas, navegação, estados visuais e UX do Bot do Telegram. É subordinada à Fonte Mestra para regras mecânicas/números e à Fonte Regional para conteúdo regional oficial.
 

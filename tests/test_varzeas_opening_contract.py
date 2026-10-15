@@ -1017,13 +1017,14 @@ def test_varzeas_mission_screen_uses_versioned_player_actions():
     assert "world:local" in callbacks
 
 
-def test_varzeas_v1_0_2_barrier_contract_and_source_authority_mirrors():
+def test_varzeas_v1_0_3_barrier_and_matrix_reservoir_contract():
     root = Path(__file__).resolve().parents[1]
     authority = (root / "SOURCE_AUTHORITY.md").read_bytes()
     assert authority == (root / "docs/SOURCE_AUTHORITY.md").read_bytes()
-    assert b"ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.2_FINAL.md" in authority
+    assert b"ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.3_FINAL.md" in authority
+    assert b"v1.0.3 sucede a v1.0.2 exclusivamente" in authority
 
-    source = (root / "ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.2_FINAL.md").read_text(
+    source = (root / "ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.3_FINAL.md").read_text(
         encoding="utf-8"
     )
     published_barriers = (
@@ -1036,5 +1037,24 @@ def test_varzeas_v1_0_2_barrier_contract_and_source_authority_mirrors():
         "Protocolo de Continuidade · Barreira igual a `8% HP Máximo` por `2T`, CD4.",
     )
     assert all(barrier in source for barrier in published_barriers)
-    assert "Revisão v1.0.2" in source
+    assert "Revisão v1.0.3" in source
     assert Action("duration-default", "duration-default", Decimal(0)).self_barrier_duration == 0
+
+    reservoir_section = source.split("## 14.2 Reservatórios operacionais", 1)[1].split(
+        "## 14.3 Fases", 1
+    )[0]
+    assert "exatamente **3** Reservatórios Operacionais" in reservoir_section
+    assert "até três ocorrências elegíveis" in reservoir_section
+    assert "Transferência Externa continua resolvendo com `165% ATQ`" in reservoir_section
+    assert "sucesso contextual" in reservoir_section
+    assert "resultado contextual não resolvido/falha" in reservoir_section
+    assert "o Reservatório usado não retorna" in reservoir_section
+    assert "não é associado a uma quarta janela" in reservoir_section
+    assert (
+        "nenhum dano adicional ou redução de dano, Cura, Barreira, Debuff, bônus de PER, "
+        "Hard CC, wipe, loot, XP, recompensa ou segunda rolagem"
+    ) in reservoir_section
+    assert "telemetria/QA" in reservoir_section
+    assert "não adiciona requisito de Mastery" in reservoir_section
+    assert "interrompe o bônus daquela ocorrência" not in reservoir_section
+    assert reservoir_section.count("%") == 3
