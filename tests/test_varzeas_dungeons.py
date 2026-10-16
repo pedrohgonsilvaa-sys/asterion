@@ -280,22 +280,22 @@ def test_varzeas_dungeon_barrier_durations_and_global_action_default():
 
 def test_varzeas_dungeon_published_action_coefficients_and_cooldowns():
     expected = (
-        (VARZEAS_INFIRMARY_FAMILY_ID, 1, "golpe_assimetrico", "1.00", 0, False),
+        (VARZEAS_INFIRMARY_FAMILY_ID, 1, "golpe_assimetrico", "1.00", None, False),
         (VARZEAS_INFIRMARY_FAMILY_ID, 1, "ferida_reaberta", "0.90", 2, False),
-        (VARZEAS_INFIRMARY_FAMILY_ID, 3, "braco_suporte", "1.00", 0, False),
+        (VARZEAS_INFIRMARY_FAMILY_ID, 3, "braco_suporte", "1.00", None, False),
         (VARZEAS_INFIRMARY_FAMILY_ID, 3, "cauterizacao_inadequada", "0.85", 3, False),
         (VARZEAS_INFIRMARY_FAMILY_ID, 3, "placa_procedimento", "0", 3, False),
         (VARZEAS_INFIRMARY_FAMILY_ID, 3, "intervencao_brusca", "1.70", 4, True),
-        (VARZEAS_INFIRMARY_FAMILY_ID, 5, "golpe_mantido", "1.00", 0, False),
+        (VARZEAS_INFIRMARY_FAMILY_ID, 5, "golpe_mantido", "1.00", None, False),
         (VARZEAS_INFIRMARY_FAMILY_ID, 5, "sutura_forcada", "0.85", 3, False),
         (VARZEAS_INFIRMARY_FAMILY_ID, 5, "protocolo_continuidade", "0", 4, False),
         (VARZEAS_INFIRMARY_FAMILY_ID, 5, "manutencao_repetida", "0", 5, False),
         (VARZEAS_INFIRMARY_FAMILY_ID, 5, "intervencao_final", "1.75", 4, True),
-        (VARZEAS_CISTERN_FAMILY_ID, 2, "impacto_valvula", "1.05", 0, False),
+        (VARZEAS_CISTERN_FAMILY_ID, 2, "impacto_valvula", "1.05", None, False),
         (VARZEAS_CISTERN_FAMILY_ID, 2, "linha_pressurizada", "0", 3, False),
         (VARZEAS_CISTERN_FAMILY_ID, 2, "descarga_fluxo", "1.30", 3, False),
         (VARZEAS_CISTERN_FAMILY_ID, 2, "fecho_seguranca", "1.75", 4, True),
-        (VARZEAS_CISTERN_FAMILY_ID, 4, "golpe_contencao_executor", "1.10", 0, False),
+        (VARZEAS_CISTERN_FAMILY_ID, 4, "golpe_contencao_executor", "1.10", None, False),
         (VARZEAS_CISTERN_FAMILY_ID, 4, "fixar_incidente", "0.90", 3, False),
         (VARZEAS_CISTERN_FAMILY_ID, 4, "resposta_emergencia", "1.40", 3, False),
         (VARZEAS_CISTERN_FAMILY_ID, 4, "imobilizacao_pesada", "1.80", 4, True),
@@ -413,7 +413,7 @@ def test_varzeas_dungeon_bosses_have_no_unpublished_global_pressure_bonus():
 
 def test_varzeas_dungeon_self_effect_exclusion_survives_combat_codec():
     combat = _combat(VARZEAS_CISTERN_FAMILY_ID, 5)
-    restored = decode(encode(combat))
+    restored = decode(encode(combat), combat.id, combat.ruleset, combat.version)
     assert (
         restored.enemy_actions["linha_aberta"].skip_if_self_effect_active
         == "varzeas.cistern.line_closed.attack"

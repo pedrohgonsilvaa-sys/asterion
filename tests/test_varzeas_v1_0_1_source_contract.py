@@ -60,12 +60,12 @@ def test_varzeas_source_authority_is_current_and_has_no_global_barrier_default()
     mirror = (root / "docs" / "SOURCE_AUTHORITY.md").read_bytes()
 
     assert mirror == (root / "SOURCE_AUTHORITY.md").read_bytes()
-    assert "**Várzeas Carmesins v1.0.2 FINAL**" in authority
-    assert "ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.2_FINAL.md" in authority
+    assert "**Várzeas Carmesins v1.0.3 FINAL**" in authority
+    assert "ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.3_FINAL.md" in authority
     assert "**Índice atualizado:** 2026-10-15." in authority
     assert "Várzeas Carmesins v1.0.0 FINAL" not in authority
-    assert "Várzeas v1.0.2" in authority
-    assert "Não cria regra universal de duração de Barreira." in authority
+    assert "A v1.0.3 sucede a v1.0.2 exclusivamente" in authority
+    assert "não cria default ou sistema universal" in authority
 
 
 def test_varzeas_v1_0_2_only_adds_persistente_barrier_duration():
@@ -103,8 +103,9 @@ def test_varzeas_v1_0_2_only_adds_persistente_barrier_duration():
     )
     assert normalized == previous
     authority = (root / "SOURCE_AUTHORITY.md").read_text(encoding="utf-8")
-    assert "Protocolo de Continuidade" in authority
-    assert "nenhuma duração global de Barreira é criada" in authority
+    assert "ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.3_FINAL.md" in authority
+    assert "A v1.0.3 sucede a v1.0.2 exclusivamente" in authority
+    assert "Preserva todas as durações regionais de Barreira em `2T`" in authority
 
 
 def test_varzeas_v1_0_2_publishes_all_seven_barrier_durations_explicitly():

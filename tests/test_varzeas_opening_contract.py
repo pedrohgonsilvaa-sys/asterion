@@ -100,6 +100,12 @@ def test_varzeas_diques_hunt_pool_levels_weights_and_variants_match_source():
         ("alfa_salmoura", 3),
     )
     assert VARZEAS_DIQUES_PROFILE.variant_chance == 10
+    dique_creature_ids = {
+        "cao_salmoura",
+        "garca_ferruginosa",
+        "portador_rubro",
+        "alfa_salmoura",
+    }
     assert {
         creature.creature_id: (
             creature.category,
@@ -109,6 +115,7 @@ def test_varzeas_diques_hunt_pool_levels_weights_and_variants_match_source():
             creature.weight,
         )
         for creature in VARZEAS_CREATURES
+        if creature.creature_id in dique_creature_ids
     } == {
         "cao_salmoura": ("common", "predator", 31, 34, 34),
         "garca_ferruginosa": ("common", "predator", 31, 34, 33),
@@ -282,7 +289,7 @@ def test_varzeas_hortos_hunt_explore_variants_and_materials_match_source():
         "coletor_hematico"
     }
     assert {
-        creature.creature_id: (creature.min_level, creature.max_level)
+        creature.creature_id: (creature.unlock_level, creature.max_level)
         for creature in VARZEAS_CREATURES
         if creature.creature_id
         in {
@@ -743,12 +750,35 @@ def test_varzeas_s21_screen_uses_only_the_published_investigation_beats():
     )
     screen = render_varzeas_mission(view)
     assert "culturas de suporte se tornaram autônomas" in screen.text
-    assert "pessoas transformadas" in screen.text
+    assert "pessoas transformadas" not in screen.text
     assert "Transferência" not in screen.text
     assert "Emergência" not in screen.text
     assert "varzeas:action:S21:4:observe_autonomous_grafts" in {
         button.callback_data
         for row in screen.keyboard.inline_keyboard
+        for button in row
+    }
+
+    analysis_screen = render_varzeas_mission(
+        VarzeasMissionView(
+            character_id=view.character_id,
+            quest_id=S21_ID,
+            title="Cicatrizes de Cultivo",
+            kind="analyze_support_function",
+            status="active",
+            step=3,
+            state_version=5,
+            progress={},
+            location="Hortos Hemaris",
+            level=35,
+        )
+    )
+    assert "pessoas transformadas" in analysis_screen.text
+    assert "Transferência" not in analysis_screen.text
+    assert "Emergência" not in analysis_screen.text
+    assert "varzeas:action:S21:5:analyze_support_function" in {
+        button.callback_data
+        for row in analysis_screen.keyboard.inline_keyboard
         for button in row
     }
 
@@ -814,9 +844,12 @@ def test_varzeas_brejos_hunt_pool_levels_weights_and_variants_match_source():
         "alfa_salmoura",
     }
     assert {creature.creature_id for creature in hunt_pool(35, VARZEAS_BREJOS_PROFILE)} == {
+        "cao_salmoura",
+        "garca_ferruginosa",
         "portador_rubro",
         "aranha_junco",
         "cervo_ferrugem",
+        "alfa_salmoura",
         "viuva_rubra",
     }
     assert sum(weight for _creature, weight in VARZEAS_BREJOS_PROFILE.creature_weights) == 100
@@ -1033,7 +1066,7 @@ def test_varzeas_v1_0_3_barrier_and_matrix_reservoir_contract():
         "Reservatório Blindado · Barreira `100% ATQ` por `2T`, CD3.",
         "Placa de Procedimento · Barreira `100% ATQ` por `2T`, CD3.",
         "Linha Pressurizada · Barreira `95% ATQ` por `2T`, CD3.",
-        "Membrana de Contenção · Barreira `8% HP Máximo` por `2T`, CD4.",
+        "**Membrana de Contenção** · Barreira `8% HP Máximo` por `2T`, CD4.",
         "Protocolo de Continuidade · Barreira igual a `8% HP Máximo` por `2T`, CD4.",
     )
     assert all(barrier in source for barrier in published_barriers)
@@ -1043,7 +1076,7 @@ def test_varzeas_v1_0_3_barrier_and_matrix_reservoir_contract():
     reservoir_section = source.split("## 14.2 Reservatórios operacionais", 1)[1].split(
         "## 14.3 Fases", 1
     )[0]
-    assert "exatamente **3** Reservatórios Operacionais" in reservoir_section
+    assert "exatamente **3 Reservatórios Operacionais**" in reservoir_section
     assert "até três ocorrências elegíveis" in reservoir_section
     assert "Transferência Externa continua resolvendo com `165% ATQ`" in reservoir_section
     assert reservoir_section.count(
@@ -1051,13 +1084,13 @@ def test_varzeas_v1_0_3_barrier_and_matrix_reservoir_contract():
     ) == 2
     assert "sucesso contextual" in reservoir_section
     assert "resultado contextual não resolvido/falha" in reservoir_section
-    assert "o Reservatório usado não retorna" in reservoir_section
+    assert "O Reservatório usado não retorna" in reservoir_section
     assert "não é associado a uma quarta janela" in reservoir_section
     assert (
-        "nenhum dano adicional ou redução de dano, Cura, Barreira, Debuff, bônus de PER, "
+        "não há dano adicional ou redução de dano, Cura, Barreira, Debuff, bônus de PER, "
         "Hard CC, wipe, loot, XP, recompensa ou segunda rolagem"
     ) in reservoir_section
     assert "telemetria/QA" in reservoir_section
-    assert "não adiciona requisito de Mastery" in reservoir_section
+    assert "nem adiciona requisito de Mastery" in reservoir_section
     assert "interrompe o bônus daquela ocorrência" not in reservoir_section
     assert reservoir_section.count("%") == 3
