@@ -483,7 +483,8 @@ def test_varzeas_consumables_and_three_special_recipes_use_exact_published_costs
 
     expected_specials = {
         "recipe.varzeas.enfermaria.mascara_triagem_silenciosa": (
-            ("leatherworker", 9), "Máscara da Triagem Silenciosa", "Cabeça", "Raro", 1, 9,
+            ("leatherworker", 9), "Máscara da Triagem Silenciosa", "Cabeça",
+            "equipment", "Raro", 1, 9, True, 240,
             {
                 "material.varzeas.couro_de_varzea": 6,
                 "material.varzeas.junco_ferruginoso": 2,
@@ -492,7 +493,8 @@ def test_varzeas_consumables_and_three_special_recipes_use_exact_published_costs
             },
         ),
         "recipe.varzeas.cisterna.peitoral_fluxo_contido": (
-            ("blacksmith", 10), "Peitoral do Fluxo Contido", "Torso", "Épico", 2, 10,
+            ("blacksmith", 10), "Peitoral do Fluxo Contido", "Torso",
+            "equipment", "Épico", 2, 10, True, 700,
             {
                 "material.varzeas.ferro_de_salmoura": 14,
                 "material.varzeas.soro_antigo": 6,
@@ -502,7 +504,8 @@ def test_varzeas_consumables_and_three_special_recipes_use_exact_published_costs
             },
         ),
         "recipe.varzeas.matriz.regulacao": (
-            ("artificer", 10), "Regulação da Matriz", "HP", "Épico", 2, 10,
+            ("artificer", 10), "Regulação da Matriz", "HP",
+            "enchantment", "Épico", None, 10, False, 280,
             {
                 "material.varzeas.soro_antigo": 5,
                 "material.varzeas.ferro_de_salmoura": 2,
@@ -512,26 +515,32 @@ def test_varzeas_consumables_and_three_special_recipes_use_exact_published_costs
         ),
     }
     for recipe_id, (
-        profession, name, slot_or_stat, rarity, sw, level, expected_materials
+        profession, name, slot_or_stat, output_kind, rarity, sw, level,
+        creation_enabled, expected_crowns, expected_materials,
     ) in expected_specials.items():
         recipe = RECIPE_BY_ID[recipe_id]
         assert (recipe.profession_id, recipe.required_level) == profession
         assert recipe.name == name
+        assert recipe.output_kind == output_kind
         assert recipe.grade == 4
         assert recipe.rarity == rarity
-        assert recipe.sw == sw
+        if sw is not None:
+            assert recipe.sw == sw
         assert recipe.required_level == level
+        # Recipe discovery is gated separately from equipment/enchantment output.
         assert recipe.unlock_id == recipe_id
-        assert recipe.creation_enabled is False
+        assert recipe.creation_enabled is creation_enabled
+        assert recipe_crown_cost(recipe, 40) == expected_crowns
         assert {
             material.material_id: material.quantity
             for material in recipe.fixed_materials
         } == expected_materials
         if recipe_id == "recipe.varzeas.matriz.regulacao":
+            assert recipe.fixed_crown_cost == expected_crowns
             assert recipe.output_id == slot_or_stat
-            assert recipe_crown_cost(recipe, 40) == 280
             assert enchantment_potency_for("Regulação da Matriz", "Épico", 4) == "0.30%"
         else:
+            assert recipe.fixed_crown_cost is None
             assert recipe.output_slot == slot_or_stat
 
 
@@ -667,10 +676,17 @@ def test_matrix_reservoir_ui_offers_contextual_action_and_shows_persisted_outcom
         for row in screen.keyboard.inline_keyboard
         for button in row
     }
+    button_labels = {
+        button.text
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+    }
     assert (
         f"varzeas:reservoir:{activity_id.hex}:8:a" in callbacks
     )
-    assert "Resolver Reservatório A" in screen.text
+    assert "Telegraph contextual: Reservatório A." in screen.text
+    assert "Resolver registra sucesso e consome o Reservatório." in screen.text
+    assert "Resolver Reservatório A" in button_labels
     assert "165% ATQ" in screen.text
     assert "sem efeito numérico adicional" in screen.text
 
