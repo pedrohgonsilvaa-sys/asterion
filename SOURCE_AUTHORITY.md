@@ -1,6 +1,6 @@
 # Autoridade das Fontes
 
-**Índice atualizado:** 2026-10-15.
+**Índice atualizado:** 2026-10-17.
 
 > **Índice geral único:** `SOURCE_AUTHORITY.md` é o registro de governança que seleciona as versões autoritativas por escopo. Patches de sincronização são artefatos operacionais e não constituem uma segunda autoridade. Em conflito com índices/patches anteriores, este arquivo prevalece quanto à seleção de versões, sem alterar o conteúdo interno das Fontes.
 
@@ -23,6 +23,19 @@ Estado oficial:
 - não existe reabertura numérica vigente na baseline;
 - a v1.4.9 formaliza que HP Máximo, ATQ, DEF e AGI estáticos finais fecham uma única vez com `round_half_up` após toda a composição estática; HP atual autoritativo é inteiro e HP legado fracionário é fechado para baixo em fronteira segura;
 - Cosméticos possui três categorias oficiais: Aparência, Título e Moldura.
+
+## Contrato Global Complementar — Weapon Metadata
+
+**ASTERION — Contrato Global de Weapon Metadata v1.0.0 FINAL**
+
+Arquivo vigente: `ASTERION_CONTRATO_GLOBAL_WEAPON_METADATA_v1.0.0_FINAL.md`.
+
+Este contrato global complementa o GDD Estrutural v1.6.0 e fecha, exclusivamente para armas player-equippable, `weapon_form` descritiva, `handedness`, elegibilidade de slot, tags explícitas de compatibilidade, mapeamento canônico das armas publicadas na tabela §9 e política de legado `EXACT_CANONICAL_MAPPING_OR_UNMAPPED`. `weapon_family` não é conceito canônico e não deve ser armazenado nem inferido.
+
+O contrato não redefine economia regional nem conteúdo regional fora desse escopo, e não substitui nem rebaixa versões regionais vigentes. O GDD Estrutural v1.6.0 permanece a autoridade estrutural superior. Este contrato não é autoridade visual: assets e apresentação visual não determinam metadata mecânica.
+
+A presença de entradas de Altos Cinéreos na tabela de metadata limita-se aos itens nela mapeados. Ela não registra nem substitui uma Fonte Regional de Altos, não resolve a pendência independente de `unlock.location` e não declara Altos v1.0.0 como fonte sem pendências.
+
 
 ## Fontes regionais vigentes
 
