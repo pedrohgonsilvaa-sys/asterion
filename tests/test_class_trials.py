@@ -50,6 +50,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 
 REFUGE = "Refúgio do Ocaso"
 REGION = "Terras do Ocaso"
@@ -88,6 +89,7 @@ async def _seed_trial(
                 crowns=23,
             )
         )
+        await add_compatible_weapon_for_arts(session, character_id, active_art_ids)
         session.add_all(
             CharacterActiveArtSlot(
                 character_id=character_id,

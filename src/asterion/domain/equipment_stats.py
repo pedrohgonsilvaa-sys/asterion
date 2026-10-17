@@ -21,6 +21,7 @@ from asterion.domain.equipment_modifications import (
     rune_compatible,
     rune_potency_for,
 )
+from asterion.domain.weapon_metadata import weapon_definition
 
 D = Decimal
 ZERO = D(0)
@@ -251,6 +252,13 @@ def item_snapshot_from_persisted(
         or payload_assignment != assignment
     ):
         raise EquipmentConfigurationError("Item slot does not match its equipped slot.")
+    definition = weapon_definition(payload.get("weapon_type_id"))
+    if definition is not None:
+        expected_assignment = assignment_for_item_slot(definition.persisted_item_slot)
+        if expected_assignment != assignment:
+            raise EquipmentConfigurationError(
+                "Canonical weapon metadata does not match its persisted item slot."
+            )
     payload_id = payload.get("item_instance_id")
     if payload_id is not None and str(payload_id) != item_instance_id:
         raise EquipmentConfigurationError("Item payload identity does not match its row.")

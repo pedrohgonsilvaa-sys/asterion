@@ -33,6 +33,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 from tests.test_s3_p4_integration import _seed_campaign
 
 
@@ -171,6 +172,11 @@ async def test_s4_watch_points_combat_checkpoint_reward_and_reconnect(database, 
         character = await session.get(Character, character_id)
         assert character is not None
         character.selected_path = "bastiao"
+        await add_compatible_weapon_for_arts(
+            session,
+            character_id,
+            (FIRST_CLASS_ART_IDS["sentinela"],),
+        )
         session.add(CharacterActiveArtSlot(
             character_id=character_id, slot=1, art_id=FIRST_CLASS_ART_IDS["sentinela"]
         ))

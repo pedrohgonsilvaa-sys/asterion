@@ -61,6 +61,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 
 
 async def _seed_road(
@@ -379,6 +380,12 @@ async def test_road_travel_and_hunt_reconnect_are_persistent(database):
 async def test_manual_hunt_uses_authoritative_active_art_snapshot(database):
     actor, service = await _seed_road(database, 771121)
     art_id = FIRST_CLASS_ART_IDS["sentinela"]
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        await add_compatible_weapon_for_arts(session, character.id, (art_id,))
     art_service = ActiveArtService(database[1], "ocaso")
     equipped = await art_service.equip_art(actor, 1, art_id)
     assert equipped is not None and equipped.combat_configuration_version == 1
@@ -1606,6 +1613,12 @@ async def test_normal_manual_hunt_uses_only_persisted_active_arts(database):
         SENTINEL_ART_IDS["quebra_postura"],
         SENTINEL_ART_IDS["muralha_breve"],
     )
+    async with sessions.begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == 772210)
+        )
+        assert character is not None
+        await add_compatible_weapon_for_arts(session, character.id, configured)
     await art_service.equip_art(actor, 1, configured[0], expected_configuration_version=0)
     await art_service.equip_art(actor, 2, configured[1], expected_configuration_version=1)
     await art_service.equip_art(actor, 3, configured[2], expected_configuration_version=2)

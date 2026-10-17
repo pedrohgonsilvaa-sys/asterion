@@ -30,6 +30,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 from tests.test_p2_integration import _seed as _seed_p2_character
 
 
@@ -131,6 +132,8 @@ async def test_s2_gate_and_offer_do_not_create_quest(database):
 async def test_s2_camp_vestiges_and_combat_are_persistent_and_fixed(database):
     character_id, service = await _seed_s2(database, 997104)
     art_id = FIRST_CLASS_ART_IDS["sentinela"]
+    async with database[1].begin() as session:
+        await add_compatible_weapon_for_arts(session, character_id, (art_id,))
     equipped = await ActiveArtService(database[1], "ocaso").equip_art(997104, 1, art_id)
     assert equipped is not None and equipped.combat_configuration_version == 1
     accepted = await service.accept(997104)

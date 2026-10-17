@@ -1,6 +1,8 @@
 """Canonical active-Art identities that are implemented by the current runtime."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+
+from asterion.domain.weapon_metadata import VALID_COMPATIBILITY_TAGS
 
 
 @dataclass(frozen=True, slots=True)
@@ -9,12 +11,15 @@ class ActiveArtDefinition:
     character_class: str
     min_level: int
     path_id: str | None = None
+    weapon_requirement: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         if not self.art_id or len(self.art_id) > 96:
             raise ValueError("Active Arts require a stable id.")
         if self.min_level < 1:
             raise ValueError("Active Art minimum level must be positive.")
+        if not self.weapon_requirement <= VALID_COMPATIBILITY_TAGS:
+            raise ValueError("Active Art weapon requirement contains an unknown tag.")
 
 
 FIRST_CLASS_ART_IDS = {
@@ -160,6 +165,46 @@ ACTIVE_ART_DEFINITIONS.update(
         for art_id, min_level in ERRANTE_ART_LEVELS.items()
     }
 )
+
+ART_WEAPON_REQUIREMENTS = {
+    SENTINEL_ART_IDS["golpe_de_guarda"]: frozenset({"weapon.compat.melee"}),
+    SENTINEL_ART_IDS["quebra_postura"]: frozenset({"weapon.compat.melee"}),
+    SENTINEL_ART_IDS["impacto_resoluto"]: frozenset({"weapon.compat.melee"}),
+    ERRANTE_ART_IDS["corte_veloz"]: frozenset({"weapon.compat.melee"}),
+    ERRANTE_ART_IDS["ferida_profunda"]: frozenset({"weapon.compat.melee"}),
+    ERRANTE_ART_IDS["golpe_oportuno"]: frozenset({"weapon.compat.melee"}),
+    VIGIA_ART_IDS["disparo_preciso"]: frozenset({"weapon.compat.bow", "weapon.compat.crossbow"}),
+    VIGIA_ART_IDS["marca_da_presa"]: frozenset({"weapon.compat.bow", "weapon.compat.crossbow"}),
+    VIGIA_ART_IDS["saraivada"]: frozenset({"weapon.compat.bow", "weapon.compat.crossbow"}),
+}
+for _art_id, _weapon_requirement in ART_WEAPON_REQUIREMENTS.items():
+    ACTIVE_ART_DEFINITIONS[_art_id] = replace(
+        ACTIVE_ART_DEFINITIONS[_art_id],
+        weapon_requirement=_weapon_requirement,
+    )
+
+
+def weapon_requirement_satisfied(
+    definition: ActiveArtDefinition, equipped_tags: frozenset[str]
+) -> bool:
+    """Evaluate the Art's explicit tag requirement; empty means NONE."""
+    return not definition.weapon_requirement or bool(
+        definition.weapon_requirement & equipped_tags
+    )
+
+
+def weapon_requirement_label(definition: ActiveArtDefinition) -> str:
+    """Return the approved player-facing wording for current Art requirements."""
+    if not definition.weapon_requirement:
+        return "Nenhum"
+    if definition.weapon_requirement == frozenset({"weapon.compat.melee"}):
+        return "Arma corpo a corpo compatível"
+    if definition.weapon_requirement == frozenset(
+        {"weapon.compat.bow", "weapon.compat.crossbow"}
+    ):
+        return "Arco ou Besta compatível"
+    return "Arma compatível"
+
 
 
 def active_art_definition(art_id: str) -> ActiveArtDefinition | None:

@@ -103,7 +103,9 @@ class EquipmentModificationService:
             current = int(payload.get("enhancement", 0))
             target = current + 1
             if current >= 10:
-                return self._preview(character, item, equipped, False, "MAX_ENHANCEMENT", {})
+                return await self._preview(
+                    session, character, item, equipped, False, "MAX_ENHANCEMENT", {}
+                )
             grade = equipment_grade(item.item_level)
             grade_id = ("i", "ii", "iii", "iv", "v", "vi")[grade - 1]
             fragment_id = f"material.tdo.fragmento_aprimoramento_{grade_id}"
@@ -120,7 +122,8 @@ class EquipmentModificationService:
                 reason = "FRAGMENTS"
             elif character.crowns < cost:
                 reason = "CROWNS"
-            return self._preview(
+            return await self._preview(
+                session,
                 character,
                 item,
                 equipped,
@@ -146,7 +149,9 @@ class EquipmentModificationService:
                 return None
             character, item, equipped = context
             if affinity not in self._affinities(item):
-                return self._preview(character, item, equipped, False, "AFFINITY", {})
+                return await self._preview(
+                    session, character, item, equipped, False, "AFFINITY", {}
+                )
             current = self._installed_rune(item, affinity)
             stacks = (
                 await session.scalars(
@@ -165,7 +170,8 @@ class EquipmentModificationService:
                 session, character.id, current, release_stack=False
             )
             reason = "FOREGROUND" if await self._mutation_blocked(session, character.id) else None
-            return self._preview(
+            return await self._preview(
+                session,
                 character,
                 item,
                 equipped,
@@ -266,7 +272,8 @@ class EquipmentModificationService:
             reason = "FOREGROUND" if await self._mutation_blocked(session, character.id) else None
             if reason is None and not await self._safe_location(session, character.id):
                 reason = "LOCATION"
-            return self._preview(
+            return await self._preview(
+                session,
                 character,
                 item,
                 equipped,
@@ -288,7 +295,9 @@ class EquipmentModificationService:
             character, item, equipped = context
             recipe = RECIPE_BY_ID.get(recipe_id)
             if recipe is None or recipe.output_kind != "enchantment":
-                return self._preview(character, item, equipped, False, "RECIPE", {})
+                return await self._preview(
+                    session, character, item, equipped, False, "RECIPE", {}
+                )
             profession = await session.scalar(
                 select(CharacterProfession).where(
                     CharacterProfession.character_id == character.id,
@@ -326,7 +335,8 @@ class EquipmentModificationService:
                 reason = "MATERIALS"
             elif character.crowns < (recipe.fixed_crown_cost or 0):
                 reason = "CROWNS"
-            return self._preview(
+            return await self._preview(
+                session,
                 character,
                 item,
                 equipped,
@@ -373,7 +383,8 @@ class EquipmentModificationService:
                 reason = "NO_CANDIDATES"
             elif character.crowns < cost:
                 reason = "CROWNS"
-            return self._preview(
+            return await self._preview(
+                session,
                 character,
                 item,
                 equipped,
@@ -407,7 +418,8 @@ class EquipmentModificationService:
                 session, character.id, materials, item.bound
             ):
                 reason = "INVENTORY_FULL"
-            return self._preview(
+            return await self._preview(
+                session,
                 character,
                 item,
                 equipped,
@@ -814,7 +826,9 @@ class EquipmentModificationService:
             character, item, _ = context
             payload = dict(item.payload or {})
             if bool(payload.get(key, False)) == value:
-                return self._preview(character, item, None, True, None, {})
+                return await self._preview(
+                    session, character, item, None, True, None, {}
+                )
             payload[key] = value
             self._save_payload(item, payload)
         return await self.dismantle_preview(actor, item_id)
@@ -890,8 +904,9 @@ class EquipmentModificationService:
         )
         return character, item, equipped
 
-    def _preview(
+    async def _preview(
         self,
+        session: AsyncSession,
         character: Character,
         item: EquipmentItem,
         equipped: Any,
@@ -903,7 +918,7 @@ class EquipmentModificationService:
         if assignment is None:
             raise EquipmentModificationRejected("INVALID_ITEM")
         slot = parse_equipment_slot(equipped.slot) if equipped is not None else None
-        view = self.views._item_view(item, slot, character.level)
+        view = await self.views._item_view(session, item, slot, character.level)
         return OperationPreview(
             view,
             self._item_version(item),

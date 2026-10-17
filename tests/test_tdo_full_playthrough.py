@@ -387,13 +387,14 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     active_arts = ActiveArtService(sessions, "ocaso")
     art_view = await active_arts.view(actor)
     assert art_view is not None
-    equipped = await active_arts.equip_art(
-        actor,
-        1,
-        FIRST_CLASS_ART_IDS["sentinela"],
-        expected_configuration_version=art_view.combat_configuration_version,
-    )
-    assert equipped is not None and equipped.changed
+    if FIRST_CLASS_ART_IDS["sentinela"] not in art_view.weapon_incompatible_art_ids:
+        equipped = await active_arts.equip_art(
+            actor,
+            1,
+            FIRST_CLASS_ART_IDS["sentinela"],
+            expected_configuration_version=art_view.combat_configuration_version,
+        )
+        assert equipped is not None and equipped.changed
 
     road = RoadService(sessions, "ocaso")
     location = await road.travel(actor, ROAD)
@@ -1232,6 +1233,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     if (
         second_sentinel_art in crypt_art_view.available_art_ids
         and second_sentinel_art not in {entry.art_id for entry in crypt_art_view.slots}
+        and second_sentinel_art not in crypt_art_view.weapon_incompatible_art_ids
     ):
         equipped_art = await crypt_arts.equip_art(
             actor,
@@ -1897,11 +1899,14 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     # mission boss. The same three-slot configuration is later frozen in P6.
     art_service = ActiveArtService(sessions, "ocaso")
     for slot, art_id in (
+        (1, FIRST_CLASS_ART_IDS["sentinela"]),
         (2, SENTINEL_ART_IDS["quebra_postura"]),
         (3, SENTINEL_ART_IDS["impacto_resoluto"]),
     ):
         art_view = await art_service.view(actor)
         assert art_view is not None and art_id in art_view.available_art_ids
+        if art_id in art_view.weapon_incompatible_art_ids:
+            continue
         if art_id not in {entry.art_id for entry in art_view.slots}:
             result = await art_service.equip_art(
                 actor,
@@ -2079,6 +2084,8 @@ async def run_tdo_full_playthrough(database, monkeypatch):
         if art_id not in art_view.available_art_ids:
             raise AssertionError(f"Arte ainda bloqueada no Nv.10: {art_id}")
         equipped_arts = {entry.art_id for entry in art_view.slots}
+        if art_id in art_view.weapon_incompatible_art_ids:
+            continue
         if art_id not in equipped_arts:
             result = await art_service.equip_art(
                 actor,

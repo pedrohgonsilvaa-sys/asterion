@@ -42,6 +42,7 @@ from asterion.infrastructure.db.models import (
     RewardEvent,
     WorldState,
 )
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 
 REGION = "Terras do Ocaso"
 REFUGE = "Refúgio do Ocaso"
@@ -78,8 +79,19 @@ async def _seed_sentinel(database, actor: int):
 
 
 async def _start_sentinel(service, actor: int, arts=(), *, stage: int = 1):
+    art_ids = tuple(arts)
+    if art_ids:
+        async with service.sessions.begin() as session:
+            character_id = await session.scalar(
+                select(Character.id).where(
+                    Character.telegram_id == actor,
+                    Character.server_id == service.server_id,
+                )
+            )
+            assert character_id is not None
+            await add_compatible_weapon_for_arts(session, character_id, art_ids)
     art_service = ActiveArtService(service.sessions, service.server_id)
-    for slot, art_id in enumerate(tuple(arts), start=1):
+    for slot, art_id in enumerate(art_ids, start=1):
         await art_service.equip_art(actor, slot, art_id)
     view = await service.resume(actor)
     if view.kind == "available":
@@ -476,6 +488,12 @@ async def test_sentinel_stage_checkpoint_then_stage_two_defeat_and_retry(databas
     assert active.current_stage == 2
     assert active.completed_stages == (1,)
 
+    async with sessions.begin() as session:
+        await add_compatible_weapon_for_arts(
+            session,
+            character_id,
+            (SENTINEL_ART_IDS["quebra_postura"],),
+        )
     art_service = ActiveArtService(service.sessions, service.server_id)
     await art_service.equip_art(actor, 1, SENTINEL_ART_IDS["quebra_postura"])
     stage_two = await service.start_attempt(actor, active.state_version)

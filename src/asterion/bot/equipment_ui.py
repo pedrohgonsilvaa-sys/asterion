@@ -91,13 +91,22 @@ def render_equipment_root(view: EquipmentRootView) -> Screen:
 def render_equipment_detail(view: EquipmentDetailView, *, context: str) -> Screen:
     item = view.item
     icon = next(icon for slot, _, icon, _ in SLOT_PRESENTATION if slot == item.slot)
-    label = SLOT_LABELS[item.slot]
     rarity = _rarity_label(item.rarity)
     rarity_icon = RARITY_ICON.get(rarity, "⚪")
+    slot_label = item.weapon_slot_label or SLOT_LABELS[item.slot]
     lines = [
         f"{icon} {escape(item.name)} · +{item.enhancement}",
-        f"{rarity_icon} {escape(rarity)} · {label}",
+        f"{rarity_icon} {escape(rarity)} · {escape(slot_label)}",
     ]
+    if item.weapon_form_label is not None:
+        lines.extend(
+            [
+                f"🗡️ Forma · {escape(item.weapon_form_label)}",
+                f"🤲 Mãos · {escape(item.weapon_handedness_label or '')}",
+                "🎴 Compatibilidade de Artes · "
+                + escape(item.weapon_compatibility_label or ""),
+            ]
+        )
     if context == "i" and item.equipped:
         lines.append("✅ Equipado")
     if item.bound:

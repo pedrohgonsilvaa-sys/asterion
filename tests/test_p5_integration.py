@@ -34,6 +34,7 @@ from asterion.infrastructure.db.models import (
     RewardComponent,
     RewardEvent,
 )
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 from tests.test_s3_p4_integration import _seed_campaign
 from tests.test_s4_s5_integration import _seed_p4, _set_location, _terminal
 
@@ -98,6 +99,11 @@ async def test_p5_full_mission_uses_canonical_custodian_and_rewards_once(databas
         assert character is not None
         vigor_before = character.vigor
         character.selected_path = "bastiao"
+        await add_compatible_weapon_for_arts(
+            session,
+            character_id,
+            ("class_art.sentinela.golpe_de_guarda",),
+        )
         session.add(
             CharacterActiveArtSlot(
                 character_id=character_id,

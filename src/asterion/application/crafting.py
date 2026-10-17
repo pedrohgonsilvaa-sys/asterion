@@ -30,6 +30,7 @@ from asterion.domain.professions import (
     recipe_materials,
 )
 from asterion.domain.road import materialize_equipment, rune_potency
+from asterion.domain.weapon_metadata import weapon_type_id_for_recipe
 from asterion.infrastructure.db.models import (
     BlockedDelivery,
     Character,
@@ -649,6 +650,7 @@ class CraftingService:
                 forced_name=recipe.output_name,
                 forced_slot=recipe.output_slot,
                 bound=view.result_bound,
+                weapon_type_id=weapon_type_id_for_recipe(recipe.recipe_id),
             )
             item_id, item_payload = equipment_instance_payload(output_payload)
             source_key = f"{receipt.source_key}:equipment"

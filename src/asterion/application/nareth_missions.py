@@ -61,6 +61,7 @@ from asterion.domain.road import (
     materialize_equipment,
 )
 from asterion.domain.road import VARZEAS_REGION_ENTRY_UNLOCK as CRIMSON_UNLOCK
+from asterion.domain.weapon_metadata import weapon_type_id_for_reward_source
 from asterion.infrastructure.db.combat_codec import decode
 from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
@@ -1904,7 +1905,12 @@ class NarethMissionService:
                 rarity, item_level = ("Raro", 25) if quest_id == P15_ID else ("Épico", 30)
                 payload = materialize_equipment(
                     f"{source_id}:{character.id}:{choice}", rarity, item_level,
-                    forced_name=name, forced_slot=slot, bound=True,
+                    forced_name=name,
+                    forced_slot=slot,
+                    bound=True,
+                    weapon_type_id=weapon_type_id_for_reward_source(
+                        f"{source_id}:equipment:{choice}"
+                    ),
                 )
                 event = RewardEvent(character_id=character.id, source_id=source_id)
                 session.add(event)

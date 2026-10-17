@@ -13,10 +13,12 @@ from asterion.application.combat_configuration_guard import (
     find_combat_configuration_blocker,
     lock_for_combat_configuration_mutation,
 )
+from asterion.application.weapon_metadata import equipped_weapon_compatibility_tags
 from asterion.domain.arts import (
     ACTIVE_ART_DEFINITIONS,
     ActiveArtDefinition,
     active_art_definition,
+    weapon_requirement_satisfied,
 )
 from asterion.infrastructure.db.models import Character, CharacterActiveArtSlot
 
@@ -36,6 +38,7 @@ class ActiveArtMutationCode(StrEnum):
     DUPLICATE_ART = "duplicate_art"
     STALE_CONFIGURATION = "stale_configuration"
     INVALID_CURRENT_CONFIGURATION = "invalid_current_configuration"
+    WEAPON_REQUIREMENT = "weapon_requirement"
 
 
 class ActiveArtMutationRejected(RuntimeError):
@@ -88,6 +91,7 @@ class ActiveArtCharacterView:
     slots: tuple[ActiveArtSlotSnapshot, ...]
     available_art_ids: tuple[str, ...]
     foreground: bool
+    weapon_incompatible_art_ids: tuple[str, ...] = ()
 
 
 def _validate_definition(character: Character, definition: ActiveArtDefinition) -> None:
@@ -104,8 +108,10 @@ async def load_active_art_configuration(
     character: Character,
     *,
     lock_rows: bool = True,
+    weapon_compatibility_tags: frozenset[str] | None = None,
+    validate_weapon_requirements: bool = True,
 ) -> ActiveArtConfigurationSnapshot:
-    """Load the character's persisted active Arts in slot order and validate them."""
+    """Load persisted Arts and validate explicit weapon requirements."""
     if not session.in_transaction():
         raise RuntimeError("Active Art configuration loading requires an open transaction.")
     statement = (
@@ -116,6 +122,16 @@ async def load_active_art_configuration(
     if lock_rows:
         statement = statement.with_for_update()
     rows = list((await session.scalars(statement)).all())
+    needs_weapon_check = any(
+        (definition := active_art_definition(row.art_id)) is not None
+        and definition.weapon_requirement
+        for row in rows
+    )
+    if needs_weapon_check and weapon_compatibility_tags is None:
+        weapon_compatibility_tags = await equipped_weapon_compatibility_tags(
+            session, character.id
+        )
+    equipped_tags = weapon_compatibility_tags or frozenset()
     seen_slots: set[int] = set()
     seen_arts: set[str] = set()
     snapshots: list[ActiveArtSlotSnapshot] = []
@@ -128,6 +144,13 @@ async def load_active_art_configuration(
         if definition is None:
             raise ActiveArtConfigurationError("Persisted active Art is unknown to the runtime.")
         _validate_definition(character, definition)
+        if (
+            validate_weapon_requirements
+            and not weapon_requirement_satisfied(definition, equipped_tags)
+        ):
+            raise ActiveArtConfigurationError(
+                "Equipped Art weapon requirement is not met."
+            )
         seen_slots.add(row.slot)
         seen_arts.add(row.art_id)
         snapshots.append(ActiveArtSlotSnapshot(row.slot, row.art_id))
@@ -135,7 +158,6 @@ async def load_active_art_configuration(
         character.combat_configuration_version,
         tuple(snapshots),
     )
-
 
 class ActiveArtService:
     """Serialize active-Art mutations through Character and the shared combat guard."""
@@ -156,8 +178,15 @@ class ActiveArtService:
             )
             if character is None:
                 return None
+            compatibility_tags = await equipped_weapon_compatibility_tags(
+                session, character.id
+            )
             configuration = await load_active_art_configuration(
-                session, character, lock_rows=False
+                session,
+                character,
+                lock_rows=False,
+                weapon_compatibility_tags=compatibility_tags,
+                validate_weapon_requirements=False,
             )
             blocker = await find_combat_configuration_blocker(session, character.id)
             available = tuple(
@@ -166,6 +195,13 @@ class ActiveArtService:
                 if definition.character_class == character.character_class
                 and character.level >= definition.min_level
                 and (definition.path_id is None or definition.path_id == character.selected_path)
+            )
+            weapon_incompatible = tuple(
+                art_id
+                for art_id in available
+                if not weapon_requirement_satisfied(
+                    ACTIVE_ART_DEFINITIONS[art_id], compatibility_tags
+                )
             )
             return ActiveArtCharacterView(
                 character.id,
@@ -177,6 +213,7 @@ class ActiveArtService:
                 configuration.slots,
                 available,
                 blocker is not None,
+                weapon_incompatible,
             )
 
     async def equip_art(
@@ -214,6 +251,21 @@ class ActiveArtService:
                 )
             final = dict(current)
             final[slot] = art_id
+            compatibility_tags = await equipped_weapon_compatibility_tags(
+                session, character.id
+            )
+            for final_art_id in final.values():
+                final_definition = active_art_definition(final_art_id)
+                if final_definition is None or weapon_requirement_satisfied(
+                    final_definition, compatibility_tags
+                ):
+                    continue
+                code = (
+                    ActiveArtMutationCode.WEAPON_REQUIREMENT
+                    if final_art_id == art_id
+                    else ActiveArtMutationCode.INVALID_CURRENT_CONFIGURATION
+                )
+                raise ActiveArtMutationRejected(code)
             await self._write_rows(session, character.id, rows, current, final)
             character.combat_configuration_version += 1
             await session.flush()

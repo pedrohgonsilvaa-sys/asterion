@@ -24,6 +24,7 @@ from asterion.domain.equipment_modifications import (
 )
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.prologue import first_art
+from asterion.domain.weapon_metadata import weapon_definition
 
 D = Decimal
 RULESET = CURRENT_COMBAT_RULESET
@@ -1464,13 +1465,19 @@ VARIANT_POOL = {
 }
 
 EQUIPMENT_CATALOG = (
-    ("Arma do Caminhante", "Principal"), ("Guarda do Caminhante", "Secundária"),
-    ("Arma Pesada do Caminhante", "2H"), ("Elmo de Fuligem", "Cabeça"),
-    ("Couraça de Fuligem", "Torso"), ("Manoplas de Fuligem", "Mãos"),
-    ("Passos de Fuligem", "Pés"), ("Capuz das Cinzas", "Cabeça"),
-    ("Veste do Caminhante", "Torso"), ("Luvas de Fuligem", "Mãos"),
-    ("Botas da Estrada", "Pés"), ("Selo Enegrecido", "Acessório"),
-    ("Relicário de Cinzas", "Artefato"),
+    (None, "Principal", "weapon.type.tdo.arma_caminhante"),
+    (None, "Secundária", "weapon.type.tdo.guarda_caminhante"),
+    (None, "2H", "weapon.type.tdo.arma_pesada_caminhante"),
+    ("Elmo de Fuligem", "Cabeça", None),
+    ("Couraça de Fuligem", "Torso", None),
+    ("Manoplas de Fuligem", "Mãos", None),
+    ("Passos de Fuligem", "Pés", None),
+    ("Capuz das Cinzas", "Cabeça", None),
+    ("Veste do Caminhante", "Torso", None),
+    ("Luvas de Fuligem", "Mãos", None),
+    ("Botas da Estrada", "Pés", None),
+    ("Selo Enegrecido", "Acessório", None),
+    ("Relicário de Cinzas", "Artefato", None),
 )
 RARITY_SECONDARIES = {"Comum": 0, "Raro": 1, "Épico": 2, "Lendário": 3, "Mítico": 4}
 RUNE_FAMILIES = (("Brasa", "ATQ"), ("Pedra", "DEF"), ("Caminhante", "AGI"), ("Fresta", "PER"), ("Presságio", "CRIT"), ("Persistência", "HP"), ("Desvio", "Esquiva"), ("Guarda", "Bloqueio"))
@@ -1487,25 +1494,63 @@ def materialize_equipment(
     forced_name: str | None = None,
     forced_slot: str | None = None,
     bound: bool = False,
+    weapon_type_id: str | None = None,
 ) -> dict:
-    eligible = tuple((name, slot) for name, slot in EQUIPMENT_CATALOG if not (rarity == "Mítico" and slot == "Torso"))
+    if weapon_type_id is not None:
+        definition = weapon_definition(weapon_type_id)
+        if definition is None:
+            raise ValueError("Unknown canonical weapon type ID.")
+        expected_slot = definition.persisted_item_slot
+        if forced_name is not None and forced_name != definition.item_name:
+            raise ValueError("Canonical weapon name does not match its identity.")
+        if forced_slot is not None and forced_slot != expected_slot:
+            raise ValueError("Canonical weapon slot does not match its identity.")
+        forced_name = definition.item_name
+        forced_slot = expected_slot
+
+    eligible = tuple(
+        template
+        for template in EQUIPMENT_CATALOG
+        if not (rarity == "Mítico" and template[1] == "Torso")
+    )
+    selected_weapon_type_id = weapon_type_id
     if forced_slot is not None:
-        if forced_slot not in {slot for _, slot in eligible}:
+        if forced_slot not in {template[1] for template in eligible}:
             raise ValueError(f"unknown forced equipment slot {forced_slot!r}")
         slot = forced_slot
         if forced_name is None:
-            templates = tuple(item for item in eligible if item[1] == slot)
-            name = templates[_stable_draw(seed, "equipment.template", len(templates))][0]
+            templates = tuple(template for template in eligible if template[1] == slot)
+            name, _, selected_weapon_type_id = templates[
+                _stable_draw(seed, "equipment.template", len(templates))
+            ]
         else:
             name = forced_name
     else:
-        groups = tuple(sorted({"Principal" if slot == "2H" else slot for _, slot in eligible}))
+        groups = tuple(
+            sorted({"Principal" if template[1] == "2H" else template[1] for template in eligible})
+        )
         group = groups[_stable_draw(seed, "equipment.group", len(groups))]
-        templates = tuple(item for item in eligible if item[1] == group or (group == "Principal" and item[1] == "2H"))
+        templates = tuple(
+            template
+            for template in eligible
+            if template[1] == group or (group == "Principal" and template[1] == "2H")
+        )
         if forced_name is None:
-            name, slot = templates[_stable_draw(seed, "equipment.template", len(templates))]
+            name, slot, selected_weapon_type_id = templates[
+                _stable_draw(seed, "equipment.template", len(templates))
+            ]
         else:
             name, slot = forced_name, templates[0][1]
+    if selected_weapon_type_id is not None:
+        definition = weapon_definition(selected_weapon_type_id)
+        if definition is None or definition.persisted_item_slot != slot:
+            raise ValueError("Equipment template has invalid canonical weapon metadata.")
+        if name is None:
+            name = definition.item_name
+        elif name != definition.item_name:
+            raise ValueError("Equipment template name does not match its canonical identity.")
+    if name is None:
+        raise ValueError("Equipment template is missing its item name.")
     count = RARITY_SECONDARIES[rarity]
     pools = {"Principal": ("ATQ", "AGI", "PER", "CRIT"), "2H": ("ATQ", "AGI", "PER", "CRIT"), "Secundária": ("ATQ", "DEF", "PER", "CRIT", "Bloqueio"), "Cabeça": ("HP", "DEF", "PER", "CRIT"), "Torso": ("HP", "DEF", "Bloqueio"), "Mãos": ("ATQ", "AGI", "PER", "CRIT"), "Pés": ("HP", "DEF", "AGI", "Esquiva"), "Acessório": ("HP", "ATQ", "AGI", "PER", "CRIT", "Esquiva"), "Artefato": ("HP", "ATQ", "DEF", "PER", "CRIT", "Bloqueio")}
     pool = list(pools[slot])
@@ -1529,7 +1574,22 @@ def materialize_equipment(
         else:
             value = raw.quantize(D(1), rounding=ROUND_HALF_UP)
         secondaries.append({"attribute": attribute, "value": str(value)})
-    return {"item_name": name, "slot": slot, "item_level": level, "rarity": rarity, "core": core, "secondaries": secondaries, "enhancement": 0, "rune": None, "enchantment": None, "bound": bound}
+    payload = {
+        "item_name": name,
+        "slot": slot,
+        "item_level": level,
+        "rarity": rarity,
+        "core": core,
+        "secondaries": secondaries,
+        "enhancement": 0,
+        "rune": None,
+        "enchantment": None,
+        "bound": bound,
+    }
+    if selected_weapon_type_id is not None:
+        payload["weapon_type_id"] = selected_weapon_type_id
+    return payload
+
 
 def rune_potency(family: str, rarity: str, grade: int = 1) -> str:
     return rune_potency_for(family, rarity, grade)

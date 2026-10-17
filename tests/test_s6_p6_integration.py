@@ -45,6 +45,7 @@ from asterion.infrastructure.db.models import (
     RewardEvent,
     Unlock,
 )
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 from tests.test_s4_s5_integration import _seed_p4, _set_location, _terminal
 
 
@@ -88,6 +89,11 @@ async def _ready_p6_character(sessions, character_id):
         character = await session.get(Character, character_id)
         assert character is not None
         character.selected_path = "bastiao"
+        await add_compatible_weapon_for_arts(
+            session,
+            character_id,
+            ("class_art.sentinela.golpe_de_guarda",),
+        )
         session.add_all(
             [
                 CharacterTalentChoice(

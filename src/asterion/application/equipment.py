@@ -18,6 +18,10 @@ from asterion.application.equipment_configuration import (
     reconcile_character_hp,
     resolve_character_combat_stats,
 )
+from asterion.application.weapon_metadata import (
+    WeaponMetadataPersistenceError,
+    resolve_equipment_weapon,
+)
 from asterion.domain.equipment import (
     EquipmentSlot,
     assign_equipment_instance_id,
@@ -110,6 +114,12 @@ class EquipmentService:
                 payload_assignment = assignment_for_item_slot(str(payload_slot))
                 if payload_assignment != assignment:
                     raise EquipmentMutationRejected(EquipmentMutationCode.INVALID_ITEM)
+            try:
+                await resolve_equipment_weapon(session, item)
+            except WeaponMetadataPersistenceError as exc:
+                raise EquipmentMutationRejected(
+                    EquipmentMutationCode.INVALID_ITEM
+                ) from exc
             if item.item_level < 1 or item.item_level > 60:
                 raise EquipmentMutationRejected(EquipmentMutationCode.INVALID_ITEM)
             if character.level < item.item_level:

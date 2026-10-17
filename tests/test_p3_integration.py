@@ -34,6 +34,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 
 
 async def _seed_p3(database, actor: int, *, level: int = 5, p2_status: str = "completed"):
@@ -110,6 +111,12 @@ async def _start_scripted_combat(service: P3Service, actor: int):
 async def test_p3_scripted_combat_freezes_equipped_class_art(database):
     _, service = await _seed_p3(database, 998304)
     art_id = FIRST_CLASS_ART_IDS["sentinela"]
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == 998304)
+        )
+        assert character is not None
+        await add_compatible_weapon_for_arts(session, character.id, (art_id,))
     equipped = await ActiveArtService(database[1], "ocaso").equip_art(998304, 1, art_id)
     assert equipped is not None and equipped.combat_configuration_version == 1
 

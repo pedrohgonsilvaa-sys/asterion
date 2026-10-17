@@ -7,7 +7,11 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.active_arts import ActiveArtCharacterView
 from asterion.application.talents import TalentView
 from asterion.bot.creation_ui import Screen
-from asterion.domain.arts import ART_IDS_BY_CLASS
+from asterion.domain.arts import (
+    ART_IDS_BY_CLASS,
+    active_art_definition,
+    weapon_requirement_label,
+)
 from asterion.domain.class_trials import class_player_actions
 from asterion.domain.paths import PATH_DEFINITIONS
 from asterion.domain.talents import IMPLEMENTED_TALENT_LEVELS, TalentDefinition
@@ -195,6 +199,15 @@ def _art_index(view: ActiveArtCharacterView, art_id: str) -> int:
     return ART_IDS_BY_CLASS[view.character_class].index(art_id)
 
 
+def _weapon_requirement_notice(view: ActiveArtCharacterView, art_id: str) -> str | None:
+    if art_id not in view.weapon_incompatible_art_ids:
+        return None
+    definition = active_art_definition(art_id)
+    if definition is None or not definition.weapon_requirement:
+        return "🔒 Requisito de arma não atendido."
+    return f"🔒 Requer {weapon_requirement_label(definition)} equipada."
+
+
 def _art_category(action) -> str:
     if (
         action.heal_coefficient
@@ -335,6 +348,8 @@ def render_art_root(view: ActiveArtCharacterView) -> Screen:
         action = actions[art_id]
         index = _art_index(view, art_id)
         lines.append(f"{slot} {escape(action.name)} · {_art_category(action)}")
+        if notice := _weapon_requirement_notice(view, art_id):
+            lines.append(notice)
         rows.append(
             [
                 _button(
@@ -351,6 +366,8 @@ def render_art_root(view: ActiveArtCharacterView) -> Screen:
         action = actions[art_id]
         index = _art_index(view, art_id)
         lines.append(f"{index + 1} {escape(action.name)} · {_art_category(action)}")
+        if notice := _weapon_requirement_notice(view, art_id):
+            lines.append(notice)
         other_buttons.append(
             _button(
                 str(index + 1),
@@ -366,18 +383,39 @@ def render_art_root(view: ActiveArtCharacterView) -> Screen:
 
 def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
     action = _actions_for_view(view)[art_id]
+    definition = active_art_definition(art_id)
     art_index = _art_index(view, art_id)
     equipped_slot = next((entry.slot for entry in view.slots if entry.art_id == art_id), None)
+    incompatible = art_id in view.weapon_incompatible_art_ids
     lines = [
         f"🎴 {escape(action.name)}",
         f"Arte Ativa · {_class_label(view.character_class)}",
         "",
     ]
     lines.extend(_art_mechanics_lines(action))
+    if definition is not None and definition.weapon_requirement:
+        lines.extend(
+            [
+                "",
+                "🗡️ Requisito de arma · "
+                + escape(weapon_requirement_label(definition)),
+            ]
+        )
+    if incompatible:
+        lines.append("🔒 Requisito não atendido · equipe uma arma compatível.")
     if equipped_slot is not None:
         lines.extend(["", f"🧩 Slot · {equipped_slot}"])
     rows = []
-    if equipped_slot is None and not view.foreground:
+    if equipped_slot is not None and not view.foreground:
+        rows.append(
+            [
+                _button(
+                    "Desequipar Arte",
+                    f"art:u:{_base36(equipped_slot)}:{_base36(view.combat_configuration_version)}",
+                )
+            ]
+        )
+    elif equipped_slot is None and not incompatible and not view.foreground:
         rows.append(
             [
                 _button(
@@ -393,6 +431,8 @@ def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
 
 
 def render_art_slot_choice(view: ActiveArtCharacterView, art_id: str) -> Screen:
+    if art_id in view.weapon_incompatible_art_ids:
+        return render_art_detail(view, art_id)
     action = _actions_for_view(view)[art_id]
     art_index = _art_index(view, art_id)
     filled = {entry.slot: entry.art_id for entry in view.slots}

@@ -10,18 +10,29 @@ from asterion.application.active_arts import (
     load_active_art_configuration,
 )
 from asterion.application.combat_configuration_guard import CombatConfigurationLocked
+from asterion.application.equipment import equipment_instance_payload
 from asterion.domain.arts import FIRST_CLASS_ART_IDS, SENTINEL_ART_IDS
 from asterion.domain.combat_math import resolve_combat_stats
+from asterion.domain.road import materialize_equipment
 from asterion.infrastructure.db.models import (
     Account,
     Character,
     CharacterActiveArtSlot,
+    CharacterEquipmentSlot,
+    EquipmentItem,
     GameActivity,
     HuntRound,
 )
 
 
-async def _seed_character(database, actor: int, *, level: int = 10, cls: str = "sentinela"):
+async def _seed_character(
+    database,
+    actor: int,
+    *,
+    level: int = 10,
+    cls: str = "sentinela",
+    weapon_type_id: str | None = None,
+):
     _, sessions = database
     stats = resolve_combat_stats(cls, level, "remanescente")
     character_id = uuid4()
@@ -47,6 +58,35 @@ async def _seed_character(database, actor: int, *, level: int = 10, cls: str = "
                 crowns=0,
             )
         )
+        if weapon_type_id is not None:
+            weapon_payload = materialize_equipment(
+                f"active-art-test:{actor}",
+                "Comum",
+                1,
+                weapon_type_id=weapon_type_id,
+            )
+            weapon_id, weapon_payload = equipment_instance_payload(weapon_payload)
+            session.add(
+                EquipmentItem(
+                    id=weapon_id,
+                    character_id=character_id,
+                    source_key=f"active-art-test:{actor}:weapon",
+                    item_name=weapon_payload["item_name"],
+                    rarity=weapon_payload["rarity"],
+                    slot=weapon_payload["slot"],
+                    item_level=weapon_payload["item_level"],
+                    bound=False,
+                    payload=weapon_payload,
+                )
+            )
+            await session.flush()
+            session.add(
+                CharacterEquipmentSlot(
+                    character_id=character_id,
+                    slot="Principal",
+                    equipment_item_id=weapon_id,
+                )
+            )
     return character_id, sessions
 
 
@@ -66,7 +106,11 @@ async def test_empty_active_art_configuration_is_valid(database):
 @pytest.mark.asyncio
 async def test_equip_three_slots_order_duplicate_noop_and_unequip(database):
     actor = 771002
-    character_id, sessions = await _seed_character(database, actor)
+    character_id, sessions = await _seed_character(
+        database,
+        actor,
+        weapon_type_id="weapon.type.tdo.arma_caminhante",
+    )
     service = ActiveArtService(sessions, "ocaso")
     arts = (
         SENTINEL_ART_IDS["golpe_de_guarda"],
@@ -112,7 +156,12 @@ async def test_active_art_mutation_rejects_invalid_slot_wrong_class_level_and_st
     database,
 ):
     actor = 771003
-    _, sessions = await _seed_character(database, actor, level=1)
+    _, sessions = await _seed_character(
+        database,
+        actor,
+        level=1,
+        weapon_type_id="weapon.type.tdo.arma_caminhante",
+    )
     service = ActiveArtService(sessions, "ocaso")
 
     with pytest.raises(ActiveArtMutationRejected) as bad_slot:
@@ -181,7 +230,7 @@ async def test_active_art_rows_cascade_with_character(database):
     actor = 771020
     character_id, sessions = await _seed_character(database, actor)
     service = ActiveArtService(sessions, "ocaso")
-    await service.equip_art(actor, 1, SENTINEL_ART_IDS["golpe_de_guarda"])
+    await service.equip_art(actor, 1, SENTINEL_ART_IDS["muralha_breve"])
 
     async with sessions.begin() as session:
         character = await session.get(Character, character_id)

@@ -46,6 +46,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 
 
 async def _seed(
@@ -411,6 +412,8 @@ async def test_p2_discovery_ash_points_observation_and_reconnect_are_idempotent(
 ):
     character_id, service = await _seed(database, 881005)
     art_id = FIRST_CLASS_ART_IDS["sentinela"]
+    async with database[1].begin() as session:
+        await add_compatible_weapon_for_arts(session, character_id, (art_id,))
     equipped = await ActiveArtService(database[1], "ocaso").equip_art(881005, 1, art_id)
     assert equipped is not None and equipped.combat_configuration_version == 1
     offer = await service.alda(881005)

@@ -3,7 +3,11 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
-from asterion.application.active_arts import ActiveArtMutationRejected, ActiveArtService
+from asterion.application.active_arts import (
+    ActiveArtMutationCode,
+    ActiveArtMutationRejected,
+    ActiveArtService,
+)
 from asterion.application.combat_configuration_guard import CombatConfigurationLocked
 from asterion.application.talents import (
     TalentMutationRejected,
@@ -19,7 +23,11 @@ from asterion.bot.character_progression_ui import (
     render_talent_root,
 )
 from asterion.bot.creation_handlers import present
-from asterion.domain.arts import ART_IDS_BY_CLASS
+from asterion.domain.arts import (
+    ART_IDS_BY_CLASS,
+    active_art_definition,
+    weapon_requirement_label,
+)
 from asterion.domain.talents import TALENTS_BY_CLASS
 
 
@@ -33,6 +41,17 @@ def _talent_by_index(view, index: int):
 
 def _art_by_index(view, index: int) -> str:
     return ART_IDS_BY_CLASS[view.character_class][index]
+
+
+def _art_mutation_message(exc: ActiveArtMutationRejected, art_id: str | None = None) -> str:
+    if exc.code == ActiveArtMutationCode.WEAPON_REQUIREMENT:
+        definition = active_art_definition(art_id) if art_id is not None else None
+        if definition is not None and definition.weapon_requirement:
+            return f"Requer {weapon_requirement_label(definition)} equipada."
+        return "Requer uma arma compatível equipada."
+    if exc.code == ActiveArtMutationCode.INVALID_CURRENT_CONFIGURATION:
+        return "A configuração contém uma Arte sem arma compatível."
+    return "A tela foi atualizada."
 
 
 def character_progression_router(
@@ -83,11 +102,20 @@ def character_progression_router(
                         art_id,
                         expected_configuration_version=view.combat_configuration_version,
                     )
-                except (ActiveArtMutationRejected, CombatConfigurationLocked):
+                except ActiveArtMutationRejected as exc:
+                    await query.answer(_art_mutation_message(exc, art_id), show_alert=True)
                     await show_arts(query)
                     return
+                except CombatConfigurationLocked:
+                    await query.answer(
+                        "Configuração bloqueada durante a atividade.", show_alert=True
+                    )
+                    await show_arts(query)
+                    return
+                await query.answer("Arte equipada.")
                 await show_arts(query)
                 return
+            await query.answer()
             rendered = render_art_slot_choice(view, art_id)
         else:
             rendered = render_art_detail(view, art_id)
@@ -169,6 +197,7 @@ def character_progression_router(
     async def art_action(query: CallbackQuery) -> None:
         parts = (query.data or "").split(":")
         actor = query.from_user.id
+        art_id: str | None = None
         if parts == ["art", "r"]:
             await query.answer()
             await show_arts(query)
@@ -198,12 +227,12 @@ def character_progression_router(
                     view is None
                     or expected != view.combat_configuration_version
                     or art_id not in view.available_art_ids
+                    or art_id in view.weapon_incompatible_art_ids
                     or any(entry.art_id == art_id for entry in view.slots)
                 ):
                     await query.answer("A tela foi atualizada.")
                     await show_arts(query)
                     return
-                await query.answer()
                 await show_arts(query, art_id=art_id, choose=True)
                 return
             if action == "s" and len(parts) == 5:
@@ -218,6 +247,7 @@ def character_progression_router(
                     view is None
                     or expected != view.combat_configuration_version
                     or art_id not in view.available_art_ids
+                    or art_id in view.weapon_incompatible_art_ids
                 ):
                     await query.answer("A tela foi atualizada.")
                     await show_arts(query)
@@ -231,13 +261,40 @@ def character_progression_router(
                 await query.answer()
                 await show_arts(query)
                 return
+            if action == "u" and len(parts) == 4:
+                slot, expected = _from_base36(parts[2]), _from_base36(parts[3])
+                view = await active_arts.view(actor)
+                if (
+                    view is None
+                    or expected != view.combat_configuration_version
+                    or not any(entry.slot == slot for entry in view.slots)
+                ):
+                    await query.answer("A tela foi atualizada.")
+                    await show_arts(query)
+                    return
+                await active_arts.unequip_slot(
+                    actor,
+                    slot,
+                    expected_configuration_version=expected,
+                )
+                await query.answer("Arte desequipada.")
+                await show_arts(query)
+                return
+        except ActiveArtMutationRejected as exc:
+            await query.answer(_art_mutation_message(exc, art_id), show_alert=True)
+            await show_arts(query)
+            return
+        except CombatConfigurationLocked:
+            await query.answer(
+                "Configuração bloqueada durante a atividade.", show_alert=True
+            )
+            await show_arts(query)
+            return
         except (
             IndexError,
             KeyError,
             TypeError,
             ValueError,
-            ActiveArtMutationRejected,
-            CombatConfigurationLocked,
         ):
             await query.answer("A tela foi atualizada.")
             await show_arts(query)

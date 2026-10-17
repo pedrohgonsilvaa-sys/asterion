@@ -33,6 +33,7 @@ from asterion.infrastructure.db.models import (
     RewardEvent,
     Unlock,
 )
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 from tests.test_road_integration import _seed_road
 
 
@@ -321,6 +322,12 @@ async def test_round_freezes_equipment_across_encounters_and_keeps_new_level(dat
 async def test_round_freezes_authoritative_active_arts_and_blocks_mutation(database):
     actor, service = await _seed_round(database, 772022)
     art_id = FIRST_CLASS_ART_IDS["sentinela"]
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        await add_compatible_weapon_for_arts(session, character.id, (art_id,))
     art_service = ActiveArtService(database[1], "ocaso")
     equipped = await art_service.equip_art(actor, 1, art_id)
     assert equipped is not None and equipped.combat_configuration_version == 1

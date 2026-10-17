@@ -94,6 +94,7 @@ from asterion.domain.varzeas_bosses import (
     configure_varzeas_campaign_boss,
     varzeas_boss_phase_evidence,
 )
+from asterion.domain.weapon_metadata import weapon_type_id_for_reward_source
 from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
     BestiaryEntry,
@@ -2166,7 +2167,12 @@ class VarzeasMissionService:
         name, slot = P24_REWARD_CHOICES[choice]
         payload = materialize_equipment(
             f"{P24_REWARD_SOURCE}:{character.id}:{choice}", "Épico", 40,
-            forced_name=name, forced_slot=slot, bound=True,
+            forced_name=name,
+            forced_slot=slot,
+            bound=True,
+            weapon_type_id=weapon_type_id_for_reward_source(
+                f"{P24_REWARD_SOURCE}:equipment:{choice}"
+            ),
         )
         event = RewardEvent(character_id=character.id, source_id=P24_REWARD_SOURCE)
         session.add(event)

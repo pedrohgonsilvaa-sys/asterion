@@ -8,6 +8,10 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.weapon_metadata import (
+    WeaponMetadataPersistenceError,
+    resolve_equipment_weapon,
+)
 from asterion.domain.equipment import (
     EquipmentSlot,
     assignment_for_item_slot,
@@ -65,6 +69,10 @@ class EquipmentItemView:
     enchantment: dict | None = None
     secondaries: tuple[tuple[str, str], ...] = ()
     reroll_available: bool = False
+    weapon_form_label: str | None = None
+    weapon_handedness_label: str | None = None
+    weapon_slot_label: str | None = None
+    weapon_compatibility_label: str | None = None
 
     @property
     def equipped(self) -> bool:
@@ -125,7 +133,8 @@ class EquipmentViewService:
                 return None
             slots = await self._equipped_state(session, character)
             by_slot = {
-                slot: self._item_view(row, slot, character.level) for slot, row in slots.items()
+                slot: await self._item_view(session, row, slot, character.level)
+                for slot, row in slots.items()
             }
             main = by_slot.get(EquipmentSlot.PRINCIPAL)
             blocked = bool(main and main.two_handed)
@@ -174,7 +183,7 @@ class EquipmentViewService:
             equipped_slot = parse_equipment_slot(slot_rows[0].slot) if slot_rows else None
             if slot_rows and equipped_slot is None:
                 raise EquipmentViewUnavailable("Invalid persisted equipment slot.")
-            view = self._item_view(item, equipped_slot, character.level)
+            view = await self._item_view(session, item, equipped_slot, character.level)
             return EquipmentDetailView(
                 character.id,
                 character.level,
@@ -206,7 +215,8 @@ class EquipmentViewService:
                 )
 
             equipped_by_slot = {
-                slot: self._item_view(row, slot, character.level) for slot, row in equipped.items()
+                slot: await self._item_view(session, row, slot, character.level)
+                for slot, row in equipped.items()
             }
             current_ids = {view.item_instance_id for view in equipped_by_slot.values()}
             rows = (
@@ -226,7 +236,7 @@ class EquipmentViewService:
                 if row.item_level > character.level:
                     continue
                 try:
-                    item_view = self._item_view(row, None, character.level)
+                    item_view = await self._item_view(session, row, None, character.level)
                 except EquipmentViewUnavailable:
                     # Malformed legacy rows are not offered as valid actions. The
                     # authoritative EquipmentService still validates every commit.
@@ -296,8 +306,9 @@ class EquipmentViewService:
             by_slot[slot] = item
         return by_slot
 
-    def _item_view(
+    async def _item_view(
         self,
+        session: AsyncSession,
         item: EquipmentItem,
         equipped_slot: EquipmentSlot | None,
         character_level: int,
@@ -306,6 +317,12 @@ class EquipmentViewService:
         if assignment is None:
             raise EquipmentViewUnavailable("Unknown equipment slot.")
         rarity = _localized_rarity(item.rarity)
+        try:
+            weapon = await resolve_equipment_weapon(session, item)
+        except WeaponMetadataPersistenceError as exc:
+            raise EquipmentViewUnavailable(
+                "Stored weapon metadata conflicts with its equipment slot."
+            ) from exc
         try:
             snapshot = item_snapshot_from_persisted(
                 item_instance_id=str(item.id),
@@ -353,6 +370,10 @@ class EquipmentViewService:
             enchantment=(raw_enchantment if isinstance(raw_enchantment, dict) else None),
             secondaries=tuple((name, str(value)) for name, value in snapshot.secondaries),
             reroll_available=reroll_available,
+            weapon_form_label=weapon.form_label if weapon else None,
+            weapon_handedness_label=weapon.handedness_label if weapon else None,
+            weapon_slot_label=weapon.slot_label if weapon else None,
+            weapon_compatibility_label=weapon.compatibility_label if weapon else None,
         )
 
     def _validate_configuration(self, items: dict[EquipmentSlot, EquipmentItemView]) -> None:

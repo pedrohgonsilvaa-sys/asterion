@@ -38,6 +38,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 from tests.test_creation_ui import callback_update
 
 D = Decimal
@@ -205,6 +206,11 @@ async def test_exchange_removes_only_incompatible_path_art_slots(database, monke
     )
     future_art = "class_art.sentinela.path.bastiao"
     async with sessions.begin() as session:
+        await add_compatible_weapon_for_arts(
+            session,
+            character_id,
+            (FIRST_CLASS_ART_IDS["sentinela"],),
+        )
         session.add_all(
             [
                 CharacterActiveArtSlot(

@@ -22,6 +22,7 @@ from asterion.infrastructure.db.models import (
     WorldState,
 )
 from tests.helpers.pvpve import start_manual_hunt_after_no_match
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 
 
 @pytest.mark.asyncio
@@ -65,6 +66,7 @@ async def test_level_ten_progression_freezes_path_talents_and_active_arts_in_hun
                 crowns=500,
             )
         )
+        await add_compatible_weapon_for_arts(session, character_id, active_art_ids)
         await session.flush()
         session.add_all(
             [

@@ -38,6 +38,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 
 REFUGE = "Refúgio do Ocaso"
 REGION = "Terras do Ocaso"
@@ -73,6 +74,16 @@ async def _seed_errante(database, actor: int):
 
 
 async def _start_errante(service, actor: int, arts: tuple[str, ...], *, stage: int = 1):
+    if arts:
+        async with service.sessions.begin() as session:
+            character_id = await session.scalar(
+                select(Character.id).where(
+                    Character.telegram_id == actor,
+                    Character.server_id == service.server_id,
+                )
+            )
+            assert character_id is not None
+            await add_compatible_weapon_for_arts(session, character_id, arts)
     art_service = ActiveArtService(service.sessions, service.server_id)
     for slot, art_id in enumerate(arts, start=1):
         await art_service.equip_art(actor, slot, art_id)
