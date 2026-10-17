@@ -4,7 +4,7 @@
 
 > **Índice geral único:** `SOURCE_AUTHORITY.md` é o registro de governança que seleciona as versões autoritativas por escopo. Patches de sincronização são artefatos operacionais e não constituem uma segunda autoridade. Em conflito com índices/patches anteriores, este arquivo prevalece quanto à seleção de versões, sem alterar o conteúdo interno das Fontes.
 
-> **Sincronização 2026-10-15:** este índice registra Fonte Mestra v1.6.0, Terras do Ocaso v1.0.16 FINAL, Vales dos Enforcados v1.0.6 FINAL, Planícies de Nareth v1.0.2 FINAL, Várzeas Carmesins v1.0.3 FINAL, Lore v1.2, Visual/UI de 2026-10-13 e anatomia racial v2.0. Notas históricas mais abaixo podem citar versões anteriores apenas como registro; não reativam autoridade superada.
+> **Sincronização 2026-10-17:** este índice registra Fonte Mestra v1.6.0, Terras do Ocaso v1.0.16 FINAL, Vales dos Enforcados v1.0.6 FINAL, Planícies de Nareth v1.0.2 FINAL, Várzeas Carmesins v1.0.3 FINAL, Altos Cinéreos v1.0.1 FINAL, Lore v1.2, Visual/UI de 2026-10-13 e anatomia racial v2.0. Notas históricas mais abaixo podem citar versões anteriores apenas como registro; não reativam autoridade superada.
 
 ## Fonte Mestra vigente
 
@@ -34,7 +34,7 @@ Este contrato global complementa o GDD Estrutural v1.6.0 e fecha, exclusivamente
 
 O contrato não redefine economia regional nem conteúdo regional fora desse escopo, e não substitui nem rebaixa versões regionais vigentes. O GDD Estrutural v1.6.0 permanece a autoridade estrutural superior. Este contrato não é autoridade visual: assets e apresentação visual não determinam metadata mecânica.
 
-A presença de entradas de Altos Cinéreos na tabela de metadata limita-se aos itens nela mapeados. Ela não registra nem substitui uma Fonte Regional de Altos, não resolve a pendência independente de `unlock.location` e não declara Altos v1.0.0 como fonte sem pendências.
+A presença de entradas de Altos Cinéreos na tabela de metadata limita-se aos itens nela mapeados. Ela não registra nem substitui a Fonte Regional de Altos Cinéreos nem define seus gates; essa autoridade está registrada como Altos Cinéreos v1.0.1 FINAL na Região 5 abaixo.
 
 
 ## Fontes regionais vigentes
@@ -72,6 +72,14 @@ A v1.0.2 sucede a v1.0.1 exclusivamente para fechar em 2T as durações das nove
 Arquivo vigente: `ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.3_FINAL.md`.
 
 A v1.0.3 sucede a v1.0.2 exclusivamente para esclarecer que sucesso ou falha/omissão na ação contextual dos Reservatórios Operacionais não altera a potência publicada de Transferência Externa (`165% ATQ`) nem cria consequências numéricas ou econômicas; cada Reservatório usado é consumido e não retorna, até o máximo publicado de três. Preserva todas as durações regionais de Barreira em `2T` e não cria default ou sistema universal. Todo o restante do conteúdo regional permanece inalterado. A Região cobre Nv.31–40 com saída para Nv.41 e define Locais, P19–P24, S19–S24, NPCs, Materiais Grau IV, criaturas, pools, economia, Crafting, Bestiário, Códice, Feitos e sistemas regionais, subordinados às regras globais da Fonte Mestra.
+
+### Região 5 — Altos Cinéreos · Nv.41–50
+
+**Altos Cinéreos v1.0.1 FINAL**
+
+Arquivo vigente: `ASTERION_CONTEUDO_ALTOS_CINEREOS_v1.0.1_FINAL.md`.
+
+A v1.0.1 FINAL harmoniza acesso persistente, navegação e atividades por Local. Escarpa exige P24 concluída + Nv.41 e registra acesso na etapa 1 de P25; Abrigo é descoberto na etapa 6 de P25. Pontes, Pedreiras e Bastilha abrem, respectivamente, pela ativação válida de P26 após P25 concluída + Nv.43, P27 após P26 concluída + Nv.45 e P28 após P27 concluída + Nv.47. Coração abre na etapa 7 de P29; Nv.50 continua exigido para iniciar P30. Caçada e Desbravar só são habilitados no Local correspondente após a conclusão de sua missão; Ronda exige também a primeira vitória manual válida posterior em Caçada no mesmo Local. S25 examina a ponte pelo lado da Escarpa sem antecipar acesso às Pontes. A revisão preserva os demais valores e conteúdos aprovados e não cria mecânica global.
 
 Quando uma Fonte Regional especificar conteúdo dentro de parâmetros sistêmicos da Fonte Mestra, ambas devem ser aplicadas em conjunto. Em conflito estrutural ou numérico global, a Fonte Mestra prevalece; em conteúdo regional fechado dentro do próprio escopo, a revisão Regional vigente prevalece sobre rascunhos ou versões regionais anteriores.
 
