@@ -696,4 +696,6 @@ async def test_nareth_hunt_and_round_unlock_after_p13_and_desbravar_is_unchanged
             )
             for ordinal in range(len(round_materials))
         ]
-        assert [row.item_id for row in round_materials] == expected_round
+        # RewardComponent uses random UUID ids, so row order does not preserve
+        # the stable material.basic.<ordinal> draw order.
+        assert sorted(row.item_id for row in round_materials) == sorted(expected_round)
