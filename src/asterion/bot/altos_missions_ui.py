@@ -6,7 +6,13 @@ from html import escape
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from asterion.application.altos_missions import P25_TITLE, P26_TITLE, AltosMissionView
+from asterion.application.altos_missions import (
+    P25_TITLE,
+    P26_TITLE,
+    P27_REWARD_OPTIONS,
+    P27_TITLE,
+    AltosMissionView,
+)
 from asterion.application.prologue import CombatView
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
@@ -17,7 +23,11 @@ def _button(text: str, callback: str) -> InlineKeyboardButton:
 
 
 def render_altos_mission(view: AltosMissionView) -> Screen:
-    fallback_title = P26_TITLE if view.quest_id == "P26" else P25_TITLE
+    fallback_title = (
+        P27_TITLE if view.quest_id == "P27"
+        else P26_TITLE if view.quest_id == "P26"
+        else P25_TITLE
+    )
     title = escape(view.title or fallback_title)
     rows: list[list[InlineKeyboardButton]] = []
     if view.kind == "combat" and view.combat is not None and view.activity_id is not None:
@@ -43,12 +53,14 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
             )
         )
         return Screen(
-            f"📜 {title} · Altos Cinéreos\n⚔️ Encontro roteirizado · Escarpa da Cinza\n\n{hud.text}",
+            f"📜 {title} · Altos Cinéreos\n⚔️ Encontro roteirizado · {'Pedreiras Suspensas' if view.quest_id == 'P27' else 'Escarpa da Cinza'}\n\n{hud.text}",
             "missions",
             hud.keyboard,
             parse_mode=hud.parse_mode,
         )
 
+    if view.quest_id == "P27":
+        return _render_p27(view, title, rows)
     if view.quest_id == "P26":
         return _render_p26(view, title, rows)
 
@@ -179,5 +191,81 @@ def _render_p26(view: AltosMissionView, title: str, rows) -> Screen:
         rows.append([_button("Registrar Regência de Continuidade", f"altos:action:{view.state_version}:record_regencia_codex")])
     elif view.step == 7:
         rows.append([_button("Concluir a análise com Sel Ardan", f"altos:action:{view.state_version}:conclude_emergency_authority")])
+    rows.append([_button("← Missões", "world:missions")])
+    return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def _render_p27(view: AltosMissionView, title: str, rows) -> Screen:
+    if view.status == "suspended":
+        return Screen(
+            f"📜 {title} · Suspensa\n\nP26 deve estar concluída e o personagem precisa alcançar Nv. 45 para iniciar a jornada com Doren Vask e Rava Kern.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=[[_button("← Missões", "world:missions")]]),
+        )
+    if view.status == "available":
+        rows.extend(
+            (
+                [_button("Iniciar P27 com Doren e Rava", "altos:action:0:activate_p27")],
+                [_button("← Missões", "world:missions")],
+            )
+        )
+        return Screen(
+            f"📜 {title} · Disponível\nAltos Cinéreos · Abrigo do Peso\n\nDoren Vask e Rava Kern apresentam registros de prioridades de sustentação.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    if view.status == "completed":
+        selected = view.progress.get("reward_item_id", "Equipamento Raro escolhido")
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Concluída\n\n✨ 62.400 XP · 780 Coroas\n🎁 Equipamento escolhido: {escape(str(selected))}",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+
+    step_text = {
+        1: "Alcance e descubra Pedreiras Suspensas.",
+        2: "Examine uma rota de blocos, um registro de cabo e uma tabela de distribuição.",
+        3: "Vença a Carcaça Mineral Nv. 45 em um encontro roteirizado.",
+        4: "Recupere a placa sem valor econômico sobre prioridades de sustentação.",
+        5: "Compare a placa com Doren Vask e Rava Kern.",
+        6: "Registre Prioridades de Carga no Códice.",
+        7: "Escolha pessoalmente um Equipamento Raro Nv. 45.",
+    }.get(view.step, "Retome a etapa atual da missão.")
+    local = "Abrigo do Peso" if view.step == 1 else "Pedreiras Suspensas"
+    lines = [f"📜 {title} · Em Andamento", f"Altos Cinéreos · {local}", "", step_text]
+    if view.step == 1:
+        rows.append([_button("Seguir para Pedreiras Suspensas", "road:route:altos_pedreiras")])
+    elif view.step == 2:
+        examined = set(view.progress.get("pedreira_records", ()))
+        for action, label in (
+            ("inspect_block_route", "Examinar rota de blocos"),
+            ("inspect_cable_record", "Examinar registro de cabo"),
+            ("inspect_distribution_table", "Examinar tabela de distribuição"),
+        ):
+            if action not in examined:
+                rows.append([_button(label, f"altos:action:{view.state_version}:{action}")])
+    elif view.step == 3:
+        if view.progress.get("awaiting_retry"):
+            rows.append([_button("Tentar novamente", f"altos:retry:P27:{view.state_version}")])
+        else:
+            rows.extend(
+                (
+                    [_button("Iniciar encontro Solo", f"altos:combat:P27:{view.state_version}:solo")],
+                    [_button("Solicitar encontro em Grupo", f"altos:combat:P27:{view.state_version}:group")],
+                )
+            )
+    elif view.step == 4:
+        rows.append([_button("Recuperar a placa de prioridades", f"altos:action:{view.state_version}:recover_priority_plate")])
+    elif view.step == 5:
+        rows.append([_button("Comparar com Doren e Rava", f"altos:action:{view.state_version}:compare_plate_with_doren_and_rava")])
+    elif view.step == 6:
+        rows.append([_button("Registrar Prioridades de Carga", f"altos:action:{view.state_version}:record_priorities_codex")])
+    elif view.step == 7:
+        selected = view.progress.get("reward_choice")
+        for key, (_item_id, name, _slot) in P27_REWARD_OPTIONS.items():
+            if key != selected:
+                rows.append([_button(name, f"altos:choice:P27:{view.state_version}:{key}")])
+
     rows.append([_button("← Missões", "world:missions")])
     return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))

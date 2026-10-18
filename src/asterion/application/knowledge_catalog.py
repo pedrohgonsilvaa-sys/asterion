@@ -315,6 +315,10 @@ CODEX_FRAGMENTS = {
         "Regência de Continuidade",
         "Os registros identificam uma autoridade emergencial chamada Regência de Continuidade. Sua cadeia integral de decisões permanece desconhecida.",
     ),
+    "explore.altos.pedreiras.mapa_extracao": FragmentPresentation(
+        "Mapa de Extração Recortado",
+        "O Mapa de Extração Recortado foi registrado no Códice.",
+    ),
     "explore.altos.pontes.livro_prioridades": FragmentPresentation(
         "Livro de Prioridades de Travessia",
         "Um livro registra a existência de prioridades de travessia. Seu conteúdo ainda não permite interpretar quais rotas foram priorizadas.",
@@ -1075,6 +1079,12 @@ ACHIEVEMENTS = (
         "exploration",
         "Concluiu P26 — Ordens de Emergência.",
     ),
+    AchievementPresentation(
+        "achievement.altos.continuidade_custo",
+        "Continuidade a Qualquer Custo",
+        "exploration",
+        "Concluiu P27 — A Continuidade a Qualquer Custo.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
@@ -1138,6 +1148,7 @@ ALTOS_LOCATIONS = {
     "location.altos.escarpa_cinza": "Escarpa da Cinza",
     "location.altos.abrigo_peso": "Abrigo do Peso",
     "location.altos.pontes_fuligem": "Pontes de Fuligem",
+    "location.altos.pedreiras_suspensas": "Pedreiras Suspensas",
 }
 LOCATION_LABELS = (
     TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS | VARZEAS_LOCATIONS | ALTOS_LOCATIONS
@@ -1428,6 +1439,12 @@ CREATURE_PRESENTATION = {
     ),
     "elite.altos.devorador_escoria": CreaturePresentation(
         ALTOS_REGION_ID, ("location.altos.pontes_fuligem",)
+    ),
+    "creature.altos.morcego_chamine": CreaturePresentation(
+        ALTOS_REGION_ID, ("location.altos.pedreiras_suspensas",)
+    ),
+    "creature.altos.carcaca_mineral": CreaturePresentation(
+        ALTOS_REGION_ID, ("location.altos.pedreiras_suspensas",)
     ),
 }
 CREATURE_NOTES = {

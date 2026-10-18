@@ -66,6 +66,10 @@ def altos_missions_router(
     async def mission_action(query: CallbackQuery) -> None:
         parts = (query.data or "").split(":")
         try:
+            if len(parts) == 5 and parts[1] == "choice" and parts[2] == "P27":
+                view = await service.choose_p27_reward(
+                    query.from_user.id, int(parts[3]), parts[4]
+                )
             if len(parts) == 4 and parts[1] == "action":
                 view = await service.advance(
                     query.from_user.id, int(parts[2]), parts[3]
@@ -84,8 +88,27 @@ def altos_missions_router(
                     raise ValueError("invalid combat mode")
             elif len(parts) == 3 and parts[1] == "retry":
                 view = await service.retry_combat(query.from_user.id, int(parts[2]))
+            elif len(parts) == 5 and parts[1] == "combat" and parts[2] == "P27":
+                version = int(parts[3])
+                if parts[4] == "solo":
+                    view = await service.start_solo_combat(
+                        query.from_user.id, version, "P27"
+                    )
+                elif parts[4] == "group":
+                    view = await service.propose_group_combat(
+                        query.from_user.id, version, "P27"
+                    )
+                    if view is not None and view.proposal_id is not None:
+                        await query.answer("Confirmação enviada ao Grupo.")
+                        await show_group(query)
+                        return
+                else:
+                    raise ValueError("invalid combat mode")
+            elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "P27":
+                view = await service.retry_combat(query.from_user.id, int(parts[3]), "P27")
             else:
-                raise SkipHandler()
+                if not (len(parts) == 5 and parts[1] == "choice" and parts[2] == "P27"):
+                    raise SkipHandler()
         except (TypeError, ValueError, GroupError):
             await query.answer("A ação expirou ou o estado da missão mudou.", show_alert=True)
             return

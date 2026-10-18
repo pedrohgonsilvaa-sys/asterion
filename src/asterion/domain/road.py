@@ -56,21 +56,29 @@ ALTOS_REGION = "Altos Cinéreos"
 ALTOS_ESCARPA = "Escarpa da Cinza"
 ALTOS_ABRIGO = "Abrigo do Peso"
 ALTOS_PONTES = "Pontes de Fuligem"
+ALTOS_PEDREIRAS = "Pedreiras Suspensas"
 ALTOS_ESCARPA_LOCATION = "location.altos.escarpa_cinza"
 ALTOS_ABRIGO_LOCATION = "location.altos.abrigo_peso"
 ALTOS_PONTES_LOCATION = "location.altos.pontes_fuligem"
+ALTOS_PEDREIRAS_LOCATION = "location.altos.pedreiras_suspensas"
 ALTOS_ESCARPA_ACCESS_UNLOCK = "unlock.location.altos.escarpa_cinza"
 ALTOS_ABRIGO_ACCESS_UNLOCK = "unlock.location.altos.abrigo_peso"
 ALTOS_PONTES_ACCESS_UNLOCK = "unlock.location.altos.pontes_fuligem"
+ALTOS_PEDREIRAS_ACCESS_UNLOCK = "unlock.location.altos.pedreiras_suspensas"
 ALTOS_ESCARPA_BRAZIER = "bonfire.altos.escarpa"
 ALTOS_ABRIGO_BRAZIER = "bonfire.altos.abrigo"
 ALTOS_PONTES_BRAZIER = "bonfire.altos.ponte_alta"
+ALTOS_PEDREIRA_BRAZIER = "bonfire.altos.pedreira_velha"
 ALTOS_ESCARPA_HUNT_UNLOCK = "unlock.hunt.altos.escarpa"
 ALTOS_ESCARPA_EXPLORE_UNLOCK = "unlock.explore.altos.escarpa"
 ALTOS_ESCARPA_ROUND_UNLOCK = "unlock.round.altos.escarpa"
 ALTOS_PONTES_HUNT_UNLOCK = "unlock.hunt.altos.pontes"
 ALTOS_PONTES_EXPLORE_UNLOCK = "unlock.explore.altos.pontes"
 ALTOS_PONTES_ROUND_UNLOCK = "unlock.round.altos.pontes"
+ALTOS_PEDREIRAS_HUNT_UNLOCK = "unlock.hunt.altos.pedreiras"
+ALTOS_PEDREIRAS_EXPLORE_UNLOCK = "unlock.explore.altos.pedreiras"
+ALTOS_PEDREIRAS_ROUND_UNLOCK = "unlock.round.altos.pedreiras"
+ALTOS_PEDREIRAS_DUNGEON_UNLOCK = "unlock.dungeon.altos.pedreira_contrapeso"
 ALTOS_LOBO_ESCARPA = "creature.altos.lobo_escarpa"
 ALTOS_ABUTRE_FULIGEM = "creature.altos.abutre_fuligem"
 ALTOS_ESCARAVELHO_BASALTO = "creature.altos.escaravelho_basalto"
@@ -79,6 +87,8 @@ ALTOS_QUEBRA_ESCARPAS = "elite.altos.quebra_escarpas"
 ALTOS_LAGARTO_ESCORIA = "creature.altos.lagarto_escoria"
 ALTOS_QUEBRA_CABOS = "creature.altos.quebra_cabos"
 ALTOS_DEVORADOR_ESCORIA = "elite.altos.devorador_escoria"
+ALTOS_MORCEGO_CHAMINE = "creature.altos.morcego_chamine"
+ALTOS_CARCACA_MINERAL = "creature.altos.carcaca_mineral"
 ALTOS_FERRO_CONTRAPESO = "material.altos.ferro_contrapeso"
 ALTOS_COURO_ESCARPA = "material.altos.couro_escarpa"
 ALTOS_LIQUEN_PEDREIRA = "material.altos.liquen_pedreira"
@@ -1521,6 +1531,26 @@ CREATURE_CATALOG = (
         ),
         ai_priority=("rasgo_escoria", "cauda_abrasao", "salto_predatorio"),
     ),
+    Creature(
+        ALTOS_MORCEGO_CHAMINE, "Morcego de Chaminé", "common", "predator", 44, 48, 0,
+        ("mordida_chamine", "rasante_duto", "eco_duto"),
+        (
+            ("mordida_chamine", "Mordida de Chaminé", D("0.90"), 0, D(0), 0),
+            ("rasante_duto", "Rasante de Duto", D("1.10"), 0, D(0), 0, None, 0, False, 2),
+            ("eco_duto", "Eco de Duto", D("0.80"), 0, D("0.10"), 2, None, 0, False, 3, "perception"),
+        ),
+        ai_priority=("eco_duto", "rasante_duto"),
+    ),
+    Creature(
+        ALTOS_CARCACA_MINERAL, "Carcaça Mineral", "uncommon", "armored", 45, 49, 0,
+        ("golpe_mineralizado", "crosta_deposito", "arrasto_pesado"),
+        (
+            ("golpe_mineralizado", "Golpe Mineralizado", D("1.00"), 0, D(0), 0),
+            ("crosta_deposito", "Crosta de Depósito", D("0.95"), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.95"), 2),
+            ("arrasto_pesado", "Arrasto Pesado", D("1.30"), 0, D(0), 0, None, 0, False, 3),
+        ),
+        ai_priority=("crosta_deposito", "arrasto_pesado"),
+    ),
 )
 
 VARIANTS = {
@@ -1587,6 +1617,8 @@ VARIANT_POOL = {
     ALTOS_LAGARTO_ESCORIA: ("furious", "resistant", "agile"),
     ALTOS_QUEBRA_CABOS: ("agile", "resistant"),
     ALTOS_DEVORADOR_ESCORIA: (),
+    ALTOS_MORCEGO_CHAMINE: ("agile", "furious"),
+    ALTOS_CARCACA_MINERAL: ("resistant", "furious"),
 }
 
 EQUIPMENT_CATALOG = (
@@ -1798,6 +1830,24 @@ ALTOS_PONTES_PROFILE = HuntLocationProfile(
     explore_unlock=ALTOS_PONTES_EXPLORE_UNLOCK,
 )
 
+ALTOS_PEDREIRAS_PROFILE = HuntLocationProfile(
+    local_id=ALTOS_PEDREIRAS_LOCATION,
+    label=ALTOS_PEDREIRAS,
+    creature_weights=(
+        (ALTOS_ESCARAVELHO_BASALTO, 18),
+        (ALTOS_CARNEIRO_PESO, 16),
+        (ALTOS_LAGARTO_ESCORIA, 22),
+        (ALTOS_MORCEGO_CHAMINE, 17),
+        (ALTOS_CARCACA_MINERAL, 21),
+        (ALTOS_QUEBRA_ESCARPAS, 2),
+        (ALTOS_DEVORADOR_ESCORIA, 4),
+    ),
+    variant_chance=16,
+    hunt_unlock=ALTOS_PEDREIRAS_HUNT_UNLOCK,
+    round_familiarity=ALTOS_PEDREIRAS_ROUND_UNLOCK,
+    explore_unlock=ALTOS_PEDREIRAS_EXPLORE_UNLOCK,
+)
+
 LOCATION_LEVEL_BANDS = {
     "Estrada das Cinzas": (1, 10),
     "Charneca da Fuligem": (3, 5),
@@ -1817,6 +1867,7 @@ LOCATION_LEVEL_BANDS = {
     "Galerias de Transferência": (37, 40),
     ALTOS_ESCARPA: (41, 45),
     ALTOS_PONTES: (43, 49),
+    ALTOS_PEDREIRAS: (45, 49),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -2619,6 +2670,111 @@ ALTOS_PONTES_EXPLORATION_PROFILE = ExplorationLocationProfile(
     ),
 )
 
+ALTOS_PEDREIRAS_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=ALTOS_PEDREIRAS_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition(
+            "braseiro_pedreira_velha", "great_discovery",
+            "explore.altos.pedreiras.braseiro_pedreira_velha", 50,
+            "O Braseiro da Pedreira Velha foi descoberto entre as estruturas suspensas.",
+            min_level=45, unique=True,
+        ),
+        ExplorationResultDefinition(
+            "entrada_contrapeso", "great_discovery",
+            "explore.altos.pedreiras.entrada_contrapeso", 50,
+            "A Entrada da Pedreira do Contrapeso foi registrada.",
+            min_level=45, unique=True,
+        ),
+        ExplorationResultDefinition(
+            "mapa_extracao", "knowledge",
+            "explore.altos.pedreiras.mapa_extracao", 60,
+            "O Mapa de Extração Recortado foi registrado no Códice.",
+            min_level=45, unique=True,
+        ),
+        ExplorationResultDefinition(
+            "marcas_peso", "knowledge",
+            "explore.altos.pedreiras.marcas_peso", 40,
+            "Marcas de peso foram observadas nas Pedreiras Suspensas.", min_level=45,
+        ),
+        ExplorationResultDefinition(
+            "bloco_suspenso", "narrative",
+            "explore.altos.pedreiras.bloco_suspenso", 55,
+            "Um bloco permanece suspenso sobre a rota.", min_level=45,
+        ),
+        ExplorationResultDefinition(
+            "trilho_interrompido", "narrative",
+            "explore.altos.pedreiras.trilho_interrompido", 45,
+            "Um trilho interrompido marca a distribuição das cargas.", min_level=45,
+        ),
+        ExplorationResultDefinition(
+            "escaravelho_basalto", "combat",
+            "explore.altos.pedreiras.combat.escaravelho_basalto", 18,
+            "Um Escaravelho de Basalto bloqueia a rota.", min_level=45,
+            creature_id=ALTOS_ESCARAVELHO_BASALTO,
+        ),
+        ExplorationResultDefinition(
+            "carneiro_peso", "combat",
+            "explore.altos.pedreiras.combat.carneiro_peso", 17,
+            "Um Carneiro do Peso surge entre as estruturas.", min_level=45,
+            creature_id=ALTOS_CARNEIRO_PESO,
+        ),
+        ExplorationResultDefinition(
+            "lagarto_escoria", "combat",
+            "explore.altos.pedreiras.combat.lagarto_escoria", 25,
+            "Um Lagarto de Escória ocupa a passagem.", min_level=45,
+            creature_id=ALTOS_LAGARTO_ESCORIA,
+        ),
+        ExplorationResultDefinition(
+            "morcego_chamine", "combat",
+            "explore.altos.pedreiras.combat.morcego_chamine", 18,
+            "Um Morcego de Chaminé desce sobre a rota.", min_level=45,
+            creature_id=ALTOS_MORCEGO_CHAMINE,
+        ),
+        ExplorationResultDefinition(
+            "carcaca_mineral", "combat",
+            "explore.altos.pedreiras.combat.carcaca_mineral", 22,
+            "Uma Carcaça Mineral bloqueia a passagem.", min_level=45,
+            creature_id=ALTOS_CARCACA_MINERAL,
+        ),
+        ExplorationResultDefinition(
+            "ferro_contrapeso", "resource",
+            "explore.altos.pedreiras.ferro_contrapeso", 35,
+            "Ferro de Contrapeso pode ser recolhido entre as estruturas.", min_level=45,
+        ),
+        ExplorationResultDefinition(
+            "cinza_basalto", "resource",
+            "explore.altos.pedreiras.cinza_basalto", 30,
+            "Cinza de Basalto pode ser recolhida entre as pedras.", min_level=45,
+        ),
+        ExplorationResultDefinition(
+            "couro_escarpa", "resource",
+            "explore.altos.pedreiras.couro_escarpa", 20,
+            "Couro de Escarpa pode ser recolhido no local.", min_level=45,
+        ),
+        ExplorationResultDefinition(
+            "liquen_pedreira", "resource",
+            "explore.altos.pedreiras.liquen_pedreira", 15,
+            "Líquen de Pedreira cresce junto à rocha protegida.", min_level=45,
+        ),
+        ExplorationResultDefinition(
+            "poeira_clara", "atmospheric",
+            "explore.altos.pedreiras.poeira_clara", 34,
+            "Poeira clara atravessa a plataforma vazia.", min_level=45,
+        ),
+        ExplorationResultDefinition(
+            "plataforma_vazia", "atmospheric",
+            "explore.altos.pedreiras.plataforma_vazia", 33,
+            "Uma plataforma vazia permanece suspensa sobre o vão.", min_level=45,
+        ),
+        ExplorationResultDefinition(
+            "corrente_abismo", "atmospheric",
+            "explore.altos.pedreiras.corrente_sobre_abismo", 33,
+            "Uma corrente atravessa o abismo entre as estruturas.", min_level=45,
+        ),
+    ),
+)
+
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
     CHARNECA_LOCATION: CHARNECA_EXPLORATION_PROFILE,
@@ -2638,6 +2794,7 @@ EXPLORATION_PROFILES = {
     VARZEAS_GALERIAS_LOCATION: VARZEAS_GALERIAS_EXPLORATION_PROFILE,
     ALTOS_ESCARPA_LOCATION: ALTOS_ESCARPA_EXPLORATION_PROFILE,
     ALTOS_PONTES_LOCATION: ALTOS_PONTES_EXPLORATION_PROFILE,
+    ALTOS_PEDREIRAS_LOCATION: ALTOS_PEDREIRAS_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
@@ -2660,6 +2817,7 @@ HUNT_PROFILES = {
     VARZEAS_GALERIAS_LOCATION: VARZEAS_GALERIAS_PROFILE,
     ALTOS_ESCARPA_LOCATION: ALTOS_ESCARPA_PROFILE,
     ALTOS_PONTES_LOCATION: ALTOS_PONTES_PROFILE,
+    ALTOS_PEDREIRAS_LOCATION: ALTOS_PEDREIRAS_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -2881,6 +3039,8 @@ ALTOS_BASIC_MATERIAL_CREATURE_IDS = frozenset(
         ALTOS_LAGARTO_ESCORIA,
         ALTOS_QUEBRA_CABOS,
         ALTOS_DEVORADOR_ESCORIA,
+        ALTOS_MORCEGO_CHAMINE,
+        ALTOS_CARCACA_MINERAL,
     }
 )
 
@@ -3062,6 +3222,14 @@ MATERIAL_POOLS = {
     ALTOS_LAGARTO_ESCORIA: ((ALTOS_COURO_ESCARPA, 70), (ALTOS_CINZA_BASALTO, 30)),
     ALTOS_QUEBRA_CABOS: ((ALTOS_LIQUEN_PEDREIRA, 65), (ALTOS_COURO_ESCARPA, 35)),
     ALTOS_DEVORADOR_ESCORIA: ((ALTOS_COURO_ESCARPA, 70), (ALTOS_CINZA_BASALTO, 30)),
+    ALTOS_MORCEGO_CHAMINE: (
+        (ALTOS_COURO_ESCARPA, 60),
+        (ALTOS_LIQUEN_PEDREIRA, 40),
+    ),
+    ALTOS_CARCACA_MINERAL: (
+        (ALTOS_CINZA_BASALTO, 70),
+        (ALTOS_FERRO_CONTRAPESO, 30),
+    ),
 }
 
 

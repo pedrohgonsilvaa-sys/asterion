@@ -34,6 +34,7 @@ from asterion.application.road import (
     ALTOS_ABRIGO_LABEL,
     ALTOS_ESCARPA_LABEL,
     ALTOS_LOCATIONS,
+    ALTOS_PEDREIRAS_LABEL,
     ALTOS_PONTES_LABEL,
     VARZEAS_CAMARA_LABEL,
 )
@@ -58,6 +59,8 @@ from asterion.domain.road import (
     ALTOS_ESCARPA_LOCATION,
     ALTOS_ESCARPA_PROFILE,
     ALTOS_ESCARPA_ROUND_UNLOCK,
+    ALTOS_PEDREIRAS_ACCESS_UNLOCK,
+    ALTOS_PEDREIRAS_LOCATION,
     ALTOS_QUEBRA_ESCARPAS,
     ALTOS_REGION,
     VARIANT_POOL,
@@ -87,12 +90,13 @@ from tests.test_road_integration import _seed_road
 from tests.test_s4_s5_integration import _terminal
 
 
-def test_altos_location_catalog_stops_at_p26():
+def test_altos_location_catalog_stops_at_p27():
     assert ALTOS_REGION == "Altos Cinéreos"
     assert ALTOS_LOCATIONS == {
         ALTOS_ESCARPA_LABEL,
         ALTOS_ABRIGO_LABEL,
         ALTOS_PONTES_LABEL,
+        ALTOS_PEDREIRAS_LABEL,
     }
     assert ALTOS_ESCARPA_LOCATION == "location.altos.escarpa_cinza"
     assert ALTOS_ABRIGO_LOCATION == "location.altos.abrigo_peso"
@@ -103,6 +107,8 @@ def test_altos_location_catalog_stops_at_p26():
     assert ALTOS_ESCARPA_HUNT_UNLOCK == "unlock.hunt.altos.escarpa"
     assert ALTOS_ESCARPA_EXPLORE_UNLOCK == "unlock.explore.altos.escarpa"
     assert ALTOS_ESCARPA_ROUND_UNLOCK == "unlock.round.altos.escarpa"
+    assert ALTOS_PEDREIRAS_LOCATION == "location.altos.pedreiras_suspensas"
+    assert ALTOS_PEDREIRAS_ACCESS_UNLOCK == "unlock.location.altos.pedreiras_suspensas"
     assert P25_ID == "P25"
     assert P25_MISSION_ID == "mission.altos.p25"
     assert P25_TITLE == "O Peso Antigo"
@@ -128,7 +134,7 @@ def test_altos_location_catalog_stops_at_p26():
         assert INVENTORY_MATERIAL_LABELS[material_id] == label
         assert BESTIARY_MATERIAL_LABELS[material_id] == label
     assert ALTOS_PONTES_LABEL == "Pontes de Fuligem"
-    assert "Pedreiras Suspensas" not in ALTOS_LOCATIONS
+    assert ALTOS_PEDREIRAS_LABEL == "Pedreiras Suspensas"
     assert "Bastilha de Carga" not in ALTOS_LOCATIONS
     assert "Coração do Colosso" not in ALTOS_LOCATIONS
 
