@@ -47,6 +47,7 @@ from asterion.domain.equipment_stats import (
 )
 from asterion.domain.road import (
     ALTOS_ESCARPA_LOCATION,
+    ALTOS_PONTES_LOCATION,
     ALTOS_REGION,
     BOSQUE_LOCATION,
     CHARNECA_LOCATION,
@@ -216,6 +217,15 @@ class RoundService(RoadService):
                 or not await self._has_location(s, c.id, ALTOS_ESCARPA_LOCATION)
             ):
                 return None
+        elif profile.local_id == ALTOS_PONTES_LOCATION:
+            if (
+                world.region != ALTOS_REGION
+                or c.level < 43
+                or not await self._nareth_mission_completed(s, c.id, "P25")
+                or not await self._nareth_mission_completed(s, c.id, "P26")
+                or not await self._has_location(s, c.id, ALTOS_PONTES_LOCATION)
+            ):
+                return None
         elif profile.local_id == NARETH_POSTO_LOCATION:
             return None
         if profile.local_id in {
@@ -226,6 +236,7 @@ class RoundService(RoadService):
             NARETH_CAMPINAS_LOCATION,
             VARZEAS_GALERIAS_LOCATION,
             ALTOS_ESCARPA_LOCATION,
+            ALTOS_PONTES_LOCATION,
         } and any(
             creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
         ):

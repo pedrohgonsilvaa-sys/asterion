@@ -30,7 +30,12 @@ from asterion.application.equipment_configuration import (
 )
 from asterion.application.groups import ActivityEligibility, GroupError, GroupService
 from asterion.application.progression import consolidate_character_level
-from asterion.application.road import ALTOS_ABRIGO_LABEL, ALTOS_ESCARPA_LABEL, RoadService
+from asterion.application.road import (
+    ALTOS_ABRIGO_LABEL,
+    ALTOS_ESCARPA_LABEL,
+    ALTOS_PONTES_LABEL,
+    RoadService,
+)
 from asterion.application.scripted_combat import (
     apply_action,
     consumable_state,
@@ -51,6 +56,10 @@ from asterion.domain.road import (
     ALTOS_ESCARPA_HUNT_UNLOCK,
     ALTOS_ESCARPA_LOCATION,
     ALTOS_LOBO_ESCARPA,
+    ALTOS_PONTES_ACCESS_UNLOCK,
+    ALTOS_PONTES_EXPLORE_UNLOCK,
+    ALTOS_PONTES_HUNT_UNLOCK,
+    ALTOS_PONTES_LOCATION,
     ALTOS_REGION,
     RULESET,
     CreatureCombatantSpec,
@@ -92,6 +101,14 @@ P25_CODEX_ENTRY = "codex.altos.infraestrutura_sustentacao"
 P25_REGION_CODEX = "codex.altos.regiao"
 P25_NARRATIVE_UNLOCK = "narrative.altos.infraestrutura_reconhecida"
 P25_ACHIEVEMENT = "achievement.altos.peso_antigo"
+P26_ID = "P26"
+P26_MISSION_ID = "mission.altos.p26"
+P26_TITLE = "Ordens de Emergência"
+P26_CONTENT_VERSION = "altos-1.0.1"
+P26_REWARD_SOURCE = P26_MISSION_ID
+P26_CODEX_ENTRY = "codex.altos.regencia_continuidade"
+P26_NARRATIVE_UNLOCK = "narrative.altos.regencia_identificada"
+P26_ACHIEVEMENT = "achievement.altos.ordens_emergencia"
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,7 +142,7 @@ class AltosMissionView:
 
 
 class AltosMissionService:
-    """Quest state, shared objectives, and the fixed P25 scripted encounter."""
+    """Persistent mission progression for the Altos Cinéreos campaign."""
 
     def __init__(
         self,
@@ -139,7 +156,7 @@ class AltosMissionService:
         self.road = RoadService(sessions, server_id)
 
     async def on_location(self, actor: int) -> None:
-        """Commit individual Escarpa entry or shared arrival at the Abrigo."""
+        """Commit Altos location discovery and shared campaign arrivals."""
         async with self.sessions.begin() as session:
             actor_row = await self._character(session, actor)
             if actor_row is None:
@@ -153,6 +170,9 @@ class AltosMissionService:
                 return
             if world.location == ALTOS_ESCARPA_LABEL:
                 await self._enter_escarpa(session, character, world)
+                return
+            if world.location == ALTOS_PONTES_LABEL:
+                await self._enter_pontes(session, character_ids)
                 return
             if world.location != ALTOS_ABRIGO_LABEL:
                 return
@@ -191,6 +211,31 @@ class AltosMissionService:
                     f"p25.abrigo_arrival:{member.character.id}",
                     {"location": ALTOS_ABRIGO_LABEL},
                 )
+
+    async def _enter_pontes(self, session, character_ids) -> None:
+        members = await self._present_p26(
+            session, character_ids, 2, ALTOS_PONTES_LABEL
+        )
+        for member in members:
+            await self._ensure(
+                session,
+                LocationDiscovery,
+                character_id=member.character.id,
+                location_id=ALTOS_PONTES_LOCATION,
+            )
+            member.quest.step = 3
+            member.quest.state_version += 1
+            member.quest.progress = {
+                **(member.quest.progress or {}),
+                "pontes_discovered": True,
+            }
+            await self._credit_p26(
+                session,
+                member.character.id,
+                "p26.discovered_pontes",
+                f"p26.discovered_pontes:{member.character.id}",
+                {"location": ALTOS_PONTES_LOCATION},
+            )
 
     async def _enter_escarpa(self, session, character, world) -> None:
         if character.level < 41 or not await self._quest_completed(
@@ -236,7 +281,30 @@ class AltosMissionService:
 
     async def resume_active(self, actor: int) -> AltosMissionView | None:
         await self.on_location(actor)
-        return await self.resume(actor)
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                return None
+            world = await self._world(session, character.id, lock=False)
+            p26 = await self._quest(session, character.id, P26_ID, lock=False)
+            if p26 is not None:
+                return self._p26_view(character, p26, world)
+            p25 = await self._quest(session, character.id, P25_ID, lock=False)
+            if p25 is not None and p25.status == "active":
+                if p25.content_version != P25_CONTENT_VERSION:
+                    return None
+                return await self._view(session, character, p25, world)
+            if (
+                p25 is not None
+                and p25.status == "completed"
+                and world is not None
+                and world.location == ALTOS_ABRIGO_LABEL
+            ):
+                status = "available" if character.level >= 43 else "suspended"
+                return self._p26_offer_view(character, world, status)
+            if p25 is None or p25.content_version != P25_CONTENT_VERSION:
+                return None
+            return await self._view(session, character, p25, world)
 
     async def resume(self, actor: int) -> AltosMissionView | None:
         async with self.sessions() as session:
@@ -267,7 +335,11 @@ class AltosMissionService:
                         select(LocationDiscovery.location_id).where(
                             LocationDiscovery.character_id == character.id,
                             LocationDiscovery.location_id.in_(
-                                (ALTOS_ESCARPA_LOCATION, ALTOS_ABRIGO_LOCATION)
+                                (
+                                    ALTOS_ESCARPA_LOCATION,
+                                    ALTOS_ABRIGO_LOCATION,
+                                    ALTOS_PONTES_LOCATION,
+                                )
                             ),
                         )
                     )
@@ -278,13 +350,307 @@ class AltosMissionService:
                 for location_id, label in (
                     (ALTOS_ESCARPA_LOCATION, ALTOS_ESCARPA_LABEL),
                     (ALTOS_ABRIGO_LOCATION, ALTOS_ABRIGO_LABEL),
+                    (ALTOS_PONTES_LOCATION, ALTOS_PONTES_LABEL),
                 )
                 if location_id in found
             }
 
+    async def start_p26(self, actor: int, version: int = 0) -> AltosMissionView | None:
+        await self.on_location(actor)
+        async with self.sessions.begin() as session:
+            actor_row = await self._character(session, actor)
+            if actor_row is None:
+                return None
+            await lock_campaign_roster(session, actor_row.id)
+            character = await session.scalar(
+                select(Character).where(Character.id == actor_row.id).with_for_update()
+            )
+            world = await self._world(session, actor_row.id)
+            if character is None or world is None:
+                return None
+            existing = await self._quest(session, character.id, P26_ID)
+            if existing is not None:
+                return self._p26_view(character, existing, world)
+            p25 = await self._quest(session, character.id, P25_ID)
+            if (
+                p25 is None
+                or p25.status != "completed"
+                or p25.content_version != P25_CONTENT_VERSION
+                or world.region != ALTOS_REGION
+                or world.location != ALTOS_ABRIGO_LABEL
+            ):
+                return None
+            if character.level < 43:
+                return self._p26_offer_view(character, world, "suspended")
+            if version != 0 or await self._foreground(session, character.id):
+                return self._p26_offer_view(character, world, "available")
+
+            await self._ensure(
+                session,
+                Unlock,
+                character_id=character.id,
+                unlock_id=ALTOS_PONTES_ACCESS_UNLOCK,
+            )
+            quest = Quest(
+                character_id=character.id,
+                quest_id=P26_ID,
+                title=P26_TITLE,
+                status="active",
+                step=2,
+                content_version=P26_CONTENT_VERSION,
+                state_version=1,
+                progress={"order_received": True},
+            )
+            session.add(quest)
+            await session.flush()
+            await self._credit_p26(
+                session,
+                character.id,
+                "p26.received_order",
+                f"p26.received_order:{character.id}",
+                {"giver": "Sel Ardan", "mission_id": P26_MISSION_ID},
+            )
+            return self._p26_view(character, quest, world)
+
+    def _p26_offer_view(self, character, world, status: str) -> AltosMissionView:
+        return AltosMissionView(
+            character_id=character.id,
+            quest_id=P26_ID,
+            title=P26_TITLE,
+            kind="mission",
+            status=status,
+            step=1,
+            state_version=0,
+            progress={},
+            location=world.location,
+            level=character.level,
+        )
+
+    def _p26_view(self, character, quest, world) -> AltosMissionView:
+        return AltosMissionView(
+            character_id=character.id,
+            quest_id=quest.quest_id,
+            title=quest.title,
+            kind="mission",
+            status=quest.status,
+            step=quest.step,
+            state_version=quest.state_version,
+            progress=quest.progress or {},
+            location=world.location if world is not None else ALTOS_ABRIGO_LABEL,
+            level=character.level,
+        )
+
+    async def _advance_p26(
+        self, session, character_ids, character, quest, world, version, action
+    ) -> AltosMissionView:
+        if (
+            quest.status != "active"
+            or quest.content_version != P26_CONTENT_VERSION
+            or quest.state_version != version
+            or await self._foreground(session, character.id)
+        ):
+            return self._p26_view(character, quest, world)
+
+        if quest.step == 3 and world.location == ALTOS_PONTES_LABEL and action in {
+            "inspect_order_station_1",
+            "inspect_order_station_2",
+            "inspect_order_station_3",
+        }:
+            members = await self._present_p26(
+                session, character_ids, 3, ALTOS_PONTES_LABEL
+            )
+            for member in members:
+                progress = dict(member.quest.progress or {})
+                stations = set(progress.get("order_stations", ()))
+                if action in stations:
+                    continue
+                stations.add(action)
+                progress["order_stations"] = sorted(stations)
+                member.quest.progress = progress
+                if len(stations) == 3:
+                    member.quest.step = 4
+                member.quest.state_version += 1
+                await self._credit_p26(
+                    session,
+                    member.character.id,
+                    f"p26.{action}",
+                    f"p26.{action}:{member.character.id}",
+                    {"location": ALTOS_PONTES_LOCATION, "station": action},
+                )
+        elif (
+            quest.step == 4
+            and world.location == ALTOS_PONTES_LABEL
+            and action == "verify_waiting_bridge"
+        ):
+            members = await self._present_p26(
+                session, character_ids, 4, ALTOS_PONTES_LABEL
+            )
+            for member in members:
+                member.quest.step = 5
+                member.quest.state_version += 1
+                member.quest.progress = {
+                    **(member.quest.progress or {}),
+                    "verified_waiting_bridge": True,
+                }
+                await self._credit_p26(
+                    session,
+                    member.character.id,
+                    "p26.verified_waiting_bridge",
+                    f"p26.verified_waiting_bridge:{member.character.id}",
+                    {"location": ALTOS_PONTES_LOCATION},
+                )
+        elif (
+            quest.step == 5
+            and world.location == ALTOS_PONTES_LABEL
+            and action == "compare_records_with_sel"
+        ):
+            quest.step = 6
+            quest.state_version += 1
+            quest.progress = {
+                **(quest.progress or {}),
+                "compared_records_with_sel": True,
+            }
+            await self._credit_p26(
+                session,
+                character.id,
+                "p26.compared_records_with_sel",
+                f"p26.compared_records_with_sel:{character.id}",
+                {"giver": "Sel Ardan"},
+            )
+        elif (
+            quest.step == 6
+            and world.location == ALTOS_PONTES_LABEL
+            and action == "record_regencia_codex"
+        ):
+            progress = dict(quest.progress or {})
+            if not progress.get("codex_recorded"):
+                await self._ensure(
+                    session,
+                    CodexEntry,
+                    character_id=character.id,
+                    entry_id=P26_CODEX_ENTRY,
+                )
+                await self._ensure(
+                    session,
+                    CodexFragment,
+                    character_id=character.id,
+                    entry_id=P26_CODEX_ENTRY,
+                    fragment_id=P26_CODEX_ENTRY,
+                )
+                progress["codex_recorded"] = True
+                quest.progress = progress
+                quest.step = 7
+                quest.state_version += 1
+                await self._credit_p26(
+                    session,
+                    character.id,
+                    "p26.recorded_regencia_continuidade",
+                    f"p26.recorded_regencia_continuidade:{character.id}",
+                    {"codex_entry": P26_CODEX_ENTRY},
+                )
+        elif (
+            quest.step == 7
+            and world.location == ALTOS_PONTES_LABEL
+            and action == "conclude_emergency_authority"
+            and (quest.progress or {}).get("codex_recorded")
+        ):
+            await self._complete_p26(session, character, quest)
+
+        await session.flush()
+        return self._p26_view(character, quest, world)
+
+    async def _complete_p26(self, session, character, quest) -> None:
+        for unlock_id in (
+            ALTOS_PONTES_HUNT_UNLOCK,
+            ALTOS_PONTES_EXPLORE_UNLOCK,
+            P26_NARRATIVE_UNLOCK,
+        ):
+            await self._ensure(
+                session, Unlock, character_id=character.id, unlock_id=unlock_id
+            )
+        await self._ensure(
+            session, CodexEntry, character_id=character.id, entry_id=P26_CODEX_ENTRY
+        )
+        await self._ensure(
+            session,
+            CodexFragment,
+            character_id=character.id,
+            entry_id=P26_CODEX_ENTRY,
+            fragment_id=P26_CODEX_ENTRY,
+        )
+        await self._ensure(
+            session, Achievement, character_id=character.id, achievement_id=P26_ACHIEVEMENT
+        )
+        event = await session.scalar(
+            select(RewardEvent)
+            .where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == P26_REWARD_SOURCE,
+            )
+            .with_for_update()
+        )
+        if event is None:
+            event = RewardEvent(character_id=character.id, source_id=P26_REWARD_SOURCE)
+            session.add(event)
+            await session.flush()
+            character.xp += 57_900
+            character.crowns += 750
+            session.add_all(
+                (
+                    RewardComponent(reward_event_id=event.id, kind="xp", quantity=57_900),
+                    RewardComponent(reward_event_id=event.id, kind="crowns", quantity=750),
+                    RewardComponent(
+                        reward_event_id=event.id,
+                        kind="material",
+                        item_id="material.altos.ferro_contrapeso",
+                        quantity=3,
+                        payload={"material_id": "material.altos.ferro_contrapeso", "bound": True},
+                    ),
+                    RewardComponent(
+                        reward_event_id=event.id,
+                        kind="material",
+                        item_id="material.altos.cinza_basalto",
+                        quantity=1,
+                        payload={"material_id": "material.altos.cinza_basalto", "bound": True},
+                    ),
+                )
+            )
+            await self.road.deliver_material(
+                session,
+                character,
+                "material.altos.ferro_contrapeso",
+                3,
+                f"{P26_REWARD_SOURCE}:material:ferro_contrapeso",
+                bound=True,
+            )
+            await self.road.deliver_material(
+                session,
+                character,
+                "material.altos.cinza_basalto",
+                1,
+                f"{P26_REWARD_SOURCE}:material:cinza_basalto",
+                bound=True,
+            )
+        progress = dict(quest.progress or {})
+        progress["completed"] = True
+        quest.status = "completed"
+        quest.state_version += 1
+        quest.progress = progress
+        character.ruleset_version = CHARACTER_RULESET
+        await consolidate_character_level(session, character)
+        await self._credit_p26(
+            session,
+            character.id,
+            "p26.completed",
+            f"p26.completed:{character.id}",
+            {"location": ALTOS_PONTES_LOCATION},
+        )
+
     async def advance(
         self, actor: int, version: int, action: str
     ) -> AltosMissionView | None:
+        if action == "receive_order":
+            return await self.start_p26(actor, version)
         await self.on_location(actor)
         async with self.sessions.begin() as session:
             actor_row = await self._character(session, actor)
@@ -294,8 +660,15 @@ class AltosMissionService:
             character = await session.scalar(
                 select(Character).where(Character.id == actor_row.id).with_for_update()
             )
-            quest = await self._quest(session, actor_row.id, P25_ID)
             world = await self._world(session, actor_row.id)
+            p26 = await self._quest(session, actor_row.id, P26_ID)
+            if p26 is not None:
+                if character is None or world is None:
+                    return None
+                return await self._advance_p26(
+                    session, character_ids, character, p26, world, version, action
+                )
+            quest = await self._quest(session, actor_row.id, P25_ID)
             if character is None or quest is None or world is None:
                 return None
             if (
@@ -1206,11 +1579,34 @@ class AltosMissionService:
             location=location,
         )
 
+    async def _present_p26(self, session, character_ids, step, location):
+        return await present_campaign_members(
+            session,
+            character_ids=character_ids,
+            quest_id=P26_ID,
+            content_version=P26_CONTENT_VERSION,
+            step=step,
+            region=ALTOS_REGION,
+            location=location,
+        )
+
     async def _credit(self, session, character_id, objective_id, source_key, evidence):
         await record_campaign_objective_credit(
             session,
             character_id=character_id,
             quest_id=P25_ID,
+            objective_id=objective_id,
+            source_key=source_key,
+            evidence=evidence,
+        )
+
+    async def _credit_p26(
+        self, session, character_id, objective_id, source_key, evidence
+    ):
+        await record_campaign_objective_credit(
+            session,
+            character_id=character_id,
+            quest_id=P26_ID,
             objective_id=objective_id,
             source_key=source_key,
             evidence=evidence,

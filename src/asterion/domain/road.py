@@ -55,20 +55,30 @@ VARZEAS_CAMARA_ACCESS_UNLOCK = "region.varzeas.camara_matriz.available"
 ALTOS_REGION = "Altos Cinéreos"
 ALTOS_ESCARPA = "Escarpa da Cinza"
 ALTOS_ABRIGO = "Abrigo do Peso"
+ALTOS_PONTES = "Pontes de Fuligem"
 ALTOS_ESCARPA_LOCATION = "location.altos.escarpa_cinza"
 ALTOS_ABRIGO_LOCATION = "location.altos.abrigo_peso"
+ALTOS_PONTES_LOCATION = "location.altos.pontes_fuligem"
 ALTOS_ESCARPA_ACCESS_UNLOCK = "unlock.location.altos.escarpa_cinza"
 ALTOS_ABRIGO_ACCESS_UNLOCK = "unlock.location.altos.abrigo_peso"
+ALTOS_PONTES_ACCESS_UNLOCK = "unlock.location.altos.pontes_fuligem"
 ALTOS_ESCARPA_BRAZIER = "bonfire.altos.escarpa"
 ALTOS_ABRIGO_BRAZIER = "bonfire.altos.abrigo"
+ALTOS_PONTES_BRAZIER = "bonfire.altos.ponte_alta"
 ALTOS_ESCARPA_HUNT_UNLOCK = "unlock.hunt.altos.escarpa"
 ALTOS_ESCARPA_EXPLORE_UNLOCK = "unlock.explore.altos.escarpa"
 ALTOS_ESCARPA_ROUND_UNLOCK = "unlock.round.altos.escarpa"
+ALTOS_PONTES_HUNT_UNLOCK = "unlock.hunt.altos.pontes"
+ALTOS_PONTES_EXPLORE_UNLOCK = "unlock.explore.altos.pontes"
+ALTOS_PONTES_ROUND_UNLOCK = "unlock.round.altos.pontes"
 ALTOS_LOBO_ESCARPA = "creature.altos.lobo_escarpa"
 ALTOS_ABUTRE_FULIGEM = "creature.altos.abutre_fuligem"
 ALTOS_ESCARAVELHO_BASALTO = "creature.altos.escaravelho_basalto"
 ALTOS_CARNEIRO_PESO = "creature.altos.carneiro_peso"
 ALTOS_QUEBRA_ESCARPAS = "elite.altos.quebra_escarpas"
+ALTOS_LAGARTO_ESCORIA = "creature.altos.lagarto_escoria"
+ALTOS_QUEBRA_CABOS = "creature.altos.quebra_cabos"
+ALTOS_DEVORADOR_ESCORIA = "elite.altos.devorador_escoria"
 ALTOS_FERRO_CONTRAPESO = "material.altos.ferro_contrapeso"
 ALTOS_COURO_ESCARPA = "material.altos.couro_escarpa"
 ALTOS_LIQUEN_PEDREIRA = "material.altos.liquen_pedreira"
@@ -1480,6 +1490,37 @@ CREATURE_CATALOG = (
         ),
         ai_priority=("fratura_apoio", "pisoteio_alto", "carga_escarpa"),
     ),
+    Creature(
+        ALTOS_LAGARTO_ESCORIA, "Lagarto de Escória", "common", "balanced", 43, 47, 0,
+        ("mordida_escoria", "cauda_atrito", "placa_atrito"),
+        (
+            ("mordida_escoria", "Mordida de Escória", D("1.00"), 0, D(0), 0),
+            ("cauda_atrito", "Cauda de Atrito", D("1.20"), 0, D(0), 0, None, 0, False, 3),
+            ("placa_atrito", "Placa de Atrito", D("0.80"), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.80"), 2),
+        ),
+        ai_priority=("placa_atrito", "cauda_atrito"),
+    ),
+    Creature(
+        ALTOS_QUEBRA_CABOS, "Quebra-Cabos", "common", "controller", 43, 49, 0,
+        ("mordida_fibra", "romper_apoio", "investida_baixa"),
+        (
+            ("mordida_fibra", "Mordida de Fibra", D("0.90"), 0, D(0), 0),
+            ("romper_apoio", "Romper Apoio", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+            ("investida_baixa", "Investida Baixa", D("1.20"), 0, D(0), 0, None, 0, False, 3),
+        ),
+        ai_priority=("romper_apoio", "investida_baixa"),
+    ),
+    Creature(
+        ALTOS_DEVORADOR_ESCORIA, "Devorador de Escória", "elite", "predator", 46, 48, 0,
+        ("mordida_devorador", "rasgo_escoria", "cauda_abrasao", "salto_predatorio"),
+        (
+            ("mordida_devorador", "Mordida do Devorador", D("1.05"), 0, D(0), 0),
+            ("rasgo_escoria", "Rasgo de Escória", D("0.90"), 0, D(0), 0, "bleed", 1, False, 2),
+            ("cauda_abrasao", "Cauda de Abrasão", D("0.75"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+            ("salto_predatorio", "Salto Predatório", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+        ),
+        ai_priority=("rasgo_escoria", "cauda_abrasao", "salto_predatorio"),
+    ),
 )
 
 VARIANTS = {
@@ -1543,6 +1584,9 @@ VARIANT_POOL = {
     ALTOS_ESCARAVELHO_BASALTO: ("resistant", "agile"),
     ALTOS_CARNEIRO_PESO: ("furious", "resistant"),
     ALTOS_QUEBRA_ESCARPAS: (),
+    ALTOS_LAGARTO_ESCORIA: ("furious", "resistant", "agile"),
+    ALTOS_QUEBRA_CABOS: ("agile", "resistant"),
+    ALTOS_DEVORADOR_ESCORIA: (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -1736,6 +1780,24 @@ ALTOS_ESCARPA_PROFILE = HuntLocationProfile(
     explore_unlock=ALTOS_ESCARPA_EXPLORE_UNLOCK,
 )
 
+ALTOS_PONTES_PROFILE = HuntLocationProfile(
+    local_id=ALTOS_PONTES_LOCATION,
+    label=ALTOS_PONTES,
+    creature_weights=(
+        (ALTOS_LOBO_ESCARPA, 15),
+        (ALTOS_ABUTRE_FULIGEM, 18),
+        (ALTOS_CARNEIRO_PESO, 20),
+        (ALTOS_QUEBRA_CABOS, 25),
+        (ALTOS_LAGARTO_ESCORIA, 17),
+        (ALTOS_QUEBRA_ESCARPAS, 2),
+        (ALTOS_DEVORADOR_ESCORIA, 3),
+    ),
+    variant_chance=13,
+    hunt_unlock=ALTOS_PONTES_HUNT_UNLOCK,
+    round_familiarity=ALTOS_PONTES_ROUND_UNLOCK,
+    explore_unlock=ALTOS_PONTES_EXPLORE_UNLOCK,
+)
+
 LOCATION_LEVEL_BANDS = {
     "Estrada das Cinzas": (1, 10),
     "Charneca da Fuligem": (3, 5),
@@ -1754,6 +1816,7 @@ LOCATION_LEVEL_BANDS = {
     "Hortos Hemaris": (35, 39),
     "Galerias de Transferência": (37, 40),
     ALTOS_ESCARPA: (41, 45),
+    ALTOS_PONTES: (43, 49),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -2448,6 +2511,114 @@ ALTOS_ESCARPA_EXPLORATION_PROFILE = ExplorationLocationProfile(
     ),
 )
 
+ALTOS_PONTES_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=ALTOS_PONTES_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition(
+            "braseiro_ponte_alta", "great_discovery",
+            "explore.altos.pontes.braseiro_ponte_alta", 50,
+            "O Braseiro da Ponte Alta foi descoberto entre as estruturas de travessia.",
+            min_level=43, unique=True,
+        ),
+        ExplorationResultDefinition(
+            "plataforma_contrapeso", "great_discovery",
+            "explore.altos.pontes.plataforma_contrapeso", 50,
+            "A Plataforma de Contrapeso Externa foi registrada.",
+            min_level=43, unique=True,
+        ),
+        ExplorationResultDefinition(
+            "livro_prioridades", "knowledge",
+            "explore.altos.pontes.livro_prioridades", 55,
+            "O Livro de Prioridades de Travessia registra a existência de prioridades.",
+            min_level=43, unique=True,
+        ),
+        ExplorationResultDefinition(
+            "marcas_cabos", "knowledge",
+            "explore.altos.pontes.marcas_cabos", 45,
+            "Marcas nos Cabos foram observadas nas Pontes de Fuligem.",
+            min_level=43,
+        ),
+        ExplorationResultDefinition(
+            "corda_substituicao", "narrative",
+            "explore.altos.pontes.corda_substituicao", 55,
+            "Uma Corda de Substituição permanece junto à passagem.",
+            min_level=43,
+        ),
+        ExplorationResultDefinition(
+            "sinal_retorno", "narrative",
+            "explore.altos.pontes.sinal_retorno", 45,
+            "Um Sinal de Retorno aponta para a rota atravessada.",
+            min_level=43,
+        ),
+        ExplorationResultDefinition(
+            "lobo_escarpa", "combat",
+            "explore.altos.pontes.combat.lobo_escarpa", 15,
+            "Um Lobo de Escarpa surge na passarela.", min_level=43,
+            creature_id=ALTOS_LOBO_ESCARPA,
+        ),
+        ExplorationResultDefinition(
+            "abutre_fuligem", "combat",
+            "explore.altos.pontes.combat.abutre_fuligem", 15,
+            "Um Abutre da Fuligem desce sobre as Pontes.", min_level=43,
+            creature_id=ALTOS_ABUTRE_FULIGEM,
+        ),
+        ExplorationResultDefinition(
+            "carneiro_peso", "combat",
+            "explore.altos.pontes.combat.carneiro_peso", 25,
+            "Um Carneiro do Peso bloqueia a passarela.", min_level=43,
+            creature_id=ALTOS_CARNEIRO_PESO,
+        ),
+        ExplorationResultDefinition(
+            "quebra_cabos", "combat",
+            "explore.altos.pontes.combat.quebra_cabos", 25,
+            "Um Quebra-Cabos rompe a tensão de uma estrutura próxima.", min_level=43,
+            creature_id=ALTOS_QUEBRA_CABOS,
+        ),
+        ExplorationResultDefinition(
+            "lagarto_escoria", "combat",
+            "explore.altos.pontes.combat.lagarto_escoria", 20,
+            "Um Lagarto de Escória atravessa a passarela.", min_level=43,
+            creature_id=ALTOS_LAGARTO_ESCORIA,
+        ),
+        ExplorationResultDefinition(
+            "ferro_contrapeso", "resource",
+            "explore.altos.pontes.ferro_contrapeso", 35,
+            "Ferro de Contrapeso pode ser recolhido entre os cabos.", min_level=43,
+        ),
+        ExplorationResultDefinition(
+            "couro_escarpa", "resource",
+            "explore.altos.pontes.couro_escarpa", 20,
+            "Couro de Escarpa pode ser recolhido no local.", min_level=43,
+        ),
+        ExplorationResultDefinition(
+            "liquen_pedreira", "resource",
+            "explore.altos.pontes.liquen_pedreira", 25,
+            "Líquen de Pedreira cresce entre as pedras protegidas.", min_level=43,
+        ),
+        ExplorationResultDefinition(
+            "cinza_basalto", "resource",
+            "explore.altos.pontes.cinza_basalto", 20,
+            "Cinza de Basalto pode ser recolhida entre as estruturas.", min_level=43,
+        ),
+        ExplorationResultDefinition(
+            "fuligem_vento", "atmospheric",
+            "explore.altos.pontes.fuligem_vento", 34,
+            "A fuligem se desloca pelo vento entre as passarelas.", min_level=43,
+        ),
+        ExplorationResultDefinition(
+            "contrapeso_imovel", "atmospheric",
+            "explore.altos.pontes.contrapeso_imovel", 33,
+            "Um contrapeso permanece imóvel sobre a estrutura.", min_level=43,
+        ),
+        ExplorationResultDefinition(
+            "passarela_longa", "atmospheric",
+            "explore.altos.pontes.passarela_longa", 33,
+            "A passarela se estende sobre o vão entre as encostas.", min_level=43,
+        ),
+    ),
+)
+
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
     CHARNECA_LOCATION: CHARNECA_EXPLORATION_PROFILE,
@@ -2466,6 +2637,7 @@ EXPLORATION_PROFILES = {
     VARZEAS_HORTOS_LOCATION: VARZEAS_HORTOS_EXPLORATION_PROFILE,
     VARZEAS_GALERIAS_LOCATION: VARZEAS_GALERIAS_EXPLORATION_PROFILE,
     ALTOS_ESCARPA_LOCATION: ALTOS_ESCARPA_EXPLORATION_PROFILE,
+    ALTOS_PONTES_LOCATION: ALTOS_PONTES_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
@@ -2487,6 +2659,7 @@ HUNT_PROFILES = {
     VARZEAS_HORTOS_LOCATION: VARZEAS_HORTOS_PROFILE,
     VARZEAS_GALERIAS_LOCATION: VARZEAS_GALERIAS_PROFILE,
     ALTOS_ESCARPA_LOCATION: ALTOS_ESCARPA_PROFILE,
+    ALTOS_PONTES_LOCATION: ALTOS_PONTES_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -2705,6 +2878,9 @@ ALTOS_BASIC_MATERIAL_CREATURE_IDS = frozenset(
         ALTOS_ESCARAVELHO_BASALTO,
         ALTOS_CARNEIRO_PESO,
         ALTOS_QUEBRA_ESCARPAS,
+        ALTOS_LAGARTO_ESCORIA,
+        ALTOS_QUEBRA_CABOS,
+        ALTOS_DEVORADOR_ESCORIA,
     }
 )
 
@@ -2883,6 +3059,9 @@ MATERIAL_POOLS = {
         (ALTOS_COURO_ESCARPA, 85),
         (ALTOS_CINZA_BASALTO, 15),
     ),
+    ALTOS_LAGARTO_ESCORIA: ((ALTOS_COURO_ESCARPA, 70), (ALTOS_CINZA_BASALTO, 30)),
+    ALTOS_QUEBRA_CABOS: ((ALTOS_LIQUEN_PEDREIRA, 65), (ALTOS_COURO_ESCARPA, 35)),
+    ALTOS_DEVORADOR_ESCORIA: ((ALTOS_COURO_ESCARPA, 70), (ALTOS_CINZA_BASALTO, 30)),
 }
 
 

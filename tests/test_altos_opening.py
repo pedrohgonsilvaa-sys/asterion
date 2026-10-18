@@ -34,6 +34,7 @@ from asterion.application.road import (
     ALTOS_ABRIGO_LABEL,
     ALTOS_ESCARPA_LABEL,
     ALTOS_LOCATIONS,
+    ALTOS_PONTES_LABEL,
     VARZEAS_CAMARA_LABEL,
 )
 from asterion.application.round import RoundService
@@ -86,9 +87,13 @@ from tests.test_road_integration import _seed_road
 from tests.test_s4_s5_integration import _terminal
 
 
-def test_altos_opening_registers_only_the_two_p25_locations():
+def test_altos_location_catalog_stops_at_p26():
     assert ALTOS_REGION == "Altos Cinéreos"
-    assert ALTOS_LOCATIONS == {ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL}
+    assert ALTOS_LOCATIONS == {
+        ALTOS_ESCARPA_LABEL,
+        ALTOS_ABRIGO_LABEL,
+        ALTOS_PONTES_LABEL,
+    }
     assert ALTOS_ESCARPA_LOCATION == "location.altos.escarpa_cinza"
     assert ALTOS_ABRIGO_LOCATION == "location.altos.abrigo_peso"
     assert ALTOS_ESCARPA_ACCESS_UNLOCK == "unlock.location.altos.escarpa_cinza"
@@ -122,7 +127,7 @@ def test_altos_opening_registers_only_the_two_p25_locations():
         assert MATERIAL_NAMES[material_id] == label
         assert INVENTORY_MATERIAL_LABELS[material_id] == label
         assert BESTIARY_MATERIAL_LABELS[material_id] == label
-    assert "Pontes de Fuligem" not in ALTOS_LOCATIONS
+    assert ALTOS_PONTES_LABEL == "Pontes de Fuligem"
     assert "Pedreiras Suspensas" not in ALTOS_LOCATIONS
     assert "Bastilha de Carga" not in ALTOS_LOCATIONS
     assert "Coração do Colosso" not in ALTOS_LOCATIONS

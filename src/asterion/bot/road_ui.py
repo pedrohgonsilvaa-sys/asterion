@@ -10,6 +10,7 @@ from asterion.application.prologue import CombatView
 from asterion.application.road import (
     ALTOS_ABRIGO_LABEL,
     ALTOS_ESCARPA_LABEL,
+    ALTOS_PONTES_LABEL,
     ALTOS_REGION_LABEL,
     BOSQUE,
     CHARNECA,
@@ -97,6 +98,7 @@ def _location_copy(location: str) -> tuple[str, str]:
         VARZEAS_GALERIAS: "🧱",
         ALTOS_ESCARPA_LABEL: "⛰️",
         ALTOS_ABRIGO_LABEL: "🏘️",
+        ALTOS_PONTES_LABEL: "🌉",
     }.get(location, "🔥")
     if location == VDE_BERCO:
         return f"🌿 {location}", f"{VDE_REGION} · Local de clímax"
@@ -107,7 +109,7 @@ def _location_copy(location: str) -> tuple[str, str]:
         NARETH_REGION
         if location in {NARETH_CAMPINAS, NARETH_POSTO, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL}
         else ALTOS_REGION_LABEL
-        if location in {ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL}
+        if location in {ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL}
         else VARZEAS_REGION
         if location in {VARZEAS_DIQUES, VARZEAS_PORTO, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS}
         else VDE_REGION
@@ -161,6 +163,7 @@ def _route_key(location: str) -> str:
         RUINS: "ruinas",
         ALTOS_ESCARPA_LABEL: "altos_escarpa",
         ALTOS_ABRIGO_LABEL: "altos_abrigo",
+        ALTOS_PONTES_LABEL: "altos_pontes",
     }[location]
 
 
@@ -806,6 +809,7 @@ def render_current_local(
         VARZEAS_CAMARA_LABEL,
         ALTOS_ESCARPA_LABEL,
         ALTOS_ABRIGO_LABEL,
+        ALTOS_PONTES_LABEL,
     }:
         for destination in view.route_destinations:
             route_key, label = {
@@ -847,6 +851,8 @@ def render_current_local(
                 (ALTOS_ESCARPA_LABEL, VARZEAS_CAMARA_LABEL): ("varzeas_camara", "Retornar à Câmara da Matriz"),
                 (ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL): ("altos_abrigo", "Seguir para o Abrigo do Peso"),
                 (ALTOS_ABRIGO_LABEL, ALTOS_ESCARPA_LABEL): ("altos_escarpa", "Retornar à Escarpa da Cinza"),
+                (ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL): ("altos_pontes", "Seguir para Pontes de Fuligem"),
+                (ALTOS_PONTES_LABEL, ALTOS_ABRIGO_LABEL): ("altos_abrigo", "Retornar ao Abrigo do Peso"),
             }.get((view.location, destination), (None, None))
             if route_key is not None:
                 keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])
@@ -945,6 +951,8 @@ def render_current_local(
         lines.extend(["", "🏘️ Hub seguro · Abrigo do Peso", "🚫 Caçada e Desbravar · Indisponíveis neste Local"])
         if ALTOS_ESCARPA_LABEL in view.route_destinations:
             keyboard.append([InlineKeyboardButton(text="Retornar à Escarpa da Cinza", callback_data="road:route:altos_escarpa")])
+        if ALTOS_PONTES_LABEL in view.route_destinations:
+            keyboard.append([InlineKeyboardButton(text="Seguir para Pontes de Fuligem", callback_data="road:route:altos_pontes")])
         if view.brazier_label:
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
         if mission_available:
@@ -955,6 +963,14 @@ def render_current_local(
                 keyboard.append([InlineKeyboardButton(text="Seguir para o Abrigo do Peso", callback_data="road:route:altos_abrigo")])
             elif destination == VARZEAS_CAMARA_LABEL:
                 keyboard.append([InlineKeyboardButton(text="Retornar à Câmara da Matriz", callback_data="road:route:varzeas_camara")])
+        if view.brazier_label:
+            lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        if mission_available:
+            keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
+    elif view.location == ALTOS_PONTES_LABEL:
+        lines.extend(["", "🌉 Pontes de Fuligem · Altos Cinéreos"])
+        if ALTOS_ABRIGO_LABEL in view.route_destinations:
+            keyboard.append([InlineKeyboardButton(text="Retornar ao Abrigo do Peso", callback_data="road:route:altos_abrigo")])
         if view.brazier_label:
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
         if mission_available:

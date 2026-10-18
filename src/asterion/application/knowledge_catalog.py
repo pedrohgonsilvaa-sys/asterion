@@ -216,6 +216,20 @@ CODEX_ENTRIES = (
         150,
         "location.altos.escarpa_cinza",
     ),
+    CodexPresentation(
+        "codex.altos.regencia_continuidade",
+        "Regência de Continuidade",
+        "regions",
+        160,
+        "location.altos.pontes_fuligem",
+    ),
+    CodexPresentation(
+        "codex.altos.prioridades_carga",
+        "Prioridades de Carga",
+        "regions",
+        170,
+        "location.altos.pontes_fuligem",
+    ),
     CodexPresentation("codex.figure.iven_raal", "Iven Raal", "figures", 30),
     CodexPresentation("codex.mystery.o_no_antigo", "O Nó Antigo", "mysteries", 50),
     CodexPresentation(
@@ -296,6 +310,14 @@ CODEX_FRAGMENTS = {
     "codex.altos.infraestrutura_sustentacao": FragmentPresentation(
         "Carga Observável",
         "Carga e escoras foram observadas; não há registro de autorização.",
+    ),
+    "codex.altos.regencia_continuidade": FragmentPresentation(
+        "Regência de Continuidade",
+        "Os registros identificam uma autoridade emergencial chamada Regência de Continuidade. Sua cadeia integral de decisões permanece desconhecida.",
+    ),
+    "explore.altos.pontes.livro_prioridades": FragmentPresentation(
+        "Livro de Prioridades de Travessia",
+        "Um livro registra a existência de prioridades de travessia. Seu conteúdo ainda não permite interpretar quais rotas foram priorizadas.",
     ),
     "explore.altos.escarpa.caderno_resgate_rasgado": FragmentPresentation(
         "Caderno de Resgate Rasgado",
@@ -1047,6 +1069,12 @@ ACHIEVEMENTS = (
         "exploration",
         "Concluiu todos os resultados únicos de Desbravar das Várzeas Carmesins.",
     ),
+    AchievementPresentation(
+        "achievement.altos.ordens_emergencia",
+        "Ordens de Emergência",
+        "exploration",
+        "Concluiu P26 — Ordens de Emergência.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
@@ -1109,6 +1137,7 @@ VARZEAS_LOCATIONS = {
 ALTOS_LOCATIONS = {
     "location.altos.escarpa_cinza": "Escarpa da Cinza",
     "location.altos.abrigo_peso": "Abrigo do Peso",
+    "location.altos.pontes_fuligem": "Pontes de Fuligem",
 }
 LOCATION_LABELS = (
     TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS | VARZEAS_LOCATIONS | ALTOS_LOCATIONS
@@ -1146,6 +1175,7 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     **{location_id: location_id for location_id in VARZEAS_LOCATIONS},
     "Escarpa da Cinza": "location.altos.escarpa_cinza",
     "Abrigo do Peso": "location.altos.abrigo_peso",
+    "Pontes de Fuligem": "location.altos.pontes_fuligem",
     **{location_id: location_id for location_id in ALTOS_LOCATIONS},
 }
 MATERIAL_LABELS = {
@@ -1389,6 +1419,15 @@ CREATURE_PRESENTATION = {
     ),
     "elite.altos.quebra_escarpas": CreaturePresentation(
         ALTOS_REGION_ID, ("location.altos.escarpa_cinza",)
+    ),
+    "creature.altos.lagarto_escoria": CreaturePresentation(
+        ALTOS_REGION_ID, ("location.altos.pontes_fuligem",)
+    ),
+    "creature.altos.quebra_cabos": CreaturePresentation(
+        ALTOS_REGION_ID, ("location.altos.pontes_fuligem",)
+    ),
+    "elite.altos.devorador_escoria": CreaturePresentation(
+        ALTOS_REGION_ID, ("location.altos.pontes_fuligem",)
     ),
 }
 CREATURE_NOTES = {

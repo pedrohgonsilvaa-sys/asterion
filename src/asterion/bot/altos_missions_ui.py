@@ -6,7 +6,7 @@ from html import escape
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from asterion.application.altos_missions import P25_TITLE, AltosMissionView
+from asterion.application.altos_missions import P25_TITLE, P26_TITLE, AltosMissionView
 from asterion.application.prologue import CombatView
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
@@ -17,7 +17,8 @@ def _button(text: str, callback: str) -> InlineKeyboardButton:
 
 
 def render_altos_mission(view: AltosMissionView) -> Screen:
-    title = escape(view.title or P25_TITLE)
+    fallback_title = P26_TITLE if view.quest_id == "P26" else P25_TITLE
+    title = escape(view.title or fallback_title)
     rows: list[list[InlineKeyboardButton]] = []
     if view.kind == "combat" and view.combat is not None and view.activity_id is not None:
         hud = render_combat(
@@ -47,6 +48,9 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
             hud.keyboard,
             parse_mode=hud.parse_mode,
         )
+
+    if view.quest_id == "P26":
+        return _render_p26(view, title, rows)
 
     if view.status == "completed":
         text = (
@@ -116,5 +120,64 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         else:
             rows.append([_button("Concluir com Rava Kern", f"altos:action:{view.state_version}:conclude_with_rava")])
 
+    rows.append([_button("← Missões", "world:missions")])
+    return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def _render_p26(view: AltosMissionView, title: str, rows) -> Screen:
+    if view.status == "suspended":
+        return Screen(
+            f"📜 {title} · Suspensa\n\nP25 deve estar concluída e o personagem precisa alcançar Nv. 43 para receber a ordem de Sel Ardan.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=[[_button("← Missões", "world:missions")]]),
+        )
+    if view.status == "available":
+        rows.append([_button("Receber ordem de Sel Ardan", "altos:action:0:receive_order")])
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Disponível\nAltos Cinéreos · Abrigo do Peso\n\nSel Ardan entrega uma ordem sem contexto suficiente.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    if view.status == "completed":
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Concluída\n\n✨ 57.900 XP · 750 Coroas\n📦 3 Ferros de Contrapeso · 1 Cinza de Basalto",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+
+    step_text = {
+        2: "Alcance e descubra Pontes de Fuligem.",
+        3: "Examine três estações de ordem com datas e selos físicos diferentes.",
+        4: "Verifique a ponte mantida em espera por uma autorização incompatível.",
+        5: "Compare os registros com Sel Ardan.",
+        6: "Registre pela primeira vez o nome Regência de Continuidade no Códice.",
+        7: "Conclua que a Regência era uma autoridade emergencial, sem reconstruir sua cadeia integral de decisões.",
+    }.get(view.step, "Retome a etapa atual da missão.")
+    local = "Pontes de Fuligem" if view.step in {2, 3, 4, 5, 6, 7} else "Abrigo do Peso"
+    lines = [f"📜 {title} · Em Andamento", f"Altos Cinéreos · {local}", "", step_text]
+    if view.step == 2:
+        rows.append([_button("Seguir para Pontes de Fuligem", "road:route:altos_pontes")])
+    elif view.step == 3:
+        examined = set(view.progress.get("order_stations", ()))
+        for action, label in (
+            ("inspect_order_station_1", "Examinar estação de ordem I"),
+            ("inspect_order_station_2", "Examinar estação de ordem II"),
+            ("inspect_order_station_3", "Examinar estação de ordem III"),
+        ):
+            if action not in examined:
+                rows.append([_button(label, f"altos:action:{view.state_version}:{action}")])
+    elif view.step == 4:
+        rows.append([_button("Verificar a ponte em espera", f"altos:action:{view.state_version}:verify_waiting_bridge")])
+    elif view.step == 5:
+        if view.location == "Pontes de Fuligem":
+            rows.append([_button("Comparar registros com Sel Ardan", f"altos:action:{view.state_version}:compare_records_with_sel")])
+        else:
+            rows.append([_button("Retornar a Pontes de Fuligem", "road:route:altos_pontes")])
+    elif view.step == 6:
+        rows.append([_button("Registrar Regência de Continuidade", f"altos:action:{view.state_version}:record_regencia_codex")])
+    elif view.step == 7:
+        rows.append([_button("Concluir a análise com Sel Ardan", f"altos:action:{view.state_version}:conclude_emergency_authority")])
     rows.append([_button("← Missões", "world:missions")])
     return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
