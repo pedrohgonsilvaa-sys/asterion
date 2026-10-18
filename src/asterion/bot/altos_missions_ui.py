@@ -16,6 +16,7 @@ from asterion.application.altos_missions import (
     P29_TITLE,
     P30_REWARD_OPTIONS,
     P30_TITLE,
+    S26_TITLE,
     AltosMissionView,
 )
 from asterion.application.prologue import CombatView
@@ -34,6 +35,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         else P27_TITLE if view.quest_id == "P27"
         else P26_TITLE if view.quest_id == "P26"
         else P30_TITLE if view.quest_id == "P30"
+        else S26_TITLE if view.quest_id == "S26"
         else P25_TITLE
     )
     title = escape(view.title or fallback_title)
@@ -60,8 +62,20 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
                 combat_actor_key=view.combat_actor_key,
             )
         )
+        combat_location = (
+            view.location
+            if view.quest_id == "S26"
+            else "Coração do Colosso"
+            if view.quest_id == "P30"
+            else "Bastilha de Carga"
+            if view.quest_id in {"P28", "P29"}
+            else "Pedreiras Suspensas"
+            if view.quest_id == "P27"
+            else "Escarpa da Cinza"
+        )
+        encounter_label = "Encontro roteirizado" if view.quest_id == "S26" else "Encontro de Campanha"
         return Screen(
-            f"📜 {title} · Altos Cinéreos\n⚔️ Encontro de Campanha · {'Coração do Colosso' if view.quest_id == 'P30' else 'Bastilha de Carga' if view.quest_id in {'P28', 'P29'} else 'Pedreiras Suspensas' if view.quest_id == 'P27' else 'Escarpa da Cinza'}\n\n{hud.text}",
+            f"📜 {title} · Altos Cinéreos\n⚔️ {encounter_label} · {escape(combat_location)}\n\n{hud.text}",
             "missions",
             hud.keyboard,
             parse_mode=hud.parse_mode,
@@ -77,6 +91,8 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         return _render_p30(view, title, rows)
     if view.quest_id == "P26":
         return _render_p26(view, title, rows)
+    if view.quest_id == "S26":
+        return _render_s26_combat_step(view, title, rows)
 
     if view.status == "completed":
         text = (
@@ -148,6 +164,33 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
 
     rows.append([_button("← Missões", "world:missions")])
     return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def _render_s26_combat_step(view: AltosMissionView, title: str, rows) -> Screen:
+    location = escape(view.location)
+    if view.step == 3:
+        step_text = "Vença o Carneiro do Peso (Nv.44) em combate roteirizado."
+        if view.progress.get("awaiting_retry"):
+            rows.append(
+                [_button("Tentar novamente", f"altos:retry:S26:{view.state_version}")]
+            )
+        else:
+            rows.extend(
+                (
+                    [_button("Iniciar encontro Solo", f"altos:combat:S26:{view.state_version}:solo")],
+                    [_button("Solicitar encontro em Grupo", f"altos:combat:S26:{view.state_version}:group")],
+                )
+            )
+    else:
+        step_text = "Combate resolvido. Retome Turno sem Fim para continuar."
+        rows.append([_button("Retomar Turno sem Fim", "s26:resume")])
+    rows.append([_button("← Missões", "world:missions")])
+    text = (
+        f"📜 {title} · Em Andamento\nAltos Cinéreos · {location}\n\n"
+        f"Etapa {view.step}/6 · {step_text}\n\n"
+        "Encontro de missão · sem Variante e sem settlement econômico próprio."
+    )
+    return Screen(text, "missions", InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 def _render_p26(view: AltosMissionView, title: str, rows) -> Screen:

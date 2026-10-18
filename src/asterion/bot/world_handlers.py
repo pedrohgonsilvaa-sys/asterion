@@ -62,6 +62,7 @@ from asterion.application.s4 import S4Service
 from asterion.application.s5 import S5Service
 from asterion.application.s6 import S6Service
 from asterion.application.s25 import S25Service
+from asterion.application.s26 import S26Service
 from asterion.application.varzeas_missions import (
     S19_ID,
     S20_ID,
@@ -108,6 +109,7 @@ from asterion.bot.s3_ui import render_s3
 from asterion.bot.s4_ui import render_s4
 from asterion.bot.s5_ui import render_s5
 from asterion.bot.s6_ui import render_s6
+from asterion.bot.s26_ui import render_s26
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
 from asterion.bot.vde_missions_ui import render_vde_mission
 from asterion.bot.world_ui import render_adventure, render_world
@@ -139,6 +141,7 @@ def world_router(
     varzeas_missions: VarzeasMissionService | None = None,
     altos_missions: AltosMissionService | None = None,
     s25: S25Service | None = None,
+    s26: S26Service | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -157,13 +160,22 @@ def world_router(
         return render_combat(combat_view) if combat_view is not None else None
 
     async def resume_altos(message: Message, actor: int, *, edit: bool = False) -> bool:
-        if altos_missions is None:
-            return False
-        view = await altos_missions.resume_active(actor)
-        if view is None or view.status != "active":
-            return False
-        await present(message, render_altos_mission(view), images, edit=edit)
-        return True
+        if altos_missions is not None:
+            view = await altos_missions.resume_active(actor)
+            if view is not None and view.status == "active":
+                await present(message, render_altos_mission(view), images, edit=edit)
+                return True
+        if s26 is not None:
+            secondary = await s26.resume_active(actor)
+            if secondary is not None and secondary.status == "active":
+                screen = (
+                    render_altos_mission(secondary)
+                    if hasattr(secondary, "quest_id")
+                    else render_s26(secondary)
+                )
+                await present(message, screen, images, edit=edit)
+                return True
+        return False
 
     async def show(message: Message):
         dungeon_view = await dungeons.resume(message.from_user.id) if dungeons and message.from_user else None
@@ -1371,6 +1383,7 @@ def world_router(
             else None
         )
         s25_view = await s25.summary(query.from_user.id) if s25 else None
+        s26_view = await s26.summary(query.from_user.id) if s26 else None
         if altos_view is not None and altos_view.status == "active":
             mission_screen = render_altos_mission(altos_view)
             if s25_view is not None:
@@ -1394,6 +1407,33 @@ def world_router(
                     rows.append([InlineKeyboardButton(text="A Ponte que Espera", callback_data=secondary_action)])
                 mission_screen = Screen(
                     mission_screen.text + f"\n\n📜 Missão Secundária · A Ponte que Espera · {secondary_state}",
+                    mission_screen.image_key,
+                    InlineKeyboardMarkup(inline_keyboard=rows),
+                    parse_mode=mission_screen.parse_mode,
+                )
+            if s26_view is not None and (
+                s26_view.status in {"active", "completed"}
+                or s26_view.available
+                or s26_view.reacceptable
+            ):
+                secondary_action = (
+                    "s26:resume"
+                    if s26_view.status in {"active", "completed"}
+                    else "s26:hesa"
+                )
+                secondary_state = (
+                    "Em Andamento"
+                    if s26_view.status == "active"
+                    else "Concluída"
+                    if s26_view.status == "completed"
+                    else "Disponível para reaceite"
+                    if s26_view.reacceptable
+                    else "Disponível"
+                )
+                rows = list(mission_screen.keyboard.inline_keyboard) if mission_screen.keyboard else []
+                rows.append([InlineKeyboardButton(text="Turno sem Fim", callback_data=secondary_action)])
+                mission_screen = Screen(
+                    mission_screen.text + f"\n\n📜 Missão Secundária · Turno sem Fim · {secondary_state}",
                     mission_screen.image_key,
                     InlineKeyboardMarkup(inline_keyboard=rows),
                     parse_mode=mission_screen.parse_mode,
@@ -1789,6 +1829,20 @@ def world_router(
             else:
                 state, action = "Indisponível", None
             secondary_entries.append((f"📜 A Ponte que Espera · {state}", action))
+        if s26_view is not None and (
+            s26_view.status in {"active", "completed"}
+            or s26_view.available
+            or s26_view.reacceptable
+        ):
+            if s26_view.status == "active":
+                state, action = "Em Andamento", "s26:resume"
+            elif s26_view.status == "completed":
+                state, action = "Concluída", "s26:resume"
+            elif s26_view.reacceptable:
+                state, action = "Disponível para reaceite", "s26:hesa"
+            else:
+                state, action = "Disponível", "s26:hesa"
+            secondary_entries.append((f"📜 Turno sem Fim · {state}", action))
         if secondary_entries:
             secondary_lines = []
             secondary_buttons = []

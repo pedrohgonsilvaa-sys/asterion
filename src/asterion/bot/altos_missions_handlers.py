@@ -152,6 +152,22 @@ def altos_missions_router(
                         return
                 else:
                     raise ValueError("invalid combat mode")
+            elif len(parts) == 5 and parts[1] == "combat" and parts[2] == "S26":
+                version = int(parts[3])
+                if parts[4] == "solo":
+                    view = await service.start_solo_combat(
+                        query.from_user.id, version, "S26"
+                    )
+                elif parts[4] == "group":
+                    view = await service.propose_group_combat(
+                        query.from_user.id, version, "S26"
+                    )
+                    if view is not None and view.proposal_id is not None:
+                        await query.answer("Confirmação enviada ao Grupo.")
+                        await show_group(query)
+                        return
+                else:
+                    raise ValueError("invalid combat mode")
             elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "P27":
                 view = await service.retry_combat(query.from_user.id, int(parts[3]), "P27")
             elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "P28":
@@ -160,6 +176,8 @@ def altos_missions_router(
                 view = await service.retry_combat(query.from_user.id, int(parts[3]), "P29")
             elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "P30":
                 view = await service.retry_combat(query.from_user.id, int(parts[3]), "P30")
+            elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "S26":
+                view = await service.retry_combat(query.from_user.id, int(parts[3]), "S26")
             else:
                 if not (
                     len(parts) == 5
@@ -207,6 +225,7 @@ def altos_missions_router(
                 query.from_user.id,
                 proposal_id,
                 expected_revision=revision,
+                quest_id=(proposal.context_payload or {}).get("quest_id", "P25"),
             )
         except GroupError as exc:
             message = (

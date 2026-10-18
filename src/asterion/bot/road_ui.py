@@ -969,6 +969,7 @@ def render_current_local(
             keyboard.append([InlineKeyboardButton(text="Seguir para Pontes de Fuligem", callback_data="road:route:altos_pontes")])
         if view.brazier_label:
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        keyboard.append([InlineKeyboardButton(text="Hesa Tor", callback_data="s26:hesa")])
         if mission_available:
             keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     elif view.location == ALTOS_ESCARPA_LABEL:
@@ -988,6 +989,7 @@ def render_current_local(
             keyboard.append([InlineKeyboardButton(text="Retornar ao Abrigo do Peso", callback_data="road:route:altos_abrigo")])
         if view.brazier_label:
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        keyboard.append([InlineKeyboardButton(text="Hesa Tor", callback_data="s26:hesa")])
         if mission_available:
             keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     elif view.location == ALTOS_PEDREIRAS_LABEL:

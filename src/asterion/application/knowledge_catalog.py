@@ -217,6 +217,13 @@ CODEX_ENTRIES = (
         "location.altos.escarpa_cinza",
     ),
     CodexPresentation(
+        "codex.altos.turno_sem_fim",
+        "Turno sem Fim",
+        "regions",
+        155,
+        "location.altos.abrigo_peso",
+    ),
+    CodexPresentation(
         "codex.altos.regencia_continuidade",
         "Regência de Continuidade",
         "regions",
@@ -331,6 +338,10 @@ CODEX_FRAGMENTS = {
     "codex.altos.infraestrutura_sustentacao": FragmentPresentation(
         "Carga Observável",
         "Carga e escoras foram observadas; não há registro de autorização.",
+    ),
+    "codex.altos.turno_sem_fim": FragmentPresentation(
+        "Turno sem Fim",
+        "O registro elogia o turno que também prolongou a obrigação. A conclusão preserva que heroísmo individual e exploração institucional podem coexistir.",
     ),
     "codex.fragment.altos.autorizacao_que_nunca_veio": FragmentPresentation(
         "Autorização que Nunca Veio",
