@@ -30,6 +30,7 @@ from asterion.application.road import (
     ALTOS_PONTES_LABEL,
     ALTOS_REGION_LABEL,
     BOSQUE,
+    CONFINS_ESTRADAS_AUSENTES_LABEL,
     CONFINS_LOCATION_CATALOG,
     CONFINS_MARCHA_LABEL,
     CONFINS_REGION_LABEL,
@@ -1182,6 +1183,7 @@ def world_router(
             "road:route:altos_coracao": ALTOS_CORACAO_LABEL,
             "road:route:confins_marcha": CONFINS_MARCHA_LABEL,
             "road:route:confins_ultimo_refugio": CONFINS_ULTIMO_REFUGIO_LABEL,
+            "road:route:confins_estradas_ausentes": CONFINS_ESTRADAS_AUSENTES_LABEL,
         }.get(route_key)
         route_attempt_id = exploration_callback_attempt_id(query)
         route_has_attempt_id = len(route_parts) == 4
@@ -1287,6 +1289,7 @@ def world_router(
                 ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL,
                 ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL,
                 CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL,
+                CONFINS_ESTRADAS_AUSENTES_LABEL,
             }:
                 if altos_missions is not None:
                     await altos_missions.on_location(query.from_user.id)
@@ -1380,6 +1383,7 @@ def world_router(
                 ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL,
                 ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL,
                 CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL,
+                CONFINS_ESTRADAS_AUSENTES_LABEL,
             }:
                 if altos_missions is not None:
                     await altos_missions.on_location(query.from_user.id)
@@ -2712,6 +2716,7 @@ def world_router(
             "altos_coracao": ALTOS_CORACAO_LABEL,
             "confins_marcha": CONFINS_MARCHA_LABEL,
             "confins_ultimo_refugio": CONFINS_ULTIMO_REFUGIO_LABEL,
+            "confins_estradas_ausentes": CONFINS_ESTRADAS_AUSENTES_LABEL,
         }
         name = names.get(key)
         if name is None:
@@ -2732,6 +2737,7 @@ def world_router(
             "varzeas_diques": "🧱", "varzeas_porto": "⚓", "varzeas_brejos": "🌫️", "varzeas_hortos": "🌱", "varzeas_galerias": "🧱", "varzeas_camara": "🏛️",
             "altos_escarpa": "🌋", "altos_abrigo": "🏘️", "altos_pontes": "🌉", "altos_pedreiras": "⛏️", "altos_bastilha": "🏰", "altos_coracao": "🌋",
             "confins_marcha": "🌫️", "confins_ultimo_refugio": "🏚️",
+            "confins_estradas_ausentes": "🧭",
         }[key]
         level_band = {
             "road": "Nv. 1–10",
@@ -2764,6 +2770,7 @@ def world_router(
             "altos_coracao": "Local de clímax",
             "confins_marcha": "Nv. 51–54",
             "confins_ultimo_refugio": "Hub seguro",
+            "confins_estradas_ausentes": "Nv. 53–56",
         }[key]
         region = (
             "Vales dos Enforcados"
@@ -2780,7 +2787,7 @@ def world_router(
         )
         lines = [f"{icon} {name}" + (" · Local Atual" if is_current else ""), f"{region} · {level_band}"]
         keyboard: list[list[InlineKeyboardButton]] = []
-        if key in {"charneca", "bosque", "ruinas", "vde_garganta", "vde_vigilia", "vde_mata", "vde_baixios", "vde_claustro", "nareth_campinas", "nareth_posto", "nareth_canais", "nareth_campos", "nareth_observatorio", "varzeas_diques", "varzeas_porto", "varzeas_brejos", "varzeas_hortos", "varzeas_galerias", "altos_escarpa", "altos_abrigo", "altos_pontes", "altos_pedreiras", "altos_bastilha", "confins_marcha", "confins_ultimo_refugio"}:
+        if key in {"charneca", "bosque", "ruinas", "vde_garganta", "vde_vigilia", "vde_mata", "vde_baixios", "vde_claustro", "nareth_campinas", "nareth_posto", "nareth_canais", "nareth_campos", "nareth_observatorio", "varzeas_diques", "varzeas_porto", "varzeas_brejos", "varzeas_hortos", "varzeas_galerias", "altos_escarpa", "altos_abrigo", "altos_pontes", "altos_pedreiras", "altos_bastilha", "confins_marcha", "confins_ultimo_refugio", "confins_estradas_ausentes"}:
             known_brazier = None
             if is_current and road_view is not None and road_view.location == name:
                 known_brazier = road_view.brazier_label
@@ -2836,6 +2843,7 @@ def world_router(
                     ALTOS_CORACAO_LABEL: "road:route:altos_coracao",
                     CONFINS_MARCHA_LABEL: "road:route:confins_marcha",
                     CONFINS_ULTIMO_REFUGIO_LABEL: "road:route:confins_ultimo_refugio",
+                    CONFINS_ESTRADAS_AUSENTES_LABEL: "road:route:confins_estradas_ausentes",
                 }
                 for destination in road_view.route_destinations:
                     if destination == current:
@@ -2981,6 +2989,7 @@ def world_router(
                     ALTOS_CORACAO_LABEL: "road:route:altos_coracao",
                     CONFINS_MARCHA_LABEL: "road:route:confins_marcha",
                     CONFINS_ULTIMO_REFUGIO_LABEL: "road:route:confins_ultimo_refugio",
+                    CONFINS_ESTRADAS_AUSENTES_LABEL: "road:route:confins_estradas_ausentes",
                 }.get(name)
             if road_view is not None and route_callback and name in road_view.route_destinations:
                 route_label = {
@@ -3014,6 +3023,7 @@ def world_router(
                     ALTOS_CORACAO_LABEL: "Seguir ao Coração do Colosso",
                     CONFINS_MARCHA_LABEL: "Atravessar à Marcha Nebulosa",
                     CONFINS_ULTIMO_REFUGIO_LABEL: "Seguir para o Último Refúgio",
+                    CONFINS_ESTRADAS_AUSENTES_LABEL: "Seguir para Estradas Ausentes",
                 }[name]
                 lines.extend(["", "🧭 Rota terrestre · Disponível"])
                 keyboard.append([InlineKeyboardButton(text=route_label, callback_data=route_callback)])
@@ -3089,6 +3099,7 @@ def world_router(
                 "🌋" if current == ALTOS_CORACAO_LABEL else
                 "🌫️" if current == CONFINS_MARCHA_LABEL else
                 "🏚️" if current == CONFINS_ULTIMO_REFUGIO_LABEL else
+                "🧭" if current == CONFINS_ESTRADAS_AUSENTES_LABEL else
                 "🪨" if current == RUINS else
                 "🌫️" if current == VDE_VIGILIA else "🔥"
             )
@@ -3101,7 +3112,7 @@ def world_router(
                 known_regions.append(VARZEAS_REGION)
             if ALTOS_ESCARPA_LABEL in known or ALTOS_ABRIGO_LABEL in known or ALTOS_PONTES_LABEL in known or ALTOS_PEDREIRAS_LABEL in known or ALTOS_BASTILHA_LABEL in known or ALTOS_CORACAO_LABEL in known:
                 known_regions.append(ALTOS_REGION_LABEL)
-            if CONFINS_MARCHA_LABEL in known or CONFINS_ULTIMO_REFUGIO_LABEL in known:
+            if CONFINS_MARCHA_LABEL in known or CONFINS_ULTIMO_REFUGIO_LABEL in known or CONFINS_ESTRADAS_AUSENTES_LABEL in known:
                 known_regions.append(CONFINS_REGION_LABEL)
             current_line = f"{current_icon} {current} · Local Atual" if current else ""
             text = (
@@ -3435,6 +3446,7 @@ def world_router(
         map_keys = {
             CONFINS_MARCHA_LABEL: "confins_marcha",
             CONFINS_ULTIMO_REFUGIO_LABEL: "confins_ultimo_refugio",
+            CONFINS_ESTRADAS_AUSENTES_LABEL: "confins_estradas_ausentes",
         }
         known_locations = set(known)
         ordered = tuple((name, map_keys.get(name)) for name in CONFINS_LOCATION_CATALOG)
@@ -3459,7 +3471,10 @@ def world_router(
                 if known_here
                 else "Bloqueado"
             )
-            icon = "🏚️" if name == CONFINS_ULTIMO_REFUGIO_LABEL else "🌫️"
+            icon = (
+                "🏚️" if name == CONFINS_ULTIMO_REFUGIO_LABEL else
+                "🧭" if name == CONFINS_ESTRADAS_AUSENTES_LABEL else "🌫️"
+            )
             lines.append(f"{index} {icon} {name} · {state}")
             if key is not None and (known_here or route_open or brazier_open):
                 buttons.append(
@@ -3545,6 +3560,7 @@ def world_router(
             "altos_coracao": ALTOS_CORACAO_LABEL,
             "confins_marcha": CONFINS_MARCHA_LABEL,
             "confins_ultimo_refugio": CONFINS_ULTIMO_REFUGIO_LABEL,
+            "confins_estradas_ausentes": CONFINS_ESTRADAS_AUSENTES_LABEL,
         }
         destination = names.get(key)
         if destination is None:
@@ -3587,6 +3603,7 @@ def world_router(
                 ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL,
                 ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL,
                 CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL,
+                CONFINS_ESTRADAS_AUSENTES_LABEL,
             }:
                 if altos_missions is not None:
                     await altos_missions.on_location(query.from_user.id)
@@ -3640,6 +3657,7 @@ def world_router(
             ALTOS_CORACAO_LABEL: "altos_coracao",
             CONFINS_MARCHA_LABEL: "confins_marcha",
             CONFINS_ULTIMO_REFUGIO_LABEL: "confins_ultimo_refugio",
+            CONFINS_ESTRADAS_AUSENTES_LABEL: "confins_estradas_ausentes",
         }.get(current)
         back_callback = (
             "world:local"

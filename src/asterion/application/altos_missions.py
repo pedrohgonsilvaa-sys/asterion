@@ -39,6 +39,7 @@ from asterion.application.road import (
     ALTOS_ESCARPA_LABEL,
     ALTOS_PEDREIRAS_LABEL,
     ALTOS_PONTES_LABEL,
+    CONFINS_ESTRADAS_AUSENTES_LABEL,
     CONFINS_MARCHA_LABEL,
     CONFINS_ULTIMO_REFUGIO_LABEL,
     RoadService,
@@ -87,7 +88,12 @@ from asterion.domain.road import (
     ALTOS_REGION,
     ALTOS_SUPERVISOR_CARGA,
     ALTOS_VIGIA_CARGA,
+    CONFINS_ANDARILHO_REPETIDO,
     CONFINS_CAO_NEVOA,
+    CONFINS_ESTRADAS_ACCESS_UNLOCK,
+    CONFINS_ESTRADAS_AUSENTES_LOCATION,
+    CONFINS_ESTRADAS_EXPLORE_UNLOCK,
+    CONFINS_ESTRADAS_HUNT_UNLOCK,
     CONFINS_FERRO_BALIZA,
     CONFINS_MARCHA_ACCESS_UNLOCK,
     CONFINS_MARCHA_EXPLORE_UNLOCK,
@@ -95,6 +101,7 @@ from asterion.domain.road import (
     CONFINS_MARCHA_LOCATION,
     CONFINS_MARCO_DUPLO_BRAZIER,
     CONFINS_MUSGO_LIMIAR,
+    CONFINS_PO_REFERENCIA,
     CONFINS_REGION,
     CONFINS_TESTEMUNHA_BRAZIER,
     CONFINS_ULTIMO_REFUGIO_ACCESS_UNLOCK,
@@ -218,6 +225,14 @@ P31_CODEX_ENTRY = "codex.confins.duas_leituras_rota"
 P31_NARRATIVE_UNLOCK = "narrative.confins.duas_leituras_confirmadas"
 P31_ACHIEVEMENT = "achievement.confins.primeira_marcha"
 P31_TITLE_COSMETIC = "cosmetic.title.confins.testemunha_rota"
+P32_ID = "P32"
+P32_MISSION_ID = "mission.confins.p32"
+P32_TITLE = "A Fratura"
+P32_CONTENT_VERSION = "confins-1.0.0"
+P32_REWARD_SOURCE = P32_MISSION_ID
+P32_CODEX_ENTRY = "codex.confins.fratura_definicao"
+P32_NARRATIVE_UNLOCK = "narrative.confins.fratura_reconhecida"
+P32_ACHIEVEMENT = "achievement.confins.fratura_observada"
 ALTOS_PRIMARY_LOCATIONS = (
     ALTOS_ESCARPA_LOCATION,
     ALTOS_ABRIGO_LOCATION,
@@ -324,13 +339,21 @@ P25_COMBAT = {
         51,
         "common",
     ),
+    P32_ID: (
+        P32_MISSION_ID,
+        "p32.a_fratura",
+        CONFINS_ESTRADAS_AUSENTES_LABEL,
+        CONFINS_ANDARILHO_REPETIDO,
+        53,
+        "uncommon",
+    ),
 }
 
 
 def _scripted_combat_step(quest_id: str) -> int:
     if quest_id == S30_ID:
         return 5
-    if quest_id == P31_ID:
+    if quest_id in {P31_ID, P32_ID}:
         return 4
     return 4 if quest_id in {P28_ID, P29_ID, P30_ID} else 3
 
@@ -350,11 +373,12 @@ def _content_version(quest_id: str) -> str:
         P30_ID: P30_CONTENT_VERSION,
         S30_ID: S30_CONTENT_VERSION,
         P31_ID: P31_CONTENT_VERSION,
+        P32_ID: P32_CONTENT_VERSION,
     }.get(quest_id, P25_CONTENT_VERSION)
 
 
 def _mission_region(quest_id: str) -> str:
-    return CONFINS_REGION if quest_id == P31_ID else ALTOS_REGION
+    return CONFINS_REGION if quest_id in {P31_ID, P32_ID} else ALTOS_REGION
 
 
 @dataclass(frozen=True, slots=True)
@@ -439,6 +463,45 @@ class AltosMissionService:
                     return
                 if world.location == CONFINS_ULTIMO_REFUGIO_LABEL:
                     await self._enter_confins_refuge(session, character_ids)
+                if world.location == CONFINS_ESTRADAS_AUSENTES_LABEL:
+                    members = await self._present_p32(
+                        session, character_ids, 2, CONFINS_ESTRADAS_AUSENTES_LABEL
+                    )
+                    for member in members:
+                        if (
+                            member.character.level < 53
+                            or not await self._quest_completed(
+                                session, member.character.id, P31_ID
+                            )
+                            or not await session.scalar(
+                                select(Unlock.id).where(
+                                    Unlock.character_id == member.character.id,
+                                    Unlock.unlock_id == CONFINS_ESTRADAS_ACCESS_UNLOCK,
+                                )
+                            )
+                        ):
+                            continue
+                        await self._ensure(
+                            session,
+                            LocationDiscovery,
+                            character_id=member.character.id,
+                            location_id=CONFINS_ESTRADAS_AUSENTES_LOCATION,
+                        )
+                        progress = dict(member.quest.progress or {})
+                        progress["completed_steps"] = sorted(
+                            set(progress.get("completed_steps", ())) | {2}
+                        )
+                        progress["estradas_arrival_recorded"] = True
+                        member.quest.progress = progress
+                        member.quest.step = 3
+                        member.quest.state_version += 1
+                        await self._credit_p32(
+                            session,
+                            member.character.id,
+                            "p32.arrived_estradas",
+                            f"p32.arrived_estradas:{member.character.id}",
+                            {"location_id": CONFINS_ESTRADAS_AUSENTES_LOCATION},
+                        )
                 return
             if world is None or world.region != ALTOS_REGION:
                 return
@@ -838,9 +901,17 @@ class AltosMissionService:
             if character is None:
                 return None
             world = await self._world(session, character.id, lock=False)
+            p32 = await self._quest(session, character.id, P32_ID, lock=False)
+            if p32 is not None:
+                if p32.content_version != P32_CONTENT_VERSION:
+                    return None
+                return await self._view(session, character, p32, world)
             p31 = await self._quest(session, character.id, P31_ID, lock=False)
             if p31 is not None:
                 if p31.status == "completed":
+                    if world is not None and world.location == CONFINS_ULTIMO_REFUGIO_LABEL:
+                        status = "available" if character.level >= 53 else "suspended"
+                        return self._p32_offer_view(character, world, status)
                     return None
                 return await self._view(session, character, p31, world)
             p30 = await self._quest(session, character.id, P30_ID, lock=False)
@@ -910,6 +981,7 @@ class AltosMissionService:
             if character is None:
                 return None
             if quest_id is None:
+                p32 = await self._quest(session, character.id, P32_ID, lock=False)
                 p31 = await self._quest(session, character.id, P31_ID, lock=False)
                 p30 = await self._quest(session, character.id, P30_ID, lock=False)
                 p29 = await self._quest(session, character.id, P29_ID, lock=False)
@@ -917,7 +989,8 @@ class AltosMissionService:
                 p27 = await self._quest(session, character.id, P27_ID, lock=False)
                 p26 = await self._quest(session, character.id, P26_ID, lock=False)
                 quest_id = (
-                    P31_ID if p31 is not None
+                    P32_ID if p32 is not None
+                    else P31_ID if p31 is not None
                     else P30_ID if p30 is not None
                     else P29_ID if p29 is not None and p29.status != "completed"
                     else P30_ID if p29 is not None and p29.status == "completed"
@@ -930,6 +1003,19 @@ class AltosMissionService:
                         character, p26, await self._world(session, character.id, lock=False)
                     )
             quest = await self._quest(session, character.id, quest_id, lock=False)
+            if quest is None and quest_id == P32_ID:
+                p31 = await self._quest(session, character.id, P31_ID, lock=False)
+                world = await self._world(session, character.id, lock=False)
+                if (
+                    p31 is not None
+                    and p31.status == "completed"
+                    and p31.content_version == P31_CONTENT_VERSION
+                    and world is not None
+                    and world.region == CONFINS_REGION
+                    and world.location == CONFINS_ULTIMO_REFUGIO_LABEL
+                ):
+                    status = "available" if character.level >= 53 else "suspended"
+                    return self._p32_offer_view(character, world, status)
             if quest is None and quest_id == P30_ID:
                 p29 = await self._quest(session, character.id, P29_ID, lock=False)
                 if p29 is not None and p29.status == "completed":
@@ -944,6 +1030,7 @@ class AltosMissionService:
                     P25_CONTENT_VERSION,
                     P30_CONTENT_VERSION,
                     P31_CONTENT_VERSION,
+                    P32_CONTENT_VERSION,
                     S30_CONTENT_VERSION,
                 }:
                     return None
@@ -977,6 +1064,7 @@ class AltosMissionService:
                                     ALTOS_CORACAO_LOCATION,
                                     CONFINS_MARCHA_LOCATION,
                                     CONFINS_ULTIMO_REFUGIO_LOCATION,
+                                    CONFINS_ESTRADAS_AUSENTES_LOCATION,
                                 )
                             ),
                         )
@@ -994,9 +1082,72 @@ class AltosMissionService:
                     (ALTOS_CORACAO_LOCATION, ALTOS_CORACAO_LABEL),
                     (CONFINS_MARCHA_LOCATION, CONFINS_MARCHA_LABEL),
                     (CONFINS_ULTIMO_REFUGIO_LOCATION, CONFINS_ULTIMO_REFUGIO_LABEL),
+                    (CONFINS_ESTRADAS_AUSENTES_LOCATION, CONFINS_ESTRADAS_AUSENTES_LABEL),
                 )
                 if location_id in found
             }
+
+    async def start_p32(self, actor: int, version: int = 0) -> AltosMissionView | None:
+        await self.on_location(actor)
+        async with self.sessions.begin() as session:
+            actor_row = await self._character(session, actor)
+            if actor_row is None:
+                return None
+            await lock_campaign_roster(session, actor_row.id)
+            character = await session.scalar(
+                select(Character).where(Character.id == actor_row.id).with_for_update()
+            )
+            world = await self._world(session, actor_row.id)
+            if character is None or world is None:
+                return None
+            existing = await self._quest(session, character.id, P32_ID)
+            if existing is not None:
+                if existing.content_version != P32_CONTENT_VERSION:
+                    return None
+                return self._p32_view(character, existing, world)
+            p31 = await self._quest(session, character.id, P31_ID)
+            if (
+                p31 is None
+                or p31.status != "completed"
+                or p31.content_version != P31_CONTENT_VERSION
+                or world.region != CONFINS_REGION
+                or world.location != CONFINS_ULTIMO_REFUGIO_LABEL
+            ):
+                return None
+            if character.level < 53:
+                return self._p32_offer_view(character, world, "suspended")
+            if version != 0 or await self._foreground(session, character.id):
+                return self._p32_offer_view(character, world, "available")
+            await self._ensure(
+                session,
+                Unlock,
+                character_id=character.id,
+                unlock_id=CONFINS_ESTRADAS_ACCESS_UNLOCK,
+            )
+            quest = Quest(
+                character_id=character.id,
+                quest_id=P32_ID,
+                title=P32_TITLE,
+                status="active",
+                step=1,
+                content_version=P32_CONTENT_VERSION,
+                state_version=1,
+                progress={"completed_steps": [], "route_trace_ids": []},
+            )
+            session.add(quest)
+            await session.flush()
+            await self._credit_p32(
+                session,
+                character.id,
+                "p32.activated",
+                f"p32.activated:{character.id}",
+                {
+                    "mission_id": P32_MISSION_ID,
+                    "giver_id": "npc.confins.sera_nol",
+                    "location_unlock": CONFINS_ESTRADAS_ACCESS_UNLOCK,
+                },
+            )
+            return self._p32_view(character, quest, world)
 
     async def start_p26(self, actor: int, version: int = 0) -> AltosMissionView | None:
         await self.on_location(actor)
@@ -1357,6 +1508,34 @@ class AltosMissionService:
             state_version=quest.state_version,
             progress=quest.progress or {},
             location=world.location if world is not None else ALTOS_CORACAO_LABEL,
+            level=character.level,
+        )
+
+    def _p32_offer_view(self, character, world, status: str) -> AltosMissionView:
+        return AltosMissionView(
+            character_id=character.id,
+            quest_id=P32_ID,
+            title=P32_TITLE,
+            kind="mission",
+            status=status,
+            step=1,
+            state_version=0,
+            progress={},
+            location=world.location if world is not None else CONFINS_ULTIMO_REFUGIO_LABEL,
+            level=character.level,
+        )
+
+    def _p32_view(self, character, quest, world) -> AltosMissionView:
+        return AltosMissionView(
+            character_id=character.id,
+            quest_id=P32_ID,
+            title=P32_TITLE,
+            kind="mission",
+            status=quest.status,
+            step=quest.step,
+            state_version=quest.state_version,
+            progress=quest.progress or {},
+            location=world.location if world is not None else CONFINS_ULTIMO_REFUGIO_LABEL,
             level=character.level,
         )
 
@@ -2529,6 +2708,212 @@ class AltosMissionService:
             {"location": ALTOS_PONTES_LOCATION},
         )
 
+    async def _advance_p32(
+        self, session, character_ids, character, quest, world, version, action
+    ) -> AltosMissionView:
+        if (
+            quest.status != "active"
+            or quest.content_version != P32_CONTENT_VERSION
+            or quest.state_version != version
+            or world.region != CONFINS_REGION
+            or await self._foreground(session, character.id)
+        ):
+            return self._p32_view(character, quest, world)
+
+        if (
+            quest.step == 1
+            and world.location == CONFINS_ULTIMO_REFUGIO_LABEL
+            and action == "receive_p32_route_traces"
+        ):
+            progress = dict(quest.progress or {})
+            trace_ids = sorted(set(progress.get("route_trace_ids", ())) | {"outbound", "return"})
+            if len(trace_ids) == 2:
+                progress["route_trace_ids"] = trace_ids
+                progress["completed_steps"] = sorted(
+                    set(progress.get("completed_steps", ())) | {1}
+                )
+                progress["two_route_traces_received"] = True
+                quest.progress = progress
+                quest.step = 2
+                quest.state_version += 1
+                await self._credit_p32(
+                    session,
+                    character.id,
+                    "p32.received_route_traces",
+                    f"p32.received_route_traces:{character.id}",
+                    {"trace_ids": trace_ids},
+                )
+        elif (
+            quest.step == 3
+            and world.location == CONFINS_ESTRADAS_AUSENTES_LABEL
+            and action in {
+                "inspect_finished_foundation",
+                "inspect_absent_map_marker",
+                "inspect_discordant_return_record",
+            }
+        ):
+            members = await self._present_p32(
+                session, character_ids, 3, CONFINS_ESTRADAS_AUSENTES_LABEL
+            )
+            for member in members:
+                if member.character.level < 53:
+                    continue
+                progress = dict(member.quest.progress or {})
+                evidence = set(progress.get("physical_fracture_evidence", ()))
+                if action in evidence:
+                    continue
+                evidence.add(action)
+                progress["physical_fracture_evidence"] = sorted(evidence)
+                if len(evidence) == 3:
+                    progress["completed_steps"] = sorted(
+                        set(progress.get("completed_steps", ())) | {3}
+                    )
+                    member.quest.step = 4
+                member.quest.progress = progress
+                member.quest.state_version += 1
+                await self._credit_p32(
+                    session,
+                    member.character.id,
+                    f"p32.{action}",
+                    f"p32.{action}:{member.character.id}",
+                    {
+                        "location_id": CONFINS_ESTRADAS_AUSENTES_LOCATION,
+                        "evidence_id": action,
+                    },
+                )
+        elif (
+            quest.step == 5
+            and world.location == CONFINS_ESTRADAS_AUSENTES_LABEL
+            and (quest.progress or {}).get("scripted_andarilho_victory")
+            and (quest.progress or {}).get("andarilho_not_clone_nor_soul_observed")
+            and action == "compare_fracture_evidence"
+        ):
+            progress = dict(quest.progress or {})
+            if not progress.get("fracture_evidence_compared"):
+                progress["fracture_evidence_compared"] = True
+                progress["completed_steps"] = sorted(
+                    set(progress.get("completed_steps", ())) | {5}
+                )
+                quest.progress = progress
+                quest.step = 6
+                quest.state_version += 1
+                await self._credit_p32(
+                    session,
+                    character.id,
+                    "p32.evidence_compared",
+                    f"p32.evidence_compared:{character.id}",
+                    {
+                        "npc_ids": ("npc.confins.talen_nyr", "npc.confins.sera_nol"),
+                        "observations": (
+                            "andarilho_not_clone_nor_soul",
+                            "localized_stability_failure_not_portal",
+                        ),
+                        "interpretation": "localized_stability_failure_not_portal",
+                    },
+                )
+        elif (
+            quest.step == 6
+            and world.location == CONFINS_ESTRADAS_AUSENTES_LABEL
+            and (quest.progress or {}).get("fracture_evidence_compared")
+            and action == "record_fracture_codex_and_conclude"
+        ):
+            await self._ensure(
+                session, CodexEntry, character_id=character.id, entry_id=P32_CODEX_ENTRY
+            )
+            await self._ensure(
+                session,
+                CodexFragment,
+                character_id=character.id,
+                entry_id=P32_CODEX_ENTRY,
+                fragment_id=P32_CODEX_ENTRY,
+            )
+            progress = dict(quest.progress or {})
+            progress["codex_recorded"] = True
+            progress["completed_steps"] = sorted(
+                set(progress.get("completed_steps", ())) | {6}
+            )
+            quest.progress = progress
+            await self._complete_p32(session, character, quest)
+
+        return await self._view(session, character, quest, world)
+
+    async def _complete_p32(self, session, character, quest) -> None:
+        for unlock_id in (
+            CONFINS_ESTRADAS_HUNT_UNLOCK,
+            CONFINS_ESTRADAS_EXPLORE_UNLOCK,
+            P32_NARRATIVE_UNLOCK,
+        ):
+            await self._ensure(
+                session, Unlock, character_id=character.id, unlock_id=unlock_id
+            )
+        await self._ensure(
+            session, Achievement, character_id=character.id, achievement_id=P32_ACHIEVEMENT
+        )
+        event = await session.scalar(
+            select(RewardEvent)
+            .where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == P32_REWARD_SOURCE,
+            )
+            .with_for_update()
+        )
+        if event is None:
+            event = RewardEvent(character_id=character.id, source_id=P32_REWARD_SOURCE)
+            session.add(event)
+            await session.flush()
+            character.xp += 82_250
+            character.crowns += 900
+            materials = (
+                (CONFINS_FERRO_BALIZA, 2, "ferro_baliza"),
+                (CONFINS_MUSGO_LIMIAR, 1, "musgo_limiar"),
+                (CONFINS_PO_REFERENCIA, 1, "po_referencia"),
+            )
+            session.add_all(
+                [
+                    RewardComponent(
+                        reward_event_id=event.id, kind="xp", quantity=82_250
+                    ),
+                    RewardComponent(
+                        reward_event_id=event.id, kind="crowns", quantity=900
+                    ),
+                    *[
+                        RewardComponent(
+                            reward_event_id=event.id,
+                            kind="material",
+                            item_id=material_id,
+                            quantity=quantity,
+                            payload={"material_id": material_id, "bound": True},
+                        )
+                        for material_id, quantity, _key in materials
+                    ],
+                ]
+            )
+            for material_id, quantity, key in materials:
+                await self.road.deliver_material(
+                    session,
+                    character,
+                    material_id,
+                    quantity,
+                    f"{P32_REWARD_SOURCE}:material:{key}",
+                    bound=True,
+                )
+        progress = dict(quest.progress or {})
+        progress["completed"] = True
+        progress["completed_steps"] = list(range(1, 7))
+        quest.status = "completed"
+        quest.step = 6
+        quest.state_version += 1
+        quest.progress = progress
+        character.ruleset_version = CHARACTER_RULESET
+        await consolidate_character_level(session, character)
+        await self._credit_p32(
+            session,
+            character.id,
+            "p32.completed",
+            f"p32.completed:{character.id}",
+            {"mission_id": P32_MISSION_ID, "codex_entry_id": P32_CODEX_ENTRY},
+        )
+
     async def _advance_p31(
         self, session, character_ids, character, quest, world, version, action
     ) -> AltosMissionView:
@@ -2770,6 +3155,8 @@ class AltosMissionService:
     async def advance(
         self, actor: int, version: int, action: str
     ) -> AltosMissionView | None:
+        if action == "activate_p32":
+            return await self.start_p32(actor, version)
         if action == "activate_p30":
             return await self.start_p30(actor, version)
         if action.startswith("choose_p30_reward_"):
@@ -2794,6 +3181,13 @@ class AltosMissionService:
                 select(Character).where(Character.id == actor_row.id).with_for_update()
             )
             world = await self._world(session, actor_row.id)
+            p32 = await self._quest(session, actor_row.id, P32_ID)
+            if p32 is not None:
+                if character is None or world is None:
+                    return None
+                return await self._advance_p32(
+                    session, character_ids, character, p32, world, version, action
+                )
             p31 = await self._quest(session, actor_row.id, P31_ID)
             if p31 is not None:
                 if character is None or world is None:
@@ -3027,6 +3421,7 @@ class AltosMissionService:
                 or world.region != _mission_region(quest_id)
                 or world.location not in _combat_locations(profile)
                 or (quest_id == P31_ID and character.level < 51)
+                or (quest_id == P32_ID and character.level < 53)
             ):
                 return await self._view(session, character, quest, world)
             activity = await session.scalar(
@@ -3104,6 +3499,14 @@ class AltosMissionService:
                     and (
                         world.region != CONFINS_REGION
                         or world.location != CONFINS_MARCHA_LABEL
+                    )
+                )
+                or (
+                    quest_id == P32_ID
+                    and (
+                        world.region != CONFINS_REGION
+                        or world.location != CONFINS_ESTRADAS_AUSENTES_LABEL
+                        or character.level < 53
                     )
                 )
             ):
@@ -3440,6 +3843,8 @@ class AltosMissionService:
         ):
             role = "ineligible"
         elif quest_id == P31_ID and character.level < 51:
+            role = "ineligible"
+        elif quest_id == P32_ID and character.level < 53:
             role = "ineligible"
         elif (
             quest is not None
@@ -3799,9 +4204,27 @@ class AltosMissionService:
                         f"p31.scripted_cao_victory:{character.id}",
                         {"creature_id": creature_id, "enemy_level": enemy_level},
                     )
+                elif quest_id == P32_ID:
+                    quest.step = 5
+                    progress["completed_steps"] = sorted(
+                        set(progress.get("completed_steps", ())) | {4}
+                    )
+                    progress["scripted_andarilho_victory"] = True
+                    progress["andarilho_not_clone_nor_soul_observed"] = True
+                    await self._credit_p32(
+                        session,
+                        character.id,
+                        "p32.scripted_andarilho_victory",
+                        f"p32.scripted_andarilho_victory:{character.id}",
+                        {
+                            "creature_id": creature_id,
+                            "enemy_level": enemy_level,
+                            "finding": "not_clone_nor_soul",
+                        },
+                    )
                 else:
                     quest.step = _scripted_combat_step(quest_id) + 1
-                if quest_id in {P30_ID, P31_ID}:
+                if quest_id in {P30_ID, P31_ID, P32_ID}:
                     pass
                 elif quest_id == S30_ID:
                     pass
@@ -4029,9 +4452,27 @@ class AltosMissionService:
                                     f"p31.scripted_cao_victory:{participant.id}",
                                     {"creature_id": creature_id, "enemy_level": enemy_level},
                                 )
+                            elif quest_id == P32_ID:
+                                participant_quest.step = 5
+                                progress["completed_steps"] = sorted(
+                                    set(progress.get("completed_steps", ())) | {4}
+                                )
+                                progress["scripted_andarilho_victory"] = True
+                                progress["andarilho_not_clone_nor_soul_observed"] = True
+                                await self._credit_p32(
+                                    session,
+                                    participant.id,
+                                    "p32.scripted_andarilho_victory",
+                                    f"p32.scripted_andarilho_victory:{participant.id}",
+                                    {
+                                        "creature_id": creature_id,
+                                        "enemy_level": enemy_level,
+                                        "finding": "not_clone_nor_soul",
+                                    },
+                                )
                             else:
                                 participant_quest.step = _scripted_combat_step(quest_id) + 1
-                            if quest_id in {P30_ID, P31_ID}:
+                            if quest_id in {P30_ID, P31_ID, P32_ID}:
                                 pass
                             elif quest_id == S30_ID:
                                 pass
@@ -4674,6 +5115,17 @@ class AltosMissionService:
             location=location,
         )
 
+    async def _present_p32(self, session, character_ids, step, location):
+        return await present_campaign_members(
+            session,
+            character_ids=character_ids,
+            quest_id=P32_ID,
+            content_version=P32_CONTENT_VERSION,
+            step=step,
+            region=CONFINS_REGION,
+            location=location,
+        )
+
     async def _credit(self, session, character_id, objective_id, source_key, evidence):
         await record_campaign_objective_credit(
             session,
@@ -4751,6 +5203,18 @@ class AltosMissionService:
             session,
             character_id=character_id,
             quest_id=P31_ID,
+            objective_id=objective_id,
+            source_key=source_key,
+            evidence=evidence,
+        )
+
+    async def _credit_p32(
+        self, session, character_id, objective_id, source_key, evidence
+    ):
+        await record_campaign_objective_credit(
+            session,
+            character_id=character_id,
+            quest_id=P32_ID,
             objective_id=objective_id,
             source_key=source_key,
             evidence=evidence,

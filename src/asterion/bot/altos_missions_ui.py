@@ -17,6 +17,7 @@ from asterion.application.altos_missions import (
     P30_REWARD_OPTIONS,
     P30_TITLE,
     P31_TITLE,
+    P32_TITLE,
     S26_TITLE,
     S30_TITLE,
     AltosMissionView,
@@ -32,7 +33,8 @@ def _button(text: str, callback: str) -> InlineKeyboardButton:
 
 def render_altos_mission(view: AltosMissionView) -> Screen:
     fallback_title = (
-        P31_TITLE if view.quest_id == "P31"
+        P32_TITLE if view.quest_id == "P32"
+        else P31_TITLE if view.quest_id == "P31"
         else P28_TITLE if view.quest_id == "P28"
         else P29_TITLE if view.quest_id == "P29"
         else P27_TITLE if view.quest_id == "P27"
@@ -68,7 +70,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         )
         combat_location = (
             view.location
-            if view.quest_id in {"S26", "P31"}
+            if view.quest_id in {"S26", "P31", "P32"}
             else "Coração do Colosso"
             if view.quest_id == "P30"
             else "Bastilha de Carga"
@@ -83,7 +85,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
             "Chefe opcional · economia zero"
             if view.quest_id == "S30"
             else "Encontro roteirizado · economia zero"
-            if view.quest_id == "P31"
+            if view.quest_id in {"P31", "P32"}
             else "Encontro roteirizado"
             if view.quest_id == "S26"
             else "Encontro de Campanha"
@@ -105,6 +107,8 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         return _render_p30(view, title, rows)
     if view.quest_id == "P31":
         return _render_p31(view, title, rows)
+    if view.quest_id == "P32":
+        return _render_p32(view, title, rows)
     if view.quest_id == "P26":
         return _render_p26(view, title, rows)
     if view.quest_id == "S26":
@@ -617,5 +621,85 @@ def _render_p31(view: AltosMissionView, title: str, rows) -> Screen:
         rows.append([_button("Comparar as duas leituras", f"altos:action:{view.state_version}:compare_dual_readings")])
     elif view.step == 8:
         rows.append([_button("Registrar no Códice e concluir com Sera", f"altos:action:{view.state_version}:record_p31_codex_and_conclude")])
+    rows.append([_button("← Missões", "world:missions")])
+    return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def _render_p32(view: AltosMissionView, title: str, rows) -> Screen:
+    if view.status == "available":
+        rows.append([_button("Receber os traçados de Sera", "altos:action:0:activate_p32")])
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Disponível\nConfins do Véu · Último Refúgio\n\n"
+            "Sera Nol apresenta dois traçados do mesmo percurso; Talen Nyr ajuda a examiná-los.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    if view.status == "suspended":
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Suspensa\n\nP32 requer P31 concluída e Nv.53. "
+            "O progresso anterior permanece preservado.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    if view.status == "completed":
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Concluída\n\n✨ 82.250 XP · 900 Coroas\n"
+            "📦 2 Ferros de Baliza · 1 Musgo de Limiar · 1 Pó de Referência\n"
+            "🏅 Feito · O Nome da Fratura",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+
+    step_text = {
+        1: "Receba de Sera dois traçados de ida e volta do mesmo trajeto, sem eleger uma versão como correta.",
+        2: "Siga até Estradas Ausentes para registrar a chegada.",
+        3: "Verifique os três indícios físicos distintos nas Estradas Ausentes.",
+        4: "Enfrente um Andarilho Repetido (Nv.53) em encontro roteirizado e registre que não é clone nem alma.",
+        5: "Compare as evidências com Talen Nyr e Sera Nol; a Fratura é localizada, não um portal.",
+        6: "Registre a definição no Códice e conclua P32.",
+    }.get(view.step, "Retome a etapa atual da missão.")
+    location = (
+        "Último Refúgio"
+        if view.step in {1, 2} and not view.progress.get("estradas_arrival_recorded")
+        else "Estradas Ausentes"
+    )
+    lines = [
+        f"📜 {title} · Em Andamento",
+        f"Confins do Véu · {location}",
+        "",
+        f"Etapa {view.step}/6 · {step_text}",
+    ]
+    if view.step == 1:
+        rows.append(
+            [_button("Receber os dois traçados de Sera", f"altos:action:{view.state_version}:receive_p32_route_traces")]
+        )
+    elif view.step == 2:
+        rows.append([_button("Seguir para Estradas Ausentes", "road:route:confins_estradas_ausentes")])
+    elif view.step == 3:
+        evidence = set(view.progress.get("physical_fracture_evidence", ()))
+        for action, label in (
+            ("inspect_finished_foundation", "Examinar a fundação terminada"),
+            ("inspect_absent_map_marker", "Conferir o marco ausente no mapa"),
+            ("inspect_discordant_return_record", "Verificar o registro de retorno discordante"),
+        ):
+            if action not in evidence:
+                rows.append([_button(label, f"altos:action:{view.state_version}:{action}")])
+    elif view.step == 4:
+        if view.progress.get("awaiting_retry"):
+            rows.append([_button("Tentar novamente", f"altos:retry:P32:{view.state_version}")])
+        else:
+            rows.extend(
+                (
+                    [_button("Iniciar encontro Solo", f"altos:combat:P32:{view.state_version}:solo")],
+                    [_button("Solicitar encontro em Grupo", f"altos:combat:P32:{view.state_version}:group")],
+                )
+            )
+    elif view.step == 5:
+        rows.append([_button("Comparar as evidências com Talen e Sera", f"altos:action:{view.state_version}:compare_fracture_evidence")])
+    elif view.step == 6:
+        rows.append([_button("Registrar no Códice e concluir", f"altos:action:{view.state_version}:record_fracture_codex_and_conclude")])
     rows.append([_button("← Missões", "world:missions")])
     return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))

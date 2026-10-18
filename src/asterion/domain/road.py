@@ -77,15 +77,25 @@ CONFINS_LOCATION_CATALOG = (
 CONFINS_REGION_UNLOCK = "unlock.region.confins"
 CONFINS_MARCHA_ACCESS_UNLOCK = "unlock.location.confins.marcha_nebulosa"
 CONFINS_ULTIMO_REFUGIO_ACCESS_UNLOCK = "unlock.location.confins.ultimo_refugio"
+CONFINS_ESTRADAS_ACCESS_UNLOCK = "unlock.location.confins.estradas_ausentes"
 CONFINS_MARCHA_HUNT_UNLOCK = "unlock.hunt.confins.marcha"
 CONFINS_MARCHA_EXPLORE_UNLOCK = "unlock.explore.confins.marcha"
 CONFINS_MARCHA_ROUND_UNLOCK = "unlock.round.confins.marcha"
+CONFINS_ESTRADAS_HUNT_UNLOCK = "unlock.hunt.confins.estradas"
+CONFINS_ESTRADAS_EXPLORE_UNLOCK = "unlock.explore.confins.estradas"
+CONFINS_ESTRADAS_ROUND_UNLOCK = "unlock.round.confins.estradas"
 CONFINS_MARCO_DUPLO_BRAZIER = "bonfire.confins.marco_duplo"
 CONFINS_TESTEMUNHA_BRAZIER = "bonfire.confins.testemunha"
+CONFINS_ESTRADA_CONFERIDA_BRAZIER = "bonfire.confins.estrada_conferida"
+CONFINS_ARQUIVO_RETORNO_DUNGEON_UNLOCK = "unlock.dungeon.confins.arquivo_retorno"
 CONFINS_CAO_NEVOA = "creature.confins.cao_nevoa"
 CONFINS_GRALHA_DUAS_SOMBRAS = "creature.confins.gralha_duas_sombras"
 CONFINS_CERVO_PASSO_DUPLO = "creature.confins.cervo_passo_duplo"
 CONFINS_PREDADOR_DUAS_PEGADAS = "elite.confins.predador_duas_pegadas"
+CONFINS_ANDARILHO_REPETIDO = "creature.confins.andarilho_repetido"
+CONFINS_ARANHA_LIMIAR = "creature.confins.aranha_limiar"
+CONFINS_VIGIA_DESFASADO = "creature.confins.vigia_desfasado"
+CONFINS_VIUVA_INTERVALO = "elite.confins.viuva_intervalo"
 CONFINS_FERRO_BALIZA = "material.confins.ferro_baliza"
 CONFINS_COURO_MARCHA = "material.confins.couro_marcha"
 CONFINS_MUSGO_LIMIAR = "material.confins.musgo_limiar"
@@ -1785,6 +1795,10 @@ VARIANT_POOL = {
     CONFINS_GRALHA_DUAS_SOMBRAS: ("agile", "furious"),
     CONFINS_CERVO_PASSO_DUPLO: ("resistant", "furious"),
     CONFINS_PREDADOR_DUAS_PEGADAS: (),
+    CONFINS_ANDARILHO_REPETIDO: ("resistant", "agile"),
+    CONFINS_ARANHA_LIMIAR: ("agile", "hemorrhagic"),
+    CONFINS_VIGIA_DESFASADO: ("resistant", "furious"),
+    CONFINS_VIUVA_INTERVALO: (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -2046,6 +2060,23 @@ CONFINS_MARCHA_PROFILE = HuntLocationProfile(
     explore_unlock=CONFINS_MARCHA_EXPLORE_UNLOCK,
 )
 
+CONFINS_ESTRADAS_PROFILE = HuntLocationProfile(
+    local_id=CONFINS_ESTRADAS_AUSENTES_LOCATION,
+    label=CONFINS_ESTRADAS_AUSENTES,
+    creature_weights=(
+        (CONFINS_CAO_NEVOA, 14),
+        (CONFINS_GRALHA_DUAS_SOMBRAS, 14),
+        (CONFINS_ANDARILHO_REPETIDO, 22),
+        (CONFINS_ARANHA_LIMIAR, 36),
+        (CONFINS_VIGIA_DESFASADO, 6),
+        (CONFINS_VIUVA_INTERVALO, 8),
+    ),
+    variant_chance=16,
+    hunt_unlock=CONFINS_ESTRADAS_HUNT_UNLOCK,
+    round_familiarity=CONFINS_ESTRADAS_ROUND_UNLOCK,
+    explore_unlock=CONFINS_ESTRADAS_EXPLORE_UNLOCK,
+)
+
 LOCATION_LEVEL_BANDS = {
     "Estrada das Cinzas": (1, 10),
     "Charneca da Fuligem": (3, 5),
@@ -2069,6 +2100,7 @@ LOCATION_LEVEL_BANDS = {
     ALTOS_BASTILHA: (47, 50),
     CONFINS_MARCHA: (51, 54),
     CONFINS_ULTIMO_REFUGIO: (51, 60),
+    CONFINS_ESTRADAS_AUSENTES: (53, 56),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -3144,6 +3176,59 @@ EXPLORATION_PROFILES = {
             ),
         ),
     ),
+    CONFINS_ESTRADAS_AUSENTES_LOCATION: ExplorationLocationProfile(
+        local_id=CONFINS_ESTRADAS_AUSENTES_LOCATION,
+        category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+        results=(
+            ExplorationResultDefinition(
+                "braseiro_conferida", "great_discovery", "explore.confins.estradas.braseiro_conferida", 50,
+                "O Braseiro da Estrada Conferida marca um trecho seguro das Estradas Ausentes.",
+                min_level=53, unique=True,
+            ),
+            ExplorationResultDefinition(
+                "arquivo_retorno", "great_discovery", "explore.confins.estradas.arquivo_retorno", 50,
+                "Uma entrada para o Arquivo do Retorno foi localizada nas Estradas Ausentes.",
+                min_level=53, unique=True,
+            ),
+            ExplorationResultDefinition(
+                "memoria_fundacao", "knowledge", "explore.confins.estradas.memoria_fundacao", 60,
+                "Uma memória material da fundação registra uma casa presente e ausente.",
+                min_level=53, unique=True,
+            ),
+            ExplorationResultDefinition(
+                "estacas_alternadas", "knowledge", "explore.confins.estradas.estacas_alternadas", 40,
+                "Estacas alternadas foram observadas ao longo da estrada.", min_level=53,
+            ),
+            ExplorationResultDefinition(
+                "estrada_sem_ponte", "narrative", "explore.confins.estradas.estrada_sem_ponte", 55,
+                "A estrada segue sem ponte em um trecho onde a rota indicada continua.", min_level=53,
+            ),
+            ExplorationResultDefinition(
+                "retorno_sem_ida", "narrative", "explore.confins.estradas.retorno_sem_ida", 45,
+                "Um registro de retorno não encontra uma ida correspondente.", min_level=53,
+            ),
+            ExplorationResultDefinition(
+                "combate", "combat", "explore.confins.estradas.combate", 100,
+                "Uma criatura das Estradas Ausentes bloqueia a passagem.", min_level=53,
+            ),
+            ExplorationResultDefinition(
+                "recurso", "resource", "explore.confins.estradas.recurso", 100,
+                "Um material básico Grau VI pode ser recolhido nas Estradas Ausentes.", min_level=53,
+            ),
+            ExplorationResultDefinition(
+                "atmos.lama_incompleta", "atmospheric", "explore.confins.estradas.atmos.lama_incompleta", 34,
+                "A lama termina antes de completar o contorno de uma passagem.", min_level=53,
+            ),
+            ExplorationResultDefinition(
+                "atmos.placa_curva", "atmospheric", "explore.confins.estradas.atmos.placa_curva", 33,
+                "Uma placa acompanha uma curva que não aparece na leitura do mapa.", min_level=53,
+            ),
+            ExplorationResultDefinition(
+                "atmos.marco_nao_visto", "atmospheric", "explore.confins.estradas.atmos.marco_nao_visto", 33,
+                "Um marco é registrado sem ter sido visto no trajeto.", min_level=53,
+            ),
+        ),
+    ),
 }
 
 HUNT_PROFILES = {
@@ -3169,6 +3254,7 @@ HUNT_PROFILES = {
     ALTOS_PEDREIRAS_LOCATION: ALTOS_PEDREIRAS_PROFILE,
     ALTOS_BASTILHA_LOCATION: ALTOS_BASTILHA_PROFILE,
     CONFINS_MARCHA_LOCATION: CONFINS_MARCHA_PROFILE,
+    CONFINS_ESTRADAS_AUSENTES_LOCATION: CONFINS_ESTRADAS_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -3403,6 +3489,10 @@ CONFINS_BASIC_MATERIAL_CREATURE_IDS = frozenset(
         CONFINS_GRALHA_DUAS_SOMBRAS,
         CONFINS_CERVO_PASSO_DUPLO,
         CONFINS_PREDADOR_DUAS_PEGADAS,
+        CONFINS_ANDARILHO_REPETIDO,
+        CONFINS_ARANHA_LIMIAR,
+        CONFINS_VIGIA_DESFASADO,
+        CONFINS_VIUVA_INTERVALO,
     }
 )
 
@@ -3612,6 +3702,22 @@ MATERIAL_POOLS = {
     CONFINS_PREDADOR_DUAS_PEGADAS: (
         (CONFINS_COURO_MARCHA, 85),
         (CONFINS_PO_REFERENCIA, 15),
+    ),
+    CONFINS_ANDARILHO_REPETIDO: (
+        (CONFINS_FERRO_BALIZA, 55),
+        (CONFINS_PO_REFERENCIA, 45),
+    ),
+    CONFINS_ARANHA_LIMIAR: (
+        (CONFINS_MUSGO_LIMIAR, 80),
+        (CONFINS_PO_REFERENCIA, 20),
+    ),
+    CONFINS_VIGIA_DESFASADO: (
+        (CONFINS_FERRO_BALIZA, 85),
+        (CONFINS_PO_REFERENCIA, 15),
+    ),
+    CONFINS_VIUVA_INTERVALO: (
+        (CONFINS_MUSGO_LIMIAR, 60),
+        (CONFINS_PO_REFERENCIA, 40),
     ),
 }
 
@@ -4272,3 +4378,73 @@ CONFINS_CREATURES = (
     ),
 )
 CREATURE_CATALOG = (*CREATURE_CATALOG, *CONFINS_CREATURES)
+
+CONFINS_ESTRADAS_CREATURES = (
+    Creature(
+        CONFINS_ANDARILHO_REPETIDO,
+        "Andarilho Repetido",
+        "uncommon",
+        "balanced",
+        52,
+        56,
+        0,
+        ("golpe_desfasado", "passo_refeito", "estado_discordante"),
+        (
+            ("golpe_desfasado", "Golpe Desfasado", D("1.00"), 0, D(0), 0),
+            ("passo_refeito", "Passo Refeito", D("1.20"), 0, D(0), 0, None, 0, False, 3),
+            ("estado_discordante", "Estado Discordante", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+        ),
+        ai_priority=("estado_discordante", "passo_refeito"),
+    ),
+    Creature(
+        CONFINS_ARANHA_LIMIAR,
+        "Aranha de Limiar",
+        "common",
+        "controller",
+        53,
+        56,
+        0,
+        ("mordida_limiar", "fio_desalinhado", "salto_perna"),
+        (
+            ("mordida_limiar", "Mordida de Limiar", D("0.90"), 0, D(0), 0),
+            ("fio_desalinhado", "Fio Desalinhado", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "agility"),
+            ("salto_perna", "Salto de Perna", D("1.20"), 0, D(0), 0, None, 0, False, 3),
+        ),
+        ai_priority=("fio_desalinhado", "salto_perna"),
+    ),
+    Creature(
+        CONFINS_VIGIA_DESFASADO,
+        "Vigia Desfasado",
+        "uncommon",
+        "armored",
+        58,
+        60,
+        0,
+        ("golpe_registro", "placa_deslocada", "ordem_revisao", "aproximacao_impossivel"),
+        (
+            ("golpe_registro", "Golpe de Registro", D("1.00"), 0, D(0), 0),
+            ("placa_deslocada", "Placa Deslocada", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("1.00"), 2, True),
+            ("ordem_revisao", "Ordem de Revisão", D("0.90"), 0, D("0.12"), 2, None, 0, False, 3, "defense"),
+            ("aproximacao_impossivel", "Aproximação Impossível", D("1.65"), 0, D(0), 0, None, 0, True, 4),
+        ),
+        ai_priority=("placa_deslocada", "ordem_revisao", "aproximacao_impossivel"),
+    ),
+    Creature(
+        CONFINS_VIUVA_INTERVALO,
+        "Viúva de Intervalo",
+        "elite",
+        "controller",
+        57,
+        59,
+        0,
+        ("mordida_intervalo", "sutura_errada", "trama_fendida", "fio_sobre_vazio"),
+        (
+            ("mordida_intervalo", "Mordida do Intervalo", D("1.00"), 0, D(0), 0),
+            ("sutura_errada", "Sutura Errada", D("0.90"), 0, D("0.12"), 2, None, 0, False, 3, "agility"),
+            ("trama_fendida", "Trama Fendida", D("0.75"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+            ("fio_sobre_vazio", "Fio sobre o Vazio", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+        ),
+        ai_priority=("sutura_errada", "trama_fendida", "fio_sobre_vazio"),
+    ),
+)
+CREATURE_CATALOG = (*CREATURE_CATALOG, *CONFINS_ESTRADAS_CREATURES)

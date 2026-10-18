@@ -387,6 +387,20 @@ CODEX_ENTRIES = (
         302,
         "location.confins.marcha_nebulosa",
     ),
+    CodexPresentation(
+        "codex.confins.fratura_definicao",
+        "Fratura Observável",
+        "history",
+        303,
+        "location.confins.estradas_ausentes",
+    ),
+    CodexPresentation(
+        "codex.confins.casa_presente_ausente",
+        "A Casa que Não Chegou",
+        "history",
+        304,
+        "location.confins.estradas_ausentes",
+    ),
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -405,6 +419,14 @@ CODEX_FRAGMENTS = {
     "codex.confins.duas_leituras_rota": FragmentPresentation(
         "Dois marcos honestos",
         "A anotação de Talen e a marca física do terreno registram posições incompatíveis para a mesma estrada. Ambas são preservadas como leituras honestas; a discrepância, por si só, não prova a existência de dois mundos.",
+    ),
+    "codex.confins.fratura_definicao": FragmentPresentation(
+        "Fratura Observável",
+        "Os traçados recebidos, a fundação concluída, a ausência de um marco no mapa e o registro de retorno discordante sustentam a definição de Fratura como falha localizada de estabilidade. A evidência não descreve um portal nem explica integralmente o Avesso.",
+    ),
+    "explore.confins.estradas.memoria_fundacao": FragmentPresentation(
+        "Memória de Fundação",
+        "Uma evidência documental e material registra uma casa como presente e ausente. Este trecho acrescenta a observação sem concluir a missão secundária correspondente.",
     ),
     "explore.confins.marcha.duas_balizas": FragmentPresentation(
         "Marcos Incompatíveis",
@@ -1308,6 +1330,12 @@ ACHIEVEMENTS = (
         "Concluiu P31 — Onde o Véu Afina.",
         "Título · Testemunha de Rota",
     ),
+    AchievementPresentation(
+        "achievement.confins.fratura_observada",
+        "O Nome da Fratura",
+        "exploration",
+        "Concluiu P32 — A Fratura.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
@@ -1496,6 +1524,14 @@ CREATURE_PRESENTATION = {
     "predador_duas_pegadas": CreaturePresentation(
         CONFINS_REGION_ID,
         ("location.confins.marcha_nebulosa", "location.confins.estradas_ausentes"),
+    ),
+    "andarilho_repetido": CreaturePresentation(
+        CONFINS_REGION_ID,
+        ("location.confins.estradas_ausentes", "location.confins.fraturas_limiar"),
+    ),
+    "aranha_limiar": CreaturePresentation(
+        CONFINS_REGION_ID,
+        ("location.confins.estradas_ausentes", "location.confins.fraturas_limiar"),
     ),
     "dog_cinereo": CreaturePresentation(
         TDO_REGION_ID, ("tdo.location.estrada_das_cinzas", "tdo.location.charneca_da_fuligem")

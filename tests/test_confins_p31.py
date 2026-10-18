@@ -589,8 +589,8 @@ def test_confins_catalog_and_activity_pools_match_the_opening_contract():
         "Nó Central",
         "Câmara da Regência",
     )
-    assert CONFINS_LOCATIONS == frozenset(CONFINS_LOCATION_CATALOG[:2])
-    assert TRAVEL_LOCATIONS.isdisjoint(CONFINS_LOCATION_CATALOG[2:])
+    assert CONFINS_LOCATIONS == frozenset(CONFINS_LOCATION_CATALOG[:3])
+    assert TRAVEL_LOCATIONS.isdisjoint(CONFINS_LOCATION_CATALOG[3:])
     assert HUNT_PROFILES[CONFINS_MARCHA_LOCATION] is CONFINS_MARCHA_PROFILE
     assert CONFINS_MARCHA_PROFILE.creature_weights == (
         (CONFINS_CAO_NEVOA, 50),
@@ -629,7 +629,13 @@ def test_confins_catalog_and_activity_pools_match_the_opening_contract():
         "explore.confins.marcha.atmos.pedra_volta",
         "explore.confins.marcha.atmos.passo_umido",
     }
-    assert CONFINS_EXPLORATION_UNIQUE_XP == {
+    assert {
+        result_id: CONFINS_EXPLORATION_UNIQUE_XP[result_id]
+        for result_id in (
+            "explore.confins.marcha.duas_balizas",
+            "explore.confins.marcha.caderno_marcha",
+        )
+    } == {
         "explore.confins.marcha.duas_balizas": 12_744,
         "explore.confins.marcha.caderno_marcha": 3_983,
     }
