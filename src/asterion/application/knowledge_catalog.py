@@ -338,6 +338,13 @@ CODEX_ENTRIES = (
     CodexPresentation(
         "codex.history.nomes_dos_vales", "Nomes dos Vales", "history", 130
     ),
+    CodexPresentation(
+        "codex.altos.ordem_que_restou",
+        "A Ordem que Restou",
+        "history",
+        205,
+        "location.altos.bastilha_carga",
+    ),
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -395,6 +402,10 @@ CODEX_FRAGMENTS = {
     "codex.altos.dissidencia_sem_sabotagem": FragmentPresentation(
         "Dissidência sem Sabotagem",
         "Os três registros examinados documentam recusas sem sabotagem material; ao menos dois dos recusantes continuaram na manutenção civil. Isso não absolve integralmente todos os dissidentes e não desfaz a sabotagem corroborada em P30.",
+    ),
+    "codex.altos.ordem_que_restou": FragmentPresentation(
+        "A Ordem que Restou",
+        "Um protocolo antigo permanece em execução, embora já não tenha função civil válida no presente. O registro descreve fatos observados sem atribuir consciência ou intenção ao Custódio.",
     ),
     "codex.altos.convergencia_objetivo": FragmentPresentation(
         "Objetivo conhecido",
@@ -1193,6 +1204,12 @@ ACHIEVEMENTS = (
         "Concluiu S29 — Os que Disseram Não.",
     ),
     AchievementPresentation(
+        "achievement.altos.ordem_restou",
+        "A Ordem que Restou",
+        "chronicles",
+        "Concluiu S30 — A Ordem que Restou.",
+    ),
+    AchievementPresentation(
         "achievement.altos.antes_convergencia",
         "Antes da Convergência",
         "chronicles",
@@ -1582,6 +1599,9 @@ CREATURE_PRESENTATION = {
         ALTOS_REGION_ID, ("location.altos.pedreiras_suspensas",)
     ),
     "creature.altos.vigia_carga": CreaturePresentation(
+        ALTOS_REGION_ID, ("location.altos.bastilha_carga",)
+    ),
+    "boss.altos.s30.custodio_ultimo_turno": CreaturePresentation(
         ALTOS_REGION_ID, ("location.altos.bastilha_carga",)
     ),
     "elite.altos.supervisor_carga": CreaturePresentation(

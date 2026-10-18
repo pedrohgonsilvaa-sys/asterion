@@ -103,6 +103,7 @@ ALTOS_CARCACA_MINERAL = "creature.altos.carcaca_mineral"
 ALTOS_VIGIA_CARGA = "creature.altos.vigia_carga"
 ALTOS_SUPERVISOR_CARGA = "elite.altos.supervisor_carga"
 ALTOS_COLOSSO_CINEREO = "boss.altos.colosso_cinereo"
+ALTOS_CUSTODIO_ULTIMO_TURNO = "boss.altos.s30.custodio_ultimo_turno"
 ALTOS_FERRO_CONTRAPESO = "material.altos.ferro_contrapeso"
 ALTOS_COURO_ESCARPA = "material.altos.couro_escarpa"
 ALTOS_LIQUEN_PEDREIRA = "material.altos.liquen_pedreira"
@@ -1470,6 +1471,62 @@ CAMPAIGN_BOSS_CREATURES = (
             ("placa_sustentacao", "Placa de Sustentação", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), -1, True, "self", None, None, 2, (), (), D("0.50"), D("0.08")),
             ("varredura_contrapeso", "Varredura de Contrapeso", D("0.85"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
             ("carga_distribuida", "Carga Distribuída", D("1.80"), 0, D(0), 0, None, 0, True, 5, None, D(0), D(0), 0, False, "all_opponents"),
+        ),
+        ai_priority=(),
+    ),
+    Creature(
+        ALTOS_CUSTODIO_ULTIMO_TURNO,
+        "Custódio do Último Turno",
+        "boss",
+        "controller",
+        50,
+        50,
+        0,
+        (
+            "golpe_rotina",
+            "ordem_vencida",
+            "fecho_protocolo",
+            "ultimo_turno",
+        ),
+        (
+            ("golpe_rotina", "Golpe de Rotina", D("1.00"), 0, D(0), 0),
+            (
+                "ordem_vencida",
+                "Ordem Vencida",
+                D("0.90"),
+                0,
+                D("0.10"),
+                2,
+                None,
+                0,
+                False,
+                3,
+                "agility",
+            ),
+            (
+                "fecho_protocolo",
+                "Fecho de Protocolo",
+                D("1.25"),
+                0,
+                D(0),
+                0,
+                None,
+                0,
+                False,
+                3,
+            ),
+            (
+                "ultimo_turno",
+                "Último Turno",
+                D("1.75"),
+                0,
+                D(0),
+                0,
+                None,
+                0,
+                True,
+                4,
+            ),
         ),
         ai_priority=(),
     ),

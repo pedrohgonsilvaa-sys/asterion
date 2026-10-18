@@ -17,6 +17,7 @@ from asterion.application.altos_missions import (
     P30_REWARD_OPTIONS,
     P30_TITLE,
     S26_TITLE,
+    S30_TITLE,
     AltosMissionView,
 )
 from asterion.application.prologue import CombatView
@@ -35,6 +36,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         else P27_TITLE if view.quest_id == "P27"
         else P26_TITLE if view.quest_id == "P26"
         else P30_TITLE if view.quest_id == "P30"
+        else S30_TITLE if view.quest_id == "S30"
         else S26_TITLE if view.quest_id == "S26"
         else P25_TITLE
     )
@@ -68,12 +70,20 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
             else "Coração do Colosso"
             if view.quest_id == "P30"
             else "Bastilha de Carga"
+            if view.quest_id == "S30"
+            else "Bastilha de Carga"
             if view.quest_id in {"P28", "P29"}
             else "Pedreiras Suspensas"
             if view.quest_id == "P27"
             else "Escarpa da Cinza"
         )
-        encounter_label = "Encontro roteirizado" if view.quest_id == "S26" else "Encontro de Campanha"
+        encounter_label = (
+            "Chefe opcional · economia zero"
+            if view.quest_id == "S30"
+            else "Encontro roteirizado"
+            if view.quest_id == "S26"
+            else "Encontro de Campanha"
+        )
         return Screen(
             f"📜 {title} · Altos Cinéreos\n⚔️ {encounter_label} · {escape(combat_location)}\n\n{hud.text}",
             "missions",

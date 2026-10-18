@@ -158,6 +158,14 @@ NARETH_DISTINCTIVE_BOSS_MASTERY = {
     },
 }
 
+S30_DISTINCTIVE_BOSS_MASTERY = {
+    "boss.altos.s30.custodio_ultimo_turno": {
+        "first_victory",
+        "action:ordem_vencida",
+        "mechanic:ultimo_turno_telegraph",
+    }
+}
+
 NARETH_DISTINCTIVE_ELITE_MASTERY = {
     "escavador_eixo": {
         "first_victory",
@@ -275,7 +283,18 @@ class BestiaryRecorder:
                 )
             ).all()
         )
-        if creature_id == "tecela_fosso":
+        if creature_id in S30_DISTINCTIVE_BOSS_MASTERY:
+            required = S30_DISTINCTIVE_BOSS_MASTERY[creature_id]
+            entry.stage = (
+                "dominated"
+                if entry.bkp >= 50 and required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 30
+                else "known"
+                if entry.bkp >= 10
+                else "observed"
+            )
+        elif creature_id == "tecela_fosso":
             required = {
                 "first_victory",
                 "action:fio_arrasto",
@@ -804,6 +823,29 @@ class BestiaryRecorder:
                     "mechanic:prepared_leap", "mechanic", 5,
                 ):
                     new_evidence_ids.add("mechanic:prepared_leap")
+            if creature_id == "boss.altos.s30.custodio_ultimo_turno":
+                if action_id == "ordem_vencida":
+                    if await self.add_evidence(
+                        session,
+                        entry,
+                        character_id,
+                        creature_id,
+                        "mechanic:ordem_vencida_agility",
+                        "mechanic",
+                        5,
+                    ):
+                        new_evidence_ids.add("mechanic:ordem_vencida_agility")
+                if event.action == "prepare:ultimo_turno":
+                    if await self.add_evidence(
+                        session,
+                        entry,
+                        character_id,
+                        creature_id,
+                        "mechanic:ultimo_turno_telegraph",
+                        "mechanic",
+                        5,
+                    ):
+                        new_evidence_ids.add("mechanic:ultimo_turno_telegraph")
             if event.action == "rend":
                 if await self.add_evidence(
                     session, entry, character_id, creature_id,
@@ -904,6 +946,9 @@ class BestiaryRecorder:
             ).all()
         )
         required = (
+            S30_DISTINCTIVE_BOSS_MASTERY[creature_id]
+            if creature_id in S30_DISTINCTIVE_BOSS_MASTERY
+            else
             VARZEAS_DISTINCTIVE_BOSS_MASTERY[creature_id]
             if creature_id in VARZEAS_DISTINCTIVE_BOSS_MASTERY
             else NARETH_DISTINCTIVE_BOSS_MASTERY[creature_id]
@@ -929,15 +974,26 @@ class BestiaryRecorder:
             }
         )
         previous_stage = entry.stage
-        entry.stage = (
-            "dominated"
-            if required.issubset(evidence_ids)
-            else "studied"
-            if entry.bkp >= 22
-            else "known"
-            if entry.bkp >= 8
-            else "observed"
-        )
+        if creature_id in S30_DISTINCTIVE_BOSS_MASTERY:
+            entry.stage = (
+                "dominated"
+                if entry.bkp >= 50 and required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 30
+                else "known"
+                if entry.bkp >= 10
+                else "observed"
+            )
+        else:
+            entry.stage = (
+                "dominated"
+                if required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 22
+                else "known"
+                if entry.bkp >= 8
+                else "observed"
+            )
         if entry.stage != previous_stage:
             await reconcile_tdo_feats_for_character(session, character_id)
 

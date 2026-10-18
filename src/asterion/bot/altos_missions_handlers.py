@@ -9,6 +9,7 @@ from aiogram.types import CallbackQuery, Message
 
 from asterion.application.altos_missions import AltosMissionService
 from asterion.application.groups import GroupError
+from asterion.application.s30 import S30Service, S30View
 from asterion.bot.altos_missions_ui import render_altos_mission
 from asterion.bot.combat_ui import (
     CampaignCombatCallback,
@@ -18,6 +19,7 @@ from asterion.bot.combat_ui import (
 )
 from asterion.bot.creation_handlers import present
 from asterion.bot.groups_ui import render_group
+from asterion.bot.s30_ui import render_s30
 
 
 def _base36(value: str) -> int:
@@ -27,7 +29,10 @@ def _base36(value: str) -> int:
 
 
 def altos_missions_router(
-    service: AltosMissionService, images: dict[str, str]
+    service: AltosMissionService,
+    images: dict[str, str],
+    *,
+    s30: S30Service | None = None,
 ) -> Router:
     router = Router(name="altos_missions")
     router.message.filter(F.chat.type == "private")
@@ -36,7 +41,12 @@ def altos_missions_router(
     async def show(query: CallbackQuery, view) -> None:
         await query.answer()
         if view is not None and isinstance(query.message, Message):
-            await present(query.message, render_altos_mission(view), images, edit=True)
+            screen = render_altos_mission(view)
+            if view.quest_id == "S30" and s30 is not None:
+                mission_view = await s30.resume(query.from_user.id)
+                if isinstance(mission_view, S30View):
+                    screen = render_s30(mission_view)
+            await present(query.message, screen, images, edit=True)
 
     async def show_group(query: CallbackQuery) -> None:
         if service.groups is None or not isinstance(query.message, Message):
@@ -152,6 +162,22 @@ def altos_missions_router(
                         return
                 else:
                     raise ValueError("invalid combat mode")
+            elif len(parts) == 5 and parts[1] == "combat" and parts[2] == "S30":
+                version = int(parts[3])
+                if parts[4] == "solo":
+                    view = await service.start_solo_combat(
+                        query.from_user.id, version, "S30"
+                    )
+                elif parts[4] == "group":
+                    view = await service.propose_group_combat(
+                        query.from_user.id, version, "S30"
+                    )
+                    if view is not None and view.proposal_id is not None:
+                        await query.answer("Confirmação enviada ao Grupo.")
+                        await show_group(query)
+                        return
+                else:
+                    raise ValueError("invalid combat mode")
             elif len(parts) == 5 and parts[1] == "combat" and parts[2] == "S26":
                 version = int(parts[3])
                 if parts[4] == "solo":
@@ -176,6 +202,8 @@ def altos_missions_router(
                 view = await service.retry_combat(query.from_user.id, int(parts[3]), "P29")
             elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "P30":
                 view = await service.retry_combat(query.from_user.id, int(parts[3]), "P30")
+            elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "S30":
+                view = await service.retry_combat(query.from_user.id, int(parts[3]), "S30")
             elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "S26":
                 view = await service.retry_combat(query.from_user.id, int(parts[3]), "S26")
             else:

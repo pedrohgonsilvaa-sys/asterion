@@ -187,6 +187,10 @@ P30_CODEX_ENTRY = "codex.altos.sabotagem_ancora_central"
 P30_NARRATIVE_UNLOCK = "narrative.altos.sabotagem_ancora_confirmada"
 P30_RECIPE_UNLOCK = "recipe.altos.colosso.continuidade"
 P30_ACHIEVEMENT = "achievement.altos.colosso_silenciado"
+S30_ID = "S30"
+S30_MISSION_ID = "mission.altos.s30"
+S30_TITLE = "A Ordem que Restou"
+S30_CONTENT_VERSION = "altos-1.0.1"
 ALTOS_REGION_ACHIEVEMENT = "achievement.altos.regiao"
 P30_CONFINS_UNLOCK = "unlock.region.confins"
 ALTOS_PRIMARY_LOCATIONS = (
@@ -279,10 +283,20 @@ P25_COMBAT = {
         50,
         "boss",
     ),
+    S30_ID: (
+        S30_MISSION_ID,
+        "s30.a_ordem_que_restou",
+        ALTOS_BASTILHA_LABEL,
+        "boss.altos.s30.custodio_ultimo_turno",
+        50,
+        "boss",
+    ),
 }
 
 
 def _scripted_combat_step(quest_id: str) -> int:
+    if quest_id == S30_ID:
+        return 5
     return 4 if quest_id in {P28_ID, P29_ID, P30_ID} else 3
 
 
@@ -299,6 +313,7 @@ def _content_version(quest_id: str) -> str:
         P28_ID: P28_CONTENT_VERSION,
         P29_ID: P29_CONTENT_VERSION,
         P30_ID: P30_CONTENT_VERSION,
+        S30_ID: S30_CONTENT_VERSION,
     }.get(quest_id, P25_CONTENT_VERSION)
 
 
@@ -645,6 +660,19 @@ class AltosMissionService:
         )
 
     async def resume_active(self, actor: int) -> AltosMissionView | None:
+        s30_active = False
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            if character is not None:
+                s30_active = bool(await session.scalar(
+                    select(GameActivity.id).where(
+                        GameActivity.character_id == character.id,
+                        GameActivity.content_id == S30_MISSION_ID,
+                        GameActivity.status == "active",
+                    )
+                ))
+        if s30_active:
+            return await self.resume(actor, S30_ID)
         await self.on_location(actor)
         async with self.sessions() as session:
             character = await self._character(session, actor)
@@ -749,6 +777,7 @@ class AltosMissionService:
                 if quest is None or quest.content_version not in {
                     P25_CONTENT_VERSION,
                     P30_CONTENT_VERSION,
+                    S30_CONTENT_VERSION,
                 }:
                     return None
             world = await self._world(session, character.id, lock=False)
@@ -2610,6 +2639,21 @@ class AltosMissionService:
                     f"p30.encounter_started:{character.id}",
                     {"boss_id": ALTOS_COLOSSO_CINEREO, "mode": "solo"},
                 )
+            elif quest_id == S30_ID:
+                progress["encounter_started"] = True
+                progress["completed_steps"] = sorted(
+                    set(progress.get("completed_steps", ())) | {5}
+                )
+                await self._credit_s30(
+                    session,
+                    character.id,
+                    "s30.custodian_faced",
+                    "s30.custodian_faced",
+                    {
+                        "boss_id": "boss.altos.s30.custodio_ultimo_turno",
+                        "mode": "solo",
+                    },
+                )
             quest.progress = progress
             quest.state_version += 1
             return await self._view(session, character, quest, world)
@@ -2637,6 +2681,7 @@ class AltosMissionService:
                 or quest.step != _scripted_combat_step(quest_id)
                 or quest.state_version != version
                 or not (quest.progress or {}).get("awaiting_retry")
+                or (quest_id == S30_ID and world.location != ALTOS_BASTILHA_LABEL)
             ):
                 return (
                     await self._view(session, character, quest, world)
@@ -2834,7 +2879,7 @@ class AltosMissionService:
             enemy_level,
             "enemy",
             None,
-            campaign_boss_group_size=1 if quest_id == P30_ID else None,
+            campaign_boss_group_size=1 if quest_id in {P30_ID, S30_ID} else None,
         )
         combat = create_creature_party_combat(
             uuid4(),
@@ -2866,6 +2911,11 @@ class AltosMissionService:
             character.id,
             creature_id,
             victory=False,
+            evidence_id=(
+                "habitat:location.altos.bastilha_carga" if quest_id == S30_ID else None
+            ),
+            evidence_category="habitat" if quest_id == S30_ID else None,
+            evidence_points=3 if quest_id == S30_ID else 0,
             observation_category=category,
         )
         return activity
@@ -3060,7 +3110,9 @@ class AltosMissionService:
             enemy_level,
             "enemy",
             None,
-            campaign_boss_group_size=len(characters) if quest_id == P30_ID else None,
+            campaign_boss_group_size=(
+                len(characters) if quest_id in {P30_ID, S30_ID} else None
+            ),
         )
         combat = create_creature_party_combat(
             uuid4(),
@@ -3086,7 +3138,7 @@ class AltosMissionService:
             combat=combat,
             ruleset_version=combat.ruleset,
             checkpoint=checkpoint,
-            campaign_boss=quest_id == P30_ID,
+            campaign_boss=quest_id in {P30_ID, S30_ID},
         )
         if quest_id == P30_ID and encounter.journey_id is not None:
             journey = await session.get(
@@ -3143,12 +3195,49 @@ class AltosMissionService:
                     )
                 participant_quest.progress = progress
                 participant_quest.state_version += 1
+        elif quest_id == S30_ID:
+            for roster_member in roster:
+                if roster_member.role != "eligible":
+                    continue
+                participant_quest = await self._quest(
+                    session, roster_member.character.id, S30_ID
+                )
+                if (
+                    participant_quest is None
+                    or participant_quest.status != "active"
+                    or participant_quest.step != 5
+                ):
+                    continue
+                progress = dict(participant_quest.progress or {})
+                progress["encounter_started"] = True
+                progress["completed_steps"] = sorted(
+                    set(progress.get("completed_steps", ())) | {5}
+                )
+                participant_quest.progress = progress
+                participant_quest.state_version += 1
+                await self._credit_s30(
+                    session,
+                    roster_member.character.id,
+                    "s30.custodian_faced",
+                    "s30.custodian_faced",
+                    {
+                        "boss_id": "boss.altos.s30.custodio_ultimo_turno",
+                        "mode": "group",
+                    },
+                )
         for member in roster:
             await self.road._bestiary(
                 session,
                 member.character.id,
                 creature_id,
                 victory=False,
+                evidence_id=(
+                    "habitat:location.altos.bastilha_carga"
+                    if quest_id == S30_ID
+                    else None
+                ),
+                evidence_category="habitat" if quest_id == S30_ID else None,
+                evidence_points=3 if quest_id == S30_ID else 0,
                 observation_category=category,
             )
         return str(encounter.id)
@@ -3259,9 +3348,23 @@ class AltosMissionService:
                         f"p30.colossus_defeated:{character.id}",
                         {"boss_id": ALTOS_COLOSSO_CINEREO, "victory": True},
                     )
+                elif quest_id == S30_ID:
+                    quest.step = 7
+                    progress["completed_steps"] = sorted(
+                        set(progress.get("completed_steps", ())) | {5, 6}
+                    )
+                    await self._credit_s30(
+                        session,
+                        character.id,
+                        "s30.custodian_defeated",
+                        "s30.custodian_defeated",
+                        {"boss_id": "boss.altos.s30.custodio_ultimo_turno", "victory": True},
+                    )
                 else:
                     quest.step = _scripted_combat_step(quest_id) + 1
                 if quest_id == P30_ID:
+                    pass
+                elif quest_id == S30_ID:
                     pass
                 elif quest_id == P29_ID:
                     await self._credit_p29(
@@ -3308,6 +3411,11 @@ class AltosMissionService:
                 await normalize_character_hp(session, character)
                 progress.update(combat_result="defeat", awaiting_retry=True)
                 if quest_id == P30_ID:
+                    character.hp = character.max_hp
+                    world.region = ALTOS_REGION
+                    world.location = ALTOS_ABRIGO_LABEL
+                    progress["recovery_brazier"] = ALTOS_ABRIGO_BRAZIER
+                elif quest_id == S30_ID:
                     character.hp = character.max_hp
                     world.region = ALTOS_REGION
                     world.location = ALTOS_ABRIGO_LABEL
@@ -3454,9 +3562,26 @@ class AltosMissionService:
                                     f"p30.colossus_defeated:{participant.id}",
                                     {"boss_id": ALTOS_COLOSSO_CINEREO, "victory": True},
                                 )
+                            elif quest_id == S30_ID:
+                                participant_quest.step = 7
+                                progress["completed_steps"] = sorted(
+                                    set(progress.get("completed_steps", ())) | {5, 6}
+                                )
+                                await self._credit_s30(
+                                    session,
+                                    participant.id,
+                                    "s30.custodian_defeated",
+                                    "s30.custodian_defeated",
+                                    {
+                                        "boss_id": "boss.altos.s30.custodio_ultimo_turno",
+                                        "victory": True,
+                                    },
+                                )
                             else:
                                 participant_quest.step = _scripted_combat_step(quest_id) + 1
                             if quest_id == P30_ID:
+                                pass
+                            elif quest_id == S30_ID:
                                 pass
                             elif quest_id == P29_ID:
                                 await self._credit_p29(
@@ -3510,11 +3635,28 @@ class AltosMissionService:
                                     participant_world.region = ALTOS_REGION
                                     participant_world.location = ALTOS_ABRIGO_LABEL
                                 progress["recovery_brazier"] = ALTOS_ABRIGO_BRAZIER
+                            elif quest_id == S30_ID:
+                                participant.hp = participant.max_hp
+                                participant_world = await self._world(
+                                    session, participant.id
+                                )
+                                if participant_world is not None:
+                                    participant_world.region = ALTOS_REGION
+                                    participant_world.location = ALTOS_ABRIGO_LABEL
+                                progress["recovery_brazier"] = ALTOS_ABRIGO_BRAZIER
                         participant_quest.progress = progress
                         participant_quest.state_version += 1
                     elif updated.result == "defeat":
                         await normalize_character_hp(session, participant)
                         if quest_id == P30_ID:
+                            participant.hp = participant.max_hp
+                            participant_world = await self._world(
+                                session, participant.id
+                            )
+                            if participant_world is not None:
+                                participant_world.region = ALTOS_REGION
+                                participant_world.location = ALTOS_ABRIGO_LABEL
+                        elif quest_id == S30_ID:
                             participant.hp = participant.max_hp
                             participant_world = await self._world(
                                 session, participant.id
@@ -4146,6 +4288,18 @@ class AltosMissionService:
             session,
             character_id=character_id,
             quest_id=S26_ID,
+            objective_id=objective_id,
+            source_key=source_key,
+            evidence=evidence,
+        )
+
+    async def _credit_s30(
+        self, session, character_id, objective_id, source_key, evidence
+    ):
+        await record_campaign_objective_credit(
+            session,
+            character_id=character_id,
+            quest_id=S30_ID,
             objective_id=objective_id,
             source_key=source_key,
             evidence=evidence,
