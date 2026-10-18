@@ -110,7 +110,9 @@ VARZEAS_INFIRMARY_CORE = "material.varzeas.nucleo_enfermaria_afundada"
 VARZEAS_CISTERN_CORE = "material.varzeas.nucleo_cisterna_transferencia"
 VARZEAS_MATRIX_CORE = "material.varzeas.nucleo_matriz_rubra"
 CATALYST_V = "material.tdo.catalisador_elite_v"
+FRAGMENT_V = "material.tdo.fragmento_aprimoramento_v"
 ALTOS_COLOSSUS_CORE = "material.special.altos.core.colosso_cinereo"
+ALTOS_PEDREIRA_CORE = "material.special.altos.core.pedreira_contrapeso"
 
 MATERIAL_NAMES = {
     IRON: "Ferro de Fuligem",
@@ -149,6 +151,7 @@ MATERIAL_NAMES = {
     "material.altos.cinza_basalto": "Cinza de Basalto",
     CATALYST_V: "Catalisador de Elite V",
     ALTOS_COLOSSUS_CORE: "Núcleo do Colosso Cinéreo",
+    ALTOS_PEDREIRA_CORE: "Núcleo da Pedreira do Contrapeso",
     VDE_IRON: "Ferro Enredado",
     VDE_LEATHER: "Couro Musgoso",
     VDE_HERB: "Erva de Turfa",
@@ -922,6 +925,27 @@ def _special_recipes() -> list[RecipeDefinition]:
             creation_enabled=False,
             unlock_id="recipe.altos.colosso.continuidade",
             description="Encantamento Épico de Bloqueio · Grau V · +0,50 p.p.",
+        ),
+        RecipeDefinition(
+            recipe_id="recipe.altos.pedreira.relicario_peso_suspenso",
+            profession_id="jeweler",
+            name="Relicário do Peso Suspenso",
+            output_kind="equipment",
+            required_level=12,
+            grade=5,
+            rarity="Raro",
+            output_name="Relicário do Peso Suspenso",
+            output_slot="Artefato",
+            output_id="equipment.altos.special.relicario_peso_suspenso",
+            sw=2,
+            fixed_materials=(
+                MaterialRequirement("material.altos.ferro_contrapeso", 10),
+                MaterialRequirement("material.altos.cinza_basalto", 6),
+                MaterialRequirement(FRAGMENT_V, 8, False),
+                MaterialRequirement(ALTOS_PEDREIRA_CORE, 1),
+            ),
+            unlock_id="recipe.altos.pedreira.relicario_peso_suspenso",
+            description="Artefato · Raro · Grau V · SW2",
         ),
     ]
 

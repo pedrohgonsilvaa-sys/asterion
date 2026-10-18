@@ -3267,6 +3267,12 @@ class RoadService:
                     character_id=c.id,
                     unlock_id=ALTOS_PEDREIRAS_DUNGEON_UNLOCK,
                 )
+                await self._ensure(
+                    s,
+                    CodexEntry,
+                    character_id=c.id,
+                    entry_id="codex.altos.dungeon.pedreira_contrapeso",
+                )
                 components.append(
                     ("unlock", ALTOS_PEDREIRAS_DUNGEON_UNLOCK, 1, {})
                 )

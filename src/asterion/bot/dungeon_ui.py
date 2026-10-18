@@ -32,6 +32,7 @@ def render_dungeons(view: DungeonView) -> Screen:
                 "dungeon.nareth.observatorio_afundado": "dungeon:nareth-observatory",
                 "dungeon.varzeas.enfermaria_afundada": "dungeon:varzeas-infirmary",
                 "dungeon.varzeas.cisterna_transferencia": "dungeon:varzeas-cistern",
+                "dungeon.altos.pedreira_contrapeso": "dungeon:altos-pedreira",
             }.get(family_id, "dungeon:known")
             rows.append([_button(f"{name} · {level_range}", callback)])
             details.append(f"{name} · {level_range}\n{region} · {location}")
@@ -70,6 +71,7 @@ def render_dungeons(view: DungeonView) -> Screen:
             "dungeon.nareth.observatorio_afundado": "o",
             "dungeon.varzeas.enfermaria_afundada": "i",
             "dungeon.varzeas.cisterna_transferencia": "t",
+            "dungeon.altos.pedreira_contrapeso": "p",
         }.get(view.family_id)
         if family_key is None:
             return Screen(

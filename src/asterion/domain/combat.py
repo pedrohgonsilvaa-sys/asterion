@@ -154,7 +154,10 @@ class Action:
     skip_if_target_dot_at_cap: str | None = None
     vampirism_cap_hp_fraction: Decimal | None = None
     skip_if_self_effect_active: str | None = None
+    skip_if_any_self_effect_active: tuple[str, ...] = ()
     skip_if_actor_last_action: tuple[str, ...] = ()
+    ai_priority_after: tuple[str, ...] = ()
+    barrier_bound_effect_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.hit_count < 1:
@@ -406,6 +409,7 @@ class CombatPhaseTrigger:
     heal_source_per_active_fighter_fraction: Decimal = ZERO
     consume_active_fighter_keys: tuple[str, ...] = ()
     barrier_source_per_active_fighter_fraction: Decimal = ZERO
+    ai_priority: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -558,6 +562,8 @@ def _resolve_phase_triggers(state: Combat) -> None:
             continue
         if trigger.phase_id is not None:
             state.phase_id = trigger.phase_id
+        if trigger.ai_priority:
+            state.ai_priorities[trigger.source_fighter_key] = trigger.ai_priority
         for key in trigger.activate_fighter_keys:
             fighter = state.fighters.get(key)
             if fighter is not None and fighter.hp <= ZERO:
@@ -1440,6 +1446,17 @@ def _deal_damage(target: Fighter, amount: Decimal | int) -> tuple[Decimal, Decim
     return hp_damage, absorbed
 
 
+def _remove_barrier_bound_effects(state: Combat, fighter: Fighter, source: str) -> None:
+    if not source:
+        return
+    action_id = source.rsplit(":", 1)[-1]
+    action = state.enemy_actions.get(action_id) or state.player_actions.get(action_id)
+    if action is None or not action.barrier_bound_effect_ids:
+        return
+    linked = set(action.barrier_bound_effect_ids)
+    fighter.effects = [effect for effect in fighter.effects if effect.id not in linked]
+
+
 def _deal_combat_damage(
     state: Combat,
     target_key: str,
@@ -1449,7 +1466,10 @@ def _deal_combat_damage(
 ) -> tuple[Decimal, Decimal]:
     target = state.fighters[target_key]
     hp_before = target.hp
+    barrier_source_before = target.barrier_source
     actual_damage, barrier_absorbed = _deal_damage(target, amount)
+    if barrier_source_before and not target.barrier_source:
+        _remove_barrier_bound_effects(state, target, barrier_source_before)
     threshold = target.stats.hp * D("0.50")
     if hp_before > threshold and target.hp <= threshold:
         _grant_vigilia_retaliation(state, target_key, source_key)
@@ -1884,12 +1904,14 @@ def _end_turn(state: Combat) -> None:
         actor.next_direct_crit_bonus = ZERO
         actor.next_direct_crit_expires_opportunity = None
         actor.next_direct_crit_effect_id = ""
+    barrier_source_before = actor.barrier_source
     if actor.opportunity > actor.barrier_applied_opportunity and actor.barrier_remaining > 0:
         actor.barrier_remaining -= 1
         if actor.barrier_remaining == 0:
             actor.barrier = D(0)
             actor.barrier_source = ""
             actor.barrier_debuff_magnitude_reduction = ZERO
+            _remove_barrier_bound_effects(state, actor, barrier_source_before)
     if actor.opportunity > actor.ward_applied_opportunity and actor.ward_remaining > 0:
         actor.ward_remaining -= 1
         if actor.ward_remaining == 0:
@@ -4442,6 +4464,11 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
             for effect in enemy.effects
         ):
             return False
+        if action.skip_if_any_self_effect_active and any(
+            effect.id in action.skip_if_any_self_effect_active and effect.remaining > 0
+            for effect in enemy.effects
+        ):
+            return False
         if action.requires_defeated_fighter_keys and not any(
             key in state.fighters and state.fighters[key].hp <= ZERO
             for key in action.requires_defeated_fighter_keys
@@ -4544,6 +4571,8 @@ def _advance_to_player(state: Combat) -> None:
             committed = _perform(
                 state, actor_key, action_id, target_id=target_id
             )
+            if committed and action and action.ai_priority_after:
+                state.ai_priorities[actor_key] = action.ai_priority_after
             if committed and not prepared_declaration:
                 _record_devastador_charge(
                     state, actor_key, event_start, action_id

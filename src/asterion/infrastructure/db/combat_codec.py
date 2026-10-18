@@ -107,6 +107,13 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "skip_if_actor_last_action": tuple(
                         value.get("skip_if_actor_last_action", ())
                     ),
+                    "skip_if_any_self_effect_active": tuple(
+                        value.get("skip_if_any_self_effect_active", ())
+                    ),
+                    "ai_priority_after": tuple(value.get("ai_priority_after", ())),
+                    "barrier_bound_effect_ids": tuple(
+                        value.get("barrier_bound_effect_ids", ())
+                    ),
                     "self_effects": tuple(
                         ActionEffect(
                             **(effect | {"magnitude": Decimal(effect["magnitude"])})
@@ -400,6 +407,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                                         "barrier_source_per_active_fighter_fraction", "0"
                                     )
                                 ),
+                                "ai_priority": tuple(trigger.get("ai_priority", ())),
                             }
                         )
                     )

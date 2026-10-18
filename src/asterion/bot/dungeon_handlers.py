@@ -76,6 +76,15 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
             await service.detail(query.from_user.id, "dungeon.varzeas.cisterna_transferencia"),
         )
 
+    @router.callback_query(F.data == "dungeon:altos-pedreira")
+    async def altos_pedreira(query: CallbackQuery):
+        await show(
+            query,
+            await service.detail(
+                query.from_user.id, "dungeon.altos.pedreira_contrapeso"
+            ),
+        )
+
     @router.callback_query(F.data.startswith("dungeon:group:"))
     async def prepare_group(query: CallbackQuery):
         try:
@@ -89,6 +98,7 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "o": "dungeon.nareth.observatorio_afundado",
                 "i": "dungeon.varzeas.enfermaria_afundada",
                 "t": "dungeon.varzeas.cisterna_transferencia",
+                "p": "dungeon.altos.pedreira_contrapeso",
             }[family_key]
             difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
                 difficulty_key
@@ -111,6 +121,7 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "o": "dungeon.nareth.observatorio_afundado",
                 "i": "dungeon.varzeas.enfermaria_afundada",
                 "t": "dungeon.varzeas.cisterna_transferencia",
+                "p": "dungeon.altos.pedreira_contrapeso",
             }[family_key]
             difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
                 difficulty_key
@@ -197,6 +208,7 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "o": "dungeon.nareth.observatorio_afundado",
                 "i": "dungeon.varzeas.enfermaria_afundada",
                 "t": "dungeon.varzeas.cisterna_transferencia",
+                "p": "dungeon.altos.pedreira_contrapeso",
             }.get(pieces[2])
             suffix = pieces[3]
         else:

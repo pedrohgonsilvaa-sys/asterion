@@ -21,6 +21,27 @@ from asterion.application.equipment_configuration import (
 from asterion.application.progression import consolidate_character_level
 from asterion.application.road import CHARNECA, RUINS, RoadService
 from asterion.application.vigor import add_vigor_state, reconcile_character_vigor, utcnow
+from asterion.domain.altos_pedreira_dungeon import (
+    ALTOS_PEDREIRA_BOSS_CODEX_ENTRY,
+    ALTOS_PEDREIRA_BRAZIER_LABEL,
+    ALTOS_PEDREIRA_CODEX_ENTRY,
+    ALTOS_PEDREIRA_CONTENT_VERSION,
+    ALTOS_PEDREIRA_CORE_ID,
+    ALTOS_PEDREIRA_CORE_NAME,
+    ALTOS_PEDREIRA_CYCLE_CODEX_ENTRY,
+    ALTOS_PEDREIRA_DISCOVERY_UNLOCK,
+    ALTOS_PEDREIRA_ENVIRONMENTS,
+    ALTOS_PEDREIRA_FAMILY_ID,
+    ALTOS_PEDREIRA_FIRST_CLEAR_PREFIX,
+    ALTOS_PEDREIRA_KNOWN_PATH_UNLOCK,
+    ALTOS_PEDREIRA_RECIPE_NAME,
+    ALTOS_PEDREIRA_RECIPE_UNLOCK,
+    ALTOS_PEDREIRA_REWARD_PREFIX,
+    ALTOS_PEDREIRA_RULESET_VERSION,
+    altos_pedreira_encounter_specs,
+    altos_pedreira_enemy_rewards,
+    create_altos_pedreira_combat,
+)
 from asterion.domain.combat import (
     CombatConsumableOption,
     act,
@@ -45,6 +66,7 @@ from asterion.domain.dungeons import (
     roll_brazier,
     roll_weighted,
     stable_draw,
+    weighted_material_for_ordinal,
 )
 from asterion.domain.equipment_stats import (
     equipment_configuration_from_data,
@@ -208,6 +230,7 @@ from asterion.domain.vde_santuario import (
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
+    Achievement,
     BestiaryEntry,
     BestiaryEvidence,
     Character,
@@ -224,6 +247,7 @@ from asterion.infrastructure.db.models import (
     DungeonRunMember,
     EquipmentItem,
     GameActivity,
+    Quest,
     RewardComponent,
     RewardEvent,
     RuneStack,
@@ -276,6 +300,11 @@ class DungeonFamily:
     catalyst_material: str | None = None
     fragment_material: str | None = None
     recipe_name: str | None = None
+    required_quest_ids: tuple[str, ...] = ()
+    completion_xp_by_difficulty: tuple[tuple[str, int], ...] = ()
+    first_clear_xp_by_difficulty: tuple[tuple[str, int], ...] = ()
+    crowns_by_difficulty: tuple[tuple[str, int], ...] = ()
+    basic_material_weights: tuple[tuple[str, int], ...] = ()
 
 
 DUNGEON_FAMILIES = {
@@ -483,6 +512,52 @@ DUNGEON_FAMILIES = {
         fragment_material=VARZEAS_DUNGEON_FRAGMENT,
         recipe_name=VARZEAS_CISTERN_RECIPE_NAME,
     ),
+    ALTOS_PEDREIRA_FAMILY_ID: DungeonFamily(
+        ALTOS_PEDREIRA_FAMILY_ID,
+        "Pedreira do Contrapeso",
+        "Nv.44–47",
+        "Pedreiras Suspensas",
+        "Pedreiras Suspensas",
+        ALTOS_PEDREIRA_DISCOVERY_UNLOCK,
+        ALTOS_PEDREIRA_KNOWN_PATH_UNLOCK,
+        ALTOS_PEDREIRA_FIRST_CLEAR_PREFIX,
+        ALTOS_PEDREIRA_REWARD_PREFIX,
+        "dungeon_altos_pedreira_encounter",
+        ALTOS_PEDREIRA_CONTENT_VERSION,
+        ALTOS_PEDREIRA_RULESET_VERSION,
+        47,
+        45,
+        "codex.altos.dungeon.pedreira_contrapeso",
+        ALTOS_PEDREIRA_CORE_ID,
+        ALTOS_PEDREIRA_CORE_NAME,
+        ALTOS_PEDREIRA_RECIPE_UNLOCK,
+        ALTOS_PEDREIRA_BRAZIER_LABEL,
+        region_display="Altos Cinéreos",
+        encounter_count=5,
+        recipe_name=ALTOS_PEDREIRA_RECIPE_NAME,
+        required_quest_ids=("P27",),
+        completion_xp_by_difficulty=(
+            ("stable", 12_590),
+            ("fractured", 15_430),
+            ("rupture", 24_240),
+        ),
+        first_clear_xp_by_difficulty=(
+            ("stable", 20_144),
+            ("fractured", 24_688),
+            ("rupture", 38_784),
+        ),
+        crowns_by_difficulty=(
+            ("stable", 650),
+            ("fractured", 970),
+            ("rupture", 1_800),
+        ),
+        basic_material_weights=(
+            ("material.altos.ferro_contrapeso", 4_500),
+            ("material.altos.cinza_basalto", 3_500),
+            ("material.altos.couro_escarpa", 1_000),
+            ("material.altos.liquen_pedreira", 1_000),
+        ),
+    ),
 }
 
 
@@ -524,6 +599,8 @@ def _encounter_environment(family_id: str, ordinal: int) -> str:
         return VARZEAS_INFIRMARY_ENVIRONMENTS[ordinal]
     if family_id == VARZEAS_CISTERN_FAMILY_ID:
         return VARZEAS_CISTERN_ENVIRONMENTS[ordinal]
+    if family_id == ALTOS_PEDREIRA_FAMILY_ID:
+        return ALTOS_PEDREIRA_ENVIRONMENTS[ordinal]
     raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
@@ -555,6 +632,10 @@ def _encounter_specs(run, ordinal: int):
             run.initial_group_size,
             DUNGEON_FAMILIES[family_id].reference_level,
         )
+    if family_id == ALTOS_PEDREIRA_FAMILY_ID:
+        return altos_pedreira_encounter_specs(
+            ordinal, run.difficulty, run.initial_group_size
+        )
     raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
@@ -578,6 +659,8 @@ def _enemy_rewards_for(run, ordinal: int):
             ordinal,
             DUNGEON_FAMILIES[run.dungeon_family_id].reference_level,
         )
+    if run.dungeon_family_id == ALTOS_PEDREIRA_FAMILY_ID:
+        return altos_pedreira_enemy_rewards(ordinal)
     raise ValueError(f"Unknown dungeon family: {run.dungeon_family_id}")
 
 
@@ -667,7 +750,10 @@ class DungeonService:
                 return None
             known = []
             for family in DUNGEON_FAMILIES.values():
-                if await self._has_unlock(session, character.id, family.discovery_unlock):
+                if (
+                    await self._has_unlock(session, character.id, family.discovery_unlock)
+                    and await self._has_required_quests(session, character.id, family)
+                ):
                     known.append(
                         (
                             family.family_id,
@@ -691,7 +777,7 @@ class DungeonService:
             family = DUNGEON_FAMILIES.get(family_id)
             if family is None or not await self._has_unlock(
                 session, character.id, family.discovery_unlock
-            ):
+            ) or not await self._has_required_quests(session, character.id, family):
                 return self._view(character, kind="hidden", family_id=family_id)
             stable = await self._has_unlock(
                 session, character.id, family.first_clear_prefix + "stable"
@@ -1299,6 +1385,7 @@ class DungeonService:
                 or world is None
                 or world.location != family.entry_location
                 or not await self._has_unlock(session, character.id, family.discovery_unlock)
+                or not await self._has_required_quests(session, character.id, family)
             ):
                 return self._view(character, kind="detail", reason="gate", family_id=family_id)
             stable = await self._has_unlock(
@@ -1688,6 +1775,22 @@ class DungeonService:
                     level=primary_character.level,
                     difficulty=run.difficulty,
                     reference_level=family.reference_level,
+                    equipment=equipment,
+                    active_art_ids=active_arts,
+                    ordinal=run.current_encounter_ordinal,
+                    run_seed=run.seed,
+                    initial_group_size=run.initial_group_size,
+                    party=group,
+                )
+            elif run.dungeon_family_id == ALTOS_PEDREIRA_FAMILY_ID:
+                combat = create_altos_pedreira_combat(
+                    uuid4(),
+                    name=primary_character.name,
+                    character_class=primary_character.character_class,
+                    race=primary_character.race,
+                    hp=primary_member.hp,
+                    level=primary_character.level,
+                    difficulty=run.difficulty,
                     equipment=equipment,
                     active_art_ids=active_arts,
                     ordinal=run.current_encounter_ordinal,
@@ -2215,6 +2318,14 @@ class DungeonService:
                             spec.creature.creature_id,
                             fixed_xp=3084,
                         )
+                    elif spec.creature.creature_id == "boss.altos.pedreira.peso_sem_fim":
+                        await self._grant_boss_milestone(
+                            session,
+                            participant_character,
+                            run,
+                            spec.creature.creature_id,
+                            fixed_xp=4026,
+                        )
                     if spec.creature.category == "boss":
                         await self.bestiary.refresh_boss_mastery(
                             session, participant_character.id, spec.creature.creature_id
@@ -2353,9 +2464,19 @@ class DungeonService:
                 continue
             first_clear_id = family.first_clear_prefix + run.difficulty
             first_clear = not await self._has_unlock(session, character.id, first_clear_id)
-            completion_xp = dungeon_completion_xp(
-                run.reference_level, run.difficulty, first_clear=first_clear
+            family_completion = dict(family.completion_xp_by_difficulty)
+            family_first_clear = dict(family.first_clear_xp_by_difficulty)
+            completion_xp = (
+                family_first_clear.get(run.difficulty)
+                if first_clear and family_first_clear
+                else family_completion.get(run.difficulty)
+                if family_completion
+                else None
             )
+            if completion_xp is None:
+                completion_xp = dungeon_completion_xp(
+                    run.reference_level, run.difficulty, first_clear=first_clear
+                )
             internal_xp = sum(
                 enemy_xp(
                     int(row[0]),
@@ -2367,7 +2488,9 @@ class DungeonService:
                 for row in raw_internal_rewards
             )
             total_xp = internal_xp + completion_xp
-            crown_reward = dungeon_crowns(run.reference_level, run.difficulty)
+            crown_reward = dict(family.crowns_by_difficulty).get(
+                run.difficulty, dungeon_crowns(run.reference_level, run.difficulty)
+            )
             character.xp += total_xp
             character.crowns += crown_reward
             event = RewardEvent(character_id=character.id, source_id=source)
@@ -2397,10 +2520,16 @@ class DungeonService:
             member_seed = f"{run.seed}:member:{character.id.hex}"
             material_counts: dict[str, int] = {}
             for ordinal in range(profile.basic_materials):
-                material_id = material_for_ordinal(
-                    member_seed,
-                    ordinal,
-                    family.basic_material_pool or BASIC_MATERIALS,
+                material_id = (
+                    weighted_material_for_ordinal(
+                        member_seed, ordinal, family.basic_material_weights
+                    )
+                    if family.basic_material_weights
+                    else material_for_ordinal(
+                        member_seed,
+                        ordinal,
+                        family.basic_material_pool or BASIC_MATERIALS,
+                    )
                 )
                 material_counts[material_id] = material_counts.get(material_id, 0) + 1
             catalyst_id = family.catalyst_material or catalyst_material_id(run.reference_level)
@@ -2499,6 +2628,15 @@ class DungeonService:
             if first_clear:
                 await self._ensure_unlock(session, character.id, first_clear_id)
                 first_clear_by_character[str(character.id)] = True
+                if (
+                    run.dungeon_family_id == ALTOS_PEDREIRA_FAMILY_ID
+                    and run.difficulty == "stable"
+                ):
+                    await self._ensure_achievement(
+                        session,
+                        character.id,
+                        "achievement.altos.pedreira_primeira",
+                    )
                 if run.difficulty == "stable":
                     if run.dungeon_family_id == CRYPT_FAMILY_ID:
                         await self._refresh_crypt_boss_mastery(session, character.id)
@@ -2529,6 +2667,10 @@ class DungeonService:
             }:
                 await self._record_varzeas_codex_completion(
                     session, character.id, run.dungeon_family_id
+                )
+            elif run.dungeon_family_id == ALTOS_PEDREIRA_FAMILY_ID:
+                await self._ensure_codex_entry(
+                    session, character.id, ALTOS_PEDREIRA_CODEX_ENTRY
                 )
             session.add_all(components)
             reward_lines_by_character[str(character.id)] = self._reward_lines(
@@ -2615,6 +2757,14 @@ class DungeonService:
             "material.varzeas.soro_antigo": "Soro Antigo",
             "material.varzeas.catalisador_elite_iv": "Catalisador de Elite IV",
             "material.varzeas.fragmento_aprimoramento_iv": "Fragmento de Aprimoramento IV",
+            "material.altos.ferro_contrapeso": "Ferro de Contrapeso",
+            "material.altos.cinza_basalto": "Cinza de Basalto",
+            "material.altos.couro_escarpa": "Couro de Escarpa",
+            "material.altos.liquen_pedreira": "Líquen de Pedreira",
+            "material.tdo.catalisador_elite_v": "Catalisador de Elite V",
+            "material.tdo.catalisador_elite_vi": "Catalisador de Elite VI",
+            "material.tdo.fragmento_aprimoramento_v": "Fragmento de Aprimoramento V",
+            "material.tdo.fragmento_aprimoramento_vi": "Fragmento de Aprimoramento VI",
         }
         for material_id, quantity in sorted(materials.items()):
             lines.append(f"📦 {labels.get(material_id, material_id)} · {quantity}")
@@ -2796,6 +2946,8 @@ class DungeonService:
             if family_id == VARZEAS_INFIRMARY_FAMILY_ID
             else "coracao_transferencia"
             if family_id == VARZEAS_CISTERN_FAMILY_ID
+            else "boss.altos.pedreira.peso_sem_fim"
+            if family_id == ALTOS_PEDREIRA_FAMILY_ID
             else "custodio_primeiro_selo"
         )
         for event in after.events[cursor:]:
@@ -3177,6 +3329,15 @@ class DungeonService:
     async def _ensure_codex_for_encounter(
         self, session, character_id, ordinal, *, family_id=CRYPT_FAMILY_ID
     ):
+        if family_id == ALTOS_PEDREIRA_FAMILY_ID:
+            entry_id = {
+                1: ALTOS_PEDREIRA_CODEX_ENTRY,
+                4: ALTOS_PEDREIRA_CYCLE_CODEX_ENTRY,
+                5: ALTOS_PEDREIRA_BOSS_CODEX_ENTRY,
+            }.get(ordinal)
+            if entry_id is not None:
+                await self._ensure_codex_entry(session, character_id, entry_id)
+            return
         if family_id == FOSSO_FAMILY_ID:
             fragments = {
                 1: (
@@ -3406,6 +3567,8 @@ class DungeonService:
         await reconcile_character_vigor(session, character)
         if not await self._has_unlock(session, character.id, family.discovery_unlock):
             return "discovery"
+        if not await self._has_required_quests(session, character.id, family):
+            return "gate"
         stable = await self._has_unlock(session, character.id, family.first_clear_prefix + "stable")
         fractured = await self._has_unlock(
             session, character.id, family.first_clear_prefix + "fractured"
@@ -4034,6 +4197,22 @@ class DungeonService:
             is not None
         )
 
+    async def _has_required_quests(self, session, character_id, family):
+        if not family.required_quest_ids:
+            return True
+        completed = set(
+            (
+                await session.scalars(
+                    select(Quest.quest_id).where(
+                        Quest.character_id == character_id,
+                        Quest.quest_id.in_(family.required_quest_ids),
+                        Quest.status == "completed",
+                    )
+                )
+            ).all()
+        )
+        return set(family.required_quest_ids).issubset(completed)
+
     async def _ensure_unlock(self, session, character_id, unlock_id):
         existing = await session.scalar(
             select(Unlock)
@@ -4045,6 +4224,21 @@ class DungeonService:
             await session.flush()
             return True
         return False
+
+    async def _ensure_achievement(self, session, character_id, achievement_id):
+        existing = await session.scalar(
+            select(Achievement)
+            .where(
+                Achievement.character_id == character_id,
+                Achievement.achievement_id == achievement_id,
+            )
+            .with_for_update()
+        )
+        if existing is not None:
+            return False
+        session.add(Achievement(character_id=character_id, achievement_id=achievement_id))
+        await session.flush()
+        return True
 
     async def _ensure_codex_entry(self, session, character_id, entry_id):
         existing = await session.scalar(

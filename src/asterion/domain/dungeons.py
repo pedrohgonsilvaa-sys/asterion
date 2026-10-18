@@ -231,6 +231,25 @@ def material_for_ordinal(
     return pool[stable_draw(seed, f"material.basic.{ordinal}", len(pool))]
 
 
+def weighted_material_for_ordinal(
+    seed: str,
+    ordinal: int,
+    pool: tuple[tuple[str, int], ...],
+) -> str:
+    """Draw one basic material deterministically from a basis-point pool."""
+    if not pool or any(weight < 0 for _material_id, weight in pool):
+        raise ValueError("Dungeon weighted material pools must be non-empty and non-negative.")
+    if sum(weight for _material_id, weight in pool) != 10_000:
+        raise ValueError("Dungeon weighted material weights must total 10000 basis points.")
+    draw = stable_draw(seed, f"material.basic.{ordinal}", 10_000)
+    cursor = 0
+    for material_id, weight in pool:
+        cursor += weight
+        if draw < cursor:
+            return material_id
+    raise AssertionError("A validated weighted material pool must resolve a draw.")
+
+
 def rune_grade(reference_level: int) -> int:
     return min(6, max(1, (reference_level - 1) // 10 + 1))
 

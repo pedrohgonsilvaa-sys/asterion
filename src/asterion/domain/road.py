@@ -104,6 +104,9 @@ ALTOS_VIGIA_CARGA = "creature.altos.vigia_carga"
 ALTOS_SUPERVISOR_CARGA = "elite.altos.supervisor_carga"
 ALTOS_COLOSSO_CINEREO = "boss.altos.colosso_cinereo"
 ALTOS_CUSTODIO_ULTIMO_TURNO = "boss.altos.s30.custodio_ultimo_turno"
+ALTOS_PEDREIRA_OPERARIO = "dungeon_creature.altos.pedreira.operario_petrificado"
+ALTOS_PEDREIRA_PRENSOR = "dungeon_elite.altos.pedreira.prensor_antigo"
+ALTOS_PEDREIRA_PESO_SEM_FIM = "boss.altos.pedreira.peso_sem_fim"
 ALTOS_FERRO_CONTRAPESO = "material.altos.ferro_contrapeso"
 ALTOS_COURO_ESCARPA = "material.altos.couro_escarpa"
 ALTOS_LIQUEN_PEDREIRA = "material.altos.liquen_pedreira"
@@ -3791,6 +3794,7 @@ def create_creature_party_combat(
     pressure_start_opportunity: int = 0,
     pressure_cap: int = 0,
     party: tuple[PlayerCombatantSpec, ...] | None = None,
+    configure_combat=None,
 ) -> Combat:
     """Create a shared-engine combat with independent AI schedules per enemy."""
     if not enemies:
@@ -3921,8 +3925,7 @@ def create_creature_party_combat(
             if active_art_ids is None
             else class_player_actions(character_class, tuple(active_art_ids))
         )
-    return start_combat(
-        Combat(
+    state = Combat(
             combat_id,
             runtime_ruleset,
             fighters=fighters,
@@ -3948,4 +3951,64 @@ def create_creature_party_combat(
             ai_target_cycle=(tuple(member.character_id for member in party or ())
                              if party is not None and len(party) > 1 else ()),
         )
-    )
+    if configure_combat is not None:
+        configure_combat(state)
+    return start_combat(state)
+
+
+ALTOS_PEDREIRA_CREATURES = (
+    Creature(
+        ALTOS_PEDREIRA_OPERARIO,
+        "Operário Petrificado",
+        "common",
+        "balanced",
+        45,
+        47,
+        0,
+        ("ferramenta_inercial", "golpe_arrasto"),
+        (
+            ("ferramenta_inercial", "Ferramenta Inercial", D("1.00"), 0, D(0), 0),
+            ("golpe_arrasto", "Golpe de Arrasto", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+        ),
+    ),
+    Creature(
+        ALTOS_PEDREIRA_PRENSOR,
+        "Prensor Antigo",
+        "elite",
+        "armored",
+        46,
+        46,
+        0,
+        ("impacto_prensa", "placa_compressao", "pressao_trilho", "curso_completo"),
+        (
+            ("impacto_prensa", "Impacto de Prensa", D("1.05"), 0, D(0), 0),
+            ("placa_compressao", "Placa de Compressão", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.95"), 2, True),
+            ("pressao_trilho", "Pressão de Trilho", D("1.30"), 0, D(0), 0, None, 0, False, 3),
+            ("curso_completo", "Curso Completo", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+        ),
+    ),
+    Creature(
+        ALTOS_PEDREIRA_PESO_SEM_FIM,
+        "Peso sem Fim",
+        "boss",
+        "brute",
+        47,
+        47,
+        0,
+        (
+            "impacto_carro",
+            "cabo_tensao",
+            "contrapeso_elevado",
+            "contrapeso_baixo",
+            "queda_massa",
+        ),
+        (
+            ("impacto_carro", "Impacto do Carro", D("1.00"), 0, D(0), 0),
+            ("cabo_tensao", "Cabo em Tensão", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+            ("contrapeso_elevado", "Contrapeso Elevado", D(0), 0, D(0), 0, None, 0, False, 5),
+            ("contrapeso_baixo", "Contrapeso Baixo", D(0), 0, D(0), 0, None, 0, False, 5, None, D(0), D(0), 2, True),
+            ("queda_massa", "Queda de Massa", D("1.80"), 0, D(0), 0, None, 0, True, 5),
+        ),
+    ),
+)
+CREATURE_CATALOG = (*CREATURE_CATALOG, *ALTOS_PEDREIRA_CREATURES)

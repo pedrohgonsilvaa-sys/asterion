@@ -652,6 +652,8 @@ class CraftingService:
                 bound=view.result_bound,
                 weapon_type_id=weapon_type_id_for_recipe(recipe.recipe_id),
             )
+            if recipe.output_id is not None:
+                output_payload["template_id"] = recipe.output_id
             item_id, item_payload = equipment_instance_payload(output_payload)
             source_key = f"{receipt.source_key}:equipment"
             delivery = await self._deliver_equipment(

@@ -345,6 +345,27 @@ CODEX_ENTRIES = (
         205,
         "location.altos.bastilha_carga",
     ),
+    CodexPresentation(
+        "codex.altos.dungeon.pedreira_contrapeso",
+        "Pedreira do Contrapeso",
+        "history",
+        206,
+        "location.altos.pedreiras_suspensas",
+    ),
+    CodexPresentation(
+        "codex.altos.dungeon.ciclo_contrapeso",
+        "Ciclo do Contrapeso",
+        "history",
+        207,
+        "location.altos.pedreiras_suspensas",
+    ),
+    CodexPresentation(
+        "codex.altos.dungeon.peso_sem_fim",
+        "Peso sem Fim",
+        "history",
+        208,
+        "location.altos.pedreiras_suspensas",
+    ),
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -1233,6 +1254,12 @@ ACHIEVEMENTS = (
         "exploration",
         "Resolveu os 11 resultados únicos de Desbravar dos Altos Cinéreos.",
     ),
+    AchievementPresentation(
+        "achievement.altos.pedreira_primeira",
+        "Peso em Movimento",
+        "pve",
+        "Concluiu pela primeira vez a Pedreira do Contrapeso em dificuldade Estável.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
@@ -1369,7 +1396,11 @@ MATERIAL_LABELS = {
     "material.altos.liquen_pedreira": "Líquen de Pedreira",
     "material.altos.cinza_basalto": "Cinza de Basalto",
     "material.special.altos.core.colosso_cinereo": "Núcleo do Colosso Cinéreo",
+    "material.special.altos.core.pedreira_contrapeso": "Núcleo da Pedreira do Contrapeso",
     "material.tdo.catalisador_elite_v": "Catalisador de Elite V",
+    "material.tdo.catalisador_elite_vi": "Catalisador de Elite VI",
+    "material.tdo.fragmento_aprimoramento_v": "Fragmento de Aprimoramento V",
+    "material.tdo.fragmento_aprimoramento_vi": "Fragmento de Aprimoramento VI",
 }
 
 
