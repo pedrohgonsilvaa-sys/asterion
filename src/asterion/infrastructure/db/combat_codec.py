@@ -395,6 +395,11 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                                 "consume_active_fighter_keys": tuple(
                                     trigger.get("consume_active_fighter_keys", ())
                                 ),
+                                "barrier_source_per_active_fighter_fraction": Decimal(
+                                    trigger.get(
+                                        "barrier_source_per_active_fighter_fraction", "0"
+                                    )
+                                ),
                             }
                         )
                     )

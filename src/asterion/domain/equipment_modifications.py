@@ -133,6 +133,7 @@ ENCHANTMENT_FAMILIES = {
     "Véu da Margem": "Esquiva",
     "Selo da Válvula": "Bloqueio",
     "Regulação da Matriz": "HP",
+    "Continuidade do Colosso": "Bloqueio",
 }
 RUNE_GRADE_VI = {
     "HP": (D("0.60"), D("0.80"), D("1.00")),

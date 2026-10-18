@@ -244,6 +244,13 @@ CODEX_ENTRIES = (
         190,
         "location.altos.bastilha_carga",
     ),
+    CodexPresentation(
+        "codex.altos.sabotagem_ancora_central",
+        "Sabotagem da Âncora Central",
+        "history",
+        200,
+        "location.altos.coracao_colosso",
+    ),
     CodexPresentation("codex.figure.iven_raal", "Iven Raal", "figures", 30),
     CodexPresentation("codex.mystery.o_no_antigo", "O Nó Antigo", "mysteries", 50),
     CodexPresentation(
@@ -336,6 +343,10 @@ CODEX_FRAGMENTS = {
     "codex.altos.convergencia_objetivo": FragmentPresentation(
         "Objetivo conhecido",
         "A Convergência buscava recalibrar a rede. Os registros documentam riscos tanto em prosseguir quanto em interromper; a probabilidade final de sucesso permanece desconhecida.",
+    ),
+    "codex.altos.sabotagem_ancora_central": FragmentPresentation(
+        "Registro pós-combate",
+        "O registro confirma que uma ala radicalizada dos Desvelados sabotou a Âncora Central durante o acoplamento. A evidência não atribui a ação ao movimento inteiro nem revela a cadeia completa da Ruptura.",
     ),
     "explore.altos.pedreiras.mapa_extracao": FragmentPresentation(
         "Mapa de Extração Recortado",
@@ -1120,6 +1131,18 @@ ACHIEVEMENTS = (
         "Concluiu P29 — Antes da Convergência.",
     ),
     AchievementPresentation(
+        "achievement.altos.colosso_silenciado",
+        "O Peso Pode Cessar",
+        "combat",
+        "Concluiu P30 após sua primeira vitória válida contra o Colosso Cinéreo.",
+    ),
+    AchievementPresentation(
+        "achievement.altos.regiao",
+        "Altos Cinéreos",
+        "exploration",
+        "Concluiu P30, alcançou Nv.50 e descobriu os seis Locais principais dos Altos Cinéreos.",
+    ),
+    AchievementPresentation(
         "achievement.altos.cartografo_peso",
         "Cartógrafo do Peso",
         "exploration",
@@ -1260,6 +1283,8 @@ MATERIAL_LABELS = {
     "material.altos.couro_escarpa": "Couro de Escarpa",
     "material.altos.liquen_pedreira": "Líquen de Pedreira",
     "material.altos.cinza_basalto": "Cinza de Basalto",
+    "material.special.altos.core.colosso_cinereo": "Núcleo do Colosso Cinéreo",
+    "material.tdo.catalisador_elite_v": "Catalisador de Elite V",
 }
 
 

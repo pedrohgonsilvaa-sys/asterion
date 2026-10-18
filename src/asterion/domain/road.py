@@ -102,6 +102,7 @@ ALTOS_MORCEGO_CHAMINE = "creature.altos.morcego_chamine"
 ALTOS_CARCACA_MINERAL = "creature.altos.carcaca_mineral"
 ALTOS_VIGIA_CARGA = "creature.altos.vigia_carga"
 ALTOS_SUPERVISOR_CARGA = "elite.altos.supervisor_carga"
+ALTOS_COLOSSO_CINEREO = "boss.altos.colosso_cinereo"
 ALTOS_FERRO_CONTRAPESO = "material.altos.ferro_contrapeso"
 ALTOS_COURO_ESCARPA = "material.altos.couro_escarpa"
 ALTOS_LIQUEN_PEDREIRA = "material.altos.liquen_pedreira"
@@ -1448,6 +1449,30 @@ CAMPAIGN_BOSS_CREATURES = (
     VDE_MATRIARCH,
     *NARETH_CAMPAIGN_BOSSES,
     *VARZEAS_CAMPAIGN_BOSSES,
+    Creature(
+        ALTOS_COLOSSO_CINEREO,
+        "Colosso Cinéreo",
+        "boss",
+        "armored",
+        50,
+        50,
+        0,
+        (
+            "golpe_contraforte",
+            "marca_carga",
+            "placa_sustentacao",
+            "varredura_contrapeso",
+            "carga_distribuida",
+        ),
+        (
+            ("golpe_contraforte", "Golpe de Contraforte", D("1.00"), 0, D(0), 0),
+            ("marca_carga", "Marca de Carga", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+            ("placa_sustentacao", "Placa de Sustentação", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), -1, True, "self", None, None, 2, (), (), D("0.50"), D("0.08")),
+            ("varredura_contrapeso", "Varredura de Contrapeso", D("0.85"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+            ("carga_distribuida", "Carga Distribuída", D("1.80"), 0, D(0), 0, None, 0, True, 5, None, D(0), D(0), 0, False, "all_opponents"),
+        ),
+        ai_priority=(),
+    ),
 )
 CREATURE_CATALOG = (
     *CREATURE_CATALOG,

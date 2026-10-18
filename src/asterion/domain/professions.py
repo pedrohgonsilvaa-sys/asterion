@@ -109,6 +109,8 @@ VARZEAS_FRAGMENT_IV = "material.varzeas.fragmento_aprimoramento_iv"
 VARZEAS_INFIRMARY_CORE = "material.varzeas.nucleo_enfermaria_afundada"
 VARZEAS_CISTERN_CORE = "material.varzeas.nucleo_cisterna_transferencia"
 VARZEAS_MATRIX_CORE = "material.varzeas.nucleo_matriz_rubra"
+CATALYST_V = "material.tdo.catalisador_elite_v"
+ALTOS_COLOSSUS_CORE = "material.special.altos.core.colosso_cinereo"
 
 MATERIAL_NAMES = {
     IRON: "Ferro de Fuligem",
@@ -145,6 +147,8 @@ MATERIAL_NAMES = {
     "material.altos.couro_escarpa": "Couro de Escarpa",
     "material.altos.liquen_pedreira": "Líquen de Pedreira",
     "material.altos.cinza_basalto": "Cinza de Basalto",
+    CATALYST_V: "Catalisador de Elite V",
+    ALTOS_COLOSSUS_CORE: "Núcleo do Colosso Cinéreo",
     VDE_IRON: "Ferro Enredado",
     VDE_LEATHER: "Couro Musgoso",
     VDE_HERB: "Erva de Turfa",
@@ -897,6 +901,27 @@ def _special_recipes() -> list[RecipeDefinition]:
             ),
             unlock_id="recipe.varzeas.cisterna.peitoral_fluxo_contido",
             description="Torso · Épico · Grau IV · SW2",
+        ),
+        RecipeDefinition(
+            recipe_id="recipe.altos.colosso.continuidade",
+            profession_id="artificer",
+            name="Continuidade do Colosso",
+            output_kind="enchantment",
+            required_level=12,
+            grade=5,
+            rarity="Épico",
+            output_id="enchant.altos.continuidade_colosso",
+            output_family="Continuidade do Colosso",
+            fixed_materials=(
+                MaterialRequirement("material.altos.cinza_basalto", 5),
+                MaterialRequirement("material.altos.ferro_contrapeso", 2),
+                MaterialRequirement(CATALYST_V, 1, False),
+                MaterialRequirement(ALTOS_COLOSSUS_CORE, 1),
+            ),
+            fixed_crown_cost=340,
+            creation_enabled=False,
+            unlock_id="recipe.altos.colosso.continuidade",
+            description="Encantamento Épico de Bloqueio · Grau V · +0,50 p.p.",
         ),
     ]
 

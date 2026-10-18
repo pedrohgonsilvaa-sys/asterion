@@ -234,6 +234,7 @@ class Fighter:
     retaliation_duration_bonus: int = 0
     side: str = ""
     takes_turn: bool = True
+    encounter_hidden: bool = False
     defeat_on_zero: bool | None = None
     required_for_victory: bool | None = None
     protection_layers: int = 0
@@ -404,6 +405,7 @@ class CombatPhaseTrigger:
     resolution_id: str | None = None
     heal_source_per_active_fighter_fraction: Decimal = ZERO
     consume_active_fighter_keys: tuple[str, ...] = ()
+    barrier_source_per_active_fighter_fraction: Decimal = ZERO
 
 
 @dataclass(frozen=True, slots=True)
@@ -560,6 +562,7 @@ def _resolve_phase_triggers(state: Combat) -> None:
             fighter = state.fighters.get(key)
             if fighter is not None and fighter.hp <= ZERO:
                 fighter.hp = fighter.stats.hp
+                fighter.encounter_hidden = False
         for key in trigger.revive_fighter_keys:
             fighter = state.fighters.get(key)
             if fighter is not None and fighter.hp <= ZERO:
@@ -576,8 +579,21 @@ def _resolve_phase_triggers(state: Combat) -> None:
                 * len(active_resolution_fighters)
             )
             source.hp = min(source.stats.hp, source.hp + healing)
+        if (
+            active_resolution_fighters
+            and trigger.barrier_source_per_active_fighter_fraction > ZERO
+        ):
+            source.barrier += (
+                source.stats.hp
+                * trigger.barrier_source_per_active_fighter_fraction
+                * len(active_resolution_fighters)
+            ).to_integral_value(rounding=ROUND_FLOOR)
+            source.barrier_remaining = -1
+            source.barrier_applied_opportunity = source.opportunity
+            source.barrier_source = f"{source.id}:{trigger.trigger_id}"
         for fighter in active_resolution_fighters:
             fighter.hp = ZERO
+            fighter.encounter_hidden = True
         state.phase_triggered_ids.add(trigger.trigger_id)
         state.mechanic_events.append(
             CombatEvent(
@@ -1065,7 +1081,7 @@ def apply_effect_batch(
         if (
             barrier_reduction > ZERO
             and target.barrier > ZERO
-            and target.barrier_remaining > 0
+            and target.barrier_remaining != 0
             and effect.kind == "debuff"
             and effect.removable
             and not effect.fixed_mechanic
@@ -1406,7 +1422,7 @@ def combat_consumable_options(
 def _deal_damage(target: Fighter, amount: Decimal | int) -> tuple[Decimal, Decimal]:
     incoming = max(D(0), D(amount))
     absorbed = D(0)
-    if target.barrier_remaining > 0 and target.barrier > 0:
+    if target.barrier_remaining != 0 and target.barrier > 0:
         absorbed = min(target.barrier, incoming)
         target.barrier -= absorbed
         if target.barrier <= 0:
@@ -1615,7 +1631,7 @@ def _grant_retaliation(
         source = "path.bastiao.fortaleza"
         if not (
             target.barrier > ZERO
-            and target.barrier_remaining > 0
+            and target.barrier_remaining != 0
             and target.barrier_source == source
         ):
             value = (target.stats.hp * D("0.04") * D("1.10")).to_integral_value(
@@ -3176,7 +3192,11 @@ def _perform(
                 rounding=ROUND_FLOOR
             )
         actor.barrier = max(ZERO, value)
-        actor.barrier_remaining = max(0, action.self_barrier_duration)
+        actor.barrier_remaining = (
+            action.self_barrier_duration
+            if action.self_barrier_duration < 0
+            else max(0, action.self_barrier_duration)
+        )
         actor.barrier_applied_opportunity = actor.opportunity
         actor.barrier_source = f"{actor_id}:{action.id}"
         actor.barrier_debuff_magnitude_reduction = (
@@ -3338,7 +3358,7 @@ def _perform(
         protection_layers_before = target.protection_layers
         target_barrier_source = (
             target.barrier_source
-            if target.barrier > ZERO and target.barrier_remaining > 0
+            if target.barrier > ZERO and target.barrier_remaining != 0
             else ""
         )
 
@@ -4442,7 +4462,7 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
         return not (
             action.skip_if_barrier_active
             and enemy.barrier > ZERO
-            and enemy.barrier_remaining > 0
+            and enemy.barrier_remaining != 0
         )
 
     priority = state.ai_priorities.get(actor_key, state.ai_priority)

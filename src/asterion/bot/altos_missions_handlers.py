@@ -136,12 +136,30 @@ def altos_missions_router(
                         return
                 else:
                     raise ValueError("invalid combat mode")
+            elif len(parts) == 5 and parts[1] == "combat" and parts[2] == "P30":
+                version = int(parts[3])
+                if parts[4] == "solo":
+                    view = await service.start_solo_combat(
+                        query.from_user.id, version, "P30"
+                    )
+                elif parts[4] == "group":
+                    view = await service.propose_group_combat(
+                        query.from_user.id, version, "P30"
+                    )
+                    if view is not None and view.proposal_id is not None:
+                        await query.answer("Confirmação enviada ao Grupo.")
+                        await show_group(query)
+                        return
+                else:
+                    raise ValueError("invalid combat mode")
             elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "P27":
                 view = await service.retry_combat(query.from_user.id, int(parts[3]), "P27")
             elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "P28":
                 view = await service.retry_combat(query.from_user.id, int(parts[3]), "P28")
             elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "P29":
                 view = await service.retry_combat(query.from_user.id, int(parts[3]), "P29")
+            elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "P30":
+                view = await service.retry_combat(query.from_user.id, int(parts[3]), "P30")
             else:
                 if not (
                     len(parts) == 5

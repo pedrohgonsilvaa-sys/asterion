@@ -638,6 +638,8 @@ class EquipmentModificationService:
                 ),
                 "bound": result_bound,
             }
+            if recipe.output_id and recipe.output_id.startswith("enchant."):
+                payload["enchantment"]["effect_id"] = recipe.output_id
             if result_bound:
                 item.bound = True
                 payload["bound"] = True

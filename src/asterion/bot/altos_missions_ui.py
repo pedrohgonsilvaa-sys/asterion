@@ -14,6 +14,8 @@ from asterion.application.altos_missions import (
     P28_TITLE,
     P29_PRIORITY_RECORDS,
     P29_TITLE,
+    P30_REWARD_OPTIONS,
+    P30_TITLE,
     AltosMissionView,
 )
 from asterion.application.prologue import CombatView
@@ -31,6 +33,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         else P29_TITLE if view.quest_id == "P29"
         else P27_TITLE if view.quest_id == "P27"
         else P26_TITLE if view.quest_id == "P26"
+        else P30_TITLE if view.quest_id == "P30"
         else P25_TITLE
     )
     title = escape(view.title or fallback_title)
@@ -58,7 +61,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
             )
         )
         return Screen(
-            f"📜 {title} · Altos Cinéreos\n⚔️ Encontro roteirizado · {'Bastilha de Carga' if view.quest_id in {'P28', 'P29'} else 'Pedreiras Suspensas' if view.quest_id == 'P27' else 'Escarpa da Cinza'}\n\n{hud.text}",
+            f"📜 {title} · Altos Cinéreos\n⚔️ Encontro de Campanha · {'Coração do Colosso' if view.quest_id == 'P30' else 'Bastilha de Carga' if view.quest_id in {'P28', 'P29'} else 'Pedreiras Suspensas' if view.quest_id == 'P27' else 'Escarpa da Cinza'}\n\n{hud.text}",
             "missions",
             hud.keyboard,
             parse_mode=hud.parse_mode,
@@ -70,6 +73,8 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         return _render_p28(view, title, rows)
     if view.quest_id == "P29":
         return _render_p29(view, title, rows)
+    if view.quest_id == "P30":
+        return _render_p30(view, title, rows)
     if view.quest_id == "P26":
         return _render_p26(view, title, rows)
 
@@ -419,5 +424,84 @@ def _render_p29(view: AltosMissionView, title: str, rows) -> Screen:
         rows.append([_button("Registrar objetivo no Códice", f"altos:action:{view.state_version}:record_convergence_codex")])
     elif view.step == 7:
         rows.append([_button("Abrir rota ao Coração", f"altos:action:{view.state_version}:open_route_to_coracao")])
+    rows.append([_button("← Missões", "world:missions")])
+    return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def _render_p30(view: AltosMissionView, title: str, rows) -> Screen:
+    if view.status == "suspended":
+        return Screen(
+            f"📜 {title} · Suspensa\n\nP29 deve estar concluída e o personagem precisa alcançar Nv. 50 para iniciar P30.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=[[_button("← Missões", "world:missions")]]),
+        )
+    if view.status == "available":
+        rows.extend(
+            (
+                [_button("Iniciar P30 com Rava e Sel", "altos:action:0:activate_p30")],
+                [_button("← Missões", "world:missions")],
+            )
+        )
+        return Screen(
+            f"📜 {title} · Disponível\nAltos Cinéreos · Coração do Colosso\n\nRava Kern e Sel Ardan preparam a entrada no confronto final da Região.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    if view.status == "completed":
+        selected = escape(str(view.progress.get("reward_item_id", "Épico escolhido")))
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Concluída\n\nO Colosso está inativo para você.\n✨ 134.100 XP · 1.700 Coroas\n📦 5 Ferros de Contrapeso · 3 Cinzas de Basalto · 1 Núcleo do Colosso\n🎁 Épico escolhido: {selected}",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+
+    step_text = {
+        1: "Entre no Coração do Colosso.",
+        2: "Examine os três caminhos físicos de distribuição de carga.",
+        3: "Recupere o registro incompleto do acoplamento excepcional.",
+        4: "Inicie e derrote o Colosso Cinéreo (Nv. 50).",
+        7: "Examine o registro pós-combate sobre a sabotagem da Âncora Central pela ala radicalizada dos Desvelados.",
+        8: "Registre no Códice a evidência delimitada sobre a sabotagem.",
+        9: "Revele diretamente a receita Continuidade do Colosso.",
+        10: "Escolha pessoalmente um Equipamento Épico Nv. 50.",
+    }.get(view.step, "Retome a etapa atual da missão.")
+    lines = [f"📜 {title} · Em Andamento", "Altos Cinéreos · Coração do Colosso", "", step_text]
+    if view.step == 1:
+        rows.append([_button("Seguir para o Coração do Colosso", "road:route:altos_coracao")])
+    elif view.step == 2:
+        examined = set(view.progress.get("load_paths", ()))
+        for key, label in (
+            ("contraforte", "Examinar caminho do contraforte"),
+            ("cabo", "Examinar caminho do cabo"),
+            ("escora", "Examinar caminho da escora"),
+        ):
+            if key not in examined:
+                rows.append([_button(label, f"altos:action:{view.state_version}:inspect_load_path_{key}")])
+    elif view.step == 3:
+        rows.append([_button("Recuperar registro incompleto", f"altos:action:{view.state_version}:recover_exceptional_coupling_record")])
+    elif view.step == 4:
+        if view.progress.get("awaiting_retry") and view.location != "Coração do Colosso":
+            rows.append([_button("Retornar ao Coração", "road:route:altos_coracao")])
+        elif view.progress.get("awaiting_retry"):
+            rows.append([_button("Tentar novamente", f"altos:retry:P30:{view.state_version}")])
+        else:
+            rows.extend(
+                (
+                    [_button("Iniciar encontro Solo", f"altos:combat:P30:{view.state_version}:solo")],
+                    [_button("Solicitar encontro em Grupo", f"altos:combat:P30:{view.state_version}:group")],
+                )
+            )
+    elif view.step == 7:
+        rows.append([_button("Examinar registro pós-combate", f"altos:action:{view.state_version}:inspect_postcombat_sabotage_record")])
+    elif view.step == 8:
+        rows.append([_button("Registrar evidência no Códice", f"altos:action:{view.state_version}:record_sabotage_codex")])
+    elif view.step == 9:
+        rows.append([_button("Revelar Continuidade do Colosso", f"altos:action:{view.state_version}:reveal_colossus_recipe")])
+    elif view.step == 10:
+        selected = view.progress.get("reward_choice")
+        for key, (_item_id, name, _slot) in P30_REWARD_OPTIONS.items():
+            if key != selected:
+                rows.append([_button(name, f"altos:action:{view.state_version}:choose_p30_reward_{key}")])
     rows.append([_button("← Missões", "world:missions")])
     return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))

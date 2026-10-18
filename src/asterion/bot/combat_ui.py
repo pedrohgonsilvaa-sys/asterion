@@ -963,11 +963,16 @@ def _status_lines(
 ) -> list[str]:
     name = escape(fighter.name)
     lines: list[str] = []
-    if fighter.barrier > 0 and fighter.barrier_remaining > 0:
+    if fighter.barrier > 0 and fighter.barrier_remaining != 0:
         icon = "🔰" if player else "🛡️"
+        duration = (
+            f"<code>{fighter.barrier_remaining}T</code>"
+            if fighter.barrier_remaining > 0
+            else "<code>até absorvida</code>"
+        )
         lines.append(
             f"{icon} Barreira de {name} · <code>{number(fighter.barrier)}</code> · "
-            f"<code>{fighter.barrier_remaining}T</code>"
+            f"{duration}"
         )
     for effect in fighter.effects:
         stat = {
@@ -1083,6 +1088,7 @@ def render_combat(view: CombatView) -> Screen:
                 for key in state.fighters
                 if _fighter_side(state, key) != viewer_side
                 and (is_pvpve or _fighter_side(state, key) == "enemy")
+                and not state.fighters[key].encounter_hidden
                 and state.fighters[key].hp > 0
             ),
             key=lambda key: (state.fighters[key].id, key),
@@ -1155,15 +1161,25 @@ def render_combat(view: CombatView) -> Screen:
         )
         lines.extend(["", "📜 Registro de Combate · Recentes", "", "\n".join(recent[-4:]), ""])
         status_lines: list[str] = []
-        if enemy.barrier > 0 and enemy.barrier_remaining > 0:
+        if enemy.barrier > 0 and enemy.barrier_remaining != 0:
+            duration = (
+                f"<code>{enemy.barrier_remaining}T</code>"
+                if enemy.barrier_remaining > 0
+                else "<code>até absorvida</code>"
+            )
             status_lines.append(
                 f"🛡️ Barreira de {escape(enemy.name)} · "
-                f"<code>{number(enemy.barrier)}</code> · <code>{enemy.barrier_remaining}T</code>"
+                f"<code>{number(enemy.barrier)}</code> · {duration}"
             )
-        if player.barrier > 0 and player.barrier_remaining > 0:
+        if player.barrier > 0 and player.barrier_remaining != 0:
+            duration = (
+                f"<code>{player.barrier_remaining}T</code>"
+                if player.barrier_remaining > 0
+                else "<code>até absorvida</code>"
+            )
             status_lines.append(
                 f"🔰 Barreira · <code>{number(player.barrier)}</code> · "
-                f"<code>{player.barrier_remaining}T</code>"
+                f"{duration}"
             )
         if player.ward_charges > 0 and player.ward_remaining > 0:
             status_lines.append(

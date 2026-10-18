@@ -87,6 +87,8 @@ MATERIAL_LABELS = {
     "material.altos.couro_escarpa": "Couro de Escarpa",
     "material.altos.liquen_pedreira": "Líquen de Pedreira",
     "material.altos.cinza_basalto": "Cinza de Basalto",
+    "material.special.altos.core.colosso_cinereo": "Núcleo do Colosso Cinéreo",
+    "material.tdo.catalisador_elite_v": "Catalisador de Elite V",
 }
 
 @dataclass(frozen=True)
