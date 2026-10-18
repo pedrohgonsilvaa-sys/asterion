@@ -237,6 +237,13 @@ CODEX_ENTRIES = (
         180,
         "location.altos.bastilha_carga",
     ),
+    CodexPresentation(
+        "codex.altos.convergencia_objetivo",
+        "Objetivo da Convergência",
+        "regions",
+        190,
+        "location.altos.bastilha_carga",
+    ),
     CodexPresentation("codex.figure.iven_raal", "Iven Raal", "figures", 30),
     CodexPresentation("codex.mystery.o_no_antigo", "O Nó Antigo", "mysteries", 50),
     CodexPresentation(
@@ -325,6 +332,10 @@ CODEX_FRAGMENTS = {
     "codex.altos.desvelados_origem": FragmentPresentation(
         "Origem dos Desvelados",
         "As fontes distinguem a oposição legítima à Regência da radicalização posterior de uma ala. As evidências disponíveis não autorizam atribuir a sabotagem da Âncora Central ao movimento como um todo nem confirmá-la como fato concluído.",
+    ),
+    "codex.altos.convergencia_objetivo": FragmentPresentation(
+        "Objetivo conhecido",
+        "A Convergência buscava recalibrar a rede. Os registros documentam riscos tanto em prosseguir quanto em interromper; a probabilidade final de sucesso permanece desconhecida.",
     ),
     "explore.altos.pedreiras.mapa_extracao": FragmentPresentation(
         "Mapa de Extração Recortado",
@@ -1103,6 +1114,12 @@ ACHIEVEMENTS = (
         "Concluiu P28 — Os Desvelados.",
     ),
     AchievementPresentation(
+        "achievement.altos.antes_convergencia",
+        "Antes da Convergência",
+        "chronicles",
+        "Concluiu P29 — Antes da Convergência.",
+    ),
+    AchievementPresentation(
         "achievement.altos.cartografo_peso",
         "Cartógrafo do Peso",
         "exploration",
@@ -1173,6 +1190,7 @@ ALTOS_LOCATIONS = {
     "location.altos.pontes_fuligem": "Pontes de Fuligem",
     "location.altos.pedreiras_suspensas": "Pedreiras Suspensas",
     "location.altos.bastilha_carga": "Bastilha de Carga",
+    "location.altos.coracao_colosso": "Coração do Colosso",
 }
 LOCATION_LABELS = (
     TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS | VARZEAS_LOCATIONS | ALTOS_LOCATIONS

@@ -33,6 +33,7 @@ from asterion.application.knowledge_catalog import MATERIAL_LABELS as BESTIARY_M
 from asterion.application.road import (
     ALTOS_ABRIGO_LABEL,
     ALTOS_BASTILHA_LABEL,
+    ALTOS_CORACAO_LABEL,
     ALTOS_ESCARPA_LABEL,
     ALTOS_LOCATIONS,
     ALTOS_PEDREIRAS_LABEL,
@@ -53,6 +54,8 @@ from asterion.domain.road import (
     ALTOS_ABRIGO_ACCESS_UNLOCK,
     ALTOS_ABRIGO_BRAZIER,
     ALTOS_ABRIGO_LOCATION,
+    ALTOS_CORACAO_ACCESS_UNLOCK,
+    ALTOS_CORACAO_LOCATION,
     ALTOS_ESCARPA_ACCESS_UNLOCK,
     ALTOS_ESCARPA_BRAZIER,
     ALTOS_ESCARPA_EXPLORE_UNLOCK,
@@ -91,7 +94,7 @@ from tests.test_road_integration import _seed_road
 from tests.test_s4_s5_integration import _terminal
 
 
-def test_altos_location_catalog_stops_at_p28():
+def test_altos_location_catalog_includes_p29_heart():
     assert ALTOS_REGION == "Altos Cinéreos"
     assert ALTOS_LOCATIONS == {
         ALTOS_ESCARPA_LABEL,
@@ -99,6 +102,7 @@ def test_altos_location_catalog_stops_at_p28():
         ALTOS_PONTES_LABEL,
         ALTOS_PEDREIRAS_LABEL,
         ALTOS_BASTILHA_LABEL,
+        ALTOS_CORACAO_LABEL,
     }
     assert ALTOS_ESCARPA_LOCATION == "location.altos.escarpa_cinza"
     assert ALTOS_ABRIGO_LOCATION == "location.altos.abrigo_peso"
@@ -111,6 +115,8 @@ def test_altos_location_catalog_stops_at_p28():
     assert ALTOS_ESCARPA_ROUND_UNLOCK == "unlock.round.altos.escarpa"
     assert ALTOS_PEDREIRAS_LOCATION == "location.altos.pedreiras_suspensas"
     assert ALTOS_PEDREIRAS_ACCESS_UNLOCK == "unlock.location.altos.pedreiras_suspensas"
+    assert ALTOS_CORACAO_LOCATION == "location.altos.coracao_colosso"
+    assert ALTOS_CORACAO_ACCESS_UNLOCK == "unlock.location.altos.coracao_colosso"
     assert P25_ID == "P25"
     assert P25_MISSION_ID == "mission.altos.p25"
     assert P25_TITLE == "O Peso Antigo"
@@ -138,7 +144,7 @@ def test_altos_location_catalog_stops_at_p28():
     assert ALTOS_PONTES_LABEL == "Pontes de Fuligem"
     assert ALTOS_PEDREIRAS_LABEL == "Pedreiras Suspensas"
     assert "Bastilha de Carga" in ALTOS_LOCATIONS
-    assert "Coração do Colosso" not in ALTOS_LOCATIONS
+    assert ALTOS_CORACAO_LABEL in ALTOS_LOCATIONS
 
 
 def test_altos_escarpa_hunt_profile_matches_the_final_opening_pool():

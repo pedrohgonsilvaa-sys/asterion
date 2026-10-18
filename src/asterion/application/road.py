@@ -46,6 +46,9 @@ from asterion.domain.road import (
     ALTOS_BASTILHA_EXPLORE_UNLOCK,
     ALTOS_BASTILHA_HUNT_UNLOCK,
     ALTOS_BASTILHA_LOCATION,
+    ALTOS_CORACAO,
+    ALTOS_CORACAO_ACCESS_UNLOCK,
+    ALTOS_CORACAO_LOCATION,
     ALTOS_ESCARPA,
     ALTOS_ESCARPA_ACCESS_UNLOCK,
     ALTOS_ESCARPA_BRAZIER,
@@ -226,13 +229,14 @@ ALTOS_ABRIGO_LABEL = ALTOS_ABRIGO
 ALTOS_PONTES_LABEL = ALTOS_PONTES
 ALTOS_PEDREIRAS_LABEL = ALTOS_PEDREIRAS
 ALTOS_BASTILHA_LABEL = ALTOS_BASTILHA
+ALTOS_CORACAO_LABEL = ALTOS_CORACAO
 VARZEAS_DIQUES_LABEL = VARZEAS_DIQUES
 VARZEAS_PORTO_LABEL = VARZEAS_PORTO
 VARZEAS_BREJOS_LABEL = VARZEAS_BREJOS
 VARZEAS_HORTOS_LABEL = VARZEAS_HORTOS
 VARZEAS_GALERIAS_LABEL = VARZEAS_GALERIAS
 VARZEAS_CAMARA_LABEL = VARZEAS_CAMARA
-ALTOS_LOCATIONS = frozenset((ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL))
+ALTOS_LOCATIONS = frozenset((ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL))
 VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO))
 NARETH_LOCATIONS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL))
 VARZEAS_LOCATIONS = frozenset((VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL, VARZEAS_GALERIAS_LABEL, VARZEAS_CAMARA_LABEL))
@@ -248,6 +252,7 @@ ALTOS_ESCARPA_ABRIGO_ROUTE_ENDPOINTS = frozenset((ALTOS_ESCARPA_LABEL, ALTOS_ABR
 ALTOS_ABRIGO_PONTES_ROUTE_ENDPOINTS = frozenset((ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL))
 ALTOS_PONTES_PEDREIRAS_ROUTE_ENDPOINTS = frozenset((ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL))
 ALTOS_PEDREIRAS_BASTILHA_ROUTE_ENDPOINTS = frozenset((ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL))
+ALTOS_BASTILHA_CORACAO_ROUTE_ENDPOINTS = frozenset((ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL))
 NARETH_CAMPINAS_POSTO_ROUTE_ENDPOINTS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL))
 NARETH_POSTO_CANAIS_ROUTE_ENDPOINTS = frozenset((NARETH_POSTO_LABEL, NARETH_CANAIS))
 NARETH_CANAIS_CAMPOS_ROUTE_ENDPOINTS = frozenset((NARETH_CANAIS, NARETH_CAMPOS))
@@ -291,8 +296,9 @@ OVERLAND_ROUTE_PAIRS = (
     ALTOS_ABRIGO_PONTES_ROUTE_ENDPOINTS,
     ALTOS_PONTES_PEDREIRAS_ROUTE_ENDPOINTS,
     ALTOS_PEDREIRAS_BASTILHA_ROUTE_ENDPOINTS,
+    ALTOS_BASTILHA_CORACAO_ROUTE_ENDPOINTS,
 )
-TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL, VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL, VARZEAS_GALERIAS_LABEL, VARZEAS_CAMARA_LABEL, ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL))
+TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL, VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL, VARZEAS_GALERIAS_LABEL, VARZEAS_CAMARA_LABEL, ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL))
 BRAZIER_FOR_LOCATION = {
     ROAD: "tdo.brazier.estrada",
     REFUGE: "tdo.brazier.refugio_do_ocaso",
@@ -606,6 +612,7 @@ def _grade_material_for_level(level: int, material_kind: str) -> str:
         2: ("vde", "ii"),
         3: ("nareth", "iii"),
         4: ("varzeas", "iv"),
+        5: ("tdo", "v"),
     }.get(grade)
     if regional_grade is not None:
         region, roman_grade = regional_grade
@@ -1010,6 +1017,17 @@ class RoadService:
                         )
                     )
                     route_unlock = ALTOS_BASTILHA_ACCESS_UNLOCK
+                elif pair == ALTOS_BASTILHA_CORACAO_ROUTE_ENDPOINTS:
+                    gate_ok = bool(
+                        await self._nareth_mission_completed(s, c.id, "P29")
+                        and await s.scalar(
+                            select(Unlock.id).where(
+                                Unlock.character_id == c.id,
+                                Unlock.unlock_id == ALTOS_CORACAO_ACCESS_UNLOCK,
+                            )
+                        )
+                    )
+                    route_unlock = ALTOS_CORACAO_ACCESS_UNLOCK
                 elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
                     gate_ok = (
                         await self._p4_completed(s, c.id)
@@ -1166,6 +1184,13 @@ class RoadService:
                 await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=VARZEAS_GALERIAS_LOCATION)
             elif destination == VARZEAS_CAMARA_LABEL:
                 await self._ensure(s, LocationDiscovery, character_id=c.id, location_id=VARZEAS_CAMARA_LOCATION)
+            elif destination == ALTOS_CORACAO_LABEL:
+                await self._ensure(
+                    s,
+                    LocationDiscovery,
+                    character_id=c.id,
+                    location_id=ALTOS_CORACAO_LOCATION,
+                )
             return await self._view_for_world(s, c, world)
 
     async def start_hunt(self, actor: int) -> RoadView | None:
@@ -4899,6 +4924,7 @@ class RoadService:
         altos_p26_complete = await self._nareth_mission_completed(s, c.id, "P26")
         altos_p27_complete = await self._nareth_mission_completed(s, c.id, "P27")
         altos_p28_complete = await self._nareth_mission_completed(s, c.id, "P28")
+        altos_p29_complete = await self._nareth_mission_completed(s, c.id, "P29")
         altos_escarpa_discovered = await self._has_location(s, c.id, ALTOS_ESCARPA_LOCATION)
         altos_abrigo_discovered = await self._has_location(s, c.id, ALTOS_ABRIGO_LOCATION)
         altos_pontes_discovered = await self._has_location(s, c.id, ALTOS_PONTES_LOCATION)
@@ -4931,6 +4957,15 @@ class RoadService:
                 select(Unlock.id).where(
                     Unlock.character_id == c.id,
                     Unlock.unlock_id == ALTOS_BASTILHA_ACCESS_UNLOCK,
+                )
+            )
+        )
+        altos_coracao_access_open = bool(
+            altos_p29_complete
+            and await s.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == ALTOS_CORACAO_ACCESS_UNLOCK,
                 )
             )
         )
@@ -5209,6 +5244,11 @@ class RoadService:
                     route_destinations.append(ALTOS_BASTILHA_LABEL)
             elif world.location == ALTOS_BASTILHA_LABEL and altos_bastilha_access_open:
                 route_destinations.append(ALTOS_PEDREIRAS_LABEL)
+                if altos_coracao_access_open:
+                    route_destinations.append(ALTOS_CORACAO_LABEL)
+            elif world.location == ALTOS_CORACAO_LABEL and altos_coracao_access_open:
+                if altos_bastilha_discovered:
+                    route_destinations.append(ALTOS_BASTILHA_LABEL)
         route_available = bool(route_destinations)
         material_table_ready = bool(
             hunt_profile
@@ -5566,6 +5606,9 @@ class RoadService:
                     )
                 )
             )
+        elif world.location == ALTOS_CORACAO_LABEL:
+            hunt_enabled = False
+            explore_enabled = False
         else:
             # Every other known travel location must be handled explicitly above.
             return self._invalid_location_view(c, world)
@@ -5598,6 +5641,7 @@ class RoadService:
             ALTOS_PONTES_LABEL: "altos_pontes",
             ALTOS_PEDREIRAS_LABEL: "altos_pedreiras",
             ALTOS_BASTILHA_LABEL: "altos_bastilha",
+            ALTOS_CORACAO_LABEL: "altos_coracao",
         }
         return RoadView(
             kind_by_location[world.location],

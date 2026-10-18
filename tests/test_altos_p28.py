@@ -27,6 +27,8 @@ from asterion.application.road import (
     ALTOS_BASTILHA_LABEL,
     ALTOS_PEDREIRAS_LABEL,
     ALTOS_REGION_LABEL,
+    _grade_catalyst_for_level,
+    _grade_fragment_for_level,
 )
 from asterion.application.round import RoundService
 from asterion.domain.combat import active_player_key
@@ -175,6 +177,11 @@ def test_p28_bastilha_profiles_catalog_and_screen_match_final_source():
     assert LOCATION_LABELS[ALTOS_BASTILHA_LOCATION] == ALTOS_BASTILHA_LABEL
     assert CREATURE_PRESENTATION[ALTOS_VIGIA_CARGA].habitats == (ALTOS_BASTILHA_LOCATION,)
     assert CREATURE_PRESENTATION[ALTOS_SUPERVISOR_CARGA].region_id == ALTOS_REGION_ID
+
+
+def test_grade_v_hunt_settlement_uses_existing_global_material_ids():
+    assert _grade_fragment_for_level(47) == "material.tdo.fragmento_aprimoramento_v"
+    assert _grade_catalyst_for_level(47) == "material.tdo.catalisador_elite_v"
     assert CODEX_BY_ID["codex.altos.desvelados_origem"].location_id == ALTOS_BASTILHA_LOCATION
     assert "radicalização posterior" in CODEX_FRAGMENTS["codex.altos.desvelados_origem"].text
     assert "sabotagem da Âncora Central" in CODEX_FRAGMENTS["codex.altos.desvelados_origem"].text

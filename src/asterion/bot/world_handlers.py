@@ -24,6 +24,7 @@ from asterion.application.prologue import PrologueService
 from asterion.application.road import (
     ALTOS_ABRIGO_LABEL,
     ALTOS_BASTILHA_LABEL,
+    ALTOS_CORACAO_LABEL,
     ALTOS_ESCARPA_LABEL,
     ALTOS_PEDREIRAS_LABEL,
     ALTOS_PONTES_LABEL,
@@ -1129,6 +1130,7 @@ def world_router(
             "road:route:altos_pontes": ALTOS_PONTES_LABEL,
             "road:route:altos_pedreiras": ALTOS_PEDREIRAS_LABEL,
             "road:route:altos_bastilha": ALTOS_BASTILHA_LABEL,
+            "road:route:altos_coracao": ALTOS_CORACAO_LABEL,
         }.get(route_key)
         route_attempt_id = exploration_callback_attempt_id(query)
         route_has_attempt_id = len(route_parts) == 4
@@ -1230,7 +1232,7 @@ def world_router(
                 await road.round_back(query.from_user.id, current.round_id)
         view = await road.travel_route(query.from_user.id, destination)
         if view is not None:
-            if destination in {ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL} and await resume_altos(
+            if destination in {ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL} and await resume_altos(
                 query.message, query.from_user.id, edit=True
             ):
                 return
@@ -1314,7 +1316,7 @@ def world_router(
             return
         view = await road.travel_brazier(query.from_user.id, brazier_id)
         if view is not None:
-            if view.location in {ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL} and await resume_altos(
+            if view.location in {ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL} and await resume_altos(
                 query.message, query.from_user.id, edit=True
             ):
                 return
@@ -2393,6 +2395,7 @@ def world_router(
             "altos_pontes": ALTOS_PONTES_LABEL,
             "altos_pedreiras": ALTOS_PEDREIRAS_LABEL,
             "altos_bastilha": ALTOS_BASTILHA_LABEL,
+            "altos_coracao": ALTOS_CORACAO_LABEL,
         }
         name = names.get(key)
         if name is None:
@@ -2411,7 +2414,7 @@ def world_router(
             "nareth_observatorio": "🧭",
             "nareth_camara": "🏛️",
             "varzeas_diques": "🧱", "varzeas_porto": "⚓", "varzeas_brejos": "🌫️", "varzeas_hortos": "🌱", "varzeas_galerias": "🧱", "varzeas_camara": "🏛️",
-            "altos_escarpa": "🌋", "altos_abrigo": "🏘️", "altos_pontes": "🌉", "altos_pedreiras": "⛏️", "altos_bastilha": "🏰",
+            "altos_escarpa": "🌋", "altos_abrigo": "🏘️", "altos_pontes": "🌉", "altos_pedreiras": "⛏️", "altos_bastilha": "🏰", "altos_coracao": "🌋",
         }[key]
         level_band = {
             "road": "Nv. 1–10",
@@ -2441,6 +2444,7 @@ def world_router(
             "altos_pontes": "Nv. 43–49",
             "altos_pedreiras": "Nv. 45–49",
             "altos_bastilha": "Nv. 47–50",
+            "altos_coracao": "Local de clímax",
         }[key]
         region = (
             "Vales dos Enforcados"
@@ -2508,6 +2512,7 @@ def world_router(
                     ALTOS_PONTES_LABEL: "road:route:altos_pontes",
                     ALTOS_PEDREIRAS_LABEL: "road:route:altos_pedreiras",
                     ALTOS_BASTILHA_LABEL: "road:route:altos_bastilha",
+                    ALTOS_CORACAO_LABEL: "road:route:altos_coracao",
                 }
                 for destination in road_view.route_destinations:
                     if destination == current:
@@ -2610,6 +2615,10 @@ def world_router(
                         label = "Seguir para Bastilha de Carga"
                     elif current == ALTOS_BASTILHA_LABEL and destination == ALTOS_PEDREIRAS_LABEL:
                         label = "Retornar a Pedreiras Suspensas"
+                    elif current == ALTOS_BASTILHA_LABEL and destination == ALTOS_CORACAO_LABEL:
+                        label = "Abrir rota ao Coração do Colosso"
+                    elif current == ALTOS_CORACAO_LABEL and destination == ALTOS_BASTILHA_LABEL:
+                        label = "Retornar à Bastilha de Carga"
                     elif current == VARZEAS_CAMARA and destination == VARZEAS_GALERIAS:
                         label = "Retornar às Galerias de Transferência"
                     else:
@@ -2738,6 +2747,7 @@ def world_router(
                 "🌉" if current == ALTOS_PONTES_LABEL else
                 "⛏️" if current == ALTOS_PEDREIRAS_LABEL else
                 "🏰" if current == ALTOS_BASTILHA_LABEL else
+                "🌋" if current == ALTOS_CORACAO_LABEL else
                 "🪨" if current == RUINS else
                 "🌫️" if current == VDE_VIGILIA else "🔥"
             )
@@ -2748,7 +2758,7 @@ def world_router(
                 known_regions.append(NARETH_REGION)
             if VARZEAS_DIQUES in known or VARZEAS_PORTO in known or VARZEAS_BREJOS in known:
                 known_regions.append(VARZEAS_REGION)
-            if ALTOS_ESCARPA_LABEL in known or ALTOS_ABRIGO_LABEL in known or ALTOS_PONTES_LABEL in known or ALTOS_PEDREIRAS_LABEL in known or ALTOS_BASTILHA_LABEL in known:
+            if ALTOS_ESCARPA_LABEL in known or ALTOS_ABRIGO_LABEL in known or ALTOS_PONTES_LABEL in known or ALTOS_PEDREIRAS_LABEL in known or ALTOS_BASTILHA_LABEL in known or ALTOS_CORACAO_LABEL in known:
                 known_regions.append(ALTOS_REGION_LABEL)
             current_line = f"{current_icon} {current} · Local Atual" if current else ""
             text = (
@@ -3022,6 +3032,7 @@ def world_router(
             (ALTOS_PONTES_LABEL, "altos_pontes"),
             (ALTOS_PEDREIRAS_LABEL, "altos_pedreiras"),
             (ALTOS_BASTILHA_LABEL, "altos_bastilha"),
+            (ALTOS_CORACAO_LABEL, "altos_coracao"),
         )
         visible = [(name, key) for name, key in ordered if name in known]
         if not visible:
@@ -3127,6 +3138,7 @@ def world_router(
             "altos_pontes": ALTOS_PONTES_LABEL,
             "altos_pedreiras": ALTOS_PEDREIRAS_LABEL,
             "altos_bastilha": ALTOS_BASTILHA_LABEL,
+            "altos_coracao": ALTOS_CORACAO_LABEL,
         }
         destination = names.get(key)
         if destination is None:

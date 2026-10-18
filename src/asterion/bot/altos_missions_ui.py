@@ -12,6 +12,8 @@ from asterion.application.altos_missions import (
     P27_REWARD_OPTIONS,
     P27_TITLE,
     P28_TITLE,
+    P29_PRIORITY_RECORDS,
+    P29_TITLE,
     AltosMissionView,
 )
 from asterion.application.prologue import CombatView
@@ -26,6 +28,7 @@ def _button(text: str, callback: str) -> InlineKeyboardButton:
 def render_altos_mission(view: AltosMissionView) -> Screen:
     fallback_title = (
         P28_TITLE if view.quest_id == "P28"
+        else P29_TITLE if view.quest_id == "P29"
         else P27_TITLE if view.quest_id == "P27"
         else P26_TITLE if view.quest_id == "P26"
         else P25_TITLE
@@ -55,7 +58,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
             )
         )
         return Screen(
-            f"📜 {title} · Altos Cinéreos\n⚔️ Encontro roteirizado · {'Bastilha de Carga' if view.quest_id == 'P28' else 'Pedreiras Suspensas' if view.quest_id == 'P27' else 'Escarpa da Cinza'}\n\n{hud.text}",
+            f"📜 {title} · Altos Cinéreos\n⚔️ Encontro roteirizado · {'Bastilha de Carga' if view.quest_id in {'P28', 'P29'} else 'Pedreiras Suspensas' if view.quest_id == 'P27' else 'Escarpa da Cinza'}\n\n{hud.text}",
             "missions",
             hud.keyboard,
             parse_mode=hud.parse_mode,
@@ -65,6 +68,8 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         return _render_p27(view, title, rows)
     if view.quest_id == "P28":
         return _render_p28(view, title, rows)
+    if view.quest_id == "P29":
+        return _render_p29(view, title, rows)
     if view.quest_id == "P26":
         return _render_p26(view, title, rows)
 
@@ -345,5 +350,74 @@ def _render_p28(view: AltosMissionView, title: str, rows) -> Screen:
         rows.append(
             [_button("Registrar limites da conclusão", f"altos:action:{view.state_version}:record_non_attribution")]
         )
+    rows.append([_button("← Missões", "world:missions")])
+    return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def _render_p29(view: AltosMissionView, title: str, rows) -> Screen:
+    if view.status == "suspended":
+        return Screen(
+            f"📜 {title} · Suspensa\n\nP28 deve estar concluída e o personagem precisa alcançar Nv. 49 para prosseguir.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=[[_button("← Missões", "world:missions")]]),
+        )
+    if view.status == "available":
+        rows.extend(
+            (
+                [_button("Iniciar P29 com Sel e Maro", "altos:action:0:activate_p29")],
+                [_button("← Missões", "world:missions")],
+            )
+        )
+        return Screen(
+            f"📜 {title} · Disponível\nAltos Cinéreos · Bastilha de Carga\n\nSel Ardan e Maro Keln apresentam os riscos documentados da Convergência.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    if view.status == "completed":
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Concluída\n\n✨ 72.000 XP · 1.050 Coroas\n📦 2 Ferros de Contrapeso · 1 Líquen de Pedreira · 1 Cinza de Basalto",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+
+    step_text = {
+        1: "Reúna os três registros de prioridade já acessíveis na Bastilha.",
+        2: "Localize Convergência em uma ordem técnica.",
+        3: "Verifique o esquema físico de rede e acoplamento, sem acessar os minutos finais da Ruptura.",
+        4: "Vença o Supervisor de Carga (Nv. 49) em um encontro roteirizado.",
+        5: "Compare com Sel Ardan e Maro Keln os riscos documentados de prosseguir e interromper.",
+        6: "Registre no Códice que a Convergência buscava recalibrar a rede; a probabilidade final de sucesso permanece desconhecida.",
+        7: "Abra a rota ao Coração do Colosso.",
+    }.get(view.step, "Retome a etapa atual da missão.")
+    lines = [f"📜 {title} · Em Andamento", "Altos Cinéreos · Bastilha de Carga", "", step_text]
+    if view.step == 1:
+        records = set(view.progress.get("priority_records", ()))
+        for record in P29_PRIORITY_RECORDS:
+            if record not in records:
+                index = P29_PRIORITY_RECORDS.index(record) + 1
+                rows.append(
+                    [_button(f"Reunir registro de prioridade {index}/3", f"altos:action:{view.state_version}:collect_{record}")]
+                )
+    elif view.step == 2:
+        rows.append([_button("Localizar ordem técnica", f"altos:action:{view.state_version}:locate_convergence_order")])
+    elif view.step == 3:
+        rows.append([_button("Verificar esquema físico", f"altos:action:{view.state_version}:inspect_network_coupling_diagram")])
+    elif view.step == 4:
+        if view.progress.get("awaiting_retry"):
+            rows.append([_button("Tentar novamente", f"altos:retry:P29:{view.state_version}")])
+        else:
+            rows.extend(
+                (
+                    [_button("Iniciar encontro Solo", f"altos:combat:P29:{view.state_version}:solo")],
+                    [_button("Solicitar encontro em Grupo", f"altos:combat:P29:{view.state_version}:group")],
+                )
+            )
+    elif view.step == 5:
+        rows.append([_button("Comparar riscos com Sel e Maro", f"altos:action:{view.state_version}:compare_documented_risks_with_sel_and_maro")])
+    elif view.step == 6:
+        rows.append([_button("Registrar objetivo no Códice", f"altos:action:{view.state_version}:record_convergence_codex")])
+    elif view.step == 7:
+        rows.append([_button("Abrir rota ao Coração", f"altos:action:{view.state_version}:open_route_to_coracao")])
     rows.append([_button("← Missões", "world:missions")])
     return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
