@@ -39,6 +39,7 @@ from asterion.application.s5 import S5Service
 from asterion.application.s6 import S6Service
 from asterion.application.s25 import S25Service
 from asterion.application.s26 import S26Service
+from asterion.application.s27 import S27Service
 from asterion.application.talents import TalentService
 from asterion.application.varzeas_missions import VarzeasMissionService
 from asterion.application.vde_missions import VDEMissionService
@@ -73,6 +74,7 @@ from asterion.bot.s5_handlers import s5_router
 from asterion.bot.s6_handlers import s6_router
 from asterion.bot.s25_handlers import s25_router
 from asterion.bot.s26_handlers import s26_router
+from asterion.bot.s27_handlers import s27_router
 from asterion.bot.settings_handlers import settings_router
 from asterion.bot.varzeas_missions_handlers import varzeas_missions_router
 from asterion.bot.vde_missions_handlers import vde_missions_router
@@ -124,6 +126,7 @@ def get_bot_runtime() -> BotRuntime:
     s6 = S6Service(SessionFactory, settings.server_id, groups=groups)
     s25 = S25Service(SessionFactory, settings.server_id)
     s26 = S26Service(SessionFactory, settings.server_id, altos_missions)
+    s27 = S27Service(SessionFactory, settings.server_id, altos_missions.road)
     class_trials = ClassTrialService(SessionFactory, settings.server_id)
     paths = PathSelectionService(SessionFactory, settings.server_id)
     active_arts = ActiveArtService(SessionFactory, settings.server_id)
@@ -200,6 +203,7 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(s6_router(s6, settings.creation_images))
     dispatcher.include_router(s25_router(s25, settings.creation_images))
     dispatcher.include_router(s26_router(s26, settings.creation_images))
+    dispatcher.include_router(s27_router(s27, settings.creation_images))
     dispatcher.include_router(p6_router(p6, settings.creation_images))
     dispatcher.include_router(path_router(paths, class_trials, settings.creation_images))
     dispatcher.include_router(
@@ -273,6 +277,7 @@ def get_bot_runtime() -> BotRuntime:
             altos_missions=altos_missions,
             s25=s25,
             s26=s26,
+            s27=s27,
         )
     )
     dispatcher.include_router(

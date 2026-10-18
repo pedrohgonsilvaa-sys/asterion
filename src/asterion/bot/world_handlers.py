@@ -63,6 +63,7 @@ from asterion.application.s5 import S5Service
 from asterion.application.s6 import S6Service
 from asterion.application.s25 import S25Service
 from asterion.application.s26 import S26Service
+from asterion.application.s27 import S27Service
 from asterion.application.varzeas_missions import (
     S19_ID,
     S20_ID,
@@ -142,6 +143,7 @@ def world_router(
     altos_missions: AltosMissionService | None = None,
     s25: S25Service | None = None,
     s26: S26Service | None = None,
+    s27: S27Service | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -1384,6 +1386,7 @@ def world_router(
         )
         s25_view = await s25.summary(query.from_user.id) if s25 else None
         s26_view = await s26.summary(query.from_user.id) if s26 else None
+        s27_view = await s27.summary(query.from_user.id) if s27 else None
         if altos_view is not None and altos_view.status == "active":
             mission_screen = render_altos_mission(altos_view)
             if s25_view is not None:
@@ -1434,6 +1437,33 @@ def world_router(
                 rows.append([InlineKeyboardButton(text="Turno sem Fim", callback_data=secondary_action)])
                 mission_screen = Screen(
                     mission_screen.text + f"\n\n📜 Missão Secundária · Turno sem Fim · {secondary_state}",
+                    mission_screen.image_key,
+                    InlineKeyboardMarkup(inline_keyboard=rows),
+                    parse_mode=mission_screen.parse_mode,
+                )
+            if s27_view is not None and (
+                s27_view.status in {"active", "completed"}
+                or s27_view.available
+                or s27_view.reacceptable
+            ):
+                secondary_action = (
+                    "s27:resume"
+                    if s27_view.status in {"active", "completed"}
+                    else "s27:doren"
+                )
+                secondary_state = (
+                    "Em Andamento"
+                    if s27_view.status == "active"
+                    else "Concluída"
+                    if s27_view.status == "completed"
+                    else "Disponível para reaceite"
+                    if s27_view.reacceptable
+                    else "Disponível"
+                )
+                rows = list(mission_screen.keyboard.inline_keyboard) if mission_screen.keyboard else []
+                rows.append([InlineKeyboardButton(text="Cabo Partido", callback_data=secondary_action)])
+                mission_screen = Screen(
+                    mission_screen.text + f"\n\n📜 Missão Secundária · Cabo Partido · {secondary_state}",
                     mission_screen.image_key,
                     InlineKeyboardMarkup(inline_keyboard=rows),
                     parse_mode=mission_screen.parse_mode,
@@ -1843,6 +1873,20 @@ def world_router(
             else:
                 state, action = "Disponível", "s26:hesa"
             secondary_entries.append((f"📜 Turno sem Fim · {state}", action))
+        if s27_view is not None and (
+            s27_view.status in {"active", "completed"}
+            or s27_view.available
+            or s27_view.reacceptable
+        ):
+            if s27_view.status == "active":
+                state, action = "Em Andamento", "s27:resume"
+            elif s27_view.status == "completed":
+                state, action = "Concluída", "s27:resume"
+            elif s27_view.reacceptable:
+                state, action = "Disponível para reaceite", "s27:doren"
+            else:
+                state, action = "Disponível", "s27:doren"
+            secondary_entries.append((f"📜 Cabo Partido · {state}", action))
         if secondary_entries:
             secondary_lines = []
             secondary_buttons = []

@@ -1000,6 +1000,7 @@ def render_current_local(
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
         elif ALTOS_PEDREIRAS_LABEL in view.route_destinations:
             lines.append("🔥 Braseiro da Pedreira Velha · Ainda não descoberto")
+        keyboard.append([InlineKeyboardButton(text="Doren Vask", callback_data="s27:doren")])
         if mission_available:
             keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     elif view.location == ALTOS_BASTILHA_LABEL:

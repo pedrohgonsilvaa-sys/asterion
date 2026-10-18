@@ -238,6 +238,13 @@ CODEX_ENTRIES = (
         "location.altos.pontes_fuligem",
     ),
     CodexPresentation(
+        "codex.altos.reparo_redundante",
+        "Reparo Redundante",
+        "regions",
+        175,
+        "location.altos.pedreiras_suspensas",
+    ),
+    CodexPresentation(
         "codex.altos.desvelados_origem",
         "Origem dos Desvelados",
         "regions",
@@ -342,6 +349,10 @@ CODEX_FRAGMENTS = {
     "codex.altos.turno_sem_fim": FragmentPresentation(
         "Turno sem Fim",
         "O registro elogia o turno que também prolongou a obrigação. A conclusão preserva que heroísmo individual e exploração institucional podem coexistir.",
+    ),
+    "codex.altos.reparo_redundante": FragmentPresentation(
+        "Reparo Redundante",
+        "O cabo rompido foi resolvido com um reparo moderno redundante; a reconstrução integral do sistema antigo não era necessária.",
     ),
     "codex.fragment.altos.autorizacao_que_nunca_veio": FragmentPresentation(
         "Autorização que Nunca Veio",
