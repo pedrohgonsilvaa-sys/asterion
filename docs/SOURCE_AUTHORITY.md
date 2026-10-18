@@ -1,10 +1,12 @@
 # Autoridade das Fontes
 
-**Índice atualizado:** 2026-10-17.
+**Índice atualizado:** 2026-10-18.
 
 > **Índice geral único:** `SOURCE_AUTHORITY.md` é o registro de governança que seleciona as versões autoritativas por escopo. Patches de sincronização são artefatos operacionais e não constituem uma segunda autoridade. Em conflito com índices/patches anteriores, este arquivo prevalece quanto à seleção de versões, sem alterar o conteúdo interno das Fontes.
 
 > **Sincronização 2026-10-17:** este índice registra Fonte Mestra v1.6.0, Terras do Ocaso v1.0.16 FINAL, Vales dos Enforcados v1.0.6 FINAL, Planícies de Nareth v1.0.2 FINAL, Várzeas Carmesins v1.0.3 FINAL, Altos Cinéreos v1.0.1 FINAL, Lore v1.2, Visual/UI de 2026-10-13 e anatomia racial v2.0. Notas históricas mais abaixo podem citar versões anteriores apenas como registro; não reativam autoridade superada.
+
+> **Sincronização 2026-10-18:** Confins do Véu v1.0.0 FINAL (`FINAL_APPROVED`, conteúdo regional C aprovado) está registrado na Região 6. O Contrato Global de Weapon Metadata v1.0.0 FINAL permanece íntegro e vigente, SHA-256 `c283b398949dc0a864d98b9e0e9031080a50b937db6932ffcde7d46e600aa740`. O GDD v1.6.0 permanece superior para sistemas globais; a Bíblia Canônica v3.0 FINAL rege Lore, identidades e limites; a Fonte Regional rege o conteúdo fechado da Região 6. **HANDOFF À ENGENHARIA AUTORIZADO** após esta sincronização; isto não declara P31 implementada.
 
 ## Fonte Mestra vigente
 
@@ -29,12 +31,15 @@ Estado oficial:
 **ASTERION — Contrato Global de Weapon Metadata v1.0.0 FINAL**
 
 Arquivo vigente: `ASTERION_CONTRATO_GLOBAL_WEAPON_METADATA_v1.0.0_FINAL.md`.
+SHA-256 verificado: `c283b398949dc0a864d98b9e0e9031080a50b937db6932ffcde7d46e600aa740`.
 
 Este contrato global complementa o GDD Estrutural v1.6.0 e fecha, exclusivamente para armas player-equippable, `weapon_form` descritiva, `handedness`, elegibilidade de slot, tags explícitas de compatibilidade, mapeamento canônico das armas publicadas na tabela §9 e política de legado `EXACT_CANONICAL_MAPPING_OR_UNMAPPED`. `weapon_family` não é conceito canônico e não deve ser armazenado nem inferido.
 
 O contrato não redefine economia regional nem conteúdo regional fora desse escopo, e não substitui nem rebaixa versões regionais vigentes. O GDD Estrutural v1.6.0 permanece a autoridade estrutural superior. Este contrato não é autoridade visual: assets e apresentação visual não determinam metadata mecânica.
 
 A presença de entradas de Altos Cinéreos na tabela de metadata limita-se aos itens nela mapeados. Ela não registra nem substitui a Fonte Regional de Altos Cinéreos nem define seus gates; essa autoridade está registrada como Altos Cinéreos v1.0.1 FINAL na Região 5 abaixo.
+
+A §19.2 de Confins do Véu v1.0.0 FINAL declara metadata explícita para as cinco armas regionais Grau VI usando os vocabulários de forma, handedness, slot e tags funcionais deste contrato. A compatibilidade foi conferida; `weapon_family` permanece não armazenado e não inferível. O conteúdo regional está registrado separadamente na Região 6.
 
 
 ## Fontes regionais vigentes
@@ -82,6 +87,17 @@ Arquivo vigente: `ASTERION_CONTEUDO_ALTOS_CINEREOS_v1.0.1_FINAL.md`.
 A v1.0.1 FINAL harmoniza acesso persistente, navegação e atividades por Local. Escarpa exige P24 concluída + Nv.41 e registra acesso na etapa 1 de P25; Abrigo é descoberto na etapa 6 de P25. Pontes, Pedreiras e Bastilha abrem, respectivamente, pela ativação válida de P26 após P25 concluída + Nv.43, P27 após P26 concluída + Nv.45 e P28 após P27 concluída + Nv.47. Coração abre na etapa 7 de P29; Nv.50 continua exigido para iniciar P30. Caçada e Desbravar só são habilitados no Local correspondente após a conclusão de sua missão; Ronda exige também a primeira vitória manual válida posterior em Caçada no mesmo Local. S25 examina a ponte pelo lado da Escarpa sem antecipar acesso às Pontes. A revisão preserva os demais valores e conteúdos aprovados e não cria mecânica global.
 
 Quando uma Fonte Regional especificar conteúdo dentro de parâmetros sistêmicos da Fonte Mestra, ambas devem ser aplicadas em conjunto. Em conflito estrutural ou numérico global, a Fonte Mestra prevalece; em conteúdo regional fechado dentro do próprio escopo, a revisão Regional vigente prevalece sobre rascunhos ou versões regionais anteriores.
+
+### Região 6 — Confins do Véu · Nv.51–60
+
+**Confins do Véu v1.0.0 FINAL — FINAL_APPROVED**
+
+Arquivo vigente: `ASTERION_CONTEUDO_CONFINS_DO_VEU_v1.0.0_FINAL.md`.
+SHA-256 integral verificado: `c86a0208888d14bbd653cda6174956df89b2233304dcca523d878b5b42a102fc`.
+
+A aprovação de conteúdo regional C foi confirmada em 2026-10-18. Para sistemas, fórmulas e regras globais, prevalece o GDD Estrutural v1.6.0; para Lore, NPCs, identidades e limites, prevalece a Bíblia Canônica Mundo/Regiões/Bestiário/NPCs v3.0 FINAL; esta Fonte define as decisões regionais C aprovadas, sem sobrepor aquelas autoridades. A §19.2 está sincronizada com o Contrato Global de Weapon Metadata v1.0.0 FINAL, registrado acima.
+
+**Handoff à Engenharia:** autorizado após o registro desta Fonte FINAL e do Contrato Global de Weapon Metadata no índice. O handoff não significa que o conteúdo tenha sido implementado.
 
 ## Fonte Visual/UI
 
