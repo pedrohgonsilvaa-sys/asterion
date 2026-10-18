@@ -252,6 +252,13 @@ CODEX_ENTRIES = (
         "location.altos.bastilha_carga",
     ),
     CodexPresentation(
+        "codex.altos.cartas_emergencia",
+        "Cartas de Emergência",
+        "regions",
+        185,
+        "location.altos.bastilha_carga",
+    ),
+    CodexPresentation(
         "codex.altos.convergencia_objetivo",
         "Objetivo da Convergência",
         "regions",
@@ -365,6 +372,18 @@ CODEX_FRAGMENTS = {
     "codex.altos.desvelados_origem": FragmentPresentation(
         "Origem dos Desvelados",
         "As fontes distinguem a oposição legítima à Regência da radicalização posterior de uma ala. As evidências disponíveis não autorizam atribuir a sabotagem da Âncora Central ao movimento como um todo nem confirmá-la como fato concluído.",
+    ),
+    "codex.fragment.altos.cartas_emergencia.civil": FragmentPresentation(
+        "Carta civil — rota das Pontes",
+        "Testemunho civil ligado à rota das Pontes. Complementa a documentação técnica sem substituí-la.",
+    ),
+    "codex.fragment.altos.cartas_emergencia.trabalhadores": FragmentPresentation(
+        "Carta de trabalhadores — Pedreiras",
+        "Testemunho de trabalhadores nas Pedreiras. Registra uma perspectiva local e complementa os registros técnicos.",
+    ),
+    "codex.fragment.altos.cartas_emergencia.fora_arquivo": FragmentPresentation(
+        "Carta preservada fora do arquivo oficial",
+        "Carta civil preservada fora do arquivo oficial. Sua origem distinta não a torna automaticamente superior aos registros técnicos.",
     ),
     "codex.altos.convergencia_objetivo": FragmentPresentation(
         "Objetivo conhecido",
@@ -1149,6 +1168,12 @@ ACHIEVEMENTS = (
         "Os Desvelados",
         "exploration",
         "Concluiu P28 — Os Desvelados.",
+    ),
+    AchievementPresentation(
+        "achievement.altos.cartas_emergencia",
+        "Fora do Arquivo",
+        "exploration",
+        "Concluiu S28 — Cartas de Emergência e registrou os três Trechos de Cartas.",
     ),
     AchievementPresentation(
         "achievement.altos.antes_convergencia",

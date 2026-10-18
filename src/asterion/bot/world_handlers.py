@@ -64,6 +64,7 @@ from asterion.application.s6 import S6Service
 from asterion.application.s25 import S25Service
 from asterion.application.s26 import S26Service
 from asterion.application.s27 import S27Service
+from asterion.application.s28 import S28Service
 from asterion.application.varzeas_missions import (
     S19_ID,
     S20_ID,
@@ -111,6 +112,7 @@ from asterion.bot.s4_ui import render_s4
 from asterion.bot.s5_ui import render_s5
 from asterion.bot.s6_ui import render_s6
 from asterion.bot.s26_ui import render_s26
+from asterion.bot.s28_ui import render_s28
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
 from asterion.bot.vde_missions_ui import render_vde_mission
 from asterion.bot.world_ui import render_adventure, render_world
@@ -144,6 +146,7 @@ def world_router(
     s25: S25Service | None = None,
     s26: S26Service | None = None,
     s27: S27Service | None = None,
+    s28: S28Service | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -176,6 +179,11 @@ def world_router(
                     else render_s26(secondary)
                 )
                 await present(message, screen, images, edit=edit)
+                return True
+        if s28 is not None:
+            secondary = await s28.resume_active(actor)
+            if secondary is not None:
+                await present(message, render_s28(secondary), images, edit=edit)
                 return True
         return False
 
@@ -1387,6 +1395,7 @@ def world_router(
         s25_view = await s25.summary(query.from_user.id) if s25 else None
         s26_view = await s26.summary(query.from_user.id) if s26 else None
         s27_view = await s27.summary(query.from_user.id) if s27 else None
+        s28_view = await s28.summary(query.from_user.id) if s28 else None
         if altos_view is not None and altos_view.status == "active":
             mission_screen = render_altos_mission(altos_view)
             if s25_view is not None:
@@ -1464,6 +1473,33 @@ def world_router(
                 rows.append([InlineKeyboardButton(text="Cabo Partido", callback_data=secondary_action)])
                 mission_screen = Screen(
                     mission_screen.text + f"\n\n📜 Missão Secundária · Cabo Partido · {secondary_state}",
+                    mission_screen.image_key,
+                    InlineKeyboardMarkup(inline_keyboard=rows),
+                    parse_mode=mission_screen.parse_mode,
+                )
+            if s28_view is not None and (
+                s28_view.status in {"active", "completed"}
+                or s28_view.available
+                or s28_view.reacceptable
+            ):
+                secondary_action = (
+                    "s28:resume"
+                    if s28_view.status in {"active", "completed"}
+                    else "s28:maro"
+                )
+                secondary_state = (
+                    "Em Andamento"
+                    if s28_view.status == "active"
+                    else "Concluída"
+                    if s28_view.status == "completed"
+                    else "Disponível para reaceite"
+                    if s28_view.reacceptable
+                    else "Disponível"
+                )
+                rows = list(mission_screen.keyboard.inline_keyboard) if mission_screen.keyboard else []
+                rows.append([InlineKeyboardButton(text="Cartas de Emergência", callback_data=secondary_action)])
+                mission_screen = Screen(
+                    mission_screen.text + f"\n\n📜 Missão Secundária · Cartas de Emergência · {secondary_state}",
                     mission_screen.image_key,
                     InlineKeyboardMarkup(inline_keyboard=rows),
                     parse_mode=mission_screen.parse_mode,
@@ -1887,6 +1923,20 @@ def world_router(
             else:
                 state, action = "Disponível", "s27:doren"
             secondary_entries.append((f"📜 Cabo Partido · {state}", action))
+        if s28_view is not None and (
+            s28_view.status in {"active", "completed"}
+            or s28_view.available
+            or s28_view.reacceptable
+        ):
+            if s28_view.status == "active":
+                state, action = "Em Andamento", "s28:resume"
+            elif s28_view.status == "completed":
+                state, action = "Concluída", "s28:resume"
+            elif s28_view.reacceptable:
+                state, action = "Disponível para reaceite", "s28:maro"
+            else:
+                state, action = "Disponível", "s28:maro"
+            secondary_entries.append((f"📜 Cartas de Emergência · {state}", action))
         if secondary_entries:
             secondary_lines = []
             secondary_buttons = []
