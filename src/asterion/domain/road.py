@@ -107,6 +107,9 @@ ALTOS_CUSTODIO_ULTIMO_TURNO = "boss.altos.s30.custodio_ultimo_turno"
 ALTOS_PEDREIRA_OPERARIO = "dungeon_creature.altos.pedreira.operario_petrificado"
 ALTOS_PEDREIRA_PRENSOR = "dungeon_elite.altos.pedreira.prensor_antigo"
 ALTOS_PEDREIRA_PESO_SEM_FIM = "boss.altos.pedreira.peso_sem_fim"
+ALTOS_BASTILHA_CUSTODIO_PONTE = "dungeon_elite.altos.bastilha.custodio_ponte"
+ALTOS_BASTILHA_COORDENADOR_CARGA = "dungeon_elite.altos.bastilha.coordenador_carga"
+ALTOS_BASTILHA_GUARDIAO_CONTRAPESO = "boss.altos.bastilha.guardiao_contrapeso"
 ALTOS_FERRO_CONTRAPESO = "material.altos.ferro_contrapeso"
 ALTOS_COURO_ESCARPA = "material.altos.couro_escarpa"
 ALTOS_LIQUEN_PEDREIRA = "material.altos.liquen_pedreira"
@@ -4012,3 +4015,62 @@ ALTOS_PEDREIRA_CREATURES = (
     ),
 )
 CREATURE_CATALOG = (*CREATURE_CATALOG, *ALTOS_PEDREIRA_CREATURES)
+
+ALTOS_BASTILHA_DUNGEON_CREATURES = (
+    Creature(
+        ALTOS_BASTILHA_CUSTODIO_PONTE,
+        "Custódio de Ponte",
+        "elite",
+        "armored",
+        49,
+        49,
+        0,
+        ("golpe_parapeito", "travar_passagem", "reorientar_carga", "fecho_ponte"),
+        (
+            ("golpe_parapeito", "Golpe de Parapeito", D("1.00"), 0, D(0), 0),
+            ("travar_passagem", "Travar Passagem", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("1.00"), 2, True),
+            ("reorientar_carga", "Reorientar Carga", D("0.85"), 0, D("0.12"), 2, None, 0, False, 3, "agility"),
+            ("fecho_ponte", "Fecho de Ponte", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+        ),
+    ),
+    Creature(
+        ALTOS_BASTILHA_COORDENADOR_CARGA,
+        "Coordenador de Carga",
+        "elite",
+        "controller",
+        49,
+        49,
+        0,
+        ("pulso_coordenacao", "ordem_prioridade", "redistribuir_placas", "sobrecarga_linha"),
+        (
+            ("pulso_coordenacao", "Pulso de Coordenação", D("1.00"), 0, D(0), 0),
+            ("ordem_prioridade", "Ordem de Prioridade", D("0.80"), 0, D("0.10"), 2, None, 0, False, 3, "attack"),
+            ("redistribuir_placas", "Redistribuir Placas", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.95"), 2, True),
+            ("sobrecarga_linha", "Sobrecarga de Linha", D("1.70"), 0, D(0), 0, None, 0, True, 4),
+        ),
+    ),
+    Creature(
+        ALTOS_BASTILHA_GUARDIAO_CONTRAPESO,
+        "Guardião do Contrapeso",
+        "boss",
+        "armored",
+        50,
+        50,
+        0,
+        (
+            "impacto_sustentacao",
+            "linha_carga",
+            "ancora_postura",
+            "varredura_ponte",
+            "redistribuicao_forcada",
+        ),
+        (
+            ("impacto_sustentacao", "Impacto de Sustentação", D("1.00"), 0, D(0), 0),
+            ("linha_carga", "Linha de Carga", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+            ("ancora_postura", "Âncora de Postura", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), 0, True, "self", None, None, 2, (), (), D("0.50"), D("0.08")),
+            ("varredura_ponte", "Varredura de Ponte", D("0.85"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+            ("redistribuicao_forcada", "Redistribuição Forçada", D("1.80"), 0, D(0), 0, None, 0, True, 5),
+        ),
+    ),
+)
+CREATURE_CATALOG = (*CREATURE_CATALOG, *ALTOS_BASTILHA_DUNGEON_CREATURES)

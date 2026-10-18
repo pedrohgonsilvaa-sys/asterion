@@ -21,6 +21,30 @@ from asterion.application.equipment_configuration import (
 from asterion.application.progression import consolidate_character_level
 from asterion.application.road import CHARNECA, RUINS, RoadService
 from asterion.application.vigor import add_vigor_state, reconcile_character_vigor, utcnow
+from asterion.domain.altos_bastilha_dungeon import (
+    ALTOS_BASTILHA_BOSS_CODEX_ENTRY,
+    ALTOS_BASTILHA_BRAZIER_LABEL,
+    ALTOS_BASTILHA_CODEX_ENTRY,
+    ALTOS_BASTILHA_CONTENT_VERSION,
+    ALTOS_BASTILHA_CORE_ID,
+    ALTOS_BASTILHA_CORE_NAME,
+    ALTOS_BASTILHA_DISCOVERY_UNLOCK,
+    ALTOS_BASTILHA_ENVIRONMENTS,
+    ALTOS_BASTILHA_FAMILY_ID,
+    ALTOS_BASTILHA_FIRST_CLEAR_PREFIX,
+    ALTOS_BASTILHA_GUARDIAN,
+    ALTOS_BASTILHA_KNOWN_PATH_UNLOCK,
+    ALTOS_BASTILHA_PHASE_II,
+    ALTOS_BASTILHA_PHASE_III,
+    ALTOS_BASTILHA_PROTOCOLS_CODEX_ENTRY,
+    ALTOS_BASTILHA_RECIPE_NAME,
+    ALTOS_BASTILHA_RECIPE_UNLOCK,
+    ALTOS_BASTILHA_REWARD_PREFIX,
+    ALTOS_BASTILHA_RULESET_VERSION,
+    altos_bastilha_encounter_specs,
+    altos_bastilha_enemy_rewards,
+    create_altos_bastilha_combat,
+)
 from asterion.domain.altos_pedreira_dungeon import (
     ALTOS_PEDREIRA_BOSS_CODEX_ENTRY,
     ALTOS_PEDREIRA_BRAZIER_LABEL,
@@ -558,6 +582,48 @@ DUNGEON_FAMILIES = {
             ("material.altos.liquen_pedreira", 1_000),
         ),
     ),
+    ALTOS_BASTILHA_FAMILY_ID: DungeonFamily(
+        ALTOS_BASTILHA_FAMILY_ID,
+        "Bastilha Profunda",
+        "Nv.48–50",
+        "Bastilha de Carga",
+        "Bastilha de Carga",
+        ALTOS_BASTILHA_DISCOVERY_UNLOCK,
+        ALTOS_BASTILHA_KNOWN_PATH_UNLOCK,
+        ALTOS_BASTILHA_FIRST_CLEAR_PREFIX,
+        ALTOS_BASTILHA_REWARD_PREFIX,
+        "dungeon_altos_bastilha_encounter",
+        ALTOS_BASTILHA_CONTENT_VERSION,
+        ALTOS_BASTILHA_RULESET_VERSION,
+        50,
+        48,
+        ALTOS_BASTILHA_CODEX_ENTRY,
+        ALTOS_BASTILHA_CORE_ID,
+        ALTOS_BASTILHA_CORE_NAME,
+        ALTOS_BASTILHA_RECIPE_UNLOCK,
+        ALTOS_BASTILHA_BRAZIER_LABEL,
+        region_display="Altos Cinéreos",
+        encounter_count=5,
+        recipe_name=ALTOS_BASTILHA_RECIPE_NAME,
+        required_quest_ids=("P28",),
+        completion_xp_by_difficulty=(
+            ("stable", 13_280),
+            ("fractured", 16_270),
+            ("rupture", 24_240),
+        ),
+        first_clear_xp_by_difficulty=(
+            ("stable", 21_248),
+            ("fractured", 26_032),
+            ("rupture", 38_784),
+        ),
+        crowns_by_difficulty=(("stable", 680), ("fractured", 1_020), ("rupture", 1_800)),
+        basic_material_weights=(
+            ("material.altos.ferro_contrapeso", 5_000),
+            ("material.altos.cinza_basalto", 3_500),
+            ("material.altos.liquen_pedreira", 1_000),
+            ("material.altos.couro_escarpa", 500),
+        ),
+    ),
 }
 
 
@@ -601,6 +667,8 @@ def _encounter_environment(family_id: str, ordinal: int) -> str:
         return VARZEAS_CISTERN_ENVIRONMENTS[ordinal]
     if family_id == ALTOS_PEDREIRA_FAMILY_ID:
         return ALTOS_PEDREIRA_ENVIRONMENTS[ordinal]
+    if family_id == ALTOS_BASTILHA_FAMILY_ID:
+        return ALTOS_BASTILHA_ENVIRONMENTS[ordinal]
     raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
@@ -636,6 +704,10 @@ def _encounter_specs(run, ordinal: int):
         return altos_pedreira_encounter_specs(
             ordinal, run.difficulty, run.initial_group_size
         )
+    if family_id == ALTOS_BASTILHA_FAMILY_ID:
+        return altos_bastilha_encounter_specs(
+            ordinal, run.difficulty, run.initial_group_size
+        )
     raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
@@ -661,6 +733,8 @@ def _enemy_rewards_for(run, ordinal: int):
         )
     if run.dungeon_family_id == ALTOS_PEDREIRA_FAMILY_ID:
         return altos_pedreira_enemy_rewards(ordinal)
+    if run.dungeon_family_id == ALTOS_BASTILHA_FAMILY_ID:
+        return altos_bastilha_enemy_rewards(ordinal)
     raise ValueError(f"Unknown dungeon family: {run.dungeon_family_id}")
 
 
@@ -1798,6 +1872,22 @@ class DungeonService:
                     initial_group_size=run.initial_group_size,
                     party=group,
                 )
+            elif run.dungeon_family_id == ALTOS_BASTILHA_FAMILY_ID:
+                combat = create_altos_bastilha_combat(
+                    uuid4(),
+                    name=primary_character.name,
+                    character_class=primary_character.character_class,
+                    race=primary_character.race,
+                    hp=primary_member.hp,
+                    level=primary_character.level,
+                    difficulty=run.difficulty,
+                    equipment=equipment,
+                    active_art_ids=active_arts,
+                    ordinal=run.current_encounter_ordinal,
+                    run_seed=run.seed,
+                    initial_group_size=run.initial_group_size,
+                    party=group,
+                )
             else:
                 raise ValueError(f"Unknown dungeon family: {run.dungeon_family_id}")
             combat.configuration_snapshot = (combat.configuration_snapshot or {}) | {
@@ -2326,6 +2416,14 @@ class DungeonService:
                             spec.creature.creature_id,
                             fixed_xp=4026,
                         )
+                    elif spec.creature.creature_id == ALTOS_BASTILHA_GUARDIAN:
+                        await self._grant_boss_milestone(
+                            session,
+                            participant_character,
+                            run,
+                            spec.creature.creature_id,
+                            fixed_xp=4470,
+                        )
                     if spec.creature.category == "boss":
                         await self.bestiary.refresh_boss_mastery(
                             session, participant_character.id, spec.creature.creature_id
@@ -2637,6 +2735,15 @@ class DungeonService:
                         character.id,
                         "achievement.altos.pedreira_primeira",
                     )
+                if (
+                    run.dungeon_family_id == ALTOS_BASTILHA_FAMILY_ID
+                    and run.difficulty == "stable"
+                ):
+                    await self._ensure_achievement(
+                        session,
+                        character.id,
+                        "achievement.altos.bastilha_primeira",
+                    )
                 if run.difficulty == "stable":
                     if run.dungeon_family_id == CRYPT_FAMILY_ID:
                         await self._refresh_crypt_boss_mastery(session, character.id)
@@ -2671,6 +2778,10 @@ class DungeonService:
             elif run.dungeon_family_id == ALTOS_PEDREIRA_FAMILY_ID:
                 await self._ensure_codex_entry(
                     session, character.id, ALTOS_PEDREIRA_CODEX_ENTRY
+                )
+            elif run.dungeon_family_id == ALTOS_BASTILHA_FAMILY_ID:
+                await self._ensure_codex_entry(
+                    session, character.id, ALTOS_BASTILHA_CODEX_ENTRY
                 )
             session.add_all(components)
             reward_lines_by_character[str(character.id)] = self._reward_lines(
@@ -2948,6 +3059,8 @@ class DungeonService:
             if family_id == VARZEAS_CISTERN_FAMILY_ID
             else "boss.altos.pedreira.peso_sem_fim"
             if family_id == ALTOS_PEDREIRA_FAMILY_ID
+            else ALTOS_BASTILHA_GUARDIAN
+            if family_id == ALTOS_BASTILHA_FAMILY_ID
             else "custodio_primeiro_selo"
         )
         for event in after.events[cursor:]:
@@ -3177,6 +3290,27 @@ class DungeonService:
                 await self._ensure_codex_entry(
                     session, character.id, "codex.mystery.linhas_transferencia_ativas"
                 )
+            elif event.action == f"phase:{ALTOS_BASTILHA_PHASE_II}":
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    ALTOS_BASTILHA_GUARDIAN,
+                    "phase:ancoragem_ativa",
+                    "phase",
+                    5,
+                )
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    ALTOS_BASTILHA_GUARDIAN,
+                    "mechanic:ponto_ancoragem_observado",
+                    "mechanic",
+                    5,
+                )
+            elif event.action == f"phase:{ALTOS_BASTILHA_PHASE_III}":
+                await self._ensure_codex_entry(
+                    session, character.id, ALTOS_BASTILHA_PROTOCOLS_CODEX_ENTRY
+                )
             elif event.action == f"phase:{NARETH_GALLERIES_RETURN_RESOLVED}":
                 await self._add_bestiary_evidence(
                     session,
@@ -3218,6 +3352,10 @@ class DungeonService:
                 VARZEAS_INFIRMARY_FAMILY_ID,
                 VARZEAS_CISTERN_FAMILY_ID,
             }:
+                await self.bestiary.refresh_boss_mastery(
+                    session, character.id, boss_creature_id
+                )
+            elif family_id == ALTOS_BASTILHA_FAMILY_ID:
                 await self.bestiary.refresh_boss_mastery(
                     session, character.id, boss_creature_id
                 )
@@ -3334,6 +3472,15 @@ class DungeonService:
                 1: ALTOS_PEDREIRA_CODEX_ENTRY,
                 4: ALTOS_PEDREIRA_CYCLE_CODEX_ENTRY,
                 5: ALTOS_PEDREIRA_BOSS_CODEX_ENTRY,
+            }.get(ordinal)
+            if entry_id is not None:
+                await self._ensure_codex_entry(session, character_id, entry_id)
+            return
+        if family_id == ALTOS_BASTILHA_FAMILY_ID:
+            entry_id = {
+                1: ALTOS_BASTILHA_CODEX_ENTRY,
+                4: ALTOS_BASTILHA_PROTOCOLS_CODEX_ENTRY,
+                5: ALTOS_BASTILHA_BOSS_CODEX_ENTRY,
             }.get(ordinal)
             if entry_id is not None:
                 await self._ensure_codex_entry(session, character_id, entry_id)

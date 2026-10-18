@@ -175,6 +175,19 @@ ALTOS_PEDREIRA_DISTINCTIVE_BOSS_MASTERY = {
     }
 }
 
+ALTOS_BASTILHA_DISTINCTIVE_BOSS_MASTERY = {
+    "boss.altos.bastilha.guardiao_contrapeso": {
+        "first_victory",
+        "phase:ancoragem_ativa",
+        "mechanic:ponto_ancoragem_observado",
+        "action:redistribuicao_forcada",
+    }
+}
+ALTOS_DISTINCTIVE_DUNGEON_BOSS_MASTERY = (
+    ALTOS_PEDREIRA_DISTINCTIVE_BOSS_MASTERY
+    | ALTOS_BASTILHA_DISTINCTIVE_BOSS_MASTERY
+)
+
 NARETH_DISTINCTIVE_ELITE_MASTERY = {
     "escavador_eixo": {
         "first_victory",
@@ -390,8 +403,8 @@ class BestiaryRecorder:
                     "elite_victory",
                     6,
                 )
-        elif creature_id in ALTOS_PEDREIRA_DISTINCTIVE_BOSS_MASTERY:
-            required = ALTOS_PEDREIRA_DISTINCTIVE_BOSS_MASTERY[creature_id]
+        elif creature_id in ALTOS_DISTINCTIVE_DUNGEON_BOSS_MASTERY:
+            required = ALTOS_DISTINCTIVE_DUNGEON_BOSS_MASTERY[creature_id]
             entry.stage = (
                 "dominated"
                 if entry.bkp >= 50 and required.issubset(evidence_ids)
@@ -968,8 +981,8 @@ class BestiaryRecorder:
         required = (
             S30_DISTINCTIVE_BOSS_MASTERY[creature_id]
             if creature_id in S30_DISTINCTIVE_BOSS_MASTERY
-            else ALTOS_PEDREIRA_DISTINCTIVE_BOSS_MASTERY[creature_id]
-            if creature_id in ALTOS_PEDREIRA_DISTINCTIVE_BOSS_MASTERY
+            else ALTOS_DISTINCTIVE_DUNGEON_BOSS_MASTERY[creature_id]
+            if creature_id in ALTOS_DISTINCTIVE_DUNGEON_BOSS_MASTERY
             else
             VARZEAS_DISTINCTIVE_BOSS_MASTERY[creature_id]
             if creature_id in VARZEAS_DISTINCTIVE_BOSS_MASTERY
@@ -998,7 +1011,7 @@ class BestiaryRecorder:
         previous_stage = entry.stage
         if creature_id in {
             *S30_DISTINCTIVE_BOSS_MASTERY,
-            *ALTOS_PEDREIRA_DISTINCTIVE_BOSS_MASTERY,
+            *ALTOS_DISTINCTIVE_DUNGEON_BOSS_MASTERY,
         }:
             entry.stage = (
                 "dominated"
