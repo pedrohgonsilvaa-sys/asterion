@@ -16,6 +16,7 @@ from asterion.application.altos_missions import (
     P29_TITLE,
     P30_REWARD_OPTIONS,
     P30_TITLE,
+    P31_TITLE,
     S26_TITLE,
     S30_TITLE,
     AltosMissionView,
@@ -31,7 +32,8 @@ def _button(text: str, callback: str) -> InlineKeyboardButton:
 
 def render_altos_mission(view: AltosMissionView) -> Screen:
     fallback_title = (
-        P28_TITLE if view.quest_id == "P28"
+        P31_TITLE if view.quest_id == "P31"
+        else P28_TITLE if view.quest_id == "P28"
         else P29_TITLE if view.quest_id == "P29"
         else P27_TITLE if view.quest_id == "P27"
         else P26_TITLE if view.quest_id == "P26"
@@ -66,7 +68,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         )
         combat_location = (
             view.location
-            if view.quest_id == "S26"
+            if view.quest_id in {"S26", "P31"}
             else "Coração do Colosso"
             if view.quest_id == "P30"
             else "Bastilha de Carga"
@@ -80,6 +82,8 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         encounter_label = (
             "Chefe opcional · economia zero"
             if view.quest_id == "S30"
+            else "Encontro roteirizado · economia zero"
+            if view.quest_id == "P31"
             else "Encontro roteirizado"
             if view.quest_id == "S26"
             else "Encontro de Campanha"
@@ -99,6 +103,8 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         return _render_p29(view, title, rows)
     if view.quest_id == "P30":
         return _render_p30(view, title, rows)
+    if view.quest_id == "P31":
+        return _render_p31(view, title, rows)
     if view.quest_id == "P26":
         return _render_p26(view, title, rows)
     if view.quest_id == "S26":
@@ -556,5 +562,60 @@ def _render_p30(view: AltosMissionView, title: str, rows) -> Screen:
         for key, (_item_id, name, _slot) in P30_REWARD_OPTIONS.items():
             if key != selected:
                 rows.append([_button(name, f"altos:action:{view.state_version}:choose_p30_reward_{key}")])
+    rows.append([_button("← Missões", "world:missions")])
+    return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def _render_p31(view: AltosMissionView, title: str, rows) -> Screen:
+    if view.status == "completed":
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Concluída\n\n✨ 77.050 XP · 860 Coroas\n"
+            "📦 1 Ferro de Baliza · 1 Musgo de Limiar\n"
+            "🏅 Feito · Primeira Marcha · Título Testemunha de Rota",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+
+    step_text = {
+        1: "Atravesse a fronteira dos Confins e registre sua chegada à Marcha Nebulosa.",
+        2: "Examine os dois marcos da estrada e compare suas posições sem decidir qual leitura é falsa.",
+        3: "Descubra o Braseiro do Marco Duplo.",
+        4: "Derrote um Cão de Névoa (Nv. 51) no encontro roteirizado.",
+        5: "Siga até o Último Refúgio.",
+        6: "Descubra o Braseiro da Testemunha com Haro Sen.",
+        7: "Compare as duas leituras com Sera Nol e Roven Pell.",
+        8: "Registre “Dois marcos honestos” no Códice e conclua com Sera Nol.",
+    }.get(view.step, "Retome a etapa atual da missão.")
+    location = "Último Refúgio" if view.step in {6, 7, 8} else "Marcha Nebulosa"
+    lines = [f"📜 {title} · Em Andamento", f"Confins do Véu · {location}", "", f"Etapa {view.step}/8 · {step_text}"]
+    if view.step == 2:
+        evidence = set(view.progress.get("route_marker_evidence", ()))
+        for action, label in (
+            ("inspect_talen_marker", "Examinar marco indicado por Talen"),
+            ("inspect_ground_marker", "Examinar o segundo marco da estrada"),
+        ):
+            if action not in evidence:
+                rows.append([_button(label, f"altos:action:{view.state_version}:{action}")])
+    elif view.step == 3:
+        rows.append([_button("Descobrir Braseiro do Marco Duplo", f"altos:action:{view.state_version}:discover_marco_duplo")])
+    elif view.step == 4:
+        if view.progress.get("awaiting_retry"):
+            rows.append([_button("Tentar novamente", f"altos:retry:P31:{view.state_version}")])
+        else:
+            rows.extend(
+                (
+                    [_button("Iniciar encontro Solo", f"altos:combat:P31:{view.state_version}:solo")],
+                    [_button("Solicitar encontro em Grupo", f"altos:combat:P31:{view.state_version}:group")],
+                )
+            )
+    elif view.step == 5:
+        rows.append([_button("Seguir para o Último Refúgio", "road:route:confins_ultimo_refugio")])
+    elif view.step == 6:
+        rows.append([_button("Descobrir Braseiro da Testemunha", f"altos:action:{view.state_version}:discover_testemunha")])
+    elif view.step == 7:
+        rows.append([_button("Comparar as duas leituras", f"altos:action:{view.state_version}:compare_dual_readings")])
+    elif view.step == 8:
+        rows.append([_button("Registrar no Códice e concluir com Sera", f"altos:action:{view.state_version}:record_p31_codex_and_conclude")])
     rows.append([_button("← Missões", "world:missions")])
     return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))

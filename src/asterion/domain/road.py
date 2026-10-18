@@ -53,6 +53,43 @@ VARZEAS_CAMARA = "Câmara da Matriz"
 VARZEAS_CAMARA_LOCATION = "varzeas.location.camara_da_matriz"
 VARZEAS_CAMARA_ACCESS_UNLOCK = "region.varzeas.camara_matriz.available"
 ALTOS_REGION = "Altos Cinéreos"
+CONFINS_REGION = "Confins do Véu"
+CONFINS_MARCHA = "Marcha Nebulosa"
+CONFINS_ULTIMO_REFUGIO = "Último Refúgio"
+CONFINS_MARCHA_LOCATION = "location.confins.marcha_nebulosa"
+CONFINS_ULTIMO_REFUGIO_LOCATION = "location.confins.ultimo_refugio"
+CONFINS_ESTRADAS_AUSENTES = "Estradas Ausentes"
+CONFINS_ESTRADAS_AUSENTES_LOCATION = "location.confins.estradas_ausentes"
+CONFINS_FRATURAS_LIMIAR = "Fraturas do Limiar"
+CONFINS_FRATURAS_LIMIAR_LOCATION = "location.confins.fraturas_limiar"
+CONFINS_NO_CENTRAL = "Nó Central"
+CONFINS_NO_CENTRAL_LOCATION = "location.confins.no_central"
+CONFINS_CAMARA_REGENCIA = "Câmara da Regência"
+CONFINS_CAMARA_REGENCIA_LOCATION = "location.confins.camara_regencia"
+CONFINS_LOCATION_CATALOG = (
+    (CONFINS_MARCHA_LOCATION, CONFINS_MARCHA),
+    (CONFINS_ULTIMO_REFUGIO_LOCATION, CONFINS_ULTIMO_REFUGIO),
+    (CONFINS_ESTRADAS_AUSENTES_LOCATION, CONFINS_ESTRADAS_AUSENTES),
+    (CONFINS_FRATURAS_LIMIAR_LOCATION, CONFINS_FRATURAS_LIMIAR),
+    (CONFINS_NO_CENTRAL_LOCATION, CONFINS_NO_CENTRAL),
+    (CONFINS_CAMARA_REGENCIA_LOCATION, CONFINS_CAMARA_REGENCIA),
+)
+CONFINS_REGION_UNLOCK = "unlock.region.confins"
+CONFINS_MARCHA_ACCESS_UNLOCK = "unlock.location.confins.marcha_nebulosa"
+CONFINS_ULTIMO_REFUGIO_ACCESS_UNLOCK = "unlock.location.confins.ultimo_refugio"
+CONFINS_MARCHA_HUNT_UNLOCK = "unlock.hunt.confins.marcha"
+CONFINS_MARCHA_EXPLORE_UNLOCK = "unlock.explore.confins.marcha"
+CONFINS_MARCHA_ROUND_UNLOCK = "unlock.round.confins.marcha"
+CONFINS_MARCO_DUPLO_BRAZIER = "bonfire.confins.marco_duplo"
+CONFINS_TESTEMUNHA_BRAZIER = "bonfire.confins.testemunha"
+CONFINS_CAO_NEVOA = "creature.confins.cao_nevoa"
+CONFINS_GRALHA_DUAS_SOMBRAS = "creature.confins.gralha_duas_sombras"
+CONFINS_CERVO_PASSO_DUPLO = "creature.confins.cervo_passo_duplo"
+CONFINS_PREDADOR_DUAS_PEGADAS = "elite.confins.predador_duas_pegadas"
+CONFINS_FERRO_BALIZA = "material.confins.ferro_baliza"
+CONFINS_COURO_MARCHA = "material.confins.couro_marcha"
+CONFINS_MUSGO_LIMIAR = "material.confins.musgo_limiar"
+CONFINS_PO_REFERENCIA = "material.confins.po_referencia"
 ALTOS_ESCARPA = "Escarpa da Cinza"
 ALTOS_ABRIGO = "Abrigo do Peso"
 ALTOS_PONTES = "Pontes de Fuligem"
@@ -1744,6 +1781,10 @@ VARIANT_POOL = {
     ALTOS_CARCACA_MINERAL: ("resistant", "furious"),
     ALTOS_VIGIA_CARGA: ("resistant", "furious"),
     ALTOS_SUPERVISOR_CARGA: (),
+    CONFINS_CAO_NEVOA: ("agile", "furious"),
+    CONFINS_GRALHA_DUAS_SOMBRAS: ("agile", "furious"),
+    CONFINS_CERVO_PASSO_DUPLO: ("resistant", "furious"),
+    CONFINS_PREDADOR_DUAS_PEGADAS: (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -1990,6 +2031,21 @@ ALTOS_BASTILHA_PROFILE = HuntLocationProfile(
     explore_unlock=ALTOS_BASTILHA_EXPLORE_UNLOCK,
 )
 
+CONFINS_MARCHA_PROFILE = HuntLocationProfile(
+    local_id=CONFINS_MARCHA_LOCATION,
+    label=CONFINS_MARCHA,
+    creature_weights=(
+        (CONFINS_CAO_NEVOA, 50),
+        (CONFINS_GRALHA_DUAS_SOMBRAS, 26),
+        (CONFINS_CERVO_PASSO_DUPLO, 15),
+        (CONFINS_PREDADOR_DUAS_PEGADAS, 9),
+    ),
+    variant_chance=14,
+    hunt_unlock=CONFINS_MARCHA_HUNT_UNLOCK,
+    round_familiarity=CONFINS_MARCHA_ROUND_UNLOCK,
+    explore_unlock=CONFINS_MARCHA_EXPLORE_UNLOCK,
+)
+
 LOCATION_LEVEL_BANDS = {
     "Estrada das Cinzas": (1, 10),
     "Charneca da Fuligem": (3, 5),
@@ -2011,6 +2067,8 @@ LOCATION_LEVEL_BANDS = {
     ALTOS_PONTES: (43, 49),
     ALTOS_PEDREIRAS: (45, 49),
     ALTOS_BASTILHA: (47, 50),
+    CONFINS_MARCHA: (51, 54),
+    CONFINS_ULTIMO_REFUGIO: (51, 60),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -3038,6 +3096,54 @@ EXPLORATION_PROFILES = {
     ALTOS_PONTES_LOCATION: ALTOS_PONTES_EXPLORATION_PROFILE,
     ALTOS_PEDREIRAS_LOCATION: ALTOS_PEDREIRAS_EXPLORATION_PROFILE,
     ALTOS_BASTILHA_LOCATION: ALTOS_BASTILHA_EXPLORATION_PROFILE,
+    CONFINS_MARCHA_LOCATION: ExplorationLocationProfile(
+        local_id=CONFINS_MARCHA_LOCATION,
+        category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+        results=(
+            ExplorationResultDefinition(
+                "duas_balizas", "great_discovery", "explore.confins.marcha.duas_balizas", 100,
+                "Duas balizas físicas da mesma estrada ocupam posições incompatíveis.",
+                min_level=51, unique=True,
+            ),
+            ExplorationResultDefinition(
+                "caderno_marcha", "knowledge", "explore.confins.marcha.caderno_marcha", 60,
+                "O Caderno de Ida e Volta registra duas leituras honestas da rota.",
+                min_level=51, unique=True,
+            ),
+            ExplorationResultDefinition(
+                "giz_apagado", "knowledge", "explore.confins.marcha.giz_apagado", 40,
+                "Marcas de giz apagadas foram observadas junto à estrada.", min_level=51,
+            ),
+            ExplorationResultDefinition(
+                "marca_repetida", "narrative", "explore.confins.marcha.marca_repetida", 55,
+                "Uma marca reaparece em trecho diferente da estrada.", min_level=51,
+            ),
+            ExplorationResultDefinition(
+                "sino_distante", "narrative", "explore.confins.marcha.sino_distante", 45,
+                "Um sino distante soa sem alterar o estado da região.", min_level=51,
+            ),
+            ExplorationResultDefinition(
+                "combate", "combat", "explore.confins.marcha.combate", 100,
+                "Uma criatura da Marcha Nebulosa bloqueia a passagem.", min_level=51,
+            ),
+            ExplorationResultDefinition(
+                "recurso", "resource", "explore.confins.marcha.recurso", 100,
+                "Um material básico Grau VI pode ser recolhido na Marcha.", min_level=51,
+            ),
+            ExplorationResultDefinition(
+                "nevoa_sem_vento", "atmospheric", "explore.confins.marcha.atmos.nevoa_sem_vento", 34,
+                "Uma névoa baixa permanece imóvel apesar da passagem de viajantes.", min_level=51,
+            ),
+            ExplorationResultDefinition(
+                "pedra_volta", "atmospheric", "explore.confins.marcha.atmos.pedra_volta", 33,
+                "Uma pedra marcada parece ter voltado a uma posição já observada.", min_level=51,
+            ),
+            ExplorationResultDefinition(
+                "passo_umido", "atmospheric", "explore.confins.marcha.atmos.passo_umido", 33,
+                "Passos úmidos cruzam a margem sem deixar uma direção contínua.", min_level=51,
+            ),
+        ),
+    ),
 }
 
 HUNT_PROFILES = {
@@ -3062,6 +3168,7 @@ HUNT_PROFILES = {
     ALTOS_PONTES_LOCATION: ALTOS_PONTES_PROFILE,
     ALTOS_PEDREIRAS_LOCATION: ALTOS_PEDREIRAS_PROFILE,
     ALTOS_BASTILHA_LOCATION: ALTOS_BASTILHA_PROFILE,
+    CONFINS_MARCHA_LOCATION: CONFINS_MARCHA_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -3290,6 +3397,15 @@ ALTOS_BASIC_MATERIAL_CREATURE_IDS = frozenset(
     }
 )
 
+CONFINS_BASIC_MATERIAL_CREATURE_IDS = frozenset(
+    {
+        CONFINS_CAO_NEVOA,
+        CONFINS_GRALHA_DUAS_SOMBRAS,
+        CONFINS_CERVO_PASSO_DUPLO,
+        CONFINS_PREDADOR_DUAS_PEGADAS,
+    }
+)
+
 MATERIAL_POOLS = {
     "dog_cinereo": (("material.tdo.couro_escoriado", 100),),
     "alfa_cinereo": (("material.tdo.couro_escoriado", 100),),
@@ -3483,6 +3599,19 @@ MATERIAL_POOLS = {
     ALTOS_SUPERVISOR_CARGA: (
         (ALTOS_FERRO_CONTRAPESO, 75),
         (ALTOS_CINZA_BASALTO, 25),
+    ),
+    CONFINS_CAO_NEVOA: ((CONFINS_COURO_MARCHA, 100),),
+    CONFINS_GRALHA_DUAS_SOMBRAS: (
+        (CONFINS_MUSGO_LIMIAR, 60),
+        (CONFINS_PO_REFERENCIA, 40),
+    ),
+    CONFINS_CERVO_PASSO_DUPLO: (
+        (CONFINS_COURO_MARCHA, 90),
+        (CONFINS_MUSGO_LIMIAR, 10),
+    ),
+    CONFINS_PREDADOR_DUAS_PEGADAS: (
+        (CONFINS_COURO_MARCHA, 85),
+        (CONFINS_PO_REFERENCIA, 15),
     ),
 }
 
@@ -4074,3 +4203,72 @@ ALTOS_BASTILHA_DUNGEON_CREATURES = (
     ),
 )
 CREATURE_CATALOG = (*CREATURE_CATALOG, *ALTOS_BASTILHA_DUNGEON_CREATURES)
+
+CONFINS_CREATURES = (
+    Creature(
+        CONFINS_CAO_NEVOA,
+        "Cão de Névoa",
+        "common",
+        "predator",
+        51,
+        54,
+        0,
+        ("mordida_marcha", "corrida_marcos", "rasgo_nevoa"),
+        (
+            ("mordida_marcha", "Mordida de Marcha", D("1.00"), 0, D(0), 0),
+            ("corrida_marcos", "Corrida entre Marcos", D("1.20"), 0, D(0), 0, None, 0, False, 3),
+            ("rasgo_nevoa", "Rasgo em Névoa", D("0.90"), 0, D(0), 0, "bleed", 1, False, 3),
+        ),
+        ai_priority=("rasgo_nevoa", "corrida_marcos"),
+    ),
+    Creature(
+        CONFINS_GRALHA_DUAS_SOMBRAS,
+        "Gralha de Duas Sombras",
+        "common",
+        "predator",
+        51,
+        54,
+        0,
+        ("bicada_marca", "asa_retorno", "vista_contraditoria"),
+        (
+            ("bicada_marca", "Bicada de Marca", D("0.95"), 0, D(0), 0),
+            ("asa_retorno", "Asa de Retorno", D("1.15"), 0, D(0), 0, None, 0, False, 2),
+            ("vista_contraditoria", "Vista Contraditória", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "perception"),
+        ),
+        ai_priority=("vista_contraditoria", "asa_retorno"),
+    ),
+    Creature(
+        CONFINS_CERVO_PASSO_DUPLO,
+        "Cervo de Passo Duplo",
+        "common",
+        "brute",
+        54,
+        57,
+        0,
+        ("chifrada_dupla_leitura", "investida_trilha", "salto_casco"),
+        (
+            ("chifrada_dupla_leitura", "Chifrada Dupla Leitura", D("1.05"), 0, D(0), 0),
+            ("investida_trilha", "Investida de Trilha", D("1.30"), 0, D(0), 0, None, 0, False, 3),
+            ("salto_casco", "Salto de Casco", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+        ),
+        ai_priority=("salto_casco", "investida_trilha"),
+    ),
+    Creature(
+        CONFINS_PREDADOR_DUAS_PEGADAS,
+        "Predador de Duas Pegadas",
+        "elite",
+        "predator",
+        54,
+        56,
+        0,
+        ("presa_marcha", "rasgo_duas_trilhas", "finta_retorno", "queda_pegadas"),
+        (
+            ("presa_marcha", "Presa de Marcha", D("1.05"), 0, D(0), 0),
+            ("rasgo_duas_trilhas", "Rasgo em Duas Trilhas", D("0.90"), 0, D(0), 0, "bleed", 1, False, 3),
+            ("finta_retorno", "Finta de Retorno", D("1.30"), 0, D(0), 0, None, 0, False, 3),
+            ("queda_pegadas", "Queda de Pegadas", D("1.80"), 0, D(0), 0, None, 0, True, 4),
+        ),
+        ai_priority=("rasgo_duas_trilhas", "queda_pegadas", "finta_retorno"),
+    ),
+)
+CREATURE_CATALOG = (*CREATURE_CATALOG, *CONFINS_CREATURES)

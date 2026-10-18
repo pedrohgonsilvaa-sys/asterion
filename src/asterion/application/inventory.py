@@ -93,6 +93,10 @@ MATERIAL_LABELS = {
     "material.tdo.catalisador_elite_vi": "Catalisador de Elite VI",
     "material.tdo.fragmento_aprimoramento_v": "Fragmento de Aprimoramento V",
     "material.tdo.fragmento_aprimoramento_vi": "Fragmento de Aprimoramento VI",
+    "material.confins.ferro_baliza": "Ferro de Baliza",
+    "material.confins.couro_marcha": "Couro de Marcha",
+    "material.confins.musgo_limiar": "Musgo de Limiar",
+    "material.confins.po_referencia": "Pó de Referência",
 }
 
 @dataclass(frozen=True)

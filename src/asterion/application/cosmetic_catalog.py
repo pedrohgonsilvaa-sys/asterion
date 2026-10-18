@@ -231,6 +231,12 @@ COSMETICS = (
         "Capa do Porto da Salmoura",
         None,
     ),
+    CosmeticDefinition(
+        "cosmetic.title.confins.testemunha_rota",
+        "title",
+        "Testemunha de Rota",
+        "achievement.confins.primeira_marcha",
+    ),
 )
 
 COSMETICS_BY_ID = {item.cosmetic_id: item for item in COSMETICS}

@@ -10,12 +10,16 @@ from asterion.application.prologue import CombatView
 from asterion.application.road import (
     ALTOS_ABRIGO_LABEL,
     ALTOS_BASTILHA_LABEL,
+    ALTOS_CORACAO_LABEL,
     ALTOS_ESCARPA_LABEL,
     ALTOS_PEDREIRAS_LABEL,
     ALTOS_PONTES_LABEL,
     ALTOS_REGION_LABEL,
     BOSQUE,
     CHARNECA,
+    CONFINS_MARCHA_LABEL,
+    CONFINS_REGION_LABEL,
+    CONFINS_ULTIMO_REFUGIO_LABEL,
     NARETH_CAMARA_LABEL,
     NARETH_CAMPINAS,
     NARETH_CAMPOS,
@@ -103,6 +107,9 @@ def _location_copy(location: str) -> tuple[str, str]:
         ALTOS_PONTES_LABEL: "🌉",
         ALTOS_PEDREIRAS_LABEL: "⛏️",
         ALTOS_BASTILHA_LABEL: "🏰",
+        ALTOS_CORACAO_LABEL: "🌋",
+        CONFINS_MARCHA_LABEL: "🌫️",
+        CONFINS_ULTIMO_REFUGIO_LABEL: "🏚️",
     }.get(location, "🔥")
     if location == VDE_BERCO:
         return f"🌿 {location}", f"{VDE_REGION} · Local de clímax"
@@ -113,7 +120,9 @@ def _location_copy(location: str) -> tuple[str, str]:
         NARETH_REGION
         if location in {NARETH_CAMPINAS, NARETH_POSTO, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL}
         else ALTOS_REGION_LABEL
-        if location in {ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL}
+        if location in {ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL}
+        else CONFINS_REGION_LABEL
+        if location in {CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL}
         else VARZEAS_REGION
         if location in {VARZEAS_DIQUES, VARZEAS_PORTO, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS}
         else VDE_REGION
@@ -170,6 +179,9 @@ def _route_key(location: str) -> str:
         ALTOS_PONTES_LABEL: "altos_pontes",
         ALTOS_PEDREIRAS_LABEL: "altos_pedreiras",
         ALTOS_BASTILHA_LABEL: "altos_bastilha",
+        ALTOS_CORACAO_LABEL: "altos_coracao",
+        CONFINS_MARCHA_LABEL: "confins_marcha",
+        CONFINS_ULTIMO_REFUGIO_LABEL: "confins_ultimo_refugio",
     }[location]
 
 
@@ -773,6 +785,7 @@ def render_current_local(
         ALTOS_ESCARPA_LABEL,
         ALTOS_PEDREIRAS_LABEL,
         ALTOS_BASTILHA_LABEL,
+        CONFINS_MARCHA_LABEL,
     }:
         lines.append("")
         if view.hunt_enabled:
@@ -820,6 +833,9 @@ def render_current_local(
         ALTOS_PONTES_LABEL,
         ALTOS_PEDREIRAS_LABEL,
         ALTOS_BASTILHA_LABEL,
+        ALTOS_CORACAO_LABEL,
+        CONFINS_MARCHA_LABEL,
+        CONFINS_ULTIMO_REFUGIO_LABEL,
     }:
         for destination in view.route_destinations:
             route_key, label = {
@@ -867,6 +883,12 @@ def render_current_local(
                 (ALTOS_PEDREIRAS_LABEL, ALTOS_PONTES_LABEL): ("altos_pontes", "Retornar a Pontes de Fuligem"),
                 (ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL): ("altos_bastilha", "Seguir para Bastilha de Carga"),
                 (ALTOS_BASTILHA_LABEL, ALTOS_PEDREIRAS_LABEL): ("altos_pedreiras", "Retornar a Pedreiras Suspensas"),
+                (ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL): ("altos_coracao", "Abrir rota ao Coração do Colosso"),
+                (ALTOS_CORACAO_LABEL, ALTOS_BASTILHA_LABEL): ("altos_bastilha", "Retornar à Bastilha de Carga"),
+                (ALTOS_CORACAO_LABEL, CONFINS_MARCHA_LABEL): ("confins_marcha", "Atravessar aos Confins do Véu"),
+                (CONFINS_MARCHA_LABEL, ALTOS_CORACAO_LABEL): ("altos_coracao", "Retornar ao Coração do Colosso"),
+                (CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL): ("confins_ultimo_refugio", "Seguir para o Último Refúgio"),
+                (CONFINS_ULTIMO_REFUGIO_LABEL, CONFINS_MARCHA_LABEL): ("confins_marcha", "Retornar à Marcha Nebulosa"),
             }.get((view.location, destination), (None, None))
             if route_key is not None:
                 keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])
@@ -1015,6 +1037,18 @@ def render_current_local(
             lines.append("🔥 Braseiro da Bastilha Externa · Ainda não descoberto")
         keyboard.append([InlineKeyboardButton(text="Maro Keln", callback_data="s28:maro")])
         keyboard.append([InlineKeyboardButton(text="Os que Disseram Não", callback_data="s29:maro")])
+        if mission_available:
+            keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
+    elif view.location == CONFINS_MARCHA_LABEL:
+        lines.extend(["", "🌫️ Marcha Nebulosa · Confins do Véu"])
+        if view.brazier_label:
+            lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        if mission_available:
+            keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
+    elif view.location == CONFINS_ULTIMO_REFUGIO_LABEL:
+        lines.extend(["", "🏚️ Hub seguro · Último Refúgio", "🚫 Caçada, Desbravar e Ronda · Indisponíveis neste Local"])
+        if view.brazier_label:
+            lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
         if mission_available:
             keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     else:

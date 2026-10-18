@@ -366,6 +366,27 @@ CODEX_ENTRIES = (
         208,
         "location.altos.pedreiras_suspensas",
     ),
+    CodexPresentation(
+        "codex.confins.regiao",
+        "Confins do Véu",
+        "regions",
+        300,
+        "location.confins.marcha_nebulosa",
+    ),
+    CodexPresentation(
+        "codex.confins.duas_leituras_rota",
+        "Duas Leituras da Rota",
+        "history",
+        301,
+        "location.confins.marcha_nebulosa",
+    ),
+    CodexPresentation(
+        "codex.confins.marcos_incompativeis",
+        "Marcos Incompatíveis",
+        "history",
+        302,
+        "location.confins.marcha_nebulosa",
+    ),
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -377,6 +398,26 @@ class FragmentPresentation:
 
 
 CODEX_FRAGMENTS = {
+    "codex.confins.regiao": FragmentPresentation(
+        "Confins do Véu",
+        "A chegada à Marcha Nebulosa registra o bioma e a cultura local. As duas leituras da rota permanecem como observações, sem declarar qual delas prevalece.",
+    ),
+    "codex.confins.duas_leituras_rota": FragmentPresentation(
+        "Dois marcos honestos",
+        "A anotação de Talen e a marca física do terreno registram posições incompatíveis para a mesma estrada. Ambas são preservadas como leituras honestas; a discrepância, por si só, não prova a existência de dois mundos.",
+    ),
+    "explore.confins.marcha.duas_balizas": FragmentPresentation(
+        "Marcos Incompatíveis",
+        "Duas balizas físicas da mesma estrada foram observadas em posições incompatíveis. O registro preserva a observação sem escolher qual marco está correto.",
+    ),
+    "explore.confins.marcha.caderno_marcha": FragmentPresentation(
+        "Caderno de Ida e Volta",
+        "O caderno registra duas leituras honestas da rota e funciona como adendo às evidências reunidas nos Confins.",
+    ),
+    "explore.confins.marcha.giz_apagado": FragmentPresentation(
+        "Giz Apagado",
+        "Marcas de giz apagadas foram observadas junto à estrada.",
+    ),
     "codex.fragment.estrada.memoria_viajantes": FragmentPresentation(
         "Memória de viajantes",
         "Vestígios na estrada preservam a memória de viajantes que passaram por ali.",
@@ -1260,6 +1301,13 @@ ACHIEVEMENTS = (
         "pve",
         "Concluiu pela primeira vez a Pedreira do Contrapeso em dificuldade Estável.",
     ),
+    AchievementPresentation(
+        "achievement.confins.primeira_marcha",
+        "Primeira Marcha",
+        "exploration",
+        "Concluiu P31 — Onde o Véu Afina.",
+        "Título · Testemunha de Rota",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
@@ -1271,8 +1319,10 @@ ACHIEVEMENT_BY_ID = {entry.achievement_id: entry for entry in ACHIEVEMENTS}
 
 TDO_REGION_ID = "tdo"
 ALTOS_REGION_ID = "altos"
+CONFINS_REGION_ID = "confins_do_veu"
 TDO_REGION_LABEL = "🌑 Terras do Ocaso · Nv. 1–10"
 ALTOS_REGION_LABEL = "🌋 Altos Cinéreos · Nv. 41–50"
+CONFINS_REGION_LABEL = "🌫️ Confins do Véu · Nv. 51–60"
 VDE_REGION_ID = "vde"
 VDE_REGION_LABEL = "🪢 Vales dos Enforcados · Nv. 11–20"
 NARETH_REGION_ID = "nareth"
@@ -1327,8 +1377,21 @@ ALTOS_LOCATIONS = {
     "location.altos.bastilha_carga": "Bastilha de Carga",
     "location.altos.coracao_colosso": "Coração do Colosso",
 }
+CONFINS_LOCATIONS = {
+    "location.confins.marcha_nebulosa": "Marcha Nebulosa",
+    "location.confins.ultimo_refugio": "Último Refúgio",
+    "location.confins.estradas_ausentes": "Estradas Ausentes",
+    "location.confins.fraturas_limiar": "Fraturas do Limiar",
+    "location.confins.no_central": "Nó Central",
+    "location.confins.camara_regencia": "Câmara da Regência",
+}
 LOCATION_LABELS = (
-    TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS | VARZEAS_LOCATIONS | ALTOS_LOCATIONS
+    TDO_LOCATIONS
+    | VDE_LOCATIONS
+    | NARETH_LOCATIONS
+    | VARZEAS_LOCATIONS
+    | ALTOS_LOCATIONS
+    | CONFINS_LOCATIONS
 )
 HABITAT_EVIDENCE_TO_LOCATION = {
     "estrada": "tdo.location.estrada_das_cinzas",
@@ -1365,6 +1428,9 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     "Abrigo do Peso": "location.altos.abrigo_peso",
     "Pontes de Fuligem": "location.altos.pontes_fuligem",
     **{location_id: location_id for location_id in ALTOS_LOCATIONS},
+    "Marcha Nebulosa": "location.confins.marcha_nebulosa",
+    "Último Refúgio": "location.confins.ultimo_refugio",
+    **{location_id: location_id for location_id in CONFINS_LOCATIONS},
 }
 MATERIAL_LABELS = {
     "material.tdo.ferro_de_fuligem": "Ferro de Fuligem",
@@ -1401,6 +1467,10 @@ MATERIAL_LABELS = {
     "material.tdo.catalisador_elite_vi": "Catalisador de Elite VI",
     "material.tdo.fragmento_aprimoramento_v": "Fragmento de Aprimoramento V",
     "material.tdo.fragmento_aprimoramento_vi": "Fragmento de Aprimoramento VI",
+    "material.confins.ferro_baliza": "Ferro de Baliza",
+    "material.confins.couro_marcha": "Couro de Marcha",
+    "material.confins.musgo_limiar": "Musgo de Limiar",
+    "material.confins.po_referencia": "Pó de Referência",
 }
 
 
@@ -1411,6 +1481,22 @@ class CreaturePresentation:
 
 
 CREATURE_PRESENTATION = {
+    "cao_nevoa": CreaturePresentation(
+        CONFINS_REGION_ID,
+        ("location.confins.marcha_nebulosa", "location.confins.estradas_ausentes"),
+    ),
+    "gralha_duas_sombras": CreaturePresentation(
+        CONFINS_REGION_ID,
+        ("location.confins.marcha_nebulosa", "location.confins.estradas_ausentes"),
+    ),
+    "cervo_passo_duplo": CreaturePresentation(
+        CONFINS_REGION_ID,
+        ("location.confins.marcha_nebulosa", "location.confins.fraturas_limiar"),
+    ),
+    "predador_duas_pegadas": CreaturePresentation(
+        CONFINS_REGION_ID,
+        ("location.confins.marcha_nebulosa", "location.confins.estradas_ausentes"),
+    ),
     "dog_cinereo": CreaturePresentation(
         TDO_REGION_ID, ("tdo.location.estrada_das_cinzas", "tdo.location.charneca_da_fuligem")
     ),

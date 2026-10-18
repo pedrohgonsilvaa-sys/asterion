@@ -76,6 +76,12 @@ SLOT_LABEL = {
 }
 
 MATERIAL_META = {
+    "material.confins.ferro_baliza": ("⛏️", "Metal · Grau VI"),
+    "material.confins.couro_marcha": ("🐾", "Couro · Grau VI"),
+    "material.confins.musgo_limiar": ("🌿", "Reagente · Grau VI"),
+    "material.confins.po_referencia": ("✨", "Essência · Grau VI"),
+    "material.tdo.catalisador_elite_vi": ("⚗️", "Recurso Especial · Grau VI"),
+    "material.tdo.fragmento_aprimoramento_vi": ("🪨", "Recurso Especial · Grau VI"),
     "material.tdo.ferro_de_fuligem": ("⛏️", "Metal · Grau I"),
     "material.tdo.couro_escoriado": ("🐾", "Couro · Grau I"),
     "material.tdo.erva_cinzenta": ("🌿", "Reagente · Grau I"),
