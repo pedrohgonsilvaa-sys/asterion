@@ -61,6 +61,7 @@ from asterion.application.s3 import S3Service
 from asterion.application.s4 import S4Service
 from asterion.application.s5 import S5Service
 from asterion.application.s6 import S6Service
+from asterion.application.s25 import S25Service
 from asterion.application.varzeas_missions import (
     S19_ID,
     S20_ID,
@@ -137,6 +138,7 @@ def world_router(
     nareth_missions: NarethMissionService | None = None,
     varzeas_missions: VarzeasMissionService | None = None,
     altos_missions: AltosMissionService | None = None,
+    s25: S25Service | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -1368,8 +1370,35 @@ def world_router(
             if altos_missions
             else None
         )
+        s25_view = await s25.summary(query.from_user.id) if s25 else None
         if altos_view is not None and altos_view.status == "active":
-            await present(query.message, render_altos_mission(altos_view), images, edit=True)
+            mission_screen = render_altos_mission(altos_view)
+            if s25_view is not None:
+                secondary_action = None
+                if s25_view.status == "active":
+                    secondary_action = "s25:resume"
+                    secondary_state = "Em Andamento"
+                elif s25_view.status == "completed":
+                    secondary_action = "s25:resume"
+                    secondary_state = "Concluída"
+                elif s25_view.reacceptable:
+                    secondary_action = "s25:doren"
+                    secondary_state = "Disponível para reaceite"
+                elif s25_view.available:
+                    secondary_action = "s25:doren"
+                    secondary_state = "Disponível"
+                else:
+                    secondary_state = "Indisponível"
+                rows = list(mission_screen.keyboard.inline_keyboard) if mission_screen.keyboard else []
+                if secondary_action is not None:
+                    rows.append([InlineKeyboardButton(text="A Ponte que Espera", callback_data=secondary_action)])
+                mission_screen = Screen(
+                    mission_screen.text + f"\n\n📜 Missão Secundária · A Ponte que Espera · {secondary_state}",
+                    mission_screen.image_key,
+                    InlineKeyboardMarkup(inline_keyboard=rows),
+                    parse_mode=mission_screen.parse_mode,
+                )
+            await present(query.message, mission_screen, images, edit=True)
             return
         s6_view = await s6.summary(query.from_user.id) if s6 else None
         if s3_view is None and s3 is not None:
@@ -1748,6 +1777,18 @@ def world_router(
             else:
                 state, action = "Bloqueada · Requer S22, P23 e Nv.40", None
             secondary_entries.append((f"📜 {varzeas_s24_view.title} · {state}", action))
+        if s25_view is not None:
+            if s25_view.status == "active":
+                state, action = "Em Andamento", "s25:resume"
+            elif s25_view.status == "completed":
+                state, action = "Concluída", "s25:resume"
+            elif s25_view.reacceptable:
+                state, action = "Disponível para reaceite", "s25:doren"
+            elif s25_view.available:
+                state, action = "Disponível", "s25:doren"
+            else:
+                state, action = "Indisponível", None
+            secondary_entries.append((f"📜 A Ponte que Espera · {state}", action))
         if secondary_entries:
             secondary_lines = []
             secondary_buttons = []

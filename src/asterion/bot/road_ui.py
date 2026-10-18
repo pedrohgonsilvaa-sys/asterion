@@ -979,6 +979,7 @@ def render_current_local(
                 keyboard.append([InlineKeyboardButton(text="Retornar à Câmara da Matriz", callback_data="road:route:varzeas_camara")])
         if view.brazier_label:
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        keyboard.append([InlineKeyboardButton(text="Doren Vask", callback_data="s25:doren")])
         if mission_available:
             keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     elif view.location == ALTOS_PONTES_LABEL:

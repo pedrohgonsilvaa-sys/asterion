@@ -332,6 +332,10 @@ CODEX_FRAGMENTS = {
         "Carga Observável",
         "Carga e escoras foram observadas; não há registro de autorização.",
     ),
+    "codex.fragment.altos.autorizacao_que_nunca_veio": FragmentPresentation(
+        "Autorização que Nunca Veio",
+        "O selo identifica a última autorização válida. Duas ordens posteriores apenas mandavam aguardar, e a ponte não deve ser aberta pela missão.",
+    ),
     "codex.altos.regencia_continuidade": FragmentPresentation(
         "Regência de Continuidade",
         "Os registros identificam uma autoridade emergencial chamada Regência de Continuidade. Sua cadeia integral de decisões permanece desconhecida.",
