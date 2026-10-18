@@ -971,6 +971,7 @@ def render_current_local(
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
         keyboard.append([InlineKeyboardButton(text="Hesa Tor", callback_data="s26:hesa")])
         keyboard.append([InlineKeyboardButton(text="Maro Keln", callback_data="s28:maro")])
+        keyboard.append([InlineKeyboardButton(text="Os que Disseram Não", callback_data="s29:maro")])
         if mission_available:
             keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     elif view.location == ALTOS_ESCARPA_LABEL:
@@ -1013,6 +1014,7 @@ def render_current_local(
         elif ALTOS_BASTILHA_LABEL in view.route_destinations:
             lines.append("🔥 Braseiro da Bastilha Externa · Ainda não descoberto")
         keyboard.append([InlineKeyboardButton(text="Maro Keln", callback_data="s28:maro")])
+        keyboard.append([InlineKeyboardButton(text="Os que Disseram Não", callback_data="s29:maro")])
         if mission_available:
             keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     else:

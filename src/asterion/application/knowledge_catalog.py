@@ -259,6 +259,13 @@ CODEX_ENTRIES = (
         "location.altos.bastilha_carga",
     ),
     CodexPresentation(
+        "codex.altos.dissidencia_sem_sabotagem",
+        "Os que Disseram Não",
+        "regions",
+        186,
+        "location.altos.bastilha_carga",
+    ),
+    CodexPresentation(
         "codex.altos.convergencia_objetivo",
         "Objetivo da Convergência",
         "regions",
@@ -384,6 +391,10 @@ CODEX_FRAGMENTS = {
     "codex.fragment.altos.cartas_emergencia.fora_arquivo": FragmentPresentation(
         "Carta preservada fora do arquivo oficial",
         "Carta civil preservada fora do arquivo oficial. Sua origem distinta não a torna automaticamente superior aos registros técnicos.",
+    ),
+    "codex.altos.dissidencia_sem_sabotagem": FragmentPresentation(
+        "Dissidência sem Sabotagem",
+        "Os três registros examinados documentam recusas sem sabotagem material; ao menos dois dos recusantes continuaram na manutenção civil. Isso não absolve integralmente todos os dissidentes e não desfaz a sabotagem corroborada em P30.",
     ),
     "codex.altos.convergencia_objetivo": FragmentPresentation(
         "Objetivo conhecido",
@@ -1174,6 +1185,12 @@ ACHIEVEMENTS = (
         "Fora do Arquivo",
         "exploration",
         "Concluiu S28 — Cartas de Emergência e registrou os três Trechos de Cartas.",
+    ),
+    AchievementPresentation(
+        "achievement.altos.dissidencia",
+        "Dizer Não",
+        "exploration",
+        "Concluiu S29 — Os que Disseram Não.",
     ),
     AchievementPresentation(
         "achievement.altos.antes_convergencia",
