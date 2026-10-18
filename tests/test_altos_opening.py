@@ -32,6 +32,7 @@ from asterion.application.knowledge_catalog import (
 from asterion.application.knowledge_catalog import MATERIAL_LABELS as BESTIARY_MATERIAL_LABELS
 from asterion.application.road import (
     ALTOS_ABRIGO_LABEL,
+    ALTOS_BASTILHA_LABEL,
     ALTOS_ESCARPA_LABEL,
     ALTOS_LOCATIONS,
     ALTOS_PEDREIRAS_LABEL,
@@ -90,13 +91,14 @@ from tests.test_road_integration import _seed_road
 from tests.test_s4_s5_integration import _terminal
 
 
-def test_altos_location_catalog_stops_at_p27():
+def test_altos_location_catalog_stops_at_p28():
     assert ALTOS_REGION == "Altos Cinéreos"
     assert ALTOS_LOCATIONS == {
         ALTOS_ESCARPA_LABEL,
         ALTOS_ABRIGO_LABEL,
         ALTOS_PONTES_LABEL,
         ALTOS_PEDREIRAS_LABEL,
+        ALTOS_BASTILHA_LABEL,
     }
     assert ALTOS_ESCARPA_LOCATION == "location.altos.escarpa_cinza"
     assert ALTOS_ABRIGO_LOCATION == "location.altos.abrigo_peso"
@@ -135,7 +137,7 @@ def test_altos_location_catalog_stops_at_p27():
         assert BESTIARY_MATERIAL_LABELS[material_id] == label
     assert ALTOS_PONTES_LABEL == "Pontes de Fuligem"
     assert ALTOS_PEDREIRAS_LABEL == "Pedreiras Suspensas"
-    assert "Bastilha de Carga" not in ALTOS_LOCATIONS
+    assert "Bastilha de Carga" in ALTOS_LOCATIONS
     assert "Coração do Colosso" not in ALTOS_LOCATIONS
 
 

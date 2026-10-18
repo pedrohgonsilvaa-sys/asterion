@@ -57,18 +57,22 @@ ALTOS_ESCARPA = "Escarpa da Cinza"
 ALTOS_ABRIGO = "Abrigo do Peso"
 ALTOS_PONTES = "Pontes de Fuligem"
 ALTOS_PEDREIRAS = "Pedreiras Suspensas"
+ALTOS_BASTILHA = "Bastilha de Carga"
 ALTOS_ESCARPA_LOCATION = "location.altos.escarpa_cinza"
 ALTOS_ABRIGO_LOCATION = "location.altos.abrigo_peso"
 ALTOS_PONTES_LOCATION = "location.altos.pontes_fuligem"
 ALTOS_PEDREIRAS_LOCATION = "location.altos.pedreiras_suspensas"
+ALTOS_BASTILHA_LOCATION = "location.altos.bastilha_carga"
 ALTOS_ESCARPA_ACCESS_UNLOCK = "unlock.location.altos.escarpa_cinza"
 ALTOS_ABRIGO_ACCESS_UNLOCK = "unlock.location.altos.abrigo_peso"
 ALTOS_PONTES_ACCESS_UNLOCK = "unlock.location.altos.pontes_fuligem"
 ALTOS_PEDREIRAS_ACCESS_UNLOCK = "unlock.location.altos.pedreiras_suspensas"
+ALTOS_BASTILHA_ACCESS_UNLOCK = "unlock.location.altos.bastilha_carga"
 ALTOS_ESCARPA_BRAZIER = "bonfire.altos.escarpa"
 ALTOS_ABRIGO_BRAZIER = "bonfire.altos.abrigo"
 ALTOS_PONTES_BRAZIER = "bonfire.altos.ponte_alta"
 ALTOS_PEDREIRA_BRAZIER = "bonfire.altos.pedreira_velha"
+ALTOS_BASTILHA_BRAZIER = "bonfire.altos.bastilha_externa"
 ALTOS_ESCARPA_HUNT_UNLOCK = "unlock.hunt.altos.escarpa"
 ALTOS_ESCARPA_EXPLORE_UNLOCK = "unlock.explore.altos.escarpa"
 ALTOS_ESCARPA_ROUND_UNLOCK = "unlock.round.altos.escarpa"
@@ -79,6 +83,10 @@ ALTOS_PEDREIRAS_HUNT_UNLOCK = "unlock.hunt.altos.pedreiras"
 ALTOS_PEDREIRAS_EXPLORE_UNLOCK = "unlock.explore.altos.pedreiras"
 ALTOS_PEDREIRAS_ROUND_UNLOCK = "unlock.round.altos.pedreiras"
 ALTOS_PEDREIRAS_DUNGEON_UNLOCK = "unlock.dungeon.altos.pedreira_contrapeso"
+ALTOS_BASTILHA_HUNT_UNLOCK = "unlock.hunt.altos.bastilha"
+ALTOS_BASTILHA_EXPLORE_UNLOCK = "unlock.explore.altos.bastilha"
+ALTOS_BASTILHA_ROUND_UNLOCK = "unlock.round.altos.bastilha"
+ALTOS_BASTILHA_DUNGEON_UNLOCK = "unlock.dungeon.altos.bastilha_profunda"
 ALTOS_LOBO_ESCARPA = "creature.altos.lobo_escarpa"
 ALTOS_ABUTRE_FULIGEM = "creature.altos.abutre_fuligem"
 ALTOS_ESCARAVELHO_BASALTO = "creature.altos.escaravelho_basalto"
@@ -89,6 +97,8 @@ ALTOS_QUEBRA_CABOS = "creature.altos.quebra_cabos"
 ALTOS_DEVORADOR_ESCORIA = "elite.altos.devorador_escoria"
 ALTOS_MORCEGO_CHAMINE = "creature.altos.morcego_chamine"
 ALTOS_CARCACA_MINERAL = "creature.altos.carcaca_mineral"
+ALTOS_VIGIA_CARGA = "creature.altos.vigia_carga"
+ALTOS_SUPERVISOR_CARGA = "elite.altos.supervisor_carga"
 ALTOS_FERRO_CONTRAPESO = "material.altos.ferro_contrapeso"
 ALTOS_COURO_ESCARPA = "material.altos.couro_escarpa"
 ALTOS_LIQUEN_PEDREIRA = "material.altos.liquen_pedreira"
@@ -1551,6 +1561,28 @@ CREATURE_CATALOG = (
         ),
         ai_priority=("crosta_deposito", "arrasto_pesado"),
     ),
+    Creature(
+        ALTOS_VIGIA_CARGA, "Vigia de Carga", "uncommon", "armored", 47, 50, 0,
+        ("impacto_carga", "placa_ancoragem", "marcacao_peso", "descarga_contrapeso"),
+        (
+            ("impacto_carga", "Impacto de Carga", D("1.00"), 0, D(0), 0),
+            ("placa_ancoragem", "Placa de Ancoragem", D("0.95"), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.95"), 2),
+            ("marcacao_peso", "Marcação de Peso", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+            ("descarga_contrapeso", "Descarga de Contrapeso", D("1.65"), 0, D(0), 0, None, 0, True, 4),
+        ),
+        ai_priority=("placa_ancoragem", "marcacao_peso", "descarga_contrapeso"),
+    ),
+    Creature(
+        ALTOS_SUPERVISOR_CARGA, "Supervisor de Carga", "elite", "armored", 48, 50, 0,
+        ("impacto_supervisao", "travar_carga", "ordem_pressao", "descarga_linha"),
+        (
+            ("impacto_supervisao", "Impacto de Supervisão", D("1.00"), 0, D(0), 0),
+            ("travar_carga", "Travar Carga", D("1.00"), 0, D(0), 0, None, 0, False, 3, None, D(0), D("1.00"), 2),
+            ("ordem_pressao", "Ordem de Pressão", D("0.85"), 0, D("0.12"), 2, None, 0, False, 3, "attack"),
+            ("descarga_linha", "Descarga de Linha", D("1.80"), 0, D(0), 0, None, 0, True, 4),
+        ),
+        ai_priority=("travar_carga", "ordem_pressao", "descarga_linha"),
+    ),
 )
 
 VARIANTS = {
@@ -1619,6 +1651,8 @@ VARIANT_POOL = {
     ALTOS_DEVORADOR_ESCORIA: (),
     ALTOS_MORCEGO_CHAMINE: ("agile", "furious"),
     ALTOS_CARCACA_MINERAL: ("resistant", "furious"),
+    ALTOS_VIGIA_CARGA: ("resistant", "furious"),
+    ALTOS_SUPERVISOR_CARGA: (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -1848,6 +1882,23 @@ ALTOS_PEDREIRAS_PROFILE = HuntLocationProfile(
     explore_unlock=ALTOS_PEDREIRAS_EXPLORE_UNLOCK,
 )
 
+ALTOS_BASTILHA_PROFILE = HuntLocationProfile(
+    local_id=ALTOS_BASTILHA_LOCATION,
+    label=ALTOS_BASTILHA,
+    creature_weights=(
+        (ALTOS_MORCEGO_CHAMINE, 14),
+        (ALTOS_CARCACA_MINERAL, 22),
+        (ALTOS_QUEBRA_CABOS, 24),
+        (ALTOS_VIGIA_CARGA, 34),
+        (ALTOS_DEVORADOR_ESCORIA, 2),
+        (ALTOS_SUPERVISOR_CARGA, 4),
+    ),
+    variant_chance=18,
+    hunt_unlock=ALTOS_BASTILHA_HUNT_UNLOCK,
+    round_familiarity=ALTOS_BASTILHA_ROUND_UNLOCK,
+    explore_unlock=ALTOS_BASTILHA_EXPLORE_UNLOCK,
+)
+
 LOCATION_LEVEL_BANDS = {
     "Estrada das Cinzas": (1, 10),
     "Charneca da Fuligem": (3, 5),
@@ -1868,6 +1919,7 @@ LOCATION_LEVEL_BANDS = {
     ALTOS_ESCARPA: (41, 45),
     ALTOS_PONTES: (43, 49),
     ALTOS_PEDREIRAS: (45, 49),
+    ALTOS_BASTILHA: (47, 50),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -2775,6 +2827,105 @@ ALTOS_PEDREIRAS_EXPLORATION_PROFILE = ExplorationLocationProfile(
     ),
 )
 
+ALTOS_BASTILHA_EXPLORATION_PROFILE = ExplorationLocationProfile(
+    local_id=ALTOS_BASTILHA_LOCATION,
+    category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+    results=(
+        ExplorationResultDefinition(
+            "braseiro_externo", "great_discovery",
+            "explore.altos.bastilha.braseiro_externo", 50,
+            "O Braseiro da Bastilha Externa foi descoberto.",
+            min_level=47, unique=True,
+        ),
+        ExplorationResultDefinition(
+            "entrada_profunda", "great_discovery",
+            "explore.altos.bastilha.entrada_profunda", 50,
+            "A Entrada da Bastilha Profunda foi registrada.",
+            min_level=47, unique=True,
+        ),
+        ExplorationResultDefinition(
+            "tabela_validade", "knowledge",
+            "explore.altos.bastilha.tabela_validade", 60,
+            "A Tabela de Validade de Ordens foi registrada.",
+            min_level=47, unique=True,
+        ),
+        ExplorationResultDefinition(
+            "selos_reemitidos", "knowledge",
+            "explore.altos.bastilha.selos_reemitidos", 40,
+            "Selos reemitidos foram observados na Bastilha.", min_level=47,
+        ),
+        ExplorationResultDefinition(
+            "porta_prioridade", "narrative",
+            "explore.altos.bastilha.porta_prioridade", 55,
+            "Uma porta registra uma prioridade de acesso.", min_level=47,
+        ),
+        ExplorationResultDefinition(
+            "arquivo_sem_destino", "narrative",
+            "explore.altos.bastilha.arquivo_sem_destino", 45,
+            "Um arquivo permanece sem destino registrado.", min_level=47,
+        ),
+        ExplorationResultDefinition(
+            "morcego_chamine", "combat",
+            "explore.altos.bastilha.combat.morcego_chamine", 15,
+            "Um Morcego de Chaminé surge entre as passarelas.", min_level=47,
+            creature_id=ALTOS_MORCEGO_CHAMINE,
+        ),
+        ExplorationResultDefinition(
+            "carcaca_mineral", "combat",
+            "explore.altos.bastilha.combat.carcaca_mineral", 20,
+            "Uma Carcaça Mineral bloqueia o acesso.", min_level=47,
+            creature_id=ALTOS_CARCACA_MINERAL,
+        ),
+        ExplorationResultDefinition(
+            "quebra_cabos", "combat",
+            "explore.altos.bastilha.combat.quebra_cabos", 25,
+            "Um Quebra-Cabos ocupa a passagem.", min_level=47,
+            creature_id=ALTOS_QUEBRA_CABOS,
+        ),
+        ExplorationResultDefinition(
+            "vigia_carga", "combat",
+            "explore.altos.bastilha.combat.vigia_carga", 40,
+            "Um Vigia de Carga guarda a rota.", min_level=47,
+            creature_id=ALTOS_VIGIA_CARGA,
+        ),
+        ExplorationResultDefinition(
+            "ferro_contrapeso", "resource",
+            "explore.altos.bastilha.ferro_contrapeso", 40,
+            "Ferro de Contrapeso pode ser recolhido na Bastilha.", min_level=47,
+        ),
+        ExplorationResultDefinition(
+            "cinza_basalto", "resource",
+            "explore.altos.bastilha.cinza_basalto", 35,
+            "Cinza de Basalto pode ser recolhida na Bastilha.", min_level=47,
+        ),
+        ExplorationResultDefinition(
+            "liquen_pedreira", "resource",
+            "explore.altos.bastilha.liquen_pedreira", 15,
+            "Líquen de Pedreira cresce entre as estruturas.", min_level=47,
+        ),
+        ExplorationResultDefinition(
+            "couro_escarpa", "resource",
+            "explore.altos.bastilha.couro_escarpa", 10,
+            "Couro de Escarpa pode ser recolhido no local.", min_level=47,
+        ),
+        ExplorationResultDefinition(
+            "correntes_vazio", "atmospheric",
+            "explore.altos.bastilha.correntes_vazio", 34,
+            "Correntes permanecem suspensas no vazio.", min_level=47,
+        ),
+        ExplorationResultDefinition(
+            "pedra_administrativa", "atmospheric",
+            "explore.altos.bastilha.pedra_administrativa", 33,
+            "Uma pedra conserva marcas administrativas.", min_level=47,
+        ),
+        ExplorationResultDefinition(
+            "sala_sem_turno", "atmospheric",
+            "explore.altos.bastilha.sala_sem_turno", 33,
+            "Uma sala permanece sem turno designado.", min_level=47,
+        ),
+    ),
+)
+
 EXPLORATION_PROFILES = {
     ROAD_LOCATION: ROAD_EXPLORATION_PROFILE,
     CHARNECA_LOCATION: CHARNECA_EXPLORATION_PROFILE,
@@ -2795,6 +2946,7 @@ EXPLORATION_PROFILES = {
     ALTOS_ESCARPA_LOCATION: ALTOS_ESCARPA_EXPLORATION_PROFILE,
     ALTOS_PONTES_LOCATION: ALTOS_PONTES_EXPLORATION_PROFILE,
     ALTOS_PEDREIRAS_LOCATION: ALTOS_PEDREIRAS_EXPLORATION_PROFILE,
+    ALTOS_BASTILHA_LOCATION: ALTOS_BASTILHA_EXPLORATION_PROFILE,
 }
 
 HUNT_PROFILES = {
@@ -2818,6 +2970,7 @@ HUNT_PROFILES = {
     ALTOS_ESCARPA_LOCATION: ALTOS_ESCARPA_PROFILE,
     ALTOS_PONTES_LOCATION: ALTOS_PONTES_PROFILE,
     ALTOS_PEDREIRAS_LOCATION: ALTOS_PEDREIRAS_PROFILE,
+    ALTOS_BASTILHA_LOCATION: ALTOS_BASTILHA_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -3041,6 +3194,8 @@ ALTOS_BASIC_MATERIAL_CREATURE_IDS = frozenset(
         ALTOS_DEVORADOR_ESCORIA,
         ALTOS_MORCEGO_CHAMINE,
         ALTOS_CARCACA_MINERAL,
+        ALTOS_VIGIA_CARGA,
+        ALTOS_SUPERVISOR_CARGA,
     }
 )
 
@@ -3229,6 +3384,14 @@ MATERIAL_POOLS = {
     ALTOS_CARCACA_MINERAL: (
         (ALTOS_CINZA_BASALTO, 70),
         (ALTOS_FERRO_CONTRAPESO, 30),
+    ),
+    ALTOS_VIGIA_CARGA: (
+        (ALTOS_FERRO_CONTRAPESO, 90),
+        (ALTOS_CINZA_BASALTO, 10),
+    ),
+    ALTOS_SUPERVISOR_CARGA: (
+        (ALTOS_FERRO_CONTRAPESO, 75),
+        (ALTOS_CINZA_BASALTO, 25),
     ),
 }
 

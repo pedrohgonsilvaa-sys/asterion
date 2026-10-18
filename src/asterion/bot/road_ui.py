@@ -9,6 +9,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.prologue import CombatView
 from asterion.application.road import (
     ALTOS_ABRIGO_LABEL,
+    ALTOS_BASTILHA_LABEL,
     ALTOS_ESCARPA_LABEL,
     ALTOS_PEDREIRAS_LABEL,
     ALTOS_PONTES_LABEL,
@@ -101,6 +102,7 @@ def _location_copy(location: str) -> tuple[str, str]:
         ALTOS_ABRIGO_LABEL: "🏘️",
         ALTOS_PONTES_LABEL: "🌉",
         ALTOS_PEDREIRAS_LABEL: "⛏️",
+        ALTOS_BASTILHA_LABEL: "🏰",
     }.get(location, "🔥")
     if location == VDE_BERCO:
         return f"🌿 {location}", f"{VDE_REGION} · Local de clímax"
@@ -111,7 +113,7 @@ def _location_copy(location: str) -> tuple[str, str]:
         NARETH_REGION
         if location in {NARETH_CAMPINAS, NARETH_POSTO, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL}
         else ALTOS_REGION_LABEL
-        if location in {ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL}
+        if location in {ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL}
         else VARZEAS_REGION
         if location in {VARZEAS_DIQUES, VARZEAS_PORTO, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS}
         else VDE_REGION
@@ -167,6 +169,7 @@ def _route_key(location: str) -> str:
         ALTOS_ABRIGO_LABEL: "altos_abrigo",
         ALTOS_PONTES_LABEL: "altos_pontes",
         ALTOS_PEDREIRAS_LABEL: "altos_pedreiras",
+        ALTOS_BASTILHA_LABEL: "altos_bastilha",
     }[location]
 
 
@@ -769,6 +772,7 @@ def render_current_local(
         NARETH_OBSERVATORIO, VARZEAS_DIQUES, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS,
         ALTOS_ESCARPA_LABEL,
         ALTOS_PEDREIRAS_LABEL,
+        ALTOS_BASTILHA_LABEL,
     }:
         lines.append("")
         if view.hunt_enabled:
@@ -815,6 +819,7 @@ def render_current_local(
         ALTOS_ABRIGO_LABEL,
         ALTOS_PONTES_LABEL,
         ALTOS_PEDREIRAS_LABEL,
+        ALTOS_BASTILHA_LABEL,
     }:
         for destination in view.route_destinations:
             route_key, label = {
@@ -860,6 +865,8 @@ def render_current_local(
                 (ALTOS_PONTES_LABEL, ALTOS_ABRIGO_LABEL): ("altos_abrigo", "Retornar ao Abrigo do Peso"),
                 (ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL): ("altos_pedreiras", "Seguir para Pedreiras Suspensas"),
                 (ALTOS_PEDREIRAS_LABEL, ALTOS_PONTES_LABEL): ("altos_pontes", "Retornar a Pontes de Fuligem"),
+                (ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL): ("altos_bastilha", "Seguir para Bastilha de Carga"),
+                (ALTOS_BASTILHA_LABEL, ALTOS_PEDREIRAS_LABEL): ("altos_pedreiras", "Retornar a Pedreiras Suspensas"),
             }.get((view.location, destination), (None, None))
             if route_key is not None:
                 keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])
@@ -990,6 +997,16 @@ def render_current_local(
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
         elif ALTOS_PEDREIRAS_LABEL in view.route_destinations:
             lines.append("🔥 Braseiro da Pedreira Velha · Ainda não descoberto")
+        if mission_available:
+            keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
+    elif view.location == ALTOS_BASTILHA_LABEL:
+        lines.extend(["", "🏰 Bastilha de Carga · Altos Cinéreos"])
+        if ALTOS_PEDREIRAS_LABEL in view.route_destinations:
+            keyboard.append([InlineKeyboardButton(text="Retornar a Pedreiras Suspensas", callback_data="road:route:altos_pedreiras")])
+        if view.brazier_label:
+            lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        elif ALTOS_BASTILHA_LABEL in view.route_destinations:
+            lines.append("🔥 Braseiro da Bastilha Externa · Ainda não descoberto")
         if mission_available:
             keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     else:

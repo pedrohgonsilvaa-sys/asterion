@@ -11,6 +11,7 @@ from asterion.application.altos_missions import (
     P26_TITLE,
     P27_REWARD_OPTIONS,
     P27_TITLE,
+    P28_TITLE,
     AltosMissionView,
 )
 from asterion.application.prologue import CombatView
@@ -24,7 +25,8 @@ def _button(text: str, callback: str) -> InlineKeyboardButton:
 
 def render_altos_mission(view: AltosMissionView) -> Screen:
     fallback_title = (
-        P27_TITLE if view.quest_id == "P27"
+        P28_TITLE if view.quest_id == "P28"
+        else P27_TITLE if view.quest_id == "P27"
         else P26_TITLE if view.quest_id == "P26"
         else P25_TITLE
     )
@@ -53,7 +55,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
             )
         )
         return Screen(
-            f"📜 {title} · Altos Cinéreos\n⚔️ Encontro roteirizado · {'Pedreiras Suspensas' if view.quest_id == 'P27' else 'Escarpa da Cinza'}\n\n{hud.text}",
+            f"📜 {title} · Altos Cinéreos\n⚔️ Encontro roteirizado · {'Bastilha de Carga' if view.quest_id == 'P28' else 'Pedreiras Suspensas' if view.quest_id == 'P27' else 'Escarpa da Cinza'}\n\n{hud.text}",
             "missions",
             hud.keyboard,
             parse_mode=hud.parse_mode,
@@ -61,6 +63,8 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
 
     if view.quest_id == "P27":
         return _render_p27(view, title, rows)
+    if view.quest_id == "P28":
+        return _render_p28(view, title, rows)
     if view.quest_id == "P26":
         return _render_p26(view, title, rows)
 
@@ -267,5 +271,79 @@ def _render_p27(view: AltosMissionView, title: str, rows) -> Screen:
             if key != selected:
                 rows.append([_button(name, f"altos:choice:P27:{view.state_version}:{key}")])
 
+    rows.append([_button("← Missões", "world:missions")])
+    return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def _render_p28(view: AltosMissionView, title: str, rows) -> Screen:
+    if view.status == "suspended":
+        return Screen(
+            f"📜 {title} · Suspensa\n\nP27 deve estar concluída e o personagem precisa alcançar Nv. 47 para seguir para a Bastilha de Carga.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=[[_button("← Missões", "world:missions")]]),
+        )
+    if view.status == "available":
+        rows.extend(
+            (
+                [_button("Iniciar P28 com Sel e Maro", "altos:action:0:activate_p28")],
+                [_button("← Missões", "world:missions")],
+            )
+        )
+        return Screen(
+            f"📜 {title} · Disponível\nAltos Cinéreos · Pedreiras Suspensas\n\nSel Ardan e Maro Keln apresentam duas fontes sobre os Desvelados.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    if view.status == "completed":
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Concluída\n\n✨ 67.100 XP · 1.010 Coroas\n📦 2 Ferros de Contrapeso · 1 Couro de Escarpa · 1 Cinza de Basalto",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+
+    step_text = {
+        1: "Alcance e descubra a Bastilha de Carga.",
+        2: "Localize o arquivo oficial de contenção de informação.",
+        3: "Localize o memorial crítico preservado fora da cadeia oficial.",
+        4: "Enfrente o Vigia de Carga (Nv. 47) em um combate roteirizado.",
+        5: "Compare as duas fontes com Sel Ardan e Maro Keln.",
+        6: "Registre a origem dos Desvelados no Códice, distinguindo oposição legítima da radicalização posterior.",
+        7: "Registre que a sabotagem da Âncora Central não pode ser atribuída ao movimento nem confirmada como fato concluído.",
+    }.get(view.step, "Retome a etapa atual da missão.")
+    local = "Pedreiras Suspensas" if view.step == 1 else "Bastilha de Carga"
+    lines = [f"📜 {title} · Em Andamento", f"Altos Cinéreos · {local}", "", step_text]
+    if view.step == 1:
+        rows.append([_button("Seguir para Bastilha de Carga", "road:route:altos_bastilha")])
+    elif view.step == 2:
+        rows.append(
+            [_button("Localizar arquivo de contenção", f"altos:action:{view.state_version}:locate_containment_archive")]
+        )
+    elif view.step == 3:
+        rows.append(
+            [_button("Localizar memorial crítico", f"altos:action:{view.state_version}:locate_critical_memorial")]
+        )
+    elif view.step == 4:
+        if view.progress.get("awaiting_retry"):
+            rows.append([_button("Tentar novamente", f"altos:retry:P28:{view.state_version}")])
+        else:
+            rows.extend(
+                (
+                    [_button("Iniciar encontro Solo", f"altos:combat:P28:{view.state_version}:solo")],
+                    [_button("Solicitar encontro em Grupo", f"altos:combat:P28:{view.state_version}:group")],
+                )
+            )
+    elif view.step == 5:
+        rows.append(
+            [_button("Comparar fontes com Sel e Maro", f"altos:action:{view.state_version}:compare_sources_with_sel_and_maro")]
+        )
+    elif view.step == 6:
+        rows.append(
+            [_button("Registrar origem dos Desvelados", f"altos:action:{view.state_version}:record_desvelados_codex")]
+        )
+    elif view.step == 7:
+        rows.append(
+            [_button("Registrar limites da conclusão", f"altos:action:{view.state_version}:record_non_attribution")]
+        )
     rows.append([_button("← Missões", "world:missions")])
     return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))

@@ -230,6 +230,13 @@ CODEX_ENTRIES = (
         170,
         "location.altos.pontes_fuligem",
     ),
+    CodexPresentation(
+        "codex.altos.desvelados_origem",
+        "Origem dos Desvelados",
+        "regions",
+        180,
+        "location.altos.bastilha_carga",
+    ),
     CodexPresentation("codex.figure.iven_raal", "Iven Raal", "figures", 30),
     CodexPresentation("codex.mystery.o_no_antigo", "O Nó Antigo", "mysteries", 50),
     CodexPresentation(
@@ -314,6 +321,10 @@ CODEX_FRAGMENTS = {
     "codex.altos.regencia_continuidade": FragmentPresentation(
         "Regência de Continuidade",
         "Os registros identificam uma autoridade emergencial chamada Regência de Continuidade. Sua cadeia integral de decisões permanece desconhecida.",
+    ),
+    "codex.altos.desvelados_origem": FragmentPresentation(
+        "Origem dos Desvelados",
+        "As fontes distinguem a oposição legítima à Regência da radicalização posterior de uma ala. As evidências disponíveis não autorizam atribuir a sabotagem da Âncora Central ao movimento como um todo nem confirmá-la como fato concluído.",
     ),
     "explore.altos.pedreiras.mapa_extracao": FragmentPresentation(
         "Mapa de Extração Recortado",
@@ -1085,6 +1096,18 @@ ACHIEVEMENTS = (
         "exploration",
         "Concluiu P27 — A Continuidade a Qualquer Custo.",
     ),
+    AchievementPresentation(
+        "achievement.altos.desvelados",
+        "Os Desvelados",
+        "exploration",
+        "Concluiu P28 — Os Desvelados.",
+    ),
+    AchievementPresentation(
+        "achievement.altos.cartografo_peso",
+        "Cartógrafo do Peso",
+        "exploration",
+        "Resolveu os 11 resultados únicos de Desbravar dos Altos Cinéreos.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
@@ -1149,6 +1172,7 @@ ALTOS_LOCATIONS = {
     "location.altos.abrigo_peso": "Abrigo do Peso",
     "location.altos.pontes_fuligem": "Pontes de Fuligem",
     "location.altos.pedreiras_suspensas": "Pedreiras Suspensas",
+    "location.altos.bastilha_carga": "Bastilha de Carga",
 }
 LOCATION_LABELS = (
     TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS | VARZEAS_LOCATIONS | ALTOS_LOCATIONS
@@ -1445,6 +1469,12 @@ CREATURE_PRESENTATION = {
     ),
     "creature.altos.carcaca_mineral": CreaturePresentation(
         ALTOS_REGION_ID, ("location.altos.pedreiras_suspensas",)
+    ),
+    "creature.altos.vigia_carga": CreaturePresentation(
+        ALTOS_REGION_ID, ("location.altos.bastilha_carga",)
+    ),
+    "elite.altos.supervisor_carga": CreaturePresentation(
+        ALTOS_REGION_ID, ("location.altos.bastilha_carga",)
     ),
 }
 CREATURE_NOTES = {
