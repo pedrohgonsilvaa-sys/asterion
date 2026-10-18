@@ -202,6 +202,20 @@ CODEX_ENTRIES = (
         130,
         "vde.location.berco_da_matriarca",
     ),
+    CodexPresentation(
+        "codex.altos.regiao",
+        "Altos Cinéreos",
+        "regions",
+        140,
+        "location.altos.escarpa_cinza",
+    ),
+    CodexPresentation(
+        "codex.altos.infraestrutura_sustentacao",
+        "Infraestrutura de Sustentação",
+        "regions",
+        150,
+        "location.altos.escarpa_cinza",
+    ),
     CodexPresentation("codex.figure.iven_raal", "Iven Raal", "figures", 30),
     CodexPresentation("codex.mystery.o_no_antigo", "O Nó Antigo", "mysteries", 50),
     CodexPresentation(
@@ -278,6 +292,14 @@ CODEX_FRAGMENTS = {
     ),
     "codex.fragment.estrada.luzes_na_estrada": FragmentPresentation(
         "Luzes na estrada", "Luzes foram observadas ao longo da Estrada das Cinzas."
+    ),
+    "codex.altos.infraestrutura_sustentacao": FragmentPresentation(
+        "Carga Observável",
+        "Carga e escoras foram observadas; não há registro de autorização.",
+    ),
+    "explore.altos.escarpa.caderno_resgate_rasgado": FragmentPresentation(
+        "Caderno de Resgate Rasgado",
+        "Um Caderno de Resgate Rasgado foi encontrado e registrado no Códice.",
     ),
     "codex.fragment.bosque.estrutura_enterrada": FragmentPresentation(
         "Estrutura enterrada",
@@ -1035,7 +1057,9 @@ ACHIEVEMENT_BY_ID = {entry.achievement_id: entry for entry in ACHIEVEMENTS}
 
 
 TDO_REGION_ID = "tdo"
+ALTOS_REGION_ID = "altos"
 TDO_REGION_LABEL = "🌑 Terras do Ocaso · Nv. 1–10"
+ALTOS_REGION_LABEL = "🌋 Altos Cinéreos · Nv. 41–50"
 VDE_REGION_ID = "vde"
 VDE_REGION_LABEL = "🪢 Vales dos Enforcados · Nv. 11–20"
 NARETH_REGION_ID = "nareth"
@@ -1082,7 +1106,13 @@ VARZEAS_LOCATIONS = {
     "varzeas.location.enfermaria_afundada": "Enfermaria Afundada",
     "varzeas.location.camara_da_matriz": "Câmara da Matriz",
 }
-LOCATION_LABELS = TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS | VARZEAS_LOCATIONS
+ALTOS_LOCATIONS = {
+    "location.altos.escarpa_cinza": "Escarpa da Cinza",
+    "location.altos.abrigo_peso": "Abrigo do Peso",
+}
+LOCATION_LABELS = (
+    TDO_LOCATIONS | VDE_LOCATIONS | NARETH_LOCATIONS | VARZEAS_LOCATIONS | ALTOS_LOCATIONS
+)
 HABITAT_EVIDENCE_TO_LOCATION = {
     "estrada": "tdo.location.estrada_das_cinzas",
     "Estrada das Cinzas": "tdo.location.estrada_das_cinzas",
@@ -1114,6 +1144,9 @@ HABITAT_EVIDENCE_TO_LOCATION = {
     "Enfermaria Afundada": "varzeas.location.enfermaria_afundada",
     "Câmara da Matriz": "varzeas.location.camara_da_matriz",
     **{location_id: location_id for location_id in VARZEAS_LOCATIONS},
+    "Escarpa da Cinza": "location.altos.escarpa_cinza",
+    "Abrigo do Peso": "location.altos.abrigo_peso",
+    **{location_id: location_id for location_id in ALTOS_LOCATIONS},
 }
 MATERIAL_LABELS = {
     "material.tdo.ferro_de_fuligem": "Ferro de Fuligem",
@@ -1140,6 +1173,10 @@ MATERIAL_LABELS = {
     "material.varzeas.nucleo_enfermaria_afundada": "Núcleo da Enfermaria Afundada",
     "material.varzeas.nucleo_cisterna_transferencia": "Núcleo da Cisterna de Transferência",
     "material.varzeas.nucleo_matriz_rubra": "Núcleo da Matriz Rubra",
+    "material.altos.ferro_contrapeso": "Ferro de Contrapeso",
+    "material.altos.couro_escarpa": "Couro de Escarpa",
+    "material.altos.liquen_pedreira": "Líquen de Pedreira",
+    "material.altos.cinza_basalto": "Cinza de Basalto",
 }
 
 
@@ -1337,6 +1374,21 @@ CREATURE_PRESENTATION = {
     ),
     "guardiao_no_antigo": CreaturePresentation(
         VDE_REGION_ID, ("vde.location.santuario_do_no_antigo",)
+    ),
+    "creature.altos.lobo_escarpa": CreaturePresentation(
+        ALTOS_REGION_ID, ("location.altos.escarpa_cinza",)
+    ),
+    "creature.altos.abutre_fuligem": CreaturePresentation(
+        ALTOS_REGION_ID, ("location.altos.escarpa_cinza",)
+    ),
+    "creature.altos.escaravelho_basalto": CreaturePresentation(
+        ALTOS_REGION_ID, ("location.altos.escarpa_cinza",)
+    ),
+    "creature.altos.carneiro_peso": CreaturePresentation(
+        ALTOS_REGION_ID, ("location.altos.escarpa_cinza",)
+    ),
+    "elite.altos.quebra_escarpas": CreaturePresentation(
+        ALTOS_REGION_ID, ("location.altos.escarpa_cinza",)
     ),
 }
 CREATURE_NOTES = {

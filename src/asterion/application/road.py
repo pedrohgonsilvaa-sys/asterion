@@ -34,6 +34,18 @@ from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.equipment_modifications import equipment_grade
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.road import (
+    ALTOS_ABRIGO,
+    ALTOS_ABRIGO_ACCESS_UNLOCK,
+    ALTOS_ABRIGO_BRAZIER,
+    ALTOS_ABRIGO_LOCATION,
+    ALTOS_BASIC_MATERIAL_CREATURE_IDS,
+    ALTOS_ESCARPA,
+    ALTOS_ESCARPA_ACCESS_UNLOCK,
+    ALTOS_ESCARPA_BRAZIER,
+    ALTOS_ESCARPA_EXPLORE_UNLOCK,
+    ALTOS_ESCARPA_HUNT_UNLOCK,
+    ALTOS_ESCARPA_LOCATION,
+    ALTOS_REGION,
     BOSQUE_BRAZIER,
     BOSQUE_LOCATION,
     BOSQUE_ROUTE_UNLOCK,
@@ -187,12 +199,16 @@ REGION = "Terras do Ocaso"
 VDE_REGION = "Vales dos Enforcados"
 NARETH_REGION = "Planícies de Nareth"
 VARZEAS_REGION = "Várzeas Carmesins"
+ALTOS_REGION_LABEL = ALTOS_REGION
+ALTOS_ESCARPA_LABEL = ALTOS_ESCARPA
+ALTOS_ABRIGO_LABEL = ALTOS_ABRIGO
 VARZEAS_DIQUES_LABEL = VARZEAS_DIQUES
 VARZEAS_PORTO_LABEL = VARZEAS_PORTO
 VARZEAS_BREJOS_LABEL = VARZEAS_BREJOS
 VARZEAS_HORTOS_LABEL = VARZEAS_HORTOS
 VARZEAS_GALERIAS_LABEL = VARZEAS_GALERIAS
 VARZEAS_CAMARA_LABEL = VARZEAS_CAMARA
+ALTOS_LOCATIONS = frozenset((ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL))
 VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO))
 NARETH_LOCATIONS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL))
 VARZEAS_LOCATIONS = frozenset((VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL, VARZEAS_GALERIAS_LABEL, VARZEAS_CAMARA_LABEL))
@@ -203,6 +219,8 @@ VARZEAS_PORTO_BREJOS_ROUTE_ENDPOINTS = frozenset((VARZEAS_PORTO_LABEL, VARZEAS_B
 VARZEAS_BREJOS_HORTOS_ROUTE_ENDPOINTS = frozenset((VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL))
 VARZEAS_HORTOS_GALERIAS_ROUTE_ENDPOINTS = frozenset((VARZEAS_HORTOS_LABEL, VARZEAS_GALERIAS_LABEL))
 VARZEAS_GALERIAS_CAMARA_ROUTE_ENDPOINTS = frozenset((VARZEAS_GALERIAS_LABEL, VARZEAS_CAMARA_LABEL))
+VARZEAS_CAMARA_ALTOS_ROUTE_ENDPOINTS = frozenset((VARZEAS_CAMARA_LABEL, ALTOS_ESCARPA_LABEL))
+ALTOS_ESCARPA_ABRIGO_ROUTE_ENDPOINTS = frozenset((ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL))
 NARETH_CAMPINAS_POSTO_ROUTE_ENDPOINTS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL))
 NARETH_POSTO_CANAIS_ROUTE_ENDPOINTS = frozenset((NARETH_POSTO_LABEL, NARETH_CANAIS))
 NARETH_CANAIS_CAMPOS_ROUTE_ENDPOINTS = frozenset((NARETH_CANAIS, NARETH_CAMPOS))
@@ -241,8 +259,10 @@ OVERLAND_ROUTE_PAIRS = (
     VARZEAS_BREJOS_HORTOS_ROUTE_ENDPOINTS,
     VARZEAS_HORTOS_GALERIAS_ROUTE_ENDPOINTS,
     VARZEAS_GALERIAS_CAMARA_ROUTE_ENDPOINTS,
+    VARZEAS_CAMARA_ALTOS_ROUTE_ENDPOINTS,
+    ALTOS_ESCARPA_ABRIGO_ROUTE_ENDPOINTS,
 )
-TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL, VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL, VARZEAS_GALERIAS_LABEL, VARZEAS_CAMARA_LABEL))
+TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL, VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL, VARZEAS_GALERIAS_LABEL, VARZEAS_CAMARA_LABEL, ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL))
 BRAZIER_FOR_LOCATION = {
     ROAD: "tdo.brazier.estrada",
     REFUGE: "tdo.brazier.refugio_do_ocaso",
@@ -264,6 +284,8 @@ BRAZIER_FOR_LOCATION = {
     VARZEAS_BREJOS_LABEL: VARZEAS_BREJOS_BRAZIER,
     VARZEAS_HORTOS_LABEL: VARZEAS_HORTOS_BRAZIER,
     VARZEAS_GALERIAS_LABEL: VARZEAS_GALERIAS_BRAZIER,
+    ALTOS_ESCARPA_LABEL: ALTOS_ESCARPA_BRAZIER,
+    ALTOS_ABRIGO_LABEL: ALTOS_ABRIGO_BRAZIER,
 }
 BRAZIER_DETAILS = {
     "tdo.brazier.estrada": (ROAD, "Braseiro da Estrada"),
@@ -286,6 +308,8 @@ BRAZIER_DETAILS = {
     VARZEAS_BREJOS_BRAZIER: (VARZEAS_BREJOS_LABEL, "Braseiro dos Juncos Baixos"),
     VARZEAS_HORTOS_BRAZIER: (VARZEAS_HORTOS_LABEL, "Braseiro do Horto Seco"),
     VARZEAS_GALERIAS_BRAZIER: (VARZEAS_GALERIAS_LABEL, "Braseiro das Válvulas"),
+    ALTOS_ESCARPA_BRAZIER: (ALTOS_ESCARPA_LABEL, "Braseiro da Escarpa"),
+    ALTOS_ABRIGO_BRAZIER: (ALTOS_ABRIGO_LABEL, "Braseiro do Abrigo"),
 }
 HUNT_CONTENT = "road_manual_hunt"
 GROUP_HUNT_CONTENT = "road_group_hunt"
@@ -338,6 +362,10 @@ MATERIAL_LABELS = {
     "material.varzeas.nucleo_enfermaria_afundada": "Núcleo da Enfermaria Afundada",
     "material.varzeas.nucleo_cisterna_transferencia": "Núcleo da Cisterna de Transferência",
     "material.varzeas.nucleo_matriz_rubra": "Núcleo da Matriz Rubra",
+    "material.altos.ferro_contrapeso": "Ferro de Contrapeso",
+    "material.altos.couro_escarpa": "Couro de Escarpa",
+    "material.altos.liquen_pedreira": "Líquen de Pedreira",
+    "material.altos.cinza_basalto": "Cinza de Basalto",
 }
 VDE_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.vde.garganta.ferro_enredado": "material.vde.ferro_enredado",
@@ -374,6 +402,16 @@ VARZEAS_EXPLORATION_RESOURCE_MATERIALS = {
     "explore.varzeas.galerias.soro_antigo": "material.varzeas.soro_antigo",
     "explore.varzeas.galerias.junco_ferruginoso": "material.varzeas.junco_ferruginoso",
     "explore.varzeas.galerias.couro_varzea": "material.varzeas.couro_de_varzea",
+}
+ALTOS_EXPLORATION_RESOURCE_MATERIALS = {
+    "explore.altos.escarpa.ferro_contrapeso": "material.altos.ferro_contrapeso",
+    "explore.altos.escarpa.couro_escarpa": "material.altos.couro_escarpa",
+    "explore.altos.escarpa.liquen_pedreira": "material.altos.liquen_pedreira",
+    "explore.altos.escarpa.cinza_basalto": "material.altos.cinza_basalto",
+}
+ALTOS_EXPLORATION_UNIQUE_XP = {
+    "explore.altos.escarpa.mirante_escoras": 8912,
+    "explore.altos.escarpa.caderno_resgate_rasgado": 2785,
 }
 VARZEAS_EXPLORATION_UNIQUE_XP = {
     "explore.varzeas.diques.comporta_primeiro_dique": 5760,
@@ -720,6 +758,7 @@ class RoadService:
             if active_p4 is not None and mode == "brazier":
                 return None
             if mode == "route":
+                grant_route_unlock_on_arrival = False
                 pair = next(
                     (
                         candidate
@@ -828,6 +867,55 @@ class RoadService:
                         )
                     )
                     route_unlock = VARZEAS_GALERIAS_CAMARA_ROUTE
+                elif pair == VARZEAS_CAMARA_ALTOS_ROUTE_ENDPOINTS:
+                    if destination == ALTOS_ESCARPA_LABEL:
+                        gate_ok = bool(
+                            c.level >= 41
+                            and await self._nareth_mission_completed(s, c.id, "P24")
+                        )
+                        route_unlock = ALTOS_ESCARPA_ACCESS_UNLOCK
+                        grant_route_unlock_on_arrival = gate_ok
+                    else:
+                        gate_ok = bool(
+                            await s.scalar(
+                                select(Unlock.id).where(
+                                    Unlock.character_id == c.id,
+                                    Unlock.unlock_id == ALTOS_ESCARPA_ACCESS_UNLOCK,
+                                )
+                            )
+                        )
+                        route_unlock = VARZEAS_REGION_ENTRY_UNLOCK
+                elif pair == ALTOS_ESCARPA_ABRIGO_ROUTE_ENDPOINTS:
+                    if destination == ALTOS_ABRIGO_LABEL:
+                        active_p25_step = await s.scalar(
+                            select(Quest.id).where(
+                                Quest.character_id == c.id,
+                                Quest.quest_id == "P25",
+                                Quest.status == "active",
+                                Quest.step == 6,
+                            )
+                        )
+                        gate_ok = bool(
+                            active_p25_step
+                            or await s.scalar(
+                                select(Unlock.id).where(
+                                    Unlock.character_id == c.id,
+                                    Unlock.unlock_id == ALTOS_ABRIGO_ACCESS_UNLOCK,
+                                )
+                            )
+                        )
+                        route_unlock = ALTOS_ABRIGO_ACCESS_UNLOCK
+                        grant_route_unlock_on_arrival = bool(active_p25_step)
+                    else:
+                        gate_ok = bool(
+                            await s.scalar(
+                                select(Unlock.id).where(
+                                    Unlock.character_id == c.id,
+                                    Unlock.unlock_id == ALTOS_ESCARPA_ACCESS_UNLOCK,
+                                )
+                            )
+                        )
+                        route_unlock = ALTOS_ESCARPA_ACCESS_UNLOCK
                 elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
                     gate_ok = (
                         await self._p4_completed(s, c.id)
@@ -838,10 +926,13 @@ class RoadService:
                 else:
                     gate_ok = await self._p3_completed(s, c.id)
                     route_unlock = BOSQUE_ROUTE_UNLOCK
-                if not gate_ok or not await s.scalar(
-                    select(Unlock).where(
-                        Unlock.character_id == c.id,
-                        Unlock.unlock_id == route_unlock,
+                if not gate_ok or (
+                    not grant_route_unlock_on_arrival
+                    and not await s.scalar(
+                        select(Unlock).where(
+                            Unlock.character_id == c.id,
+                            Unlock.unlock_id == route_unlock,
+                        )
                     )
                 ):
                     return None
@@ -927,6 +1018,9 @@ class RoadService:
                 return blocking
             world.location = destination
             world.region = (
+                ALTOS_REGION
+                if destination in ALTOS_LOCATIONS
+                else
                 VARZEAS_REGION
                 if destination in VARZEAS_LOCATIONS
                 else
@@ -936,6 +1030,13 @@ class RoadService:
                 if destination in VDE_LOCATIONS
                 else REGION
             )
+            if mode == "route" and grant_route_unlock_on_arrival:
+                await self._ensure(
+                    s,
+                    Unlock,
+                    character_id=c.id,
+                    unlock_id=route_unlock,
+                )
             if destination == VDE_BAIXIOS:
                 await self._ensure(
                     s,
@@ -1908,6 +2009,7 @@ class RoadService:
                     context.creature_id in VDE_BASIC_MATERIAL_CREATURE_IDS
                     or context.creature_id in NARETH_BASIC_MATERIAL_CREATURE_IDS
                     or context.creature_id in VARZEAS_BASIC_MATERIAL_CREATURE_IDS
+                    or context.creature_id in ALTOS_BASIC_MATERIAL_CREATURE_IDS
                 ):
                     material_seed = f"{context.seed}:material.basic.{ordinal}"
                 elif context.category == "common" and ordinal == 0:
@@ -1979,12 +2081,15 @@ class RoadService:
                 )
             )
         profile = hunt_profile_for_local_id(context.local_id)
-        await self._ensure(
-            s,
-            Unlock,
-            character_id=c.id,
-            unlock_id=profile.round_familiarity,
-        )
+        if context.local_id != ALTOS_ESCARPA_LOCATION or await self._nareth_mission_completed(
+            s, c.id, "P25"
+        ):
+            await self._ensure(
+                s,
+                Unlock,
+                character_id=c.id,
+                unlock_id=profile.round_familiarity,
+            )
         await consolidate_character_level(s, c, equipment_configuration)
         if context.pvpve_collision_id is not None:
             await self.pvpve.finish_prey_member(
@@ -2098,6 +2203,9 @@ class RoadService:
             return
         await reconcile_character_vigor(s, c)
         base_text = (attempt.progress or {}).get("result_text", "")
+        if attempt.local_id == ALTOS_ESCARPA_LOCATION:
+            await self._settle_altos_exploration(s, c, attempt, base_text)
+            return
         if attempt.local_id == CHARNECA_LOCATION:
             await self._settle_charneca_exploration(s, c, attempt, base_text)
             return
@@ -2879,6 +2987,136 @@ class RoadService:
         from asterion.application.varzeas_feats import reconcile_varzeas_feats
 
         await reconcile_varzeas_feats(s, c)
+
+    async def _settle_altos_exploration(self, s, c, attempt, base_text: str) -> None:
+        """Settle Escarpa exploration with the global economy and published outcomes."""
+        source_id = f"explore:{attempt.id}"
+        existing = await s.scalar(
+            select(RewardEvent)
+            .where(
+                RewardEvent.character_id == c.id,
+                RewardEvent.source_id == source_id,
+            )
+            .with_for_update()
+        )
+        if existing is not None:
+            return
+        event = RewardEvent(character_id=c.id, source_id=source_id)
+        s.add(event)
+        await s.flush()
+        components: list[tuple[str, str | None, int, dict]] = []
+        lines = [base_text]
+        should_consolidate = False
+
+        if attempt.category == "combat" and attempt.activity_id is not None:
+            context = await s.scalar(
+                select(HuntContext)
+                .where(HuntContext.game_activity_id == attempt.activity_id)
+                .with_for_update()
+            )
+            if context is None:
+                raise RuntimeError("Altos exploration combat is missing HuntContext")
+            enough = c.vigor >= 4
+            xp = enemy_xp(
+                context.enemy_level,
+                context.category,
+                Decimal(1) if enough else Decimal("0.25"),
+                player_level=c.level,
+            )
+            c.xp += xp
+            components.append(("xp", None, xp, {}))
+            lines.append(f"✨ XP · {xp}")
+            if enough:
+                c.vigor -= 4
+                award = int(
+                    (
+                        (Decimal(100 + 15 * context.enemy_level) * Decimal("0.15"))
+                        / 10
+                    ).quantize(Decimal(1), rounding=ROUND_HALF_EVEN)
+                    * 10
+                )
+                c.crowns += award
+                components.append(("crowns", None, award, {}))
+                lines.append(f"🪙 Coroas · {award}")
+            bestiary = await self._bestiary(
+                s,
+                c.id,
+                context.creature_id,
+                victory=True,
+                elite=context.category == "elite",
+                observation_category=context.category,
+            )
+            if bestiary is not None:
+                components.append(("bestiary", context.creature_id, 1, bestiary))
+                lines.append(
+                    f"📖 Bestiário · {bestiary['creature_name']} · {bestiary['stage_label']}"
+                )
+            should_consolidate = True
+        elif attempt.category == "resource":
+            material_id = ALTOS_EXPLORATION_RESOURCE_MATERIALS.get(attempt.result_id)
+            if material_id is None:
+                raise RuntimeError(f"unknown Altos exploration resource {attempt.result_id!r}")
+            if c.vigor >= 4:
+                c.vigor -= 4
+                award = int(
+                    (
+                        (Decimal(100 + 15 * c.level) * Decimal("0.10")) / 10
+                    ).quantize(Decimal(1), rounding=ROUND_HALF_EVEN)
+                    * 10
+                )
+                c.crowns += award
+                components.extend(
+                    (
+                        ("crowns", None, award, {}),
+                        ("material", material_id, 1, {"material_id": material_id}),
+                    )
+                )
+                lines.extend(
+                    (f"🪙 Coroas · {award}", f"📦 {MATERIAL_LABELS[material_id]} · 1")
+                )
+                await self._deliver_material(
+                    s, c, material_id, 1, f"explore:{attempt.id}:resource"
+                )
+        else:
+            xp = ALTOS_EXPLORATION_UNIQUE_XP.get(attempt.result_id, 0)
+            if xp:
+                c.xp += xp
+                components.append(("xp", None, xp, {}))
+                lines.append(f"✨ XP · {xp}")
+                should_consolidate = True
+            if attempt.result_id == "explore.altos.escarpa.caderno_resgate_rasgado":
+                entry_id = "codex.altos.infraestrutura_sustentacao"
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id=entry_id)
+                await self._ensure(
+                    s,
+                    CodexFragment,
+                    character_id=c.id,
+                    entry_id=entry_id,
+                    fragment_id=attempt.result_id,
+                )
+                components.append(
+                    ("codex", entry_id, 1, {"fragment_id": attempt.result_id})
+                )
+                lines.append("📖 Códice · Caderno de Resgate Rasgado")
+
+        for kind, item_id, quantity, payload in components:
+            s.add(
+                RewardComponent(
+                    reward_event_id=event.id,
+                    kind=kind,
+                    item_id=item_id,
+                    quantity=quantity,
+                    payload=payload,
+                )
+            )
+        attempt.progress = {
+            **(attempt.progress or {}),
+            "receipt_text": "\\n\\n".join(lines),
+            "settled": True,
+        }
+        attempt.completed_at = attempt.completed_at or datetime.now(UTC)
+        if should_consolidate:
+            await consolidate_character_level(s, c)
 
     async def _settle_charneca_exploration(self, s, c, attempt, base_text: str):
         source_id = f"explore:{attempt.id}"
@@ -3719,6 +3957,8 @@ class RoadService:
 
     @staticmethod
     def _travel_region(location: str) -> str:
+        if location in ALTOS_LOCATIONS:
+            return "altos"
         if location in VARZEAS_LOCATIONS:
             return "varzeas"
         if location in VDE_LOCATIONS:
@@ -3844,6 +4084,14 @@ class RoadService:
             ):
                 return None
             if activity_kind == "hunt" and not await self._nareth_mission_completed(s, c.id, "P22"):
+                return None
+        elif profile.local_id == ALTOS_ESCARPA_LOCATION:
+            if (
+                world.region != ALTOS_REGION
+                or c.level < 41
+                or not await self._nareth_mission_completed(s, c.id, "P25")
+                or not await self._has_location(s, c.id, ALTOS_ESCARPA_LOCATION)
+            ):
                 return None
         unlock_id = profile.hunt_unlock if activity_kind == "hunt" else profile.explore_unlock
         if not await s.scalar(
@@ -4414,6 +4662,13 @@ class RoadService:
                 )
             )
         )
+        altos_entry_open = bool(
+            c.level >= 41
+            and await self._nareth_mission_completed(s, c.id, "P24")
+        )
+        altos_p25_complete = await self._nareth_mission_completed(s, c.id, "P25")
+        altos_escarpa_discovered = await self._has_location(s, c.id, ALTOS_ESCARPA_LOCATION)
+        altos_abrigo_discovered = await self._has_location(s, c.id, ALTOS_ABRIGO_LOCATION)
         varzeas_inner_route_open = bool(
             varzeas_p19_open
             and await s.scalar(
@@ -4480,6 +4735,8 @@ class RoadService:
             and (location != NARETH_CANAIS or nareth_p14_open)
             and (location != NARETH_CAMPOS or nareth_p15_open)
             and (location != NARETH_OBSERVATORIO or nareth_p16_open)
+            and (location != ALTOS_ESCARPA_LABEL or altos_entry_open)
+            and (location != ALTOS_ABRIGO_LABEL or altos_abrigo_discovered)
         ) if world.location not in {VDE_BERCO, NARETH_CAMARA_LABEL} else ()
         active_p3 = await s.scalar(
             select(Quest.id).where(
@@ -4662,6 +4919,16 @@ class RoadService:
                 )
             ):
                 route_destinations.append(VARZEAS_GALERIAS_LABEL)
+                if altos_entry_open:
+                    route_destinations.append(ALTOS_ESCARPA_LABEL)
+            elif world.location == ALTOS_ESCARPA_LABEL and altos_escarpa_discovered:
+                if altos_entry_open:
+                    route_destinations.append(VARZEAS_CAMARA_LABEL)
+                if altos_abrigo_discovered:
+                    route_destinations.append(ALTOS_ABRIGO_LABEL)
+            elif world.location == ALTOS_ABRIGO_LABEL and altos_abrigo_discovered:
+                if altos_escarpa_discovered:
+                    route_destinations.append(ALTOS_ESCARPA_LABEL)
         route_available = bool(route_destinations)
         material_table_ready = bool(
             hunt_profile
@@ -4919,6 +5186,34 @@ class RoadService:
         elif world.location == VARZEAS_CAMARA_LABEL:
             hunt_enabled = False
             explore_enabled = False
+        elif world.location == ALTOS_ESCARPA_LABEL:
+            hunt_enabled = bool(
+                altos_entry_open
+                and altos_p25_complete
+                and altos_escarpa_discovered
+                and material_table_ready
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == ALTOS_ESCARPA_HUNT_UNLOCK,
+                    )
+                )
+            )
+            explore_enabled = bool(
+                altos_entry_open
+                and altos_p25_complete
+                and altos_escarpa_discovered
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == ALTOS_ESCARPA_EXPLORE_UNLOCK,
+                    )
+                )
+            )
+        elif world.location == ALTOS_ABRIGO_LABEL:
+            # Abrigo do Peso is a campaign hub without Hunt or Desbravar.
+            hunt_enabled = False
+            explore_enabled = False
         else:
             # Every other known travel location must be handled explicitly above.
             return self._invalid_location_view(c, world)
@@ -4946,6 +5241,8 @@ class RoadService:
             VARZEAS_HORTOS_LABEL: "varzeas_hortos",
             VARZEAS_GALERIAS_LABEL: "varzeas_galerias",
             VARZEAS_CAMARA_LABEL: "varzeas_camara",
+            ALTOS_ESCARPA_LABEL: "altos_escarpa",
+            ALTOS_ABRIGO_LABEL: "altos_abrigo",
         }
         return RoadView(
             kind_by_location[world.location],

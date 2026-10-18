@@ -8,6 +8,9 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
 from asterion.application.road import (
+    ALTOS_ABRIGO_LABEL,
+    ALTOS_ESCARPA_LABEL,
+    ALTOS_REGION_LABEL,
     BOSQUE,
     CHARNECA,
     NARETH_CAMARA_LABEL,
@@ -92,6 +95,8 @@ def _location_copy(location: str) -> tuple[str, str]:
         VARZEAS_BREJOS: "🌫️",
         VARZEAS_HORTOS: "🌱",
         VARZEAS_GALERIAS: "🧱",
+        ALTOS_ESCARPA_LABEL: "⛰️",
+        ALTOS_ABRIGO_LABEL: "🏘️",
     }.get(location, "🔥")
     if location == VDE_BERCO:
         return f"🌿 {location}", f"{VDE_REGION} · Local de clímax"
@@ -101,6 +106,8 @@ def _location_copy(location: str) -> tuple[str, str]:
     region = (
         NARETH_REGION
         if location in {NARETH_CAMPINAS, NARETH_POSTO, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL}
+        else ALTOS_REGION_LABEL
+        if location in {ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL}
         else VARZEAS_REGION
         if location in {VARZEAS_DIQUES, VARZEAS_PORTO, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS}
         else VDE_REGION
@@ -152,6 +159,8 @@ def _route_key(location: str) -> str:
         CHARNECA: "charneca",
         BOSQUE: "bosque",
         RUINS: "ruinas",
+        ALTOS_ESCARPA_LABEL: "altos_escarpa",
+        ALTOS_ABRIGO_LABEL: "altos_abrigo",
     }[location]
 
 
@@ -752,6 +761,7 @@ def render_current_local(
         ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS,
         VDE_CLAUSTRO, NARETH_CAMPINAS, NARETH_CANAIS, NARETH_CAMPOS,
         NARETH_OBSERVATORIO, VARZEAS_DIQUES, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS,
+        ALTOS_ESCARPA_LABEL,
     }:
         lines.append("")
         if view.hunt_enabled:
@@ -794,6 +804,8 @@ def render_current_local(
         VARZEAS_HORTOS,
         VARZEAS_GALERIAS,
         VARZEAS_CAMARA_LABEL,
+        ALTOS_ESCARPA_LABEL,
+        ALTOS_ABRIGO_LABEL,
     }:
         for destination in view.route_destinations:
             route_key, label = {
@@ -831,6 +843,10 @@ def render_current_local(
                 (VARZEAS_GALERIAS, VARZEAS_HORTOS): ("varzeas_hortos", "Retornar aos Hortos Hemaris"),
                 (VARZEAS_GALERIAS, VARZEAS_CAMARA_LABEL): ("varzeas_camara", "Seguir à Câmara da Matriz"),
                 (VARZEAS_CAMARA_LABEL, VARZEAS_GALERIAS): ("varzeas_galerias", "Retornar às Galerias de Transferência"),
+                (VARZEAS_CAMARA_LABEL, ALTOS_ESCARPA_LABEL): ("altos_escarpa", "Atravessar para a Escarpa da Cinza"),
+                (ALTOS_ESCARPA_LABEL, VARZEAS_CAMARA_LABEL): ("varzeas_camara", "Retornar à Câmara da Matriz"),
+                (ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL): ("altos_abrigo", "Seguir para o Abrigo do Peso"),
+                (ALTOS_ABRIGO_LABEL, ALTOS_ESCARPA_LABEL): ("altos_escarpa", "Retornar à Escarpa da Cinza"),
             }.get((view.location, destination), (None, None))
             if route_key is not None:
                 keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])
@@ -921,6 +937,24 @@ def render_current_local(
         for destination in view.route_destinations:
             if destination == VARZEAS_PORTO:
                 keyboard.append([InlineKeyboardButton(text="Retornar ao Porto da Salmoura", callback_data="road:route:varzeas_porto")])
+        if view.brazier_label:
+            lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        if mission_available:
+            keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
+    elif view.location == ALTOS_ABRIGO_LABEL:
+        lines.extend(["", "🏘️ Hub seguro · Abrigo do Peso", "🚫 Caçada e Desbravar · Indisponíveis neste Local"])
+        if ALTOS_ESCARPA_LABEL in view.route_destinations:
+            keyboard.append([InlineKeyboardButton(text="Retornar à Escarpa da Cinza", callback_data="road:route:altos_escarpa")])
+        if view.brazier_label:
+            lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        if mission_available:
+            keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
+    elif view.location == ALTOS_ESCARPA_LABEL:
+        for destination in view.route_destinations:
+            if destination == ALTOS_ABRIGO_LABEL:
+                keyboard.append([InlineKeyboardButton(text="Seguir para o Abrigo do Peso", callback_data="road:route:altos_abrigo")])
+            elif destination == VARZEAS_CAMARA_LABEL:
+                keyboard.append([InlineKeyboardButton(text="Retornar à Câmara da Matriz", callback_data="road:route:varzeas_camara")])
         if view.brazier_label:
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
         if mission_available:

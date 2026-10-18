@@ -15,6 +15,8 @@ from asterion.application.character_surfaces import (
 )
 from asterion.application.knowledge_catalog import (
     ACHIEVEMENT_CATEGORIES,
+    ALTOS_REGION_ID,
+    ALTOS_REGION_LABEL,
     CODEX_CATEGORY_ORDER,
     CODEX_ENTRIES,
     CREATURE_PRESENTATION,
@@ -215,7 +217,7 @@ def render_codex_detail(view: KnowledgeView, entry: CodexEntryView) -> Screen:
         for fragment in entry.fragments:
             lines.extend([f"📜 {fragment.title}", fragment.text, ""])
         lines.pop()
-    region_id = entry.location_id.split(".", 1)[0] if entry.location_id else None
+    region_id = _codex_region_id(entry.location_id) if entry.location_id else None
     parent = (
         f"kb:r:{region_id}"
         if region_id in _region_labels()
@@ -348,7 +350,7 @@ def _locations_in_region(view: KnowledgeView, region_id: str) -> list[CodexEntry
             entry
             for entry in view.codex_entries
             if entry.location_id is not None
-            and entry.location_id.split(".", 1)[0] == region_id
+            and _codex_region_id(entry.location_id) == region_id
         ),
         key=lambda entry: (entry.order, entry.title.casefold()),
     )
@@ -369,7 +371,11 @@ def _known_bestiary_regions(view: KnowledgeView) -> list[tuple[str, str, int]]:
         presentation = CREATURE_PRESENTATION.get(record.creature_id)
         if presentation:
             counts[presentation.region_id] = counts.get(presentation.region_id, 0) + 1
-    labels = {TDO_REGION_ID: "🌑 Terras do Ocaso", VDE_REGION_ID: "🪢 Vales dos Enforcados"}
+    labels = {
+        TDO_REGION_ID: "🌑 Terras do Ocaso",
+        VDE_REGION_ID: "🪢 Vales dos Enforcados",
+        ALTOS_REGION_ID: "🌋 Altos Cinéreos",
+    }
     return [
         (region_id, labels[region_id], count)
         for region_id, count in sorted(counts.items())
@@ -381,21 +387,28 @@ def _region_labels() -> dict[str, str]:
     return {
         TDO_REGION_ID: TDO_REGION_LABEL,
         VDE_REGION_ID: VDE_REGION_LABEL,
+        ALTOS_REGION_ID: ALTOS_REGION_LABEL,
     }
 
 
 def _known_codex_regions(view: KnowledgeView) -> list[tuple[str, str]]:
     region_ids = {
-        entry.location_id.split(".", 1)[0]
+        _codex_region_id(entry.location_id)
         for entry in view.codex_entries
         if entry.location_id is not None
     }
     labels = _region_labels()
     return [
         (region_id, labels[region_id])
-        for region_id in (TDO_REGION_ID, VDE_REGION_ID)
+        for region_id in (TDO_REGION_ID, VDE_REGION_ID, ALTOS_REGION_ID)
         if region_id in region_ids and _locations_in_region(view, region_id)
     ]
+
+
+def _codex_region_id(location_id: str) -> str:
+    if location_id.startswith("location.altos."):
+        return ALTOS_REGION_ID
+    return location_id.split(".", 1)[0]
 
 
 def _knowledge_navigation(prefix: str) -> list[list[InlineKeyboardButton]]:

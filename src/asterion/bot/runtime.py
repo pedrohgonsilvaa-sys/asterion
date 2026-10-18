@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher
 
 from asterion.application.account import AccountService
 from asterion.application.active_arts import ActiveArtService
+from asterion.application.altos_missions import AltosMissionService
 from asterion.application.character_surfaces import CharacterSurfacesService
 from asterion.application.class_trials import ClassTrialService
 from asterion.application.consumables import ConsumableService
@@ -40,6 +41,7 @@ from asterion.application.talents import TalentService
 from asterion.application.varzeas_missions import VarzeasMissionService
 from asterion.application.vde_missions import VDEMissionService
 from asterion.application.world import WorldService
+from asterion.bot.altos_missions_handlers import altos_missions_router
 from asterion.bot.character_progression_handlers import character_progression_router
 from asterion.bot.character_surfaces_handlers import character_surfaces_router
 from asterion.bot.class_trial_handlers import class_trial_router
@@ -114,6 +116,7 @@ def get_bot_runtime() -> BotRuntime:
     vde_missions = VDEMissionService(SessionFactory, settings.server_id, groups=groups)
     nareth_missions = NarethMissionService(SessionFactory, settings.server_id, groups=groups)
     varzeas_missions = VarzeasMissionService(SessionFactory, settings.server_id, groups=groups)
+    altos_missions = AltosMissionService(SessionFactory, settings.server_id, groups=groups)
     s6 = S6Service(SessionFactory, settings.server_id, groups=groups)
     class_trials = ClassTrialService(SessionFactory, settings.server_id)
     paths = PathSelectionService(SessionFactory, settings.server_id)
@@ -147,6 +150,7 @@ def get_bot_runtime() -> BotRuntime:
         nareth_missions_router(nareth_missions, settings.creation_images)
     )
     dispatcher.include_router(varzeas_missions_router(varzeas_missions, settings.creation_images))
+    dispatcher.include_router(altos_missions_router(altos_missions, settings.creation_images))
     dispatcher.include_router(
         groups_router(
             groups,
@@ -258,6 +262,7 @@ def get_bot_runtime() -> BotRuntime:
             vde_missions=vde_missions,
             nareth_missions=nareth_missions,
             varzeas_missions=varzeas_missions,
+            altos_missions=altos_missions,
         )
     )
     dispatcher.include_router(

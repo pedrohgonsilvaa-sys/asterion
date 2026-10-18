@@ -83,6 +83,10 @@ MATERIAL_LABELS = {
     "material.varzeas.nucleo_enfermaria_afundada": "Núcleo da Enfermaria Afundada",
     "material.varzeas.nucleo_cisterna_transferencia": "Núcleo da Cisterna de Transferência",
     "material.varzeas.nucleo_matriz_rubra": "Núcleo da Matriz Rubra",
+    "material.altos.ferro_contrapeso": "Ferro de Contrapeso",
+    "material.altos.couro_escarpa": "Couro de Escarpa",
+    "material.altos.liquen_pedreira": "Líquen de Pedreira",
+    "material.altos.cinza_basalto": "Cinza de Basalto",
 }
 
 @dataclass(frozen=True)
