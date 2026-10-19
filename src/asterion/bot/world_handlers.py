@@ -77,6 +77,7 @@ from asterion.application.s29 import S29Service
 from asterion.application.s30 import S30Service
 from asterion.application.s31 import S31Service
 from asterion.application.s32 import S32Service
+from asterion.application.s33 import S33Service
 from asterion.application.varzeas_missions import (
     S19_ID,
     S20_ID,
@@ -129,6 +130,7 @@ from asterion.bot.s29_ui import render_s29
 from asterion.bot.s30_ui import render_s30
 from asterion.bot.s31_ui import render_s31
 from asterion.bot.s32_ui import render_s32
+from asterion.bot.s33_ui import render_s33
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
 from asterion.bot.vde_missions_ui import render_vde_mission
 from asterion.bot.world_ui import render_adventure, render_world
@@ -167,6 +169,7 @@ def world_router(
     s30: S30Service | None = None,
     s31: S31Service | None = None,
     s32: S32Service | None = None,
+    s33: S33Service | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -185,6 +188,11 @@ def world_router(
         return render_combat(combat_view) if combat_view is not None else None
 
     async def resume_altos(message: Message, actor: int, *, edit: bool = False) -> bool:
+        if s33 is not None:
+            secondary = await s33.resume_active(actor)
+            if secondary is not None:
+                await present(message, render_s33(secondary), images, edit=edit)
+                return True
         if s32 is not None:
             secondary = await s32.resume_active(actor)
             if secondary is not None:
@@ -1483,6 +1491,7 @@ def world_router(
         s30_view = await s30.summary(query.from_user.id) if s30 else None
         s31_view = await s31.summary(query.from_user.id) if s31 else None
         s32_view = await s32.summary(query.from_user.id) if s32 else None
+        s33_view = await s33.summary(query.from_user.id) if s33 else None
         if altos_view is not None and altos_view.status == "active":
             mission_screen = render_altos_mission(altos_view)
             if s25_view is not None:
@@ -1663,6 +1672,28 @@ def world_router(
                     rows.append([InlineKeyboardButton(text="Duas Vezes a Mesma Estrada", callback_data=secondary_action)])
                 mission_screen = Screen(
                     mission_screen.text + f"\n\n📜 Missão Secundária · Duas Vezes a Mesma Estrada · {state}",
+                    mission_screen.image_key,
+                    InlineKeyboardMarkup(inline_keyboard=rows),
+                    parse_mode=mission_screen.parse_mode,
+                )
+            if s33_view is not None:
+                if s33_view.status in {"active", "completed"}:
+                    state, secondary_action = (
+                        ("Em Andamento", "s33:resume")
+                        if s33_view.status == "active"
+                        else ("Concluída", "s33:resume")
+                    )
+                elif s33_view.reacceptable:
+                    state, secondary_action = "Disponível para reaceite", "s33:roven"
+                elif s33_view.available:
+                    state, secondary_action = "Disponível", "s33:roven"
+                else:
+                    state, secondary_action = "Bloqueada · requer P33 concluída + Nv.55", None
+                rows = list(mission_screen.keyboard.inline_keyboard) if mission_screen.keyboard else []
+                if secondary_action is not None:
+                    rows.append([InlineKeyboardButton(text="Nomes em Ordem Errada", callback_data=secondary_action)])
+                mission_screen = Screen(
+                    mission_screen.text + f"\n\n📜 Missão Secundária · Nomes em Ordem Errada · {state}",
                     mission_screen.image_key,
                     InlineKeyboardMarkup(inline_keyboard=rows),
                     parse_mode=mission_screen.parse_mode,
@@ -2152,6 +2183,18 @@ def world_router(
             else:
                 state, action = "Bloqueada · requer P32 concluída + Nv.54", None
             secondary_entries.append((f"📜 A Casa que Não Chegou · {state}", action))
+        if s33_view is not None:
+            if s33_view.status == "active":
+                state, action = "Em Andamento", "s33:resume"
+            elif s33_view.status == "completed":
+                state, action = "Concluída", "s33:resume"
+            elif s33_view.reacceptable:
+                state, action = "Disponível para reaceite", "s33:roven"
+            elif s33_view.available:
+                state, action = "Disponível", "s33:roven"
+            else:
+                state, action = "Bloqueada · requer P33 concluída + Nv.55", None
+            secondary_entries.append((f"📜 Nomes em Ordem Errada · {state}", action))
         if secondary_entries:
             secondary_lines = []
             secondary_buttons = []
@@ -2778,6 +2821,39 @@ def world_router(
                 rows.append([InlineKeyboardButton(text="S32 · Retomar A Casa que Não Chegou", callback_data="s32:resume")])
                 local_screen = Screen(
                     local_screen.text + "\n\n📜 S32 · A Casa que Não Chegou · Em andamento",
+                    local_screen.image_key,
+                    InlineKeyboardMarkup(inline_keyboard=rows),
+                    parse_mode=local_screen.parse_mode,
+                )
+        if s33 is not None and view.location == CONFINS_ULTIMO_REFUGIO_LABEL:
+            contact = await s33.giver(actor)
+            if contact is not None:
+                if contact.status == "active":
+                    state, callback = "Em Andamento", "s33:resume"
+                elif contact.status == "completed":
+                    state, callback = "Concluída", "s33:resume"
+                elif contact.reacceptable:
+                    state, callback = "Disponível para reaceite", "s33:roven"
+                elif contact.available:
+                    state, callback = "Disponível", "s33:roven"
+                else:
+                    state, callback = "Requer P33 concluída + Nv.55", None
+                rows = list(local_screen.keyboard.inline_keyboard) if local_screen.keyboard else []
+                if callback is not None:
+                    rows.append([InlineKeyboardButton(text="Roven Pell · Nomes em Ordem Errada", callback_data=callback)])
+                local_screen = Screen(
+                    local_screen.text + f"\n\n📜 Roven Pell · Nomes em Ordem Errada · {state}",
+                    local_screen.image_key,
+                    InlineKeyboardMarkup(inline_keyboard=rows),
+                    parse_mode=local_screen.parse_mode,
+                )
+        elif s33 is not None and view.location == CONFINS_FRATURAS_LIMIAR_LABEL:
+            active_s33 = await s33.summary(actor)
+            if active_s33 is not None and active_s33.status == "active":
+                rows = list(local_screen.keyboard.inline_keyboard) if local_screen.keyboard else []
+                rows.append([InlineKeyboardButton(text="S33 · Retomar Nomes em Ordem Errada", callback_data="s33:resume")])
+                local_screen = Screen(
+                    local_screen.text + "\n\n📜 S33 · Nomes em Ordem Errada · Em andamento",
                     local_screen.image_key,
                     InlineKeyboardMarkup(inline_keyboard=rows),
                     parse_mode=local_screen.parse_mode,

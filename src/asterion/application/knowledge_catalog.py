@@ -416,6 +416,13 @@ CODEX_ENTRIES = (
         "location.confins.fraturas_limiar",
     ),
     CodexPresentation(
+        "codex.confins.nomes_ordem_errada",
+        "Nomes em Ordem Errada",
+        "history",
+        312,
+        "location.confins.fraturas_limiar",
+    ),
+    CodexPresentation(
         "codex.confins.ancora_central_coordenacao",
         "Âncora Central",
         "history",
@@ -480,6 +487,10 @@ CODEX_FRAGMENTS = {
     "codex.confins.avesso_estados": FragmentPresentation(
         "Avesso como estado",
         "As observações de Roven e as evidências físicas reunidas descrevem o Avesso como um estado no qual relações de causalidade, matéria e identidade deixam de ser confiáveis. O registro não o trata como lugar, entidade maligna ou vontade.",
+    ),
+    "mission.confins.s33.nomes_ordem_errada": FragmentPresentation(
+        "Nomes em Ordem Errada",
+        "Duas inscrições e duas listas preservam um erro simples de cópia que pode ser comprovado e uma discrepância material que permanece sem solução. As evidências são mantidas lado a lado; nem toda diferença é atribuída ao Avesso, e nenhuma pessoa duplicada é inferida.",
     ),
     "codex.confins.ancora_central_coordenacao": FragmentPresentation(
         "Âncora Central",
