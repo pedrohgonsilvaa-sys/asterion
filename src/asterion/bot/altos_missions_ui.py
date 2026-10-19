@@ -20,6 +20,7 @@ from asterion.application.altos_missions import (
     P32_TITLE,
     P33_REWARD_OPTIONS,
     P33_TITLE,
+    P34_TITLE,
     S26_TITLE,
     S30_TITLE,
     AltosMissionView,
@@ -35,7 +36,8 @@ def _button(text: str, callback: str) -> InlineKeyboardButton:
 
 def render_altos_mission(view: AltosMissionView) -> Screen:
     fallback_title = (
-        P33_TITLE if view.quest_id == "P33"
+        P34_TITLE if view.quest_id == "P34"
+        else P33_TITLE if view.quest_id == "P33"
         else P32_TITLE if view.quest_id == "P32"
         else P31_TITLE if view.quest_id == "P31"
         else P28_TITLE if view.quest_id == "P28"
@@ -73,7 +75,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         )
         combat_location = (
             view.location
-            if view.quest_id in {"S26", "P31", "P32", "P33"}
+            if view.quest_id in {"S26", "P31", "P32", "P33", "P34"}
             else "Coração do Colosso"
             if view.quest_id == "P30"
             else "Bastilha de Carga"
@@ -88,13 +90,13 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
             "Chefe opcional · economia zero"
             if view.quest_id == "S30"
             else "Encontro roteirizado · economia zero"
-            if view.quest_id in {"P31", "P32", "P33"}
+            if view.quest_id in {"P31", "P32", "P33", "P34"}
             else "Encontro roteirizado"
             if view.quest_id == "S26"
             else "Encontro de Campanha"
         )
         return Screen(
-            f"📜 {title} · Altos Cinéreos\n⚔️ {encounter_label} · {escape(combat_location)}\n\n{hud.text}",
+            f"📜 {title} · {'Confins do Véu' if view.quest_id in {'P31', 'P32', 'P33', 'P34'} else 'Altos Cinéreos'}\n⚔️ {encounter_label} · {escape(combat_location)}\n\n{hud.text}",
             "missions",
             hud.keyboard,
             parse_mode=hud.parse_mode,
@@ -114,6 +116,8 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         return _render_p32(view, title, rows)
     if view.quest_id == "P33":
         return _render_p33(view, title, rows)
+    if view.quest_id == "P34":
+        return _render_p34(view, title, rows)
     if view.quest_id == "P26":
         return _render_p26(view, title, rows)
     if view.quest_id == "S26":
@@ -269,6 +273,85 @@ def _render_p33(view: AltosMissionView, title: str, rows) -> Screen:
         for key, (_item_id, name, _slot) in P33_REWARD_OPTIONS.items():
             if key != selected:
                 rows.append([_button(name, f"altos:action:{view.state_version}:choose_p33_reward_{key}")])
+    rows.append([_button("← Missões", "world:missions")])
+    return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def _render_p34(view: AltosMissionView, title: str, rows) -> Screen:
+    if view.status == "available":
+        rows.extend(
+            (
+                [_button("Iniciar P34 com Eris e Sera", "altos:action:0:activate_p34")],
+                [_button("← Missões", "world:missions")],
+            )
+        )
+        return Screen(
+            f"📜 {title} · Disponível\nConfins do Véu · Fraturas do Limiar\n\n"
+            "P33 foi concluída. Nv.57 abre a investigação da Âncora Central; a ativação libera a rota individual ao Nó Central.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    if view.status == "suspended":
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Suspensa\n\nP34 requer P33 concluída e Nv.57. "
+            "A rota ao Nó Central será retomada quando você atingir o nível exigido.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    if view.status == "completed":
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Concluída\n\n✨ 93.250 XP · 1.200 Coroas\n"
+            "📦 2 Ferros de Baliza · 1 Couro de Marcha · 1 Pó de Referência\n"
+            "🏅 Feito · Nó Não é Fonte",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+
+    arrived = bool(view.progress.get("no_arrival_recorded"))
+    location = "Nó Central" if arrived else "Fraturas do Limiar"
+    step_text = {
+        2: "Entre no Nó Central e examine condução de referência, alinhamento de rotas e comunicação de falha.",
+        3: "Enfrente o Custódio Desfasado Nv.57 em encontro roteirizado, sem economia própria.",
+        4: "Localize evidências de que diferentes Âncoras estabilizavam regiões antes da noite final.",
+        5: "Compare a interpretação técnica de Eris com a documentação civil de Roven.",
+        6: "Registre no Códice o papel de coordenação e referência da Âncora Central; conclua com Eris e Sera.",
+    }.get(view.step, "Retome a etapa atual da missão.")
+    lines = [
+        f"📜 {title} · Em Andamento",
+        f"Confins do Véu · {location}",
+        "",
+        f"Etapa {view.step}/6 · {step_text}",
+    ]
+    if view.step == 2:
+        if not arrived:
+            rows.append([_button("Seguir para o Nó Central", "road:route:confins_no_central")])
+        else:
+            evidence = set(view.progress.get("physical_point_evidence_ids", ()))
+            for action, label in (
+                ("inspect_reference_conduction", "Examinar a condução de referência"),
+                ("inspect_route_alignment", "Examinar o alinhamento de rotas"),
+                ("inspect_failure_communication", "Examinar a comunicação de falha"),
+            ):
+                if action not in evidence:
+                    rows.append([_button(label, f"altos:action:{view.state_version}:{action}")])
+    elif view.step == 3:
+        if view.progress.get("awaiting_retry"):
+            rows.append([_button("Tentar novamente", f"altos:retry:P34:{view.state_version}")])
+        else:
+            rows.extend(
+                (
+                    [_button("Iniciar encontro Solo", f"altos:combat:P34:{view.state_version}:solo")],
+                    [_button("Solicitar encontro em Grupo", f"altos:combat:P34:{view.state_version}:group")],
+                )
+            )
+    elif view.step == 4:
+        rows.append([_button("Registrar evidências das Âncoras regionais", f"altos:action:{view.state_version}:observe_regional_anchor_evidence")])
+    elif view.step == 5:
+        rows.append([_button("Comparar os registros com Roven", f"altos:action:{view.state_version}:compare_eris_with_roven")])
+    elif view.step == 6:
+        rows.append([_button("Registrar no Códice e concluir com Eris e Sera", f"altos:action:{view.state_version}:record_anchor_codex_and_conclude")])
     rows.append([_button("← Missões", "world:missions")])
     return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
 

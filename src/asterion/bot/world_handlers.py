@@ -34,6 +34,7 @@ from asterion.application.road import (
     CONFINS_FRATURAS_LIMIAR_LABEL,
     CONFINS_LOCATION_CATALOG,
     CONFINS_MARCHA_LABEL,
+    CONFINS_NO_CENTRAL_LABEL,
     CONFINS_REGION_LABEL,
     CONFINS_ULTIMO_REFUGIO_LABEL,
     NARETH_CAMARA,
@@ -1186,6 +1187,7 @@ def world_router(
             "road:route:confins_ultimo_refugio": CONFINS_ULTIMO_REFUGIO_LABEL,
             "road:route:confins_estradas_ausentes": CONFINS_ESTRADAS_AUSENTES_LABEL,
             "road:route:confins_fraturas_limiar": CONFINS_FRATURAS_LIMIAR_LABEL,
+            "road:route:confins_no_central": CONFINS_NO_CENTRAL_LABEL,
         }.get(route_key)
         route_attempt_id = exploration_callback_attempt_id(query)
         route_has_attempt_id = len(route_parts) == 4
@@ -1293,6 +1295,7 @@ def world_router(
                 CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL,
                 CONFINS_ESTRADAS_AUSENTES_LABEL,
                 CONFINS_FRATURAS_LIMIAR_LABEL,
+                CONFINS_NO_CENTRAL_LABEL,
             }:
                 if altos_missions is not None:
                     await altos_missions.on_location(query.from_user.id)
@@ -1388,6 +1391,7 @@ def world_router(
                 CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL,
                 CONFINS_ESTRADAS_AUSENTES_LABEL,
                 CONFINS_FRATURAS_LIMIAR_LABEL,
+                CONFINS_NO_CENTRAL_LABEL,
             }:
                 if altos_missions is not None:
                     await altos_missions.on_location(query.from_user.id)
@@ -2722,6 +2726,7 @@ def world_router(
             "confins_ultimo_refugio": CONFINS_ULTIMO_REFUGIO_LABEL,
             "confins_estradas_ausentes": CONFINS_ESTRADAS_AUSENTES_LABEL,
             "confins_fraturas_limiar": CONFINS_FRATURAS_LIMIAR_LABEL,
+            "confins_no_central": CONFINS_NO_CENTRAL_LABEL,
         }
         name = names.get(key)
         if name is None:
@@ -2744,6 +2749,7 @@ def world_router(
             "confins_marcha": "🌫️", "confins_ultimo_refugio": "🏚️",
             "confins_estradas_ausentes": "🧭",
             "confins_fraturas_limiar": "🌫️",
+            "confins_no_central": "🧭",
         }[key]
         level_band = {
             "road": "Nv. 1–10",
@@ -2778,6 +2784,7 @@ def world_router(
             "confins_ultimo_refugio": "Hub seguro",
             "confins_estradas_ausentes": "Nv. 53–56",
             "confins_fraturas_limiar": "Nv. 55–60",
+            "confins_no_central": "Nv. 57–60",
         }[key]
         region = (
             "Vales dos Enforcados"
@@ -2794,7 +2801,7 @@ def world_router(
         )
         lines = [f"{icon} {name}" + (" · Local Atual" if is_current else ""), f"{region} · {level_band}"]
         keyboard: list[list[InlineKeyboardButton]] = []
-        if key in {"charneca", "bosque", "ruinas", "vde_garganta", "vde_vigilia", "vde_mata", "vde_baixios", "vde_claustro", "nareth_campinas", "nareth_posto", "nareth_canais", "nareth_campos", "nareth_observatorio", "varzeas_diques", "varzeas_porto", "varzeas_brejos", "varzeas_hortos", "varzeas_galerias", "altos_escarpa", "altos_abrigo", "altos_pontes", "altos_pedreiras", "altos_bastilha", "confins_marcha", "confins_ultimo_refugio", "confins_estradas_ausentes", "confins_fraturas_limiar"}:
+        if key in {"charneca", "bosque", "ruinas", "vde_garganta", "vde_vigilia", "vde_mata", "vde_baixios", "vde_claustro", "nareth_campinas", "nareth_posto", "nareth_canais", "nareth_campos", "nareth_observatorio", "varzeas_diques", "varzeas_porto", "varzeas_brejos", "varzeas_hortos", "varzeas_galerias", "altos_escarpa", "altos_abrigo", "altos_pontes", "altos_pedreiras", "altos_bastilha", "confins_marcha", "confins_ultimo_refugio", "confins_estradas_ausentes", "confins_fraturas_limiar", "confins_no_central"}:
             known_brazier = None
             if is_current and road_view is not None and road_view.location == name:
                 known_brazier = road_view.brazier_label
@@ -2852,6 +2859,7 @@ def world_router(
                     CONFINS_ULTIMO_REFUGIO_LABEL: "road:route:confins_ultimo_refugio",
                     CONFINS_ESTRADAS_AUSENTES_LABEL: "road:route:confins_estradas_ausentes",
                     CONFINS_FRATURAS_LIMIAR_LABEL: "road:route:confins_fraturas_limiar",
+                    CONFINS_NO_CENTRAL_LABEL: "road:route:confins_no_central",
                 }
                 for destination in road_view.route_destinations:
                     if destination == current:
@@ -2999,6 +3007,7 @@ def world_router(
                     CONFINS_ULTIMO_REFUGIO_LABEL: "road:route:confins_ultimo_refugio",
                     CONFINS_ESTRADAS_AUSENTES_LABEL: "road:route:confins_estradas_ausentes",
                     CONFINS_FRATURAS_LIMIAR_LABEL: "road:route:confins_fraturas_limiar",
+                    CONFINS_NO_CENTRAL_LABEL: "road:route:confins_no_central",
                 }.get(name)
             if road_view is not None and route_callback and name in road_view.route_destinations:
                 route_label = {
@@ -3034,6 +3043,7 @@ def world_router(
                     CONFINS_ULTIMO_REFUGIO_LABEL: "Seguir para o Último Refúgio",
                     CONFINS_ESTRADAS_AUSENTES_LABEL: "Seguir para Estradas Ausentes",
                     CONFINS_FRATURAS_LIMIAR_LABEL: "Seguir para Fraturas do Limiar",
+                    CONFINS_NO_CENTRAL_LABEL: "Seguir para o Nó Central",
                 }[name]
                 lines.extend(["", "🧭 Rota terrestre · Disponível"])
                 keyboard.append([InlineKeyboardButton(text=route_label, callback_data=route_callback)])
@@ -3111,6 +3121,7 @@ def world_router(
                 "🏚️" if current == CONFINS_ULTIMO_REFUGIO_LABEL else
                 "🧭" if current == CONFINS_ESTRADAS_AUSENTES_LABEL else
                 "🌫️" if current == CONFINS_FRATURAS_LIMIAR_LABEL else
+                "🧭" if current == CONFINS_NO_CENTRAL_LABEL else
                 "🪨" if current == RUINS else
                 "🌫️" if current == VDE_VIGILIA else "🔥"
             )
@@ -3123,7 +3134,7 @@ def world_router(
                 known_regions.append(VARZEAS_REGION)
             if ALTOS_ESCARPA_LABEL in known or ALTOS_ABRIGO_LABEL in known or ALTOS_PONTES_LABEL in known or ALTOS_PEDREIRAS_LABEL in known or ALTOS_BASTILHA_LABEL in known or ALTOS_CORACAO_LABEL in known:
                 known_regions.append(ALTOS_REGION_LABEL)
-            if CONFINS_MARCHA_LABEL in known or CONFINS_ULTIMO_REFUGIO_LABEL in known or CONFINS_ESTRADAS_AUSENTES_LABEL in known or CONFINS_FRATURAS_LIMIAR_LABEL in known:
+            if CONFINS_MARCHA_LABEL in known or CONFINS_ULTIMO_REFUGIO_LABEL in known or CONFINS_ESTRADAS_AUSENTES_LABEL in known or CONFINS_FRATURAS_LIMIAR_LABEL in known or CONFINS_NO_CENTRAL_LABEL in known:
                 known_regions.append(CONFINS_REGION_LABEL)
             current_line = f"{current_icon} {current} · Local Atual" if current else ""
             text = (
@@ -3459,6 +3470,7 @@ def world_router(
             CONFINS_ULTIMO_REFUGIO_LABEL: "confins_ultimo_refugio",
             CONFINS_ESTRADAS_AUSENTES_LABEL: "confins_estradas_ausentes",
             CONFINS_FRATURAS_LIMIAR_LABEL: "confins_fraturas_limiar",
+            CONFINS_NO_CENTRAL_LABEL: "confins_no_central",
         }
         known_locations = set(known)
         ordered = tuple((name, map_keys.get(name)) for name in CONFINS_LOCATION_CATALOG)
@@ -3574,6 +3586,7 @@ def world_router(
             "confins_ultimo_refugio": CONFINS_ULTIMO_REFUGIO_LABEL,
             "confins_estradas_ausentes": CONFINS_ESTRADAS_AUSENTES_LABEL,
             "confins_fraturas_limiar": CONFINS_FRATURAS_LIMIAR_LABEL,
+            "confins_no_central": CONFINS_NO_CENTRAL_LABEL,
         }
         destination = names.get(key)
         if destination is None:
@@ -3672,6 +3685,7 @@ def world_router(
             CONFINS_ULTIMO_REFUGIO_LABEL: "confins_ultimo_refugio",
             CONFINS_ESTRADAS_AUSENTES_LABEL: "confins_estradas_ausentes",
             CONFINS_FRATURAS_LIMIAR_LABEL: "confins_fraturas_limiar",
+            CONFINS_NO_CENTRAL_LABEL: "confins_no_central",
         }.get(current)
         back_callback = (
             "world:local"

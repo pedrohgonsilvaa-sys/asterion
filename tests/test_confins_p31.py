@@ -589,8 +589,8 @@ def test_confins_catalog_and_activity_pools_match_the_opening_contract():
         "Nó Central",
         "Câmara da Regência",
     )
-    assert CONFINS_LOCATIONS == frozenset(CONFINS_LOCATION_CATALOG[:4])
-    assert TRAVEL_LOCATIONS.isdisjoint(CONFINS_LOCATION_CATALOG[4:])
+    assert CONFINS_LOCATIONS == frozenset(CONFINS_LOCATION_CATALOG[:5])
+    assert TRAVEL_LOCATIONS.isdisjoint(CONFINS_LOCATION_CATALOG[5:])
     assert HUNT_PROFILES[CONFINS_MARCHA_LOCATION] is CONFINS_MARCHA_PROFILE
     assert CONFINS_MARCHA_PROFILE.creature_weights == (
         (CONFINS_CAO_NEVOA, 50),

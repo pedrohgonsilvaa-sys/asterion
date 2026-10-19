@@ -20,6 +20,7 @@ from asterion.application.road import (
     CONFINS_ESTRADAS_AUSENTES_LABEL,
     CONFINS_FRATURAS_LIMIAR_LABEL,
     CONFINS_MARCHA_LABEL,
+    CONFINS_NO_CENTRAL_LABEL,
     CONFINS_REGION_LABEL,
     CONFINS_ULTIMO_REFUGIO_LABEL,
     NARETH_CAMARA_LABEL,
@@ -114,6 +115,7 @@ def _location_copy(location: str) -> tuple[str, str]:
         CONFINS_ULTIMO_REFUGIO_LABEL: "🏚️",
         CONFINS_ESTRADAS_AUSENTES_LABEL: "🧭",
         CONFINS_FRATURAS_LIMIAR_LABEL: "🌫️",
+        CONFINS_NO_CENTRAL_LABEL: "🧭",
     }.get(location, "🔥")
     if location == VDE_BERCO:
         return f"🌿 {location}", f"{VDE_REGION} · Local de clímax"
@@ -126,7 +128,7 @@ def _location_copy(location: str) -> tuple[str, str]:
         else ALTOS_REGION_LABEL
         if location in {ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL}
         else CONFINS_REGION_LABEL
-        if location in {CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL, CONFINS_ESTRADAS_AUSENTES_LABEL, CONFINS_FRATURAS_LIMIAR_LABEL}
+        if location in {CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL, CONFINS_ESTRADAS_AUSENTES_LABEL, CONFINS_FRATURAS_LIMIAR_LABEL, CONFINS_NO_CENTRAL_LABEL}
         else VARZEAS_REGION
         if location in {VARZEAS_DIQUES, VARZEAS_PORTO, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS}
         else VDE_REGION
@@ -188,6 +190,7 @@ def _route_key(location: str) -> str:
         CONFINS_ULTIMO_REFUGIO_LABEL: "confins_ultimo_refugio",
         CONFINS_ESTRADAS_AUSENTES_LABEL: "confins_estradas_ausentes",
         CONFINS_FRATURAS_LIMIAR_LABEL: "confins_fraturas_limiar",
+        CONFINS_NO_CENTRAL_LABEL: "confins_no_central",
     }[location]
 
 
@@ -794,6 +797,7 @@ def render_current_local(
         CONFINS_MARCHA_LABEL,
         CONFINS_ESTRADAS_AUSENTES_LABEL,
         CONFINS_FRATURAS_LIMIAR_LABEL,
+        CONFINS_NO_CENTRAL_LABEL,
     }:
         lines.append("")
         if view.hunt_enabled:
@@ -846,6 +850,7 @@ def render_current_local(
         CONFINS_ULTIMO_REFUGIO_LABEL,
         CONFINS_ESTRADAS_AUSENTES_LABEL,
         CONFINS_FRATURAS_LIMIAR_LABEL,
+        CONFINS_NO_CENTRAL_LABEL,
     }:
         for destination in view.route_destinations:
             route_key, label = {
@@ -903,6 +908,8 @@ def render_current_local(
                 (CONFINS_ESTRADAS_AUSENTES_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL): ("confins_ultimo_refugio", "Retornar ao Último Refúgio"),
                 (CONFINS_ESTRADAS_AUSENTES_LABEL, CONFINS_FRATURAS_LIMIAR_LABEL): ("confins_fraturas_limiar", "Seguir para Fraturas do Limiar"),
                 (CONFINS_FRATURAS_LIMIAR_LABEL, CONFINS_ESTRADAS_AUSENTES_LABEL): ("confins_estradas_ausentes", "Retornar às Estradas Ausentes"),
+                (CONFINS_FRATURAS_LIMIAR_LABEL, CONFINS_NO_CENTRAL_LABEL): ("confins_no_central", "Seguir para o Nó Central"),
+                (CONFINS_NO_CENTRAL_LABEL, CONFINS_FRATURAS_LIMIAR_LABEL): ("confins_fraturas_limiar", "Retornar às Fraturas do Limiar"),
             }.get((view.location, destination), (None, None))
             if route_key is not None:
                 keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:route:{route_key}")])
@@ -1073,6 +1080,12 @@ def render_current_local(
             keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     elif view.location == CONFINS_FRATURAS_LIMIAR_LABEL:
         lines.extend(["", "🌫️ Fraturas do Limiar · Confins do Véu"])
+        if view.brazier_label:
+            lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
+        if mission_available:
+            keyboard.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
+    elif view.location == CONFINS_NO_CENTRAL_LABEL:
+        lines.extend(["", "🧭 Nó Central · Confins do Véu"])
         if view.brazier_label:
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
         if mission_available:

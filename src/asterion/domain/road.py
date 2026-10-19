@@ -69,6 +69,12 @@ CONFINS_FRATURAS_ROUND_UNLOCK = "unlock.round.confins.fraturas"
 CONFINS_LIMIAR_FIRME_BRAZIER = "bonfire.confins.limiar_firme"
 CONFINS_NO_CENTRAL = "Nó Central"
 CONFINS_NO_CENTRAL_LOCATION = "location.confins.no_central"
+CONFINS_NO_CENTRAL_ACCESS_UNLOCK = "unlock.location.confins.no_central"
+CONFINS_NO_CENTRAL_HUNT_UNLOCK = "unlock.hunt.confins.no"
+CONFINS_NO_CENTRAL_EXPLORE_UNLOCK = "unlock.explore.confins.no"
+CONFINS_NO_CENTRAL_ROUND_UNLOCK = "unlock.round.confins.no"
+CONFINS_NO_RETORNO_BRAZIER = "bonfire.confins.no_retorno"
+CONFINS_CAMARA_CONTRADICOES_DUNGEON_UNLOCK = "unlock.dungeon.confins.camara_contradicoes"
 CONFINS_CAMARA_REGENCIA = "Câmara da Regência"
 CONFINS_CAMARA_REGENCIA_LOCATION = "location.confins.camara_regencia"
 CONFINS_LOCATION_CATALOG = (
@@ -2109,6 +2115,22 @@ CONFINS_FRATURAS_PROFILE = HuntLocationProfile(
     explore_unlock=CONFINS_FRATURAS_EXPLORE_UNLOCK,
 )
 
+CONFINS_NO_CENTRAL_PROFILE = HuntLocationProfile(
+    local_id=CONFINS_NO_CENTRAL_LOCATION,
+    label=CONFINS_NO_CENTRAL,
+    creature_weights=(
+        (CONFINS_SANGUESSUGA_PALIDA, 10),
+        (CONFINS_CASCA_REFLEXO, 19),
+        (CONFINS_MARIPOSA_SEM_HORIZONTE, 17),
+        (CONFINS_VIGIA_DESFASADO, 39),
+        (CONFINS_CUSTODIO_DESFASADO, 15),
+    ),
+    variant_chance=20,
+    hunt_unlock=CONFINS_NO_CENTRAL_HUNT_UNLOCK,
+    round_familiarity=CONFINS_NO_CENTRAL_ROUND_UNLOCK,
+    explore_unlock=CONFINS_NO_CENTRAL_EXPLORE_UNLOCK,
+)
+
 LOCATION_LEVEL_BANDS = {
     "Estrada das Cinzas": (1, 10),
     "Charneca da Fuligem": (3, 5),
@@ -2134,6 +2156,7 @@ LOCATION_LEVEL_BANDS = {
     CONFINS_ULTIMO_REFUGIO: (51, 60),
     CONFINS_ESTRADAS_AUSENTES: (53, 56),
     CONFINS_FRATURAS_LIMIAR: (55, 59),
+    CONFINS_NO_CENTRAL: (57, 60),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -3315,6 +3338,59 @@ EXPLORATION_PROFILES = {
             ),
         ),
     ),
+    CONFINS_NO_CENTRAL_LOCATION: ExplorationLocationProfile(
+        local_id=CONFINS_NO_CENTRAL_LOCATION,
+        category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+        results=(
+            ExplorationResultDefinition(
+                "braseiro_retorno", "great_discovery", "explore.confins.no.braseiro_retorno", 50,
+                "O Braseiro do Nó de Retorno marca uma referência permanente no Nó Central.",
+                min_level=57, unique=True,
+            ),
+            ExplorationResultDefinition(
+                "camara_contradicoes", "great_discovery", "explore.confins.no.camara_contradicoes", 50,
+                "Uma entrada para a Câmara das Contradições foi localizada no Nó Central.",
+                min_level=57, unique=True,
+            ),
+            ExplorationResultDefinition(
+                "rede_incompleta", "knowledge", "explore.confins.no.rede_incompleta", 60,
+                "O Diagrama da Rede Incompleta acrescenta um trecho observado ao registro técnico.",
+                min_level=57, unique=True,
+            ),
+            ExplorationResultDefinition(
+                "junta_marco", "knowledge", "explore.confins.no.junta_marco", 40,
+                "Uma junta de marco foi observada sem estabelecer a rede completa.", min_level=57,
+            ),
+            ExplorationResultDefinition(
+                "ordem_muro", "narrative", "explore.confins.no.ordem_muro", 55,
+                "Uma ordem preservada no muro descreve uma rotina local.", min_level=57,
+            ),
+            ExplorationResultDefinition(
+                "corda_medida", "narrative", "explore.confins.no.corda_medida", 45,
+                "Uma corda medida registra uma distância de referência.", min_level=57,
+            ),
+            ExplorationResultDefinition(
+                "combate", "combat", "explore.confins.no.combate", 100,
+                "Uma criatura elegível do Nó Central bloqueia a passagem.", min_level=57,
+            ),
+            ExplorationResultDefinition(
+                "recurso", "resource", "explore.confins.no.recurso", 100,
+                "Um material básico Grau VI pode ser recolhido no Nó Central.", min_level=57,
+            ),
+            ExplorationResultDefinition(
+                "atmos.metal_paz", "atmospheric", "explore.confins.no.atmos.metal_paz", 34,
+                "Metal em Paz permanece fixo apesar da vibração da estrutura.", min_level=57,
+            ),
+            ExplorationResultDefinition(
+                "atmos.registro_sem_voz", "atmospheric", "explore.confins.no.atmos.registro_sem_voz", 33,
+                "Um registro sem voz conserva apenas os dados físicos observáveis.", min_level=57,
+            ),
+            ExplorationResultDefinition(
+                "atmos.parede_repetida", "atmospheric", "explore.confins.no.atmos.parede_repetida", 33,
+                "Uma parede repetida acompanha a estrutura sem indicar outro lugar.", min_level=57,
+            ),
+        ),
+    ),
 }
 
 HUNT_PROFILES = {
@@ -3342,6 +3418,7 @@ HUNT_PROFILES = {
     CONFINS_MARCHA_LOCATION: CONFINS_MARCHA_PROFILE,
     CONFINS_ESTRADAS_AUSENTES_LOCATION: CONFINS_ESTRADAS_PROFILE,
     CONFINS_FRATURAS_LIMIAR_LOCATION: CONFINS_FRATURAS_PROFILE,
+    CONFINS_NO_CENTRAL_LOCATION: CONFINS_NO_CENTRAL_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()

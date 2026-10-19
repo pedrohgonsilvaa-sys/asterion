@@ -408,6 +408,13 @@ CODEX_ENTRIES = (
         305,
         "location.confins.fraturas_limiar",
     ),
+    CodexPresentation(
+        "codex.confins.ancora_central_coordenacao",
+        "Âncora Central",
+        "history",
+        306,
+        "location.confins.no_central",
+    ),
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -434,6 +441,14 @@ CODEX_FRAGMENTS = {
     "codex.confins.avesso_estados": FragmentPresentation(
         "Avesso como estado",
         "As observações de Roven e as evidências físicas reunidas descrevem o Avesso como um estado no qual relações de causalidade, matéria e identidade deixam de ser confiáveis. O registro não o trata como lugar, entidade maligna ou vontade.",
+    ),
+    "codex.confins.ancora_central_coordenacao": FragmentPresentation(
+        "Âncora Central",
+        "A documentação técnica e civil corroborada descreve a Âncora Central como sistema de coordenação e referência entre Âncoras regionais, não como gerador de energia ou interruptor mestre.",
+    ),
+    "explore.confins.no.rede_incompleta": FragmentPresentation(
+        "Diagrama da Rede Incompleta",
+        "O diagrama registra conexões e referências observáveis sem revelar a conclusão integral da Convergência.",
     ),
     "explore.confins.fraturas.corte_referencia": FragmentPresentation(
         "Corte de Referência Observável",
@@ -1361,6 +1376,12 @@ ACHIEVEMENTS = (
         "exploration",
         "Concluiu P33 — O Avesso.",
         "Título · Leitor de Incoerências",
+    ),
+    AchievementPresentation(
+        "achievement.confins.ancora_compreendida",
+        "Nó Não é Fonte",
+        "exploration",
+        "Concluiu P34 — A Âncora Central.",
     ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(

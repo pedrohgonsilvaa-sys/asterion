@@ -1,6 +1,7 @@
 """Shared persistence rules for creature discovery and Bestiary evidence."""
 
 from decimal import ROUND_HALF_UP, Decimal
+from hashlib import sha256
 
 from sqlalchemy import select
 
@@ -21,6 +22,14 @@ BESTIARY_STAGE_LABELS = {
     "studied": "Estudado",
     "dominated": "Dominado",
 }
+
+
+def _reward_source_id(kind: str, character_id, creature_id: str) -> str:
+    source_id = f"bestiary:{kind}:{character_id}:{creature_id}"
+    if len(source_id) <= 96:
+        return source_id
+    creature_hash = sha256(creature_id.encode("utf-8")).hexdigest()
+    return f"bestiary:{kind}:{creature_hash}"
 
 VDE_IMPORTANT_FIRST_VICTORY_XP = {
     "no_feroz": (14, 687),
@@ -1038,7 +1047,7 @@ class BestiaryRecorder:
     async def _grant_observation_xp(
         self, session, character_id, creature_id, reference_level
     ):
-        source_id = f"bestiary:observation:{character_id}:{creature_id}"
+        source_id = _reward_source_id("observation", character_id, creature_id)
         event = await session.scalar(
             select(RewardEvent)
             .where(
@@ -1074,7 +1083,7 @@ class BestiaryRecorder:
         return xp
 
     async def _grant_alpha_victory_xp(self, session, character_id, creature_id):
-        source_id = f"bestiary:first_victory:{character_id}:{creature_id}"
+        source_id = _reward_source_id("first_victory", character_id, creature_id)
         event = await session.scalar(
             select(RewardEvent)
             .where(
@@ -1113,7 +1122,7 @@ class BestiaryRecorder:
         reference_level,
         configured_xp=None,
     ):
-        source_id = f"bestiary:first_victory:{character_id}:{creature_id}"
+        source_id = _reward_source_id("first_victory", character_id, creature_id)
         event = await session.scalar(
             select(RewardEvent)
             .where(
