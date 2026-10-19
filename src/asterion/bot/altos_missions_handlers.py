@@ -11,6 +11,7 @@ from asterion.application.altos_missions import AltosMissionService
 from asterion.application.groups import GroupError
 from asterion.application.s30 import S30Service, S30View
 from asterion.application.s31 import S31Service, S31View
+from asterion.application.s32 import S32Service, S32View
 from asterion.bot.altos_missions_ui import render_altos_mission
 from asterion.bot.combat_ui import (
     CampaignCombatCallback,
@@ -22,6 +23,7 @@ from asterion.bot.creation_handlers import present
 from asterion.bot.groups_ui import render_group
 from asterion.bot.s30_ui import render_s30
 from asterion.bot.s31_ui import render_s31
+from asterion.bot.s32_ui import render_s32
 
 
 def _base36(value: str) -> int:
@@ -36,6 +38,7 @@ def altos_missions_router(
     *,
     s30: S30Service | None = None,
     s31: S31Service | None = None,
+    s32: S32Service | None = None,
 ) -> Router:
     router = Router(name="altos_missions")
     router.message.filter(F.chat.type == "private")
@@ -53,6 +56,10 @@ def altos_missions_router(
                 mission_view = await s31.resume(query.from_user.id)
                 if isinstance(mission_view, S31View):
                     screen = render_s31(mission_view)
+            if view.quest_id == "S32" and s32 is not None:
+                mission_view = await s32.resume(query.from_user.id)
+                if isinstance(mission_view, S32View):
+                    screen = render_s32(mission_view)
             await present(query.message, screen, images, edit=True)
 
     async def show_group(query: CallbackQuery) -> None:
@@ -67,6 +74,16 @@ def altos_missions_router(
     async def resume_from_command(message: Message) -> None:
         if message.from_user is None:
             raise SkipHandler()
+        if s32 is not None:
+            secondary = await s32.resume_active(message.from_user.id)
+            if secondary is not None:
+                screen = (
+                    render_altos_mission(secondary)
+                    if hasattr(secondary, "quest_id")
+                    else render_s32(secondary)
+                )
+                await present(message, screen, images, edit=False)
+                return
         if s31 is not None:
             secondary = await s31.resume_active(message.from_user.id)
             if secondary is not None:
@@ -84,6 +101,16 @@ def altos_missions_router(
 
     @router.callback_query(F.data == "altos:mission")
     async def resume_mission(query: CallbackQuery) -> None:
+        if s32 is not None:
+            secondary = await s32.resume_active(query.from_user.id)
+            if secondary is not None:
+                if isinstance(secondary, S32View):
+                    await query.answer()
+                    if isinstance(query.message, Message):
+                        await present(query.message, render_s32(secondary), images, edit=True)
+                    return
+                await show(query, secondary)
+                return
         if s31 is not None:
             secondary = await s31.resume_active(query.from_user.id)
             if secondary is not None:

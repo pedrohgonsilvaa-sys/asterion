@@ -76,6 +76,7 @@ from asterion.application.s28 import S28Service
 from asterion.application.s29 import S29Service
 from asterion.application.s30 import S30Service
 from asterion.application.s31 import S31Service
+from asterion.application.s32 import S32Service
 from asterion.application.varzeas_missions import (
     S19_ID,
     S20_ID,
@@ -127,6 +128,7 @@ from asterion.bot.s28_ui import render_s28
 from asterion.bot.s29_ui import render_s29
 from asterion.bot.s30_ui import render_s30
 from asterion.bot.s31_ui import render_s31
+from asterion.bot.s32_ui import render_s32
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
 from asterion.bot.vde_missions_ui import render_vde_mission
 from asterion.bot.world_ui import render_adventure, render_world
@@ -164,6 +166,7 @@ def world_router(
     s29: S29Service | None = None,
     s30: S30Service | None = None,
     s31: S31Service | None = None,
+    s32: S32Service | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -182,6 +185,16 @@ def world_router(
         return render_combat(combat_view) if combat_view is not None else None
 
     async def resume_altos(message: Message, actor: int, *, edit: bool = False) -> bool:
+        if s32 is not None:
+            secondary = await s32.resume_active(actor)
+            if secondary is not None:
+                screen = (
+                    render_altos_mission(secondary)
+                    if hasattr(secondary, "quest_id")
+                    else render_s32(secondary)
+                )
+                await present(message, screen, images, edit=edit)
+                return True
         if s31 is not None:
             secondary = await s31.resume_active(actor)
             if secondary is not None:
@@ -1469,6 +1482,7 @@ def world_router(
         s29_view = await s29.summary(query.from_user.id) if s29 else None
         s30_view = await s30.summary(query.from_user.id) if s30 else None
         s31_view = await s31.summary(query.from_user.id) if s31 else None
+        s32_view = await s32.summary(query.from_user.id) if s32 else None
         if altos_view is not None and altos_view.status == "active":
             mission_screen = render_altos_mission(altos_view)
             if s25_view is not None:
@@ -2126,6 +2140,18 @@ def world_router(
             else:
                 state, action = "Bloqueada · requer P31 concluída + Nv.52", None
             secondary_entries.append((f"📜 Duas Vezes a Mesma Estrada · {state}", action))
+        if s32_view is not None:
+            if s32_view.status == "active":
+                state, action = "Em Andamento", "s32:resume"
+            elif s32_view.status == "completed":
+                state, action = "Concluída", "s32:resume"
+            elif s32_view.reacceptable:
+                state, action = "Disponível para reaceite", "s32:haro"
+            elif s32_view.available:
+                state, action = "Disponível", "s32:haro"
+            else:
+                state, action = "Bloqueada · requer P32 concluída + Nv.54", None
+            secondary_entries.append((f"📜 A Casa que Não Chegou · {state}", action))
         if secondary_entries:
             secondary_lines = []
             secondary_buttons = []
@@ -2706,6 +2732,52 @@ def world_router(
                     rows.append([InlineKeyboardButton(text="Talen Nyr · Duas Vezes a Mesma Estrada", callback_data=callback)])
                 local_screen = Screen(
                     local_screen.text + f"\n\n📜 Talen Nyr · Duas Vezes a Mesma Estrada · {state}",
+                    local_screen.image_key,
+                    InlineKeyboardMarkup(inline_keyboard=rows),
+                    parse_mode=local_screen.parse_mode,
+                )
+        if s32 is not None and view.location == CONFINS_ULTIMO_REFUGIO_LABEL:
+            contact = await s32.giver(actor)
+            if contact is not None:
+                contact_name = (
+                    "Roven Pell"
+                    if contact.status == "active" and contact.step == 5
+                    else "Haro Sen"
+                )
+                if contact.status == "active" and contact.step == 5:
+                    state, callback = "Comparação pessoal disponível", "s32:resume"
+                    button_label = "Roven Pell · Comparar as duas fichas"
+                elif contact.status == "active":
+                    state, callback = "Em Andamento", "s32:resume"
+                    button_label = "Haro Sen · A Casa que Não Chegou"
+                elif contact.status == "completed":
+                    state, callback = "Concluída", "s32:haro"
+                    button_label = "Haro Sen · A Casa que Não Chegou"
+                elif contact.reacceptable:
+                    state, callback = "Disponível para reaceite", "s32:haro"
+                    button_label = "Haro Sen · A Casa que Não Chegou"
+                elif contact.available:
+                    state, callback = "Disponível", "s32:haro"
+                    button_label = "Haro Sen · A Casa que Não Chegou"
+                else:
+                    state, callback = "Requer P32 concluída + Nv.54", None
+                    button_label = "Haro Sen · A Casa que Não Chegou"
+                rows = list(local_screen.keyboard.inline_keyboard) if local_screen.keyboard else []
+                if callback is not None:
+                    rows.append([InlineKeyboardButton(text=button_label, callback_data=callback)])
+                local_screen = Screen(
+                    local_screen.text + f"\n\n📜 {contact_name} · A Casa que Não Chegou · {state}",
+                    local_screen.image_key,
+                    InlineKeyboardMarkup(inline_keyboard=rows),
+                    parse_mode=local_screen.parse_mode,
+                )
+        elif s32 is not None and view.location == CONFINS_ESTRADAS_AUSENTES_LABEL:
+            active_s32 = await s32.summary(actor)
+            if active_s32 is not None and active_s32.status == "active":
+                rows = list(local_screen.keyboard.inline_keyboard) if local_screen.keyboard else []
+                rows.append([InlineKeyboardButton(text="S32 · Retomar A Casa que Não Chegou", callback_data="s32:resume")])
+                local_screen = Screen(
+                    local_screen.text + "\n\n📜 S32 · A Casa que Não Chegou · Em andamento",
                     local_screen.image_key,
                     InlineKeyboardMarkup(inline_keyboard=rows),
                     parse_mode=local_screen.parse_mode,

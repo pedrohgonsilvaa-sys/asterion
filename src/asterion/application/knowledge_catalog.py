@@ -517,6 +517,10 @@ CODEX_FRAGMENTS = {
         "Memória de Fundação",
         "Uma evidência documental e material registra uma casa como presente e ausente. Este trecho acrescenta a observação sem concluir a missão secundária correspondente.",
     ),
+    "mission.confins.s32.casa_presente_ausente": FragmentPresentation(
+        "A Casa que Não Chegou",
+        "As fichas de presença e ausência e a fundação material permanecem registradas lado a lado. A discrepância não prova viagem temporal, portal, dimensão adicional, duplicação de pessoas ou uma causa além do que foi observado.",
+    ),
     "explore.confins.marcha.duas_balizas": FragmentPresentation(
         "Marcos Incompatíveis",
         "Duas balizas físicas da mesma estrada foram observadas em posições incompatíveis. O registro preserva a observação sem escolher qual marco está correto.",
