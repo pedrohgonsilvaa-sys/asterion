@@ -461,6 +461,7 @@ MATERIAL_LABELS = {
     "material.confins.couro_marcha": "Couro de Marcha",
     "material.confins.musgo_limiar": "Musgo de Limiar",
     "material.confins.po_referencia": "Pó de Referência",
+    "material.special.confins.core.arquivo_retorno": "Núcleo do Arquivo do Retorno",
     "material.tdo.catalisador_elite_vi": "Catalisador de Elite VI",
     "material.tdo.fragmento_aprimoramento_vi": "Fragmento de Aprimoramento VI",
     "material.tdo.ferro_de_fuligem": "Ferro de Fuligem",

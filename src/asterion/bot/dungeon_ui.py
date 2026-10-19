@@ -34,6 +34,7 @@ def render_dungeons(view: DungeonView) -> Screen:
                 "dungeon.varzeas.cisterna_transferencia": "dungeon:varzeas-cistern",
                 "dungeon.altos.pedreira_contrapeso": "dungeon:altos-pedreira",
                 "dungeon.altos.bastilha_profunda": "dungeon:altos-bastilha",
+                "dungeon.confins.arquivo_retorno": "dungeon:confins-arquivo",
             }.get(family_id, "dungeon:known")
             rows.append([_button(f"{name} · {level_range}", callback)])
             details.append(f"{name} · {level_range}\n{region} · {location}")
@@ -74,6 +75,7 @@ def render_dungeons(view: DungeonView) -> Screen:
             "dungeon.varzeas.cisterna_transferencia": "t",
             "dungeon.altos.pedreira_contrapeso": "p",
             "dungeon.altos.bastilha_profunda": "b",
+            "dungeon.confins.arquivo_retorno": "a",
         }.get(view.family_id)
         if family_key is None:
             return Screen(

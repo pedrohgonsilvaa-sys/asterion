@@ -196,6 +196,16 @@ CONFINS_S36_BOSS_MASTERY = {
     }
 }
 
+CONFINS_ARQUIVO_BOSS_MASTERY = {
+    "boss.confins.arquivo.o_que_chega_antes": {
+        "first_victory",
+        "phase:registro_antecipado",
+        "phase:registro_refeito",
+        "action:queda_retorno",
+        "stable_first_clear",
+    }
+}
+
 ALTOS_PEDREIRA_DISTINCTIVE_BOSS_MASTERY = {
     "boss.altos.pedreira.peso_sem_fim": {
         "first_victory",
@@ -433,8 +443,16 @@ class BestiaryRecorder:
                     "elite_victory",
                     6,
                 )
-        elif creature_id in (CONFINS_REGENT_BOSS_MASTERY | CONFINS_S36_BOSS_MASTERY):
-            required = (CONFINS_REGENT_BOSS_MASTERY | CONFINS_S36_BOSS_MASTERY)[creature_id]
+        elif creature_id in (
+            CONFINS_REGENT_BOSS_MASTERY
+            | CONFINS_S36_BOSS_MASTERY
+            | CONFINS_ARQUIVO_BOSS_MASTERY
+        ):
+            required = (
+                CONFINS_REGENT_BOSS_MASTERY
+                | CONFINS_S36_BOSS_MASTERY
+                | CONFINS_ARQUIVO_BOSS_MASTERY
+            )[creature_id]
             entry.stage = (
                 "dominated"
                 if entry.bkp >= 50 and required.issubset(evidence_ids)
@@ -1041,6 +1059,8 @@ class BestiaryRecorder:
         required = (
             S30_DISTINCTIVE_BOSS_MASTERY[creature_id]
             if creature_id in S30_DISTINCTIVE_BOSS_MASTERY
+            else CONFINS_ARQUIVO_BOSS_MASTERY[creature_id]
+            if creature_id in CONFINS_ARQUIVO_BOSS_MASTERY
             else CONFINS_S36_BOSS_MASTERY[creature_id]
             if creature_id in CONFINS_S36_BOSS_MASTERY
             else CONFINS_REGENT_BOSS_MASTERY[creature_id]
@@ -1075,6 +1095,7 @@ class BestiaryRecorder:
         previous_stage = entry.stage
         if creature_id in {
             *S30_DISTINCTIVE_BOSS_MASTERY,
+            *CONFINS_ARQUIVO_BOSS_MASTERY,
             *CONFINS_S36_BOSS_MASTERY,
             *CONFINS_REGENT_BOSS_MASTERY,
             *ALTOS_DISTINCTIVE_DUNGEON_BOSS_MASTERY,

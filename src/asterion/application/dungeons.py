@@ -73,6 +73,31 @@ from asterion.domain.combat import (
     combat_consumable_options,
     use_combat_consumable,
 )
+from asterion.domain.confins_arquivo_dungeon import (
+    CONFINS_ARQUIVO_BASIC_MATERIAL_WEIGHTS,
+    CONFINS_ARQUIVO_BOSS,
+    CONFINS_ARQUIVO_BOSS_CODEX_ENTRY,
+    CONFINS_ARQUIVO_BRAZIER_LABEL,
+    CONFINS_ARQUIVO_CODEX_ENTRY,
+    CONFINS_ARQUIVO_CONTENT_VERSION,
+    CONFINS_ARQUIVO_CORE_ID,
+    CONFINS_ARQUIVO_CORE_NAME,
+    CONFINS_ARQUIVO_DISCOVERY_UNLOCK,
+    CONFINS_ARQUIVO_ENVIRONMENTS,
+    CONFINS_ARQUIVO_FAMILY_ID,
+    CONFINS_ARQUIVO_FIRST_CLEAR_PREFIX,
+    CONFINS_ARQUIVO_KNOWN_PATH_UNLOCK,
+    CONFINS_ARQUIVO_PHASE_II,
+    CONFINS_ARQUIVO_PHASE_III,
+    CONFINS_ARQUIVO_RECIPE_NAME,
+    CONFINS_ARQUIVO_RECIPE_UNLOCK,
+    CONFINS_ARQUIVO_RECORD_CODEX_ENTRY,
+    CONFINS_ARQUIVO_REWARD_PREFIX,
+    CONFINS_ARQUIVO_RULESET_VERSION,
+    confins_arquivo_encounter_specs,
+    confins_arquivo_enemy_rewards,
+    create_confins_arquivo_combat,
+)
 from asterion.domain.consumables import ConsumableFamily
 from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.dungeons import (
@@ -133,6 +158,7 @@ from asterion.domain.nareth_dungeons import (
     nareth_dungeon_enemy_rewards,
 )
 from asterion.domain.road import (
+    CONFINS_ESTRADAS_AUSENTES,
     RULESET,
     PlayerCombatantSpec,
     enemy_xp,
@@ -624,6 +650,47 @@ DUNGEON_FAMILIES = {
             ("material.altos.couro_escarpa", 500),
         ),
     ),
+    CONFINS_ARQUIVO_FAMILY_ID: DungeonFamily(
+        CONFINS_ARQUIVO_FAMILY_ID,
+        "Arquivo do Retorno",
+        "Nv.54–57",
+        CONFINS_ESTRADAS_AUSENTES,
+        CONFINS_ESTRADAS_AUSENTES,
+        CONFINS_ARQUIVO_DISCOVERY_UNLOCK,
+        CONFINS_ARQUIVO_KNOWN_PATH_UNLOCK,
+        CONFINS_ARQUIVO_FIRST_CLEAR_PREFIX,
+        CONFINS_ARQUIVO_REWARD_PREFIX,
+        "dungeon_confins_arquivo_encounter",
+        CONFINS_ARQUIVO_CONTENT_VERSION,
+        CONFINS_ARQUIVO_RULESET_VERSION,
+        57,
+        54,
+        CONFINS_ARQUIVO_CODEX_ENTRY,
+        CONFINS_ARQUIVO_CORE_ID,
+        CONFINS_ARQUIVO_CORE_NAME,
+        CONFINS_ARQUIVO_RECIPE_UNLOCK,
+        CONFINS_ARQUIVO_BRAZIER_LABEL,
+        region_display="Confins do Véu",
+        encounter_count=5,
+        recipe_name=CONFINS_ARQUIVO_RECIPE_NAME,
+        required_quest_ids=("P32",),
+        completion_xp_by_difficulty=(
+            ("stable", 14_870),
+            ("fractured", 18_220),
+            ("rupture", 24_240),
+        ),
+        first_clear_xp_by_difficulty=(
+            ("stable", 23_792),
+            ("fractured", 29_152),
+            ("rupture", 38_784),
+        ),
+        crowns_by_difficulty=(
+            ("stable", 770),
+            ("fractured", 1_150),
+            ("rupture", 1_800),
+        ),
+        basic_material_weights=CONFINS_ARQUIVO_BASIC_MATERIAL_WEIGHTS,
+    ),
 }
 
 
@@ -669,6 +736,8 @@ def _encounter_environment(family_id: str, ordinal: int) -> str:
         return ALTOS_PEDREIRA_ENVIRONMENTS[ordinal]
     if family_id == ALTOS_BASTILHA_FAMILY_ID:
         return ALTOS_BASTILHA_ENVIRONMENTS[ordinal]
+    if family_id == CONFINS_ARQUIVO_FAMILY_ID:
+        return CONFINS_ARQUIVO_ENVIRONMENTS[ordinal]
     raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
@@ -708,6 +777,10 @@ def _encounter_specs(run, ordinal: int):
         return altos_bastilha_encounter_specs(
             ordinal, run.difficulty, run.initial_group_size
         )
+    if family_id == CONFINS_ARQUIVO_FAMILY_ID:
+        return confins_arquivo_encounter_specs(
+            ordinal, run.difficulty, run.initial_group_size
+        )
     raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
@@ -735,6 +808,8 @@ def _enemy_rewards_for(run, ordinal: int):
         return altos_pedreira_enemy_rewards(ordinal)
     if run.dungeon_family_id == ALTOS_BASTILHA_FAMILY_ID:
         return altos_bastilha_enemy_rewards(ordinal)
+    if run.dungeon_family_id == CONFINS_ARQUIVO_FAMILY_ID:
+        return confins_arquivo_enemy_rewards(ordinal)
     raise ValueError(f"Unknown dungeon family: {run.dungeon_family_id}")
 
 
@@ -1888,6 +1963,22 @@ class DungeonService:
                     initial_group_size=run.initial_group_size,
                     party=group,
                 )
+            elif run.dungeon_family_id == CONFINS_ARQUIVO_FAMILY_ID:
+                combat = create_confins_arquivo_combat(
+                    uuid4(),
+                    name=primary_character.name,
+                    character_class=primary_character.character_class,
+                    race=primary_character.race,
+                    hp=primary_member.hp,
+                    level=primary_character.level,
+                    difficulty=run.difficulty,
+                    equipment=equipment,
+                    active_art_ids=active_arts,
+                    ordinal=run.current_encounter_ordinal,
+                    run_seed=run.seed,
+                    initial_group_size=run.initial_group_size,
+                    party=group,
+                )
             else:
                 raise ValueError(f"Unknown dungeon family: {run.dungeon_family_id}")
             combat.configuration_snapshot = (combat.configuration_snapshot or {}) | {
@@ -2428,6 +2519,10 @@ class DungeonService:
                         await self.bestiary.refresh_boss_mastery(
                             session, participant_character.id, spec.creature.creature_id
                         )
+            if run.dungeon_family_id == CONFINS_ARQUIVO_FAMILY_ID:
+                await self._record_confins_arquivo_codex(
+                    session, participant_character.id, ordinal
+                )
 
         encounter.status = "completed"
         encounter.reward_settled = True
@@ -2744,6 +2839,15 @@ class DungeonService:
                         character.id,
                         "achievement.altos.bastilha_primeira",
                     )
+                if (
+                    run.dungeon_family_id == CONFINS_ARQUIVO_FAMILY_ID
+                    and run.difficulty == "stable"
+                ):
+                    await self._ensure_achievement(
+                        session,
+                        character.id,
+                        "achievement.confins.arquivo_estavel",
+                    )
                 if run.difficulty == "stable":
                     if run.dungeon_family_id == CRYPT_FAMILY_ID:
                         await self._refresh_crypt_boss_mastery(session, character.id)
@@ -2783,6 +2887,19 @@ class DungeonService:
                 await self._ensure_codex_entry(
                     session, character.id, ALTOS_BASTILHA_CODEX_ENTRY
                 )
+            elif run.dungeon_family_id == CONFINS_ARQUIVO_FAMILY_ID:
+                if run.difficulty == "stable" and first_clear:
+                    await self._add_bestiary_evidence(
+                        session,
+                        character.id,
+                        CONFINS_ARQUIVO_BOSS,
+                        "stable_first_clear",
+                        "completion",
+                        0,
+                    )
+                    await self.bestiary.refresh_boss_mastery(
+                        session, character.id, CONFINS_ARQUIVO_BOSS
+                    )
             session.add_all(components)
             reward_lines_by_character[str(character.id)] = self._reward_lines(
                 total_xp,
@@ -2872,6 +2989,10 @@ class DungeonService:
             "material.altos.cinza_basalto": "Cinza de Basalto",
             "material.altos.couro_escarpa": "Couro de Escarpa",
             "material.altos.liquen_pedreira": "Líquen de Pedreira",
+            "material.confins.ferro_baliza": "Ferro de Baliza",
+            "material.confins.couro_marcha": "Couro de Marcha",
+            "material.confins.musgo_limiar": "Musgo de Limiar",
+            "material.confins.po_referencia": "Pó de Referência",
             "material.tdo.catalisador_elite_v": "Catalisador de Elite V",
             "material.tdo.catalisador_elite_vi": "Catalisador de Elite VI",
             "material.tdo.fragmento_aprimoramento_v": "Fragmento de Aprimoramento V",
@@ -3019,6 +3140,19 @@ class DungeonService:
                 elite=spec.creature.category == "elite",
                 observation_category=spec.creature.category,
             )
+            if (
+                family_id == CONFINS_ARQUIVO_FAMILY_ID
+                and ordinal == 5
+                and spec.creature.creature_id == CONFINS_ARQUIVO_BOSS
+            ):
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    CONFINS_ARQUIVO_BOSS,
+                    "phase:registro_antecipado",
+                    "phase",
+                    5,
+                )
 
     async def _record_combat_events(self, session, character, run, encounter, before, after):
         family_id = getattr(run, "dungeon_family_id", CRYPT_FAMILY_ID)
@@ -3061,6 +3195,8 @@ class DungeonService:
             if family_id == ALTOS_PEDREIRA_FAMILY_ID
             else ALTOS_BASTILHA_GUARDIAN
             if family_id == ALTOS_BASTILHA_FAMILY_ID
+            else CONFINS_ARQUIVO_BOSS
+            if family_id == CONFINS_ARQUIVO_FAMILY_ID
             else "custodio_primeiro_selo"
         )
         for event in after.events[cursor:]:
@@ -3264,6 +3400,28 @@ class DungeonService:
                     "phase",
                     5,
                 )
+            elif family_id == CONFINS_ARQUIVO_FAMILY_ID and event.action == (
+                f"phase:{CONFINS_ARQUIVO_PHASE_II}"
+            ):
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    CONFINS_ARQUIVO_BOSS,
+                    "phase:registro_refeito",
+                    "phase",
+                    5,
+                )
+            elif family_id == CONFINS_ARQUIVO_FAMILY_ID and event.action == (
+                f"phase:{CONFINS_ARQUIVO_PHASE_III}"
+            ):
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    CONFINS_ARQUIVO_BOSS,
+                    "phase:retorno_sem_ida",
+                    "phase",
+                    5,
+                )
             elif event.action == f"phase:{VARZEAS_PERSISTENT_PHASE_II}":
                 await self._add_bestiary_evidence(
                     session,
@@ -3356,6 +3514,10 @@ class DungeonService:
                     session, character.id, boss_creature_id
                 )
             elif family_id == ALTOS_BASTILHA_FAMILY_ID:
+                await self.bestiary.refresh_boss_mastery(
+                    session, character.id, boss_creature_id
+                )
+            elif family_id == CONFINS_ARQUIVO_FAMILY_ID:
                 await self.bestiary.refresh_boss_mastery(
                     session, character.id, boss_creature_id
                 )
@@ -3467,6 +3629,12 @@ class DungeonService:
     async def _ensure_codex_for_encounter(
         self, session, character_id, ordinal, *, family_id=CRYPT_FAMILY_ID
     ):
+        if family_id == CONFINS_ARQUIVO_FAMILY_ID:
+            if ordinal == 1:
+                await self._ensure_codex_entry(
+                    session, character_id, CONFINS_ARQUIVO_CODEX_ENTRY
+                )
+            return
         if family_id == ALTOS_PEDREIRA_FAMILY_ID:
             entry_id = {
                 1: ALTOS_PEDREIRA_CODEX_ENTRY,
@@ -3608,6 +3776,50 @@ class DungeonService:
         entry_id, fragment_id = values
         await self._ensure_codex_entry(session, character_id, entry_id)
         await self._ensure_fragment(session, character_id, entry_id, fragment_id)
+
+    async def _record_confins_arquivo_codex(self, session, character_id, ordinal):
+        if ordinal == 1:
+            await self._ensure_codex_entry(
+                session, character_id, CONFINS_ARQUIVO_CODEX_ENTRY
+            )
+            await self._ensure_fragment(
+                session,
+                character_id,
+                CONFINS_ARQUIVO_CODEX_ENTRY,
+                "codex.fragment.confins.arquivo.cabecalho_entrada",
+            )
+        elif ordinal in {2, 3, 4}:
+            await self._ensure_codex_entry(
+                session, character_id, CONFINS_ARQUIVO_RECORD_CODEX_ENTRY
+            )
+            fragments = {
+                2: (
+                    "codex.fragment.confins.arquivo.livro_a",
+                    "codex.fragment.confins.arquivo.livro_b",
+                ),
+                3: ("codex.fragment.confins.arquivo.guardiao_retorno",),
+                4: (
+                    "codex.fragment.confins.arquivo.placa_entrada",
+                    "codex.fragment.confins.arquivo.placa_saida",
+                ),
+            }
+            for fragment_id in fragments[ordinal]:
+                await self._ensure_fragment(
+                    session,
+                    character_id,
+                    CONFINS_ARQUIVO_RECORD_CODEX_ENTRY,
+                    fragment_id,
+                )
+        elif ordinal == 5:
+            await self._ensure_codex_entry(
+                session, character_id, CONFINS_ARQUIVO_BOSS_CODEX_ENTRY
+            )
+            await self._ensure_fragment(
+                session,
+                character_id,
+                CONFINS_ARQUIVO_BOSS_CODEX_ENTRY,
+                "codex.fragment.confins.arquivo.chegada_antes",
+            )
 
     async def _record_crypt_codex_completion(self, session, character_id):
         for entry_id, fragment_id in (

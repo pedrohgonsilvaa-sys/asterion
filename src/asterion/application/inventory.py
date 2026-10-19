@@ -97,6 +97,7 @@ MATERIAL_LABELS = {
     "material.confins.couro_marcha": "Couro de Marcha",
     "material.confins.musgo_limiar": "Musgo de Limiar",
     "material.confins.po_referencia": "Pó de Referência",
+    "material.special.confins.core.arquivo_retorno": "Núcleo do Arquivo do Retorno",
 }
 
 @dataclass(frozen=True)

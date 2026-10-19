@@ -114,6 +114,9 @@ CONFINS_VIUVA_INTERVALO = "elite.confins.viuva_intervalo"
 CONFINS_CUSTODIO_DESFASADO = "elite.confins.custodio_desfasado"
 CONFINS_REGENTE_FRATURADO = "boss.confins.regente_fraturado"
 CONFINS_S36_VERIFIER = "boss.confins.s36.verificador_sem_testemunhas"
+CONFINS_ARQUIVO_ECO = "dungeon_creature.confins.arquivo.eco_sem_origem"
+CONFINS_ARQUIVO_GUARDIAN = "dungeon_elite.confins.arquivo.guardiao_retorno"
+CONFINS_ARQUIVO_O_QUE_CHEGA_ANTES = "boss.confins.arquivo.o_que_chega_antes"
 CONFINS_FERRO_BALIZA = "material.confins.ferro_baliza"
 CONFINS_COURO_MARCHA = "material.confins.couro_marcha"
 CONFINS_MUSGO_LIMIAR = "material.confins.musgo_limiar"
@@ -4764,3 +4767,58 @@ CONFINS_S36_VERIFIER_BOSS = Creature(
     ai_priority=("selagem_retorno", "desvio_registro", "conferencia_final", "golpe_comprovacao"),
 )
 CREATURE_CATALOG = (*CREATURE_CATALOG, CONFINS_S36_VERIFIER_BOSS)
+
+CONFINS_ARQUIVO_CREATURES = (
+    Creature(
+        CONFINS_ARQUIVO_ECO,
+        "Eco sem Origem",
+        "common",
+        "balanced",
+        54,
+        57,
+        0,
+        ("sinal_presenca", "passagem_repetida", "rasura_registro"),
+        (
+            ("sinal_presenca", "Sinal de Presença", D("0.95"), 0, D(0), 0),
+            ("passagem_repetida", "Passagem Repetida", D("1.10"), 0, D(0), 0, None, 0, False, 2),
+            ("rasura_registro", "Rasura de Registro", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "per"),
+        ),
+        ai_priority=("rasura_registro", "passagem_repetida", "sinal_presenca"),
+    ),
+    Creature(
+        CONFINS_ARQUIVO_GUARDIAN,
+        "Guardião do Retorno",
+        "elite",
+        "armored",
+        56,
+        56,
+        0,
+        ("golpe_protocolo", "reconstituir_postura", "revisao_retorno", "volta_indevida"),
+        (
+            ("golpe_protocolo", "Golpe de Protocolo", D("1.00"), 0, D(0), 0),
+            ("reconstituir_postura", "Reconstituir Postura", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("1.00"), 2, True, "self"),
+            ("revisao_retorno", "Revisão de Retorno", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+            ("volta_indevida", "Volta Indevida", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+        ),
+        ai_priority=("reconstituir_postura", "revisao_retorno", "volta_indevida", "golpe_protocolo"),
+    ),
+    Creature(
+        CONFINS_ARQUIVO_O_QUE_CHEGA_ANTES,
+        "O Que Chega Antes",
+        "boss",
+        "balanced",
+        57,
+        57,
+        0,
+        ("marca_chegada", "registro_antecipado", "cobertura_anterior", "queda_retorno", "retorno_sem_ida"),
+        (
+            ("marca_chegada", "Marca de Chegada", D("1.00"), 0, D(0), 0),
+            ("registro_antecipado", "Registro Antecipado", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "agility"),
+            ("cobertura_anterior", "Cobertura Anterior", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), 2, True, "self", None, None, 2, (), (), D("0.50"), D("0.08")),
+            ("queda_retorno", "Queda do Retorno", D("0.80"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+            ("retorno_sem_ida", "Retorno sem Ida", D("1.80"), 0, D(0), 0, None, 0, True, 5),
+        ),
+        ai_priority=("cobertura_anterior", "registro_antecipado", "retorno_sem_ida", "queda_retorno", "marca_chegada"),
+    ),
+)
+CREATURE_CATALOG = (*CREATURE_CATALOG, *CONFINS_ARQUIVO_CREATURES)

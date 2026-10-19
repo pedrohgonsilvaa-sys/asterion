@@ -2866,6 +2866,10 @@ def world_router(
                 "dungeon.nareth.observatorio_afundado",
                 "dungeon:nareth-observatory",
             ),
+            CONFINS_ESTRADAS_AUSENTES_LABEL: (
+                "dungeon.confins.arquivo_retorno",
+                "dungeon:confins-arquivo",
+            ),
         }
         family = family_by_location.get(view.location)
         if dungeons is not None and family is not None:

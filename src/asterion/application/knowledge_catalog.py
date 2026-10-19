@@ -471,6 +471,27 @@ CODEX_ENTRIES = (
         310,
         "location.confins.camara_regencia",
     ),
+    CodexPresentation(
+        "codex.confins.dungeon.arquivo_retorno",
+        "Arquivo do Retorno",
+        "history",
+        315,
+        "location.confins.estradas_ausentes",
+    ),
+    CodexPresentation(
+        "codex.confins.dungeon.registro_repetido",
+        "Registro Repetido",
+        "history",
+        316,
+        "location.confins.estradas_ausentes",
+    ),
+    CodexPresentation(
+        "codex.confins.dungeon.chegada_antes",
+        "O Que Chega Antes",
+        "history",
+        317,
+        "location.confins.estradas_ausentes",
+    ),
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -533,6 +554,18 @@ CODEX_FRAGMENTS = {
     "codex.confins.protocolo_encerrado": FragmentPresentation(
         "Depois do Protocolo",
         "O protocolo impossível foi encerrado nesta trajetória. O Véu não foi curado, as Fraturas permanecem e o Avesso não foi destruído.",
+    ),
+    "codex.confins.dungeon.arquivo_retorno": FragmentPresentation(
+        "Arquivo do Retorno",
+        "A entrada descoberta abre caminho ao Arquivo do Retorno. O cabeçalho da equipe é registrado como evidência de acesso válido, sem revelar a reconstrução histórica completa.",
+    ),
+    "codex.confins.dungeon.registro_repetido": FragmentPresentation(
+        "Registro Repetido",
+        "Dois livros, páginas e placas preservam estados documentais repetidos. O registro descreve matéria e arquivo observáveis; não estabelece viagem no tempo controlável.",
+    ),
+    "codex.confins.dungeon.chegada_antes": FragmentPresentation(
+        "O Que Chega Antes",
+        "A vitória registra o comportamento observado do chefe e a chegada incongruente preservada no Arquivo. O Códice não o identifica como alma humana nem como testemunha onisciente.",
     ),
     "explore.confins.no.rede_incompleta": FragmentPresentation(
         "Diagrama da Rede Incompleta",
@@ -1666,6 +1699,7 @@ MATERIAL_LABELS = {
     "material.confins.couro_marcha": "Couro de Marcha",
     "material.confins.musgo_limiar": "Musgo de Limiar",
     "material.confins.po_referencia": "Pó de Referência",
+    "material.special.confins.core.arquivo_retorno": "Núcleo do Arquivo do Retorno",
 }
 
 

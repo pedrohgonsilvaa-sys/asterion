@@ -94,6 +94,13 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
             ),
         )
 
+    @router.callback_query(F.data == "dungeon:confins-arquivo")
+    async def confins_arquivo(query: CallbackQuery):
+        await show(
+            query,
+            await service.detail(query.from_user.id, "dungeon.confins.arquivo_retorno"),
+        )
+
     @router.callback_query(F.data.startswith("dungeon:group:"))
     async def prepare_group(query: CallbackQuery):
         try:
@@ -109,6 +116,7 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "t": "dungeon.varzeas.cisterna_transferencia",
                 "p": "dungeon.altos.pedreira_contrapeso",
                 "b": "dungeon.altos.bastilha_profunda",
+                "a": "dungeon.confins.arquivo_retorno",
             }[family_key]
             difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
                 difficulty_key
@@ -133,6 +141,7 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "t": "dungeon.varzeas.cisterna_transferencia",
                 "p": "dungeon.altos.pedreira_contrapeso",
                 "b": "dungeon.altos.bastilha_profunda",
+                "a": "dungeon.confins.arquivo_retorno",
             }[family_key]
             difficulty = {"s": "stable", "f": "fractured", "r": "rupture"}[
                 difficulty_key
@@ -221,6 +230,7 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 "t": "dungeon.varzeas.cisterna_transferencia",
                 "p": "dungeon.altos.pedreira_contrapeso",
                 "b": "dungeon.altos.bastilha_profunda",
+                "a": "dungeon.confins.arquivo_retorno",
             }.get(pieces[2])
             suffix = pieces[3]
         else:
