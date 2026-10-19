@@ -249,6 +249,18 @@ COSMETICS = (
         "Arquivo Duplo",
         "achievement.confins.cadeia_ruptura",
     ),
+    CosmeticDefinition(
+        "cosmetic.frame.confins.ultima_referencia",
+        "frame",
+        "Última Referência",
+        "achievement.confins.regente_primeira",
+    ),
+    CosmeticDefinition(
+        "cosmetic.appearance.confins.viajante_veu",
+        "appearance",
+        "Viajante do Véu",
+        "achievement.confins.regiao",
+    ),
 )
 
 COSMETICS_BY_ID = {item.cosmetic_id: item for item in COSMETICS}

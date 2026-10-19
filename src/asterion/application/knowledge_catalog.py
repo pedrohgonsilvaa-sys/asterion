@@ -429,6 +429,20 @@ CODEX_ENTRIES = (
         308,
         "location.confins.no_central",
     ),
+    CodexPresentation(
+        "codex.confins.regente_natureza",
+        "Regente Fraturado",
+        "history",
+        309,
+        "location.confins.camara_regencia",
+    ),
+    CodexPresentation(
+        "codex.confins.protocolo_encerrado",
+        "Depois do Protocolo",
+        "history",
+        310,
+        "location.confins.camara_regencia",
+    ),
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -467,6 +481,14 @@ CODEX_FRAGMENTS = {
     "codex.confins.cadeia_ruptura_documentada": FragmentPresentation(
         "Cadeia da Ruptura",
         "A oposição inicial dos Desvelados foi legítima; Neris Olan e uma ala radical autorizaram sabotagem consciente para isolamento regional controlado apesar do risco catastrófico. A decisão de Cael Rhen também enfrentava riscos ao prosseguir ou interromper a operação em acoplamento excepcional. A Ruptura é reconstruída como cascata de fatores; não atribui culpa coletiva nem elimina lacunas documentais.",
+    ),
+    "codex.confins.regente_natureza": FragmentPresentation(
+        "Regente Fraturado",
+        "A matéria observada e os registros pós-confronto descrevem uma manifestação composta de fragmentos de Cael Rhen, protocolos, registros e estados do Avesso. Não se trata de Cael vivo ou ressuscitado, e a evidência não afirma consciência própria nem reconstrói com certeza absoluta os minutos finais da Ruptura.",
+    ),
+    "codex.confins.protocolo_encerrado": FragmentPresentation(
+        "Depois do Protocolo",
+        "O protocolo impossível foi encerrado nesta trajetória. O Véu não foi curado, as Fraturas permanecem e o Avesso não foi destruído.",
     ),
     "explore.confins.no.rede_incompleta": FragmentPresentation(
         "Diagrama da Rede Incompleta",
@@ -1411,6 +1433,20 @@ ACHIEVEMENTS = (
         "chronicles",
         "Concluiu P35 — A Noite da Convergência.",
         "Moldura · Arquivo Duplo",
+    ),
+    AchievementPresentation(
+        "achievement.confins.regente_primeira",
+        "Encerrar sem Curar",
+        "pve",
+        "Obteve a primeira vitória válida contra o Regente Fraturado em P36.",
+        "Moldura · Última Referência",
+    ),
+    AchievementPresentation(
+        "achievement.confins.regiao",
+        "Confins do Véu",
+        "exploration",
+        "Concluiu P36 em Nv.60 e descobriu os seis Locais dos Confins do Véu.",
+        "Aparência · Viajante do Véu",
     ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(

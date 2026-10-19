@@ -56,6 +56,9 @@ from asterion.application.scripted_combat import (
 )
 from asterion.domain.altos_colossus import configure_colossus_encounter
 from asterion.domain.combat import Combat, active_player_key
+from asterion.domain.confins_regent import ANCHOR_KEYS as P36_ANCHOR_KEYS
+from asterion.domain.confins_regent import REGENT_ID as P36_BOSS_ID
+from asterion.domain.confins_regent import configure_regent_encounter
 from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
 from asterion.domain.creation import RULESET as CHARACTER_RULESET
 from asterion.domain.road import (
@@ -107,6 +110,7 @@ from asterion.domain.road import (
     CONFINS_FRATURAS_EXPLORE_UNLOCK,
     CONFINS_FRATURAS_HUNT_UNLOCK,
     CONFINS_FRATURAS_LIMIAR_LOCATION,
+    CONFINS_LOCATION_CATALOG,
     CONFINS_MARCHA_ACCESS_UNLOCK,
     CONFINS_MARCHA_EXPLORE_UNLOCK,
     CONFINS_MARCHA_HUNT_UNLOCK,
@@ -135,6 +139,7 @@ from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
     Achievement,
+    BestiaryEntry,
     Brazier,
     CampaignJourney,
     CampaignJourneyMember,
@@ -288,6 +293,50 @@ P35_TECHNICAL_SEQUENCE = (
     "growing_dependency_inequality",
     "coupled_convergence",
 )
+P36_ID = "P36"
+P36_MISSION_ID = "mission.confins.p36"
+P36_TITLE = "O Regente Fraturado"
+P36_CONTENT_VERSION = "confins-1.0.0"
+P36_CHECKPOINT = "p36.o_regente_fraturado"
+P36_REWARD_SOURCE = P36_MISSION_ID
+P36_CORE_SOURCE = "boss.confins.regente_fraturado.first_victory"
+P36_CORE_ID = "material.special.confins.core.regente_fraturado"
+P36_NARRATIVE_UNLOCK = "narrative.confins.protocolo_impossivel_encerrado"
+P36_CAMPAIGN_UNLOCK = "unlock.campaign.first_journey_complete"
+P36_RECIPE_UNLOCK = "recipe.confins.regente.eco_encerramento"
+P36_CODEX_NATURE = "codex.confins.regente_natureza"
+P36_CODEX_PROTOCOL = "codex.confins.protocolo_encerrado"
+P36_FIRST_VICTORY_ACHIEVEMENT = "achievement.confins.regente_primeira"
+P36_FIRST_VICTORY_FRAME = "cosmetic.frame.confins.ultima_referencia"
+P36_REGION_ACHIEVEMENT = "achievement.confins.regiao"
+P36_REGION_APPEARANCE = "cosmetic.appearance.confins.viajante_veu"
+P36_STAGE_ONE_EVIDENCE = (
+    "institutional_record",
+    "local_matter",
+    "incompatible_states",
+)
+P36_STAGE_TWO_EVIDENCE = (
+    "final_evidence_a",
+    "final_evidence_b",
+    "final_evidence_c",
+)
+P36_REWARD_OPTIONS = {
+    "guarda_ultimo_protocolo": (
+        "equipment.confins.campaign.p36.guarda_ultimo_protocolo",
+        "Guarda do Último Protocolo",
+        "Secundária",
+    ),
+    "selo_referencia_presente": (
+        "equipment.confins.campaign.p36.selo_referencia_presente",
+        "Selo da Referência Presente",
+        "Acessório",
+    ),
+    "relicario_ordem_findada": (
+        "equipment.confins.campaign.p36.relicario_ordem_findada",
+        "Relicário da Ordem Findada",
+        "Artefato",
+    ),
+}
 ALTOS_PRIMARY_LOCATIONS = (
     ALTOS_ESCARPA_LOCATION,
     ALTOS_ABRIGO_LOCATION,
@@ -443,6 +492,14 @@ P25_COMBAT = {
         59,
         "uncommon",
     ),
+    P36_ID: (
+        P36_MISSION_ID,
+        P36_CHECKPOINT,
+        CONFINS_CAMARA_REGENCIA_LABEL,
+        P36_BOSS_ID,
+        60,
+        "boss",
+    ),
 }
 
 
@@ -454,6 +511,8 @@ def _scripted_combat_step(quest_id: str) -> int:
     if quest_id == P34_ID:
         return 3
     if quest_id == P35_ID:
+        return 3
+    if quest_id == P36_ID:
         return 3
     if quest_id in {P31_ID, P32_ID}:
         return 4
@@ -479,11 +538,16 @@ def _content_version(quest_id: str) -> str:
         P33_ID: P33_CONTENT_VERSION,
         P34_ID: P34_CONTENT_VERSION,
         P35_ID: P35_CONTENT_VERSION,
+        P36_ID: P36_CONTENT_VERSION,
     }.get(quest_id, P25_CONTENT_VERSION)
 
 
 def _mission_region(quest_id: str) -> str:
-    return CONFINS_REGION if quest_id in {P31_ID, P32_ID, P33_ID, P34_ID, P35_ID} else ALTOS_REGION
+    return (
+        CONFINS_REGION
+        if quest_id in {P31_ID, P32_ID, P33_ID, P34_ID, P35_ID, P36_ID}
+        else ALTOS_REGION
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -701,6 +765,21 @@ class AltosMissionService:
                         character_id=character.id,
                         location_id=CONFINS_CAMARA_REGENCIA_LOCATION,
                     )
+                    p36 = await self._ensure_p36_quest(session, character, world)
+                    if p36 is not None and p36.status == "active" and p36.step == 1:
+                        progress = dict(p36.progress or {})
+                        if not progress.get("chamber_entered"):
+                            progress["chamber_entered"] = True
+                            p36.progress = progress
+                            p36.state_version += 1
+                            await self._credit_p36(
+                                session,
+                                character.id,
+                                "p36.chamber_entered",
+                                f"p36.chamber_entered:{character.id}",
+                                {"location_id": CONFINS_CAMARA_REGENCIA_LOCATION},
+                            )
+                await self._reconcile_confins_region_achievement(session, character)
                 return
             if world is None or world.region != ALTOS_REGION:
                 return
@@ -1100,10 +1179,23 @@ class AltosMissionService:
             if character is None:
                 return None
             world = await self._world(session, character.id, lock=False)
+            p36 = await self._quest(session, character.id, P36_ID, lock=False)
+            if p36 is not None:
+                if p36.content_version != P36_CONTENT_VERSION:
+                    return None
+                return self._p36_view(character, p36, world)
             p35 = await self._quest(session, character.id, P35_ID, lock=False)
             if p35 is not None:
                 if p35.content_version != P35_CONTENT_VERSION:
                     return None
+                if (
+                    p35.status == "completed"
+                    and world is not None
+                    and world.region == CONFINS_REGION
+                    and world.location == CONFINS_CAMARA_REGENCIA_LABEL
+                ):
+                    status = "available" if character.level >= 60 else "suspended"
+                    return self._p36_offer_view(character, world, status)
                 return await self._view(session, character, p35, world)
             p34 = await self._quest(session, character.id, P34_ID, lock=False)
             if p34 is not None:
@@ -1218,6 +1310,7 @@ class AltosMissionService:
             if character is None:
                 return None
             if quest_id is None:
+                p36 = await self._quest(session, character.id, P36_ID, lock=False)
                 p35 = await self._quest(session, character.id, P35_ID, lock=False)
                 p34 = await self._quest(session, character.id, P34_ID, lock=False)
                 p33 = await self._quest(session, character.id, P33_ID, lock=False)
@@ -1229,7 +1322,8 @@ class AltosMissionService:
                 p27 = await self._quest(session, character.id, P27_ID, lock=False)
                 p26 = await self._quest(session, character.id, P26_ID, lock=False)
                 quest_id = (
-                    P35_ID if p35 is not None
+                    P36_ID if p36 is not None
+                    else P35_ID if p35 is not None
                     else P34_ID if p34 is not None
                     else P33_ID if p33 is not None
                     else P32_ID if p32 is not None
@@ -1246,6 +1340,19 @@ class AltosMissionService:
                         character, p26, await self._world(session, character.id, lock=False)
                     )
             quest = await self._quest(session, character.id, quest_id, lock=False)
+            if quest is None and quest_id == P36_ID:
+                p35 = await self._quest(session, character.id, P35_ID, lock=False)
+                world = await self._world(session, character.id, lock=False)
+                if (
+                    p35 is not None
+                    and p35.status == "completed"
+                    and p35.content_version == P35_CONTENT_VERSION
+                    and world is not None
+                    and world.region == CONFINS_REGION
+                    and world.location == CONFINS_CAMARA_REGENCIA_LABEL
+                ):
+                    status = "available" if character.level >= 60 else "suspended"
+                    return self._p36_offer_view(character, world, status)
             if quest is None and quest_id == P35_ID:
                 p34 = await self._quest(session, character.id, P34_ID, lock=False)
                 world = await self._world(session, character.id, lock=False)
@@ -1316,6 +1423,7 @@ class AltosMissionService:
                     P33_CONTENT_VERSION,
                     P34_CONTENT_VERSION,
                     P35_CONTENT_VERSION,
+                    P36_CONTENT_VERSION,
                     S30_CONTENT_VERSION,
                 }:
                     return None
@@ -1352,6 +1460,7 @@ class AltosMissionService:
                                     CONFINS_ESTRADAS_AUSENTES_LOCATION,
                                     CONFINS_FRATURAS_LIMIAR_LOCATION,
                                     CONFINS_NO_CENTRAL_LOCATION,
+                                    CONFINS_CAMARA_REGENCIA_LOCATION,
                                 )
                             ),
                         )
@@ -1372,6 +1481,7 @@ class AltosMissionService:
                     (CONFINS_ESTRADAS_AUSENTES_LOCATION, CONFINS_ESTRADAS_AUSENTES_LABEL),
                     (CONFINS_FRATURAS_LIMIAR_LOCATION, CONFINS_FRATURAS_LIMIAR_LABEL),
                     (CONFINS_NO_CENTRAL_LOCATION, CONFINS_NO_CENTRAL_LABEL),
+                    (CONFINS_CAMARA_REGENCIA_LOCATION, CONFINS_CAMARA_REGENCIA_LABEL),
                 )
                 if location_id in found
             }
@@ -1630,6 +1740,52 @@ class AltosMissionService:
                 {"mission_id": P35_MISSION_ID, "level": character.level},
             )
             return self._p35_view(character, quest, world)
+
+    async def _ensure_p36_quest(self, session, character, world):
+        """Automatically activate P36 on valid personal arrival at level 60."""
+        existing = await self._quest(session, character.id, P36_ID)
+        if existing is not None:
+            if existing.content_version != P36_CONTENT_VERSION:
+                return None
+            return existing
+        if (
+            character.level < 60
+            or world is None
+            or world.region != CONFINS_REGION
+            or world.location != CONFINS_CAMARA_REGENCIA_LABEL
+            or not await self._quest_completed(session, character.id, P35_ID)
+            or not await session.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == character.id,
+                    Unlock.unlock_id == CONFINS_CAMARA_REGENCIA_ACCESS_UNLOCK,
+                )
+            )
+        ):
+            return None
+        quest = Quest(
+            character_id=character.id,
+            quest_id=P36_ID,
+            title=P36_TITLE,
+            status="active",
+            step=1,
+            content_version=P36_CONTENT_VERSION,
+            state_version=1,
+            progress={
+                "completed_steps": [],
+                "chamber_evidence_ids": [],
+                "final_evidence_ids": [],
+            },
+        )
+        session.add(quest)
+        await session.flush()
+        await self._credit_p36(
+            session,
+            character.id,
+            "p36.activated",
+            f"p36.activated:{character.id}",
+            {"mission_id": P36_MISSION_ID, "level": character.level},
+        )
+        return quest
 
     async def start_p26(self, actor: int, version: int = 0) -> AltosMissionView | None:
         await self.on_location(actor)
@@ -2102,6 +2258,89 @@ class AltosMissionService:
             state_version=quest.state_version,
             progress=quest.progress or {},
             location=world.location if world is not None else CONFINS_NO_CENTRAL_LABEL,
+            level=character.level,
+        )
+
+    def _p36_offer_view(self, character, world, status: str) -> AltosMissionView:
+        return AltosMissionView(
+            character_id=character.id,
+            quest_id=P36_ID,
+            title=P36_TITLE,
+            kind="mission",
+            status=status,
+            step=1,
+            state_version=0,
+            progress={},
+            location=world.location if world is not None else CONFINS_CAMARA_REGENCIA_LABEL,
+            level=character.level,
+        )
+
+    async def choose_p36_reward(
+        self, actor: int, version: int, option_key: str
+    ) -> AltosMissionView | None:
+        """Persist the explicit Legendary choice; payment waits for Sera's closeout."""
+        if option_key not in P36_REWARD_OPTIONS:
+            return await self.resume(actor, P36_ID)
+        async with self.sessions.begin() as session:
+            actor_row = await self._character(session, actor)
+            if actor_row is None:
+                return None
+            await lock_campaign_roster(session, actor_row.id)
+            character = await session.scalar(
+                select(Character).where(Character.id == actor_row.id).with_for_update()
+            )
+            quest = await self._quest(session, actor_row.id, P36_ID)
+            world = await self._world(session, actor_row.id)
+            if character is None or quest is None or world is None:
+                return None
+            progress = dict(quest.progress or {})
+            if (
+                quest.status != "active"
+                or quest.content_version != P36_CONTENT_VERSION
+                or quest.step != 8
+                or quest.state_version != version
+                or character.level < 60
+                or world.region != CONFINS_REGION
+                or world.location != CONFINS_CAMARA_REGENCIA_LABEL
+                or not progress.get("codices_and_recipe_recorded")
+                or not progress.get("nature_recorded")
+                or not progress.get("first_core_claimed")
+                or 7 not in progress.get("completed_steps", ())
+                or not await self._quest_completed(session, character.id, P35_ID)
+            ):
+                return self._p36_view(character, quest, world)
+            previous = progress.get("reward_choice")
+            if previous is not None and previous != option_key:
+                return self._p36_view(character, quest, world)
+            if previous is None:
+                progress["reward_choice"] = option_key
+                progress["reward_item_id"] = P36_REWARD_OPTIONS[option_key][0]
+                quest.progress = progress
+                quest.state_version += 1
+                await self._credit_p36(
+                    session,
+                    character.id,
+                    "p36.legendary_choice_recorded",
+                    f"p36.legendary_choice_recorded:{character.id}",
+                    {
+                        "item_id": progress["reward_item_id"],
+                        "personal": True,
+                        "irreversible": True,
+                    },
+                )
+            return self._p36_view(character, quest, world)
+
+    def _p36_view(self, character, quest, world) -> AltosMissionView:
+        return AltosMissionView(
+            character_id=character.id,
+            quest_id=P36_ID,
+            title=P36_TITLE,
+            kind="mission",
+            status=quest.status,
+            step=quest.step,
+            state_version=quest.state_version,
+            progress=quest.progress or {},
+            location=world.location if world is not None else CONFINS_CAMARA_REGENCIA_LABEL,
             level=character.level,
         )
 
@@ -3671,6 +3910,487 @@ class AltosMissionService:
 
         return self._p34_view(character, quest, world)
 
+    async def _advance_p36(
+        self, session, character_ids, character, quest, world, version, action
+    ) -> AltosMissionView:
+        if (
+            quest.status != "active"
+            or quest.content_version != P36_CONTENT_VERSION
+            or quest.state_version != version
+            or character.level < 60
+            or world.region != CONFINS_REGION
+            or world.location != CONFINS_CAMARA_REGENCIA_LABEL
+            or not await self._p36_individually_eligible(session, character)
+            or await self._foreground(session, character.id)
+        ):
+            return self._p36_view(character, quest, world)
+
+        if quest.step == 1 and action in {
+            f"record_chamber_{item}" for item in P36_STAGE_ONE_EVIDENCE
+        }:
+            evidence_id = action.removeprefix("record_chamber_")
+            if not (quest.progress or {}).get("chamber_entered"):
+                return self._p36_view(character, quest, world)
+            members = await self._present_p36(
+                session, character_ids, 1, CONFINS_CAMARA_REGENCIA_LABEL
+            )
+            for member in members:
+                if not await self._p36_individually_eligible(session, member.character):
+                    continue
+                progress = dict(member.quest.progress or {})
+                evidence = set(progress.get("chamber_evidence_ids", ()))
+                if evidence_id in evidence:
+                    continue
+                evidence.add(evidence_id)
+                progress["chamber_evidence_ids"] = sorted(evidence)
+                if set(P36_STAGE_ONE_EVIDENCE).issubset(evidence):
+                    progress["completed_steps"] = sorted(
+                        set(progress.get("completed_steps", ())) | {1}
+                    )
+                    member.quest.step = 2
+                member.quest.progress = progress
+                member.quest.state_version += 1
+                await self._credit_p36(
+                    session,
+                    member.character.id,
+                    f"p36.chamber_evidence.{evidence_id}",
+                    f"p36.chamber_evidence.{evidence_id}:{member.character.id}",
+                    {
+                        "evidence_id": evidence_id,
+                        "observed_in": CONFINS_CAMARA_REGENCIA_LOCATION,
+                    },
+                )
+        elif quest.step == 2 and action in {
+            f"record_final_evidence_{item}" for item in P36_STAGE_TWO_EVIDENCE
+        }:
+            evidence_id = action.removeprefix("record_final_evidence_")
+            members = await self._present_p36(
+                session, character_ids, 2, CONFINS_CAMARA_REGENCIA_LABEL
+            )
+            for member in members:
+                if not await self._p36_individually_eligible(session, member.character):
+                    continue
+                progress = dict(member.quest.progress or {})
+                evidence = set(progress.get("final_evidence_ids", ()))
+                if evidence_id in evidence:
+                    continue
+                evidence.add(evidence_id)
+                progress["final_evidence_ids"] = sorted(evidence)
+                if set(P36_STAGE_TWO_EVIDENCE).issubset(evidence):
+                    progress.update(
+                        completed_steps=sorted(
+                            set(progress.get("completed_steps", ())) | {2}
+                        ),
+                        knowledge_gaps_recorded=True,
+                    )
+                    member.quest.step = 3
+                member.quest.progress = progress
+                member.quest.state_version += 1
+                await self._credit_p36(
+                    session,
+                    member.character.id,
+                    f"p36.final_evidence.{evidence_id}",
+                    f"p36.final_evidence.{evidence_id}:{member.character.id}",
+                    {
+                        "evidence_id": evidence_id,
+                        "continuous_final_account_not_claimed": True,
+                    },
+                )
+        elif (
+            quest.step == 6
+            and (quest.progress or {}).get("first_core_claimed")
+            and action == "record_regent_nature"
+        ):
+            progress = dict(quest.progress or {})
+            if not progress.get("nature_recorded"):
+                progress.update(
+                    nature_recorded=True,
+                    nature_facts={
+                        "manifestation_composed_of_cael_fragments_records_protocols_"
+                        "matter_and_avesso_states": True,
+                        "not_living_or_resurrected_cael": True,
+                        "protocol_closure_does_not_cure_veil": True,
+                        "protocol_closure_does_not_destroy_avesso": True,
+                        "historical_certainty_is_limited": True,
+                    },
+                    completed_steps=sorted(
+                        set(progress.get("completed_steps", ())) | {6}
+                    ),
+                )
+                quest.progress = progress
+                quest.step = 7
+                quest.state_version += 1
+                await self._credit_p36(
+                    session,
+                    character.id,
+                    "p36.regent_nature_recorded",
+                    f"p36.regent_nature_recorded:{character.id}",
+                    progress["nature_facts"] | {"personal": True},
+                )
+        elif quest.step == 7 and action == "record_regent_codices_and_recipe":
+            progress = dict(quest.progress or {})
+            if progress.get("nature_recorded") and not progress.get(
+                "codices_and_recipe_recorded"
+            ):
+                for entry_id in (P36_CODEX_NATURE, P36_CODEX_PROTOCOL):
+                    await self._ensure(
+                        session,
+                        CodexEntry,
+                        character_id=character.id,
+                        entry_id=entry_id,
+                    )
+                    await self._ensure(
+                        session,
+                        CodexFragment,
+                        character_id=character.id,
+                        entry_id=entry_id,
+                        fragment_id=entry_id,
+                    )
+                await self._ensure(
+                    session,
+                    Unlock,
+                    character_id=character.id,
+                    unlock_id=P36_RECIPE_UNLOCK,
+                )
+                progress.update(
+                    codices_and_recipe_recorded=True,
+                    codex_records=[P36_CODEX_NATURE, P36_CODEX_PROTOCOL],
+                    recipe_revealed=True,
+                    completed_steps=sorted(
+                        set(progress.get("completed_steps", ())) | {7}
+                    ),
+                )
+                quest.progress = progress
+                quest.step = 8
+                quest.state_version += 1
+                await self._credit_p36(
+                    session,
+                    character.id,
+                    "p36.codices_and_recipe_recorded",
+                    f"p36.codices_and_recipe_recorded:{character.id}",
+                    {
+                        "codex_entry_ids": (P36_CODEX_NATURE, P36_CODEX_PROTOCOL),
+                        "recipe_id": P36_RECIPE_UNLOCK,
+                        "direct_discovery": True,
+                        "no_extra_materials": True,
+                        "personal": True,
+                    },
+                )
+        elif (
+            quest.step == 8
+            and action == "conclude_with_sera"
+            and (quest.progress or {}).get("reward_choice") in P36_REWARD_OPTIONS
+            and (quest.progress or {}).get("codices_and_recipe_recorded")
+            and (quest.progress or {}).get("nature_recorded")
+            and (quest.progress or {}).get("first_core_claimed")
+        ):
+            await self._complete_p36(session, character, quest)
+
+        return self._p36_view(character, quest, world)
+
+    async def _complete_p36(self, session, character, quest) -> None:
+        progress = dict(quest.progress or {})
+        option_key = progress.get("reward_choice")
+        option = P36_REWARD_OPTIONS.get(option_key)
+        if (
+            option is None
+            or quest.status != "active"
+            or quest.step != 8
+            or not progress.get("nature_recorded")
+            or not progress.get("codices_and_recipe_recorded")
+            or not progress.get("first_core_claimed")
+            or not await self._quest_completed(session, character.id, P35_ID)
+        ):
+            return
+        item_id, item_name, slot = option
+        event = await session.scalar(
+            select(RewardEvent)
+            .where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == P36_REWARD_SOURCE,
+            )
+            .with_for_update()
+        )
+        materials = (
+            (CONFINS_FERRO_BALIZA, 3, "ferro_baliza"),
+            (CONFINS_COURO_MARCHA, 1, "couro_marcha"),
+            (CONFINS_MUSGO_LIMIAR, 1, "musgo_limiar"),
+            (CONFINS_PO_REFERENCIA, 3, "po_referencia"),
+        )
+        if event is None:
+            weapon = weapon_definition(item_id)
+            payload = materialize_equipment(
+                f"{P36_REWARD_SOURCE}:{character.id}:{item_id}",
+                "Lendário",
+                60,
+                forced_name=item_name,
+                forced_slot=slot,
+                bound=True,
+                weapon_type_id=item_id if weapon is not None else None,
+            )
+            payload["catalog_item_id"] = item_id
+            event = RewardEvent(character_id=character.id, source_id=P36_REWARD_SOURCE)
+            session.add(event)
+            await session.flush()
+            character.xp += 183_420
+            character.crowns += 2_000
+            session.add_all(
+                (
+                    RewardComponent(reward_event_id=event.id, kind="xp", quantity=183_420),
+                    RewardComponent(reward_event_id=event.id, kind="crowns", quantity=2_000),
+                    RewardComponent(
+                        reward_event_id=event.id,
+                        kind="equipment",
+                        item_id=item_id,
+                        quantity=1,
+                        payload=payload,
+                    ),
+                    *[
+                        RewardComponent(
+                            reward_event_id=event.id,
+                            kind="material",
+                            item_id=material_id,
+                            quantity=quantity,
+                            payload={"material_id": material_id, "bound": True},
+                        )
+                        for material_id, quantity, _key in materials
+                    ],
+                )
+            )
+            equipment_source = f"{P36_REWARD_SOURCE}:equipment"
+            if await self.road._inventory_slots(session, character.id) < 60:
+                instance_id, instance = equipment_instance_payload(payload)
+                session.add(
+                    EquipmentItem(
+                        id=instance_id,
+                        character_id=character.id,
+                        source_key=equipment_source,
+                        item_name=item_name,
+                        rarity="Lendário",
+                        slot=slot,
+                        item_level=60,
+                        bound=True,
+                        payload=instance,
+                    )
+                )
+            else:
+                await self.road._pending(
+                    session, character.id, equipment_source, "equipment", payload
+                )
+            for material_id, quantity, key in materials:
+                await self.road.deliver_material(
+                    session,
+                    character,
+                    material_id,
+                    quantity,
+                    f"{P36_REWARD_SOURCE}:material:{key}",
+                    bound=True,
+                )
+        else:
+            component = await session.scalar(
+                select(RewardComponent)
+                .where(
+                    RewardComponent.reward_event_id == event.id,
+                    RewardComponent.kind == "equipment",
+                )
+                .with_for_update()
+            )
+            if component is None or component.item_id != item_id:
+                raise RuntimeError("P36 reward event conflicts with the persisted choice")
+
+        await self._ensure(
+            session, Unlock, character_id=character.id, unlock_id=P36_NARRATIVE_UNLOCK
+        )
+        await self._ensure(
+            session, Unlock, character_id=character.id, unlock_id=P36_CAMPAIGN_UNLOCK
+        )
+        progress.update(
+            completed=True,
+            completed_steps=list(range(1, 9)),
+            reward_item_id=item_id,
+            regent_personally_inactive=True,
+            campaign_completed=True,
+            legacy_eligible=True,
+        )
+        quest.status = "completed"
+        quest.step = 8
+        quest.state_version += 1
+        quest.progress = progress
+        character.ruleset_version = CHARACTER_RULESET
+        await consolidate_character_level(session, character)
+        await self._add_p36_bestiary_evidence(
+            session, character.id, "p36_completed", points=0
+        )
+        await self.road.bestiary.refresh_boss_mastery(
+            session, character.id, P36_BOSS_ID
+        )
+        await self._reconcile_confins_region_achievement(session, character)
+        await self._credit_p36(
+            session,
+            character.id,
+            "p36.completed",
+            f"p36.completed:{character.id}",
+            {
+                "mission_id": P36_MISSION_ID,
+                "first_journey_complete": True,
+                "legacy_eligible": True,
+                "world_state_mutated": False,
+                "reward_item_id": item_id,
+            },
+        )
+
+    async def _claim_p36_core(self, session, character) -> bool:
+        event = await session.scalar(
+            select(RewardEvent)
+            .where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == P36_CORE_SOURCE,
+            )
+            .with_for_update()
+        )
+        if event is not None:
+            return False
+        event = RewardEvent(character_id=character.id, source_id=P36_CORE_SOURCE)
+        session.add(event)
+        await session.flush()
+        session.add(
+            RewardComponent(
+                reward_event_id=event.id,
+                kind="material",
+                item_id=P36_CORE_ID,
+                quantity=1,
+                payload={"material_id": P36_CORE_ID, "bound": True},
+            )
+        )
+        await self.road.deliver_material(
+            session,
+            character,
+            P36_CORE_ID,
+            1,
+            f"{P36_CORE_SOURCE}:material:core",
+            bound=True,
+        )
+        return True
+
+    async def _reconcile_confins_region_achievement(self, session, character) -> bool:
+        if (
+            character.level < 60
+            or not await self._quest_completed(session, character.id, P36_ID)
+        ):
+            return False
+        locations = tuple(location_id for location_id, _name in CONFINS_LOCATION_CATALOG)
+        discovered = set(
+            (
+                await session.scalars(
+                    select(LocationDiscovery.location_id).where(
+                        LocationDiscovery.character_id == character.id,
+                        LocationDiscovery.location_id.in_(locations),
+                    )
+                )
+            ).all()
+        )
+        if not set(locations).issubset(discovered):
+            return False
+        await self._ensure(
+            session,
+            Achievement,
+            character_id=character.id,
+            achievement_id=P36_REGION_ACHIEVEMENT,
+        )
+        await self._ensure(
+            session,
+            CharacterCosmetic,
+            character_id=character.id,
+            cosmetic_id=P36_REGION_APPEARANCE,
+            cosmetic_type="appearance",
+            source_achievement_id=P36_REGION_ACHIEVEMENT,
+        )
+        return True
+
+    async def _add_p36_bestiary_evidence(
+        self, session, character_id, evidence_id, *, points: int = 0
+    ) -> bool:
+        entry = await session.scalar(
+            select(BestiaryEntry)
+            .where(
+                BestiaryEntry.character_id == character_id,
+                BestiaryEntry.creature_id == P36_BOSS_ID,
+            )
+            .with_for_update()
+        )
+        if entry is None:
+            return False
+        created = await self.road.bestiary.add_evidence(
+            session,
+            entry,
+            character_id,
+            P36_BOSS_ID,
+            evidence_id,
+            "campaign",
+            points,
+        )
+        await self.road.bestiary.refresh_boss_mastery(
+            session, character_id, P36_BOSS_ID
+        )
+        return created
+
+    async def _record_p36_bestiary_state(self, session, character_id, combat) -> None:
+        entry = await session.scalar(
+            select(BestiaryEntry)
+            .where(
+                BestiaryEntry.character_id == character_id,
+                BestiaryEntry.creature_id == P36_BOSS_ID,
+            )
+            .with_for_update()
+        )
+        if entry is None:
+            return
+        if combat.phase_id in {"I", "default"}:
+            await self.road.bestiary.add_evidence(
+                session, entry, character_id, P36_BOSS_ID, "phase:manter", "phase", 0
+            )
+        for trigger_id, evidence_id in (
+            ("confins.regent.phase.ii", "phase:referencias_incompativeis"),
+            ("confins.regent.phase.iii", "phase:protocolo_que_nao_pode_concluir"),
+        ):
+            if trigger_id in combat.phase_triggered_ids:
+                await self.road.bestiary.add_evidence(
+                    session, entry, character_id, P36_BOSS_ID, evidence_id, "phase", 0
+                )
+        if (
+            combat.phase_id == "II"
+            and any(
+                key in combat.fighters
+                and combat.fighters[key].hp > 0
+                and not combat.fighters[key].encounter_hidden
+                for key in P36_ANCHOR_KEYS
+            )
+        ):
+            await self.road.bestiary.add_evidence(
+                session,
+                entry,
+                character_id,
+                P36_BOSS_ID,
+                "mechanic:anchor_registry_observed",
+                "mechanic",
+                0,
+            )
+        await self.road.bestiary.refresh_boss_mastery(
+            session, character_id, P36_BOSS_ID
+        )
+
+    async def _p36_individually_eligible(self, session, character) -> bool:
+        return bool(
+            character.level >= 60
+            and await self._quest_completed(session, character.id, P35_ID)
+            and await session.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == character.id,
+                    Unlock.unlock_id == CONFINS_CAMARA_REGENCIA_ACCESS_UNLOCK,
+                )
+            )
+        )
+
     async def _advance_p35(
         self, session, character_ids, character, quest, world, version, action
     ) -> AltosMissionView:
@@ -4551,6 +5271,10 @@ class AltosMissionService:
     async def advance(
         self, actor: int, version: int, action: str
     ) -> AltosMissionView | None:
+        if action.startswith("choose_p36_reward_"):
+            return await self.choose_p36_reward(
+                actor, version, action.removeprefix("choose_p36_reward_")
+            )
         if action == "activate_p35":
             return await self.start_p35(actor, version)
         if action == "activate_p34":
@@ -4587,6 +5311,13 @@ class AltosMissionService:
                 select(Character).where(Character.id == actor_row.id).with_for_update()
             )
             world = await self._world(session, actor_row.id)
+            p36 = await self._quest(session, actor_row.id, P36_ID)
+            if p36 is not None:
+                if character is None or world is None:
+                    return None
+                return await self._advance_p36(
+                    session, character_ids, character, p36, world, version, action
+                )
             p35 = await self._quest(session, actor_row.id, P35_ID)
             if p35 is not None:
                 if character is None or world is None:
@@ -4852,6 +5583,17 @@ class AltosMissionService:
                 or (quest_id == P33_ID and character.level < 55)
                 or (quest_id == P34_ID and character.level < 57)
                 or (quest_id == P35_ID and character.level < 59)
+                or (
+                    quest_id == P36_ID
+                    and (
+                        character.level < 60
+                        or not await self._quest_completed(session, character.id, P35_ID)
+                        or not {1, 2}.issubset(
+                            set((quest.progress or {}).get("completed_steps", ()))
+                        )
+                        or not (quest.progress or {}).get("chamber_entered")
+                    )
+                )
             ):
                 return await self._view(session, character, quest, world)
             activity = await session.scalar(
@@ -4896,6 +5638,20 @@ class AltosMissionService:
                         "mode": "solo",
                     },
                 )
+            elif quest_id == P36_ID and not progress.get("encounter_started"):
+                progress.update(
+                    encounter_started=True,
+                    completed_steps=sorted(
+                        set(progress.get("completed_steps", ())) | {3}
+                    ),
+                )
+                await self._credit_p36(
+                    session,
+                    character.id,
+                    "p36.regent_encounter_started",
+                    f"p36.regent_encounter_started:{character.id}",
+                    {"boss_id": P36_BOSS_ID, "mode": "solo", "confirmed": True},
+                )
             quest.progress = progress
             quest.state_version += 1
             return await self._view(session, character, quest, world)
@@ -4903,8 +5659,8 @@ class AltosMissionService:
     async def retry_combat(
         self, actor: int, version: int, quest_id: str = P25_ID
     ) -> AltosMissionView | None:
-        if quest_id == P30_ID:
-            return await self._retry_p30_combat(actor, version)
+        if quest_id in {P30_ID, P36_ID}:
+            return await self._retry_p30_combat(actor, version, quest_id)
         async with self.sessions.begin() as session:
             character = await self._character(session, actor)
             if character is None:
@@ -4963,6 +5719,10 @@ class AltosMissionService:
                         or character.level < 59
                     )
                 )
+                or (
+                    quest_id == P36_ID
+                    and not await self._p36_individually_eligible(session, character)
+                )
             ):
                 return (
                     await self._view(session, character, quest, world)
@@ -4979,7 +5739,7 @@ class AltosMissionService:
             return await self._view(session, character, quest, world)
 
     async def _retry_p30_combat(
-        self, actor: int, version: int
+        self, actor: int, version: int, quest_id: str = P30_ID
     ) -> AltosMissionView | None:
         async with self.sessions.begin() as session:
             seed = await self._character(session, actor)
@@ -4989,19 +5749,24 @@ class AltosMissionService:
             character = await session.scalar(
                 select(Character).where(Character.id == seed.id).with_for_update()
             )
-            quest = await self._quest(session, seed.id, P30_ID)
+            quest = await self._quest(session, seed.id, quest_id)
             world = await self._world(session, seed.id)
             if character is None or quest is None or world is None:
                 return None
             progress = dict(quest.progress or {})
             if (
                 quest.status != "active"
-                or quest.content_version != P30_CONTENT_VERSION
-                or quest.step != 4
+                or quest.content_version != _content_version(quest_id)
+                or quest.step != _scripted_combat_step(quest_id)
                 or quest.state_version != version
                 or not progress.get("awaiting_retry")
-                or world.region != ALTOS_REGION
-                or world.location != ALTOS_CORACAO_LABEL
+                or world.region != _mission_region(quest_id)
+                or world.location not in _combat_locations(P25_COMBAT[quest_id])
+                or (quest_id == P36_ID and character.level < 60)
+                or (
+                    quest_id == P36_ID
+                    and not await self._p36_individually_eligible(session, character)
+                )
                 or await self._foreground(session, character.id)
             ):
                 return await self._view(session, character, quest, world)
@@ -5011,7 +5776,7 @@ class AltosMissionService:
                 activity_id = UUID(str(activity_text))
             except (TypeError, ValueError) as error:
                 raise RuntimeError(
-                    "P30 retry is missing its persistent combat identity"
+                    f"{quest_id} retry is missing its persistent combat identity"
                 ) from error
 
             shared_seed = await session.scalar(
@@ -5028,12 +5793,14 @@ class AltosMissionService:
                     CampaignJourney, locked.encounter.journey_id, with_for_update=True
                 )
                 snapshot = (
-                    (journey.context_payload or {}).get("p30_initial_combat_snapshot")
+                    (journey.context_payload or {}).get(
+                        f"{quest_id.lower()}_initial_combat_snapshot"
+                    )
                     if journey is not None
                     else None
                 )
                 if not isinstance(snapshot, dict):
-                    raise RuntimeError("P30 group retry is missing its frozen encounter")
+                    raise RuntimeError(f"{quest_id} group retry is missing its frozen encounter")
                 combat = decode(
                     snapshot,
                     locked.encounter.id,
@@ -5053,13 +5820,13 @@ class AltosMissionService:
                     roster_member.settlement_state = "pending"
                     roster_member.settled_at = None
                     member_quest = await self._quest(
-                        session, participant.id, P30_ID
+                        session, participant.id, quest_id
                     )
                     if (
                         roster_member.role == "eligible"
                         and member_quest is not None
                         and member_quest.status == "active"
-                        and member_quest.step == 4
+                        and member_quest.step == _scripted_combat_step(quest_id)
                     ):
                         member_progress = dict(member_quest.progress or {})
                         member_progress.pop("awaiting_retry", None)
@@ -5125,7 +5892,7 @@ class AltosMissionService:
                 _encounter, record = await CombatRepository(session).combat(activity)
                 snapshot = progress.get("initial_combat_snapshot")
                 if not isinstance(snapshot, dict):
-                    raise RuntimeError("P30 retry is missing its frozen encounter")
+                    raise RuntimeError(f"{quest_id} retry is missing its frozen encounter")
                 combat = decode(
                     snapshot,
                     record.id,
@@ -5160,7 +5927,7 @@ class AltosMissionService:
             enemy_level,
             "enemy",
             None,
-            campaign_boss_group_size=1 if quest_id in {P30_ID, S30_ID} else None,
+            campaign_boss_group_size=1 if quest_id in {P30_ID, P36_ID, S30_ID} else None,
         )
         combat = create_creature_party_combat(
             uuid4(),
@@ -5176,12 +5943,14 @@ class AltosMissionService:
         )
         if quest_id == P30_ID:
             combat = configure_colossus_encounter(combat)
+        elif quest_id == P36_ID:
+            combat = configure_regent_encounter(combat)
         combat.configuration_snapshot = (combat.configuration_snapshot or {}) | arts.to_data()
         activity, _encounter, _record = await CombatRepository(session).create(
             character, content_id, combat
         )
-        if quest_id == P30_ID:
-            quest = await self._quest(session, character.id, P30_ID)
+        if quest_id in {P30_ID, P36_ID}:
+            quest = await self._quest(session, character.id, quest_id)
             if quest is not None:
                 progress = dict(quest.progress or {})
                 progress.setdefault("initial_combat_snapshot", encode(combat))
@@ -5199,6 +5968,8 @@ class AltosMissionService:
             evidence_points=3 if quest_id == S30_ID else 0,
             observation_category=category,
         )
+        if quest_id == P36_ID:
+            await self._record_p36_bestiary_state(session, character.id, combat)
         return activity
 
     async def propose_group_combat(
@@ -5289,6 +6060,34 @@ class AltosMissionService:
         active = await self._foreground(session, character.id)
         content_version = _content_version(quest_id)
         if (
+            quest_id == P36_ID
+            and quest is None
+            and world is not None
+            and world.region == CONFINS_REGION
+            and world.location == CONFINS_CAMARA_REGENCIA_LABEL
+            and character.level >= 60
+        ):
+            quest = await self._ensure_p36_quest(session, character, world)
+            if quest is not None and quest.status == "active" and quest.step == 1:
+                progress = dict(quest.progress or {})
+                if not progress.get("chamber_entered"):
+                    progress["chamber_entered"] = True
+                    quest.progress = progress
+                    quest.state_version += 1
+                    await self._ensure(
+                        session,
+                        LocationDiscovery,
+                        character_id=character.id,
+                        location_id=CONFINS_CAMARA_REGENCIA_LOCATION,
+                    )
+                    await self._credit_p36(
+                        session,
+                        character.id,
+                        "p36.chamber_entered",
+                        f"p36.chamber_entered:{character.id}",
+                        {"location_id": CONFINS_CAMARA_REGENCIA_LOCATION},
+                    )
+        if (
             active is not None
             or world is None
             or world.region != _mission_region(quest_id)
@@ -5305,6 +6104,18 @@ class AltosMissionService:
         elif quest_id == P34_ID and character.level < 57:
             role = "ineligible"
         elif quest_id == P35_ID and character.level < 59:
+            role = "ineligible"
+        elif (
+            quest_id == P36_ID
+            and (
+                not await self._p36_individually_eligible(session, character)
+                or quest is None
+                or not {1, 2}.issubset(
+                    set((quest.progress or {}).get("completed_steps", ()))
+                )
+                or not (quest.progress or {}).get("chamber_entered")
+            )
+        ):
             role = "ineligible"
         elif (
             quest is not None
@@ -5402,7 +6213,7 @@ class AltosMissionService:
             "enemy",
             None,
             campaign_boss_group_size=(
-                len(characters) if quest_id in {P30_ID, S30_ID} else None
+                len(characters) if quest_id in {P30_ID, P36_ID, S30_ID} else None
             ),
         )
         combat = create_creature_party_combat(
@@ -5419,6 +6230,8 @@ class AltosMissionService:
         )
         if quest_id == P30_ID:
             combat = configure_colossus_encounter(combat)
+        elif quest_id == P36_ID:
+            combat = configure_regent_encounter(combat)
         encounter = await create_campaign_encounter(
             session,
             group=group,
@@ -5429,7 +6242,7 @@ class AltosMissionService:
             combat=combat,
             ruleset_version=combat.ruleset,
             checkpoint=checkpoint,
-            campaign_boss=quest_id in {P30_ID, S30_ID},
+            campaign_boss=quest_id in {P30_ID, P36_ID, S30_ID},
         )
         if quest_id == P30_ID and encounter.journey_id is not None:
             journey = await session.get(
@@ -5486,6 +6299,55 @@ class AltosMissionService:
                     )
                 participant_quest.progress = progress
                 participant_quest.state_version += 1
+        elif quest_id == P36_ID and encounter.journey_id is not None:
+            journey = await session.get(
+                CampaignJourney, encounter.journey_id, with_for_update=True
+            )
+            if journey is not None:
+                journey.context_payload = {
+                    **(journey.context_payload or {}),
+                    "p36_initial_combat_snapshot": encode(combat),
+                }
+            encounter_members = list(
+                (
+                    await session.scalars(
+                        select(CampaignSharedEncounterMember).where(
+                            CampaignSharedEncounterMember.shared_encounter_id
+                            == encounter.id
+                        )
+                    )
+                ).all()
+            )
+            member_by_character = {
+                member.character_id: member for member in encounter_members
+            }
+            for roster_member in roster:
+                if roster_member.role != "eligible":
+                    continue
+                participant = roster_member.character
+                participant_quest = await self._quest(session, participant.id, P36_ID)
+                encounter_member = member_by_character.get(participant.id)
+                if participant_quest is None or encounter_member is None:
+                    continue
+                progress = dict(participant_quest.progress or {})
+                progress.setdefault("initial_combat_snapshot", encode(combat))
+                progress.update(
+                    combat_activity_id=str(encounter_member.game_activity_id),
+                    campaign_encounter_id=str(encounter.id),
+                    encounter_started=True,
+                    completed_steps=sorted(
+                        set(progress.get("completed_steps", ())) | {3}
+                    ),
+                )
+                participant_quest.progress = progress
+                participant_quest.state_version += 1
+                await self._credit_p36(
+                    session,
+                    participant.id,
+                    "p36.regent_encounter_started",
+                    f"p36.regent_encounter_started:{participant.id}",
+                    {"boss_id": P36_BOSS_ID, "mode": "group", "confirmed": True},
+                )
         elif quest_id == S30_ID:
             for roster_member in roster:
                 if roster_member.role != "eligible":
@@ -5531,6 +6393,8 @@ class AltosMissionService:
                 evidence_points=3 if quest_id == S30_ID else 0,
                 observation_category=category,
             )
+            if quest_id == P36_ID:
+                await self._record_p36_bestiary_state(session, member.character.id, combat)
         return str(encounter.id)
 
     async def action(
@@ -5611,6 +6475,8 @@ class AltosMissionService:
             await self.road.bestiary.record_combat_events(
                 session, character.id, creature_id, None, updated
             )
+            if quest_id == P36_ID:
+                await self._record_p36_bestiary_state(session, character.id, updated)
             progress = dict(quest.progress or {})
             if updated.result == "victory":
                 activity.status = "completed"
@@ -5623,6 +6489,8 @@ class AltosMissionService:
                     victory=True,
                     observation_category=category,
                 )
+                if quest_id == P36_ID:
+                    await consolidate_character_level(session, character)
                 if quest_id == P30_ID:
                     quest.step = 7
                     progress["completed_steps"] = sorted(
@@ -5732,6 +6600,41 @@ class AltosMissionService:
                             "economy_zero": True,
                         },
                     )
+                elif quest_id == P36_ID:
+                    quest.step = 6
+                    progress.update(
+                        completed_steps=sorted(
+                            set(progress.get("completed_steps", ())) | {3, 4, 5}
+                        ),
+                        first_valid_victory=True,
+                        awaiting_retry=False,
+                    )
+                    claimed = await self._claim_p36_core(session, character)
+                    progress["first_core_claimed"] = (
+                        claimed or progress.get("first_core_claimed", False)
+                    )
+                    if claimed:
+                        await self._ensure(
+                            session,
+                            Achievement,
+                            character_id=character.id,
+                            achievement_id=P36_FIRST_VICTORY_ACHIEVEMENT,
+                        )
+                        await self._ensure(
+                            session,
+                            CharacterCosmetic,
+                            character_id=character.id,
+                            cosmetic_id=P36_FIRST_VICTORY_FRAME,
+                            cosmetic_type="frame",
+                            source_achievement_id=P36_FIRST_VICTORY_ACHIEVEMENT,
+                        )
+                    await self._credit_p36(
+                        session,
+                        character.id,
+                        "p36.regent_defeated",
+                        f"p36.regent_defeated:{character.id}",
+                        {"boss_id": P36_BOSS_ID, "first_victory": claimed},
+                    )
                 else:
                     quest.step = _scripted_combat_step(quest_id) + 1
                 if quest_id in {P30_ID, P31_ID, P32_ID, P33_ID, P34_ID, P35_ID}:
@@ -5792,6 +6695,11 @@ class AltosMissionService:
                     world.region = ALTOS_REGION
                     world.location = ALTOS_ABRIGO_LABEL
                     progress["recovery_brazier"] = ALTOS_ABRIGO_BRAZIER
+                elif quest_id == P36_ID:
+                    character.hp = character.max_hp
+                    world.region = CONFINS_REGION
+                    world.location = CONFINS_ULTIMO_REFUGIO_LABEL
+                    progress["recovery_brazier"] = CONFINS_TESTEMUNHA_BRAZIER
             quest.progress = progress
             quest.state_version += 1
             return await self._view(session, character, quest, world)
@@ -5895,6 +6803,10 @@ class AltosMissionService:
                 await self.road.bestiary.record_combat_events(
                     session, character_id, creature_id, None, updated
                 )
+                if quest_id == P36_ID:
+                    await self._record_p36_bestiary_state(
+                        session, character_id, updated
+                    )
             if updated.result is not None:
                 member_by_character = {row.character_id: row for row in locked.members}
                 for character_id, participant in locked.characters.items():
@@ -5917,6 +6829,8 @@ class AltosMissionService:
                                 victory=True,
                                 observation_category=category,
                             )
+                            if quest_id == P36_ID:
+                                await consolidate_character_level(session, participant)
                             if quest_id == P30_ID:
                                 participant_quest.step = 7
                                 progress["completed_steps"] = sorted(
@@ -6030,6 +6944,45 @@ class AltosMissionService:
                                         "economy_zero": True,
                                     },
                                 )
+                            elif quest_id == P36_ID:
+                                participant_quest.step = 6
+                                progress.update(
+                                    completed_steps=sorted(
+                                        set(progress.get("completed_steps", ()))
+                                        | {3, 4, 5}
+                                    ),
+                                    first_valid_victory=True,
+                                    awaiting_retry=False,
+                                )
+                                claimed = await self._claim_p36_core(
+                                    session, participant
+                                )
+                                progress["first_core_claimed"] = (
+                                    claimed
+                                    or progress.get("first_core_claimed", False)
+                                )
+                                if claimed:
+                                    await self._ensure(
+                                        session,
+                                        Achievement,
+                                        character_id=participant.id,
+                                        achievement_id=P36_FIRST_VICTORY_ACHIEVEMENT,
+                                    )
+                                    await self._ensure(
+                                        session,
+                                        CharacterCosmetic,
+                                        character_id=participant.id,
+                                        cosmetic_id=P36_FIRST_VICTORY_FRAME,
+                                        cosmetic_type="frame",
+                                        source_achievement_id=P36_FIRST_VICTORY_ACHIEVEMENT,
+                                    )
+                                await self._credit_p36(
+                                    session,
+                                    participant.id,
+                                    "p36.regent_defeated",
+                                    f"p36.regent_defeated:{participant.id}",
+                                    {"boss_id": P36_BOSS_ID, "first_victory": claimed},
+                                )
                             else:
                                 participant_quest.step = _scripted_combat_step(quest_id) + 1
                             if quest_id in {P30_ID, P31_ID, P32_ID, P33_ID, P34_ID, P35_ID}:
@@ -6096,7 +7049,15 @@ class AltosMissionService:
                                 if participant_world is not None:
                                     participant_world.region = ALTOS_REGION
                                     participant_world.location = ALTOS_ABRIGO_LABEL
-                                progress["recovery_brazier"] = ALTOS_ABRIGO_BRAZIER
+                            elif quest_id == P36_ID:
+                                participant.hp = participant.max_hp
+                                participant_world = await self._world(
+                                    session, participant.id
+                                )
+                                if participant_world is not None:
+                                    participant_world.region = CONFINS_REGION
+                                    participant_world.location = CONFINS_ULTIMO_REFUGIO_LABEL
+                                progress["recovery_brazier"] = CONFINS_TESTEMUNHA_BRAZIER
                         participant_quest.progress = progress
                         participant_quest.state_version += 1
                     elif updated.result == "defeat":
@@ -6117,7 +7078,15 @@ class AltosMissionService:
                             if participant_world is not None:
                                 participant_world.region = ALTOS_REGION
                                 participant_world.location = ALTOS_ABRIGO_LABEL
-                if quest_id == P30_ID and updated.result == "defeat":
+                        elif quest_id == P36_ID:
+                            participant.hp = participant.max_hp
+                            participant_world = await self._world(
+                                session, participant.id
+                            )
+                            if participant_world is not None:
+                                participant_world.region = CONFINS_REGION
+                                participant_world.location = CONFINS_ULTIMO_REFUGIO_LABEL
+                if updated.result == "defeat" and quest_id in {P30_ID, P36_ID}:
                     await self._settle_p30_defeat(session, locked)
                 else:
                     await settle_campaign_encounter(session, locked, updated.result)
@@ -6856,6 +7825,29 @@ class AltosMissionService:
             session,
             character_id=character_id,
             quest_id=S26_ID,
+            objective_id=objective_id,
+            source_key=source_key,
+            evidence=evidence,
+        )
+
+    async def _present_p36(self, session, character_ids, step, location):
+        return await present_campaign_members(
+            session,
+            character_ids=character_ids,
+            quest_id=P36_ID,
+            content_version=P36_CONTENT_VERSION,
+            step=step,
+            region=CONFINS_REGION,
+            location=location,
+        )
+
+    async def _credit_p36(
+        self, session, character_id, objective_id, source_key, evidence
+    ):
+        await record_campaign_objective_credit(
+            session,
+            character_id=character_id,
+            quest_id=P36_ID,
             objective_id=objective_id,
             source_key=source_key,
             evidence=evidence,

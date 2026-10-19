@@ -175,6 +175,19 @@ S30_DISTINCTIVE_BOSS_MASTERY = {
     }
 }
 
+CONFINS_REGENT_BOSS_MASTERY = {
+    "boss.confins.regente_fraturado": {
+        "first_victory",
+        "phase:manter",
+        "phase:referencias_incompativeis",
+        "phase:protocolo_que_nao_pode_concluir",
+        "mechanic:anchor_registry_observed",
+        "action:ancoragem_conflito",
+        "action:desfecho_ultima_ordem",
+        "p36_completed",
+    }
+}
+
 ALTOS_PEDREIRA_DISTINCTIVE_BOSS_MASTERY = {
     "boss.altos.pedreira.peso_sem_fim": {
         "first_victory",
@@ -412,6 +425,17 @@ class BestiaryRecorder:
                     "elite_victory",
                     6,
                 )
+        elif creature_id in CONFINS_REGENT_BOSS_MASTERY:
+            required = CONFINS_REGENT_BOSS_MASTERY[creature_id]
+            entry.stage = (
+                "dominated"
+                if entry.bkp >= 50 and required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 30
+                else "known"
+                if entry.bkp >= 10
+                else "observed"
+            )
         elif creature_id in ALTOS_DISTINCTIVE_DUNGEON_BOSS_MASTERY:
             required = ALTOS_DISTINCTIVE_DUNGEON_BOSS_MASTERY[creature_id]
             entry.stage = (
@@ -563,6 +587,14 @@ class BestiaryRecorder:
                         reference_level=30,
                         configured_xp=1956,
                     )
+                elif creature_id == "boss.confins.regente_fraturado":
+                    await self._grant_regional_victory_xp(
+                        session,
+                        character_id,
+                        creature_id,
+                        reference_level=60,
+                        configured_xp=6114,
+                    )
             else:
                 entry.bkp += _repeat_bkp(
                     entry.wins, elite, observation_category
@@ -588,7 +620,18 @@ class BestiaryRecorder:
                 )
             ).all()
         )
-        if creature_id == "tecela_fosso":
+        if creature_id == "boss.confins.regente_fraturado":
+            required = CONFINS_REGENT_BOSS_MASTERY[creature_id]
+            entry.stage = (
+                "dominated"
+                if entry.bkp >= 50 and required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 30
+                else "known"
+                if entry.bkp >= 10
+                else "observed"
+            )
+        elif creature_id == "tecela_fosso":
             required = {
                 "first_victory",
                 "action:fio_arrasto",
@@ -990,6 +1033,8 @@ class BestiaryRecorder:
         required = (
             S30_DISTINCTIVE_BOSS_MASTERY[creature_id]
             if creature_id in S30_DISTINCTIVE_BOSS_MASTERY
+            else CONFINS_REGENT_BOSS_MASTERY[creature_id]
+            if creature_id in CONFINS_REGENT_BOSS_MASTERY
             else ALTOS_DISTINCTIVE_DUNGEON_BOSS_MASTERY[creature_id]
             if creature_id in ALTOS_DISTINCTIVE_DUNGEON_BOSS_MASTERY
             else
@@ -1020,6 +1065,7 @@ class BestiaryRecorder:
         previous_stage = entry.stage
         if creature_id in {
             *S30_DISTINCTIVE_BOSS_MASTERY,
+            *CONFINS_REGENT_BOSS_MASTERY,
             *ALTOS_DISTINCTIVE_DUNGEON_BOSS_MASTERY,
         }:
             entry.stage = (

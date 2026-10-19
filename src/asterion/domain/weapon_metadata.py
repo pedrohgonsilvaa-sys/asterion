@@ -272,6 +272,14 @@ _CANONICAL_WEAPON_ROWS = (
         "weapon.slot.secondary_only",
         ("weapon.compat.melee",),
     ),
+    (
+        "equipment.confins.campaign.p36.guarda_ultimo_protocolo",
+        "Guarda do Último Protocolo",
+        "weapon.form.mace",
+        "weapon.hands.one",
+        "weapon.slot.secondary_only",
+        ("weapon.compat.melee",),
+    ),
 )
 _CANONICAL_WEAPON_IDS = frozenset(row[0] for row in _CANONICAL_WEAPON_ROWS)
 WEAPON_DEFINITIONS = MappingProxyType(

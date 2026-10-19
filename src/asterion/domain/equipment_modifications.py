@@ -134,6 +134,7 @@ ENCHANTMENT_FAMILIES = {
     "Selo da Válvula": "Bloqueio",
     "Regulação da Matriz": "HP",
     "Continuidade do Colosso": "Bloqueio",
+    "Eco do Encerramento": "PER",
 }
 RUNE_GRADE_VI = {
     "HP": (D("0.60"), D("0.80"), D("1.00")),

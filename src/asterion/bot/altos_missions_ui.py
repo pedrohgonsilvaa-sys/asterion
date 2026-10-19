@@ -22,6 +22,8 @@ from asterion.application.altos_missions import (
     P33_TITLE,
     P34_TITLE,
     P35_TITLE,
+    P36_REWARD_OPTIONS,
+    P36_TITLE,
     S26_TITLE,
     S30_TITLE,
     AltosMissionView,
@@ -41,7 +43,8 @@ def _button(text: str, callback: str) -> InlineKeyboardButton:
 
 def render_altos_mission(view: AltosMissionView) -> Screen:
     fallback_title = (
-        P35_TITLE if view.quest_id == "P35"
+        P36_TITLE if view.quest_id == "P36"
+        else P35_TITLE if view.quest_id == "P35"
         else P34_TITLE if view.quest_id == "P34"
         else P33_TITLE if view.quest_id == "P33"
         else P32_TITLE if view.quest_id == "P32"
@@ -81,7 +84,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         )
         combat_location = (
             view.location
-            if view.quest_id in {"S26", "P31", "P32", "P33", "P34", "P35"}
+            if view.quest_id in {"S26", "P31", "P32", "P33", "P34", "P35", "P36"}
             else "Coração do Colosso"
             if view.quest_id == "P30"
             else "Bastilha de Carga"
@@ -96,13 +99,13 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
             "Chefe opcional · economia zero"
             if view.quest_id == "S30"
             else "Encontro roteirizado · economia zero"
-            if view.quest_id in {"P31", "P32", "P33", "P34", "P35"}
+            if view.quest_id in {"P31", "P32", "P33", "P34", "P35", "P36"}
             else "Encontro roteirizado"
             if view.quest_id == "S26"
             else "Encontro de Campanha"
         )
         return Screen(
-            f"📜 {title} · {'Confins do Véu' if view.quest_id in {'P31', 'P32', 'P33', 'P34', 'P35'} else 'Altos Cinéreos'}\n⚔️ {encounter_label} · {escape(combat_location)}\n\n{hud.text}",
+            f"📜 {title} · {'Confins do Véu' if view.quest_id in {'P31', 'P32', 'P33', 'P34', 'P35', 'P36'} else 'Altos Cinéreos'}\n⚔️ {encounter_label} · {escape(combat_location)}\n\n{hud.text}",
             "missions",
             hud.keyboard,
             parse_mode=hud.parse_mode,
@@ -126,6 +129,8 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         return _render_p34(view, title, rows)
     if view.quest_id == "P35":
         return _render_p35(view, title, rows)
+    if view.quest_id == "P36":
+        return _render_p36(view, title, rows)
     if view.quest_id == "P26":
         return _render_p26(view, title, rows)
     if view.quest_id == "S26":
@@ -462,6 +467,97 @@ def _render_p35(view: AltosMissionView, title: str, rows) -> Screen:
             rows.append([_button("Concluir relato com Sera Nol", f"altos:action:{view.state_version}:conclude_with_sera")])
         elif view.location == CONFINS_CAMARA_REGENCIA_LABEL:
             rows.append([_button("Retornar ao Nó Central", "road:route:confins_no_central")])
+    rows.append([_button("← Missões", "world:missions")])
+    return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def _render_p36(view: AltosMissionView, title: str, rows) -> Screen:
+    if view.status == "completed":
+        selected = escape(str(view.progress.get("reward_item_id", "Lendário escolhido")))
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Primeira jornada concluída\n\n"
+            "O protocolo impossível foi encerrado para você. O Véu não foi curado e o Avesso permanece.\n"
+            "✨ 183.420 XP nominais · 2.000 Coroas\n"
+            "📦 3 Ferros de Baliza · 1 Couro de Marcha · 1 Musgo de Limiar · 3 Pós de Referência\n"
+            f"🎁 Equipamento Lendário escolhido: {selected}\n"
+            "A campanha permanece no Nv.60; o Legado é uma ação separada.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+
+    if view.status != "active":
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Aguardando elegibilidade\n\n"
+            "P36 exige P35 concluída e Nv.60. A Câmara continua acessível conforme o direito já concedido.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+
+    step_text = {
+        1: "Na Câmara, examine o registro institucional, a matéria local e as marcas de estados incompatíveis.",
+        2: "Registre três evidências físicas finais e as lacunas que impedem um relato contínuo dos últimos minutos.",
+        3: "Inicie conscientemente o confronto com o Regente Fraturado.",
+        4: "A vitória válida avança a missão; uma derrota permite recuperar-se no Braseiro da Testemunha e tentar novamente.",
+        5: "O Núcleo do Regente Fraturado é individual e concedido somente na primeira vitória válida.",
+        6: "Leia o registro pós-confronto: o Regente é uma manifestação composta, não Cael Rhen vivo ou ressuscitado.",
+        7: "Registre separadamente as duas entradas de Códice e revele a Receita diretamente.",
+        8: "Escolha explicitamente um Lendário Nv.60 e encerre a jornada com Sera Nol.",
+    }.get(view.step, "Retome a etapa atual da missão.")
+    lines = [
+        f"📜 {title} · Em Andamento",
+        "Confins do Véu · Câmara da Regência",
+        "",
+        f"Etapa {view.step}/8 · {step_text}",
+    ]
+    progress = view.progress
+    if view.step == 1:
+        evidence = set(progress.get("chamber_evidence_ids", ()))
+        for key, label in (
+            ("institutional_record", "Examinar o registro institucional"),
+            ("local_matter", "Examinar a matéria local"),
+            ("incompatible_states", "Examinar marcas de estados incompatíveis"),
+        ):
+            if key not in evidence:
+                rows.append([_button(label, f"altos:action:{view.state_version}:record_chamber_{key}")])
+        lines.append(f"Elementos examinados · {len(evidence)}/3")
+    elif view.step == 2:
+        evidence = set(progress.get("final_evidence_ids", ()))
+        for key, label in (
+            ("final_evidence_a", "Examinar evidência física I"),
+            ("final_evidence_b", "Examinar evidência física II"),
+            ("final_evidence_c", "Examinar evidência física III"),
+        ):
+            if key not in evidence:
+                rows.append([_button(label, f"altos:action:{view.state_version}:record_final_evidence_{key}")])
+        lines.append(f"Evidências distintas · {len(evidence)}/3")
+    elif view.step == 3:
+        rows.extend(
+            (
+                [_button("Iniciar confronto Solo", f"altos:combat:P36:{view.state_version}:solo")],
+                [_button("Solicitar confronto em Grupo", f"altos:combat:P36:{view.state_version}:group")],
+            )
+        )
+    elif view.step == 4:
+        if progress.get("awaiting_retry"):
+            if view.location != CONFINS_CAMARA_REGENCIA_LABEL:
+                rows.append([_button("Retornar à Câmara da Regência", "road:route:confins_camara_regencia")])
+            else:
+                rows.append([_button("Tentar novamente", f"altos:retry:P36:{view.state_version}")])
+    elif view.step == 6:
+        rows.append([_button("Registrar a natureza delimitada do Regente", f"altos:action:{view.state_version}:record_regent_nature")])
+    elif view.step == 7:
+        rows.append([_button("Registrar Códices e revelar Eco do Encerramento", f"altos:action:{view.state_version}:record_regent_codices_and_recipe")])
+    elif view.step == 8:
+        selected = progress.get("reward_choice")
+        if selected is None:
+            for key, (_item_id, name, _slot) in P36_REWARD_OPTIONS.items():
+                rows.append([_button(name, f"altos:choice:P36:{view.state_version}:{key}")])
+        else:
+            selected_name = P36_REWARD_OPTIONS.get(selected, (None, "Lendário escolhido", None))[1]
+            lines.append(f"Escolha confirmada · {escape(selected_name)}")
+            rows.append([_button("Concluir pessoalmente com Sera Nol", f"altos:action:{view.state_version}:conclude_with_sera")])
     rows.append([_button("← Missões", "world:missions")])
     return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
 

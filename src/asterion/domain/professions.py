@@ -657,6 +657,27 @@ def _alchemy_recipes() -> list[RecipeDefinition]:
 def _special_recipes() -> list[RecipeDefinition]:
     return [
         RecipeDefinition(
+            recipe_id="recipe.confins.regente.eco_encerramento",
+            profession_id="artificer",
+            name="Eco do Encerramento",
+            output_kind="enchantment",
+            required_level=15,
+            grade=6,
+            rarity="Épico",
+            output_id="enchant.confins.eco_encerramento",
+            output_family="Eco do Encerramento",
+            fixed_materials=(
+                MaterialRequirement("material.confins.po_referencia", 5),
+                MaterialRequirement("material.confins.ferro_baliza", 2),
+                MaterialRequirement("material.tdo.catalisador_elite_vi", 1, False),
+                MaterialRequirement("material.special.confins.core.regente_fraturado", 1),
+            ),
+            fixed_crown_cost=400,
+            creation_enabled=False,
+            unlock_id="recipe.confins.regente.eco_encerramento",
+            description="Encantamento Épico de PER · Grau VI · +0,50 p.p.",
+        ),
+        RecipeDefinition(
             recipe_id="recipe.tdo.cripta.relicario_sem_nome",
             profession_id="jeweler",
             name="Relicário dos Sem-Nome",

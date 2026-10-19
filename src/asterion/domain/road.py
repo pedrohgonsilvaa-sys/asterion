@@ -112,6 +112,7 @@ CONFINS_MARIPOSA_SEM_HORIZONTE = "creature.confins.mariposa_sem_horizonte"
 CONFINS_VIGIA_DESFASADO = "creature.confins.vigia_desfasado"
 CONFINS_VIUVA_INTERVALO = "elite.confins.viuva_intervalo"
 CONFINS_CUSTODIO_DESFASADO = "elite.confins.custodio_desfasado"
+CONFINS_REGENTE_FRATURADO = "boss.confins.regente_fraturado"
 CONFINS_FERRO_BALIZA = "material.confins.ferro_baliza"
 CONFINS_COURO_MARCHA = "material.confins.couro_marcha"
 CONFINS_MUSGO_LIMIAR = "material.confins.musgo_limiar"
@@ -4703,3 +4704,38 @@ CONFINS_FRATURAS_CREATURES = (
     ),
 )
 CREATURE_CATALOG = (*CREATURE_CATALOG, *CONFINS_FRATURAS_CREATURES)
+
+CONFINS_REGENT_BOSS = Creature(
+    CONFINS_REGENTE_FRATURADO,
+    "Regente Fraturado",
+    "boss",
+    "balanced",
+    60,
+    60,
+    0,
+    (
+        "ordem_sobreposta",
+        "selo_continuidade",
+        "marca_divergencia",
+        "leitura_duas_ordens",
+        "ancoragem_conflito",
+        "desfecho_ultima_ordem",
+    ),
+    (
+        ("ordem_sobreposta", "Ordem Sobreposta", D("1.00"), 0, D(0), 0),
+        ("selo_continuidade", "Selo de Continuidade", D(0), 0, D(0), 0),
+        ("marca_divergencia", "Marca de Divergência", D("0.90"), 0, D("0.12"), 2, None, 0, False, 3, "defense"),
+        ("leitura_duas_ordens", "Leitura de Duas Ordens", D("0.80"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+        ("ancoragem_conflito", "Ancoragem em Conflito", D("1.30"), 0, D(0), 0, None, 0, False, 3),
+        ("desfecho_ultima_ordem", "Desfecho da Última Ordem", D("1.85"), 0, D(0), 0, None, 0, True, 5),
+    ),
+    ai_priority=(
+        "selo_continuidade",
+        "marca_divergencia",
+        "desfecho_ultima_ordem",
+        "leitura_duas_ordens",
+        "ancoragem_conflito",
+        "ordem_sobreposta",
+    ),
+)
+CREATURE_CATALOG = (*CREATURE_CATALOG, CONFINS_REGENT_BOSS)
