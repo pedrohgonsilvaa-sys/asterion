@@ -415,6 +415,20 @@ CODEX_ENTRIES = (
         306,
         "location.confins.no_central",
     ),
+    CodexPresentation(
+        "codex.confins.convergencia_reconstrucao",
+        "Convergência — Reconstrução",
+        "history",
+        307,
+        "location.confins.no_central",
+    ),
+    CodexPresentation(
+        "codex.confins.cadeia_ruptura_documentada",
+        "Cadeia da Ruptura",
+        "history",
+        308,
+        "location.confins.no_central",
+    ),
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -445,6 +459,14 @@ CODEX_FRAGMENTS = {
     "codex.confins.ancora_central_coordenacao": FragmentPresentation(
         "Âncora Central",
         "A documentação técnica e civil corroborada descreve a Âncora Central como sistema de coordenação e referência entre Âncoras regionais, não como gerador de energia ou interruptor mestre.",
+    ),
+    "codex.confins.convergencia_reconstrucao": FragmentPresentation(
+        "Convergência — Reconstrução",
+        "Registros de Custódia, Regência e oposição dos Desvelados, cruzados com a sequência técnica, sustentam a Convergência como operação coordenada de Âncoras acopladas. A interpretação é uma reconstrução histórica provável, não prova matemática absoluta; os minutos finais não preservados permanecem lacuna.",
+    ),
+    "codex.confins.cadeia_ruptura_documentada": FragmentPresentation(
+        "Cadeia da Ruptura",
+        "A oposição inicial dos Desvelados foi legítima; Neris Olan e uma ala radical autorizaram sabotagem consciente para isolamento regional controlado apesar do risco catastrófico. A decisão de Cael Rhen também enfrentava riscos ao prosseguir ou interromper a operação em acoplamento excepcional. A Ruptura é reconstruída como cascata de fatores; não atribui culpa coletiva nem elimina lacunas documentais.",
     ),
     "explore.confins.no.rede_incompleta": FragmentPresentation(
         "Diagrama da Rede Incompleta",
@@ -1382,6 +1404,13 @@ ACHIEVEMENTS = (
         "Nó Não é Fonte",
         "exploration",
         "Concluiu P34 — A Âncora Central.",
+    ),
+    AchievementPresentation(
+        "achievement.confins.cadeia_ruptura",
+        "A Noite Reconstruída",
+        "chronicles",
+        "Concluiu P35 — A Noite da Convergência.",
+        "Moldura · Arquivo Duplo",
     ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(

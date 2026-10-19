@@ -243,6 +243,12 @@ COSMETICS = (
         "Leitor de Incoerências",
         "achievement.confins.avesso_nomeado",
     ),
+    CosmeticDefinition(
+        "cosmetic.frame.confins.arquivo_duplo",
+        "frame",
+        "Arquivo Duplo",
+        "achievement.confins.cadeia_ruptura",
+    ),
 )
 
 COSMETICS_BY_ID = {item.cosmetic_id: item for item in COSMETICS}

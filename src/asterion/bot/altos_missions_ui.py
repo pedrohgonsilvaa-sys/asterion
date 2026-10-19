@@ -21,11 +21,16 @@ from asterion.application.altos_missions import (
     P33_REWARD_OPTIONS,
     P33_TITLE,
     P34_TITLE,
+    P35_TITLE,
     S26_TITLE,
     S30_TITLE,
     AltosMissionView,
 )
 from asterion.application.prologue import CombatView
+from asterion.application.road import (
+    CONFINS_CAMARA_REGENCIA_LABEL,
+    CONFINS_NO_CENTRAL_LABEL,
+)
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 
@@ -36,7 +41,8 @@ def _button(text: str, callback: str) -> InlineKeyboardButton:
 
 def render_altos_mission(view: AltosMissionView) -> Screen:
     fallback_title = (
-        P34_TITLE if view.quest_id == "P34"
+        P35_TITLE if view.quest_id == "P35"
+        else P34_TITLE if view.quest_id == "P34"
         else P33_TITLE if view.quest_id == "P33"
         else P32_TITLE if view.quest_id == "P32"
         else P31_TITLE if view.quest_id == "P31"
@@ -75,7 +81,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         )
         combat_location = (
             view.location
-            if view.quest_id in {"S26", "P31", "P32", "P33", "P34"}
+            if view.quest_id in {"S26", "P31", "P32", "P33", "P34", "P35"}
             else "Coração do Colosso"
             if view.quest_id == "P30"
             else "Bastilha de Carga"
@@ -90,13 +96,13 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
             "Chefe opcional · economia zero"
             if view.quest_id == "S30"
             else "Encontro roteirizado · economia zero"
-            if view.quest_id in {"P31", "P32", "P33", "P34"}
+            if view.quest_id in {"P31", "P32", "P33", "P34", "P35"}
             else "Encontro roteirizado"
             if view.quest_id == "S26"
             else "Encontro de Campanha"
         )
         return Screen(
-            f"📜 {title} · {'Confins do Véu' if view.quest_id in {'P31', 'P32', 'P33', 'P34'} else 'Altos Cinéreos'}\n⚔️ {encounter_label} · {escape(combat_location)}\n\n{hud.text}",
+            f"📜 {title} · {'Confins do Véu' if view.quest_id in {'P31', 'P32', 'P33', 'P34', 'P35'} else 'Altos Cinéreos'}\n⚔️ {encounter_label} · {escape(combat_location)}\n\n{hud.text}",
             "missions",
             hud.keyboard,
             parse_mode=hud.parse_mode,
@@ -118,6 +124,8 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         return _render_p33(view, title, rows)
     if view.quest_id == "P34":
         return _render_p34(view, title, rows)
+    if view.quest_id == "P35":
+        return _render_p35(view, title, rows)
     if view.quest_id == "P26":
         return _render_p26(view, title, rows)
     if view.quest_id == "S26":
@@ -352,6 +360,108 @@ def _render_p34(view: AltosMissionView, title: str, rows) -> Screen:
         rows.append([_button("Comparar os registros com Roven", f"altos:action:{view.state_version}:compare_eris_with_roven")])
     elif view.step == 6:
         rows.append([_button("Registrar no Códice e concluir com Eris e Sera", f"altos:action:{view.state_version}:record_anchor_codex_and_conclude")])
+    rows.append([_button("← Missões", "world:missions")])
+    return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def _render_p35(view: AltosMissionView, title: str, rows) -> Screen:
+    if view.status == "available":
+        rows.extend(
+            (
+                [_button("Iniciar P35 com Eris, Roven e Sera", "altos:action:0:activate_p35")],
+                [_button("← Missões", "world:missions")],
+            )
+        )
+        return Screen(
+            f"📜 {title} · Disponível\nConfins do Véu · Nó Central\n\n"
+            "P34 foi concluída. Nv.59 permite iniciar a reconstrução documental da Noite da Convergência.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    if view.status == "suspended":
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Suspensa\n\nP35 requer P34 concluída e Nv.59. "
+            "Seu acesso anterior permanece registrado; a missão poderá ser iniciada ao atingir o nível exigido.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    if view.status == "completed":
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Concluída\n\n✨ 98.950 XP · 1.220 Coroas\n"
+            "📦 2 Ferros de Baliza · 1 Musgo de Limiar · 1 Pó de Referência\n"
+            "🏅 Feito · A Noite Reconstruída\n🖼️ Moldura · Arquivo Duplo\n\n"
+            "O Regente Fraturado ainda não foi enfrentado; o protocolo permanece aberto.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+
+    chain_labels = {
+        "custodia_ancoras": "Custódia das Âncoras",
+        "regencia_continuidade": "Regência de Continuidade",
+        "oposicao_desvelados": "Oposição dos Desvelados",
+    }
+    sequence_labels = {
+        "pre_civil_deterioration": "Deterioração do Véu anterior à civilização asteriana",
+        "anchors_stabilized": "Funcionamento inicial e efeito estabilizador das Âncoras",
+        "growing_dependency_inequality": "Dependência crescente e desigualdade da rede",
+        "coupled_convergence": "Convergência como operação coordenada de Âncoras acopladas",
+    }
+    step_text = {
+        1: "No Nó Central, reúna as três cadeias documentais independentes.",
+        2: "Confira materialmente os quatro elementos da sequência técnica.",
+        3: "Vença o Vigia Desfasado Nv.59 em encontro roteirizado, sem Variante ou economia própria.",
+        4: "Reconstrua com Eris e Roven a sabotagem consciente da ala radical, preservando a distinção entre oposição legítima e culpa coletiva.",
+        5: "Registre a decisão de Cael Rhen e os riscos documentados de prosseguir ou interromper.",
+        6: "Registre separadamente Convergência — Reconstrução e Cadeia da Ruptura, preservando lacunas documentais.",
+        7: "Abra a rota física para a Câmara da Regência. O acesso individual é válido desde Nv.59; não inicia P36.",
+        8: "Retorne a Sera Nol no Nó Central e conclua o relato.",
+    }.get(view.step, "Retome a etapa atual da missão.")
+    lines = [
+        f"📜 {title} · Em Andamento",
+        "Confins do Véu · Nó Central",
+        "",
+        f"Etapa {view.step}/8 · {step_text}",
+    ]
+    progress = view.progress
+    if view.step == 1:
+        evidence = set(progress.get("documentary_chain_evidence_ids", ()))
+        for key, label in chain_labels.items():
+            if key not in evidence:
+                rows.append([_button(label, f"altos:action:{view.state_version}:record_chain_{key}")])
+        lines.append(f"Cadeias registradas · {len(evidence)}/3")
+    elif view.step == 2:
+        evidence = set(progress.get("technical_sequence_evidence_ids", ()))
+        for key, label in sequence_labels.items():
+            if key not in evidence:
+                rows.append([_button(label, f"altos:action:{view.state_version}:verify_sequence_{key}")])
+        lines.append(f"Elementos verificados · {len(evidence)}/4")
+    elif view.step == 3:
+        if progress.get("awaiting_retry"):
+            rows.append([_button("Tentar novamente", f"altos:retry:P35:{view.state_version}")])
+        else:
+            rows.extend(
+                (
+                    [_button("Iniciar encontro Solo", f"altos:combat:P35:{view.state_version}:solo")],
+                    [_button("Solicitar encontro em Grupo", f"altos:combat:P35:{view.state_version}:group")],
+                )
+            )
+    elif view.step == 4:
+        rows.append([_button("Registrar a reconstrução documental", f"altos:action:{view.state_version}:reconstruct_desvelados_sabotage")])
+    elif view.step == 5:
+        rows.append([_button("Registrar a decisão de Cael Rhen", f"altos:action:{view.state_version}:record_cael_rhen_decision_context")])
+    elif view.step == 6:
+        rows.append([_button("Registrar as duas entradas de Códice", f"altos:action:{view.state_version}:record_convergence_codices")])
+    elif view.step == 7:
+        if not progress.get("chamber_route_opened"):
+            rows.append([_button("Abrir rota à Câmara da Regência", f"altos:action:{view.state_version}:open_chamber_route")])
+    elif view.step == 8:
+        if view.location == CONFINS_NO_CENTRAL_LABEL:
+            rows.append([_button("Seguir à Câmara da Regência", "road:route:confins_camara_regencia")])
+            rows.append([_button("Concluir relato com Sera Nol", f"altos:action:{view.state_version}:conclude_with_sera")])
+        elif view.location == CONFINS_CAMARA_REGENCIA_LABEL:
+            rows.append([_button("Retornar ao Nó Central", "road:route:confins_no_central")])
     rows.append([_button("← Missões", "world:missions")])
     return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
 
