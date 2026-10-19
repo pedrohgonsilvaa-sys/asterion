@@ -381,6 +381,13 @@ CODEX_ENTRIES = (
         "location.confins.marcha_nebulosa",
     ),
     CodexPresentation(
+        "codex.confins.pegadas_incompativeis",
+        "Duas Vezes a Mesma Estrada",
+        "history",
+        311,
+        "location.confins.marcha_nebulosa",
+    ),
+    CodexPresentation(
         "codex.confins.marcos_incompativeis",
         "Marcos Incompatíveis",
         "history",
@@ -461,6 +468,10 @@ CODEX_FRAGMENTS = {
     "codex.confins.duas_leituras_rota": FragmentPresentation(
         "Dois marcos honestos",
         "A anotação de Talen e a marca física do terreno registram posições incompatíveis para a mesma estrada. Ambas são preservadas como leituras honestas; a discrepância, por si só, não prova a existência de dois mundos.",
+    ),
+    "codex.confins.pegadas_incompativeis": FragmentPresentation(
+        "Duas Vezes a Mesma Estrada",
+        "Três pontos físicos da mesma trilha preservam duas leituras plausíveis de pegadas, com quantidades distintas de passadas. Ambas permanecem registradas sem atribuir a diferença a cópias conscientes de criaturas ou pessoas.",
     ),
     "codex.confins.fratura_definicao": FragmentPresentation(
         "Fratura Observável",

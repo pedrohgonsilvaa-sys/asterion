@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, Message
 from asterion.application.altos_missions import AltosMissionService
 from asterion.application.groups import GroupError
 from asterion.application.s30 import S30Service, S30View
+from asterion.application.s31 import S31Service, S31View
 from asterion.bot.altos_missions_ui import render_altos_mission
 from asterion.bot.combat_ui import (
     CampaignCombatCallback,
@@ -20,6 +21,7 @@ from asterion.bot.combat_ui import (
 from asterion.bot.creation_handlers import present
 from asterion.bot.groups_ui import render_group
 from asterion.bot.s30_ui import render_s30
+from asterion.bot.s31_ui import render_s31
 
 
 def _base36(value: str) -> int:
@@ -33,6 +35,7 @@ def altos_missions_router(
     images: dict[str, str],
     *,
     s30: S30Service | None = None,
+    s31: S31Service | None = None,
 ) -> Router:
     router = Router(name="altos_missions")
     router.message.filter(F.chat.type == "private")
@@ -46,6 +49,10 @@ def altos_missions_router(
                 mission_view = await s30.resume(query.from_user.id)
                 if isinstance(mission_view, S30View):
                     screen = render_s30(mission_view)
+            if view.quest_id == "S31" and s31 is not None:
+                mission_view = await s31.resume(query.from_user.id)
+                if isinstance(mission_view, S31View):
+                    screen = render_s31(mission_view)
             await present(query.message, screen, images, edit=True)
 
     async def show_group(query: CallbackQuery) -> None:
@@ -60,6 +67,16 @@ def altos_missions_router(
     async def resume_from_command(message: Message) -> None:
         if message.from_user is None:
             raise SkipHandler()
+        if s31 is not None:
+            secondary = await s31.resume_active(message.from_user.id)
+            if secondary is not None:
+                screen = (
+                    render_altos_mission(secondary)
+                    if hasattr(secondary, "quest_id")
+                    else render_s31(secondary)
+                )
+                await present(message, screen, images, edit=False)
+                return
         view = await service.resume_active(message.from_user.id)
         if view is None:
             raise SkipHandler()
@@ -67,6 +84,16 @@ def altos_missions_router(
 
     @router.callback_query(F.data == "altos:mission")
     async def resume_mission(query: CallbackQuery) -> None:
+        if s31 is not None:
+            secondary = await s31.resume_active(query.from_user.id)
+            if secondary is not None:
+                if isinstance(secondary, S31View):
+                    await query.answer()
+                    if isinstance(query.message, Message):
+                        await present(query.message, render_s31(secondary), images, edit=True)
+                    return
+                await show(query, secondary)
+                return
         view = await service.resume_active(query.from_user.id)
         if view is None:
             raise SkipHandler()
@@ -215,6 +242,22 @@ def altos_missions_router(
                         return
                 else:
                     raise ValueError("invalid combat mode")
+            elif len(parts) == 5 and parts[1] == "combat" and parts[2] == "S31":
+                version = int(parts[3])
+                if parts[4] == "solo":
+                    view = await service.start_solo_combat(
+                        query.from_user.id, version, "S31"
+                    )
+                elif parts[4] == "group":
+                    view = await service.propose_group_combat(
+                        query.from_user.id, version, "S31"
+                    )
+                    if view is not None and view.proposal_id is not None:
+                        await query.answer("Confirmação enviada ao Grupo.")
+                        await show_group(query)
+                        return
+                else:
+                    raise ValueError("invalid combat mode")
             elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "P27":
                 view = await service.retry_combat(query.from_user.id, int(parts[3]), "P27")
             elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "P28":
@@ -229,6 +272,8 @@ def altos_missions_router(
                 view = await service.retry_combat(query.from_user.id, int(parts[3]), "S26")
             elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "P36":
                 view = await service.retry_combat(query.from_user.id, int(parts[3]), "P36")
+            elif len(parts) == 4 and parts[1] == "retry" and parts[2] == "S31":
+                view = await service.retry_combat(query.from_user.id, int(parts[3]), "S31")
             else:
                 if not (
                     len(parts) == 5

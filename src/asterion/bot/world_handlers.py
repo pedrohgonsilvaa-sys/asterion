@@ -75,6 +75,7 @@ from asterion.application.s27 import S27Service
 from asterion.application.s28 import S28Service
 from asterion.application.s29 import S29Service
 from asterion.application.s30 import S30Service
+from asterion.application.s31 import S31Service
 from asterion.application.varzeas_missions import (
     S19_ID,
     S20_ID,
@@ -125,6 +126,7 @@ from asterion.bot.s26_ui import render_s26
 from asterion.bot.s28_ui import render_s28
 from asterion.bot.s29_ui import render_s29
 from asterion.bot.s30_ui import render_s30
+from asterion.bot.s31_ui import render_s31
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
 from asterion.bot.vde_missions_ui import render_vde_mission
 from asterion.bot.world_ui import render_adventure, render_world
@@ -161,6 +163,7 @@ def world_router(
     s28: S28Service | None = None,
     s29: S29Service | None = None,
     s30: S30Service | None = None,
+    s31: S31Service | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -179,6 +182,16 @@ def world_router(
         return render_combat(combat_view) if combat_view is not None else None
 
     async def resume_altos(message: Message, actor: int, *, edit: bool = False) -> bool:
+        if s31 is not None:
+            secondary = await s31.resume_active(actor)
+            if secondary is not None:
+                screen = (
+                    render_altos_mission(secondary)
+                    if hasattr(secondary, "quest_id")
+                    else render_s31(secondary)
+                )
+                await present(message, screen, images, edit=edit)
+                return True
         if altos_missions is not None:
             view = await altos_missions.resume_active(actor)
             if view is not None and view.status == "active":
@@ -1455,6 +1468,7 @@ def world_router(
         s28_view = await s28.summary(query.from_user.id) if s28 else None
         s29_view = await s29.summary(query.from_user.id) if s29 else None
         s30_view = await s30.summary(query.from_user.id) if s30 else None
+        s31_view = await s31.summary(query.from_user.id) if s31 else None
         if altos_view is not None and altos_view.status == "active":
             mission_screen = render_altos_mission(altos_view)
             if s25_view is not None:
@@ -1613,6 +1627,28 @@ def world_router(
                 rows.append([InlineKeyboardButton(text="A Ordem que Restou", callback_data=secondary_action)])
                 mission_screen = Screen(
                     mission_screen.text + f"\n\n📜 Missão Secundária · A Ordem que Restou · {secondary_state}",
+                    mission_screen.image_key,
+                    InlineKeyboardMarkup(inline_keyboard=rows),
+                    parse_mode=mission_screen.parse_mode,
+                )
+            if s31_view is not None:
+                if s31_view.status in {"active", "completed"}:
+                    state, secondary_action = (
+                        ("Em Andamento", "s31:resume")
+                        if s31_view.status == "active"
+                        else ("Concluída", "s31:resume")
+                    )
+                elif s31_view.reacceptable:
+                    state, secondary_action = "Disponível para reaceite", "s31:talen"
+                elif s31_view.available:
+                    state, secondary_action = "Disponível", "s31:talen"
+                else:
+                    state, secondary_action = "Bloqueada · requer P31 concluída + Nv.52", None
+                rows = list(mission_screen.keyboard.inline_keyboard) if mission_screen.keyboard else []
+                if secondary_action is not None:
+                    rows.append([InlineKeyboardButton(text="Duas Vezes a Mesma Estrada", callback_data=secondary_action)])
+                mission_screen = Screen(
+                    mission_screen.text + f"\n\n📜 Missão Secundária · Duas Vezes a Mesma Estrada · {state}",
                     mission_screen.image_key,
                     InlineKeyboardMarkup(inline_keyboard=rows),
                     parse_mode=mission_screen.parse_mode,
@@ -2078,6 +2114,18 @@ def world_router(
             else:
                 state, action = "Disponível", "s30:sel"
             secondary_entries.append((f"📜 A Ordem que Restou · {state}", action))
+        if s31_view is not None:
+            if s31_view.status == "active":
+                state, action = "Em Andamento", "s31:resume"
+            elif s31_view.status == "completed":
+                state, action = "Concluída", "s31:resume"
+            elif s31_view.reacceptable:
+                state, action = "Disponível para reaceite", "s31:talen"
+            elif s31_view.available:
+                state, action = "Disponível", "s31:talen"
+            else:
+                state, action = "Bloqueada · requer P31 concluída + Nv.52", None
+            secondary_entries.append((f"📜 Duas Vezes a Mesma Estrada · {state}", action))
         if secondary_entries:
             secondary_lines = []
             secondary_buttons = []
@@ -2595,6 +2643,7 @@ def world_router(
             "nareth_campinas", "nareth_posto",
             "varzeas_diques", "varzeas_porto", "varzeas_brejos",
             "altos_escarpa", "altos_abrigo", "altos_pontes", "altos_pedreiras", "altos_bastilha",
+            "confins_marcha",
         }
         if view is None and road is not None:
             view = await road.resume(actor)
@@ -2602,7 +2651,7 @@ def world_router(
             return None
         explore_state = None
         explore_message = None
-        if view.location in {ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, NARETH_CAMPINAS, VARZEAS_DIQUES, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS, ALTOS_ESCARPA_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL} and view.explore_enabled:
+        if view.location in {ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, NARETH_CAMPINAS, VARZEAS_DIQUES, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS, ALTOS_ESCARPA_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, CONFINS_MARCHA_LABEL} and view.explore_enabled:
             explore_view = await road.prepare_explore(actor)
             if explore_view is not None:
                 if explore_view.kind == "explore_prepare":
@@ -2632,13 +2681,36 @@ def world_router(
             detail = await dungeons.detail(actor, family[0])
             if detail is not None and detail.kind != "hidden":
                 dungeon = (detail.dungeon_name, family[1])
-        return render_current_local(
+        local_screen = render_current_local(
             view,
             explore_state=explore_state,
             explore_message=explore_message,
             dungeon=dungeon,
             mission_available=True,
         )
+        if s31 is not None and view.location == CONFINS_MARCHA_LABEL:
+            contact = await s31.giver(actor)
+            if contact is not None:
+                if contact.status == "active":
+                    state, callback = "Em Andamento", "s31:resume"
+                elif contact.status == "completed":
+                    state, callback = "Concluída", "s31:talen"
+                elif contact.reacceptable:
+                    state, callback = "Disponível para reaceite", "s31:talen"
+                elif contact.available:
+                    state, callback = "Disponível", "s31:talen"
+                else:
+                    state, callback = "Requer P31 concluída + Nv.52", None
+                rows = list(local_screen.keyboard.inline_keyboard) if local_screen.keyboard else []
+                if callback is not None:
+                    rows.append([InlineKeyboardButton(text="Talen Nyr · Duas Vezes a Mesma Estrada", callback_data=callback)])
+                local_screen = Screen(
+                    local_screen.text + f"\n\n📜 Talen Nyr · Duas Vezes a Mesma Estrada · {state}",
+                    local_screen.image_key,
+                    InlineKeyboardMarkup(inline_keyboard=rows),
+                    parse_mode=local_screen.parse_mode,
+                )
+        return local_screen
 
     @router.callback_query(F.data == "world:local")
     async def current_local(query: CallbackQuery):
