@@ -80,6 +80,7 @@ from asterion.domain.road import (
     CONFINS_ARQUIVO_RETORNO_DUNGEON_UNLOCK,
     CONFINS_BASIC_MATERIAL_CREATURE_IDS,
     CONFINS_CAO_NEVOA,
+    CONFINS_CASCA_REFLEXO,
     CONFINS_CERVO_PASSO_DUPLO,
     CONFINS_COURO_MARCHA,
     CONFINS_ESTRADA_CONFERIDA_BRAZIER,
@@ -89,17 +90,25 @@ from asterion.domain.road import (
     CONFINS_ESTRADAS_EXPLORE_UNLOCK,
     CONFINS_ESTRADAS_HUNT_UNLOCK,
     CONFINS_FERRO_BALIZA,
+    CONFINS_FRATURAS_ACCESS_UNLOCK,
+    CONFINS_FRATURAS_EXPLORE_UNLOCK,
+    CONFINS_FRATURAS_HUNT_UNLOCK,
+    CONFINS_FRATURAS_LIMIAR,
+    CONFINS_FRATURAS_LIMIAR_LOCATION,
     CONFINS_GRALHA_DUAS_SOMBRAS,
+    CONFINS_LIMIAR_FIRME_BRAZIER,
     CONFINS_MARCHA,
     CONFINS_MARCHA_ACCESS_UNLOCK,
     CONFINS_MARCHA_EXPLORE_UNLOCK,
     CONFINS_MARCHA_HUNT_UNLOCK,
     CONFINS_MARCHA_LOCATION,
     CONFINS_MARCO_DUPLO_BRAZIER,
+    CONFINS_MARIPOSA_SEM_HORIZONTE,
     CONFINS_MUSGO_LIMIAR,
     CONFINS_PO_REFERENCIA,
     CONFINS_REGION,
     CONFINS_REGION_UNLOCK,
+    CONFINS_SANGUESSUGA_PALIDA,
     CONFINS_TESTEMUNHA_BRAZIER,
     CONFINS_ULTIMO_REFUGIO,
     CONFINS_ULTIMO_REFUGIO_ACCESS_UNLOCK,
@@ -264,6 +273,7 @@ ALTOS_CORACAO_LABEL = ALTOS_CORACAO
 CONFINS_MARCHA_LABEL = CONFINS_MARCHA
 CONFINS_ULTIMO_REFUGIO_LABEL = CONFINS_ULTIMO_REFUGIO
 CONFINS_ESTRADAS_AUSENTES_LABEL = CONFINS_ESTRADAS_AUSENTES
+CONFINS_FRATURAS_LIMIAR_LABEL = CONFINS_FRATURAS_LIMIAR
 CONFINS_LOCATION_CATALOG = tuple(label for _, label in CONFINS_LOCATION_ENTRIES)
 VARZEAS_DIQUES_LABEL = VARZEAS_DIQUES
 VARZEAS_PORTO_LABEL = VARZEAS_PORTO
@@ -272,7 +282,7 @@ VARZEAS_HORTOS_LABEL = VARZEAS_HORTOS
 VARZEAS_GALERIAS_LABEL = VARZEAS_GALERIAS
 VARZEAS_CAMARA_LABEL = VARZEAS_CAMARA
 ALTOS_LOCATIONS = frozenset((ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL))
-CONFINS_LOCATIONS = frozenset((CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL, CONFINS_ESTRADAS_AUSENTES_LABEL))
+CONFINS_LOCATIONS = frozenset((CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL, CONFINS_ESTRADAS_AUSENTES_LABEL, CONFINS_FRATURAS_LIMIAR_LABEL))
 VDE_LOCATIONS = frozenset((VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO))
 NARETH_LOCATIONS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL))
 VARZEAS_LOCATIONS = frozenset((VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL, VARZEAS_GALERIAS_LABEL, VARZEAS_CAMARA_LABEL))
@@ -292,6 +302,7 @@ ALTOS_BASTILHA_CORACAO_ROUTE_ENDPOINTS = frozenset((ALTOS_BASTILHA_LABEL, ALTOS_
 ALTOS_CONFINS_ROUTE_ENDPOINTS = frozenset((ALTOS_CORACAO_LABEL, CONFINS_MARCHA_LABEL))
 CONFINS_MARCHA_REFUGIO_ROUTE_ENDPOINTS = frozenset((CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL))
 CONFINS_REFUGIO_ESTRADAS_ROUTE_ENDPOINTS = frozenset((CONFINS_ULTIMO_REFUGIO_LABEL, CONFINS_ESTRADAS_AUSENTES_LABEL))
+CONFINS_ESTRADAS_FRATURAS_ROUTE_ENDPOINTS = frozenset((CONFINS_ESTRADAS_AUSENTES_LABEL, CONFINS_FRATURAS_LIMIAR_LABEL))
 NARETH_CAMPINAS_POSTO_ROUTE_ENDPOINTS = frozenset((NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL))
 NARETH_POSTO_CANAIS_ROUTE_ENDPOINTS = frozenset((NARETH_POSTO_LABEL, NARETH_CANAIS))
 NARETH_CANAIS_CAMPOS_ROUTE_ENDPOINTS = frozenset((NARETH_CANAIS, NARETH_CAMPOS))
@@ -339,8 +350,9 @@ OVERLAND_ROUTE_PAIRS = (
     ALTOS_CONFINS_ROUTE_ENDPOINTS,
     CONFINS_MARCHA_REFUGIO_ROUTE_ENDPOINTS,
     CONFINS_REFUGIO_ESTRADAS_ROUTE_ENDPOINTS,
+    CONFINS_ESTRADAS_FRATURAS_ROUTE_ENDPOINTS,
 )
-TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL, VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL, VARZEAS_GALERIAS_LABEL, VARZEAS_CAMARA_LABEL, ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL, CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL, CONFINS_ESTRADAS_AUSENTES_LABEL))
+TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL, VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL, VARZEAS_GALERIAS_LABEL, VARZEAS_CAMARA_LABEL, ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL, CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL, CONFINS_ESTRADAS_AUSENTES_LABEL, CONFINS_FRATURAS_LIMIAR_LABEL))
 BRAZIER_FOR_LOCATION = {
     ROAD: "tdo.brazier.estrada",
     REFUGE: "tdo.brazier.refugio_do_ocaso",
@@ -370,6 +382,7 @@ BRAZIER_FOR_LOCATION = {
     CONFINS_MARCHA_LABEL: CONFINS_MARCO_DUPLO_BRAZIER,
     CONFINS_ULTIMO_REFUGIO_LABEL: CONFINS_TESTEMUNHA_BRAZIER,
     CONFINS_ESTRADAS_AUSENTES_LABEL: CONFINS_ESTRADA_CONFERIDA_BRAZIER,
+    CONFINS_FRATURAS_LIMIAR_LABEL: CONFINS_LIMIAR_FIRME_BRAZIER,
 }
 BRAZIER_DETAILS = {
     "tdo.brazier.estrada": (ROAD, "Braseiro da Estrada"),
@@ -400,6 +413,7 @@ BRAZIER_DETAILS = {
     CONFINS_MARCO_DUPLO_BRAZIER: (CONFINS_MARCHA_LABEL, "Braseiro do Marco Duplo"),
     CONFINS_TESTEMUNHA_BRAZIER: (CONFINS_ULTIMO_REFUGIO_LABEL, "Braseiro da Testemunha"),
     CONFINS_ESTRADA_CONFERIDA_BRAZIER: (CONFINS_ESTRADAS_AUSENTES_LABEL, "Braseiro da Estrada Conferida"),
+    CONFINS_LIMIAR_FIRME_BRAZIER: (CONFINS_FRATURAS_LIMIAR_LABEL, "Braseiro do Limiar Firme"),
 }
 HUNT_CONTENT = "road_manual_hunt"
 GROUP_HUNT_CONTENT = "road_group_hunt"
@@ -536,6 +550,9 @@ CONFINS_EXPLORATION_UNIQUE_XP = {
     "explore.confins.estradas.braseiro_conferida": 14_024,
     "explore.confins.estradas.arquivo_retorno": 14_024,
     "explore.confins.estradas.memoria_fundacao": 4_383,
+    "explore.confins.fraturas.braseiro_limiar": 14_920,
+    "explore.confins.fraturas.corte_referencia": 14_920,
+    "explore.confins.fraturas.ficha_dupla": 4_663,
 }
 CONFINS_EXPLORATION_RESOURCE_POOL = (
     (CONFINS_FERRO_BALIZA, 25),
@@ -548,6 +565,12 @@ CONFINS_ESTRADAS_EXPLORATION_RESOURCE_POOL = (
     (CONFINS_COURO_MARCHA, 25),
     (CONFINS_MUSGO_LIMIAR, 30),
     (CONFINS_PO_REFERENCIA, 20),
+)
+CONFINS_FRATURAS_EXPLORATION_RESOURCE_POOL = (
+    (CONFINS_FERRO_BALIZA, 20),
+    (CONFINS_COURO_MARCHA, 20),
+    (CONFINS_MUSGO_LIMIAR, 25),
+    (CONFINS_PO_REFERENCIA, 35),
 )
 CONFINS_CARTOGRAPHER_UNIQUE_IDS = (
     "explore.confins.marcha.duas_balizas",
@@ -1185,6 +1208,42 @@ class RoadService:
                             and p32 is not None
                         )
                     route_unlock = CONFINS_ESTRADAS_ACCESS_UNLOCK
+                elif pair == CONFINS_ESTRADAS_FRATURAS_ROUTE_ENDPOINTS:
+                    p33 = await s.scalar(
+                        select(Quest).where(
+                            Quest.character_id == c.id,
+                            Quest.quest_id == "P33",
+                            Quest.status.in_(("active", "completed")),
+                        )
+                    )
+                    if destination == CONFINS_FRATURAS_LIMIAR_LABEL:
+                        gate_ok = bool(
+                            world.region == CONFINS_REGION
+                            and c.level >= 55
+                            and await self._nareth_mission_completed(s, c.id, "P32")
+                            and p33 is not None
+                            and await s.scalar(
+                                select(Unlock.id).where(
+                                    Unlock.character_id == c.id,
+                                    Unlock.unlock_id == CONFINS_FRATURAS_ACCESS_UNLOCK,
+                                )
+                            )
+                        )
+                    else:
+                        gate_ok = bool(
+                            world.region == CONFINS_REGION
+                            and await self._has_location(
+                                s, c.id, CONFINS_FRATURAS_LIMIAR_LOCATION
+                            )
+                            and p33 is not None
+                            and await s.scalar(
+                                select(Unlock.id).where(
+                                    Unlock.character_id == c.id,
+                                    Unlock.unlock_id == CONFINS_FRATURAS_ACCESS_UNLOCK,
+                                )
+                            )
+                        )
+                    route_unlock = CONFINS_FRATURAS_ACCESS_UNLOCK
                 elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
                     gate_ok = (
                         await self._p4_completed(s, c.id)
@@ -2105,6 +2164,27 @@ class RoadService:
                     raise RuntimeError("Confins exploration combat has no level-eligible creature")
                 selected_creature_id = weighted_choice(seed, candidates)
                 result_text = f"Combate · {creature_for(selected_creature_id).name}"
+            elif (
+                category == "combat"
+                and hunt_profile.local_id == CONFINS_FRATURAS_LIMIAR_LOCATION
+            ):
+                candidates = tuple(
+                    (creature_id, weight)
+                    for creature_id, weight in (
+                        (CONFINS_ARANHA_LIMIAR, 20),
+                        (CONFINS_CERVO_PASSO_DUPLO, 20),
+                        (CONFINS_SANGUESSUGA_PALIDA, 20),
+                        (CONFINS_CASCA_REFLEXO, 20),
+                        (CONFINS_MARIPOSA_SEM_HORIZONTE, 20),
+                    )
+                    if creature_for(creature_id).min_level
+                    <= c.level
+                    <= creature_for(creature_id).max_level
+                )
+                if not candidates:
+                    raise RuntimeError("Confins exploration combat has no level-eligible creature")
+                selected_creature_id = weighted_choice(seed, candidates)
+                result_text = f"Combate · {creature_for(selected_creature_id).name}"
             attempt = ExplorationAttempt(
                 character_id=c.id,
                 local_id=attempt_local_id,
@@ -2408,6 +2488,7 @@ class RoadService:
             ALTOS_BASTILHA_LOCATION: "P28",
             CONFINS_MARCHA_LOCATION: "P31",
             CONFINS_ESTRADAS_AUSENTES_LOCATION: "P32",
+            CONFINS_FRATURAS_LIMIAR_LOCATION: "P33",
         }.get(context.local_id)
         if round_gate_quest is None or await self._nareth_mission_completed(
             s, c.id, round_gate_quest
@@ -2543,6 +2624,9 @@ class RoadService:
             await self._settle_confins_exploration(s, c, attempt, base_text)
             return
         if attempt.local_id == CONFINS_ESTRADAS_AUSENTES_LOCATION:
+            await self._settle_confins_exploration(s, c, attempt, base_text)
+            return
+        if attempt.local_id == CONFINS_FRATURAS_LIMIAR_LOCATION:
             await self._settle_confins_exploration(s, c, attempt, base_text)
             return
         if attempt.local_id == CHARNECA_LOCATION:
@@ -3646,9 +3730,13 @@ class RoadService:
                     * 10
                 )
                 resource_pool = (
-                    CONFINS_ESTRADAS_EXPLORATION_RESOURCE_POOL
-                    if attempt.local_id == CONFINS_ESTRADAS_AUSENTES_LOCATION
-                    else CONFINS_EXPLORATION_RESOURCE_POOL
+                    CONFINS_FRATURAS_EXPLORATION_RESOURCE_POOL
+                    if attempt.local_id == CONFINS_FRATURAS_LIMIAR_LOCATION
+                    else (
+                        CONFINS_ESTRADAS_EXPLORATION_RESOURCE_POOL
+                        if attempt.local_id == CONFINS_ESTRADAS_AUSENTES_LOCATION
+                        else CONFINS_EXPLORATION_RESOURCE_POOL
+                    )
                 )
                 material = weighted_choice(
                     f"{attempt.seed}:exploration-resource:0", resource_pool
@@ -3734,6 +3822,41 @@ class RoadService:
                 )
                 components.append(("codex", entry_id, 1, {"fragment_id": fragment_id}))
                 lines.append("📖 Códice · Memória de Fundação")
+            elif attempt.result_id == "explore.confins.fraturas.braseiro_limiar":
+                await self._ensure(
+                    s,
+                    Brazier,
+                    character_id=c.id,
+                    brazier_id=CONFINS_LIMIAR_FIRME_BRAZIER,
+                )
+                components.append(("brazier", CONFINS_LIMIAR_FIRME_BRAZIER, 1, {}))
+                lines.append("🔥 Braseiro do Limiar Firme · Descoberto")
+            elif attempt.result_id == "explore.confins.fraturas.corte_referencia":
+                entry_id = "codex.confins.fratura_definicao"
+                fragment_id = attempt.result_id
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id=entry_id)
+                await self._ensure(
+                    s,
+                    CodexFragment,
+                    character_id=c.id,
+                    entry_id=entry_id,
+                    fragment_id=fragment_id,
+                )
+                components.append(("codex", entry_id, 1, {"fragment_id": fragment_id}))
+                lines.append("📖 Códice · Evidência observada da Fratura")
+            elif attempt.result_id == "explore.confins.fraturas.ficha_dupla":
+                entry_id = "codex.confins.avesso_estados"
+                fragment_id = attempt.result_id
+                await self._ensure(s, CodexEntry, character_id=c.id, entry_id=entry_id)
+                await self._ensure(
+                    s,
+                    CodexFragment,
+                    character_id=c.id,
+                    entry_id=entry_id,
+                    fragment_id=fragment_id,
+                )
+                components.append(("codex", entry_id, 1, {"fragment_id": fragment_id}))
+                lines.append("📖 Códice · Ficha de Duas Posições")
 
         for kind, item_id, quantity, payload in components:
             s.add(
@@ -4792,6 +4915,15 @@ class RoadService:
                 or not await self._has_location(s, c.id, CONFINS_ESTRADAS_AUSENTES_LOCATION)
             ):
                 return None
+        elif profile.local_id == CONFINS_FRATURAS_LIMIAR_LOCATION:
+            if (
+                world.region != CONFINS_REGION
+                or c.level < 55
+                or not await self._nareth_mission_completed(s, c.id, "P32")
+                or not await self._nareth_mission_completed(s, c.id, "P33")
+                or not await self._has_location(s, c.id, CONFINS_FRATURAS_LIMIAR_LOCATION)
+            ):
+                return None
         unlock_id = profile.hunt_unlock if activity_kind == "hunt" else profile.explore_unlock
         if not await s.scalar(
             select(Unlock).where(
@@ -4819,6 +4951,7 @@ class RoadService:
             ALTOS_BASTILHA_LOCATION,
             CONFINS_MARCHA_LOCATION,
             CONFINS_ESTRADAS_AUSENTES_LOCATION,
+            CONFINS_FRATURAS_LIMIAR_LOCATION,
         } and any(
             creature_id not in MATERIAL_POOLS for creature_id, _ in profile.creature_weights
         ):
@@ -5383,6 +5516,8 @@ class RoadService:
         confins_p31_complete = await self._nareth_mission_completed(s, c.id, "P31")
         confins_p32_complete = await self._nareth_mission_completed(s, c.id, "P32")
         confins_p32_open = await self._nareth_mission_started_or_completed(s, c.id, "P32")
+        confins_p33_complete = await self._nareth_mission_completed(s, c.id, "P33")
+        confins_p33_open = await self._nareth_mission_started_or_completed(s, c.id, "P33")
         confins_marcha_discovered = await self._has_location(
             s, c.id, CONFINS_MARCHA_LOCATION
         )
@@ -5392,6 +5527,9 @@ class RoadService:
         confins_estradas_discovered = await self._has_location(
             s, c.id, CONFINS_ESTRADAS_AUSENTES_LOCATION
         )
+        confins_fraturas_discovered = await self._has_location(
+            s, c.id, CONFINS_FRATURAS_LIMIAR_LOCATION
+        )
         confins_estradas_access_open = bool(
             c.level >= 53
             and confins_p31_complete
@@ -5400,6 +5538,17 @@ class RoadService:
                 select(Unlock.id).where(
                     Unlock.character_id == c.id,
                     Unlock.unlock_id == CONFINS_ESTRADAS_ACCESS_UNLOCK,
+                )
+            )
+        )
+        confins_fraturas_access_open = bool(
+            c.level >= 55
+            and confins_p32_complete
+            and confins_p33_open
+            and await s.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == c.id,
+                    Unlock.unlock_id == CONFINS_FRATURAS_ACCESS_UNLOCK,
                 )
             )
         )
@@ -5521,6 +5670,7 @@ class RoadService:
             and (location != CONFINS_MARCHA_LABEL or confins_marcha_discovered)
             and (location != CONFINS_ULTIMO_REFUGIO_LABEL or confins_refuge_discovered)
             and (location != CONFINS_ESTRADAS_AUSENTES_LABEL or confins_estradas_discovered)
+            and (location != CONFINS_FRATURAS_LIMIAR_LABEL or confins_fraturas_discovered)
         ) if world.location not in {VDE_BERCO, NARETH_CAMARA_LABEL} else ()
         active_p3 = await s.scalar(
             select(Quest.id).where(
@@ -5745,6 +5895,11 @@ class RoadService:
             elif world.location == CONFINS_ESTRADAS_AUSENTES_LABEL and confins_estradas_discovered:
                 if confins_refuge_discovered:
                     route_destinations.append(CONFINS_ULTIMO_REFUGIO_LABEL)
+                if confins_fraturas_access_open:
+                    route_destinations.append(CONFINS_FRATURAS_LIMIAR_LABEL)
+            elif world.location == CONFINS_FRATURAS_LIMIAR_LABEL and confins_fraturas_discovered:
+                if confins_estradas_discovered and confins_fraturas_access_open:
+                    route_destinations.append(CONFINS_ESTRADAS_AUSENTES_LABEL)
         route_available = bool(route_destinations)
         material_table_ready = bool(
             hunt_profile
@@ -6158,6 +6313,31 @@ class RoadService:
                     )
                 )
             )
+        elif world.location == CONFINS_FRATURAS_LIMIAR_LABEL:
+            hunt_enabled = bool(
+                confins_entry_open
+                and confins_p33_complete
+                and confins_fraturas_discovered
+                and material_table_ready
+                and hunt_profile
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == CONFINS_FRATURAS_HUNT_UNLOCK,
+                    )
+                )
+            )
+            explore_enabled = bool(
+                confins_entry_open
+                and confins_p33_complete
+                and confins_fraturas_discovered
+                and await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == c.id,
+                        Unlock.unlock_id == CONFINS_FRATURAS_EXPLORE_UNLOCK,
+                    )
+                )
+            )
         else:
             # Every other known travel location must be handled explicitly above.
             return self._invalid_location_view(c, world)
@@ -6194,6 +6374,7 @@ class RoadService:
             CONFINS_MARCHA_LABEL: "confins_marcha",
             CONFINS_ULTIMO_REFUGIO_LABEL: "confins_ultimo_refugio",
             CONFINS_ESTRADAS_AUSENTES_LABEL: "confins_estradas_ausentes",
+            CONFINS_FRATURAS_LIMIAR_LABEL: "confins_fraturas_limiar",
         }
         return RoadView(
             kind_by_location[world.location],

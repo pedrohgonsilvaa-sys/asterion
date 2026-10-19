@@ -18,6 +18,8 @@ from asterion.application.altos_missions import (
     P30_TITLE,
     P31_TITLE,
     P32_TITLE,
+    P33_REWARD_OPTIONS,
+    P33_TITLE,
     S26_TITLE,
     S30_TITLE,
     AltosMissionView,
@@ -33,7 +35,8 @@ def _button(text: str, callback: str) -> InlineKeyboardButton:
 
 def render_altos_mission(view: AltosMissionView) -> Screen:
     fallback_title = (
-        P32_TITLE if view.quest_id == "P32"
+        P33_TITLE if view.quest_id == "P33"
+        else P32_TITLE if view.quest_id == "P32"
         else P31_TITLE if view.quest_id == "P31"
         else P28_TITLE if view.quest_id == "P28"
         else P29_TITLE if view.quest_id == "P29"
@@ -70,7 +73,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         )
         combat_location = (
             view.location
-            if view.quest_id in {"S26", "P31", "P32"}
+            if view.quest_id in {"S26", "P31", "P32", "P33"}
             else "Coração do Colosso"
             if view.quest_id == "P30"
             else "Bastilha de Carga"
@@ -85,7 +88,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
             "Chefe opcional · economia zero"
             if view.quest_id == "S30"
             else "Encontro roteirizado · economia zero"
-            if view.quest_id in {"P31", "P32"}
+            if view.quest_id in {"P31", "P32", "P33"}
             else "Encontro roteirizado"
             if view.quest_id == "S26"
             else "Encontro de Campanha"
@@ -109,6 +112,8 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         return _render_p31(view, title, rows)
     if view.quest_id == "P32":
         return _render_p32(view, title, rows)
+    if view.quest_id == "P33":
+        return _render_p33(view, title, rows)
     if view.quest_id == "P26":
         return _render_p26(view, title, rows)
     if view.quest_id == "S26":
@@ -182,6 +187,88 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         else:
             rows.append([_button("Concluir com Rava Kern", f"altos:action:{view.state_version}:conclude_with_rava")])
 
+    rows.append([_button("← Missões", "world:missions")])
+    return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def _render_p33(view: AltosMissionView, title: str, rows) -> Screen:
+    if view.status == "available":
+        rows.extend(
+            (
+                [_button("Iniciar P33 com Roven e Talen", "altos:action:0:activate_p33")],
+                [_button("← Missões", "world:missions")],
+            )
+        )
+        return Screen(
+            f"📜 {title} · Disponível\nConfins do Véu · Estradas Ausentes\n\n"
+            "Roven Pell e Talen Nyr apresentam evidências físicas de referências incompatíveis.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    if view.status == "suspended":
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Suspensa\n\nP33 requer P32 concluída e Nv.55. "
+            "O acesso às Fraturas será retomado quando você atingir o nível exigido.",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    if view.status == "completed":
+        selected = escape(str(view.progress.get("reward_item_id", "Equipamento Raro escolhido")))
+        rows.append([_button("← Missões", "world:missions")])
+        return Screen(
+            f"📜 {title} · Concluída\n\n✨ 87.650 XP · 920 Coroas\n"
+            f"🎁 Equipamento Raro Nv.55: {selected}\n"
+            "🏅 Feito · Nomear sem Dominar · Título Leitor de Incoerências",
+            "missions",
+            InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+
+    step_text = {
+        1: "Atravesse às Fraturas do Limiar; observe as duas marcas físicas de referência discordantes.",
+        2: "Examine três evidências físicas distintas nas Fraturas.",
+        3: "Vença a Casca de Reflexo (Nv.55) em combate roteirizado.",
+        4: "Com Roven Pell, compreenda o Avesso como um estado de relações não confiáveis, não como lugar ou vontade.",
+        5: "Registre no Códice somente o conhecimento legitimamente adquirido.",
+        6: "Escolha um Equipamento Raro Nv.55 com Roven e conclua P33.",
+    }.get(view.step, "Retome a etapa atual da missão.")
+    location = "Estradas Ausentes" if view.step == 1 else "Fraturas do Limiar"
+    lines = [
+        f"📜 {title} · Em Andamento",
+        f"Confins do Véu · {location}",
+        "",
+        f"Etapa {view.step}/6 · {step_text}",
+    ]
+    if view.step == 1:
+        rows.append([_button("Seguir para Fraturas do Limiar", "road:route:confins_fraturas_limiar")])
+    elif view.step == 2:
+        evidence = set(view.progress.get("physical_evidence_ids", ()))
+        for action, label in (
+            ("inspect_stone_position", "Examinar a posição da pedra"),
+            ("inspect_wear_state", "Examinar o estado de desgaste"),
+            ("inspect_trail_observation_sequence", "Verificar a sequência de observação da trilha"),
+        ):
+            if action not in evidence:
+                rows.append([_button(label, f"altos:action:{view.state_version}:{action}")])
+    elif view.step == 3:
+        if view.progress.get("awaiting_retry"):
+            rows.append([_button("Tentar novamente", f"altos:retry:P33:{view.state_version}")])
+        else:
+            rows.extend(
+                (
+                    [_button("Iniciar encontro Solo", f"altos:combat:P33:{view.state_version}:solo")],
+                    [_button("Solicitar encontro em Grupo", f"altos:combat:P33:{view.state_version}:group")],
+                )
+            )
+    elif view.step == 4:
+        rows.append([_button("Interpretar as evidências com Roven", f"altos:action:{view.state_version}:interpret_avesso_with_roven")])
+    elif view.step == 5:
+        rows.append([_button("Registrar no Códice", f"altos:action:{view.state_version}:record_avesso_codex")])
+    elif view.step == 6:
+        selected = view.progress.get("reward_choice")
+        for key, (_item_id, name, _slot) in P33_REWARD_OPTIONS.items():
+            if key != selected:
+                rows.append([_button(name, f"altos:action:{view.state_version}:choose_p33_reward_{key}")])
     rows.append([_button("← Missões", "world:missions")])
     return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
 

@@ -237,6 +237,12 @@ COSMETICS = (
         "Testemunha de Rota",
         "achievement.confins.primeira_marcha",
     ),
+    CosmeticDefinition(
+        "cosmetic.title.confins.leitor_incoerencias",
+        "title",
+        "Leitor de Incoerências",
+        "achievement.confins.avesso_nomeado",
+    ),
 )
 
 COSMETICS_BY_ID = {item.cosmetic_id: item for item in COSMETICS}

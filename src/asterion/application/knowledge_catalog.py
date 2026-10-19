@@ -401,6 +401,13 @@ CODEX_ENTRIES = (
         304,
         "location.confins.estradas_ausentes",
     ),
+    CodexPresentation(
+        "codex.confins.avesso_estados",
+        "Estados do Avesso",
+        "history",
+        305,
+        "location.confins.fraturas_limiar",
+    ),
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -423,6 +430,18 @@ CODEX_FRAGMENTS = {
     "codex.confins.fratura_definicao": FragmentPresentation(
         "Fratura Observável",
         "Os traçados recebidos, a fundação concluída, a ausência de um marco no mapa e o registro de retorno discordante sustentam a definição de Fratura como falha localizada de estabilidade. A evidência não descreve um portal nem explica integralmente o Avesso.",
+    ),
+    "codex.confins.avesso_estados": FragmentPresentation(
+        "Avesso como estado",
+        "As observações de Roven e as evidências físicas reunidas descrevem o Avesso como um estado no qual relações de causalidade, matéria e identidade deixam de ser confiáveis. O registro não o trata como lugar, entidade maligna ou vontade.",
+    ),
+    "explore.confins.fraturas.corte_referencia": FragmentPresentation(
+        "Corte de Referência Observável",
+        "Um corte físico preserva uma referência local verificável para a definição de Fratura, sem explicar o Avesso por completo.",
+    ),
+    "explore.confins.fraturas.ficha_dupla": FragmentPresentation(
+        "Ficha de Duas Posições",
+        "A ficha registra duas posições observadas. O fragmento acrescenta evidência física ao Códice sem estabelecer uma causa além do que foi observado.",
     ),
     "explore.confins.estradas.memoria_fundacao": FragmentPresentation(
         "Memória de Fundação",
@@ -1335,6 +1354,13 @@ ACHIEVEMENTS = (
         "O Nome da Fratura",
         "exploration",
         "Concluiu P32 — A Fratura.",
+    ),
+    AchievementPresentation(
+        "achievement.confins.avesso_nomeado",
+        "Nomear sem Dominar",
+        "exploration",
+        "Concluiu P33 — O Avesso.",
+        "Título · Leitor de Incoerências",
     ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(

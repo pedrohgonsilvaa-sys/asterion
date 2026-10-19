@@ -62,6 +62,11 @@ CONFINS_ESTRADAS_AUSENTES = "Estradas Ausentes"
 CONFINS_ESTRADAS_AUSENTES_LOCATION = "location.confins.estradas_ausentes"
 CONFINS_FRATURAS_LIMIAR = "Fraturas do Limiar"
 CONFINS_FRATURAS_LIMIAR_LOCATION = "location.confins.fraturas_limiar"
+CONFINS_FRATURAS_ACCESS_UNLOCK = "unlock.location.confins.fraturas_limiar"
+CONFINS_FRATURAS_HUNT_UNLOCK = "unlock.hunt.confins.fraturas"
+CONFINS_FRATURAS_EXPLORE_UNLOCK = "unlock.explore.confins.fraturas"
+CONFINS_FRATURAS_ROUND_UNLOCK = "unlock.round.confins.fraturas"
+CONFINS_LIMIAR_FIRME_BRAZIER = "bonfire.confins.limiar_firme"
 CONFINS_NO_CENTRAL = "Nó Central"
 CONFINS_NO_CENTRAL_LOCATION = "location.confins.no_central"
 CONFINS_CAMARA_REGENCIA = "Câmara da Regência"
@@ -94,8 +99,12 @@ CONFINS_CERVO_PASSO_DUPLO = "creature.confins.cervo_passo_duplo"
 CONFINS_PREDADOR_DUAS_PEGADAS = "elite.confins.predador_duas_pegadas"
 CONFINS_ANDARILHO_REPETIDO = "creature.confins.andarilho_repetido"
 CONFINS_ARANHA_LIMIAR = "creature.confins.aranha_limiar"
+CONFINS_SANGUESSUGA_PALIDA = "creature.confins.sanguessuga_palida"
+CONFINS_CASCA_REFLEXO = "creature.confins.casca_reflexo"
+CONFINS_MARIPOSA_SEM_HORIZONTE = "creature.confins.mariposa_sem_horizonte"
 CONFINS_VIGIA_DESFASADO = "creature.confins.vigia_desfasado"
 CONFINS_VIUVA_INTERVALO = "elite.confins.viuva_intervalo"
+CONFINS_CUSTODIO_DESFASADO = "elite.confins.custodio_desfasado"
 CONFINS_FERRO_BALIZA = "material.confins.ferro_baliza"
 CONFINS_COURO_MARCHA = "material.confins.couro_marcha"
 CONFINS_MUSGO_LIMIAR = "material.confins.musgo_limiar"
@@ -1797,8 +1806,12 @@ VARIANT_POOL = {
     CONFINS_PREDADOR_DUAS_PEGADAS: (),
     CONFINS_ANDARILHO_REPETIDO: ("resistant", "agile"),
     CONFINS_ARANHA_LIMIAR: ("agile", "hemorrhagic"),
+    CONFINS_SANGUESSUGA_PALIDA: ("agile", "furious"),
+    CONFINS_CASCA_REFLEXO: ("resistant", "furious"),
+    CONFINS_MARIPOSA_SEM_HORIZONTE: ("agile", "furious"),
     CONFINS_VIGIA_DESFASADO: ("resistant", "furious"),
     CONFINS_VIUVA_INTERVALO: (),
+    CONFINS_CUSTODIO_DESFASADO: (),
 }
 
 EQUIPMENT_CATALOG = (
@@ -2077,6 +2090,25 @@ CONFINS_ESTRADAS_PROFILE = HuntLocationProfile(
     explore_unlock=CONFINS_ESTRADAS_EXPLORE_UNLOCK,
 )
 
+CONFINS_FRATURAS_PROFILE = HuntLocationProfile(
+    local_id=CONFINS_FRATURAS_LIMIAR_LOCATION,
+    label=CONFINS_FRATURAS_LIMIAR,
+    creature_weights=(
+        (CONFINS_ANDARILHO_REPETIDO, 14),
+        (CONFINS_ARANHA_LIMIAR, 12),
+        (CONFINS_CERVO_PASSO_DUPLO, 14),
+        (CONFINS_SANGUESSUGA_PALIDA, 17),
+        (CONFINS_CASCA_REFLEXO, 15),
+        (CONFINS_MARIPOSA_SEM_HORIZONTE, 10),
+        (CONFINS_VIUVA_INTERVALO, 10),
+        (CONFINS_CUSTODIO_DESFASADO, 8),
+    ),
+    variant_chance=18,
+    hunt_unlock=CONFINS_FRATURAS_HUNT_UNLOCK,
+    round_familiarity=CONFINS_FRATURAS_ROUND_UNLOCK,
+    explore_unlock=CONFINS_FRATURAS_EXPLORE_UNLOCK,
+)
+
 LOCATION_LEVEL_BANDS = {
     "Estrada das Cinzas": (1, 10),
     "Charneca da Fuligem": (3, 5),
@@ -2101,6 +2133,7 @@ LOCATION_LEVEL_BANDS = {
     CONFINS_MARCHA: (51, 54),
     CONFINS_ULTIMO_REFUGIO: (51, 60),
     CONFINS_ESTRADAS_AUSENTES: (53, 56),
+    CONFINS_FRATURAS_LIMIAR: (55, 59),
 }
 
 CHARNECA_PROFILE = HuntLocationProfile(
@@ -3229,6 +3262,59 @@ EXPLORATION_PROFILES = {
             ),
         ),
     ),
+    CONFINS_FRATURAS_LIMIAR_LOCATION: ExplorationLocationProfile(
+        local_id=CONFINS_FRATURAS_LIMIAR_LOCATION,
+        category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
+        results=(
+            ExplorationResultDefinition(
+                "braseiro_limiar", "great_discovery", "explore.confins.fraturas.braseiro_limiar", 50,
+                "O Braseiro do Limiar Firme marca uma referência observável nas Fraturas.",
+                min_level=55, unique=True,
+            ),
+            ExplorationResultDefinition(
+                "corte_referencia", "great_discovery", "explore.confins.fraturas.corte_referencia", 50,
+                "Um corte de referência observável acrescenta evidência à definição de Fratura.",
+                min_level=55, unique=True,
+            ),
+            ExplorationResultDefinition(
+                "ficha_dupla", "knowledge", "explore.confins.fraturas.ficha_dupla", 60,
+                "A Ficha de Duas Posições acrescenta um fragmento observado ao Códice.",
+                min_level=55, unique=True,
+            ),
+            ExplorationResultDefinition(
+                "linhas_gastas", "knowledge", "explore.confins.fraturas.linhas_gastas", 40,
+                "Linhas gastas foram observadas junto a uma referência de trilha.", min_level=55,
+            ),
+            ExplorationResultDefinition(
+                "angulo_sem_retorno", "narrative", "explore.confins.fraturas.angulo_sem_retorno", 55,
+                "Um ângulo sem retorno foi observado sem estabelecer uma causa completa.", min_level=55,
+            ),
+            ExplorationResultDefinition(
+                "eco_pedra", "narrative", "explore.confins.fraturas.eco_pedra", 45,
+                "Um eco de pedra foi observado no Limiar.", min_level=55,
+            ),
+            ExplorationResultDefinition(
+                "combate", "combat", "explore.confins.fraturas.combate", 100,
+                "Uma criatura elegível das Fraturas bloqueia a passagem.", min_level=55,
+            ),
+            ExplorationResultDefinition(
+                "recurso", "resource", "explore.confins.fraturas.recurso", 100,
+                "Um material básico Grau VI pode ser recolhido nas Fraturas.", min_level=55,
+            ),
+            ExplorationResultDefinition(
+                "atmos.silencio_limiar", "atmospheric", "explore.confins.fraturas.atmos.silencio_limiar", 34,
+                "O silêncio do Limiar interrompe por instantes os sons da trilha.", min_level=55,
+            ),
+            ExplorationResultDefinition(
+                "atmos.dobras_nevoa", "atmospheric", "explore.confins.fraturas.atmos.dobras_nevoa", 33,
+                "Dobras de névoa acompanham uma pedra sem alterar sua posição física.", min_level=55,
+            ),
+            ExplorationResultDefinition(
+                "atmos.pedra_sem_mancha", "atmospheric", "explore.confins.fraturas.atmos.pedra_sem_mancha", 33,
+                "Uma pedra sem mancha contrasta com o desgaste ao redor.", min_level=55,
+            ),
+        ),
+    ),
 }
 
 HUNT_PROFILES = {
@@ -3255,6 +3341,7 @@ HUNT_PROFILES = {
     ALTOS_BASTILHA_LOCATION: ALTOS_BASTILHA_PROFILE,
     CONFINS_MARCHA_LOCATION: CONFINS_MARCHA_PROFILE,
     CONFINS_ESTRADAS_AUSENTES_LOCATION: CONFINS_ESTRADAS_PROFILE,
+    CONFINS_FRATURAS_LIMIAR_LOCATION: CONFINS_FRATURAS_PROFILE,
 }
 HUNT_PROFILES_BY_LABEL = {
     profile.label: profile for profile in HUNT_PROFILES.values()
@@ -3491,8 +3578,12 @@ CONFINS_BASIC_MATERIAL_CREATURE_IDS = frozenset(
         CONFINS_PREDADOR_DUAS_PEGADAS,
         CONFINS_ANDARILHO_REPETIDO,
         CONFINS_ARANHA_LIMIAR,
+        CONFINS_SANGUESSUGA_PALIDA,
+        CONFINS_CASCA_REFLEXO,
+        CONFINS_MARIPOSA_SEM_HORIZONTE,
         CONFINS_VIGIA_DESFASADO,
         CONFINS_VIUVA_INTERVALO,
+        CONFINS_CUSTODIO_DESFASADO,
     }
 )
 
@@ -3718,6 +3809,22 @@ MATERIAL_POOLS = {
     CONFINS_VIUVA_INTERVALO: (
         (CONFINS_MUSGO_LIMIAR, 60),
         (CONFINS_PO_REFERENCIA, 40),
+    ),
+    CONFINS_SANGUESSUGA_PALIDA: (
+        (CONFINS_MUSGO_LIMIAR, 65),
+        (CONFINS_PO_REFERENCIA, 35),
+    ),
+    CONFINS_CASCA_REFLEXO: (
+        (CONFINS_FERRO_BALIZA, 40),
+        (CONFINS_PO_REFERENCIA, 60),
+    ),
+    CONFINS_MARIPOSA_SEM_HORIZONTE: (
+        (CONFINS_PO_REFERENCIA, 75),
+        (CONFINS_MUSGO_LIMIAR, 25),
+    ),
+    CONFINS_CUSTODIO_DESFASADO: (
+        (CONFINS_FERRO_BALIZA, 80),
+        (CONFINS_PO_REFERENCIA, 20),
     ),
 }
 
@@ -4448,3 +4555,72 @@ CONFINS_ESTRADAS_CREATURES = (
     ),
 )
 CREATURE_CATALOG = (*CREATURE_CATALOG, *CONFINS_ESTRADAS_CREATURES)
+
+CONFINS_FRATURAS_CREATURES = (
+    Creature(
+        CONFINS_SANGUESSUGA_PALIDA,
+        "Sanguessuga Pálida",
+        "common",
+        "balanced",
+        55,
+        58,
+        0,
+        ("succao_rasa", "mordida_agua_fria", "agarrar_sem_trava"),
+        (
+            ("succao_rasa", "Sucção Rasa", D("0.95"), 0, D(0), 0),
+            ("mordida_agua_fria", "Mordida de Água Fria", D("0.85"), 0, D(0), 0, "bleed", 1, False, 3),
+            ("agarrar_sem_trava", "Agarrar sem Trava", D("1.15"), 0, D(0), 0, None, 0, False, 3),
+        ),
+        ai_priority=("mordida_agua_fria", "agarrar_sem_trava"),
+    ),
+    Creature(
+        CONFINS_CASCA_REFLEXO,
+        "Casca de Reflexo",
+        "uncommon",
+        "armored",
+        55,
+        59,
+        0,
+        ("placa_repetida", "cobertura_reflexa", "tranco_referencia"),
+        (
+            ("placa_repetida", "Placa Repetida", D("1.00"), 0, D(0), 0),
+            ("cobertura_reflexa", "Cobertura Reflexa", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.95"), 2, True),
+            ("tranco_referencia", "Tranco de Referência", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+        ),
+        ai_priority=("cobertura_reflexa", "tranco_referencia"),
+    ),
+    Creature(
+        CONFINS_MARIPOSA_SEM_HORIZONTE,
+        "Mariposa sem Horizonte",
+        "common",
+        "caster",
+        56,
+        59,
+        0,
+        ("po_limiar", "leque_divergente", "giro_asa"),
+        (
+            ("po_limiar", "Pó do Limiar", D("0.95"), 0, D(0), 0),
+            ("leque_divergente", "Leque Divergente", D("0.75"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+            ("giro_asa", "Giro de Asa", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "attack"),
+        ),
+        ai_priority=("leque_divergente", "giro_asa"),
+    ),
+    Creature(
+        CONFINS_CUSTODIO_DESFASADO,
+        "Custódio Desfasado",
+        "elite",
+        "armored",
+        59,
+        60,
+        0,
+        ("impacto_referencia", "pranchas_alternadas", "marca_correcao", "protocolo_bifurcado"),
+        (
+            ("impacto_referencia", "Impacto de Referência", D("1.05"), 0, D(0), 0),
+            ("pranchas_alternadas", "Pranchas Alternadas", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("1.05"), 2, True),
+            ("marca_correcao", "Marca de Correção", D("0.90"), 0, D("0.12"), 2, None, 0, False, 3, "defense"),
+            ("protocolo_bifurcado", "Protocolo Bifurcado", D("1.85"), 0, D(0), 0, None, 0, True, 4),
+        ),
+        ai_priority=("pranchas_alternadas", "marca_correcao", "protocolo_bifurcado"),
+    ),
+)
+CREATURE_CATALOG = (*CREATURE_CATALOG, *CONFINS_FRATURAS_CREATURES)
