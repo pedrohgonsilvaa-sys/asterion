@@ -19,6 +19,7 @@ from asterion.domain.arts import (
 from asterion.domain.equipment_stats import item_snapshot_from_persisted
 from asterion.domain.road import materialize_equipment
 from asterion.domain.weapon_metadata import (
+    _CANONICAL_WEAPON_ROWS,
     COMPATIBILITY_LABELS,
     HANDEDNESS_LABELS,
     SLOT_ELIGIBILITY_LABELS,
@@ -189,10 +190,26 @@ EXPECTED_CANONICAL_WEAPONS = (
     ),
 )
 
+EXPECTED_CONFINS_P36_WEAPONS = (
+    (
+        "equipment.confins.campaign.p36.guarda_ultimo_protocolo",
+        "weapon.form.mace",
+        "weapon.hands.one",
+        "weapon.slot.secondary_only",
+        ("weapon.compat.melee",),
+    ),
+)
+
 
 def test_canonical_registry_matches_all_22_contract_rows():
     assert len(EXPECTED_CANONICAL_WEAPONS) == 22
-    assert tuple(WEAPON_DEFINITIONS) == tuple(row[0] for row in EXPECTED_CANONICAL_WEAPONS)
+    expected_rows = (*EXPECTED_CANONICAL_WEAPONS, *EXPECTED_CONFINS_P36_WEAPONS)
+    expected_ids = tuple(row[0] for row in expected_rows)
+    canonical_row_ids = tuple(row[0] for row in _CANONICAL_WEAPON_ROWS)
+    assert len(canonical_row_ids) == len(set(canonical_row_ids))
+    assert len(canonical_row_ids) == len(WEAPON_DEFINITIONS)
+    assert canonical_row_ids == expected_ids
+    assert tuple(WEAPON_DEFINITIONS) == expected_ids
     assert {
         (
             definition.weapon_type_id,
@@ -204,8 +221,9 @@ def test_canonical_registry_matches_all_22_contract_rows():
         for definition in WEAPON_DEFINITIONS.values()
     } == {
         (weapon_id, form, hands, slot, tuple(sorted(tags)))
-        for weapon_id, form, hands, slot, tags in EXPECTED_CANONICAL_WEAPONS
+        for weapon_id, form, hands, slot, tags in expected_rows
     }
+    assert "equipment.confins.special.guarda_duas_versoes" not in WEAPON_DEFINITIONS
     assert "weapon_family" not in {entry.name for entry in fields(WeaponDefinition)}
 
 
