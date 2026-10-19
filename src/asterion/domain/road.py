@@ -113,6 +113,7 @@ CONFINS_VIGIA_DESFASADO = "creature.confins.vigia_desfasado"
 CONFINS_VIUVA_INTERVALO = "elite.confins.viuva_intervalo"
 CONFINS_CUSTODIO_DESFASADO = "elite.confins.custodio_desfasado"
 CONFINS_REGENTE_FRATURADO = "boss.confins.regente_fraturado"
+CONFINS_S36_VERIFIER = "boss.confins.s36.verificador_sem_testemunhas"
 CONFINS_FERRO_BALIZA = "material.confins.ferro_baliza"
 CONFINS_COURO_MARCHA = "material.confins.couro_marcha"
 CONFINS_MUSGO_LIMIAR = "material.confins.musgo_limiar"
@@ -4739,3 +4740,27 @@ CONFINS_REGENT_BOSS = Creature(
     ),
 )
 CREATURE_CATALOG = (*CREATURE_CATALOG, CONFINS_REGENT_BOSS)
+
+CONFINS_S36_VERIFIER_BOSS = Creature(
+    CONFINS_S36_VERIFIER,
+    "Verificador sem Testemunhas",
+    "boss",
+    "controller",
+    60,
+    60,
+    0,
+    (
+        "golpe_comprovacao",
+        "desvio_registro",
+        "selagem_retorno",
+        "conferencia_final",
+    ),
+    (
+        ("golpe_comprovacao", "Golpe de Comprovação", D("1.00"), 0, D(0), 0),
+        ("desvio_registro", "Desvio de Registro", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "agility"),
+        ("selagem_retorno", "Selagem de Retorno", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D("0.90"), 2, True, "self", None, None, 2),
+        ("conferencia_final", "Conferência Final", D("1.75"), 0, D(0), 0, None, 0, True, 5),
+    ),
+    ai_priority=("selagem_retorno", "desvio_registro", "conferencia_final", "golpe_comprovacao"),
+)
+CREATURE_CATALOG = (*CREATURE_CATALOG, CONFINS_S36_VERIFIER_BOSS)

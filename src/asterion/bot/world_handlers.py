@@ -80,6 +80,7 @@ from asterion.application.s32 import S32Service
 from asterion.application.s33 import S33Service
 from asterion.application.s34 import S34Service
 from asterion.application.s35 import S35Service
+from asterion.application.s36 import S36Service
 from asterion.application.varzeas_missions import (
     S19_ID,
     S20_ID,
@@ -135,6 +136,7 @@ from asterion.bot.s32_ui import render_s32
 from asterion.bot.s33_ui import render_s33
 from asterion.bot.s34_ui import render_s34
 from asterion.bot.s35_ui import render_s35
+from asterion.bot.s36_ui import render_s36
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
 from asterion.bot.vde_missions_ui import render_vde_mission
 from asterion.bot.world_ui import render_adventure, render_world
@@ -176,6 +178,7 @@ def world_router(
     s33: S33Service | None = None,
     s34: S34Service | None = None,
     s35: S35Service | None = None,
+    s36: S36Service | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -194,6 +197,16 @@ def world_router(
         return render_combat(combat_view) if combat_view is not None else None
 
     async def resume_altos(message: Message, actor: int, *, edit: bool = False) -> bool:
+        if s36 is not None:
+            secondary = await s36.resume_active(actor)
+            if secondary is not None:
+                screen = (
+                    render_altos_mission(secondary)
+                    if isinstance(secondary, AltosMissionView)
+                    else render_s36(secondary)
+                )
+                await present(message, screen, images, edit=edit)
+                return True
         if s35 is not None:
             secondary = await s35.resume_active(actor)
             if secondary is not None:
@@ -1520,6 +1533,7 @@ def world_router(
         s33_view = await s33.summary(query.from_user.id) if s33 else None
         s34_view = await s34.summary(query.from_user.id) if s34 else None
         s35_view = await s35.summary(query.from_user.id) if s35 else None
+        s36_view = await s36.summary(query.from_user.id) if s36 else None
         if altos_view is not None and altos_view.status == "active":
             mission_screen = render_altos_mission(altos_view)
             if s25_view is not None:
@@ -2291,6 +2305,18 @@ def world_router(
             else:
                 state, action = "Bloqueada · requer P34 concluída + Nv.58", None
             secondary_entries.append((f"📜 O Registro que Discorda · {state}", action))
+        if s36_view is not None:
+            if s36_view.status == "active":
+                state, action = "Em Andamento", "s36:resume"
+            elif s36_view.status == "completed":
+                state, action = "Concluída", "s36:resume"
+            elif s36_view.reacceptable:
+                state, action = "Disponível para reaceite", "s36:haro"
+            elif s36_view.available:
+                state, action = "Disponível", "s36:haro"
+            else:
+                state, action = "Bloqueada · requer P36 concluída + Nv.60 atual", None
+            secondary_entries.append((f"📜 Depois da Última Ordem · {state}", action))
         if secondary_entries:
             secondary_lines = []
             secondary_buttons = []
@@ -3020,6 +3046,41 @@ def world_router(
                 rows.append([InlineKeyboardButton(text="S35 · Retomar O Registro que Discorda", callback_data="s35:resume")])
                 local_screen = Screen(
                     local_screen.text + "\n\n📜 S35 · O Registro que Discorda · Em andamento",
+                    local_screen.image_key,
+                    InlineKeyboardMarkup(inline_keyboard=rows),
+                    parse_mode=local_screen.parse_mode,
+                )
+        if s36 is not None and view.location in {
+            CONFINS_NO_CENTRAL_LABEL,
+            CONFINS_ULTIMO_REFUGIO_LABEL,
+        }:
+            contact = await s36.giver(actor)
+            if contact is not None:
+                if contact.status == "active":
+                    state, callback = "Em Andamento", "s36:resume"
+                elif contact.status == "completed":
+                    state, callback = "Concluída", "s36:resume"
+                elif contact.reacceptable:
+                    state, callback = "Disponível para reaceite", "s36:haro"
+                elif contact.available:
+                    state, callback = "Disponível", "s36:haro"
+                else:
+                    state, callback = "Requer P36 concluída + Nv.60 atual", None
+                rows = list(local_screen.keyboard.inline_keyboard) if local_screen.keyboard else []
+                if callback is not None:
+                    rows.append([InlineKeyboardButton(text="Haro Sen / Sera Nol · Depois da Última Ordem", callback_data=callback)])
+                local_screen = Screen(
+                    local_screen.text + f"\n\n🧭 Haro Sen / Sera Nol · Depois da Última Ordem · {state}",
+                    local_screen.image_key,
+                    InlineKeyboardMarkup(inline_keyboard=rows),
+                    parse_mode=local_screen.parse_mode,
+                )
+            active_s36 = await s36.summary(actor)
+            if active_s36 is not None and active_s36.status == "active":
+                rows = list(local_screen.keyboard.inline_keyboard) if local_screen.keyboard else []
+                rows.append([InlineKeyboardButton(text="S36 · Retomar Depois da Última Ordem", callback_data="s36:resume")])
+                local_screen = Screen(
+                    local_screen.text + "\n\n📜 S36 · Depois da Última Ordem · Em andamento",
                     local_screen.image_key,
                     InlineKeyboardMarkup(inline_keyboard=rows),
                     parse_mode=local_screen.parse_mode,

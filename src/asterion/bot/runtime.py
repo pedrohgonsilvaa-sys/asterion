@@ -48,6 +48,7 @@ from asterion.application.s32 import S32Service
 from asterion.application.s33 import S33Service
 from asterion.application.s34 import S34Service
 from asterion.application.s35 import S35Service
+from asterion.application.s36 import S36Service
 from asterion.application.talents import TalentService
 from asterion.application.varzeas_missions import VarzeasMissionService
 from asterion.application.vde_missions import VDEMissionService
@@ -91,6 +92,7 @@ from asterion.bot.s32_handlers import s32_router
 from asterion.bot.s33_handlers import s33_router
 from asterion.bot.s34_handlers import s34_router
 from asterion.bot.s35_handlers import s35_router
+from asterion.bot.s36_handlers import s36_router
 from asterion.bot.settings_handlers import settings_router
 from asterion.bot.varzeas_missions_handlers import varzeas_missions_router
 from asterion.bot.vde_missions_handlers import vde_missions_router
@@ -151,6 +153,7 @@ def get_bot_runtime() -> BotRuntime:
     s33 = S33Service(SessionFactory, settings.server_id, altos_missions)
     s34 = S34Service(SessionFactory, settings.server_id, altos_missions)
     s35 = S35Service(SessionFactory, settings.server_id, altos_missions)
+    s36 = S36Service(SessionFactory, settings.server_id, altos_missions)
     class_trials = ClassTrialService(SessionFactory, settings.server_id)
     paths = PathSelectionService(SessionFactory, settings.server_id)
     active_arts = ActiveArtService(SessionFactory, settings.server_id)
@@ -240,6 +243,7 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(s33_router(s33, settings.creation_images))
     dispatcher.include_router(s34_router(s34, settings.creation_images))
     dispatcher.include_router(s35_router(s35, settings.creation_images))
+    dispatcher.include_router(s36_router(s36, settings.creation_images))
     dispatcher.include_router(p6_router(p6, settings.creation_images))
     dispatcher.include_router(path_router(paths, class_trials, settings.creation_images))
     dispatcher.include_router(
@@ -322,6 +326,7 @@ def get_bot_runtime() -> BotRuntime:
             s33=s33,
             s34=s34,
             s35=s35,
+            s36=s36,
         )
     )
     dispatcher.include_router(

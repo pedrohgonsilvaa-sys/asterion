@@ -256,6 +256,12 @@ COSMETICS = (
         "achievement.confins.regente_primeira",
     ),
     CosmeticDefinition(
+        "cosmetic.title.confins.guardiao_testemunhas",
+        "title",
+        "Guardião de Testemunhas",
+        "achievement.confins.s36",
+    ),
+    CosmeticDefinition(
         "cosmetic.appearance.confins.viajante_veu",
         "appearance",
         "Viajante do Véu",

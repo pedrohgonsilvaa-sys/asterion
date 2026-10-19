@@ -1490,6 +1490,13 @@ ACHIEVEMENTS = (
         "Moldura · Última Referência",
     ),
     AchievementPresentation(
+        "achievement.confins.s36",
+        "Depois da Ordem",
+        "chronicles",
+        "Concluiu S36 — Depois da Última Ordem.",
+        "Título · Guardião de Testemunhas",
+    ),
+    AchievementPresentation(
         "achievement.confins.regiao",
         "Confins do Véu",
         "exploration",
