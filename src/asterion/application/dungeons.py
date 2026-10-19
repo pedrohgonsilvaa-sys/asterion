@@ -98,6 +98,31 @@ from asterion.domain.confins_arquivo_dungeon import (
     confins_arquivo_enemy_rewards,
     create_confins_arquivo_combat,
 )
+from asterion.domain.confins_contradictions_dungeon import (
+    CONFINS_CONTRADICOES_BASIC_MATERIAL_WEIGHTS,
+    CONFINS_CONTRADICOES_BOSS,
+    CONFINS_CONTRADICOES_BOSS_CODEX_ENTRY,
+    CONFINS_CONTRADICOES_BRAZIER_LABEL,
+    CONFINS_CONTRADICOES_CODEX_ENTRY,
+    CONFINS_CONTRADICOES_CONTENT_VERSION,
+    CONFINS_CONTRADICOES_CORE_ID,
+    CONFINS_CONTRADICOES_CORE_NAME,
+    CONFINS_CONTRADICOES_DISCOVERY_UNLOCK,
+    CONFINS_CONTRADICOES_ENVIRONMENTS,
+    CONFINS_CONTRADICOES_FAMILY_ID,
+    CONFINS_CONTRADICOES_FIRST_CLEAR_PREFIX,
+    CONFINS_CONTRADICOES_KNOWN_PATH_UNLOCK,
+    CONFINS_CONTRADICOES_PHASE_II,
+    CONFINS_CONTRADICOES_PHASE_III,
+    CONFINS_CONTRADICOES_RECIPE_NAME,
+    CONFINS_CONTRADICOES_RECIPE_UNLOCK,
+    CONFINS_CONTRADICOES_RECORD_CODEX_ENTRY,
+    CONFINS_CONTRADICOES_REWARD_PREFIX,
+    CONFINS_CONTRADICOES_RULESET_VERSION,
+    confins_contradicoes_encounter_specs,
+    confins_contradicoes_enemy_rewards,
+    create_confins_contradicoes_combat,
+)
 from asterion.domain.consumables import ConsumableFamily
 from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.dungeons import (
@@ -691,6 +716,47 @@ DUNGEON_FAMILIES = {
         ),
         basic_material_weights=CONFINS_ARQUIVO_BASIC_MATERIAL_WEIGHTS,
     ),
+    CONFINS_CONTRADICOES_FAMILY_ID: DungeonFamily(
+        CONFINS_CONTRADICOES_FAMILY_ID,
+        "Câmara das Contradições",
+        "Nv.58–60",
+        "Nó Central",
+        "Nó Central",
+        CONFINS_CONTRADICOES_DISCOVERY_UNLOCK,
+        CONFINS_CONTRADICOES_KNOWN_PATH_UNLOCK,
+        CONFINS_CONTRADICOES_FIRST_CLEAR_PREFIX,
+        CONFINS_CONTRADICOES_REWARD_PREFIX,
+        "dungeon_confins_contradicoes_encounter",
+        CONFINS_CONTRADICOES_CONTENT_VERSION,
+        CONFINS_CONTRADICOES_RULESET_VERSION,
+        60,
+        58,
+        CONFINS_CONTRADICOES_CODEX_ENTRY,
+        CONFINS_CONTRADICOES_CORE_ID,
+        CONFINS_CONTRADICOES_CORE_NAME,
+        CONFINS_CONTRADICOES_RECIPE_UNLOCK,
+        CONFINS_CONTRADICOES_BRAZIER_LABEL,
+        region_display="Confins do Véu",
+        encounter_count=5,
+        recipe_name=CONFINS_CONTRADICOES_RECIPE_NAME,
+        required_quest_ids=("P34",),
+        completion_xp_by_difficulty=(
+            ("stable", 15_550),
+            ("fractured", 19_050),
+            ("rupture", 24_240),
+        ),
+        first_clear_xp_by_difficulty=(
+            ("stable", 24_880),
+            ("fractured", 30_480),
+            ("rupture", 38_784),
+        ),
+        crowns_by_difficulty=(
+            ("stable", 800),
+            ("fractured", 1_200),
+            ("rupture", 1_800),
+        ),
+        basic_material_weights=CONFINS_CONTRADICOES_BASIC_MATERIAL_WEIGHTS,
+    ),
 }
 
 
@@ -738,6 +804,8 @@ def _encounter_environment(family_id: str, ordinal: int) -> str:
         return ALTOS_BASTILHA_ENVIRONMENTS[ordinal]
     if family_id == CONFINS_ARQUIVO_FAMILY_ID:
         return CONFINS_ARQUIVO_ENVIRONMENTS[ordinal]
+    if family_id == CONFINS_CONTRADICOES_FAMILY_ID:
+        return CONFINS_CONTRADICOES_ENVIRONMENTS[ordinal]
     raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
@@ -781,6 +849,10 @@ def _encounter_specs(run, ordinal: int):
         return confins_arquivo_encounter_specs(
             ordinal, run.difficulty, run.initial_group_size
         )
+    if family_id == CONFINS_CONTRADICOES_FAMILY_ID:
+        return confins_contradicoes_encounter_specs(
+            ordinal, run.difficulty, run.initial_group_size
+        )
     raise ValueError(f"Unknown dungeon family: {family_id}")
 
 
@@ -810,6 +882,8 @@ def _enemy_rewards_for(run, ordinal: int):
         return altos_bastilha_enemy_rewards(ordinal)
     if run.dungeon_family_id == CONFINS_ARQUIVO_FAMILY_ID:
         return confins_arquivo_enemy_rewards(ordinal)
+    if run.dungeon_family_id == CONFINS_CONTRADICOES_FAMILY_ID:
+        return confins_contradicoes_enemy_rewards(ordinal)
     raise ValueError(f"Unknown dungeon family: {run.dungeon_family_id}")
 
 
@@ -1979,6 +2053,22 @@ class DungeonService:
                     initial_group_size=run.initial_group_size,
                     party=group,
                 )
+            elif run.dungeon_family_id == CONFINS_CONTRADICOES_FAMILY_ID:
+                combat = create_confins_contradicoes_combat(
+                    uuid4(),
+                    name=primary_character.name,
+                    character_class=primary_character.character_class,
+                    race=primary_character.race,
+                    hp=primary_member.hp,
+                    level=primary_character.level,
+                    difficulty=run.difficulty,
+                    equipment=equipment,
+                    active_art_ids=active_arts,
+                    ordinal=run.current_encounter_ordinal,
+                    run_seed=run.seed,
+                    initial_group_size=run.initial_group_size,
+                    party=group,
+                )
             else:
                 raise ValueError(f"Unknown dungeon family: {run.dungeon_family_id}")
             combat.configuration_snapshot = (combat.configuration_snapshot or {}) | {
@@ -2523,6 +2613,10 @@ class DungeonService:
                 await self._record_confins_arquivo_codex(
                     session, participant_character.id, ordinal
                 )
+            elif run.dungeon_family_id == CONFINS_CONTRADICOES_FAMILY_ID:
+                await self._record_confins_contradicoes_codex(
+                    session, participant_character.id, ordinal
+                )
 
         encounter.status = "completed"
         encounter.reward_settled = True
@@ -2848,6 +2942,15 @@ class DungeonService:
                         character.id,
                         "achievement.confins.arquivo_estavel",
                     )
+                if (
+                    run.dungeon_family_id == CONFINS_CONTRADICOES_FAMILY_ID
+                    and run.difficulty == "stable"
+                ):
+                    await self._ensure_achievement(
+                        session,
+                        character.id,
+                        "achievement.confins.contradicoes_estavel",
+                    )
                 if run.difficulty == "stable":
                     if run.dungeon_family_id == CRYPT_FAMILY_ID:
                         await self._refresh_crypt_boss_mastery(session, character.id)
@@ -2899,6 +3002,19 @@ class DungeonService:
                     )
                     await self.bestiary.refresh_boss_mastery(
                         session, character.id, CONFINS_ARQUIVO_BOSS
+                    )
+            elif run.dungeon_family_id == CONFINS_CONTRADICOES_FAMILY_ID:
+                if run.difficulty == "stable" and first_clear:
+                    await self._add_bestiary_evidence(
+                        session,
+                        character.id,
+                        CONFINS_CONTRADICOES_BOSS,
+                        "stable_first_clear",
+                        "completion",
+                        0,
+                    )
+                    await self.bestiary.refresh_boss_mastery(
+                        session, character.id, CONFINS_CONTRADICOES_BOSS
                     )
             session.add_all(components)
             reward_lines_by_character[str(character.id)] = self._reward_lines(
@@ -3197,6 +3313,8 @@ class DungeonService:
             if family_id == ALTOS_BASTILHA_FAMILY_ID
             else CONFINS_ARQUIVO_BOSS
             if family_id == CONFINS_ARQUIVO_FAMILY_ID
+            else CONFINS_CONTRADICOES_BOSS
+            if family_id == CONFINS_CONTRADICOES_FAMILY_ID
             else "custodio_primeiro_selo"
         )
         for event in after.events[cursor:]:
@@ -3239,6 +3357,19 @@ class DungeonService:
                 )
                 .with_for_update()
             )
+            if (
+                entry is None
+                and family_id == CONFINS_CONTRADICOES_FAMILY_ID
+                and creature.category in {"elite", "boss"}
+            ):
+                entry = BestiaryEntry(
+                    character_id=character.id,
+                    creature_id=creature.creature_id,
+                    bkp=0,
+                    wins=0,
+                )
+                session.add(entry)
+                await session.flush()
             if entry is not None:
                 await self.bestiary.add_evidence(
                     session,
@@ -3422,6 +3553,50 @@ class DungeonService:
                     "phase",
                     5,
                 )
+            elif family_id == CONFINS_CONTRADICOES_FAMILY_ID and event.action == (
+                f"phase:{CONFINS_CONTRADICOES_PHASE_II}"
+            ):
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    CONFINS_CONTRADICOES_BOSS,
+                    "phase:afirmacoes_incompativeis",
+                    "phase",
+                    5,
+                )
+            elif family_id == CONFINS_CONTRADICOES_FAMILY_ID and event.action == (
+                "phase:affirmation_plates_observed"
+            ):
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    CONFINS_CONTRADICOES_BOSS,
+                    "mechanic:affirmation_plates_observed",
+                    "mechanic",
+                    5,
+                )
+            elif family_id == CONFINS_CONTRADICOES_FAMILY_ID and event.action == (
+                f"phase:{CONFINS_CONTRADICOES_PHASE_III}"
+            ):
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    CONFINS_CONTRADICOES_BOSS,
+                    "phase:afirmacao_final",
+                    "phase",
+                    5,
+                )
+            elif family_id == CONFINS_CONTRADICOES_FAMILY_ID and event.action == (
+                "phase:affirmation_phase_final"
+            ):
+                await self._add_bestiary_evidence(
+                    session,
+                    character.id,
+                    CONFINS_CONTRADICOES_BOSS,
+                    "mechanic:placas_consumidas",
+                    "mechanic",
+                    5,
+                )
             elif event.action == f"phase:{VARZEAS_PERSISTENT_PHASE_II}":
                 await self._add_bestiary_evidence(
                     session,
@@ -3521,6 +3696,10 @@ class DungeonService:
                 await self.bestiary.refresh_boss_mastery(
                     session, character.id, boss_creature_id
                 )
+            elif family_id == CONFINS_CONTRADICOES_FAMILY_ID:
+                await self.bestiary.refresh_boss_mastery(
+                    session, character.id, boss_creature_id
+                )
 
     async def _add_bestiary_evidence(
         self, session, character_id, creature_id, evidence_id, category, value
@@ -3533,6 +3712,15 @@ class DungeonService:
             )
             .with_for_update()
         )
+        if entry is None and creature_id == CONFINS_CONTRADICOES_BOSS:
+            entry = BestiaryEntry(
+                character_id=character_id,
+                creature_id=creature_id,
+                bkp=0,
+                wins=0,
+            )
+            session.add(entry)
+            await session.flush()
         if entry is not None:
             await self.bestiary.add_evidence(
                 session, entry, character_id, creature_id, evidence_id, category, value
@@ -3629,6 +3817,16 @@ class DungeonService:
     async def _ensure_codex_for_encounter(
         self, session, character_id, ordinal, *, family_id=CRYPT_FAMILY_ID
     ):
+        if family_id == CONFINS_CONTRADICOES_FAMILY_ID:
+            if ordinal == 1:
+                await self._ensure_codex_entry(
+                    session, character_id, CONFINS_CONTRADICOES_CODEX_ENTRY
+                )
+            elif ordinal == 5:
+                await self._ensure_codex_entry(
+                    session, character_id, CONFINS_CONTRADICOES_BOSS_CODEX_ENTRY
+                )
+            return
         if family_id == CONFINS_ARQUIVO_FAMILY_ID:
             if ordinal == 1:
                 await self._ensure_codex_entry(
@@ -3819,6 +4017,43 @@ class DungeonService:
                 character_id,
                 CONFINS_ARQUIVO_BOSS_CODEX_ENTRY,
                 "codex.fragment.confins.arquivo.chegada_antes",
+            )
+
+    async def _record_confins_contradicoes_codex(self, session, character_id, ordinal):
+        if ordinal == 1:
+            await self._ensure_codex_entry(
+                session, character_id, CONFINS_CONTRADICOES_CODEX_ENTRY
+            )
+            await self._ensure_fragment(
+                session,
+                character_id,
+                CONFINS_CONTRADICOES_CODEX_ENTRY,
+                "codex.fragment.confins.contradicoes.camara",
+            )
+        elif ordinal in {2, 3, 4}:
+            await self._ensure_codex_entry(
+                session, character_id, CONFINS_CONTRADICOES_RECORD_CODEX_ENTRY
+            )
+            fragment_id = {
+                2: "codex.fragment.confins.contradicoes.ponto_controle",
+                3: "codex.fragment.confins.contradicoes.mesa_ordens",
+                4: "codex.fragment.confins.contradicoes.duas_ordens",
+            }[ordinal]
+            await self._ensure_fragment(
+                session,
+                character_id,
+                CONFINS_CONTRADICOES_RECORD_CODEX_ENTRY,
+                fragment_id,
+            )
+        elif ordinal == 5:
+            await self._ensure_codex_entry(
+                session, character_id, CONFINS_CONTRADICOES_BOSS_CODEX_ENTRY
+            )
+            await self._ensure_fragment(
+                session,
+                character_id,
+                CONFINS_CONTRADICOES_BOSS_CODEX_ENTRY,
+                "codex.fragment.confins.contradicoes.testemunha",
             )
 
     async def _record_crypt_codex_completion(self, session, character_id):

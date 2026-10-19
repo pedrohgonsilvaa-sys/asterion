@@ -117,6 +117,9 @@ CONFINS_S36_VERIFIER = "boss.confins.s36.verificador_sem_testemunhas"
 CONFINS_ARQUIVO_ECO = "dungeon_creature.confins.arquivo.eco_sem_origem"
 CONFINS_ARQUIVO_GUARDIAN = "dungeon_elite.confins.arquivo.guardiao_retorno"
 CONFINS_ARQUIVO_O_QUE_CHEGA_ANTES = "boss.confins.arquivo.o_que_chega_antes"
+CONFINS_CONTRADICOES_CUSTODIO = "dungeon_elite.confins.contradicoes.custodio_no_central"
+CONFINS_CONTRADICOES_PRECEPTOR = "dungeon_elite.confins.contradicoes.preceptor_contradicao"
+CONFINS_CONTRADICOES_BOSS = "boss.confins.contradicoes.testemunha_impossivel"
 CONFINS_FERRO_BALIZA = "material.confins.ferro_baliza"
 CONFINS_COURO_MARCHA = "material.confins.couro_marcha"
 CONFINS_MUSGO_LIMIAR = "material.confins.musgo_limiar"
@@ -4822,3 +4825,59 @@ CONFINS_ARQUIVO_CREATURES = (
     ),
 )
 CREATURE_CATALOG = (*CREATURE_CATALOG, *CONFINS_ARQUIVO_CREATURES)
+
+CONFINS_CONTRADICOES_CREATURES = (
+    Creature(
+        CONFINS_CONTRADICOES_CUSTODIO,
+        "Custódio do Nó Central",
+        "elite",
+        "armored",
+        60,
+        60,
+        0,
+        ("impacto_coordenacao", "placa_no", "pressao_referencia", "travamento_passagem"),
+        (
+            ("impacto_coordenacao", "Impacto de Coordenação", D("1.00"), 0, D(0), 0),
+            ("placa_no", "Placa de Nó", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("1.00"), 2, True, "self"),
+            ("pressao_referencia", "Pressão de Referência", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+            ("travamento_passagem", "Travamento de Passagem", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+        ),
+        ai_priority=("placa_no", "pressao_referencia", "travamento_passagem", "impacto_coordenacao"),
+    ),
+    Creature(
+        CONFINS_CONTRADICOES_PRECEPTOR,
+        "Preceptor de Contradição",
+        "elite",
+        "controller",
+        60,
+        60,
+        0,
+        ("golpe_ordem", "ordem_a", "ordem_b", "confronto_registros"),
+        (
+            ("golpe_ordem", "Golpe de Ordem", D("0.95"), 0, D(0), 0),
+            ("ordem_a", "Ordem A", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "agility"),
+            ("ordem_b", "Ordem B", D("0.85"), 0, D("0.10"), 2, None, 0, False, 3, "attack"),
+            ("confronto_registros", "Confronto de Registros", D("1.75"), 0, D(0), 0, None, 0, True, 4),
+        ),
+        ai_priority=("ordem_a", "ordem_b", "confronto_registros", "golpe_ordem"),
+    ),
+    Creature(
+        CONFINS_CONTRADICOES_BOSS,
+        "Testemunha Impossível",
+        "boss",
+        "controller",
+        60,
+        60,
+        0,
+        ("referencia_incompativel", "revisao_contraditoria", "placa_evidencia", "leitura_sobreposta", "afirmacao_final"),
+        (
+            ("referencia_incompativel", "Referência Incompatível", D("1.00"), 0, D(0), 0),
+            ("revisao_contraditoria", "Revisão Contraditória", D("0.90"), 0, D("0.12"), 2, None, 0, False, 3, "defense"),
+            ("placa_evidencia", "Placa de Evidência", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), 2, True, "self", None, None, 2, (), (), D("0.50"), D("0.08")),
+            ("leitura_sobreposta", "Leitura Sobreposta", D("0.80"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+            ("afirmacao_final", "Afirmação Final", D("1.85"), 0, D(0), 0, None, 0, True, 5),
+        ),
+        ai_priority=("placa_evidencia", "revisao_contraditoria", "afirmacao_final", "leitura_sobreposta", "referencia_incompativel"),
+    ),
+)
+CREATURE_CATALOG = (*CREATURE_CATALOG, *CONFINS_CONTRADICOES_CREATURES)

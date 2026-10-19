@@ -280,6 +280,14 @@ _CANONICAL_WEAPON_ROWS = (
         "weapon.slot.secondary_only",
         ("weapon.compat.melee",),
     ),
+    (
+        "equipment.confins.special.guarda_duas_versoes",
+        "Guarda das Duas Versões",
+        "weapon.form.sword",
+        "weapon.hands.one",
+        "weapon.slot.secondary_only",
+        ("weapon.compat.melee",),
+    ),
 )
 _CANONICAL_WEAPON_IDS = frozenset(row[0] for row in _CANONICAL_WEAPON_ROWS)
 WEAPON_DEFINITIONS = MappingProxyType(
@@ -352,6 +360,9 @@ _EXACT_RECIPE_TO_WEAPON_ID = {
     "recipe.tdo.galerias.guarda_primeiro_selo": "weapon.type.tdo.guarda_primeiro_selo",
     "recipe.vde.santuario.guarda_no_antigo": "weapon.type.vde.guarda_no_antigo",
     "recipe.nareth.observatorio.guarda_referencia": "weapon.type.nareth.guarda_referencia",
+    "recipe.confins.contradicoes.guarda_duas_versoes": (
+        "equipment.confins.special.guarda_duas_versoes"
+    ),
 }
 
 

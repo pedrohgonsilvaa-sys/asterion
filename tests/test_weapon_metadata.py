@@ -200,10 +200,25 @@ EXPECTED_CONFINS_P36_WEAPONS = (
     ),
 )
 
+EXPECTED_CONFINS_DUNGEON_WEAPONS = (
+    (
+        "equipment.confins.special.guarda_duas_versoes",
+        "weapon.form.sword",
+        "weapon.hands.one",
+        "weapon.slot.secondary_only",
+        ("weapon.compat.melee",),
+    ),
+)
+
 
 def test_canonical_registry_matches_all_22_contract_rows():
     assert len(EXPECTED_CANONICAL_WEAPONS) == 22
-    expected_rows = (*EXPECTED_CANONICAL_WEAPONS, *EXPECTED_CONFINS_P36_WEAPONS)
+    expected_rows = (
+        *EXPECTED_CANONICAL_WEAPONS,
+        *EXPECTED_CONFINS_P36_WEAPONS,
+        *EXPECTED_CONFINS_DUNGEON_WEAPONS,
+    )
+    assert len(expected_rows) == 24
     expected_ids = tuple(row[0] for row in expected_rows)
     canonical_row_ids = tuple(row[0] for row in _CANONICAL_WEAPON_ROWS)
     assert len(canonical_row_ids) == len(set(canonical_row_ids))
@@ -223,7 +238,6 @@ def test_canonical_registry_matches_all_22_contract_rows():
         (weapon_id, form, hands, slot, tuple(sorted(tags)))
         for weapon_id, form, hands, slot, tags in expected_rows
     }
-    assert "equipment.confins.special.guarda_duas_versoes" not in WEAPON_DEFINITIONS
     assert "weapon_family" not in {entry.name for entry in fields(WeaponDefinition)}
 
 
@@ -367,6 +381,10 @@ def test_materialization_tags_only_explicit_canonical_weapons():
         ("recipe.tdo.galerias.guarda_primeiro_selo", "weapon.type.tdo.guarda_primeiro_selo"),
         ("recipe.vde.santuario.guarda_no_antigo", "weapon.type.vde.guarda_no_antigo"),
         ("recipe.nareth.observatorio.guarda_referencia", "weapon.type.nareth.guarda_referencia"),
+        (
+            "recipe.confins.contradicoes.guarda_duas_versoes",
+            "equipment.confins.special.guarda_duas_versoes",
+        ),
     ],
 )
 def test_exact_current_recipe_ids_resolve_to_canonical_weapon(recipe_id, expected_id):

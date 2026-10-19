@@ -157,6 +157,7 @@ MATERIAL_NAMES = {
     "material.tdo.catalisador_elite_vi": "Catalisador de Elite VI",
     "material.tdo.fragmento_aprimoramento_vi": "Fragmento de Aprimoramento VI",
     "material.special.confins.core.arquivo_retorno": "Núcleo do Arquivo do Retorno",
+    "material.special.confins.core.camara_contradicoes": "Núcleo da Câmara das Contradições",
     CATALYST_V: "Catalisador de Elite V",
     ALTOS_COLOSSUS_CORE: "Núcleo do Colosso Cinéreo",
     ALTOS_PEDREIRA_CORE: "Núcleo da Pedreira do Contrapeso",
@@ -1019,6 +1020,30 @@ def _special_recipes() -> list[RecipeDefinition]:
             ),
             unlock_id="recipe.confins.arquivo.relicario_entrada_duplicada",
             description="Artefato · Raro · Grau VI · SW2",
+        ),
+        RecipeDefinition(
+            recipe_id="recipe.confins.contradicoes.guarda_duas_versoes",
+            profession_id="blacksmith",
+            name="Guarda das Duas Versões",
+            output_kind="equipment",
+            required_level=15,
+            grade=6,
+            rarity="Épico",
+            output_name="Guarda das Duas Versões",
+            output_slot="Secundária",
+            output_id="equipment.confins.special.guarda_duas_versoes",
+            sw=1,
+            fixed_materials=(
+                MaterialRequirement("material.confins.ferro_baliza", 7),
+                MaterialRequirement("material.confins.po_referencia", 3),
+                MaterialRequirement("material.tdo.catalisador_elite_vi", 2, False),
+                MaterialRequirement("material.tdo.fragmento_aprimoramento_vi", 6, False),
+                MaterialRequirement(
+                    "material.special.confins.core.camara_contradicoes", 1
+                ),
+            ),
+            unlock_id="recipe.confins.contradicoes.guarda_duas_versoes",
+            description="Arma Secundária · Épico · Grau VI · SW1 · Espada 1H",
         ),
     ]
 

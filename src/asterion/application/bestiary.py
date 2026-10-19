@@ -206,6 +206,15 @@ CONFINS_ARQUIVO_BOSS_MASTERY = {
     }
 }
 
+CONFINS_CONTRADICOES_BOSS_MASTERY = {
+    "boss.confins.contradicoes.testemunha_impossivel": {
+        "first_victory",
+        "mechanic:affirmation_plates_observed",
+        "action:revisao_contraditoria",
+        "stable_first_clear",
+    }
+}
+
 ALTOS_PEDREIRA_DISTINCTIVE_BOSS_MASTERY = {
     "boss.altos.pedreira.peso_sem_fim": {
         "first_victory",
@@ -447,11 +456,13 @@ class BestiaryRecorder:
             CONFINS_REGENT_BOSS_MASTERY
             | CONFINS_S36_BOSS_MASTERY
             | CONFINS_ARQUIVO_BOSS_MASTERY
+            | CONFINS_CONTRADICOES_BOSS_MASTERY
         ):
             required = (
                 CONFINS_REGENT_BOSS_MASTERY
                 | CONFINS_S36_BOSS_MASTERY
                 | CONFINS_ARQUIVO_BOSS_MASTERY
+                | CONFINS_CONTRADICOES_BOSS_MASTERY
             )[creature_id]
             entry.stage = (
                 "dominated"
@@ -621,6 +632,14 @@ class BestiaryRecorder:
                         reference_level=60,
                         configured_xp=6114,
                     )
+                elif creature_id == "boss.confins.contradicoes.testemunha_impossivel":
+                    await self._grant_regional_victory_xp(
+                        session,
+                        character_id,
+                        creature_id,
+                        reference_level=60,
+                        configured_xp=6114,
+                    )
             else:
                 entry.bkp += _repeat_bkp(
                     entry.wins, elite, observation_category
@@ -648,6 +667,17 @@ class BestiaryRecorder:
         )
         if creature_id == "boss.confins.regente_fraturado":
             required = CONFINS_REGENT_BOSS_MASTERY[creature_id]
+            entry.stage = (
+                "dominated"
+                if entry.bkp >= 50 and required.issubset(evidence_ids)
+                else "studied"
+                if entry.bkp >= 30
+                else "known"
+                if entry.bkp >= 10
+                else "observed"
+            )
+        elif creature_id in CONFINS_CONTRADICOES_BOSS_MASTERY:
+            required = CONFINS_CONTRADICOES_BOSS_MASTERY[creature_id]
             entry.stage = (
                 "dominated"
                 if entry.bkp >= 50 and required.issubset(evidence_ids)
@@ -1061,6 +1091,8 @@ class BestiaryRecorder:
             if creature_id in S30_DISTINCTIVE_BOSS_MASTERY
             else CONFINS_ARQUIVO_BOSS_MASTERY[creature_id]
             if creature_id in CONFINS_ARQUIVO_BOSS_MASTERY
+            else CONFINS_CONTRADICOES_BOSS_MASTERY[creature_id]
+            if creature_id in CONFINS_CONTRADICOES_BOSS_MASTERY
             else CONFINS_S36_BOSS_MASTERY[creature_id]
             if creature_id in CONFINS_S36_BOSS_MASTERY
             else CONFINS_REGENT_BOSS_MASTERY[creature_id]
@@ -1096,6 +1128,7 @@ class BestiaryRecorder:
         if creature_id in {
             *S30_DISTINCTIVE_BOSS_MASTERY,
             *CONFINS_ARQUIVO_BOSS_MASTERY,
+            *CONFINS_CONTRADICOES_BOSS_MASTERY,
             *CONFINS_S36_BOSS_MASTERY,
             *CONFINS_REGENT_BOSS_MASTERY,
             *ALTOS_DISTINCTIVE_DUNGEON_BOSS_MASTERY,

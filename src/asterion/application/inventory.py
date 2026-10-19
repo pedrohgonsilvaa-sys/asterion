@@ -98,6 +98,7 @@ MATERIAL_LABELS = {
     "material.confins.musgo_limiar": "Musgo de Limiar",
     "material.confins.po_referencia": "Pó de Referência",
     "material.special.confins.core.arquivo_retorno": "Núcleo do Arquivo do Retorno",
+    "material.special.confins.core.camara_contradicoes": "Núcleo da Câmara das Contradições",
 }
 
 @dataclass(frozen=True)

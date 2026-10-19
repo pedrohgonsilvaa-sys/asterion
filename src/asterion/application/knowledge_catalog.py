@@ -492,6 +492,27 @@ CODEX_ENTRIES = (
         317,
         "location.confins.estradas_ausentes",
     ),
+    CodexPresentation(
+        "codex.confins.dungeon.camara_contradicoes",
+        "Câmara das Contradições",
+        "history",
+        318,
+        "location.confins.no_central",
+    ),
+    CodexPresentation(
+        "codex.confins.dungeon.ordens_irreconciliaveis",
+        "Ordens Irreconciliáveis",
+        "history",
+        319,
+        "location.confins.no_central",
+    ),
+    CodexPresentation(
+        "codex.confins.dungeon.testemunha_impossivel",
+        "Testemunha Impossível",
+        "history",
+        320,
+        "location.confins.no_central",
+    ),
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -566,6 +587,26 @@ CODEX_FRAGMENTS = {
     "codex.confins.dungeon.chegada_antes": FragmentPresentation(
         "O Que Chega Antes",
         "A vitória registra o comportamento observado do chefe e a chegada incongruente preservada no Arquivo. O Códice não o identifica como alma humana nem como testemunha onisciente.",
+    ),
+    "codex.fragment.confins.contradicoes.camara": FragmentPresentation(
+        "Câmara das Contradições",
+        "A entrada observada reúne registros e infraestrutura para comparar leituras incompatíveis. O acesso não resolve quais documentos devem prevalecer.",
+    ),
+    "codex.fragment.confins.contradicoes.ponto_controle": FragmentPresentation(
+        "Ponto de Controle",
+        "A placa documental B preserva uma leitura oficial distinta da placa A. A observação não escolhe uma verdade definitiva.",
+    ),
+    "codex.fragment.confins.contradicoes.mesa_ordens": FragmentPresentation(
+        "Mesa das Ordens",
+        "A mesa mantém ordens incompatíveis em circulação documental. A presença desses registros não explica sua divergência.",
+    ),
+    "codex.fragment.confins.contradicoes.duas_ordens": FragmentPresentation(
+        "Duas Ordens",
+        "O registro físico preserva lado a lado duas versões incompatíveis. Nenhuma leitura apaga a evidência da outra.",
+    ),
+    "codex.fragment.confins.contradicoes.testemunha": FragmentPresentation(
+        "Testemunha Impossível",
+        "O combate registra ações observadas da Testemunha Impossível e as Placas de Afirmação. O Bestiário descreve o encontro, sem tratá-la como profeta, deus ou fonte onisciente.",
     ),
     "explore.confins.no.rede_incompleta": FragmentPresentation(
         "Diagrama da Rede Incompleta",
@@ -1536,6 +1577,12 @@ ACHIEVEMENTS = (
         "Concluiu P36 em Nv.60 e descobriu os seis Locais dos Confins do Véu.",
         "Aparência · Viajante do Véu",
     ),
+    AchievementPresentation(
+        "achievement.confins.contradicoes_estavel",
+        "Versões Preservadas",
+        "pve",
+        "Concluiu pela primeira vez a Câmara das Contradições em dificuldade Estável.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
@@ -1700,6 +1747,7 @@ MATERIAL_LABELS = {
     "material.confins.musgo_limiar": "Musgo de Limiar",
     "material.confins.po_referencia": "Pó de Referência",
     "material.special.confins.core.arquivo_retorno": "Núcleo do Arquivo do Retorno",
+    "material.special.confins.core.camara_contradicoes": "Núcleo da Câmara das Contradições",
 }
 
 
@@ -1733,6 +1781,18 @@ CREATURE_PRESENTATION = {
     "aranha_limiar": CreaturePresentation(
         CONFINS_REGION_ID,
         ("location.confins.estradas_ausentes", "location.confins.fraturas_limiar"),
+    ),
+    "creature.confins.vigia_desfasado": CreaturePresentation(
+        CONFINS_REGION_ID, ("location.confins.no_central",)
+    ),
+    "dungeon_elite.confins.contradicoes.custodio_no_central": CreaturePresentation(
+        CONFINS_REGION_ID, ("location.confins.no_central",)
+    ),
+    "dungeon_elite.confins.contradicoes.preceptor_contradicao": CreaturePresentation(
+        CONFINS_REGION_ID, ("location.confins.no_central",)
+    ),
+    "boss.confins.contradicoes.testemunha_impossivel": CreaturePresentation(
+        CONFINS_REGION_ID, ("location.confins.no_central",)
     ),
     "dog_cinereo": CreaturePresentation(
         TDO_REGION_ID, ("tdo.location.estrada_das_cinzas", "tdo.location.charneca_da_fuligem")

@@ -2870,6 +2870,10 @@ def world_router(
                 "dungeon.confins.arquivo_retorno",
                 "dungeon:confins-arquivo",
             ),
+            CONFINS_NO_CENTRAL_LABEL: (
+                "dungeon.confins.camara_contradicoes",
+                "dungeon:confins-contradicoes",
+            ),
         }
         family = family_by_location.get(view.location)
         if dungeons is not None and family is not None:
