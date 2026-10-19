@@ -27,6 +27,7 @@ from asterion.application.altos_missions import (
     S26_TITLE,
     S30_TITLE,
     S31_TITLE,
+    S35_TITLE,
     AltosMissionView,
 )
 from asterion.application.prologue import CombatView
@@ -57,6 +58,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         else P30_TITLE if view.quest_id == "P30"
         else S30_TITLE if view.quest_id == "S30"
         else S31_TITLE if view.quest_id == "S31"
+        else S35_TITLE if view.quest_id == "S35"
         else S26_TITLE if view.quest_id == "S26"
         else P25_TITLE
     )
@@ -86,7 +88,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
         )
         combat_location = (
             view.location
-            if view.quest_id in {"S26", "S31", "P31", "P32", "P33", "P34", "P35", "P36"}
+            if view.quest_id in {"S26", "S31", "S34", "S35", "P31", "P32", "P33", "P34", "P35", "P36"}
             else "Coração do Colosso"
             if view.quest_id == "P30"
             else "Bastilha de Carga"
@@ -101,7 +103,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
             "Chefe opcional · economia zero"
             if view.quest_id == "S30"
             else "Encontro roteirizado · economia zero"
-            if view.quest_id in {"S31", "P31", "P32", "P33", "P34", "P35", "P36"}
+            if view.quest_id in {"S31", "S34", "S35", "P31", "P32", "P33", "P34", "P35", "P36"}
             else "Encontro roteirizado"
             if view.quest_id == "S26"
             else "Encontro de Campanha"
@@ -432,6 +434,11 @@ def _render_p35(view: AltosMissionView, title: str, rows) -> Screen:
         f"Etapa {view.step}/8 · {step_text}",
     ]
     progress = view.progress
+    if progress.get("s35_contextual_knowledge_available"):
+        lines.append(
+            "Contexto já registrado: S35 preservou duas ordens oficiais incompatíveis. "
+            "Isso não substitui as três cadeias documentais nem as evidências próprias de P35."
+        )
     if view.step == 1:
         evidence = set(progress.get("documentary_chain_evidence_ids", ()))
         for key, label in chain_labels.items():

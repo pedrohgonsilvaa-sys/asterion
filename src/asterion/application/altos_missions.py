@@ -250,6 +250,11 @@ S34_MISSION_ID = "mission.confins.s34"
 S34_TITLE = "A Testemunha de Ontem"
 S34_CONTENT_VERSION = "confins-1.0.0"
 S34_CHECKPOINT = "s34.a_testemunha_de_ontem"
+S35_ID = "S35"
+S35_MISSION_ID = "mission.confins.s35"
+S35_TITLE = "O Registro que Discorda"
+S35_CONTENT_VERSION = "confins-1.0.0"
+S35_CHECKPOINT = "s35.o_registro_que_discorda"
 ALTOS_REGION_ACHIEVEMENT = "achievement.altos.regiao"
 P30_CONFINS_UNLOCK = "unlock.region.confins"
 P31_ID = "P31"
@@ -491,6 +496,14 @@ P25_COMBAT = {
         57,
         "uncommon",
     ),
+    S35_ID: (
+        S35_MISSION_ID,
+        S35_CHECKPOINT,
+        (CONFINS_NO_CENTRAL_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL),
+        CONFINS_VIGIA_DESFASADO,
+        58,
+        "uncommon",
+    ),
     P31_ID: (
         P31_MISSION_ID,
         "p31.onde_o_veu_afina",
@@ -545,7 +558,7 @@ P25_COMBAT = {
 def _scripted_combat_step(quest_id: str) -> int:
     if quest_id in {S31_ID, S32_ID}:
         return 4
-    if quest_id == S34_ID:
+    if quest_id in {S34_ID, S35_ID}:
         return 3
     if quest_id == S30_ID:
         return 5
@@ -579,6 +592,7 @@ def _content_version(quest_id: str) -> str:
         S31_ID: S31_CONTENT_VERSION,
         S32_ID: S32_CONTENT_VERSION,
         S34_ID: S34_CONTENT_VERSION,
+        S35_ID: S35_CONTENT_VERSION,
         P31_ID: P31_CONTENT_VERSION,
         P32_ID: P32_CONTENT_VERSION,
         P33_ID: P33_CONTENT_VERSION,
@@ -591,7 +605,19 @@ def _content_version(quest_id: str) -> str:
 def _mission_region(quest_id: str) -> str:
     return (
         CONFINS_REGION
-        if quest_id in {S31_ID, S32_ID, S34_ID, P31_ID, P32_ID, P33_ID, P34_ID, P35_ID, P36_ID}
+        if quest_id
+        in {
+            S31_ID,
+            S32_ID,
+            S34_ID,
+            S35_ID,
+            P31_ID,
+            P32_ID,
+            P33_ID,
+            P34_ID,
+            P35_ID,
+            P36_ID,
+        }
         else ALTOS_REGION
     )
 
@@ -5656,6 +5682,15 @@ class AltosMissionService:
                         )
                     )
                 )
+                or (
+                    quest_id == S35_ID
+                    and (
+                        character.level < 58
+                        or not await self._quest_completed(
+                            session, character.id, P34_ID
+                        )
+                    )
+                )
                 or (quest_id == P32_ID and character.level < 53)
                 or (quest_id == P33_ID and character.level < 55)
                 or (quest_id == P34_ID and character.level < 57)
@@ -5793,6 +5828,18 @@ class AltosMissionService:
                         or world.location
                         not in (CONFINS_FRATURAS_LIMIAR_LABEL, CONFINS_NO_CENTRAL_LABEL)
                         or character.level < 57
+                        or not await self._quest_completed(
+                            session, character.id, P34_ID
+                        )
+                    )
+                )
+                or (
+                    quest_id == S35_ID
+                    and (
+                        world.region != CONFINS_REGION
+                        or world.location
+                        not in (CONFINS_NO_CENTRAL_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL)
+                        or character.level < 58
                         or not await self._quest_completed(
                             session, character.id, P34_ID
                         )
@@ -6228,6 +6275,14 @@ class AltosMissionService:
             quest_id == S34_ID
             and (
                 character.level < 57
+                or not await self._quest_completed(session, character.id, P34_ID)
+            )
+        ):
+            role = "ineligible"
+        elif (
+            quest_id == S35_ID
+            and (
+                character.level < 58
                 or not await self._quest_completed(session, character.id, P34_ID)
             )
         ):
@@ -6710,6 +6765,25 @@ class AltosMissionService:
                             "economy_zero": True,
                         },
                     )
+                elif quest_id == S35_ID:
+                    quest.step = 4
+                    progress["completed_steps"] = sorted(
+                        set(progress.get("completed_steps", ())) | {3}
+                    )
+                    progress["scripted_vigia_victory"] = True
+                    await self._credit_s35(
+                        session,
+                        character.id,
+                        "s35.vigia_defeated",
+                        f"s35.vigia_defeated:{character.id}",
+                        {
+                            "creature_id": creature_id,
+                            "enemy_level": enemy_level,
+                            "mission_scripted": True,
+                            "variant": False,
+                            "economy_zero": True,
+                        },
+                    )
                 elif quest_id == P31_ID:
                     quest.step = 5
                     progress["completed_steps"] = sorted(
@@ -6833,6 +6907,7 @@ class AltosMissionService:
                     S31_ID,
                     S32_ID,
                     S34_ID,
+                    S35_ID,
                     P31_ID,
                     P32_ID,
                     P33_ID,
@@ -7120,6 +7195,25 @@ class AltosMissionService:
                                         "economy_zero": True,
                                     },
                                 )
+                            elif quest_id == S35_ID:
+                                participant_quest.step = 4
+                                progress["completed_steps"] = sorted(
+                                    set(progress.get("completed_steps", ())) | {3}
+                                )
+                                progress["scripted_vigia_victory"] = True
+                                await self._credit_s35(
+                                    session,
+                                    participant.id,
+                                    "s35.vigia_defeated",
+                                    f"s35.vigia_defeated:{participant.id}",
+                                    {
+                                        "creature_id": creature_id,
+                                        "enemy_level": enemy_level,
+                                        "mission_scripted": True,
+                                        "variant": False,
+                                        "economy_zero": True,
+                                    },
+                                )
                             elif quest_id == P31_ID:
                                 participant_quest.step = 5
                                 progress["completed_steps"] = sorted(
@@ -7247,6 +7341,7 @@ class AltosMissionService:
                                 S31_ID,
                                 S32_ID,
                                 S34_ID,
+                                S35_ID,
                                 P31_ID,
                                 P32_ID,
                                 P33_ID,
@@ -8163,6 +8258,18 @@ class AltosMissionService:
             session,
             character_id=character_id,
             quest_id=S34_ID,
+            objective_id=objective_id,
+            source_key=source_key,
+            evidence=evidence,
+        )
+
+    async def _credit_s35(
+        self, session, character_id, objective_id, source_key, evidence
+    ):
+        await record_campaign_objective_credit(
+            session,
+            character_id=character_id,
+            quest_id=S35_ID,
             objective_id=objective_id,
             source_key=source_key,
             evidence=evidence,

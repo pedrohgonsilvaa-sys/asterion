@@ -430,6 +430,13 @@ CODEX_ENTRIES = (
         "location.confins.fraturas_limiar",
     ),
     CodexPresentation(
+        "codex.confins.duas_ordens_oficiais",
+        "Ordens Discordantes",
+        "history",
+        314,
+        "location.confins.no_central",
+    ),
+    CodexPresentation(
         "codex.confins.ancora_central_coordenacao",
         "Âncora Central",
         "history",
@@ -502,6 +509,10 @@ CODEX_FRAGMENTS = {
     "codex.confins.testemunha_ontem": FragmentPresentation(
         "A Testemunha de Ontem",
         "O depoimento tem data anterior ao aparente evento de emissão. Duas marcas físicas e uma ficha com cadeia de custódia preservam uma ordem local verificável, mas não explicam integralmente a discrepância. O registro não afirma profecia, deslocamento temporal consciente, pessoa duplicada nem memória falsa comprovada.",
+    ),
+    "codex.confins.duas_ordens_oficiais": FragmentPresentation(
+        "Ordens Discordantes",
+        "Duas ordens oficiais referentes ao mesmo intervalo administrativo são preservadas lado a lado. As origens dos dois lacres e a trilha de transmissão sustentam sua autenticidade, mas a divergência e as lacunas documentais permanecem sem conclusão definitiva.",
     ),
     "codex.confins.ancora_central_coordenacao": FragmentPresentation(
         "Âncora Central",
