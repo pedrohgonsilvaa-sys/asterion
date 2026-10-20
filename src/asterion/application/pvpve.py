@@ -690,6 +690,7 @@ class PvpveService:
                     actor_action,
                     target_id=resolved_target,
                     actor_key=member.actor_key,
+                    effect_id=effect_id,
                 )
             else:
                 # The authoritative TDO rules explicitly prohibit external
@@ -1506,6 +1507,8 @@ class PvpveService:
                     candidates.append((Decimal("-1"), action_id, None))
                     continue
                 action = available.get(action_id)
+                if action is not None and action.effect_removal is not None:
+                    continue
                 targets = action_target_ids(combat, action_id, actor_key=actor_key)
                 if action is None or not targets:
                     continue

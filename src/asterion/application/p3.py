@@ -657,7 +657,12 @@ class P3Service:
                 record.snapshot, record.id, activity.ruleset_version, activity.state_version
             )
             if consumable_id is None:
-                updated = act(combat, action)
+                updated = act(
+                    combat,
+                    action,
+                    target_id=target_id,
+                    effect_id=effect_id,
+                )
             else:
                 stack = await session.scalar(
                     select(ConsumableStack)

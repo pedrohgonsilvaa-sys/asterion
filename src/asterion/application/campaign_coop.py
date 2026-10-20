@@ -442,6 +442,7 @@ def resolve_campaign_action(
             action,
             target_id=target_id,
             actor_key=member.actor_key,
+            effect_id=effect_id,
         )
     else:
         updated = use_combat_consumable(

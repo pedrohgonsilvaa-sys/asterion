@@ -2015,7 +2015,12 @@ class RoadService:
             if consumable_id is None:
                 if action is None:
                     return await self._combat_view(s, c, activity)
-                updated = act(combat, action)
+                updated = act(
+                    combat,
+                    action,
+                    target_id=target_id,
+                    effect_id=effect_id,
+                )
             else:
                 context = await s.scalar(
                     select(HuntContext).where(HuntContext.game_activity_id == activity.id)

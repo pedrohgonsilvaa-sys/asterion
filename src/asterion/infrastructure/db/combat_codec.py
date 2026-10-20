@@ -7,6 +7,7 @@ from uuid import UUID
 from asterion.domain.combat import (
     Action,
     ActionEffect,
+    ActionEffectRemoval,
     Combat,
     CombatDamageAura,
     CombatEvent,
@@ -41,10 +42,16 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
     payload = dict(payload)
     payload.pop("dots", None)  # legacy snapshots used a non-authoritative label list
     def action(value):
+        effect_removal = value.get("effect_removal")
         return Action(
             **(
                 value
                 | {
+                    "effect_removal": (
+                        ActionEffectRemoval(**effect_removal)
+                        if isinstance(effect_removal, dict)
+                        else effect_removal
+                    ),
                     "coefficient": Decimal(value["coefficient"]),
                     "attack_debuff": Decimal(value["attack_debuff"]),
                     "per_bonus_if_target_poisoned": Decimal(
@@ -278,6 +285,16 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "calculated_damage": int(event.get("calculated_damage", 0)),
                     "effective_damage": int(event.get("effective_damage", 0)),
                     "target_effect_ids": tuple(event.get("target_effect_ids", ())),
+                    "removed_effect_ids": tuple(
+                        event.get("removed_effect_ids", ())
+                    ),
+                    "effect_removal_kinds": tuple(
+                        event.get("effect_removal_kinds", ())
+                    ),
+                    "remaining_effect_stacks": tuple(
+                        int(count)
+                        for count in event.get("remaining_effect_stacks", ())
+                    ),
                     "actor_effect_ids": tuple(event.get("actor_effect_ids", ())),
                     "target_state_tags": tuple(event.get("target_state_tags", ())),
                     "path_triggers": tuple(event.get("path_triggers", ())),

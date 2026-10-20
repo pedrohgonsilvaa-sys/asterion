@@ -721,8 +721,11 @@ def event_line(state: Combat, event: CombatEvent) -> str:
                 "dot:bleed": "Sangramento",
                 "dot:burn": "Queimadura",
             }.get(event.action, "Dano contínuo")
-            return f"☣️ <b>{actor_name}</b> sofre <b>{dot}</b>."
-        return f"✨ <b>{actor_name}</b> age no combate."
+            line = f"☣️ <b>{actor_name}</b> sofre <b>{dot}</b>."
+        else:
+            line = f"✨ <b>{actor_name}</b> age no combate."
+        removal = _action_effect_removal_line(state, event)
+        return f"{line}{' ' + removal if removal else ''}"
     target = _fighter_for_event(state, event.target) or actor
     target_name = escape(target.name)
     if event.barrier_value:
@@ -790,6 +793,9 @@ def event_line(state: Combat, event: CombatEvent) -> str:
             )
     if event.barrier_absorbed:
         line += f" Barreira absorve <code>{number(event.barrier_absorbed)}</code>."
+    removal = _action_effect_removal_line(state, event)
+    if removal:
+        line += f" {removal}"
     return line
 
 def _effect_label(state: Combat, effect_id: str, *, target_id: str) -> str:
@@ -804,8 +810,45 @@ def _effect_label(state: Combat, effect_id: str, *, target_id: str) -> str:
     action = state.enemy_actions.get(effect_id) or state.player_actions.get(effect_id)
     if action is not None:
         return escape(action.name)
+    if effect_id.startswith("effect:"):
+        return escape(effect_id.removeprefix("effect:"))
+    if effect_id:
+        return escape(effect_id)
     fallback = "Efeito Negativo" if target_id == "player" else "Efeito Positivo"
     return escape(fallback)
+
+
+def _action_effect_removal_line(state: Combat, event: CombatEvent) -> str:
+    component = event.effect_removal_component
+    if component is None:
+        return ""
+    label = "Purificação" if component == "purification" else "Dispel"
+    if event.effect_removal_result == "missed":
+        return f"✨ {label} não aplicado: o ataque não atingiu o alvo."
+    if not event.removed_effect_ids:
+        return f"✨ {label}: nenhum efeito elegível foi removido."
+    target = _fighter_for_event(state, event.target)
+    target_name = escape(target.name if target is not None else event.target)
+    removed = []
+    for index, effect_id in enumerate(event.removed_effect_ids):
+        kind = (
+            event.effect_removal_kinds[index]
+            if index < len(event.effect_removal_kinds)
+            else event.effect_removal_kind
+        )
+        if kind == "stack":
+            remaining = (
+                event.remaining_effect_stacks[index]
+                if index < len(event.remaining_effect_stacks)
+                else 0
+            )
+            detail = f"1 acúmulo removido · Restam {remaining}"
+        else:
+            detail = "Removido"
+        removed.append(
+            f"<b>{_effect_label(state, effect_id, target_id=event.target)}</b> · {detail}"
+        )
+    return f"✨ {label} em <b>{target_name}</b>: " + ", ".join(removed) + "."
 
 
 def _consumable_event_line(state: Combat, event: CombatEvent, actor_name: str) -> str:

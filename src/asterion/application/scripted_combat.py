@@ -89,9 +89,9 @@ async def apply_action(
     combat, _, record = await current_combat(session, activity)
     if consumable_id is None:
         updated = (
-            act(combat, action)
+            act(combat, action, effect_id=effect_id)
             if target_id is None
-            else act(combat, action, target_id=target_id)
+            else act(combat, action, target_id=target_id, effect_id=effect_id)
         )
     else:
         stack = await session.scalar(

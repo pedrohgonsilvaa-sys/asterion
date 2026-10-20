@@ -86,6 +86,35 @@ class ActionEffect:
 
 
 @dataclass(frozen=True)
+class ActionEffectRemoval:
+    """One explicit Purification/Dispel component of an active action.
+
+    The component resolves after the action's ordinary damage/status/healing/
+    barrier effects. Target and effect selection are validated before commit;
+    the component itself never owns a separate action, RNG roll, or cooldown.
+    """
+
+    kind: str
+    count: int = 1
+    trigger: str = "action"
+    scope: str = "per_action"
+    selection_required: bool = True
+    resolution_order: str = "after_primary"
+
+    def __post_init__(self) -> None:
+        if self.kind not in {"purification", "dispel"}:
+            raise ValueError("Action effect removal must be Purification or Dispel.")
+        if self.count < 1:
+            raise ValueError("Action effect removal count must be positive.")
+        if self.trigger not in {"action", "successful_direct_hit"}:
+            raise ValueError("Action effect removal trigger is invalid.")
+        if self.scope not in {"per_action", "per_target"}:
+            raise ValueError("Action effect removal scope is invalid.")
+        if self.resolution_order != "after_primary":
+            raise ValueError("Action effect removal resolution order is invalid.")
+
+
+@dataclass(frozen=True)
 class Action:
     id: str
     name: str
@@ -158,6 +187,7 @@ class Action:
     skip_if_actor_last_action: tuple[str, ...] = ()
     ai_priority_after: tuple[str, ...] = ()
     barrier_bound_effect_ids: tuple[str, ...] = ()
+    effect_removal: ActionEffectRemoval | None = None
 
     def __post_init__(self) -> None:
         if self.hit_count < 1:
@@ -184,6 +214,14 @@ class Action:
             raise ValueError("Prepared action chains require a positive duration.")
         if self.effect_trigger_scope not in {"per_action", "per_hit", "per_target"}:
             raise ValueError("Action effect trigger scope is invalid.")
+        if self.effect_removal is not None:
+            if not isinstance(self.effect_removal, ActionEffectRemoval):
+                raise ValueError("Action effect removal must use its typed component.")
+            if (
+                self.effect_removal.trigger == "successful_direct_hit"
+                and self.coefficient <= ZERO
+            ):
+                raise ValueError("Direct-hit effect removal requires direct damage.")
         if (
             self.enemy_hp_fraction_below is not None
             and not ZERO <= self.enemy_hp_fraction_below <= D(1)
@@ -293,6 +331,11 @@ class CombatEvent:
     barrier_absorbed: Decimal = D(0)
     barrier_value: Decimal = D(0)
     effect_removal_kind: str | None = None
+    effect_removal_component: str | None = None
+    effect_removal_result: str | None = None
+    removed_effect_ids: tuple[str, ...] = ()
+    effect_removal_kinds: tuple[str, ...] = ()
+    remaining_effect_stacks: tuple[int, ...] = ()
     dodged: bool = False
     blocked: bool = False
     actor_entity_id: str = ""
@@ -418,6 +461,16 @@ class CombatConsumableOption:
     target_id: str
     effect_id: str | None
     label: str
+
+
+@dataclass(frozen=True, slots=True)
+class CombatEffectRemovalOption:
+    target_id: str
+    effect_id: str
+    label: str
+    stacks: int
+    remaining: int
+    stackable: bool
 
 
 @dataclass
@@ -1301,32 +1354,117 @@ def consumable_effect_options(
         or target_id not in state.fighters
     ):
         return ()
-    target = state.fighters[target_id]
-    options: list[tuple[str, str]] = []
-    if item.family in {ConsumableFamily.PURIFICATION, ConsumableFamily.ANTIDOTE}:
-        for index, dot in enumerate(state.dot_states.get(target_id, [])):
-            if (
-                dot.stacks > 0
-                and dot.remaining > 0
-                and dot.removable
-                and not dot.unremovable
-                and not dot.protected
-                and not dot.fixed_mechanic
-                and not dot.boss_protected
-            ):
-                options.append((dot.instance_id or f"d{index + 1:x}", f"dot:{dot.kind}"))
-        if item.family == ConsumableFamily.PURIFICATION:
-            for index, effect in enumerate(target.effects):
-                if purifiable(effect):
-                    options.append(
-                        (effect.instance_id or f"e{index + 1:x}", f"effect:{effect.id}")
-                    )
-    elif item.family == ConsumableFamily.DISPELLER and target_id != "player":
-        for index, effect in enumerate(target.effects):
-            if dissipatable(effect):
-                options.append(
-                    (effect.instance_id or f"e{index + 1:x}", f"effect:{effect.id}")
+    if item.family == ConsumableFamily.PURIFICATION:
+        return tuple(
+            (option.effect_id, option.label)
+            for option in _effect_removal_options_for_target(
+                state, "purification", target_id
+            )
+        )
+    if item.family == ConsumableFamily.ANTIDOTE:
+        return tuple(
+            (option.effect_id, option.label)
+            for option in _dot_removal_options_for_target(state, target_id)
+        )
+    if item.family == ConsumableFamily.DISPELLER and target_id != "player":
+        return tuple(
+            (option.effect_id, option.label)
+            for option in _effect_removal_options_for_target(state, "dispel", target_id)
+        )
+    return ()
+
+
+def _dot_is_removable(dot: DotState) -> bool:
+    return bool(
+        dot.stacks > 0
+        and dot.remaining > 0
+        and dot.removable
+        and not dot.unremovable
+        and not dot.protected
+        and not dot.fixed_mechanic
+        and not dot.boss_protected
+    )
+
+
+def _dot_removal_options_for_target(
+    state: Combat, target_id: str
+) -> tuple[CombatEffectRemovalOption, ...]:
+    options = []
+    for index, dot in enumerate(state.dot_states.get(target_id, ())):
+        if not _dot_is_removable(dot):
+            continue
+        options.append(
+            CombatEffectRemovalOption(
+                target_id,
+                _dot_token(dot, index),
+                f"dot:{dot.kind}",
+                dot.stacks,
+                dot.remaining,
+                True,
+            )
+        )
+    return tuple(options)
+
+
+def _effect_removal_options_for_target(
+    state: Combat, component: str, target_id: str
+) -> tuple[CombatEffectRemovalOption, ...]:
+    target = state.fighters.get(target_id)
+    if target is None:
+        return ()
+    options: list[CombatEffectRemovalOption] = []
+    if component == "purification":
+        options.extend(_dot_removal_options_for_target(state, target_id))
+    for index, effect in enumerate(target.effects):
+        eligible = (
+            purifiable(effect)
+            if component == "purification"
+            else dissipatable(effect)
+            if component == "dispel"
+            else False
+        )
+        if eligible:
+            options.append(
+                CombatEffectRemovalOption(
+                    target_id,
+                    _effect_token(effect, index),
+                    f"effect:{effect.id}",
+                    effect.stacks,
+                    effect.remaining,
+                    effect.stackable,
                 )
+            )
+    return tuple(options)
+
+
+def action_effect_removal_options(
+    state: Combat,
+    action_id: str,
+    *,
+    target_id: str | None = None,
+    actor_key: str | None = None,
+) -> tuple[CombatEffectRemovalOption, ...]:
+    """Expose only currently valid, stable effect selections for an Action."""
+    actor_key = actor_key or active_player_key(state)
+    if actor_key is None:
+        return ()
+    action = player_actions_for(state, actor_key).get(action_id)
+    if action is None or action.effect_removal is None:
+        return ()
+    targets = _resolve_action_targets(state, actor_key, action, target_id)
+    actor_side = _fighter_side(state, actor_key)
+    options = []
+    for target_key in targets:
+        target_side = _fighter_side(state, target_key)
+        if action.effect_removal.kind == "purification" and target_side != actor_side:
+            continue
+        if action.effect_removal.kind == "dispel" and target_side == actor_side:
+            continue
+        options.extend(
+            _effect_removal_options_for_target(
+                state, action.effect_removal.kind, target_key
+            )
+        )
     return tuple(options)
 
 
@@ -4734,34 +4872,15 @@ def use_purification_consumable(
             dots = updated.dot_states.get(actor_key, [])
             if not 0 <= dot_index < len(dots):
                 return state
-            dot = dots[dot_index]
-            if (
-                not dot.removable
-                or dot.unremovable
-                or dot.protected
-                or dot.fixed_mechanic
-                or dot.boss_protected
-                or dot.stacks <= 0
-                or dot.remaining <= 0
-            ):
-                return state
-            snapshots = list(dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks)
-            if not snapshots:
-                return state
-            snapshots.pop(0)
-            if snapshots:
-                dot.stack_snapshots = snapshots
-                dot.snapshot_attack = snapshots[0]
-                dot.stacks = len(snapshots)
-            else:
-                dots.pop(dot_index)
+            selection_id = _dot_token(dots[dot_index], dot_index)
         else:
             if not 0 <= effect_index < len(player.effects):
                 return state
-            effect = player.effects[effect_index]
-            if not purifiable(effect):
-                return state
-            player.effects.pop(effect_index)
+            selection_id = _effect_token(player.effects[effect_index], effect_index)
+        if _remove_selected_effect_component(
+            updated, actor_key, selection_id, "purification"
+        ) is None:
+            return state
         return _finish_consumable_turn(
             updated, "consumable:purify", actor_key=actor_key
         )
@@ -4815,6 +4934,67 @@ def _remove_selected_effect(
             target.effects.pop(index)
         return effect.id
     return None
+
+
+def _remove_selected_effect_component(
+    state: Combat,
+    target_id: str,
+    selection_id: str,
+    component: str,
+) -> tuple[str, str] | None:
+    """Remove exactly one eligible unit, preserving the remaining stack state."""
+    if component == "purification":
+        dots = state.dot_states.get(target_id, [])
+        for index, dot in enumerate(dots):
+            if _dot_token(dot, index) != selection_id or not _dot_is_removable(dot):
+                continue
+            snapshots = list(dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks)
+            if not snapshots:
+                return None
+            snapshots.pop(0)
+            if snapshots:
+                dot.stack_snapshots = snapshots
+                dot.snapshot_attack = snapshots[0]
+                dot.stacks = len(snapshots)
+            else:
+                dots.pop(index)
+                if not dots:
+                    state.dot_states.pop(target_id, None)
+            return f"dot:{dot.kind}", "stack"
+
+    target = state.fighters.get(target_id)
+    if target is None:
+        return None
+    for index, effect in enumerate(target.effects):
+        if _effect_token(effect, index) != selection_id:
+            continue
+        eligible = (
+            purifiable(effect)
+            if component == "purification"
+            else dissipatable(effect)
+            if component == "dispel"
+            else False
+        )
+        if not eligible:
+            return None
+        removal_kind = "stack" if effect.stackable else "effect"
+        effect_id = _remove_selected_effect(target, selection_id, one_stack=True)
+        return (effect_id, removal_kind) if effect_id else None
+    return None
+
+
+def _remaining_effect_stack_count(
+    state: Combat, target_id: str, selection_id: str
+) -> int:
+    for index, dot in enumerate(state.dot_states.get(target_id, ())):
+        if _dot_token(dot, index) == selection_id:
+            return max(0, dot.stacks)
+    target = state.fighters.get(target_id)
+    if target is not None:
+        for index, effect in enumerate(target.effects):
+            if _effect_token(effect, index) == selection_id:
+                return max(0, effect.stacks)
+    return 0
 
 
 def combat_consumable_usable(
@@ -4899,7 +5079,6 @@ def use_combat_consumable(
     updated = deepcopy(state)
     player = updated.fighters[actor_key]
     resolved_target = target_id or actor_key
-    target = updated.fighters[resolved_target]
     healed = D(0)
     effect_name = ""
     effect_removal_kind = None
@@ -4912,11 +5091,12 @@ def use_combat_consumable(
         player.hp += healed
     elif item.family == ConsumableFamily.PURIFICATION:
         assert effect_id is not None
-        effect_name = _remove_selected_dot(
-            updated, actor_key, effect_id, all_stacks=False
-        ) or _remove_selected_effect(player, effect_id, one_stack=True) or ""
-        if not effect_name:
+        removed = _remove_selected_effect_component(
+            updated, actor_key, effect_id, "purification"
+        )
+        if removed is None:
             return state
+        effect_name, _removal_kind = removed
     elif item.family == ConsumableFamily.ANTIDOTE:
         assert effect_id is not None
         effect_name = _remove_selected_dot(updated, actor_key, effect_id, all_stacks=True) or ""
@@ -4936,20 +5116,12 @@ def use_combat_consumable(
         player.barrier_debuff_magnitude_reduction = ZERO
     elif item.family == ConsumableFamily.DISPELLER:
         assert effect_id is not None
-        selected = next(
-            (
-                effect
-                for index, effect in enumerate(target.effects)
-                if _effect_token(effect, index) == effect_id and dissipatable(effect)
-            ),
-            None,
+        removed = _remove_selected_effect_component(
+            updated, resolved_target, effect_id, "dispel"
         )
-        if selected is None:
+        if removed is None:
             return state
-        effect_removal_kind = "stack" if selected.stackable else "effect"
-        effect_name = _remove_selected_effect(target, effect_id, one_stack=True) or ""
-        if not effect_name:
-            return state
+        effect_name, effect_removal_kind = removed
     elif item.family == ConsumableFamily.WARDING:
         player.ward_charges = 1
         player.ward_remaining = 2
@@ -4969,12 +5141,226 @@ def use_combat_consumable(
     )
 
 
+def _action_has_primary_component(action: Action) -> bool:
+    return bool(
+        action.coefficient > ZERO
+        or action.attack_debuff
+        or action.native_dot_stacks
+        or action.heal_coefficient > ZERO
+        or action.self_barrier_coefficient > ZERO
+        or action.self_barrier_hp_fraction > ZERO
+        or action.target_barrier_coefficient > ZERO
+        or action.target_effects
+        or action.self_effects
+        or action.self_effect_stat
+        or action.revive_fighter_keys
+        or action.next_direct_crit_bonus > ZERO
+        or action.prepares_chain
+        or action.self_state_tags_after is not None
+        or action.manifestation_kind
+    )
+
+
+def _prepare_action_effect_removal(
+    state: Combat,
+    action: Action,
+    target_keys: tuple[str, ...],
+    *,
+    actor_key: str,
+    effect_id: str | None,
+    effect_selections: tuple[tuple[str, str], ...],
+) -> tuple[bool, tuple[tuple[str, str], ...]]:
+    spec = action.effect_removal
+    if spec is None:
+        return (effect_id is None and not effect_selections, ())
+
+    if actor_key not in state.fighters:
+        return False, ()
+    actor_side = _fighter_side(state, actor_key)
+    eligible_targets = tuple(
+        key
+        for key in target_keys
+        if (
+            _fighter_side(state, key) == actor_side
+            if spec.kind == "purification"
+            else _fighter_side(state, key) != actor_side
+        )
+    )
+    options_by_target = {
+        key: _effect_removal_options_for_target(state, spec.kind, key)
+        for key in eligible_targets
+    }
+    candidates = tuple(
+        (key, option.effect_id)
+        for key in eligible_targets
+        for option in options_by_target[key]
+    )
+
+    if effect_id is not None and effect_selections:
+        return False, ()
+    selected: list[tuple[str, str]] = []
+    if effect_id is not None:
+        matches = tuple(pair for pair in candidates if pair[1] == effect_id)
+        if len(matches) != 1:
+            return False, ()
+        selected.extend(matches)
+    elif effect_selections:
+        selected.extend((str(key), str(selection)) for key, selection in effect_selections)
+        if any(pair not in candidates for pair in selected):
+            return False, ()
+    elif candidates:
+        if spec.selection_required:
+            return False, ()
+        else:
+            remaining = spec.count
+            for key in eligible_targets:
+                for option in options_by_target[key]:
+                    if remaining <= 0:
+                        break
+                    units = min(remaining, option.stacks if option.stackable else 1)
+                    selected.extend((key, option.effect_id) for _ in range(units))
+                    remaining -= units
+                if spec.scope == "per_action" and remaining <= 0:
+                    break
+                if spec.scope == "per_target":
+                    remaining = spec.count
+
+    selection_counts: dict[tuple[str, str], int] = {}
+    option_by_selection = {
+        (key, option.effect_id): option
+        for key, options in options_by_target.items()
+        for option in options
+    }
+    for selection in selected:
+        selection_counts[selection] = selection_counts.get(selection, 0) + 1
+        option = option_by_selection.get(selection)
+        if option is None:
+            return False, ()
+        capacity = option.stacks if option.stackable else 1
+        if selection_counts[selection] > capacity:
+            return False, ()
+
+    if spec.scope == "per_action" and len(selected) > spec.count:
+        return False, ()
+    if spec.scope == "per_target":
+        selected_counts: dict[str, int] = {}
+        for key, _ in selected:
+            selected_counts[key] = selected_counts.get(key, 0) + 1
+        if any(count > spec.count for count in selected_counts.values()):
+            return False, ()
+        if spec.selection_required and selected:
+            if any(
+                options_by_target[key]
+                and selected_counts.get(key, 0) == 0
+                for key in eligible_targets
+            ):
+                return False, ()
+
+    if not selected and not _action_has_primary_component(action):
+        return False, ()
+    return True, tuple(selected)
+
+
+def _resolve_action_effect_removal(
+    state: Combat,
+    actor_key: str,
+    action_id: str,
+    action: Action,
+    plan: tuple[tuple[str, str], ...],
+    target_keys: tuple[str, ...],
+    *,
+    event_start: int,
+) -> None:
+    spec = action.effect_removal
+    if spec is None:
+        return
+    selected_by_target: dict[str, list[str]] = {}
+    for target_key, selection_id in plan:
+        selected_by_target.setdefault(target_key, []).append(selection_id)
+    actor = state.fighters[actor_key]
+    allowed_targets = {
+        key
+        for key in target_keys
+        if (
+            _fighter_side(state, key) == _fighter_side(state, actor_key)
+            if spec.kind == "purification"
+            else _fighter_side(state, key) != _fighter_side(state, actor_key)
+        )
+    }
+    if spec.scope == "per_action":
+        component_targets = (
+            set(selected_by_target)
+            if selected_by_target
+            else set(tuple(key for key in target_keys if key in allowed_targets)[:1])
+        )
+    else:
+        component_targets = allowed_targets
+    for target_key in target_keys:
+        if target_key not in component_targets:
+            continue
+        matching = [
+            index
+            for index in range(event_start, len(state.events))
+            if state.events[index].actor_entity_id == actor.id
+            and state.events[index].action == action_id
+            and state.events[index].target == state.fighters[target_key].id
+        ]
+        if not matching:
+            continue
+        event_index = matching[-1]
+        target_events = [state.events[index] for index in matching]
+        if spec.trigger == "successful_direct_hit" and not any(
+            not event.dodged for event in target_events
+        ):
+            state.events[event_index] = replace(
+                state.events[event_index],
+                effect_removal_component=spec.kind,
+                effect_removal_result="missed",
+            )
+            continue
+        selections = selected_by_target.get(target_key, [])
+        removed = []
+        for selection_id in selections:
+            result = _remove_selected_effect_component(
+                state, target_key, selection_id, spec.kind
+            )
+            if result is not None:
+                removed.append(
+                    (
+                        result[0],
+                        result[1],
+                        _remaining_effect_stack_count(state, target_key, selection_id),
+                    )
+                )
+        if removed:
+            effect_ids = tuple(result[0] for result in removed)
+            removal_kinds = tuple(result[1] for result in removed)
+            remaining_stacks = tuple(result[2] for result in removed)
+            result_label = "removed"
+        else:
+            effect_ids = ()
+            removal_kinds = ()
+            remaining_stacks = ()
+            result_label = "no_eligible_effect"
+        state.events[event_index] = replace(
+            state.events[event_index],
+            effect_removal_component=spec.kind,
+            effect_removal_result=result_label,
+            removed_effect_ids=effect_ids,
+            effect_removal_kinds=removal_kinds,
+            remaining_effect_stacks=remaining_stacks,
+            effect_removal_kind=removal_kinds[0] if removal_kinds else None,
+        )
+
+
 def act(
     state: Combat,
     action: str,
     *,
     target_id: str | None = None,
     actor_key: str | None = None,
+    effect_id: str | None = None,
+    effect_selections: tuple[tuple[str, str], ...] = (),
 ) -> Combat:
     """Resolve one player action; invalid action/target intentions are a no-op."""
     actor_key = actor_key or active_player_key(state)
@@ -4995,10 +5381,25 @@ def act(
     if action not in allowed_actions(state, actor_key):
         return state
     actions = player_actions_for(state, actor_key)
-    if action in actions:
-        definition = actions[action]
-        if not _resolve_action_targets(state, actor_key, definition, target_id):
+    action_definition = actions.get(action)
+    effect_removal_plan: tuple[tuple[str, str], ...] = ()
+    target_keys: tuple[str, ...] = ()
+    if action_definition is not None:
+        target_keys = _resolve_action_targets(state, actor_key, action_definition, target_id)
+        if not target_keys:
             return state
+        valid_removal, effect_removal_plan = _prepare_action_effect_removal(
+            state,
+            action_definition,
+            target_keys,
+            actor_key=actor_key,
+            effect_id=effect_id,
+            effect_selections=effect_selections,
+        )
+        if not valid_removal:
+            return state
+    elif effect_id is not None or effect_selections:
+        return state
     with localcontext() as ctx:
         ctx.prec = PRECISION
         updated = deepcopy(state)
@@ -5008,6 +5409,16 @@ def act(
         committed = _perform(updated, actor_key, action, target_id=target_id)
         if not committed:
             return state
+        if action_definition is not None and action_definition.effect_removal is not None:
+            _resolve_action_effect_removal(
+                updated,
+                actor_key,
+                action,
+                action_definition,
+                effect_removal_plan,
+                target_keys,
+                event_start=event_start,
+            )
         _record_devastador_charge(updated, actor_key, event_start, action)
         updated.used_attack |= action == "attack"
         updated.used_defend |= action == "defend"

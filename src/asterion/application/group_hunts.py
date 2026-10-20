@@ -519,7 +519,13 @@ class GroupHuntService:
                     session, character_seed, activity, encounter, members, combat
                 )
             if action is not None:
-                updated = act(combat, action, target_id=target_id, actor_key=member.actor_key)
+                updated = act(
+                    combat,
+                    action,
+                    target_id=target_id,
+                    actor_key=member.actor_key,
+                    effect_id=effect_id,
+                )
             else:
                 limit = ENCOUNTER_CONSUMABLE_LIMITS.get(encounter.category, 0)
                 stack = await session.scalar(

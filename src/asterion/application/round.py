@@ -36,6 +36,7 @@ from asterion.domain.combat import (
     allowed_actions,
     consumable_available,
     effective_heal_amount,
+    player_actions_for,
     use_heal_consumable,
     use_purification_consumable,
 )
@@ -1355,11 +1356,14 @@ class RoundService(RoadService):
             return ("action", "defend")
         if "defend" in actions:
             return ("action", "defend")
+        available_actions = player_actions_for(combat)
         active_art = next(
             (
                 action
                 for action in actions
                 if action.startswith(("class_art.", "path_art."))
+                and action in available_actions
+                and available_actions[action].effect_removal is None
             ),
             None,
         )

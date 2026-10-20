@@ -2270,7 +2270,13 @@ class DungeonService:
                     actor_key=actor_key,
                 )
             else:
-                updated = act(state, action_id, target_id=target_id, actor_key=actor_key)
+                updated = act(
+                    state,
+                    action_id,
+                    target_id=target_id,
+                    actor_key=actor_key,
+                    effect_id=effect_id,
+                )
             if updated.version == state.version:
                 return await self._run_view(
                     session,
