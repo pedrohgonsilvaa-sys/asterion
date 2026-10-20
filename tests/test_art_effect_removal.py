@@ -484,6 +484,10 @@ async def test_postgres_action_removal_is_atomic_and_survives_reconnect(database
     )
     current = await service.resume(actor)
     assert current is not None and current.kind == "combat"
+    assert [
+        (effect.id, effect.instance_id)
+        for effect in current.combat.fighters["player"].effects
+    ] == [("weak", "persistent-weak")]
 
     results = await asyncio.gather(
         service.action(
@@ -504,14 +508,46 @@ async def test_postgres_action_removal_is_atomic_and_survives_reconnect(database
     assert all(result is not None for result in results)
     latest = await service.resume(actor)
     assert latest is not None and latest.kind == "combat"
-    assert latest.combat.fighters["player"].effects == []
     removed_events = [
         event
         for event in latest.combat.events
         if event.action == PURIFY and event.removed_effect_ids
     ]
     assert len(removed_events) == 1
-    assert removed_events[0].effect_removal_component == "purification"
+    removed_event = removed_events[0]
+    assert removed_event.effect_removal_component == "purification"
+    assert removed_event.effect_removal_result == "removed"
+    assert removed_event.target == "player"
+    assert removed_event.target_effect_ids == ("weak",)
+    assert removed_event.removed_effect_ids == ("weak",)
+    assert removed_event.effect_removal_kinds == ("effect",)
+
+    remaining_effects = latest.combat.fighters["player"].effects
+    assert all(effect.instance_id != "persistent-weak" for effect in remaining_effects)
+    for effect in remaining_effects:
+        application_events = [
+            event
+            for event in latest.combat.events
+            if event.sequence > removed_event.sequence
+            and event.actor != "player"
+            and event.target == "player"
+            and event.effect_application_event_id == effect.application_event
+        ]
+        assert len(application_events) == 1
+        application = application_events[0]
+        assert effect.application_event
+        assert application.effect_id == effect.id
+        assert application.actor_entity_id
+        assert application.applied_effect_stat == effect.stat
+        assert application.applied_effect_magnitude == effect.magnitude
+        assert application.applied_effect_duration == effect.remaining
+        assert application.applied_effect_kind == effect.kind
+        assert application.applied_effect_removable == effect.removable
+        assert effect.remaining > 0
+        assert not effect.protected
+        assert not effect.unremovable
+        assert not effect.fixed_mechanic
+        assert not effect.boss_protected
 
     stale = await service.action(
         actor,
@@ -523,6 +559,12 @@ async def test_postgres_action_removal_is_atomic_and_survives_reconnect(database
     assert stale is not None
     reconnected = await service.resume(actor)
     assert reconnected is not None and reconnected.kind == "combat"
+    assert reconnected.combat.fighters["player"].effects == remaining_effects
+    assert reconnected.combat.events == latest.combat.events
+    assert all(
+        effect.instance_id != "persistent-weak"
+        for effect in reconnected.combat.fighters["player"].effects
+    )
     assert sum(
         event.action == PURIFY and bool(event.removed_effect_ids)
         for event in reconnected.combat.events
