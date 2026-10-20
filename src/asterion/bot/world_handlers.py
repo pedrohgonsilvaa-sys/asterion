@@ -791,10 +791,51 @@ def world_router(
         if await foreground(query):
             await query.answer()
             return
+        current = await service.resume(query.from_user.id)
+        if current is None or current.kind != "brazier":
+            await query.answer(
+                "Este botão de descanso não corresponde mais ao estado atual.",
+                show_alert=True,
+            )
+            await restore_context(query)
+            return
         view = await service.rest(query.from_user.id)
-        await query.answer()
         if view and isinstance(query.message, Message):
+            await query.answer()
             await present(query.message, render_world(view), images, edit=True)
+            return
+        await query.answer(
+            "Este botão de descanso não corresponde mais ao estado atual.",
+            show_alert=True,
+        )
+        await restore_context(query)
+
+    @router.callback_query(F.data.regexp(r"^world:rest:[a-zA-Z0-9_.-]{1,64}$"))
+    async def rest_at_permanent_brazier(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        brazier_id = (query.data or "").removeprefix("world:rest:")
+        view = (
+            await road.rest(query.from_user.id, expected_brazier_id=brazier_id)
+            if road is not None
+            else None
+        )
+        if view is not None and isinstance(query.message, Message):
+            await query.answer()
+            local_screen = await current_local_screen(query.from_user.id, view)
+            await present(
+                query.message,
+                local_screen or render_road(view),
+                images,
+                edit=True,
+            )
+            return
+        await query.answer(
+            "O descanso não está disponível neste Braseiro neste momento.",
+            show_alert=True,
+        )
+        await restore_context(query)
 
     @router.callback_query(F.data == "road:hunt")
     async def hunt(query: CallbackQuery):

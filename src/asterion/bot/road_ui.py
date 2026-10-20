@@ -790,6 +790,16 @@ def render_current_local(
         bar(view.vigor, view.max_vigor, "🟨"),
     ]
     keyboard: list[list[InlineKeyboardButton]] = []
+    if view.brazier_id is not None and view.brazier_label is not None:
+        lines.extend(["", "❤️ Descansar · Restaura HP"])
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text="Descansar",
+                    callback_data=f"world:rest:{view.brazier_id}",
+                )
+            ]
+        )
     if view.location in {
         ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS,
         VDE_CLAUSTRO, NARETH_CAMPINAS, NARETH_CANAIS, NARETH_CAMPOS,

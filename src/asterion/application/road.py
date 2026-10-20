@@ -125,6 +125,7 @@ from asterion.domain.road import (
     CONFINS_ULTIMO_REFUGIO_LOCATION,
     CONFINS_VIGIA_DESFASADO,
     EXPLORATION_PROFILES,
+    LOCATION_LEVEL_BANDS,
     MATERIAL_POOLS,
     NARETH_BASIC_MATERIAL_CREATURE_IDS,
     NARETH_BRAZIER_CAMPOS,
@@ -238,6 +239,11 @@ from asterion.infrastructure.db.models import (
     CodexEntry,
     CodexFragment,
     ConsumableStack,
+    DungeonLobby,
+    DungeonLobbyMember,
+    DungeonMatchQueue,
+    DungeonRun,
+    DungeonRunMember,
     EquipmentItem,
     ExplorationAttempt,
     GameActivity,
@@ -914,6 +920,317 @@ class RoadService:
         if detail is None:
             return None
         return await self._travel(actor, detail[0], mode="brazier", brazier_id=brazier_id)
+
+    async def rest(
+        self, actor: int, *, expected_brazier_id: str | None = None
+    ) -> RoadView | None:
+        """Restore only this character at their currently discovered world Brazier."""
+        location: str | None = None
+        async with self.sessions.begin() as s:
+            c = await s.scalar(
+                select(Character)
+                .where(Character.telegram_id == actor, Character.server_id == self.server_id)
+                .with_for_update()
+            )
+            if c is None or c.stage != "menu:ready":
+                return None
+            world = await s.scalar(
+                select(WorldState).where(WorldState.character_id == c.id).with_for_update()
+            )
+            if world is None or world.location not in TRAVEL_LOCATIONS:
+                return None
+            brazier_id = BRAZIER_FOR_LOCATION.get(world.location)
+            detail = BRAZIER_DETAILS.get(brazier_id) if brazier_id is not None else None
+            if (
+                brazier_id is None
+                or detail is None
+                or detail[0] != world.location
+                or (expected_brazier_id is not None and expected_brazier_id != brazier_id)
+                or not await self._permanent_brazier_rest_gate(s, c, world)
+            ):
+                return None
+
+            # The unique active foreground row covers combat, exploration,
+            # queues, and other activities. Keep the dungeon checks explicit:
+            # a run remains a foreground even if a stale/missing UI activity row
+            # is encountered during recovery.
+            active_activity = await s.scalar(
+                select(GameActivity.id).where(
+                    GameActivity.character_id == c.id,
+                    GameActivity.status == "active",
+                ).with_for_update()
+            )
+            active_dungeon_member = await s.scalar(
+                select(DungeonRunMember.character_id)
+                .join(DungeonRun, DungeonRun.id == DungeonRunMember.run_id)
+                .where(
+                    DungeonRunMember.character_id == c.id,
+                    DungeonRun.status == "active",
+                    DungeonRunMember.status.in_(("active", "defeated")),
+                )
+                .with_for_update()
+            )
+            open_lobby = await s.scalar(
+                select(DungeonLobbyMember.character_id)
+                .join(DungeonLobby, DungeonLobby.id == DungeonLobbyMember.lobby_id)
+                .where(
+                    DungeonLobbyMember.character_id == c.id,
+                    DungeonLobbyMember.status.in_(
+                        ("joined", "queued", "matched", "confirmed")
+                    ),
+                    DungeonLobby.status.in_(("forming", "confirming")),
+                )
+                .with_for_update()
+            )
+            queued_match = await s.scalar(
+                select(DungeonMatchQueue.character_id)
+                .where(
+                    DungeonMatchQueue.character_id == c.id,
+                    DungeonMatchQueue.status.in_(("queued", "matched")),
+                )
+                .with_for_update()
+            )
+            if (
+                active_activity is not None
+                or active_dungeon_member is not None
+                or open_lobby is not None
+                or queued_match is not None
+            ):
+                return None
+
+            known_brazier = await s.scalar(
+                select(Brazier)
+                .where(
+                    Brazier.character_id == c.id,
+                    Brazier.brazier_id == brazier_id,
+                )
+                .with_for_update()
+            )
+            if known_brazier is None:
+                return None
+
+            # Combat effects live in the encounter snapshot, not on Character.
+            # Reaching this point guarantees there is no active encounter whose
+            # state could be mutated or resumed after the rest.
+            c.hp = c.max_hp
+            location = world.location
+
+        view = await self.resume(actor)
+        if view is None or view.location != location:
+            return None
+        return view
+
+    async def _permanent_brazier_rest_gate(self, s, character, world) -> bool:
+        location = world.location
+        region = self._travel_region(location)
+        expected_region = {
+            "tdo": REGION,
+            "vde": VDE_REGION,
+            "nareth": NARETH_REGION,
+            "varzeas": VARZEAS_REGION,
+            "altos": ALTOS_REGION,
+            "confins": CONFINS_REGION,
+        }.get(region)
+        if expected_region is None or world.region != expected_region:
+            return False
+
+        regional_minimum = {
+            "tdo": 1,
+            "vde": 11,
+            "nareth": 21,
+            "varzeas": 31,
+            "altos": 41,
+            "confins": 51,
+        }[region]
+        local_band = LOCATION_LEVEL_BANDS.get(location)
+        current_level_minimum = local_band[0] if local_band is not None else regional_minimum
+        if character.level < max(regional_minimum, current_level_minimum):
+            return False
+
+        async def has_unlock(unlock_id: str) -> bool:
+            return bool(
+                await s.scalar(
+                    select(Unlock.id).where(
+                        Unlock.character_id == character.id,
+                        Unlock.unlock_id == unlock_id,
+                    )
+                )
+            )
+
+        if region == "tdo":
+            if not await self._p1_completed(s, character.id):
+                return False
+            if location == CHARNECA and not (
+                await self._p2_completed(s, character.id)
+                and await has_unlock(CHARNECA_ROUTE_UNLOCK)
+            ):
+                return False
+            if location == BOSQUE and not (
+                await self._p3_completed(s, character.id)
+                and await has_unlock(BOSQUE_ROUTE_UNLOCK)
+            ):
+                return False
+            if location == RUINS and not (
+                character.level >= 8
+                and await self._p4_completed(s, character.id)
+                and await self._has_location(s, character.id, RUINS_LOCATION)
+                and await has_unlock(RUINS_ROUTE_UNLOCK)
+            ):
+                return False
+        elif region == "vde":
+            if not await self._p7_completed(s, character.id):
+                return False
+            if location == VDE_VIGILIA and not await has_unlock(
+                VDE_GARGANTA_VIGILIA_ROUTE
+            ):
+                return False
+            if location == VDE_MATA and not await self._p8_started_or_completed(
+                s, character.id
+            ):
+                return False
+            if location == VDE_MATA and not await has_unlock(VDE_VIGILIA_MATA_ROUTE):
+                return False
+            if location == VDE_BAIXIOS and not await self._p9_started_or_completed(
+                s, character.id
+            ):
+                return False
+            if location == VDE_BAIXIOS and not await has_unlock(VDE_MATA_BAIXIOS_ROUTE):
+                return False
+            if location == VDE_CLAUSTRO and not await self._p10_started_or_completed(
+                s, character.id
+            ):
+                return False
+            if location == VDE_CLAUSTRO and not await has_unlock(
+                VDE_BAIXIOS_CLAUSTRO_ROUTE
+            ):
+                return False
+            if location == VDE_BERCO and not (
+                await self._has_location(s, character.id, VDE_BERCO_LOCATION)
+                and await has_unlock(VDE_CLAUSTRO_BERCO_ROUTE)
+                and await self._nareth_mission_completed(s, character.id, "P11")
+            ):
+                return False
+        elif region == "nareth":
+            if not await self._p12_completed(s, character.id):
+                return False
+            if location == NARETH_POSTO_LABEL and not (
+                await self._nareth_p13_started_or_completed(s, character.id)
+                and await self._nareth_p13_route_open(s, character.id)
+            ):
+                return False
+            for local, quest_id in (
+                (NARETH_CANAIS, "P14"),
+                (NARETH_CAMPOS, "P15"),
+                (NARETH_OBSERVATORIO, "P16"),
+            ):
+                if location == local and not await self._nareth_mission_started_or_completed(
+                    s, character.id, quest_id
+                ):
+                    return False
+            for local, route_unlock in (
+                (NARETH_CANAIS, NARETH_POSTO_CANAIS_ROUTE),
+                (NARETH_CAMPOS, NARETH_CANAIS_CAMPOS_ROUTE),
+                (NARETH_OBSERVATORIO, NARETH_CAMPOS_OBSERVATORIO_ROUTE),
+            ):
+                if location == local and not await has_unlock(route_unlock):
+                    return False
+            if location == NARETH_CAMARA_LABEL and not (
+                await self._nareth_mission_started_or_completed(s, character.id, "P17")
+                and await has_unlock("region.nareth.camara_arconte.available")
+                and await has_unlock(NARETH_OBSERVATORIO_CAMARA_ROUTE)
+            ):
+                return False
+        elif region == "varzeas":
+            if not (
+                await self._nareth_mission_completed(s, character.id, "P18")
+                and await has_unlock(VARZEAS_REGION_ENTRY_UNLOCK)
+            ):
+                return False
+            if location == VARZEAS_PORTO_LABEL and not (
+                await self._nareth_mission_started_or_completed(s, character.id, "P19")
+                and await has_unlock(VARZEAS_DIQUES_PORTO_ROUTE)
+            ):
+                return False
+            if location == VARZEAS_BREJOS_LABEL and not (
+                character.level >= 33
+                and await self._nareth_mission_started_or_completed(s, character.id, "P20")
+                and await has_unlock(VARZEAS_PORTO_BREJOS_ROUTE)
+            ):
+                return False
+            if location == VARZEAS_HORTOS_LABEL and not (
+                character.level >= 35
+                and await self._nareth_mission_completed(s, character.id, "P20")
+                and await self._nareth_mission_started_or_completed(s, character.id, "P21")
+                and await has_unlock(VARZEAS_BREJOS_HORTOS_ROUTE)
+            ):
+                return False
+            if location == VARZEAS_GALERIAS_LABEL and not (
+                character.level >= 37
+                and await self._nareth_mission_started_or_completed(s, character.id, "P22")
+                and await has_unlock(VARZEAS_HORTOS_GALERIAS_ROUTE)
+            ):
+                return False
+        elif region == "altos":
+            if not (
+                await self._nareth_mission_completed(s, character.id, "P24")
+                and await has_unlock(ALTOS_ESCARPA_ACCESS_UNLOCK)
+            ):
+                return False
+            if location == ALTOS_ABRIGO_LABEL and not await has_unlock(
+                ALTOS_ABRIGO_ACCESS_UNLOCK
+            ):
+                return False
+            for local, level, preceding_quest, access_unlock in (
+                (ALTOS_PONTES_LABEL, 43, "P25", ALTOS_PONTES_ACCESS_UNLOCK),
+                (ALTOS_PEDREIRAS_LABEL, 45, "P26", ALTOS_PEDREIRAS_ACCESS_UNLOCK),
+                (ALTOS_BASTILHA_LABEL, 47, "P27", ALTOS_BASTILHA_ACCESS_UNLOCK),
+            ):
+                if location == local and not (
+                    character.level >= level
+                    and await self._nareth_mission_completed(
+                        s, character.id, preceding_quest
+                    )
+                    and await has_unlock(access_unlock)
+                ):
+                    return False
+            if location == ALTOS_CORACAO_LABEL and not (
+                await self._nareth_mission_completed(s, character.id, "P29")
+                and await has_unlock(ALTOS_CORACAO_ACCESS_UNLOCK)
+            ):
+                return False
+        elif region == "confins":
+            if not (
+                await self._nareth_mission_completed(s, character.id, "P30")
+                and await has_unlock(CONFINS_REGION_UNLOCK)
+            ):
+                return False
+            if location == CONFINS_ULTIMO_REFUGIO_LABEL and not (
+                await self._nareth_mission_started_or_completed(s, character.id, "P31")
+                and await has_unlock(CONFINS_ULTIMO_REFUGIO_ACCESS_UNLOCK)
+            ):
+                return False
+            if location == CONFINS_ESTRADAS_AUSENTES_LABEL and not (
+                character.level >= 53
+                and await self._nareth_mission_completed(s, character.id, "P31")
+                and await self._nareth_mission_started_or_completed(s, character.id, "P32")
+                and await has_unlock(CONFINS_ESTRADAS_ACCESS_UNLOCK)
+            ):
+                return False
+            if location == CONFINS_FRATURAS_LIMIAR_LABEL and not (
+                character.level >= 55
+                and await self._nareth_mission_completed(s, character.id, "P32")
+                and await self._nareth_mission_started_or_completed(s, character.id, "P33")
+                and await has_unlock(CONFINS_FRATURAS_ACCESS_UNLOCK)
+            ):
+                return False
+            if location == CONFINS_NO_CENTRAL_LABEL and not (
+                character.level >= 57
+                and await self._nareth_mission_completed(s, character.id, "P33")
+                and await self._nareth_mission_started_or_completed(s, character.id, "P34")
+                and await has_unlock(CONFINS_NO_CENTRAL_ACCESS_UNLOCK)
+            ):
+                return False
+        return True
 
     async def _travel(
         self,

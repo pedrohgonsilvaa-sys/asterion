@@ -167,8 +167,8 @@ class WorldService:
             )
             if c is None:
                 return None
-            await reconcile_character_vigor(session, c)
             if c.stage == "cinzas_na_estrada:ready_for_first_brazier":
+                await reconcile_character_vigor(session, c)
                 brazier = await session.scalar(
                     select(Brazier).where(
                         Brazier.character_id == c.id, Brazier.brazier_id == BRAZIER_ID
@@ -194,32 +194,8 @@ class WorldService:
                     )
                 )
                 c.stage = "menu:ready"
-            elif c.stage == "menu:ready":
-                q = await session.scalar(
-                    select(Quest)
-                    .where(Quest.character_id == c.id, Quest.quest_id == "P1")
-                    .with_for_update()
-                )
-                world = await session.scalar(
-                    select(WorldState).where(WorldState.character_id == c.id).with_for_update()
-                )
-                refuge = await session.scalar(
-                    select(Brazier).where(
-                        Brazier.character_id == c.id,
-                        Brazier.brazier_id == "tdo.brazier.refugio_do_ocaso",
-                    )
-                )
-                if (
-                    q
-                    and q.status == "completed"
-                    and world
-                    and world.location == "Refúgio do Ocaso"
-                    and refuge
-                ):
-                    c.hp = c.max_hp
-                # For stale/unauthorized rest callbacks, leave state intact.
-                # Rebuild the view only after this transaction releases the
-                # character lock; resume() locks it to reconcile Vigor.
-            else:
+            elif c.stage != "menu:ready":
                 return None
+            # The legacy callback only reconstructs the current view for a
+            # ready character. Permanent rest is authorized by RoadService.
         return await self.resume(actor)
