@@ -1,3 +1,4 @@
+from dataclasses import replace
 from decimal import Decimal
 from uuid import uuid4
 
@@ -21,10 +22,16 @@ from asterion.domain.class_trials import (
     create_errante_trial_combat,
     errante_conditions_for_event,
     errante_enemy_actions,
+    errante_player_actions,
     errante_stage_definition,
 )
-from asterion.domain.combat import Effect, Fighter, start_combat
-from asterion.domain.combat_math import CombatStats, resolve_combat_stats
+from asterion.domain.combat import Effect, Fighter, _perform, start_combat
+from asterion.domain.combat_math import (
+    CombatRng,
+    CombatStats,
+    direct_damage,
+    resolve_combat_stats,
+)
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
     Account,
@@ -44,10 +51,16 @@ REFUGE = "Refúgio do Ocaso"
 REGION = "Terras do Ocaso"
 
 
-async def _seed_errante(database, actor: int):
+async def _seed_errante(
+    database,
+    actor: int,
+    *,
+    level: int = 10,
+    selected_path: str | None = None,
+):
     _, sessions = database
     character_id = uuid4()
-    stats = resolve_combat_stats("errante", 10, "remanescente")
+    stats = resolve_combat_stats("errante", level, "remanescente")
     async with sessions.begin() as session:
         session.add(Account(telegram_id=actor))
         session.add(
@@ -58,9 +71,10 @@ async def _seed_errante(database, actor: int):
                 name="Errante",
                 race="remanescente",
                 character_class="errante",
+                selected_path=selected_path,
                 stage="menu:ready",
                 ruleset_version="gdd-1.4.7-baseline-1.0",
-                level=10,
+                level=level,
                 xp=0,
                 hp=Decimal("1"),
                 max_hp=stats.hp,
@@ -115,6 +129,19 @@ def _player(stats: CombatStats | None = None) -> Fighter:
     )
 
 
+def _corte_duplo_combat() -> tuple:
+    art_id = ERRANTE_ART_IDS["corte_duplo"]
+    definition = errante_stage_definition(1, allowed_art_ids=(art_id,))
+    combat = start_combat(create_errante_trial_combat(_player(), definition))
+    player = combat.fighters["player"]
+    player.level = 18
+    player.selected_path = "carrasco"
+    player.stats = replace(player.stats, crit=Decimal(0), evasion=Decimal(0), block=Decimal(0))
+    enemy = combat.fighters["enemy"]
+    enemy.stats = replace(enemy.stats, evasion=Decimal(0), block=Decimal(0))
+    return combat
+
+
 def test_errante_templates_and_cycles_match_tdo_v1_0_12():
     expected = {
         1: ("trial_entity.errante.primeiro_corte", "580", "95", "85", "90"),
@@ -151,6 +178,128 @@ def test_errante_templates_and_cycles_match_tdo_v1_0_12():
     assert errante_enemy_actions(2)[ERRANTE_PREPARED_ACTION_ID].prepared is True
     assert errante_enemy_actions(3)[ERRANTE_EXPOSE_ACTION_ID].self_effect_duration == 1
     assert errante_enemy_actions(3)[ERRANTE_EXPOSE_ACTION_ID].self_effect_magnitude == 0
+
+
+def test_errante_corte_duplo_resolves_two_sixty_percent_hits_as_one_action():
+    art_id = ERRANTE_ART_IDS["corte_duplo"]
+    action = errante_player_actions((art_id,))[art_id]
+    assert (action.coefficient, action.hit_count, action.cooldown) == (
+        Decimal("0.60"),
+        2,
+        3,
+    )
+    assert art_id not in create_errante_trial_combat(
+        _player(), errante_stage_definition(1)
+    ).player_actions
+
+    combat = _corte_duplo_combat()
+    player = combat.fighters["player"]
+    enemy = combat.fighters["enemy"]
+    enemy.barrier = Decimal(20)
+    enemy.barrier_remaining = 2
+    initial_hp = enemy.hp
+
+    assert _perform(combat, "player", art_id, target_id=enemy.id)
+    hits = [event for event in combat.events if event.action == art_id]
+
+    assert len(hits) == 2
+    assert [(event.hit_index, event.hit_count) for event in hits] == [(1, 2), (2, 2)]
+    assert len({event.action_instance_id for event in hits}) == 1
+    assert all(
+        event.calculated_damage
+        == direct_damage(
+            player.stat("attack"),
+            Decimal("0.60"),
+            enemy.stat("defense"),
+            player.level,
+            critical=event.critical,
+        )
+        for event in hits
+    )
+    assert sum(event.barrier_absorbed for event in hits) == 20
+    assert initial_hp - enemy.hp == sum(event.effective_damage for event in hits)
+    assert player.action_use_counts[art_id] == 1
+    assert player.cooldowns[art_id] == player.opportunity + 3
+
+
+def test_errante_corte_duplo_rolls_accuracy_and_critical_separately_per_hit(
+    monkeypatch,
+):
+    art_id = ERRANTE_ART_IDS["corte_duplo"]
+    purposes = []
+
+    def evasion_by_hit(_rng, _probability, purpose):
+        purposes.append(purpose)
+        return purpose.endswith(":hit:1") if purpose.startswith("evasion:") else False
+
+    monkeypatch.setattr(CombatRng, "chance", evasion_by_hit)
+    combat = _corte_duplo_combat()
+    combat.fighters["enemy"].stats = replace(
+        combat.fighters["enemy"].stats, evasion=Decimal(50)
+    )
+    assert _perform(combat, "player", art_id, target_id="enemy")
+    hits = [event for event in combat.events if event.action == art_id]
+    assert [event.dodged for event in hits] == [True, False]
+    assert [event.hit_index for event in hits] == [1, 2]
+    assert [
+        purpose.rsplit(":hit:", 1)[1]
+        for purpose in purposes
+        if purpose.startswith("evasion:")
+    ] == ["1", "2"]
+
+    purposes.clear()
+
+    def critical_by_hit(_rng, _probability, purpose):
+        purposes.append(purpose)
+        return purpose.endswith(":hit:2") if purpose.startswith("critical:") else False
+
+    monkeypatch.setattr(CombatRng, "chance", critical_by_hit)
+    critical_combat = _corte_duplo_combat()
+    critical_combat.fighters["player"].stats = replace(
+        critical_combat.fighters["player"].stats, crit=Decimal(100)
+    )
+    assert _perform(critical_combat, "player", art_id, target_id="enemy")
+    critical_hits = [
+        event for event in critical_combat.events if event.action == art_id
+    ]
+    assert [event.critical for event in critical_hits] == [False, True]
+    assert [
+        purpose.rsplit(":hit:", 1)[1]
+        for purpose in purposes
+        if purpose.startswith("critical:") and ":hit:" in purpose
+    ] == ["1", "2"]
+
+    monkeypatch.setattr(CombatRng, "chance", lambda *_args: False)
+    lethal_combat = _corte_duplo_combat()
+    lethal_combat.fighters["enemy"].hp = Decimal(1)
+    assert _perform(lethal_combat, "player", art_id, target_id="enemy")
+    lethal_hits = [event for event in lethal_combat.events if event.action == art_id]
+    assert len(lethal_hits) == 1
+    assert lethal_hits[0].hit_index == 1
+    assert lethal_combat.fighters["enemy"].hp == 0
+
+
+def test_errante_corte_duplo_snapshots_oportunismo_once_for_the_action():
+    art_id = ERRANTE_ART_IDS["corte_duplo"]
+    combat = _corte_duplo_combat()
+    player = combat.fighters["player"]
+    player.talent_ids = ("talent.errante.ritmo_predatorio",)
+    combat.fighters["enemy"].effects.append(
+        Effect("slow", "agility", Decimal("0.10"), 2, 0, kind="debuff")
+    )
+
+    assert _perform(combat, "player", art_id, target_id="enemy")
+    hits = [event for event in combat.events if event.action == art_id]
+    assert len(hits) == 2
+    assert [event.path_final_damage_bonus for event in hits] == [
+        Decimal("0.08"),
+        Decimal("0.08"),
+    ]
+    assert all("oportunismo" in event.path_triggers for event in hits)
+    assert sum(
+        effect.id == "class_mechanic.errante.ritmo_predatorio.agility"
+        for effect in player.effects
+    ) == 1
 
 
 def test_errante_stage_one_needs_a_correlated_real_bleed_tick():
@@ -407,6 +556,55 @@ async def test_errante_attempt_uses_persisted_active_arts_and_reconnects(databas
         assert await session.scalar(select(MaterialStack.character_id).where(
             MaterialStack.character_id == character_id
         )) is None
+
+
+@pytest.mark.asyncio
+async def test_errante_corte_duplo_persists_snapshot_hits_and_idempotent_reconnect(database):
+    actor = 998808
+    art_id = ERRANTE_ART_IDS["corte_duplo"]
+    _, _, service = await _seed_errante(
+        database, actor, level=18, selected_path="sabotador"
+    )
+    active = await _start_errante(service, actor, (art_id,))
+    assert active.kind == "active"
+    combat = await service.combat(actor, active.attempt_id)
+    assert combat is not None
+    assert set(combat.player_actions) == {"attack", art_id}
+    assert any(
+        entry.get("art_id") == art_id
+        for entry in combat.configuration_snapshot.get("active_arts", ())
+    )
+    opportunity_before_action = combat.fighters["player"].opportunity
+
+    committed = await service.action(
+        actor,
+        active.attempt_id,
+        combat.version,
+        art_id,
+        target_id=combat.fighters["enemy"].id,
+    )
+    assert committed is not None and committed.kind == "active"
+    restored_view = await service.resume(actor)
+    assert restored_view.attempt_id == active.attempt_id
+    restored = await service.combat(actor, active.attempt_id)
+    assert restored is not None
+    hits = [event for event in restored.events if event.action == art_id]
+    assert [(event.hit_index, event.hit_count) for event in hits] == [(1, 2), (2, 2)]
+    assert len({event.action_instance_id for event in hits}) == 1
+    player = restored.fighters["player"]
+    assert player.cooldowns[art_id] == opportunity_before_action + 3
+
+    stale_callback = await service.action(
+        actor,
+        active.attempt_id,
+        combat.version,
+        art_id,
+        target_id=restored.fighters["enemy"].id,
+    )
+    assert stale_callback is not None
+    unchanged = await service.combat(actor, active.attempt_id)
+    assert unchanged is not None
+    assert len([event for event in unchanged.events if event.action == art_id]) == 2
 
 
 @pytest.mark.asyncio

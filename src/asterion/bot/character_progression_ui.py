@@ -288,7 +288,8 @@ def _effect_lines(effects) -> list[str]:
 def _art_mechanics_lines(action) -> list[str]:
     lines = []
     if action.coefficient:
-        lines.append(f"⚔️ Dano · {_percent(action.coefficient)}% ATQ")
+        per_hit = " por golpe" if action.hit_count > 1 else ""
+        lines.append(f"⚔️ Dano · {_percent(action.coefficient)}% ATQ{per_hit}")
     if action.hit_count > 1:
         lines.append(f"💥 Atinge · {action.hit_count} vezes")
     if action.heal_coefficient:

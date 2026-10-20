@@ -533,6 +533,10 @@ def errante_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action
             ERRANTE_ART_IDS["golpe_oportuno"], "Golpe Oportuno", Decimal("1.25"),
             cooldown=3, crit_bonus_if_target_debuffed=Decimal("15"),
         ),
+        ERRANTE_ART_IDS["corte_duplo"]: Action(
+            ERRANTE_ART_IDS["corte_duplo"], "Corte Duplo", Decimal("0.60"),
+            cooldown=3, hit_count=2,
+        ),
     }
     return {
         "attack": Action("attack", "Ataque Básico", Decimal(1)),

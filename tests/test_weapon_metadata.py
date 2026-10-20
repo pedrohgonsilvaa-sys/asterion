@@ -413,6 +413,7 @@ def test_active_art_weapon_requirements_match_the_current_explicit_matrix():
         ERRANTE_ART_IDS["corte_veloz"]: melee,
         ERRANTE_ART_IDS["ferida_profunda"]: melee,
         ERRANTE_ART_IDS["golpe_oportuno"]: melee,
+        ERRANTE_ART_IDS["corte_duplo"]: melee,
         VIGIA_ART_IDS["disparo_preciso"]: ranged,
         VIGIA_ART_IDS["marca_da_presa"]: ranged,
         VIGIA_ART_IDS["saraivada"]: ranged,
@@ -462,3 +463,30 @@ def test_weapon_incompatible_art_detail_explains_requirement_without_equip_actio
         for button in row
     ]
     assert "Equipar Arte" not in unconfigured_buttons
+
+
+def test_errante_corte_duplo_detail_shows_two_hits_and_explicit_weapon_requirement():
+    art_id = ERRANTE_ART_IDS["corte_duplo"]
+    definition = ACTIVE_ART_DEFINITIONS[art_id]
+    assert definition.character_class == "errante"
+    assert definition.min_level == 18
+    assert definition.path_id is None
+    assert definition.weapon_requirement == frozenset({"weapon.compat.melee"})
+
+    view = ActiveArtCharacterView(
+        character_id=uuid4(),
+        character_name="Teste",
+        character_class="errante",
+        level=18,
+        selected_path="carrasco",
+        combat_configuration_version=0,
+        slots=(),
+        available_art_ids=(art_id,),
+        foreground=False,
+    )
+    detail = render_art_detail(view, art_id)
+    assert "Corte Duplo" in detail.text
+    assert "Dano · 60% ATQ por golpe" in detail.text
+    assert "Atinge · 2 vezes" in detail.text
+    assert "Recarga · 3 Rodadas" in detail.text
+    assert "Arma corpo a corpo compatível" in detail.text
