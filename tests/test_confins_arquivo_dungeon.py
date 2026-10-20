@@ -415,7 +415,9 @@ def _scripted_result(state, action_id, *, target_id=None, actor_key=None, defeat
     return updated
 
 
-def _script_actions(monkeypatch, *, brazier_by_difficulty, fail_once=None):
+def _script_actions(
+    monkeypatch, *, brazier_by_difficulty, fail_once=None, action_calls=None
+):
     brazier_rolls = []
     attempts = set()
 
@@ -423,7 +425,9 @@ def _script_actions(monkeypatch, *, brazier_by_difficulty, fail_once=None):
         brazier_rolls.append((seed, difficulty))
         return brazier_by_difficulty[difficulty]
 
-    def act(state, action_id, *, target_id=None, actor_key=None):
+    def act(state, action_id, *, target_id=None, actor_key=None, effect_id=None):
+        if action_calls is not None:
+            action_calls.append((action_id, target_id, actor_key, effect_id))
         ordinal = state.configuration_snapshot["dungeon"]["ordinal"]
         should_fail = fail_once == ordinal and ordinal not in attempts
         attempts.add(ordinal)
@@ -438,6 +442,62 @@ def _script_actions(monkeypatch, *, brazier_by_difficulty, fail_once=None):
     monkeypatch.setattr("asterion.application.dungeons.roll_brazier", roll_brazier)
     monkeypatch.setattr("asterion.application.dungeons.act", act)
     return brazier_rolls
+
+
+@pytest.mark.asyncio
+async def test_confins_arquivo_action_forwards_optional_effect_selection_postgres(
+    database, monkeypatch
+):
+    actor = 991_409
+    _character_id, sessions = await _seed_archive_actor(database, actor, level=54)
+    action_calls = []
+    _script_actions(
+        monkeypatch,
+        brazier_by_difficulty={"stable": False, "fractured": False, "rupture": False},
+        action_calls=action_calls,
+    )
+    service = DungeonService(sessions, "ocaso")
+    current = await service.start_solo(
+        actor, "stable", family_id=CONFINS_ARQUIVO_FAMILY_ID
+    )
+    assert current is not None and current.run_id is not None
+    fight = await service.begin_encounter(actor, current.run_id, current.state_version)
+    assert fight is not None and fight.kind == "combat" and fight.combat is not None
+    assert fight.activity_id is not None
+    target = action_target_ids(fight.combat, "attack", actor_key="player")[0]
+
+    current = await service.action(
+        actor,
+        current.run_id,
+        fight.activity_id,
+        fight.combat.version,
+        "attack",
+        target,
+    )
+    assert current is not None and current.kind == "ready"
+    assert action_calls == [("attack", target, "player", None)]
+
+    next_fight = await service.begin_encounter(
+        actor, current.run_id, current.state_version
+    )
+    assert next_fight is not None and next_fight.kind == "combat"
+    assert next_fight.combat is not None and next_fight.activity_id is not None
+    next_target = action_target_ids(next_fight.combat, "attack", actor_key="player")[0]
+    selected_effect_id = "test.effect-selection"
+    current = await service.action(
+        actor,
+        current.run_id,
+        next_fight.activity_id,
+        next_fight.combat.version,
+        "attack",
+        next_target,
+        effect_id=selected_effect_id,
+    )
+    assert current is not None and current.kind == "ready"
+    assert action_calls == [
+        ("attack", target, "player", None),
+        ("attack", next_target, "player", selected_effect_id),
+    ]
 
 
 async def _clear_run(service, actor: int, difficulty: str):

@@ -401,7 +401,9 @@ async def _clear_chamber_run(
         brazier_rolls.append((seed, requested_difficulty))
         return brazier_exists
 
-    def scripted_action(state, action_id, *, target_id=None, actor_key=None):
+    def scripted_action(
+        state, action_id, *, target_id=None, actor_key=None, effect_id=None
+    ):
         ordinal = state.configuration_snapshot["dungeon"]["ordinal"]
         should_fail = fail_once == ordinal and ordinal not in attempts
         attempts.add(ordinal)
