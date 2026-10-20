@@ -16,7 +16,15 @@ from asterion.domain.arts import (
     TECELAO_ART_IDS,
     VIGIA_ART_IDS,
 )
-from asterion.domain.combat import Action, ActionEffect, Combat, CombatEvent, Fighter
+from asterion.domain.combat import (
+    Action,
+    ActionCondition,
+    ActionConditionalModifier,
+    ActionEffect,
+    Combat,
+    CombatEvent,
+    Fighter,
+)
 from asterion.domain.combat_math import CURRENT_COMBAT_RULESET, CombatStats
 from asterion.domain.path_arts import path_player_actions
 
@@ -692,6 +700,23 @@ def vigia_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action]:
         VIGIA_ART_IDS["saraivada"]: Action(
             VIGIA_ART_IDS["saraivada"], "Saraivada", Decimal("0.40"),
             cooldown=3, hit_count=3,
+        ),
+        VIGIA_ART_IDS["tiro_calculado"]: Action(
+            VIGIA_ART_IDS["tiro_calculado"],
+            "Tiro Calculado",
+            Decimal("1.25"),
+            cooldown=3,
+            conditional_modifiers=(
+                ActionConditionalModifier(
+                    "vigia.tiro_calculado.two_aim_crit",
+                    ActionCondition(
+                        "class_resource_at_least", resource="aim", minimum=2
+                    ),
+                    "crit_bonus",
+                    Decimal("10"),
+                    target_scope="primary_target",
+                ),
+            ),
         ),
         VIGIA_ART_IDS["olho_da_vigilia"]: Action(
             VIGIA_ART_IDS["olho_da_vigilia"], "Olho da Vigília", Decimal(0),

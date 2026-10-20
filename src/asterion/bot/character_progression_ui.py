@@ -339,6 +339,16 @@ def _art_mechanics_lines(action) -> list[str]:
         lines.append(
             f"💥 Contra alvo com Debuff · +{action.crit_bonus_if_target_debuffed:g} p.p. CRIT"
         )
+    for modifier in action.conditional_modifiers:
+        if (
+            modifier.condition.kind == "class_resource_at_least"
+            and modifier.condition.resource == "aim"
+            and modifier.component == "crit_bonus"
+        ):
+            lines.append(
+                f"🎯 Com {modifier.condition.minimum}+ Miras no alvo no início da ação · "
+                f"+{modifier.magnitude:g} p.p. CRIT"
+            )
     if action.per_bonus_if_target_poisoned:
         lines.append(
             f"🎯 Contra alvo Envenenado · +{action.per_bonus_if_target_poisoned:g} p.p. PER"

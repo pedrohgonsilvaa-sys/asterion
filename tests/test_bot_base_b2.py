@@ -31,7 +31,7 @@ from asterion.bot.character_surfaces_handlers import character_surfaces_router
 from asterion.bot.cosmetics_handlers import cosmetics_router
 from asterion.bot.doctrines_handlers import doctrines_router
 from asterion.bot.doctrines_ui import b36, render_doctrine_detail
-from asterion.domain.arts import ART_IDS_BY_CLASS, DEVASTADOR_ART_IDS
+from asterion.domain.arts import ART_IDS_BY_CLASS, DEVASTADOR_ART_IDS, VIGIA_ART_IDS
 from asterion.domain.economy import crowns_per_level, path_switch_cost
 from asterion.domain.equipment import assign_equipment_instance_id
 from asterion.domain.road import materialize_equipment
@@ -661,31 +661,51 @@ async def test_doctrines_snapshot_apply_cost_noop_foreground_and_limit(database)
 
 
 @pytest.mark.asyncio
-async def test_doctrine_rejects_path_art_with_incompatible_saved_weapon(database):
-    actor = 891240
+@pytest.mark.parametrize(
+    ("actor", "art_id", "character_class", "selected_path", "incompatible_weapon"),
+    [
+        (
+            891240,
+            DEVASTADOR_ART_IDS["ariete"],
+            "sentinela",
+            "devastador",
+            "weapon.type.tdo.arma_pesada_caminhante",
+        ),
+        (
+            891241,
+            VIGIA_ART_IDS["tiro_calculado"],
+            "vigia",
+            "atirador",
+            "weapon.type.tdo.arma_caminhante",
+        ),
+    ],
+)
+async def test_doctrine_rejects_art_with_incompatible_saved_weapon(
+    database, actor, art_id, character_class, selected_path, incompatible_weapon
+):
     await _seed_road(database, actor=actor)
     sessions = database[1]
-    art_id = DEVASTADOR_ART_IDS["ariete"]
     async with sessions.begin() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert character is not None
         character.level = 20
-        character.selected_path = "devastador"
+        character.character_class = character_class
+        character.selected_path = selected_path
         character.crowns = 20_000
         session.add(Unlock(character_id=character.id, unlock_id="class_trial_completed"))
         await add_compatible_weapon_for_arts(session, character.id, (art_id,))
         bow_payload = materialize_equipment(
-            "doctrine-ariete-incompatible-bow",
+            f"doctrine-incompatible-weapon-{actor}",
             "Comum",
             20,
-            weapon_type_id="weapon.type.tdo.arma_pesada_caminhante",
+            weapon_type_id=incompatible_weapon,
         )
         bow_id, bow_payload = assign_equipment_instance_id(bow_payload)
         session.add(
             EquipmentItem(
                 id=bow_id,
                 character_id=character.id,
-                source_key="test:doctrine-ariete-incompatible-bow",
+                source_key=f"test:doctrine-incompatible-weapon:{actor}",
                 item_name=bow_payload["item_name"],
                 rarity=bow_payload["rarity"],
                 slot=bow_payload["slot"],
@@ -698,7 +718,9 @@ async def test_doctrine_rejects_path_art_with_incompatible_saved_weapon(database
     service = DoctrineService(sessions, "ocaso")
     initial = await service.view(actor)
     assert initial is not None
-    created = await service.create(actor, "Aríete incompatível", initial.configuration_version)
+    created = await service.create(
+        actor, f"Arte incompatível {actor}", initial.configuration_version
+    )
     assert created is not None and created.doctrine_id is not None
     doctrine = next(
         item for item in (await service.view(actor)).doctrines

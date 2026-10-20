@@ -68,6 +68,7 @@ VIGIA_ART_IDS = {
     "marca_da_presa": "class_art.vigia.marca_da_presa",
     "saraivada": "class_art.vigia.saraivada",
     "olho_da_vigilia": "class_art.vigia.olho_da_vigilia",
+    "tiro_calculado": "class_art.vigia.tiro_calculado",
 }
 
 VIGIA_ART_LEVELS = {
@@ -75,6 +76,7 @@ VIGIA_ART_LEVELS = {
     VIGIA_ART_IDS["marca_da_presa"]: 4,
     VIGIA_ART_IDS["saraivada"]: 7,
     VIGIA_ART_IDS["olho_da_vigilia"]: 9,
+    VIGIA_ART_IDS["tiro_calculado"]: 18,
 }
 
 TECELAO_ART_IDS = {
@@ -211,6 +213,7 @@ ART_WEAPON_REQUIREMENTS = {
     VIGIA_ART_IDS["disparo_preciso"]: frozenset({"weapon.compat.bow", "weapon.compat.crossbow"}),
     VIGIA_ART_IDS["marca_da_presa"]: frozenset({"weapon.compat.bow", "weapon.compat.crossbow"}),
     VIGIA_ART_IDS["saraivada"]: frozenset({"weapon.compat.bow", "weapon.compat.crossbow"}),
+    VIGIA_ART_IDS["tiro_calculado"]: frozenset({"weapon.compat.bow", "weapon.compat.crossbow"}),
 }
 for _art_id, _weapon_requirement in ART_WEAPON_REQUIREMENTS.items():
     ACTIVE_ART_DEFINITIONS[_art_id] = replace(

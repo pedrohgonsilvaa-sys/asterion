@@ -1178,10 +1178,19 @@ def _action_resource_hints(
         elif condition.kind == "target_has_normal_negative_effect":
             description = "alvo com Debuff comum no início da ação"
         elif condition.kind == "class_resource_at_least":
-            description = (
-                f"{_class_resource_label(condition.resource or '', condition.state_kind)} "
-                f"≥ {condition.minimum}"
-            )
+            if (
+                condition.resource == "aim"
+                and modifier.component == "crit_bonus"
+            ):
+                description = (
+                    f"alvo com {condition.minimum}+ Miras no início da ação · "
+                    f"+{number(modifier.magnitude)} p.p. CRIT"
+                )
+            else:
+                description = (
+                    f"{_class_resource_label(condition.resource or '', condition.state_kind)} "
+                    f"≥ {condition.minimum}"
+                )
         else:
             description = "condição da ação"
         hints.append(f"Bônus condicional · {description}")

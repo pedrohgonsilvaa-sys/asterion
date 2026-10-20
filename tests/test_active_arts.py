@@ -18,6 +18,7 @@ from asterion.domain.arts import (
     ERRANTE_ART_IDS,
     FIRST_CLASS_ART_IDS,
     SENTINEL_ART_IDS,
+    VIGIA_ART_IDS,
 )
 from asterion.domain.combat_math import resolve_combat_stats
 from asterion.domain.road import materialize_equipment
@@ -477,6 +478,97 @@ async def test_errante_corte_duplo_revalidates_class_and_level_gates(database):
     with pytest.raises(ActiveArtMutationRejected) as level_gate:
         await service.equip_art(actor, 2, art_id)
     assert level_gate.value.code == ActiveArtMutationCode.LEVEL_REQUIRED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "weapon_type_id", "actor", "available_level"),
+    [
+        ("atirador", "weapon.type.tdo.arma_pesada_caminhante", 771070, 18),
+        ("rastreador", "weapon.type.vde.arma_pesada_lacos", 771071, 20),
+        (None, "weapon.type.tdo.arma_pesada_caminhante", 771072, 20),
+    ],
+)
+async def test_vigia_tiro_calculado_unlocks_at_18_and_persists_for_both_paths(
+    database, path, weapon_type_id, actor, available_level
+):
+    art_id = VIGIA_ART_IDS["tiro_calculado"]
+    sessions = database[1]
+    service = ActiveArtService(sessions, "ocaso")
+
+    await _seed_character(
+        database,
+        actor,
+        level=17,
+        cls="vigia",
+        selected_path=path,
+        weapon_type_id=weapon_type_id,
+    )
+    locked = await service.view(actor)
+    assert locked is not None and art_id not in locked.available_art_ids
+    with pytest.raises(ActiveArtMutationRejected) as level_gate:
+        await service.equip_art(actor, 1, art_id)
+    assert level_gate.value.code == ActiveArtMutationCode.LEVEL_REQUIRED
+
+    actor += 1_000
+    character_id, _ = await _seed_character(
+        database,
+        actor,
+        level=available_level,
+        cls="vigia",
+        selected_path=path,
+        weapon_type_id=weapon_type_id,
+    )
+    available = await service.view(actor)
+    assert available is not None and art_id in available.available_art_ids
+    assert art_id not in available.weapon_incompatible_art_ids
+    equipped = await service.equip_art(actor, 3, art_id)
+    assert equipped is not None and equipped.art_id == art_id
+
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        configuration = await load_active_art_configuration(session, character)
+    assert configuration.art_ids == (art_id,)
+    assert configuration.slots[0].slot == 3
+
+
+@pytest.mark.asyncio
+async def test_vigia_tiro_calculado_rejects_other_classes_and_non_ranged_metadata(database):
+    art_id = VIGIA_ART_IDS["tiro_calculado"]
+    sessions = database[1]
+    service = ActiveArtService(sessions, "ocaso")
+
+    other_class = 771080
+    await _seed_character(
+        database,
+        other_class,
+        level=20,
+        cls="errante",
+        selected_path="carrasco",
+        weapon_type_id="weapon.type.tdo.arma_pesada_caminhante",
+    )
+    assert art_id not in (await service.view(other_class)).available_art_ids
+    with pytest.raises(ActiveArtMutationRejected) as wrong_class:
+        await service.equip_art(other_class, 1, art_id)
+    assert wrong_class.value.code == ActiveArtMutationCode.WRONG_CLASS
+
+    for actor, weapon_type_id in (
+        (771081, None),
+        (771082, "weapon.type.tdo.arma_caminhante"),
+    ):
+        await _seed_character(
+            database,
+            actor,
+            level=20,
+            cls="vigia",
+            selected_path="atirador",
+            weapon_type_id=weapon_type_id,
+        )
+        view = await service.view(actor)
+        assert view is not None and art_id in view.weapon_incompatible_art_ids
+        with pytest.raises(ActiveArtMutationRejected) as incompatible:
+            await service.equip_art(actor, 1, art_id)
+        assert incompatible.value.code == ActiveArtMutationCode.WEAPON_REQUIREMENT
 
 
 @pytest.mark.asyncio

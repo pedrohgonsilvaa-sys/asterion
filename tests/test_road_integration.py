@@ -24,8 +24,8 @@ from asterion.application.road import (
     RoadService,
 )
 from asterion.application.round import RoundService
-from asterion.domain.arts import FIRST_CLASS_ART_IDS, SENTINEL_ART_IDS
-from asterion.domain.combat import act, allowed_actions
+from asterion.domain.arts import FIRST_CLASS_ART_IDS, SENTINEL_ART_IDS, VIGIA_ART_IDS
+from asterion.domain.combat import act, action_target_ids, allowed_actions
 from asterion.domain.combat_math import resolve_combat_stats
 from asterion.domain.road import (
     RUINS_LOCATION,
@@ -35,6 +35,8 @@ from asterion.domain.road import (
     materialize_equipment,
 )
 from asterion.domain.talents import TALENTS_BY_CLASS
+from asterion.infrastructure.db.combat_codec import decode
+from asterion.infrastructure.db.combat_repository import CombatRepository
 from asterion.infrastructure.db.models import (
     Account,
     BestiaryEntry,
@@ -401,6 +403,76 @@ async def test_manual_hunt_uses_authoritative_active_art_snapshot(database):
     assert resumed.combat.configuration_snapshot == combat.combat.configuration_snapshot
     with pytest.raises(CombatConfigurationLocked):
         await art_service.unequip_slot(actor, 1, expected_configuration_version=1)
+
+
+@pytest.mark.asyncio
+async def test_manual_hunt_executes_persisted_tiro_calculado_and_reconnects(database):
+    actor = 771123
+    _actor, service = await _seed_road(database, actor)
+    sessions = database[1]
+    art_id = VIGIA_ART_IDS["tiro_calculado"]
+    async with sessions.begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        stats = resolve_combat_stats("vigia", 20, "remanescente")
+        character.character_class = "vigia"
+        character.selected_path = "rastreador"
+        character.level = 20
+        character.hp = stats.hp
+        character.max_hp = stats.hp
+        character.crowns = 20_000
+        await add_compatible_weapon_for_arts(session, character.id, (art_id,))
+
+    art_service = ActiveArtService(sessions, "ocaso")
+    equipped = await art_service.equip_art(actor, 1, art_id)
+    assert equipped is not None and equipped.changed
+
+    await service.travel(actor, ROAD)
+    started = await service.start_hunt(actor)
+    assert started.kind == "combat" and started.combat is not None
+    assert art_id in allowed_actions(started.combat)
+    assert started.combat.configuration_snapshot["active_arts"] == [
+        {"slot": 1, "art_id": art_id}
+    ]
+    target_id = action_target_ids(started.combat, art_id, actor_key="player")[0]
+    committed = await service.action(
+        actor,
+        started.activity_id,
+        started.combat.version,
+        art_id,
+        target_id=target_id,
+    )
+    assert committed is not None
+
+    async with sessions.begin() as session:
+        activity = await session.get(GameActivity, started.activity_id)
+        assert activity is not None
+        _encounter, record = await CombatRepository(session).combat(activity)
+        restored = decode(
+            record.snapshot,
+            record.id,
+            activity.ruleset_version,
+            activity.state_version,
+        )
+    events = [
+        event
+        for event in restored.events
+        if event.actor == "player" and event.action == art_id
+    ]
+    assert len(events) == 1
+    assert events[0].path_crit_bonus == Decimal(0)
+    assert events[0].hit_count == 1
+
+    resumed = await service.resume(actor)
+    if resumed.kind == "combat":
+        assert resumed.combat is not None
+        assert resumed.combat.configuration_snapshot == started.combat.configuration_snapshot
+        assert sum(
+            event.actor == "player" and event.action == art_id
+            for event in resumed.combat.events
+        ) == 1
 
 
 @pytest.mark.asyncio
