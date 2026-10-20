@@ -8,6 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from asterion.domain.arts import (
+    ART_IDS_BY_CLASS,
     ERRANTE_ART_IDS,
     LUMINAR_ART_IDS,
     ORACULO_ART_IDS,
@@ -17,6 +18,7 @@ from asterion.domain.arts import (
 )
 from asterion.domain.combat import Action, ActionEffect, Combat, CombatEvent, Fighter
 from asterion.domain.combat_math import CURRENT_COMBAT_RULESET, CombatStats
+from asterion.domain.path_arts import path_player_actions
 
 TRIAL_IDS_BY_CLASS = {
     "sentinela": "trial.sentinela.guarda",
@@ -1173,8 +1175,16 @@ def luminar_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action
 def class_player_actions(
     character_class: str,
     allowed_art_ids: tuple[str, ...],
+    selected_path: str | None = None,
 ) -> dict[str, Action]:
-    """Return the existing canonical Class Art actions for any PvE combat."""
+    """Build the equipped Class and Path Arts through one shared action set."""
+    if len(allowed_art_ids) > 3 or len(set(allowed_art_ids)) != len(allowed_art_ids):
+        raise ValueError("Combat configuration accepts at most three unique Arts.")
+    class_catalog = set(ART_IDS_BY_CLASS.get(character_class, ()))
+    class_art_ids = tuple(art_id for art_id in allowed_art_ids if art_id in class_catalog)
+    path_art_ids = tuple(art_id for art_id in allowed_art_ids if art_id not in class_catalog)
+    if len(class_art_ids) + len(path_art_ids) != len(allowed_art_ids):
+        raise ValueError("Unknown active Art in combat configuration.")
     factories = {
         "sentinela": sentinel_player_actions,
         "errante": errante_player_actions,
@@ -1186,7 +1196,9 @@ def class_player_actions(
     factory = factories.get(character_class)
     if factory is None:
         raise ValueError("Character Class does not have a Class Art catalog.")
-    return factory(tuple(allowed_art_ids))
+    actions = factory(class_art_ids)
+    actions.update(path_player_actions(character_class, selected_path, path_art_ids))
+    return actions
 
 
 def luminar_enemy_actions() -> dict[str, Action]:

@@ -19,7 +19,9 @@ from asterion.bot.combat_ui import (
     render_combat,
 )
 from asterion.bot.creation_handlers import creation_router
-from asterion.domain.combat import Action, CombatEvent, Effect, combat_consumable_options
+from asterion.domain.arts import DEVASTADOR_ART_IDS
+from asterion.domain.combat import Action, CombatEvent, Effect, act, combat_consumable_options
+from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.prologue import PROFILE
 from asterion.domain.road import CREATURES, create_road_combat
 from tests.test_creation_ui import callback_update, message_update
@@ -211,6 +213,60 @@ def test_target_markers_appear_on_the_relevant_target_card():
         fixed_mechanic=True,
     )
     assert "Oportunismo · elegível" not in render_combat(view).text
+
+
+def test_campaign_solo_path_art_uses_short_frozen_slot_callback():
+    ariete = DEVASTADOR_ART_IDS["ariete"]
+    combat = create_road_combat(
+        uuid4(),
+        "Luiken",
+        "sentinela",
+        "remanescente",
+        Decimal("500"),
+        CREATURES[0],
+        12,
+        None,
+        player_level=12,
+        equipment_configuration=EquipmentConfigurationSnapshot(
+            combat_configuration_version=4,
+            selected_path="devastador",
+        ),
+        active_art_ids=(ariete,),
+    )
+    combat.configuration_snapshot = (combat.configuration_snapshot or {}) | {
+        "active_arts": [{"slot": 2, "art_id": ariete}]
+    }
+    view = CombatView(
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        combat,
+        "combat",
+        0,
+        context="p12",
+    )
+
+    screen = render_combat(view)
+    button = next(
+        button
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+        if button.text == "Aríete"
+    )
+    assert len(button.callback_data.encode("utf-8")) <= 64
+    assert CombatCallback.unpack(button.callback_data).action == "a2"
+
+    updated = act(combat, ariete, target_id="enemy")
+    cooldown_view = CombatView(
+        view.activity_id,
+        view.encounter_id,
+        view.character_id,
+        updated,
+        "combat",
+        0,
+        context="p12",
+    )
+    assert "Aríete · CD<code>1</code>" in render_combat(cooldown_view).text
 
 
 def test_competitive_hud_hides_opponent_owned_class_state():

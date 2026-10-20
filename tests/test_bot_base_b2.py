@@ -31,7 +31,7 @@ from asterion.bot.character_surfaces_handlers import character_surfaces_router
 from asterion.bot.cosmetics_handlers import cosmetics_router
 from asterion.bot.doctrines_handlers import doctrines_router
 from asterion.bot.doctrines_ui import b36, render_doctrine_detail
-from asterion.domain.arts import ART_IDS_BY_CLASS
+from asterion.domain.arts import ART_IDS_BY_CLASS, DEVASTADOR_ART_IDS
 from asterion.domain.economy import crowns_per_level, path_switch_cost
 from asterion.domain.equipment import assign_equipment_instance_id
 from asterion.domain.road import materialize_equipment
@@ -52,6 +52,7 @@ from asterion.infrastructure.db.models import (
     Quest,
     Unlock,
 )
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
 from tests.test_character_surfaces_telegram import _button, _last_screen, _message_update
 from tests.test_creation_ui import callback_update
 from tests.test_road_integration import _seed_road
@@ -486,6 +487,9 @@ async def test_doctrines_snapshot_apply_cost_noop_foreground_and_limit(database)
                 talent_id=talent.talent_id,
             )
         )
+        await add_compatible_weapon_for_arts(
+            session, character.id, (ART_IDS_BY_CLASS["sentinela"][0],)
+        )
         character_id = character.id
 
     service = DoctrineService(sessions, "ocaso")
@@ -657,6 +661,99 @@ async def test_doctrines_snapshot_apply_cost_noop_foreground_and_limit(database)
 
 
 @pytest.mark.asyncio
+async def test_doctrine_rejects_path_art_with_incompatible_saved_weapon(database):
+    actor = 891240
+    await _seed_road(database, actor=actor)
+    sessions = database[1]
+    art_id = DEVASTADOR_ART_IDS["ariete"]
+    async with sessions.begin() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        assert character is not None
+        character.level = 20
+        character.selected_path = "devastador"
+        character.crowns = 20_000
+        session.add(Unlock(character_id=character.id, unlock_id="class_trial_completed"))
+        await add_compatible_weapon_for_arts(session, character.id, (art_id,))
+        bow_payload = materialize_equipment(
+            "doctrine-ariete-incompatible-bow",
+            "Comum",
+            20,
+            weapon_type_id="weapon.type.tdo.arma_pesada_caminhante",
+        )
+        bow_id, bow_payload = assign_equipment_instance_id(bow_payload)
+        session.add(
+            EquipmentItem(
+                id=bow_id,
+                character_id=character.id,
+                source_key="test:doctrine-ariete-incompatible-bow",
+                item_name=bow_payload["item_name"],
+                rarity=bow_payload["rarity"],
+                slot=bow_payload["slot"],
+                item_level=bow_payload["item_level"],
+                bound=False,
+                payload=bow_payload,
+            )
+        )
+
+    service = DoctrineService(sessions, "ocaso")
+    initial = await service.view(actor)
+    assert initial is not None
+    created = await service.create(actor, "Aríete incompatível", initial.configuration_version)
+    assert created is not None and created.doctrine_id is not None
+    doctrine = next(
+        item for item in (await service.view(actor)).doctrines
+        if item.doctrine_id == created.doctrine_id
+    )
+    equipped_art = await service.update_component(
+        actor,
+        doctrine.doctrine_id,
+        doctrine.revision,
+        initial.configuration_version,
+        "arts",
+        ("1", art_id),
+    )
+    assert equipped_art is not None and equipped_art.changed
+    doctrine = next(
+        item for item in (await service.view(actor)).doctrines
+        if item.doctrine_id == created.doctrine_id
+    )
+    applied_melee = await service.apply(
+        actor,
+        doctrine.doctrine_id,
+        doctrine.revision,
+        initial.configuration_version,
+    )
+    assert applied_melee is not None and applied_melee.changed
+    assert applied_melee.configuration_version == initial.configuration_version + 1
+    doctrine = next(
+        item for item in (await service.view(actor)).doctrines
+        if item.doctrine_id == created.doctrine_id
+    )
+    selected_bow = await service.update_component(
+        actor,
+        doctrine.doctrine_id,
+        doctrine.revision,
+        applied_melee.configuration_version,
+        "equipment",
+        ("Principal", bow_id),
+    )
+    assert selected_bow is not None and selected_bow.changed
+    doctrine = next(
+        item for item in (await service.view(actor)).doctrines
+        if item.doctrine_id == created.doctrine_id
+    )
+    assert doctrine.incomplete_reason == "weapon_requirement"
+    assert not doctrine.can_apply
+    with pytest.raises(DoctrineRejected, match="weapon_requirement"):
+        await service.apply(
+            actor,
+            doctrine.doctrine_id,
+            doctrine.revision,
+            applied_melee.configuration_version,
+        )
+
+
+@pytest.mark.asyncio
 async def test_doctrine_rejects_two_hand_conflict_and_missing_item(database):
     actor = 891250
     await _seed_road(database, actor=actor)
@@ -738,6 +835,9 @@ async def test_cosmetic_and_doctrine_telegram_flows_use_real_callbacks(database)
     sessions = database[1]
     async with sessions.begin() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        await add_compatible_weapon_for_arts(
+            session, character.id, (ART_IDS_BY_CLASS["sentinela"][0],)
+        )
         session.add(
             Achievement(character_id=character.id, achievement_id="feat.tdo.a_ultima_guarda")
         )

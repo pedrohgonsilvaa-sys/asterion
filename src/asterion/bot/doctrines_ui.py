@@ -4,7 +4,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.doctrines import DoctrineCollectionView, DoctrineView
 from asterion.bot.creation_ui import Screen
-from asterion.domain.arts import ART_IDS_BY_CLASS
+from asterion.domain.arts import ACTIVE_ART_IDS_BY_CLASS, active_art_definition
 from asterion.domain.paths import PATH_DEFINITIONS
 from asterion.domain.talents import IMPLEMENTED_TALENT_LEVELS, TALENT_DEFINITIONS, TALENTS_BY_CLASS
 
@@ -14,6 +14,7 @@ REASON_LABELS = {
     "invalid_equipment": "Equipamentos incompatíveis",
     "item_unavailable": "Item indisponível",
     "invalid_art": "Arte incompatível",
+    "weapon_requirement": "Arma incompatível com uma Arte equipada",
     "duplicate_art": "Arte repetida",
     "talent_points": "Pontos de Talento insuficientes",
     "invalid_talents": "Talentos incompatíveis",
@@ -325,7 +326,7 @@ def render_art_slots(view, doctrine) -> Screen:
 
 
 def render_art_choices(view, doctrine, slot: int) -> Screen:
-    arts = ART_IDS_BY_CLASS[view.character_class]
+    arts = doctrine_art_ids(view, doctrine)
     did, rev, cfg = (
         doctrine.doctrine_id.hex,
         b36(doctrine.revision),
@@ -339,16 +340,27 @@ def render_art_choices(view, doctrine, slot: int) -> Screen:
             )
         ]
         for index, art_id in enumerate(arts)
-        if (
-            definition := __import__(
-                "asterion.domain.arts", fromlist=["active_art_definition"]
-            ).active_art_definition(art_id)
-        )
+        if (definition := active_art_definition(art_id))
         and view.level >= definition.min_level
     ]
     rows.append([_btn("Remover deste slot", f"doc:ai:{did}:{rev}:{cfg}:{slot}:x")])
     rows.append([_btn("← Slots", f"doc:as:{did}:{rev}:{cfg}")])
     return Screen("🎴 Escolha uma Arte disponível.", "character", _markup(rows))
+
+
+def doctrine_art_ids(view, doctrine) -> tuple[str, ...]:
+    """Return implemented Arts eligible for the Path saved in this draft."""
+    selected_path = doctrine.configuration.get("path")
+    return tuple(
+        art_id
+        for art_id in ACTIVE_ART_IDS_BY_CLASS[view.character_class]
+        if (definition := active_art_definition(art_id)) is not None
+        and view.level >= definition.min_level
+        and (
+            definition.path_id is None
+            or definition.path_id == selected_path
+        )
+    )
 
 
 def render_talent_slots(view, doctrine) -> Screen:

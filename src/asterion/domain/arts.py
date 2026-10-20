@@ -115,6 +115,12 @@ LUMINAR_ART_LEVELS = {
     LUMINAR_ART_IDS["julgamento"]: 9,
 }
 
+# Path Arts are registered only when the shared combat runtime can execute them.
+# Future canonical Arts remain absent until their actions are implemented.
+DEVASTADOR_ART_IDS = {
+    "ariete": "path_art.sentinela.devastador.ariete",
+}
+
 
 ACTIVE_ART_DEFINITIONS = {
     art_id: ActiveArtDefinition(art_id, character_class, 1)
@@ -127,6 +133,18 @@ ACTIVE_ART_DEFINITIONS.update(
     }
 )
 
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        DEVASTADOR_ART_IDS["ariete"]: ActiveArtDefinition(
+            DEVASTADOR_ART_IDS["ariete"],
+            "sentinela",
+            12,
+            path_id="devastador",
+            weapon_requirement=frozenset({"weapon.compat.melee"}),
+        )
+    }
+)
+
 ART_IDS_BY_CLASS = {
     "sentinela": tuple(SENTINEL_ART_IDS.values()),
     "errante": tuple(ERRANTE_ART_IDS.values()),
@@ -134,6 +152,18 @@ ART_IDS_BY_CLASS = {
     "tecelao": tuple(TECELAO_ART_IDS.values()),
     "oraculo": tuple(ORACULO_ART_IDS.values()),
     "luminar": tuple(LUMINAR_ART_IDS.values()),
+}
+PATH_ART_IDS_BY_PATH = {
+    "devastador": tuple(DEVASTADOR_ART_IDS.values()),
+}
+PATH_ART_IDS_BY_CLASS = {
+    "sentinela": tuple(DEVASTADOR_ART_IDS.values()),
+}
+ACTIVE_ART_IDS_BY_CLASS = {
+    character_class: tuple(
+        (*class_art_ids, *PATH_ART_IDS_BY_CLASS.get(character_class, ()))
+    )
+    for character_class, class_art_ids in ART_IDS_BY_CLASS.items()
 }
 ACTIVE_ART_DEFINITIONS.update(
     {

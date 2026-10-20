@@ -1190,6 +1190,22 @@ def render_combat(view: CombatView) -> Screen:
             if status_lines:
                 status_lines.append("")
             status_lines.extend(player_class_lines)
+        active_art_cooldowns = []
+        for action_id, action in player_actions.items():
+            if not action_id.startswith(("class_art.", "path_art.")):
+                continue
+            remaining = max(
+                0,
+                player.cooldowns.get(action_id, 0) - player.opportunity,
+            )
+            if remaining:
+                active_art_cooldowns.append(
+                    f"⏳ {escape(action.name)} · CD<code>{remaining}</code>"
+                )
+        if active_art_cooldowns:
+            if status_lines:
+                status_lines.append("")
+            status_lines.extend(active_art_cooldowns)
         if status_lines:
             insert_at = lines.index("📜 Registro de Combate · Recentes")
             lines[insert_at:insert_at] = status_lines
@@ -1294,7 +1310,9 @@ def render_combat(view: CombatView) -> Screen:
             ).pack()
         else:
             callback_action = action
-            if action.startswith("class_art.") and isinstance(state.configuration_snapshot, dict):
+            if action.startswith(("class_art.", "path_art.")) and isinstance(
+                state.configuration_snapshot, dict
+            ):
                 active = state.configuration_snapshot.get("active_arts", ())
                 slot = next(
                     (

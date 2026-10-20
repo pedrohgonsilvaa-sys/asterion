@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import select
 
 from asterion.application.active_arts import (
+    ActiveArtConfigurationError,
     ActiveArtMutationCode,
     ActiveArtMutationRejected,
     ActiveArtService,
@@ -11,7 +12,12 @@ from asterion.application.active_arts import (
 )
 from asterion.application.combat_configuration_guard import CombatConfigurationLocked
 from asterion.application.equipment import equipment_instance_payload
-from asterion.domain.arts import FIRST_CLASS_ART_IDS, SENTINEL_ART_IDS
+from asterion.domain.arts import (
+    ACTIVE_ART_IDS_BY_CLASS,
+    DEVASTADOR_ART_IDS,
+    FIRST_CLASS_ART_IDS,
+    SENTINEL_ART_IDS,
+)
 from asterion.domain.combat_math import resolve_combat_stats
 from asterion.domain.road import materialize_equipment
 from asterion.infrastructure.db.models import (
@@ -31,6 +37,7 @@ async def _seed_character(
     *,
     level: int = 10,
     cls: str = "sentinela",
+    selected_path: str | None = None,
     weapon_type_id: str | None = None,
 ):
     _, sessions = database
@@ -47,6 +54,7 @@ async def _seed_character(
                 name=f"Art{suffix}"[:16],
                 race="remanescente",
                 character_class=cls,
+                selected_path=selected_path,
                 stage="menu:ready",
                 ruleset_version="gdd-1.4.7-baseline-1.0",
                 level=level,
@@ -247,3 +255,130 @@ async def test_active_art_rows_cascade_with_character(database):
             ).all()
         )
     assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_devastador_ariete_unlock_path_class_and_weapon_gates(database):
+    ariete = DEVASTADOR_ART_IDS["ariete"]
+    service = ActiveArtService(database[1], "ocaso")
+
+    low_actor = 771030
+    await _seed_character(
+        database,
+        low_actor,
+        level=11,
+        selected_path="devastador",
+        weapon_type_id="weapon.type.tdo.arma_caminhante",
+    )
+    low_view = await service.view(low_actor)
+    assert low_view is not None and ariete not in low_view.available_art_ids
+    with pytest.raises(ActiveArtMutationRejected) as low_level:
+        await service.equip_art(low_actor, 1, ariete)
+    assert low_level.value.code == ActiveArtMutationCode.LEVEL_REQUIRED
+
+    bastion_actor = 771031
+    await _seed_character(
+        database,
+        bastion_actor,
+        level=20,
+        selected_path="bastiao",
+        weapon_type_id="weapon.type.tdo.arma_caminhante",
+    )
+    bastion_view = await service.view(bastion_actor)
+    assert bastion_view is not None and ariete not in bastion_view.available_art_ids
+    with pytest.raises(ActiveArtMutationRejected) as wrong_path:
+        await service.equip_art(bastion_actor, 1, ariete)
+    assert wrong_path.value.code == ActiveArtMutationCode.PATH_REQUIRED
+
+    other_class_actor = 771032
+    await _seed_character(
+        database,
+        other_class_actor,
+        level=20,
+        cls="vigia",
+        selected_path="atirador",
+        weapon_type_id="weapon.type.tdo.arma_caminhante",
+    )
+    with pytest.raises(ActiveArtMutationRejected) as wrong_class:
+        await service.equip_art(other_class_actor, 1, ariete)
+    assert wrong_class.value.code == ActiveArtMutationCode.WRONG_CLASS
+
+    unarmed_actor = 771033
+    await _seed_character(
+        database, unarmed_actor, level=12, selected_path="devastador"
+    )
+    unarmed_view = await service.view(unarmed_actor)
+    assert unarmed_view is not None and ariete in unarmed_view.available_art_ids
+    assert ariete in unarmed_view.weapon_incompatible_art_ids
+    with pytest.raises(ActiveArtMutationRejected) as no_weapon:
+        await service.equip_art(unarmed_actor, 1, ariete)
+    assert no_weapon.value.code == ActiveArtMutationCode.WEAPON_REQUIREMENT
+
+    bow_actor = 771034
+    await _seed_character(
+        database,
+        bow_actor,
+        level=12,
+        selected_path="devastador",
+        weapon_type_id="weapon.type.tdo.arma_pesada_caminhante",
+    )
+    bow_view = await service.view(bow_actor)
+    assert bow_view is not None and ariete in bow_view.weapon_incompatible_art_ids
+    with pytest.raises(ActiveArtMutationRejected) as incompatible:
+        await service.equip_art(bow_actor, 1, ariete)
+    assert incompatible.value.code == ActiveArtMutationCode.WEAPON_REQUIREMENT
+
+    melee_actor = 771035
+    _, melee_sessions = await _seed_character(
+        database,
+        melee_actor,
+        level=12,
+        selected_path="devastador",
+        weapon_type_id="weapon.type.tdo.arma_caminhante",
+    )
+    melee_view = await service.view(melee_actor)
+    assert melee_view is not None and ariete in melee_view.available_art_ids
+    assert ariete not in melee_view.weapon_incompatible_art_ids
+    equipped = await service.equip_art(
+        melee_actor, 2, ariete, expected_configuration_version=0
+    )
+    assert equipped is not None and equipped.changed
+    async with melee_sessions.begin() as session:
+        character = await session.get(Character, melee_view.character_id)
+        active = await load_active_art_configuration(session, character)
+    assert active.art_ids == (ariete,)
+    assert ariete in ACTIVE_ART_IDS_BY_CLASS["sentinela"]
+
+
+@pytest.mark.asyncio
+async def test_path_art_configuration_is_revalidated_after_level_change_and_repairable(
+    database,
+):
+    actor = 771036
+    ariete = DEVASTADOR_ART_IDS["ariete"]
+    character_id, sessions = await _seed_character(
+        database,
+        actor,
+        level=12,
+        selected_path="devastador",
+        weapon_type_id="weapon.type.tdo.arma_caminhante",
+    )
+    service = ActiveArtService(sessions, "ocaso")
+    await service.equip_art(actor, 1, ariete)
+
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        character.level = 11
+    view = await service.view(actor)
+    assert view is not None and view.ineligible_art_ids == (ariete,)
+    with pytest.raises(ActiveArtConfigurationError, match="level requirement"):
+        async with sessions.begin() as session:
+            character = await session.get(Character, character_id)
+            await load_active_art_configuration(session, character)
+
+    removed = await service.unequip_slot(actor, 1, expected_configuration_version=1)
+    assert removed is not None and removed.changed
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        active = await load_active_art_configuration(session, character)
+    assert active.slots == ()

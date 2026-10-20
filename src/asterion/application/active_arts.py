@@ -92,6 +92,7 @@ class ActiveArtCharacterView:
     available_art_ids: tuple[str, ...]
     foreground: bool
     weapon_incompatible_art_ids: tuple[str, ...] = ()
+    ineligible_art_ids: tuple[str, ...] = ()
 
 
 def _validate_definition(character: Character, definition: ActiveArtDefinition) -> None:
@@ -110,6 +111,7 @@ async def load_active_art_configuration(
     lock_rows: bool = True,
     weapon_compatibility_tags: frozenset[str] | None = None,
     validate_weapon_requirements: bool = True,
+    validate_eligibility: bool = True,
 ) -> ActiveArtConfigurationSnapshot:
     """Load persisted Arts and validate explicit weapon requirements."""
     if not session.in_transaction():
@@ -143,7 +145,8 @@ async def load_active_art_configuration(
         definition = active_art_definition(row.art_id)
         if definition is None:
             raise ActiveArtConfigurationError("Persisted active Art is unknown to the runtime.")
-        _validate_definition(character, definition)
+        if validate_eligibility:
+            _validate_definition(character, definition)
         if (
             validate_weapon_requirements
             and not weapon_requirement_satisfied(definition, equipped_tags)
@@ -187,6 +190,7 @@ class ActiveArtService:
                 lock_rows=False,
                 weapon_compatibility_tags=compatibility_tags,
                 validate_weapon_requirements=False,
+                validate_eligibility=False,
             )
             blocker = await find_combat_configuration_blocker(session, character.id)
             available = tuple(
@@ -203,6 +207,17 @@ class ActiveArtService:
                     ACTIVE_ART_DEFINITIONS[art_id], compatibility_tags
                 )
             )
+            ineligible = tuple(
+                entry.art_id
+                for entry in configuration.slots
+                if (definition := ACTIVE_ART_DEFINITIONS[entry.art_id]).character_class
+                != character.character_class
+                or character.level < definition.min_level
+                or (
+                    definition.path_id is not None
+                    and definition.path_id != character.selected_path
+                )
+            )
             return ActiveArtCharacterView(
                 character.id,
                 character.name,
@@ -214,6 +229,7 @@ class ActiveArtService:
                 available,
                 blocker is not None,
                 weapon_incompatible,
+                ineligible,
             )
 
     async def equip_art(
@@ -290,7 +306,9 @@ class ActiveArtService:
             if character is None:
                 return None
             self._check_version(character, expected_configuration_version)
-            rows, current = await self._load_rows(session, character)
+            rows, current = await self._load_rows(
+                session, character, allow_ineligible=True
+            )
             if slot not in current:
                 return ActiveArtMutationResult(
                     False,
@@ -339,7 +357,10 @@ class ActiveArtService:
 
     @staticmethod
     async def _load_rows(
-        session: AsyncSession, character: Character
+        session: AsyncSession,
+        character: Character,
+        *,
+        allow_ineligible: bool = False,
     ) -> tuple[list[CharacterActiveArtSlot], dict[int, str]]:
         rows = list(
             (
@@ -362,7 +383,8 @@ class ActiveArtService:
                 definition = active_art_definition(row.art_id)
                 if definition is None:
                     raise ActiveArtConfigurationError("Unknown persisted active Art.")
-                _validate_definition(character, definition)
+                if not allow_ineligible:
+                    _validate_definition(character, definition)
                 current[row.slot] = row.art_id
                 seen_arts.add(row.art_id)
         except ActiveArtConfigurationError as exc:

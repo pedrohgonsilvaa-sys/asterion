@@ -24,7 +24,7 @@ from asterion.bot.character_progression_ui import (
 )
 from asterion.bot.creation_handlers import present
 from asterion.domain.arts import (
-    ART_IDS_BY_CLASS,
+    ACTIVE_ART_IDS_BY_CLASS,
     active_art_definition,
     weapon_requirement_label,
 )
@@ -40,7 +40,7 @@ def _talent_by_index(view, index: int):
 
 
 def _art_by_index(view, index: int) -> str:
-    return ART_IDS_BY_CLASS[view.character_class][index]
+    return ACTIVE_ART_IDS_BY_CLASS[view.character_class][index]
 
 
 def _art_mutation_message(exc: ActiveArtMutationRejected, art_id: str | None = None) -> str:
@@ -211,7 +211,10 @@ def character_progression_router(
                 if (
                     view is None
                     or expected != view.combat_configuration_version
-                    or art_id not in view.available_art_ids
+                    or (
+                        art_id not in view.available_art_ids
+                        and not any(entry.art_id == art_id for entry in view.slots)
+                    )
                 ):
                     await query.answer("A tela foi atualizada.")
                     await show_arts(query)

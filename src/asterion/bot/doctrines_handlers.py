@@ -13,6 +13,7 @@ from asterion.application.doctrines import (
 )
 from asterion.bot.creation_handlers import present
 from asterion.bot.doctrines_ui import (
+    doctrine_art_ids,
     render_apply_preview,
     render_art_choices,
     render_art_slots,
@@ -27,7 +28,6 @@ from asterion.bot.doctrines_ui import (
     render_talent_choices,
     render_talent_slots,
 )
-from asterion.domain.arts import ART_IDS_BY_CLASS
 from asterion.domain.economy import crowns_per_level, path_switch_cost
 from asterion.domain.equipment import assignment_for_item_slot
 from asterion.domain.paths import PATHS_BY_CLASS
@@ -290,7 +290,7 @@ def doctrines_router(service: DoctrineService, images: dict[str, str]) -> Router
                 token = parts[6]
                 art_id = None
                 if token != "x":
-                    arts = ART_IDS_BY_CLASS[view.character_class]
+                    arts = doctrine_art_ids(view, doctrine)
                     index = _from36(token)
                     if index >= len(arts):
                         raise ValueError

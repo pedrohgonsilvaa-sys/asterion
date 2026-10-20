@@ -22,7 +22,8 @@ from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     resolve_character_combat_stats,
 )
-from asterion.domain.arts import active_art_definition
+from asterion.application.weapon_metadata import resolve_equipment_weapon
+from asterion.domain.arts import active_art_definition, weapon_requirement_satisfied
 from asterion.domain.economy import crowns_per_level, path_switch_cost
 from asterion.domain.equipment import EquipmentSlot, parse_equipment_slot
 from asterion.domain.paths import path_belongs_to_class
@@ -781,6 +782,11 @@ class DoctrineService:
         item_by_id = {item.id: item for item in items}
         if len(item_by_id) != len(ids):
             return "item_unavailable"
+        weapon_compatibility_tags: set[str] = set()
+        for item in item_by_id.values():
+            weapon = await resolve_equipment_weapon(session, item)
+            if weapon is not None:
+                weapon_compatibility_tags.update(weapon.compatibility_tags)
         try:
             build_equipment_configuration(
                 character,
@@ -810,6 +816,8 @@ class DoctrineService:
                 or (definition.path_id is not None and definition.path_id != path)
             ):
                 return "invalid_art"
+            if not weapon_requirement_satisfied(definition, weapon_compatibility_tags):
+                return "weapon_requirement"
 
         talents = config["talents"]
         if len(talents) > talent_points_at_level(character.level):

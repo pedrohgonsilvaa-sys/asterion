@@ -1356,7 +1356,12 @@ class RoundService(RoadService):
         if "defend" in actions:
             return ("action", "defend")
         active_art = next(
-            (action for action in actions if action.startswith("class_art.")), None
+            (
+                action
+                for action in actions
+                if action.startswith(("class_art.", "path_art."))
+            ),
+            None,
         )
         if active_art is not None:
             return ("action", active_art)

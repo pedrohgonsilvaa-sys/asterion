@@ -21,7 +21,7 @@ from asterion.bot.character_progression_ui import (
     render_talent_list,
     render_talent_root,
 )
-from asterion.domain.arts import ART_IDS_BY_CLASS
+from asterion.domain.arts import ART_IDS_BY_CLASS, DEVASTADOR_ART_IDS
 from asterion.domain.combat_math import (
     class_stats,
     finalize_primary_stats,
@@ -249,6 +249,40 @@ def test_talent_and_art_screens_render_every_class_catalog_without_future_execut
         if character_class == "oraculo":
             detail = render_art_detail(art_view, art_ids[1])
             assert "Alvo · Você ou Aliado" in detail.text
+
+
+def test_devastador_ariete_is_visible_with_explicit_melee_requirement():
+    ariete = DEVASTADOR_ART_IDS["ariete"]
+    view = ActiveArtCharacterView(
+        character_id=uuid4(),
+        character_name="Hero",
+        character_class="sentinela",
+        level=12,
+        selected_path="devastador",
+        combat_configuration_version=4,
+        slots=(),
+        available_art_ids=(ariete,),
+        foreground=False,
+    )
+
+    root = render_art_root(view)
+    assert "Aríete" in root.text
+    detail = render_art_detail(view, ariete)
+    assert "135% ATQ" in detail.text
+    assert "+10 p.p." in detail.text
+    assert "Recarga · 2 Rodadas" in detail.text
+    assert "Arma corpo a corpo compatível" in detail.text
+    assert "Equipar Arte" in [
+        button.text for row in detail.keyboard.inline_keyboard for button in row
+    ]
+
+    incompatible = render_art_detail(
+        replace(view, weapon_incompatible_art_ids=(ariete,)), ariete
+    )
+    assert "equipe uma arma compatível" in incompatible.text
+    assert "Equipar Arte" not in [
+        button.text for row in incompatible.keyboard.inline_keyboard for button in row
+    ]
 
 
 @pytest.mark.asyncio

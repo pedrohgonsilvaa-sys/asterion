@@ -4061,7 +4061,11 @@ def create_player_versus_player_combat(
                 equipment.selected_path,
                 talent_ids,
             )
-            actions = class_player_actions(member.character_class, member.active_art_ids)
+            actions = class_player_actions(
+                member.character_class,
+                member.active_art_ids,
+                selected_path=equipment.selected_path,
+            )
             actions_by_fighter[member.fighter_key] = actions
             first_actions = first_actions or actions
             configuration_snapshots[member.fighter_key] = (
@@ -4268,7 +4272,9 @@ def create_creature_party_combat(
                 tuple(talent_id for _, talent_id in member_equipment.talent_choices),
             )
             member_actions = class_player_actions(
-                member.character_class, member.active_art_ids
+                member.character_class,
+                member.active_art_ids,
+                selected_path=member_equipment.selected_path,
             )
             for action_id, action in member_actions.items():
                 existing = player_actions.get(action_id)
@@ -4355,7 +4361,11 @@ def create_creature_party_combat(
                 "art": first_art(character_class, 1),
             }
             if active_art_ids is None
-            else class_player_actions(character_class, tuple(active_art_ids))
+            else class_player_actions(
+                character_class,
+                tuple(active_art_ids),
+                selected_path=(equipment.selected_path if equipment is not None else None),
+            )
         )
     state = Combat(
             combat_id,

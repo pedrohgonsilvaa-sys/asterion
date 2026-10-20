@@ -8,6 +8,7 @@ from aiogram import Bot, Dispatcher
 from sqlalchemy import select
 
 from asterion.application.active_arts import (
+    ActiveArtConfigurationError,
     ActiveArtMutationCode,
     ActiveArtMutationRejected,
     ActiveArtService,
@@ -26,7 +27,12 @@ from asterion.bot.path_ui import (
     render_path_exchange,
     render_path_preview,
 )
-from asterion.domain.arts import FIRST_CLASS_ART_IDS, ActiveArtDefinition, active_art_definition
+from asterion.domain.arts import (
+    DEVASTADOR_ART_IDS,
+    FIRST_CLASS_ART_IDS,
+    ActiveArtDefinition,
+    active_art_definition,
+)
 from asterion.domain.combat_math import resolve_combat_stats
 from asterion.domain.paths import PATH_DEFINITIONS, PATHS_BY_CLASS
 from asterion.infrastructure.db.models import (
@@ -284,6 +290,51 @@ async def test_path_art_requires_matching_selected_path(database, monkeypatch):
         character = await session.get(Character, character_id)
         active = await load_active_art_configuration(session, character)
     assert active.art_ids == (path_art,)
+
+
+@pytest.mark.asyncio
+async def test_exchange_away_from_devastador_removes_ariete_and_invalidates_old_config(
+    database,
+):
+    actor = 771209
+    character_id, sessions = await _seed_character(
+        database,
+        actor,
+        level=12,
+        crowns=2000,
+        trial_complete=True,
+    )
+    ariete = DEVASTADOR_ART_IDS["ariete"]
+    async with sessions.begin() as session:
+        await add_compatible_weapon_for_arts(session, character_id, (ariete,))
+
+    paths = PathSelectionService(sessions, "ocaso")
+    initial = await paths.choose_initial(actor, "bastiao", 0)
+    assert initial is not None and initial.changed
+    devastador = await paths.exchange(
+        actor, "devastador", initial.view.configuration_version
+    )
+    assert devastador is not None and devastador.changed
+
+    active_arts = ActiveArtService(sessions, "ocaso")
+    equipped = await active_arts.equip_art(
+        actor, 1, ariete, expected_configuration_version=devastador.view.configuration_version
+    )
+    assert equipped is not None and equipped.changed
+    with pytest.raises(ActiveArtConfigurationError):
+        async with sessions.begin() as session:
+            character = await session.get(Character, character_id)
+            character.selected_path = "bastiao"
+            await load_active_art_configuration(session, character)
+
+    switched_back = await paths.exchange(
+        actor, "bastiao", equipped.combat_configuration_version
+    )
+    assert switched_back is not None and switched_back.changed
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        active = await load_active_art_configuration(session, character)
+    assert active.art_ids == ()
 
 
 @pytest.mark.parametrize("character_class", tuple(PATHS_BY_CLASS))

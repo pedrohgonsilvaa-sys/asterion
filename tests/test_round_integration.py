@@ -16,7 +16,7 @@ from asterion.application.round import (
     RoundService,
 )
 from asterion.application.vigor import REGEN_INTERVAL_SECONDS
-from asterion.domain.arts import FIRST_CLASS_ART_IDS
+from asterion.domain.arts import DEVASTADOR_ART_IDS, FIRST_CLASS_ART_IDS
 from asterion.domain.combat import DotState
 from asterion.domain.combat_math import Stats, resolve_combat_stats
 from asterion.domain.equipment_stats import equipment_configuration_from_data
@@ -360,6 +360,52 @@ async def test_round_freezes_authoritative_active_arts_and_blocks_mutation(datab
         assert state.config_snapshot["combat_configuration"]["active_arts"] == [
             {"slot": 1, "art_id": art_id}
         ]
+
+
+@pytest.mark.asyncio
+async def test_round_snapshots_equipped_devastador_ariete(database):
+    actor, service = await _seed_round(database, 772024)
+    art_id = DEVASTADOR_ART_IDS["ariete"]
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        character.level = 20
+        character.selected_path = "devastador"
+        session.add(Unlock(character_id=character.id, unlock_id="class_trial_completed"))
+        await add_compatible_weapon_for_arts(session, character.id, (art_id,))
+
+    art_service = ActiveArtService(database[1], "ocaso")
+    equipped = await art_service.equip_art(actor, 2, art_id)
+    assert equipped is not None and equipped.changed
+    prepared = await service.prepare_round(actor, 5)
+    started = await service.start_round(actor, prepared.round_id, prepared.state_version)
+    assert started.kind in {"round_active", "round_interrupted"}
+
+    async with database[1]() as session:
+        state = await session.scalar(select(HuntRound).where(HuntRound.id == started.round_id))
+        frozen = state.config_snapshot["combat_configuration"]
+        assert frozen["active_arts"] == [{"slot": 2, "art_id": art_id}]
+        assert frozen["selected_path"] == "devastador"
+        encounter = await session.scalar(
+            select(HuntRoundEncounter)
+            .where(HuntRoundEncounter.round_id == state.id)
+            .order_by(HuntRoundEncounter.ordinal)
+        )
+        assert art_id in encounter.combat_snapshot["player_actions"]
+
+    resumed = await service.resume(actor)
+    assert resumed.round_id == started.round_id
+    async with database[1]() as session:
+        state = await session.scalar(select(HuntRound).where(HuntRound.id == started.round_id))
+        encounter = await session.scalar(
+            select(HuntRoundEncounter)
+            .where(HuntRoundEncounter.round_id == state.id)
+            .order_by(HuntRoundEncounter.ordinal)
+        )
+        assert state.config_snapshot["combat_configuration"] == frozen
+        assert art_id in encounter.combat_snapshot["player_actions"]
 
 
 

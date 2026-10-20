@@ -8,7 +8,7 @@ from asterion.application.active_arts import ActiveArtCharacterView
 from asterion.application.talents import TalentView
 from asterion.bot.creation_ui import Screen
 from asterion.domain.arts import (
-    ART_IDS_BY_CLASS,
+    ACTIVE_ART_IDS_BY_CLASS,
     active_art_definition,
     weapon_requirement_label,
 )
@@ -185,18 +185,33 @@ def render_talent_respec(view: TalentView) -> Screen:
 
 def _actions_for_view(view: ActiveArtCharacterView) -> dict:
     actions = {}
-    for art_id in ART_IDS_BY_CLASS[view.character_class]:
-        actions.update(class_player_actions(view.character_class, (art_id,)))
+    for art_id in ACTIVE_ART_IDS_BY_CLASS[view.character_class]:
+        try:
+            definition = active_art_definition(art_id)
+            actions.update(
+                class_player_actions(
+                    view.character_class,
+                    (art_id,),
+                    selected_path=(
+                        definition.path_id
+                        if definition is not None and definition.path_id is not None
+                        else view.selected_path
+                    ),
+                )
+            )
+        except ValueError:
+            # Arts owned by another Path remain outside this character's catalog.
+            continue
     return actions
 
 
 def _art_ids(view: ActiveArtCharacterView) -> tuple[str, ...]:
-    all_arts = ART_IDS_BY_CLASS[view.character_class]
+    all_arts = ACTIVE_ART_IDS_BY_CLASS[view.character_class]
     return tuple(art_id for art_id in all_arts if art_id in view.available_art_ids)
 
 
 def _art_index(view: ActiveArtCharacterView, art_id: str) -> int:
-    return ART_IDS_BY_CLASS[view.character_class].index(art_id)
+    return ACTIVE_ART_IDS_BY_CLASS[view.character_class].index(art_id)
 
 
 def _weapon_requirement_notice(view: ActiveArtCharacterView, art_id: str) -> str | None:
@@ -206,6 +221,21 @@ def _weapon_requirement_notice(view: ActiveArtCharacterView, art_id: str) -> str
     if definition is None or not definition.weapon_requirement:
         return "🔒 Requisito de arma não atendido."
     return f"🔒 Requer {weapon_requirement_label(definition)} equipada."
+
+
+def _eligibility_notice(view: ActiveArtCharacterView, art_id: str) -> str | None:
+    if art_id not in view.ineligible_art_ids:
+        return None
+    definition = active_art_definition(art_id)
+    if definition is None:
+        return "🔒 Arte indisponível nesta configuração."
+    if view.level < definition.min_level:
+        return f"🔒 Requer Nv.{definition.min_level}; remova a Arte antes de combater."
+    if definition.path_id is not None and definition.path_id != view.selected_path:
+        path_name = PATH_DEFINITIONS.get(definition.path_id)
+        label = path_name.name if path_name is not None else definition.path_id
+        return f"🔒 Requer Caminho {escape(label)}; remova a Arte antes de combater."
+    return "🔒 Arte indisponível nesta configuração."
 
 
 def _art_category(action) -> str:
@@ -300,6 +330,8 @@ def _art_mechanics_lines(action) -> list[str]:
         lines.append(
             f"🎯 Contra alvo Envenenado · +{action.per_bonus_if_target_poisoned:g} p.p. PER"
         )
+    if action.actor_per_bonus:
+        lines.append(f"🎯 PER na ação · +{action.actor_per_bonus:g} p.p.")
     if action.self_barrier_debuff_magnitude_reduction:
         lines.append(
             "🛡️ Barreira reduz em "
@@ -348,6 +380,8 @@ def render_art_root(view: ActiveArtCharacterView) -> Screen:
         action = actions[art_id]
         index = _art_index(view, art_id)
         lines.append(f"{slot} {escape(action.name)} · {_art_category(action)}")
+        if notice := _eligibility_notice(view, art_id):
+            lines.append(notice)
         if notice := _weapon_requirement_notice(view, art_id):
             lines.append(notice)
         rows.append(
@@ -389,7 +423,12 @@ def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
     incompatible = art_id in view.weapon_incompatible_art_ids
     lines = [
         f"🎴 {escape(action.name)}",
-        f"Arte Ativa · {_class_label(view.character_class)}",
+        f"Arte Ativa · {_class_label(view.character_class)}"
+        + (
+            f" · {escape(PATH_DEFINITIONS[definition.path_id].name)}"
+            if definition is not None and definition.path_id in PATH_DEFINITIONS
+            else ""
+        ),
         "",
     ]
     lines.extend(_art_mechanics_lines(action))
@@ -403,6 +442,8 @@ def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
         )
     if incompatible:
         lines.append("🔒 Requisito não atendido · equipe uma arma compatível.")
+    if notice := _eligibility_notice(view, art_id):
+        lines.extend(["", notice])
     if equipped_slot is not None:
         lines.extend(["", f"🧩 Slot · {equipped_slot}"])
     rows = []
@@ -415,7 +456,12 @@ def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
                 )
             ]
         )
-    elif equipped_slot is None and not incompatible and not view.foreground:
+    elif (
+        equipped_slot is None
+        and not incompatible
+        and art_id not in view.ineligible_art_ids
+        and not view.foreground
+    ):
         rows.append(
             [
                 _button(
@@ -443,7 +489,8 @@ def render_art_slot_choice(view: ActiveArtCharacterView, art_id: str) -> Screen:
         "🎴 Equipar Arte",
         "",
         f"{escape(action.name)}",
-        f"Arte Ativa · {_character_lines(view.character_name, view.character_class, None)[1]}",
+        f"Arte Ativa · "
+        f"{_character_lines(view.character_name, view.character_class, view.selected_path)[1]}",
         "",
         *_art_mechanics_lines(action),
         "",
