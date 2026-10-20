@@ -1,4 +1,5 @@
 import re
+from datetime import date
 from pathlib import Path
 
 BARRIER_PAIRS = (
@@ -58,11 +59,28 @@ def test_varzeas_source_authority_is_current_and_has_no_global_barrier_default()
     root = Path(__file__).resolve().parents[1]
     authority = (root / "SOURCE_AUTHORITY.md").read_text(encoding="utf-8")
     mirror = (root / "docs" / "SOURCE_AUTHORITY.md").read_bytes()
+    regional_source = (
+        root / "ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.3_FINAL.md"
+    ).read_text(encoding="utf-8")
+    index_date = re.search(
+        r"^\*\*Índice atualizado:\*\* (\d{4}-\d{2}-\d{2})\.$",
+        authority,
+        re.MULTILINE,
+    )
+    consolidation_date = re.search(
+        r"^\*\*Data de consolidação:\*\* (\d{4}-\d{2}-\d{2})",
+        regional_source,
+        re.MULTILINE,
+    )
 
     assert mirror == (root / "SOURCE_AUTHORITY.md").read_bytes()
     assert "**Várzeas Carmesins v1.0.3 FINAL**" in authority
     assert "ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.3_FINAL.md" in authority
-    assert "**Índice atualizado:** 2026-10-15." in authority
+    assert index_date is not None
+    assert consolidation_date is not None
+    assert date.fromisoformat(index_date.group(1)) >= date.fromisoformat(
+        consolidation_date.group(1)
+    )
     assert "Várzeas Carmesins v1.0.0 FINAL" not in authority
     assert "A v1.0.3 sucede a v1.0.2 exclusivamente" in authority
     assert "não cria default ou sistema universal" in authority
