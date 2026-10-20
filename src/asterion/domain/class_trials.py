@@ -862,42 +862,54 @@ def tecelao_stage_definition(
     )
 
 
-def tecelao_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action]:
+def tecelao_player_actions(
+    allowed_art_ids: tuple[str, ...], *, legacy_trial_chain: bool = True
+) -> dict[str, Action]:
     if len(allowed_art_ids) > 3 or len(set(allowed_art_ids)) != len(allowed_art_ids):
         raise ValueError("Tecelão combat configuration accepts at most three unique Arts.")
     if not set(allowed_art_ids).issubset(set(TECELAO_ART_IDS.values())):
         raise ValueError("Unknown Tecelão Art in trial combat configuration.")
+    # The class trial intentionally retains its frozen teaching chain. Normal
+    # combat uses the shared path_state Trama implementation in combat.py.
+    trama_fields = (
+        {
+            "prepares_chain": TECELAO_THREAD_KEY,
+            "consumes_chain": TECELAO_THREAD_KEY,
+            "chain_power_bonus": TECELAO_THREAD_BASE_POWER_BONUS,
+            "prepares_chain_duration": TECELAO_THREAD_BASE_DURATION,
+        }
+        if legacy_trial_chain
+        else {}
+    )
     definitions = {
         TECELAO_ART_IDS["fio_cortante"]: Action(
             TECELAO_ART_IDS["fio_cortante"], "Fio Cortante", Decimal("1.20"), cooldown=2,
-            prepares_chain=TECELAO_THREAD_KEY,
-            consumes_chain=TECELAO_THREAD_KEY,
-            chain_power_bonus=TECELAO_THREAD_BASE_POWER_BONUS,
-            prepares_chain_duration=TECELAO_THREAD_BASE_DURATION,
+            **trama_fields,
         ),
         TECELAO_ART_IDS["chama_tecida"]: Action(
             TECELAO_ART_IDS["chama_tecida"], "Chama Tecida", Decimal("0.85"),
             cooldown=2, native_dot_kind="burn", native_dot_stacks=1,
-            prepares_chain=TECELAO_THREAD_KEY,
-            consumes_chain=TECELAO_THREAD_KEY,
-            chain_power_bonus=TECELAO_THREAD_BASE_POWER_BONUS,
-            prepares_chain_duration=TECELAO_THREAD_BASE_DURATION,
+            **trama_fields,
         ),
         TECELAO_ART_IDS["ruptura_da_trama"]: Action(
             TECELAO_ART_IDS["ruptura_da_trama"], "Ruptura da Trama", Decimal("0.80"),
-            cooldown=3, target_mode="all_opponents",
-            prepares_chain=TECELAO_THREAD_KEY,
-            consumes_chain=TECELAO_THREAD_KEY,
-            chain_power_bonus=TECELAO_THREAD_BASE_POWER_BONUS,
-            prepares_chain_duration=TECELAO_THREAD_BASE_DURATION,
+            cooldown=3, target_mode="all_opponents", **trama_fields,
         ),
         TECELAO_ART_IDS["veu_entrelacado"]: Action(
             TECELAO_ART_IDS["veu_entrelacado"], "Véu Entrelaçado", Decimal(0),
             cooldown=3, target_mode="self", self_barrier_coefficient=Decimal("0.90"),
-            self_barrier_duration=2, prepares_chain=TECELAO_THREAD_KEY,
-            consumes_chain=TECELAO_THREAD_KEY,
-            chain_power_bonus=TECELAO_THREAD_BASE_POWER_BONUS,
-            prepares_chain_duration=TECELAO_THREAD_BASE_DURATION,
+            self_barrier_duration=2, **trama_fields,
+        ),
+        TECELAO_ART_IDS["geada_tecida"]: Action(
+            TECELAO_ART_IDS["geada_tecida"],
+            "Geada Tecida",
+            Decimal("0.90"),
+            attack_debuff=Decimal("0.15"),
+            duration=2,
+            cooldown=3,
+            effect_stat="agility",
+            effect_id=TECELAO_ART_IDS["geada_tecida"],
+            **trama_fields,
         ),
     }
     return {
@@ -1236,7 +1248,10 @@ def class_player_actions(
     factory = factories.get(character_class)
     if factory is None:
         raise ValueError("Character Class does not have a Class Art catalog.")
-    actions = factory(class_art_ids)
+    if character_class == "tecelao":
+        actions = tecelao_player_actions(class_art_ids, legacy_trial_chain=False)
+    else:
+        actions = factory(class_art_ids)
     actions.update(path_player_actions(character_class, selected_path, path_art_ids))
     return actions
 

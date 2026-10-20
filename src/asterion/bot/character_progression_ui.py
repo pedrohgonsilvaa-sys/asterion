@@ -9,6 +9,7 @@ from asterion.application.talents import TalentView
 from asterion.bot.creation_ui import Screen
 from asterion.domain.arts import (
     ACTIVE_ART_IDS_BY_CLASS,
+    TECELAO_ART_IDS,
     active_art_definition,
     weapon_requirement_label,
 )
@@ -361,7 +362,11 @@ def _art_mechanics_lines(action) -> list[str]:
             f"{action.self_barrier_debuff_magnitude_reduction * 100:g}% "
             "a magnitude de Debuffs recebidos."
         )
-    if action.prepares_chain or action.consumes_chain:
+    if (
+        action.prepares_chain
+        or action.consumes_chain
+        or action.id in TECELAO_ART_IDS.values()
+    ):
         lines.append("✨ Trama Encadeada · prepara ou consome a janela")
 
     if action.target_mode == "self":
@@ -463,6 +468,8 @@ def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
                 + escape(weapon_requirement_label(definition)),
             ]
         )
+    elif art_id == TECELAO_ART_IDS["geada_tecida"]:
+        lines.extend(["", "🗡️ Requisito de arma · Nenhum"])
     if incompatible:
         lines.append("🔒 Requisito não atendido · equipe uma arma compatível.")
     if notice := _eligibility_notice(view, art_id):
