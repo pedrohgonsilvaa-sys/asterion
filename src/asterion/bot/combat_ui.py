@@ -689,7 +689,57 @@ def _fighter_for_event(state: Combat, identifier: str | None):
     )
 
 
-def event_line(state: Combat, event: CombatEvent) -> str:
+def _class_resource_update_line(
+    state: Combat,
+    event: CombatEvent,
+    viewer_key: str | None,
+) -> str:
+    if not event.class_resource_changes or viewer_key not in state.fighters:
+        return ""
+    actor_key = next(
+        (
+            key
+            for key, fighter in state.fighters.items()
+            if fighter.id == (event.actor_entity_id or event.actor)
+        ),
+        event.actor,
+    )
+    if (
+        actor_key not in state.fighters
+        or _fighter_side(state, actor_key) != _fighter_side(state, viewer_key)
+    ):
+        return ""
+    labels = {
+        "retaliation": "Retaliação",
+        "aim": "Mira",
+        "trama": "Trama",
+        "omen_offensive": "Presságio Ofensivo",
+        "omen_defensive": "Presságio Defensivo",
+        "luminar_state": "Fulgor/Julgamento",
+    }
+    updates: list[str] = []
+    for resource, target_id, consumed, remaining in event.class_resource_changes:
+        target = _fighter_for_event(state, target_id)
+        target_suffix = (
+            f" em <b>{escape(target.name)}</b>"
+            if target is not None and target.id != event.actor_entity_id
+            else ""
+        )
+        noun = "acúmulo(s)" if resource == "aim" else "instância(s)"
+        updates.append(
+            f"{labels.get(resource, 'Recurso')}:{target_suffix} "
+            f"<code>{consumed}</code> {noun} consumida(s) · "
+            f"restam <code>{remaining}</code>"
+        )
+    return "♻️ " + "; ".join(updates) + "."
+
+
+def event_line(
+    state: Combat,
+    event: CombatEvent,
+    *,
+    viewer_key: str | None = None,
+) -> str:
     actor = _fighter_for_event(
         state, event.actor_entity_id or event.actor
     )
@@ -734,11 +784,13 @@ def event_line(state: Combat, event: CombatEvent) -> str:
             if target.id != actor.id and action.target_barrier_duration
             else action.self_barrier_duration
         )
-        return (
+        line = (
             f"🛡️ <b>{actor_name}</b> ergue <b>{escape(action.name)}</b> "
             f"em <b>{target_name}</b>. Barreira · "
             f"<code>{number(event.barrier_value)}</code> · <code>{duration}T</code>."
         )
+        update = _class_resource_update_line(state, event, viewer_key)
+        return f"{line}{' ' + update if update else ''}"
     label = action.name.split(" ", 1)[-1] if event.actor == "player" else action.name
     emoji = (
         "⚔️"
@@ -796,6 +848,9 @@ def event_line(state: Combat, event: CombatEvent) -> str:
     removal = _action_effect_removal_line(state, event)
     if removal:
         line += f" {removal}"
+    update = _class_resource_update_line(state, event, viewer_key)
+    if update:
+        line += f" {update}"
     return line
 
 def _effect_label(state: Combat, effect_id: str, *, target_id: str) -> str:
@@ -1004,6 +1059,135 @@ def _class_mechanic_status_lines(
     return lines
 
 
+def _class_resource_label(resource: str, state_kind: str | None = None) -> str:
+    if resource == "luminar_state":
+        return "Fulgor" if state_kind == "fulgor" else "Julgamento"
+    return {
+        "retaliation": "Retaliação",
+        "aim": "Mira",
+        "trama": "Trama",
+        "omen_offensive": "Presságio Ofensivo",
+        "omen_defensive": "Presságio Defensivo",
+    }.get(resource, "Recurso de Classe")
+
+
+def _class_resource_count_for_ui(
+    state: Combat,
+    actor_key: str,
+    resource: str,
+    *,
+    target_id: str | None = None,
+    state_kind: str | None = None,
+) -> int:
+    actor = state.fighters[actor_key]
+    if resource == "retaliation":
+        return int(actor.retaliation_charges > 0 and actor.retaliation_remaining > 0)
+    if resource == "trama":
+        value = actor.path_state.get("trama_state")
+        return (
+            int(value.get("remaining", 0))
+            if isinstance(value, dict) and int(value.get("remaining", 0)) > 0
+            else 0
+        )
+    if resource == "luminar_state":
+        value = actor.path_state.get("luminar_state")
+        return int(
+            isinstance(value, dict)
+            and int(value.get("remaining", 0)) > 0
+            and value.get("kind") == state_kind
+        )
+    if target_id is None:
+        return 0
+    target = next(
+        (fighter for fighter in state.fighters.values() if fighter.id == target_id),
+        None,
+    )
+    if target is None:
+        return 0
+    if resource == "aim":
+        entries = target.path_state.get("aim_from", {})
+        value = entries.get(actor.id) if isinstance(entries, dict) else None
+        return int(value.get("stacks", 0)) if isinstance(value, dict) else 0
+    if resource in {"omen_offensive", "omen_defensive"}:
+        entries = actor.path_state.get(resource, {})
+        value = entries.get(target.id) if isinstance(entries, dict) else None
+        return int(value.get("remaining", 0)) if isinstance(value, dict) else 0
+    return 0
+
+
+def _action_resource_hints(
+    state: Combat,
+    actor_key: str,
+    action_id: str,
+    action,
+) -> list[str]:
+    actor = state.fighters.get(actor_key)
+    if actor is None:
+        return []
+    targets = action_target_ids(state, action_id, actor_key=actor_key)
+    hints: list[str] = []
+    for use in action.resource_uses:
+        label = _class_resource_label(use.resource, use.state_kind)
+        if use.target_selector == "actor":
+            available = _class_resource_count_for_ui(
+                state, actor_key, use.resource, state_kind=use.state_kind
+            )
+            verb = "Exige" if use.required else "Disponível"
+            hints.append(
+                f"{verb} {label}: <code>{available}/{max(use.minimum, use.consume)}</code>"
+            )
+            continue
+        candidates = targets if use.target_selector == "each_target" else targets[:4]
+        if not candidates:
+            hints.append(f"{label}: selecione um alvo elegível")
+            continue
+        values = []
+        for target_id in candidates:
+            available = _class_resource_count_for_ui(
+                state,
+                actor_key,
+                use.resource,
+                target_id=target_id,
+                state_kind=use.state_kind,
+            )
+            target = next(
+                (fighter for fighter in state.fighters.values() if fighter.id == target_id),
+                None,
+            )
+            if target is not None:
+                values.append(f"{escape(target.name)} {available}")
+        requirement = "Exige" if use.required else "Usa"
+        count = max(use.minimum, use.consume)
+        if use.target_selector == "primary_target":
+            hints.append(
+                f"{requirement} {label} <code>{count}</code> no alvo principal "
+                f"(disponível: {', '.join(values)})"
+            )
+        else:
+            hints.append(f"{label} por alvo (disponível: {', '.join(values)})")
+    for modifier in action.conditional_modifiers:
+        condition = modifier.condition
+        if condition.kind == "actor_hp_fraction_below":
+            description = (
+                f"HP próprio abaixo de {number(condition.threshold * 100)}%"
+            )
+        elif condition.kind == "target_hp_fraction_at_most":
+            description = (
+                f"alvo com HP até {number(condition.threshold * 100)}%"
+            )
+        elif condition.kind == "target_has_normal_negative_effect":
+            description = "alvo com Debuff comum no início da ação"
+        elif condition.kind == "class_resource_at_least":
+            description = (
+                f"{_class_resource_label(condition.resource or '', condition.state_kind)} "
+                f"≥ {condition.minimum}"
+            )
+        else:
+            description = "condição da ação"
+        hints.append(f"Bônus condicional · {description}")
+    return hints
+
+
 def _status_lines(
     state: Combat,
     fighter,
@@ -1108,7 +1292,9 @@ def render_combat(view: CombatView) -> Screen:
         return Screen("⚔️ Combate indisponível.", view.context)
     player_actions = player_actions_for(state, action_actor_key or player_key)
     icon = COPY[f"class:{player.character_class}"].split(" ", 1)[0]
-    recent = [state.opening_log] + [event_line(state, event) for event in state.events]
+    recent = [state.opening_log] + [
+        event_line(state, event, viewer_key=player_key) for event in state.events
+    ]
     if is_party_combat:
         lines = []
         if is_trial and view.trial_stage_caption:
@@ -1319,6 +1505,12 @@ def render_combat(view: CombatView) -> Screen:
                     )
         if not is_trial:
             lines.append(hint)
+            if action not in {"attack", "defend"}:
+                lines.extend(
+                    _action_resource_hints(
+                        state, player_key, action, player_actions[action]
+                    )
+                )
         if is_trial:
             action_ids = class_trial_action_ids(state, actor_key=action_actor_key)
             action_index = action_ids.index(action)

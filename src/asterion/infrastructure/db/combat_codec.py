@@ -6,8 +6,11 @@ from uuid import UUID
 
 from asterion.domain.combat import (
     Action,
+    ActionCondition,
+    ActionConditionalModifier,
     ActionEffect,
     ActionEffectRemoval,
+    ActionResourceUse,
     Combat,
     CombatDamageAura,
     CombatEvent,
@@ -51,6 +54,33 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                         ActionEffectRemoval(**effect_removal)
                         if isinstance(effect_removal, dict)
                         else effect_removal
+                    ),
+                    "resource_uses": tuple(
+                        ActionResourceUse(**use)
+                        for use in value.get("resource_uses", ())
+                    ),
+                    "conditional_modifiers": tuple(
+                        ActionConditionalModifier(
+                            **(
+                                modifier
+                                | {
+                                    "condition": ActionCondition(
+                                        **(
+                                            modifier["condition"]
+                                            | {
+                                                "threshold": Decimal(
+                                                    modifier["condition"].get(
+                                                        "threshold", "0"
+                                                    )
+                                                )
+                                            }
+                                        )
+                                    ),
+                                    "magnitude": Decimal(modifier["magnitude"]),
+                                }
+                            )
+                        )
+                        for modifier in value.get("conditional_modifiers", ())
                     ),
                     "coefficient": Decimal(value["coefficient"]),
                     "attack_debuff": Decimal(value["attack_debuff"]),
@@ -298,6 +328,10 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "actor_effect_ids": tuple(event.get("actor_effect_ids", ())),
                     "target_state_tags": tuple(event.get("target_state_tags", ())),
                     "path_triggers": tuple(event.get("path_triggers", ())),
+                    "class_resource_changes": tuple(
+                        (str(row[0]), str(row[1]), int(row[2]), int(row[3]))
+                        for row in event.get("class_resource_changes", ())
+                    ),
                     "target_effect_application_event_ids": tuple(
                         event.get("target_effect_application_event_ids", ())
                     ),

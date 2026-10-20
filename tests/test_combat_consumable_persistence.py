@@ -13,7 +13,14 @@ from asterion.application.round import RoundService
 from asterion.bot.combat_handlers import combat_router
 from asterion.bot.combat_ui import CombatConsumableFlowCallback, event_line
 from asterion.bot.road_ui import render_road
-from asterion.domain.combat import Action, DotState, Effect
+from asterion.domain.combat import (
+    Action,
+    ActionCondition,
+    ActionConditionalModifier,
+    ActionResourceUse,
+    DotState,
+    Effect,
+)
 from asterion.domain.combat_math import Stats
 from asterion.domain.prologue import PROFILE
 from asterion.infrastructure.db.combat_codec import decode, encode
@@ -190,6 +197,137 @@ async def test_last_unit_and_duplicate_retry_commit_once_across_reconnect(databa
     )
     assert stale_retry is not None and stale_retry.combat.version == latest.combat.version
     assert await _stack_quantity(database, actor, "consumable.heal") == 0
+
+
+@pytest.mark.asyncio
+async def test_declared_class_resource_snapshot_and_after_resolution_payment_survive_reconnect(
+    database, monkeypatch
+):
+    actor = 770399
+    service, view = await _combat(database, actor, {})
+
+    def install_synthetic_terminal(combat):
+        player = combat.fighters["player"]
+        target = combat.fighters["enemy"]
+        player.character_class = "vigia"
+        player.selected_path = "atirador"
+        target.path_state["aim_from"] = {
+            player.id: {
+                "stacks": 4,
+                "remaining": 2,
+                "applied_opportunity": player.opportunity,
+            }
+        }
+        combat.player_actions["synthetic_terminal"] = Action(
+            "class_art.test.synthetic_terminal",
+            "Finalização Sintética de Teste",
+            Decimal("0.20"),
+            cooldown=2,
+            hit_count=2,
+            resource_uses=(
+                ActionResourceUse(
+                    "aim",
+                    minimum=4,
+                    consume=4,
+                    consume_at="after_resolution",
+                    target_selector="primary_target",
+                    required=True,
+                ),
+            ),
+            conditional_modifiers=(
+                ActionConditionalModifier(
+                    "test.terminal.four_aim_crit",
+                    ActionCondition(
+                        "class_resource_at_least",
+                        resource="aim",
+                        minimum=4,
+                    ),
+                    "crit_bonus",
+                    Decimal(15),
+                    target_scope="primary_target",
+                ),
+            ),
+        )
+
+    await _save_combat(database, view, install_synthetic_terminal)
+    before = await service.resume(actor)
+    assert before is not None and before.kind == "combat"
+    action = before.combat.player_actions["synthetic_terminal"]
+    assert action.resource_uses[0].consume_at == "after_resolution"
+    assert action.conditional_modifiers[0].condition.minimum == 4
+
+    original_record_bestiary = service._record_bestiary_combat_events
+
+    async def fail_after_combat_snapshot(*args, **kwargs):
+        raise RuntimeError("injected before-commit failure")
+
+    monkeypatch.setattr(
+        service, "_record_bestiary_combat_events", fail_after_combat_snapshot
+    )
+    with pytest.raises(RuntimeError, match="injected before-commit failure"):
+        await service.action(
+            actor,
+            before.activity_id,
+            before.combat.version,
+            action="synthetic_terminal",
+            target_id="enemy",
+        )
+    rolled_back = await service.resume(actor)
+    assert rolled_back is not None and rolled_back.kind == "combat"
+    assert rolled_back.combat.version == before.combat.version
+    assert rolled_back.combat.fighters["enemy"].path_state["aim_from"][
+        rolled_back.combat.fighters["player"].id
+    ]["stacks"] == 4
+    assert not any(
+        event.action == "synthetic_terminal" for event in rolled_back.combat.events
+    )
+    monkeypatch.setattr(
+        service, "_record_bestiary_combat_events", original_record_bestiary
+    )
+
+    submissions = await asyncio.gather(
+        service.action(
+            actor,
+            before.activity_id,
+            before.combat.version,
+            action="synthetic_terminal",
+            target_id="enemy",
+        ),
+        service.action(
+            actor,
+            before.activity_id,
+            before.combat.version,
+            action="synthetic_terminal",
+            target_id="enemy",
+        ),
+    )
+    assert all(result is not None and result.kind == "combat" for result in submissions)
+    after = await service.resume(actor)
+    assert after is not None and after.kind == "combat"
+    assert "aim_from" not in after.combat.fighters["enemy"].path_state
+    assert after.combat.fighters["player"].cooldowns["synthetic_terminal"] > 0
+    action_events = [
+        event
+        for event in after.combat.events
+        if event.action == "synthetic_terminal"
+    ]
+    assert len(action_events) == 2
+    assert action_events[0].class_resource_changes == (("aim", "enemy", 4, 0),)
+    assert action_events[1].class_resource_changes == ()
+
+    stale = await service.action(
+        actor,
+        before.activity_id,
+        before.combat.version,
+        action="synthetic_terminal",
+        target_id="enemy",
+    )
+    assert stale is not None and stale.combat.version == after.combat.version
+    latest = await service.resume(actor)
+    assert latest is not None and latest.combat.version == after.combat.version
+    assert len(
+        [event for event in latest.combat.events if event.action == "synthetic_terminal"]
+    ) == 2
 
 
 @pytest.mark.asyncio

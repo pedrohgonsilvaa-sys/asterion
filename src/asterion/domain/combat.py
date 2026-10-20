@@ -114,6 +114,150 @@ class ActionEffectRemoval:
             raise ValueError("Action effect removal resolution order is invalid.")
 
 
+_CLASS_RESOURCE_IDS = frozenset(
+    {
+        "retaliation",
+        "aim",
+        "trama",
+        "omen_offensive",
+        "omen_defensive",
+        "luminar_state",
+    }
+)
+
+
+@dataclass(frozen=True)
+class ActionResourceUse:
+    """Declarative snapshot requirement and consumption for an internal class resource.
+
+    Class resources remain owned by their existing state machines. This metadata
+    only states when an action needs a resource and when its committed use is
+    paid; it does not turn the resource into a normal removable combat effect.
+    """
+
+    resource: str
+    minimum: int = 1
+    consume: int = 0
+    consume_at: str = "never"
+    target_selector: str = "actor"
+    consumption_scope: str = "per_action"
+    required: bool = False
+    state_kind: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.resource not in _CLASS_RESOURCE_IDS:
+            raise ValueError("Action resource use references an unknown class resource.")
+        if self.minimum < 1 or self.consume < 0:
+            raise ValueError("Action resource quantities must be valid positive counts.")
+        if self.consume > 0 and self.consume_at not in {"commit", "after_resolution"}:
+            raise ValueError("Consumed action resources need a valid consumption phase.")
+        if self.consume == 0 and self.consume_at != "never":
+            raise ValueError("Non-consuming action resources must use the never phase.")
+        if self.target_selector not in {"actor", "primary_target", "each_target"}:
+            raise ValueError("Action resource target selector is invalid.")
+        if self.consumption_scope not in {"per_action", "per_target"}:
+            raise ValueError("Action resource consumption scope is invalid.")
+        actor_resources = {"retaliation", "trama", "luminar_state"}
+        if self.resource in actor_resources and self.target_selector != "actor":
+            raise ValueError("This class resource belongs to the acting character.")
+        if self.resource in {"aim", "omen_offensive", "omen_defensive"} and (
+            self.target_selector == "actor"
+        ):
+            raise ValueError("This class resource is associated with a target.")
+        if self.resource != "luminar_state" and self.state_kind is not None:
+            raise ValueError("Only a Luminar state may declare its state kind.")
+        if self.state_kind not in {None, "fulgor", "julgamento"}:
+            raise ValueError("Luminar resource state kind is invalid.")
+        if self.resource == "luminar_state" and self.state_kind is None:
+            raise ValueError("Luminar resource use must identify Fulgor or Julgamento.")
+        if self.resource != "aim" and max(self.minimum, self.consume) > 1:
+            raise ValueError("This class resource has at most one consumable instance.")
+        if self.consume_at == "after_resolution" and self.resource != "aim":
+            raise ValueError("Only target-linked Mira may be consumed after resolution.")
+        if (
+            self.consume > 0
+            and self.target_selector == "each_target"
+            and self.consumption_scope != "per_target"
+        ):
+            raise ValueError(
+                "AoE resource consumption must declare per-target scope explicitly."
+            )
+
+
+@dataclass(frozen=True)
+class ActionCondition:
+    """A condition read from the immutable beginning-of-action snapshot."""
+
+    kind: str
+    threshold: Decimal = ZERO
+    resource: str | None = None
+    minimum: int = 1
+    state_kind: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind not in {
+            "actor_hp_fraction_below",
+            "target_hp_fraction_at_most",
+            "target_has_normal_negative_effect",
+            "class_resource_at_least",
+        }:
+            raise ValueError("Action condition kind is unsupported.")
+        if self.kind in {"actor_hp_fraction_below", "target_hp_fraction_at_most"}:
+            if not ZERO <= self.threshold <= D(1):
+                raise ValueError("Action HP condition threshold must be between zero and one.")
+        if self.kind == "class_resource_at_least":
+            if self.resource not in _CLASS_RESOURCE_IDS or self.minimum < 1:
+                raise ValueError("Action class-resource condition is invalid.")
+        elif self.resource is not None or self.state_kind is not None:
+            raise ValueError("Only a class-resource condition accepts resource metadata.")
+        if self.resource != "luminar_state" and self.state_kind is not None:
+            raise ValueError("Only a Luminar condition may specify its state kind.")
+        if self.state_kind not in {None, "fulgor", "julgamento"}:
+            raise ValueError("Luminar condition state kind is invalid.")
+        if self.resource == "luminar_state" and self.state_kind is None:
+            raise ValueError("Luminar condition must identify Fulgor or Julgamento.")
+        if self.resource is not None and self.resource != "aim" and self.minimum > 1:
+            raise ValueError("This class resource has at most one instance.")
+
+
+@dataclass(frozen=True)
+class ActionConditionalModifier:
+    """One typed modifier activated by a snapshot condition."""
+
+    id: str
+    condition: ActionCondition
+    component: str
+    magnitude: Decimal
+    operation: str = "add"
+    target_scope: str = "per_target"
+    evaluation_scope: str = "per_target"
+
+    def __post_init__(self) -> None:
+        if not self.id or not isinstance(self.condition, ActionCondition):
+            raise ValueError("Conditional action modifiers need an id and typed condition.")
+        if self.component not in {
+            "damage_power",
+            "healing_power",
+            "barrier_power",
+            "final_damage_bonus",
+            "precision_bonus",
+            "crit_bonus",
+        }:
+            raise ValueError("Conditional action modifier component is unsupported.")
+        if self.operation not in {"add", "multiply"}:
+            raise ValueError("Conditional action modifier operation is unsupported.")
+        if self.operation == "multiply" and self.component not in {
+            "damage_power",
+            "healing_power",
+            "barrier_power",
+        }:
+            raise ValueError("Multiplication is only valid for power components.")
+        if self.target_scope not in {"per_target", "primary_target"}:
+            raise ValueError("Conditional action modifier target scope is invalid.")
+        if self.evaluation_scope not in {"per_action", "per_target"}:
+            raise ValueError("Conditional action modifier evaluation scope is invalid.")
+
+
 @dataclass(frozen=True)
 class Action:
     id: str
@@ -188,6 +332,8 @@ class Action:
     ai_priority_after: tuple[str, ...] = ()
     barrier_bound_effect_ids: tuple[str, ...] = ()
     effect_removal: ActionEffectRemoval | None = None
+    resource_uses: tuple[ActionResourceUse, ...] = ()
+    conditional_modifiers: tuple[ActionConditionalModifier, ...] = ()
 
     def __post_init__(self) -> None:
         if self.hit_count < 1:
@@ -222,6 +368,13 @@ class Action:
                 and self.coefficient <= ZERO
             ):
                 raise ValueError("Direct-hit effect removal requires direct damage.")
+        if any(not isinstance(use, ActionResourceUse) for use in self.resource_uses):
+            raise ValueError("Action resources must use typed resource-use declarations.")
+        if any(
+            not isinstance(modifier, ActionConditionalModifier)
+            for modifier in self.conditional_modifiers
+        ):
+            raise ValueError("Conditional action effects must use typed declarations.")
         if (
             self.enemy_hp_fraction_below is not None
             and not ZERO <= self.enemy_hp_fraction_below <= D(1)
@@ -406,6 +559,7 @@ class CombatEvent:
     target_hp_after: Decimal | None = None
     fighter_hp_after: tuple[tuple[str, Decimal], ...] = ()
     path_triggers: tuple[str, ...] = ()
+    class_resource_changes: tuple[tuple[str, str, int, int], ...] = ()
     path_power_multiplier: Decimal = D(1)
     path_final_damage_bonus: Decimal = ZERO
     aim_stacks: int = 0
@@ -2185,6 +2339,17 @@ def _remove_aim_entry(target: Fighter, source_id: str) -> None:
         target.path_state.pop("aim_from", None)
 
 
+def _consume_aim_stacks(target: Fighter, source: Fighter, count: int) -> int:
+    entry = _aim_entry(target, source)
+    if entry is None or count <= 0:
+        return 0
+    consumed = min(int(entry.get("stacks", 0)), count)
+    entry["stacks"] = max(0, int(entry.get("stacks", 0)) - consumed)
+    if entry["stacks"] == 0:
+        _remove_aim_entry(target, source.id)
+    return consumed
+
+
 def _grant_aim(
     state: Combat,
     source_key: str,
@@ -2390,6 +2555,245 @@ def _action_has_support(action: Action) -> bool:
     return action.heal_coefficient > ZERO or _action_has_barrier(action)
 
 
+def _class_resource_count(
+    state: Combat,
+    actor_key: str,
+    target_key: str | None,
+    resource: str,
+    *,
+    state_kind: str | None = None,
+    action_id: str = "",
+    action: Action | None = None,
+) -> int:
+    """Read one class machine without converting it into a removable Effect."""
+    actor = state.fighters[actor_key]
+    if resource == "retaliation":
+        return int(actor.retaliation_charges > 0 and actor.retaliation_remaining > 0)
+    if resource == "trama":
+        entry = actor.path_state.get("trama_state")
+        eligible_art = bool(
+            action is not None
+            and _is_art_action(action_id, action)
+            and (action.coefficient > ZERO or _action_has_support(action))
+            and isinstance(entry, dict)
+            and entry.get("origin_art") != action.id
+        )
+        return int(
+            actor.character_class == "tecelao"
+            and eligible_art
+            and int(entry.get("remaining", 0)) > 0
+        )
+    if resource == "luminar_state":
+        entry = actor.path_state.get("luminar_state")
+        return int(
+            actor.character_class == "luminar"
+            and isinstance(entry, dict)
+            and int(entry.get("remaining", 0)) > 0
+            and (state_kind is None or entry.get("kind") == state_kind)
+        )
+    if target_key is None:
+        return 0
+    target = state.fighters[target_key]
+    if resource == "aim":
+        entry = _aim_entry(target, actor) if actor.character_class == "vigia" else None
+        return int(entry.get("stacks", 0)) if entry is not None else 0
+    if resource in {"omen_offensive", "omen_defensive"}:
+        eligible_action = bool(
+            action is not None
+            and _is_art_action(action_id, action)
+            and (
+                resource == "omen_offensive"
+                and action.coefficient > ZERO
+                and _fighter_side(state, actor_key) != _fighter_side(state, target_key)
+                or resource == "omen_defensive"
+                and _action_has_support(action)
+                and _fighter_side(state, actor_key) == _fighter_side(state, target_key)
+            )
+        )
+        if not eligible_action:
+            return 0
+        entries = actor.path_state.get(resource, {})
+        entry = entries.get(target.id) if isinstance(entries, dict) else None
+        return int(
+            actor.character_class == "oraculo"
+            and isinstance(entry, dict)
+            and int(entry.get("remaining", 0)) > 0
+        )
+    return 0
+
+
+def _resource_selector_targets(
+    state: Combat,
+    actor_key: str,
+    target_keys: tuple[str, ...],
+    primary_target_key: str | None,
+    selector: str,
+) -> tuple[str, ...]:
+    if selector == "actor":
+        return (actor_key,)
+    if selector == "primary_target":
+        return (primary_target_key,) if primary_target_key is not None else ()
+    return target_keys
+
+
+def _snapshot_action_resource_uses(
+    state: Combat,
+    actor_key: str,
+    action_id: str,
+    action: Action,
+    target_keys: tuple[str, ...],
+    requested_target_id: str | None,
+) -> tuple[dict, ...] | None:
+    if not action.resource_uses:
+        return ()
+    primary_target_key = _primary_target_key(
+        state, actor_key, action, target_keys, requested_target_id
+    )
+    plans: list[dict] = []
+    for index, use in enumerate(action.resource_uses):
+        selected_keys = _resource_selector_targets(
+            state,
+            actor_key,
+            target_keys,
+            primary_target_key,
+            use.target_selector,
+        )
+        if not selected_keys:
+            if use.required:
+                return None
+            continue
+        snapshots = tuple(
+            (
+                key,
+                state.fighters[key].id,
+                _class_resource_count(
+                    state,
+                    actor_key,
+                    key if key != actor_key else None,
+                    use.resource,
+                    state_kind=use.state_kind,
+                    action_id=action_id,
+                    action=action,
+                ),
+            )
+            for key in selected_keys
+        )
+        if use.resource == "retaliation" and use.consume and use.consume_at == "commit":
+            eligible_retaliation_action = bool(
+                action_id == "attack"
+                or _is_art_action(action_id, action) and action.coefficient > ZERO
+            ) and any(
+                _fighter_side(state, actor_key) != _fighter_side(state, target_key)
+                for target_key in target_keys
+            )
+            if not eligible_retaliation_action:
+                if use.required:
+                    return None
+                continue
+        threshold = max(use.minimum, use.consume)
+        eligible = tuple(row for row in snapshots if row[2] >= threshold)
+        if use.required and len(eligible) != len(snapshots):
+            return None
+        if use.consume and eligible:
+            if use.consumption_scope == "per_action":
+                eligible = eligible[:1]
+            plans.append(
+                {
+                    "index": index,
+                    "use": use,
+                    "targets": eligible,
+                    "action_id": action_id,
+                }
+            )
+    return tuple(plans)
+
+
+def _action_condition_matches(
+    state: Combat,
+    actor_key: str,
+    target_key: str | None,
+    condition: ActionCondition,
+    *,
+    action_id: str,
+    action: Action,
+) -> bool:
+    actor = state.fighters[actor_key]
+    if condition.kind == "actor_hp_fraction_below":
+        return actor.stats.hp > ZERO and actor.hp < actor.stats.hp * condition.threshold
+    if condition.kind == "target_hp_fraction_at_most":
+        if target_key is None:
+            return False
+        target = state.fighters[target_key]
+        return target.stats.hp > ZERO and target.hp <= target.stats.hp * condition.threshold
+    if condition.kind == "target_has_normal_negative_effect":
+        return target_key is not None and _has_valid_negative_effect(
+            state, state.fighters[target_key]
+        )
+    if condition.kind == "class_resource_at_least" and condition.resource is not None:
+        count = _class_resource_count(
+            state,
+            actor_key,
+            target_key,
+            condition.resource,
+            state_kind=condition.state_kind,
+            action_id=action_id,
+            action=action,
+        )
+        return count >= condition.minimum
+    return False
+
+
+def _apply_declared_conditional_modifiers(
+    state: Combat,
+    actor_key: str,
+    action_id: str,
+    action: Action,
+    target_keys: tuple[str, ...],
+    primary_target_key: str | None,
+    context: dict,
+) -> None:
+    condition_snapshot = context.get("condition_snapshot", {})
+    for modifier_index, modifier in enumerate(action.conditional_modifiers):
+        selected_keys = (
+            (primary_target_key,)
+            if modifier.target_scope == "primary_target"
+            and primary_target_key is not None
+            else target_keys
+            if modifier.target_scope == "per_target"
+            else ()
+        )
+        for target_key in selected_keys:
+            target = state.fighters[target_key]
+            entry = context["by_target"].get(target.id)
+            condition_target_key = (
+                primary_target_key
+                if modifier.evaluation_scope == "per_action"
+                else target_key
+            )
+            condition_target_id = (
+                state.fighters[condition_target_key].id
+                if condition_target_key is not None
+                else "__action__"
+            )
+            if entry is None or not condition_snapshot.get(
+                (modifier_index, condition_target_id), False
+            ):
+                continue
+            component = modifier.component
+            if component in {"damage_power", "healing_power", "barrier_power"}:
+                if modifier.operation == "multiply":
+                    entry[component] *= D(1) + modifier.magnitude
+                else:
+                    entry[component] += modifier.magnitude
+            elif component == "final_damage_bonus":
+                entry[component] += modifier.magnitude
+            elif component == "precision_bonus":
+                entry["per_bonus"] += modifier.magnitude
+            elif component == "crit_bonus":
+                entry[component] += modifier.magnitude
+            entry["triggers"].append(modifier.id)
+
+
 def _guard_integrity_can_reduce(target: Fighter, effect: ActionEffect | Effect) -> bool:
     token = target.path_state.get("guard_integrity_debuff")
     return bool(
@@ -2422,6 +2826,7 @@ def _prepare_path_action(
     action: Action,
     target_keys: tuple[str, ...],
     requested_target: str | None = None,
+    resource_uses: tuple[dict, ...] = (),
 ) -> dict:
     actor = state.fighters[actor_id]
     is_art = _is_art_action(action_id, action)
@@ -2431,6 +2836,38 @@ def _prepare_path_action(
         state, actor_id, action, target_keys, requested_target
     )
     primary_target = state.fighters.get(primary_key) if primary_key else None
+    condition_snapshot: dict[tuple[int, str], bool] = {}
+    for modifier_index, modifier in enumerate(action.conditional_modifiers):
+        condition_targets = (
+            (primary_key,)
+            if modifier.evaluation_scope == "per_action"
+            else target_keys
+        )
+        if not condition_targets and modifier.evaluation_scope == "per_action":
+            condition_snapshot[(modifier_index, "__action__")] = (
+                _action_condition_matches(
+                    state,
+                    actor_id,
+                    None,
+                    modifier.condition,
+                    action_id=action_id,
+                    action=action,
+                )
+            )
+        for condition_target_key in condition_targets:
+            if condition_target_key is None:
+                continue
+            condition_target = state.fighters[condition_target_key]
+            condition_snapshot[(modifier_index, condition_target.id)] = (
+                _action_condition_matches(
+                    state,
+                    actor_id,
+                    condition_target_key,
+                    modifier.condition,
+                    action_id=action_id,
+                    action=action,
+                )
+            )
     context = {
         "by_target": {},
         "target_ids": {state.fighters[key].id for key in target_keys},
@@ -2442,14 +2879,13 @@ def _prepare_path_action(
         "omen_consumptions": [],
         "generated_triggers": [],
         "oportunism_triggered": False,
-        "aim_terminal_target_id": None,
+        "resource_uses": resource_uses,
+        "condition_snapshot": condition_snapshot,
+        "resource_changes": [],
+        "automatic_resource_changes": [],
+        "target_keys": target_keys,
         "action_instance_id": "",
     }
-    terminal = _is_named_art(action_id, action, "disparo_terminal")
-    if terminal and primary_target is not None:
-        aim = _aim_entry(primary_target, actor) if actor.character_class == "vigia" else None
-        if aim is not None and int(aim.get("stacks", 0)) >= 4:
-            context["aim_terminal_target_id"] = primary_target.id
 
     for target_key in target_keys:
         target = state.fighters[target_key]
@@ -2486,9 +2922,6 @@ def _prepare_path_action(
             if stacks >= 3 and _has_talent(actor, "ponto_fraco"):
                 entry["crit_bonus"] += D(2)
                 entry["triggers"].append("vigia.ponto_fraco")
-            if direct and terminal and context["aim_terminal_target_id"] == target.id:
-                entry["crit_bonus"] += D(15)
-                entry["triggers"].append("atirador.disparo_terminal")
         if direct:
             for key, slug in (("trama_next_per", "tecelao"), ("aim_next_per", "vigia")):
                 next_bonus = actor.path_state.get(key)
@@ -2677,6 +3110,15 @@ def _prepare_path_action(
             "applied_opportunity": actor.opportunity,
             "expires_opportunity": actor.opportunity + 2,
         }
+    _apply_declared_conditional_modifiers(
+        state,
+        actor_id,
+        action_id,
+        action,
+        target_keys,
+        primary_key,
+        context,
+    )
     return context
 
 
@@ -2690,6 +3132,35 @@ def _commit_path_action(
     if context.get("class_resources_committed"):
         return
     actor = state.fighters[actor_id]
+    for plan in context.get("resource_uses", ()):
+        use = plan["use"]
+        if use.consume_at != "commit":
+            continue
+        if use.resource == "trama" and not context.get("trama_consumed"):
+            trama = actor.path_state.get("trama_state")
+            if isinstance(trama, dict) and int(trama.get("remaining", 0)) > 0:
+                context["trama_consumed"] = True
+                context["trama_consumed_origin"] = str(trama.get("origin_art", ""))
+        elif use.resource == "luminar_state" and not context.get("luminar_consumed"):
+            luminar = actor.path_state.get("luminar_state")
+            if (
+                isinstance(luminar, dict)
+                and int(luminar.get("remaining", 0)) > 0
+                and (use.state_kind is None or luminar.get("kind") == use.state_kind)
+            ):
+                context["luminar_consumed"] = True
+                context["luminar_consumed_kind"] = str(luminar.get("kind", ""))
+        elif use.resource in {"omen_offensive", "omen_defensive"}:
+            kind = "offensive" if use.resource == "omen_offensive" else "defensive"
+            for _key, target_id, _available in plan["targets"]:
+                consumption = (kind, target_id)
+                if consumption not in context["omen_consumptions"]:
+                    context["omen_consumptions"].append(consumption)
+        elif use.resource == "aim":
+            for target_key, _target_id, _available in plan["targets"]:
+                _consume_aim_stacks(
+                    state.fighters[target_key], actor, use.consume
+                )
     aim_primary_target = (
         context.get("primary_target_id") if action.coefficient > ZERO else None
     )
@@ -2699,7 +3170,11 @@ def _commit_path_action(
     if context.get("guard_prepared_consumed"):
         actor.path_state.pop("guard_prepared_barrier", None)
     if context.get("trama_consumed"):
-        actor.path_state.pop("trama_state", None)
+        trama = actor.path_state.pop("trama_state", None)
+        if isinstance(trama, dict):
+            context["automatic_resource_changes"].append(
+                ("trama", actor.id, 1, 0)
+            )
         if _has_talent(actor, "alternancia_fluida"):
             _apply_class_mechanic_buff(
                 actor,
@@ -2708,7 +3183,11 @@ def _commit_path_action(
                 magnitude=D("0.05"),
             )
     if context.get("luminar_consumed"):
-        actor.path_state.pop("luminar_state", None)
+        luminar = actor.path_state.pop("luminar_state", None)
+        if isinstance(luminar, dict):
+            context["automatic_resource_changes"].append(
+                ("luminar_state", actor.id, 1, 0)
+            )
         if _has_talent(actor, "alternancia_radiante"):
             _apply_class_mechanic_buff(
                 actor,
@@ -2722,6 +3201,9 @@ def _commit_path_action(
         omen = actor.path_state.get(key, {}).get(target_id)
         if isinstance(omen, dict) and int(omen.get("remaining", 0)) > 0:
             actor.path_state[key].pop(target_id, None)
+            context["automatic_resource_changes"].append(
+                (key, target_id, 1, 0)
+            )
             if not actor.path_state[key]:
                 actor.path_state.pop(key, None)
             consumed_omen = True
@@ -2770,6 +3252,48 @@ def _finalize_path_action(
     context: dict,
 ) -> str | None:
     actor = state.fighters[actor_id]
+    if context.get("path_action_finalized"):
+        return None
+    context["path_action_finalized"] = True
+    resource_changes: list[tuple[str, str, int, int]] = []
+    for plan in context.get("resource_uses", ()):
+        use = plan["use"]
+        for target_key, target_id, _available in plan["targets"]:
+            if use.consume_at == "after_resolution":
+                _consume_aim_stacks(state.fighters[target_key], actor, use.consume)
+            remaining = _class_resource_count(
+                state,
+                actor_id,
+                target_key if target_key != actor_id else None,
+                use.resource,
+                state_kind=use.state_kind,
+                action_id=action_id,
+                action=action,
+            )
+            resource_changes.append((use.resource, target_id, use.consume, remaining))
+    seen_resource_targets = {(row[0], row[1]) for row in resource_changes}
+    for row in context.get("automatic_resource_changes", ()):
+        if (row[0], row[1]) not in seen_resource_targets:
+            resource_changes.append(row)
+            seen_resource_targets.add((row[0], row[1]))
+    if resource_changes:
+        context["resource_changes"] = resource_changes
+        actor_entity_id = context.get("actor_entity_id", actor.id)
+        action_instance_id = context.get("action_instance_id", "")
+        indices = [
+            index
+            for index, event in enumerate(state.events)
+            if event.actor_entity_id == actor_entity_id
+            and event.action_instance_id == action_instance_id
+            and event.action == action_id
+        ]
+        if indices:
+            first = indices[0]
+            event = state.events[first]
+            state.events[first] = replace(
+                event,
+                class_resource_changes=tuple(resource_changes),
+            )
     if state.result:
         return None
     generated: list[tuple[str, str | None]] = []
@@ -2899,23 +3423,6 @@ def _finalize_path_action(
                 )
                 generated.append(("luminar.fluxo_restaurador", target.id))
 
-    terminal_target_id = context.get("aim_terminal_target_id")
-    if terminal_target_id:
-        target = next(
-            (fighter for fighter in state.fighters.values() if fighter.id == terminal_target_id),
-            None,
-        )
-        if target is not None:
-            aim_from = target.path_state.get("aim_from", {})
-            entry = aim_from.get(actor.id) if isinstance(aim_from, dict) else None
-            if isinstance(entry, dict):
-                entry["stacks"] = max(0, int(entry.get("stacks", 0)) - 4)
-                if entry["stacks"] == 0:
-                    aim_from.pop(actor.id, None)
-                if not aim_from:
-                    target.path_state.pop("aim_from", None)
-        generated.append(("atirador.disparo_terminal_miras_consumidas", terminal_target_id))
-
     context["actor_entity_id"] = actor.id
     for trigger, target_id in generated:
         _record_class_path_trigger(state, context, trigger, target_id)
@@ -3038,19 +3545,20 @@ def _perform(
     target_keys = _resolve_action_targets(state, actor_id, action, target_id)
     if not target_keys:
         return False
-    if actor.character_class == "vigia" and _is_named_art(
-        action_id, action, "disparo_terminal"
-    ):
-        primary_key = _primary_target_key(
-            state, actor_id, action, target_keys, target_id
-        )
-        primary = state.fighters.get(primary_key) if primary_key else None
-        aim = _aim_entry(primary, actor) if primary is not None else None
-        if aim is None or int(aim.get("stacks", 0)) < 4:
-            return False
     if _path_resolution is None:
-        _path_resolution = _prepare_path_action(
+        resource_uses = _snapshot_action_resource_uses(
             state, actor_id, action_id, action, target_keys, target_id
+        )
+        if resource_uses is None:
+            return False
+        _path_resolution = _prepare_path_action(
+            state,
+            actor_id,
+            action_id,
+            action,
+            target_keys,
+            target_id,
+            resource_uses,
         )
 
     if action.hit_count > 1 and _hit_index is None:
@@ -3464,6 +3972,15 @@ def _perform(
     retaliation_used = bool(retaliation_context.get("used"))
     retaliation_source_type = str(retaliation_context.get("source_type", ""))
     retaliation_source_actor_id = str(retaliation_context.get("source_actor_id", ""))
+    if retaliation_used:
+        _path_resolution["automatic_resource_changes"].append(
+            (
+                "retaliation",
+                actor.id,
+                1,
+                int(actor.retaliation_charges),
+            )
+        )
     retaliation_valid = retaliation_used and retaliation_source_type == "defender"
 
     current_ruleset = state.ruleset == CURRENT_COMBAT_RULESET

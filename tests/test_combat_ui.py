@@ -20,7 +20,16 @@ from asterion.bot.combat_ui import (
 )
 from asterion.bot.creation_handlers import creation_router
 from asterion.domain.arts import DEVASTADOR_ART_IDS
-from asterion.domain.combat import Action, CombatEvent, Effect, act, combat_consumable_options
+from asterion.domain.combat import (
+    Action,
+    ActionCondition,
+    ActionConditionalModifier,
+    ActionResourceUse,
+    CombatEvent,
+    Effect,
+    act,
+    combat_consumable_options,
+)
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.prologue import PROFILE
 from asterion.domain.road import CREATURES, create_road_combat
@@ -152,6 +161,72 @@ def test_class_resource_indicators_are_compact_and_separate(
             "🔰 Barreira · <code>100</code> · <code>2T</code>\n\n"
             "🛡️ Retaliação · <code>2T</code>"
         ) in text
+
+
+def test_conditional_resource_requirements_and_consumption_are_visible_to_owner_only():
+    view = _class_mechanic_combat_view("vigia", "atirador")
+    state = view.combat
+    actor = state.fighters["player"]
+    target = state.fighters["enemy"]
+    target.path_state["aim_from"] = {
+        actor.id: {"stacks": 4, "remaining": 2, "applied_opportunity": 0}
+    }
+    state.player_actions["terminal_test"] = Action(
+        "class_art.vigia.terminal_test",
+        "Finalização",
+        Decimal("1.0"),
+        resource_uses=(
+            ActionResourceUse(
+                "aim",
+                minimum=4,
+                consume=4,
+                consume_at="after_resolution",
+                target_selector="primary_target",
+                required=True,
+            ),
+        ),
+        conditional_modifiers=(
+            ActionConditionalModifier(
+                "vigia.test.crit_if_aim",
+                ActionCondition("class_resource_at_least", resource="aim", minimum=4),
+                "crit_bonus",
+                Decimal(15),
+                target_scope="primary_target",
+            ),
+        ),
+    )
+    state.events.append(
+        CombatEvent(
+            sequence=1,
+            round=1,
+            actor="player",
+            action="terminal_test",
+            target=target.id,
+            actor_entity_id=actor.id,
+            class_resource_changes=(("aim", target.id, 4, 0),),
+        )
+    )
+
+    text = render_combat(view).text
+    assert "Exige Mira <code>4</code> no alvo principal" in text
+    assert "disponível: Cão Cinéreo 4" in text
+    assert "Mira: em <b>Cão Cinéreo</b> <code>4</code> acúmulo(s) consumida(s)" in text
+    assert "restam <code>0</code>" in text
+
+    hidden = event_line(
+        state,
+        CombatEvent(
+            sequence=2,
+            round=1,
+            actor="enemy",
+            action="secret_resource",
+            target=actor.id,
+            actor_entity_id=target.id,
+            class_resource_changes=(("aim", actor.id, 4, 0),),
+        ),
+        viewer_key="player",
+    )
+    assert "Mira" not in hidden
 
 
 def test_target_markers_appear_on_the_relevant_target_card():
