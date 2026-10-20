@@ -36,6 +36,7 @@ SENTINEL_ART_IDS = {
     "quebra_postura": "class_art.sentinela.quebra_postura",
     "muralha_breve": "class_art.sentinela.muralha_breve",
     "impacto_resoluto": "class_art.sentinela.impacto_resoluto",
+    "firmeza": "class_art.sentinela.firmeza",
 }
 
 SENTINEL_ART_LEVELS = {
@@ -43,6 +44,7 @@ SENTINEL_ART_LEVELS = {
     SENTINEL_ART_IDS["quebra_postura"]: 4,
     SENTINEL_ART_IDS["muralha_breve"]: 7,
     SENTINEL_ART_IDS["impacto_resoluto"]: 9,
+    SENTINEL_ART_IDS["firmeza"]: 18,
 }
 
 ERRANTE_ART_IDS = {

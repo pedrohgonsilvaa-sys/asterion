@@ -367,6 +367,17 @@ def sentinel_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Actio
             SENTINEL_ART_IDS["impacto_resoluto"], "Impacto Resoluto", Decimal("1.35"),
             cooldown=3,
         ),
+        SENTINEL_ART_IDS["firmeza"]: Action(
+            SENTINEL_ART_IDS["firmeza"], "Firmeza", Decimal(0),
+            cooldown=3,
+            self_effect_stat="defense",
+            self_effect_magnitude=Decimal("0.12"),
+            self_effect_duration=2,
+            self_effect_id="sentinel.firmeza",
+            self_effect_kind="buff",
+            self_effect_modifier_mode="multiplicative",
+            target_mode="self",
+        ),
     }
     return {
         "attack": Action("attack", "Ataque Básico", Decimal(1)),

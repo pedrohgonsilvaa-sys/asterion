@@ -315,6 +315,18 @@ def _art_mechanics_lines(action) -> list[str]:
         )
     if action.native_dot_kind:
         lines.append(f"☣️ Aplica · {action.native_dot_kind.title()}")
+    if action.self_effect_id and action.self_effect_stat:
+        stat = {
+            "attack": "ATQ",
+            "defense": "DEF",
+            "agility": "AGI",
+            "healing_received": "Cura recebida",
+        }.get(action.self_effect_stat, action.self_effect_stat.upper())
+        sign = "−" if action.self_effect_kind == "debuff" else "+"
+        lines.append(
+            f"✨ Em si · {sign}{_percent(action.self_effect_magnitude)}% {stat} "
+            f"· {action.self_effect_duration}T"
+        )
     lines.extend(_effect_lines(action.self_effects))
     lines.extend(_effect_lines(action.target_effects))
     if action.next_direct_crit_bonus:

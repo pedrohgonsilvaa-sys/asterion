@@ -776,11 +776,18 @@ def event_line(state: Combat, event: CombatEvent) -> str:
             action.self_effect_stat or "attack",
             action.self_effect_stat or "ATQ",
         )
-        line += (
-            f" <b>{actor_name}</b> reduz a própria {stat_label} em "
-            f"<code>{number(action.self_effect_magnitude * 100)}%</code> por "
-            f"<code>{action.self_effect_duration}T</code>."
-        )
+        magnitude = number(action.self_effect_magnitude * 100)
+        duration = f"<code>{action.self_effect_duration}T</code>"
+        if action.self_effect_kind == "buff":
+            line = (
+                f"✨ <b>{actor_name}</b> usa <b>{escape(action.name)}</b> e eleva a própria "
+                f"{stat_label} em <code>{magnitude}%</code> por {duration}."
+            )
+        else:
+            line += (
+                f" <b>{actor_name}</b> reduz a própria {stat_label} em "
+                f"<code>{magnitude}%</code> por {duration}."
+            )
     if event.barrier_absorbed:
         line += f" Barreira absorve <code>{number(event.barrier_absorbed)}</code>."
     return line
@@ -1184,6 +1191,28 @@ def render_combat(view: CombatView) -> Screen:
         if player.ward_charges > 0 and player.ward_remaining > 0:
             status_lines.append(
                 f"🛡️ Resguardo · <code>{player.ward_remaining}T</code> · <code>1 Carga</code>"
+            )
+        for effect in player.effects:
+            if effect.kind != "buff" or effect.remaining <= 0:
+                continue
+            stat = {
+                "attack": "ATQ",
+                "defense": "DEF",
+                "agility": "AGI",
+                "perception": "PER",
+                "precision": "PRE",
+            }.get(effect.stat, effect.stat.upper())
+            amount = (
+                f"{number(effect.magnitude)} p.p."
+                if effect.stat_modifier_mode == "percentage_points"
+                else f"{number(effect.magnitude * 100)}%"
+            )
+            effect_name = (
+                "Firmeza" if effect.id == "sentinel.firmeza" else escape(effect.id)
+            )
+            status_lines.append(
+                f"✨ {effect_name} · {stat} +<code>{amount}</code> · "
+                f"<code>{effect.remaining}T</code>"
             )
         player_class_lines = _class_mechanic_status_lines(state, player_key, player_key)
         if player_class_lines:
