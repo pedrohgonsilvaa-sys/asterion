@@ -1,7 +1,7 @@
 """Reusable deterministic duel engine. Inputs and outputs are pure domain snapshots."""
 
 from copy import deepcopy
-from dataclasses import dataclass, field, replace
+from dataclasses import InitVar, dataclass, field, replace
 from decimal import ROUND_FLOOR, Decimal, localcontext
 from typing import Any
 from uuid import UUID
@@ -394,6 +394,38 @@ class Action:
 
 
 @dataclass
+class BarrierLayer:
+    """One independently expiring barrier source in FIFO absorption order."""
+
+    applier_id: str | None
+    effect_definition_id: str | None
+    value: Decimal
+    remaining: int
+    applied_opportunity: int
+    debuff_magnitude_reduction: Decimal = ZERO
+    source_label: str = ""
+    bound_effect_ids: tuple[str, ...] = ()
+    legacy: bool = False
+
+    def __post_init__(self) -> None:
+        self.value = max(ZERO, D(self.value))
+        self.debuff_magnitude_reduction = max(
+            ZERO, D(self.debuff_magnitude_reduction)
+        )
+        self.remaining = int(self.remaining)
+        self.applied_opportunity = int(self.applied_opportunity)
+        self.bound_effect_ids = tuple(self.bound_effect_ids)
+        if not self.legacy and (not self.applier_id or not self.effect_definition_id):
+            raise ValueError("A barrier source requires an applier and effect definition.")
+
+    @property
+    def identity(self) -> tuple[str | None, str | None] | None:
+        if self.legacy:
+            return None
+        return self.applier_id, self.effect_definition_id
+
+
+@dataclass
 class Fighter:
     id: str
     name: str
@@ -407,10 +439,12 @@ class Fighter:
     last_action: str | None = None
     cooldowns: dict[str, int] = field(default_factory=dict)
     effects: list[Effect] = field(default_factory=list)
-    barrier: Decimal = D(0)
-    barrier_remaining: int = 0
-    barrier_applied_opportunity: int = 0
-    barrier_source: str = ""
+    # InitVars preserve construction from callers and scalar snapshots. Runtime
+    # access is provided by aggregate compatibility properties installed below.
+    barrier: InitVar[Decimal] = D(0)
+    barrier_remaining: InitVar[int] = 0
+    barrier_applied_opportunity: InitVar[int] = 0
+    barrier_source: InitVar[str] = ""
     ward_remaining: int = 0
     ward_charges: int = 0
     ward_applied_opportunity: int = 0
@@ -436,11 +470,101 @@ class Fighter:
     training_state_tags: tuple[str, ...] = ()
     tagged_direct_damage_reductions: dict[str, Decimal] = field(default_factory=dict)
     action_chains: dict[str, dict[str, str]] = field(default_factory=dict)
-    barrier_debuff_magnitude_reduction: Decimal = ZERO
+    barrier_debuff_magnitude_reduction: InitVar[Decimal] = ZERO
     selected_path: str | None = None
     talent_ids: tuple[str, ...] = ()
     path_state: dict[str, Any] = field(default_factory=dict)
     action_use_counts: dict[str, int] = field(default_factory=dict)
+    barrier_layers: list[BarrierLayer] = field(default_factory=list)
+    barrier_cap_fraction: Decimal | None = None
+
+    def __post_init__(
+        self,
+        barrier: Decimal,
+        barrier_remaining: int,
+        barrier_applied_opportunity: int,
+        barrier_source: str,
+        barrier_debuff_magnitude_reduction: Decimal,
+    ) -> None:
+        # Old snapshots had one scalar barrier. Preserve it as an explicitly
+        # anonymous legacy layer instead of inventing canonical source IDs.
+        if not self.barrier_layers and D(barrier) > ZERO and barrier_remaining != 0:
+            self.barrier_layers.append(
+                BarrierLayer(
+                    applier_id=None,
+                    effect_definition_id=None,
+                    value=D(barrier),
+                    remaining=int(barrier_remaining),
+                    applied_opportunity=int(barrier_applied_opportunity),
+                    debuff_magnitude_reduction=D(barrier_debuff_magnitude_reduction),
+                    source_label=barrier_source,
+                    legacy=True,
+                )
+            )
+        self._enforce_barrier_cap()
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        object.__setattr__(self, name, value)
+        if name in {"stats", "barrier_cap_fraction"}:
+            data = object.__getattribute__(self, "__dict__")
+            if data.get("barrier_layers") and data.get("barrier_cap_fraction") is not None:
+                self._enforce_barrier_cap()
+
+    def _active_barrier_layers(self) -> tuple[BarrierLayer, ...]:
+        return tuple(
+            layer
+            for layer in self.barrier_layers
+            if layer.value > ZERO and layer.remaining != 0
+        )
+
+    def _remove_barrier_linked_effects(self, removed: tuple[BarrierLayer, ...]) -> None:
+        linked = {effect_id for layer in removed for effect_id in layer.bound_effect_ids}
+        retained = {
+            effect_id
+            for layer in self._active_barrier_layers()
+            for effect_id in layer.bound_effect_ids
+        }
+        expired = linked - retained
+        if expired:
+            self.effects = [effect for effect in self.effects if effect.id not in expired]
+
+    def _enforce_barrier_cap(self) -> None:
+        data = object.__getattribute__(self, "__dict__")
+        cap_fraction = data.get("barrier_cap_fraction")
+        stats = data.get("stats")
+        layers = data.get("barrier_layers")
+        if cap_fraction is None or stats is None or layers is None:
+            return
+        fraction = max(ZERO, D(cap_fraction))
+        cap = (stats.hp * fraction).to_integral_value(rounding=ROUND_FLOOR)
+        total = sum((layer.value for layer in self._active_barrier_layers()), ZERO)
+        excess = max(ZERO, total - cap)
+        if excess <= ZERO:
+            return
+        removed: list[BarrierLayer] = []
+        # On an HP-cap reduction, trim newest layers first. Existing layers
+        # retain their FIFO protection priority and their own durations.
+        for index in range(len(layers) - 1, -1, -1):
+            layer = layers[index]
+            if layer.remaining == 0 or layer.value <= ZERO:
+                continue
+            cut = min(excess, layer.value)
+            remainder = layer.value - cut
+            excess -= cut
+            if remainder <= ZERO:
+                removed.append(layer)
+                layers.pop(index)
+            else:
+                layers[index] = replace(layer, value=remainder)
+            if excess <= ZERO:
+                break
+        if removed:
+            self._remove_barrier_linked_effects(tuple(removed))
+
+    @property
+    def barriers(self) -> tuple[BarrierLayer, ...]:
+        """Compatibility view for consumers that only ask whether a shield exists."""
+        return self._active_barrier_layers()
 
     def stat(self, name: str) -> Decimal:
         value = getattr(self.stats, name)
@@ -463,6 +587,129 @@ class Fighter:
         return value
 
 
+def _fighter_barrier(fighter: Fighter) -> Decimal:
+    return sum((layer.value for layer in fighter._active_barrier_layers()), ZERO)
+
+
+def _legacy_layer_index(fighter: Fighter) -> int | None:
+    return next(
+        (index for index, layer in enumerate(fighter.barrier_layers) if layer.legacy),
+        None,
+    )
+
+
+def _set_legacy_barrier_component(fighter: Fighter, **changes: Any) -> None:
+    active_indexes = [
+        current
+        for current, layer in enumerate(fighter.barrier_layers)
+        if layer.value > ZERO and layer.remaining != 0
+    ]
+    # Scalar callers address the compatibility view, which represents the
+    # most recently applied active source.
+    index = active_indexes[-1] if active_indexes else _legacy_layer_index(fighter)
+    if index is None:
+        meaningful = any(
+            value not in (0, ZERO, "", None)
+            for value in changes.values()
+        )
+        if not meaningful:
+            return
+        layer = BarrierLayer(
+            applier_id=None,
+            effect_definition_id=None,
+            value=ZERO,
+            remaining=0,
+            applied_opportunity=0,
+            legacy=True,
+        )
+        fighter.barrier_layers.append(replace(layer, **changes))
+        return
+    updated = replace(fighter.barrier_layers[index], **changes)
+    if updated.value <= ZERO or updated.remaining == 0:
+        removed = (fighter.barrier_layers.pop(index),)
+        fighter._remove_barrier_linked_effects(removed)
+        return
+    fighter.barrier_layers[index] = updated
+
+
+def _set_fighter_barrier(fighter: Fighter, amount: Decimal | int) -> None:
+    value = max(ZERO, D(amount))
+    removed = tuple(fighter.barrier_layers)
+    fighter.barrier_layers.clear()
+    if value > ZERO:
+        fighter.barrier_layers.append(
+            BarrierLayer(
+                applier_id=None,
+                effect_definition_id=None,
+                value=value,
+                remaining=0,
+                applied_opportunity=fighter.opportunity,
+                legacy=True,
+            )
+        )
+    fighter._remove_barrier_linked_effects(removed)
+    fighter._enforce_barrier_cap()
+
+
+def _set_fighter_barrier_remaining(fighter: Fighter, remaining: int) -> None:
+    _set_legacy_barrier_component(fighter, remaining=int(remaining))
+
+
+def _set_fighter_barrier_applied_opportunity(fighter: Fighter, opportunity: int) -> None:
+    _set_legacy_barrier_component(fighter, applied_opportunity=int(opportunity))
+
+
+def _set_fighter_barrier_source(fighter: Fighter, source: str) -> None:
+    _set_legacy_barrier_component(fighter, source_label=str(source))
+
+
+def _set_fighter_barrier_debuff_reduction(fighter: Fighter, reduction: Decimal) -> None:
+    _set_legacy_barrier_component(
+        fighter, debuff_magnitude_reduction=max(ZERO, D(reduction))
+    )
+
+
+def _fighter_barrier_remaining(fighter: Fighter) -> int:
+    layers = fighter._active_barrier_layers()
+    if any(layer.remaining < 0 for layer in layers):
+        return -1
+    return max((layer.remaining for layer in layers), default=0)
+
+
+def _fighter_barrier_applied_opportunity(fighter: Fighter) -> int:
+    layers = fighter._active_barrier_layers()
+    return layers[-1].applied_opportunity if layers else 0
+
+
+def _fighter_barrier_source(fighter: Fighter) -> str:
+    layers = fighter._active_barrier_layers()
+    return layers[-1].source_label if layers else ""
+
+
+def _fighter_barrier_debuff_reduction(fighter: Fighter) -> Decimal:
+    # There is no stacking rule for distinct barrier-derived reductions;
+    # retain the former scalar semantics by using the strongest active source.
+    return max(
+        (layer.debuff_magnitude_reduction for layer in fighter._active_barrier_layers()),
+        default=ZERO,
+    )
+
+
+# InitVars keep the old Fighter(...) constructor while these descriptors expose
+# aggregate compatibility views; barrier_layers is the only authoritative state.
+Fighter.barrier = property(_fighter_barrier, _set_fighter_barrier)
+Fighter.barrier_remaining = property(
+    _fighter_barrier_remaining, _set_fighter_barrier_remaining
+)
+Fighter.barrier_applied_opportunity = property(
+    _fighter_barrier_applied_opportunity, _set_fighter_barrier_applied_opportunity
+)
+Fighter.barrier_source = property(_fighter_barrier_source, _set_fighter_barrier_source)
+Fighter.barrier_debuff_magnitude_reduction = property(
+    _fighter_barrier_debuff_reduction, _set_fighter_barrier_debuff_reduction
+)
+
+
 @dataclass(frozen=True)
 class Tutorial:
     responses: dict[str, str]
@@ -483,6 +730,9 @@ class CombatEvent:
     effect_id: str = ""
     barrier_absorbed: Decimal = D(0)
     barrier_value: Decimal = D(0)
+    barrier_total_after: Decimal = D(0)
+    barrier_duration: int = 0
+    barrier_absorbed_sources: tuple[str, ...] = ()
     effect_removal_kind: str | None = None
     effect_removal_component: str | None = None
     effect_removal_result: str | None = None
@@ -685,6 +935,11 @@ class Combat:
     phase_triggered_ids: set[str] = field(default_factory=set)
     phase_id: str = "default"
     manual_sides: tuple[str, ...] = ()
+    pvp_mode: bool = False
+
+    def __post_init__(self) -> None:
+        for fighter in self.fighters.values():
+            fighter.barrier_cap_fraction = D("0.35") if self.pvp_mode else None
 
     @property
     def tutorial_stage(self) -> str:
@@ -796,14 +1051,36 @@ def _resolve_phase_triggers(state: Combat) -> None:
             active_resolution_fighters
             and trigger.barrier_source_per_active_fighter_fraction > ZERO
         ):
-            source.barrier += (
+            barrier_value = (
                 source.stats.hp
                 * trigger.barrier_source_per_active_fighter_fraction
                 * len(active_resolution_fighters)
             ).to_integral_value(rounding=ROUND_FLOOR)
-            source.barrier_remaining = -1
-            source.barrier_applied_opportunity = source.opportunity
-            source.barrier_source = f"{source.id}:{trigger.trigger_id}"
+            barrier_value = _apply_barrier(
+                source,
+                applier_id=source.id,
+                effect_definition_id=trigger.trigger_id,
+                value=barrier_value,
+                duration=-1,
+                applied_opportunity=source.opportunity,
+                round_number=state.round,
+            )
+            if barrier_value > ZERO:
+                state.mechanic_events.append(
+                    CombatEvent(
+                        len(state.mechanic_events),
+                        state.round,
+                        trigger.source_fighter_key,
+                        f"phase:{trigger.trigger_id}:barrier",
+                        target=source.id,
+                        barrier_value=barrier_value,
+                        barrier_total_after=source.barrier,
+                        barrier_duration=-1,
+                        barrier_applied_source=f"{source.id}:{trigger.trigger_id}",
+                        actor_entity_id=source.id,
+                        internal=True,
+                    )
+                )
         for fighter in active_resolution_fighters:
             fighter.hp = ZERO
             fighter.encounter_hidden = True
@@ -862,6 +1139,89 @@ def _barrier_received_multiplier(state: Combat, target_key: str) -> Decimal:
         )
         multiplier += aura.barrier_received_per_source * active_sources
     return multiplier
+
+
+def _apply_barrier(
+    target: Fighter,
+    *,
+    applier_id: str,
+    effect_definition_id: str,
+    value: Decimal | int,
+    duration: int,
+    applied_opportunity: int,
+    round_number: int = 1,
+    debuff_magnitude_reduction: Decimal = ZERO,
+    bound_effect_ids: tuple[str, ...] = (),
+    source_label: str | None = None,
+) -> Decimal:
+    """Apply or replace one source-keyed barrier and return the granted amount."""
+    requested = max(ZERO, D(value))
+    duration = int(duration)
+    if target.hp <= ZERO or requested <= ZERO or duration == 0:
+        return ZERO
+
+    if target.barrier_cap_fraction is not None and round_number >= 20:
+        exhaustion = max(D("0.35"), D(1) - D("0.10") * (round_number - 19))
+        requested = (requested * exhaustion).to_integral_value(rounding=ROUND_FLOOR)
+        if requested <= ZERO:
+            return ZERO
+
+    identity = (applier_id, effect_definition_id)
+    existing_index = next(
+        (
+            index
+            for index, layer in enumerate(target.barrier_layers)
+            if not layer.legacy and layer.identity == identity
+        ),
+        None,
+    )
+    existing = (
+        target.barrier_layers[existing_index]
+        if existing_index is not None
+        else None
+    )
+    other_total = sum(
+        (
+            layer.value
+            for index, layer in enumerate(target._active_barrier_layers())
+            if layer is not existing
+        ),
+        ZERO,
+    )
+    granted = requested
+    if target.barrier_cap_fraction is not None:
+        cap = (target.stats.hp * target.barrier_cap_fraction).to_integral_value(
+            rounding=ROUND_FLOOR
+        )
+        granted = min(granted, max(ZERO, cap - other_total))
+
+    if granted <= ZERO:
+        removed = ()
+        if existing_index is not None:
+            removed = (target.barrier_layers.pop(existing_index),)
+            target._remove_barrier_linked_effects(removed)
+        return ZERO
+
+    layer = BarrierLayer(
+        applier_id=applier_id,
+        effect_definition_id=effect_definition_id,
+        value=granted,
+        remaining=duration,
+        applied_opportunity=applied_opportunity,
+        debuff_magnitude_reduction=debuff_magnitude_reduction,
+        source_label=source_label or f"{applier_id}:{effect_definition_id}",
+        bound_effect_ids=bound_effect_ids,
+    )
+    if existing_index is None:
+        target.barrier_layers.append(layer)
+    else:
+        # Same-source refresh replaces its amount and duration in place; this
+        # preserves deterministic FIFO priority without renewing other sources.
+        previous = target.barrier_layers[existing_index]
+        target.barrier_layers[existing_index] = layer
+        target._remove_barrier_linked_effects((previous,))
+    target._enforce_barrier_cap()
+    return layer.value
 
 
 def _fighter_required_for_victory(state: Combat, key: str) -> bool:
@@ -1717,36 +2077,92 @@ def combat_consumable_options(
     return tuple(options)
 
 
-def _deal_damage(target: Fighter, amount: Decimal | int) -> tuple[Decimal, Decimal]:
+def _deal_damage(
+    target: Fighter,
+    amount: Decimal | int,
+    *,
+    absorbed_sources: list[str] | None = None,
+) -> tuple[Decimal, Decimal]:
     incoming = max(D(0), D(amount))
     absorbed = D(0)
-    if target.barrier_remaining != 0 and target.barrier > 0:
-        absorbed = min(target.barrier, incoming)
-        target.barrier -= absorbed
-        if target.barrier <= 0:
-            target.barrier = D(0)
-            target.barrier_remaining = 0
-            target.barrier_source = ""
-            target.barrier_debuff_magnitude_reduction = ZERO
-    else:
-        target.barrier = D(0)
-        target.barrier_remaining = 0
-        target.barrier_source = ""
-        target.barrier_debuff_magnitude_reduction = ZERO
-    hp_damage = min(max(D(0), target.hp), incoming - absorbed)
+    remaining = incoming
+    layers: list[BarrierLayer] = []
+    depleted: list[BarrierLayer] = []
+    # FIFO by source application order is deterministic; refreshes replace in
+    # place. No canonical source-order rule exists, so this is a stable engine
+    # policy that preserves the legacy single-layer behavior.
+    for layer in target.barrier_layers:
+        if layer.value <= ZERO or layer.remaining == 0:
+            depleted.append(layer)
+            continue
+        if remaining <= ZERO:
+            layers.append(layer)
+            continue
+        consumed = min(layer.value, remaining)
+        if consumed > ZERO and absorbed_sources is not None and layer.source_label:
+            if layer.source_label not in absorbed_sources:
+                absorbed_sources.append(layer.source_label)
+        remaining -= consumed
+        absorbed += consumed
+        layer_remaining = layer.value - consumed
+        if layer_remaining > ZERO:
+            layers.append(replace(layer, value=layer_remaining))
+        else:
+            depleted.append(layer)
+    target.barrier_layers[:] = layers
+    target._remove_barrier_linked_effects(tuple(depleted))
+    hp_damage = min(max(D(0), target.hp), remaining)
     target.hp = max(D(0), target.hp - hp_damage)
     return hp_damage, absorbed
 
 
-def _remove_barrier_bound_effects(state: Combat, fighter: Fighter, source: str) -> None:
-    if not source:
-        return
-    action_id = source.rsplit(":", 1)[-1]
-    action = state.enemy_actions.get(action_id) or state.player_actions.get(action_id)
-    if action is None or not action.barrier_bound_effect_ids:
-        return
-    linked = set(action.barrier_bound_effect_ids)
-    fighter.effects = [effect for effect in fighter.effects if effect.id not in linked]
+def _remove_barrier_bound_effects(
+    state: Combat,
+    fighter: Fighter,
+    source: BarrierLayer | str,
+) -> None:
+    if isinstance(source, BarrierLayer):
+        linked = set(source.bound_effect_ids)
+        action_id = source.effect_definition_id
+        if action_id is None and source.source_label:
+            action_id = source.source_label.rsplit(":", 1)[-1]
+    else:
+        if not source:
+            return
+        linked = set()
+        action_id = source.rsplit(":", 1)[-1]
+    action = state.enemy_actions.get(action_id or "") or state.player_actions.get(
+        action_id or ""
+    )
+    if action is not None:
+        linked.update(action.barrier_bound_effect_ids)
+    retained = {
+        effect_id
+        for layer in fighter._active_barrier_layers()
+        for effect_id in layer.bound_effect_ids
+    }
+    linked -= retained
+    if linked:
+        fighter.effects = [effect for effect in fighter.effects if effect.id not in linked]
+
+
+def _advance_barrier_sources(fighter: Fighter) -> tuple[BarrierLayer, ...]:
+    active: list[BarrierLayer] = []
+    expired: list[BarrierLayer] = []
+    for layer in fighter.barrier_layers:
+        if layer.value <= ZERO or layer.remaining == 0:
+            expired.append(layer)
+        elif layer.remaining > 0 and fighter.opportunity > layer.applied_opportunity:
+            remaining = layer.remaining - 1
+            if remaining == 0:
+                expired.append(layer)
+            else:
+                active.append(replace(layer, remaining=remaining))
+        else:
+            active.append(layer)
+    fighter.barrier_layers[:] = active
+    fighter._remove_barrier_linked_effects(tuple(expired))
+    return tuple(expired)
 
 
 def _deal_combat_damage(
@@ -1755,13 +2171,27 @@ def _deal_combat_damage(
     amount: Decimal | int,
     *,
     source_key: str | None = None,
+    absorbed_sources: list[str] | None = None,
 ) -> tuple[Decimal, Decimal]:
     target = state.fighters[target_key]
     hp_before = target.hp
-    barrier_source_before = target.barrier_source
-    actual_damage, barrier_absorbed = _deal_damage(target, amount)
-    if barrier_source_before and not target.barrier_source:
-        _remove_barrier_bound_effects(state, target, barrier_source_before)
+    layers_before = tuple(target.barrier_layers)
+    actual_damage, barrier_absorbed = _deal_damage(
+        target, amount, absorbed_sources=absorbed_sources
+    )
+    remaining_identities = {
+        (layer.legacy, layer.applier_id, layer.effect_definition_id, layer.source_label)
+        for layer in target.barrier_layers
+    }
+    for layer in layers_before:
+        identity = (
+            layer.legacy,
+            layer.applier_id,
+            layer.effect_definition_id,
+            layer.source_label,
+        )
+        if identity not in remaining_identities:
+            _remove_barrier_bound_effects(state, target, layer)
     threshold = target.stats.hp * D("0.50")
     if hp_before > threshold and target.hp <= threshold:
         _grant_vigilia_retaliation(state, target_key, source_key)
@@ -1942,33 +2372,43 @@ def _grant_retaliation(
     if source_type == "defender" and target.selected_path == "bastiao":
         source = "path.bastiao.fortaleza"
         if not (
-            target.barrier > ZERO
-            and target.barrier_remaining != 0
-            and target.barrier_source == source
+            any(
+                not layer.legacy
+                and layer.identity == (target.id, source)
+                for layer in target._active_barrier_layers()
+            )
         ):
             value = (target.stats.hp * D("0.04") * D("1.10")).to_integral_value(
                 rounding=ROUND_FLOOR
             )
             if value > ZERO:
-                target.barrier = value
-                target.barrier_remaining = 1
-                target.barrier_applied_opportunity = target.opportunity
-                target.barrier_source = source
-                target.barrier_debuff_magnitude_reduction = ZERO
-                state.mechanic_events.append(
-                    CombatEvent(
-                        len(state.mechanic_events),
-                        state.round,
-                        target_key,
-                        "path.bastiao.fortaleza",
-                        target.id,
-                        actor_entity_id=target.id,
-                        barrier_value=value,
-                        barrier_applied_source=source,
-                        path_triggers=("bastiao.fortaleza",),
-                        internal=True,
-                    )
+                value = _apply_barrier(
+                    target,
+                    applier_id=target.id,
+                    effect_definition_id=source,
+                    value=value,
+                    duration=1,
+                    applied_opportunity=target.opportunity,
+                    round_number=state.round,
+                    source_label=source,
                 )
+                if value > ZERO:
+                    state.mechanic_events.append(
+                        CombatEvent(
+                            len(state.mechanic_events),
+                            state.round,
+                            target_key,
+                            "path.bastiao.fortaleza",
+                            target.id,
+                            actor_entity_id=target.id,
+                            barrier_value=value,
+                            barrier_total_after=target.barrier,
+                            barrier_duration=1,
+                            barrier_applied_source=f"{target.id}:{source}",
+                            path_triggers=("bastiao.fortaleza",),
+                            internal=True,
+                        )
+                    )
 
 
 def _grant_defender_retaliation(
@@ -2156,8 +2596,13 @@ def _end_turn(state: Combat) -> None:
                     rounding=ROUND_FLOOR
                 )
             )
+        barrier_absorbed_sources: list[str] = []
         actual_damage, barrier_absorbed = _deal_combat_damage(
-            state, actor_key, damage, source_key=source_key
+            state,
+            actor_key,
+            damage,
+            source_key=source_key,
+            absorbed_sources=barrier_absorbed_sources,
         )
         if actual_damage > ZERO:
             _resolve_phase_triggers(state)
@@ -2174,6 +2619,8 @@ def _end_turn(state: Combat) -> None:
                 calculated_damage=int(damage),
                 effective_damage=int(actual_damage),
                 barrier_absorbed=barrier_absorbed,
+                barrier_total_after=actor.barrier,
+                barrier_absorbed_sources=tuple(barrier_absorbed_sources),
                 internal=True,
                 dot_kind=dot.kind,
                 dot_application_event_id=dot.application_event,
@@ -2196,14 +2643,22 @@ def _end_turn(state: Combat) -> None:
         actor.next_direct_crit_bonus = ZERO
         actor.next_direct_crit_expires_opportunity = None
         actor.next_direct_crit_effect_id = ""
-    barrier_source_before = actor.barrier_source
-    if actor.opportunity > actor.barrier_applied_opportunity and actor.barrier_remaining > 0:
-        actor.barrier_remaining -= 1
-        if actor.barrier_remaining == 0:
-            actor.barrier = D(0)
-            actor.barrier_source = ""
-            actor.barrier_debuff_magnitude_reduction = ZERO
-            _remove_barrier_bound_effects(state, actor, barrier_source_before)
+    expired_barriers = _advance_barrier_sources(actor)
+    for layer in expired_barriers:
+        _remove_barrier_bound_effects(state, actor, layer)
+        state.mechanic_events.append(
+            CombatEvent(
+                len(state.mechanic_events),
+                state.round,
+                layer.applier_id or layer.source_label,
+                "barrier.expired",
+                actor.id,
+                barrier_value=layer.value,
+                barrier_total_after=actor.barrier,
+                barrier_applied_source=layer.source_label,
+                internal=True,
+            )
+        )
     if actor.opportunity > actor.ward_applied_opportunity and actor.ward_remaining > 0:
         actor.ward_remaining -= 1
         if actor.ward_remaining == 0:
@@ -3859,17 +4314,22 @@ def _perform(
             value = (actor.stat("attack") * barrier_coefficient).to_integral_value(
                 rounding=ROUND_FLOOR
             )
-        actor.barrier = max(ZERO, value)
-        actor.barrier_remaining = (
-            action.self_barrier_duration
-            if action.self_barrier_duration < 0
-            else max(0, action.self_barrier_duration)
+        value = _apply_barrier(
+            actor,
+            applier_id=actor.id,
+            effect_definition_id=action.id,
+            value=max(ZERO, value),
+            duration=(
+                action.self_barrier_duration
+                if action.self_barrier_duration < 0
+                else max(0, action.self_barrier_duration)
+            ),
+            applied_opportunity=actor.opportunity,
+            round_number=state.round,
+            debuff_magnitude_reduction=action.self_barrier_debuff_magnitude_reduction,
+            bound_effect_ids=action.barrier_bound_effect_ids,
         )
-        actor.barrier_applied_opportunity = actor.opportunity
-        actor.barrier_source = f"{actor_id}:{action.id}"
-        actor.barrier_debuff_magnitude_reduction = (
-            action.self_barrier_debuff_magnitude_reduction
-        )
+        barrier_source = f"{actor.id}:{action.id}" if value > ZERO else ""
         actor.last_action = action_id
         if _hit_index is None:
             actor.action_use_counts[action_id] = actor.action_use_counts.get(action_id, 0) + 1
@@ -3882,12 +4342,18 @@ def _perform(
                 actor_id,
                 action_id,
                 actor.id,
-                barrier_value=actor.barrier,
+                barrier_value=value,
+                barrier_total_after=actor.barrier,
+                barrier_duration=(
+                    action.self_barrier_duration
+                    if value > ZERO
+                    else 0
+                ),
                 actor_entity_id=actor.id,
                 response_to_prepared_action_instance_id=(
                     response_to_prepared_action_instance_id
                 ),
-                barrier_applied_source=actor.barrier_source,
+                barrier_applied_source=barrier_source,
                 action_instance_id=action_instance_id,
                 chain_state_before=chain_state_before,
                 chain_state_after=chain_state_after,
@@ -4038,6 +4504,8 @@ def _perform(
             if target.barrier > ZERO and target.barrier_remaining != 0
             else ""
         )
+        applied_barrier_source = ""
+        applied_barrier_duration = 0
 
         dodged = False
         if current_ruleset and direct_eligible:
@@ -4313,8 +4781,13 @@ def _perform(
             else 0
         )
 
+        barrier_absorbed_sources: list[str] = []
         actual_damage, barrier_absorbed = _deal_combat_damage(
-            state, target_key, damage, source_key=actor_id
+            state,
+            target_key,
+            damage,
+            source_key=actor_id,
+            absorbed_sources=barrier_absorbed_sources,
         )
         if actual_damage > 0:
             _resolve_phase_triggers(state)
@@ -4627,13 +5100,22 @@ def _perform(
             ).to_integral_value(rounding=ROUND_FLOOR)
             target_barrier = max(ZERO, target_barrier)
             if target_barrier > ZERO:
-                target.barrier = target_barrier
-                target.barrier_remaining = max(0, action.target_barrier_duration)
-                target.barrier_applied_opportunity = target.opportunity
-                target.barrier_source = f"{actor.id}:{action.id}"
-                target.barrier_debuff_magnitude_reduction = (
+                target_barrier = _apply_barrier(
+                    target,
+                    applier_id=actor.id,
+                    effect_definition_id=action.id,
+                    value=target_barrier,
+                    duration=max(0, action.target_barrier_duration),
+                    applied_opportunity=target.opportunity,
+                    round_number=state.round,
+                    debuff_magnitude_reduction=(
                     action.target_barrier_debuff_magnitude_reduction
+                    ),
+                    bound_effect_ids=action.barrier_bound_effect_ids,
                 )
+                if target_barrier > ZERO:
+                    applied_barrier_source = f"{actor.id}:{action.id}"
+                    applied_barrier_duration = max(0, action.target_barrier_duration)
 
         if actor.character_class == "oraculo" and _is_art_action(action_id, action):
             applied_target_effects = [
@@ -4677,6 +5159,9 @@ def _perform(
                 applied_effect.id if applied_effect is not None else "",
                 barrier_absorbed=barrier_absorbed,
                 barrier_value=target_barrier,
+                barrier_total_after=target.barrier,
+                barrier_duration=applied_barrier_duration,
+                barrier_absorbed_sources=tuple(barrier_absorbed_sources),
                 blocked=blocked,
                 actor_entity_id=actor.id,
                 calculated_damage=damage,
@@ -4685,6 +5170,7 @@ def _perform(
                 defender_mitigation_applied=defender_prevented_damage > 0,
                 defender_prevented_damage=defender_prevented_damage,
                 target_barrier_source=target_barrier_source,
+                barrier_applied_source=applied_barrier_source,
                 prepared_resolution=prepared_resolution,
                 target_effect_ids=target_effect_ids,
                 target_effect_application_event_ids=target_effect_application_event_ids,
@@ -4747,9 +5233,6 @@ def _perform(
                 path_per_bonus=D(target_path.get("per_bonus", ZERO)),
                 path_crit_bonus=D(target_path.get("crit_bonus", ZERO)),
                 trigger_scope=action.effect_trigger_scope,
-                barrier_applied_source=(
-                    f"{actor.id}:{action.id}" if target_barrier > ZERO else ""
-                ),
                 applied_effect_stat=applied_effect.stat if applied_effect else "",
                 applied_effect_magnitude=(
                     applied_effect.magnitude if applied_effect else ZERO
@@ -5292,6 +5775,8 @@ def _finish_consumable_turn(
     effect_removal_kind: str | None = None,
     barrier_value: Decimal = ZERO,
     barrier_absorbed: Decimal = ZERO,
+    barrier_source: str = "",
+    barrier_duration: int = 0,
     actor_key: str = "player",
 ) -> Combat:
     healed = D(0) if healed is None else healed
@@ -5311,6 +5796,9 @@ def _finish_consumable_turn(
             effect_removal_kind=effect_removal_kind,
             barrier_absorbed=barrier_absorbed,
             barrier_value=barrier_value,
+            barrier_total_after=player.barrier,
+            barrier_duration=barrier_duration,
+            barrier_applied_source=barrier_source,
         )
     )
     state.consumable_uses += 1
@@ -5600,6 +6088,8 @@ def use_combat_consumable(
     effect_name = ""
     effect_removal_kind = None
     barrier_value = D(0)
+    barrier_source = ""
+    barrier_duration = 0
 
     if item.family == ConsumableFamily.HEALING:
         healed = effective_heal_amount(updated, actor_key)
@@ -5626,11 +6116,19 @@ def use_combat_consumable(
         )
         if barrier_value <= 0:
             return state
-        player.barrier = barrier_value
-        player.barrier_remaining = 2
-        player.barrier_applied_opportunity = player.opportunity
-        player.barrier_source = "player:consumable.protecao"
-        player.barrier_debuff_magnitude_reduction = ZERO
+        barrier_value = _apply_barrier(
+            player,
+            applier_id=player.id,
+            effect_definition_id="consumable.protecao",
+            value=barrier_value,
+            duration=2,
+            applied_opportunity=player.opportunity,
+            round_number=state.round,
+        )
+        if barrier_value <= ZERO:
+            return state
+        barrier_source = f"{player.id}:consumable.protecao"
+        barrier_duration = 2
     elif item.family == ConsumableFamily.DISPELLER:
         assert effect_id is not None
         removed = _remove_selected_effect_component(
@@ -5654,6 +6152,8 @@ def use_combat_consumable(
         effect_id=effect_name,
         effect_removal_kind=effect_removal_kind,
         barrier_value=barrier_value,
+        barrier_source=barrier_source,
+        barrier_duration=barrier_duration,
         actor_key=actor_key,
     )
 

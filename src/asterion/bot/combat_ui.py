@@ -1253,11 +1253,7 @@ def _status_lines(
     lines: list[str] = []
     if fighter.barrier > 0 and fighter.barrier_remaining != 0:
         icon = "🔰" if player else "🛡️"
-        duration = (
-            f"<code>{fighter.barrier_remaining}T</code>"
-            if fighter.barrier_remaining > 0
-            else "<code>até absorvida</code>"
-        )
+        duration = _barrier_duration_summary(fighter)
         lines.append(
             f"{icon} Barreira de {name} · <code>{number(fighter.barrier)}</code> · "
             f"{duration}"
@@ -1297,6 +1293,14 @@ def _status_lines(
             lines.append("")
         lines.extend(class_lines)
     return lines
+
+
+def _barrier_duration_summary(fighter) -> str:
+    durations = [
+        "até absorvida" if layer.remaining < 0 else f"{layer.remaining}T"
+        for layer in fighter.barriers
+    ]
+    return f"<code>{' + '.join(durations)}</code>"
 
 
 def _trial_fighter_card(
@@ -1452,21 +1456,13 @@ def render_combat(view: CombatView) -> Screen:
         lines.extend(["", "📜 Registro de Combate · Recentes", "", "\n".join(recent[-4:]), ""])
         status_lines: list[str] = []
         if enemy.barrier > 0 and enemy.barrier_remaining != 0:
-            duration = (
-                f"<code>{enemy.barrier_remaining}T</code>"
-                if enemy.barrier_remaining > 0
-                else "<code>até absorvida</code>"
-            )
+            duration = _barrier_duration_summary(enemy)
             status_lines.append(
                 f"🛡️ Barreira de {escape(enemy.name)} · "
                 f"<code>{number(enemy.barrier)}</code> · {duration}"
             )
         if player.barrier > 0 and player.barrier_remaining != 0:
-            duration = (
-                f"<code>{player.barrier_remaining}T</code>"
-                if player.barrier_remaining > 0
-                else "<code>até absorvida</code>"
-            )
+            duration = _barrier_duration_summary(player)
             status_lines.append(
                 f"🔰 Barreira · <code>{number(player.barrier)}</code> · "
                 f"{duration}"

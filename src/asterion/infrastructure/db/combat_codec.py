@@ -11,6 +11,7 @@ from asterion.domain.combat import (
     ActionEffect,
     ActionEffectRemoval,
     ActionResourceUse,
+    BarrierLayer,
     Combat,
     CombatDamageAura,
     CombatEvent,
@@ -38,6 +39,20 @@ def encode(state: Combat) -> dict:
     value = asdict(state)
     for key in ("id", "ruleset", "version"):
         del value[key]
+    for fighter_key, fighter in state.fighters.items():
+        # These scalar keys keep compatibility with older readers. When
+        # barrier_layers is present, decode treats that source list as authoritative.
+        value["fighters"][fighter_key].update(
+            {
+                "barrier": str(fighter.barrier),
+                "barrier_remaining": fighter.barrier_remaining,
+                "barrier_applied_opportunity": fighter.barrier_applied_opportunity,
+                "barrier_source": fighter.barrier_source,
+                "barrier_debuff_magnitude_reduction": str(
+                    fighter.barrier_debuff_magnitude_reduction
+                ),
+            }
+        )
     return _json_value(value)
 
 
@@ -206,8 +221,39 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 | {
                     "hp": Decimal(value["hp"]),
                     "barrier": Decimal(value.get("barrier", "0")),
+                    "barrier_remaining": int(value.get("barrier_remaining", 0)),
+                    "barrier_applied_opportunity": int(
+                        value.get("barrier_applied_opportunity", 0)
+                    ),
+                    "barrier_source": value.get("barrier_source", ""),
                     "barrier_debuff_magnitude_reduction": Decimal(
                         value.get("barrier_debuff_magnitude_reduction", "0")
+                    ),
+                    "barrier_layers": [
+                        BarrierLayer(
+                            **(
+                                layer
+                                | {
+                                    "value": Decimal(layer["value"]),
+                                    "remaining": int(layer["remaining"]),
+                                    "applied_opportunity": int(
+                                        layer.get("applied_opportunity", 0)
+                                    ),
+                                    "debuff_magnitude_reduction": Decimal(
+                                        layer.get("debuff_magnitude_reduction", "0")
+                                    ),
+                                    "bound_effect_ids": tuple(
+                                        layer.get("bound_effect_ids", ())
+                                    ),
+                                }
+                            )
+                        )
+                        for layer in value.get("barrier_layers", ())
+                    ],
+                    "barrier_cap_fraction": (
+                        Decimal(value["barrier_cap_fraction"])
+                        if value.get("barrier_cap_fraction") is not None
+                        else None
                     ),
                     "protection_reduction_per_layer": Decimal(
                         value.get("protection_reduction_per_layer", "0")
@@ -257,6 +303,13 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                     "healed": Decimal(event["healed"]),
                     "barrier_absorbed": Decimal(event.get("barrier_absorbed", "0")),
                     "barrier_value": Decimal(event.get("barrier_value", "0")),
+                    "barrier_total_after": Decimal(
+                        event.get("barrier_total_after", "0")
+                    ),
+                    "barrier_duration": int(event.get("barrier_duration", 0)),
+                    "barrier_absorbed_sources": tuple(
+                        event.get("barrier_absorbed_sources", ())
+                    ),
                     "power_multiplier": Decimal(event.get("power_multiplier", "1")),
                     "damage_power_multiplier": Decimal(
                         event.get("damage_power_multiplier", "1")
@@ -467,6 +520,7 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                 "phase_triggered_ids": set(payload.get("phase_triggered_ids", ())),
                 "phase_id": payload.get("phase_id", "default"),
                 "party_mode": bool(payload.get("party_mode", False)),
+                "pvp_mode": bool(payload.get("pvp_mode", False)),
                 "manual_sides": tuple(payload.get("manual_sides", ())),
                 "order": tuple(payload["order"]),
                 "tutorial": tutorial,

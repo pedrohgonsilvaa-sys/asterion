@@ -4101,6 +4101,7 @@ def create_player_versus_player_combat(
             player_actions_by_fighter=actions_by_fighter,
             player_configuration_snapshots=configuration_snapshots,
             party_mode=True,
+            pvp_mode=True,
             manual_sides=("player", "enemy"),
             external_consumables_allowed=False,
         )
