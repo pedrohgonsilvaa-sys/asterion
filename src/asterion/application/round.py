@@ -1157,6 +1157,12 @@ class RoundService(RoadService):
                     stack.quantity -= 1
                     consumable_uses += 1
                 combat = updated
+            elif kind == "action_self":
+                combat = act(
+                    combat,
+                    str(target),
+                    target_id=combat.fighters["player"].id,
+                )
             elif kind == "purify_dot":
                 stack = await self._consumable_stack(s, c.id, PURIFY_CONSUMABLE, lock=True)
                 if stack is None or stack.quantity <= 0:
@@ -1336,16 +1342,24 @@ class RoundService(RoadService):
             lethal = self._lethal_purification_candidate(combat)
             if lethal is not None:
                 return lethal
-        # Recovery Arts are intentionally absent until an equipped implemented Art
-        # actually exposes recovery semantics in the combat engine.
+
+        recovery_art = self._recovery_art_choice(combat, actions)
         if hp_ratio <= CRITICAL_THRESHOLD and heal_available:
+            if recovery_art is not None:
+                return ("action_self", recovery_art)
             return ("heal", None)
+        if hp_ratio <= CRITICAL_THRESHOLD and recovery_art is not None:
+            return ("action_self", recovery_art)
         if purify_available:
             critical = self._purification_candidate(combat, "critical")
             if critical is not None:
                 return critical
         if hp_ratio <= RECOVERY_THRESHOLD and heal_available:
+            if recovery_art is not None:
+                return ("action_self", recovery_art)
             return ("heal", None)
+        if hp_ratio <= RECOVERY_THRESHOLD and recovery_art is not None:
+            return ("action_self", recovery_art)
         if purify_available:
             high = self._purification_candidate(combat, "high")
             if high is not None:
@@ -1378,6 +1392,37 @@ class RoundService(RoadService):
 
     def _effective_heal(self, combat) -> Decimal:
         return effective_heal_amount(combat)
+
+    @staticmethod
+    def _recovery_art_choice(combat, actions: tuple[str, ...]) -> str | None:
+        """Select the first equipped, legal recovery Art meeting the GDD floor."""
+        player = combat.fighters["player"]
+        available = player_actions_for(combat)
+        for action_id in actions:
+            action = available.get(action_id)
+            if (
+                action is None
+                or not action_id.startswith(("class_art.", "path_art."))
+                or action.heal_coefficient <= 0
+                or action.target_mode not in {"self", "ally", "ally_or_self"}
+                or action.effect_removal is not None
+            ):
+                continue
+            preview = act(combat, action_id, target_id=player.id)
+            if preview is combat:
+                continue
+            healing = sum(
+                (
+                    event.effective_healing
+                    for event in preview.events[len(combat.events) :]
+                    if event.action == action_id
+                    and event.actor_entity_id == player.id
+                ),
+                Decimal(0),
+            )
+            if healing >= player.stats.hp * MIN_EFFECTIVE_HEAL:
+                return action_id
+        return None
 
     def _dot_metrics(self, combat, dot) -> tuple[Decimal, Decimal, Decimal]:
         coefficient = {

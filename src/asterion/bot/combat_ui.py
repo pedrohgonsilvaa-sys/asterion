@@ -781,14 +781,24 @@ def event_line(
     if event.barrier_value:
         duration = (
             action.target_barrier_duration
-            if target.id != actor.id and action.target_barrier_duration
+            if action.target_barrier_coefficient
+            and action.target_barrier_duration
+            and (target.id != actor.id or action.target_mode in {"ally", "ally_or_self"})
             else action.self_barrier_duration
         )
-        line = (
-            f"🛡️ <b>{actor_name}</b> ergue <b>{escape(action.name)}</b> "
-            f"em <b>{target_name}</b>. Barreira · "
-            f"<code>{number(event.barrier_value)}</code> · <code>{duration}T</code>."
-        )
+        if action.heal_coefficient:
+            line = (
+                f"✨ <b>{actor_name}</b> usa <b>{escape(action.name)}</b> "
+                f"em <b>{target_name}</b>. Cura efetiva · "
+                f"<code>{number(event.effective_healing)}</code> HP. Barreira · "
+                f"<code>{number(event.barrier_value)}</code> · <code>{duration}T</code>."
+            )
+        else:
+            line = (
+                f"🛡️ <b>{actor_name}</b> ergue <b>{escape(action.name)}</b> "
+                f"em <b>{target_name}</b>. Barreira · "
+                f"<code>{number(event.barrier_value)}</code> · <code>{duration}T</code>."
+            )
         update = _class_resource_update_line(state, event, viewer_key)
         return f"{line}{' ' + update if update else ''}"
     label = action.name.split(" ", 1)[-1] if event.actor == "player" else action.name

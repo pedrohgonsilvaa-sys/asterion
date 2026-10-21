@@ -9,6 +9,7 @@ from asterion.application.talents import TalentView
 from asterion.bot.creation_ui import Screen
 from asterion.domain.arts import (
     ACTIVE_ART_IDS_BY_CLASS,
+    LUMINAR_ART_IDS,
     ORACULO_ART_IDS,
     TECELAO_ART_IDS,
     active_art_definition,
@@ -479,6 +480,8 @@ def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
                 "🔮 Buff positivo bem-sucedido · gera Presságio Defensivo no alvo.",
             ]
         )
+    elif art_id == LUMINAR_ART_IDS["luz_restauradora"]:
+        lines.extend(["", "🗡️ Requisito de arma · Nenhum"])
     if incompatible:
         lines.append("🔒 Requisito não atendido · equipe uma arma compatível.")
     if notice := _eligibility_notice(view, art_id):

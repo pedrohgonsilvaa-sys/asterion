@@ -3428,6 +3428,19 @@ def _prepare_path_action(
                     entry["triggers"].append("pressagio.defensivo_consumido")
                     context["omen_consumptions"].append(("defensive", target.id))
 
+        if actor.character_class == "luminar" and is_art and support:
+            if (
+                action.heal_coefficient > ZERO
+                and target.stats.hp > ZERO
+                and target.hp <= target.stats.hp * D("0.40")
+                and _has_talent(actor, "cura_prudente")
+            ):
+                entry["healing_power"] *= D("1.05")
+                entry["triggers"].append("luminar.cura_prudente")
+            if _action_has_barrier(action) and _has_talent(actor, "egide_densa"):
+                entry["barrier_power"] *= D("1.04")
+                entry["triggers"].append("luminar.egide_densa")
+
         guard_barrier = actor.path_state.get("guard_prepared_barrier")
         if support and _action_has_barrier(action) and isinstance(guard_barrier, dict):
             if int(guard_barrier.get("remaining", 0)) > 0:

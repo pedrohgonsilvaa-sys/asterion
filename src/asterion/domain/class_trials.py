@@ -1229,6 +1229,16 @@ def luminar_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action
             attack_debuff=Decimal("0.15"), duration=2, cooldown=3,
             effect_stat="healing_received", effect_id="luminar.julgamento.cura",
         ),
+        LUMINAR_ART_IDS["luz_restauradora"]: Action(
+            LUMINAR_ART_IDS["luz_restauradora"],
+            "Luz Restauradora",
+            Decimal(0),
+            cooldown=4,
+            target_mode="ally",
+            heal_coefficient=Decimal("0.70"),
+            target_barrier_coefficient=Decimal("0.35"),
+            target_barrier_duration=2,
+        ),
     }
     return {
         "attack": Action("attack", "Ataque Básico", Decimal(1)),
