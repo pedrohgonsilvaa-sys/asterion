@@ -127,6 +127,7 @@ LUMINAR_ART_IDS = {
     "egide_solar": "class_art.luminar.egide_solar",
     "julgamento": "class_art.luminar.julgamento",
     "luz_restauradora": "class_art.luminar.luz_restauradora",
+    "explosao_solar": "class_art.luminar.explosao_solar",
 }
 
 LUMINAR_ART_LEVELS = {
@@ -135,6 +136,7 @@ LUMINAR_ART_LEVELS = {
     LUMINAR_ART_IDS["egide_solar"]: 7,
     LUMINAR_ART_IDS["julgamento"]: 9,
     LUMINAR_ART_IDS["luz_restauradora"]: 18,
+    LUMINAR_ART_IDS["explosao_solar"]: 34,
 }
 
 # Path Arts are registered only when the shared combat runtime can execute them.

@@ -1282,6 +1282,10 @@ def _resolve_action_targets(
     ]
     candidates.sort(key=lambda key: (state.fighters[key].id, key))
     if action.target_mode in {"all_opponents", "all_allies"}:
+        if requested_target is not None:
+            requested_key = _resolve_fighter_key(state, requested_target)
+            if requested_key not in candidates:
+                return ()
         return tuple(candidates)
 
     requested_key = _resolve_fighter_key(state, requested_target)

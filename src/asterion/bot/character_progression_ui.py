@@ -512,6 +512,8 @@ def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
         )
     elif art_id == LUMINAR_ART_IDS["luz_restauradora"]:
         lines.extend(["", "🗡️ Requisito de arma · Nenhum"])
+    elif art_id == LUMINAR_ART_IDS["explosao_solar"]:
+        lines.extend(["", "🗡️ Requisito de arma · Nenhum"])
     if incompatible:
         lines.append("🔒 Requisito não atendido · equipe uma arma compatível.")
     if notice := _eligibility_notice(view, art_id):
@@ -568,6 +570,8 @@ def render_art_slot_choice(view: ActiveArtCharacterView, art_id: str) -> Screen:
         "",
         "🎴 Artes Equipadas",
     ]
+    if art_id == LUMINAR_ART_IDS["explosao_solar"]:
+        lines.extend(["🗡️ Requisito de arma · Nenhum", ""])
     rows = []
     for slot in (1, 2, 3):
         current_id = filled.get(slot)

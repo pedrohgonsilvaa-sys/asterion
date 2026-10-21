@@ -719,6 +719,18 @@ def _class_resource_update_line(
     }
     updates: list[str] = []
     for resource, target_id, consumed, remaining in event.class_resource_changes:
+        if resource == "luminar_state":
+            consumed_label = (
+                "Julgamento"
+                if "luminar.julgamento_consumido" in event.path_triggers
+                else "Fulgor"
+                if "luminar.fulgor_consumido" in event.path_triggers
+                else "Fulgor/Julgamento"
+            )
+            updates.append(
+                f"{consumed_label} consumido · restam <code>{remaining}</code>"
+            )
+            continue
         target = _fighter_for_event(state, target_id)
         target_suffix = (
             f" em <b>{escape(target.name)}</b>"
@@ -745,6 +757,14 @@ def event_line(
     )
     if actor is None:
         return "O combate continua."
+    actor_key = next(
+        (
+            key
+            for key, fighter in state.fighters.items()
+            if fighter.id == (event.actor_entity_id or event.actor)
+        ),
+        event.actor,
+    )
     actor_name = escape(actor.name)
     if event.action.startswith("prepare:"):
         action_id = event.action.split(":", 1)[1]
@@ -897,6 +917,21 @@ def event_line(
     update = _class_resource_update_line(state, event, viewer_key)
     if update:
         line += f" {update}"
+    if (
+        "luminar.fulgor_gerado" in event.path_triggers
+        and viewer_key in state.fighters
+        and _fighter_side(state, actor_key) == _fighter_side(state, viewer_key)
+    ):
+        luminar = actor.path_state.get("luminar_state")
+        if (
+            isinstance(luminar, dict)
+            and luminar.get("kind") == "fulgor"
+            and int(luminar.get("remaining", 0)) > 0
+        ):
+            line += (
+                " ☀️ Fulgor gerado/renovado · "
+                f"<code>{int(luminar['remaining'])}T</code>."
+            )
     if (
         "tecelao.trama_gerada" in event.path_triggers
         and viewer_key in state.fighters

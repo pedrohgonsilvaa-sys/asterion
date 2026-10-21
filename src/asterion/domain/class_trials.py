@@ -1294,6 +1294,13 @@ def luminar_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action
             target_barrier_coefficient=Decimal("0.35"),
             target_barrier_duration=2,
         ),
+        LUMINAR_ART_IDS["explosao_solar"]: Action(
+            LUMINAR_ART_IDS["explosao_solar"],
+            "Explosão Solar",
+            Decimal("0.85"),
+            cooldown=3,
+            target_mode="all_opponents",
+        ),
     }
     return {
         "attack": Action("attack", "Ataque Básico", Decimal(1)),
