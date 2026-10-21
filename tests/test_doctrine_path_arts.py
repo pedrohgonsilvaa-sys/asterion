@@ -2,7 +2,13 @@ from uuid import uuid4
 
 from asterion.application.doctrines import DoctrineCollectionView, DoctrineView
 from asterion.bot.doctrines_ui import doctrine_art_ids, render_art_choices
-from asterion.domain.arts import ART_IDS_BY_CLASS, DEVASTADOR_ART_IDS, VIGIA_ART_IDS
+from asterion.domain.arts import (
+    ACTIVE_ART_DEFINITIONS,
+    ART_IDS_BY_CLASS,
+    DEVASTADOR_ART_IDS,
+    SENTINEL_ART_IDS,
+    VIGIA_ART_IDS,
+)
 
 
 def _views(*, level: int = 20, path: str | None = "devastador"):
@@ -32,19 +38,29 @@ def _views(*, level: int = 20, path: str | None = "devastador"):
 def test_doctrine_choices_include_only_implemented_art_for_draft_path_and_level():
     ariete = DEVASTADOR_ART_IDS["ariete"]
     view, doctrine = _views(path="devastador")
+    expected_class_arts = tuple(
+        art_id
+        for art_id in ART_IDS_BY_CLASS["sentinela"]
+        if ACTIVE_ART_DEFINITIONS[art_id].min_level <= view.level
+    )
     assert doctrine_art_ids(view, doctrine) == (
-        *ART_IDS_BY_CLASS["sentinela"],
+        *expected_class_arts,
         ariete,
     )
     screen = render_art_choices(view, doctrine, 1)
     labels = [button.text for row in screen.keyboard.inline_keyboard for button in row]
-    assert any("Ariete" in label for label in labels)
+    assert any("Aríete" in label for label in labels)
 
     bastion_view, bastion_doctrine = _views(path="bastiao")
     assert ariete not in doctrine_art_ids(bastion_view, bastion_doctrine)
 
     low_view, low_doctrine = _views(level=11, path="devastador")
     assert ariete not in doctrine_art_ids(low_view, low_doctrine)
+
+    rechaco = SENTINEL_ART_IDS["golpe_de_rechaco"]
+    assert rechaco not in doctrine_art_ids(view, doctrine)
+    level_34_view, level_34_doctrine = _views(level=34, path="devastador")
+    assert rechaco in doctrine_art_ids(level_34_view, level_34_doctrine)
 
 
 def test_doctrine_offers_tiro_calculado_to_vigia_at_level_18_without_path_gate():

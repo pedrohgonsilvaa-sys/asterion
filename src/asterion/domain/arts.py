@@ -37,6 +37,7 @@ SENTINEL_ART_IDS = {
     "muralha_breve": "class_art.sentinela.muralha_breve",
     "impacto_resoluto": "class_art.sentinela.impacto_resoluto",
     "firmeza": "class_art.sentinela.firmeza",
+    "golpe_de_rechaco": "class_art.sentinela.golpe_de_rechaco",
 }
 
 SENTINEL_ART_LEVELS = {
@@ -45,6 +46,7 @@ SENTINEL_ART_LEVELS = {
     SENTINEL_ART_IDS["muralha_breve"]: 7,
     SENTINEL_ART_IDS["impacto_resoluto"]: 9,
     SENTINEL_ART_IDS["firmeza"]: 18,
+    SENTINEL_ART_IDS["golpe_de_rechaco"]: 34,
 }
 
 ERRANTE_ART_IDS = {
@@ -212,6 +214,7 @@ ART_WEAPON_REQUIREMENTS = {
     SENTINEL_ART_IDS["golpe_de_guarda"]: frozenset({"weapon.compat.melee"}),
     SENTINEL_ART_IDS["quebra_postura"]: frozenset({"weapon.compat.melee"}),
     SENTINEL_ART_IDS["impacto_resoluto"]: frozenset({"weapon.compat.melee"}),
+    SENTINEL_ART_IDS["golpe_de_rechaco"]: frozenset({"weapon.compat.melee"}),
     ERRANTE_ART_IDS["corte_veloz"]: frozenset({"weapon.compat.melee"}),
     ERRANTE_ART_IDS["ferida_profunda"]: frozenset({"weapon.compat.melee"}),
     ERRANTE_ART_IDS["golpe_oportuno"]: frozenset({"weapon.compat.melee"}),

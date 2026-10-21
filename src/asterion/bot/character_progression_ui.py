@@ -352,6 +352,15 @@ def _art_mechanics_lines(action) -> list[str]:
                 f"🎯 Com {modifier.condition.minimum}+ Miras no alvo no início da ação · "
                 f"+{modifier.magnitude:g} p.p. CRIT"
             )
+        elif (
+            modifier.condition.kind == "class_resource_at_least"
+            and modifier.condition.resource == "retaliation"
+            and modifier.component == "precision_bonus"
+        ):
+            lines.append(
+                "🛡️ Com Retaliação ativa no início da ação · "
+                f"+{modifier.magnitude:g} p.p. PER"
+            )
     if action.per_bonus_if_target_poisoned:
         lines.append(
             f"🎯 Contra alvo Envenenado · +{action.per_bonus_if_target_poisoned:g} p.p. PER"
@@ -461,6 +470,8 @@ def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
         ),
         "",
     ]
+    if definition is not None:
+        lines.insert(2, f"🔓 Desbloqueio · Nv.{definition.min_level}")
     lines.extend(_art_mechanics_lines(action))
     if definition is not None and definition.weapon_requirement:
         lines.extend(

@@ -410,6 +410,7 @@ def test_active_art_weapon_requirements_match_the_current_explicit_matrix():
         SENTINEL_ART_IDS["golpe_de_guarda"]: melee,
         SENTINEL_ART_IDS["quebra_postura"]: melee,
         SENTINEL_ART_IDS["impacto_resoluto"]: melee,
+        SENTINEL_ART_IDS["golpe_de_rechaco"]: melee,
         ERRANTE_ART_IDS["corte_veloz"]: melee,
         ERRANTE_ART_IDS["ferida_profunda"]: melee,
         ERRANTE_ART_IDS["golpe_oportuno"]: melee,

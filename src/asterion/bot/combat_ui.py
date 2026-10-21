@@ -1241,6 +1241,14 @@ def _action_resource_hints(
                     f"alvo com {condition.minimum}+ Miras no início da ação · "
                     f"+{number(modifier.magnitude)} p.p. CRIT"
                 )
+            elif (
+                condition.resource == "retaliation"
+                and modifier.component == "precision_bonus"
+            ):
+                description = (
+                    "Retaliação ativa no início da ação · "
+                    f"+{number(modifier.magnitude)} p.p. PER"
+                )
             else:
                 description = (
                     f"{_class_resource_label(condition.resource or '', condition.state_kind)} "

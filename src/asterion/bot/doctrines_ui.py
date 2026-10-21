@@ -5,6 +5,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.doctrines import DoctrineCollectionView, DoctrineView
 from asterion.bot.creation_ui import Screen
 from asterion.domain.arts import ACTIVE_ART_IDS_BY_CLASS, active_art_definition
+from asterion.domain.class_trials import class_player_actions
 from asterion.domain.paths import PATH_DEFINITIONS
 from asterion.domain.talents import IMPLEMENTED_TALENT_LEVELS, TALENT_DEFINITIONS, TALENTS_BY_CLASS
 
@@ -44,6 +45,18 @@ def _btn(text: str, callback: str) -> InlineKeyboardButton:
 
 def _markup(rows) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _art_label(view, art_id: str, selected_path: str | None) -> str:
+    try:
+        action = class_player_actions(
+            view.character_class, (art_id,), selected_path
+        ).get(art_id)
+    except ValueError:
+        action = None
+    if action is not None:
+        return action.name
+    return art_id.rsplit(".", 1)[-1].replace("_", " ").title()
 
 
 def render_doctrine_root(view: DoctrineCollectionView) -> Screen:
@@ -90,7 +103,7 @@ def render_doctrine_detail(view: DoctrineCollectionView, doctrine: DoctrineView)
     lines.extend(["", "🎴 Artes"])
     if config["arts"]:
         lines.extend(
-            f"• Slot {slot} · {art_id.rsplit('.', 1)[-1].replace('_', ' ').title()}"
+            f"• Slot {slot} · {_art_label(view, art_id, config.get('path'))}"
             for slot, art_id in sorted(config["arts"].items())
         )
     else:
@@ -335,7 +348,7 @@ def render_art_choices(view, doctrine, slot: int) -> Screen:
     rows = [
         [
             _btn(
-                f"{index + 1} {art_id.rsplit('.', 1)[-1].replace('_', ' ').title()}",
+                f"{index + 1} {_art_label(view, art_id, doctrine.configuration.get('path'))}",
                 f"doc:ai:{did}:{rev}:{cfg}:{slot}:{index}",
             )
         ]

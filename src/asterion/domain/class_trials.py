@@ -386,6 +386,25 @@ def sentinel_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Actio
             self_effect_modifier_mode="multiplicative",
             target_mode="self",
         ),
+        SENTINEL_ART_IDS["golpe_de_rechaco"]: Action(
+            SENTINEL_ART_IDS["golpe_de_rechaco"],
+            "Golpe de Rechaço",
+            Decimal("1.45"),
+            cooldown=4,
+            conditional_modifiers=(
+                ActionConditionalModifier(
+                    "sentinela.golpe_de_rechaco.retaliation_per",
+                    ActionCondition(
+                        "class_resource_at_least",
+                        resource="retaliation",
+                    ),
+                    "precision_bonus",
+                    Decimal(10),
+                    target_scope="primary_target",
+                    evaluation_scope="per_action",
+                ),
+            ),
+        ),
     }
     return {
         "attack": Action("attack", "Ataque Básico", Decimal(1)),
