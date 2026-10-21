@@ -79,7 +79,13 @@ def _apply_new(before, after, stage, evaluator, context):
 
 
 def test_oraculo_and_luminar_active_art_catalogs_are_canonical_through_level_ten():
-    assert tuple(ORACULO_ART_LEVELS.values()) == (1, 4, 7, 9)
+    assert tuple(level for level in ORACULO_ART_LEVELS.values() if level <= 10) == (
+        1,
+        4,
+        7,
+        9,
+    )
+    assert ORACULO_ART_LEVELS[ORACULO_ART_IDS["augurio_favoravel"]] == 18
     assert tuple(LUMINAR_ART_LEVELS.values()) == (1, 4, 7, 9)
     assert {ACTIVE_ART_DEFINITIONS[art].character_class for art in ORACULO_ART_IDS.values()} == {
         "oraculo"

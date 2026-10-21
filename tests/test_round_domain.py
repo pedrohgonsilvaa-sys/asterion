@@ -3,6 +3,8 @@ from decimal import Decimal
 from uuid import uuid4
 
 from asterion.application.round import RoundService
+from asterion.domain.arts import ORACULO_ART_IDS
+from asterion.domain.class_trials import class_player_actions
 from asterion.domain.combat import (
     DotState,
     Effect,
@@ -227,3 +229,25 @@ def test_consumable_budget_gates_automatic_choice_even_when_heal_is_critical():
     )
     assert allowed == ("heal", None)
     assert exhausted != ("heal", None)
+
+
+def test_round_does_not_automatically_select_augurio_favoravel_buff():
+    state = _combat()
+    state.fighters["enemy"].takes_turn = False
+    state.player_actions = class_player_actions(
+        "oraculo", (ORACULO_ART_IDS["augurio_favoravel"],)
+    )
+    state = act(state, "defend")
+
+    selected = asyncio.run(
+        _service()._choose_round_action(
+            object(),
+            type("Character", (), {"id": uuid4()})(),
+            type("Round", (), {"prepared_heal": False, "prepared_purify": False})(),
+            state,
+            consumable_uses=0,
+            consumable_limit=0,
+        )
+    )
+
+    assert selected == ("action", "attack")

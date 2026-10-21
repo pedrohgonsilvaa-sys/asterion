@@ -809,6 +809,11 @@ def event_line(
             f"❤️ <b>{actor_name}</b> usa <b>{escape(label)}</b> em "
             f"<b>{target_name}</b> e recupera <code>{number(event.healed)}</code> HP."
         )
+    elif action.target_effects and not action.coefficient:
+        line = (
+            f"✨ <b>{actor_name}</b> usa <b>{escape(action.name)}</b> "
+            f"em <b>{target_name}</b>."
+        )
     else:
         line = (
             f"{emoji} <b>{actor_name}</b> usa <b>{escape(label)}</b> em "
@@ -819,13 +824,28 @@ def event_line(
     if event.healed and not action.heal_coefficient:
         line += f" Cura <code>{number(event.healed)}</code>."
     if event.effect_id:
-        stat_label = {"attack": "ATQ", "defense": "DEF", "agility": "AGI"}.get(
-            action.effect_stat or "attack", action.effect_stat or "ATQ"
-        )
-        line += (
-            f" Reduz {stat_label} em <code>{number(action.attack_debuff * 100)}%</code> por "
-            f"<code>{action.duration}T</code>."
-        )
+        effect_stat = event.applied_effect_stat or action.effect_stat or "attack"
+        if event.applied_effect_stat:
+            stat_label = {"attack": "ATQ", "defense": "DEF", "agility": "AGI"}.get(
+                effect_stat, effect_stat.upper()
+            )
+            magnitude = event.applied_effect_magnitude
+            duration = event.applied_effect_duration
+            sign = "+" if event.applied_effect_kind == "buff" else "−"
+            line += (
+                f" {target_name} recebe {sign}<code>{number(magnitude * 100)}% "
+                f"{stat_label}</code> por <code>{duration}T</code>."
+            )
+        elif action.attack_debuff:
+            stat_label = {"attack": "ATQ", "defense": "DEF", "agility": "AGI"}.get(
+                effect_stat, effect_stat.upper()
+            )
+            line += (
+                f" {target_name} recebe −<code>{number(action.attack_debuff * 100)}% "
+                f"{stat_label}</code> por <code>{action.duration}T</code>."
+            )
+        else:
+            line += f" {target_name} recebe o efeito <b>{escape(event.effect_id)}</b>."
     if event.actor_effect_id:
         stat_label = {"attack": "ATQ", "defense": "DEF", "agility": "AGI"}.get(
             action.self_effect_stat or "attack",
@@ -851,6 +871,31 @@ def event_line(
     update = _class_resource_update_line(state, event, viewer_key)
     if update:
         line += f" {update}"
+    if (
+        "oraculo.pressagio_defensive_criado" in event.path_triggers
+        and viewer_key in state.fighters
+    ):
+        owner_key = next(
+            (
+                key
+                for key, fighter in state.fighters.items()
+                if fighter.id == (event.actor_entity_id or event.actor)
+            ),
+            None,
+        )
+        target = _fighter_for_event(state, event.target)
+        if (
+            owner_key is not None
+            and target is not None
+            and _fighter_side(state, owner_key) == _fighter_side(state, viewer_key)
+        ):
+            marks = state.fighters[owner_key].path_state.get("omen_defensive", {})
+            mark = marks.get(target.id) if isinstance(marks, dict) else None
+            if isinstance(mark, dict) and int(mark.get("remaining", 0)) > 0:
+                line += (
+                    f" 🔮 Presságio Defensivo gerado em <b>{escape(target.name)}</b> "
+                    f"· <code>{int(mark['remaining'])}T</code>."
+                )
     return line
 
 def _effect_label(state: Combat, effect_id: str, *, target_id: str) -> str:

@@ -1363,6 +1363,7 @@ class RoundService(RoadService):
                 for action in actions
                 if action.startswith(("class_art.", "path_art."))
                 and action in available_actions
+                and available_actions[action].coefficient > 0
                 and available_actions[action].effect_removal is None
             ),
             None,

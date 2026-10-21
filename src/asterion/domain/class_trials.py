@@ -1055,6 +1055,18 @@ def oraculo_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action
             self_barrier_duration=2,
             self_barrier_debuff_magnitude_reduction=Decimal("0.10"),
         ),
+        ORACULO_ART_IDS["augurio_favoravel"]: Action(
+            ORACULO_ART_IDS["augurio_favoravel"], "Augúrio Favorável", Decimal(0),
+            cooldown=4,
+            target_mode="ally",
+            target_effects=(ActionEffect(
+                "oraculo.augurio_favoravel.attack",
+                "attack",
+                Decimal("0.10"),
+                2,
+                "buff",
+            ),),
+        ),
     }
     return {
         "attack": Action("attack", "Ataque Básico", Decimal(1)),
