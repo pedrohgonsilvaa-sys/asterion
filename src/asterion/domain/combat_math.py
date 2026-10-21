@@ -163,7 +163,7 @@ def resolve_combat_stats(
             base.block,
         )
     attack_percent, hp_percent, agility_percent = static_talent_modifiers(
-        character_class, talent_ids
+        character_class, level, talent_ids
     )
     if talent_ids:
         base = CombatStats(

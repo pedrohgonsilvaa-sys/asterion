@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import replace
 from decimal import Decimal
 from fractions import Fraction
@@ -7,6 +8,16 @@ import pytest
 from sqlalchemy import select, text
 
 from asterion.application.active_arts import ActiveArtCharacterView, ActiveArtSlotSnapshot
+from asterion.application.doctrines import DoctrineRejected, DoctrineService
+from asterion.application.equipment_configuration import (
+    load_equipment_configuration,
+    resolve_character_combat_stats,
+)
+from asterion.application.progression import (
+    consolidate_character_level,
+    consolidate_level,
+    level_xp,
+)
 from asterion.application.talents import (
     TalentChoiceView,
     TalentMutationCode,
@@ -29,17 +40,25 @@ from asterion.domain.combat_math import (
     resolve_combat_stats,
 )
 from asterion.domain.economy import crowns_per_level
-from asterion.domain.equipment_stats import EquipmentStatContribution
+from asterion.domain.equipment_stats import (
+    EquipmentConfigurationError,
+    EquipmentStatContribution,
+    equipment_configuration_from_data,
+)
 from asterion.domain.paths import PATH_DEFINITIONS
 from asterion.domain.talents import (
     TALENT_CATALOG,
     TALENTS_BY_CLASS,
     TalentDefinition,
+    TalentSelectionError,
     talent_points_at_level,
+    validate_active_talent_ids,
+    validate_talent_choices,
 )
 from asterion.infrastructure.db.models import (
     Account,
     Character,
+    CharacterDoctrine,
     CharacterTalentChoice,
     GameActivity,
     WorldState,
@@ -133,6 +152,57 @@ def test_talent_catalog_contains_all_classes_tiers_and_point_levels():
             55,
             55,
         ]
+
+
+@pytest.mark.parametrize(
+    ("level", "expected_points"),
+    [
+        (1, 0), (4, 0), (5, 1), (9, 1), (10, 2), (14, 2),
+        (15, 3), (19, 3), (20, 4), (24, 4), (25, 5), (29, 5),
+        (30, 6), (34, 6), (35, 7), (39, 7), (40, 8), (44, 8),
+        (45, 9), (49, 9), (50, 10), (54, 10), (55, 11), (59, 11),
+        (60, 12),
+    ],
+)
+def test_talent_point_budget_matches_every_canonical_level_milestone(level, expected_points):
+    assert talent_points_at_level(level) == expected_points
+
+
+def test_level_progression_crosses_multiple_talent_milestones_without_duplicate_points():
+    from types import SimpleNamespace
+
+    character = SimpleNamespace(
+        level=1,
+        xp=sum(level_xp(level) for level in range(1, 20)),
+        hp=D(1),
+        max_hp=D(1),
+        race="remanescente",
+        character_class="sentinela",
+    )
+    assert consolidate_level(character) == 19
+    assert character.level == 20
+    assert talent_points_at_level(character.level) == 4
+    assert consolidate_level(character) == 0
+    assert talent_points_at_level(character.level) == 4
+
+
+def test_authoritative_talent_validator_rejects_invalid_active_ids_and_rank_duplicates():
+    steel = _talent("sentinela", "Aço Desperto").talent_id
+    other_class = _talent("errante", "Fio Afiado").talent_id
+    future = _talent("sentinela", "Ponta Revidada").talent_id
+    for ids in (("talent.unknown.injected",), (other_class,), (future,), (steel, steel)):
+        with pytest.raises(TalentSelectionError):
+            validate_active_talent_ids("sentinela", 20, ids)
+    with pytest.raises(TalentSelectionError):
+        validate_active_talent_ids(
+            "sentinela",
+            5,
+            (steel, _talent("sentinela", "Carne de Pedra").talent_id),
+        )
+    with pytest.raises(TalentSelectionError):
+        validate_talent_choices("sentinela", 10, ((1, steel), (1, steel)))
+    with pytest.raises(TalentSelectionError):
+        validate_talent_choices("sentinela", 10, ((3, steel),))
 
 
 def test_nv5_talent_stat_effects_match_all_six_class_catalogs():
@@ -539,10 +609,7 @@ async def test_respec_cost_local_atomicity_and_hp_reconciliation(database):
 
 
 def test_legacy_combat_configuration_has_no_talents_and_new_snapshot_roundtrips():
-    from asterion.domain.equipment_stats import (
-        EquipmentConfigurationSnapshot,
-        equipment_configuration_from_data,
-    )
+    from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 
     legacy = equipment_configuration_from_data(
         {"combat_configuration_version": 4, "ruleset_version": "old", "equipment": []}
@@ -555,6 +622,243 @@ def test_legacy_combat_configuration_has_no_talents_and_new_snapshot_roundtrips(
     )
     restored = equipment_configuration_from_data(current.to_data("ruleset") | {"active_arts": []})
     assert restored == current
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "invalid_choice",
+    ("unsupported", "unsupported_35", "wrong_class", "unknown", "over_budget"),
+)
+async def test_persisted_invalid_talents_fail_closed_without_deleting_rows(
+    database, invalid_choice
+):
+    invalid_cases = (
+        "unsupported",
+        "unsupported_35",
+        "wrong_class",
+        "unknown",
+        "over_budget",
+    )
+    actor = 772108 + invalid_cases.index(invalid_choice)
+    level = (
+        20
+        if invalid_choice == "unsupported"
+        else 40
+        if invalid_choice == "unsupported_35"
+        else 10
+    )
+    character_id, sessions = await _seed_character(database, actor, level=level)
+    choices = {
+        "unsupported": (3, _talent("sentinela", "Ponta Revidada").talent_id),
+        "unsupported_35": (7, _talent("sentinela", "Olho de Combate").talent_id),
+        "wrong_class": (1, _talent("errante", "Fio Afiado").talent_id),
+        "unknown": (1, "talent.unknown.injected"),
+        "over_budget": (5, _talent("sentinela", "Aço Desperto").talent_id),
+    }
+    point_slot, talent_id = choices[invalid_choice]
+    async with sessions.begin() as session:
+        session.add(
+            CharacterTalentChoice(
+                character_id=character_id,
+                point_slot=point_slot,
+                talent_id=talent_id,
+            )
+        )
+
+    service = TalentService(sessions, "ocaso")
+    with pytest.raises(TalentMutationRejected) as rejected:
+        await service.view(actor)
+    assert rejected.value.code == TalentMutationCode.INVALID_CURRENT_CONFIGURATION
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        before_hp = character.hp
+        before_max_hp = character.max_hp
+        with pytest.raises(EquipmentConfigurationError):
+            await load_equipment_configuration(session, character)
+    async with sessions() as session:
+        character = await session.get(Character, character_id)
+        saved = await session.scalar(
+            select(CharacterTalentChoice).where(
+                CharacterTalentChoice.character_id == character_id
+            )
+        )
+        assert saved is not None and (saved.point_slot, saved.talent_id) == (
+            point_slot,
+            talent_id,
+        )
+        assert (character.hp, character.max_hp) == (before_hp, before_max_hp)
+
+
+@pytest.mark.asyncio
+async def test_valid_nv5_talent_reloads_through_combat_configuration_snapshot(database):
+    actor = 772112
+    character_id, sessions = await _seed_character(database, actor, level=10)
+    talent_id = _talent("sentinela", "Aço Desperto").talent_id
+    acquired = await TalentService(sessions, "ocaso").acquire(actor, talent_id, 0)
+    assert acquired is not None and acquired.point_slot == 1
+
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        configuration = await load_equipment_configuration(session, character)
+        stats = resolve_character_combat_stats(character, configuration)
+        serialized = configuration.to_data("test-ruleset")
+    restored = equipment_configuration_from_data(serialized)
+    restored_stats = resolve_combat_stats(
+        "sentinela",
+        10,
+        "remanescente",
+        selected_path=None,
+        talent_ids=tuple(talent for _, talent in restored.talent_choices),
+    )
+    assert restored.talent_choices == ((1, talent_id),)
+    assert stats.attack == restored_stats.attack
+    assert stats.attack > resolve_combat_stats("sentinela", 10, "remanescente").attack
+
+
+@pytest.mark.asyncio
+async def test_doctrine_cannot_activate_injected_unimplemented_talent(database):
+    actor = 772113
+    character_id, sessions = await _seed_character(database, actor, level=20)
+    service = DoctrineService(sessions, "ocaso")
+    created = await service.create(actor, "Futura", 0)
+    assert created is not None and created.doctrine_id is not None
+    unsupported_id = _talent("sentinela", "Ponta Revidada").talent_id
+    async with sessions.begin() as session:
+        doctrine = await session.get(CharacterDoctrine, created.doctrine_id)
+        doctrine.configuration = {
+            "path": None,
+            "equipment": {},
+            "arts": {},
+            "talents": [{"point_slot": 3, "talent_id": unsupported_id}],
+        }
+    with pytest.raises(DoctrineRejected) as rejected:
+        await service.apply(actor, created.doctrine_id, 0, 0)
+    assert rejected.value.code == "invalid_talents"
+    async with sessions() as session:
+        character = await session.get(Character, character_id)
+        assert character.combat_configuration_version == 0
+        assert await session.scalar(
+            select(CharacterTalentChoice).where(
+                CharacterTalentChoice.character_id == character_id
+            )
+        ) is None
+        doctrine = await session.get(CharacterDoctrine, created.doctrine_id)
+        assert doctrine.configuration["talents"] == [
+            {"point_slot": 3, "talent_id": unsupported_id}
+        ]
+
+
+@pytest.mark.asyncio
+async def test_level_60_preserves_unspent_points_with_only_nv5_tier_available(database):
+    actor = 772114
+    _, sessions = await _seed_character(database, actor, level=60)
+    service = TalentService(sessions, "ocaso")
+    view = await service.view(actor)
+    assert view is not None and view.total_points == 12 and view.available_points == 12
+    for talent in TALENTS_BY_CLASS["sentinela"][:3]:
+        result = await service.acquire(
+            actor,
+            talent.talent_id,
+            view.combat_configuration_version,
+        )
+        assert result is not None and result.changed
+        view = result.view
+    assert len(view.choices) == 3
+    assert view.total_points == 12
+    assert view.available_points == 9
+    with pytest.raises(TalentMutationRejected) as fourth:
+        await service.acquire(actor, view.choices[0].talent_id, view.combat_configuration_version)
+    assert fourth.value.code == TalentMutationCode.DUPLICATE_TALENT
+
+
+@pytest.mark.asyncio
+async def test_database_progression_awards_milestone_points_once_and_keeps_unspent_budget(database):
+    actor = 772116
+    character_id, sessions = await _seed_character(database, actor, level=4)
+    service = TalentService(sessions, "ocaso")
+    talents = TALENTS_BY_CLASS["sentinela"][:3]
+    selected = 0
+
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        character.xp = level_xp(4)
+        assert await consolidate_character_level(session, character) == 1
+        assert character.level == 5
+
+    view = await service.view(actor)
+    assert view is not None and view.total_points == 1 and view.available_points == 1
+    first = await service.acquire(actor, talents[0].talent_id, view.combat_configuration_version)
+    assert first is not None and first.point_slot == 1
+    selected += 1
+
+    for current_level, target_level, expected_points in ((5, 10, 2), (10, 15, 3)):
+        async with sessions.begin() as session:
+            character = await session.get(Character, character_id)
+            character.xp = sum(level_xp(level) for level in range(current_level, target_level))
+            advanced = await consolidate_character_level(session, character)
+            assert advanced == target_level - current_level
+            assert character.level == target_level
+        view = await service.view(actor)
+        assert view is not None and view.total_points == expected_points
+        assert view.available_points == expected_points - selected
+        result = await service.acquire(
+            actor,
+            talents[selected].talent_id,
+            view.combat_configuration_version,
+        )
+        assert result is not None and result.point_slot == selected + 1
+        selected += 1
+        async with sessions.begin() as session:
+            character = await session.get(Character, character_id)
+            assert await consolidate_character_level(session, character) == 0
+        unchanged = await service.view(actor)
+        assert unchanged is not None
+        assert unchanged.total_points == expected_points
+        assert unchanged.available_points == expected_points - selected
+
+    async with sessions() as session:
+        rows = list(
+            (
+                await session.scalars(
+                    select(CharacterTalentChoice)
+                    .where(CharacterTalentChoice.character_id == character_id)
+                    .order_by(CharacterTalentChoice.point_slot)
+                )
+            ).all()
+        )
+        assert [(row.point_slot, row.talent_id) for row in rows] == [
+            (index + 1, talents[index].talent_id) for index in range(3)
+        ]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_acquisition_cannot_spend_one_point_twice(database):
+    actor = 772115
+    character_id, sessions = await _seed_character(database, actor, level=5)
+    talents = TALENTS_BY_CLASS["sentinela"][:2]
+    service = TalentService(sessions, "ocaso")
+    results = await asyncio.gather(
+        *(service.acquire(actor, talent.talent_id, 0) for talent in talents),
+        return_exceptions=True,
+    )
+    successes = [result for result in results if not isinstance(result, Exception)]
+    failures = [result for result in results if isinstance(result, TalentMutationRejected)]
+    assert len(successes) == 1
+    assert len(failures) == 1
+    assert failures[0].code == TalentMutationCode.STALE_CONFIGURATION
+    view = await service.view(actor)
+    assert view is not None and view.total_points == 1 and view.available_points == 0
+    async with sessions() as session:
+        saved = list(
+            (
+                await session.scalars(
+                    select(CharacterTalentChoice).where(
+                        CharacterTalentChoice.character_id == character_id
+                    )
+                )
+            ).all()
+        )
+        assert len(saved) == 1
 
 
 @pytest.mark.asyncio

@@ -26,7 +26,9 @@ from asterion.domain.talents import (
     TALENT_POINT_LEVELS,
     TALENTS_BY_CLASS,
     TalentDefinition,
+    TalentSelectionError,
     talent_points_at_level,
+    validate_talent_choices,
 )
 from asterion.infrastructure.db.models import (
     Character,
@@ -242,25 +244,16 @@ class TalentService:
         character: Character,
         rows: list[CharacterTalentChoice],
     ) -> tuple[tuple[int, str], ...]:
-        result = []
-        slots: set[int] = set()
-        talents: set[str] = set()
-        for row in rows:
-            definition = TALENT_DEFINITIONS.get(row.talent_id)
-            if (
-                isinstance(row.point_slot, bool)
-                or not 1 <= row.point_slot <= len(TALENT_POINT_LEVELS)
-                or row.point_slot in slots
-                or row.talent_id in talents
-                or definition is None
-                or definition.character_class != character.character_class
-                or definition.level > TALENT_POINT_LEVELS[row.point_slot - 1]
-            ):
-                raise TalentMutationRejected(TalentMutationCode.INVALID_CURRENT_CONFIGURATION)
-            slots.add(row.point_slot)
-            talents.add(row.talent_id)
-            result.append((row.point_slot, row.talent_id))
-        return tuple(result)
+        try:
+            return validate_talent_choices(
+                character.character_class,
+                character.level,
+                [(row.point_slot, row.talent_id) for row in rows],
+            )
+        except TalentSelectionError as exc:
+            raise TalentMutationRejected(
+                TalentMutationCode.INVALID_CURRENT_CONFIGURATION
+            ) from exc
 
     @staticmethod
     async def _reconcile_hp(session: AsyncSession, character: Character) -> None:

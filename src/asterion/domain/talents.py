@@ -11,6 +11,10 @@ TALENT_CATEGORIES = ("Pressão", "Resistência", "Técnica")
 IMPLEMENTED_TALENT_LEVELS = frozenset({5})
 
 
+class TalentSelectionError(ValueError):
+    """A persisted or proposed Talent selection is not active and legal."""
+
+
 @dataclass(frozen=True, slots=True)
 class TalentDefinition:
     talent_id: str
@@ -448,20 +452,98 @@ def talent_points_at_level(level: int) -> int:
     return sum(required <= level for required in TALENT_POINT_LEVELS)
 
 
-def active_talent_ids(level: int, choices: tuple[tuple[int, str], ...]) -> tuple[str, ...]:
-    maximum_slot = talent_points_at_level(level)
-    return tuple(talent_id for slot, talent_id in choices if 1 <= slot <= maximum_slot)
+def validate_talent_choices(
+    character_class: str,
+    level: int,
+    choices: tuple[tuple[int, str], ...] | list[tuple[int, str]],
+) -> tuple[tuple[int, str], ...]:
+    """Validate saved point slots and return their active, implemented choices.
+
+    This codebase has no Legado state or transition yet, so it cannot prove that
+    over-budget rows are legitimately dormant after an ascent. Such rows are
+    rejected without deleting them; a future Legado implementation must add an
+    explicit authority for dormant slots before they can be accepted here.
+    """
+    available_points = talent_points_at_level(level)
+    if not isinstance(choices, (tuple, list)):
+        raise TalentSelectionError("Talent choices must be a sequence.")
+    seen_slots: set[int] = set()
+    seen_talents: set[str] = set()
+    active: list[tuple[int, str]] = []
+    for choice in choices:
+        if not isinstance(choice, (tuple, list)) or len(choice) != 2:
+            raise TalentSelectionError("Invalid Talent choice record.")
+        slot, talent_id = choice
+        if (
+            isinstance(slot, bool)
+            or not isinstance(slot, int)
+            or not 1 <= slot <= len(TALENT_POINT_LEVELS)
+            or slot > available_points
+            or not isinstance(talent_id, str)
+            or not talent_id
+            or slot in seen_slots
+            or talent_id in seen_talents
+        ):
+            raise TalentSelectionError("Invalid or duplicate Talent choice.")
+        definition = TALENT_DEFINITIONS.get(talent_id)
+        if (
+            definition is None
+            or definition.character_class != character_class
+            or definition.level > level
+            or definition.level not in IMPLEMENTED_TALENT_LEVELS
+            or definition.level > TALENT_POINT_LEVELS[slot - 1]
+        ):
+            raise TalentSelectionError("Talent choice is not eligible for this character.")
+        seen_slots.add(slot)
+        seen_talents.add(talent_id)
+        active.append((slot, talent_id))
+    return tuple(active)
+
+
+def validate_active_talent_ids(
+    character_class: str,
+    level: int,
+    talent_ids: tuple[str, ...] | list[str],
+) -> tuple[str, ...]:
+    """Validate IDs entering static attributes or a combat snapshot."""
+    available_points = talent_points_at_level(level)
+    if not isinstance(talent_ids, (tuple, list)) or len(talent_ids) > available_points:
+        raise TalentSelectionError("Active Talent count exceeds available points.")
+    if any(not isinstance(talent_id, str) or not talent_id for talent_id in talent_ids):
+        raise TalentSelectionError("Invalid active Talent ID.")
+    if len(set(talent_ids)) != len(talent_ids):
+        raise TalentSelectionError("Duplicate active Talent ID.")
+    for talent_id in talent_ids:
+        definition = TALENT_DEFINITIONS.get(talent_id)
+        if (
+            definition is None
+            or definition.character_class != character_class
+            or definition.level > level
+            or definition.level not in IMPLEMENTED_TALENT_LEVELS
+        ):
+            raise TalentSelectionError("Active Talent is not eligible for this character.")
+    return tuple(talent_ids)
+
+
+def active_talent_ids(
+    character_class: str,
+    level: int,
+    choices: tuple[tuple[int, str], ...] | list[tuple[int, str]],
+) -> tuple[str, ...]:
+    return tuple(talent_id for _, talent_id in validate_talent_choices(
+        character_class, level, choices
+    ))
 
 
 def static_talent_modifiers(
     character_class: str,
+    level: int,
     talent_ids: tuple[str, ...] | list[str],
 ) -> tuple[Decimal, ...]:
-    definitions = [TALENT_DEFINITIONS[talent_id] for talent_id in talent_ids]
-    if any(definition.character_class != character_class for definition in definitions):
-        raise ValueError("Talent does not belong to the character Class.")
-    if any(definition.level != 5 for definition in definitions):
-        raise ValueError("Only Nv.5 Talent effects are implemented in this progression slice.")
+    definitions = [
+        TALENT_DEFINITIONS[talent_id]
+        for talent_id in validate_active_talent_ids(character_class, level, talent_ids)
+    ]
     return (
         sum((definition.attack_percent for definition in definitions), Decimal(0)),
         sum((definition.hp_percent for definition in definitions), Decimal(0)),

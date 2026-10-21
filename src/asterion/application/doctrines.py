@@ -28,10 +28,9 @@ from asterion.domain.economy import crowns_per_level, path_switch_cost
 from asterion.domain.equipment import EquipmentSlot, parse_equipment_slot
 from asterion.domain.paths import path_belongs_to_class
 from asterion.domain.talents import (
-    IMPLEMENTED_TALENT_LEVELS,
-    TALENT_DEFINITIONS,
-    TALENT_POINT_LEVELS,
+    TalentSelectionError,
     talent_points_at_level,
+    validate_talent_choices,
 )
 from asterion.infrastructure.db.models import (
     Character,
@@ -787,14 +786,27 @@ class DoctrineService:
             weapon = await resolve_equipment_weapon(session, item)
             if weapon is not None:
                 weapon_compatibility_tags.update(weapon.compatibility_tags)
+        talents = config["talents"]
+        if len(talents) > talent_points_at_level(character.level):
+            return "talent_points"
+        try:
+            validated_talents = validate_talent_choices(
+                character.character_class,
+                character.level,
+                [
+                    (item["point_slot"], item["talent_id"])
+                    for item in talents
+                ],
+            )
+        except (KeyError, TypeError, TalentSelectionError):
+            return "invalid_talents"
+
         try:
             build_equipment_configuration(
                 character,
                 [(slot, item_by_id[item_id]) for slot, item_id in equipment.items()],
                 version=character.combat_configuration_version,
-                talent_choices=tuple(
-                    (item["point_slot"], item["talent_id"]) for item in config["talents"]
-                ),
+                talent_choices=validated_talents,
             )
         except (ValueError, KeyError, TypeError):
             return "invalid_equipment"
@@ -819,31 +831,6 @@ class DoctrineService:
             if not weapon_requirement_satisfied(definition, weapon_compatibility_tags):
                 return "weapon_requirement"
 
-        talents = config["talents"]
-        if len(talents) > talent_points_at_level(character.level):
-            return "talent_points"
-        seen_slots, seen_ids = set(), set()
-        for item in talents:
-            try:
-                slot, talent_id = int(item["point_slot"]), str(item["talent_id"])
-            except (KeyError, ValueError, TypeError):
-                return "invalid_talents"
-            definition = TALENT_DEFINITIONS.get(talent_id)
-            if (
-                slot < 1
-                or slot > talent_points_at_level(character.level)
-                or slot > len(TALENT_POINT_LEVELS)
-                or slot in seen_slots
-                or talent_id in seen_ids
-                or definition is None
-                or definition.character_class != character.character_class
-                or definition.level > TALENT_POINT_LEVELS[slot - 1]
-                or character.level < definition.level
-                or definition.level not in IMPLEMENTED_TALENT_LEVELS
-            ):
-                return "invalid_talents"
-            seen_slots.add(slot)
-            seen_ids.add(talent_id)
         return None
 
     async def _character(self, session, actor):

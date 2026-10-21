@@ -16,7 +16,10 @@ from asterion.domain.equipment_stats import (
     EquipmentConfigurationSnapshot,
     item_snapshot_from_persisted,
 )
-from asterion.domain.talents import TALENT_DEFINITIONS, TALENT_POINT_LEVELS, talent_points_at_level
+from asterion.domain.talents import (
+    TalentSelectionError,
+    validate_talent_choices,
+)
 from asterion.infrastructure.db.models import (
     Character,
     CharacterEquipmentSlot,
@@ -95,6 +98,12 @@ def build_equipment_configuration(
     talent_choices: tuple[tuple[int, str], ...] = (),
 ) -> EquipmentConfigurationSnapshot:
     """Build validated pure configuration from already-authoritative item rows."""
+    try:
+        active_talent_choices = validate_talent_choices(
+            character.character_class, character.level, talent_choices
+        )
+    except TalentSelectionError as exc:
+        raise EquipmentConfigurationError("Persisted Talent configuration is invalid.") from exc
     snapshots = []
     mythic_count = 0
     for slot, item in entries:
@@ -123,7 +132,7 @@ def build_equipment_configuration(
         character.combat_configuration_version if version is None else version,
         tuple(sorted(snapshots, key=lambda item: item.slot)),
         character.selected_path,
-        talent_choices,
+        active_talent_choices,
     )
     result.contribution()
     return result
@@ -208,23 +217,11 @@ async def _load_talent_choices(
     if lock_rows:
         statement = statement.with_for_update()
     rows = list((await session.scalars(statement)).all())
-    seen_slots: set[int] = set()
-    seen_talents: set[str] = set()
-    active: list[tuple[int, str]] = []
-    available_points = talent_points_at_level(character.level)
-    for row in rows:
-        definition = TALENT_DEFINITIONS.get(row.talent_id)
-        if (
-            not 1 <= row.point_slot <= len(TALENT_POINT_LEVELS)
-            or row.point_slot in seen_slots
-            or row.talent_id in seen_talents
-            or definition is None
-            or definition.character_class != character.character_class
-            or definition.level > TALENT_POINT_LEVELS[row.point_slot - 1]
-        ):
-            raise EquipmentConfigurationError("Persisted Talent configuration is invalid.")
-        seen_slots.add(row.point_slot)
-        seen_talents.add(row.talent_id)
-        if row.point_slot <= available_points:
-            active.append((row.point_slot, row.talent_id))
-    return tuple(active)
+    try:
+        return validate_talent_choices(
+            character.character_class,
+            character.level,
+            [(row.point_slot, row.talent_id) for row in rows],
+        )
+    except TalentSelectionError as exc:
+        raise EquipmentConfigurationError("Persisted Talent configuration is invalid.") from exc
