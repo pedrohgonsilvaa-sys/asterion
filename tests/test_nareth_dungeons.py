@@ -635,7 +635,15 @@ async def test_nareth_dungeon_full_run_uses_global_settlement_and_run_scoped_bra
             ).all()
         )
 
-    def controlled_victory(state, action_id, *, target_id=None, actor_key=None):
+    def controlled_victory(
+        state,
+        action_id,
+        *,
+        target_id=None,
+        actor_key=None,
+        effect_id: str | None = None,
+    ):
+        assert effect_id is None
         actor_key = actor_key or "player"
         if action_id not in allowed_actions(state, actor_key):
             return state

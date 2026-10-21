@@ -341,7 +341,15 @@ async def test_altos_pedreira_is_discovery_and_p27_gated_and_settles_once(databa
         lambda seed, difficulty: brazier_rolls.append((seed, difficulty)) or True,
     )
 
-    def controlled_victory(state, action_id, *, target_id=None, actor_key=None):
+    def controlled_victory(
+        state,
+        action_id,
+        *,
+        target_id=None,
+        actor_key=None,
+        effect_id: str | None = None,
+    ):
+        assert effect_id is None
         actor_key = actor_key or "player"
         if action_id not in allowed_actions(state, actor_key):
             return state

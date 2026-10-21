@@ -473,7 +473,15 @@ async def test_varzeas_dungeons_use_global_run_settlement_and_run_scoped_checkpo
             ).all()
         )
 
-    def controlled_victory(state, action_id, *, target_id=None, actor_key=None):
+    def controlled_victory(
+        state,
+        action_id,
+        *,
+        target_id=None,
+        actor_key=None,
+        effect_id: str | None = None,
+    ):
+        assert effect_id is None
         actor_key = actor_key or "player"
         if action_id not in allowed_actions(state, actor_key):
             return state

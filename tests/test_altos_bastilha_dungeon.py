@@ -317,7 +317,15 @@ async def test_altos_bastilha_is_hidden_until_discovery_and_settles_on_shared_en
         lambda seed, difficulty: brazier_rolls.append((seed, difficulty)) or True,
     )
 
-    def controlled_victory(state, action_id, *, target_id=None, actor_key=None):
+    def controlled_victory(
+        state,
+        action_id,
+        *,
+        target_id=None,
+        actor_key=None,
+        effect_id: str | None = None,
+    ):
+        assert effect_id is None
         actor_key = actor_key or "player"
         if action_id not in allowed_actions(state, actor_key):
             return state
