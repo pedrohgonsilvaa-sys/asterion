@@ -144,7 +144,31 @@ def resolve_combat_stats(
     selected_path: str | None = None,
     talent_ids: tuple[str, ...] = (),
 ) -> CombatStats:
-    """Resolve all static stages, then round final primary stats exactly once."""
+    """Validate saved Talent choices, then resolve all static attribute stages."""
+    modifiers = static_talent_modifiers(character_class, level, talent_ids)
+    return _resolve_combat_stats_with_static_talent_modifiers(
+        character_class,
+        level,
+        race,
+        equipment,
+        selected_path,
+        modifiers,
+    )
+
+
+def _resolve_combat_stats_with_static_talent_modifiers(
+    character_class: str,
+    level: int,
+    race: str,
+    equipment: EquipmentStatContribution | None,
+    selected_path: str | None,
+    talent_modifiers: tuple[Decimal, Decimal, Decimal, Decimal],
+) -> CombatStats:
+    """Compose already-authorized static modifiers without intermediate rounding.
+
+    Kept private so tests can exercise a tier's pure arithmetic while the normal
+    entry point continues to reject selections whose tier is not enabled.
+    """
     base = class_stats(character_class, level)
     path = PATH_DEFINITIONS.get(selected_path or "")
     if path is not None:
@@ -162,14 +186,12 @@ def resolve_combat_stats(
             base.evasion,
             base.block,
         )
-    attack_percent, hp_percent, agility_percent = static_talent_modifiers(
-        character_class, level, talent_ids
-    )
-    if talent_ids:
+    attack_percent, hp_percent, defense_percent, agility_percent = talent_modifiers
+    if any(talent_modifiers):
         base = CombatStats(
             base.hp * (D(1) + hp_percent),
             base.attack * (D(1) + attack_percent),
-            base.defense,
+            base.defense * (D(1) + defense_percent),
             base.agility * (D(1) + agility_percent),
             base.per,
             base.crit,

@@ -25,6 +25,7 @@ class TalentDefinition:
     description: str
     attack_percent: Decimal = Decimal(0)
     hp_percent: Decimal = Decimal(0)
+    defense_percent: Decimal = Decimal(0)
     agility_percent: Decimal = Decimal(0)
 
 
@@ -407,6 +408,7 @@ _STATIC_TALENT_MODIFIERS = {
     "passo entre fios": {"agility_percent": Decimal("0.03")},
     "passos do destino": {"agility_percent": Decimal("0.03")},
     "clarão ágil": {"agility_percent": Decimal("0.03")},
+    "placas internas": {"defense_percent": Decimal("0.02")},
 }
 
 
@@ -417,7 +419,7 @@ def _make_catalog() -> tuple[TalentDefinition, ...]:
             if len(talents) != len(TALENT_CATEGORIES):
                 raise RuntimeError(f"Talent tier {character_class}/{level} must have 3 entries")
             for category, (name, description) in zip(TALENT_CATEGORIES, talents, strict=True):
-                static = _STATIC_TALENT_MODIFIERS.get(name.casefold(), {}) if level == 5 else {}
+                static = _STATIC_TALENT_MODIFIERS.get(name.casefold(), {})
                 definitions.append(
                     TalentDefinition(
                         f"talent.{character_class}.{_slug(name)}",
@@ -539,13 +541,26 @@ def static_talent_modifiers(
     character_class: str,
     level: int,
     talent_ids: tuple[str, ...] | list[str],
-) -> tuple[Decimal, ...]:
+) -> tuple[Decimal, Decimal, Decimal, Decimal]:
     definitions = [
         TALENT_DEFINITIONS[talent_id]
         for talent_id in validate_active_talent_ids(character_class, level, talent_ids)
     ]
+    return _static_talent_modifier_totals(definitions)
+
+
+def _static_talent_modifier_totals(
+    definitions: tuple[TalentDefinition, ...] | list[TalentDefinition],
+) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+    """Sum static effects after an authority has selected the definitions.
+
+    This lower-level helper deliberately does not decide eligibility. The public
+    runtime path must use ``static_talent_modifiers`` above, which validates the
+    saved choices before any modifier reaches attribute composition.
+    """
     return (
         sum((definition.attack_percent for definition in definitions), Decimal(0)),
         sum((definition.hp_percent for definition in definitions), Decimal(0)),
+        sum((definition.defense_percent for definition in definitions), Decimal(0)),
         sum((definition.agility_percent for definition in definitions), Decimal(0)),
     )
