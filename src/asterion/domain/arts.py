@@ -91,6 +91,7 @@ TECELAO_ART_IDS = {
     "ruptura_da_trama": "class_art.tecelao.ruptura_da_trama",
     "veu_entrelacado": "class_art.tecelao.veu_entrelacado",
     "geada_tecida": "class_art.tecelao.geada_tecida",
+    "surto_do_veu": "class_art.tecelao.surto_do_veu",
 }
 
 TECELAO_ART_LEVELS = {
@@ -99,6 +100,7 @@ TECELAO_ART_LEVELS = {
     TECELAO_ART_IDS["ruptura_da_trama"]: 7,
     TECELAO_ART_IDS["veu_entrelacado"]: 9,
     TECELAO_ART_IDS["geada_tecida"]: 18,
+    TECELAO_ART_IDS["surto_do_veu"]: 34,
 }
 
 ORACULO_ART_IDS = {

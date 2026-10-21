@@ -898,6 +898,31 @@ def event_line(
     if update:
         line += f" {update}"
     if (
+        "tecelao.trama_gerada" in event.path_triggers
+        and viewer_key in state.fighters
+    ):
+        owner_key = next(
+            (
+                key
+                for key, fighter in state.fighters.items()
+                if fighter.id == (event.actor_entity_id or event.actor)
+            ),
+            None,
+        )
+        if (
+            owner_key is not None
+            and _fighter_side(state, owner_key) == _fighter_side(state, viewer_key)
+        ):
+            owner_actions = player_actions_for(state, owner_key)
+            origin_action = owner_actions.get(event.action)
+            origin_name = (
+                origin_action.name if origin_action is not None else "Arte de Tecelão"
+            )
+            line += (
+                " 🪄 Trama Encadeada gerada · origem "
+                f"<b>{escape(origin_name)}</b>."
+            )
+    if (
         "oraculo.pressagio_defensive_criado" in event.path_triggers
         and viewer_key in state.fighters
     ):
@@ -1056,7 +1081,15 @@ def _class_mechanic_status_lines(
             and isinstance(trama, dict)
             and int(trama.get("remaining", 0)) > 0
         ):
-            lines.append(f"🪄 Trama · <code>{int(trama['remaining'])}T</code>")
+            origin_id = str(trama.get("origin_art", ""))
+            origin_action = player_actions_for(state, fighter_key).get(origin_id)
+            origin_name = (
+                origin_action.name if origin_action is not None else "Arte de Tecelão"
+            )
+            lines.append(
+                f"🪄 Trama · <code>{int(trama['remaining'])}T · "
+                f"{escape(origin_name)}</code>"
+            )
         luminar = fighter.path_state.get("luminar_state")
         if (
             fighter.character_class == "luminar"

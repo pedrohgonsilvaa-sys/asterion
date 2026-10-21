@@ -491,6 +491,8 @@ def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
         )
     elif art_id == TECELAO_ART_IDS["geada_tecida"]:
         lines.extend(["", "🗡️ Requisito de arma · Nenhum"])
+    elif art_id == TECELAO_ART_IDS["surto_do_veu"]:
+        lines.extend(["", "🗡️ Requisito de arma · Nenhum"])
     elif art_id == ORACULO_ART_IDS["augurio_favoravel"]:
         lines.extend(
             [

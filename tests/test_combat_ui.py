@@ -124,7 +124,7 @@ def _class_mechanic_combat_view(
                     "remaining": 2,
                 }
             },
-            "🪄 Trama · <code>2T</code>",
+            "🪄 Trama · <code>2T · Arte de Tecelão</code>",
         ),
         (
             "luminar",

@@ -953,6 +953,13 @@ def tecelao_player_actions(
             effect_id=TECELAO_ART_IDS["geada_tecida"],
             **trama_fields,
         ),
+        TECELAO_ART_IDS["surto_do_veu"]: Action(
+            TECELAO_ART_IDS["surto_do_veu"],
+            "Surto do Véu",
+            Decimal("1.45"),
+            cooldown=3,
+            **trama_fields,
+        ),
     }
     return {
         "attack": Action("attack", "Ataque Básico", Decimal(1)),
