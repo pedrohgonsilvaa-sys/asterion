@@ -923,6 +923,31 @@ def event_line(
                 f"<b>{escape(origin_name)}</b>."
             )
     if (
+        "oraculo.pressagio_offensive_criado" in event.path_triggers
+        and viewer_key in state.fighters
+    ):
+        owner_key = next(
+            (
+                key
+                for key, fighter in state.fighters.items()
+                if fighter.id == (event.actor_entity_id or event.actor)
+            ),
+            None,
+        )
+        target = _fighter_for_event(state, event.target)
+        if (
+            owner_key is not None
+            and target is not None
+            and _fighter_side(state, owner_key) == _fighter_side(state, viewer_key)
+        ):
+            marks = state.fighters[owner_key].path_state.get("omen_offensive", {})
+            mark = marks.get(target.id) if isinstance(marks, dict) else None
+            if isinstance(mark, dict) and int(mark.get("remaining", 0)) > 0:
+                line += (
+                    f" 🔮 Presságio Ofensivo gerado em <b>{escape(target.name)}</b> "
+                    f"· <code>{int(mark['remaining'])}T</code>."
+                )
+    if (
         "oraculo.pressagio_defensive_criado" in event.path_triggers
         and viewer_key in state.fighters
     ):

@@ -1287,6 +1287,8 @@ def _resolve_action_targets(
     requested_key = _resolve_fighter_key(state, requested_target)
     if requested_key is not None:
         return (requested_key,) if requested_key in candidates else ()
+    if requested_target is not None:
+        return ()
     if len(candidates) == 1:
         return (candidates[0],)
     if _fighter_side(state, actor_key) == "enemy":

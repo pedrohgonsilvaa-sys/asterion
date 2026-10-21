@@ -109,6 +109,7 @@ ORACULO_ART_IDS = {
     "ruina_predita": "class_art.oraculo.ruina_predita",
     "veu_premonitorio": "class_art.oraculo.veu_premonitorio",
     "augurio_favoravel": "class_art.oraculo.augurio_favoravel",
+    "selo_da_queda": "class_art.oraculo.selo_da_queda",
 }
 
 ORACULO_ART_LEVELS = {
@@ -117,6 +118,7 @@ ORACULO_ART_LEVELS = {
     ORACULO_ART_IDS["ruina_predita"]: 7,
     ORACULO_ART_IDS["veu_premonitorio"]: 9,
     ORACULO_ART_IDS["augurio_favoravel"]: 18,
+    ORACULO_ART_IDS["selo_da_queda"]: 34,
 }
 
 LUMINAR_ART_IDS = {

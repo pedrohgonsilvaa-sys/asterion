@@ -132,6 +132,7 @@ ORACULO_ENTITY_IDS = {
     3: "trial_entity.oraculo.futuro_possivel",
 }
 ORACULO_SINAL_EFFECT_ID = "oraculo.sinal_funesto.attack"
+ORACULO_SELO_EFFECT_ID = "oraculo.selo_da_queda.defense"
 ORACULO_OFFENSIVE_WINDOW_TAG = "oracle.offensive_window"
 ORACULO_TRAINING_ACTIONS = {
     1: ("trial.oraculo.ataque_sinal",),
@@ -1115,6 +1116,11 @@ def oraculo_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action
                 2,
                 "buff",
             ),),
+        ),
+        ORACULO_ART_IDS["selo_da_queda"]: Action(
+            ORACULO_ART_IDS["selo_da_queda"], "Selo da Queda", Decimal("1.00"),
+            attack_debuff=Decimal("0.10"), duration=2, cooldown=3,
+            effect_stat="defense", effect_id=ORACULO_SELO_EFFECT_ID,
         ),
     }
     return {

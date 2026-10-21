@@ -501,6 +501,15 @@ def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
                 "🔮 Buff positivo bem-sucedido · gera Presságio Defensivo no alvo.",
             ]
         )
+    elif art_id == ORACULO_ART_IDS["selo_da_queda"]:
+        lines.extend(
+            [
+                "",
+                "🗡️ Requisito de arma · Nenhum",
+                "🔮 Debuff normal aplicado com sucesso · gera Presságio Ofensivo no alvo.",
+                "🔮 Presságio Ofensivo preexistente no alvo · fortalece o Dano Direto.",
+            ]
+        )
     elif art_id == LUMINAR_ART_IDS["luz_restauradora"]:
         lines.extend(["", "🗡️ Requisito de arma · Nenhum"])
     if incompatible:
