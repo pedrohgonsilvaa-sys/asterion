@@ -801,7 +801,7 @@ def event_line(
             )
         update = _class_resource_update_line(state, event, viewer_key)
         return f"{line}{' ' + update if update else ''}"
-    label = action.name.split(" ", 1)[-1] if event.actor == "player" else action.name
+    label = action.name
     emoji = (
         "⚔️"
         if event.actor == "player" and event.action == "attack"
@@ -873,6 +873,22 @@ def event_line(
                 f" <b>{actor_name}</b> reduz a própria {stat_label} em "
                 f"<code>{magnitude}%</code> por {duration}."
             )
+    if event.path_per_bonus > 0:
+        owner_key = next(
+            (
+                key
+                for key, fighter in state.fighters.items()
+                if fighter.id == (event.actor_entity_id or event.actor)
+            ),
+            None,
+        )
+        viewer_can_see = viewer_key is None or (
+            owner_key is not None
+            and viewer_key in state.fighters
+            and _fighter_side(state, owner_key) == _fighter_side(state, viewer_key)
+        )
+        if viewer_can_see:
+            line += f" PER da ação · +{number(event.path_per_bonus)} p.p."
     if event.barrier_absorbed:
         line += f" Barreira absorve <code>{number(event.barrier_absorbed)}</code>."
     removal = _action_effect_removal_line(state, event)
@@ -1231,7 +1247,18 @@ def _action_resource_hints(
                 f"alvo com HP até {number(condition.threshold * 100)}%"
             )
         elif condition.kind == "target_has_normal_negative_effect":
-            description = "alvo com Debuff comum no início da ação"
+            if modifier.component == "precision_bonus":
+                description = (
+                    "alvo com DoT ou Debuff normal válido no início da ação"
+                    f" · +{number(modifier.magnitude)} p.p. PER"
+                )
+            elif modifier.component == "final_damage_bonus":
+                description = (
+                    "alvo com DoT ou Debuff normal válido no início da ação"
+                    f" · +{number(modifier.magnitude * 100)}% Dano Final"
+                )
+            else:
+                description = "alvo com Debuff comum no início da ação"
         elif condition.kind == "class_resource_at_least":
             if (
                 condition.resource == "aim"

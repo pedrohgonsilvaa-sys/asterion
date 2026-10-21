@@ -361,6 +361,14 @@ def _art_mechanics_lines(action) -> list[str]:
                 "🛡️ Com Retaliação ativa no início da ação · "
                 f"+{modifier.magnitude:g} p.p. PER"
             )
+        elif (
+            modifier.condition.kind == "target_has_normal_negative_effect"
+            and modifier.component == "precision_bonus"
+        ):
+            lines.append(
+                "🎯 Contra alvo com DoT ou Debuff normal válido no início da ação · "
+                f"+{modifier.magnitude:g} p.p. PER"
+            )
     if action.per_bonus_if_target_poisoned:
         lines.append(
             f"🎯 Contra alvo Envenenado · +{action.per_bonus_if_target_poisoned:g} p.p. PER"

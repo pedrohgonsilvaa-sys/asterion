@@ -415,6 +415,7 @@ def test_active_art_weapon_requirements_match_the_current_explicit_matrix():
         ERRANTE_ART_IDS["ferida_profunda"]: melee,
         ERRANTE_ART_IDS["golpe_oportuno"]: melee,
         ERRANTE_ART_IDS["corte_duplo"]: melee,
+        ERRANTE_ART_IDS["brecha_mortal"]: melee,
         VIGIA_ART_IDS["disparo_preciso"]: ranged,
         VIGIA_ART_IDS["marca_da_presa"]: ranged,
         VIGIA_ART_IDS["saraivada"]: ranged,

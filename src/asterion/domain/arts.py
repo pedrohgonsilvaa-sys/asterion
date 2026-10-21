@@ -55,6 +55,7 @@ ERRANTE_ART_IDS = {
     "passo_velado": "class_art.errante.passo_velado",
     "golpe_oportuno": "class_art.errante.golpe_oportuno",
     "corte_duplo": "class_art.errante.corte_duplo",
+    "brecha_mortal": "class_art.errante.brecha_mortal",
 }
 
 ERRANTE_ART_LEVELS = {
@@ -63,6 +64,7 @@ ERRANTE_ART_LEVELS = {
     ERRANTE_ART_IDS["passo_velado"]: 7,
     ERRANTE_ART_IDS["golpe_oportuno"]: 9,
     ERRANTE_ART_IDS["corte_duplo"]: 18,
+    ERRANTE_ART_IDS["brecha_mortal"]: 34,
 }
 
 VIGIA_ART_IDS = {
@@ -219,6 +221,7 @@ ART_WEAPON_REQUIREMENTS = {
     ERRANTE_ART_IDS["ferida_profunda"]: frozenset({"weapon.compat.melee"}),
     ERRANTE_ART_IDS["golpe_oportuno"]: frozenset({"weapon.compat.melee"}),
     ERRANTE_ART_IDS["corte_duplo"]: frozenset({"weapon.compat.melee"}),
+    ERRANTE_ART_IDS["brecha_mortal"]: frozenset({"weapon.compat.melee"}),
     VIGIA_ART_IDS["disparo_preciso"]: frozenset({"weapon.compat.bow", "weapon.compat.crossbow"}),
     VIGIA_ART_IDS["marca_da_presa"]: frozenset({"weapon.compat.bow", "weapon.compat.crossbow"}),
     VIGIA_ART_IDS["saraivada"]: frozenset({"weapon.compat.bow", "weapon.compat.crossbow"}),

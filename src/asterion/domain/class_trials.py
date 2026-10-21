@@ -564,6 +564,22 @@ def errante_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action
             ERRANTE_ART_IDS["corte_duplo"], "Corte Duplo", Decimal("0.60"),
             cooldown=3, hit_count=2,
         ),
+        ERRANTE_ART_IDS["brecha_mortal"]: Action(
+            ERRANTE_ART_IDS["brecha_mortal"],
+            "Brecha Mortal",
+            Decimal("1.30"),
+            cooldown=3,
+            conditional_modifiers=(
+                ActionConditionalModifier(
+                    "errante.brecha_mortal.opportunism_per",
+                    ActionCondition("target_has_normal_negative_effect"),
+                    "precision_bonus",
+                    Decimal(10),
+                    target_scope="primary_target",
+                    evaluation_scope="per_action",
+                ),
+            ),
+        ),
     }
     return {
         "attack": Action("attack", "Ataque Básico", Decimal(1)),
