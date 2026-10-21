@@ -420,6 +420,7 @@ def test_active_art_weapon_requirements_match_the_current_explicit_matrix():
         VIGIA_ART_IDS["marca_da_presa"]: ranged,
         VIGIA_ART_IDS["saraivada"]: ranged,
         VIGIA_ART_IDS["tiro_calculado"]: ranged,
+        VIGIA_ART_IDS["voleio"]: ranged,
     }
     sentinel_art = ACTIVE_ART_DEFINITIONS[SENTINEL_ART_IDS["golpe_de_guarda"]]
     vigia_art = ACTIVE_ART_DEFINITIONS[VIGIA_ART_IDS["disparo_preciso"]]

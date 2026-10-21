@@ -33,6 +33,7 @@ from asterion.application.road import (
 from asterion.application.vigor import reconcile_character_vigor
 from asterion.domain.combat import (
     act,
+    action_target_ids,
     allowed_actions,
     consumable_available,
     effective_heal_amount,
@@ -1371,17 +1372,28 @@ class RoundService(RoadService):
         if "defend" in actions:
             return ("action", "defend")
         available_actions = player_actions_for(combat)
+        offensive_arts = tuple(
+            action
+            for action in actions
+            if action.startswith(("class_art.", "path_art."))
+            and action in available_actions
+            and available_actions[action].coefficient > 0
+            and available_actions[action].effect_removal is None
+        )
+        # GDD §49.12 gives equipped AoE attacks priority when at least two
+        # living enemies are valid targets. Keep the existing action order for
+        # single-target encounters and as the normal offensive fallback.
         active_art = next(
             (
                 action
-                for action in actions
-                if action.startswith(("class_art.", "path_art."))
-                and action in available_actions
-                and available_actions[action].coefficient > 0
-                and available_actions[action].effect_removal is None
+                for action in offensive_arts
+                if available_actions[action].target_mode == "all_opponents"
+                and len(action_target_ids(combat, action)) >= 2
             ),
             None,
         )
+        if active_art is None:
+            active_art = next(iter(offensive_arts), None)
         if active_art is not None:
             return ("action", active_art)
         if "art" in actions:

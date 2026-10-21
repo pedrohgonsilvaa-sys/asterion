@@ -3350,6 +3350,12 @@ def _prepare_path_action(
             "damage_power": D(1),
             "healing_power": D(1),
             "barrier_power": D(1),
+            # AoE primary results use action-start target state. Keep source-
+            # counted auras and DEF stable if an earlier target is defeated.
+            "pre_event_defense": _fighter_stat(state, target_key, "defense"),
+            "pre_event_damage_aura_reduction": _damage_aura_reduction(
+                state, target_key
+            ),
             "final_damage_bonus": D(0),
             "per_bonus": D(3) * stacks if actor.selected_path == "atirador" else ZERO,
             "crit_bonus": D(6) if actor.selected_path == "atirador" and stacks >= 4 else ZERO,
@@ -4469,6 +4475,10 @@ def _perform(
     resolved_hit_count = _hit_count if _hit_index is not None else action.hit_count
     action_event_indices: list[int] = []
     total_vamp_damage = D(0)
+    defer_aoe_phase_triggers = (
+        action.target_mode == "all_opponents" and action.hit_count == 1
+    )
+    aoe_phase_trigger_pending = False
 
     # The target set is frozen before the first primary result. Target ordering is
     # stable by entity id and never depends on database order.
@@ -4702,7 +4712,12 @@ def _perform(
             direct_damage(
                 actor.stat("attack"),
                 damage_coefficient,
-                _fighter_stat(state, target_key, "defense"),
+                D(
+                    target_path.get(
+                        "pre_event_defense",
+                        _fighter_stat(state, target_key, "defense"),
+                    )
+                ),
                 actor.level,
                 critical=critical,
                 mitigation=mitigation,
@@ -4714,7 +4729,12 @@ def _perform(
         direct_final_reduction = min(
             D(1),
             target.protection_layers * target.protection_reduction_per_layer
-            + _damage_aura_reduction(state, target_key)
+            + D(
+                target_path.get(
+                    "pre_event_damage_aura_reduction",
+                    _damage_aura_reduction(state, target_key),
+                )
+            )
             + sum(
                 (
                     target.tagged_direct_damage_reductions.get(tag, ZERO)
@@ -4761,7 +4781,12 @@ def _perform(
             damage_without_defender = direct_damage(
                 actor.stat("attack"),
                 damage_coefficient,
-                _fighter_stat(state, target_key, "defense"),
+                D(
+                    target_path.get(
+                        "pre_event_defense",
+                        _fighter_stat(state, target_key, "defense"),
+                    )
+                ),
                 actor.level,
                 critical=critical,
                 mitigation=mitigation_without_defender,
@@ -4803,7 +4828,10 @@ def _perform(
             absorbed_sources=barrier_absorbed_sources,
         )
         if actual_damage > 0:
-            _resolve_phase_triggers(state)
+            if defer_aoe_phase_triggers:
+                aoe_phase_trigger_pending = True
+            else:
+                _resolve_phase_triggers(state)
         if (
             direct_eligible
             and damage > 0
@@ -4842,12 +4870,18 @@ def _perform(
                 )
 
             used_acquisition = actor.path_state.setdefault("aim_acquisition_used", {})
+            voleio_secondary = (
+                action.target_mode == "all_opponents"
+                and _is_named_art(action_id, action, "voleio")
+                and target.id != primary_target_id
+            )
             if (
                 target.id not in generated
                 and snapshot_stacks == 0
                 and _has_talent(actor, "aquisicao_rapida")
                 and isinstance(used_acquisition, dict)
                 and not used_acquisition.get(target.id)
+                and not voleio_secondary
             ):
                 extra_stacks = _grant_aim(
                     state,
@@ -5407,6 +5441,11 @@ def _perform(
                 state.events[target_event],
                 healed=state.events[target_event].healed + vamp_healed,
             )
+
+    # Resolve encounter phases only after every simultaneous AoE result and
+    # action-level vampirism have completed against the frozen target snapshot.
+    if aoe_phase_trigger_pending:
+        _resolve_phase_triggers(state)
 
     if action.self_state_tags_after is not None:
         actor.training_state_tags = tuple(sorted(set(action.self_state_tags_after)))

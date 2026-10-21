@@ -753,6 +753,13 @@ def vigia_player_actions(allowed_art_ids: tuple[str, ...]) -> dict[str, Action]:
                 ),
             ),
         ),
+        VIGIA_ART_IDS["voleio"]: Action(
+            VIGIA_ART_IDS["voleio"],
+            "Voleio",
+            Decimal("0.75"),
+            cooldown=3,
+            target_mode="all_opponents",
+        ),
         VIGIA_ART_IDS["olho_da_vigilia"]: Action(
             VIGIA_ART_IDS["olho_da_vigilia"], "Olho da Vigília", Decimal(0),
             cooldown=4, target_mode="self",
