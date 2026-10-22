@@ -419,6 +419,7 @@ _STATIC_TALENT_MODIFIERS = {
     "fenda precisa": {"crit_points": Decimal("2")},
     "véu denso": {"defense_percent": Decimal("0.02")},
     "véu cauteloso": {"defense_percent": Decimal("0.02")},
+    "corpo consagrado": {"defense_percent": Decimal("0.02")},
 }
 
 
