@@ -1356,6 +1356,7 @@ _CLASS_MECHANIC_COMBAT_FLAGS = (
     "omen_flexible_used",
     "luminar_cycle_used",
     "aim_acquisition_used",
+    "vigia_antecipacao_used",
 )
 
 
@@ -4886,6 +4887,7 @@ def _perform(
             if direct_eligible
             else 0
         )
+        direct_damage_before_final_reduction = damage
         direct_final_reduction = min(
             D(1),
             target.protection_layers * target.protection_reduction_per_layer
@@ -4905,10 +4907,35 @@ def _perform(
         )
         if direct_eligible and direct_final_reduction > ZERO:
             damage = int(
-                (D(damage) * (D(1) - direct_final_reduction)).to_integral_value(
+                (
+                    D(direct_damage_before_final_reduction)
+                    * (D(1) - direct_final_reduction)
+                ).to_integral_value(
                     rounding=ROUND_FLOOR
                 )
             )
+        # Antecipação protects against the first positive direct-damage
+        # component resolved in a combat. A miss or a component already reduced
+        # to zero by other direct-damage reductions does not spend the trigger;
+        # a Barrier is later in the pipeline, so full Barrier absorption still
+        # counts. The 7 percentage points join the existing direct-reduction
+        # stage and are capped by that stage's normal 100% limit.
+        anticipation_used = target.path_state.get("vigia_antecipacao_used")
+        if (
+            direct_eligible
+            and damage > 0
+            and target.character_class == "vigia"
+            and _has_talent(target, "antecipacao")
+            and not anticipation_used
+        ):
+            direct_final_reduction = min(D(1), direct_final_reduction + D("0.07"))
+            damage = int(
+                (
+                    D(direct_damage_before_final_reduction)
+                    * (D(1) - direct_final_reduction)
+                ).to_integral_value(rounding=ROUND_FLOOR)
+            )
+            target.path_state["vigia_antecipacao_used"] = True
         path_final_damage_bonus = D(target_path.get("final_damage_bonus", ZERO))
         path_triggers = list(target_path.get("triggers", ()))
         if (
@@ -5021,6 +5048,7 @@ def _perform(
             primary_target_id = _path_resolution.get("primary_target_id")
             can_generate_base = target.id == primary_target_id or is_rastros_area
             stacks = 0
+            generated_normal_mira = False
             if target.id not in generated and can_generate_base:
                 stacks = _grant_aim(
                     state,
@@ -5028,29 +5056,32 @@ def _perform(
                     target_key,
                     trigger="chuva_de_rastros" if is_rastros_area else "direct",
                 )
+                generated_normal_mira = stacks > 0
 
             used_acquisition = actor.path_state.setdefault("aim_acquisition_used", {})
-            voleio_secondary = (
-                action.target_mode == "all_opponents"
-                and _is_named_art(action_id, action, "voleio")
-                and target.id != primary_target_id
-            )
             if (
-                target.id not in generated
-                and snapshot_stacks == 0
+                snapshot_stacks == 0
                 and _has_talent(actor, "aquisicao_rapida")
                 and isinstance(used_acquisition, dict)
                 and not used_acquisition.get(target.id)
-                and not voleio_secondary
             ):
+                # This is the explicit per-target exception in GDD §49.5.
+                # Unlike ordinary Mira generation, it may apply to a valid
+                # secondary AoE target. Eligibility was frozen from the
+                # action-start Mira snapshot above, and positive pre-Barrier
+                # direct damage has already been established here.
                 extra_stacks = _grant_aim(
                     state,
                     actor_id,
                     target_key,
                     trigger="aquisicao_rapida",
                 )
+                # Consume the per-target combat allowance on the first
+                # eligible event even if the path cap currently prevents a
+                # Mira from being added. A later retry or newly freed target
+                # slot must not replay this one-time trigger.
+                used_acquisition[target.id] = True
                 if extra_stacks:
-                    used_acquisition[target.id] = True
                     stacks = extra_stacks
 
             if (
@@ -5066,9 +5097,11 @@ def _perform(
                     trigger="fixar_alvo",
                 )
                 stacks = extra_stacks or stacks
+                generated_normal_mira = generated_normal_mira or extra_stacks > 0
 
-            if stacks:
+            if generated_normal_mira:
                 generated.add(target.id)
+            if stacks:
                 path_triggers.append("vigia.mira_gerada")
                 target_path["aim_stacks_after"] = stacks
         if direct_eligible and protection_layers_before > 0:
@@ -5281,8 +5314,8 @@ def _perform(
                         target_key,
                         trigger="status",
                     )
-                    generated.add(target.id)
                     if stacks:
+                        generated.add(target.id)
                         path_triggers.append("rastreador.mira_gerada")
                         target_path["aim_stacks_after"] = stacks
 

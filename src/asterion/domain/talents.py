@@ -416,6 +416,7 @@ _STATIC_TALENT_MODIFIERS = {
     "placas internas": {"defense_percent": Decimal("0.02")},
     "precisão cruel": {"crit_points": Decimal("2")},
     "couro leve": {"defense_percent": Decimal("0.02")},
+    "perfuração calculada": {"per_points": Decimal("2")},
     "olho afiado": {"crit_points": Decimal("2")},
     "postura vigilante": {"defense_percent": Decimal("0.02")},
     "fenda precisa": {"crit_points": Decimal("2")},

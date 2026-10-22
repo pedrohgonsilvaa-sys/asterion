@@ -252,18 +252,29 @@ def test_voleio_generates_one_primary_mira_after_positive_damage_even_through_ba
     assert "aim_from" not in result.fighters["enemy-1"].path_state
 
 
-def test_voleio_aquisition_rapida_does_not_extend_to_aoe_secondaries():
+def test_voleio_aquisicao_rapida_is_per_target_but_base_mira_stays_primary_only():
     state = _battle(count=3, path="atirador")
     state.fighters["player"].talent_ids = ("talent.vigia.aquisicao_rapida",)
     result = act(state, VOLEIO, target_id="enemy-0")
     assert result.fighters["enemy-0"].path_state["aim_from"]["player"]["stacks"] == 2
-    assert result.fighters["player"].path_state["aim_acquisition_used"] == {"enemy-0": True}
-    assert all("aim_from" not in result.fighters[key].path_state for key in ("enemy-1", "enemy-2"))
+    assert result.fighters["player"].path_state["aim_acquisition_used"] == {
+        "enemy-0": True,
+        "enemy-1": True,
+        "enemy-2": True,
+    }
+    assert result.fighters["enemy-1"].path_state["aim_from"]["player"]["stacks"] == 1
+    assert result.fighters["enemy-2"].path_state["aim_from"]["player"]["stacks"] == 1
 
     without_primary = _battle(count=2, path="atirador")
     without_primary.fighters["player"].talent_ids = ("talent.vigia.aquisicao_rapida",)
     result = act(without_primary, VOLEIO)
-    assert all("aim_from" not in result.fighters[key].path_state for key in ("enemy-0", "enemy-1"))
+    # The normal AoE Mira exception still requires an explicit primary. The
+    # Talento's separately published per-target exception grants one Mira to
+    # every target that takes eligible direct damage.
+    assert all(
+        result.fighters[key].path_state["aim_from"]["player"]["stacks"] == 1
+        for key in ("enemy-0", "enemy-1")
+    )
 
 
 def test_voleio_uses_each_target_mira_snapshot_without_retroactive_bonus():
