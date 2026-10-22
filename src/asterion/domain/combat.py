@@ -1348,6 +1348,7 @@ _CLASS_MECHANIC_STATE_KEYS = (
     "trama_next_per",
     "aim_next_per",
     "aim_current_target_id",
+    "errante_sangue_frio_crit",
 )
 _CLASS_MECHANIC_COMBAT_FLAGS = (
     "vigilia_retaliation_triggered",
@@ -2649,6 +2650,18 @@ def _end_turn(state: Combat) -> None:
         actor.next_direct_crit_bonus = ZERO
         actor.next_direct_crit_expires_opportunity = None
         actor.next_direct_crit_effect_id = ""
+    sangue_frio = actor.path_state.get("errante_sangue_frio_crit")
+    expires_opportunity = (
+        sangue_frio.get("expires_opportunity")
+        if isinstance(sangue_frio, dict)
+        else None
+    )
+    if (
+        isinstance(expires_opportunity, int)
+        and not isinstance(expires_opportunity, bool)
+        and actor.opportunity > expires_opportunity
+    ):
+        actor.path_state.pop("errante_sangue_frio_crit", None)
     expired_barriers = _advance_barrier_sources(actor)
     for layer in expired_barriers:
         _remove_barrier_bound_effects(state, actor, layer)
@@ -3346,7 +3359,46 @@ def _prepare_path_action(
         "automatic_resource_changes": [],
         "target_keys": target_keys,
         "action_instance_id": "",
+        "next_direct_crit_bonus": ZERO,
+        "next_direct_crit_effect_ids": (),
+        "next_direct_crit_consumed": False,
+        "next_direct_crit_committed": False,
     }
+
+    if direct:
+        prepared_bonus = ZERO
+        prepared_effect_ids: list[str] = []
+        if (
+            actor.next_direct_crit_expires_opportunity is not None
+            and actor.opportunity <= actor.next_direct_crit_expires_opportunity
+        ):
+            prepared_bonus += actor.next_direct_crit_bonus
+            if actor.next_direct_crit_effect_id:
+                prepared_effect_ids.append(actor.next_direct_crit_effect_id)
+        sangue_frio = actor.path_state.get("errante_sangue_frio_crit")
+        expires_opportunity = (
+            sangue_frio.get("expires_opportunity")
+            if isinstance(sangue_frio, dict)
+            else None
+        )
+        if (
+            actor.character_class == "errante"
+            and _has_talent(actor, "sangue_frio")
+            and isinstance(expires_opportunity, int)
+            and not isinstance(expires_opportunity, bool)
+            and actor.opportunity <= expires_opportunity
+        ):
+            prepared_bonus += D(5)
+            prepared_effect_ids.append("errante.sangue_frio.crit")
+            context["sangue_frio_source_action_instance_id"] = str(
+                sangue_frio.get("source_action_instance_id", "")
+            )
+            context["sangue_frio_applied_opportunity"] = sangue_frio.get(
+                "applied_opportunity"
+            )
+        context["next_direct_crit_bonus"] = prepared_bonus
+        context["next_direct_crit_effect_ids"] = tuple(sorted(set(prepared_effect_ids)))
+        context["next_direct_crit_consumed"] = bool(prepared_effect_ids)
 
     for target_key in target_keys:
         target = state.fighters[target_key]
@@ -3612,6 +3664,35 @@ def _commit_path_action(
     if context.get("class_resources_committed"):
         return
     actor = state.fighters[actor_id]
+    if (
+        action.coefficient > ZERO
+        and context.get("next_direct_crit_consumed")
+        and not context.get("next_direct_crit_committed")
+    ):
+        if (
+            actor.next_direct_crit_expires_opportunity is not None
+            and actor.opportunity <= actor.next_direct_crit_expires_opportunity
+            and actor.next_direct_crit_effect_id
+            in context.get("next_direct_crit_effect_ids", ())
+        ):
+            actor.next_direct_crit_bonus = ZERO
+            actor.next_direct_crit_expires_opportunity = None
+            actor.next_direct_crit_effect_id = ""
+        expected_source = str(context.get("sangue_frio_source_action_instance_id", ""))
+        sangue_frio = actor.path_state.get("errante_sangue_frio_crit")
+        if (
+            "errante.sangue_frio.crit"
+            in context.get("next_direct_crit_effect_ids", ())
+            and isinstance(sangue_frio, dict)
+            and str(sangue_frio.get("source_action_instance_id", "")) == expected_source
+            and sangue_frio.get("applied_opportunity")
+            == context.get("sangue_frio_applied_opportunity")
+        ):
+            actor.path_state.pop("errante_sangue_frio_crit", None)
+            context.setdefault("automatic_resource_changes", []).append(
+                ("errante_sangue_frio_crit", actor.id, 1, 0)
+            )
+        context["next_direct_crit_committed"] = True
     for plan in context.get("resource_uses", ()):
         use = plan["use"]
         if use.consume_at != "commit":
@@ -4433,6 +4514,9 @@ def _perform(
     active_actor_effect_ids = {
         effect.id for effect in actor.effects if effect.remaining > 0
     }
+    active_actor_effect_ids.update(
+        _path_resolution.get("next_direct_crit_effect_ids", ())
+    )
     if (
         actor.next_direct_crit_effect_id
         and actor.next_direct_crit_expires_opportunity is not None
@@ -4542,7 +4626,10 @@ def _perform(
             if streak >= 2:
                 state.evasion_streaks[target.id] = 0
             else:
-                evasion_chance = chance_from_percentage_points(target.stat("evasion"))
+                evasion_points = target.stat("evasion")
+                if state.pvp_mode:
+                    evasion_points = min(D(25), evasion_points)
+                evasion_chance = chance_from_percentage_points(evasion_points)
                 if evasion_chance > ZERO:
                     rng = CombatRng(state.id, state.rng_cursor)
                     dodged = rng.chance(
@@ -4560,6 +4647,17 @@ def _perform(
                     state.evasion_streaks[target.id] = 0
 
         if dodged:
+            dodge_path_triggers = tuple(target_path.get("triggers", ()))
+            if (
+                target.character_class == "errante"
+                and _has_talent(target, "sangue_frio")
+            ):
+                target.path_state["errante_sangue_frio_crit"] = {
+                    "applied_opportunity": target.opportunity,
+                    "expires_opportunity": target.opportunity + 2,
+                    "source_action_instance_id": action_instance_id,
+                }
+                dodge_path_triggers += ("errante.sangue_frio_preparado",)
             event_index = len(state.events)
             state.events.append(
                 CombatEvent(
@@ -4610,7 +4708,7 @@ def _perform(
                     damage_power_multiplier=damage_power_multiplier,
                     healing_power_multiplier=healing_power_multiplier,
                     barrier_power_multiplier=barrier_power_multiplier,
-                    path_triggers=tuple(target_path.get("triggers", ())),
+                    path_triggers=dodge_path_triggers,
                     path_power_multiplier=D(target_path.get("damage_power", D(1))),
                     path_final_damage_bonus=D(
                         target_path.get("final_damage_bonus", ZERO)
@@ -4634,19 +4732,19 @@ def _perform(
                 )
                 else ZERO
             )
-            next_direct_bonus = (
-                actor.next_direct_crit_bonus
-                if actor.next_direct_crit_expires_opportunity is not None
-                and actor.opportunity <= actor.next_direct_crit_expires_opportunity
-                else ZERO
+            next_direct_bonus = D(
+                _path_resolution.get("next_direct_crit_bonus", ZERO)
             )
-            crit_chance = (
-                chance_from_percentage_points(
+            crit_points = (
                 actor.stat("crit")
                 + target_debuff_bonus
                 + next_direct_bonus
                 + D(target_path.get("crit_bonus", ZERO))
-                )
+            )
+            if state.pvp_mode:
+                crit_points = min(D(40), crit_points)
+            crit_chance = (
+                chance_from_percentage_points(crit_points)
                 if current_ruleset
                 else D("0.05")
             )
@@ -5474,10 +5572,6 @@ def _perform(
             actor.opportunity + max(1, action.next_direct_crit_duration)
         )
         actor.next_direct_crit_effect_id = action.next_direct_crit_effect_id or ""
-    if direct_eligible and actor.next_direct_crit_expires_opportunity is not None:
-        actor.next_direct_crit_bonus = ZERO
-        actor.next_direct_crit_expires_opportunity = None
-        actor.next_direct_crit_effect_id = ""
     if _hit_index is None or _hit_index == _hit_count:
         _retaliation_action_resolved(state, actor_id, actor, retaliation_context)
     if action.revive_fighter_keys and _hit_index in {None, 1}:

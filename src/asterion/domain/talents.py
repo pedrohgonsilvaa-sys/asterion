@@ -27,6 +27,10 @@ class TalentDefinition:
     hp_percent: Decimal = Decimal(0)
     defense_percent: Decimal = Decimal(0)
     agility_percent: Decimal = Decimal(0)
+    per_points: Decimal = Decimal(0)
+    crit_points: Decimal = Decimal(0)
+    evasion_points: Decimal = Decimal(0)
+    block_points: Decimal = Decimal(0)
 
 
 def _slug(value: str) -> str:
@@ -404,6 +408,7 @@ _STATIC_TALENT_MODIFIERS = {
     "luz incisiva": {"attack_percent": Decimal("0.01")},
     "vitalidade solar": {"hp_percent": Decimal("0.01")},
     "instinto rápido": {"agility_percent": Decimal("0.03")},
+    "reflexo": {"evasion_points": Decimal("1")},
     "passo do caçador": {"agility_percent": Decimal("0.03")},
     "passo entre fios": {"agility_percent": Decimal("0.03")},
     "passos do destino": {"agility_percent": Decimal("0.03")},
@@ -549,6 +554,19 @@ def static_talent_modifiers(
     return _static_talent_modifier_totals(definitions)
 
 
+def static_talent_secondary_modifiers(
+    character_class: str,
+    level: int,
+    talent_ids: tuple[str, ...] | list[str],
+) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+    """Return validated static PER, Crit, Evasion, and Block point bonuses."""
+    definitions = [
+        TALENT_DEFINITIONS[talent_id]
+        for talent_id in validate_active_talent_ids(character_class, level, talent_ids)
+    ]
+    return _static_talent_secondary_modifier_totals(definitions)
+
+
 def _static_talent_modifier_totals(
     definitions: tuple[TalentDefinition, ...] | list[TalentDefinition],
 ) -> tuple[Decimal, Decimal, Decimal, Decimal]:
@@ -563,4 +581,16 @@ def _static_talent_modifier_totals(
         sum((definition.hp_percent for definition in definitions), Decimal(0)),
         sum((definition.defense_percent for definition in definitions), Decimal(0)),
         sum((definition.agility_percent for definition in definitions), Decimal(0)),
+    )
+
+
+def _static_talent_secondary_modifier_totals(
+    definitions: tuple[TalentDefinition, ...] | list[TalentDefinition],
+) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+    """Sum secondary percentage-point effects after controlled test selection."""
+    return (
+        sum((definition.per_points for definition in definitions), Decimal(0)),
+        sum((definition.crit_points for definition in definitions), Decimal(0)),
+        sum((definition.evasion_points for definition in definitions), Decimal(0)),
+        sum((definition.block_points for definition in definitions), Decimal(0)),
     )

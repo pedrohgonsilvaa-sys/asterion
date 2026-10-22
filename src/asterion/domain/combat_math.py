@@ -7,7 +7,10 @@ from uuid import UUID
 
 from asterion.domain.equipment_stats import EquipmentStatContribution
 from asterion.domain.paths import PATH_DEFINITIONS
-from asterion.domain.talents import static_talent_modifiers
+from asterion.domain.talents import (
+    static_talent_modifiers,
+    static_talent_secondary_modifiers,
+)
 
 D = Decimal
 ZERO = D(0)
@@ -146,6 +149,9 @@ def resolve_combat_stats(
 ) -> CombatStats:
     """Validate saved Talent choices, then resolve all static attribute stages."""
     modifiers = static_talent_modifiers(character_class, level, talent_ids)
+    secondary_modifiers = static_talent_secondary_modifiers(
+        character_class, level, talent_ids
+    )
     return _resolve_combat_stats_with_static_talent_modifiers(
         character_class,
         level,
@@ -153,6 +159,7 @@ def resolve_combat_stats(
         equipment,
         selected_path,
         modifiers,
+        secondary_modifiers,
     )
 
 
@@ -163,6 +170,12 @@ def _resolve_combat_stats_with_static_talent_modifiers(
     equipment: EquipmentStatContribution | None,
     selected_path: str | None,
     talent_modifiers: tuple[Decimal, Decimal, Decimal, Decimal],
+    secondary_talent_modifiers: tuple[Decimal, Decimal, Decimal, Decimal] = (
+        ZERO,
+        ZERO,
+        ZERO,
+        ZERO,
+    ),
 ) -> CombatStats:
     """Compose already-authorized static modifiers without intermediate rounding.
 
@@ -197,6 +210,14 @@ def _resolve_combat_stats_with_static_talent_modifiers(
             base.crit,
             base.evasion,
             base.block,
+        )
+    if any(secondary_talent_modifiers):
+        base = CombatStats(
+            *base.values(),
+            base.per + secondary_talent_modifiers[0],
+            base.crit + secondary_talent_modifiers[1],
+            base.evasion + secondary_talent_modifiers[2],
+            base.block + secondary_talent_modifiers[3],
         )
     equipment = equipment or EquipmentStatContribution()
     with localcontext() as ctx:
