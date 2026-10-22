@@ -1153,6 +1153,12 @@ def _barrier_received_multiplier(state: Combat, target_key: str) -> Decimal:
         # Receiving bonuses share this multiplier stage with barrier auras;
         # source/path potency is composed separately before the final floor.
         multiplier += D("0.05")
+    if (
+        recipient is not None
+        and recipient.character_class == "sentinela"
+        and _has_talent(recipient, "barreira_densa")
+    ):
+        multiplier += D("0.05")
     return multiplier
 
 
@@ -2535,6 +2541,9 @@ def _retaliation_action_resolved(
 ) -> None:
     if not context.get("used"):
         return
+    # GDD §49.5 says "after Retaliation" without naming grant, refresh, or
+    # consumption. This hook follows the distinct action_resolved event after
+    # a committed offensive consumption; grant/refresh remain separate events.
     if _has_talent(actor, "contrapeso"):
         _apply_class_mechanic_buff(
             actor,
