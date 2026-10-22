@@ -23,7 +23,6 @@ from asterion.domain.economy import crowns_per_level
 from asterion.domain.talents import (
     IMPLEMENTED_TALENT_LEVELS,
     TALENT_DEFINITIONS,
-    TALENT_POINT_LEVELS,
     TALENTS_BY_CLASS,
     TalentDefinition,
     TalentSelectionError,
@@ -145,9 +144,6 @@ class TalentService:
             )
             if point_slot is None:
                 raise TalentMutationRejected(TalentMutationCode.NO_POINTS)
-            if definition.level > TALENT_POINT_LEVELS[point_slot - 1]:
-                raise TalentMutationRejected(TalentMutationCode.LEVEL_REQUIRED)
-
             session.add(
                 CharacterTalentChoice(
                     character_id=character.id,

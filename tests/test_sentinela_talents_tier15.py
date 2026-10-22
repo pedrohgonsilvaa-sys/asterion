@@ -183,15 +183,15 @@ def test_ponta_revidada_uses_snapshot_and_consumes_on_dodge_or_full_barrier():
     assert barriered.fighters["player"].retaliation_charges == 0
 
 
-def test_placas_internas_is_defined_as_two_percent_defense_and_keeps_tier_closed():
+def test_placas_internas_is_defined_and_authoritatively_available_at_level_15():
     definition = TALENT_DEFINITIONS[PLACAS]
     assert definition.level == 15
     assert definition.defense_percent == D("0.02")
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+    assert validate_active_talent_ids("sentinela", 15, (PLACAS,)) == (PLACAS,)
+    assert validate_talent_choices("sentinela", 15, ((1, PLACAS),)) == ((1, PLACAS),)
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("sentinela", 34, (PLACAS,))
-    with pytest.raises(TalentSelectionError):
-        validate_talent_choices("sentinela", 34, ((3, PLACAS),))
+        validate_active_talent_ids("sentinela", 14, (PLACAS,))
 
 
 def test_placas_internas_composes_with_path_equipment_and_single_final_rounding():
@@ -230,10 +230,10 @@ def test_placas_internas_composes_with_path_equipment_and_single_final_rounding(
         baseline.attack,
         baseline.agility,
     )
-    with pytest.raises(TalentSelectionError):
-        resolve_combat_stats(
-            "sentinela", 34, "remanescente", equipment, "bastiao", (PLACAS,)
-        )
+    public = resolve_combat_stats(
+        "sentinela", 34, "remanescente", equipment, "bastiao", (PLACAS,)
+    )
+    assert public == actual
 
 
 def test_placas_internas_static_result_survives_combat_snapshot_roundtrip():
@@ -360,13 +360,20 @@ def test_guarda_preparada_pending_state_persists_and_clears_on_combat_end_or_dea
     assert "guard_prepared_barrier" not in dead.path_state
 
 
-def test_tier_15_ids_cannot_enter_authoritative_active_or_persisted_choice_validation():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5})
-    for talent_id in (PONTA, PLACAS, GUARDA):
-        with pytest.raises(TalentSelectionError):
-            validate_active_talent_ids("sentinela", 15, (talent_id,))
-        with pytest.raises(TalentSelectionError):
-            validate_talent_choices("sentinela", 15, ((3, talent_id),))
+def test_tier_15_choices_are_valid_but_tier_25_remains_closed():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+    for slot, talent_id in enumerate((PONTA, PLACAS, GUARDA), 1):
+        assert validate_active_talent_ids("sentinela", 15, (talent_id,)) == (talent_id,)
+        assert validate_talent_choices("sentinela", 15, ((slot, talent_id),)) == (
+            (slot, talent_id),
+        )
 
     valid_nv5 = "talent.sentinela.aco_desperto"
     assert validate_active_talent_ids("sentinela", 15, (valid_nv5,)) == (valid_nv5,)
+    tier25 = next(
+        definition.talent_id
+        for definition in TALENT_DEFINITIONS.values()
+        if definition.character_class == "sentinela" and definition.level == 25
+    )
+    with pytest.raises(TalentSelectionError):
+        validate_active_talent_ids("sentinela", 60, (tier25,))

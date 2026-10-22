@@ -131,8 +131,8 @@ def _action_events(state, action_id: str):
     return [event for event in state.events if event.action == action_id]
 
 
-def test_tecelao_tier15_catalog_values_are_present_but_public_gate_stays_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5})
+def test_tecelao_tier15_catalog_values_and_public_gate():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
     assert TALENT_DEFINITIONS[FENDA].name == "Fenda Precisa"
     assert TALENT_DEFINITIONS[FENDA].level == 15
     assert TALENT_DEFINITIONS[FENDA].crit_points == D(2)
@@ -142,11 +142,13 @@ def test_tecelao_tier15_catalog_values_are_present_but_public_gate_stays_closed(
     assert TALENT_DEFINITIONS[TRAMA_DURADOURA].name == "Trama Duradoura"
     assert TALENT_DEFINITIONS[TRAMA_DURADOURA].level == 15
 
-    for talent_id in (FENDA, VEU_DENSO, TRAMA_DURADOURA):
+    for slot, talent_id in enumerate((FENDA, VEU_DENSO, TRAMA_DURADOURA), 1):
+        assert validate_active_talent_ids("tecelao", 15, (talent_id,)) == (talent_id,)
+        assert validate_talent_choices("tecelao", 15, ((slot, talent_id),)) == (
+            (slot, talent_id),
+        )
         with pytest.raises(TalentSelectionError):
-            validate_active_talent_ids("tecelao", 60, (talent_id,))
-        with pytest.raises(TalentSelectionError):
-            validate_talent_choices("tecelao", 60, ((1, talent_id),))
+            validate_active_talent_ids("tecelao", 14, (talent_id,))
 
 
 @pytest.mark.parametrize("path", (None, "conjurador", "runico"))
@@ -224,11 +226,19 @@ def test_fenda_precisa_adds_two_crit_points_before_equipment_enhancements():
     assert actual.values() == baseline.values()
 
 
-def test_tier15_static_effects_do_not_bypass_public_attribute_composition():
-    with pytest.raises(TalentSelectionError):
-        resolve_combat_stats("tecelao", 60, "remanescente", talent_ids=(FENDA,))
-    with pytest.raises(TalentSelectionError):
-        resolve_combat_stats("tecelao", 60, "remanescente", talent_ids=(VEU_DENSO,))
+def test_tier15_static_effects_reach_public_attribute_composition():
+    baseline = resolve_combat_stats("tecelao", 60, "remanescente")
+    public_crit = resolve_combat_stats(
+        "tecelao", 60, "remanescente", talent_ids=(FENDA,)
+    )
+    public_defense = resolve_combat_stats(
+        "tecelao", 60, "remanescente", talent_ids=(VEU_DENSO,)
+    )
+
+    assert public_crit == _internal_stats((FENDA,), level=60)
+    assert public_crit.crit == baseline.crit + D(2)
+    assert public_defense == _internal_stats((VEU_DENSO,), level=60)
+    assert public_defense.defense > baseline.defense
 
 
 @pytest.mark.parametrize(
@@ -353,12 +363,21 @@ def test_trama_window_roundtrips_codec_without_refresh_or_losing_origin():
     assert actor.path_state["trama_state"]["origin_art"] == SURTO
 
 
-def test_internal_trama_duradoura_is_not_a_public_acquisition_bypass():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5})
+def test_tier15_is_authorized_and_tier25_remains_rejected():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+    assert validate_talent_choices("tecelao", 15, ((1, TRAMA_DURADOURA),)) == (
+        (1, TRAMA_DURADOURA),
+    )
+    assert validate_active_talent_ids("tecelao", 60, (TRAMA_DURADOURA,)) == (
+        TRAMA_DURADOURA,
+    )
+    future = next(
+        definition.talent_id
+        for definition in TALENT_DEFINITIONS.values()
+        if definition.character_class == "tecelao" and definition.level == 25
+    )
     with pytest.raises(TalentSelectionError):
-        validate_talent_choices("tecelao", 60, ((1, TRAMA_DURADOURA),))
-    with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("tecelao", 60, (TRAMA_DURADOURA,))
+        validate_active_talent_ids("tecelao", 60, (future,))
 
     valid_tier5 = next(
         definition.talent_id

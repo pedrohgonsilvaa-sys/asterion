@@ -7,7 +7,12 @@ from asterion.bot.creation_ui import Screen
 from asterion.domain.arts import ACTIVE_ART_IDS_BY_CLASS, active_art_definition
 from asterion.domain.class_trials import class_player_actions
 from asterion.domain.paths import PATH_DEFINITIONS
-from asterion.domain.talents import IMPLEMENTED_TALENT_LEVELS, TALENT_DEFINITIONS, TALENTS_BY_CLASS
+from asterion.domain.talents import (
+    IMPLEMENTED_TALENT_LEVELS,
+    TALENT_DEFINITIONS,
+    TALENTS_BY_CLASS,
+    talent_points_at_level,
+)
 
 REASON_LABELS = {
     "wrong_path": "Caminho incompatível",
@@ -382,7 +387,7 @@ def render_talent_slots(view, doctrine) -> Screen:
         b36(doctrine.revision),
         b36(view.configuration_version),
     )
-    points = min(12, max(0, (view.level - 5) // 5 + 1))
+    points = talent_points_at_level(view.level)
     lines = ["🌿 Talentos da Doutrina", ""]
     rows = []
     for slot in range(1, points + 1):
@@ -399,10 +404,22 @@ def render_talent_choices(view, doctrine, point_slot: int) -> Screen:
         b36(view.configuration_version),
     )
     rows = []
+    points = talent_points_at_level(view.level)
+    if not 1 <= point_slot <= points:
+        return Screen(
+            "🔒 Este Ponto de Talento ainda não está disponível.",
+            "character",
+            _markup([[_btn("← Pontos", f"doc:ts:{did}:{rev}:{cfg}")]]),
+        )
+    selected_elsewhere = {
+        item.get("talent_id")
+        for item in doctrine.configuration.get("talents", ())
+        if isinstance(item, dict) and item.get("point_slot") != point_slot
+    }
     for index, talent in enumerate(TALENTS_BY_CLASS[view.character_class]):
         if talent.level not in IMPLEMENTED_TALENT_LEVELS or talent.level > view.level:
             continue
-        if talent.level > (5 + 5 * (point_slot - 1)):
+        if talent.talent_id in selected_elsewhere:
             continue
         rows.append(
             [_btn(f"{index + 1} {talent.name}", f"doc:ti:{did}:{rev}:{cfg}:{point_slot}:{index}")]

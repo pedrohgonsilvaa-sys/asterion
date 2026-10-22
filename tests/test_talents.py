@@ -189,7 +189,11 @@ def test_level_progression_crosses_multiple_talent_milestones_without_duplicate_
 def test_authoritative_talent_validator_rejects_invalid_active_ids_and_rank_duplicates():
     steel = _talent("sentinela", "Aço Desperto").talent_id
     other_class = _talent("errante", "Fio Afiado").talent_id
-    future = _talent("sentinela", "Ponta Revidada").talent_id
+    future = next(
+        talent.talent_id
+        for talent in TALENTS_BY_CLASS["sentinela"]
+        if talent.level == 25
+    )
     for ids in (("talent.unknown.injected",), (other_class,), (future,), (steel, steel)):
         with pytest.raises(TalentSelectionError):
             validate_active_talent_ids("sentinela", 20, ids)
@@ -525,15 +529,30 @@ async def test_talent_respec_rejects_wrong_location_balance_and_foreground(datab
 
 
 @pytest.mark.asyncio
-async def test_nv15_talent_tier_remains_metadata_only_even_when_character_is_levelled(
-    database,
-):
+async def test_nv15_talents_are_acquirable_at_level_and_future_tiers_stay_closed(database):
     actor = 772107
-    _, sessions = await _seed_character(database, actor, level=20)
+    _, sessions = await _seed_character(database, actor, level=14)
     service = TalentService(sessions, "ocaso")
     talent_id = _talent("sentinela", "Ponta Revidada").talent_id
-    with pytest.raises(TalentMutationRejected) as unavailable:
+    with pytest.raises(TalentMutationRejected) as under_level:
         await service.acquire(actor, talent_id, 0)
+    assert under_level.value.code == TalentMutationCode.LEVEL_REQUIRED
+    async with sessions.begin() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        character.level = 15
+    acquired = await service.acquire(actor, talent_id, 0)
+    assert acquired is not None and acquired.point_slot == 1
+    assert acquired.view.available_points == 2
+    future_id = next(
+        talent.talent_id
+        for talent in TALENTS_BY_CLASS["sentinela"]
+        if talent.level == 25
+    )
+    async with sessions.begin() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        character.level = 60
+    with pytest.raises(TalentMutationRejected) as unavailable:
+        await service.acquire(actor, future_id, acquired.combat_configuration_version)
     assert unavailable.value.code == TalentMutationCode.TIER_NOT_IMPLEMENTED
 
 
@@ -649,7 +668,14 @@ async def test_persisted_invalid_talents_fail_closed_without_deleting_rows(
     )
     character_id, sessions = await _seed_character(database, actor, level=level)
     choices = {
-        "unsupported": (3, _talent("sentinela", "Ponta Revidada").talent_id),
+        "unsupported": (
+            3,
+            next(
+                talent.talent_id
+                for talent in TALENTS_BY_CLASS["sentinela"]
+                if talent.level == 25
+            ),
+        ),
         "unsupported_35": (7, _talent("sentinela", "Olho de Combate").talent_id),
         "wrong_class": (1, _talent("errante", "Fio Afiado").talent_id),
         "unknown": (1, "talent.unknown.injected"),
@@ -722,7 +748,11 @@ async def test_doctrine_cannot_activate_injected_unimplemented_talent(database):
     service = DoctrineService(sessions, "ocaso")
     created = await service.create(actor, "Futura", 0)
     assert created is not None and created.doctrine_id is not None
-    unsupported_id = _talent("sentinela", "Ponta Revidada").talent_id
+    unsupported_id = next(
+        talent.talent_id
+        for talent in TALENTS_BY_CLASS["sentinela"]
+        if talent.level == 25
+    )
     async with sessions.begin() as session:
         doctrine = await session.get(CharacterDoctrine, created.doctrine_id)
         doctrine.configuration = {
@@ -749,13 +779,13 @@ async def test_doctrine_cannot_activate_injected_unimplemented_talent(database):
 
 
 @pytest.mark.asyncio
-async def test_level_60_preserves_unspent_points_with_only_nv5_tier_available(database):
+async def test_level_60_preserves_unspent_points_with_nv5_and_nv15_tiers_available(database):
     actor = 772114
-    _, sessions = await _seed_character(database, actor, level=60)
+    character_id, sessions = await _seed_character(database, actor, level=60)
     service = TalentService(sessions, "ocaso")
     view = await service.view(actor)
     assert view is not None and view.total_points == 12 and view.available_points == 12
-    for talent in TALENTS_BY_CLASS["sentinela"][:3]:
+    for talent in TALENTS_BY_CLASS["sentinela"][:6]:
         result = await service.acquire(
             actor,
             talent.talent_id,
@@ -763,12 +793,30 @@ async def test_level_60_preserves_unspent_points_with_only_nv5_tier_available(da
         )
         assert result is not None and result.changed
         view = result.view
-    assert len(view.choices) == 3
+    assert len(view.choices) == 6
     assert view.total_points == 12
-    assert view.available_points == 9
-    with pytest.raises(TalentMutationRejected) as fourth:
-        await service.acquire(actor, view.choices[0].talent_id, view.combat_configuration_version)
-    assert fourth.value.code == TalentMutationCode.DUPLICATE_TALENT
+    assert view.available_points == 6
+    future_id = next(
+        talent.talent_id
+        for talent in TALENTS_BY_CLASS["sentinela"]
+        if talent.level == 25
+    )
+    with pytest.raises(TalentMutationRejected) as future:
+        await service.acquire(actor, future_id, view.combat_configuration_version)
+    assert future.value.code == TalentMutationCode.TIER_NOT_IMPLEMENTED
+    async with sessions() as session:
+        saved = list(
+            (
+                await session.scalars(
+                    select(CharacterTalentChoice)
+                    .where(CharacterTalentChoice.character_id == character_id)
+                    .order_by(CharacterTalentChoice.point_slot)
+                )
+            ).all()
+        )
+    assert [row.talent_id for row in saved] == [
+        item.talent_id for item in TALENTS_BY_CLASS["sentinela"][:6]
+    ]
 
 
 @pytest.mark.asyncio

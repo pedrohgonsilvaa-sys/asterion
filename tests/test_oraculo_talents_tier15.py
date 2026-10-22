@@ -177,8 +177,8 @@ def _event(state, action_id: str):
     )
 
 
-def test_oraculo_tier15_definitions_and_public_gate_remain_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5})
+def test_oraculo_tier15_definitions_are_publicly_authorized_at_level():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
     assert talent_points_at_level(15) == 3
     expected = {
         PRESSAGIO_CORTANTE: ("Presságio Cortante", D(15), D(0), D(0)),
@@ -189,25 +189,22 @@ def test_oraculo_tier15_definitions_and_public_gate_remain_closed():
         definition = TALENT_DEFINITIONS[talent_id]
         assert (definition.name, definition.level, definition.per_points) == (name, level, per)
         assert definition.defense_percent == defense
-        for validate in (
-            lambda talent_id=talent_id: validate_active_talent_ids(
-                "oraculo", 60, (talent_id,)
-            ),
-            lambda talent_id=talent_id: validate_talent_choices(
-                "oraculo", 60, ((1, talent_id),)
-            ),
-            lambda talent_id=talent_id: static_talent_modifiers(
-                "oraculo", 60, (talent_id,)
-            ),
-            lambda talent_id=talent_id: static_talent_secondary_modifiers(
-                "oraculo", 60, (talent_id,)
-            ),
-            lambda talent_id=talent_id: resolve_combat_stats(
-                "oraculo", 60, "remanescente", talent_ids=(talent_id,)
-            ),
-        ):
-            with pytest.raises(TalentSelectionError):
-                validate()
+        assert validate_active_talent_ids("oraculo", 15, (talent_id,)) == (talent_id,)
+        assert validate_talent_choices("oraculo", 15, ((1, talent_id),)) == (
+            (1, talent_id),
+        )
+        static_talent_modifiers("oraculo", 15, (talent_id,))
+        static_talent_secondary_modifiers("oraculo", 15, (talent_id,))
+        resolve_combat_stats("oraculo", 15, "remanescente", talent_ids=(talent_id,))
+        with pytest.raises(TalentSelectionError):
+            validate_active_talent_ids("oraculo", 14, (talent_id,))
+    future = next(
+        definition.talent_id
+        for definition in TALENT_DEFINITIONS.values()
+        if definition.character_class == "oraculo" and definition.level == 25
+    )
+    with pytest.raises(TalentSelectionError):
+        validate_active_talent_ids("oraculo", 60, (future,))
 
 
 @pytest.mark.parametrize("path", (None, "agoureiro", "invocador"))

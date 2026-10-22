@@ -493,7 +493,25 @@ class DoctrineService:
                     if len(set(config["arts"].values())) != len(config["arts"]):
                         raise DoctrineRejected("duplicate_art")
             else:
-                config["talents"] = value
+                try:
+                    proposed_talents = [
+                        (item["point_slot"], item["talent_id"])
+                        for item in value
+                        if isinstance(item, dict)
+                    ]
+                    if len(proposed_talents) != len(value):
+                        raise TalentSelectionError("Invalid Talent choice record.")
+                    validated_talents = validate_talent_choices(
+                        character.character_class,
+                        character.level,
+                        proposed_talents,
+                    )
+                except (KeyError, TypeError, TalentSelectionError) as exc:
+                    raise DoctrineRejected("invalid_talents") from exc
+                config["talents"] = [
+                    {"point_slot": slot, "talent_id": talent_id}
+                    for slot, talent_id in validated_talents
+                ]
             updated_configuration = _canonical(config)
             if updated_configuration == _canonical(row.configuration or {}):
                 return DoctrineMutation(False, character.combat_configuration_version, row.id)

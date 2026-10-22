@@ -171,8 +171,8 @@ def _set_luminar_state(state: Combat, kind: str, remaining: int = 2) -> None:
     }
 
 
-def test_luminar_tier15_catalog_and_public_gate_stay_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5})
+def test_luminar_tier15_catalog_and_public_gate():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
     assert talent_points_at_level(15) == 3
     expected = {
         JULGAMENTO_PRECISO: ("Julgamento Preciso", D(15), D(0), D(0)),
@@ -184,25 +184,22 @@ def test_luminar_tier15_catalog_and_public_gate_stay_closed():
         assert (definition.name, definition.level) == (name, level)
         assert definition.crit_points == crit
         assert definition.defense_percent == defense
-        for validate in (
-            lambda talent_id=talent_id: validate_active_talent_ids(
-                "luminar", 60, (talent_id,)
-            ),
-            lambda talent_id=talent_id: validate_talent_choices(
-                "luminar", 60, ((3, talent_id),)
-            ),
-            lambda talent_id=talent_id: static_talent_modifiers(
-                "luminar", 60, (talent_id,)
-            ),
-            lambda talent_id=talent_id: static_talent_secondary_modifiers(
-                "luminar", 60, (talent_id,)
-            ),
-            lambda talent_id=talent_id: resolve_combat_stats(
-                "luminar", 60, "remanescente", talent_ids=(talent_id,)
-            ),
-        ):
-            with pytest.raises(TalentSelectionError):
-                validate()
+        assert validate_active_talent_ids("luminar", 15, (talent_id,)) == (talent_id,)
+        assert validate_talent_choices("luminar", 15, ((3, talent_id),)) == (
+            (3, talent_id),
+        )
+        static_talent_modifiers("luminar", 15, (talent_id,))
+        static_talent_secondary_modifiers("luminar", 15, (talent_id,))
+        resolve_combat_stats("luminar", 15, "remanescente", talent_ids=(talent_id,))
+        with pytest.raises(TalentSelectionError):
+            validate_active_talent_ids("luminar", 14, (talent_id,))
+    future = next(
+        definition.talent_id
+        for definition in TALENT_DEFINITIONS.values()
+        if definition.character_class == "luminar" and definition.level == 25
+    )
+    with pytest.raises(TalentSelectionError):
+        validate_active_talent_ids("luminar", 60, (future,))
 
 
 @pytest.mark.parametrize("path", (None, "guardiao", "inquisidor"))
@@ -518,4 +515,4 @@ def test_all_three_internal_talents_coexist_without_opening_public_selection():
     assert event.path_power_multiplier == D("1.15")
     assert event.path_crit_bonus == D(2)
     assert "luminar_state" not in result.fighters["player"].path_state
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})

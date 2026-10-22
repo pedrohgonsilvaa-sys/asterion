@@ -8,7 +8,7 @@ from decimal import Decimal
 
 TALENT_POINT_LEVELS = (5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60)
 TALENT_CATEGORIES = ("Pressão", "Resistência", "Técnica")
-IMPLEMENTED_TALENT_LEVELS = frozenset({5})
+IMPLEMENTED_TALENT_LEVELS = frozenset({5, 15})
 
 
 class TalentSelectionError(ValueError):
@@ -504,7 +504,6 @@ def validate_talent_choices(
             or definition.character_class != character_class
             or definition.level > level
             or definition.level not in IMPLEMENTED_TALENT_LEVELS
-            or definition.level > TALENT_POINT_LEVELS[slot - 1]
         ):
             raise TalentSelectionError("Talent choice is not eligible for this character.")
         seen_slots.add(slot)

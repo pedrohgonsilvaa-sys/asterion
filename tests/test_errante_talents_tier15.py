@@ -190,18 +190,17 @@ def _incoming_dodge(*, combat_id: UUID = COMBAT_ID) -> Combat:
     return state
 
 
-def test_errante_nv15_definitions_exist_but_authoritative_tier_stays_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5})
+def test_errante_nv15_definitions_are_public_at_level_and_remain_level_gated():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
     assert TALENT_DEFINITIONS[BRECHA_EXPOSTA].level == 15
     assert TALENT_DEFINITIONS[REFLEXO].level == 15
     assert TALENT_DEFINITIONS[SANGUE_FRIO].level == 15
     for talent_id in (BRECHA_EXPOSTA, REFLEXO, SANGUE_FRIO):
+        assert validate_active_talent_ids("errante", 15, (talent_id,)) == (talent_id,)
+        assert validate_talent_choices("errante", 15, ((1, talent_id),)) == ((1, talent_id),)
+        assert static_talent_secondary_modifiers("errante", 15, (talent_id,)) is not None
         with pytest.raises(TalentSelectionError):
-            validate_active_talent_ids("errante", 15, (talent_id,))
-        with pytest.raises(TalentSelectionError):
-            validate_talent_choices("errante", 15, ((1, talent_id),))
-        with pytest.raises(TalentSelectionError):
-            static_talent_secondary_modifiers("errante", 15, (talent_id,))
+            validate_active_talent_ids("errante", 14, (talent_id,))
 
 
 @pytest.mark.parametrize(
@@ -355,12 +354,12 @@ def test_reflexo_is_one_static_evasion_point_and_composes_with_equipment():
     assert actual.evasion == class_stats("errante", 34).evasion + D("2.5") + D(1)
 
 
-def test_reflexo_internal_modifier_stays_out_of_public_stats_and_doctrine_validation():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5})
-    with pytest.raises(TalentSelectionError):
-        resolve_combat_stats("errante", 34, "remanescente", talent_ids=(REFLEXO,))
-    with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("errante", 34, (REFLEXO,))
+def test_reflexo_static_modifier_is_available_through_public_stats():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+    baseline = resolve_combat_stats("errante", 34, "remanescente")
+    actual = resolve_combat_stats("errante", 34, "remanescente", talent_ids=(REFLEXO,))
+    assert actual.evasion == baseline.evasion + D(1)
+    assert actual.defense == baseline.defense
 
 
 def test_reflexo_adds_to_passo_velado_without_changing_its_duration_or_magnitude():
@@ -622,15 +621,23 @@ def test_reflexo_evasion_obeys_pvp_cap_without_imposing_it_in_pve():
 
 
 @pytest.mark.parametrize("talent_id", (BRECHA_EXPOSTA, REFLEXO, SANGUE_FRIO))
-def test_injected_persisted_nv15_ids_cannot_become_authoritative_choices(talent_id: str):
+def test_nv15_ids_are_level_gated_and_tier25_remains_closed(talent_id: str):
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("errante", 34, (talent_id,))
+        validate_active_talent_ids("errante", 14, (talent_id,))
     with pytest.raises(TalentSelectionError):
-        validate_talent_choices("errante", 34, ((1, talent_id),))
+        validate_talent_choices("errante", 14, ((1, talent_id),))
+    assert validate_active_talent_ids("errante", 15, (talent_id,)) == (talent_id,)
+    future = next(
+        definition.talent_id
+        for definition in TALENT_DEFINITIONS.values()
+        if definition.character_class == "errante" and definition.level == 25
+    )
+    with pytest.raises(TalentSelectionError):
+        validate_active_talent_ids("errante", 60, (future,))
 
 
 def test_valid_nv5_errante_choices_remain_legal_and_points_still_accrue_at_nv15():
     valid = "talent.errante.fio_afiado"
     assert validate_active_talent_ids("errante", 15, (valid,)) == (valid,)
     assert TALENT_DEFINITIONS[valid].level == 5
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
