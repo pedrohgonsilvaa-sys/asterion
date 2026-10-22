@@ -2789,6 +2789,19 @@ def _has_valid_negative_effect(state: Combat, target: Fighter) -> bool:
     )
 
 
+def _has_valid_defense_reduction(target: Fighter) -> bool:
+    """Whether the action-start target snapshot contains a live −DEF debuff."""
+    return any(
+        effect.kind == "debuff"
+        and not effect.fixed_mechanic
+        and effect.stat == "defense"
+        and effect.magnitude > ZERO
+        and effect.remaining > 0
+        and effect.stacks > 0
+        for effect in target.effects
+    )
+
+
 def _aim_entry(target: Fighter, source: Fighter) -> dict | None:
     entries = target.path_state.get("aim_from", {})
     if not isinstance(entries, dict):
@@ -3426,6 +3439,17 @@ def _prepare_path_action(
                 and _has_valid_negative_effect(state, target)
             ),
         }
+        if (
+            actor.character_class == "sentinela"
+            and direct
+            and _has_talent(actor, "pressao_de_fissuras")
+            and _has_valid_defense_reduction(target)
+        ):
+            # §49.5 grants a direct-damage power increase against the target's
+            # action-start −DEF state. It belongs in the damage component power
+            # stage, before the shared DEF/PER/Crit/mitigation calculation.
+            entry["damage_power"] *= D("1.03")
+            entry["triggers"].append("sentinela.pressao_de_fissuras")
         if entry["oportunism"]:
             entry["final_damage_bonus"] += (
                 D("0.10") if _has_talent(actor, "oportunismo_ampliado") else D("0.08")
@@ -4007,9 +4031,7 @@ def _path_effect_duration(actor: Fighter, effect: ActionEffect, duration: int) -
 def _record_devastador_charge(
     state: Combat, actor_key: str, event_start: int, action_id: str
 ) -> None:
-    for target in state.fighters.values():
-        if target.selected_path != "devastador":
-            continue
+    for target_key, target in state.fighters.items():
         hp_loss = sum(
             (
                 D(event.effective_damage)
@@ -4021,11 +4043,30 @@ def _record_devastador_charge(
             ),
             ZERO,
         )
-        if hp_loss >= target.stats.hp * D("0.08") and hp_loss > ZERO:
+        if hp_loss <= ZERO:
+            continue
+        if (
+            target.selected_path == "devastador"
+            and hp_loss >= target.stats.hp * D("0.08")
+        ):
             target.path_state["devastador_charge"] = {
                 "expires_opportunity": target.opportunity + 2,
                 "source_action": action_id,
             }
+        if (
+            target.character_class == "sentinela"
+            and target.hp > ZERO
+            and _fighter_side(state, actor_key) != _fighter_side(state, target_key)
+            and _has_talent(target, "firme_sob_impacto")
+            and hp_loss >= target.stats.hp * D("0.08")
+        ):
+            _apply_class_mechanic_buff(
+                target,
+                mechanic="sentinela.firme_sob_impacto",
+                stat="defense",
+                magnitude=D("0.05"),
+                duration=1,
+            )
 
 def _perform(
     state: Combat,
