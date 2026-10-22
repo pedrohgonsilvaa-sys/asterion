@@ -425,6 +425,12 @@ _STATIC_TALENT_MODIFIERS = {
     "corpo consagrado": {"defense_percent": Decimal("0.02")},
 }
 
+# This name is also used by a different Class at a closed tier. Keep its
+# modifier attached to the canonical Tecelão ID instead of enabling it by name.
+_STATIC_TALENT_MODIFIERS_BY_ID = {
+    "talent.tecelao.fio_perfurante": {"per_points": Decimal("2")},
+}
+
 
 def _make_catalog() -> tuple[TalentDefinition, ...]:
     definitions: list[TalentDefinition] = []
@@ -433,10 +439,14 @@ def _make_catalog() -> tuple[TalentDefinition, ...]:
             if len(talents) != len(TALENT_CATEGORIES):
                 raise RuntimeError(f"Talent tier {character_class}/{level} must have 3 entries")
             for category, (name, description) in zip(TALENT_CATEGORIES, talents, strict=True):
-                static = _STATIC_TALENT_MODIFIERS.get(name.casefold(), {})
+                talent_id = f"talent.{character_class}.{_slug(name)}"
+                static = {
+                    **_STATIC_TALENT_MODIFIERS.get(name.casefold(), {}),
+                    **_STATIC_TALENT_MODIFIERS_BY_ID.get(talent_id, {}),
+                }
                 definitions.append(
                     TalentDefinition(
-                        f"talent.{character_class}.{_slug(name)}",
+                        talent_id,
                         character_class,
                         name,
                         level,

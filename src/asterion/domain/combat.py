@@ -1055,6 +1055,7 @@ def _resolve_phase_triggers(state: Combat) -> None:
                 source.stats.hp
                 * trigger.barrier_source_per_active_fighter_fraction
                 * len(active_resolution_fighters)
+                * _barrier_received_multiplier(state, trigger.source_fighter_key)
             ).to_integral_value(rounding=ROUND_FLOOR)
             barrier_value = _apply_barrier(
                 source,
@@ -1138,6 +1139,11 @@ def _barrier_received_multiplier(state: Combat, target_key: str) -> Decimal:
             if key in state.fighters
         )
         multiplier += aura.barrier_received_per_source * active_sources
+    recipient = state.fighters.get(target_key)
+    if recipient is not None and _has_talent(recipient, "protecao_tecida"):
+        # Receiving bonuses share this multiplier stage with barrier auras;
+        # source/path potency is composed separately before the final floor.
+        multiplier += D("0.05")
     return multiplier
 
 
@@ -3762,13 +3768,6 @@ def _commit_path_action(
             context["automatic_resource_changes"].append(
                 ("trama", actor.id, 1, 0)
             )
-        if _has_talent(actor, "alternancia_fluida"):
-            _apply_class_mechanic_buff(
-                actor,
-                mechanic="tecelao.alternancia_fluida",
-                stat="agility",
-                magnitude=D("0.05"),
-            )
     if context.get("luminar_consumed"):
         luminar = actor.path_state.pop("luminar_state", None)
         if isinstance(luminar, dict):
@@ -3884,6 +3883,20 @@ def _finalize_path_action(
     if state.result:
         return None
     generated: list[tuple[str, str | None]] = []
+    if (
+        actor.character_class == "tecelao"
+        and actor.hp > ZERO
+        and context.get("trama_consumed")
+        and _has_talent(actor, "alternancia_fluida")
+    ):
+        _apply_class_mechanic_buff(
+            actor,
+            mechanic="tecelao.alternancia_fluida",
+            stat="agility",
+            magnitude=D("0.05"),
+            duration=1,
+        )
+        generated.append(("tecelao.alternancia_fluida", None))
     if (
         actor.character_class == "errante"
         and actor.hp > ZERO
@@ -6372,9 +6385,12 @@ def use_combat_consumable(
             return state
     elif item.family == ConsumableFamily.PROTECTION:
         barrier_multiplier = D("1.10") if player.selected_path == "bastiao" else D(1)
-        barrier_value = (player.stats.hp * D("0.12") * barrier_multiplier).to_integral_value(
-            rounding=ROUND_FLOOR
-        )
+        barrier_value = (
+            player.stats.hp
+            * D("0.12")
+            * barrier_multiplier
+            * _barrier_received_multiplier(updated, actor_key)
+        ).to_integral_value(rounding=ROUND_FLOOR)
         if barrier_value <= 0:
             return state
         barrier_value = _apply_barrier(
