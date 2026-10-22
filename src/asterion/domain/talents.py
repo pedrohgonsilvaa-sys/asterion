@@ -418,6 +418,7 @@ _STATIC_TALENT_MODIFIERS = {
     "postura vigilante": {"defense_percent": Decimal("0.02")},
     "fenda precisa": {"crit_points": Decimal("2")},
     "véu denso": {"defense_percent": Decimal("0.02")},
+    "véu cauteloso": {"defense_percent": Decimal("0.02")},
 }
 
 
