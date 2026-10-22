@@ -24,6 +24,7 @@ from asterion.domain.equipment_stats import EquipmentStatContribution
 from asterion.domain.talents import (
     IMPLEMENTED_TALENT_LEVELS,
     TALENT_DEFINITIONS,
+    TALENTS_BY_CLASS,
     TalentSelectionError,
     _static_talent_modifier_totals,
     _static_talent_secondary_modifier_totals,
@@ -211,15 +212,14 @@ def test_perfuracao_calculada_is_two_percentage_points_and_uses_static_compositi
     assert effective_defense(D(100), D(29) + talent.per_points) == D(70)
 
 
-def test_perfuracao_calculada_remains_closed_in_public_validation():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+def test_perfuracao_calculada_is_publicly_valid_at_nv25():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
     assert TALENT_DEFINITIONS[PERFURACAO].level == 25
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("vigia", 60, (PERFURACAO,))
-    with pytest.raises(TalentSelectionError):
-        static_talent_secondary_modifiers("vigia", 60, (PERFURACAO,))
-    with pytest.raises(TalentSelectionError):
-        resolve_combat_stats("vigia", 60, "remanescente", talent_ids=(PERFURACAO,))
+        validate_active_talent_ids("vigia", 24, (PERFURACAO,))
+    assert validate_active_talent_ids("vigia", 25, (PERFURACAO,)) == (PERFURACAO,)
+    assert static_talent_secondary_modifiers("vigia", 25, (PERFURACAO,))[0] == D(2)
+    assert resolve_combat_stats("vigia", 25, "remanescente", talent_ids=(PERFURACAO,))
     assert validate_active_talent_ids("vigia", 15, ("talent.vigia.mao_firme",))
     assert validate_active_talent_ids("vigia", 15, (MIRA_ESTAVEL,))
 def test_perfuracao_calculada_stacks_with_atirador_mira_per_and_respects_per_cap():
@@ -537,13 +537,14 @@ def test_aquisicao_rapida_uses_mira_estavel_duration_without_extra_stack_or_wind
     assert _aim(state)["trigger"] == "aquisicao_rapida"
 
 
-def test_nv25_hooks_remain_closed_to_public_composition_and_nv5_nv15_stay_open():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+def test_nv25_hooks_require_level_and_future_tiers_remain_closed():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
     with pytest.raises(TalentSelectionError):
         validate_active_talent_ids("vigia", 24, (PERFURACAO,))
+    assert validate_active_talent_ids("vigia", 25, (ANTECIPACAO,)) == (ANTECIPACAO,)
+    assert resolve_combat_stats("vigia", 25, "remanescente", talent_ids=(PERFURACAO,))
+    future_id = next(t.talent_id for t in TALENTS_BY_CLASS["vigia"] if t.level == 35)
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("vigia", 60, (ANTECIPACAO,))
-    with pytest.raises(TalentSelectionError):
-        resolve_combat_stats("vigia", 60, "remanescente", talent_ids=(PERFURACAO,))
+        validate_active_talent_ids("vigia", 60, (future_id,))
     assert validate_active_talent_ids("vigia", 15, ("talent.vigia.mao_firme",))
     assert validate_active_talent_ids("vigia", 15, (MIRA_ESTAVEL,))

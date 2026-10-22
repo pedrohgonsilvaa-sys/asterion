@@ -8,7 +8,7 @@ from decimal import Decimal
 
 TALENT_POINT_LEVELS = (5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60)
 TALENT_CATEGORIES = ("Pressão", "Resistência", "Técnica")
-IMPLEMENTED_TALENT_LEVELS = frozenset({5, 15})
+IMPLEMENTED_TALENT_LEVELS = frozenset({5, 15, 25})
 
 
 class TalentSelectionError(ValueError):

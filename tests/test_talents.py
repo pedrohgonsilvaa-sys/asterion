@@ -529,7 +529,7 @@ async def test_talent_respec_rejects_wrong_location_balance_and_foreground(datab
 
 
 @pytest.mark.asyncio
-async def test_nv15_talents_are_acquirable_at_level_and_future_tiers_stay_closed(database):
+async def test_nv15_acquisition_and_nv35_future_tier_gate(database):
     actor = 772107
     _, sessions = await _seed_character(database, actor, level=14)
     service = TalentService(sessions, "ocaso")
@@ -546,7 +546,7 @@ async def test_nv15_talents_are_acquirable_at_level_and_future_tiers_stay_closed
     future_id = next(
         talent.talent_id
         for talent in TALENTS_BY_CLASS["sentinela"]
-        if talent.level == 25
+        if talent.level == 35
     )
     async with sessions.begin() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
@@ -742,16 +742,16 @@ async def test_valid_nv5_talent_reloads_through_combat_configuration_snapshot(da
 
 
 @pytest.mark.asyncio
-async def test_doctrine_cannot_activate_injected_unimplemented_talent(database):
+async def test_doctrine_cannot_activate_injected_future_tier_talent(database):
     actor = 772113
-    character_id, sessions = await _seed_character(database, actor, level=20)
+    character_id, sessions = await _seed_character(database, actor, level=40)
     service = DoctrineService(sessions, "ocaso")
     created = await service.create(actor, "Futura", 0)
     assert created is not None and created.doctrine_id is not None
     unsupported_id = next(
         talent.talent_id
         for talent in TALENTS_BY_CLASS["sentinela"]
-        if talent.level == 25
+        if talent.level == 35
     )
     async with sessions.begin() as session:
         doctrine = await session.get(CharacterDoctrine, created.doctrine_id)
@@ -759,7 +759,7 @@ async def test_doctrine_cannot_activate_injected_unimplemented_talent(database):
             "path": None,
             "equipment": {},
             "arts": {},
-            "talents": [{"point_slot": 3, "talent_id": unsupported_id}],
+            "talents": [{"point_slot": 7, "talent_id": unsupported_id}],
         }
     with pytest.raises(DoctrineRejected) as rejected:
         await service.apply(actor, created.doctrine_id, 0, 0)
@@ -774,18 +774,18 @@ async def test_doctrine_cannot_activate_injected_unimplemented_talent(database):
         ) is None
         doctrine = await session.get(CharacterDoctrine, created.doctrine_id)
         assert doctrine.configuration["talents"] == [
-            {"point_slot": 3, "talent_id": unsupported_id}
+            {"point_slot": 7, "talent_id": unsupported_id}
         ]
 
 
 @pytest.mark.asyncio
-async def test_level_60_preserves_unspent_points_with_nv5_and_nv15_tiers_available(database):
+async def test_level_60_preserves_unspent_points_with_nv5_nv15_and_nv25_tiers_available(database):
     actor = 772114
     character_id, sessions = await _seed_character(database, actor, level=60)
     service = TalentService(sessions, "ocaso")
     view = await service.view(actor)
     assert view is not None and view.total_points == 12 and view.available_points == 12
-    for talent in TALENTS_BY_CLASS["sentinela"][:6]:
+    for talent in TALENTS_BY_CLASS["sentinela"][:9]:
         result = await service.acquire(
             actor,
             talent.talent_id,
@@ -793,13 +793,13 @@ async def test_level_60_preserves_unspent_points_with_nv5_and_nv15_tiers_availab
         )
         assert result is not None and result.changed
         view = result.view
-    assert len(view.choices) == 6
+    assert len(view.choices) == 9
     assert view.total_points == 12
-    assert view.available_points == 6
+    assert view.available_points == 3
     future_id = next(
         talent.talent_id
         for talent in TALENTS_BY_CLASS["sentinela"]
-        if talent.level == 25
+        if talent.level == 35
     )
     with pytest.raises(TalentMutationRejected) as future:
         await service.acquire(actor, future_id, view.combat_configuration_version)
@@ -815,7 +815,7 @@ async def test_level_60_preserves_unspent_points_with_nv5_and_nv15_tiers_availab
             ).all()
         )
     assert [row.talent_id for row in saved] == [
-        item.talent_id for item in TALENTS_BY_CLASS["sentinela"][:6]
+        item.talent_id for item in TALENTS_BY_CLASS["sentinela"][:9]
     ]
 
 

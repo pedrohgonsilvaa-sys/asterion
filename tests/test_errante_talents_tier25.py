@@ -305,17 +305,16 @@ def test_static_errante_tier25_modifiers_compose_equipment_runes_and_enchantment
 
 
 @pytest.mark.parametrize("talent_id", (PRECISAO_CRUEL, COURO_LEVE, PASSOS_DA_SOMBRA))
-def test_errante_nv25_talents_remain_rejected_by_public_progression_and_composition(
+def test_errante_nv25_talents_are_valid_only_at_the_required_level(
     talent_id: str,
 ):
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
     assert TALENT_DEFINITIONS[talent_id].level == 25
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("errante", 25, (talent_id,))
-    with pytest.raises(TalentSelectionError):
-        validate_talent_choices("errante", 25, ((1, talent_id),))
-    with pytest.raises(TalentSelectionError):
-        resolve_combat_stats("errante", 25, "remanescente", talent_ids=(talent_id,))
+        validate_active_talent_ids("errante", 24, (talent_id,))
+    assert validate_active_talent_ids("errante", 25, (talent_id,)) == (talent_id,)
+    assert validate_talent_choices("errante", 25, ((1, talent_id),)) == ((1, talent_id),)
+    assert resolve_combat_stats("errante", 25, "remanescente", talent_ids=(talent_id,))
     assert talent_points_at_level(25) == 5
     assert validate_active_talent_ids("errante", 25, ("talent.errante.fio_afiado",)) == (
         "talent.errante.fio_afiado",
@@ -352,9 +351,10 @@ def test_precision_cruel_respects_the_pvp_crit_cap_without_changing_pve(
     assert _action_event(resolved, "attack").critical is (not pvp)
 
 
-def test_closed_static_talents_do_not_become_public_but_nv5_nv15_remain_valid():
+def test_couro_leve_is_public_only_from_nv25_and_earlier_tiers_stay_valid():
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("errante", 60, (COURO_LEVE,))
+        validate_active_talent_ids("errante", 24, (COURO_LEVE,))
+    assert validate_active_talent_ids("errante", 25, (COURO_LEVE,)) == (COURO_LEVE,)
     legal = (
         "talent.errante.instinto_rapido",
         "talent.errante.brecha_exposta",
@@ -752,15 +752,15 @@ def test_retry_and_precommit_rejections_do_not_duplicate_or_create_the_agility_b
     assert sum(effect.id == PASSOS_EFFECT for effect in first.fighters["player"].effects) == 1
 
 
-def test_nv5_and_nv15_talents_remain_valid_and_closed_tier_points_still_accrue():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+def test_nv5_nv15_and_nv25_talents_remain_valid_and_future_points_accrue():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
     assert talent_points_at_level(5) == 1
     assert talent_points_at_level(15) == 3
     assert talent_points_at_level(25) == 5
     assert validate_active_talent_ids(
         "errante", 25, ("talent.errante.fio_afiado", "talent.errante.brecha_exposta")
     ) == ("talent.errante.fio_afiado", "talent.errante.brecha_exposta")
-    for future_level in (25, 35, 45, 55):
+    for future_level in (35, 45, 55):
         future_id = next(
             definition.talent_id
             for definition in TALENT_DEFINITIONS.values()

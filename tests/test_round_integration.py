@@ -15,12 +15,14 @@ from asterion.application.round import (
     PURIFY_CONSUMABLE,
     RoundService,
 )
+from asterion.application.talents import TalentService
 from asterion.application.vigor import REGEN_INTERVAL_SECONDS
 from asterion.domain.arts import DEVASTADOR_ART_IDS, FIRST_CLASS_ART_IDS
 from asterion.domain.combat import DotState
 from asterion.domain.combat_math import Stats, resolve_combat_stats
 from asterion.domain.equipment_stats import equipment_configuration_from_data
 from asterion.domain.road import CREATURES, ROUND_FAMILIARITY
+from asterion.domain.talents import TALENTS_BY_CLASS
 from asterion.infrastructure.db.models import (
     Character,
     CombatRecord,
@@ -142,6 +144,64 @@ async def test_round_preparation_consumables_and_reconnect_are_persistent(databa
         assert (
             await session.scalar(select(func.count(HuntRoundEncounter.id)))
         ) == 1
+
+
+@pytest.mark.asyncio
+async def test_round_snapshot_uses_a_legally_acquired_nv25_talent(database, monkeypatch):
+    import asterion.application.round as round_module
+
+    actor, service = await _seed_round(database, 772020)
+    _force_safe_common(monkeypatch, round_module)
+    sessions = database[1]
+    talent = next(
+        item for item in TALENTS_BY_CLASS["sentinela"] if item.level == 25
+    )
+    expected_stats = resolve_combat_stats("sentinela", 25, "remanescente")
+    async with sessions.begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        character.level = 25
+        character.xp = level_xp(25)
+        character.hp = expected_stats.hp
+        character.max_hp = expected_stats.hp
+
+    talents = TalentService(sessions, "ocaso")
+    view = await talents.view(actor)
+    assert view is not None and view.available_points == 5
+    acquired = await talents.acquire(
+        actor, talent.talent_id, view.combat_configuration_version
+    )
+    assert acquired is not None and acquired.changed
+
+    prepared = await service.prepare_round(actor, 5)
+    started = await service.start_round(actor, prepared.round_id, prepared.state_version)
+    assert started.kind == "round_active"
+    async with sessions() as session:
+        state = await session.scalar(
+            select(HuntRound).where(HuntRound.id == started.round_id)
+        )
+        encounter = await session.scalar(
+            select(HuntRoundEncounter)
+            .where(HuntRoundEncounter.round_id == started.round_id)
+            .order_by(HuntRoundEncounter.ordinal)
+        )
+        assert state is not None and encounter is not None
+        frozen = equipment_configuration_from_data(
+            state.config_snapshot["combat_configuration"]
+        )
+        expected_choice = {"point_slot": 1, "talent_id": talent.talent_id}
+        assert frozen.talent_choices == ((1, talent.talent_id),)
+        assert state.config_snapshot["combat_configuration"]["talents"] == [
+            expected_choice
+        ]
+        assert encounter.combat_snapshot["configuration_snapshot"]["talents"] == [
+            expected_choice
+        ]
+        assert encounter.combat_snapshot["fighters"]["player"]["talent_ids"] == [
+            talent.talent_id
+        ]
 
 
 @pytest.mark.asyncio

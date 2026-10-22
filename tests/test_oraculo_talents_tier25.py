@@ -208,22 +208,16 @@ def test_destino_exposto_respects_the_existing_pvp_crit_cap(monkeypatch, pvp, ex
     assert [points for points in observed if points > ZERO] == [expected]
 
 
-def test_oraculo_tier25_remains_rejected_by_the_public_authority():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+def test_oraculo_tier25_is_publicly_valid_at_required_level():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
     assert talent_points_at_level(25) == 5
     for talent_id in (DESTINO_EXPOSTO, ANTEVISAO_DEFENSIVA, LEITURA_DOS_SINAIS):
         assert TALENT_DEFINITIONS[talent_id].level == 25
         with pytest.raises(TalentSelectionError):
-            validate_active_talent_ids("oraculo", 60, (talent_id,))
-        with pytest.raises(TalentSelectionError):
-            static_talent_secondary_modifiers("oraculo", 60, (talent_id,))
-        with pytest.raises(TalentSelectionError):
-            resolve_combat_stats(
-                "oraculo",
-                60,
-                "remanescente",
-                talent_ids=(talent_id,),
-            )
+            validate_active_talent_ids("oraculo", 24, (talent_id,))
+        assert validate_active_talent_ids("oraculo", 25, (talent_id,)) == (talent_id,)
+        assert static_talent_secondary_modifiers("oraculo", 25, (talent_id,))
+        assert resolve_combat_stats("oraculo", 25, "remanescente", talent_ids=(talent_id,))
     legal_tier15 = ("talent.oraculo.pressagio_cortante",)
     assert validate_active_talent_ids("oraculo", 25, legal_tier15) == legal_tier15
 

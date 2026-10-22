@@ -125,7 +125,7 @@ def _effect(fighter, effect_id: str):
     return next((effect for effect in fighter.effects if effect.id == effect_id), None)
 
 
-def test_fio_perfurante_adds_two_static_per_points_but_public_tier_stays_closed():
+def test_fio_perfurante_adds_two_static_per_points_in_internal_composition():
     definition = TALENT_DEFINITIONS[FIO_PERFURANTE]
     assert (definition.character_class, definition.level, definition.per_points) == (
         "tecelao",
@@ -135,6 +135,11 @@ def test_fio_perfurante_adds_two_static_per_points_but_public_tier_stays_closed(
     baseline = _internal_stats(())
     with_talent = _internal_stats((FIO_PERFURANTE,))
     assert with_talent.per == baseline.per + D(2)
+    public_talent = resolve_combat_stats(
+        "tecelao", 25, "remanescente", talent_ids=(FIO_PERFURANTE,)
+    )
+    public_baseline = resolve_combat_stats("tecelao", 25, "remanescente")
+    assert public_talent.per == public_baseline.per + D(2)
     assert (
         with_talent.hp,
         with_talent.attack,
@@ -162,9 +167,11 @@ def test_fio_perfurante_adds_two_static_per_points_but_public_tier_stays_closed(
     assert effective_defense(D(100), near_cap_with_talent.per) == D(70)
     assert effective_defense(D(100), D(31)) == D(70)
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("tecelao", 60, (FIO_PERFURANTE,))
-    with pytest.raises(TalentSelectionError):
-        resolve_combat_stats("tecelao", 60, "remanescente", talent_ids=(FIO_PERFURANTE,))
+        validate_active_talent_ids("tecelao", 24, (FIO_PERFURANTE,))
+    assert validate_active_talent_ids("tecelao", 25, (FIO_PERFURANTE,)) == (
+        FIO_PERFURANTE,
+    )
+    assert resolve_combat_stats("tecelao", 25, "remanescente", talent_ids=(FIO_PERFURANTE,))
 
 
 def test_same_name_future_errante_talent_does_not_inherit_tecelao_static_hook():
@@ -392,8 +399,8 @@ def test_trama_consumption_buff_is_once_per_action_and_invalid_action_preserves_
     ) == 1
 
 
-def test_tier25_is_rejected_by_public_authority_while_tier15_and_points_remain():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+def test_tier25_is_valid_at_required_level_while_future_tiers_stay_closed():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
     assert validate_active_talent_ids(
         "tecelao", 15, ("talent.tecelao.trama_duradoura",)
     ) == ("talent.tecelao.trama_duradoura",)
@@ -401,8 +408,7 @@ def test_tier25_is_rejected_by_public_authority_while_tier15_and_points_remain()
     for talent_id in (FIO_PERFURANTE, PROTECAO_TECIDA, ALTERNANCIA_FLUIDA):
         assert TALENT_DEFINITIONS[talent_id].level == 25
         with pytest.raises(TalentSelectionError):
-            validate_active_talent_ids("tecelao", 25, (talent_id,))
-        with pytest.raises(TalentSelectionError):
-            validate_active_talent_ids("tecelao", 60, (talent_id,))
-        with pytest.raises(TalentSelectionError):
-            validate_talent_choices("tecelao", 60, ((1, talent_id),))
+            validate_active_talent_ids("tecelao", 24, (talent_id,))
+        assert validate_active_talent_ids("tecelao", 25, (talent_id,)) == (talent_id,)
+        assert validate_active_talent_ids("tecelao", 60, (talent_id,)) == (talent_id,)
+        assert validate_talent_choices("tecelao", 60, ((1, talent_id),)) == ((1, talent_id),)

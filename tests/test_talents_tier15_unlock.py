@@ -1,4 +1,4 @@
-"""Public PostgreSQL coverage for the Nv.15 Talent release."""
+"""Public PostgreSQL coverage for the Nv.15 and Nv.25 Talent releases."""
 
 import asyncio
 from dataclasses import replace
@@ -225,7 +225,7 @@ def _combat_reconnect(state: Combat) -> Combat:
 
 @pytest.mark.asyncio
 async def test_all_six_classes_can_acquire_all_nv15_talents_and_reload_public_snapshots(database):
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
     assert sum(
         talent.level == 15
         for talents in TALENTS_BY_CLASS.values()
@@ -283,8 +283,8 @@ async def test_all_six_classes_can_acquire_all_nv15_talents_and_reload_public_sn
         listing = render_talent_list(view)
         for talent in tier15:
             assert f"{talent.name} · Adquirido" in listing.text
-        future = next(talent for talent in TALENTS_BY_CLASS[character_class] if talent.level == 25)
-        assert f"{future.name} · Requer Nv.25" in listing.text
+        future = next(talent for talent in TALENTS_BY_CLASS[character_class] if talent.level == 35)
+        assert f"{future.name} · Requer Nv.35" in listing.text
         detail = render_talent_detail(view, future)
         assert "Adquirir Talento" not in [
             button.text
@@ -345,7 +345,7 @@ async def test_all_six_classes_can_acquire_all_nv15_talents_and_reload_public_sn
         future_id = next(
             talent.talent_id
             for talent in TALENTS_BY_CLASS[character_class]
-            if talent.level == 25
+            if talent.level == 35
         )
         with pytest.raises(TalentMutationRejected) as closed:
             await service.acquire(actor, future_id, future_view.combat_configuration_version)
@@ -613,17 +613,20 @@ async def test_doctrine_editor_accepts_nv15_without_slot_prerequisites_and_apply
 
 
 @pytest.mark.asyncio
-async def test_same_last_point_cannot_be_spent_concurrently_by_two_nv15_talents(database):
+async def test_same_last_point_cannot_be_spent_concurrently_by_two_nv25_talents(database):
     actor = 841529
-    _, sessions = await _seed_character(database, actor, "vigia", level=15)
+    _, sessions = await _seed_character(database, actor, "vigia", level=25)
     service = TalentService(sessions, "ocaso")
     view = await service.view(actor)
     assert view is not None
-    for talent in TALENTS_BY_CLASS["vigia"][3:5]:
+    for talent in (
+        TALENTS_BY_CLASS["vigia"][0],
+        *TALENTS_BY_CLASS["vigia"][3:6],
+    ):
         result = await service.acquire(actor, talent.talent_id, view.combat_configuration_version)
         assert result is not None
         view = result.view
-    candidates = (TALENTS_BY_CLASS["vigia"][5], TALENTS_BY_CLASS["vigia"][0])
+    candidates = (TALENTS_BY_CLASS["vigia"][7], TALENTS_BY_CLASS["vigia"][8])
     results = await asyncio.gather(
         *(
             service.acquire(actor, talent.talent_id, view.combat_configuration_version)
@@ -635,7 +638,7 @@ async def test_same_last_point_cannot_be_spent_concurrently_by_two_nv15_talents(
     failures = [result for result in results if isinstance(result, TalentMutationRejected)]
     assert len(failures) == 1 and failures[0].code == TalentMutationCode.STALE_CONFIGURATION
     final = await service.view(actor)
-    assert final is not None and final.available_points == 0 and len(final.choices) == 3
+    assert final is not None and final.available_points == 0 and len(final.choices) == 5
 
 
 @pytest.mark.asyncio
@@ -643,7 +646,7 @@ async def test_talent_acquisition_transaction_rolls_back_after_persisting_choice
     database, monkeypatch
 ):
     actor = 841530
-    character_id, sessions = await _seed_character(database, actor, "luminar", level=15)
+    character_id, sessions = await _seed_character(database, actor, "luminar", level=25)
     service = TalentService(sessions, "ocaso")
 
     async def fail_reconciliation(_service, _session, _character):
@@ -651,7 +654,7 @@ async def test_talent_acquisition_transaction_rolls_back_after_persisting_choice
 
     monkeypatch.setattr(TalentService, "_reconcile_hp", fail_reconciliation)
     with pytest.raises(RuntimeError, match="after choice flush"):
-        await service.acquire(actor, TALENTS_BY_CLASS["luminar"][3].talent_id, 0)
+        await service.acquire(actor, TALENTS_BY_CLASS["luminar"][6].talent_id, 0)
     async with sessions() as session:
         character = await session.get(Character, character_id)
         rows = list(
@@ -670,7 +673,7 @@ async def test_talent_acquisition_transaction_rolls_back_after_persisting_choice
 @pytest.mark.asyncio
 async def test_active_activity_lock_and_invalid_persisted_talent_prevent_unlock_bypass(database):
     actor = 841531
-    character_id, sessions = await _seed_character(database, actor, "oraculo", level=15)
+    character_id, sessions = await _seed_character(database, actor, "oraculo", level=25)
     service = TalentService(sessions, "ocaso")
     view = await service.view(actor)
     assert view is not None
@@ -686,7 +689,7 @@ async def test_active_activity_lock_and_invalid_persisted_talent_prevent_unlock_
             )
         )
     with pytest.raises(TalentMutationRejected) as locked:
-        await service.acquire(actor, TALENTS_BY_CLASS["oraculo"][3].talent_id, 0)
+        await service.acquire(actor, TALENTS_BY_CLASS["oraculo"][6].talent_id, 0)
     assert locked.value.code == TalentMutationCode.FOREGROUND
 
     _, other_sessions = database
@@ -695,11 +698,11 @@ async def test_active_activity_lock_and_invalid_persisted_talent_prevent_unlock_
             CharacterTalentChoice(
                 character_id=character_id,
                 point_slot=1,
-                talent_id=TALENTS_BY_CLASS["oraculo"][3].talent_id,
+                talent_id=TALENTS_BY_CLASS["oraculo"][6].talent_id,
             )
         )
         character = await session.get(Character, character_id)
-        character.level = 14
+        character.level = 24
     with pytest.raises(TalentMutationRejected) as invalid:
         await service.view(actor)
     assert invalid.value.code == TalentMutationCode.INVALID_CURRENT_CONFIGURATION
@@ -709,7 +712,7 @@ async def test_active_activity_lock_and_invalid_persisted_talent_prevent_unlock_
                 CharacterTalentChoice.character_id == character_id
             )
         )
-        assert row is not None and row.talent_id == TALENTS_BY_CLASS["oraculo"][3].talent_id
+        assert row is not None and row.talent_id == TALENTS_BY_CLASS["oraculo"][6].talent_id
         character = await session.get(Character, character_id)
         with pytest.raises(EquipmentConfigurationError):
             await load_equipment_configuration(session, character)

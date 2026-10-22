@@ -208,9 +208,9 @@ def test_luz_perfurante_is_static_two_point_per_and_composes_once(path):
     assert effective_defense(D(100), D(31)) == D(70)
 
 
-def test_luz_perfurante_is_rejected_by_public_composition_while_tier_is_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
-    for level in (24, 25, 60):
+def test_luz_perfurante_is_publicly_composable_at_nv25_only():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    for level in (24,):
         with pytest.raises(TalentSelectionError):
             validate_active_talent_ids("luminar", level, (LUZ_PERFURANTE,))
         with pytest.raises(TalentSelectionError):
@@ -220,6 +220,8 @@ def test_luz_perfurante_is_rejected_by_public_composition_while_tier_is_closed()
         with pytest.raises(TalentSelectionError):
             static_talent_modifiers("luminar", level, (EGIDE_DENSA,))
     assert talent_points_at_level(25) == 5
+    assert validate_active_talent_ids("luminar", 25, (LUZ_PERFURANTE,)) == (LUZ_PERFURANTE,)
+    assert static_talent_secondary_modifiers("luminar", 25, (LUZ_PERFURANTE,))[0] == D(2)
     assert static_talent_secondary_modifiers("luminar", 15, (JULGAMENTO_PRECISO,)) == (
         D(0), D(0), D(0), D(0)
     )

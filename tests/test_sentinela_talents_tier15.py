@@ -187,7 +187,7 @@ def test_placas_internas_is_defined_and_authoritatively_available_at_level_15():
     definition = TALENT_DEFINITIONS[PLACAS]
     assert definition.level == 15
     assert definition.defense_percent == D("0.02")
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
     assert validate_active_talent_ids("sentinela", 15, (PLACAS,)) == (PLACAS,)
     assert validate_talent_choices("sentinela", 15, ((1, PLACAS),)) == ((1, PLACAS),)
     with pytest.raises(TalentSelectionError):
@@ -360,8 +360,8 @@ def test_guarda_preparada_pending_state_persists_and_clears_on_combat_end_or_dea
     assert "guard_prepared_barrier" not in dead.path_state
 
 
-def test_tier_15_choices_are_valid_but_tier_25_remains_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+def test_tier_15_and_25_choices_are_valid_but_tier_35_remains_closed():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
     for slot, talent_id in enumerate((PONTA, PLACAS, GUARDA), 1):
         assert validate_active_talent_ids("sentinela", 15, (talent_id,)) == (talent_id,)
         assert validate_talent_choices("sentinela", 15, ((slot, talent_id),)) == (
@@ -370,10 +370,16 @@ def test_tier_15_choices_are_valid_but_tier_25_remains_closed():
 
     valid_nv5 = "talent.sentinela.aco_desperto"
     assert validate_active_talent_ids("sentinela", 15, (valid_nv5,)) == (valid_nv5,)
+    tier35 = next(
+        definition.talent_id
+        for definition in TALENT_DEFINITIONS.values()
+        if definition.character_class == "sentinela" and definition.level == 35
+    )
     tier25 = next(
         definition.talent_id
         for definition in TALENT_DEFINITIONS.values()
         if definition.character_class == "sentinela" and definition.level == 25
     )
+    assert validate_active_talent_ids("sentinela", 25, (tier25,)) == (tier25,)
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("sentinela", 60, (tier25,))
+        validate_active_talent_ids("sentinela", 60, (tier35,))

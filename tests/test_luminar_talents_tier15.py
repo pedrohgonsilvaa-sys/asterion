@@ -172,7 +172,7 @@ def _set_luminar_state(state: Combat, kind: str, remaining: int = 2) -> None:
 
 
 def test_luminar_tier15_catalog_and_public_gate():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
     assert talent_points_at_level(15) == 3
     expected = {
         JULGAMENTO_PRECISO: ("Julgamento Preciso", D(15), D(0), D(0)),
@@ -193,10 +193,16 @@ def test_luminar_tier15_catalog_and_public_gate():
         resolve_combat_stats("luminar", 15, "remanescente", talent_ids=(talent_id,))
         with pytest.raises(TalentSelectionError):
             validate_active_talent_ids("luminar", 14, (talent_id,))
-    future = next(
+    tier25 = next(
         definition.talent_id
         for definition in TALENT_DEFINITIONS.values()
         if definition.character_class == "luminar" and definition.level == 25
+    )
+    assert validate_active_talent_ids("luminar", 25, (tier25,)) == (tier25,)
+    future = next(
+        definition.talent_id
+        for definition in TALENT_DEFINITIONS.values()
+        if definition.character_class == "luminar" and definition.level == 35
     )
     with pytest.raises(TalentSelectionError):
         validate_active_talent_ids("luminar", 60, (future,))
@@ -501,7 +507,7 @@ def test_julgamento_aoe_crit_is_per_target_and_resource_consumption_is_per_actio
     assert "luminar_state" not in result.fighters["player"].path_state
 
 
-def test_all_three_internal_talents_coexist_without_opening_public_selection():
+def test_all_three_nv15_talents_coexist_in_controlled_combat_state():
     ids = (JULGAMENTO_PRECISO, CORPO_CONSAGRADO, CONTRALUZ_PERSISTENTE)
     stats = _internal_stats(ids, path="inquisidor")
     assert stats.defense == _internal_stats((CORPO_CONSAGRADO,), path="inquisidor").defense
@@ -515,4 +521,4 @@ def test_all_three_internal_talents_coexist_without_opening_public_selection():
     assert event.path_power_multiplier == D("1.15")
     assert event.path_crit_bonus == D(2)
     assert "luminar_state" not in result.fighters["player"].path_state
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
