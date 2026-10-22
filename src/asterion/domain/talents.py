@@ -416,6 +416,8 @@ _STATIC_TALENT_MODIFIERS = {
     "placas internas": {"defense_percent": Decimal("0.02")},
     "olho afiado": {"crit_points": Decimal("2")},
     "postura vigilante": {"defense_percent": Decimal("0.02")},
+    "fenda precisa": {"crit_points": Decimal("2")},
+    "véu denso": {"defense_percent": Decimal("0.02")},
 }
 
 
