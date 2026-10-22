@@ -1385,6 +1385,7 @@ _CLASS_MECHANIC_STATE_KEYS = (
 )
 _CLASS_MECHANIC_COMBAT_FLAGS = (
     "vigilia_retaliation_triggered",
+    "vigia_recuo_instintivo_used",
     "trama_expiry_renewed",
     "omen_flexible_used",
     "luminar_cycle_used",
@@ -2236,6 +2237,7 @@ def _deal_combat_damage(
     threshold = target.stats.hp * D("0.50")
     if hp_before > threshold and target.hp <= threshold:
         _grant_vigilia_retaliation(state, target_key, source_key)
+    _grant_vigia_recuo_instintivo(state, target_key, reason="hp_loss")
     if hp_before > ZERO and target.hp <= ZERO:
         _clear_class_mechanics_for_death(state, target_key)
     return actual_damage, barrier_absorbed
@@ -2257,6 +2259,10 @@ def _begin_turn(state: Combat) -> None:
     for fighter_key, fighter in state.fighters.items():
         if fighter.hp > ZERO and fighter.hp <= fighter.stats.hp * D("0.50"):
             _grant_vigilia_retaliation(state, fighter_key)
+        if fighter.hp > ZERO:
+            _grant_vigia_recuo_instintivo(
+                state, fighter_key, reason="first_combat_observation"
+            )
     if _is_player_turn_actor(state, actor_key) and state.prepared_action is not None:
         state.response_window_seen = True
 
@@ -2502,6 +2508,40 @@ def _grant_vigilia_retaliation(
         source_event_id=f"{state.id.hex}:{state.version}:{len(state.events)}:vigilia",
         source_type="vigilia",
     )
+
+
+def _grant_vigia_recuo_instintivo(
+    state: Combat, fighter_key: str, *, reason: str
+) -> bool:
+    fighter = state.fighters[fighter_key]
+    if (
+        fighter.character_class != "vigia"
+        or not _has_talent(fighter, "recuo_instintivo")
+        or fighter.stats.hp <= ZERO
+        or fighter.hp > fighter.stats.hp * D("0.40")
+    ):
+        return False
+    marker_key = "vigia_recuo_instintivo_used"
+    combat_id = str(state.id)
+    used = fighter.path_state.get(marker_key)
+    if isinstance(used, dict) and used.get("combat_id") == combat_id:
+        return False
+    fighter.path_state[marker_key] = {
+        "combat_id": combat_id,
+        "reason": reason,
+        "applied_opportunity": fighter.opportunity,
+    }
+    # Record the first occurrence even if it defeats the Vigia, but never
+    # create protection retroactively or on a defeated fighter.
+    if fighter.hp > ZERO:
+        _apply_class_mechanic_buff(
+            fighter,
+            mechanic="vigia.recuo_instintivo",
+            stat="defense",
+            magnitude=D("0.08"),
+            duration=1,
+        )
+    return True
 
 
 def _consume_retaliation(
@@ -2923,6 +2963,10 @@ def _switch_aim_target(
     ):
         return
     previous_target_id = source.path_state.get("aim_current_target_id")
+    if primary_target_id == previous_target_id:
+        # Re-selecting the current target is not a target switch and must not
+        # run the non-Rastreador cleanup a second time.
+        return
     for other in state.fighters.values():
         if other.id == primary_target_id:
             continue
@@ -2941,6 +2985,10 @@ def _switch_aim_target(
                 "trigger": "visao_persistente",
             }
         else:
+            # §56.4's exception preserves only the immediately previous
+            # target for this switch. All other marks follow the normal
+            # non-Rastreador cleanup, so the talent does not create a
+            # multi-target tracking capacity.
             _remove_aim_entry(other, source.id)
     source.path_state["aim_current_target_id"] = primary_target_id
 
@@ -3515,8 +3563,11 @@ def _prepare_path_action(
             if _has_talent(actor, "brecha_exposta"):
                 entry["per_bonus"] += D(4)
         if actor.character_class == "vigia":
-            if stacks >= 2 and _has_talent(actor, "alvo_exposto"):
-                entry["final_damage_bonus"] += D("0.03")
+            if direct and stacks >= 2 and _has_talent(actor, "alvo_exposto"):
+                # §49.5 names a direct-damage bonus. Apply it in the shared
+                # component-power stage, using the action-start Mira snapshot,
+                # rather than adding it to Dano Final.
+                entry["damage_power"] *= D("1.03")
                 entry["triggers"].append("vigia.alvo_exposto")
             if stacks >= 3 and _has_talent(actor, "ponto_fraco"):
                 entry["crit_bonus"] += D(2)
@@ -6113,6 +6164,17 @@ def start_combat(state: Combat) -> Combat:
         ctx.prec = PRECISION
         state = deepcopy(state)
         for fighter in state.fighters.values():
+            recuo_used = fighter.path_state.get("vigia_recuo_instintivo_used")
+            if not (
+                isinstance(recuo_used, dict)
+                and recuo_used.get("combat_id") == str(state.id)
+            ):
+                fighter.path_state.pop("vigia_recuo_instintivo_used", None)
+                fighter.effects = [
+                    effect
+                    for effect in fighter.effects
+                    if effect.id != "class_mechanic.vigia.recuo_instintivo.defense"
+                ]
             prepared_per = fighter.path_state.get("errante_desvio_ofensivo_per")
             if (
                 isinstance(prepared_per, dict)
