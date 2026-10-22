@@ -593,6 +593,17 @@ class Fighter:
             # Derive the conditional bonus from live layers on each read so
             # partial absorption and expiry cannot leave stale DEF behind.
             value *= D("1.05")
+        if (
+            name == "defense"
+            and self.character_class == "errante"
+            and "talent.errante.sobrevivencia" in self.talent_ids
+            and self.hp > ZERO
+            and self.hp * D(100) <= self.stats.hp * D(40)
+        ):
+            # Sobrevivência is a live HP threshold, not a timed buff. Derive it
+            # from the current combat HP/maximum HP so healing, reconciliation,
+            # and HP-maximum changes enter or leave the condition immediately.
+            value *= D("1.05")
         return value
 
 
@@ -1370,6 +1381,7 @@ _CLASS_MECHANIC_STATE_KEYS = (
     "aim_next_per",
     "aim_current_target_id",
     "errante_sangue_frio_crit",
+    "errante_desvio_ofensivo_per",
 )
 _CLASS_MECHANIC_COMBAT_FLAGS = (
     "vigilia_retaliation_triggered",
@@ -3401,6 +3413,9 @@ def _prepare_path_action(
         "next_direct_crit_effect_ids": (),
         "next_direct_crit_consumed": False,
         "next_direct_crit_committed": False,
+        "next_direct_per_bonus": ZERO,
+        "next_direct_per_consumed": False,
+        "next_direct_per_committed": False,
         "errante_negative_effect_applied": False,
     }
 
@@ -3438,6 +3453,21 @@ def _prepare_path_action(
         context["next_direct_crit_bonus"] = prepared_bonus
         context["next_direct_crit_effect_ids"] = tuple(sorted(set(prepared_effect_ids)))
         context["next_direct_crit_consumed"] = bool(prepared_effect_ids)
+        prepared_per = actor.path_state.get("errante_desvio_ofensivo_per")
+        if (
+            actor.character_class == "errante"
+            and _has_talent(actor, "desvio_ofensivo")
+            and isinstance(prepared_per, dict)
+            and str(prepared_per.get("combat_id", "")) == str(state.id)
+        ):
+            context["next_direct_per_bonus"] = D(4)
+            context["next_direct_per_consumed"] = True
+            context["desvio_ofensivo_source_event_index"] = prepared_per.get(
+                "source_event_index"
+            )
+            context["desvio_ofensivo_applied_opportunity"] = prepared_per.get(
+                "applied_opportunity"
+            )
 
     for target_key in target_keys:
         target = state.fighters[target_key]
@@ -3492,6 +3522,9 @@ def _prepare_path_action(
                 entry["crit_bonus"] += D(2)
                 entry["triggers"].append("vigia.ponto_fraco")
         if direct:
+            if context.get("next_direct_per_consumed"):
+                entry["per_bonus"] += D(context["next_direct_per_bonus"])
+                entry["triggers"].append("errante.desvio_ofensivo_consumido")
             for key, slug in (("trama_next_per", "tecelao"), ("aim_next_per", "vigia")):
                 next_bonus = actor.path_state.get(key)
                 if (
@@ -3745,6 +3778,25 @@ def _commit_path_action(
                 ("errante_sangue_frio_crit", actor.id, 1, 0)
             )
         context["next_direct_crit_committed"] = True
+    if (
+        action.coefficient > ZERO
+        and context.get("next_direct_per_consumed")
+        and not context.get("next_direct_per_committed")
+    ):
+        prepared_per = actor.path_state.get("errante_desvio_ofensivo_per")
+        if (
+            isinstance(prepared_per, dict)
+            and str(prepared_per.get("combat_id", "")) == str(state.id)
+            and prepared_per.get("source_event_index")
+            == context.get("desvio_ofensivo_source_event_index")
+            and prepared_per.get("applied_opportunity")
+            == context.get("desvio_ofensivo_applied_opportunity")
+        ):
+            actor.path_state.pop("errante_desvio_ofensivo_per", None)
+            context.setdefault("automatic_resource_changes", []).append(
+                ("errante_desvio_ofensivo_per", actor.id, 1, 0)
+            )
+        context["next_direct_per_committed"] = True
     for plan in context.get("resource_uses", ()):
         use = plan["use"]
         if use.consume_at != "commit":
@@ -4750,6 +4802,21 @@ def _perform(
 
         if dodged:
             dodge_path_triggers = tuple(target_path.get("triggers", ()))
+            event_index = len(state.events)
+            if (
+                target.character_class == "errante"
+                and _has_talent(target, "desvio_ofensivo")
+            ):
+                # The catalog grants the next direct action, with no turn
+                # deadline. Keep one combat-scoped preparation and replace its
+                # identity on a later real dodge; it is consumed at commit.
+                target.path_state["errante_desvio_ofensivo_per"] = {
+                    "combat_id": str(state.id),
+                    "applied_opportunity": target.opportunity,
+                    "source_action_instance_id": action_instance_id,
+                    "source_event_index": event_index,
+                }
+                dodge_path_triggers += ("errante.desvio_ofensivo_preparado",)
             if (
                 target.character_class == "errante"
                 and _has_talent(target, "sangue_frio")
@@ -4760,7 +4827,6 @@ def _perform(
                     "source_action_instance_id": action_instance_id,
                 }
                 dodge_path_triggers += ("errante.sangue_frio_preparado",)
-            event_index = len(state.events)
             state.events.append(
                 CombatEvent(
                     event_index,
@@ -6046,6 +6112,13 @@ def start_combat(state: Combat) -> Combat:
     with localcontext() as ctx:
         ctx.prec = PRECISION
         state = deepcopy(state)
+        for fighter in state.fighters.values():
+            prepared_per = fighter.path_state.get("errante_desvio_ofensivo_per")
+            if (
+                isinstance(prepared_per, dict)
+                and str(prepared_per.get("combat_id", "")) != str(state.id)
+            ):
+                fighter.path_state.pop("errante_desvio_ofensivo_per", None)
         _refresh_result(state)
         if state.result:
             state.order = ()
