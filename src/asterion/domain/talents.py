@@ -429,6 +429,7 @@ _STATIC_TALENT_MODIFIERS = {
 # modifier attached to the canonical Tecelão ID instead of enabling it by name.
 _STATIC_TALENT_MODIFIERS_BY_ID = {
     "talent.tecelao.fio_perfurante": {"per_points": Decimal("2")},
+    "talent.oraculo.destino_exposto": {"crit_points": Decimal("2")},
 }
 
 

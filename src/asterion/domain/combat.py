@@ -584,6 +584,15 @@ class Fighter:
                     else D(1) + effect.magnitude
                 )
                 value *= modifier ** max(0, effect.stacks)
+        if (
+            name == "defense"
+            and self.character_class == "oraculo"
+            and "talent.oraculo.antevisao_defensiva" in self.talent_ids
+            and self.barrier > ZERO
+        ):
+            # Derive the conditional bonus from live layers on each read so
+            # partial absorption and expiry cannot leave stale DEF behind.
+            value *= D("1.05")
         return value
 
 
@@ -3935,11 +3944,14 @@ def _finalize_path_action(
                     and _fighter_side(state, target_key) != _fighter_side(state, actor_id)
                     and _has_talent(actor, "leitura_dos_sinais")
                 ):
+                    # This context flag is emitted by a successful Omen
+                    # application after resolution, never by reading or consuming one.
                     _apply_class_mechanic_buff(
                         actor,
                         mechanic="oraculo.leitura_dos_sinais",
                         stat="agility",
                         magnitude=D("0.05"),
+                        duration=1,
                     )
                     generated.append(("oraculo.leitura_dos_sinais", None))
 
