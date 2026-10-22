@@ -430,6 +430,7 @@ _STATIC_TALENT_MODIFIERS = {
 _STATIC_TALENT_MODIFIERS_BY_ID = {
     "talent.tecelao.fio_perfurante": {"per_points": Decimal("2")},
     "talent.oraculo.destino_exposto": {"crit_points": Decimal("2")},
+    "talent.luminar.luz_perfurante": {"per_points": Decimal("2")},
 }
 
 

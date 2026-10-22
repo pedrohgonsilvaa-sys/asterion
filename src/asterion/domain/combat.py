@@ -3543,6 +3543,8 @@ def _prepare_path_action(
                 entry["healing_power"] *= D("1.05")
                 entry["triggers"].append("luminar.cura_prudente")
             if _action_has_barrier(action) and _has_talent(actor, "egide_densa"):
+                # Égide Densa is source-side: modify this Luminar action's
+                # Barrier output before recipient-side modifiers are composed.
                 entry["barrier_power"] *= D("1.04")
                 entry["triggers"].append("luminar.egide_densa")
 
@@ -3783,13 +3785,6 @@ def _commit_path_action(
             context["automatic_resource_changes"].append(
                 ("luminar_state", actor.id, 1, 0)
             )
-        if _has_talent(actor, "alternancia_radiante"):
-            _apply_class_mechanic_buff(
-                actor,
-                mechanic="luminar.alternancia_radiante",
-                stat="agility",
-                magnitude=D("0.04"),
-            )
     consumed_omen = False
     for kind, target_id in context.get("omen_consumptions", ()):
         key = "omen_offensive" if kind == "offensive" else "omen_defensive"
@@ -3892,6 +3887,22 @@ def _finalize_path_action(
     if state.result:
         return None
     generated: list[tuple[str, str | None]] = []
+    if (
+        actor.character_class == "luminar"
+        and actor.hp > ZERO
+        and context.get("luminar_consumed")
+        and _has_talent(actor, "alternancia_radiante")
+    ):
+        # The resource leaves at commit, but its reward is post-resolution.
+        # This keeps the action's primary snapshot independent of the new AGI.
+        _apply_class_mechanic_buff(
+            actor,
+            mechanic="luminar.alternancia_radiante",
+            stat="agility",
+            magnitude=D("0.04"),
+            duration=1,
+        )
+        generated.append(("luminar.alternancia_radiante", None))
     if (
         actor.character_class == "tecelao"
         and actor.hp > ZERO
@@ -6397,10 +6408,17 @@ def use_combat_consumable(
             return state
     elif item.family == ConsumableFamily.PROTECTION:
         barrier_multiplier = D("1.10") if player.selected_path == "bastiao" else D(1)
+        # This layer is applied by the active fighter, as recorded by applier_id.
+        application_multiplier = (
+            D("1.04")
+            if player.character_class == "luminar" and _has_talent(player, "egide_densa")
+            else D(1)
+        )
         barrier_value = (
             player.stats.hp
             * D("0.12")
             * barrier_multiplier
+            * application_multiplier
             * _barrier_received_multiplier(updated, actor_key)
         ).to_integral_value(rounding=ROUND_FLOOR)
         if barrier_value <= 0:
