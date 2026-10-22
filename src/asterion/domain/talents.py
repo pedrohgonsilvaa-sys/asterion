@@ -414,6 +414,8 @@ _STATIC_TALENT_MODIFIERS = {
     "passos do destino": {"agility_percent": Decimal("0.03")},
     "clarão ágil": {"agility_percent": Decimal("0.03")},
     "placas internas": {"defense_percent": Decimal("0.02")},
+    "precisão cruel": {"crit_points": Decimal("2")},
+    "couro leve": {"defense_percent": Decimal("0.02")},
     "olho afiado": {"crit_points": Decimal("2")},
     "postura vigilante": {"defense_percent": Decimal("0.02")},
     "fenda precisa": {"crit_points": Decimal("2")},

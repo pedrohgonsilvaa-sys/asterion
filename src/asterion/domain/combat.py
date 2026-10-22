@@ -3376,6 +3376,7 @@ def _prepare_path_action(
         "next_direct_crit_effect_ids": (),
         "next_direct_crit_consumed": False,
         "next_direct_crit_committed": False,
+        "errante_negative_effect_applied": False,
     }
 
     if direct:
@@ -3882,6 +3883,20 @@ def _finalize_path_action(
     if state.result:
         return None
     generated: list[tuple[str, str | None]] = []
+    if (
+        actor.character_class == "errante"
+        and actor.hp > ZERO
+        and context.get("errante_negative_effect_applied")
+        and _has_talent(actor, "passos_da_sombra")
+    ):
+        _apply_class_mechanic_buff(
+            actor,
+            mechanic="errante.passos_da_sombra",
+            stat="agility",
+            magnitude=D("0.05"),
+            duration=1,
+        )
+        generated.append(("errante.passos_da_sombra", None))
     for kind in ("offensive", "defensive"):
         target_id = context.get(f"omen_{kind}_applied_target_id")
         if (
@@ -5218,6 +5233,26 @@ def _perform(
                     dot_application_kind = chosen
                 if had_ward and not applied and target.ward_charges == 0:
                     ward_blocked.append(chosen)
+
+        if actor.character_class == "errante":
+            applied_event_ids = {
+                event_id
+                for event_id in (
+                    effect_application_event_id,
+                    target_effects_application_id,
+                )
+                if event_id
+            }
+            applied_normal_debuff = any(
+                effect.application_event in applied_event_ids
+                and effect.kind == "debuff"
+                and effect.remaining > 0
+                and effect.stacks > 0
+                and not effect.fixed_mechanic
+                for effect in target.effects
+            )
+            if dot_application_event_id or applied_normal_debuff:
+                _path_resolution["errante_negative_effect_applied"] = True
 
         agility_debuff_applied = False
         if actor.character_class == "vigia":
