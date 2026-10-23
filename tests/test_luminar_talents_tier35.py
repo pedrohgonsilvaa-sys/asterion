@@ -144,8 +144,8 @@ def _set_state(state: Combat, kind: str, remaining: int = 2) -> None:
     }
 
 
-def test_luminar_tier35_catalog_is_internal_while_public_gate_remains_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+def test_luminar_tier35_catalog_is_public_after_joint_release():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert talent_points_at_level(35) == 7
     expected = {
         VEREDITO_ARDENTE: "Veredito Ardente",
@@ -159,9 +159,11 @@ def test_luminar_tier35_catalog_is_internal_while_public_gate_remains_closed():
             35,
             "luminar",
         )
-        for level in (34, 35, 60):
+        for level in (34,):
             with pytest.raises(TalentSelectionError):
                 validate_active_talent_ids("luminar", level, (talent_id,))
+        assert validate_active_talent_ids("luminar", 35, (talent_id,)) == (talent_id,)
+        assert validate_active_talent_ids("luminar", 60, (talent_id,)) == (talent_id,)
 
 
 @pytest.mark.parametrize(

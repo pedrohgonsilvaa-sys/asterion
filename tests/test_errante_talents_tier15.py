@@ -191,7 +191,7 @@ def _incoming_dodge(*, combat_id: UUID = COMBAT_ID) -> Combat:
 
 
 def test_errante_nv15_definitions_are_public_at_level_and_remain_level_gated():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert TALENT_DEFINITIONS[BRECHA_EXPOSTA].level == 15
     assert TALENT_DEFINITIONS[REFLEXO].level == 15
     assert TALENT_DEFINITIONS[SANGUE_FRIO].level == 15
@@ -355,7 +355,7 @@ def test_reflexo_is_one_static_evasion_point_and_composes_with_equipment():
 
 
 def test_reflexo_static_modifier_is_available_through_public_stats():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     baseline = resolve_combat_stats("errante", 34, "remanescente")
     actual = resolve_combat_stats("errante", 34, "remanescente", talent_ids=(REFLEXO,))
     assert actual.evasion == baseline.evasion + D(1)
@@ -633,17 +633,19 @@ def test_nv15_ids_are_level_gated_and_nv25_is_authorized(talent_id: str):
         if definition.character_class == "errante" and definition.level == 25
     )
     assert validate_active_talent_ids("errante", 25, (tier25,)) == (tier25,)
-    future = next(
+    tier35 = next(
         definition.talent_id
         for definition in TALENT_DEFINITIONS.values()
         if definition.character_class == "errante" and definition.level == 35
     )
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("errante", 60, (future,))
+        validate_active_talent_ids("errante", 34, (tier35,))
+    assert validate_active_talent_ids("errante", 35, (tier35,)) == (tier35,)
+    assert validate_active_talent_ids("errante", 60, (tier35,)) == (tier35,)
 
 
 def test_valid_nv5_errante_choices_remain_legal_and_points_still_accrue_at_nv15():
     valid = "talent.errante.fio_afiado"
     assert validate_active_talent_ids("errante", 15, (valid,)) == (valid,)
     assert TALENT_DEFINITIONS[valid].level == 5
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})

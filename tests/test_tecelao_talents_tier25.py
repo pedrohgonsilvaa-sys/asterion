@@ -400,7 +400,7 @@ def test_trama_consumption_buff_is_once_per_action_and_invalid_action_preserves_
 
 
 def test_tier25_is_valid_at_required_level_while_future_tiers_stay_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert validate_active_talent_ids(
         "tecelao", 15, ("talent.tecelao.trama_duradoura",)
     ) == ("talent.tecelao.trama_duradoura",)

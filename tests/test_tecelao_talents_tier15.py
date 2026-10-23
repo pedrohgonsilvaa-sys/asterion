@@ -132,7 +132,7 @@ def _action_events(state, action_id: str):
 
 
 def test_tecelao_tier15_catalog_values_and_public_gate():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert TALENT_DEFINITIONS[FENDA].name == "Fenda Precisa"
     assert TALENT_DEFINITIONS[FENDA].level == 15
     assert TALENT_DEFINITIONS[FENDA].crit_points == D(2)
@@ -364,7 +364,7 @@ def test_trama_window_roundtrips_codec_without_refresh_or_losing_origin():
 
 
 def test_tier15_and_tier25_are_authorized_but_tier35_remains_rejected():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert validate_talent_choices("tecelao", 15, ((1, TRAMA_DURADOURA),)) == (
         (1, TRAMA_DURADOURA),
     )
@@ -377,13 +377,15 @@ def test_tier15_and_tier25_are_authorized_but_tier35_remains_rejected():
         if definition.character_class == "tecelao" and definition.level == 25
     )
     assert validate_active_talent_ids("tecelao", 25, (tier25,)) == (tier25,)
-    future = next(
+    tier35 = next(
         definition.talent_id
         for definition in TALENT_DEFINITIONS.values()
         if definition.character_class == "tecelao" and definition.level == 35
     )
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("tecelao", 60, (future,))
+        validate_active_talent_ids("tecelao", 34, (tier35,))
+    assert validate_active_talent_ids("tecelao", 35, (tier35,)) == (tier35,)
+    assert validate_active_talent_ids("tecelao", 60, (tier35,)) == (tier35,)
 
     valid_tier5 = next(
         definition.talent_id

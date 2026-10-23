@@ -178,7 +178,7 @@ def _event(state, action_id: str):
 
 
 def test_oraculo_tier15_definitions_are_publicly_authorized_at_level():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert talent_points_at_level(15) == 3
     expected = {
         PRESSAGIO_CORTANTE: ("Presságio Cortante", D(15), D(0), D(0)),
@@ -204,13 +204,15 @@ def test_oraculo_tier15_definitions_are_publicly_authorized_at_level():
         if definition.character_class == "oraculo" and definition.level == 25
     )
     assert validate_active_talent_ids("oraculo", 25, (tier25,)) == (tier25,)
-    future = next(
+    tier35 = next(
         definition.talent_id
         for definition in TALENT_DEFINITIONS.values()
         if definition.character_class == "oraculo" and definition.level == 35
     )
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("oraculo", 60, (future,))
+        validate_active_talent_ids("oraculo", 34, (tier35,))
+    assert validate_active_talent_ids("oraculo", 35, (tier35,)) == (tier35,)
+    assert validate_active_talent_ids("oraculo", 60, (tier35,)) == (tier35,)
 
 
 @pytest.mark.parametrize("path", (None, "agoureiro", "invocador"))

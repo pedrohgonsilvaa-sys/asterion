@@ -218,6 +218,10 @@ async def _load_talent_choices(
         statement = statement.with_for_update()
     rows = list((await session.scalars(statement)).all())
     try:
+        if any(not row.publicly_acquired for row in rows):
+            raise TalentSelectionError(
+                "Persisted Talent was not acquired through public progression."
+            )
         return validate_talent_choices(
             character.character_class,
             character.level,

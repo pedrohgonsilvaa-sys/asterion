@@ -140,15 +140,18 @@ def test_olho_de_combate_adds_two_static_crit_points_in_internal_composition(pat
     )
 
 
-def test_olho_de_combate_is_not_public_until_tier35_is_released():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+def test_olho_de_combate_is_public_at_nv35_and_unavailable_below_it():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert talent_points_at_level(35) == 7
     assert TALENT_DEFINITIONS[OLHO].level == 35
-    for level in (34, 35, 60):
+    for level in (34,):
         with pytest.raises(TalentSelectionError):
             validate_active_talent_ids("sentinela", level, (OLHO,))
         with pytest.raises(TalentSelectionError):
             static_talent_secondary_modifiers("sentinela", level, (OLHO,))
+    assert validate_active_talent_ids("sentinela", 35, (OLHO,)) == (OLHO,)
+    assert validate_active_talent_ids("sentinela", 60, (OLHO,)) == (OLHO,)
+    assert static_talent_secondary_modifiers("sentinela", 60, (OLHO,))
     assert len(tuple(item for item in TALENTS_BY_CLASS["sentinela"] if item.level == 35)) == 3
 
 

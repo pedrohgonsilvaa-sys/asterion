@@ -126,7 +126,7 @@ def _aim(state: Combat, target_key: str = "enemy-0") -> dict | None:
 
 
 def test_vigia_nv15_definitions_have_canonical_values_and_are_publicly_eligible():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert TALENT_DEFINITIONS[OLHO].level == 15
     assert TALENT_DEFINITIONS[OLHO].crit_points == D(2)
     assert TALENT_DEFINITIONS[POSTURA].level == 15
@@ -380,9 +380,9 @@ def test_mira_stavel_state_survives_reconnect_and_is_cleared_at_combat_end():
     assert _aim(restored) is None
 
 
-def test_vigia_nv5_nv15_and_nv25_are_authorized_while_nv35_stays_closed():
+def test_vigia_nv5_nv15_nv25_and_nv35_are_authorized():
     assert validate_active_talent_ids("vigia", 15, (MAO_FIRME,)) == (MAO_FIRME,)
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert validate_active_talent_ids("vigia", 60, (OLHO,)) == (OLHO,)
     tier25 = next(
         definition.talent_id
@@ -396,4 +396,5 @@ def test_vigia_nv5_nv15_and_nv25_are_authorized_while_nv35_stays_closed():
         if definition.character_class == "vigia" and definition.level == 35
     )
     with pytest.raises(TalentSelectionError):
-        resolve_combat_stats("vigia", 60, "remanescente", talent_ids=(future,))
+        resolve_combat_stats("vigia", 34, "remanescente", talent_ids=(future,))
+    assert resolve_combat_stats("vigia", 60, "remanescente", talent_ids=(future,))

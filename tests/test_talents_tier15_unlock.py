@@ -225,7 +225,7 @@ def _combat_reconnect(state: Combat) -> Combat:
 
 @pytest.mark.asyncio
 async def test_all_six_classes_can_acquire_all_nv15_talents_and_reload_public_snapshots(database):
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert sum(
         talent.level == 15
         for talents in TALENTS_BY_CLASS.values()
@@ -342,14 +342,16 @@ async def test_all_six_classes_can_acquire_all_nv15_talents_and_reload_public_sn
         future_view = await service.view(actor)
         assert future_view is not None and future_view.total_points == 12
         assert future_view.available_points == 9
-        future_id = next(
+        tier35_id = next(
             talent.talent_id
             for talent in TALENTS_BY_CLASS[character_class]
             if talent.level == 35
         )
-        with pytest.raises(TalentMutationRejected) as closed:
-            await service.acquire(actor, future_id, future_view.combat_configuration_version)
-        assert closed.value.code == TalentMutationCode.TIER_NOT_IMPLEMENTED
+        acquired35 = await service.acquire(
+            actor, tier35_id, future_view.combat_configuration_version
+        )
+        assert acquired35 is not None and acquired35.changed
+        assert acquired35.point_slot == 4 and acquired35.view.available_points == 8
 
 
 @pytest.mark.asyncio

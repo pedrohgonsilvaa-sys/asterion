@@ -109,13 +109,14 @@ def test_trama_agressiva_does_not_trigger_on_origin_art_and_keeps_tier_closed():
         change[0] == "trama"
         for change in _event(repeated, FIO_CORTANTE).class_resource_changes
     )
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert talent_points_at_level(35) == 7
     for talent_id in (TRAMA_AGRESSIVA, REFORCO_DO_VEU, FIO_PERSISTENTE):
         assert TALENT_DEFINITIONS[talent_id].level == 35
-        for level in (34, 35, 60):
-            with pytest.raises(TalentSelectionError):
-                validate_active_talent_ids("tecelao", level, (talent_id,))
+        with pytest.raises(TalentSelectionError):
+            validate_active_talent_ids("tecelao", 34, (talent_id,))
+        for level in (35, 60):
+            assert validate_active_talent_ids("tecelao", level, (talent_id,)) == (talent_id,)
 
 
 def test_trama_agressiva_does_not_increase_barrier_power_when_trama_is_consumed_defensively():
@@ -281,23 +282,25 @@ def test_fio_persistente_does_not_restore_consumed_trama_and_duradoura_stays_thr
     assert not owner.path_state.get("trama_expiry_renewed")
 
 
-def test_tier35_stays_closed_while_lower_weaver_tiers_remain_selectable():
+def test_tier35_is_public_while_lower_weaver_tiers_remain_selectable():
     public_ids = (
         "talent.tecelao.fio_potente",
         "talent.tecelao.trama_duradoura",
         "talent.tecelao.fio_perfurante",
     )
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert all(
         validate_active_talent_ids("tecelao", 25, (talent_id,)) == (talent_id,)
         for talent_id in public_ids
     )
     for talent_id in (TRAMA_AGRESSIVA, REFORCO_DO_VEU, FIO_PERSISTENTE):
         with pytest.raises(TalentSelectionError):
-            validate_active_talent_ids("tecelao", 60, (talent_id,))
+            validate_active_talent_ids("tecelao", 34, (talent_id,))
+        assert validate_active_talent_ids("tecelao", 35, (talent_id,)) == (talent_id,)
+        assert validate_active_talent_ids("tecelao", 60, (talent_id,)) == (talent_id,)
 
 
-def test_all_three_tier35_talents_coexist_internally_without_changing_public_gate():
+def test_all_three_tier35_talents_coexist_under_public_gate():
     state = _combat(
         talent_ids=(TRAMA_AGRESSIVA, REFORCO_DO_VEU, FIO_PERSISTENTE),
         arts=(FIO_CORTANTE, CHAMA_TECIDA),

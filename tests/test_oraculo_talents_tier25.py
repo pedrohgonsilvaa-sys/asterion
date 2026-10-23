@@ -209,7 +209,7 @@ def test_destino_exposto_respects_the_existing_pvp_crit_cap(monkeypatch, pvp, ex
 
 
 def test_oraculo_tier25_is_publicly_valid_at_required_level():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert talent_points_at_level(25) == 5
     for talent_id in (DESTINO_EXPOSTO, ANTEVISAO_DEFENSIVA, LEITURA_DOS_SINAIS):
         assert TALENT_DEFINITIONS[talent_id].level == 25

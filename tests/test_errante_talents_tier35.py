@@ -465,19 +465,20 @@ def test_desvio_preparation_is_cleared_on_death_and_combat_end():
     assert "errante_desvio_ofensivo_per" not in state.fighters["player"].path_state
 
 
-def test_errante_nv35_ids_remain_internally_defined_but_publicly_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+def test_errante_nv35_ids_are_publicly_valid_after_release():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     for talent_id in (OPORTUNISMO_AMPLIADO, SOBREVIVENCIA, DESVIO_OFENSIVO):
         assert TALENT_DEFINITIONS[talent_id].level == 35
-        for level in (34, 35, 60):
+        for level in (34,):
             with pytest.raises(TalentSelectionError):
                 validate_active_talent_ids("errante", level, (talent_id,))
+        assert validate_active_talent_ids("errante", 35, (talent_id,)) == (talent_id,)
+        assert validate_active_talent_ids("errante", 60, (talent_id,)) == (talent_id,)
 
     # Public static composition also delegates to the authoritative validator.
     from asterion.domain.talents import static_talent_modifiers
 
-    with pytest.raises(TalentSelectionError):
-        static_talent_modifiers("errante", 60, (OPORTUNISMO_AMPLIADO,))
+    assert static_talent_modifiers("errante", 60, (OPORTUNISMO_AMPLIADO,))
 
 
 def test_desvio_state_does_not_cross_combat_identity_or_cleanup():

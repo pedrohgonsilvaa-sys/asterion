@@ -194,8 +194,8 @@ def test_canonical_talent_point_milestones_remain_unchanged(level, points):
 
 
 @pytest.mark.asyncio
-async def test_all_six_classes_acquire_nv25_and_reload_public_snapshots(database):
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+async def test_all_six_classes_acquire_nv25_and_nv35_and_reload_public_snapshots(database):
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert sum(map(len, TIER25.values())) == 18
     assert all(len(talent_ids) == 3 for talent_ids in TIER25.values())
     static_modifiers = {
@@ -290,7 +290,20 @@ async def test_all_six_classes_acquire_nv25_and_reload_public_snapshots(database
         high_level = await service.view(actor)
         assert high_level is not None and high_level.total_points == 12
         assert high_level.available_points == 9
-        for future_level in (35, 45, 55):
+        tier35 = next(t for t in TALENTS_BY_CLASS[character_class] if t.level == 35)
+        detail = render_talent_detail(high_level, tier35)
+        assert "Adquirir Talento" in [
+            button.text
+            for row in detail.keyboard.inline_keyboard
+            for button in row
+        ]
+        acquired35 = await service.acquire(
+            actor, tier35.talent_id, high_level.combat_configuration_version
+        )
+        assert acquired35 is not None and acquired35.point_slot == 4
+        high_level = acquired35.view
+        assert high_level.available_points == 8
+        for future_level in (45, 55):
             future = next(
                 t for t in TALENTS_BY_CLASS[character_class] if t.level == future_level
             )
@@ -675,7 +688,7 @@ async def test_doctrine_accepts_nv25_without_free_respec_and_rejects_invalid_sta
         for definition in tier25_definitions
     )
     future_names = {
-        talent.name for talent in TALENTS_BY_CLASS["sentinela"] if talent.level >= 35
+        talent.name for talent in TALENTS_BY_CLASS["sentinela"] if talent.level >= 45
     }
     assert not any(
         name in button.text
@@ -685,7 +698,7 @@ async def test_doctrine_accepts_nv25_without_free_respec_and_rejects_invalid_sta
     )
 
     invalid_ids = (
-        next(t.talent_id for t in TALENTS_BY_CLASS["sentinela"] if t.level == 35),
+        next(t.talent_id for t in TALENTS_BY_CLASS["sentinela"] if t.level == 45),
         "talent.errante.precisao_cruel",
     )
     for invalid_id in invalid_ids:

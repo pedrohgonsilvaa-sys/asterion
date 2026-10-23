@@ -149,6 +149,7 @@ class TalentService:
                     character_id=character.id,
                     point_slot=point_slot,
                     talent_id=talent_id,
+                    publicly_acquired=True,
                 )
             )
             await session.flush()
@@ -241,6 +242,10 @@ class TalentService:
         rows: list[CharacterTalentChoice],
     ) -> tuple[tuple[int, str], ...]:
         try:
+            if any(not row.publicly_acquired for row in rows):
+                raise TalentSelectionError(
+                    "Talent choice was not acquired through public progression."
+                )
             return validate_talent_choices(
                 character.character_class,
                 character.level,

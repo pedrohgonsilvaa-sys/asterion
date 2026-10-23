@@ -172,7 +172,7 @@ def _set_luminar_state(state: Combat, kind: str, remaining: int = 2) -> None:
 
 
 def test_luminar_tier15_catalog_and_public_gate():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert talent_points_at_level(15) == 3
     expected = {
         JULGAMENTO_PRECISO: ("Julgamento Preciso", D(15), D(0), D(0)),
@@ -199,13 +199,15 @@ def test_luminar_tier15_catalog_and_public_gate():
         if definition.character_class == "luminar" and definition.level == 25
     )
     assert validate_active_talent_ids("luminar", 25, (tier25,)) == (tier25,)
-    future = next(
+    tier35 = next(
         definition.talent_id
         for definition in TALENT_DEFINITIONS.values()
         if definition.character_class == "luminar" and definition.level == 35
     )
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("luminar", 60, (future,))
+        validate_active_talent_ids("luminar", 34, (tier35,))
+    assert validate_active_talent_ids("luminar", 35, (tier35,)) == (tier35,)
+    assert validate_active_talent_ids("luminar", 60, (tier35,)) == (tier35,)
 
 
 @pytest.mark.parametrize("path", (None, "guardiao", "inquisidor"))
@@ -521,4 +523,4 @@ def test_all_three_nv15_talents_coexist_in_controlled_combat_state():
     assert event.path_power_multiplier == D("1.15")
     assert event.path_crit_bonus == D(2)
     assert "luminar_state" not in result.fighters["player"].path_state
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})

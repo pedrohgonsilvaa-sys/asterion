@@ -1116,7 +1116,10 @@ class P6Service:
             await session.scalar(
                 select(func.count())
                 .select_from(CharacterTalentChoice)
-                .where(CharacterTalentChoice.character_id == character.id)
+                .where(
+                    CharacterTalentChoice.character_id == character.id,
+                    CharacterTalentChoice.publicly_acquired.is_(True),
+                )
             )
             or 0
         )

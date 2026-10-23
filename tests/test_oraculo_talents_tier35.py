@@ -400,14 +400,16 @@ def test_pressagio_flexivel_waits_for_normal_three_turn_sinal_persistente_expiry
     assert owner.path_state["omen_flexible_used"] is True
 
 
-def test_oraculo_tier35_effects_remain_closed_to_public_selection():
+def test_oraculo_tier35_effects_are_valid_after_public_release():
     ids = (PROFECIA_DOLOROSA, DESTINO_ADIADO, PRESSAGIO_FLEXIVEL)
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert talent_points_at_level(35) == 7
     for talent_id in ids:
         assert TALENT_DEFINITIONS[talent_id].level == 35
         with pytest.raises(TalentSelectionError):
-            validate_active_talent_ids("oraculo", 60, (talent_id,))
+            validate_active_talent_ids("oraculo", 34, (talent_id,))
+        assert validate_active_talent_ids("oraculo", 35, (talent_id,)) == (talent_id,)
+        assert validate_active_talent_ids("oraculo", 60, (talent_id,)) == (talent_id,)
 
 
 def test_destino_adiado_flag_roundtrips_and_clears_at_combat_end():

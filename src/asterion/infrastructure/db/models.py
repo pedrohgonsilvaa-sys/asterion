@@ -2022,6 +2022,9 @@ class CharacterTalentChoice(Base):
     )
     point_slot: Mapped[int] = mapped_column(Integer, nullable=False)
     talent_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    publicly_acquired: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
 
 
 class CharacterProfession(Base):

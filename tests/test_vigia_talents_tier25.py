@@ -213,7 +213,7 @@ def test_perfuracao_calculada_is_two_percentage_points_and_uses_static_compositi
 
 
 def test_perfuracao_calculada_is_publicly_valid_at_nv25():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert TALENT_DEFINITIONS[PERFURACAO].level == 25
     with pytest.raises(TalentSelectionError):
         validate_active_talent_ids("vigia", 24, (PERFURACAO,))
@@ -537,14 +537,15 @@ def test_aquisicao_rapida_uses_mira_estavel_duration_without_extra_stack_or_wind
     assert _aim(state)["trigger"] == "aquisicao_rapida"
 
 
-def test_nv25_hooks_require_level_and_future_tiers_remain_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+def test_nv25_hooks_require_level_and_nv35_is_public():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     with pytest.raises(TalentSelectionError):
         validate_active_talent_ids("vigia", 24, (PERFURACAO,))
     assert validate_active_talent_ids("vigia", 25, (ANTECIPACAO,)) == (ANTECIPACAO,)
     assert resolve_combat_stats("vigia", 25, "remanescente", talent_ids=(PERFURACAO,))
     future_id = next(t.talent_id for t in TALENTS_BY_CLASS["vigia"] if t.level == 35)
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("vigia", 60, (future_id,))
+        validate_active_talent_ids("vigia", 34, (future_id,))
+    assert validate_active_talent_ids("vigia", 60, (future_id,)) == (future_id,)
     assert validate_active_talent_ids("vigia", 15, ("talent.vigia.mao_firme",))
     assert validate_active_talent_ids("vigia", 15, (MIRA_ESTAVEL,))

@@ -149,7 +149,7 @@ def _damage_effect(*, remaining: int = 2, fixed: bool = False, stat: str = "defe
 def test_sentinel_tier25_catalog_and_public_authority():
     tier25 = tuple(t for t in TALENTS_BY_CLASS["sentinela"] if t.level == 25)
     assert tuple(t.talent_id for t in tier25) == (PRESSAO, FIRME, PERSISTENTE)
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert talent_points_at_level(25) == 5
     assert talent_points_at_level(15) == 3
     assert validate_active_talent_ids("sentinela", 25, (PRESSAO,)) == (PRESSAO,)
@@ -748,14 +748,15 @@ def test_golpe_de_rechaco_retaliation_and_ponta_revidada_keep_distinct_per_bonus
     assert state.fighters["player"].retaliation_charges == 0
 
 
-def test_nv25_talents_are_publicly_authorized_and_future_tiers_stay_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25})
+def test_nv25_talents_are_publicly_authorized_and_tier35_is_open():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
     assert talent_points_at_level(25) == 5
     assert validate_active_talent_ids("sentinela", 25, (PONTA_REVIDADA,)) == (
         PONTA_REVIDADA,
     )
     for talent_id in (PRESSAO, FIRME, PERSISTENTE):
         assert validate_active_talent_ids("sentinela", 25, (talent_id,)) == (talent_id,)
-    future_id = next(t.talent_id for t in TALENTS_BY_CLASS["sentinela"] if t.level == 35)
+    tier35_id = next(t.talent_id for t in TALENTS_BY_CLASS["sentinela"] if t.level == 35)
     with pytest.raises(TalentSelectionError):
-        validate_active_talent_ids("sentinela", 60, (future_id,))
+        validate_active_talent_ids("sentinela", 34, (tier35_id,))
+    assert validate_active_talent_ids("sentinela", 60, (tier35_id,)) == (tier35_id,)

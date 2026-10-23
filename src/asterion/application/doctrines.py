@@ -662,6 +662,7 @@ class DoctrineService:
                         character_id=character.id,
                         point_slot=talent["point_slot"],
                         talent_id=talent["talent_id"],
+                        publicly_acquired=True,
                     )
                 )
             await session.flush()
