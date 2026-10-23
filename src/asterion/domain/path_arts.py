@@ -73,8 +73,13 @@ RAJADA_CONTROLADA_ART_ID = ATIRADOR_ART_IDS["rajada_controlada"]
 CHUVA_DE_RASTROS_ART_ID = RASTREADOR_ART_IDS["chuva_de_rastros"]
 CONVERGENCIA_ARCANA_ART_ID = CONJURADOR_ART_IDS["convergencia_arcana"]
 RUNA_DE_RETORNO_ART_ID = RUNICO_ART_IDS["runa_de_retorno"]
+CONDENACAO_ART_ID = AGOUREIRO_ART_IDS["condenacao"]
+URSO_ART_ID = INVOCADOR_ART_IDS["urso"]
+PURGACAO_LUMINOSA_ART_ID = GUARDIAO_ART_IDS["purgacao_luminosa"]
+PURGA_ARDENTE_ART_ID = INQUISIDOR_ART_IDS["purga_ardente"]
 
 CARRASCO_MARCA_DA_MORTE_CHAIN = "errante.carrasco.marca_da_morte"
+AGOUREIRO_CONDENACAO_CHAIN = "oraculo.agoureiro.condemnacao"
 
 PATH_ART_ACTIONS = MappingProxyType(
     {
@@ -548,6 +553,70 @@ PATH_ART_ACTIONS = MappingProxyType(
                 effect_removal=ActionEffectRemoval(
                     kind="purification",
                     count=1,
+                    selection_required=False,
+                ),
+            ),
+        ),
+        CONDENACAO_ART_ID: PathArtActionDefinition(
+            art_id=CONDENACAO_ART_ID,
+            character_class="oraculo",
+            path_id="agoureiro",
+            action=Action(
+                CONDENACAO_ART_ID,
+                "Condenação",
+                Decimal("0.80"),
+                cooldown=4,
+                prepares_chain=AGOUREIRO_CONDENACAO_CHAIN,
+                prepares_chain_duration=2,
+                chain_power_bonus_damage=Decimal("0.20"),
+            ),
+        ),
+        URSO_ART_ID: PathArtActionDefinition(
+            art_id=URSO_ART_ID,
+            character_class="oraculo",
+            path_id="invocador",
+            action=Action(
+                URSO_ART_ID,
+                "Urso",
+                Decimal(0),
+                cooldown=3,
+                target_mode="self",
+                target_barrier_coefficient=Decimal("1.00"),
+                target_barrier_duration=2,
+                manifestation_kind="urso",
+            ),
+        ),
+        PURGACAO_LUMINOSA_ART_ID: PathArtActionDefinition(
+            art_id=PURGACAO_LUMINOSA_ART_ID,
+            character_class="luminar",
+            path_id="guardiao",
+            action=Action(
+                PURGACAO_LUMINOSA_ART_ID,
+                "Purgação Luminosa",
+                Decimal(0),
+                cooldown=4,
+                target_mode="ally",
+                heal_coefficient=Decimal("0.65"),
+                effect_removal=ActionEffectRemoval(
+                    kind="purification",
+                    count=1,
+                    selection_required=False,
+                ),
+            ),
+        ),
+        PURGA_ARDENTE_ART_ID: PathArtActionDefinition(
+            art_id=PURGA_ARDENTE_ART_ID,
+            character_class="luminar",
+            path_id="inquisidor",
+            action=Action(
+                PURGA_ARDENTE_ART_ID,
+                "Purga Ardente",
+                Decimal("1.20"),
+                cooldown=4,
+                effect_removal=ActionEffectRemoval(
+                    kind="dispel",
+                    count=1,
+                    trigger="successful_direct_hit",
                     selection_required=False,
                 ),
             ),

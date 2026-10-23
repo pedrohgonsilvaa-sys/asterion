@@ -156,3 +156,56 @@ def test_doctrine_ui_lists_first_wave_path_art_for_its_class_and_path(
     screen = render_art_choices(view, doctrine, 1)
     labels = [button.text for row in screen.keyboard.inline_keyboard for button in row]
     assert any(label in button_label for button_label in labels)
+
+
+@pytest.mark.parametrize(
+    ("character_class", "path", "art_id", "label"),
+    [
+        ("sentinela", "bastiao", BASTIAO_ART_IDS["contra_golpe"], "Contra-Golpe"),
+        ("sentinela", "devastador", DEVASTADOR_ART_IDS["abalo"], "Abalo"),
+        ("errante", "carrasco", CARRASCO_ART_IDS["marca_da_morte"], "Marca da Morte"),
+        ("errante", "sabotador", SABOTADOR_ART_IDS["trava_de_passos"], "Trava de Passos"),
+        ("vigia", "atirador", ATIRADOR_ART_IDS["rajada_controlada"], "Rajada Controlada"),
+        ("vigia", "rastreador", RASTREADOR_ART_IDS["chuva_de_rastros"], "Chuva de Rastros"),
+        ("tecelao", "conjurador", CONJURADOR_ART_IDS["convergencia_arcana"], "Convergência Arcana"),
+        ("tecelao", "runico", RUNICO_ART_IDS["runa_de_retorno"], "Runa de Retorno"),
+        ("oraculo", "agoureiro", AGOUREIRO_ART_IDS["condenacao"], "Condenação"),
+        ("oraculo", "invocador", INVOCADOR_ART_IDS["urso"], "Urso"),
+        ("luminar", "guardiao", GUARDIAO_ART_IDS["purgacao_luminosa"], "Purgação Luminosa"),
+        ("luminar", "inquisidor", INQUISIDOR_ART_IDS["purga_ardente"], "Purga Ardente"),
+    ],
+)
+def test_doctrine_ui_lists_wave3_path_art_only_at_level_38_for_its_path(
+    character_class, path, art_id, label
+):
+    def build_views(level):
+        collection = DoctrineCollectionView(
+            character_name="Aventureiro",
+            character_class=character_class,
+            selected_path=path,
+            configuration_version=1,
+            foreground=False,
+            current_configuration={"path": path, "equipment": {}, "arts": {}, "talents": []},
+            doctrines=(),
+            crowns=0,
+            level=level,
+        )
+        doctrine = DoctrineView(
+            doctrine_id=uuid4(),
+            name="Build",
+            revision=1,
+            configuration={"path": path, "equipment": {}, "arts": {}, "talents": []},
+            is_current=False,
+            incomplete_reason=None,
+            can_apply=True,
+        )
+        return collection, doctrine
+
+    locked_view, locked_doctrine = build_views(37)
+    assert art_id not in doctrine_art_ids(locked_view, locked_doctrine)
+
+    available_view, available_doctrine = build_views(38)
+    assert art_id in doctrine_art_ids(available_view, available_doctrine)
+    screen = render_art_choices(available_view, available_doctrine, 1)
+    labels = [button.text for row in screen.keyboard.inline_keyboard for button in row]
+    assert any(label in button_label for button_label in labels)

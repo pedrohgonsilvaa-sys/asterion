@@ -16,7 +16,10 @@ from asterion.domain.arts import (
     weapon_requirement_label,
 )
 from asterion.domain.class_trials import class_player_actions
-from asterion.domain.path_arts import CARRASCO_MARCA_DA_MORTE_CHAIN
+from asterion.domain.path_arts import (
+    AGOUREIRO_CONDENACAO_CHAIN,
+    CARRASCO_MARCA_DA_MORTE_CHAIN,
+)
 from asterion.domain.paths import PATH_DEFINITIONS
 from asterion.domain.talents import IMPLEMENTED_TALENT_LEVELS, TalentDefinition
 
@@ -405,6 +408,10 @@ def _art_mechanics_lines(action) -> list[str]:
     elif chain_key == CARRASCO_MARCA_DA_MORTE_CHAIN:
         lines.append(
             "☠️ Marca da Morte · próxima Arte direta do Carrasco recebe +12% em 2T"
+        )
+    elif chain_key == AGOUREIRO_CONDENACAO_CHAIN:
+        lines.append(
+            "🔮 Condenação · próxima Arte do Agoureiro recebe +20% em 2T"
         )
 
     if action.target_mode == "self":

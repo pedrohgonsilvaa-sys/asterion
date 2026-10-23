@@ -192,21 +192,25 @@ RUNICO_ART_IDS = {
 AGOUREIRO_ART_IDS = {
     "mau_agouro": "path_art.oraculo.agoureiro.mau_agouro",
     "destino_lento": "path_art.oraculo.agoureiro.destino_lento",
+    "condenacao": "path_art.oraculo.agoureiro.condenacao",
 }
 
 INVOCADOR_ART_IDS = {
     "lobo": "path_art.oraculo.invocador.lobo",
     "coruja": "path_art.oraculo.invocador.coruja",
+    "urso": "path_art.oraculo.invocador.urso",
 }
 
 GUARDIAO_ART_IDS = {
     "cura_solar": "path_art.luminar.guardiao.cura_solar",
     "egide_compartilhada": "path_art.luminar.guardiao.egide_compartilhada",
+    "purgacao_luminosa": "path_art.luminar.guardiao.purgacao_luminosa",
 }
 
 INQUISIDOR_ART_IDS = {
     "lanca_de_luz": "path_art.luminar.inquisidor.lanca_de_luz",
     "selo_da_penitencia": "path_art.luminar.inquisidor.selo_da_penitencia",
+    "purga_ardente": "path_art.luminar.inquisidor.purga_ardente",
 }
 
 
@@ -218,6 +222,23 @@ ACTIVE_ART_DEFINITIONS.update(
     {
         art_id: ActiveArtDefinition(art_id, "sentinela", min_level)
         for art_id, min_level in SENTINEL_ART_LEVELS.items()
+    }
+)
+
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        AGOUREIRO_ART_IDS["condenacao"]: ActiveArtDefinition(
+            AGOUREIRO_ART_IDS["condenacao"], "oraculo", 38, path_id="agoureiro"
+        ),
+        INVOCADOR_ART_IDS["urso"]: ActiveArtDefinition(
+            INVOCADOR_ART_IDS["urso"], "oraculo", 38, path_id="invocador"
+        ),
+        GUARDIAO_ART_IDS["purgacao_luminosa"]: ActiveArtDefinition(
+            GUARDIAO_ART_IDS["purgacao_luminosa"], "luminar", 38, path_id="guardiao"
+        ),
+        INQUISIDOR_ART_IDS["purga_ardente"]: ActiveArtDefinition(
+            INQUISIDOR_ART_IDS["purga_ardente"], "luminar", 38, path_id="inquisidor"
+        ),
     }
 )
 

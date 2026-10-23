@@ -8,6 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from asterion.domain.arts import (
+    AGOUREIRO_ART_IDS,
     ART_IDS_BY_CLASS,
     CARRASCO_ART_IDS,
     ERRANTE_ART_IDS,
@@ -28,6 +29,7 @@ from asterion.domain.combat import (
 )
 from asterion.domain.combat_math import CURRENT_COMBAT_RULESET, CombatStats
 from asterion.domain.path_arts import (
+    AGOUREIRO_CONDENACAO_CHAIN,
     CARRASCO_MARCA_DA_MORTE_CHAIN,
     path_player_actions,
 )
@@ -1348,6 +1350,14 @@ def class_player_actions(
                     actions[art_id],
                     consumes_chain=CARRASCO_MARCA_DA_MORTE_CHAIN,
                     chain_power_bonus_damage=Decimal("0.12"),
+                )
+    if character_class == "oraculo" and selected_path == "agoureiro":
+        for art_id in path_art_ids:
+            if art_id in AGOUREIRO_ART_IDS.values() and actions[art_id].coefficient > 0:
+                actions[art_id] = replace(
+                    actions[art_id],
+                    consumes_chain=AGOUREIRO_CONDENACAO_CHAIN,
+                    chain_power_bonus_damage=Decimal("0.20"),
                 )
     return actions
 
