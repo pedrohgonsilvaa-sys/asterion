@@ -69,6 +69,10 @@ CONTRA_GOLPE_ART_ID = BASTIAO_ART_IDS["contra_golpe"]
 ABALO_ART_ID = DEVASTADOR_ART_IDS["abalo"]
 MARCA_DA_MORTE_ART_ID = CARRASCO_ART_IDS["marca_da_morte"]
 TRAVA_DE_PASSOS_ART_ID = SABOTADOR_ART_IDS["trava_de_passos"]
+ULTIMA_MURALHA_ART_ID = BASTIAO_ART_IDS["ultima_muralha"]
+RUPTOR_ART_ID = DEVASTADOR_ART_IDS["ruptor"]
+CEIFA_ART_ID = CARRASCO_ART_IDS["ceifa"]
+COLAPSO_PREPARADO_ART_ID = SABOTADOR_ART_IDS["colapso_preparado"]
 RAJADA_CONTROLADA_ART_ID = ATIRADOR_ART_IDS["rajada_controlada"]
 CHUVA_DE_RASTROS_ART_ID = RASTREADOR_ART_IDS["chuva_de_rastros"]
 CONVERGENCIA_ARCANA_ART_ID = CONJURADOR_ART_IDS["convergencia_arcana"]
@@ -618,6 +622,88 @@ PATH_ART_ACTIONS = MappingProxyType(
                     count=1,
                     trigger="successful_direct_hit",
                     selection_required=False,
+                ),
+            ),
+        ),
+        ULTIMA_MURALHA_ART_ID: PathArtActionDefinition(
+            art_id=ULTIMA_MURALHA_ART_ID,
+            character_class="sentinela",
+            path_id="bastiao",
+            action=Action(
+                ULTIMA_MURALHA_ART_ID,
+                "Última Muralha",
+                Decimal(0),
+                cooldown=5,
+                target_mode="all_allies",
+                target_barrier_coefficient=Decimal("0.65"),
+                target_barrier_duration=2,
+            ),
+        ),
+        RUPTOR_ART_ID: PathArtActionDefinition(
+            art_id=RUPTOR_ART_ID,
+            character_class="sentinela",
+            path_id="devastador",
+            action=Action(
+                RUPTOR_ART_ID,
+                "Ruptor",
+                Decimal("1.70"),
+                cooldown=5,
+                conditional_modifiers=(
+                    ActionConditionalModifier(
+                        "sentinela.ruptor.low_hp_power",
+                        ActionCondition(
+                            "actor_hp_fraction_below", threshold=Decimal("0.50")
+                        ),
+                        "damage_power",
+                        Decimal("0.10"),
+                        operation="multiply",
+                        evaluation_scope="per_action",
+                    ),
+                ),
+            ),
+        ),
+        CEIFA_ART_ID: PathArtActionDefinition(
+            art_id=CEIFA_ART_ID,
+            character_class="errante",
+            path_id="carrasco",
+            action=Action(
+                CEIFA_ART_ID,
+                "Ceifa",
+                Decimal("1.65"),
+                cooldown=5,
+                conditional_modifiers=(
+                    ActionConditionalModifier(
+                        "errante.ceifa.target_low_hp_crit",
+                        ActionCondition(
+                            "target_hp_fraction_at_most", threshold=Decimal("0.40")
+                        ),
+                        "crit_bonus",
+                        Decimal(10),
+                    ),
+                ),
+            ),
+        ),
+        COLAPSO_PREPARADO_ART_ID: PathArtActionDefinition(
+            art_id=COLAPSO_PREPARADO_ART_ID,
+            character_class="errante",
+            path_id="sabotador",
+            action=Action(
+                COLAPSO_PREPARADO_ART_ID,
+                "Colapso Preparado",
+                Decimal("1.20"),
+                cooldown=5,
+                conditional_modifiers=tuple(
+                    ActionConditionalModifier(
+                        f"errante.colapso_preparado.distinct_negative_{count}",
+                        ActionCondition(
+                            "target_distinct_normal_negative_effects_at_least",
+                            minimum=count,
+                        ),
+                        "damage_power",
+                        Decimal("0.10"),
+                        operation="add",
+                    )
+                    for count in (1, 2, 3)
                 ),
             ),
         ),

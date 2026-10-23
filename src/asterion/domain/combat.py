@@ -199,6 +199,7 @@ class ActionCondition:
             "actor_hp_fraction_below",
             "target_hp_fraction_at_most",
             "target_has_normal_negative_effect",
+            "target_distinct_normal_negative_effects_at_least",
             "class_resource_at_least",
         }:
             raise ValueError("Action condition kind is unsupported.")
@@ -210,6 +211,11 @@ class ActionCondition:
                 raise ValueError("Action class-resource condition is invalid.")
         elif self.resource is not None or self.state_kind is not None:
             raise ValueError("Only a class-resource condition accepts resource metadata.")
+        if (
+            self.kind == "target_distinct_normal_negative_effects_at_least"
+            and self.minimum < 1
+        ):
+            raise ValueError("Distinct negative-effect conditions need a positive count.")
         if self.resource != "luminar_state" and self.state_kind is not None:
             raise ValueError("Only a Luminar condition may specify its state kind.")
         if self.state_kind not in {None, "fulgor", "julgamento"}:
@@ -2878,6 +2884,24 @@ def _has_valid_negative_effect(state: Combat, target: Fighter) -> bool:
     )
 
 
+def _distinct_valid_negative_effect_count(state: Combat, target: Fighter) -> int:
+    """Count live normal DoT/Debuff kinds once, ignoring repeated stacks."""
+    kinds = {
+        ("debuff", effect.id)
+        for effect in target.effects
+        if effect.kind == "debuff"
+        and not effect.fixed_mechanic
+        and effect.remaining > 0
+        and effect.stacks > 0
+    }
+    kinds.update(
+        ("dot", dot.kind)
+        for dot in state.dot_states.get(target.id, ())
+        if not dot.fixed_mechanic and dot.remaining > 0 and dot.stacks > 0
+    )
+    return len(kinds)
+
+
 def _has_valid_defense_reduction(target: Fighter) -> bool:
     """Whether the action-start target snapshot contains a live −DEF debuff."""
     return any(
@@ -3318,6 +3342,12 @@ def _action_condition_matches(
     if condition.kind == "target_has_normal_negative_effect":
         return target_key is not None and _has_valid_negative_effect(
             state, state.fighters[target_key]
+        )
+    if condition.kind == "target_distinct_normal_negative_effects_at_least":
+        return (
+            target_key is not None
+            and _distinct_valid_negative_effect_count(state, state.fighters[target_key])
+            >= condition.minimum
         )
     if condition.kind == "class_resource_at_least" and condition.resource is not None:
         count = _class_resource_count(

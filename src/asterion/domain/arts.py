@@ -145,24 +145,28 @@ DEVASTADOR_ART_IDS = {
     "ariete": "path_art.sentinela.devastador.ariete",
     "golpe_de_ruptura": "path_art.sentinela.devastador.golpe_de_ruptura",
     "abalo": "path_art.sentinela.devastador.abalo",
+    "ruptor": "path_art.sentinela.devastador.ruptor",
 }
 
 BASTIAO_ART_IDS = {
     "escudo_de_cinzas": "path_art.sentinela.bastiao.escudo_de_cinzas",
     "interpor": "path_art.sentinela.bastiao.interpor",
     "contra_golpe": "path_art.sentinela.bastiao.contra_golpe",
+    "ultima_muralha": "path_art.sentinela.bastiao.ultima_muralha",
 }
 
 CARRASCO_ART_IDS = {
     "corte_de_execucao": "path_art.errante.carrasco.corte_de_execucao",
     "hemorragia": "path_art.errante.carrasco.hemorragia",
     "marca_da_morte": "path_art.errante.carrasco.marca_da_morte",
+    "ceifa": "path_art.errante.carrasco.ceifa",
 }
 
 SABOTADOR_ART_IDS = {
     "veneno_velado": "path_art.errante.sabotador.veneno_velado",
     "fio_cortado": "path_art.errante.sabotador.fio_cortado",
     "trava_de_passos": "path_art.errante.sabotador.trava_de_passos",
+    "colapso_preparado": "path_art.errante.sabotador.colapso_preparado",
 }
 
 ATIRADOR_ART_IDS = {
@@ -518,6 +522,35 @@ ACTIVE_ART_DEFINITIONS.update(
             SABOTADOR_ART_IDS["fio_cortado"],
             "errante",
             22,
+            path_id="sabotador",
+            weapon_requirement=frozenset({"weapon.compat.melee"}),
+        ),
+    }
+)
+
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        BASTIAO_ART_IDS["ultima_muralha"]: ActiveArtDefinition(
+            BASTIAO_ART_IDS["ultima_muralha"], "sentinela", 52, path_id="bastiao"
+        ),
+        DEVASTADOR_ART_IDS["ruptor"]: ActiveArtDefinition(
+            DEVASTADOR_ART_IDS["ruptor"],
+            "sentinela",
+            52,
+            path_id="devastador",
+            weapon_requirement=frozenset({"weapon.compat.melee"}),
+        ),
+        CARRASCO_ART_IDS["ceifa"]: ActiveArtDefinition(
+            CARRASCO_ART_IDS["ceifa"],
+            "errante",
+            52,
+            path_id="carrasco",
+            weapon_requirement=frozenset({"weapon.compat.melee"}),
+        ),
+        SABOTADOR_ART_IDS["colapso_preparado"]: ActiveArtDefinition(
+            SABOTADOR_ART_IDS["colapso_preparado"],
+            "errante",
+            52,
             path_id="sabotador",
             weapon_requirement=frozenset({"weapon.compat.melee"}),
         ),
