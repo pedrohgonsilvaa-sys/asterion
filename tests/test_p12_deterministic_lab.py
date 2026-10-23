@@ -1050,6 +1050,8 @@ async def test_p12_deterministic_lab_from_one_organic_checkpoint(database, monke
                             "active_connections", "aura_reduction", "defeat_cause",
                         )
                     },
+                    "sequence": best["sequence"],
+                    "turn_trace": _compact_trace(best["trace"]),
                 },
                 ensure_ascii=False,
                 default=str,
