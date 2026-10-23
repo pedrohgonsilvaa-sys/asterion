@@ -595,6 +595,16 @@ class Fighter:
             value *= D("1.05")
         if (
             name == "defense"
+            and self.character_class == "tecelao"
+            and "talent.tecelao.reforco_do_veu" in self.talent_ids
+            and self.barrier > ZERO
+        ):
+            # Reforço do Véu is derived from the recipient's active barrier
+            # layers, regardless of their source, so depletion and expiry are
+            # reflected without persisting a second DEF modifier.
+            value *= D("1.05")
+        if (
+            name == "defense"
             and self.character_class == "errante"
             and "talent.errante.sobrevivencia" in self.talent_ids
             and self.hp > ZERO
