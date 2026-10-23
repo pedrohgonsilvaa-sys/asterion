@@ -1,27 +1,33 @@
-"""Opt-in P12 laboratory: one organic checkpoint, many deterministic simulations.
+"""P12 laboratory with an explicit organic CAPTURE and cheap domain REPLAY.
 
-Run with ASTERION_RUN_P12_DETERMINISTIC_LAB=1 and a disposable PostgreSQL URL.
-The campaign journey is deliberately executed once. All strategy comparisons
-after checkpoint capture operate on deep copies through the production domain
-combat functions and never write synthetic progress to the database.
+CAPTURE is opt-in and uses a disposable PostgreSQL schema. REPLAY reads a safe,
+hashed JSON checkpoint and never enters the campaign driver or database fixture.
 """
 
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
+import re
+import subprocess
+import sys
+import tempfile
 import time
 from copy import deepcopy
+from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import select
 
-from asterion.application.road import RoadService
 from asterion.domain.arts import DEVASTADOR_ART_IDS, SENTINEL_ART_IDS
 from asterion.domain.combat import (
+    Combat,
+    Fighter,
     _damage_aura_reduction,
     act,
     action_target_ids,
@@ -30,8 +36,9 @@ from asterion.domain.combat import (
     player_actions_for,
     use_combat_consumable,
 )
+from asterion.domain.combat_math import CURRENT_COMBAT_RULESET, CombatStats
 from asterion.domain.consumables import ConsumableFamily, definition
-from asterion.infrastructure.db.combat_codec import encode
+from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
     Character,
     Quest,
@@ -39,6 +46,13 @@ from asterion.infrastructure.db.models import (
 
 D = Decimal
 P12_RNG_NAMESPACE = "asterion:p12:a2:combat-seed:"
+P12_CHECKPOINT_FORMAT = "asterion-p12-combat-checkpoint"
+P12_CHECKPOINT_VERSION = 1
+P12_CAPTURE_COMMAND = (
+    "$env:ASTERION_P12_MODE='capture'; $env:PYTHONIOENCODING='utf-8'; "
+    ".venv/Scripts/python.exe -m pytest -q "
+    "tests/test_p12_deterministic_lab.py -k p12_checkpoint_capture"
+)
 CONNECTIONS = ("connection_a", "connection_b", "connection_c")
 ART_ID = DEVASTADOR_ART_IDS["ariete"]
 GUARD_ART_ID = SENTINEL_ART_IDS["golpe_de_guarda"]
@@ -55,8 +69,146 @@ def _combat_id(seed: int):
 
 
 def _snapshot_hash(state) -> str:
-    payload = json.dumps(encode(state), sort_keys=True, separators=(",", ":"))
+    payload = _canonical_json(encode(state))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _canonical_json(value) -> str:
+    def encode_decimal(item):
+        if isinstance(item, Decimal):
+            return str(item)
+        raise TypeError(f"Unsupported checkpoint JSON value: {type(item).__name__}")
+
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=encode_decimal,
+    )
+
+
+def _checkpoint_path() -> Path:
+    configured = os.getenv("ASTERION_P12_CHECKPOINT_PATH")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return Path(tempfile.gettempdir()) / "asterion-p12-lab" / "checkpoint.json"
+
+
+def _report_directory() -> Path:
+    configured = os.getenv("ASTERION_P12_REPORT_DIR")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return _checkpoint_path().parent / "reports"
+
+
+def _current_head() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).resolve().parents[1],
+    )
+    return result.stdout.strip()
+
+
+def _domain_fingerprints() -> dict[str, str]:
+    root = Path(__file__).resolve().parents[1]
+    sources = {
+        "combat": root / "src/asterion/domain/combat.py",
+        "combat_math": root / "src/asterion/domain/combat_math.py",
+        "combat_codec": root / "src/asterion/infrastructure/db/combat_codec.py",
+    }
+    return {
+        name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for name, path in sources.items()
+    }
+
+
+def _configure_capture_console() -> None:
+    """Keep legacy playthrough progress output safe on Windows CP1252 consoles."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
+def _checkpoint_digest(document: dict) -> str:
+    unsigned = {key: value for key, value in document.items() if key != "sha256"}
+    return hashlib.sha256(_canonical_json(unsigned).encode("utf-8")).hexdigest()
+
+
+def _seal_checkpoint(document: dict) -> dict:
+    sealed = dict(document)
+    sealed.pop("sha256", None)
+    sealed["sha256"] = _checkpoint_digest(sealed)
+    return sealed
+
+
+def _write_checkpoint(path: Path, document: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    temporary.write_text(_canonical_json(document) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def _load_checkpoint(path: Path):
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"P12 checkpoint not found at {path}. Run CAPTURE explicitly: {P12_CAPTURE_COMMAND}"
+        )
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"P12 checkpoint is not readable JSON: {path}") from exc
+    if not isinstance(document, dict) or document.get("format") != P12_CHECKPOINT_FORMAT:
+        raise ValueError("Unsupported P12 checkpoint format; capture a fresh checkpoint")
+    if document.get("format_version") != P12_CHECKPOINT_VERSION:
+        raise ValueError(
+            f"Unsupported P12 checkpoint format version {document.get('format_version')!r}; "
+            "capture a fresh checkpoint"
+        )
+    captured_head = document.get("captured_git_head")
+    if not isinstance(captured_head, str) or not re.fullmatch(r"[0-9a-f]{40}", captured_head):
+        raise ValueError("P12 checkpoint has malformed Git provenance")
+    stored_hash = document.get("sha256")
+    if not isinstance(stored_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", stored_hash):
+        raise ValueError("P12 checkpoint has no valid SHA-256; capture a fresh checkpoint")
+    if not hmac.compare_digest(stored_hash, _checkpoint_digest(document)):
+        raise ValueError("P12 checkpoint SHA-256 mismatch; the file may be incomplete or altered")
+    if document.get("domain_ruleset") != CURRENT_COMBAT_RULESET:
+        raise ValueError(
+            f"P12 checkpoint ruleset {document.get('domain_ruleset')!r} is incompatible with "
+            f"{CURRENT_COMBAT_RULESET!r}; capture a fresh checkpoint"
+        )
+    if document.get("domain_fingerprints") != _domain_fingerprints():
+        raise ValueError(
+            "P12 checkpoint combat/codec sources differ from the captured domain version; "
+            "capture a fresh checkpoint"
+        )
+    combat_id = document.get("combat_id")
+    version = document.get("combat_version")
+    if not isinstance(combat_id, str) or not isinstance(version, int):
+        raise ValueError("P12 checkpoint combat identity/version is malformed")
+    try:
+        from uuid import UUID
+
+        state = decode(document["combat"], UUID(combat_id), document["domain_ruleset"], version)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("P12 checkpoint combat payload cannot be decoded") from exc
+    if state.id.hex != combat_id.replace("-", ""):
+        raise ValueError("P12 checkpoint combat identity does not match its payload")
+    if state.ruleset != CURRENT_COMBAT_RULESET or state.version != version:
+        raise ValueError("P12 checkpoint decoded with an incompatible domain version")
+    if encode(state) != document.get("combat"):
+        raise ValueError("P12 checkpoint codec round-trip changed its combat state")
+    if state.result is not None or state.phase_id != "I" or state.rng_cursor != 0:
+        raise ValueError("P12 checkpoint is not at the pre-action Matriarch start")
+    if not set(CONNECTIONS).issubset(state.fighters):
+        raise ValueError("P12 checkpoint is missing the Matriarch's Radicular Connections")
+    if not isinstance(document.get("provenance"), dict):
+        raise ValueError("P12 checkpoint provenance is missing")
+    return document, state
 
 
 def _active_connections(state) -> tuple[str, ...]:
@@ -547,17 +699,23 @@ def _public_sequence_entry(view, entry, missions, actor):
 
 
 @pytest.mark.skipif(
-    os.getenv("ASTERION_RUN_P12_DETERMINISTIC_LAB") != "1",
-    reason="P12 lab runs one long organic journey; enable explicitly",
+    os.getenv("ASTERION_P12_MODE", "").casefold() != "capture",
+    reason="organic P1-P12 capture is long and runs only with ASTERION_P12_MODE=capture",
 )
 @pytest.mark.asyncio
-async def test_p12_deterministic_lab_from_one_organic_checkpoint(database, monkeypatch):
-    """Capture one legal P12 checkpoint then compare cloned deterministic fights."""
+async def test_p12_checkpoint_capture(database, monkeypatch):
+    """Capture the legal P12 pre-action state once through public campaign services."""
+    _configure_capture_console()
     import asterion.application.campaign_coop as campaign_coop
     import asterion.application.vde_missions as vde_module
     import tests.test_vde_full_playthrough as journey
+    from asterion.application.active_arts import (
+        ActiveArtMutationCode,
+        ActiveArtMutationRejected,
+        ActiveArtService,
+    )
     from asterion.application.talents import TalentService
-    from asterion.infrastructure.db.models import ConsumableStack, RewardEvent
+    from asterion.infrastructure.db.models import ConsumableStack
     actor_box: dict[str, int] = {}
     capture: dict = {}
     seed_box = {"seed": 0}
@@ -565,6 +723,7 @@ async def test_p12_deterministic_lab_from_one_organic_checkpoint(database, monke
     original_resume = journey.VDEMissionService.resume
     original_equipper = journey._equip_best_available_combat_gear
     original_profile = vde_module.create_campaign_boss_profile
+    original_equip_art = ActiveArtService.equip_art
 
     async def seeded_campaign_profile(*args, **kwargs):
         state = await original_profile(*args, **kwargs)
@@ -637,6 +796,51 @@ async def test_p12_deterministic_lab_from_one_organic_checkpoint(database, monke
                 current = result.view
         return view
 
+    async def equip_art_from_clean_loadout(
+        self, actor, slot, art_id, *, expected_configuration_version=None
+    ):
+        try:
+            return await original_equip_art(
+                self,
+                actor,
+                slot,
+                art_id,
+                expected_configuration_version=expected_configuration_version,
+            )
+        except ActiveArtMutationRejected as exc:
+            if exc.code != ActiveArtMutationCode.INVALID_CURRENT_CONFIGURATION:
+                raise
+            # A legitimate equipment upgrade can invalidate an old loadout.
+            # Clear those slots through the public service before applying S6's
+            # already-published legal loadout, matching the UI recovery path.
+            current = await self.view(actor)
+            assert current is not None
+            removed = []
+            for active_slot in tuple(current.slots):
+                result = await self.unequip_slot(
+                    actor,
+                    active_slot.slot,
+                    expected_configuration_version=current.combat_configuration_version,
+                )
+                assert result is not None and result.changed
+                removed.append(active_slot.slot)
+                current = await self.view(actor)
+                assert current is not None
+            capture.setdefault("configuration_setup_repairs", []).append(
+                {
+                    "service": "ActiveArtService.unequip_slot",
+                    "slots_cleared": removed,
+                    "reason": "old arts incompatible after legitimate equipment upgrade",
+                }
+            )
+            return await original_equip_art(
+                self,
+                actor,
+                slot,
+                art_id,
+                expected_configuration_version=current.combat_configuration_version,
+            )
+
     async def capture_p12_start(self, actor, quest_id, version):
         if quest_id != journey.P12_ID or capture.get("view") is not None:
             return await original_start(self, actor, quest_id, version)
@@ -684,21 +888,33 @@ async def test_p12_deterministic_lab_from_one_organic_checkpoint(database, monke
                 )
             ).all()
             capture["provenance"] = {
-                "character_id": str(character.id),
-                "name": character.name,
+                "capture_method": (
+                    "organic test driver through public campaign, equipment, talent, "
+                    "and P12 activity services"
+                ),
+                "campaign_attestation": (
+                    "The organic driver completed P1-P11 and S12 before P12 combat; "
+                    "no quest, XP, reward, or equipment progress was seeded."
+                ),
+                "configuration_setup_repairs": capture.get(
+                    "configuration_setup_repairs", []
+                ),
                 "race": character.race,
                 "class": character.character_class,
                 "level": character.level,
                 "xp": character.xp,
-                "hp": character.hp,
-                "max_hp": character.max_hp,
-                "crowns": character.crowns,
+                "hp": str(character.hp),
+                "max_hp": str(character.max_hp),
                 "location": view.location,
-                "quests": tuple(tuple(row) for row in quests),
-                "stocks": tuple((key, int(quantity)) for key, quantity in stocks),
+                "quest_progress": [list(row) for row in quests],
+                "equipment": capture["preparation"]["equipment"],
+                "consumable_stock": [
+                    [key, int(quantity)] for key, quantity in stocks
+                ],
+                "consumable_budget_limit": view.consumable_budget_limit,
                 "combat_id": str(view.combat.id),
                 "combat_checkpoint_hash": capture["checkpoint_hash"],
-                "active_arts": tuple(
+                "arts": tuple(
                     entry.art_id
                     for entry in sorted(
                         (view.combat.configuration_snapshot or {}).get("active_arts", ()),
@@ -707,7 +923,7 @@ async def test_p12_deterministic_lab_from_one_organic_checkpoint(database, monke
                 ),
                 "talents": tuple(view.combat.fighters["player"].talent_ids),
                 "path": view.combat.fighters["player"].selected_path,
-                "fight_stats": {
+                "combat_stats": {
                     key: str(value)
                     for key, value in (
                         ("HP", view.combat.fighters["player"].stats.hp),
@@ -717,6 +933,11 @@ async def test_p12_deterministic_lab_from_one_organic_checkpoint(database, monke
                         ("PER", view.combat.fighters["player"].stats.per),
                         ("CRIT", view.combat.fighters["player"].stats.crit),
                     )
+                },
+                "rng": {
+                    "seed": seed_box["seed"],
+                    "source": "CombatRng derives rolls from combat_id and rng_cursor",
+                    "cursor_at_capture": view.combat.rng_cursor,
                 },
             }
         raise _CheckpointCaptured(P12_CAPTURED)
@@ -728,7 +949,14 @@ async def test_p12_deterministic_lab_from_one_organic_checkpoint(database, monke
     )
     monkeypatch.setattr(journey.VDEMissionService, "resume", resume_with_public_talents)
     monkeypatch.setattr(journey.VDEMissionService, "start_solo_combat", capture_p12_start)
+    monkeypatch.setattr(ActiveArtService, "equip_art", equip_art_from_clean_loadout)
 
+    checkpoint_path = _checkpoint_path()
+    if checkpoint_path.exists() and os.getenv("ASTERION_P12_OVERWRITE_CHECKPOINT") != "1":
+        pytest.fail(
+            f"Refusing to replace existing checkpoint {checkpoint_path}; "
+            "set ASTERION_P12_OVERWRITE_CHECKPOINT=1 only for an intentional recapture"
+        )
     started = time.perf_counter()
     try:
         await journey.test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch)
@@ -746,19 +974,8 @@ async def test_p12_deterministic_lab_from_one_organic_checkpoint(database, monke
     assert capture["preparation"]["level"] == 20
     assert len(capture["preparation"]["arts"]) == 3
     assert capture["provenance"]["xp"] >= 0
-    assert capture["provenance"]["quests"]
+    assert capture["provenance"]["quest_progress"]
     assert capture["provenance"]["combat_checkpoint_hash"] == _snapshot_hash(initial)
-    print(
-        "P12_A2_CHECKPOINT="
-        + json.dumps(
-            {"journey_seconds": round(journey_seconds, 2), **capture["provenance"]},
-            ensure_ascii=False,
-            default=str,
-            sort_keys=True,
-        ),
-        flush=True,
-    )
-
     # A PostgreSQL reload of the still-active snapshot is an actual persistence
     # round trip, not a manually reconstructed fixture.
     resumed = await journey.VDEMissionService(database[1], "ocaso").resume_active(
@@ -767,298 +984,419 @@ async def test_p12_deterministic_lab_from_one_organic_checkpoint(database, monke
     assert resumed is not None and resumed.combat == initial
     assert _snapshot_hash(resumed.combat) == capture["checkpoint_hash"]
 
-    stock = {key: int(quantity) for key, quantity in checkpoint.consumable_quantities}
-    heal_stock = {
-        item_id: quantity
-        for item_id, quantity in stock.items()
-        if (item := definition(item_id)) is not None and item.family == ConsumableFamily.HEALING
-    }
-    assert sum(heal_stock.values()) >= 1
-    budget = checkpoint.consumable_budget_limit
-    assert budget == 3
+    document = _seal_checkpoint(
+        {
+            "format": P12_CHECKPOINT_FORMAT,
+            "format_version": P12_CHECKPOINT_VERSION,
+            "captured_git_head": _current_head(),
+            "captured_at_utc": datetime.now(UTC).isoformat(),
+            "capture_elapsed_seconds": round(journey_seconds, 2),
+            "domain_ruleset": initial.ruleset,
+            "domain_fingerprints": _domain_fingerprints(),
+            "combat_id": str(initial.id),
+            "combat_version": initial.version,
+            "combat": encode(initial),
+            "provenance": capture["provenance"],
+        }
+    )
+    _write_checkpoint(checkpoint_path, document)
+    loaded_document, reconstructed = _load_checkpoint(checkpoint_path)
+    assert loaded_document["sha256"] == document["sha256"]
+    assert encode(reconstructed) == encode(initial)
+    assert reconstructed == initial
+    print(
+        "P12_CHECKPOINT_CAPTURED="
+        + json.dumps(
+            {
+                "path": str(checkpoint_path),
+                "sha256": document["sha256"],
+                "capture_seconds": round(journey_seconds, 2),
+                "level": capture["provenance"]["level"],
+                "class": capture["provenance"]["class"],
+                "path_name": capture["provenance"]["path"],
+                "domain_ruleset": initial.ruleset,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        ),
+        flush=True,
+    )
+    return
 
+
+def _median_decimal(values) -> str:
+    ordered = sorted(D(str(value)) for value in values)
+    middle = len(ordered) // 2
+    value = (
+        ordered[middle]
+        if len(ordered) % 2
+        else (ordered[middle - 1] + ordered[middle]) / D(2)
+    )
+    return str(value.quantize(D("0.01")))
+
+
+def _run_metrics(result: dict) -> dict:
+    return {
+        key: result[key]
+        for key in (
+            "seed",
+            "connection_plan",
+            "defense_plan",
+            "result",
+            "rounds",
+            "phase_reached",
+            "player_hp_remaining",
+            "player_damage_received",
+            "player_barrier_absorbed",
+            "heals_used",
+            "boss_hp_remaining",
+            "boss_damage_dealt",
+            "boss_direct_damage",
+            "boss_barrier_absorbed",
+            "connection_damage_dealt",
+            "connection_direct_damage",
+            "connection_barrier_absorbed",
+            "connections_destroyed",
+            "connection_hp_remaining",
+            "active_connections",
+            "aura_reduction",
+            "defeat_cause",
+        )
+    }
+
+
+def _best_run_key(result: dict):
+    return (
+        result["result"] != "victory",
+        D(result["boss_hp_remaining"]),
+        -D(result["player_hp_remaining"]),
+        result["rounds"],
+        result["seed"],
+    )
+
+
+def _save_matrix_report(report: dict, checkpoint_hash: str) -> tuple[Path, Path]:
+    directory = _report_directory()
+    directory.mkdir(parents=True, exist_ok=True)
+    report["report_sha256"] = hashlib.sha256(
+        _canonical_json(report).encode("utf-8")
+    ).hexdigest()
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    paths = (
+        directory / f"matrix-{checkpoint_hash[:12]}-{stamp}.json",
+        directory / "latest-report.json",
+    )
+    for path in paths:
+        temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+        temporary.write_text(_canonical_json(report) + "\n", encoding="utf-8")
+        os.replace(temporary, path)
+    return paths
+
+
+@pytest.mark.skipif(
+    os.getenv("ASTERION_P12_MODE", "").casefold() != "replay",
+    reason="P12 strategy replay runs only with ASTERION_P12_MODE=replay",
+)
+def test_p12_checkpoint_replay_matrix():
+    """Replay ten A-E cases from JSON; this test has no DB fixture or journey call."""
+    checkpoint_path = _checkpoint_path()
+    document, initial = _load_checkpoint(checkpoint_path)
+    initial_hash = _snapshot_hash(initial)
+    provenance = document["provenance"]
+    stock = {
+        item_id: int(quantity)
+        for item_id, quantity in provenance["consumable_stock"]
+    }
+    budget_limit = int(provenance["consumable_budget_limit"])
     plans = ("A", "B", "C", "D", "E")
-    defenses = ("cautious", "barrier", "aggressive")
-    seeds = tuple(range(12))
-    results: list[dict] = []
-    detailed_trace: dict[str, list[dict]] = {}
+    seeds = (0, 1)
+    names = {
+        "A": "focus Matriarch",
+        "B": "destroy one Connection then Matriarch",
+        "C": "destroy two Connections then Matriarch",
+        "D": "destroy three Connections then Matriarch",
+        "E": "adaptive Connection opportunity-cost policy",
+    }
+    results = []
+    started = time.perf_counter()
     for plan in plans:
-        detailed_trace[plan] = _simulate(
-            initial,
-            seed=0,
-            connection_plan=plan,
-            defense_plan="cautious",
-            stock=stock,
-            budget_limit=budget,
-        )["trace"]
-        for defense in defenses:
-            for seed in seeds:
-                result = _simulate(
+        for seed in seeds:
+            results.append(
+                _simulate(
                     initial,
                     seed=seed,
                     connection_plan=plan,
-                    defense_plan=defense,
+                    defense_plan="cautious",
                     stock=stock,
-                    budget_limit=budget,
+                    budget_limit=budget_limit,
                 )
-                results.append(result)
-
-    # Repetition of same input + seed + decisions must be byte-stable.
-    repeat_a = _simulate(
-        initial,
-        seed=7,
-        connection_plan="C",
-        defense_plan="barrier",
-        stock=stock,
-        budget_limit=budget,
-    )
-    repeat_b = _simulate(
-        initial,
-        seed=7,
-        connection_plan="C",
-        defense_plan="barrier",
-        stock=stock,
-        budget_limit=budget,
-    )
-    assert repeat_a["sequence"] == repeat_b["sequence"]
-    assert repeat_a["trace"] == repeat_b["trace"]
-    assert {
-        key: value
-        for key, value in repeat_a.items()
-        if key not in {"final_state", "trace", "sequence"}
-    } == {
-        key: value
-        for key, value in repeat_b.items()
-        if key not in {"final_state", "trace", "sequence"}
-    }
-
-    def _average_decimal(values):
-        values = tuple(D(str(value)) for value in values)
-        return str((sum(values, D(0)) / D(len(values))).quantize(D("0.01")))
-
-    summaries = []
-    for plan in plans:
-        for defense in defenses:
-            cohort = [
-                result
-                for result in results
-                if result["connection_plan"] == plan and result["defense_plan"] == defense
-            ]
-            summaries.append(
-                {
-                    "connection_plan": plan,
-                    "defense_plan": defense,
-                    "seeds": len(cohort),
-                    "victories": sum(
-                        result["result"] == "victory" for result in cohort
-                    ),
-                    "average_boss_damage": _average_decimal(
-                        result["boss_damage_dealt"] for result in cohort
-                    ),
-                    "best_boss_hp_remaining": min(
-                        D(result["boss_hp_remaining"]) for result in cohort
-                    ),
-                    "average_rounds": _average_decimal(
-                        result["rounds"] for result in cohort
-                    ),
-                    "average_player_damage": _average_decimal(
-                        result["player_damage_received"] for result in cohort
-                    ),
-                    "average_connection_damage": _average_decimal(
-                        result["connection_damage_dealt"] for result in cohort
-                    ),
-                    "average_heals": _average_decimal(
-                        result["heals_used"] for result in cohort
-                    ),
-                    "average_connections_destroyed": _average_decimal(
-                        len(result["connections_destroyed"]) for result in cohort
-                    ),
-                }
             )
-    print(
-        "P12_A2_STRATEGY_MATRIX="
-        + json.dumps(summaries, ensure_ascii=False, default=str, sort_keys=True),
-        flush=True,
+    matrix_seconds = time.perf_counter() - started
+
+    # Cheap repeat verifies deterministic replay separately from the ten-case matrix.
+    repeated_a = _simulate(
+        initial,
+        seed=0,
+        connection_plan="A",
+        defense_plan="cautious",
+        stock=stock,
+        budget_limit=budget_limit,
     )
+    repeated_b = _simulate(
+        initial,
+        seed=0,
+        connection_plan="A",
+        defense_plan="cautious",
+        stock=stock,
+        budget_limit=budget_limit,
+    )
+    assert repeated_a["sequence"] == repeated_b["sequence"]
+    assert repeated_a["trace"] == repeated_b["trace"]
+    assert _run_metrics(repeated_a) == _run_metrics(repeated_b)
+    assert _snapshot_hash(initial) == initial_hash, "a simulation mutated the checkpoint"
+
+    # Verify the encoded phase, active connection set, and whole state survive codec reload.
+    decoded = decode(
+        document["combat"],
+        initial.id,
+        document["domain_ruleset"],
+        document["combat_version"],
+    )
+    assert decoded.phase_id == "I"
+    assert _active_connections(decoded) == _active_connections(initial)
+    assert _snapshot_hash(decoded) == initial_hash
+
+    strategy_summaries = []
+    for plan in plans:
+        cohort = [item for item in results if item["connection_plan"] == plan]
+        best = min(cohort, key=_best_run_key)
+        strategy_summaries.append(
+            {
+                "strategy": plan,
+                "strategy_name": names[plan],
+                "defense_policy": "cautious",
+                "seeds": list(seeds),
+                "simulations": len(cohort),
+                "victories": sum(item["result"] == "victory" for item in cohort),
+                "defeats": sum(item["result"] == "defeat" for item in cohort),
+                "medians": {
+                    "matriarch_damage": _median_decimal(
+                        item["boss_damage_dealt"] for item in cohort
+                    ),
+                    "matriarch_hp_remaining": _median_decimal(
+                        item["boss_hp_remaining"] for item in cohort
+                    ),
+                    "connection_damage": _median_decimal(
+                        item["connection_damage_dealt"] for item in cohort
+                    ),
+                    "player_barrier_absorbed": _median_decimal(
+                        item["player_barrier_absorbed"] for item in cohort
+                    ),
+                    "rounds": _median_decimal(item["rounds"] for item in cohort),
+                    "consumables_used": _median_decimal(
+                        item["heals_used"] for item in cohort
+                    ),
+                    "connections_destroyed": _median_decimal(
+                        len(item["connections_destroyed"]) for item in cohort
+                    ),
+                },
+                "best_execution": {
+                    **_run_metrics(best),
+                    "sequence": best["sequence"],
+                    "turn_trace": _compact_trace(best["trace"]),
+                },
+            }
+        )
+
+    victories = sum(item["result"] == "victory" for item in results)
+    report = {
+        "format": "asterion-p12-strategy-matrix",
+        "format_version": 1,
+        "checkpoint_sha256": document["sha256"],
+        "checkpoint_captured_git_head": document["captured_git_head"],
+        "replay_git_head": _current_head(),
+        "domain_ruleset": document["domain_ruleset"],
+        "build": {
+            key: provenance[key]
+            for key in (
+                "race",
+                "class",
+                "path",
+                "level",
+                "location",
+                "equipment",
+                "talents",
+                "arts",
+                "combat_stats",
+            )
+        },
+        "rng": provenance["rng"],
+        "mode": "domain REPLAY; no campaign journey, public service, or PostgreSQL",
+        "defense_policy": "cautious",
+        "strategy_definitions": names,
+        "seeds": list(seeds),
+        "matrix_simulations": len(results),
+        "additional_determinism_replays": 2,
+        "determinism_verified": True,
+        "victories": victories,
+        "defeats": len(results) - victories,
+        "classification": "VICTORY_CONFIRMED" if victories else "INCONCLUSIVE",
+        "matrix_runtime_seconds": round(matrix_seconds, 4),
+        "strategy_summaries": strategy_summaries,
+        "runs": [_run_metrics(item) for item in results],
+    }
+    report_paths = _save_matrix_report(report, document["sha256"])
     print(
-        "P12_A2_TRACE_SEED_0="
+        "P12_REPLAY_MATRIX="
         + json.dumps(
-            {plan: _compact_trace(trace) for plan, trace in detailed_trace.items()},
+            {
+                "checkpoint_sha256": document["sha256"],
+                "matrix_simulations": len(results),
+                "additional_determinism_replays": 2,
+                "victories": victories,
+                "classification": report["classification"],
+                "matrix_runtime_seconds": report["matrix_runtime_seconds"],
+                "report": str(report_paths[0]),
+                "latest_report": str(report_paths[1]),
+                "strategies": [
+                    {
+                        "strategy": summary["strategy"],
+                        "victories": summary["victories"],
+                        "best_matriarch_hp": summary["best_execution"][
+                            "boss_hp_remaining"
+                        ],
+                        "best_seed": summary["best_execution"]["seed"],
+                    }
+                    for summary in strategy_summaries
+                ],
+            },
             ensure_ascii=False,
-            default=str,
             sort_keys=True,
         ),
         flush=True,
     )
 
-    winners = [result for result in results if result["result"] == "victory"]
-    if winners:
-        winner = sorted(
-            winners,
-            key=lambda result: (
-                result["seed"] != 0,
-                result["rounds"],
-                -D(result["player_hp_remaining"]),
-            ),
-        )[0]
-        missions = journey.VDEMissionService(database[1], "ocaso")
-        if winner["seed"] != 0:
-            # Persist the deterministic seed-0 loss through the public action
-            # service to open an ordinary retry. This path spends no consumables.
-            baseline_loss = _simulate(
-                initial,
-                seed=0,
-                connection_plan="A",
-                defense_plan="aggressive",
-                stock={},
-                budget_limit=budget,
-            )
-            if baseline_loss["result"] == "victory":
-                winner = baseline_loss
-                live = resumed
-            else:
-                assert baseline_loss["result"] == "defeat", (
-                    "A seed-0 non-winning setup must end in defeat before retry"
-                )
-                live = resumed
-                for entry in baseline_loss["sequence"]:
-                    live = await _public_sequence_entry(
-                        live, entry, missions, actor_box["actor"]
-                    )
-                retry_view = await missions.resume(actor_box["actor"], journey.P12_ID)
-                assert retry_view is not None and retry_view.progress.get("awaiting_retry")
-                road = RoadService(database[1], "ocaso")
-                await journey._move_to(road, actor_box["actor"], journey.VDE_VIGILIA)
-                await journey._craft_vde_p12_retry_consumables(
-                    journey.CraftingService(database[1], "ocaso"), actor_box["actor"]
-                )
-                await journey._move_to(road, actor_box["actor"], journey.VDE_BERCO)
-                retry_view = await missions.resume(actor_box["actor"], journey.P12_ID)
-                assert retry_view is not None
-                seed_box["seed"] = winner["seed"]
-                live = await missions.start_solo_combat(
-                    actor_box["actor"], journey.P12_ID, retry_view.state_version
-                )
-                assert live is not None and live.combat is not None
-                assert live.combat.id == _combat_id(winner["seed"])
-                assert _snapshot_hash(live.combat) == capture["checkpoint_hash"]
-        else:
-            live = resumed
-        last_callback = None
-        for entry in winner["sequence"]:
-            if live.combat is None:
-                break
-            last_callback = (live, entry)
-            live = await _public_sequence_entry(live, entry, missions, actor_box["actor"])
-            if live.combat is None or live.combat.result is not None:
-                break
-        assert live is not None and live.kind == "examine_center", (
-            f"Pure-domain candidate failed through public service: {live!r}"
-        )
-        assert last_callback is not None
-        repeated = await _public_sequence_entry(
-            last_callback[0], last_callback[1], missions, actor_box["actor"]
-        )
-        assert repeated is not None and repeated.kind == "examine_center"
-        p12 = await missions.advance(
-            actor_box["actor"], journey.P12_ID, live.state_version, "examine_center"
-        )
-        p12 = await missions.advance(
-            actor_box["actor"], journey.P12_ID, p12.state_version, "register"
-        )
-        assert p12.status == "completed" and p12.kind == "choice"
-        completed = await missions.choose_p12_reward(actor_box["actor"], p12.state_version, "2")
-        assert completed is not None and completed.kind == "completed"
-        await missions.choose_p12_reward(
-            actor_box["actor"], p12.state_version, "2"
-        )
-        async with database[1]() as session:
-            nucleus_events = await session.scalar(
-                select(RewardEvent.id).where(
-                    RewardEvent.character_id == checkpoint.character_id,
-                    RewardEvent.source_id == journey.P12_NUCLEUS_SOURCE,
-                )
-            )
-            assert nucleus_events is not None
-            nucleus_count = await session.scalar(
-                select(func.count())
-                .select_from(RewardEvent)
-                .where(
-                    RewardEvent.character_id == checkpoint.character_id,
-                    RewardEvent.source_id == journey.P12_NUCLEUS_SOURCE,
-                )
-            )
-            assert nucleus_count == 1
-            choice_reward_count = await session.scalar(
-                select(func.count())
-                .select_from(RewardEvent)
-                .where(
-                    RewardEvent.character_id == checkpoint.character_id,
-                    RewardEvent.source_id.like(f"{journey.P12_REWARD_SOURCE}:%"),
-                )
-            )
-            assert choice_reward_count == 1
-        reloaded = await journey.VDEMissionService(database[1], "ocaso").resume(
-            actor_box["actor"], journey.P12_ID
-        )
-        assert reloaded is not None and reloaded.status == "completed"
-        print(
-            "P12_A2_VICTORY_CONFIRMED="
-            + json.dumps(
-                {
-                    "seed": winner["seed"],
-                    "connection_plan": winner["connection_plan"],
-                    "defense_plan": winner["defense_plan"],
-                    "sequence": winner["sequence"],
-                    "boss_hp_remaining_simulated": winner["boss_hp_remaining"],
-                    "player_hp_remaining_simulated": winner["player_hp_remaining"],
-                    "quest_completed": completed.status,
-                    "nucleus_reward": str(nucleus_events),
-                    "nucleus_reward_count": nucleus_count,
-                    "choice_reward_count": choice_reward_count,
-                },
-                ensure_ascii=False,
-                sort_keys=True,
-            ),
-            flush=True,
-        )
-    else:
-        best = sorted(
-            results,
-            key=lambda result: (
-                D(result["boss_hp_remaining"]),
-                -D(result["player_hp_remaining"]),
-                result["rounds"],
-            ),
-        )[0]
-        print(
-            "P12_A2_NO_VICTORY_IN_SEARCH="
-            + json.dumps(
-                {
-                    "classification": "INCONCLUSIVE",
-                    "trials": len(results),
-                    "best": {
-                        key: best[key]
-                        for key in (
-                            "seed", "connection_plan", "defense_plan", "rounds",
-                            "phase_reached", "boss_hp_remaining", "boss_damage_dealt",
-                            "boss_direct_damage", "connection_damage_dealt",
-                            "connection_direct_damage", "boss_barrier_absorbed",
-                            "connection_barrier_absorbed", "player_hp_remaining",
-                            "player_damage_received",
-                            "damage_absorbed", "heals_used", "connections_destroyed",
-                            "active_connections", "aura_reduction", "defeat_cause",
-                        )
-                    },
-                    "sequence": best["sequence"],
-                    "turn_trace": _compact_trace(best["trace"]),
-                },
-                ensure_ascii=False,
-                default=str,
-                sort_keys=True,
-            ),
-            flush=True,
-        )
 
-    # The entire journey and checkpoint remained in the disposable DB schema;
-    # this lab does not assert that a bounded strategy search proves impossibility.
+def test_p12_checkpoint_hash_is_stable_and_tampering_is_rejected(tmp_path):
+    assert _canonical_json({"value": D("1.20")}) == '{"value":"1.20"}'
+    document = _seal_checkpoint(
+        {
+            "format": P12_CHECKPOINT_FORMAT,
+            "format_version": P12_CHECKPOINT_VERSION,
+            "captured_git_head": "0" * 40,
+            "domain_ruleset": CURRENT_COMBAT_RULESET,
+            "combat_id": str(_combat_id(0)),
+            "combat_version": 1,
+            "combat": {},
+            "provenance": {},
+        }
+    )
+    assert document["sha256"] == _checkpoint_digest(document)
+    path = tmp_path / "tampered.json"
+    _write_checkpoint(path, document)
+    changed = json.loads(path.read_text(encoding="utf-8"))
+    changed["combat_version"] = 2
+    _write_checkpoint(path, changed)
+    with pytest.raises(ValueError, match="SHA-256 mismatch"):
+        _load_checkpoint(path)
+
+
+def test_p12_checkpoint_json_codec_round_trip_preserves_phase_and_connections(tmp_path):
+    stats = CombatStats(D(100), D(20), D(12), D(10))
+    fighters = {
+        key: Fighter(
+            id=key,
+            name=key,
+            level=20,
+            stats=stats,
+            hp=D(100),
+            side="player" if key == "player" else "enemy",
+        )
+        for key in ("player", "enemy", *CONNECTIONS)
+    }
+    combat = Combat(
+        id=_combat_id(5),
+        ruleset=CURRENT_COMBAT_RULESET,
+        fighters=fighters,
+        player_actions={},
+        enemy_actions={},
+        ai_cycle=(),
+        phase_id="I",
+    )
+    document = _seal_checkpoint(
+        {
+            "format": P12_CHECKPOINT_FORMAT,
+            "format_version": P12_CHECKPOINT_VERSION,
+            "captured_git_head": _current_head(),
+            "domain_ruleset": CURRENT_COMBAT_RULESET,
+            "domain_fingerprints": _domain_fingerprints(),
+            "combat_id": str(combat.id),
+            "combat_version": combat.version,
+            "combat": encode(combat),
+            "provenance": {"consumable_stock": [], "consumable_budget_limit": 3},
+        }
+    )
+    path = tmp_path / "round-trip.json"
+    _write_checkpoint(path, document)
+    loaded, rebuilt = _load_checkpoint(path)
+    assert loaded["sha256"] == document["sha256"]
+    assert rebuilt == combat
+    assert rebuilt.phase_id == "I"
+    assert _active_connections(rebuilt) == CONNECTIONS
+
+
+def test_p12_checkpoint_rejects_missing_and_incompatible_versions(tmp_path):
+    missing = tmp_path / "missing.json"
+    with pytest.raises(FileNotFoundError, match="CAPTURE explicitly"):
+        _load_checkpoint(missing)
+    obsolete = _seal_checkpoint(
+        {
+            "format": P12_CHECKPOINT_FORMAT,
+            "format_version": P12_CHECKPOINT_VERSION,
+            "captured_git_head": "0" * 40,
+            "domain_ruleset": "obsolete-ruleset",
+            "combat_id": str(_combat_id(0)),
+            "combat_version": 1,
+            "combat": {},
+            "provenance": {},
+        }
+    )
+    path = tmp_path / "obsolete.json"
+    _write_checkpoint(path, obsolete)
+    with pytest.raises(ValueError, match="incompatible"):
+        _load_checkpoint(path)
+    stale_domain = _seal_checkpoint(
+        {
+            "format": P12_CHECKPOINT_FORMAT,
+            "format_version": P12_CHECKPOINT_VERSION,
+            "captured_git_head": "0" * 40,
+            "domain_ruleset": CURRENT_COMBAT_RULESET,
+            "domain_fingerprints": {},
+            "combat_id": str(_combat_id(0)),
+            "combat_version": 1,
+            "combat": {},
+            "provenance": {},
+        }
+    )
+    _write_checkpoint(path, stale_domain)
+    with pytest.raises(ValueError, match="sources differ"):
+        _load_checkpoint(path)
+
+
+def test_p12_checkpoint_rejects_unsupported_format_version(tmp_path):
+    document = _seal_checkpoint(
+        {
+            "format": P12_CHECKPOINT_FORMAT,
+            "format_version": P12_CHECKPOINT_VERSION + 1,
+            "captured_git_head": "0" * 40,
+            "domain_ruleset": CURRENT_COMBAT_RULESET,
+            "combat_id": str(_combat_id(0)),
+            "combat_version": 1,
+            "combat": {},
+            "provenance": {},
+        }
+    )
+    path = tmp_path / "unsupported.json"
+    _write_checkpoint(path, document)
+    with pytest.raises(ValueError, match="format version"):
+        _load_checkpoint(path)
