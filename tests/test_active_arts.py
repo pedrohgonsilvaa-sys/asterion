@@ -568,6 +568,34 @@ async def test_first_wave_path_arts_unlock_at_12_and_persist(
             772063,
             "weapon.type.tdo.arma_caminhante",
         ),
+        (
+            "atirador",
+            ATIRADOR_ART_IDS["fixar_alvo"],
+            "vigia",
+            772064,
+            "weapon.type.tdo.arma_pesada_caminhante",
+        ),
+        (
+            "rastreador",
+            RASTREADOR_ART_IDS["laco_de_caca"],
+            "vigia",
+            772065,
+            "weapon.type.tdo.arma_pesada_caminhante",
+        ),
+        (
+            "conjurador",
+            CONJURADOR_ART_IDS["incendio_trancado"],
+            "tecelao",
+            772066,
+            None,
+        ),
+        (
+            "runico",
+            RUNICO_ART_IDS["runa_de_ruptura"],
+            "tecelao",
+            772067,
+            None,
+        ),
     ],
 )
 async def test_b2_lot_a_path_arts_unlock_at_22_and_persist(
@@ -591,6 +619,10 @@ async def test_b2_lot_a_path_arts_unlock_at_22_and_persist(
         "devastador": "bastiao",
         "carrasco": "sabotador",
         "sabotador": "carrasco",
+        "atirador": "rastreador",
+        "rastreador": "atirador",
+        "conjurador": "runico",
+        "runico": "conjurador",
     }[path]
     wrong_path_actor = actor + 100
     await _seed_character(

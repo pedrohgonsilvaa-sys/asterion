@@ -163,18 +163,22 @@ SABOTADOR_ART_IDS = {
 
 ATIRADOR_ART_IDS = {
     "tiro_perfurante": "path_art.vigia.atirador.tiro_perfurante",
+    "fixar_alvo": "path_art.vigia.atirador.fixar_alvo",
 }
 
 RASTREADOR_ART_IDS = {
     "flecha_serrilhada": "path_art.vigia.rastreador.flecha_serrilhada",
+    "laco_de_caca": "path_art.vigia.rastreador.laco_de_caca",
 }
 
 CONJURADOR_ART_IDS = {
     "estilhaco_do_veu": "path_art.tecelao.conjurador.estilhaco_do_veu",
+    "incendio_trancado": "path_art.tecelao.conjurador.incendio_trancado",
 }
 
 RUNICO_ART_IDS = {
     "runa_de_guarda": "path_art.tecelao.runico.runa_de_guarda",
+    "runa_de_ruptura": "path_art.tecelao.runico.runa_de_ruptura",
 }
 
 AGOUREIRO_ART_IDS = {
@@ -331,6 +335,36 @@ ACTIVE_ART_DEFINITIONS.update(
             RUNICO_ART_IDS["runa_de_guarda"],
             "tecelao",
             12,
+            path_id="runico",
+        ),
+        ATIRADOR_ART_IDS["fixar_alvo"]: ActiveArtDefinition(
+            ATIRADOR_ART_IDS["fixar_alvo"],
+            "vigia",
+            22,
+            path_id="atirador",
+            weapon_requirement=frozenset(
+                {"weapon.compat.bow", "weapon.compat.crossbow"}
+            ),
+        ),
+        RASTREADOR_ART_IDS["laco_de_caca"]: ActiveArtDefinition(
+            RASTREADOR_ART_IDS["laco_de_caca"],
+            "vigia",
+            22,
+            path_id="rastreador",
+            weapon_requirement=frozenset(
+                {"weapon.compat.bow", "weapon.compat.crossbow"}
+            ),
+        ),
+        CONJURADOR_ART_IDS["incendio_trancado"]: ActiveArtDefinition(
+            CONJURADOR_ART_IDS["incendio_trancado"],
+            "tecelao",
+            22,
+            path_id="conjurador",
+        ),
+        RUNICO_ART_IDS["runa_de_ruptura"]: ActiveArtDefinition(
+            RUNICO_ART_IDS["runa_de_ruptura"],
+            "tecelao",
+            22,
             path_id="runico",
         ),
         AGOUREIRO_ART_IDS["mau_agouro"]: ActiveArtDefinition(

@@ -49,9 +49,13 @@ HEMORRAGIA_ART_ID = CARRASCO_ART_IDS["hemorragia"]
 VENENO_VELADO_ART_ID = SABOTADOR_ART_IDS["veneno_velado"]
 FIO_CORTADO_ART_ID = SABOTADOR_ART_IDS["fio_cortado"]
 TIRO_PERFURANTE_ART_ID = ATIRADOR_ART_IDS["tiro_perfurante"]
+FIXAR_ALVO_ART_ID = ATIRADOR_ART_IDS["fixar_alvo"]
 FLECHA_SERRILHADA_ART_ID = RASTREADOR_ART_IDS["flecha_serrilhada"]
+LACO_DE_CACA_ART_ID = RASTREADOR_ART_IDS["laco_de_caca"]
 ESTILHACO_DO_VEU_ART_ID = CONJURADOR_ART_IDS["estilhaco_do_veu"]
+INCENDIO_TRANCADO_ART_ID = CONJURADOR_ART_IDS["incendio_trancado"]
 RUNA_DE_GUARDA_ART_ID = RUNICO_ART_IDS["runa_de_guarda"]
+RUNA_DE_RUPTURA_ART_ID = RUNICO_ART_IDS["runa_de_ruptura"]
 MAU_AGOURO_ART_ID = AGOUREIRO_ART_IDS["mau_agouro"]
 LOBO_ART_ID = INVOCADOR_ART_IDS["lobo"]
 CURA_SOLAR_ART_ID = GUARDIAO_ART_IDS["cura_solar"]
@@ -204,6 +208,17 @@ PATH_ART_ACTIONS = MappingProxyType(
                 actor_per_bonus=Decimal(10),
             ),
         ),
+        FIXAR_ALVO_ART_ID: PathArtActionDefinition(
+            art_id=FIXAR_ALVO_ART_ID,
+            character_class="vigia",
+            path_id="atirador",
+            action=Action(
+                FIXAR_ALVO_ART_ID,
+                "Fixar Alvo",
+                Decimal("1.00"),
+                cooldown=3,
+            ),
+        ),
         FLECHA_SERRILHADA_ART_ID: PathArtActionDefinition(
             art_id=FLECHA_SERRILHADA_ART_ID,
             character_class="vigia",
@@ -217,6 +232,21 @@ PATH_ART_ACTIONS = MappingProxyType(
                 native_dot_stacks=1,
             ),
         ),
+        LACO_DE_CACA_ART_ID: PathArtActionDefinition(
+            art_id=LACO_DE_CACA_ART_ID,
+            character_class="vigia",
+            path_id="rastreador",
+            action=Action(
+                LACO_DE_CACA_ART_ID,
+                "Laço de Caça",
+                Decimal("0.80"),
+                attack_debuff=Decimal("0.20"),
+                duration=2,
+                cooldown=3,
+                effect_stat="agility",
+                effect_id=LACO_DE_CACA_ART_ID,
+            ),
+        ),
         ESTILHACO_DO_VEU_ART_ID: PathArtActionDefinition(
             art_id=ESTILHACO_DO_VEU_ART_ID,
             character_class="tecelao",
@@ -226,6 +256,20 @@ PATH_ART_ACTIONS = MappingProxyType(
                 "Estilhaço do Véu",
                 Decimal("1.40"),
                 cooldown=2,
+            ),
+        ),
+        INCENDIO_TRANCADO_ART_ID: PathArtActionDefinition(
+            art_id=INCENDIO_TRANCADO_ART_ID,
+            character_class="tecelao",
+            path_id="conjurador",
+            action=Action(
+                INCENDIO_TRANCADO_ART_ID,
+                "Incêndio Trançado",
+                Decimal("0.75"),
+                cooldown=3,
+                target_mode="all_opponents",
+                native_dot_kind="burn",
+                native_dot_stacks=1,
             ),
         ),
         RUNA_DE_GUARDA_ART_ID: PathArtActionDefinition(
@@ -240,6 +284,21 @@ PATH_ART_ACTIONS = MappingProxyType(
                 target_mode="ally",
                 target_barrier_coefficient=Decimal("1.05"),
                 target_barrier_duration=2,
+            ),
+        ),
+        RUNA_DE_RUPTURA_ART_ID: PathArtActionDefinition(
+            art_id=RUNA_DE_RUPTURA_ART_ID,
+            character_class="tecelao",
+            path_id="runico",
+            action=Action(
+                RUNA_DE_RUPTURA_ART_ID,
+                "Runa de Ruptura",
+                Decimal("0.90"),
+                attack_debuff=Decimal("0.10"),
+                duration=2,
+                cooldown=3,
+                effect_stat="defense",
+                effect_id=RUNA_DE_RUPTURA_ART_ID,
             ),
         ),
         MAU_AGOURO_ART_ID: PathArtActionDefinition(
