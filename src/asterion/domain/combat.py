@@ -5070,6 +5070,21 @@ def _perform(
             else 0
         )
         direct_damage_before_final_reduction = damage
+        interpor_effect = next(
+            (
+                effect
+                for effect in target.effects
+                if effect.stat == "interpor_next_direct"
+                and effect.kind == "buff"
+                and effect.remaining > 0
+            ),
+            None,
+        )
+        interpor_reduction = (
+            min(D(1), interpor_effect.magnitude)
+            if direct_eligible and interpor_effect is not None
+            else ZERO
+        )
         direct_final_reduction = min(
             D(1),
             target.protection_layers * target.protection_reduction_per_layer
@@ -5085,7 +5100,8 @@ def _perform(
                     for tag in target_state_tags
                 ),
                 ZERO,
-            ),
+            )
+            + interpor_reduction,
         )
         if direct_eligible and direct_final_reduction > ZERO:
             damage = int(
@@ -5141,6 +5157,20 @@ def _perform(
             target.path_state["oraculo_destino_adiado_used"] = True
         path_final_damage_bonus = D(target_path.get("final_damage_bonus", ZERO))
         path_triggers = list(target_path.get("triggers", ()))
+        if (
+            direct_eligible
+            and direct_damage_before_final_reduction > ZERO
+            and interpor_effect is not None
+        ):
+            # Interpor is a recipient-bound next Direct Damage reduction. It
+            # joins the shared pre-Barrier mitigation stage and is consumed by
+            # the first positive component, even when a Barrier absorbs it all.
+            target.effects = [
+                effect
+                for effect in target.effects
+                if effect.instance_id != interpor_effect.instance_id
+            ]
+            path_triggers.append("sentinela.interpor_consumido")
         if (
             actor.selected_path == "carrasco"
             and direct_eligible

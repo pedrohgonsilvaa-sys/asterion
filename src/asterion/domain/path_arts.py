@@ -28,6 +28,7 @@ from asterion.domain.combat import (
     Action,
     ActionCondition,
     ActionConditionalModifier,
+    ActionEffect,
 )
 
 
@@ -41,8 +42,12 @@ class PathArtActionDefinition:
 
 ARIETE_ART_ID = DEVASTADOR_ART_IDS["ariete"]
 ESCUDO_DE_CINZAS_ART_ID = BASTIAO_ART_IDS["escudo_de_cinzas"]
+INTERPOR_ART_ID = BASTIAO_ART_IDS["interpor"]
+GOLPE_DE_RUPTURA_ART_ID = DEVASTADOR_ART_IDS["golpe_de_ruptura"]
 CORTE_DE_EXECUCAO_ART_ID = CARRASCO_ART_IDS["corte_de_execucao"]
+HEMORRAGIA_ART_ID = CARRASCO_ART_IDS["hemorragia"]
 VENENO_VELADO_ART_ID = SABOTADOR_ART_IDS["veneno_velado"]
+FIO_CORTADO_ART_ID = SABOTADOR_ART_IDS["fio_cortado"]
 TIRO_PERFURANTE_ART_ID = ATIRADOR_ART_IDS["tiro_perfurante"]
 FLECHA_SERRILHADA_ART_ID = RASTREADOR_ART_IDS["flecha_serrilhada"]
 ESTILHACO_DO_VEU_ART_ID = CONJURADOR_ART_IDS["estilhaco_do_veu"]
@@ -68,6 +73,27 @@ PATH_ART_ACTIONS = MappingProxyType(
                 self_barrier_duration=2,
             ),
         ),
+        INTERPOR_ART_ID: PathArtActionDefinition(
+            art_id=INTERPOR_ART_ID,
+            character_class="sentinela",
+            path_id="bastiao",
+            action=Action(
+                INTERPOR_ART_ID,
+                "Interpor",
+                Decimal(0),
+                cooldown=4,
+                target_mode="ally",
+                target_effects=(
+                    ActionEffect(
+                        "class_mechanic.sentinela.interpor",
+                        "interpor_next_direct",
+                        Decimal("0.25"),
+                        2,
+                        "buff",
+                    ),
+                ),
+            ),
+        ),
         ARIETE_ART_ID: PathArtActionDefinition(
             art_id=ARIETE_ART_ID,
             character_class="sentinela",
@@ -78,6 +104,29 @@ PATH_ART_ACTIONS = MappingProxyType(
                 Decimal("1.35"),
                 cooldown=2,
                 actor_per_bonus=Decimal(10),
+            ),
+        ),
+        GOLPE_DE_RUPTURA_ART_ID: PathArtActionDefinition(
+            art_id=GOLPE_DE_RUPTURA_ART_ID,
+            character_class="sentinela",
+            path_id="devastador",
+            action=Action(
+                GOLPE_DE_RUPTURA_ART_ID,
+                "Golpe de Ruptura",
+                Decimal("1.25"),
+                cooldown=3,
+                conditional_modifiers=(
+                    ActionConditionalModifier(
+                        "sentinela.golpe_de_ruptura.retaliation_power",
+                        ActionCondition(
+                            "class_resource_at_least",
+                            resource="retaliation",
+                        ),
+                        "damage_power",
+                        Decimal("0.20"),
+                        operation="multiply",
+                    ),
+                ),
             ),
         ),
         CORTE_DE_EXECUCAO_ART_ID: PathArtActionDefinition(
@@ -102,6 +151,19 @@ PATH_ART_ACTIONS = MappingProxyType(
                 ),
             ),
         ),
+        HEMORRAGIA_ART_ID: PathArtActionDefinition(
+            art_id=HEMORRAGIA_ART_ID,
+            character_class="errante",
+            path_id="carrasco",
+            action=Action(
+                HEMORRAGIA_ART_ID,
+                "Hemorragia",
+                Decimal("0.95"),
+                cooldown=3,
+                native_dot_kind="bleed",
+                native_dot_stacks=2,
+            ),
+        ),
         VENENO_VELADO_ART_ID: PathArtActionDefinition(
             art_id=VENENO_VELADO_ART_ID,
             character_class="errante",
@@ -113,6 +175,21 @@ PATH_ART_ACTIONS = MappingProxyType(
                 cooldown=2,
                 native_dot_kind="poison",
                 native_dot_stacks=1,
+            ),
+        ),
+        FIO_CORTADO_ART_ID: PathArtActionDefinition(
+            art_id=FIO_CORTADO_ART_ID,
+            character_class="errante",
+            path_id="sabotador",
+            action=Action(
+                FIO_CORTADO_ART_ID,
+                "Fio Cortado",
+                Decimal("0.95"),
+                attack_debuff=Decimal("0.12"),
+                duration=2,
+                cooldown=3,
+                effect_stat="attack",
+                effect_id=FIO_CORTADO_ART_ID,
             ),
         ),
         TIRO_PERFURANTE_ART_ID: PathArtActionDefinition(

@@ -242,6 +242,8 @@ def _eligibility_notice(view: ActiveArtCharacterView, art_id: str) -> str | None
 
 
 def _art_category(action) -> str:
+    if any(effect.stat == "interpor_next_direct" for effect in action.target_effects):
+        return "Suporte"
     if (
         action.heal_coefficient
         or action.self_barrier_coefficient
@@ -277,6 +279,12 @@ def _effect_lines(effects) -> list[str]:
     }
     lines = []
     for effect in effects:
+        if effect.stat == "interpor_next_direct":
+            lines.append(
+                f"🛡️ Próximo Dano Direto recebido · −{abs(effect.magnitude) * 100:g}% "
+                f"· {effect.duration}T"
+            )
+            continue
         sign = "−" if effect.magnitude < 0 else "+"
         if effect.stat_modifier_mode == "percentage_points":
             amount = f"{abs(effect.magnitude):g} p.p."

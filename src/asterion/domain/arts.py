@@ -143,18 +143,22 @@ LUMINAR_ART_LEVELS = {
 # Future canonical Arts remain absent until their actions are implemented.
 DEVASTADOR_ART_IDS = {
     "ariete": "path_art.sentinela.devastador.ariete",
+    "golpe_de_ruptura": "path_art.sentinela.devastador.golpe_de_ruptura",
 }
 
 BASTIAO_ART_IDS = {
     "escudo_de_cinzas": "path_art.sentinela.bastiao.escudo_de_cinzas",
+    "interpor": "path_art.sentinela.bastiao.interpor",
 }
 
 CARRASCO_ART_IDS = {
     "corte_de_execucao": "path_art.errante.carrasco.corte_de_execucao",
+    "hemorragia": "path_art.errante.carrasco.hemorragia",
 }
 
 SABOTADOR_ART_IDS = {
     "veneno_velado": "path_art.errante.sabotador.veneno_velado",
+    "fio_cortado": "path_art.errante.sabotador.fio_cortado",
 }
 
 ATIRADOR_ART_IDS = {
@@ -352,6 +356,35 @@ ACTIVE_ART_DEFINITIONS.update(
             "luminar",
             12,
             path_id="inquisidor",
+        ),
+    }
+)
+
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        BASTIAO_ART_IDS["interpor"]: ActiveArtDefinition(
+            BASTIAO_ART_IDS["interpor"], "sentinela", 22, path_id="bastiao"
+        ),
+        DEVASTADOR_ART_IDS["golpe_de_ruptura"]: ActiveArtDefinition(
+            DEVASTADOR_ART_IDS["golpe_de_ruptura"],
+            "sentinela",
+            22,
+            path_id="devastador",
+            weapon_requirement=frozenset({"weapon.compat.melee"}),
+        ),
+        CARRASCO_ART_IDS["hemorragia"]: ActiveArtDefinition(
+            CARRASCO_ART_IDS["hemorragia"],
+            "errante",
+            22,
+            path_id="carrasco",
+            weapon_requirement=frozenset({"weapon.compat.melee"}),
+        ),
+        SABOTADOR_ART_IDS["fio_cortado"]: ActiveArtDefinition(
+            SABOTADOR_ART_IDS["fio_cortado"],
+            "errante",
+            22,
+            path_id="sabotador",
+            weapon_requirement=frozenset({"weapon.compat.melee"}),
         ),
     }
 )
