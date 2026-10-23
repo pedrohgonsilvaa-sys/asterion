@@ -3,7 +3,13 @@ from uuid import UUID
 
 import pytest
 
-from asterion.domain.arts import DEVASTADOR_ART_IDS, FIRST_CLASS_ART_IDS
+from asterion.domain.arts import (
+    BASTIAO_ART_IDS,
+    CARRASCO_ART_IDS,
+    DEVASTADOR_ART_IDS,
+    FIRST_CLASS_ART_IDS,
+    SABOTADOR_ART_IDS,
+)
 from asterion.domain.class_trials import class_player_actions
 from asterion.domain.combat import Combat, Fighter, act, allowed_actions, start_combat
 from asterion.domain.combat_math import CURRENT_COMBAT_RULESET, CombatStats, direct_damage
@@ -20,6 +26,40 @@ from asterion.infrastructure.db.combat_codec import decode, encode
 
 D = Decimal
 ARIETE_ID = DEVASTADOR_ART_IDS["ariete"]
+
+
+def _path_battle(character_class: str, path_id: str, art_id: str, *, target_hp=1000):
+    player = Fighter(
+        id="player",
+        name=character_class,
+        level=20,
+        stats=CombatStats(D(1000), D(100), D(0), D(100), per=D(0), crit=D(0)),
+        hp=D(1000),
+        character_class=character_class,
+        selected_path=path_id,
+        takes_turn=True,
+    )
+    enemy = Fighter(
+        id="enemy",
+        name="Alvo",
+        level=20,
+        stats=CombatStats(
+            D(1000), D(0), D(100), D(0), per=D(0), crit=D(0), evasion=D(0)
+        ),
+        hp=D(target_hp),
+        side="enemy",
+        takes_turn=False,
+    )
+    return start_combat(
+        Combat(
+            UUID("317d88a1-877c-4bc5-ae77-ae87c90a9e21"),
+            CURRENT_COMBAT_RULESET,
+            {"player": player, "enemy": enemy},
+            class_player_actions(character_class, (art_id,), selected_path=path_id),
+            {},
+            (),
+        )
+    )
 
 
 def _ariete_battle(*, retaliation: bool = False, charge: bool = False) -> Combat:
@@ -212,3 +252,71 @@ def test_path_art_action_is_a_full_shared_action_contract():
     assert action.attack_debuff == D(0)
     assert action.self_barrier_coefficient == D(0)
     assert not action.target_effects
+
+
+def test_bastiao_escudo_de_cinzas_uses_fortaleza_barrier_pipeline_and_codec():
+    art_id = BASTIAO_ART_IDS["escudo_de_cinzas"]
+    combat = _path_battle("sentinela", "bastiao", art_id)
+    opportunity_before = combat.fighters["player"].opportunity
+    updated = act(combat, art_id, target_id="player")
+    event = next(event for event in updated.events if event.action == art_id)
+
+    # 95% ATQ is multiplied by Fortaleza's canonical 10%, then floored once.
+    assert event.barrier_value == D(104)
+    assert event.barrier_duration == 2
+    assert event.barrier_power_multiplier == D("1.10")
+    assert updated.fighters["player"].barrier == D(104)
+    assert updated.fighters["player"].barriers[0].effect_definition_id == art_id
+    assert updated.fighters["player"].cooldowns[art_id] == opportunity_before + 3
+
+    restored = decode(encode(updated), updated.id, updated.ruleset, updated.version)
+    assert restored.fighters["player"].barrier == D(104)
+    assert restored.fighters["player"].barriers[0].remaining == 2
+
+
+def test_corte_de_execucao_uses_action_start_hp_threshold_and_separate_sentenca():
+    art_id = CARRASCO_ART_IDS["corte_de_execucao"]
+    above = _path_battle("errante", "carrasco", art_id, target_hp=351)
+    at_threshold = _path_battle("errante", "carrasco", art_id, target_hp=350)
+    opportunity_before = at_threshold.fighters["player"].opportunity
+
+    above_result = act(above, art_id, target_id="enemy")
+    eligible_result = act(at_threshold, art_id, target_id="enemy")
+    above_event = next(event for event in above_result.events if event.action == art_id)
+    eligible_event = next(
+        event for event in eligible_result.events if event.action == art_id
+    )
+
+    assert above_event.path_power_multiplier == D(1)
+    # Sentença has its own 40% threshold; it remains separate from the Arte's 35% power bonus.
+    assert above_event.path_final_damage_bonus == D("0.08")
+    assert eligible_event.path_power_multiplier == D("1.15")
+    assert eligible_event.path_final_damage_bonus == D("0.08")
+    assert "errante.corte_de_execucao.low_hp_power" in eligible_event.path_triggers
+    assert eligible_event.damage_power_multiplier == D(1)
+    assert (
+        eligible_result.fighters["player"].cooldowns[art_id]
+        == opportunity_before + 3
+    )
+
+
+def test_sabotador_veneno_velado_applies_normal_poison_and_reconnects():
+    art_id = SABOTADOR_ART_IDS["veneno_velado"]
+    combat = _path_battle("errante", "sabotador", art_id)
+    opportunity_before = combat.fighters["player"].opportunity
+    updated = act(combat, art_id, target_id="enemy")
+    event = next(event for event in updated.events if event.action == art_id)
+
+    assert event.effective_damage > 0
+    assert event.dot_kind == "poison"
+    assert event.dot_application_event_id
+    poison = updated.dot_states["enemy"][0]
+    assert poison.kind == "poison"
+    assert poison.stacks == 1
+    assert poison.remaining == 3
+    assert poison.snapshot_attack == D(100)
+    assert updated.fighters["player"].cooldowns[art_id] == opportunity_before + 2
+
+    restored = decode(encode(updated), updated.id, updated.ruleset, updated.version)
+    assert restored.dot_states["enemy"][0].instance_id == poison.instance_id
+    assert restored.dot_states["enemy"][0].remaining == 3

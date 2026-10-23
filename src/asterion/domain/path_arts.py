@@ -10,8 +10,17 @@ from dataclasses import dataclass
 from decimal import Decimal
 from types import MappingProxyType
 
-from asterion.domain.arts import DEVASTADOR_ART_IDS
-from asterion.domain.combat import Action
+from asterion.domain.arts import (
+    BASTIAO_ART_IDS,
+    CARRASCO_ART_IDS,
+    DEVASTADOR_ART_IDS,
+    SABOTADOR_ART_IDS,
+)
+from asterion.domain.combat import (
+    Action,
+    ActionCondition,
+    ActionConditionalModifier,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,9 +32,26 @@ class PathArtActionDefinition:
 
 
 ARIETE_ART_ID = DEVASTADOR_ART_IDS["ariete"]
+ESCUDO_DE_CINZAS_ART_ID = BASTIAO_ART_IDS["escudo_de_cinzas"]
+CORTE_DE_EXECUCAO_ART_ID = CARRASCO_ART_IDS["corte_de_execucao"]
+VENENO_VELADO_ART_ID = SABOTADOR_ART_IDS["veneno_velado"]
 
 PATH_ART_ACTIONS = MappingProxyType(
     {
+        ESCUDO_DE_CINZAS_ART_ID: PathArtActionDefinition(
+            art_id=ESCUDO_DE_CINZAS_ART_ID,
+            character_class="sentinela",
+            path_id="bastiao",
+            action=Action(
+                ESCUDO_DE_CINZAS_ART_ID,
+                "Escudo de Cinzas",
+                Decimal(0),
+                cooldown=3,
+                target_mode="self",
+                self_barrier_coefficient=Decimal("0.95"),
+                self_barrier_duration=2,
+            ),
+        ),
         ARIETE_ART_ID: PathArtActionDefinition(
             art_id=ARIETE_ART_ID,
             character_class="sentinela",
@@ -37,7 +63,42 @@ PATH_ART_ACTIONS = MappingProxyType(
                 cooldown=2,
                 actor_per_bonus=Decimal(10),
             ),
-        )
+        ),
+        CORTE_DE_EXECUCAO_ART_ID: PathArtActionDefinition(
+            art_id=CORTE_DE_EXECUCAO_ART_ID,
+            character_class="errante",
+            path_id="carrasco",
+            action=Action(
+                CORTE_DE_EXECUCAO_ART_ID,
+                "Corte de Execução",
+                Decimal("1.35"),
+                cooldown=3,
+                conditional_modifiers=(
+                    ActionConditionalModifier(
+                        "errante.corte_de_execucao.low_hp_power",
+                        ActionCondition(
+                            "target_hp_fraction_at_most", threshold=Decimal("0.35")
+                        ),
+                        "damage_power",
+                        Decimal("0.15"),
+                        operation="multiply",
+                    ),
+                ),
+            ),
+        ),
+        VENENO_VELADO_ART_ID: PathArtActionDefinition(
+            art_id=VENENO_VELADO_ART_ID,
+            character_class="errante",
+            path_id="sabotador",
+            action=Action(
+                VENENO_VELADO_ART_ID,
+                "Veneno Velado",
+                Decimal("0.85"),
+                cooldown=2,
+                native_dot_kind="poison",
+                native_dot_stacks=1,
+            ),
+        ),
     }
 )
 

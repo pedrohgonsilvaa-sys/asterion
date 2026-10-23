@@ -14,9 +14,12 @@ from asterion.application.combat_configuration_guard import CombatConfigurationL
 from asterion.application.equipment import equipment_instance_payload
 from asterion.domain.arts import (
     ACTIVE_ART_IDS_BY_CLASS,
+    BASTIAO_ART_IDS,
+    CARRASCO_ART_IDS,
     DEVASTADOR_ART_IDS,
     ERRANTE_ART_IDS,
     FIRST_CLASS_ART_IDS,
+    SABOTADOR_ART_IDS,
     SENTINEL_ART_IDS,
     VIGIA_ART_IDS,
 )
@@ -350,6 +353,105 @@ async def test_devastador_ariete_unlock_path_class_and_weapon_gates(database):
         active = await load_active_art_configuration(session, character)
     assert active.art_ids == (ariete,)
     assert ariete in ACTIVE_ART_IDS_BY_CLASS["sentinela"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "art_id", "actor", "weapon_type_id"),
+    [
+        ("bastiao", BASTIAO_ART_IDS["escudo_de_cinzas"], 771036, None),
+        (
+            "carrasco",
+            CARRASCO_ART_IDS["corte_de_execucao"],
+            771037,
+            "weapon.type.tdo.arma_caminhante",
+        ),
+        (
+            "sabotador",
+            SABOTADOR_ART_IDS["veneno_velado"],
+            771038,
+            "weapon.type.vde.arma_vale",
+        ),
+    ],
+)
+async def test_first_wave_path_arts_unlock_at_12_and_persist(
+    database, path, art_id, actor, weapon_type_id
+):
+    service = ActiveArtService(database[1], "ocaso")
+    character_class = "sentinela" if path == "bastiao" else "errante"
+    await _seed_character(
+        database,
+        actor,
+        level=11,
+        cls=character_class,
+        selected_path=path,
+        weapon_type_id=weapon_type_id,
+    )
+
+    with pytest.raises(ActiveArtMutationRejected) as level_gate:
+        await service.equip_art(actor, 1, art_id)
+    assert level_gate.value.code == ActiveArtMutationCode.LEVEL_REQUIRED
+
+    wrong_path_actor = actor + 10
+    wrong_path = "devastador" if path == "bastiao" else (
+        "sabotador" if path == "carrasco" else "carrasco"
+    )
+    await _seed_character(
+        database,
+        wrong_path_actor,
+        level=12,
+        cls=character_class,
+        selected_path=wrong_path,
+        weapon_type_id=weapon_type_id,
+    )
+    with pytest.raises(ActiveArtMutationRejected) as path_gate:
+        await service.equip_art(wrong_path_actor, 1, art_id)
+    assert path_gate.value.code == ActiveArtMutationCode.PATH_REQUIRED
+
+    wrong_class_actor = actor + 20
+    await _seed_character(
+        database,
+        wrong_class_actor,
+        level=12,
+        cls="vigia",
+        selected_path="atirador",
+    )
+    with pytest.raises(ActiveArtMutationRejected) as class_gate:
+        await service.equip_art(wrong_class_actor, 1, art_id)
+    assert class_gate.value.code == ActiveArtMutationCode.WRONG_CLASS
+
+    if weapon_type_id is not None:
+        unarmed_actor = actor + 21
+        await _seed_character(
+            database,
+            unarmed_actor,
+            level=12,
+            cls=character_class,
+            selected_path=path,
+        )
+        with pytest.raises(ActiveArtMutationRejected) as weapon_gate:
+            await service.equip_art(unarmed_actor, 1, art_id)
+        assert weapon_gate.value.code == ActiveArtMutationCode.WEAPON_REQUIREMENT
+
+    correct_actor = actor + 30
+    character_id, sessions = await _seed_character(
+        database,
+        correct_actor,
+        level=12,
+        cls=character_class,
+        selected_path=path,
+        weapon_type_id=weapon_type_id,
+    )
+
+    available = await service.view(correct_actor)
+    assert available is not None and art_id in available.available_art_ids
+    equipped = await service.equip_art(correct_actor, 1, art_id)
+    assert equipped is not None and equipped.changed
+
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        configuration = await load_active_art_configuration(session, character)
+    assert configuration.art_ids == (art_id,)
 
 
 @pytest.mark.asyncio

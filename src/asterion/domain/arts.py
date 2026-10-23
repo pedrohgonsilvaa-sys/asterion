@@ -145,6 +145,18 @@ DEVASTADOR_ART_IDS = {
     "ariete": "path_art.sentinela.devastador.ariete",
 }
 
+BASTIAO_ART_IDS = {
+    "escudo_de_cinzas": "path_art.sentinela.bastiao.escudo_de_cinzas",
+}
+
+CARRASCO_ART_IDS = {
+    "corte_de_execucao": "path_art.errante.carrasco.corte_de_execucao",
+}
+
+SABOTADOR_ART_IDS = {
+    "veneno_velado": "path_art.errante.sabotador.veneno_velado",
+}
+
 
 ACTIVE_ART_DEFINITIONS = {
     art_id: ActiveArtDefinition(art_id, character_class, 1)
@@ -178,10 +190,14 @@ ART_IDS_BY_CLASS = {
     "luminar": tuple(LUMINAR_ART_IDS.values()),
 }
 PATH_ART_IDS_BY_PATH = {
+    "bastiao": tuple(BASTIAO_ART_IDS.values()),
     "devastador": tuple(DEVASTADOR_ART_IDS.values()),
+    "carrasco": tuple(CARRASCO_ART_IDS.values()),
+    "sabotador": tuple(SABOTADOR_ART_IDS.values()),
 }
 PATH_ART_IDS_BY_CLASS = {
-    "sentinela": tuple(DEVASTADOR_ART_IDS.values()),
+    "sentinela": (*BASTIAO_ART_IDS.values(), *DEVASTADOR_ART_IDS.values()),
+    "errante": (*CARRASCO_ART_IDS.values(), *SABOTADOR_ART_IDS.values()),
 }
 ACTIVE_ART_IDS_BY_CLASS = {
     character_class: tuple(
@@ -217,6 +233,28 @@ ACTIVE_ART_DEFINITIONS.update(
     {
         art_id: ActiveArtDefinition(art_id, "errante", min_level)
         for art_id, min_level in ERRANTE_ART_LEVELS.items()
+    }
+)
+
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        BASTIAO_ART_IDS["escudo_de_cinzas"]: ActiveArtDefinition(
+            BASTIAO_ART_IDS["escudo_de_cinzas"], "sentinela", 12, path_id="bastiao"
+        ),
+        CARRASCO_ART_IDS["corte_de_execucao"]: ActiveArtDefinition(
+            CARRASCO_ART_IDS["corte_de_execucao"],
+            "errante",
+            12,
+            path_id="carrasco",
+            weapon_requirement=frozenset({"weapon.compat.melee"}),
+        ),
+        SABOTADOR_ART_IDS["veneno_velado"]: ActiveArtDefinition(
+            SABOTADOR_ART_IDS["veneno_velado"],
+            "errante",
+            12,
+            path_id="sabotador",
+            weapon_requirement=frozenset({"weapon.compat.melee"}),
+        ),
     }
 )
 
