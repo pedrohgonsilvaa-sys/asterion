@@ -4621,7 +4621,109 @@ def _perform(
         "barrier": barrier_power_multiplier,
     }.get(power_component, D(1))
 
-    if action.self_barrier_coefficient > ZERO or action.self_barrier_hp_fraction > ZERO:
+    secondary_self_barrier = bool(
+        action.target_barrier_coefficient > ZERO
+        and (
+            action.self_barrier_coefficient > ZERO
+            or action.self_barrier_hp_fraction > ZERO
+        )
+    )
+    if secondary_self_barrier:
+        primary_key = _path_resolution.get("primary_target_key")
+        if primary_key is not None and primary_key != actor_id:
+            # A declared secondary self Barrier is part of the same committed
+            # action. Use the action's selected-target power snapshot so source
+            # modifiers and Fulgor are applied once to both recipients.
+            _commit_path_action(state, actor_id, action_id, action, _path_resolution)
+            primary_target = state.fighters[primary_key]
+            primary_context = _path_target_context(
+                _path_resolution, primary_target
+            )
+            self_barrier_path_multiplier = D(
+                primary_context.get("barrier_power", D(1))
+            )
+            if actor.selected_path == "bastiao":
+                self_barrier_path_multiplier *= D("1.10")
+            if action.self_barrier_hp_fraction > ZERO:
+                self_value = (
+                    actor.stats.hp
+                    * action.self_barrier_hp_fraction
+                    * barrier_power_multiplier
+                    * self_barrier_path_multiplier
+                    * _barrier_received_multiplier(state, actor_id)
+                ).to_integral_value(rounding=ROUND_FLOOR)
+            else:
+                self_value = (
+                    actor.stat("attack")
+                    * action.self_barrier_coefficient
+                    * barrier_power_multiplier
+                    * self_barrier_path_multiplier
+                    * _barrier_received_multiplier(state, actor_id)
+                ).to_integral_value(rounding=ROUND_FLOOR)
+            self_value = _apply_barrier(
+                actor,
+                applier_id=actor.id,
+                effect_definition_id=action.id,
+                value=max(ZERO, self_value),
+                duration=(
+                    action.self_barrier_duration
+                    if action.self_barrier_duration < 0
+                    else max(0, action.self_barrier_duration)
+                ),
+                applied_opportunity=actor.opportunity,
+                round_number=state.round,
+                debuff_magnitude_reduction=(
+                    action.self_barrier_debuff_magnitude_reduction
+                ),
+                bound_effect_ids=action.barrier_bound_effect_ids,
+            )
+            state.events.append(
+                CombatEvent(
+                    len(state.events),
+                    state.round,
+                    actor_id,
+                    action_id,
+                    actor.id,
+                    barrier_value=self_value,
+                    barrier_total_after=actor.barrier,
+                    barrier_duration=(
+                        action.self_barrier_duration if self_value > ZERO else 0
+                    ),
+                    actor_entity_id=actor.id,
+                    barrier_applied_source=(
+                        f"{actor.id}:{action.id}" if self_value > ZERO else ""
+                    ),
+                    action_instance_id=action_instance_id,
+                    chain_state_before=chain_state_before,
+                    chain_state_after=chain_state_after,
+                    chain_prepared_by_action_id=chain_prepared_by_action_id,
+                    chain_consumed=chain_consumed,
+                    chain_empowered=chain_empowered,
+                    empowered_by_action_instance_id=empowered_by_action_instance_id,
+                    chain_prepared_by_action_instance_id=(
+                        chain_prepared_by_action_instance_id
+                    ),
+                    chain_consumed_by_action_instance_id=(
+                        chain_consumed_by_action_instance_id
+                    ),
+                    chain_window_before=chain_window_before,
+                    chain_window_after=chain_window_after,
+                    power_component="barrier",
+                    power_multiplier=(
+                        barrier_power_multiplier * self_barrier_path_multiplier
+                    ),
+                    barrier_power_multiplier=(
+                        barrier_power_multiplier * self_barrier_path_multiplier
+                    ),
+                    path_triggers=tuple(primary_context.get("triggers", ())),
+                    path_power_multiplier=self_barrier_path_multiplier,
+                )
+            )
+
+    if (
+        (action.self_barrier_coefficient > ZERO or action.self_barrier_hp_fraction > ZERO)
+        and not secondary_self_barrier
+    ):
         _commit_path_action(state, actor_id, action_id, action, _path_resolution)
         self_context = _path_target_context(_path_resolution, actor)
         path_barrier_multiplier = D(self_context.get("barrier_power", D(1)))

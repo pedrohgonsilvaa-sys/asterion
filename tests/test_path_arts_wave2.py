@@ -2,11 +2,15 @@ from decimal import ROUND_FLOOR, Decimal
 from uuid import UUID
 
 from asterion.domain.arts import (
+    AGOUREIRO_ART_IDS,
     ATIRADOR_ART_IDS,
     BASTIAO_ART_IDS,
     CARRASCO_ART_IDS,
     CONJURADOR_ART_IDS,
     DEVASTADOR_ART_IDS,
+    GUARDIAO_ART_IDS,
+    INQUISIDOR_ART_IDS,
+    INVOCADOR_ART_IDS,
     RASTREADOR_ART_IDS,
     RUNICO_ART_IDS,
     SABOTADOR_ART_IDS,
@@ -28,6 +32,7 @@ def _battle(
     *,
     include_ally: bool = False,
     enemy_ids: tuple[str, ...] = ("enemy",),
+    talents: tuple[str, ...] = (),
 ) -> Combat:
     player = Fighter(
         id="player",
@@ -37,6 +42,7 @@ def _battle(
         hp=D(1000),
         character_class=character_class,
         selected_path=path_id,
+        talent_ids=talents,
         takes_turn=True,
     )
     fighters = {
@@ -328,3 +334,187 @@ def test_runa_de_ruptura_applies_defense_debuff_and_respects_trama_origin():
         effect for effect in consumed.fighters["enemy"].effects if effect.id == art_id
     ).magnitude == D("0.10")
     assert "trama_state" not in consumed.fighters["player"].path_state
+
+
+def test_destino_lento_generates_offensive_omen_and_leitura_dos_sinais():
+    destino_lento = AGOUREIRO_ART_IDS["destino_lento"]
+    ruina_predita = "class_art.oraculo.ruina_predita"
+    combat = _battle(
+        "oraculo",
+        "agoureiro",
+        (destino_lento, ruina_predita),
+        talents=(
+            "talent.oraculo.leitura_dos_sinais",
+            "talent.oraculo.pressagio_cortante",
+        ),
+    )
+    generated = act(combat, destino_lento, target_id="enemy")
+    first_event = next(event for event in generated.events if event.action == destino_lento)
+    effect = next(
+        effect for effect in generated.fighters["enemy"].effects if effect.id == destino_lento
+    )
+    assert first_event.calculated_damage == direct_damage(D(100), D("0.70"), D(0), 22)
+    assert effect.stat == "agility" and effect.magnitude == D("0.18")
+    assert effect.remaining == 2
+    assert "enemy" in generated.fighters["player"].path_state["omen_offensive"]
+    assert "oraculo.pressagio_offensive_criado" in first_event.path_triggers
+    assert "oraculo.leitura_dos_sinais" in first_event.path_triggers
+
+    # A previously generated mark is consumed by a later direct Art; the
+    # Nv.15 Precision modifier remains independent of Agoureiro power.
+    consumed = act(generated, ruina_predita, target_id="enemy")
+    event = next(event for event in consumed.events if event.action == ruina_predita)
+    assert event.path_power_multiplier == D("1.16")
+    assert event.path_per_bonus == D(2)
+    assert "pressagio.ofensivo_consumido" in event.path_triggers
+    assert "enemy" not in consumed.fighters["player"].path_state.get("omen_offensive", {})
+
+
+def test_destino_lento_consumption_uses_internal_profecia_dolorosa_without_public_bypass():
+    destino_lento = AGOUREIRO_ART_IDS["destino_lento"]
+    ruina_predita = "class_art.oraculo.ruina_predita"
+    combat = _battle(
+        "oraculo",
+        "agoureiro",
+        (destino_lento, ruina_predita),
+        talents=("talent.oraculo.profecia_dolorosa",),
+    )
+    combat.fighters["player"].path_state["omen_offensive"] = {
+        "enemy": {"remaining": 2, "applied_opportunity": 0, "origin_art": "setup"}
+    }
+    result = act(combat, ruina_predita, target_id="enemy")
+    event = next(event for event in result.events if event.action == ruina_predita)
+    assert event.path_power_multiplier == D("1.16") * D("1.02")
+    assert "pressagio.ofensivo_consumido" in event.path_triggers
+
+
+def test_coruja_uses_triada_for_both_alternation_directions_without_a_pet():
+    lobo = INVOCADOR_ART_IDS["lobo"]
+    coruja = INVOCADOR_ART_IDS["coruja"]
+    for first_art, second_art in ((lobo, coruja), (coruja, lobo)):
+        combat = _battle("oraculo", "invocador", (lobo, coruja))
+        after_first = act(combat, first_art, target_id="enemy")
+        result = act(after_first, second_art, target_id="enemy")
+        event = next(event for event in result.events if event.action == second_art)
+        expected_multiplier = D("1.12") * (D("1.12") if first_art == coruja else D(1))
+        assert event.path_power_multiplier == expected_multiplier
+        assert "invocador.triade" in event.path_triggers
+        if first_art == coruja:
+            assert "pressagio.ofensivo_consumido" in event.path_triggers
+        assert len(result.fighters) == 2
+        assert result.fighters["player"].path_state["manifestation_state"]["kind"] == (
+            "coruja" if second_art == coruja else "lobo"
+        )
+        if second_art == coruja:
+            effect = next(
+                effect for effect in result.fighters["enemy"].effects if effect.id == coruja
+            )
+            assert effect.stat == "agility" and effect.magnitude == D("0.15")
+            assert effect.remaining == 2
+            assert "enemy" in result.fighters["player"].path_state["omen_offensive"]
+        restored = decode(encode(result), result.id, result.ruleset, result.version)
+        assert (
+            restored.fighters["player"].path_state["manifestation_state"]["kind"]
+            == result.fighters["player"].path_state["manifestation_state"]["kind"]
+        )
+
+
+def test_coruja_repeating_same_manifestation_does_not_get_triada_power():
+    coruja = INVOCADOR_ART_IDS["coruja"]
+    combat = _battle("oraculo", "invocador", (coruja,))
+    combat.fighters["player"].path_state["manifestation_state"] = {
+        "kind": "coruja",
+        "remaining": 2,
+        "applied_opportunity": 0,
+        "expires_opportunity": 10,
+    }
+    result = act(combat, coruja, target_id="enemy")
+    event = next(event for event in result.events if event.action == coruja)
+    assert event.path_power_multiplier == D(1)
+    assert "invocador.triade" not in event.path_triggers
+
+
+def test_egide_compartilhada_applies_two_barriers_once_and_self_target_gets_only_ninety():
+    art_id = GUARDIAO_ART_IDS["egide_compartilhada"]
+    combat = _battle("luminar", "guardiao", (art_id,), include_ally=True)
+    empowered = combat.fighters["player"]
+    empowered.path_state["luminar_state"] = {
+        "kind": "fulgor",
+        "remaining": 2,
+        "applied_opportunity": 0,
+    }
+    result = act(combat, art_id, target_id="ally")
+    ally_event = next(
+        event for event in result.events if event.action == art_id and event.target == "ally"
+    )
+    self_event = next(
+        event for event in result.events if event.action == art_id and event.target == "player"
+    )
+    assert ally_event.barrier_value == D(103)
+    assert self_event.barrier_value == D(51)
+    assert ally_event.barrier_duration == self_event.barrier_duration == 2
+    assert result.fighters["ally"].barrier == D(103)
+    assert result.fighters["player"].barrier == D(51)
+    assert "luminar_state" not in result.fighters["player"].path_state
+    assert result.fighters["player"].action_use_counts[art_id] == 1
+    restored = decode(encode(result), result.id, result.ruleset, result.version)
+    restored_action = restored.player_actions[art_id]
+    assert restored_action.target_barrier_coefficient == D("0.90")
+    assert restored_action.self_barrier_coefficient == D("0.45")
+    assert restored.fighters["player"].barrier == D(51)
+    assert restored.fighters["ally"].barrier == D(103)
+    assert act(restored, art_id, target_id="ally") is restored
+
+    self_targeted = _battle("luminar", "guardiao", (art_id,))
+    self_targeted.fighters["player"].path_state["luminar_state"] = {
+        "kind": "fulgor",
+        "remaining": 2,
+        "applied_opportunity": 0,
+    }
+    self_result = act(self_targeted, art_id, target_id="player")
+    self_events = [event for event in self_result.events if event.action == art_id]
+    assert len(self_events) == 1
+    assert self_events[0].barrier_value == D(103)
+    assert self_result.fighters["player"].barrier == D(103)
+
+
+def test_egide_compartilhada_generates_julgamento_when_fulgor_is_absent():
+    art_id = GUARDIAO_ART_IDS["egide_compartilhada"]
+    combat = _battle("luminar", "guardiao", (art_id,), include_ally=True)
+    result = act(combat, art_id, target_id="ally")
+    assert result.fighters["player"].path_state["luminar_state"]["kind"] == "julgamento"
+    assert result.fighters["player"].path_state["luminar_state"]["remaining"] == 2
+
+
+def test_selo_da_penitencia_reduces_healing_and_uses_julgamento_once():
+    art_id = INQUISIDOR_ART_IDS["selo_da_penitencia"]
+    combat = _battle("luminar", "inquisidor", (art_id,))
+    combat.fighters["player"].path_state["luminar_state"] = {
+        "kind": "julgamento",
+        "remaining": 2,
+        "applied_opportunity": 0,
+    }
+    result = act(combat, art_id, target_id="enemy")
+    event = next(event for event in result.events if event.action == art_id)
+    effect = next(effect for effect in result.fighters["enemy"].effects if effect.id == art_id)
+    assert event.calculated_damage == direct_damage(D(100), D("1.15"), D(0), 22)
+    assert event.path_power_multiplier == D("1.15")
+    assert effect.stat == "healing_received" and effect.magnitude == D("0.20")
+    assert effect.remaining == 2
+    assert "luminar_state" not in result.fighters["player"].path_state
+
+    result.enemy_actions["test_self_heal"] = Action(
+        "test_self_heal", "Test Self Heal", D(0), heal_coefficient=D(1), target_mode="self"
+    )
+    result.fighters["enemy"].hp -= D(300)
+    assert _perform(result, "enemy", "test_self_heal")
+    heal_event = next(event for event in result.events if event.action == "test_self_heal")
+    assert heal_event.healing_received_multiplier == D("0.80")
+    assert heal_event.effective_healing == D(80)
+
+
+def test_selo_da_penitencia_generates_fulgor_when_no_julgamento_is_consumed():
+    art_id = INQUISIDOR_ART_IDS["selo_da_penitencia"]
+    combat = _battle("luminar", "inquisidor", (art_id,))
+    result = act(combat, art_id, target_id="enemy")
+    assert result.fighters["player"].path_state["luminar_state"]["kind"] == "fulgor"

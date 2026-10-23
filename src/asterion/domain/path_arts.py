@@ -57,9 +57,13 @@ INCENDIO_TRANCADO_ART_ID = CONJURADOR_ART_IDS["incendio_trancado"]
 RUNA_DE_GUARDA_ART_ID = RUNICO_ART_IDS["runa_de_guarda"]
 RUNA_DE_RUPTURA_ART_ID = RUNICO_ART_IDS["runa_de_ruptura"]
 MAU_AGOURO_ART_ID = AGOUREIRO_ART_IDS["mau_agouro"]
+DESTINO_LENTO_ART_ID = AGOUREIRO_ART_IDS["destino_lento"]
 LOBO_ART_ID = INVOCADOR_ART_IDS["lobo"]
+CORUJA_ART_ID = INVOCADOR_ART_IDS["coruja"]
 CURA_SOLAR_ART_ID = GUARDIAO_ART_IDS["cura_solar"]
+EGIDE_COMPARTILHADA_ART_ID = GUARDIAO_ART_IDS["egide_compartilhada"]
 LANCA_DE_LUZ_ART_ID = INQUISIDOR_ART_IDS["lanca_de_luz"]
+SELO_DA_PENITENCIA_ART_ID = INQUISIDOR_ART_IDS["selo_da_penitencia"]
 
 PATH_ART_ACTIONS = MappingProxyType(
     {
@@ -316,6 +320,21 @@ PATH_ART_ACTIONS = MappingProxyType(
                 effect_id=MAU_AGOURO_ART_ID,
             ),
         ),
+        DESTINO_LENTO_ART_ID: PathArtActionDefinition(
+            art_id=DESTINO_LENTO_ART_ID,
+            character_class="oraculo",
+            path_id="agoureiro",
+            action=Action(
+                DESTINO_LENTO_ART_ID,
+                "Destino Lento",
+                Decimal("0.70"),
+                attack_debuff=Decimal("0.18"),
+                duration=2,
+                cooldown=3,
+                effect_stat="agility",
+                effect_id=DESTINO_LENTO_ART_ID,
+            ),
+        ),
         LOBO_ART_ID: PathArtActionDefinition(
             art_id=LOBO_ART_ID,
             character_class="oraculo",
@@ -326,6 +345,22 @@ PATH_ART_ACTIONS = MappingProxyType(
                 Decimal("1.25"),
                 cooldown=2,
                 manifestation_kind="lobo",
+            ),
+        ),
+        CORUJA_ART_ID: PathArtActionDefinition(
+            art_id=CORUJA_ART_ID,
+            character_class="oraculo",
+            path_id="invocador",
+            action=Action(
+                CORUJA_ART_ID,
+                "Coruja",
+                Decimal("0.85"),
+                attack_debuff=Decimal("0.15"),
+                duration=2,
+                cooldown=3,
+                effect_stat="agility",
+                effect_id=CORUJA_ART_ID,
+                manifestation_kind="coruja",
             ),
         ),
         CURA_SOLAR_ART_ID: PathArtActionDefinition(
@@ -341,6 +376,22 @@ PATH_ART_ACTIONS = MappingProxyType(
                 heal_coefficient=Decimal("1.00"),
             ),
         ),
+        EGIDE_COMPARTILHADA_ART_ID: PathArtActionDefinition(
+            art_id=EGIDE_COMPARTILHADA_ART_ID,
+            character_class="luminar",
+            path_id="guardiao",
+            action=Action(
+                EGIDE_COMPARTILHADA_ART_ID,
+                "Égide Compartilhada",
+                Decimal(0),
+                cooldown=4,
+                target_mode="ally",
+                target_barrier_coefficient=Decimal("0.90"),
+                target_barrier_duration=2,
+                self_barrier_coefficient=Decimal("0.45"),
+                self_barrier_duration=2,
+            ),
+        ),
         LANCA_DE_LUZ_ART_ID: PathArtActionDefinition(
             art_id=LANCA_DE_LUZ_ART_ID,
             character_class="luminar",
@@ -350,6 +401,21 @@ PATH_ART_ACTIONS = MappingProxyType(
                 "Lança de Luz",
                 Decimal("1.35"),
                 cooldown=2,
+            ),
+        ),
+        SELO_DA_PENITENCIA_ART_ID: PathArtActionDefinition(
+            art_id=SELO_DA_PENITENCIA_ART_ID,
+            character_class="luminar",
+            path_id="inquisidor",
+            action=Action(
+                SELO_DA_PENITENCIA_ART_ID,
+                "Selo da Penitência",
+                Decimal("1.00"),
+                attack_debuff=Decimal("0.20"),
+                duration=2,
+                cooldown=3,
+                effect_stat="healing_received",
+                effect_id=SELO_DA_PENITENCIA_ART_ID,
             ),
         ),
     }

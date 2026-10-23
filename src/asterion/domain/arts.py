@@ -183,18 +183,22 @@ RUNICO_ART_IDS = {
 
 AGOUREIRO_ART_IDS = {
     "mau_agouro": "path_art.oraculo.agoureiro.mau_agouro",
+    "destino_lento": "path_art.oraculo.agoureiro.destino_lento",
 }
 
 INVOCADOR_ART_IDS = {
     "lobo": "path_art.oraculo.invocador.lobo",
+    "coruja": "path_art.oraculo.invocador.coruja",
 }
 
 GUARDIAO_ART_IDS = {
     "cura_solar": "path_art.luminar.guardiao.cura_solar",
+    "egide_compartilhada": "path_art.luminar.guardiao.egide_compartilhada",
 }
 
 INQUISIDOR_ART_IDS = {
     "lanca_de_luz": "path_art.luminar.inquisidor.lanca_de_luz",
+    "selo_da_penitencia": "path_art.luminar.inquisidor.selo_da_penitencia",
 }
 
 
@@ -389,6 +393,30 @@ ACTIVE_ART_DEFINITIONS.update(
             INQUISIDOR_ART_IDS["lanca_de_luz"],
             "luminar",
             12,
+            path_id="inquisidor",
+        ),
+        AGOUREIRO_ART_IDS["destino_lento"]: ActiveArtDefinition(
+            AGOUREIRO_ART_IDS["destino_lento"],
+            "oraculo",
+            22,
+            path_id="agoureiro",
+        ),
+        INVOCADOR_ART_IDS["coruja"]: ActiveArtDefinition(
+            INVOCADOR_ART_IDS["coruja"],
+            "oraculo",
+            22,
+            path_id="invocador",
+        ),
+        GUARDIAO_ART_IDS["egide_compartilhada"]: ActiveArtDefinition(
+            GUARDIAO_ART_IDS["egide_compartilhada"],
+            "luminar",
+            22,
+            path_id="guardiao",
+        ),
+        INQUISIDOR_ART_IDS["selo_da_penitencia"]: ActiveArtDefinition(
+            INQUISIDOR_ART_IDS["selo_da_penitencia"],
+            "luminar",
+            22,
             path_id="inquisidor",
         ),
     }

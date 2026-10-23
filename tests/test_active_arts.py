@@ -596,6 +596,34 @@ async def test_first_wave_path_arts_unlock_at_12_and_persist(
             772067,
             None,
         ),
+        (
+            "agoureiro",
+            AGOUREIRO_ART_IDS["destino_lento"],
+            "oraculo",
+            772068,
+            None,
+        ),
+        (
+            "invocador",
+            INVOCADOR_ART_IDS["coruja"],
+            "oraculo",
+            772069,
+            None,
+        ),
+        (
+            "guardiao",
+            GUARDIAO_ART_IDS["egide_compartilhada"],
+            "luminar",
+            772070,
+            None,
+        ),
+        (
+            "inquisidor",
+            INQUISIDOR_ART_IDS["selo_da_penitencia"],
+            "luminar",
+            772071,
+            None,
+        ),
     ],
 )
 async def test_b2_lot_a_path_arts_unlock_at_22_and_persist(
@@ -623,6 +651,10 @@ async def test_b2_lot_a_path_arts_unlock_at_22_and_persist(
         "rastreador": "atirador",
         "conjurador": "runico",
         "runico": "conjurador",
+        "agoureiro": "invocador",
+        "invocador": "agoureiro",
+        "guardiao": "inquisidor",
+        "inquisidor": "guardiao",
     }[path]
     wrong_path_actor = actor + 100
     await _seed_character(
