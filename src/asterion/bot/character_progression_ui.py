@@ -354,6 +354,13 @@ def _art_mechanics_lines(action) -> list[str]:
         lines.append(
             f"💥 Contra alvo com Debuff · +{action.crit_bonus_if_target_debuffed:g} p.p. CRIT"
         )
+    distinct_negative_power_modifiers = [
+        modifier
+        for modifier in action.conditional_modifiers
+        if modifier.condition.kind == "target_distinct_normal_negative_effects_at_least"
+        and modifier.component == "damage_power"
+        and modifier.operation == "add"
+    ]
     for modifier in action.conditional_modifiers:
         if (
             modifier.condition.kind == "class_resource_at_least"
@@ -390,6 +397,40 @@ def _art_mechanics_lines(action) -> list[str]:
                 "🎯 Contra alvo com DoT ou Debuff normal válido no início da ação · "
                 f"+{modifier.magnitude:g} p.p. PER"
             )
+        elif (
+            modifier.condition.kind == "actor_hp_fraction_below"
+            and modifier.component == "damage_power"
+        ):
+            lines.append(
+                f"⚔️ Com HP próprio <{_percent(modifier.condition.threshold)}% · "
+                f"+{_percent(modifier.magnitude)}% potência"
+            )
+        elif (
+            modifier.condition.kind == "target_hp_fraction_at_most"
+            and modifier.component == "crit_bonus"
+        ):
+            lines.append(
+                f"💥 Contra alvo com HP ≤{_percent(modifier.condition.threshold)}% · "
+                f"+{modifier.magnitude:g} p.p. CRIT"
+            )
+    if distinct_negative_power_modifiers:
+        per_effect = distinct_negative_power_modifiers[0].magnitude
+        maximum = sum(
+            (modifier.magnitude for modifier in distinct_negative_power_modifiers),
+            start=0,
+        )
+        lines.append(
+            "⚔️ Por tipo distinto de DoT/Debuff normal válido no início · "
+            f"+{_percent(per_effect)}% potência · máximo +{_percent(maximum)}%"
+        )
+    for resource_use in action.resource_uses:
+        if resource_use.resource == "aim" and resource_use.consume > 0:
+            timing = (
+                "após a resolução"
+                if resource_use.consume_at == "after_resolution"
+                else "no commit"
+            )
+            lines.append(f"🎯 Consome {resource_use.consume} Miras do alvo {timing}")
     if action.per_bonus_if_target_poisoned:
         lines.append(
             f"🎯 Contra alvo Envenenado · +{action.per_bonus_if_target_poisoned:g} p.p. PER"

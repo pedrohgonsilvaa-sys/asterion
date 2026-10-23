@@ -173,24 +173,28 @@ ATIRADOR_ART_IDS = {
     "tiro_perfurante": "path_art.vigia.atirador.tiro_perfurante",
     "fixar_alvo": "path_art.vigia.atirador.fixar_alvo",
     "rajada_controlada": "path_art.vigia.atirador.rajada_controlada",
+    "disparo_terminal": "path_art.vigia.atirador.disparo_terminal",
 }
 
 RASTREADOR_ART_IDS = {
     "flecha_serrilhada": "path_art.vigia.rastreador.flecha_serrilhada",
     "laco_de_caca": "path_art.vigia.rastreador.laco_de_caca",
     "chuva_de_rastros": "path_art.vigia.rastreador.chuva_de_rastros",
+    "predacao_persistente": "path_art.vigia.rastreador.predacao_persistente",
 }
 
 CONJURADOR_ART_IDS = {
     "estilhaco_do_veu": "path_art.tecelao.conjurador.estilhaco_do_veu",
     "incendio_trancado": "path_art.tecelao.conjurador.incendio_trancado",
     "convergencia_arcana": "path_art.tecelao.conjurador.convergencia_arcana",
+    "rasgo_conjurado": "path_art.tecelao.conjurador.rasgo_conjurado",
 }
 
 RUNICO_ART_IDS = {
     "runa_de_guarda": "path_art.tecelao.runico.runa_de_guarda",
     "runa_de_ruptura": "path_art.tecelao.runico.runa_de_ruptura",
     "runa_de_retorno": "path_art.tecelao.runico.runa_de_retorno",
+    "circulo_runico": "path_art.tecelao.runico.circulo_runico",
 }
 
 AGOUREIRO_ART_IDS = {
@@ -553,6 +557,33 @@ ACTIVE_ART_DEFINITIONS.update(
             52,
             path_id="sabotador",
             weapon_requirement=frozenset({"weapon.compat.melee"}),
+        ),
+        ATIRADOR_ART_IDS["disparo_terminal"]: ActiveArtDefinition(
+            ATIRADOR_ART_IDS["disparo_terminal"],
+            "vigia",
+            52,
+            path_id="atirador",
+            weapon_requirement=frozenset(
+                {"weapon.compat.bow", "weapon.compat.crossbow"}
+            ),
+        ),
+        RASTREADOR_ART_IDS["predacao_persistente"]: ActiveArtDefinition(
+            RASTREADOR_ART_IDS["predacao_persistente"],
+            "vigia",
+            52,
+            path_id="rastreador",
+            weapon_requirement=frozenset(
+                {"weapon.compat.bow", "weapon.compat.crossbow"}
+            ),
+        ),
+        CONJURADOR_ART_IDS["rasgo_conjurado"]: ActiveArtDefinition(
+            CONJURADOR_ART_IDS["rasgo_conjurado"],
+            "tecelao",
+            52,
+            path_id="conjurador",
+        ),
+        RUNICO_ART_IDS["circulo_runico"]: ActiveArtDefinition(
+            RUNICO_ART_IDS["circulo_runico"], "tecelao", 52, path_id="runico"
         ),
     }
 )

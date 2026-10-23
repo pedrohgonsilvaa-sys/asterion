@@ -30,6 +30,7 @@ from asterion.domain.combat import (
     ActionConditionalModifier,
     ActionEffect,
     ActionEffectRemoval,
+    ActionResourceUse,
 )
 
 
@@ -73,6 +74,10 @@ ULTIMA_MURALHA_ART_ID = BASTIAO_ART_IDS["ultima_muralha"]
 RUPTOR_ART_ID = DEVASTADOR_ART_IDS["ruptor"]
 CEIFA_ART_ID = CARRASCO_ART_IDS["ceifa"]
 COLAPSO_PREPARADO_ART_ID = SABOTADOR_ART_IDS["colapso_preparado"]
+DISPARO_TERMINAL_ART_ID = ATIRADOR_ART_IDS["disparo_terminal"]
+PREDACAO_PERSISTENTE_ART_ID = RASTREADOR_ART_IDS["predacao_persistente"]
+RASGO_CONJURADO_ART_ID = CONJURADOR_ART_IDS["rasgo_conjurado"]
+CIRCULO_RUNICO_ART_ID = RUNICO_ART_IDS["circulo_runico"]
 RAJADA_CONTROLADA_ART_ID = ATIRADOR_ART_IDS["rajada_controlada"]
 CHUVA_DE_RASTROS_ART_ID = RASTREADOR_ART_IDS["chuva_de_rastros"]
 CONVERGENCIA_ARCANA_ART_ID = CONJURADOR_ART_IDS["convergencia_arcana"]
@@ -705,6 +710,91 @@ PATH_ART_ACTIONS = MappingProxyType(
                     )
                     for count in (1, 2, 3)
                 ),
+            ),
+        ),
+        DISPARO_TERMINAL_ART_ID: PathArtActionDefinition(
+            art_id=DISPARO_TERMINAL_ART_ID,
+            character_class="vigia",
+            path_id="atirador",
+            action=Action(
+                DISPARO_TERMINAL_ART_ID,
+                "Disparo Terminal",
+                Decimal("1.75"),
+                cooldown=5,
+                resource_uses=(
+                    ActionResourceUse(
+                        resource="aim",
+                        minimum=4,
+                        consume=4,
+                        consume_at="after_resolution",
+                        target_selector="primary_target",
+                        required=True,
+                    ),
+                ),
+                conditional_modifiers=(
+                    ActionConditionalModifier(
+                        "vigia.disparo_terminal.four_aim_crit",
+                        ActionCondition(
+                            "class_resource_at_least",
+                            resource="aim",
+                            minimum=4,
+                        ),
+                        "crit_bonus",
+                        Decimal(15),
+                        target_scope="primary_target",
+                        evaluation_scope="per_action",
+                    ),
+                ),
+            ),
+        ),
+        PREDACAO_PERSISTENTE_ART_ID: PathArtActionDefinition(
+            art_id=PREDACAO_PERSISTENTE_ART_ID,
+            character_class="vigia",
+            path_id="rastreador",
+            action=Action(
+                PREDACAO_PERSISTENTE_ART_ID,
+                "Predação Persistente",
+                Decimal("1.35"),
+                cooldown=4,
+                conditional_modifiers=tuple(
+                    ActionConditionalModifier(
+                        f"vigia.predacao_persistente.distinct_negative_{count}",
+                        ActionCondition(
+                            "target_distinct_normal_negative_effects_at_least",
+                            minimum=count,
+                        ),
+                        "damage_power",
+                        Decimal("0.08"),
+                        operation="add",
+                    )
+                    for count in (1, 2)
+                ),
+            ),
+        ),
+        RASGO_CONJURADO_ART_ID: PathArtActionDefinition(
+            art_id=RASGO_CONJURADO_ART_ID,
+            character_class="tecelao",
+            path_id="conjurador",
+            action=Action(
+                RASGO_CONJURADO_ART_ID,
+                "Rasgo Conjurado",
+                Decimal("1.25"),
+                cooldown=5,
+                target_mode="all_opponents",
+            ),
+        ),
+        CIRCULO_RUNICO_ART_ID: PathArtActionDefinition(
+            art_id=CIRCULO_RUNICO_ART_ID,
+            character_class="tecelao",
+            path_id="runico",
+            action=Action(
+                CIRCULO_RUNICO_ART_ID,
+                "Círculo Rúnico",
+                Decimal(0),
+                cooldown=5,
+                target_mode="all_allies",
+                target_barrier_coefficient=Decimal("0.60"),
+                target_barrier_duration=2,
             ),
         ),
     }
