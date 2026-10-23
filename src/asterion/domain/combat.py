@@ -199,6 +199,7 @@ class ActionCondition:
             "actor_hp_fraction_below",
             "target_hp_fraction_at_most",
             "target_has_normal_negative_effect",
+            "target_has_normal_debuff",
             "target_distinct_normal_negative_effects_at_least",
             "class_resource_at_least",
         }:
@@ -1047,7 +1048,55 @@ def _is_player_turn_actor(state: Combat, key: str) -> bool:
 def player_actions_for(state: Combat, fighter_key: str | None = None) -> dict[str, Action]:
     if fighter_key is None:
         fighter_key = active_player_key(state) or "player"
-    return state.player_actions_by_fighter.get(fighter_key, state.player_actions)
+    actions = state.player_actions_by_fighter.get(fighter_key, state.player_actions)
+    actor = state.fighters.get(fighter_key)
+    if (
+        actor is None
+        or actor.character_class != "oraculo"
+        or actor.selected_path != "invocador"
+    ):
+        return actions
+    triad_action_id = next(
+        (
+            action_id
+            for action_id, action in actions.items()
+            if action.manifestation_kind == "triade_encarnada"
+        ),
+        None,
+    )
+    if triad_action_id is None:
+        return actions
+    manifestation = actor.path_state.get("manifestation_state")
+    if (
+        not isinstance(manifestation, dict)
+        or int(manifestation.get("remaining", 0)) <= 0
+        or actor.opportunity > int(manifestation.get("expires_opportunity", -1))
+        or manifestation.get("kind") not in {"lobo", "coruja", "urso"}
+    ):
+        return {key: action for key, action in actions.items() if key != triad_action_id}
+
+    base_action = actions[triad_action_id]
+    kind = manifestation["kind"]
+    if kind == "lobo":
+        variant = replace(base_action, coefficient=D("1.55"), target_mode="opponent")
+    elif kind == "coruja":
+        variant = replace(
+            base_action,
+            coefficient=D("0.95"),
+            attack_debuff=D("0.20"),
+            duration=2,
+            effect_stat="agility",
+            effect_id=triad_action_id,
+            target_mode="opponent",
+        )
+    else:
+        variant = replace(
+            base_action,
+            target_barrier_coefficient=D("1.20"),
+            target_barrier_duration=2,
+            target_mode="self",
+        )
+    return {**actions, triad_action_id: variant}
 
 
 def _resolve_phase_triggers(state: Combat) -> None:
@@ -2902,6 +2951,17 @@ def _distinct_valid_negative_effect_count(state: Combat, target: Fighter) -> int
     return len(kinds)
 
 
+def _has_valid_normal_debuff(target: Fighter) -> bool:
+    """Whether the action-start snapshot has a live normal Debuff, not just a DoT."""
+    return any(
+        effect.kind == "debuff"
+        and not effect.fixed_mechanic
+        and effect.remaining > 0
+        and effect.stacks > 0
+        for effect in target.effects
+    )
+
+
 def _has_valid_defense_reduction(target: Fighter) -> bool:
     """Whether the action-start target snapshot contains a live −DEF debuff."""
     return any(
@@ -3342,6 +3402,10 @@ def _action_condition_matches(
     if condition.kind == "target_has_normal_negative_effect":
         return target_key is not None and _has_valid_negative_effect(
             state, state.fighters[target_key]
+        )
+    if condition.kind == "target_has_normal_debuff":
+        return target_key is not None and _has_valid_normal_debuff(
+            state.fighters[target_key]
         )
     if condition.kind == "target_distinct_normal_negative_effects_at_least":
         return (

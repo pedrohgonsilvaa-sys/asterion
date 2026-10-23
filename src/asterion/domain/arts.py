@@ -201,24 +201,28 @@ AGOUREIRO_ART_IDS = {
     "mau_agouro": "path_art.oraculo.agoureiro.mau_agouro",
     "destino_lento": "path_art.oraculo.agoureiro.destino_lento",
     "condenacao": "path_art.oraculo.agoureiro.condenacao",
+    "eclipse_previsto": "path_art.oraculo.agoureiro.eclipse_previsto",
 }
 
 INVOCADOR_ART_IDS = {
     "lobo": "path_art.oraculo.invocador.lobo",
     "coruja": "path_art.oraculo.invocador.coruja",
     "urso": "path_art.oraculo.invocador.urso",
+    "triade_encarnada": "path_art.oraculo.invocador.triade_encarnada",
 }
 
 GUARDIAO_ART_IDS = {
     "cura_solar": "path_art.luminar.guardiao.cura_solar",
     "egide_compartilhada": "path_art.luminar.guardiao.egide_compartilhada",
     "purgacao_luminosa": "path_art.luminar.guardiao.purgacao_luminosa",
+    "aurora_guardia": "path_art.luminar.guardiao.aurora_guardia",
 }
 
 INQUISIDOR_ART_IDS = {
     "lanca_de_luz": "path_art.luminar.inquisidor.lanca_de_luz",
     "selo_da_penitencia": "path_art.luminar.inquisidor.selo_da_penitencia",
     "purga_ardente": "path_art.luminar.inquisidor.purga_ardente",
+    "veredito": "path_art.luminar.inquisidor.veredito",
 }
 
 
@@ -584,6 +588,30 @@ ACTIVE_ART_DEFINITIONS.update(
         ),
         RUNICO_ART_IDS["circulo_runico"]: ActiveArtDefinition(
             RUNICO_ART_IDS["circulo_runico"], "tecelao", 52, path_id="runico"
+        ),
+        AGOUREIRO_ART_IDS["eclipse_previsto"]: ActiveArtDefinition(
+            AGOUREIRO_ART_IDS["eclipse_previsto"],
+            "oraculo",
+            52,
+            path_id="agoureiro",
+        ),
+        INVOCADOR_ART_IDS["triade_encarnada"]: ActiveArtDefinition(
+            INVOCADOR_ART_IDS["triade_encarnada"],
+            "oraculo",
+            52,
+            path_id="invocador",
+        ),
+        GUARDIAO_ART_IDS["aurora_guardia"]: ActiveArtDefinition(
+            GUARDIAO_ART_IDS["aurora_guardia"],
+            "luminar",
+            52,
+            path_id="guardiao",
+        ),
+        INQUISIDOR_ART_IDS["veredito"]: ActiveArtDefinition(
+            INQUISIDOR_ART_IDS["veredito"],
+            "luminar",
+            52,
+            path_id="inquisidor",
         ),
     }
 )

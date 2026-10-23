@@ -246,6 +246,8 @@ def _eligibility_notice(view: ActiveArtCharacterView, art_id: str) -> str | None
 
 
 def _art_category(action) -> str:
+    if action.manifestation_kind == "triade_encarnada":
+        return "Manifestação"
     if any(effect.stat == "interpor_next_direct" for effect in action.target_effects):
         return "Suporte"
     if (
@@ -398,6 +400,23 @@ def _art_mechanics_lines(action) -> list[str]:
                 f"+{modifier.magnitude:g} p.p. PER"
             )
         elif (
+            modifier.condition.kind == "target_has_normal_debuff"
+            and modifier.component == "crit_bonus"
+        ):
+            lines.append(
+                "💥 Contra alvo com Debuff normal válido no início da ação · "
+                f"+{modifier.magnitude:g} p.p. CRIT"
+            )
+        elif (
+            modifier.condition.kind == "class_resource_at_least"
+            and modifier.condition.resource == "omen_offensive"
+            and modifier.component == "attack_debuff"
+        ):
+            lines.append(
+                "🔮 Ao consumir Presságio Ofensivo do alvo · "
+                f"−{_percent(modifier.magnitude)}% Cura recebida · {action.duration}T"
+            )
+        elif (
             modifier.condition.kind == "actor_hp_fraction_below"
             and modifier.component == "damage_power"
         ):
@@ -455,7 +474,17 @@ def _art_mechanics_lines(action) -> list[str]:
             "🔮 Condenação · próxima Arte do Agoureiro recebe +20% em 2T"
         )
 
-    if action.target_mode == "self":
+    if action.manifestation_kind == "triade_encarnada":
+        lines.extend(
+            (
+                "🐺 Último Lobo · Dano Direto 155% ATQ",
+                "🦉 Última Coruja · Dano Direto 95% ATQ e −20% AGI · 2T",
+                "🐻 Último Urso · Barreira 120% ATQ · 2T",
+                "A própria Tríade não altera a última manifestação.",
+            )
+        )
+        target = "Forma da última manifestação válida"
+    elif action.target_mode == "self":
         target = "Você"
     elif action.target_mode in {"ally", "ally_or_self"}:
         target = "Você ou Aliado"

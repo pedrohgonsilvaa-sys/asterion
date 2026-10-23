@@ -78,6 +78,10 @@ DISPARO_TERMINAL_ART_ID = ATIRADOR_ART_IDS["disparo_terminal"]
 PREDACAO_PERSISTENTE_ART_ID = RASTREADOR_ART_IDS["predacao_persistente"]
 RASGO_CONJURADO_ART_ID = CONJURADOR_ART_IDS["rasgo_conjurado"]
 CIRCULO_RUNICO_ART_ID = RUNICO_ART_IDS["circulo_runico"]
+ECLIPSE_PREVISTO_ART_ID = AGOUREIRO_ART_IDS["eclipse_previsto"]
+TRIADE_ENCARNADA_ART_ID = INVOCADOR_ART_IDS["triade_encarnada"]
+AURORA_GUARDIA_ART_ID = GUARDIAO_ART_IDS["aurora_guardia"]
+VEREDITO_ART_ID = INQUISIDOR_ART_IDS["veredito"]
 RAJADA_CONTROLADA_ART_ID = ATIRADOR_ART_IDS["rajada_controlada"]
 CHUVA_DE_RASTROS_ART_ID = RASTREADOR_ART_IDS["chuva_de_rastros"]
 CONVERGENCIA_ARCANA_ART_ID = CONJURADOR_ART_IDS["convergencia_arcana"]
@@ -795,6 +799,76 @@ PATH_ART_ACTIONS = MappingProxyType(
                 target_mode="all_allies",
                 target_barrier_coefficient=Decimal("0.60"),
                 target_barrier_duration=2,
+            ),
+        ),
+        ECLIPSE_PREVISTO_ART_ID: PathArtActionDefinition(
+            art_id=ECLIPSE_PREVISTO_ART_ID,
+            character_class="oraculo",
+            path_id="agoureiro",
+            action=Action(
+                ECLIPSE_PREVISTO_ART_ID,
+                "Eclipse Previsto",
+                Decimal("1.50"),
+                duration=2,
+                effect_stat="healing_received",
+                effect_id=ECLIPSE_PREVISTO_ART_ID,
+                cooldown=5,
+                conditional_modifiers=(
+                    ActionConditionalModifier(
+                        "oraculo.eclipse_previsto.consumes_omen",
+                        ActionCondition(
+                            "class_resource_at_least",
+                            resource="omen_offensive",
+                        ),
+                        "attack_debuff",
+                        Decimal("0.15"),
+                    ),
+                ),
+            ),
+        ),
+        TRIADE_ENCARNADA_ART_ID: PathArtActionDefinition(
+            art_id=TRIADE_ENCARNADA_ART_ID,
+            character_class="oraculo",
+            path_id="invocador",
+            action=Action(
+                TRIADE_ENCARNADA_ART_ID,
+                "Tríade Encarnada",
+                Decimal(0),
+                cooldown=5,
+                target_mode="self",
+                manifestation_kind="triade_encarnada",
+            ),
+        ),
+        AURORA_GUARDIA_ART_ID: PathArtActionDefinition(
+            art_id=AURORA_GUARDIA_ART_ID,
+            character_class="luminar",
+            path_id="guardiao",
+            action=Action(
+                AURORA_GUARDIA_ART_ID,
+                "Aurora Guardiã",
+                Decimal(0),
+                heal_coefficient=Decimal("0.55"),
+                cooldown=5,
+                target_mode="all_allies",
+            ),
+        ),
+        VEREDITO_ART_ID: PathArtActionDefinition(
+            art_id=VEREDITO_ART_ID,
+            character_class="luminar",
+            path_id="inquisidor",
+            action=Action(
+                VEREDITO_ART_ID,
+                "Veredito",
+                Decimal("1.70"),
+                cooldown=5,
+                conditional_modifiers=(
+                    ActionConditionalModifier(
+                        "luminar.veredito.target_has_normal_debuff",
+                        ActionCondition("target_has_normal_debuff"),
+                        "crit_bonus",
+                        Decimal(10),
+                    ),
+                ),
             ),
         ),
     }

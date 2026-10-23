@@ -174,7 +174,7 @@ def test_path_art_pipeline_requires_registered_identity_and_current_path():
     with pytest.raises(ValueError, match="Path Art"):
         class_player_actions(
             "sentinela",
-            ("path_art.sentinela.devastador.ruptor",),
+            ("path_art.sentinela.devastador.inexistente",),
             selected_path="devastador",
         )
     with pytest.raises(ValueError, match="three unique Arts"):
