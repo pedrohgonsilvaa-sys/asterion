@@ -4,12 +4,18 @@ from uuid import UUID
 import pytest
 
 from asterion.domain.arts import (
+    AGOUREIRO_ART_IDS,
     ATIRADOR_ART_IDS,
     BASTIAO_ART_IDS,
     CARRASCO_ART_IDS,
     CONJURADOR_ART_IDS,
     DEVASTADOR_ART_IDS,
     FIRST_CLASS_ART_IDS,
+    GUARDIAO_ART_IDS,
+    INQUISIDOR_ART_IDS,
+    INVOCADOR_ART_IDS,
+    LUMINAR_ART_IDS,
+    ORACULO_ART_IDS,
     RASTREADOR_ART_IDS,
     RUNICO_ART_IDS,
     SABOTADOR_ART_IDS,
@@ -459,3 +465,140 @@ def test_runico_runa_de_guarda_targets_ally_and_uses_trama_barrier_power():
     restored = decode(encode(consumed), consumed.id, consumed.ruleset, consumed.version)
     assert restored.fighters["ally"].barriers[0].identity == ("player", art_id)
     assert restored.fighters["ally"].barrier == D(120)
+
+
+def test_agoureiro_mau_agouro_integrates_debuff_omen_and_public_talent_hooks():
+    art_id = AGOUREIRO_ART_IDS["mau_agouro"]
+    signal_id = ORACULO_ART_IDS["sinal_funesto"]
+    combat = _path_battle(
+        "oraculo",
+        "agoureiro",
+        art_id,
+        action_ids=(signal_id, art_id),
+        actor_talents=(
+            "talent.oraculo.leitura_dos_sinais",
+            "talent.oraculo.pressagio_cortante",
+            "talent.oraculo.profecia_dolorosa",
+        ),
+    )
+    marked = act(combat, signal_id, target_id="enemy")
+    assert marked.fighters["player"].path_state["omen_offensive"]["enemy"]["remaining"] > 0
+
+    resolved = act(marked, art_id, target_id="enemy")
+    event = next(event for event in resolved.events if event.action == art_id)
+    debuff = next(
+        effect
+        for effect in resolved.fighters["enemy"].effects
+        if effect.id == art_id and effect.stat == "attack"
+    )
+    assert event.calculated_damage > 0
+    assert event.applied_effect_magnitude == D("0.10")
+    assert event.applied_effect_duration == 2
+    assert debuff.magnitude == D("0.10")
+    assert event.path_power_multiplier == D("1.1832")  # 1.16 × Profecia Dolorosa 1.02.
+    assert event.path_per_bonus == D(2)  # Presságio Cortante remains a separate PER source.
+    assert event.class_resource_changes == (("omen_offensive", "enemy", 1, 0),)
+    assert "oraculo.leitura_dos_sinais" in event.path_triggers
+    assert resolved.fighters["player"].path_state["omen_offensive"]["enemy"]["remaining"] > 0
+
+
+def test_invocador_lobo_is_an_action_and_uses_existing_manifestation_state():
+    art_id = INVOCADOR_ART_IDS["lobo"]
+    combat = _path_battle("oraculo", "invocador", art_id)
+    actor = combat.fighters["player"]
+    initial_fighter_count = len(combat.fighters)
+    actor.path_state["manifestation_state"] = {
+        "kind": "coruja",
+        "remaining": 2,
+        "expires_opportunity": actor.opportunity + 2,
+    }
+
+    resolved = act(combat, art_id, target_id="enemy")
+    event = next(event for event in resolved.events if event.action == art_id)
+
+    assert event.calculated_damage > 0
+    assert event.path_power_multiplier == D("1.12")
+    assert "invocador.triade" in event.path_triggers
+    assert resolved.fighters["player"].path_state["manifestation_state"]["kind"] == "lobo"
+    assert len(resolved.fighters) == initial_fighter_count
+    assert all(fighter.id != "lobo" for fighter in resolved.fighters.values())
+
+    restored = decode(encode(resolved), resolved.id, resolved.ruleset, resolved.version)
+    assert restored.fighters["player"].path_state["manifestation_state"]["kind"] == "lobo"
+
+
+def test_guardiao_cura_solar_consumes_fulgor_for_healing_and_generates_julgamento_otherwise():
+    art_id = GUARDIAO_ART_IDS["cura_solar"]
+    fulgor_id = LUMINAR_ART_IDS["fulgor"]
+    combat = _path_battle(
+        "luminar",
+        "guardiao",
+        art_id,
+        action_ids=(fulgor_id, art_id),
+        include_ally=True,
+    )
+    prepared = act(combat, fulgor_id, target_id="enemy")
+    assert prepared.fighters["player"].path_state["luminar_state"]["kind"] == "fulgor"
+
+    healed = act(prepared, art_id, target_id="ally")
+    event = next(event for event in healed.events if event.action == art_id)
+    assert event.healed == D(115)
+    assert event.path_power_multiplier == D("1.15")
+    assert event.class_resource_changes == (("luminar_state", "player", 1, 0),)
+    assert "luminar_state" not in healed.fighters["player"].path_state
+
+    restored = decode(encode(healed), healed.id, healed.ruleset, healed.version)
+    assert restored.fighters["ally"].hp == D(615)
+    assert "luminar_state" not in restored.fighters["player"].path_state
+
+    without_fulgor = _path_battle(
+        "luminar", "guardiao", art_id, include_ally=True
+    )
+    renewed = act(without_fulgor, art_id, target_id="ally")
+    renewed_event = next(event for event in renewed.events if event.action == art_id)
+    assert renewed_event.healed == D(100)
+    assert renewed.fighters["player"].path_state["luminar_state"]["kind"] == "julgamento"
+    assert "luminar.julgamento_gerado" in renewed_event.path_triggers
+
+    zero_heal = _path_battle(
+        "luminar",
+        "guardiao",
+        art_id,
+        action_ids=(fulgor_id, art_id),
+        include_ally=True,
+    )
+    zero_prepared = act(zero_heal, fulgor_id, target_id="enemy")
+    zero_prepared.fighters["ally"].hp = zero_prepared.fighters["ally"].stats.hp
+    zero_result = act(zero_prepared, art_id, target_id="ally")
+    zero_event = next(event for event in zero_result.events if event.action == art_id)
+    assert zero_event.healed == D(0)
+    assert zero_event.class_resource_changes == (("luminar_state", "player", 1, 0),)
+    assert "luminar_state" not in zero_result.fighters["player"].path_state
+
+
+def test_inquisidor_lanca_de_luz_consumes_julgamento_and_generates_fulgor_when_unprepared():
+    art_id = INQUISIDOR_ART_IDS["lanca_de_luz"]
+    renovacao_id = LUMINAR_ART_IDS["renovacao"]
+    combat = _path_battle(
+        "luminar",
+        "inquisidor",
+        art_id,
+        action_ids=(renovacao_id, art_id),
+        include_ally=True,
+    )
+    prepared = act(combat, renovacao_id, target_id="ally")
+    assert prepared.fighters["player"].path_state["luminar_state"]["kind"] == "julgamento"
+
+    consumed = act(prepared, art_id, target_id="enemy")
+    event = next(event for event in consumed.events if event.action == art_id)
+    assert event.calculated_damage > 0
+    assert event.path_power_multiplier == D("1.15")
+    assert event.class_resource_changes == (("luminar_state", "player", 1, 0),)
+    assert "luminar_state" not in consumed.fighters["player"].path_state
+
+    without_julgamento = _path_battle("luminar", "inquisidor", art_id)
+    renewed = act(without_julgamento, art_id, target_id="enemy")
+    renewed_event = next(event for event in renewed.events if event.action == art_id)
+    assert renewed_event.path_power_multiplier == D(1)
+    assert renewed.fighters["player"].path_state["luminar_state"]["kind"] == "fulgor"
+    assert "luminar.fulgor_gerado" in renewed_event.path_triggers

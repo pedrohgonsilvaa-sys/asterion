@@ -14,6 +14,7 @@ from asterion.application.combat_configuration_guard import CombatConfigurationL
 from asterion.application.equipment import equipment_instance_payload
 from asterion.domain.arts import (
     ACTIVE_ART_IDS_BY_CLASS,
+    AGOUREIRO_ART_IDS,
     ATIRADOR_ART_IDS,
     BASTIAO_ART_IDS,
     CARRASCO_ART_IDS,
@@ -21,6 +22,9 @@ from asterion.domain.arts import (
     DEVASTADOR_ART_IDS,
     ERRANTE_ART_IDS,
     FIRST_CLASS_ART_IDS,
+    GUARDIAO_ART_IDS,
+    INQUISIDOR_ART_IDS,
+    INVOCADOR_ART_IDS,
     RASTREADOR_ART_IDS,
     RUNICO_ART_IDS,
     SABOTADOR_ART_IDS,
@@ -412,6 +416,34 @@ async def test_devastador_ariete_unlock_path_class_and_weapon_gates(database):
             772043,
             None,
         ),
+        (
+            "agoureiro",
+            AGOUREIRO_ART_IDS["mau_agouro"],
+            "oraculo",
+            772044,
+            None,
+        ),
+        (
+            "invocador",
+            INVOCADOR_ART_IDS["lobo"],
+            "oraculo",
+            772045,
+            None,
+        ),
+        (
+            "guardiao",
+            GUARDIAO_ART_IDS["cura_solar"],
+            "luminar",
+            772046,
+            None,
+        ),
+        (
+            "inquisidor",
+            INQUISIDOR_ART_IDS["lanca_de_luz"],
+            "luminar",
+            772047,
+            None,
+        ),
     ],
 )
 async def test_first_wave_path_arts_unlock_at_12_and_persist(
@@ -440,6 +472,10 @@ async def test_first_wave_path_arts_unlock_at_12_and_persist(
         "rastreador": "atirador",
         "conjurador": "runico",
         "runico": "conjurador",
+        "agoureiro": "invocador",
+        "invocador": "agoureiro",
+        "guardiao": "inquisidor",
+        "inquisidor": "guardiao",
     }[path]
     await _seed_character(
         database,

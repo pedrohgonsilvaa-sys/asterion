@@ -173,6 +173,22 @@ RUNICO_ART_IDS = {
     "runa_de_guarda": "path_art.tecelao.runico.runa_de_guarda",
 }
 
+AGOUREIRO_ART_IDS = {
+    "mau_agouro": "path_art.oraculo.agoureiro.mau_agouro",
+}
+
+INVOCADOR_ART_IDS = {
+    "lobo": "path_art.oraculo.invocador.lobo",
+}
+
+GUARDIAO_ART_IDS = {
+    "cura_solar": "path_art.luminar.guardiao.cura_solar",
+}
+
+INQUISIDOR_ART_IDS = {
+    "lanca_de_luz": "path_art.luminar.inquisidor.lanca_de_luz",
+}
+
 
 ACTIVE_ART_DEFINITIONS = {
     art_id: ActiveArtDefinition(art_id, character_class, 1)
@@ -214,12 +230,18 @@ PATH_ART_IDS_BY_PATH = {
     "rastreador": tuple(RASTREADOR_ART_IDS.values()),
     "conjurador": tuple(CONJURADOR_ART_IDS.values()),
     "runico": tuple(RUNICO_ART_IDS.values()),
+    "agoureiro": tuple(AGOUREIRO_ART_IDS.values()),
+    "invocador": tuple(INVOCADOR_ART_IDS.values()),
+    "guardiao": tuple(GUARDIAO_ART_IDS.values()),
+    "inquisidor": tuple(INQUISIDOR_ART_IDS.values()),
 }
 PATH_ART_IDS_BY_CLASS = {
     "sentinela": (*BASTIAO_ART_IDS.values(), *DEVASTADOR_ART_IDS.values()),
     "errante": (*CARRASCO_ART_IDS.values(), *SABOTADOR_ART_IDS.values()),
     "vigia": (*ATIRADOR_ART_IDS.values(), *RASTREADOR_ART_IDS.values()),
     "tecelao": (*CONJURADOR_ART_IDS.values(), *RUNICO_ART_IDS.values()),
+    "oraculo": (*AGOUREIRO_ART_IDS.values(), *INVOCADOR_ART_IDS.values()),
+    "luminar": (*GUARDIAO_ART_IDS.values(), *INQUISIDOR_ART_IDS.values()),
 }
 ACTIVE_ART_IDS_BY_CLASS = {
     character_class: tuple(
@@ -306,6 +328,30 @@ ACTIVE_ART_DEFINITIONS.update(
             "tecelao",
             12,
             path_id="runico",
+        ),
+        AGOUREIRO_ART_IDS["mau_agouro"]: ActiveArtDefinition(
+            AGOUREIRO_ART_IDS["mau_agouro"],
+            "oraculo",
+            12,
+            path_id="agoureiro",
+        ),
+        INVOCADOR_ART_IDS["lobo"]: ActiveArtDefinition(
+            INVOCADOR_ART_IDS["lobo"],
+            "oraculo",
+            12,
+            path_id="invocador",
+        ),
+        GUARDIAO_ART_IDS["cura_solar"]: ActiveArtDefinition(
+            GUARDIAO_ART_IDS["cura_solar"],
+            "luminar",
+            12,
+            path_id="guardiao",
+        ),
+        INQUISIDOR_ART_IDS["lanca_de_luz"]: ActiveArtDefinition(
+            INQUISIDOR_ART_IDS["lanca_de_luz"],
+            "luminar",
+            12,
+            path_id="inquisidor",
         ),
     }
 )

@@ -1,11 +1,24 @@
 from uuid import uuid4
 
+import pytest
+
 from asterion.application.doctrines import DoctrineCollectionView, DoctrineView
 from asterion.bot.doctrines_ui import doctrine_art_ids, render_art_choices
 from asterion.domain.arts import (
     ACTIVE_ART_DEFINITIONS,
+    AGOUREIRO_ART_IDS,
     ART_IDS_BY_CLASS,
+    ATIRADOR_ART_IDS,
+    BASTIAO_ART_IDS,
+    CARRASCO_ART_IDS,
+    CONJURADOR_ART_IDS,
     DEVASTADOR_ART_IDS,
+    GUARDIAO_ART_IDS,
+    INQUISIDOR_ART_IDS,
+    INVOCADOR_ART_IDS,
+    RASTREADOR_ART_IDS,
+    RUNICO_ART_IDS,
+    SABOTADOR_ART_IDS,
     SENTINEL_ART_IDS,
     VIGIA_ART_IDS,
 )
@@ -97,3 +110,49 @@ def test_doctrine_offers_tiro_calculado_to_vigia_at_level_18_without_path_gate()
     screen = render_art_choices(available_view, available_doctrine, 1)
     labels = [button.text for row in screen.keyboard.inline_keyboard for button in row]
     assert any("Tiro Calculado" in label for label in labels)
+
+
+@pytest.mark.parametrize(
+    ("character_class", "path", "art_id", "label"),
+    [
+        ("sentinela", "bastiao", BASTIAO_ART_IDS["escudo_de_cinzas"], "Escudo de Cinzas"),
+        ("errante", "carrasco", CARRASCO_ART_IDS["corte_de_execucao"], "Corte de Execução"),
+        ("errante", "sabotador", SABOTADOR_ART_IDS["veneno_velado"], "Veneno Velado"),
+        ("vigia", "atirador", ATIRADOR_ART_IDS["tiro_perfurante"], "Tiro Perfurante"),
+        ("vigia", "rastreador", RASTREADOR_ART_IDS["flecha_serrilhada"], "Flecha Serrilhada"),
+        ("tecelao", "conjurador", CONJURADOR_ART_IDS["estilhaco_do_veu"], "Estilhaço do Véu"),
+        ("tecelao", "runico", RUNICO_ART_IDS["runa_de_guarda"], "Runa de Guarda"),
+        ("oraculo", "agoureiro", AGOUREIRO_ART_IDS["mau_agouro"], "Mau Agouro"),
+        ("oraculo", "invocador", INVOCADOR_ART_IDS["lobo"], "Lobo"),
+        ("luminar", "guardiao", GUARDIAO_ART_IDS["cura_solar"], "Cura Solar"),
+        ("luminar", "inquisidor", INQUISIDOR_ART_IDS["lanca_de_luz"], "Lança de Luz"),
+    ],
+)
+def test_doctrine_ui_lists_first_wave_path_art_for_its_class_and_path(
+    character_class, path, art_id, label
+):
+    view = DoctrineCollectionView(
+        character_name="Aventureiro",
+        character_class=character_class,
+        selected_path=path,
+        configuration_version=1,
+        foreground=False,
+        current_configuration={"path": path, "equipment": {}, "arts": {}, "talents": []},
+        doctrines=(),
+        crowns=0,
+        level=12,
+    )
+    doctrine = DoctrineView(
+        doctrine_id=uuid4(),
+        name="Build",
+        revision=1,
+        configuration={"path": path, "equipment": {}, "arts": {}, "talents": []},
+        is_current=False,
+        incomplete_reason=None,
+        can_apply=True,
+    )
+
+    assert art_id in doctrine_art_ids(view, doctrine)
+    screen = render_art_choices(view, doctrine, 1)
+    labels = [button.text for row in screen.keyboard.inline_keyboard for button in row]
+    assert any(label in button_label for button_label in labels)

@@ -11,11 +11,15 @@ from decimal import Decimal
 from types import MappingProxyType
 
 from asterion.domain.arts import (
+    AGOUREIRO_ART_IDS,
     ATIRADOR_ART_IDS,
     BASTIAO_ART_IDS,
     CARRASCO_ART_IDS,
     CONJURADOR_ART_IDS,
     DEVASTADOR_ART_IDS,
+    GUARDIAO_ART_IDS,
+    INQUISIDOR_ART_IDS,
+    INVOCADOR_ART_IDS,
     RASTREADOR_ART_IDS,
     RUNICO_ART_IDS,
     SABOTADOR_ART_IDS,
@@ -43,6 +47,10 @@ TIRO_PERFURANTE_ART_ID = ATIRADOR_ART_IDS["tiro_perfurante"]
 FLECHA_SERRILHADA_ART_ID = RASTREADOR_ART_IDS["flecha_serrilhada"]
 ESTILHACO_DO_VEU_ART_ID = CONJURADOR_ART_IDS["estilhaco_do_veu"]
 RUNA_DE_GUARDA_ART_ID = RUNICO_ART_IDS["runa_de_guarda"]
+MAU_AGOURO_ART_ID = AGOUREIRO_ART_IDS["mau_agouro"]
+LOBO_ART_ID = INVOCADOR_ART_IDS["lobo"]
+CURA_SOLAR_ART_ID = GUARDIAO_ART_IDS["cura_solar"]
+LANCA_DE_LUZ_ART_ID = INQUISIDOR_ART_IDS["lanca_de_luz"]
 
 PATH_ART_ACTIONS = MappingProxyType(
     {
@@ -155,6 +163,57 @@ PATH_ART_ACTIONS = MappingProxyType(
                 target_mode="ally",
                 target_barrier_coefficient=Decimal("1.05"),
                 target_barrier_duration=2,
+            ),
+        ),
+        MAU_AGOURO_ART_ID: PathArtActionDefinition(
+            art_id=MAU_AGOURO_ART_ID,
+            character_class="oraculo",
+            path_id="agoureiro",
+            action=Action(
+                MAU_AGOURO_ART_ID,
+                "Mau Agouro",
+                Decimal("0.95"),
+                attack_debuff=Decimal("0.10"),
+                duration=2,
+                cooldown=2,
+                effect_stat="attack",
+                effect_id=MAU_AGOURO_ART_ID,
+            ),
+        ),
+        LOBO_ART_ID: PathArtActionDefinition(
+            art_id=LOBO_ART_ID,
+            character_class="oraculo",
+            path_id="invocador",
+            action=Action(
+                LOBO_ART_ID,
+                "Lobo",
+                Decimal("1.25"),
+                cooldown=2,
+                manifestation_kind="lobo",
+            ),
+        ),
+        CURA_SOLAR_ART_ID: PathArtActionDefinition(
+            art_id=CURA_SOLAR_ART_ID,
+            character_class="luminar",
+            path_id="guardiao",
+            action=Action(
+                CURA_SOLAR_ART_ID,
+                "Cura Solar",
+                Decimal(0),
+                cooldown=2,
+                target_mode="ally",
+                heal_coefficient=Decimal("1.00"),
+            ),
+        ),
+        LANCA_DE_LUZ_ART_ID: PathArtActionDefinition(
+            art_id=LANCA_DE_LUZ_ART_ID,
+            character_class="luminar",
+            path_id="inquisidor",
+            action=Action(
+                LANCA_DE_LUZ_ART_ID,
+                "Lança de Luz",
+                Decimal("1.35"),
+                cooldown=2,
             ),
         ),
     }
