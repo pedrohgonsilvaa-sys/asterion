@@ -1401,6 +1401,7 @@ _CLASS_MECHANIC_COMBAT_FLAGS = (
     "luminar_cycle_used",
     "aim_acquisition_used",
     "vigia_antecipacao_used",
+    "oraculo_destino_adiado_used",
 )
 
 
@@ -3048,11 +3049,17 @@ def _tick_path_resources(state: Combat, actor_key: str) -> None:
                 state_data.pop(key, None)
         else:
             entry["remaining"] = remaining
+    # If multiple Omens reach their natural expiry on the same Oráculo
+    # opportunity, resolve the single Presságio Flexível allowance in stable
+    # order: offensive before defensive, then target entity ID. The GDD grants
+    # one shared renewal, not one per kind or target.
     for key in ("omen_offensive", "omen_defensive"):
         entries = state_data.get(key)
         if not isinstance(entries, dict):
             continue
-        for target_id, entry in tuple(entries.items()):
+        for target_id, entry in sorted(
+            tuple(entries.items()), key=lambda item: str(item[0])
+        ):
             if not isinstance(entry, dict):
                 entries.pop(target_id, None)
                 continue
@@ -3618,6 +3625,9 @@ def _prepare_path_action(
                         else D("1.12")
                     )
                     if _has_talent(actor, "profecia_dolorosa"):
+                        # The catalog says +2% potency (not +2 p.p. potency),
+                        # so this is a relative 1.02 multiplier on the Omen-
+                        # empowered component, after its path-specific factor.
                         entry["damage_power"] *= D("1.02")
                     if _has_talent(actor, "pressagio_cortante"):
                         entry["per_bonus"] += D(2)
@@ -5108,6 +5118,27 @@ def _perform(
                 ).to_integral_value(rounding=ROUND_FLOOR)
             )
             target.path_state["vigia_antecipacao_used"] = True
+        # Destino Adiado shares Antecipação's first-positive-component timing:
+        # after existing direct reductions, before Barrier absorption. Keep its
+        # combat-scoped use separate so another Class's first-hit Talent cannot
+        # consume the Oráculo's allowance.
+        if (
+            direct_eligible
+            and damage > 0
+            and target.character_class == "oraculo"
+            and _has_talent(target, "destino_adiado")
+            and not target.path_state.get("oraculo_destino_adiado_used")
+        ):
+            direct_final_reduction = min(
+                D(1), direct_final_reduction + D("0.07")
+            )
+            damage = int(
+                (
+                    D(direct_damage_before_final_reduction)
+                    * (D(1) - direct_final_reduction)
+                ).to_integral_value(rounding=ROUND_FLOOR)
+            )
+            target.path_state["oraculo_destino_adiado_used"] = True
         path_final_damage_bonus = D(target_path.get("final_damage_bonus", ZERO))
         path_triggers = list(target_path.get("triggers", ()))
         if (
