@@ -154,7 +154,7 @@ def _compact_trace(trace: list[dict]) -> list[dict]:
                     "round", "opportunity", "action", "target", "reason", "legal",
                     "rejection", "hp_before", "hp_after", "barrier_before",
                     "barrier_after", "boss_hp_before", "boss_hp_after",
-                    "boss_barrier_after", "phase_before", "phase_after",
+                    "boss_barrier_before", "boss_barrier_after", "phase_before", "phase_after",
                     "connections_before", "connections_after", "active_connections_before",
                     "active_connections_after", "aura_reduction_before",
                     "aura_reduction_after", "rng_cursor_before", "rng_cursor_after",
@@ -349,9 +349,14 @@ def _simulate(initial, *, seed: int, connection_plan: str, defense_plan: str,
     destroyed: set[str] = set()
     initial_boss_hp = state.fighters["enemy"].hp
     initial_player_hp = state.fighters["player"].hp
-    outgoing = D(0)
+    boss_direct = D(0)
+    boss_effective = D(0)
+    boss_absorbed = D(0)
+    connections_direct = D(0)
+    connections_effective = D(0)
+    connections_absorbed = D(0)
     incoming = D(0)
-    absorbed = D(0)
+    player_absorbed = D(0)
     heals_used = 0
 
     for _ in range(max_actions):
@@ -393,6 +398,7 @@ def _simulate(initial, *, seed: int, connection_plan: str, defense_plan: str,
             "hp_before": str(before_player.hp),
             "barrier_before": str(before_player.barrier),
             "boss_hp_before": str(before_boss.hp),
+            "boss_barrier_before": str(before_boss.barrier),
             "phase_before": state.phase_id,
             "connections_before": {key: str(value) for key, value in before_connections.items()},
             "active_connections_before": len(_active_connections(state)),
@@ -429,11 +435,19 @@ def _simulate(initial, *, seed: int, connection_plan: str, defense_plan: str,
         added_events = updated.events[event_start:]
         added_mechanics = updated.mechanic_events[mechanic_start:]
         for event in added_events:
-            if event.actor == "player" and event.effective_damage > 0:
-                outgoing += D(event.effective_damage)
-            if event.target == "player" and event.effective_damage > 0:
-                incoming += D(event.effective_damage)
-                absorbed += D(event.barrier_absorbed)
+            if event.actor == "player":
+                if event.target == "enemy":
+                    boss_direct += D(event.damage)
+                    boss_effective += D(event.effective_damage)
+                    boss_absorbed += D(event.barrier_absorbed)
+                elif event.target in CONNECTIONS:
+                    connections_direct += D(event.damage)
+                    connections_effective += D(event.effective_damage)
+                    connections_absorbed += D(event.barrier_absorbed)
+            if event.target == "player":
+                if event.effective_damage > 0:
+                    incoming += D(event.effective_damage)
+                player_absorbed += D(event.barrier_absorbed)
         for key in CONNECTIONS:
             if before_connections[key] > 0 and updated.fighters[key].hp <= 0:
                 destroyed.add(key)
@@ -482,11 +496,17 @@ def _simulate(initial, *, seed: int, connection_plan: str, defense_plan: str,
         "initial_player_hp": str(initial_player_hp),
         "player_hp_remaining": str(state.fighters["player"].hp),
         "player_damage_received": str(incoming),
-        "damage_absorbed": str(absorbed),
+        "damage_absorbed": str(player_absorbed),
+        "player_barrier_absorbed": str(player_absorbed),
         "heals_used": heals_used,
         "initial_boss_hp": str(initial_boss_hp),
         "boss_hp_remaining": str(state.fighters["enemy"].hp),
-        "boss_damage_dealt": str(outgoing),
+        "boss_damage_dealt": str(boss_effective),
+        "boss_direct_damage": str(boss_direct),
+        "boss_barrier_absorbed": str(boss_absorbed),
+        "connection_damage_dealt": str(connections_effective),
+        "connection_direct_damage": str(connections_direct),
+        "connection_barrier_absorbed": str(connections_absorbed),
         "boss_net_hp_removed": str(initial_boss_hp - state.fighters["enemy"].hp),
         "connections_destroyed": tuple(sorted(destroyed)),
         "connection_hp_remaining": {
@@ -844,6 +864,9 @@ async def test_p12_deterministic_lab_from_one_organic_checkpoint(database, monke
                     "average_player_damage": _average_decimal(
                         result["player_damage_received"] for result in cohort
                     ),
+                    "average_connection_damage": _average_decimal(
+                        result["connection_damage_dealt"] for result in cohort
+                    ),
                     "average_heals": _average_decimal(
                         result["heals_used"] for result in cohort
                     ),
@@ -1019,7 +1042,10 @@ async def test_p12_deterministic_lab_from_one_organic_checkpoint(database, monke
                         for key in (
                             "seed", "connection_plan", "defense_plan", "rounds",
                             "phase_reached", "boss_hp_remaining", "boss_damage_dealt",
-                            "player_hp_remaining", "player_damage_received",
+                            "boss_direct_damage", "connection_damage_dealt",
+                            "connection_direct_damage", "boss_barrier_absorbed",
+                            "connection_barrier_absorbed", "player_hp_remaining",
+                            "player_damage_received",
                             "damage_absorbed", "heals_used", "connections_destroyed",
                             "active_connections", "aura_reduction", "defeat_cause",
                         )
