@@ -11,9 +11,13 @@ from decimal import Decimal
 from types import MappingProxyType
 
 from asterion.domain.arts import (
+    ATIRADOR_ART_IDS,
     BASTIAO_ART_IDS,
     CARRASCO_ART_IDS,
+    CONJURADOR_ART_IDS,
     DEVASTADOR_ART_IDS,
+    RASTREADOR_ART_IDS,
+    RUNICO_ART_IDS,
     SABOTADOR_ART_IDS,
 )
 from asterion.domain.combat import (
@@ -35,6 +39,10 @@ ARIETE_ART_ID = DEVASTADOR_ART_IDS["ariete"]
 ESCUDO_DE_CINZAS_ART_ID = BASTIAO_ART_IDS["escudo_de_cinzas"]
 CORTE_DE_EXECUCAO_ART_ID = CARRASCO_ART_IDS["corte_de_execucao"]
 VENENO_VELADO_ART_ID = SABOTADOR_ART_IDS["veneno_velado"]
+TIRO_PERFURANTE_ART_ID = ATIRADOR_ART_IDS["tiro_perfurante"]
+FLECHA_SERRILHADA_ART_ID = RASTREADOR_ART_IDS["flecha_serrilhada"]
+ESTILHACO_DO_VEU_ART_ID = CONJURADOR_ART_IDS["estilhaco_do_veu"]
+RUNA_DE_GUARDA_ART_ID = RUNICO_ART_IDS["runa_de_guarda"]
 
 PATH_ART_ACTIONS = MappingProxyType(
     {
@@ -97,6 +105,56 @@ PATH_ART_ACTIONS = MappingProxyType(
                 cooldown=2,
                 native_dot_kind="poison",
                 native_dot_stacks=1,
+            ),
+        ),
+        TIRO_PERFURANTE_ART_ID: PathArtActionDefinition(
+            art_id=TIRO_PERFURANTE_ART_ID,
+            character_class="vigia",
+            path_id="atirador",
+            action=Action(
+                TIRO_PERFURANTE_ART_ID,
+                "Tiro Perfurante",
+                Decimal("1.30"),
+                cooldown=2,
+                actor_per_bonus=Decimal(10),
+            ),
+        ),
+        FLECHA_SERRILHADA_ART_ID: PathArtActionDefinition(
+            art_id=FLECHA_SERRILHADA_ART_ID,
+            character_class="vigia",
+            path_id="rastreador",
+            action=Action(
+                FLECHA_SERRILHADA_ART_ID,
+                "Flecha Serrilhada",
+                Decimal("0.90"),
+                cooldown=2,
+                native_dot_kind="bleed",
+                native_dot_stacks=1,
+            ),
+        ),
+        ESTILHACO_DO_VEU_ART_ID: PathArtActionDefinition(
+            art_id=ESTILHACO_DO_VEU_ART_ID,
+            character_class="tecelao",
+            path_id="conjurador",
+            action=Action(
+                ESTILHACO_DO_VEU_ART_ID,
+                "Estilhaço do Véu",
+                Decimal("1.40"),
+                cooldown=2,
+            ),
+        ),
+        RUNA_DE_GUARDA_ART_ID: PathArtActionDefinition(
+            art_id=RUNA_DE_GUARDA_ART_ID,
+            character_class="tecelao",
+            path_id="runico",
+            action=Action(
+                RUNA_DE_GUARDA_ART_ID,
+                "Runa de Guarda",
+                Decimal(0),
+                cooldown=3,
+                target_mode="ally",
+                target_barrier_coefficient=Decimal("1.05"),
+                target_barrier_duration=2,
             ),
         ),
     }

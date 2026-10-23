@@ -157,6 +157,22 @@ SABOTADOR_ART_IDS = {
     "veneno_velado": "path_art.errante.sabotador.veneno_velado",
 }
 
+ATIRADOR_ART_IDS = {
+    "tiro_perfurante": "path_art.vigia.atirador.tiro_perfurante",
+}
+
+RASTREADOR_ART_IDS = {
+    "flecha_serrilhada": "path_art.vigia.rastreador.flecha_serrilhada",
+}
+
+CONJURADOR_ART_IDS = {
+    "estilhaco_do_veu": "path_art.tecelao.conjurador.estilhaco_do_veu",
+}
+
+RUNICO_ART_IDS = {
+    "runa_de_guarda": "path_art.tecelao.runico.runa_de_guarda",
+}
+
 
 ACTIVE_ART_DEFINITIONS = {
     art_id: ActiveArtDefinition(art_id, character_class, 1)
@@ -194,10 +210,16 @@ PATH_ART_IDS_BY_PATH = {
     "devastador": tuple(DEVASTADOR_ART_IDS.values()),
     "carrasco": tuple(CARRASCO_ART_IDS.values()),
     "sabotador": tuple(SABOTADOR_ART_IDS.values()),
+    "atirador": tuple(ATIRADOR_ART_IDS.values()),
+    "rastreador": tuple(RASTREADOR_ART_IDS.values()),
+    "conjurador": tuple(CONJURADOR_ART_IDS.values()),
+    "runico": tuple(RUNICO_ART_IDS.values()),
 }
 PATH_ART_IDS_BY_CLASS = {
     "sentinela": (*BASTIAO_ART_IDS.values(), *DEVASTADOR_ART_IDS.values()),
     "errante": (*CARRASCO_ART_IDS.values(), *SABOTADOR_ART_IDS.values()),
+    "vigia": (*ATIRADOR_ART_IDS.values(), *RASTREADOR_ART_IDS.values()),
+    "tecelao": (*CONJURADOR_ART_IDS.values(), *RUNICO_ART_IDS.values()),
 }
 ACTIVE_ART_IDS_BY_CLASS = {
     character_class: tuple(
@@ -254,6 +276,36 @@ ACTIVE_ART_DEFINITIONS.update(
             12,
             path_id="sabotador",
             weapon_requirement=frozenset({"weapon.compat.melee"}),
+        ),
+        ATIRADOR_ART_IDS["tiro_perfurante"]: ActiveArtDefinition(
+            ATIRADOR_ART_IDS["tiro_perfurante"],
+            "vigia",
+            12,
+            path_id="atirador",
+            weapon_requirement=frozenset(
+                {"weapon.compat.bow", "weapon.compat.crossbow"}
+            ),
+        ),
+        RASTREADOR_ART_IDS["flecha_serrilhada"]: ActiveArtDefinition(
+            RASTREADOR_ART_IDS["flecha_serrilhada"],
+            "vigia",
+            12,
+            path_id="rastreador",
+            weapon_requirement=frozenset(
+                {"weapon.compat.bow", "weapon.compat.crossbow"}
+            ),
+        ),
+        CONJURADOR_ART_IDS["estilhaco_do_veu"]: ActiveArtDefinition(
+            CONJURADOR_ART_IDS["estilhaco_do_veu"],
+            "tecelao",
+            12,
+            path_id="conjurador",
+        ),
+        RUNICO_ART_IDS["runa_de_guarda"]: ActiveArtDefinition(
+            RUNICO_ART_IDS["runa_de_guarda"],
+            "tecelao",
+            12,
+            path_id="runico",
         ),
     }
 )

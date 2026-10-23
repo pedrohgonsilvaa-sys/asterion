@@ -4,11 +4,16 @@ from uuid import UUID
 import pytest
 
 from asterion.domain.arts import (
+    ATIRADOR_ART_IDS,
     BASTIAO_ART_IDS,
     CARRASCO_ART_IDS,
+    CONJURADOR_ART_IDS,
     DEVASTADOR_ART_IDS,
     FIRST_CLASS_ART_IDS,
+    RASTREADOR_ART_IDS,
+    RUNICO_ART_IDS,
     SABOTADOR_ART_IDS,
+    TECELAO_ART_IDS,
 )
 from asterion.domain.class_trials import class_player_actions
 from asterion.domain.combat import Combat, Fighter, act, allowed_actions, start_combat
@@ -28,7 +33,17 @@ D = Decimal
 ARIETE_ID = DEVASTADOR_ART_IDS["ariete"]
 
 
-def _path_battle(character_class: str, path_id: str, art_id: str, *, target_hp=1000):
+def _path_battle(
+    character_class: str,
+    path_id: str,
+    art_id: str,
+    *,
+    target_hp=1000,
+    action_ids: tuple[str, ...] | None = None,
+    target_aim_stacks: int = 0,
+    include_ally: bool = False,
+    actor_talents: tuple[str, ...] = (),
+):
     player = Fighter(
         id="player",
         name=character_class,
@@ -37,6 +52,7 @@ def _path_battle(character_class: str, path_id: str, art_id: str, *, target_hp=1
         hp=D(1000),
         character_class=character_class,
         selected_path=path_id,
+        talent_ids=actor_talents,
         takes_turn=True,
     )
     enemy = Fighter(
@@ -50,12 +66,35 @@ def _path_battle(character_class: str, path_id: str, art_id: str, *, target_hp=1
         side="enemy",
         takes_turn=False,
     )
+    if target_aim_stacks:
+        enemy.path_state["aim_from"] = {
+            "player": {
+                "stacks": target_aim_stacks,
+                "remaining": 2,
+                "applied_opportunity": 0,
+            }
+        }
+    fighters = {"player": player, "enemy": enemy}
+    if include_ally:
+        fighters["ally"] = Fighter(
+            id="ally",
+            name="Aliado",
+            level=20,
+            stats=CombatStats(D(1000), D(50), D(100), D(50)),
+            hp=D(500),
+            side="player",
+            takes_turn=False,
+        )
     return start_combat(
         Combat(
             UUID("317d88a1-877c-4bc5-ae77-ae87c90a9e21"),
             CURRENT_COMBAT_RULESET,
-            {"player": player, "enemy": enemy},
-            class_player_actions(character_class, (art_id,), selected_path=path_id),
+            fighters,
+            class_player_actions(
+                character_class,
+                action_ids or (art_id,),
+                selected_path=path_id,
+            ),
             {},
             (),
         )
@@ -320,3 +359,103 @@ def test_sabotador_veneno_velado_applies_normal_poison_and_reconnects():
     restored = decode(encode(updated), updated.id, updated.ruleset, updated.version)
     assert restored.dot_states["enemy"][0].instance_id == poison.instance_id
     assert restored.dot_states["enemy"][0].remaining == 3
+
+
+def test_atirador_tiro_perfurante_adds_action_precision_and_uses_mira_perfeita():
+    art_id = ATIRADOR_ART_IDS["tiro_perfurante"]
+    combat = _path_battle(
+        "vigia", "atirador", art_id, target_aim_stacks=2
+    )
+    action = combat.player_actions[art_id]
+    updated = act(combat, art_id, target_id="enemy")
+    event = next(event for event in updated.events if event.action == art_id)
+
+    assert action.coefficient == D("1.30")
+    assert action.actor_per_bonus == D(10)
+    assert event.aim_stacks == 3  # post-resolution stack; the snapshot bonus is below.
+    assert event.path_per_bonus == D(6)
+    assert event.calculated_damage == direct_damage(
+        D(100), D("1.30"), D(100), 20, penetration=D(16)
+    )
+    assert updated.fighters["player"].cooldowns[art_id] == 3
+
+
+def test_rastreador_flecha_serrilhada_applies_bleed_and_one_valid_mira():
+    art_id = RASTREADOR_ART_IDS["flecha_serrilhada"]
+    combat = _path_battle("vigia", "rastreador", art_id)
+    updated = act(combat, art_id, target_id="enemy")
+    event = next(event for event in updated.events if event.action == art_id)
+
+    assert event.dot_kind == "bleed"
+    assert event.dot_application_event_id
+    assert updated.dot_states["enemy"][0].kind == "bleed"
+    assert updated.fighters["enemy"].path_state["aim_from"]["player"]["stacks"] == 1
+    assert "vigia.mira_gerada" in event.path_triggers
+    assert updated.fighters["player"].cooldowns[art_id] == 3
+
+    blocked = _path_battle("vigia", "rastreador", art_id)
+    blocked.fighters["enemy"].ward_charges = 1
+    blocked.fighters["enemy"].ward_remaining = 2
+    blocked_result = act(blocked, art_id, target_id="enemy")
+    blocked_event = next(event for event in blocked_result.events if event.action == art_id)
+    assert not blocked_event.dot_application_event_id
+    assert not blocked_result.dot_states.get("enemy")
+    # A successful direct hit still receives only its normal base Mira; the
+    # blocked DoT does not produce an additional Rastros Múltiplos grant.
+    assert blocked_result.fighters["enemy"].path_state["aim_from"]["player"]["stacks"] == 1
+
+
+def test_conjurador_estilhaco_consumes_trama_from_another_art_once():
+    art_id = CONJURADOR_ART_IDS["estilhaco_do_veu"]
+    fio_id = TECELAO_ART_IDS["fio_cortante"]
+    combat = _path_battle(
+        "tecelao",
+        "conjurador",
+        art_id,
+        action_ids=(fio_id, art_id),
+    )
+    prepared = act(combat, fio_id, target_id="enemy")
+    trama = prepared.fighters["player"].path_state["trama_state"]
+    assert trama["origin_art"] == fio_id
+    assert trama["remaining"] == 2
+
+    consumed = act(prepared, art_id, target_id="enemy")
+    event = next(event for event in consumed.events if event.action == art_id)
+    assert event.path_power_multiplier == D("1.15")
+    assert event.damage_power_multiplier == D(1)
+    assert event.class_resource_changes == (("trama", "player", 1, 0),)
+    assert "trama_state" not in consumed.fighters["player"].path_state
+
+    restored = decode(encode(consumed), consumed.id, consumed.ruleset, consumed.version)
+    assert "trama_state" not in restored.fighters["player"].path_state
+
+
+def test_runico_runa_de_guarda_targets_ally_and_uses_trama_barrier_power():
+    art_id = RUNICO_ART_IDS["runa_de_guarda"]
+    veil_id = TECELAO_ART_IDS["veu_entrelacado"]
+    combat = _path_battle(
+        "tecelao",
+        "runico",
+        art_id,
+        action_ids=(veil_id, art_id),
+        include_ally=True,
+    )
+    prepared = act(combat, veil_id, target_id="player")
+    assert prepared.fighters["player"].path_state["trama_state"]["origin_art"] == veil_id
+
+    consumed = act(prepared, art_id, target_id="ally")
+    event = next(event for event in consumed.events if event.action == art_id)
+    assert event.target == "ally"
+    assert event.barrier_value == D(120)
+    assert event.barrier_duration == 2
+    assert event.barrier_power_multiplier == D("1.15")
+    assert event.class_resource_changes == (("trama", "player", 1, 0),)
+    ally_barrier = consumed.fighters["ally"].barriers[0]
+    assert ally_barrier.identity == ("player", art_id)
+    assert ally_barrier.value == D(120)
+    assert ally_barrier.remaining == 2
+    assert "trama_state" not in consumed.fighters["player"].path_state
+
+    restored = decode(encode(consumed), consumed.id, consumed.ruleset, consumed.version)
+    assert restored.fighters["ally"].barriers[0].identity == ("player", art_id)
+    assert restored.fighters["ally"].barrier == D(120)

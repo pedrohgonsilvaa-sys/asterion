@@ -14,11 +14,15 @@ from asterion.application.combat_configuration_guard import CombatConfigurationL
 from asterion.application.equipment import equipment_instance_payload
 from asterion.domain.arts import (
     ACTIVE_ART_IDS_BY_CLASS,
+    ATIRADOR_ART_IDS,
     BASTIAO_ART_IDS,
     CARRASCO_ART_IDS,
+    CONJURADOR_ART_IDS,
     DEVASTADOR_ART_IDS,
     ERRANTE_ART_IDS,
     FIRST_CLASS_ART_IDS,
+    RASTREADOR_ART_IDS,
+    RUNICO_ART_IDS,
     SABOTADOR_ART_IDS,
     SENTINEL_ART_IDS,
     VIGIA_ART_IDS,
@@ -357,28 +361,63 @@ async def test_devastador_ariete_unlock_path_class_and_weapon_gates(database):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("path", "art_id", "actor", "weapon_type_id"),
+    ("path", "art_id", "character_class", "actor", "weapon_type_id"),
     [
-        ("bastiao", BASTIAO_ART_IDS["escudo_de_cinzas"], 771036, None),
+        (
+            "bastiao",
+            BASTIAO_ART_IDS["escudo_de_cinzas"],
+            "sentinela",
+            771036,
+            None,
+        ),
         (
             "carrasco",
             CARRASCO_ART_IDS["corte_de_execucao"],
+            "errante",
             771037,
             "weapon.type.tdo.arma_caminhante",
         ),
         (
             "sabotador",
             SABOTADOR_ART_IDS["veneno_velado"],
+            "errante",
             771038,
             "weapon.type.vde.arma_vale",
+        ),
+        (
+            "atirador",
+            ATIRADOR_ART_IDS["tiro_perfurante"],
+            "vigia",
+            772040,
+            "weapon.type.tdo.arma_pesada_caminhante",
+        ),
+        (
+            "rastreador",
+            RASTREADOR_ART_IDS["flecha_serrilhada"],
+            "vigia",
+            772041,
+            "weapon.type.vde.arma_pesada_lacos",
+        ),
+        (
+            "conjurador",
+            CONJURADOR_ART_IDS["estilhaco_do_veu"],
+            "tecelao",
+            772042,
+            None,
+        ),
+        (
+            "runico",
+            RUNICO_ART_IDS["runa_de_guarda"],
+            "tecelao",
+            772043,
+            None,
         ),
     ],
 )
 async def test_first_wave_path_arts_unlock_at_12_and_persist(
-    database, path, art_id, actor, weapon_type_id
+    database, path, art_id, character_class, actor, weapon_type_id
 ):
     service = ActiveArtService(database[1], "ocaso")
-    character_class = "sentinela" if path == "bastiao" else "errante"
     await _seed_character(
         database,
         actor,
@@ -393,9 +432,15 @@ async def test_first_wave_path_arts_unlock_at_12_and_persist(
     assert level_gate.value.code == ActiveArtMutationCode.LEVEL_REQUIRED
 
     wrong_path_actor = actor + 10
-    wrong_path = "devastador" if path == "bastiao" else (
-        "sabotador" if path == "carrasco" else "carrasco"
-    )
+    wrong_path = {
+        "bastiao": "devastador",
+        "carrasco": "sabotador",
+        "sabotador": "carrasco",
+        "atirador": "rastreador",
+        "rastreador": "atirador",
+        "conjurador": "runico",
+        "runico": "conjurador",
+    }[path]
     await _seed_character(
         database,
         wrong_path_actor,
@@ -409,12 +454,13 @@ async def test_first_wave_path_arts_unlock_at_12_and_persist(
     assert path_gate.value.code == ActiveArtMutationCode.PATH_REQUIRED
 
     wrong_class_actor = actor + 20
+    wrong_class = "vigia" if character_class == "tecelao" else "tecelao"
     await _seed_character(
         database,
         wrong_class_actor,
         level=12,
-        cls="vigia",
-        selected_path="atirador",
+        cls=wrong_class,
+        selected_path="conjurador" if wrong_class == "tecelao" else "atirador",
     )
     with pytest.raises(ActiveArtMutationRejected) as class_gate:
         await service.equip_art(wrong_class_actor, 1, art_id)
