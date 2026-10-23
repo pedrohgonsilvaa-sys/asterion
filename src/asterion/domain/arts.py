@@ -168,21 +168,25 @@ SABOTADOR_ART_IDS = {
 ATIRADOR_ART_IDS = {
     "tiro_perfurante": "path_art.vigia.atirador.tiro_perfurante",
     "fixar_alvo": "path_art.vigia.atirador.fixar_alvo",
+    "rajada_controlada": "path_art.vigia.atirador.rajada_controlada",
 }
 
 RASTREADOR_ART_IDS = {
     "flecha_serrilhada": "path_art.vigia.rastreador.flecha_serrilhada",
     "laco_de_caca": "path_art.vigia.rastreador.laco_de_caca",
+    "chuva_de_rastros": "path_art.vigia.rastreador.chuva_de_rastros",
 }
 
 CONJURADOR_ART_IDS = {
     "estilhaco_do_veu": "path_art.tecelao.conjurador.estilhaco_do_veu",
     "incendio_trancado": "path_art.tecelao.conjurador.incendio_trancado",
+    "convergencia_arcana": "path_art.tecelao.conjurador.convergencia_arcana",
 }
 
 RUNICO_ART_IDS = {
     "runa_de_guarda": "path_art.tecelao.runico.runa_de_guarda",
     "runa_de_ruptura": "path_art.tecelao.runico.runa_de_ruptura",
+    "runa_de_retorno": "path_art.tecelao.runico.runa_de_retorno",
 }
 
 AGOUREIRO_ART_IDS = {
@@ -214,6 +218,29 @@ ACTIVE_ART_DEFINITIONS.update(
     {
         art_id: ActiveArtDefinition(art_id, "sentinela", min_level)
         for art_id, min_level in SENTINEL_ART_LEVELS.items()
+    }
+)
+
+ACTIVE_ART_DEFINITIONS.update(
+    {
+        ATIRADOR_ART_IDS["rajada_controlada"]: ActiveArtDefinition(
+            ATIRADOR_ART_IDS["rajada_controlada"], "vigia", 38,
+            path_id="atirador",
+            weapon_requirement=frozenset({"weapon.compat.bow", "weapon.compat.crossbow"}),
+        ),
+        RASTREADOR_ART_IDS["chuva_de_rastros"]: ActiveArtDefinition(
+            RASTREADOR_ART_IDS["chuva_de_rastros"], "vigia", 38,
+            path_id="rastreador",
+            weapon_requirement=frozenset({"weapon.compat.bow", "weapon.compat.crossbow"}),
+        ),
+        CONJURADOR_ART_IDS["convergencia_arcana"]: ActiveArtDefinition(
+            CONJURADOR_ART_IDS["convergencia_arcana"], "tecelao", 38,
+            path_id="conjurador",
+        ),
+        RUNICO_ART_IDS["runa_de_retorno"]: ActiveArtDefinition(
+            RUNICO_ART_IDS["runa_de_retorno"], "tecelao", 38,
+            path_id="runico",
+        ),
     }
 )
 

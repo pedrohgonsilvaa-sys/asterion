@@ -29,6 +29,7 @@ from asterion.domain.combat import (
     ActionCondition,
     ActionConditionalModifier,
     ActionEffect,
+    ActionEffectRemoval,
 )
 
 
@@ -68,6 +69,10 @@ CONTRA_GOLPE_ART_ID = BASTIAO_ART_IDS["contra_golpe"]
 ABALO_ART_ID = DEVASTADOR_ART_IDS["abalo"]
 MARCA_DA_MORTE_ART_ID = CARRASCO_ART_IDS["marca_da_morte"]
 TRAVA_DE_PASSOS_ART_ID = SABOTADOR_ART_IDS["trava_de_passos"]
+RAJADA_CONTROLADA_ART_ID = ATIRADOR_ART_IDS["rajada_controlada"]
+CHUVA_DE_RASTROS_ART_ID = RASTREADOR_ART_IDS["chuva_de_rastros"]
+CONVERGENCIA_ARCANA_ART_ID = CONJURADOR_ART_IDS["convergencia_arcana"]
+RUNA_DE_RETORNO_ART_ID = RUNICO_ART_IDS["runa_de_retorno"]
 
 CARRASCO_MARCA_DA_MORTE_CHAIN = "errante.carrasco.marca_da_morte"
 
@@ -491,6 +496,60 @@ PATH_ART_ACTIONS = MappingProxyType(
                 cooldown=3,
                 effect_stat="agility",
                 effect_id=TRAVA_DE_PASSOS_ART_ID,
+            ),
+        ),
+        RAJADA_CONTROLADA_ART_ID: PathArtActionDefinition(
+            art_id=RAJADA_CONTROLADA_ART_ID,
+            character_class="vigia",
+            path_id="atirador",
+            action=Action(
+                RAJADA_CONTROLADA_ART_ID,
+                "Rajada Controlada",
+                Decimal("0.45"),
+                hit_count=3,
+                cooldown=3,
+            ),
+        ),
+        CHUVA_DE_RASTROS_ART_ID: PathArtActionDefinition(
+            art_id=CHUVA_DE_RASTROS_ART_ID,
+            character_class="vigia",
+            path_id="rastreador",
+            action=Action(
+                CHUVA_DE_RASTROS_ART_ID,
+                "Chuva de Rastros",
+                Decimal("0.70"),
+                cooldown=4,
+                target_mode="all_opponents",
+            ),
+        ),
+        CONVERGENCIA_ARCANA_ART_ID: PathArtActionDefinition(
+            art_id=CONVERGENCIA_ARCANA_ART_ID,
+            character_class="tecelao",
+            path_id="conjurador",
+            action=Action(
+                CONVERGENCIA_ARCANA_ART_ID,
+                "Convergência Arcana",
+                Decimal("0.50"),
+                hit_count=3,
+                cooldown=3,
+            ),
+        ),
+        RUNA_DE_RETORNO_ART_ID: PathArtActionDefinition(
+            art_id=RUNA_DE_RETORNO_ART_ID,
+            character_class="tecelao",
+            path_id="runico",
+            action=Action(
+                RUNA_DE_RETORNO_ART_ID,
+                "Runa de Retorno",
+                Decimal(0),
+                cooldown=4,
+                target_mode="ally",
+                heal_coefficient=Decimal("0.70"),
+                effect_removal=ActionEffectRemoval(
+                    kind="purification",
+                    count=1,
+                    selection_required=False,
+                ),
             ),
         ),
     }
