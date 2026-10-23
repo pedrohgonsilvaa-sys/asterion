@@ -16,6 +16,7 @@ from asterion.domain.arts import (
     weapon_requirement_label,
 )
 from asterion.domain.class_trials import class_player_actions
+from asterion.domain.path_arts import CARRASCO_MARCA_DA_MORTE_CHAIN
 from asterion.domain.paths import PATH_DEFINITIONS
 from asterion.domain.talents import IMPLEMENTED_TALENT_LEVELS, TalentDefinition
 
@@ -370,6 +371,15 @@ def _art_mechanics_lines(action) -> list[str]:
                 f"+{modifier.magnitude:g} p.p. PER"
             )
         elif (
+            modifier.condition.kind == "class_resource_at_least"
+            and modifier.condition.resource == "retaliation"
+            and modifier.component == "attack_debuff"
+        ):
+            lines.append(
+                "🛡️ Com Retaliação ativa no início da ação · "
+                f"aplica −{modifier.magnitude * 100:g}% ATQ por {action.duration}T"
+            )
+        elif (
             modifier.condition.kind == "target_has_normal_negative_effect"
             and modifier.component == "precision_bonus"
         ):
@@ -389,12 +399,13 @@ def _art_mechanics_lines(action) -> list[str]:
             f"{action.self_barrier_debuff_magnitude_reduction * 100:g}% "
             "a magnitude de Debuffs recebidos."
         )
-    if (
-        action.prepares_chain
-        or action.consumes_chain
-        or action.id in TECELAO_ART_IDS.values()
-    ):
+    chain_key = action.consumes_chain or action.prepares_chain
+    if chain_key == "trama_encadeada" or action.id in TECELAO_ART_IDS.values():
         lines.append("✨ Trama Encadeada · prepara ou consome a janela")
+    elif chain_key == CARRASCO_MARCA_DA_MORTE_CHAIN:
+        lines.append(
+            "☠️ Marca da Morte · próxima Arte direta do Carrasco recebe +12% em 2T"
+        )
 
     if action.target_mode == "self":
         target = "Você"

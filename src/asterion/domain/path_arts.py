@@ -64,6 +64,12 @@ CURA_SOLAR_ART_ID = GUARDIAO_ART_IDS["cura_solar"]
 EGIDE_COMPARTILHADA_ART_ID = GUARDIAO_ART_IDS["egide_compartilhada"]
 LANCA_DE_LUZ_ART_ID = INQUISIDOR_ART_IDS["lanca_de_luz"]
 SELO_DA_PENITENCIA_ART_ID = INQUISIDOR_ART_IDS["selo_da_penitencia"]
+CONTRA_GOLPE_ART_ID = BASTIAO_ART_IDS["contra_golpe"]
+ABALO_ART_ID = DEVASTADOR_ART_IDS["abalo"]
+MARCA_DA_MORTE_ART_ID = CARRASCO_ART_IDS["marca_da_morte"]
+TRAVA_DE_PASSOS_ART_ID = SABOTADOR_ART_IDS["trava_de_passos"]
+
+CARRASCO_MARCA_DA_MORTE_CHAIN = "errante.carrasco.marca_da_morte"
 
 PATH_ART_ACTIONS = MappingProxyType(
     {
@@ -416,6 +422,75 @@ PATH_ART_ACTIONS = MappingProxyType(
                 cooldown=3,
                 effect_stat="healing_received",
                 effect_id=SELO_DA_PENITENCIA_ART_ID,
+            ),
+        ),
+        CONTRA_GOLPE_ART_ID: PathArtActionDefinition(
+            art_id=CONTRA_GOLPE_ART_ID,
+            character_class="sentinela",
+            path_id="bastiao",
+            action=Action(
+                CONTRA_GOLPE_ART_ID,
+                "Contra-Golpe",
+                Decimal("1.20"),
+                duration=2,
+                cooldown=3,
+                effect_stat="attack",
+                effect_id=CONTRA_GOLPE_ART_ID,
+                conditional_modifiers=(
+                    ActionConditionalModifier(
+                        "sentinela.contra_golpe.retaliation_attack_debuff",
+                        ActionCondition(
+                            "class_resource_at_least", resource="retaliation"
+                        ),
+                        "attack_debuff",
+                        Decimal("0.10"),
+                    ),
+                ),
+            ),
+        ),
+        ABALO_ART_ID: PathArtActionDefinition(
+            art_id=ABALO_ART_ID,
+            character_class="sentinela",
+            path_id="devastador",
+            action=Action(
+                ABALO_ART_ID,
+                "Abalo",
+                Decimal("0.90"),
+                attack_debuff=Decimal("0.08"),
+                duration=2,
+                cooldown=4,
+                effect_stat="defense",
+                effect_id=ABALO_ART_ID,
+                target_mode="all_opponents",
+            ),
+        ),
+        MARCA_DA_MORTE_ART_ID: PathArtActionDefinition(
+            art_id=MARCA_DA_MORTE_ART_ID,
+            character_class="errante",
+            path_id="carrasco",
+            action=Action(
+                MARCA_DA_MORTE_ART_ID,
+                "Marca da Morte",
+                Decimal("0.80"),
+                cooldown=4,
+                prepares_chain=CARRASCO_MARCA_DA_MORTE_CHAIN,
+                prepares_chain_duration=2,
+                chain_power_bonus_damage=Decimal("0.12"),
+            ),
+        ),
+        TRAVA_DE_PASSOS_ART_ID: PathArtActionDefinition(
+            art_id=TRAVA_DE_PASSOS_ART_ID,
+            character_class="errante",
+            path_id="sabotador",
+            action=Action(
+                TRAVA_DE_PASSOS_ART_ID,
+                "Trava de Passos",
+                Decimal("0.80"),
+                attack_debuff=Decimal("0.18"),
+                duration=2,
+                cooldown=3,
+                effect_stat="agility",
+                effect_id=TRAVA_DE_PASSOS_ART_ID,
             ),
         ),
     }

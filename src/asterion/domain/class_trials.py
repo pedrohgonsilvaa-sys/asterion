@@ -2,13 +2,14 @@
 
 from collections.abc import Mapping
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
 from asterion.domain.arts import (
     ART_IDS_BY_CLASS,
+    CARRASCO_ART_IDS,
     ERRANTE_ART_IDS,
     LUMINAR_ART_IDS,
     ORACULO_ART_IDS,
@@ -26,7 +27,10 @@ from asterion.domain.combat import (
     Fighter,
 )
 from asterion.domain.combat_math import CURRENT_COMBAT_RULESET, CombatStats
-from asterion.domain.path_arts import path_player_actions
+from asterion.domain.path_arts import (
+    CARRASCO_MARCA_DA_MORTE_CHAIN,
+    path_player_actions,
+)
 
 TRIAL_IDS_BY_CLASS = {
     "sentinela": "trial.sentinela.guarda",
@@ -1337,6 +1341,14 @@ def class_player_actions(
     else:
         actions = factory(class_art_ids)
     actions.update(path_player_actions(character_class, selected_path, path_art_ids))
+    if character_class == "errante" and selected_path == "carrasco":
+        for art_id in path_art_ids:
+            if art_id in CARRASCO_ART_IDS.values() and actions[art_id].coefficient > 0:
+                actions[art_id] = replace(
+                    actions[art_id],
+                    consumes_chain=CARRASCO_MARCA_DA_MORTE_CHAIN,
+                    chain_power_bonus_damage=Decimal("0.12"),
+                )
     return actions
 
 

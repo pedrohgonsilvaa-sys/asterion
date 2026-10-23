@@ -239,6 +239,7 @@ class ActionConditionalModifier:
             "damage_power",
             "healing_power",
             "barrier_power",
+            "attack_debuff",
             "final_damage_bonus",
             "precision_bonus",
             "crit_bonus",
@@ -3376,6 +3377,10 @@ def _apply_declared_conditional_modifiers(
                     entry[component] += modifier.magnitude
             elif component == "final_damage_bonus":
                 entry[component] += modifier.magnitude
+            elif component == "attack_debuff":
+                entry["attack_debuff_bonus"] = (
+                    entry.get("attack_debuff_bonus", ZERO) + modifier.magnitude
+                )
             elif component == "precision_bonus":
                 entry["per_bonus"] += modifier.magnitude
             elif component == "crit_bonus":
@@ -5451,7 +5456,10 @@ def _perform(
         dot_application_kind = ""
         target_effects_application_id = ""
         target_effects_applied = False
-        if action.attack_debuff and target.hp > 0 and effect_trigger_applies:
+        target_attack_debuff = action.attack_debuff + target_path.get(
+            "attack_debuff_bonus", ZERO
+        )
+        if target_attack_debuff and target.hp > 0 and effect_trigger_applies:
             had_ward = target.ward_charges > 0 and target.ward_remaining > 0
             applied_effect_id = action.effect_id or action.id
             effect_application_event_id = (
@@ -5461,7 +5469,7 @@ def _perform(
             attack_debuff_effect = Effect(
                 id=applied_effect_id,
                 stat=action.effect_stat or "attack",
-                magnitude=action.attack_debuff,
+                magnitude=target_attack_debuff,
                 remaining=(
                     min(3, action.duration + 1)
                     if actor.selected_path == "sabotador" and action.duration in {1, 2}
