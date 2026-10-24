@@ -638,6 +638,12 @@ class Fighter:
                 and self.hp * D(100) <= self.stats.hp * D(35)
             ):
                 value *= D("1.07")
+            if (
+                self.character_class == "vigia"
+                and "talent.vigia.ultimo_horizonte" in self.talent_ids
+                and self.hp * D(100) <= self.stats.hp * D(35)
+            ):
+                value *= D("1.06")
         return value
 
 
@@ -1477,6 +1483,7 @@ _CLASS_MECHANIC_COMBAT_FLAGS = (
     "tecelao_defensive_barrier_used",
     "errante_instinto_de_fuga_used",
     "errante_primeiro_desvio_used",
+    "tecelao_veu_de_emergencia_used",
 )
 
 
@@ -2683,6 +2690,37 @@ def _grant_nv55_hp_threshold_effects(
             stat_modifier_mode="percentage_points",
         )
 
+    if fighter.character_class != "tecelao":
+        return
+    if (
+        not _has_talent(fighter, "veu_de_emergencia")
+        or fighter.hp > fighter.stats.hp * D("0.30")
+        or fighter.path_state.get("tecelao_veu_de_emergencia_used") == combat_id
+    ):
+        return
+
+    # Mark the combat-scoped first occurrence before applying an effect. A
+    # lethal crossing is recorded but cannot grant a Barrier or resurrect.
+    fighter.path_state["tecelao_veu_de_emergencia_used"] = combat_id
+    if fighter.hp <= ZERO:
+        return
+    requested = (fighter.stats.hp * D("0.06")).to_integral_value(
+        rounding=ROUND_FLOOR
+    )
+    requested = (
+        requested * _barrier_received_multiplier(state, fighter_key)
+    ).to_integral_value(rounding=ROUND_FLOOR)
+    _apply_barrier(
+        fighter,
+        applier_id=fighter.id,
+        effect_definition_id="class_mechanic.tecelao.veu_de_emergencia.barrier",
+        value=requested,
+        duration=1,
+        applied_opportunity=fighter.opportunity,
+        round_number=state.round,
+        source_label="class_mechanic.tecelao.veu_de_emergencia.barrier",
+    )
+
 
 def _consume_retaliation(
     state: Combat,
@@ -3753,6 +3791,7 @@ def _prepare_path_action(
         low_hp_direct_talents = {
             "sentinela": ("punicao_final", D("0.40")),
             "errante": ("fim_proximo", D("0.35")),
+            "vigia": ("disparo_implacavel", D("0.35")),
         }
         low_hp_talent = low_hp_direct_talents.get(actor.character_class)
         if (
@@ -3990,39 +4029,38 @@ def _prepare_path_action(
     ):
         context["trama_consumed"] = True
         context["trama_consumed_origin"] = str(trama_state.get("origin_art", ""))
-        for entry in context["by_target"].values():
+        for target_id, entry in context["by_target"].items():
+            target = next(
+                fighter for fighter in state.fighters.values() if fighter.id == target_id
+            )
             if direct:
                 bonus = _trama_component_bonus(actor, "damage")
                 if _has_talent(actor, "trama_agressiva"):
                     bonus += D("0.02")
+                damage_multiplier = D(1) + bonus
                 if _has_talent(actor, "sobrecarga_controlada"):
-                    target_id = next(
-                        target_id
-                        for target_id, target_context in context["by_target"].items()
-                        if target_context is entry
-                    )
-                    target = next(
-                        fighter
-                        for fighter in state.fighters.values()
-                        if fighter.id == target_id
-                    )
                     if target.stats.hp > ZERO and target.hp <= target.stats.hp * D("0.40"):
-                        bonus += D("0.04")
-                entry["damage_power"] *= D(1) + bonus
+                        # +4% potency is relative to the already strengthened
+                        # path/Trama component, matching the same wording in
+                        # Profecia Dolorosa and Veredito Ardente.
+                        damage_multiplier *= D("1.04")
+                entry["damage_power"] *= damage_multiplier
                 if _has_talent(actor, "trama_precisa"):
                     entry["crit_bonus"] += D(2)
                 entry["triggers"].append("tecelao.trama_dano_consumida")
             if action.heal_coefficient > ZERO:
                 bonus = _trama_component_bonus(actor, "healing")
+                healing_multiplier = D(1) + bonus
                 if _has_talent(actor, "trama_precisa"):
-                    bonus += D("0.02")
-                entry["healing_power"] *= D(1) + bonus
+                    healing_multiplier *= D("1.02")
+                entry["healing_power"] *= healing_multiplier
                 entry["triggers"].append("tecelao.trama_cura_consumida")
             if _action_has_barrier(action):
                 bonus = _trama_component_bonus(actor, "barrier")
+                barrier_multiplier = D(1) + bonus
                 if _has_talent(actor, "trama_precisa"):
-                    bonus += D("0.02")
-                entry["barrier_power"] *= D(1) + bonus
+                    barrier_multiplier *= D("1.02")
+                entry["barrier_power"] *= barrier_multiplier
                 entry["triggers"].append("tecelao.trama_barreira_consumida")
 
     if actor.character_class == "tecelao" and direct:
