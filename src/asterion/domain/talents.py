@@ -432,6 +432,8 @@ _STATIC_TALENT_MODIFIERS_BY_ID = {
     "talent.oraculo.destino_exposto": {"crit_points": Decimal("2")},
     "talent.luminar.luz_perfurante": {"per_points": Decimal("2")},
     "talent.sentinela.olho_de_combate": {"crit_points": Decimal("2")},
+    "talent.sentinela.ponta_penetrante": {"per_points": Decimal("2")},
+    "talent.errante.fio_perfurante": {"per_points": Decimal("2")},
 }
 
 

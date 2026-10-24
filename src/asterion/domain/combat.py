@@ -2729,6 +2729,10 @@ def _end_turn(state: Combat) -> None:
             ),
         )
         modifier = actor.damage_taken_modifiers.get(dot.kind, D(1))
+        if actor.character_class == "errante" and _has_talent(
+            actor, "pele_endurecida"
+        ):
+            modifier *= D("0.92")
         if modifier != D(1) and damage > 0:
             damage = max(
                 1,
@@ -5200,9 +5204,19 @@ def _perform(
                 )
                 critical = rng.chance(crit_chance, crit_purpose)
 
-        defender_reduction = (
-            D("0.52") if target.race == "cinereo" else D("0.45")
-        ) if target.defending else ZERO
+        defender_reduction = ZERO
+        if target.defending:
+            defender_reduction = (
+                D("0.30")
+                if state.pvp_mode and state.round >= 25
+                else D("0.45")
+            )
+            if target.race == "cinereo":
+                defender_reduction += D("0.07")
+            if target.character_class == "sentinela" and _has_talent(
+                target, "postura_de_ferro"
+            ):
+                defender_reduction += D("0.02")
         blocked = False
         if current_ruleset and direct_eligible:
             block_chance = chance_from_percentage_points(target.stat("block"))
