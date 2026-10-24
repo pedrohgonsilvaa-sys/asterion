@@ -1,0 +1,2 @@
+# Preserve byte-for-byte hashes for this candidate package on checkout.
+* -text

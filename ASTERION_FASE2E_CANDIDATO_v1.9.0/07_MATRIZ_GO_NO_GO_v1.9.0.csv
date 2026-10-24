@@ -1,0 +1,13 @@
+gate,status,evidence,next_owner,next_action
+"Preparação das minutas candidatas","GO","Minutas separadas, rastreáveis e não canônicas; pacote v1.8.0 preservado como entrada imutável","Game Design","Revisar as minutas e aprovar a próxima etapa documental"
+"Decisões numéricas e estruturais homologadas","GO_DECISAO_GD","Proficiências, treinamento v0.4, núcleos v0.7, Escudo, pesos v0.4, dez classificações e atributos individuais 66/34 têm registro de aprovação","Game Design","Formalizar em versões canônicas após a revisão"
+"Pendência GD GD-NEW-CATALOG-66-RECIPES","NO_GO_PARCIAL","Atributos dos 66 aprovados; IDs de release, receitas e vínculos/output continuam pendentes","Game Design + Conteúdo + Release/DBA","Resolver após snapshot autorizado"
+"Pendência GD GD-WEAPON-METADATA-CONTRACT","NO_GO_PUBLICACAO","Decisão de [] aprovada; contrato global candidato ainda não publicado","Game Design + responsável pelo contrato","Aprovar minuta v1.1.0 e publicá-la por processo versionado"
+"Pendência GD GD-LOOT-ELIGIBILITY-TEMPLATE-RARITY","NO_GO_PARCIAL","24 excluídos aprovados; 63 favoráveis localmente sem decisão final; 633 pendentes","Game Design + Conteúdo + Release/DBA","Fechar 696 estados após conciliação"
+"Snapshot imutável de release","NO_GO_AUSENTE","Nenhum snapshot autorizado entregue; nenhum banco acessado","Release/DBA","Fornecer export assinado/hasheado sob contrato de topo v1.7.0"
+"Verificação dos 226 IDs","NO_GO_RELEASE","0/226 IDs verificados no snapshot de release","Release/DBA + Conteúdo","Conciliar IDs sem confundir namespaces"
+"Receitas/output links","NO_GO_RELEASE","160 vínculos existentes e 198 propostas não validados contra release; materiais também dependem de conciliação","Release/DBA + Ofícios/Conteúdo","Conferir registry, recipe_id, output_id, template_id e materiais"
+"Recompensas de Campanha","NO_GO_RELEASE","24 vínculos locais reconciliados; identidades de release não confirmadas","Release/DBA + Conteúdo","Validar cada namespace no snapshot"
+"Baseline TDO v1.0.17","GO_ALVO_NAO_OPERACIONAL","Alvo aprovado e hash verificado no worktree Phase2B; índices raiz/docs apontam v1.0.16","Responsável por SOURCE_AUTHORITY","Aguardar autorização para publicar e atualizar índices"
+"Publicação canônica de GDD/contrato/fontes","NO_GO","Cânone e SOURCE_AUTHORITY permanecem intactos","Game Design + responsáveis pelas fontes","Autorizar etapa de publicação separadamente"
+"Importação, migração, feature flag, merge ou deploy","NO_GO","Nenhuma operação foi autorizada nesta etapa","Game Design + Engenharia + Release/DBA","Exigir autorização específica futura"
