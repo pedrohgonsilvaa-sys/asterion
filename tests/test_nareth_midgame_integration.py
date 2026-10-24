@@ -588,6 +588,39 @@ def test_nareth_canais_hunt_and_exploration_profiles_match_authority():
 
 
 @pytest.mark.asyncio
+async def test_nareth_canais_combat_exploration_resolves_creature_by_result_id(
+    database, monkeypatch
+):
+    import asterion.application.road as road_module
+
+    actor = 991419
+    character_id, sessions = await _seed_nareth_entry(database, actor, level=23)
+    road = RoadService(sessions, "ocaso")
+    missions = NarethMissionService(sessions, "ocaso")
+    await _enter_campinas(road, missions, actor)
+    await _complete_p13(road, missions, actor)
+    await _complete_p14(road, missions, actor, monkeypatch)
+    arrived = await road.travel_route(actor, CANAIS)
+    assert arrived is not None and arrived.location == CANAIS
+
+    result_id = "explore.nareth.canais.combat.galgo_meridiano"
+    monkeypatch.setattr(
+        road_module,
+        "_explore_result",
+        lambda *args: ("combat", result_id, "Um Galgo do Meridiano surge no canal."),
+    )
+    view = await road.explore(actor)
+    assert view is not None and view.kind == "combat" and view.activity_id is not None
+    async with sessions() as session:
+        context = await session.scalar(
+            select(HuntContext).where(HuntContext.game_activity_id == view.activity_id)
+        )
+        assert context is not None
+        assert context.character_id == character_id
+        assert context.creature_id == "galgo_meridiano"
+
+
+@pytest.mark.asyncio
 async def test_nareth_canais_manual_hunt_unlocks_round_and_brazier_discovery(
     database, monkeypatch
 ):

@@ -2632,8 +2632,13 @@ class RoadService:
             s.add(attempt)
             await s.flush()
             if category == "combat":
-                result_key = result_id.rsplit(".", 1)[-1]
-                creature_id = selected_creature_id or explore_profile.result(result_key).creature_id
+                result_definition = next(
+                    (item for item in explore_profile.results if item.result_id == result_id),
+                    None,
+                )
+                creature_id = selected_creature_id or (
+                    result_definition.creature_id if result_definition is not None else None
+                )
                 if creature_id is None:
                     raise RuntimeError(f"combat exploration result {result_id!r} has no creature")
                 creature = creature_for(creature_id)
