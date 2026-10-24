@@ -174,11 +174,14 @@ def test_fio_perfurante_adds_two_static_per_points_in_internal_composition():
     assert resolve_combat_stats("tecelao", 25, "remanescente", talent_ids=(FIO_PERFURANTE,))
 
 
-def test_same_name_future_errante_talent_does_not_inherit_tecelao_static_hook():
+def test_same_name_tier45_talents_use_their_own_id_while_public_tier_is_closed():
     errante_fio = TALENT_DEFINITIONS["talent.errante.fio_perfurante"]
     assert errante_fio.level == 45
-    assert errante_fio.per_points == ZERO
+    assert errante_fio.per_points == D(2)
     assert TALENT_DEFINITIONS[FIO_PERFURANTE].per_points == D(2)
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+    with pytest.raises(TalentSelectionError):
+        validate_active_talent_ids("errante", 60, (errante_fio.talent_id,))
 
 
 def test_protecao_tecida_is_a_recipient_bonus_and_floors_once_on_real_self_barrier():

@@ -1458,6 +1458,7 @@ _CLASS_MECHANIC_COMBAT_FLAGS = (
     "aim_acquisition_used",
     "vigia_antecipacao_used",
     "oraculo_destino_adiado_used",
+    "tecelao_defensive_barrier_used",
 )
 
 
@@ -2729,8 +2730,12 @@ def _end_turn(state: Combat) -> None:
             ),
         )
         modifier = actor.damage_taken_modifiers.get(dot.kind, D(1))
-        if actor.character_class == "errante" and _has_talent(
-            actor, "pele_endurecida"
+        if (
+            actor.character_class == "errante"
+            and _has_talent(actor, "pele_endurecida")
+        ) or (
+            actor.character_class == "vigia"
+            and _has_talent(actor, "couro_de_campo")
         ):
             modifier *= D("0.92")
         if modifier != D(1) and damage > 0:
@@ -2933,6 +2938,13 @@ def _has_valid_negative_effect(state: Combat, target: Fighter) -> bool:
         not dot.fixed_mechanic
         and dot.remaining > 0
         and dot.stacks > 0
+        for dot in state.dot_states.get(target.id, ())
+    )
+
+
+def _has_valid_dot(state: Combat, target: Fighter) -> bool:
+    return any(
+        not dot.fixed_mechanic and dot.remaining > 0 and dot.stacks > 0
         for dot in state.dot_states.get(target.id, ())
     )
 
@@ -3664,6 +3676,14 @@ def _prepare_path_action(
             ),
         }
         if (
+            direct
+            and actor.character_class == "tecelao"
+            and _has_talent(actor, "ruptura_profunda")
+            and _has_valid_dot(state, target)
+        ):
+            entry["damage_power"] *= D("1.03")
+            entry["triggers"].append("tecelao.ruptura_profunda")
+        if (
             actor.character_class == "sentinela"
             and direct
             and _has_talent(actor, "pressao_de_fissuras")
@@ -3763,6 +3783,29 @@ def _prepare_path_action(
                 # Barrier output before recipient-side modifiers are composed.
                 entry["barrier_power"] *= D("1.04")
                 entry["triggers"].append("luminar.egide_densa")
+
+        if (
+            actor.character_class == "tecelao"
+            and is_art
+            and support
+            and _action_has_barrier(action)
+            and _has_talent(actor, "tecelagem_defensiva")
+            and not (
+                isinstance(
+                    actor.path_state.get("tecelao_defensive_barrier_used"), dict
+                )
+                and actor.path_state["tecelao_defensive_barrier_used"].get(
+                    "combat_id"
+                )
+                == str(state.id)
+            )
+        ):
+            # §49.5's "primeira Barreira própria" is source-side in the current
+            # barrier model: this modifies the Tecelão's first committed barrier
+            # output action, once for the action and all its recipients.
+            entry["barrier_power"] *= D("1.10")
+            entry["triggers"].append("tecelao.tecelagem_defensiva")
+            context["tecelao_defensive_barrier_candidate"] = True
 
         guard_barrier = actor.path_state.get("guard_prepared_barrier")
         if support and _action_has_barrier(action) and isinstance(guard_barrier, dict):
@@ -3869,7 +3912,7 @@ def _prepare_path_action(
                 entry["barrier_power"] *= D(1) + bonus
                 entry["triggers"].append("tecelao.trama_barreira_consumida")
 
-    if actor.character_class == "tecelao" and direct and not context["trama_consumed"]:
+    if actor.character_class == "tecelao" and direct:
         trama_next_per = actor.path_state.get("trama_next_per")
         if isinstance(trama_next_per, dict) and int(trama_next_per.get("remaining", 0)) > 0:
             context["trama_next_per_consumed"] = True
@@ -4268,6 +4311,7 @@ def _finalize_path_action(
             "magnitude": 3,
             "remaining": 2,
             "applied_opportunity": actor.opportunity,
+            "source_action_instance_id": str(context.get("action_instance_id", "")),
         }
         generated.append(("tecelao.eco_de_alternancia", None))
     if (
@@ -4294,6 +4338,17 @@ def _finalize_path_action(
                     magnitude=D("0.04"),
                 )
                 generated.append(("luminar.fluxo_restaurador", target.id))
+
+    if context.get("tecelao_defensive_barrier_candidate") and any(
+        event.actor_entity_id == actor.id
+        and event.action_instance_id == context.get("action_instance_id")
+        and event.barrier_value > ZERO
+        for event in state.events
+    ):
+        actor.path_state["tecelao_defensive_barrier_used"] = {
+            "combat_id": str(state.id),
+            "action_instance_id": str(context.get("action_instance_id", "")),
+        }
 
     context["actor_entity_id"] = actor.id
     for trigger, target_id in generated:
