@@ -179,7 +179,7 @@ def test_same_name_tier45_talents_use_their_own_id_while_public_tier_is_open():
     assert errante_fio.level == 45
     assert errante_fio.per_points == D(2)
     assert TALENT_DEFINITIONS[FIO_PERFURANTE].per_points == D(2)
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     assert validate_active_talent_ids("errante", 60, (errante_fio.talent_id,)) == (
         errante_fio.talent_id,
     )
@@ -403,8 +403,8 @@ def test_trama_consumption_buff_is_once_per_action_and_invalid_action_preserves_
     ) == 1
 
 
-def test_tier25_is_valid_at_required_level_while_future_tiers_stay_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+def test_tier25_is_valid_at_required_level_and_higher_tiers_require_their_levels():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     assert validate_active_talent_ids(
         "tecelao", 15, ("talent.tecelao.trama_duradoura",)
     ) == ("talent.tecelao.trama_duradoura",)

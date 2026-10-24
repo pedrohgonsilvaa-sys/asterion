@@ -43,7 +43,6 @@ from asterion.domain.equipment_stats import equipment_configuration_from_data
 from asterion.domain.talents import (
     IMPLEMENTED_TALENT_LEVELS,
     TALENTS_BY_CLASS,
-    TalentSelectionError,
     talent_points_at_level,
     validate_active_talent_ids,
 )
@@ -226,7 +225,7 @@ def _observe_public_effect(character_class, path, talent_ids, stats):
 
 @pytest.mark.asyncio
 async def test_all_six_classes_acquire_persist_and_use_nv45_talents(database):
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     assert {character_class: len(ids) for character_class, ids in TIER45.items()} == {
         character_class: 3 for character_class in CLASS_ORDER
     }
@@ -306,7 +305,7 @@ async def test_all_six_classes_acquire_persist_and_use_nv45_talents(database):
 
 
 @pytest.mark.asyncio
-async def test_nv60_can_acquire_nv45_but_nv55_remains_closed(database):
+async def test_nv60_can_acquire_nv45_and_nv55_within_point_budget(database):
     for index, character_class in enumerate(CLASS_ORDER):
         actor = 884520 + index
         _, sessions = await _seed(database, actor, character_class, level=60)
@@ -323,11 +322,12 @@ async def test_nv60_can_acquire_nv45_but_nv55_remains_closed(database):
             for item in TALENTS_BY_CLASS[character_class]
             if item.level == 55
         )
-        with pytest.raises(TalentMutationRejected) as closed:
-            await service.acquire(actor, nv55, acquired.view.combat_configuration_version)
-        assert closed.value.code == TalentMutationCode.TIER_NOT_IMPLEMENTED
-        with pytest.raises(TalentSelectionError):
-            validate_active_talent_ids(character_class, 60, (nv55,))
+        nv55_result = await service.acquire(
+            actor, nv55, acquired.view.combat_configuration_version
+        )
+        assert nv55_result is not None and nv55_result.point_slot == 2
+        assert nv55_result.view.available_points == 10
+        assert validate_active_talent_ids(character_class, 60, (nv55,)) == (nv55,)
 
 
 @pytest.mark.asyncio
@@ -384,7 +384,7 @@ async def test_nv45_talent_can_be_removed_by_normal_respec(database):
 
 
 @pytest.mark.asyncio
-async def test_nv45_doctrine_ui_and_service_reject_nv55(database):
+async def test_nv45_doctrine_and_service_reject_nv55_below_required_level(database):
     actor = 884540
     _, sessions = await _seed(database, actor, "luminar", level=45)
     doctrines = DoctrineService(sessions, "ocaso")

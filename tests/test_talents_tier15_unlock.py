@@ -225,7 +225,7 @@ def _combat_reconnect(state: Combat) -> Combat:
 
 @pytest.mark.asyncio
 async def test_all_six_classes_can_acquire_all_nv15_talents_and_reload_public_snapshots(database):
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     assert sum(
         talent.level == 15
         for talents in TALENTS_BY_CLASS.values()

@@ -703,11 +703,15 @@ def test_visao_persistente_is_cleared_at_combat_end():
     assert "aim_current_target_id" not in vigia.path_state
 
 
-def test_vigia_nv35_gate_opens_while_future_tiers_remain_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+def test_vigia_nv35_and_nv55_are_eligible_at_their_required_levels():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     for talent_id in (ALVO_EXPOSTO, RECUO_INSTINTIVO, VISAO_PERSISTENTE):
         with pytest.raises(TalentSelectionError):
             validate_active_talent_ids("vigia", 34, (talent_id,))
         assert validate_active_talent_ids("vigia", 35, (talent_id,)) == (talent_id,)
         assert validate_active_talent_ids("vigia", 60, (talent_id,)) == (talent_id,)
         assert resolve_combat_stats("vigia", 60, "remanescente", talent_ids=(talent_id,))
+    nv55_id = "talent.vigia.disparo_implacavel"
+    with pytest.raises(TalentSelectionError):
+        validate_active_talent_ids("vigia", 54, (nv55_id,))
+    assert validate_active_talent_ids("vigia", 55, (nv55_id,)) == (nv55_id,)

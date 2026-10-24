@@ -191,7 +191,7 @@ def _incoming_dodge(*, combat_id: UUID = COMBAT_ID) -> Combat:
 
 
 def test_errante_nv15_definitions_are_public_at_level_and_remain_level_gated():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     assert TALENT_DEFINITIONS[BRECHA_EXPOSTA].level == 15
     assert TALENT_DEFINITIONS[REFLEXO].level == 15
     assert TALENT_DEFINITIONS[SANGUE_FRIO].level == 15
@@ -355,7 +355,7 @@ def test_reflexo_is_one_static_evasion_point_and_composes_with_equipment():
 
 
 def test_reflexo_static_modifier_is_available_through_public_stats():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     baseline = resolve_combat_stats("errante", 34, "remanescente")
     actual = resolve_combat_stats("errante", 34, "remanescente", talent_ids=(REFLEXO,))
     assert actual.evasion == baseline.evasion + D(1)
@@ -648,4 +648,4 @@ def test_valid_nv5_errante_choices_remain_legal_and_points_still_accrue_at_nv15(
     valid = "talent.errante.fio_afiado"
     assert validate_active_talent_ids("errante", 15, (valid,)) == (valid,)
     assert TALENT_DEFINITIONS[valid].level == 5
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})

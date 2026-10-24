@@ -195,7 +195,7 @@ def test_canonical_talent_point_milestones_remain_unchanged(level, points):
 
 @pytest.mark.asyncio
 async def test_all_six_classes_acquire_nv25_nv35_nv45_and_reload_public_snapshots(database):
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     assert sum(map(len, TIER25.values())) == 18
     assert all(len(talent_ids) == 3 for talent_ids in TIER25.values())
     static_modifiers = {
@@ -319,15 +319,17 @@ async def test_all_six_classes_acquire_nv25_nv35_nv45_and_reload_public_snapshot
 
         future = next(t for t in TALENTS_BY_CLASS[character_class] if t.level == 55)
         future_detail = render_talent_detail(high_level, future)
-        assert "Requer Nv.55" in future_detail.text
-        assert "Adquirir Talento" not in [
+        assert "Nv.55" in future_detail.text
+        assert "Adquirir Talento" in [
             button.text
             for row in future_detail.keyboard.inline_keyboard
             for button in row
         ]
-        with pytest.raises(TalentMutationRejected) as locked:
-            await service.acquire(actor, future.talent_id, high_level.combat_configuration_version)
-        assert locked.value.code == TalentMutationCode.TIER_NOT_IMPLEMENTED
+        acquired55 = await service.acquire(
+            actor, future.talent_id, high_level.combat_configuration_version
+        )
+        assert acquired55 is not None and acquired55.point_slot == 6
+        assert acquired55.view.available_points == 6
 
 
 @pytest.mark.asyncio

@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import command
+from asterion.application.talents import TalentMutationCode, TalentMutationRejected, TalentService
 from asterion.infrastructure.db.models import (
     Account,
     Character,
@@ -349,3 +350,149 @@ async def test_0029_quarantines_pre_release_nv45_without_revoking_nv35_provenanc
             lower_id,
             legitimate_35,
         ]
+
+
+@pytest.mark.asyncio
+async def test_0030_quarantines_pre_release_nv55_without_revoking_earlier_tiers(database):
+    engine, sessions = database
+    async with engine.begin() as connection:
+        await connection.run_sync(
+            lambda sync: _migrate(sync, "20261023_0029", direction="downgrade")
+        )
+
+    character_id = uuid4()
+    activity_id = uuid4()
+    encounter_id = uuid4()
+    actor = 772398
+    lower_ids = (
+        "talent.luminar.luz_incisiva",
+        "talent.luminar.veredito_ardente",
+        "talent.luminar.punicao_da_fraqueza",
+    )
+    stored_nv55_id = "talent.luminar.ultimo_alvorecer"
+    nv55_ids = (
+        "talent.sentinela.punicao_final",
+        "talent.sentinela.persistencia",
+        "talent.sentinela.guarda_integra",
+        "talent.errante.fim_proximo",
+        "talent.errante.primeiro_desvio",
+        "talent.errante.instinto_de_fuga",
+        "talent.vigia.disparo_implacavel",
+        "talent.vigia.ultimo_horizonte",
+        "talent.vigia.cacada_metodica",
+        "talent.tecelao.sobrecarga_controlada",
+        "talent.tecelao.veu_de_emergencia",
+        "talent.tecelao.trama_precisa",
+        "talent.oraculo.fim_anunciado",
+        "talent.oraculo.ultima_visao",
+        "talent.oraculo.sinais_convergentes",
+        "talent.luminar.sentenca_solar",
+        "talent.luminar.ultimo_alvorecer",
+        "talent.luminar.contraluz_perfeita",
+    )
+    async with sessions.begin() as session:
+        session.add(Account(telegram_id=actor))
+        session.add(
+            Character(
+                id=character_id,
+                telegram_id=actor,
+                server_id="ocaso",
+                name="Legacy",
+                race="remanescente",
+                character_class="luminar",
+                stage="menu:ready",
+                ruleset_version="test",
+                level=60,
+                xp=0,
+                hp=1000,
+                max_hp=1000,
+            )
+        )
+        session.add(
+            GameActivity(
+                id=activity_id,
+                character_id=character_id,
+                content_id="c3-legacy-talent-snapshot",
+                status="active",
+                state_version=0,
+                ruleset_version="test",
+            )
+        )
+        await session.flush()
+        session.add(Encounter(id=encounter_id, game_activity_id=activity_id))
+        await session.flush()
+        session.add(
+            CombatRecord(
+                encounter_id=encounter_id,
+                snapshot={"fighters": {"player": {"talent_ids": [*lower_ids, *nv55_ids]}}},
+            )
+        )
+        session.add(
+            CharacterDoctrine(
+                character_id=character_id,
+                name="C3 anterior à abertura",
+                configuration={
+                    "path": None,
+                    "equipment": {},
+                    "arts": {},
+                    "talents": [
+                        {"point_slot": index + 1, "talent_id": talent_id}
+                        for index, talent_id in enumerate((*lower_ids, *nv55_ids))
+                    ],
+                },
+            )
+        )
+
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "INSERT INTO character_talent_choices "
+                "(character_id, point_slot, talent_id, publicly_acquired) "
+                "VALUES (:character_id, :point_slot, :talent_id, true)"
+            ),
+                [
+                    {
+                        "character_id": character_id,
+                        "point_slot": index + 1,
+                        "talent_id": talent_id,
+                    }
+                    for index, talent_id in enumerate(lower_ids)
+                ]
+                + [
+                    {
+                        "character_id": character_id,
+                        "point_slot": 12,
+                        "talent_id": stored_nv55_id,
+                    }
+                ],
+        )
+        await connection.run_sync(lambda sync: _migrate(sync, "head"))
+
+    async with sessions() as session:
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT talent_id, publicly_acquired "
+                    "FROM character_talent_choices WHERE character_id=:character_id "
+                    "ORDER BY point_slot"
+                ),
+                {"character_id": character_id},
+            )
+        ).all()
+        assert [(row.talent_id, row.publicly_acquired) for row in rows] == [
+            *((talent_id, True) for talent_id in lower_ids),
+            (stored_nv55_id, False),
+        ]
+        doctrine = await session.scalar(
+            text("SELECT configuration FROM character_doctrines WHERE character_id=:id"),
+            {"id": character_id},
+        )
+        assert [choice["talent_id"] for choice in doctrine["talents"]] == list(lower_ids)
+        combat = await session.scalar(
+            text("SELECT snapshot FROM combats WHERE encounter_id=:id"),
+            {"id": encounter_id},
+        )
+        assert combat["fighters"]["player"]["talent_ids"] == list(lower_ids)
+    with pytest.raises(TalentMutationRejected) as invalid_legacy:
+        await TalentService(sessions, "ocaso").view(actor)
+    assert invalid_legacy.value.code == TalentMutationCode.INVALID_CURRENT_CONFIGURATION

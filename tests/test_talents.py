@@ -769,7 +769,7 @@ async def test_valid_nv5_talent_reloads_through_combat_configuration_snapshot(da
 
 
 @pytest.mark.asyncio
-async def test_doctrine_cannot_activate_injected_nv55_talent(database):
+async def test_doctrine_rejects_nv55_below_required_level(database):
     actor = 772113
     character_id, sessions = await _seed_character(database, actor, level=40)
     service = DoctrineService(sessions, "ocaso")
@@ -806,7 +806,7 @@ async def test_doctrine_cannot_activate_injected_nv55_talent(database):
 
 
 @pytest.mark.asyncio
-async def test_level_60_preserves_unspent_points_with_nv5_nv15_nv25_nv35_nv45_available(database):
+async def test_level_60_can_spend_all_twelve_points_through_nv55(database):
     actor = 772114
     character_id, sessions = await _seed_character(database, actor, level=60)
     service = TalentService(sessions, "ocaso")
@@ -846,9 +846,10 @@ async def test_level_60_preserves_unspent_points_with_nv5_nv15_nv25_nv35_nv45_av
         for talent in TALENTS_BY_CLASS["sentinela"]
         if talent.level == 55
     )
-    with pytest.raises(TalentMutationRejected) as future:
-        await service.acquire(actor, level55_id, view.combat_configuration_version)
-    assert future.value.code == TalentMutationCode.TIER_NOT_IMPLEMENTED
+    acquired55 = await service.acquire(actor, level55_id, view.combat_configuration_version)
+    assert acquired55 is not None and acquired55.point_slot == 12
+    view = acquired55.view
+    assert view.total_points == 12 and view.available_points == 0
     async with sessions() as session:
         saved = list(
             (
@@ -861,7 +862,7 @@ async def test_level_60_preserves_unspent_points_with_nv5_nv15_nv25_nv35_nv45_av
         )
     assert [row.talent_id for row in saved] == [
         item.talent_id for item in TALENTS_BY_CLASS["sentinela"][:9]
-    ] + [future_id, level45_id]
+    ] + [future_id, level45_id, level55_id]
 
 
 @pytest.mark.asyncio

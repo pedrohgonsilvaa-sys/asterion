@@ -7,11 +7,7 @@ import pytest
 from asterion.domain.combat import Action, _begin_turn, _deal_combat_damage, _perform
 from asterion.domain.combat_math import CURRENT_COMBAT_RULESET
 from asterion.domain.prologue import PROFILE
-from asterion.domain.talents import (
-    IMPLEMENTED_TALENT_LEVELS,
-    TalentSelectionError,
-    validate_active_talent_ids,
-)
+from asterion.domain.talents import IMPLEMENTED_TALENT_LEVELS, validate_active_talent_ids
 from asterion.infrastructure.db.combat_codec import decode, encode
 
 D = Decimal
@@ -75,19 +71,15 @@ def _event(state, action: str):
     return next(event for event in reversed(state.events) if event.action == action)
 
 
-def test_nv55_oraculo_and_luminar_effects_remain_internal_before_unlock():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+def test_nv55_oraculo_and_luminar_effects_are_supported_by_public_gate():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     for character_class, slugs in (
         ("oraculo", ("fim_anunciado", "ultima_visao", "sinais_convergentes")),
         ("luminar", ("sentenca_solar", "ultimo_alvorecer", "contraluz_perfeita")),
     ):
         for slug in slugs:
-            with pytest.raises(TalentSelectionError):
-                validate_active_talent_ids(
-                    character_class,
-                    55,
-                    (f"talent.{character_class}.{slug}",),
-                )
+            talent_id = f"talent.{character_class}.{slug}"
+            assert validate_active_talent_ids(character_class, 55, (talent_id,)) == (talent_id,)
 
 
 @pytest.mark.parametrize(

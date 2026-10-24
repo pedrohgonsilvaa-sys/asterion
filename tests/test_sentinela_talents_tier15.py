@@ -187,7 +187,7 @@ def test_placas_internas_is_defined_and_authoritatively_available_at_level_15():
     definition = TALENT_DEFINITIONS[PLACAS]
     assert definition.level == 15
     assert definition.defense_percent == D("0.02")
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     assert validate_active_talent_ids("sentinela", 15, (PLACAS,)) == (PLACAS,)
     assert validate_talent_choices("sentinela", 15, ((1, PLACAS),)) == ((1, PLACAS),)
     with pytest.raises(TalentSelectionError):
@@ -361,7 +361,7 @@ def test_guarda_preparada_pending_state_persists_and_clears_on_combat_end_or_dea
 
 
 def test_tier_15_25_and_35_choices_are_valid_at_their_levels():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     for slot, talent_id in enumerate((PONTA, PLACAS, GUARDA), 1):
         assert validate_active_talent_ids("sentinela", 15, (talent_id,)) == (talent_id,)
         assert validate_talent_choices("sentinela", 15, ((slot, talent_id),)) == (

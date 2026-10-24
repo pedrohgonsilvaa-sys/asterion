@@ -402,7 +402,7 @@ def test_pressagio_flexivel_waits_for_normal_three_turn_sinal_persistente_expiry
 
 def test_oraculo_tier35_effects_are_valid_after_public_release():
     ids = (PROFECIA_DOLOROSA, DESTINO_ADIADO, PRESSAGIO_FLEXIVEL)
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     assert talent_points_at_level(35) == 7
     for talent_id in ids:
         assert TALENT_DEFINITIONS[talent_id].level == 35

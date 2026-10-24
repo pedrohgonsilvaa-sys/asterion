@@ -247,7 +247,7 @@ def _observe_acquired_talent(character_class, path, talent_ids, stats):
 
 @pytest.mark.asyncio
 async def test_all_six_classes_acquire_persist_and_use_nv35_talents(database):
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     assert {character_class: len(ids) for character_class, ids in TIER35.items()} == {
         character_class: 3 for character_class in CLASS_ORDER
     }
@@ -330,17 +330,19 @@ async def test_all_six_classes_acquire_persist_and_use_nv35_talents(database):
         high_level = await service.view(actor)
         assert high_level is not None and high_level.total_points == 12
         assert validate_active_talent_ids(character_class, 60, talent_ids) == talent_ids
-        for future_level in (55,):
-            future_id = next(
-                talent.talent_id
-                for talent in TALENTS_BY_CLASS[character_class]
-                if talent.level == future_level
-            )
-            with pytest.raises(TalentMutationRejected) as future:
-                await service.acquire(
-                    actor, future_id, high_level.combat_configuration_version
-                )
-            assert future.value.code == TalentMutationCode.TIER_NOT_IMPLEMENTED
+        final_tier_id = next(
+            talent.talent_id
+            for talent in TALENTS_BY_CLASS[character_class]
+            if talent.level == 55
+        )
+        final_tier = await service.acquire(
+            actor, final_tier_id, high_level.combat_configuration_version
+        )
+        assert final_tier is not None and final_tier.point_slot == 4
+        assert final_tier.view.available_points == 8
+        assert validate_active_talent_ids(character_class, 60, (final_tier_id,)) == (
+            final_tier_id,
+        )
         assert validate_active_talent_ids(
             character_class,
             60,
@@ -368,7 +370,7 @@ async def test_all_six_classes_acquire_persist_and_use_nv35_talents(database):
 
 
 @pytest.mark.asyncio
-async def test_doctrine_accepts_nv35_and_keeps_nv55_invalid(database):
+async def test_doctrine_rejects_nv55_below_required_level(database):
     character_class = "luminar"
     actor = 861360
     _, sessions = await _seed(database, actor, character_class, level=35)

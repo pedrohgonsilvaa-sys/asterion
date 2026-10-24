@@ -150,7 +150,7 @@ async def test_round_preparation_consumables_and_reconnect_are_persistent(databa
         ) == 1
 
 
-@pytest.mark.parametrize("level", [25, 45])
+@pytest.mark.parametrize("level", [25, 45, 55])
 @pytest.mark.asyncio
 async def test_round_snapshot_uses_a_legally_acquired_public_talent(
     database, monkeypatch, level
@@ -176,7 +176,8 @@ async def test_round_snapshot_uses_a_legally_acquired_public_talent(
 
     talents = TalentService(sessions, "ocaso")
     view = await talents.view(actor)
-    assert view is not None and view.available_points == (5 if level == 25 else 9)
+    expected_points = {25: 5, 45: 9, 55: 11}[level]
+    assert view is not None and view.available_points == expected_points
     acquired = await talents.acquire(
         actor, talent.talent_id, view.combat_configuration_version
     )

@@ -141,7 +141,7 @@ def test_olho_de_combate_adds_two_static_crit_points_in_internal_composition(pat
 
 
 def test_olho_de_combate_is_public_at_nv35_and_unavailable_below_it():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     assert talent_points_at_level(35) == 7
     assert TALENT_DEFINITIONS[OLHO].level == 35
     for level in (34,):

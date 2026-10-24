@@ -9,11 +9,7 @@ from asterion.domain.class_trials import class_player_actions
 from asterion.domain.combat import Action, _begin_turn, _deal_combat_damage, _perform
 from asterion.domain.combat_math import CURRENT_COMBAT_RULESET
 from asterion.domain.prologue import PROFILE
-from asterion.domain.talents import (
-    IMPLEMENTED_TALENT_LEVELS,
-    TalentSelectionError,
-    validate_active_talent_ids,
-)
+from asterion.domain.talents import IMPLEMENTED_TALENT_LEVELS, validate_active_talent_ids
 from asterion.infrastructure.db.combat_codec import decode, encode
 
 D = Decimal
@@ -78,8 +74,8 @@ def _event(state, action: str):
     return next(event for event in reversed(state.events) if event.action == action)
 
 
-def test_nv55_effects_are_internal_while_public_gate_remains_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+def test_nv55_effects_are_supported_by_the_joint_public_gate():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     for talent_id in (
         "talent.vigia.disparo_implacavel",
         "talent.vigia.ultimo_horizonte",
@@ -89,8 +85,7 @@ def test_nv55_effects_are_internal_while_public_gate_remains_closed():
         "talent.tecelao.trama_precisa",
     ):
         character_class = talent_id.split(".")[1]
-        with pytest.raises(TalentSelectionError):
-            validate_active_talent_ids(character_class, 55, (talent_id,))
+        assert validate_active_talent_ids(character_class, 55, (talent_id,)) == (talent_id,)
 
 
 @pytest.mark.parametrize(

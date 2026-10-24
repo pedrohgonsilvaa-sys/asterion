@@ -213,7 +213,7 @@ def test_perfuracao_calculada_is_two_percentage_points_and_uses_static_compositi
 
 
 def test_perfuracao_calculada_is_publicly_valid_at_nv25():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     assert TALENT_DEFINITIONS[PERFURACAO].level == 25
     with pytest.raises(TalentSelectionError):
         validate_active_talent_ids("vigia", 24, (PERFURACAO,))
@@ -538,7 +538,7 @@ def test_aquisicao_rapida_uses_mira_estavel_duration_without_extra_stack_or_wind
 
 
 def test_nv25_hooks_require_level_and_nv35_is_public():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
     with pytest.raises(TalentSelectionError):
         validate_active_talent_ids("vigia", 24, (PERFURACAO,))
     assert validate_active_talent_ids("vigia", 25, (ANTECIPACAO,)) == (ANTECIPACAO,)
