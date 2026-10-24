@@ -704,7 +704,7 @@ def test_visao_persistente_is_cleared_at_combat_end():
 
 
 def test_vigia_nv35_gate_opens_while_future_tiers_remain_closed():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
     for talent_id in (ALVO_EXPOSTO, RECUO_INSTINTIVO, VISAO_PERSISTENTE):
         with pytest.raises(TalentSelectionError):
             validate_active_talent_ids("vigia", 34, (talent_id,))

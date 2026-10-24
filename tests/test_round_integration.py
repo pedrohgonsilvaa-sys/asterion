@@ -150,30 +150,33 @@ async def test_round_preparation_consumables_and_reconnect_are_persistent(databa
         ) == 1
 
 
+@pytest.mark.parametrize("level", [25, 45])
 @pytest.mark.asyncio
-async def test_round_snapshot_uses_a_legally_acquired_nv25_talent(database, monkeypatch):
+async def test_round_snapshot_uses_a_legally_acquired_public_talent(
+    database, monkeypatch, level
+):
     import asterion.application.round as round_module
 
-    actor, service = await _seed_round(database, 772020)
+    actor, service = await _seed_round(database, 772020 + level)
     _force_safe_common(monkeypatch, round_module)
     sessions = database[1]
     talent = next(
-        item for item in TALENTS_BY_CLASS["sentinela"] if item.level == 25
+        item for item in TALENTS_BY_CLASS["sentinela"] if item.level == level
     )
-    expected_stats = resolve_combat_stats("sentinela", 25, "remanescente")
+    expected_stats = resolve_combat_stats("sentinela", level, "remanescente")
     async with sessions.begin() as session:
         character = await session.scalar(
             select(Character).where(Character.telegram_id == actor)
         )
         assert character is not None
-        character.level = 25
-        character.xp = level_xp(25)
+        character.level = level
+        character.xp = level_xp(level)
         character.hp = expected_stats.hp
         character.max_hp = expected_stats.hp
 
     talents = TalentService(sessions, "ocaso")
     view = await talents.view(actor)
-    assert view is not None and view.available_points == 5
+    assert view is not None and view.available_points == (5 if level == 25 else 9)
     acquired = await talents.acquire(
         actor, talent.talent_id, view.combat_configuration_version
     )

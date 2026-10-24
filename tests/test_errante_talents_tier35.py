@@ -466,7 +466,7 @@ def test_desvio_preparation_is_cleared_on_death_and_combat_end():
 
 
 def test_errante_nv35_ids_are_publicly_valid_after_release():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
     for talent_id in (OPORTUNISMO_AMPLIADO, SOBREVIVENCIA, DESVIO_OFENSIVO):
         assert TALENT_DEFINITIONS[talent_id].level == 35
         for level in (34,):

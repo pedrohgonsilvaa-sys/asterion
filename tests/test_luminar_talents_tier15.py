@@ -172,7 +172,7 @@ def _set_luminar_state(state: Combat, kind: str, remaining: int = 2) -> None:
 
 
 def test_luminar_tier15_catalog_and_public_gate():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
     assert talent_points_at_level(15) == 3
     expected = {
         JULGAMENTO_PRECISO: ("Julgamento Preciso", D(15), D(0), D(0)),
@@ -523,4 +523,4 @@ def test_all_three_nv15_talents_coexist_in_controlled_combat_state():
     assert event.path_power_multiplier == D("1.15")
     assert event.path_crit_bonus == D(2)
     assert "luminar_state" not in result.fighters["player"].path_state
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})

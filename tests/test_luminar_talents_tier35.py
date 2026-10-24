@@ -145,7 +145,7 @@ def _set_state(state: Combat, kind: str, remaining: int = 2) -> None:
 
 
 def test_luminar_tier35_catalog_is_public_after_joint_release():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
     assert talent_points_at_level(35) == 7
     expected = {
         VEREDITO_ARDENTE: "Veredito Ardente",

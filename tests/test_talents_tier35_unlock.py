@@ -39,7 +39,6 @@ from asterion.domain.equipment_stats import equipment_configuration_from_data
 from asterion.domain.talents import (
     IMPLEMENTED_TALENT_LEVELS,
     TALENTS_BY_CLASS,
-    TalentSelectionError,
     talent_points_at_level,
     validate_active_talent_ids,
     validate_talent_choices,
@@ -248,7 +247,7 @@ def _observe_acquired_talent(character_class, path, talent_ids, stats):
 
 @pytest.mark.asyncio
 async def test_all_six_classes_acquire_persist_and_use_nv35_talents(database):
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
     assert {character_class: len(ids) for character_class, ids in TIER35.items()} == {
         character_class: 3 for character_class in CLASS_ORDER
     }
@@ -331,7 +330,7 @@ async def test_all_six_classes_acquire_persist_and_use_nv35_talents(database):
         high_level = await service.view(actor)
         assert high_level is not None and high_level.total_points == 12
         assert validate_active_talent_ids(character_class, 60, talent_ids) == talent_ids
-        for future_level in (45, 55):
+        for future_level in (55,):
             future_id = next(
                 talent.talent_id
                 for talent in TALENTS_BY_CLASS[character_class]
@@ -342,12 +341,11 @@ async def test_all_six_classes_acquire_persist_and_use_nv35_talents(database):
                     actor, future_id, high_level.combat_configuration_version
                 )
             assert future.value.code == TalentMutationCode.TIER_NOT_IMPLEMENTED
-        with pytest.raises(TalentSelectionError):
-            validate_active_talent_ids(
-                character_class,
-                60,
-                (next(t.talent_id for t in TALENTS_BY_CLASS[character_class] if t.level == 45),),
-            )
+        assert validate_active_talent_ids(
+            character_class,
+            60,
+            (next(t.talent_id for t in TALENTS_BY_CLASS[character_class] if t.level == 45),),
+        )
 
         high_actor = 862350 + index
         _, high_sessions = await _seed(
@@ -370,7 +368,7 @@ async def test_all_six_classes_acquire_persist_and_use_nv35_talents(database):
 
 
 @pytest.mark.asyncio
-async def test_doctrine_accepts_nv35_and_keeps_nv45_nv55_invalid(database):
+async def test_doctrine_accepts_nv35_and_keeps_nv55_invalid(database):
     character_class = "luminar"
     actor = 861360
     _, sessions = await _seed(database, actor, character_class, level=35)
@@ -414,7 +412,7 @@ async def test_doctrine_accepts_nv35_and_keeps_nv45_nv55_invalid(database):
     invalid_id = next(
         talent.talent_id
         for talent in TALENTS_BY_CLASS[character_class]
-        if talent.level == 45
+        if talent.level == 55
     )
     fresh = await service.view(actor)
     assert fresh is not None

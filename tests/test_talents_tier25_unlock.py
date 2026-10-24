@@ -194,8 +194,8 @@ def test_canonical_talent_point_milestones_remain_unchanged(level, points):
 
 
 @pytest.mark.asyncio
-async def test_all_six_classes_acquire_nv25_and_nv35_and_reload_public_snapshots(database):
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+async def test_all_six_classes_acquire_nv25_nv35_nv45_and_reload_public_snapshots(database):
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
     assert sum(map(len, TIER25.values())) == 18
     assert all(len(talent_ids) == 3 for talent_ids in TIER25.values())
     static_modifiers = {
@@ -303,21 +303,31 @@ async def test_all_six_classes_acquire_nv25_and_nv35_and_reload_public_snapshots
         assert acquired35 is not None and acquired35.point_slot == 4
         high_level = acquired35.view
         assert high_level.available_points == 8
-        for future_level in (45, 55):
-            future = next(
-                t for t in TALENTS_BY_CLASS[character_class] if t.level == future_level
-            )
-            future_id = future.talent_id
-            future_detail = render_talent_detail(high_level, future)
-            assert f"Requer Nv.{future_level}" in future_detail.text
-            assert "Adquirir Talento" not in [
-                button.text
-                for row in future_detail.keyboard.inline_keyboard
-                for button in row
-            ]
-            with pytest.raises(TalentMutationRejected) as locked:
-                await service.acquire(actor, future_id, high_level.combat_configuration_version)
-            assert locked.value.code == TalentMutationCode.TIER_NOT_IMPLEMENTED
+        tier45 = next(t for t in TALENTS_BY_CLASS[character_class] if t.level == 45)
+        tier45_detail = render_talent_detail(high_level, tier45)
+        assert "Adquirir Talento" in [
+            button.text
+            for row in tier45_detail.keyboard.inline_keyboard
+            for button in row
+        ]
+        acquired45 = await service.acquire(
+            actor, tier45.talent_id, high_level.combat_configuration_version
+        )
+        assert acquired45 is not None and acquired45.point_slot == 5
+        high_level = acquired45.view
+        assert high_level.available_points == 7
+
+        future = next(t for t in TALENTS_BY_CLASS[character_class] if t.level == 55)
+        future_detail = render_talent_detail(high_level, future)
+        assert "Requer Nv.55" in future_detail.text
+        assert "Adquirir Talento" not in [
+            button.text
+            for row in future_detail.keyboard.inline_keyboard
+            for button in row
+        ]
+        with pytest.raises(TalentMutationRejected) as locked:
+            await service.acquire(actor, future.talent_id, high_level.combat_configuration_version)
+        assert locked.value.code == TalentMutationCode.TIER_NOT_IMPLEMENTED
 
 
 @pytest.mark.asyncio
@@ -698,7 +708,7 @@ async def test_doctrine_accepts_nv25_without_free_respec_and_rejects_invalid_sta
     )
 
     invalid_ids = (
-        next(t.talent_id for t in TALENTS_BY_CLASS["sentinela"] if t.level == 45),
+        next(t.talent_id for t in TALENTS_BY_CLASS["sentinela"] if t.level == 55),
         "talent.errante.precisao_cruel",
     )
     for invalid_id in invalid_ids:

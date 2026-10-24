@@ -209,7 +209,7 @@ def test_luz_perfurante_is_static_two_point_per_and_composes_once(path):
 
 
 def test_luz_perfurante_is_publicly_composable_at_nv25_only():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
     for level in (24,):
         with pytest.raises(TalentSelectionError):
             validate_active_talent_ids("luminar", level, (LUZ_PERFURANTE,))

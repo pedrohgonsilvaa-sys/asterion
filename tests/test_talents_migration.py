@@ -222,3 +222,130 @@ async def test_0028_quarantines_pre_release_nv35_rows_and_frozen_talent_ids(data
             {"id": encounter_id},
         )
         assert combat["fighters"]["player"]["talent_ids"] == [lower_id]
+
+
+@pytest.mark.asyncio
+async def test_0029_quarantines_pre_release_nv45_without_revoking_nv35_provenance(database):
+    engine, sessions = database
+    async with engine.begin() as connection:
+        await connection.run_sync(
+            lambda sync: _migrate(sync, "20261023_0028", direction="downgrade")
+        )
+
+    character_id = uuid4()
+    activity_id = uuid4()
+    encounter_id = uuid4()
+    actor = 772299
+    lower_id = "talent.luminar.luz_incisiva"
+    legitimate_35 = "talent.luminar.veredito_ardente"
+    closed_45 = "talent.luminar.punicao_da_fraqueza"
+    async with sessions.begin() as session:
+        session.add(Account(telegram_id=actor))
+        session.add(
+            Character(
+                id=character_id,
+                telegram_id=actor,
+                server_id="ocaso",
+                name="Legacy",
+                race="remanescente",
+                character_class="luminar",
+                stage="menu:ready",
+                ruleset_version="test",
+                level=60,
+                xp=0,
+                hp=1000,
+                max_hp=1000,
+            )
+        )
+        session.add(
+            GameActivity(
+                id=activity_id,
+                character_id=character_id,
+                content_id="c2-legacy-talent-snapshot",
+                status="active",
+                state_version=0,
+                ruleset_version="test",
+            )
+        )
+        await session.flush()
+        session.add(Encounter(id=encounter_id, game_activity_id=activity_id))
+        await session.flush()
+        session.add(
+            CombatRecord(
+                encounter_id=encounter_id,
+                snapshot={
+                    "fighters": {
+                        "player": {
+                            "talent_ids": [lower_id, legitimate_35, closed_45]
+                        }
+                    }
+                },
+            )
+        )
+        session.add(
+            CharacterDoctrine(
+                character_id=character_id,
+                name="C2 anterior à abertura",
+                configuration={
+                    "path": None,
+                    "equipment": {},
+                    "arts": {},
+                    "talents": [
+                        {"point_slot": 1, "talent_id": lower_id},
+                        {"point_slot": 7, "talent_id": legitimate_35},
+                        {"point_slot": 9, "talent_id": closed_45},
+                    ],
+                },
+            )
+        )
+
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "INSERT INTO character_talent_choices "
+                "(character_id, point_slot, talent_id, publicly_acquired) "
+                "VALUES (:character_id, 1, :lower_id, true), "
+                "(:character_id, 7, :tier35_id, true), "
+                "(:character_id, 9, :tier45_id, true)"
+            ),
+            {
+                "character_id": character_id,
+                "lower_id": lower_id,
+                "tier35_id": legitimate_35,
+                "tier45_id": closed_45,
+            },
+        )
+        await connection.run_sync(lambda sync: _migrate(sync, "head"))
+
+    async with sessions() as session:
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT talent_id, publicly_acquired "
+                    "FROM character_talent_choices WHERE character_id=:character_id "
+                    "ORDER BY point_slot"
+                ),
+                {"character_id": character_id},
+            )
+        ).all()
+        assert [(row.talent_id, row.publicly_acquired) for row in rows] == [
+            (lower_id, True),
+            (legitimate_35, True),
+            (closed_45, False),
+        ]
+        doctrine = await session.scalar(
+            text("SELECT configuration FROM character_doctrines WHERE character_id=:id"),
+            {"id": character_id},
+        )
+        assert doctrine["talents"] == [
+            {"point_slot": 1, "talent_id": lower_id},
+            {"point_slot": 7, "talent_id": legitimate_35},
+        ]
+        combat = await session.scalar(
+            text("SELECT snapshot FROM combats WHERE encounter_id=:id"),
+            {"id": encounter_id},
+        )
+        assert combat["fighters"]["player"]["talent_ids"] == [
+            lower_id,
+            legitimate_35,
+        ]

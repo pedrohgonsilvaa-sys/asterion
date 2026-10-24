@@ -178,7 +178,7 @@ def _event(state, action_id: str):
 
 
 def test_oraculo_tier15_definitions_are_publicly_authorized_at_level():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
     assert talent_points_at_level(15) == 3
     expected = {
         PRESSAGIO_CORTANTE: ("Presságio Cortante", D(15), D(0), D(0)),

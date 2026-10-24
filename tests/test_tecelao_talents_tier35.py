@@ -109,7 +109,7 @@ def test_trama_agressiva_does_not_trigger_on_origin_art_and_keeps_tier_closed():
         change[0] == "trama"
         for change in _event(repeated, FIO_CORTANTE).class_resource_changes
     )
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
     assert talent_points_at_level(35) == 7
     for talent_id in (TRAMA_AGRESSIVA, REFORCO_DO_VEU, FIO_PERSISTENTE):
         assert TALENT_DEFINITIONS[talent_id].level == 35
@@ -288,7 +288,7 @@ def test_tier35_is_public_while_lower_weaver_tiers_remain_selectable():
         "talent.tecelao.trama_duradoura",
         "talent.tecelao.fio_perfurante",
     )
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
     assert all(
         validate_active_talent_ids("tecelao", 25, (talent_id,)) == (talent_id,)
         for talent_id in public_ids

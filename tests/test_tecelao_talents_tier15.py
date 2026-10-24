@@ -132,7 +132,7 @@ def _action_events(state, action_id: str):
 
 
 def test_tecelao_tier15_catalog_values_and_public_gate():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
     assert TALENT_DEFINITIONS[FENDA].name == "Fenda Precisa"
     assert TALENT_DEFINITIONS[FENDA].level == 15
     assert TALENT_DEFINITIONS[FENDA].crit_points == D(2)
@@ -363,8 +363,8 @@ def test_trama_window_roundtrips_codec_without_refresh_or_losing_origin():
     assert actor.path_state["trama_state"]["origin_art"] == SURTO
 
 
-def test_tier15_and_tier25_are_authorized_but_tier35_remains_rejected():
-    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35})
+def test_tier15_tier25_tier35_and_tier45_are_authorized():
+    assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45})
     assert validate_talent_choices("tecelao", 15, ((1, TRAMA_DURADOURA),)) == (
         (1, TRAMA_DURADOURA),
     )
