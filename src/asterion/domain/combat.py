@@ -1484,6 +1484,8 @@ _CLASS_MECHANIC_COMBAT_FLAGS = (
     "errante_instinto_de_fuga_used",
     "errante_primeiro_desvio_used",
     "tecelao_veu_de_emergencia_used",
+    "oraculo_ultima_visao_used",
+    "luminar_ultimo_alvorecer_used",
 )
 
 
@@ -2690,35 +2692,82 @@ def _grant_nv55_hp_threshold_effects(
             stat_modifier_mode="percentage_points",
         )
 
-    if fighter.character_class != "tecelao":
+    emergency_effects = {
+        "tecelao": (
+            "veu_de_emergencia",
+            "tecelao_veu_de_emergencia_used",
+            "class_mechanic.tecelao.veu_de_emergencia.barrier",
+            "barrier",
+        ),
+        "oraculo": (
+            "ultima_visao",
+            "oraculo_ultima_visao_used",
+            "class_mechanic.oraculo.ultima_visao.barrier",
+            "barrier",
+        ),
+        "luminar": (
+            "ultimo_alvorecer",
+            "luminar_ultimo_alvorecer_used",
+            "class_mechanic.luminar.ultimo_alvorecer.heal",
+            "heal",
+        ),
+    }
+    emergency = emergency_effects.get(fighter.character_class)
+    if emergency is None:
         return
+    talent_slug, marker_key, source_id, effect_kind = emergency
     if (
-        not _has_talent(fighter, "veu_de_emergencia")
+        not _has_talent(fighter, talent_slug)
         or fighter.hp > fighter.stats.hp * D("0.30")
-        or fighter.path_state.get("tecelao_veu_de_emergencia_used") == combat_id
+        or fighter.path_state.get(marker_key) == combat_id
     ):
         return
 
     # Mark the combat-scoped first occurrence before applying an effect. A
     # lethal crossing is recorded but cannot grant a Barrier or resurrect.
-    fighter.path_state["tecelao_veu_de_emergencia_used"] = combat_id
+    fighter.path_state[marker_key] = combat_id
     if fighter.hp <= ZERO:
         return
-    requested = (fighter.stats.hp * D("0.06")).to_integral_value(
+    if effect_kind == "barrier":
+        requested = (fighter.stats.hp * D("0.06")).to_integral_value(
+            rounding=ROUND_FLOOR
+        )
+        requested = (
+            requested * _barrier_received_multiplier(state, fighter_key)
+        ).to_integral_value(rounding=ROUND_FLOOR)
+        _apply_barrier(
+            fighter,
+            applier_id=fighter.id,
+            effect_definition_id=source_id,
+            value=requested,
+            duration=1,
+            applied_opportunity=fighter.opportunity,
+            round_number=state.round,
+            source_label=source_id,
+        )
+        return
+
+    # Último Alvorecer is a restricted passive heal: it intentionally bypasses
+    # the ordinary Arte healing pipeline, its Crit and all healing triggers.
+    amount = (fighter.stats.hp * D("0.05")).to_integral_value(
         rounding=ROUND_FLOOR
     )
-    requested = (
-        requested * _barrier_received_multiplier(state, fighter_key)
-    ).to_integral_value(rounding=ROUND_FLOOR)
-    _apply_barrier(
-        fighter,
-        applier_id=fighter.id,
-        effect_definition_id="class_mechanic.tecelao.veu_de_emergencia.barrier",
-        value=requested,
-        duration=1,
-        applied_opportunity=fighter.opportunity,
-        round_number=state.round,
-        source_label="class_mechanic.tecelao.veu_de_emergencia.barrier",
+    healed = min(max(ZERO, fighter.stats.hp - fighter.hp), amount)
+    if healed <= ZERO:
+        return
+    fighter.hp += healed
+    state.mechanic_events.append(
+        CombatEvent(
+            len(state.mechanic_events),
+            state.round,
+            fighter_key,
+            source_id,
+            fighter.id,
+            healed=healed,
+            effect_id=source_id,
+            actor_entity_id=fighter.id,
+            internal=True,
+        )
     )
 
 
@@ -3792,6 +3841,8 @@ def _prepare_path_action(
             "sentinela": ("punicao_final", D("0.40")),
             "errante": ("fim_proximo", D("0.35")),
             "vigia": ("disparo_implacavel", D("0.35")),
+            "oraculo": ("fim_anunciado", D("0.35")),
+            "luminar": ("sentenca_solar", D("0.35")),
         }
         low_hp_talent = low_hp_direct_talents.get(actor.character_class)
         if (
@@ -3996,7 +4047,9 @@ def _prepare_path_action(
             )
             multiplier = D(1) + percent
             if expected_kind == "fulgor" and _has_talent(actor, "contraluz_perfeita"):
-                multiplier += D("0.02")
+                # The canonical description says +2% potency, which is a
+                # relative modifier after the path's Fulgor strengthening.
+                multiplier *= D("1.02")
             for entry in context["by_target"].values():
                 if expected_kind == "julgamento":
                     entry["damage_power"] *= multiplier

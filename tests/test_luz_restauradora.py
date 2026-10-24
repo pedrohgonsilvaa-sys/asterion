@@ -230,7 +230,7 @@ def test_luz_applies_eligible_luminar_talents_without_double_counting_fulgor():
     actor_after = result.fighters["player"]
     event = _event(result)
 
-    assert event.effective_healing == D("85")  # floor(100 × .70 × 1.05 × 1.17)
+    assert event.effective_healing == D("86")  # floor(100 × .70 × 1.05 × 1.15 × 1.02)
     assert event.barrier_value == D("42")  # floor(100 × .35 × 1.17 × 1.04)
     assert event.class_resource_changes == (("luminar_state", actor.id, 1, 0),)
     assert "luminar.cura_prudente" in event.path_triggers
