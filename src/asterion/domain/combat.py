@@ -613,6 +613,15 @@ class Fighter:
             value *= D("1.05")
         if (
             name == "defense"
+            and self.character_class == "luminar"
+            and "talent.luminar.luz_protetora" in self.talent_ids
+            and self.barrier > ZERO
+        ):
+            # Luz Protetora is derived from the Luminar's active barrier layers
+            # on every read, so absorption and expiry cannot leave stale DEF.
+            value *= D("1.05")
+        if (
+            name == "defense"
             and self.character_class == "errante"
             and "talent.errante.sobrevivencia" in self.talent_ids
             and self.hp > ZERO
@@ -1772,6 +1781,20 @@ def apply_effect_batch(
             and numeric_stat
         ):
             effect.magnitude *= max(ZERO, D(1) - barrier_reduction)
+        if (
+            target.character_class == "oraculo"
+            and _has_talent(target, "mente_velada")
+            and effect.kind == "debuff"
+            and effect.removable
+            and not effect.unremovable
+            and not effect.protected
+            and not effect.fixed_mechanic
+            and not effect.hard_cc
+            and numeric_stat
+        ):
+            # Mente Velada reduces the magnitude of an eligible numeric
+            # Debuff; it does not change duration or incoming damage.
+            effect.magnitude *= D("0.94")
 
     simulated_effects = deepcopy(target.effects)
     would_apply: list[bool] = []
@@ -3684,6 +3707,25 @@ def _prepare_path_action(
             entry["damage_power"] *= D("1.03")
             entry["triggers"].append("tecelao.ruptura_profunda")
         if (
+            direct
+            and actor.character_class == "oraculo"
+            and _has_talent(actor, "fraqueza_prevista")
+            and _has_valid_normal_debuff(target)
+        ):
+            entry["damage_power"] *= D("1.03")
+            entry["triggers"].append("oraculo.fraqueza_prevista")
+        if (
+            direct
+            and actor.character_class == "luminar"
+            and _has_talent(actor, "punicao_da_fraqueza")
+            and healing_received_multiplier(state, target_key) < D(1)
+        ):
+            # This is target-specific and uses the action-start healing
+            # modifier snapshot; a status applied by this action cannot enable
+            # the bonus retroactively.
+            entry["damage_power"] *= D("1.03")
+            entry["triggers"].append("luminar.punicao_da_fraqueza")
+        if (
             actor.character_class == "sentinela"
             and direct
             and _has_talent(actor, "pressao_de_fissuras")
@@ -4318,26 +4360,31 @@ def _finalize_path_action(
         context.get("luminar_consumed_kind") == "fulgor"
         and _has_talent(actor, "fluxo_restaurador")
     ):
-        events = [
-            event
+        healed_target_ids = dict.fromkeys(
+            event.target
             for event in state.events
             if event.actor_entity_id == actor.id
             and event.action_instance_id == context.get("action_instance_id")
             and event.effective_healing > ZERO
-        ]
-        if events:
+        )
+        for healed_target_id in healed_target_ids:
             target = next(
-                (fighter for fighter in state.fighters.values() if fighter.id == events[0].target),
+                (
+                    fighter
+                    for fighter in state.fighters.values()
+                    if fighter.id == healed_target_id
+                ),
                 None,
             )
-            if target is not None:
-                _apply_class_mechanic_buff(
-                    target,
-                    mechanic="luminar.fluxo_restaurador",
-                    stat="defense",
-                    magnitude=D("0.04"),
-                )
-                generated.append(("luminar.fluxo_restaurador", target.id))
+            if target is None:
+                continue
+            _apply_class_mechanic_buff(
+                target,
+                mechanic="luminar.fluxo_restaurador",
+                stat="defense",
+                magnitude=D("0.04"),
+            )
+            generated.append(("luminar.fluxo_restaurador", target.id))
 
     if context.get("tecelao_defensive_barrier_candidate") and any(
         event.actor_entity_id == actor.id
@@ -6598,7 +6645,11 @@ def healing_received_multiplier(state: Combat, target_id: str = "player") -> Dec
     target = state.fighters[target_id]
     multiplier = D(1)
     for effect in target.effects:
-        if effect.stat != "healing_received":
+        if (
+            effect.stat != "healing_received"
+            or effect.remaining <= 0
+            or effect.stacks <= 0
+        ):
             continue
         multiplier *= (
             max(D(0), D(1) - effect.magnitude)
