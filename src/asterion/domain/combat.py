@@ -631,6 +631,13 @@ class Fighter:
             # from the current combat HP/maximum HP so healing, reconciliation,
             # and HP-maximum changes enter or leave the condition immediately.
             value *= D("1.05")
+        if name == "defense" and self.hp > ZERO and self.stats.hp > ZERO:
+            if (
+                self.character_class == "sentinela"
+                and "talent.sentinela.persistencia" in self.talent_ids
+                and self.hp * D(100) <= self.stats.hp * D(35)
+            ):
+                value *= D("1.07")
         return value
 
 
@@ -1468,6 +1475,8 @@ _CLASS_MECHANIC_COMBAT_FLAGS = (
     "vigia_antecipacao_used",
     "oraculo_destino_adiado_used",
     "tecelao_defensive_barrier_used",
+    "errante_instinto_de_fuga_used",
+    "errante_primeiro_desvio_used",
 )
 
 
@@ -2329,6 +2338,7 @@ def _deal_combat_damage(
     if hp_before > threshold and target.hp <= threshold:
         _grant_vigilia_retaliation(state, target_key, source_key)
     _grant_vigia_recuo_instintivo(state, target_key, reason="hp_loss")
+    _grant_nv55_hp_threshold_effects(state, target_key, reason="hp_loss")
     if hp_before > ZERO and target.hp <= ZERO:
         _clear_class_mechanics_for_death(state, target_key)
     return actual_damage, barrier_absorbed
@@ -2344,6 +2354,7 @@ def _begin_turn(state: Combat) -> None:
     guard_integrity = actor.path_state.get("guard_integrity_debuff")
     if (
         isinstance(guard_integrity, dict)
+        and str(guard_integrity.get("combat_id", "")) == str(state.id)
         and actor.opportunity >= int(guard_integrity.get("expires_opportunity", 0))
     ):
         actor.path_state.pop("guard_integrity_debuff", None)
@@ -2354,6 +2365,9 @@ def _begin_turn(state: Combat) -> None:
             _grant_vigia_recuo_instintivo(
                 state, fighter_key, reason="first_combat_observation"
             )
+        _grant_nv55_hp_threshold_effects(
+            state, fighter_key, reason="first_combat_observation"
+        )
     if _is_player_turn_actor(state, actor_key) and state.prepared_action is not None:
         state.response_window_seen = True
 
@@ -2385,6 +2399,7 @@ def _apply_class_mechanic_buff(
     magnitude: Decimal,
     duration: int = 1,
     effect_id: str | None = None,
+    stat_modifier_mode: str = "multiplicative",
 ) -> None:
     resolved_effect_id = effect_id or f"class_mechanic.{mechanic}.{stat}"
     existing = next(
@@ -2399,12 +2414,14 @@ def _apply_class_mechanic_buff(
                 duration,
                 actor.opportunity,
                 kind="buff",
+                stat_modifier_mode=stat_modifier_mode,
             )
         )
         return
     existing.magnitude = magnitude
     existing.remaining = duration
     existing.applied_opportunity = actor.opportunity
+    existing.stat_modifier_mode = stat_modifier_mode
 
 
 def _retaliation_duration(actor: Fighter) -> int:
@@ -2570,8 +2587,14 @@ def _grant_defender_retaliation(
             "remaining": 2,
             "applied_opportunity": target.opportunity,
         }
-    if _has_talent(target, "guarda_integra"):
+    _arm_guard_integrity(state, target_key)
+
+
+def _arm_guard_integrity(state: Combat, target_key: str) -> None:
+    target = state.fighters[target_key]
+    if target.character_class == "sentinela" and _has_talent(target, "guarda_integra"):
         target.path_state["guard_integrity_debuff"] = {
+            "combat_id": str(state.id),
             "expires_opportunity": target.opportunity + 1,
         }
 
@@ -2633,6 +2656,32 @@ def _grant_vigia_recuo_instintivo(
             duration=1,
         )
     return True
+
+
+def _grant_nv55_hp_threshold_effects(
+    state: Combat, fighter_key: str, *, reason: str
+) -> None:
+    fighter = state.fighters[fighter_key]
+    if fighter.stats.hp <= ZERO:
+        return
+    combat_id = str(state.id)
+
+    if (
+        fighter.hp > ZERO
+        and fighter.character_class == "errante"
+        and _has_talent(fighter, "instinto_de_fuga")
+        and fighter.hp * D(100) <= fighter.stats.hp * D(30)
+        and fighter.path_state.get("errante_instinto_de_fuga_used") != combat_id
+    ):
+        fighter.path_state["errante_instinto_de_fuga_used"] = combat_id
+        _apply_class_mechanic_buff(
+            fighter,
+            mechanic="errante.instinto_de_fuga",
+            stat="evasion",
+            magnitude=D(10),
+            duration=1,
+            stat_modifier_mode="percentage_points",
+        )
 
 
 def _consume_retaliation(
@@ -3521,11 +3570,14 @@ def _apply_declared_conditional_modifiers(
             entry["triggers"].append(modifier.id)
 
 
-def _guard_integrity_can_reduce(target: Fighter, effect: ActionEffect | Effect) -> bool:
+def _guard_integrity_can_reduce(
+    state: Combat, target: Fighter, effect: ActionEffect | Effect
+) -> bool:
     token = target.path_state.get("guard_integrity_debuff")
     return bool(
         target.character_class == "sentinela"
         and isinstance(token, dict)
+        and str(token.get("combat_id", "")) == str(state.id)
         and target.opportunity < int(token.get("expires_opportunity", 0))
         and effect.kind == "debuff"
         and effect.magnitude > ZERO
@@ -3698,6 +3750,25 @@ def _prepare_path_action(
                 and _has_valid_negative_effect(state, target)
             ),
         }
+        low_hp_direct_talents = {
+            "sentinela": ("punicao_final", D("0.40")),
+            "errante": ("fim_proximo", D("0.35")),
+        }
+        low_hp_talent = low_hp_direct_talents.get(actor.character_class)
+        if (
+            direct
+            and low_hp_talent is not None
+            and _has_talent(actor, low_hp_talent[0])
+            and target.stats.hp > ZERO
+            and target.hp <= target.stats.hp * low_hp_talent[1]
+        ):
+            # These are direct-damage bonuses evaluated from the action-start
+            # target HP snapshot, using the same component-power stage as the
+            # existing direct-damage Talents in §49.5.
+            entry["damage_power"] *= D("1.04")
+            entry["triggers"].append(
+                f"{actor.character_class}.{low_hp_talent[0]}"
+            )
         if (
             direct
             and actor.character_class == "tecelao"
@@ -4494,6 +4565,7 @@ def _perform(
     if action_id == "defend":
         actor.defending = True
         actor.last_action = action_id
+        _arm_guard_integrity(state, actor_id)
         state.events.append(
             CombatEvent(
                 len(state.events),
@@ -5472,6 +5544,30 @@ def _perform(
                 ).to_integral_value(rounding=ROUND_FLOOR)
             )
             target.path_state["oraculo_destino_adiado_used"] = True
+        primeiro_desvio_used = target.path_state.get(
+            "errante_primeiro_desvio_used"
+        )
+        if (
+            direct_eligible
+            and damage > 0
+            and target.character_class == "errante"
+            and _has_talent(target, "primeiro_desvio")
+            and primeiro_desvio_used != str(state.id)
+        ):
+            # Like Antecipação and Destino Adiado, this is a first positive
+            # Direct Damage component reduction after existing direct
+            # reductions and before Barrier absorption. The combat id keeps
+            # each Class' one-use allowance independent and reconnect-safe.
+            direct_final_reduction = min(
+                D(1), direct_final_reduction + D("0.08")
+            )
+            damage = int(
+                (
+                    D(direct_damage_before_final_reduction)
+                    * (D(1) - direct_final_reduction)
+                ).to_integral_value(rounding=ROUND_FLOOR)
+            )
+            target.path_state["errante_primeiro_desvio_used"] = str(state.id)
         path_final_damage_bonus = D(target_path.get("final_damage_bonus", ZERO))
         path_triggers = list(target_path.get("triggers", ()))
         if (
@@ -5688,7 +5784,7 @@ def _perform(
                 applied_opportunity=target.opportunity,
             )
             guard_integrity_applied = _guard_integrity_can_reduce(
-                target, attack_debuff_effect
+                state, target, attack_debuff_effect
             )
             if guard_integrity_applied:
                 attack_debuff_effect.magnitude *= D("0.90")
@@ -5723,7 +5819,7 @@ def _perform(
                 (
                     index
                     for index, effect in enumerate(action.target_effects)
-                    if _guard_integrity_can_reduce(target, effect)
+                    if _guard_integrity_can_reduce(state, target, effect)
                 ),
                 None,
             )
