@@ -160,7 +160,11 @@ def difficulty_gate(
 
 
 def dungeon_completion_xp(
-    reference_level: int, difficulty: str, *, first_clear: bool = False
+    reference_level: int,
+    difficulty: str,
+    *,
+    first_clear: bool = False,
+    legacy_factor: Decimal | None = None,
 ) -> int:
     profile = DIFFICULTIES[difficulty]
     h = D("0.905903") + D("0.094097") * reference_level
@@ -170,6 +174,8 @@ def dungeon_completion_xp(
     raw = xp_per_hour * profile.duration_minutes / D(60) * profile.efficiency
     if first_clear:
         raw *= D("1.60")
+    if legacy_factor is not None:
+        raw *= legacy_factor
     return int((raw / D(10)).quantize(D(1), rounding=ROUND_HALF_EVEN) * 10)
 
 

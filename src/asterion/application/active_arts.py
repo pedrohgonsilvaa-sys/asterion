@@ -145,6 +145,20 @@ async def load_active_art_configuration(
         definition = active_art_definition(row.art_id)
         if definition is None:
             raise ActiveArtConfigurationError("Persisted active Art is unknown to the runtime.")
+        right_class_and_path = (
+            definition.character_class == character.character_class
+            and (definition.path_id is None or definition.path_id == character.selected_path)
+        )
+        dormant_after_legacy = character.legacy_level > 0 and right_class_and_path and (
+            character.level < definition.min_level
+            or not weapon_requirement_satisfied(definition, equipped_tags)
+        )
+        if dormant_after_legacy:
+            # Keep the saved slot as remembered configuration, but freeze it out of
+            # combat snapshots until level and equipment requirements are satisfied.
+            seen_slots.add(row.slot)
+            seen_arts.add(row.art_id)
+            continue
         if validate_eligibility:
             _validate_definition(character, definition)
         if (
@@ -207,15 +221,27 @@ class ActiveArtService:
                     ACTIVE_ART_DEFINITIONS[art_id], compatibility_tags
                 )
             )
+            saved_rows = list(
+                (
+                    await session.scalars(
+                        select(CharacterActiveArtSlot.art_id).where(
+                            CharacterActiveArtSlot.character_id == character.id
+                        )
+                    )
+                ).all()
+            )
             ineligible = tuple(
-                entry.art_id
-                for entry in configuration.slots
-                if (definition := ACTIVE_ART_DEFINITIONS[entry.art_id]).character_class
-                != character.character_class
-                or character.level < definition.min_level
-                or (
-                    definition.path_id is not None
-                    and definition.path_id != character.selected_path
+                art_id
+                for art_id in saved_rows
+                if (definition := ACTIVE_ART_DEFINITIONS.get(art_id)) is not None
+                and (
+                    definition.character_class != character.character_class
+                    or character.level < definition.min_level
+                    or (
+                        definition.path_id is not None
+                        and definition.path_id != character.selected_path
+                    )
+                    or not weapon_requirement_satisfied(definition, compatibility_tags)
                 )
             )
             return ActiveArtCharacterView(
@@ -272,6 +298,17 @@ class ActiveArtService:
             )
             for final_art_id in final.values():
                 final_definition = active_art_definition(final_art_id)
+                if final_definition is not None and character.legacy_level > 0 and (
+                    character.level < final_definition.min_level
+                    or not weapon_requirement_satisfied(final_definition, compatibility_tags)
+                ) and (
+                    final_definition.character_class == character.character_class
+                    and (
+                        final_definition.path_id is None
+                        or final_definition.path_id == character.selected_path
+                    )
+                ):
+                    continue
                 if final_definition is None or weapon_requirement_satisfied(
                     final_definition, compatibility_tags
                 ):
@@ -383,7 +420,16 @@ class ActiveArtService:
                 definition = active_art_definition(row.art_id)
                 if definition is None:
                     raise ActiveArtConfigurationError("Unknown persisted active Art.")
-                if not allow_ineligible:
+                dormant_after_legacy = (
+                    character.legacy_level > 0
+                    and character.level < definition.min_level
+                    and definition.character_class == character.character_class
+                    and (
+                        definition.path_id is None
+                        or definition.path_id == character.selected_path
+                    )
+                )
+                if not allow_ineligible and not dormant_after_legacy:
                     _validate_definition(character, definition)
                 current[row.slot] = row.art_id
                 seen_arts.add(row.art_id)

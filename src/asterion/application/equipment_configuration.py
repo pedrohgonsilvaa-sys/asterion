@@ -17,7 +17,9 @@ from asterion.domain.equipment_stats import (
     item_snapshot_from_persisted,
 )
 from asterion.domain.talents import (
+    TALENT_DEFINITIONS,
     TalentSelectionError,
+    talent_points_at_level,
     validate_talent_choices,
 )
 from asterion.infrastructure.db.models import (
@@ -222,10 +224,19 @@ async def _load_talent_choices(
             raise TalentSelectionError(
                 "Persisted Talent was not acquired through public progression."
             )
-        return validate_talent_choices(
-            character.character_class,
-            character.level,
-            [(row.point_slot, row.talent_id) for row in rows],
-        )
+        choices = [(row.point_slot, row.talent_id) for row in rows]
+        if character.legacy_level > 0:
+            # Publicly acquired choices remain persisted through Ascension. Validate
+            # their provenance and identity against the full point budget, then expose
+            # only slots earned at the character's current level to combat snapshots.
+            all_choices = validate_talent_choices(character.character_class, 60, choices)
+            active_points = talent_points_at_level(character.level)
+            return tuple(
+                choice
+                for choice in all_choices
+                if choice[0] <= active_points
+                and TALENT_DEFINITIONS[choice[1]].level <= character.level
+            )
+        return validate_talent_choices(character.character_class, character.level, choices)
     except TalentSelectionError as exc:
         raise EquipmentConfigurationError("Persisted Talent configuration is invalid.") from exc

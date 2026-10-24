@@ -19,6 +19,7 @@ from asterion.application.equipment_modifications import EquipmentModificationSe
 from asterion.application.equipment_view import EquipmentViewService
 from asterion.application.groups import GroupService
 from asterion.application.inventory import InventoryService
+from asterion.application.legacy import LegacyService
 from asterion.application.nareth_missions import NarethMissionService
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import P2Service
@@ -118,6 +119,7 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher = Dispatcher(disable_fsm=True)
     prologue = PrologueService(SessionFactory, settings.server_id, PROFILE)
     world = WorldService(SessionFactory, settings.server_id)
+    legacy = LegacyService(SessionFactory, settings.server_id)
     groups = GroupService(SessionFactory, settings.server_id)
     p1 = P1Service(SessionFactory, settings.server_id, groups=groups)
     p2 = P2Service(SessionFactory, settings.server_id, groups=groups)
@@ -327,6 +329,7 @@ def get_bot_runtime() -> BotRuntime:
             s34=s34,
             s35=s35,
             s36=s36,
+            legacy=legacy,
         )
     )
     dispatcher.include_router(

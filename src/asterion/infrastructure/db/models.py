@@ -77,6 +77,7 @@ class Character(Base):
             name="ck_character_selected_path",
         ),
         CheckConstraint("level BETWEEN 1 AND 60 AND xp >= 0", name="ck_character_progress"),
+        CheckConstraint("legacy_level BETWEEN 0 AND 5", name="ck_character_legacy_level"),
         CheckConstraint("hp >= 0 AND hp <= max_hp AND max_hp > 0", name="ck_character_hp"),
         CheckConstraint(
             "vigor BETWEEN 0 AND max_vigor AND max_vigor = 100", name="ck_character_vigor"
@@ -99,6 +100,9 @@ class Character(Base):
     ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
     level: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     xp: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    legacy_level: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     hp: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
     max_hp: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
     vigor: Mapped[int] = mapped_column(Integer, nullable=False, default=100, server_default="100")
@@ -126,6 +130,63 @@ class Character(Base):
     combat_configuration_version: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+
+
+class LegacyAscensionRecord(Base):
+    """Immutable audit entry for a committed Legacy transition."""
+
+    __tablename__ = "legacy_ascensions"
+    __table_args__ = (
+        UniqueConstraint(
+            "character_id", "legacy_level_after", name="uq_legacy_level_per_character"
+        ),
+        UniqueConstraint("operation_key", name="uq_legacy_ascension_operation"),
+        CheckConstraint("legacy_level_after BETWEEN 1 AND 5", name="ck_legacy_ascension_level"),
+        CheckConstraint("character_level_before = 60", name="ck_legacy_ascension_level_before"),
+        CheckConstraint("xp_before >= 0", name="ck_legacy_ascension_xp_before"),
+        CheckConstraint(
+            "configuration_version_before >= 0",
+            name="ck_legacy_ascension_config_version",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    legacy_level_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    character_level_before: Mapped[int] = mapped_column(Integer, nullable=False)
+    xp_before: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    campaign_quest_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    operation_key: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    configuration_version_before: Mapped[int] = mapped_column(Integer, nullable=False)
+    ascended_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class LegacyAscensionConfirmation(Base):
+    """One current, stale-safe explicit confirmation for a character."""
+
+    __tablename__ = "legacy_ascension_confirmations"
+    __table_args__ = (
+        UniqueConstraint("confirmation_key", name="uq_legacy_confirmation_key"),
+        CheckConstraint(
+            "expected_configuration_version >= 0",
+            name="ck_legacy_confirmation_config_version",
+        ),
+        CheckConstraint("expires_at > created_at", name="ck_legacy_confirmation_expiry"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    confirmation_key: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    expected_configuration_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class SocialGroup(Base):

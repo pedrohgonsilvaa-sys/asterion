@@ -88,11 +88,13 @@ def render_talent_root(view: TalentView) -> Screen:
 
 
 def _talent_state(view: TalentView, talent: TalentDefinition) -> tuple[str, str]:
-    acquired = {
-        choice.talent_id for choice in view.choices if choice.point_slot <= view.total_points
-    }
-    if talent.talent_id in acquired:
+    choice = next((item for item in view.choices if item.talent_id == talent.talent_id), None)
+    if choice is not None and choice.active:
         return "✅", "Adquirido"
+    if choice is not None:
+        if talent.level > view.level:
+            return "🕰️", f"Adquirido · Retorna no Nv.{talent.level}"
+        return "🕰️", "Adquirido · Ponto ainda inativo"
     if talent.level not in IMPLEMENTED_TALENT_LEVELS:
         return "🔒", f"Requer Nv.{talent.level}"
     if view.level < talent.level:

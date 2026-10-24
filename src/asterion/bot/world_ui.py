@@ -2,6 +2,7 @@ from html import escape
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from asterion.application.legacy import LegacyView
 from asterion.application.world import WorldView
 from asterion.bot.creation_ui import Screen
 
@@ -117,9 +118,91 @@ def render_world(view: WorldView) -> Screen:
         ("Códice", "knowledge:codex"),
         ("Vínculos", "links:root"),
         ("Configurações", "settings:root"),
+        ("Legado", "legacy:root"),
     ]
     rows = [
         [InlineKeyboardButton(text=a, callback_data=b) for a, b in labels[i : i + 2]]
         for i in range(0, len(labels), 2)
     ]
     return Screen(text, "menu", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def render_legacy(
+    view: LegacyView,
+    *,
+    confirmation_key: str | None = None,
+    succeeded: bool = False,
+) -> Screen:
+    ranks = {
+        0: "Sem Legado",
+        1: "Legado I",
+        2: "Legado II",
+        3: "Legado III",
+        4: "Legado IV",
+        5: "Legado V",
+    }
+    reasons = {
+        "level_required": "Alcance o Nv.60.",
+        "campaign_required": "Conclua a campanha principal.",
+        "safe_location_required": "Venha ao Refúgio do Ocaso.",
+        "activity_locked": "Encerre atividades e vínculos incompatíveis antes de ascender.",
+        "legacy_transition_undefined": "A próxima transição ainda não está disponível.",
+    }
+    text = (
+        "🔱 Legado\n\n"
+        f"{ranks.get(view.legacy_level, 'Legado desconhecido')} · Nv. {view.level}\n"
+        f"Multiplicador de XP elegível: ×{view.xp_factor}\n"
+    )
+    if succeeded:
+        text += (
+            "\nAscensão concluída. Sua campanha e conquistas permanecem; sua progressão foi "
+            "reiniciada no Nv.1. Equipamentos incompatíveis continuam no Inventário."
+        )
+    elif confirmation_key is not None:
+        text += (
+            "\nConfirme a Ascensão para Legado I. O personagem voltará ao Nv.1 e perderá "
+            "qualquer XP restante no Nv.60. A campanha e os itens serão preservados; itens "
+            "incompatíveis serão desequipados. Esta ação não pode ser desfeita."
+        )
+    elif view.can_ascend:
+        text += "\nVocê atende aos requisitos da primeira Ascensão em um local seguro."
+    else:
+        text += "\nPara a primeira Ascensão:"
+        text += "\n" + "\n".join(
+            f"• {reasons.get(reason.value, 'Requisito ainda não atendido.')}"
+            for reason in view.reasons
+        )
+
+    if confirmation_key is not None:
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Confirmar Ascensão",
+                        callback_data=f"legacy:confirm:{confirmation_key}",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Cancelar", callback_data=f"legacy:cancel:{confirmation_key}"
+                    )
+                ],
+                [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
+            ]
+        )
+    else:
+        rows = []
+        if view.can_ascend:
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text="Preparar Ascensão",
+                        callback_data=f"legacy:prepare:{view.configuration_version}",
+                    )
+                ]
+            )
+        rows.append(
+            [InlineKeyboardButton(text="← Menu", callback_data="menu:back")]
+        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+    return Screen(text, "menu", keyboard)

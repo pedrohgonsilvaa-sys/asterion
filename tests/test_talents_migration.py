@@ -10,8 +10,6 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from alembic import command
 from asterion.application.talents import TalentMutationCode, TalentMutationRejected, TalentService
 from asterion.infrastructure.db.models import (
-    Account,
-    Character,
     CharacterDoctrine,
     CombatRecord,
     Encounter,
@@ -23,6 +21,41 @@ def _migrate(connection, revision: str, direction: str = "upgrade") -> None:
     config = Config("alembic.ini")
     config.attributes["connection"] = connection
     getattr(command, direction)(config, revision)
+
+
+async def _insert_character_before_legacy(
+    engine,
+    *,
+    actor: int,
+    character_id,
+    name: str,
+    character_class: str,
+    level: int,
+    selected_path: str | None = None,
+) -> None:
+    """Seed a character at a historical revision that predates legacy_level."""
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("INSERT INTO accounts (telegram_id) VALUES (:actor)"),
+            {"actor": actor},
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO characters (id, telegram_id, server_id, name, race, "
+                "character_class, selected_path, stage, ruleset_version, level, xp, "
+                "hp, max_hp) VALUES (:id, :actor, 'ocaso', :name, 'remanescente', "
+                ":character_class, :selected_path, 'menu:ready', 'test', :level, "
+                "0, 1000, 1000)"
+            ),
+            {
+                "id": character_id,
+                "actor": actor,
+                "name": name,
+                "character_class": character_class,
+                "selected_path": selected_path,
+                "level": level,
+            },
+        )
 
 
 @pytest_asyncio.fixture
@@ -135,25 +168,16 @@ async def test_0028_quarantines_pre_release_nv35_rows_and_frozen_talent_ids(data
     actor = 772298
     lower_id = "talent.sentinela.aco_desperto"
     closed_id = "talent.sentinela.olho_de_combate"
+    await _insert_character_before_legacy(
+        engine,
+        actor=actor,
+        character_id=character_id,
+        name="Clegacy",
+        character_class="sentinela",
+        selected_path="bastiao",
+        level=40,
+    )
     async with sessions.begin() as session:
-        session.add(Account(telegram_id=actor))
-        session.add(
-            Character(
-                id=character_id,
-                telegram_id=actor,
-                server_id="ocaso",
-                name="Clegacy",
-                race="remanescente",
-                character_class="sentinela",
-                selected_path="bastiao",
-                stage="menu:ready",
-                ruleset_version="test",
-                level=40,
-                xp=0,
-                hp=1000,
-                max_hp=1000,
-            )
-        )
         session.add(
             GameActivity(
                 id=activity_id,
@@ -240,24 +264,15 @@ async def test_0029_quarantines_pre_release_nv45_without_revoking_nv35_provenanc
     lower_id = "talent.luminar.luz_incisiva"
     legitimate_35 = "talent.luminar.veredito_ardente"
     closed_45 = "talent.luminar.punicao_da_fraqueza"
+    await _insert_character_before_legacy(
+        engine,
+        actor=actor,
+        character_id=character_id,
+        name="Legacy",
+        character_class="luminar",
+        level=60,
+    )
     async with sessions.begin() as session:
-        session.add(Account(telegram_id=actor))
-        session.add(
-            Character(
-                id=character_id,
-                telegram_id=actor,
-                server_id="ocaso",
-                name="Legacy",
-                race="remanescente",
-                character_class="luminar",
-                stage="menu:ready",
-                ruleset_version="test",
-                level=60,
-                xp=0,
-                hp=1000,
-                max_hp=1000,
-            )
-        )
         session.add(
             GameActivity(
                 id=activity_id,
@@ -390,24 +405,15 @@ async def test_0030_quarantines_pre_release_nv55_without_revoking_earlier_tiers(
         "talent.luminar.ultimo_alvorecer",
         "talent.luminar.contraluz_perfeita",
     )
+    await _insert_character_before_legacy(
+        engine,
+        actor=actor,
+        character_id=character_id,
+        name="Legacy",
+        character_class="luminar",
+        level=60,
+    )
     async with sessions.begin() as session:
-        session.add(Account(telegram_id=actor))
-        session.add(
-            Character(
-                id=character_id,
-                telegram_id=actor,
-                server_id="ocaso",
-                name="Legacy",
-                race="remanescente",
-                character_class="luminar",
-                stage="menu:ready",
-                ruleset_version="test",
-                level=60,
-                xp=0,
-                hp=1000,
-                max_hp=1000,
-            )
-        )
         session.add(
             GameActivity(
                 id=activity_id,

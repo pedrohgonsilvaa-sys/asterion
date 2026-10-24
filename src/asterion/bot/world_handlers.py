@@ -10,6 +10,10 @@ from asterion.application.class_trials import ClassTrialService
 from asterion.application.consumables import ConsumableService
 from asterion.application.dungeons import DungeonService
 from asterion.application.inventory import InventoryService
+from asterion.application.legacy import (
+    LegacyActionRejected,
+    LegacyService,
+)
 from asterion.application.nareth_missions import (
     S13_ID,
     NarethMissionService,
@@ -139,7 +143,7 @@ from asterion.bot.s35_ui import render_s35
 from asterion.bot.s36_ui import render_s36
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
 from asterion.bot.vde_missions_ui import render_vde_mission
-from asterion.bot.world_ui import render_adventure, render_world
+from asterion.bot.world_ui import render_adventure, render_legacy, render_world
 
 
 def world_router(
@@ -179,6 +183,7 @@ def world_router(
     s34: S34Service | None = None,
     s35: S35Service | None = None,
     s36: S36Service | None = None,
+    legacy: LegacyService | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -1539,6 +1544,88 @@ def world_router(
             await present(
                 query.message,
                 render_adventure(current, principal_quest_title),
+                images,
+                edit=True,
+            )
+
+    @router.callback_query(F.data == "legacy:root")
+    async def legacy_root(query: CallbackQuery):
+        await query.answer()
+        if legacy is None or not isinstance(query.message, Message):
+            await restore_context(query)
+            return
+        view = await legacy.view(query.from_user.id)
+        if view is None:
+            await restore_context(query)
+            return
+        await present(query.message, render_legacy(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("legacy:prepare:"))
+    async def legacy_prepare(query: CallbackQuery):
+        await query.answer()
+        if legacy is None or not isinstance(query.message, Message):
+            await restore_context(query)
+            return
+        try:
+            expected_version = int(query.data.rsplit(":", 1)[1])
+            prepared = await legacy.prepare(
+                query.from_user.id,
+                expected_configuration_version=expected_version,
+            )
+        except (ValueError, LegacyActionRejected):
+            view = await legacy.view(query.from_user.id)
+            if view is not None:
+                await present(query.message, render_legacy(view), images, edit=True)
+            return
+        if prepared is None:
+            await restore_context(query)
+            return
+        if prepared.confirmation_key is None:
+            await present(query.message, render_legacy(prepared.view), images, edit=True)
+            return
+        await present(
+            query.message,
+            render_legacy(prepared.view, confirmation_key=prepared.confirmation_key.hex),
+            images,
+            edit=True,
+        )
+
+    @router.callback_query(F.data.startswith("legacy:cancel:"))
+    async def legacy_cancel(query: CallbackQuery):
+        await query.answer()
+        if legacy is None or not isinstance(query.message, Message):
+            await restore_context(query)
+            return
+        try:
+            confirmation_key = UUID(hex=query.data.rsplit(":", 1)[1])
+            await legacy.cancel(query.from_user.id, confirmation_key)
+        except ValueError:
+            pass
+        view = await legacy.view(query.from_user.id)
+        if view is not None:
+            await present(query.message, render_legacy(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("legacy:confirm:"))
+    async def legacy_confirm(query: CallbackQuery):
+        if legacy is None or not isinstance(query.message, Message):
+            await query.answer()
+            await restore_context(query)
+            return
+        try:
+            confirmation_key = UUID(hex=query.data.rsplit(":", 1)[1])
+            result = await legacy.confirm(query.from_user.id, confirmation_key)
+        except (ValueError, LegacyActionRejected):
+            await query.answer("Confirmação expirada ou já utilizada.", show_alert=True)
+            view = await legacy.view(query.from_user.id)
+            if view is not None:
+                await present(query.message, render_legacy(view), images, edit=True)
+            return
+        await query.answer("Ascensão concluída." if result and result.succeeded else "Ascensão não realizada.")
+        view = await legacy.view(query.from_user.id)
+        if view is not None:
+            await present(
+                query.message,
+                render_legacy(view, succeeded=bool(result and result.succeeded)),
                 images,
                 edit=True,
             )

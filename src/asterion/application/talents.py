@@ -63,6 +63,7 @@ class TalentMutationRejected(RuntimeError):
 class TalentChoiceView:
     point_slot: int
     talent_id: str
+    active: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,10 +247,13 @@ class TalentService:
                 raise TalentSelectionError(
                     "Talent choice was not acquired through public progression."
                 )
+            choices = [(row.point_slot, row.talent_id) for row in rows]
+            if character.legacy_level > 0:
+                return validate_talent_choices(character.character_class, 60, choices)
             return validate_talent_choices(
                 character.character_class,
                 character.level,
-                [(row.point_slot, row.talent_id) for row in rows],
+                choices,
             )
         except TalentSelectionError as exc:
             raise TalentMutationRejected(
@@ -291,7 +295,15 @@ class TalentService:
             character.combat_configuration_version,
             total_points,
             max(0, total_points - len(active_choices)),
-            tuple(TalentChoiceView(slot, talent_id) for slot, talent_id in choices),
+            tuple(
+                TalentChoiceView(
+                    slot,
+                    talent_id,
+                    slot <= total_points
+                    and TALENT_DEFINITIONS[talent_id].level <= character.level,
+                )
+                for slot, talent_id in choices
+            ),
             character.crowns,
             world.location if world is not None else None,
             blocker is not None,
