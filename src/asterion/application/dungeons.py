@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import select, text
@@ -145,6 +145,7 @@ from asterion.domain.dungeons import (
 from asterion.domain.equipment_stats import (
     equipment_configuration_from_data,
 )
+from asterion.domain.legacy import legacy_xp_factor
 from asterion.domain.nareth_dungeons import (
     NARETH_DUNGEON_BASIC_MATERIALS,
     NARETH_DUNGEON_CATALYST,
@@ -2766,9 +2767,20 @@ class DungeonService:
                 if family_completion
                 else None
             )
+            legacy_factor = legacy_xp_factor(character.legacy_level)
             if completion_xp is None:
                 completion_xp = dungeon_completion_xp(
-                    run.reference_level, run.difficulty, first_clear=first_clear
+                    run.reference_level,
+                    run.difficulty,
+                    first_clear=first_clear,
+                    legacy_factor=legacy_factor,
+                )
+            elif legacy_factor != Decimal(1):
+                completion_xp = int(
+                    (Decimal(completion_xp) * legacy_factor / Decimal(10)).quantize(
+                        Decimal(1), rounding=ROUND_HALF_EVEN
+                    )
+                    * 10
                 )
             internal_xp = sum(
                 enemy_xp(
@@ -2777,6 +2789,7 @@ class DungeonService:
                     player_level=character.level,
                     powerlevel_factor=D("0.25"),
                     participation_factor=participation,
+                    legacy_factor=legacy_factor,
                 )
                 for row in raw_internal_rewards
             )

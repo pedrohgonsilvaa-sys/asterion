@@ -42,6 +42,7 @@ from asterion.domain.combat import (
 )
 from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS, ConsumableFamily
 from asterion.domain.consumables import definition as consumable_definition
+from asterion.domain.legacy import legacy_xp_factor
 from asterion.domain.road import (
     RULESET,
     CreatureCombatantSpec,
@@ -1332,7 +1333,12 @@ class S2Service:
         )
         if existing is not None:
             return 0
-        amount = enemy_xp(4, "common", player_level=character.level)
+        amount = enemy_xp(
+            4,
+            "common",
+            player_level=character.level,
+            legacy_factor=legacy_xp_factor(character.legacy_level),
+        )
         event = RewardEvent(character_id=character.id, source_id=source_id)
         session.add(event)
         await session.flush()

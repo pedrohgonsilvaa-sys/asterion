@@ -46,6 +46,7 @@ from asterion.domain.consumables import (
     ConsumableFamily,
 )
 from asterion.domain.consumables import definition as consumable_definition
+from asterion.domain.legacy import legacy_xp_factor
 from asterion.domain.road import (
     RULESET,
     SPIDER,
@@ -1427,7 +1428,12 @@ class P2Service:
         )
         if existing is not None:
             return 0
-        xp = enemy_xp(3, "uncommon", player_level=character.level)
+        xp = enemy_xp(
+            3,
+            "uncommon",
+            player_level=character.level,
+            legacy_factor=legacy_xp_factor(character.legacy_level),
+        )
         event = RewardEvent(character_id=character.id, source_id=source_id)
         session.add(event)
         await session.flush()

@@ -31,6 +31,7 @@ from asterion.application.scripted_combat import (
     normalize_character_hp,
 )
 from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
+from asterion.domain.legacy import legacy_xp_factor
 from asterion.domain.road import RUINS_LOCATION, SUNSET_CUSTODIAN, enemy_xp
 from asterion.infrastructure.db.combat_codec import decode
 from asterion.infrastructure.db.models import (
@@ -827,7 +828,12 @@ class P5Service:
             .with_for_update()
         ):
             return
-        amount = enemy_xp(9, "elite", player_level=character.level)
+        amount = enemy_xp(
+            9,
+            "elite",
+            player_level=character.level,
+            legacy_factor=legacy_xp_factor(character.legacy_level),
+        )
         event = RewardEvent(character_id=character.id, source_id=source)
         session.add(event)
         await session.flush()

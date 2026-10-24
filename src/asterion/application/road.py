@@ -33,6 +33,7 @@ from asterion.domain.consumables import (
 from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.equipment_modifications import equipment_grade
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
+from asterion.domain.legacy import legacy_xp_factor
 from asterion.domain.road import (
     ALTOS_ABRIGO,
     ALTOS_ABRIGO_ACCESS_UNLOCK,
@@ -2811,7 +2812,13 @@ class RoadService:
         await s.flush()
         enough = c.vigor >= 2
         factor = Decimal(1) if enough else Decimal("0.25")
-        xp = enemy_xp(context.enemy_level, context.category, factor, player_level=c.level)
+        xp = enemy_xp(
+            context.enemy_level,
+            context.category,
+            factor,
+            player_level=c.level,
+            legacy_factor=legacy_xp_factor(c.legacy_level),
+        )
         c.xp += xp
         crowns_award = crowns(context.enemy_level, context.category) if enough else 0
         c.crowns += crowns_award
@@ -3115,6 +3122,7 @@ class RoadService:
                     context.category,
                     factor,
                     player_level=c.level,
+                    legacy_factor=legacy_xp_factor(c.legacy_level),
                 )
                 c.xp += xp
                 components = [("xp", None, xp, {})]
@@ -3332,6 +3340,7 @@ class RoadService:
                 context.category,
                 Decimal(1) if enough else Decimal("0.25"),
                 player_level=c.level,
+                legacy_factor=legacy_xp_factor(c.legacy_level),
             )
             c.xp += xp
             components.append(("xp", None, xp, {}))
@@ -3495,6 +3504,7 @@ class RoadService:
                 context.category,
                 Decimal(1) if enough else Decimal("0.25"),
                 player_level=c.level,
+                legacy_factor=legacy_xp_factor(c.legacy_level),
             )
             c.xp += xp
             components.append(("xp", None, xp, {}))
@@ -3655,6 +3665,7 @@ class RoadService:
                 context.category,
                 Decimal(1) if enough else Decimal("0.25"),
                 player_level=c.level,
+                legacy_factor=legacy_xp_factor(c.legacy_level),
             )
             c.xp += xp
             components.append(("xp", None, xp, {}))
@@ -3878,6 +3889,7 @@ class RoadService:
                 context.category,
                 Decimal(1) if enough else Decimal("0.25"),
                 player_level=c.level,
+                legacy_factor=legacy_xp_factor(c.legacy_level),
             )
             c.xp += xp
             components.append(("xp", None, xp, {}))
@@ -4109,6 +4121,7 @@ class RoadService:
                 context.category,
                 Decimal(1) if enough else Decimal("0.25"),
                 player_level=c.level,
+                legacy_factor=legacy_xp_factor(c.legacy_level),
             )
             c.xp += xp
             components.append(("xp", None, xp, {}))
@@ -4392,6 +4405,7 @@ class RoadService:
                 context.category,
                 Decimal(1) if enough else Decimal("0.25"),
                 player_level=c.level,
+                legacy_factor=legacy_xp_factor(c.legacy_level),
             )
             c.xp += xp
             components.append(("xp", None, xp, {}))
@@ -4607,6 +4621,7 @@ class RoadService:
                 context.category,
                 Decimal(1) if enough else Decimal("0.25"),
                 player_level=c.level,
+                legacy_factor=legacy_xp_factor(c.legacy_level),
             )
             c.xp += xp
             components.append(("xp", None, xp, {}))
@@ -4833,6 +4848,7 @@ class RoadService:
                 context.category,
                 Decimal(1) if enough else Decimal("0.25"),
                 player_level=c.level,
+                legacy_factor=legacy_xp_factor(c.legacy_level),
             )
             c.xp += xp
             components.append(("xp", None, xp, {}))

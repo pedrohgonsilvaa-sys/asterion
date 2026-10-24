@@ -25,7 +25,8 @@ from asterion.domain.arts import (
 from asterion.domain.combat import DotState
 from asterion.domain.combat_math import Stats, resolve_combat_stats
 from asterion.domain.equipment_stats import equipment_configuration_from_data
-from asterion.domain.road import CREATURES, ROUND_FAMILIARITY
+from asterion.domain.legacy import legacy_xp_factor
+from asterion.domain.road import CREATURES, ROUND_FAMILIARITY, crowns, enemy_xp
 from asterion.domain.talents import TALENTS_BY_CLASS
 from asterion.infrastructure.db.models import (
     Character,
@@ -33,6 +34,7 @@ from asterion.infrastructure.db.models import (
     ConsumableStack,
     EquipmentItem,
     GameActivity,
+    HuntContext,
     HuntRound,
     HuntRoundEncounter,
     RewardComponent,
@@ -44,9 +46,14 @@ from tests.test_road_integration import _seed_road
 
 
 async def _seed_round(
-    database, actor: int, *, vigor: int = 100, pvpve: bool = False
+    database,
+    actor: int,
+    *,
+    vigor: int = 100,
+    pvpve: bool = False,
+    legacy_level: int = 0,
 ):
-    await _seed_road(database, actor, vigor=vigor)
+    await _seed_road(database, actor, vigor=vigor, legacy_level=legacy_level)
     sessions = database[1]
     async with sessions() as session:
         character = await session.scalar(
@@ -251,6 +258,65 @@ async def test_round_resolves_due_encounter_once_and_charges_two_vigor(database,
                 RewardEvent.source_id == f"activity:{first_activity}"
             )
         ) == 1
+
+
+@pytest.mark.asyncio
+async def test_round_applies_legacy_multiplier_to_xp_only(database, monkeypatch):
+    import asterion.application.round as round_module
+
+    actor, service = await _seed_round(database, 772_129, legacy_level=1)
+    _force_safe_common(monkeypatch, round_module)
+    prepared = await service.prepare_round(actor, 5)
+    started = await service.start_round(actor, prepared.round_id, prepared.state_version)
+    async with database[1].begin() as session:
+        state = await session.scalar(
+            select(HuntRound).where(HuntRound.id == started.round_id)
+        )
+        state.next_resolution_at = datetime.now(UTC) - timedelta(seconds=1)
+
+    assert await service.advance_due_rounds() == 1
+    async with database[1]() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        state = await session.scalar(
+            select(HuntRound).where(HuntRound.id == started.round_id)
+        )
+        encounter = await session.scalar(
+            select(HuntRoundEncounter).where(
+                HuntRoundEncounter.round_id == state.id,
+                HuntRoundEncounter.ordinal == 1,
+            )
+        )
+        assert encounter is not None and encounter.activity_id is not None
+        context = await session.scalar(
+            select(HuntContext).where(
+                HuntContext.game_activity_id == encounter.activity_id
+            )
+        )
+        reward = await session.scalar(
+            select(RewardEvent).where(
+                RewardEvent.character_id == character.id,
+                RewardEvent.source_id == f"activity:{encounter.activity_id}",
+            )
+        )
+        components = list(
+            (
+                await session.scalars(
+                    select(RewardComponent).where(RewardComponent.reward_event_id == reward.id)
+                )
+            ).all()
+        )
+        xp = next(row.quantity for row in components if row.kind == "xp")
+        crowns_paid = sum(row.quantity for row in components if row.kind == "crowns")
+        assert xp == enemy_xp(
+            context.enemy_level,
+            context.category,
+            player_level=1,
+            legacy_factor=legacy_xp_factor(1),
+        )
+        assert crowns_paid == crowns(context.enemy_level, context.category)
+        assert character.vigor == 98
 
 
 @pytest.mark.asyncio

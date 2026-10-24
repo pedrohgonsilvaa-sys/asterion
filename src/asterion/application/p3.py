@@ -54,6 +54,7 @@ from asterion.domain.consumables import (
     ConsumableFamily,
 )
 from asterion.domain.consumables import definition as consumable_definition
+from asterion.domain.legacy import legacy_xp_factor
 from asterion.domain.road import (
     BOSQUE_LOCATION,
     CERVO,
@@ -1436,7 +1437,12 @@ class P3Service:
         )
         if existing is not None:
             return 0
-        amount = enemy_xp(5, "common", player_level=character.level)
+        amount = enemy_xp(
+            5,
+            "common",
+            player_level=character.level,
+            legacy_factor=legacy_xp_factor(character.legacy_level),
+        )
         event = RewardEvent(character_id=character.id, source_id=source_id)
         session.add(event)
         await session.flush()

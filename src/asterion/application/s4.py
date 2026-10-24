@@ -41,6 +41,7 @@ from asterion.application.scripted_combat import (
     normalize_character_hp,
 )
 from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
+from asterion.domain.legacy import legacy_xp_factor
 from asterion.domain.road import (
     RUINS_LOCATION,
     RULESET,
@@ -917,7 +918,12 @@ class S4Service:
             RewardEvent.character_id == character.id, RewardEvent.source_id == source
         ).with_for_update()):
             return
-        amount = enemy_xp(7, "common", player_level=character.level)
+        amount = enemy_xp(
+            7,
+            "common",
+            player_level=character.level,
+            legacy_factor=legacy_xp_factor(character.legacy_level),
+        )
         event = RewardEvent(character_id=character.id, source_id=source)
         session.add(event)
         await session.flush()

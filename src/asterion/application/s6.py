@@ -33,6 +33,7 @@ from asterion.application.scripted_combat import (
     normalize_character_hp,
 )
 from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
+from asterion.domain.legacy import legacy_xp_factor
 from asterion.domain.road import LAST_TRACE_GUARDIAN, RUINS_LOCATION, enemy_xp
 from asterion.infrastructure.db.combat_codec import decode
 from asterion.infrastructure.db.models import (
@@ -811,7 +812,12 @@ class S6Service:
         )
         if event is not None:
             return
-        amount = enemy_xp(10, "uncommon", player_level=character.level)
+        amount = enemy_xp(
+            10,
+            "uncommon",
+            player_level=character.level,
+            legacy_factor=legacy_xp_factor(character.legacy_level),
+        )
         event = RewardEvent(character_id=character.id, source_id=source)
         session.add(event)
         await session.flush()
