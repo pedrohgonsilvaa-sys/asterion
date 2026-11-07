@@ -1,0 +1,1179 @@
+{
+  "artifact": "ASTERION_PACOTE_CANDIDATO_PROFICIENCIAS_EQUIPAMENTOS",
+  "version": "1.9.1",
+  "status": "CANDIDATO_NAO_CANONICO_NAO_IMPORTADO_NAO_PRONTO_PARA_PUBLICACAO",
+  "created_date": "2026-10-24",
+  "scope": "correções documentais expressamente solicitadas por Game Design para GDD §24.7, GDD §49.8 e referências cruzadas da minuta Weapon Metadata; sem publicação, importação, integração ou alteração de dados de catálogo",
+  "parent_candidate": {
+    "version": "1.9.0",
+    "zip": "inputs/ASTERION_FASE2E_v1.9.0_PARA_HOMOLOGACAO_GD.zip",
+    "zip_sha256": "31360dfb5d81f81d31601d0e1190f2b998d7b18eb025234f070056c1f0e30278",
+    "preserved_unmodified": true
+  },
+  "baseline_target": {
+    "region": "Terras do Ocaso",
+    "version": "v1.0.17",
+    "file": "ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.17_FINAL.md",
+    "sha256": "9c58e504a97e4acd55e39cfe99fd5322eb7026dc71cca3b86d116e918606a369",
+    "source_worktree": ".worktrees/asterion-proficiency-phase2b",
+    "source_commit": "b16d52267f7fe837b143b458fd5c0c68ad150b8f",
+    "source_git_state": "untracked",
+    "authority_status": "baseline alvo aprovado; não operacional até publicação autorizada"
+  },
+  "baseline_origin": {
+    "region": "Terras do Ocaso",
+    "version": "v1.0.16",
+    "file": "ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.16_FINAL.md",
+    "sha256": "8fdbe5e61216d0a2b9b62b60e5666361584055b266afbf2238437abc59b4954b",
+    "source_worktree": "C:/dev/asterion",
+    "source_commit": "eede4b1171109a8dc4ab1aa3767fdcc07d507507",
+    "role": "proveniência histórica e versão selecionada pela raiz"
+  },
+  "authority_preflight": {
+    "root_index": "SOURCE_AUTHORITY.md",
+    "root_sha256": "d50fb7b618d9d80540536aab8102a491d40ce6b9fa0e077006656f93ab73fd8b",
+    "docs_index": "docs/SOURCE_AUTHORITY.md",
+    "docs_sha256": "d50fb7b618d9d80540536aab8102a491d40ce6b9fa0e077006656f93ab73fd8b",
+    "root_and_docs_identical": true,
+    "root_worktree": "C:/dev/asterion",
+    "root_commit": "eede4b1171109a8dc4ab1aa3767fdcc07d507507",
+    "phase2b_worktree": ".worktrees/asterion-proficiency-phase2b",
+    "phase2b_commit": "b16d52267f7fe837b143b458fd5c0c68ad150b8f",
+    "phase2b_index_sha256": "e452b9129feadea67979ae73a5f1980b82e395623af86cf8ffdad13ac511c418",
+    "root_selects_tdo": "v1.0.16",
+    "target_worktree_selects": "v1.0.17",
+    "indexes_modified_in_this_task": false
+  },
+  "regional_sources_root_selected": [
+    {
+      "region": "Terras do Ocaso",
+      "version": "v1.0.16 FINAL",
+      "path": "ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.16_FINAL.md",
+      "sha256": "8fdbe5e61216d0a2b9b62b60e5666361584055b266afbf2238437abc59b4954b",
+      "worktree": "C:/dev/asterion",
+      "commit": "eede4b1171109a8dc4ab1aa3767fdcc07d507507",
+      "selected_by_root": true,
+      "git_state": "tracked; unchanged in this task"
+    },
+    {
+      "region": "Vales dos Enforcados",
+      "version": "v1.0.6 FINAL",
+      "path": "ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.6_FINAL.md",
+      "sha256": "d88a247dcf1d384ebc3385faa77c80f25b0cef114ccc6e71191b112117159247",
+      "worktree": "C:/dev/asterion",
+      "commit": "eede4b1171109a8dc4ab1aa3767fdcc07d507507",
+      "selected_by_root": true,
+      "git_state": "tracked; unchanged in this task"
+    },
+    {
+      "region": "Planícies de Nareth",
+      "version": "v1.0.2 FINAL",
+      "path": "ASTERION_CONTEUDO_PLANICIES_DE_NARETH_v1.0.2_FINAL.md",
+      "sha256": "758add317d856f6890284c4a7fd09457716b3f21f8094b2619c21245ba7e8470",
+      "worktree": "C:/dev/asterion",
+      "commit": "eede4b1171109a8dc4ab1aa3767fdcc07d507507",
+      "selected_by_root": true,
+      "git_state": "tracked; unchanged in this task"
+    },
+    {
+      "region": "Várzeas Carmesins",
+      "version": "v1.0.3 FINAL",
+      "path": "ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.3_FINAL.md",
+      "sha256": "d3772463786daff9f7748dff9a1bbf2761c3bf0f4f96848b460e16131cd70628",
+      "worktree": "C:/dev/asterion",
+      "commit": "eede4b1171109a8dc4ab1aa3767fdcc07d507507",
+      "selected_by_root": true,
+      "git_state": "tracked; unchanged in this task"
+    },
+    {
+      "region": "Altos Cinéreos",
+      "version": "v1.0.1 FINAL",
+      "path": "ASTERION_CONTEUDO_ALTOS_CINEREOS_v1.0.1_FINAL.md",
+      "sha256": "e3ee5a1dbbe81b51cd63464cdc043629afff705a0167cd60feee9abe80d54d6f",
+      "worktree": "C:/dev/asterion",
+      "commit": "eede4b1171109a8dc4ab1aa3767fdcc07d507507",
+      "selected_by_root": true,
+      "git_state": "tracked; unchanged in this task"
+    },
+    {
+      "region": "Confins do Véu",
+      "version": "v1.0.0 FINAL",
+      "path": "ASTERION_CONTEUDO_CONFINS_DO_VEU_v1.0.0_FINAL.md",
+      "sha256": "c86a0208888d14bbd653cda6174956df89b2233304dcca523d878b5b42a102fc",
+      "worktree": "C:/dev/asterion",
+      "commit": "eede4b1171109a8dc4ab1aa3767fdcc07d507507",
+      "selected_by_root": true,
+      "git_state": "tracked; unchanged in this task"
+    }
+  ],
+  "global_sources": [
+    {
+      "name": "GDD Estrutural",
+      "version": "v1.6.0",
+      "path": "ASTERION_GDD_Estrutural_v1.6.0_Fonte_Mestra.md",
+      "sha256": "0c9245861da2af8ed13944607f47b9122165d38e5a919f8b3dbaa668b65550aa",
+      "canonical_vigente": true
+    },
+    {
+      "name": "Contrato Global de Weapon Metadata",
+      "version": "v1.0.0 FINAL",
+      "path": "ASTERION_CONTRATO_GLOBAL_WEAPON_METADATA_v1.0.0_FINAL.md",
+      "sha256": "c283b398949dc0a864d98b9e0e9031080a50b937db6932ffcde7d46e600aa740",
+      "canonical_vigente": true
+    }
+  ],
+  "snapshot_contract_references": {
+    "current_top_level": {
+      "path": "07_CONTRATO_SNAPSHOT_RELEASE_v1.7.0.md",
+      "sha256": "9ad491272dca5d91964afd981dd8c75e7007f92d47edae00152627d3226fe503",
+      "status": "contrato vigente de topo no pacote v1.8.0 para uma futura entrega",
+      "use_for_future_snapshot": true
+    },
+    "historical_nested": {
+      "path": "inputs/v1.6.0/07_CONTRATO_SNAPSHOT_RELEASE_v1.6.0.md",
+      "sha256": "4d56b55244897d4b5a66fea82bf4ac22c720cf529c2fada2fc261fc3c83877ae",
+      "status": "entrada histórica preservada",
+      "use_for_future_snapshot": false
+    }
+  },
+  "release_snapshot": {
+    "supplied": false,
+    "connection_used": false,
+    "release_database_verification": "none",
+    "required_contract_file": "07_CONTRATO_SNAPSHOT_RELEASE_v1.7.0.md",
+    "historical_contract_file": "inputs/v1.6.0/07_CONTRATO_SNAPSHOT_RELEASE_v1.6.0.md",
+    "next_action": "Release/DBA entrega snapshot imutável; nenhuma conexão direta a banco foi solicitada ou usada"
+  },
+  "counts": {
+    "regional_records": 192,
+    "origin_records": 34,
+    "total_template_ids": 226,
+    "exact_local_matches_in_prior_scan": 46,
+    "reconciled_candidate_ids": 80,
+    "new_regional_candidate_ids": 66,
+    "origin_candidate_ids": 34,
+    "unique_ids_in_overlay": 226,
+    "special_classifications": 10,
+    "special_decided_for_this_candidate": 10,
+    "special_pending_game_design": 0,
+    "campaign_reward_rows": 24,
+    "distinct_mission_id_values": 8,
+    "distinct_reward_event_source_id_values": 8,
+    "distinct_equipment_source_key_values": 24,
+    "distinct_campaign_equipment_template_id_values": 24,
+    "category_value_counts": [
+      {
+        "category": "",
+        "count": 86
+      },
+      {
+        "category": "Leve",
+        "count": 35
+      },
+      {
+        "category": "Média",
+        "count": 31
+      },
+      {
+        "category": "N/A",
+        "count": 10
+      },
+      {
+        "category": "Pesada",
+        "count": 29
+      },
+      {
+        "category": "Vestes",
+        "count": 35
+      }
+    ],
+    "training_rows": 15,
+    "approved_armor_core_vectors": 16,
+    "approved_shield_core_rows": 1,
+    "approved_loot_weight_rows": 144,
+    "pending_template_rarity_eligibility_rows": 633,
+    "approved_game_design_decision_rows": 14,
+    "phase2d_c_individual_attribute_approvals": 100,
+    "phase2d_c_regional_individual_approvals": 66,
+    "phase2d_c_origin_individual_approvals": 34,
+    "regional_weapon_explicit_empty_tags_approved": 12,
+    "torso_mythic_inelegible_pairs_approved": 24,
+    "loot_local_evidence_favorable_not_final_eligible": 63,
+    "loot_pairs_pending_after_decision": 633,
+    "loot_pairs_approved_ineligible": 24,
+    "loot_pairs_with_local_favorable_evidence": 63,
+    "loot_pairs_final_eligible_approved": 0,
+    "loot_pairs_final_eligibility_not_resolved": 696,
+    "release_verified_ids": 0,
+    "full_decision_matrix_rows": 20,
+    "open_game_design_decision_rows": 3,
+    "origin_kit_compositions_approved": 6
+  },
+  "decisions": {
+    "special_classifications": [
+      {
+        "template_id": "equipment.altos.campaign.p27.capuz_vento_preso",
+        "display_name": "Capuz do Vento Preso",
+        "category": "Vestes",
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA",
+        "approval_source": "ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.md §2",
+        "decision_date": "2026-10-24",
+        "canonical_published": false,
+        "release_database_verified": false
+      },
+      {
+        "template_id": "equipment.confins.campaign.p33.capuz_dupla_leitura",
+        "display_name": "Capuz da Dupla Leitura",
+        "category": "Leve",
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA",
+        "approval_source": "ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.md §2",
+        "decision_date": "2026-10-24",
+        "canonical_published": false,
+        "release_database_verified": false
+      },
+      {
+        "template_id": "equipment.nareth.campaign.p15.capuz_dos_marcos_longos",
+        "display_name": "Capuz dos Marcos Longos",
+        "category": "Leve",
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA",
+        "approval_source": "ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.md §2",
+        "decision_date": "2026-10-24",
+        "canonical_published": false,
+        "release_database_verified": false
+      },
+      {
+        "template_id": "equipment.tdo.campaign.p3.veu_do_bosque",
+        "display_name": "Véu do Bosque",
+        "category": "Leve",
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA",
+        "approval_source": "ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.md §2",
+        "decision_date": "decidida anteriormente; data exata não indicada; reafirmada em 2026-10-24",
+        "canonical_published": false,
+        "release_database_verified": false
+      },
+      {
+        "template_id": "equipment.tdo.campaign.p6.guarda_do_ultimo_posto",
+        "display_name": "Guarda do Último Posto",
+        "category": "Pesada",
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA",
+        "approval_source": "ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.md §2",
+        "decision_date": "2026-10-24",
+        "canonical_published": false,
+        "release_database_verified": false
+      },
+      {
+        "template_id": "equipment.varzeas.campaign.p21.mascara_da_salmoura",
+        "display_name": "Máscara da Salmoura",
+        "category": "Média",
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA",
+        "approval_source": "ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.md §2",
+        "decision_date": "2026-10-24",
+        "canonical_published": false,
+        "release_database_verified": false
+      },
+      {
+        "template_id": "equipment.varzeas.special.mascara_da_triagem_silenciosa",
+        "display_name": "Máscara da Triagem Silenciosa",
+        "category": "Vestes",
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA",
+        "approval_source": "ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.md §2",
+        "decision_date": "2026-10-24",
+        "canonical_published": false,
+        "release_database_verified": false
+      },
+      {
+        "template_id": "equipment.varzeas.special.peitoral_do_fluxo_contido",
+        "display_name": "Peitoral do Fluxo Contido",
+        "category": "Média",
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA",
+        "approval_source": "ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.md §2",
+        "decision_date": "decidida anteriormente; data exata não indicada; reafirmada em 2026-10-24",
+        "canonical_published": false,
+        "release_database_verified": false
+      },
+      {
+        "template_id": "equipment.vde.campaign.p12.guarda_do_berco_silente",
+        "display_name": "Guarda do Berço Silente",
+        "category": "Média",
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA",
+        "approval_source": "ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.md §2",
+        "decision_date": "decidida anteriormente; data exata não indicada; reafirmada em 2026-10-24",
+        "canonical_published": false,
+        "release_database_verified": false
+      },
+      {
+        "template_id": "equipment.vde.campaign.p9.capuz_das_copas_suspensas",
+        "display_name": "Capuz das Copas Suspensas",
+        "category": "Vestes",
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA",
+        "approval_source": "ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.md §2",
+        "decision_date": "2026-10-24",
+        "canonical_published": false,
+        "release_database_verified": false
+      }
+    ],
+    "approved_game_design_summary": {
+      "training_v04": true,
+      "armor_cores_v07": true,
+      "shield_core_and_innate_block_zero": true,
+      "loot_weights_v04": true,
+      "special_classifications": 10,
+      "regional_individual_attributes_approved": 66,
+      "origin_individual_attributes_approved": 34,
+      "regional_empty_weapon_tag_records_approved": 12,
+      "torso_mythic_pairs_approved_ineligible": 24,
+      "local_favorable_loot_evidence_not_final": 63,
+      "release_verified_ids": 0,
+      "origin_class_kit_compositions": 6,
+      "origin_economic_prohibitions_explicit": [
+        "venda",
+        "troca",
+        "listagem",
+        "desmontagem",
+        "reembolso",
+        "cashback",
+        "aprimoramento",
+        "reroll",
+        "Runas",
+        "Encantamentos"
+      ]
+    },
+    "remaining_game_design_decisions": [
+      {
+        "decision_key": "GD-NEW-CATALOG-66-RECIPES",
+        "domain": "identidades dos equipamentos regionais candidatos e receitas/vínculos",
+        "status": "pendente_conciliacao_e_homologacao",
+        "candidate_value": "atributos dos 66 equipamentos regionais aprovados; 226 IDs continuam candidatos; receitas/output links propostos continuam sem verificação de release",
+        "owner": "Game Design + Ofícios/Conteúdo + Release/DBA"
+      },
+      {
+        "decision_key": "GD-WEAPON-METADATA-CONTRACT",
+        "domain": "contrato global Weapon Metadata",
+        "status": "pendente_formalizacao_e_publicacao",
+        "candidate_value": "forma, Proficiência de equipagem e requisito de Arte independentes; [] explícito aprovado nos 12 Cajados/Bastões; revisão global ainda não publicada",
+        "owner": "Game Design + responsável técnico do contrato"
+      },
+      {
+        "decision_key": "GD-LOOT-ELIGIBILITY-TEMPLATE-RARITY",
+        "domain": "elegibilidade individual de Saque por template × raridade",
+        "status": "pendente_conciliacao_e_homologacao",
+        "candidate_value": "24 pares inelegíveis aprovados; 63 evidências locais favoráveis sem decisão final; 633 pendentes; 0 elegíveis finais aprovados",
+        "owner": "Game Design + Conteúdo + Release/DBA"
+      }
+    ],
+    "origin_class_kit_compositions": [
+      {
+        "class": "Sentinela",
+        "principal": "Espada",
+        "secondary": "Escudo",
+        "body": "4 peças Pesadas",
+        "accessory": "vazio",
+        "artifact": "vazio",
+        "template_count": 6,
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA"
+      },
+      {
+        "class": "Errante",
+        "principal": "Espada",
+        "secondary": "Adaga",
+        "body": "4 peças Leves",
+        "accessory": "vazio",
+        "artifact": "vazio",
+        "template_count": 6,
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA"
+      },
+      {
+        "class": "Vigia",
+        "principal": "Arco 2H",
+        "secondary": "vazio",
+        "body": "4 peças Leves",
+        "accessory": "vazio",
+        "artifact": "vazio",
+        "template_count": 5,
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA"
+      },
+      {
+        "class": "Tecelão",
+        "principal": "Cajado 2H",
+        "secondary": "vazio",
+        "body": "4 peças de Vestes",
+        "accessory": "vazio",
+        "artifact": "vazio",
+        "template_count": 5,
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA"
+      },
+      {
+        "class": "Oráculo",
+        "principal": "Bastão 1H",
+        "secondary": "Adaga",
+        "body": "4 peças de Vestes",
+        "accessory": "vazio",
+        "artifact": "vazio",
+        "template_count": 6,
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA"
+      },
+      {
+        "class": "Luminar",
+        "principal": "Maça",
+        "secondary": "Escudo",
+        "body": "4 peças Médias",
+        "accessory": "vazio",
+        "artifact": "vazio",
+        "template_count": 6,
+        "decision_status": "APROVADO_GAME_DESIGN_AGUARDA_FORMALIZACAO_CANONICA"
+      }
+    ]
+  },
+  "package_integrity": {
+    "parent_v1_8_historical_hashes_preserved": true,
+    "parent_source_provenance": [
+      {
+        "path": "SOURCE_AUTHORITY.md",
+        "version": "raiz atual; TDO v1.0.16",
+        "role": "índice ativo de autoridade, leitura somente",
+        "bytes": 25640,
+        "sha256": "d50fb7b618d9d80540536aab8102a491d40ce6b9fa0e077006656f93ab73fd8b"
+      },
+      {
+        "path": "docs/SOURCE_AUTHORITY.md",
+        "version": "cópia local; idêntica ao índice da raiz na conferência",
+        "role": "prova local da cópia, leitura somente",
+        "bytes": 25640,
+        "sha256": "d50fb7b618d9d80540536aab8102a491d40ce6b9fa0e077006656f93ab73fd8b"
+      },
+      {
+        "path": ".worktrees/asterion-proficiency-phase2b/SOURCE_AUTHORITY.md",
+        "version": "índice do worktree; TDO v1.0.17",
+        "role": "origem do baseline-alvo candidato",
+        "bytes": 25443,
+        "sha256": "e452b9129feadea67979ae73a5f1980b82e395623af86cf8ffdad13ac511c418"
+      },
+      {
+        "path": "ASTERION_GDD_Estrutural_v1.6.0_Fonte_Mestra.md",
+        "version": "v1.6.0",
+        "role": "fonte estrutural vigente consultada",
+        "bytes": 350048,
+        "sha256": "0c9245861da2af8ed13944607f47b9122165d38e5a919f8b3dbaa668b65550aa"
+      },
+      {
+        "path": "ASTERION_CONTRATO_GLOBAL_WEAPON_METADATA_v1.0.0_FINAL.md",
+        "version": "v1.0.0 FINAL",
+        "role": "contrato vigente consultado",
+        "bytes": 28802,
+        "sha256": "c283b398949dc0a864d98b9e0e9031080a50b937db6932ffcde7d46e600aa740"
+      },
+      {
+        "path": "ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.16_FINAL.md",
+        "version": "v1.0.16 FINAL",
+        "role": "proveniência original das reconciliações locais",
+        "bytes": 170344,
+        "sha256": "8fdbe5e61216d0a2b9b62b60e5666361584055b266afbf2238437abc59b4954b"
+      },
+      {
+        "path": ".worktrees/asterion-proficiency-phase2b/ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.17_FINAL.md",
+        "version": "v1.0.17 FINAL",
+        "role": "baseline-alvo candidato, fonte no worktree da Fase 2B",
+        "bytes": 170321,
+        "sha256": "9c58e504a97e4acd55e39cfe99fd5322eb7026dc71cca3b86d116e918606a369"
+      },
+      {
+        "path": "ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.6_FINAL.md",
+        "version": "v1.0.6 FINAL",
+        "role": "fonte regional",
+        "bytes": 69361,
+        "sha256": "d88a247dcf1d384ebc3385faa77c80f25b0cef114ccc6e71191b112117159247"
+      },
+      {
+        "path": "ASTERION_CONTEUDO_PLANICIES_DE_NARETH_v1.0.2_FINAL.md",
+        "version": "v1.0.2 FINAL",
+        "role": "fonte regional",
+        "bytes": 72519,
+        "sha256": "758add317d856f6890284c4a7fd09457716b3f21f8094b2619c21245ba7e8470"
+      },
+      {
+        "path": "ASTERION_CONTEUDO_VARZEAS_CARMESINS_v1.0.3_FINAL.md",
+        "version": "v1.0.3 FINAL",
+        "role": "fonte regional",
+        "bytes": 69633,
+        "sha256": "d3772463786daff9f7748dff9a1bbf2761c3bf0f4f96848b460e16131cd70628"
+      },
+      {
+        "path": "ASTERION_CONTEUDO_ALTOS_CINEREOS_v1.0.1_FINAL.md",
+        "version": "v1.0.1 FINAL",
+        "role": "fonte regional",
+        "bytes": 106154,
+        "sha256": "e3ee5a1dbbe81b51cd63464cdc043629afff705a0167cd60feee9abe80d54d6f"
+      },
+      {
+        "path": "ASTERION_CONTEUDO_CONFINS_DO_VEU_v1.0.0_FINAL.md",
+        "version": "v1.0.0 FINAL",
+        "role": "fonte regional",
+        "bytes": 123582,
+        "sha256": "c86a0208888d14bbd653cda6174956df89b2233304dcca523d878b5b42a102fc"
+      },
+      {
+        "path": "balanceamento/ASTERION_CONSOLIDACAO_GLOBAL_PROFICIENCIAS_EQUIPAMENTOS_v1.1.0_NAO_CANONICA.md",
+        "version": "v1.1.0",
+        "role": "consolidação não canônica de origem",
+        "bytes": 13159,
+        "sha256": "18d9dd2b1cfb1a20bd438d68e655069fe43e00ca31fa0988001682d4834cbb0c"
+      },
+      {
+        "path": "balanceamento/ASTERION_ANEXO_REFERENCIAS_PROFICIENCIAS_EQUIPAMENTOS_v1.1.0_NAO_CANONICO.json",
+        "version": "v1.1.0",
+        "role": "anexo estruturado de origem",
+        "bytes": 277850,
+        "sha256": "c58506951fc129cf0a225d8e1ab02cb19fcb6ab93d5fd9b31806dd7137fc834b"
+      },
+      {
+        "path": "balanceamento/ASTERION_DECISOES_PECAS_ESPECIAIS_10_v1.2.0.csv",
+        "version": "v1.2.0",
+        "role": "classificações especiais de origem",
+        "bytes": 9810,
+        "sha256": "4d236561bd1a702550bf5e80f1e8c53dd2088959c7a53c4c811f35f3a47796cd"
+      },
+      {
+        "path": "balanceamento/fontes_candidatas_v1.3.0/09_CATALOGO_REGIONAL_192_v1.3.0_CANDIDATO.json",
+        "version": "v1.3.0",
+        "role": "catálogo regional de proveniência",
+        "bytes": 964858,
+        "sha256": "42c523a6a13283df6612aa524a91d6a019e7113e3412952a95bc1cc4c51a2b74"
+      },
+      {
+        "path": "balanceamento/fontes_candidatas_v1.3.0/14_CLASSIFICACOES_ESPECIAIS_10_v1.3.0.csv",
+        "version": "v1.3.0",
+        "role": "classificações especiais de proveniência",
+        "bytes": 3803,
+        "sha256": "05d11a85faa77065be9f8b408852a96e6dadef07830a9e4e6304f3af334d4c86"
+      },
+      {
+        "path": "balanceamento/ASTERION_FONTES_CANDIDATAS_PROFICIENCIA_EQUIPAMENTOS_v1.3.0.zip",
+        "version": "v1.3.0",
+        "role": "pacote candidato de proveniência",
+        "bytes": 99992,
+        "sha256": "66dc2ac17c25a405dde981b3278601af9675bc31cc0319b9b33caf24986bffc9"
+      },
+      {
+        "path": "balanceamento/fontes_candidatas_v1.4.0/01_MANIFESTO_CATALOGO_DADOS_v1.4.0_CANDIDATO.json",
+        "version": "v1.4.0",
+        "role": "manifesto de origem",
+        "bytes": 4949616,
+        "sha256": "770358c1c38a865555f51fc45d2e17047fc0c843b9f552dcb6a26c1fbd9060c9"
+      },
+      {
+        "path": "balanceamento/fontes_candidatas_v1.4.0/02_LEDGER_TEMPLATE_IDS_226_v1.4.0.csv",
+        "version": "v1.4.0",
+        "role": "ledger fonte para comparar conjunto de IDs",
+        "bytes": 92783,
+        "sha256": "d9ebed61f325cad1c88ecfab8f78967fe7f9115df494a363d302088214d89aeb"
+      },
+      {
+        "path": "balanceamento/fontes_candidatas_v1.4.0/06_VINCULOS_RECOMPENSA_CAMPANHA_24_v1.4.0.csv",
+        "version": "v1.4.0",
+        "role": "entrada anterior de recompensas",
+        "bytes": 9554,
+        "sha256": "2242286b27f9d2d3f9136f306727505352a859c8cc07942178547779b868cba4"
+      },
+      {
+        "path": "balanceamento/fontes_candidatas_v1.4.0/10_EQUIPAMENTOS_ORIGEM_34_v1.4.0.csv",
+        "version": "v1.4.0",
+        "role": "catálogo candidato de Origem",
+        "bytes": 35599,
+        "sha256": "4d9d2a7ef4363857cb53aca85e45c70530067f96d07d6a2f5c0878f1d86e7397"
+      },
+      {
+        "path": "balanceamento/ASTERION_RECONCILIACAO_RECOMPENSAS_24_v1.5.0.csv",
+        "version": "v1.5.0",
+        "role": "reconciliação local de recompensas",
+        "bytes": 10510,
+        "sha256": "90509b9ba58b19ab08fd28f517f0d807c8555697d7ef00853f3d5ce14764d4c2"
+      },
+      {
+        "path": "balanceamento/ASTERION_PRONTIDAO_STAGING_v1.5.0.md",
+        "version": "v1.5.0",
+        "role": "relatório local de prontidão, sem snapshot",
+        "bytes": 10816,
+        "sha256": "e9ee677bfe8166ca7ce3a958bb9b1b747b233854d906db8182024566278b3d76"
+      }
+    ],
+    "parent_package_file_inventory": [
+      {
+        "path": "02_CATALOGO_STATUS_226_v1.7.0.csv",
+        "bytes": 102288,
+        "sha256": "e40078065dd4450338ec947af9a561863501f84c99398a4b9aa71c7811b554d2"
+      },
+      {
+        "path": "03_CLASSIFICACOES_ESPECIAIS_10_v1.7.0.csv",
+        "bytes": 5361,
+        "sha256": "ccacbb99e853927f1191547b407f5016b0e01a61b275514f12a5aec578020d00"
+      },
+      {
+        "path": "04_MATRIZ_DECISOES_CANDIDATO_v1.7.0.csv",
+        "bytes": 9292,
+        "sha256": "fa2ef7d4f51fcada27ff4c338f3b38aa1af14fbd97b63b315faf46f899abaa44"
+      },
+      {
+        "path": "04_MATRIZ_DECISOES_PENDENTES_v1.7.0.csv",
+        "bytes": 2057,
+        "sha256": "24442fa3ad38c077283e20a864b4345de8f33381930a2aba75991eb9fa2f1d61"
+      },
+      {
+        "path": "05_RECONCILIACAO_RECOMPENSAS_24_v1.5.0.csv",
+        "bytes": 10510,
+        "sha256": "90509b9ba58b19ab08fd28f517f0d807c8555697d7ef00853f3d5ce14764d4c2"
+      },
+      {
+        "path": "06_RECOMPENSAS_CAMPANHA_BASELINE_24_v1.7.0.csv",
+        "bytes": 18938,
+        "sha256": "526feaae03250e37a3e14f8041008ba74aeb184a689b7bd246f3c686792d8aac"
+      },
+      {
+        "path": "07_CONTRATO_SNAPSHOT_RELEASE_v1.7.0.md",
+        "bytes": 3166,
+        "sha256": "9ad491272dca5d91964afd981dd8c75e7007f92d47edae00152627d3226fe503"
+      },
+      {
+        "path": "08_DIFF_DOCUMENTAL_v1.7.0.md",
+        "bytes": 1965,
+        "sha256": "987aae24ba85536d00e93cdc67735956c597b699284d4e6cf2a0bfeb7f942d50"
+      },
+      {
+        "path": "09_RELATORIO_CONSOLIDACAO_v1.7.0.md",
+        "bytes": 1685,
+        "sha256": "69eaeee78eed553d033e61cb590d0584c060ca4f3490de5ced1782b981de19b3"
+      },
+      {
+        "path": "10_GO_NO_GO_v1.7.0.csv",
+        "bytes": 3414,
+        "sha256": "704b7bc034b6264662278d305200bff959732924c20355fa687f2b3252f08d81"
+      },
+      {
+        "path": "11_README_v1.7.0.md",
+        "bytes": 838,
+        "sha256": "b5e4971c6df98868afe7e9b99bdac766907f47a91c7e987901a8f7b9a79ee5bc"
+      },
+      {
+        "path": "13_TREINAMENTO_PROFICIENCIAS_15_v0.4.0.csv",
+        "bytes": 2269,
+        "sha256": "83dfb67617038c00d230837cdafad850665391389ab65e23a5ec2666a2ff8372"
+      },
+      {
+        "path": "14_NUCLEOS_ARMADURA_16_v0.7.0.csv",
+        "bytes": 2726,
+        "sha256": "164788f3f13cbb66b4e05a1e81b9041e5ecca7c6be60230ed93e6533ab992e38"
+      },
+      {
+        "path": "15_ESCUDO_NUCLEO_HOMOLOGADO.csv",
+        "bytes": 423,
+        "sha256": "c792b8a538c7ce897effb55c79d957efcd1c8e35214b7a747d6519d2fe501ba1"
+      },
+      {
+        "path": "16_PESOS_SAQUE_v0.4.0.csv",
+        "bytes": 25184,
+        "sha256": "ab0194807444554e98feedd1357e4afa6544e1b1873060ef2ce884be4095d346"
+      },
+      {
+        "path": "17_ELEGIBILIDADE_SAQUE_720_v1.4.0_PENDENTE.csv",
+        "bytes": 239598,
+        "sha256": "f3e2b5b761233468814d5b9bff45adaca852e4dd9ecd7d0891d2507d4fd59535"
+      },
+      {
+        "path": "inputs/ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.md",
+        "bytes": 8435,
+        "sha256": "ba7426fec6add7962f831378a135a266bf3dbc23701ecbcab36252a2ff11a558"
+      },
+      {
+        "path": "inputs/ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.zip",
+        "bytes": 4043,
+        "sha256": "9f25dac59d1675dbca7671d1a1d93180752e6cb044647569c00cdecc51397697"
+      },
+      {
+        "path": "inputs/ASTERION_DECISOES_PECAS_ESPECIAIS_10_v1.2.0.csv",
+        "bytes": 9810,
+        "sha256": "4d236561bd1a702550bf5e80f1e8c53dd2088959c7a53c4c811f35f3a47796cd"
+      },
+      {
+        "path": "inputs/ASTERION_MATRIZ_256_COMBINACOES_NUCLEOS_ARMADURA_v0.7.0_NAO_CANONICA.csv",
+        "bytes": 57493,
+        "sha256": "cdf3c1065157947a96b423ab816bf535da2be442bc1b521e39feae5961533251"
+      },
+      {
+        "path": "inputs/ASTERION_PACOTE_CANDIDATO_PROFICIENCIAS_EQUIPAMENTOS_v1.6.0_NAO_CANONICO.zip",
+        "bytes": 256237,
+        "sha256": "347832d6e37fb6042a21fad49d77dbad3402c29ccbc035d2f2b5754afd2f746b"
+      },
+      {
+        "path": "inputs/ASTERION_PROPOSTA_PROFICIENCIA_TREINAMENTO_SAQUE_v0.4.0_PARA_APROVACAO.zip",
+        "bytes": 9162,
+        "sha256": "74aa4782691e0e2f2543ad0c93249c3e14e9cc19251cc53dd13dc67cd0690dc0"
+      },
+      {
+        "path": "inputs/ASTERION_SOLUCAO_CONTRATO_NUCLEOS_ARMADURA_v0.7.0_NAO_CANONICA.md",
+        "bytes": 13688,
+        "sha256": "47c093074662727977cc6240bcb8e5d1e2e29657d3c9cec102c3b938933b742a"
+      },
+      {
+        "path": "inputs/v1.4.0/00_README_PACOTE_v1.4.0.md",
+        "bytes": 1258,
+        "sha256": "112aa3018621765efc6142d83fa0170db57fc507b147a9ad3165a08593db4aa1"
+      },
+      {
+        "path": "inputs/v1.4.0/01_MANIFESTO_CATALOGO_DADOS_v1.4.0_CANDIDATO.json",
+        "bytes": 4949616,
+        "sha256": "770358c1c38a865555f51fc45d2e17047fc0c843b9f552dcb6a26c1fbd9060c9"
+      },
+      {
+        "path": "inputs/v1.4.0/02_LEDGER_TEMPLATE_IDS_226_v1.4.0.csv",
+        "bytes": 92783,
+        "sha256": "d9ebed61f325cad1c88ecfab8f78967fe7f9115df494a363d302088214d89aeb"
+      },
+      {
+        "path": "inputs/v1.4.0/03_RECEITAS_NOVOS_66_198_v1.4.0.csv",
+        "bytes": 217324,
+        "sha256": "b6d321c2426037d3fde4978438ca540ab59b371195f93e55b5d10528f52525a5"
+      },
+      {
+        "path": "inputs/v1.4.0/04_CUSTOS_CRAFT_POR_ITEMLEVEL_1980_v1.4.0.csv",
+        "bytes": 634329,
+        "sha256": "36d6d875439fd915746390e0ef6923786598446789018484bf09261c8cfab4a9"
+      },
+      {
+        "path": "inputs/v1.4.0/05_LINKS_RECEITA_OUTPUT_TEMPLATE_160_v1.4.0.csv",
+        "bytes": 89090,
+        "sha256": "a2270ef4716e1b8475d5aa2a656d509da8c17a611c24b869c3db2a794a59e74e"
+      },
+      {
+        "path": "inputs/v1.4.0/06_VINCULOS_RECOMPENSA_CAMPANHA_24_v1.4.0.csv",
+        "bytes": 9554,
+        "sha256": "2242286b27f9d2d3f9136f306727505352a859c8cc07942178547779b868cba4"
+      },
+      {
+        "path": "inputs/v1.4.0/07_SAQUE_TEMPLATES_RARIDADES_720_v1.4.0.csv",
+        "bytes": 179695,
+        "sha256": "eea26db9f4c4b6c6b5da2dfd4963e0c3ed6615656f32eb29dd86b0b2f967af17"
+      },
+      {
+        "path": "inputs/v1.4.0/08_NORMALIZACAO_GRUPOS_SAQUE_240_v1.4.0.csv",
+        "bytes": 59978,
+        "sha256": "aad0cfe87cb76e270d81011eaaf0e76f919e8319d150b4fda2dc6e4ae322dc2d"
+      },
+      {
+        "path": "inputs/v1.4.0/09_WEAPON_METADATA_20_v1.4.0.csv",
+        "bytes": 7125,
+        "sha256": "9c7784a868b56e88d506a4ac21441c3d74d13f9da38c15702e8af3f8901f55fd"
+      },
+      {
+        "path": "inputs/v1.4.0/10_EQUIPAMENTOS_ORIGEM_34_v1.4.0.csv",
+        "bytes": 35599,
+        "sha256": "4d9d2a7ef4363857cb53aca85e45c70530067f96d07d6a2f5c0878f1d86e7397"
+      },
+      {
+        "path": "inputs/v1.4.0/11_ESCUDOS_NAO_ARMA_8_v1.4.0.csv",
+        "bytes": 1144,
+        "sha256": "c91ce6526475f92700065f6c0dbe53e96caa0e1bee093e9502aae7c945fe116b"
+      },
+      {
+        "path": "inputs/v1.4.0/12_MATERIAL_IDS_RECEITAS_v1.4.0.csv",
+        "bytes": 5003,
+        "sha256": "b6e4f7853070b919a809ff5feaa79c066ea840a826bd43c48bcc6a5961ae2549"
+      },
+      {
+        "path": "inputs/v1.4.0/13_EVIDENCIA_BUSCA_IDS_226_v1.4.0.csv",
+        "bytes": 28603,
+        "sha256": "3a839c685ba2fd3c7ef67bb2b288a88539625d29b22daad6191795f429cc4a4b"
+      },
+      {
+        "path": "inputs/v1.4.0/14_RELATORIO_PENDENCIAS_E_FECHAMENTO_v1.4.0.md",
+        "bytes": 5188,
+        "sha256": "13f4f4aa06313a5c2b73bea6dd9120dceb82564bf9f4717f04a690d82059c05a"
+      },
+      {
+        "path": "inputs/v1.4.0/15_ADENDO_WEAPON_METADATA_v1.4.0_CANDIDATO.md",
+        "bytes": 1288,
+        "sha256": "54b1309a949b38dd7c250bf883647a09707be076b478c8f8c13a1b7428318ed4"
+      },
+      {
+        "path": "inputs/v1.4.0/16_REGRA_GUARDA_EQUIPAMENTOS_ORIGEM_v1.4.0_CANDIDATA.md",
+        "bytes": 1344,
+        "sha256": "f2d3d4796e29a7ef244ed4fa188afae3ed7694a0cc338fe8c5512888567b77b5"
+      },
+      {
+        "path": "inputs/v1.4.0/17_EVIDENCIA_BUSCA_RECIPE_IDS_198_v1.4.0.csv",
+        "bytes": 18288,
+        "sha256": "46cbd320605c219e5eeddedda5884a2735022b0165e4cb5edd71352b43eb40e3"
+      },
+      {
+        "path": "inputs/v1.6.0/02_CATALOGO_STATUS_226_v1.6.0.csv",
+        "bytes": 102024,
+        "sha256": "cd6acfc5636d102a721d8776ffa6f4507493496be1aba07b923f1521cf73ce0e"
+      },
+      {
+        "path": "inputs/v1.6.0/03_CLASSIFICACOES_ESPECIAIS_10_v1.6.0.csv",
+        "bytes": 4715,
+        "sha256": "3e998ca432e11e4f2059c5cc87b9f6c4340e5f54ac0bfa3ef0fa459a30d8b271"
+      },
+      {
+        "path": "inputs/v1.6.0/04_MATRIZ_DECISOES_CANDIDATO_v1.6.0.csv",
+        "bytes": 6372,
+        "sha256": "501e56b50e70287a5a4167018c0ff7786c1ae110ebc84c40bf1106842d62efb3"
+      },
+      {
+        "path": "inputs/v1.6.0/04_MATRIZ_DECISOES_PENDENTES_v1.6.0.csv",
+        "bytes": 5183,
+        "sha256": "bad311a10c18acc60618dfc9a957c05ea41780bb0c50313ff4beea351efe9313"
+      },
+      {
+        "path": "inputs/v1.6.0/05_RECONCILIACAO_RECOMPENSAS_24_v1.5.0.csv",
+        "bytes": 10510,
+        "sha256": "90509b9ba58b19ab08fd28f517f0d807c8555697d7ef00853f3d5ce14764d4c2"
+      },
+      {
+        "path": "inputs/v1.6.0/06_RECOMPENSAS_CAMPANHA_BASELINE_24_v1.6.0.csv",
+        "bytes": 17046,
+        "sha256": "0f908bf40564b94ad7ef9c47f35aa3d461a63a47aa0abc1a6f563d6a58fefa87"
+      },
+      {
+        "path": "inputs/v1.6.0/07_CONTRATO_SNAPSHOT_RELEASE_v1.6.0.md",
+        "bytes": 2706,
+        "sha256": "4d56b55244897d4b5a66fea82bf4ac22c720cf529c2fada2fc261fc3c83877ae"
+      },
+      {
+        "path": "inputs/v1.6.0/08_DIFF_DOCUMENTAL_v1.6.0.md",
+        "bytes": 2604,
+        "sha256": "89babb3e12d169dfc2b9c12762f588180e1cca82cd7387e343aa7aa56fc0774c"
+      },
+      {
+        "path": "inputs/v1.6.0/09_RELATORIO_CONSOLIDACAO_v1.6.0.md",
+        "bytes": 1389,
+        "sha256": "24e9dfe5f538c655f68be59e39a27b285915d0cd8e885dfef7e1d719b9dabc5c"
+      },
+      {
+        "path": "inputs/v1.6.0/10_GO_NO_GO_v1.6.0.csv",
+        "bytes": 2062,
+        "sha256": "090bec9f821d27f329b4dee9205d4ecfb9249757c47d1f1cd46ee95d504c2039"
+      },
+      {
+        "path": "inputs/v1.6.0/11_README_v1.6.0.md",
+        "bytes": 2050,
+        "sha256": "653ed9fa9aaab989411646331ef85470eb50728f97d5116c697f3e7cf1360b46"
+      },
+      {
+        "path": "inputs/v1.6.0/12_MANIFESTO_REVISAO_v1.6.0_CANDIDATO.json",
+        "bytes": 25761,
+        "sha256": "8f4bee7a4d6551ba134b0c7c281d30c7ffd1847526bd725683d2ca0f0169d155"
+      },
+      {
+        "path": "inputs/v1.6.0/SHA256SUMS.txt",
+        "bytes": 3570,
+        "sha256": "373144d943b199b39a84121a3c7ee06f74dd4649c0c526b0f8c24d6888d4cb04"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/ASTERION_DECISOES_PECAS_ESPECIAIS_10_v1.2.0.csv",
+        "bytes": 9810,
+        "sha256": "4d236561bd1a702550bf5e80f1e8c53dd2088959c7a53c4c811f35f3a47796cd"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/00_README_PACOTE_v1.4.0.md",
+        "bytes": 1258,
+        "sha256": "112aa3018621765efc6142d83fa0170db57fc507b147a9ad3165a08593db4aa1"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/01_MANIFESTO_CATALOGO_DADOS_v1.4.0_CANDIDATO.json",
+        "bytes": 4949616,
+        "sha256": "770358c1c38a865555f51fc45d2e17047fc0c843b9f552dcb6a26c1fbd9060c9"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/02_LEDGER_TEMPLATE_IDS_226_v1.4.0.csv",
+        "bytes": 92783,
+        "sha256": "d9ebed61f325cad1c88ecfab8f78967fe7f9115df494a363d302088214d89aeb"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/03_RECEITAS_NOVOS_66_198_v1.4.0.csv",
+        "bytes": 217324,
+        "sha256": "b6d321c2426037d3fde4978438ca540ab59b371195f93e55b5d10528f52525a5"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/04_CUSTOS_CRAFT_POR_ITEMLEVEL_1980_v1.4.0.csv",
+        "bytes": 634329,
+        "sha256": "36d6d875439fd915746390e0ef6923786598446789018484bf09261c8cfab4a9"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/05_LINKS_RECEITA_OUTPUT_TEMPLATE_160_v1.4.0.csv",
+        "bytes": 89090,
+        "sha256": "a2270ef4716e1b8475d5aa2a656d509da8c17a611c24b869c3db2a794a59e74e"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/06_VINCULOS_RECOMPENSA_CAMPANHA_24_v1.4.0.csv",
+        "bytes": 9554,
+        "sha256": "2242286b27f9d2d3f9136f306727505352a859c8cc07942178547779b868cba4"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/07_SAQUE_TEMPLATES_RARIDADES_720_v1.4.0.csv",
+        "bytes": 179695,
+        "sha256": "eea26db9f4c4b6c6b5da2dfd4963e0c3ed6615656f32eb29dd86b0b2f967af17"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/08_NORMALIZACAO_GRUPOS_SAQUE_240_v1.4.0.csv",
+        "bytes": 59978,
+        "sha256": "aad0cfe87cb76e270d81011eaaf0e76f919e8319d150b4fda2dc6e4ae322dc2d"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/09_WEAPON_METADATA_20_v1.4.0.csv",
+        "bytes": 7125,
+        "sha256": "9c7784a868b56e88d506a4ac21441c3d74d13f9da38c15702e8af3f8901f55fd"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/10_EQUIPAMENTOS_ORIGEM_34_v1.4.0.csv",
+        "bytes": 35599,
+        "sha256": "4d9d2a7ef4363857cb53aca85e45c70530067f96d07d6a2f5c0878f1d86e7397"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/11_ESCUDOS_NAO_ARMA_8_v1.4.0.csv",
+        "bytes": 1144,
+        "sha256": "c91ce6526475f92700065f6c0dbe53e96caa0e1bee093e9502aae7c945fe116b"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/12_MATERIAL_IDS_RECEITAS_v1.4.0.csv",
+        "bytes": 5003,
+        "sha256": "b6e4f7853070b919a809ff5feaa79c066ea840a826bd43c48bcc6a5961ae2549"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/13_EVIDENCIA_BUSCA_IDS_226_v1.4.0.csv",
+        "bytes": 28603,
+        "sha256": "3a839c685ba2fd3c7ef67bb2b288a88539625d29b22daad6191795f429cc4a4b"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/14_RELATORIO_PENDENCIAS_E_FECHAMENTO_v1.4.0.md",
+        "bytes": 5188,
+        "sha256": "13f4f4aa06313a5c2b73bea6dd9120dceb82564bf9f4717f04a690d82059c05a"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/15_ADENDO_WEAPON_METADATA_v1.4.0_CANDIDATO.md",
+        "bytes": 1288,
+        "sha256": "54b1309a949b38dd7c250bf883647a09707be076b478c8f8c13a1b7428318ed4"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/16_REGRA_GUARDA_EQUIPAMENTOS_ORIGEM_v1.4.0_CANDIDATA.md",
+        "bytes": 1344,
+        "sha256": "f2d3d4796e29a7ef244ed4fa188afae3ed7694a0cc338fe8c5512888567b77b5"
+      },
+      {
+        "path": "inputs/v1.6.0/inputs/v1.4.0/17_EVIDENCIA_BUSCA_RECIPE_IDS_198_v1.4.0.csv",
+        "bytes": 18288,
+        "sha256": "46cbd320605c219e5eeddedda5884a2735022b0165e4cb5edd71352b43eb40e3"
+      }
+    ],
+    "parent_source_artifacts_v1_7": [
+      {
+        "path": "inputs/ASTERION_PACOTE_CANDIDATO_PROFICIENCIAS_EQUIPAMENTOS_v1.6.0_NAO_CANONICO.zip",
+        "role": "pacote anterior preservado",
+        "sha256": "347832d6e37fb6042a21fad49d77dbad3402c29ccbc035d2f2b5754afd2f746b"
+      },
+      {
+        "path": "inputs/ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.zip",
+        "role": "registro de decisões",
+        "sha256": "9f25dac59d1675dbca7671d1a1d93180752e6cb044647569c00cdecc51397697"
+      },
+      {
+        "path": "inputs/ASTERION_PROPOSTA_PROFICIENCIA_TREINAMENTO_SAQUE_v0.4.0_PARA_APROVACAO.zip",
+        "role": "proposta original treinamento e pesos",
+        "sha256": "74aa4782691e0e2f2543ad0c93249c3e14e9cc19251cc53dd13dc67cd0690dc0"
+      },
+      {
+        "path": "inputs/ASTERION_MATRIZ_256_COMBINACOES_NUCLEOS_ARMADURA_v0.7.0_NAO_CANONICA.csv",
+        "role": "matriz técnica de núcleos",
+        "sha256": "cdf3c1065157947a96b423ab816bf535da2be442bc1b521e39feae5961533251"
+      }
+    ],
+    "parent_phase2d_c_evidence_hashes": [
+      {
+        "file": "01_MATRIZ_EQUIPAMENTOS_REGIONAIS_66_FASE2D_C_v1.0.0.csv",
+        "sha256": "344c9a44203705ed81c65e0e7975b8dfeff99caad95e1b80c0a00180dc65a3c1"
+      },
+      {
+        "file": "02_MATRIZ_EQUIPAMENTOS_ORIGEM_34_FASE2D_C_v1.0.0.csv",
+        "sha256": "2b5c9d9a092686279d9b5bfc8101fe91435aa752003962ce718de0b859c0cf1e"
+      },
+      {
+        "file": "03_MATRIZ_ELEGIBILIDADE_SAQUE_720_FASE2D_C_v1.0.0.csv",
+        "sha256": "f6ed1b0fdc668a78d60bd07227b0bf8e8397369a5108175f028e13dd42643462"
+      },
+      {
+        "file": "07_MANIFESTO_PROVENIENCIA_FASE2D_C_v1.0.0.json",
+        "sha256": "1d01e84acdb757db4f058ddcb475b15f0e8fe3ad816906f000d973111cc55c2c"
+      }
+    ],
+    "parent_approval_record": {
+      "source_document": "ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.md",
+      "source_zip": "ASTERION_ADENDO_HOMOLOGACOES_PROFICIENCIAS_EQUIPAMENTOS_v1.0.0_CANDIDATO.zip",
+      "source_zip_sha256": "9f25dac59d1675dbca7671d1a1d93180752e6cb044647569c00cdecc51397697",
+      "source_document_sha256": "ba7426fec6add7962f831378a135a266bf3dbc23701ecbcab36252a2ff11a558",
+      "decision_date": "2026-10-24",
+      "approved_fronts": [
+        "10 classificações especiais",
+        "Treinamento v0.4",
+        "núcleos de armadura v0.7",
+        "Escudo com Bloqueio inerente 0",
+        "pesos de Saque v0.4"
+      ],
+      "canonical_published": false,
+      "release_verified": false,
+      "runtime_enabled": false
+    },
+    "parent_baseline_and_checkout_divergence": {
+      "baseline_target": {
+        "region": "Terras do Ocaso",
+        "file": "ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.17_FINAL.md",
+        "version": "v1.0.17",
+        "source_checkout": ".worktrees/asterion-proficiency-phase2b",
+        "sha256": "9c58e504a97e4acd55e39cfe99fd5322eb7026dc71cca3b86d116e918606a369",
+        "target_status": "baseline alvo deste pacote candidato; não implica sincronização do índice raiz"
+      },
+      "baseline_origin": {
+        "file": "ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.16_FINAL.md",
+        "version": "v1.0.16",
+        "source_checkout": "raiz",
+        "sha256": "8fdbe5e61216d0a2b9b62b60e5666361584055b266afbf2238437abc59b4954b",
+        "usage": "origem documental das reconciliações locais v1.4/v1.5 e da entrada histórica de decisões"
+      },
+      "checkout_divergence": {
+        "root_source_authority": "SOURCE_AUTHORITY.md",
+        "root_selects": "TDO v1.0.16",
+        "root_sha256": "d50fb7b618d9d80540536aab8102a491d40ce6b9fa0e077006656f93ab73fd8b",
+        "docs_copy": "docs/SOURCE_AUTHORITY.md",
+        "docs_copy_sha256": "d50fb7b618d9d80540536aab8102a491d40ce6b9fa0e077006656f93ab73fd8b",
+        "docs_copy_matches_root": true,
+        "phase2b_worktree_source_authority": ".worktrees/asterion-proficiency-phase2b/SOURCE_AUTHORITY.md",
+        "phase2b_worktree_selects": "TDO v1.0.17",
+        "phase2b_worktree_sha256": "e452b9129feadea67979ae73a5f1980b82e395623af86cf8ffdad13ac511c418",
+        "root_modified": false,
+        "indexes_synchronized": false,
+        "resolution": "divergência explicitada; nenhum índice foi editado, sobrescrito ou sincronizado"
+      }
+    },
+    "new_artifact_hashes": [
+      {
+        "path": ".gitattributes",
+        "bytes": 80,
+        "sha256": "926fdd0eaa7bd1e6c58f58703d8bb0e0b282884fa66153251580db03d5a09396"
+      },
+      {
+        "path": "00_README_PACOTE_v1.9.1.md",
+        "bytes": 1432,
+        "sha256": "24cbe47cd8349c41f6a5c9dcb6fb9614826fd951a6116bd890bda3f9148b888d"
+      },
+      {
+        "path": "01_MINUTA_GDD_ESTRUTURAL_REVISADO_PROPOSTA_NAO_CANONICA.md",
+        "bytes": 13631,
+        "sha256": "c94f912e537ae6abfa67e6818150fac4586bccc5daa9c0cabd6537a071f829af"
+      },
+      {
+        "path": "02_MINUTA_CONTRATO_WEAPON_METADATA_v1.1.0_PROPOSTA_NAO_CANONICA.md",
+        "bytes": 10112,
+        "sha256": "043cf16ec7cde4aef98abb19d5385e5ab184daf43bc89f2f767b2888e87232db"
+      },
+      {
+        "path": "03_MATRIZ_CORRESPONDENCIA_DECISOES_SECOES_v1.9.1.csv",
+        "bytes": 6863,
+        "sha256": "acf9e1370f0a7ca5ff39ca0d69503b2c58a50d7d9663ab869dc9c3ce4df90256"
+      },
+      {
+        "path": "05_RELATORIO_CONFLITOS_PENDENCIAS_v1.9.1.md",
+        "bytes": 5567,
+        "sha256": "d1308d20e00ec90de8163d0ed1107cdcd572c620fbed0bf762e577468bb2d662"
+      },
+      {
+        "path": "06_PLANO_PUBLICACAO_CANONICA_v1.9.0.md",
+        "bytes": 2494,
+        "sha256": "13b2eddb53586fb248e51982182a93af1049ad701d7f5ea5baff16172b8a855f"
+      },
+      {
+        "path": "07_MATRIZ_GO_NO_GO_v1.9.1.csv",
+        "bytes": 2997,
+        "sha256": "9409ac131de59888cc58b97d40ebd84b22ad6ff25b3a984e822c181aa2299d8c"
+      },
+      {
+        "path": "08_BASELINE_AUTORIDADE_E_HASHES_v1.9.0.csv",
+        "bytes": 5346,
+        "sha256": "04827e41193dcd74d89f4672843a7b3e5f95d2dadce7654ca8f08974a88c597e"
+      },
+      {
+        "path": "09_DIFF_DOCUMENTAL_v1.9.1.md",
+        "bytes": 2581,
+        "sha256": "2d01896c03fcfffee7cee1708196ed7de9bb4d92f77abba3a52f7938cc604167"
+      },
+      {
+        "path": "10_RELATORIO_CORRECOES_GD_v1.9.1.md",
+        "bytes": 2213,
+        "sha256": "c721bcf9afec234f1ab9c669f248913a388dfb360e6134d4626e7b825422493a"
+      },
+      {
+        "path": "inputs/ASTERION_FASE2E_v1.9.0_PARA_HOMOLOGACAO_GD.zip",
+        "bytes": 840784,
+        "sha256": "31360dfb5d81f81d31601d0e1190f2b998d7b18eb025234f070056c1f0e30278"
+      },
+      {
+        "path": "inputs/ASTERION_PACOTE_CANDIDATO_PROFICIENCIAS_EQUIPAMENTOS_v1.8.0_NAO_CANONICO.zip",
+        "bytes": 821062,
+        "sha256": "e33efe2095c94c6377105db73e008025ebf7f83abc40f82103544ef83e4d5df8"
+      }
+    ],
+    "parent_v1_9_zip_sha256": "31360dfb5d81f81d31601d0e1190f2b998d7b18eb025234f070056c1f0e30278",
+    "prior_v1_8_zip_sha256": "e33efe2095c94c6377105db73e008025ebf7f83abc40f82103544ef83e4d5df8",
+    "revision_artifact_inventory_scope": "todos os arquivos do pacote exceto este manifesto e SHA256SUMS.txt; caminhos relativos com /"
+  },
+  "candidate_changes": {
+    "ids_modified": 0,
+    "catalog_values_modified": 0,
+    "source_values_reopened": 0,
+    "manifest_pending_decisions_aligned_to_matrix_rows": 3,
+    "stale_v1_8_origin_values_pending_entry_removed": true,
+    "stale_v1_8_regional_values_pending_entry_removed": true,
+    "snapshot_reference_corrected": true,
+    "canonical_sources_changed": false,
+    "origin_kit_compositions_added_without_template_changes": true,
+    "origin_grant_not_repeated_by_legacy_or_recovery": true,
+    "old_fixed_aggregate_total_revoked_in_gdd_draft": true,
+    "weapon_metadata_9_7_9_8_13_9_15_cross_references_checked": true
+  },
+  "parent_counts_preserved": {
+    "total_template_ids": 226,
+    "regional_records": 192,
+    "origin_records": 34,
+    "release_verified_ids": 0
+  },
+  "publication_status": {
+    "documentary_candidate_go": true,
+    "canonical_publication": "NO_GO",
+    "catalog_import": "NO_GO",
+    "release_verification": "NO_GO",
+    "migration": "NO_GO",
+    "feature_flag": "disabled",
+    "merge": "NO_GO",
+    "deploy": "NO_GO"
+  },
+  "integrity": {
+    "algorithm": "SHA-256",
+    "checksum_file": "SHA256SUMS.txt",
+    "checksum_file_covers": "all files in this package except itself, including this manifest",
+    "manifest_self_hash": "recorded in SHA256SUMS.txt",
+    "zip_sha256": "calcular após criação do ZIP; reportado externamente"
+  },
+  "grandparent_candidate": {
+    "version": "1.8.0",
+    "zip": "inputs/ASTERION_PACOTE_CANDIDATO_PROFICIENCIAS_EQUIPAMENTOS_v1.8.0_NAO_CANONICO.zip",
+    "zip_sha256": "e33efe2095c94c6377105db73e008025ebf7f83abc40f82103544ef83e4d5df8",
+    "manifest": "12_MANIFESTO_REVISAO_v1.8.0_CANDIDATO.json",
+    "manifest_sha256": "6272208c0ab52e2983f1bfc1e6a2dc2b73c347fc4d3679878f3506d59d2086bf",
+    "embedded_zip_sha256": "e33efe2095c94c6377105db73e008025ebf7f83abc40f82103544ef83e4d5df8",
+    "preserved_unmodified": true
+  },
+  "decision_matrix_status_counts": {
+    "APROVADO_GAME_DESIGN": 14,
+    "AUTORIZAÇÃO_DE_ESCOPO_DOCUMENTADA": 0,
+    "CORREÇÃO_DOCUMENTAL_COMPROVADA": 1,
+    "EVIDÊNCIA_DE_PREFLIGHT": 1,
+    "INELEGÍVEL_APROVADO_GAME_DESIGN": 1,
+    "PENDENTE": 3
+  }
+}
