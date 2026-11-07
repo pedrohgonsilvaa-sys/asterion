@@ -81,7 +81,7 @@ async def _start_scripted_combat(service: S2Service, actor: int):
 
 
 def _terminal(result: str):
-    def finish(combat, action):
+    def finish(combat, action, **_kwargs):
         updated = deepcopy(combat)
         updated.version += 1
         updated.result = result
@@ -541,7 +541,7 @@ async def test_s2_shares_vestiges_and_uses_confirmed_persistent_group_combat(
     assert len({views[actor].activity_id for actor in actors}) == 3
     assert all(views[actor].combat == views[actors[0]].combat for actor in actors)
 
-    def terminal_victory(combat, action, *, actor_key=None, target_id=None):
+    def terminal_victory(combat, action, *, actor_key=None, target_id=None, **_kwargs):
         updated = deepcopy(combat)
         updated.version += 1
         updated.result = "victory"

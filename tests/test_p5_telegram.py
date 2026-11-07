@@ -121,7 +121,7 @@ async def test_p5fight_attack_callback_routes_to_service_and_stale_click_is_safe
     combat = await _start_combat(p5, actor, sessions, character_id)
     assert combat is not None and combat.combat is not None
 
-    def advance_once(state, action):
+    def advance_once(state, action, **_kwargs):
         updated = deepcopy(state)
         updated.version += 1
         return updated

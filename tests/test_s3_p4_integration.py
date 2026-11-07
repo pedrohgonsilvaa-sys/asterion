@@ -32,7 +32,7 @@ from tests.test_p3_integration import _seed_p3
 
 
 def _terminal(result: str):
-    def finish(combat, action):
+    def finish(combat, action, **_kwargs):
         updated = deepcopy(combat)
         updated.version += 1
         updated.result = result
@@ -190,7 +190,7 @@ async def test_s3_shares_tracks_and_runs_confirmed_group_encounter(database, mon
     assert all(views[actor].combat == views[actors[0]].combat for actor in actors)
     assert all(views[actor].combat_actor_key != "player" for actor in actors)
 
-    def terminal_victory(combat, action, *, actor_key=None, target_id=None):
+    def terminal_victory(combat, action, *, actor_key=None, target_id=None, **_kwargs):
         updated = deepcopy(combat)
         updated.version += 1
         updated.result = "victory"
@@ -582,7 +582,7 @@ async def test_p4_group_shares_ruins_and_vigia_without_sharing_mission_rewards(
     assert started.group_size == resumed.group_size == 2
     assert {started.combat_actor_key, resumed.combat_actor_key} == {"p1", "p2"}
 
-    def resolve_victory(combat, action, *, target_id=None, actor_key=None):
+    def resolve_victory(combat, action, *, target_id=None, actor_key=None, **_kwargs):
         updated = deepcopy(combat)
         updated.version += 1
         updated.result = "victory"

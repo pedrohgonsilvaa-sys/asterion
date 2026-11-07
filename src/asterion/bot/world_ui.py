@@ -118,7 +118,6 @@ def render_world(view: WorldView) -> Screen:
         ("Códice", "knowledge:codex"),
         ("Vínculos", "links:root"),
         ("Configurações", "settings:root"),
-        ("Legado", "legacy:root"),
     ]
     rows = [
         [InlineKeyboardButton(text=a, callback_data=b) for a, b in labels[i : i + 2]]
@@ -187,7 +186,7 @@ def render_legacy(
                         text="Cancelar", callback_data=f"legacy:cancel:{confirmation_key}"
                     )
                 ],
-                [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
+                [InlineKeyboardButton(text="← Personagem", callback_data="character:root")],
             ]
         )
     else:
@@ -202,7 +201,7 @@ def render_legacy(
                 ]
             )
         rows.append(
-            [InlineKeyboardButton(text="← Menu", callback_data="menu:back")]
+            [InlineKeyboardButton(text="← Personagem", callback_data="character:root")]
         )
         keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
     return Screen(text, "menu", keyboard)

@@ -297,6 +297,7 @@ def test_boss_fragment_aura_phase_activation_revival_and_codec():
     living_fragment.hp = living_fragment.stats.hp * D("0.70")
     first_phase.fighters["fragment_1"].hp = D(0)
     first_phase.fighters["enemy"].hp = boss.stats.hp * D("0.3501")
+    first_phase.fighters["enemy"].barrier_layers.clear()
     last_phase = act(first_phase, "attack", target_id="enemy")
     assert last_phase.fighters["fragment_1"].hp == (
         last_phase.fighters["fragment_1"].stats.hp * D("0.50")
