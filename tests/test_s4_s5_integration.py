@@ -38,14 +38,7 @@ from tests.test_s3_p4_integration import _seed_campaign
 
 
 def _terminal(result: str):
-    def finish(
-        combat,
-        action,
-        *,
-        target_id: str | None = None,
-        actor_key: str | None = None,
-        effect_id: str | None = None,
-    ):
+    def finish(combat, action, *, effect_id: str | None = None, **_kwargs):
         assert effect_id is None
         updated = deepcopy(combat)
         updated.version += 1
