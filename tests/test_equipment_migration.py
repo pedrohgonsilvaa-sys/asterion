@@ -2,16 +2,25 @@
 
 import json
 import os
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import command
+
+
+def _head_revision() -> str:
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    revision = ScriptDirectory.from_config(config).get_current_head()
+    assert revision is not None
+    return revision
 
 
 def _migrate(connection, revision: str, direction: str = "upgrade") -> None:
@@ -124,7 +133,7 @@ async def test_0009_equipment_upgrade_constraints_safe_downgrade_and_reupgrade(
         )
         await connection.run_sync(lambda sync: _migrate(sync, "head"))
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261010_0027"
+            _head_revision()
         )
         assert await _column_exists(
             connection, "characters", "combat_configuration_version"
@@ -205,7 +214,7 @@ async def test_0009_equipment_upgrade_constraints_safe_downgrade_and_reupgrade(
             text("SELECT equipment_item_id FROM character_equipment_slots WHERE slot='Principal'")
         ) == equipment_id
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261010_0027"
+            _head_revision()
         )
         await connection.execute(text("DELETE FROM character_equipment_slots"))
         await connection.run_sync(lambda sync: _migrate(sync, "20260924_0009", "downgrade"))
@@ -222,7 +231,7 @@ async def test_0009_equipment_upgrade_constraints_safe_downgrade_and_reupgrade(
         ) == equipment_id
         await connection.run_sync(lambda sync: _migrate(sync, "head"))
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261010_0027"
+            _head_revision()
         )
         assert await connection.scalar(
             text("SELECT combat_configuration_version FROM characters WHERE id=:id"),

@@ -1,14 +1,23 @@
 import os
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import command
+
+
+def _head_revision() -> str:
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    revision = ScriptDirectory.from_config(config).get_current_head()
+    assert revision is not None
+    return revision
 
 
 def _migrate(connection, revision: str, direction: str = "upgrade") -> None:
@@ -61,7 +70,7 @@ async def test_0014_selected_path_defaults_null_enforces_values_and_downgrades_s
         )
         await connection.run_sync(lambda sync: _migrate(sync, "head"))
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261010_0027"
+            _head_revision()
         )
         assert await connection.scalar(
             text("SELECT selected_path FROM characters WHERE id = :id"), {"id": character_id}
@@ -90,7 +99,7 @@ async def test_0014_selected_path_defaults_null_enforces_values_and_downgrades_s
 
     async with engine.begin() as connection:
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261010_0027"
+            _head_revision()
         )
         await connection.execute(
             text("DELETE FROM characters WHERE id = :id"), {"id": character_id}

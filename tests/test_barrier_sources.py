@@ -3,6 +3,7 @@
 import json
 from dataclasses import replace
 from decimal import Decimal
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
@@ -336,6 +337,9 @@ def test_player_versus_player_combat_marks_pvp_cap_mode():
 
 @pytest.mark.asyncio
 async def test_postgres_jsonb_snapshot_preserves_barrier_layers(database):
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
     state = _combat()
     _grant(state, applier="caster-a", effect="spell-a", value=50, duration=1)
     _grant(state, applier="caster-b", effect="spell-b", value=35, duration=3)
@@ -347,7 +351,9 @@ async def test_postgres_jsonb_snapshot_preserves_barrier_layers(database):
             text("SELECT CAST(:snapshot AS jsonb)"), {"snapshot": payload}
         )
 
-    assert revision == "20261010_0027"
+    alembic_config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    current_head = ScriptDirectory.from_config(alembic_config).get_current_head()
+    assert revision == current_head
     restored = decode(persisted, state.id, state.ruleset, state.version)
     assert restored.fighters["player"].barrier == D(85)
     assert [layer.remaining for layer in restored.fighters["player"].barriers] == [1, 3]
