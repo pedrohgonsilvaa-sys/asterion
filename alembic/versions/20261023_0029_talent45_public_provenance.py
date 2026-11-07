@@ -4,9 +4,9 @@ Revision ID: 20261023_0029
 Revises: 20261023_0028
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 revision = "20261023_0029"
 down_revision = "20261023_0028"
@@ -103,7 +103,9 @@ def upgrade() -> None:
                     RETURN result;
                 ELSIF jsonb_typeof(value) = 'object' THEN
                     result := '{}'::jsonb;
-                    FOR property_name, item IN SELECT key, val FROM jsonb_each(value) AS e(key, val) LOOP
+                    FOR property_name, item IN
+                        SELECT key, val FROM jsonb_each(value) AS e(key, val)
+                    LOOP
                         result := result || jsonb_build_object(
                             property_name,
                             pg_temp._c2_strip_unreleased_talent45(item)

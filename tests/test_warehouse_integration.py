@@ -6,6 +6,7 @@ import pytest
 from aiogram import Bot, Dispatcher
 from sqlalchemy import delete, select
 
+from asterion.application.combat_configuration_guard import CombatConfigurationLocked
 from asterion.application.crafting import CraftingService
 from asterion.application.doctrines import DoctrineService
 from asterion.application.inventory import MATERIAL_LABELS, InventoryService
@@ -1548,3 +1549,30 @@ async def test_inventory_page_button_opens_the_next_page_in_telegram(database):
     )
     second = bot.session.make_request.call_args.args[1]
     assert "Página 2/2" in second.text
+
+
+@pytest.mark.asyncio
+async def test_cancel_still_works_while_an_activity_locks_transfers(database, monkeypatch):
+    actor, _ = await _seed_road(database, 781090)
+    sessions = database[1]
+    character_id = await _character_id(sessions, actor)
+    stack_id = uuid4()
+    async with sessions.begin() as session:
+        session.add(_material(MaterialStack, character_id, quantity=5, row_id=stack_id))
+    service = WarehouseService(sessions, "ocaso")
+    preview = await service.prepare_transfer(actor, "deposit", "material", stack_id)
+
+    monkeypatch.setattr(
+        "asterion.application.warehouse.lock_for_combat_configuration_mutation",
+        AsyncMock(side_effect=CombatConfigurationLocked(None)),
+    )
+
+    with pytest.raises(WarehouseRejected) as rejected:
+        await service.confirm(actor, preview.operation_id)
+    assert rejected.value.code == "FOREGROUND_LOCKED"
+    assert await service.cancel(actor, preview.operation_id) == "CANCELLED"
+    async with sessions() as session:
+        operation = await session.get(WarehouseOperation, preview.operation_id)
+        stack = await session.get(MaterialStack, stack_id)
+    assert operation.status == "cancelled"
+    assert stack.quantity == 5
