@@ -5,7 +5,11 @@ from uuid import UUID
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from asterion.application.crafting import CraftingRejected, CraftingService
+from asterion.application.crafting import (
+    CraftingRejected,
+    CraftingService,
+    is_crafting_location,
+)
 from asterion.application.professions import (
     ProfessionMutationRejected,
     ProfessionService,
@@ -65,8 +69,8 @@ def profession_router(
             ),
             None,
         )
-        can_create = (
-            progress is not None and not home.foreground and home.location == "Refúgio do Ocaso"
+        can_create = progress is not None and not home.foreground and is_crafting_location(
+            home.location
         )
         screen = render_profession_detail(
             profession_id,
@@ -76,6 +80,7 @@ def profession_router(
             progress is not None,
             home.foreground,
             can_create=can_create,
+            location=home.location,
         )
         await present(query.message, screen, images, edit=True)
 

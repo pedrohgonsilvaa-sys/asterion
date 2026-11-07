@@ -1,12 +1,17 @@
+import json
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 import asterion.application.crafting as crafting_module
-from asterion.application.crafting import CraftingRejected, CraftingService
+from asterion.application.crafting import (
+    CraftingRejected,
+    CraftingService,
+    is_crafting_location,
+)
 from asterion.application.inventory import InventoryService
 from asterion.application.professions import (
     ProfessionMutationRejected,
@@ -16,9 +21,12 @@ from asterion.domain.professions import (
     FRAGMENT_I,
     IRON,
     RESIDUE,
+    VARZEAS_ESSENCE,
+    VARZEAS_REAGENT,
 )
 from asterion.infrastructure.db.models import (
     BlockedDelivery,
+    Brazier,
     Character,
     CharacterProfession,
     ConsumableStack,
@@ -28,6 +36,8 @@ from asterion.infrastructure.db.models import (
     MaterialStack,
     RuneStack,
     Unlock,
+    WarehouseMaterialStack,
+    WorldState,
 )
 from tests.test_road_integration import _seed_road
 
@@ -80,6 +90,221 @@ async def _set_profession_level(database, character_id, profession_id, level, px
         )
         row.level = level
         row.pxp = pxp
+
+
+@pytest.mark.parametrize(
+    ("location", "expected"),
+    (
+        ("Refúgio do Ocaso", True),
+        ("Vigília do Vale", True),
+        ("Porto da Salmoura", True),
+        ("Último Refúgio", True),
+        ("Diques Rubros", False),
+        ("Brejos do Pulso", False),
+        ("Câmara da Matriz", False),
+        (None, False),
+    ),
+)
+def test_crafting_location_policy_is_explicitly_scoped(location, expected):
+    assert is_crafting_location(location) is expected
+
+
+@pytest.mark.asyncio
+async def test_confins_alchemy_recipe_can_be_crafted_at_last_refuge(database):
+    actor = 840115
+    character_id = await _seed_active_professions(database, actor, "alchemist", "artificer")
+    await _set_profession_level(database, character_id, "alchemist", 13)
+    async with database[1].begin() as session:
+        character = await session.get(Character, character_id)
+        character.level = 60
+        character.crowns = 55580
+        world = await session.get(WorldState, character_id)
+        world.region = "Confins do Véu"
+        world.location = "Último Refúgio"
+        session.add(
+            Brazier(character_id=character_id, brazier_id="bonfire.confins.testemunha")
+        )
+        session.add_all(
+            [
+                MaterialStack(
+                    character_id=character_id,
+                    material_id=VARZEAS_REAGENT,
+                    quantity=3,
+                    bound=True,
+                ),
+                MaterialStack(
+                    character_id=character_id,
+                    material_id=VARZEAS_ESSENCE,
+                    quantity=1,
+                    bound=True,
+                ),
+            ]
+        )
+
+    service = CraftingService(database[1], "ocaso")
+    recipe_id = "recipe.varzeas.alchemist.heal.varzeas.iv"
+    recipe = await service.recipe(actor, recipe_id)
+    assert recipe is not None and recipe.available is True and recipe.reason is None
+    preview = await service.preview(actor, recipe_id)
+    assert preview is not None and preview.delivery == "Inventário"
+    committed = await service.commit(actor, preview.receipt_id)
+    repeated = await service.commit(actor, preview.receipt_id)
+    assert committed is not None and repeated is not None
+    assert committed.status == repeated.status == "committed"
+
+    async with database[1]() as session:
+        character = await session.get(Character, character_id)
+        consumable = await session.scalar(
+            select(ConsumableStack).where(
+                ConsumableStack.character_id == character_id,
+                ConsumableStack.consumable_id == "consumable.heal.varzeas.iv",
+            )
+        )
+        receipt = await session.get(CraftingReceipt, preview.receipt_id)
+        assert character.crowns == 55510
+        assert consumable is not None and consumable.quantity == 1
+        assert receipt is not None and receipt.status == "committed"
+
+
+@pytest.mark.asyncio
+async def test_varzeas_alchemy_preview_and_commit_at_porto_preserve_inventory_and_warehouse(
+    database,
+):
+    actor = 840112
+    character_id = await _seed_active_professions(database, actor, "alchemist", "artificer")
+    await _set_profession_level(database, character_id, "alchemist", 12)
+    async with database[1].begin() as session:
+        character = await session.get(Character, character_id)
+        character.level = 40
+        character.crowns = 41310
+        world = await session.get(WorldState, character_id)
+        world.region = "Várzeas Carmesins"
+        world.location = "Porto da Salmoura"
+        session.add(Brazier(character_id=character_id, brazier_id="varzeas.brazier.porto"))
+        session.add(
+            MaterialStack(
+                character_id=character_id,
+                material_id=VARZEAS_REAGENT,
+                quantity=2,
+                bound=False,
+            )
+        )
+        session.add_all(
+            [
+                WarehouseMaterialStack(
+                    id=uuid4(),
+                    character_id=character_id,
+                    material_id=VARZEAS_REAGENT,
+                    quantity=1,
+                    bound=False,
+                ),
+                WarehouseMaterialStack(
+                    id=uuid4(),
+                    character_id=character_id,
+                    material_id=VARZEAS_ESSENCE,
+                    quantity=1,
+                    bound=False,
+                ),
+            ]
+        )
+
+    service = CraftingService(database[1], "ocaso")
+    recipe_id = "recipe.varzeas.alchemist.heal.varzeas.iv"
+    recipe = await service.recipe(actor, recipe_id)
+    assert recipe is not None and recipe.available is True and recipe.reason is None
+    assert {item.required: item.owned for item in recipe.ingredients} == {3: 3, 1: 1}
+    assert any(
+        stack_id.startswith("warehouse:")
+        for ingredient in recipe.ingredients
+        for stack_id, _quantity, _bound in ingredient.consumed_stacks
+    )
+
+    preview = await service.preview(actor, recipe_id)
+    assert preview is not None and preview.delivery == "Inventário"
+    committed = await service.commit(actor, preview.receipt_id)
+    repeated = await service.commit(actor, preview.receipt_id)
+    assert committed is not None and repeated is not None
+    assert committed.status == repeated.status == "committed"
+    assert json.loads(json.dumps(committed.output_payload)) == repeated.output_payload
+
+    async with database[1]() as session:
+        character = await session.get(Character, character_id)
+        consumable = await session.scalar(
+            select(ConsumableStack).where(
+                ConsumableStack.character_id == character_id,
+                ConsumableStack.consumable_id == "consumable.heal.varzeas.iv",
+            )
+        )
+        inventory_reagent = await session.scalar(
+            select(MaterialStack).where(
+                MaterialStack.character_id == character_id,
+                MaterialStack.material_id == VARZEAS_REAGENT,
+            )
+        )
+        warehouse_materials = (
+            await session.scalars(
+                select(WarehouseMaterialStack).where(
+                    WarehouseMaterialStack.character_id == character_id
+                )
+            )
+        ).all()
+        receipt = await session.get(CraftingReceipt, preview.receipt_id)
+        assert character.crowns == 41240
+        assert consumable is not None and consumable.quantity == 1
+        assert inventory_reagent is None
+        assert warehouse_materials == []
+        assert receipt is not None and receipt.status == "committed"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("location", "profession_level", "expected_reason"),
+    (
+        ("Hortos Hemaris", 12, "wrong_location"),
+        ("Porto da Salmoura", 8, "profession_level"),
+    ),
+)
+async def test_varzeas_alchemy_rejects_ineligible_location_or_profession_without_consuming(
+    database, location, profession_level, expected_reason
+):
+    actor = 840113 if location == "Hortos Hemaris" else 840114
+    character_id = await _seed_active_professions(database, actor, "alchemist", "artificer")
+    await _set_profession_level(database, character_id, "alchemist", profession_level)
+    await _add_materials(database, character_id, {VARZEAS_REAGENT: 3, VARZEAS_ESSENCE: 1})
+    async with database[1].begin() as session:
+        character = await session.get(Character, character_id)
+        character.crowns = 500
+        world = await session.get(WorldState, character_id)
+        world.region = "Várzeas Carmesins"
+        world.location = location
+        if location == "Porto da Salmoura":
+            session.add(Brazier(character_id=character_id, brazier_id="varzeas.brazier.porto"))
+
+    service = CraftingService(database[1], "ocaso")
+    recipe_id = "recipe.varzeas.alchemist.heal.varzeas.iv"
+    recipe = await service.recipe(actor, recipe_id)
+    assert recipe is not None and recipe.available is False
+    assert recipe.reason == expected_reason
+    with pytest.raises(CraftingRejected, match=expected_reason):
+        await service.preview(actor, recipe_id)
+    async with database[1]() as session:
+        character = await session.get(Character, character_id)
+        stacks = (
+            await session.scalars(
+                select(MaterialStack).where(MaterialStack.character_id == character_id)
+            )
+        ).all()
+        receipts = (
+            await session.scalars(
+                select(CraftingReceipt).where(CraftingReceipt.character_id == character_id)
+            )
+        ).all()
+        assert character.crowns == 500
+        assert {stack.material_id: stack.quantity for stack in stacks} == {
+            VARZEAS_REAGENT: 3,
+            VARZEAS_ESSENCE: 1,
+        }
+        assert receipts == []
 
 
 @pytest.mark.asyncio
