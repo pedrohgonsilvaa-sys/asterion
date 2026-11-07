@@ -5,9 +5,12 @@ from uuid import UUID
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from asterion.application.inventory import InventoryEntry, InventoryView
+from asterion.application.inventory import InventoryEntry, InventoryView, origin_label
 from asterion.bot.creation_ui import Screen
 from asterion.domain.consumables import grade_label
+
+# Keeps a page of the longest possible entries under Telegram's 4096-character limit.
+PAGE_SIZE = 15
 
 RARITY_ICON = {
     "Comum": "⚪",
@@ -149,7 +152,7 @@ CONSUMABLE_DETAILS = {
 }
 
 
-def _rarity(entry: InventoryEntry) -> str:
+def rarity_label(entry: InventoryEntry) -> str:
     if not entry.rarity:
         return ""
     label = RARITY_LABEL.get(entry.rarity.casefold())
@@ -166,7 +169,7 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
         meta = " · ".join(
             part
             for part in (
-                _rarity(entry),
+                rarity_label(entry),
                 escape(SLOT_LABEL.get(entry.slot or "", entry.slot or "")),
                 f"Nv.{entry.item_level}" if entry.item_level is not None else "",
             )
@@ -204,7 +207,7 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
         meta = " · ".join(
             part
             for part in (
-                _rarity(entry),
+                rarity_label(entry),
                 f"Grau {entry.grade}" if entry.grade is not None else "",
             )
             if part
@@ -224,7 +227,7 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
             details = " · ".join(
                 part
                 for part in (
-                    _rarity(entry),
+                    rarity_label(entry),
                     escape(SLOT_LABEL.get(entry.slot or "", entry.slot or "")),
                     f"Nv.{entry.item_level}" if entry.item_level is not None else "",
                 )
@@ -250,7 +253,7 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
                 details = " · ".join(
                     part
                     for part in (
-                        _rarity(entry),
+                        rarity_label(entry),
                         f"Grau {entry.grade}" if entry.grade is not None else "",
                     )
                     if part
@@ -265,7 +268,29 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
     return [f"{index} 📦 {escape(entry.title)} · {entry.quantity}"]
 
 
-def render_inventory(view: InventoryView) -> Screen:
+def page_slice(entries: tuple, page: int) -> tuple[int, int, int, tuple]:
+    """Clamp the page so a stale button still lands on a page that exists."""
+
+    pages = max(1, -(-len(entries) // PAGE_SIZE))
+    page = min(max(page, 0), pages - 1)
+    start = page * PAGE_SIZE
+    return page, pages, start, entries[start : start + PAGE_SIZE]
+
+
+def page_line(page: int, pages: int) -> list[str]:
+    return [f"Página {page + 1}/{pages}"] if pages > 1 else []
+
+
+def page_buttons(page: int, pages: int, prefix: str) -> list[list[InlineKeyboardButton]]:
+    row = []
+    if page > 0:
+        row.append(InlineKeyboardButton(text="← Anterior", callback_data=f"{prefix}:{page - 1}"))
+    if page < pages - 1:
+        row.append(InlineKeyboardButton(text="Próxima →", callback_data=f"{prefix}:{page + 1}"))
+    return [row] if row else []
+
+
+def render_inventory(view: InventoryView, page: int = 0) -> Screen:
     if view.kind == "inventory_root":
         text = (
             "🎒 Inventário\n\n"
@@ -305,23 +330,25 @@ def render_inventory(view: InventoryView) -> Screen:
             "materials": "🧱 Materiais",
             "runes": "🔷 Runas",
         }
+        page, pages, start, entries = page_slice(view.entries, page)
         lines = [
             headings.get(view.category or "", "🎒 Inventário"),
             "",
             f"🎒 Inventário · {view.used_slots}/{view.capacity}",
+            *page_line(page, pages),
             "",
         ]
-        if not view.entries:
+        if not entries:
             lines.append("Nenhum item nesta categoria.")
         else:
-            for index, entry in enumerate(view.entries, start=1):
-                if index > 1:
+            for index, entry in enumerate(entries, start=start + 1):
+                if index > start + 1:
                     lines.append("")
                 lines.extend(_entry_lines(index, entry))
         equipment_buttons = []
         warehouse_equipment_buttons = []
         if view.category == "equipment":
-            for index, entry in enumerate(view.entries, start=1):
+            for index, entry in enumerate(entries, start=start + 1):
                 if entry.kind != "equipment":
                     continue
                 try:
@@ -333,7 +360,7 @@ def render_inventory(view: InventoryView) -> Screen:
                         text=str(index), callback_data=f"eq:v:{item_id.hex}"
                     )
                 )
-                if not entry.equipped and not bool((entry.payload or {}).get("locked")):
+                if not entry.equipped:
                     warehouse_equipment_buttons.append(
                         InlineKeyboardButton(
                             text=f"Guardar {index}",
@@ -345,7 +372,7 @@ def render_inventory(view: InventoryView) -> Screen:
                 text=str(index),
                 callback_data=f"inventory:consumable:{entry.key}",
             )
-            for index, entry in enumerate(view.entries, start=1)
+            for index, entry in enumerate(entries, start=start + 1)
             if entry.kind == "consumable" and entry.payload is not None
         ]
         rows = [
@@ -356,28 +383,27 @@ def render_inventory(view: InventoryView) -> Screen:
             warehouse_equipment_buttons[offset : offset + 2]
             for offset in range(0, len(warehouse_equipment_buttons), 2)
         )
-        if view.category == "materials":
-            material_buttons = [
+        if view.category in {"materials", "consumables", "runes"}:
+            stack_buttons = [
                 InlineKeyboardButton(
                     text=f"Guardar {index}",
                     callback_data=(
-                        "warehouse:deposit:material:"
+                        f"warehouse:deposit:{entry.kind}:"
                         f"{entry.payload['warehouse_source_id'].replace('-', '')}"
                     ),
                 )
-                for index, entry in enumerate(view.entries, start=1)
-                if entry.kind == "material"
-                and entry.payload
-                and entry.payload.get("warehouse_source_id")
+                for index, entry in enumerate(entries, start=start + 1)
+                if entry.payload and entry.payload.get("warehouse_source_id")
             ]
             rows.extend(
-                material_buttons[offset : offset + 2]
-                for offset in range(0, len(material_buttons), 2)
+                stack_buttons[offset : offset + 2]
+                for offset in range(0, len(stack_buttons), 2)
             )
         rows.extend(
             consumable_buttons[index : index + 5]
             for index in range(0, len(consumable_buttons), 5)
         )
+        rows.extend(page_buttons(page, pages, f"inventory:category:{view.category}"))
         rows.append([InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")])
         keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
         return Screen("\n".join(lines), "inventory", keyboard, parse_mode="HTML")
@@ -436,7 +462,7 @@ def render_inventory(view: InventoryView) -> Screen:
                 lines.append("")
             lines.extend(_entry_lines(index, entry))
             if entry.payload and entry.payload.get("origin"):
-                lines.append(f"Origem · {escape(str(entry.payload['origin']))}")
+                lines.append(f"Origem · {origin_label(str(entry.payload['origin']))}")
     claim_buttons = [
         InlineKeyboardButton(
             text=f"Resgatar {index}",

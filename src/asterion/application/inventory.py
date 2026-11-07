@@ -101,6 +101,10 @@ MATERIAL_LABELS = {
     "material.confins.po_referencia": "Pó de Referência",
     "material.special.confins.core.arquivo_retorno": "Núcleo do Arquivo do Retorno",
     "material.special.confins.core.camara_contradicoes": "Núcleo da Câmara das Contradições",
+    "material.nareth.nucleo_arconte_invertido": "Núcleo do Arconte Invertido",
+    "material.nareth.nucleo_galerias_meridiano": "Núcleo das Galerias do Meridiano",
+    "material.nareth.nucleo_observatorio_afundado": "Núcleo do Observatório Afundado",
+    "material.special.altos.core.bastilha_profunda": "Núcleo da Bastilha Profunda",
 }
 
 @dataclass(frozen=True)
@@ -143,7 +147,28 @@ class InventoryView:
     secondary_blocked_by_two_handed: bool = False
 
 
-def consumable_inventory_entry(item_id: str, quantity: int) -> InventoryEntry:
+# GDD 23.2 names five delivery origins. Market and Service have no delivery yet;
+# when they do, their source keys must start with these prefixes.
+ORIGIN_PREFIXES = (
+    (("activity:", "explore:", "dungeon:", "dungeon."), "Loot"),
+    (("market:",), "Mercado"),
+    (("craft:",), "Crafting"),
+    (("service:",), "Serviço"),
+)
+
+
+def origin_label(source_key: str) -> str:
+    """Translate an internal delivery source into the category shown to the player."""
+
+    for prefixes, label in ORIGIN_PREFIXES:
+        if source_key.startswith(prefixes):
+            return label
+    return "Recompensa"
+
+
+def consumable_inventory_entry(
+    item_id: str, quantity: int, source_id: UUID | None = None
+) -> InventoryEntry:
     """Resolve existing stock IDs through the canonical item catalog."""
     item = consumable_definition(item_id)
     return InventoryEntry(
@@ -159,6 +184,7 @@ def consumable_inventory_entry(item_id: str, quantity: int) -> InventoryEntry:
                 "use_context": item.use_context.value,
                 "target": item.target.value,
                 "round_eligible": item.round_eligible,
+                **({"warehouse_source_id": str(source_id)} if source_id else {}),
             }
             if item is not None
             else None
@@ -311,7 +337,7 @@ class InventoryService:
                 )
             ).all()
             blocked = len(blocked_rows)
-            entries = tuple(self._pending_entry(row) for row in rows) + tuple(
+            entries = tuple(self.pending_entry(row) for row in rows) + tuple(
                 self._blocked_entry(row) for row in blocked_rows
             )
             return InventoryView(
@@ -388,7 +414,10 @@ class InventoryService:
                     .order_by(ConsumableStack.consumable_id)
                 )
             ).all()
-            return [consumable_inventory_entry(row.consumable_id, row.quantity) for row in rows]
+            return [
+                consumable_inventory_entry(row.consumable_id, row.quantity, row.id)
+                for row in rows
+            ]
         if category == "materials":
             rows = (
                 await session.scalars(
@@ -436,11 +465,13 @@ class InventoryService:
                 rarity=row.rarity,
                 grade=row.grade,
                 bound=row.bound,
+                payload={"warehouse_source_id": str(row.id)},
             )
             for row in rows
         ]
 
-    def _pending_entry(self, row: PendingItem) -> InventoryEntry:
+    @staticmethod
+    def pending_entry(row: PendingItem | BlockedDelivery) -> InventoryEntry:
         payload = dict(row.payload or {})
         if row.kind == "equipment":
             return InventoryEntry(
@@ -499,17 +530,10 @@ class InventoryService:
     @staticmethod
     def _blocked_entry(row: BlockedDelivery) -> InventoryEntry:
         payload = dict(row.payload or {})
-        title = str(
-            payload.get("item_name")
-            or payload.get("material_id")
-            or payload.get("consumable_id")
-            or payload.get("family")
-            or row.kind
-        )
         return InventoryEntry(
             kind="blocked_delivery",
             key=str(row.id),
-            title=title,
+            title=InventoryService.pending_entry(row).title,
             quantity=row.quantity,
             rarity=payload.get("rarity"),
             slot=payload.get("slot"),

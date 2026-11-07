@@ -2222,6 +2222,38 @@ class ConsumableStack(Base):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
 
+class WarehouseRuneStack(Base):
+    """A Rune stack kept in the character's canonical 100-slot Warehouse."""
+
+    __tablename__ = "warehouse_rune_stacks"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_warehouse_rune_quantity"),
+        Index("ix_warehouse_rune_character", "character_id"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    family: Mapped[str] = mapped_column(String(32), nullable=False)
+    rarity: Mapped[str] = mapped_column(String(16), nullable=False)
+    grade: Mapped[int] = mapped_column(Integer, nullable=False)
+    potency: Mapped[str] = mapped_column(String(24), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    bound: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+
+class WarehouseConsumableStack(Base):
+    """A Consumable stack kept in the character's canonical 100-slot Warehouse."""
+
+    __tablename__ = "warehouse_consumable_stacks"
+    __table_args__ = (
+        CheckConstraint("quantity BETWEEN 1 AND 99", name="ck_warehouse_consumable_quantity"),
+        Index("ix_warehouse_consumable_character", "character_id"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    consumable_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class PendingItem(Base):
     __tablename__ = "pending_items"
     __table_args__ = (

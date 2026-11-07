@@ -12,6 +12,10 @@ from asterion.infrastructure.db.models import (
     EquipmentItem,
     MaterialStack,
     RuneStack,
+    WarehouseConsumableStack,
+    WarehouseEquipmentItem,
+    WarehouseMaterialStack,
+    WarehouseRuneStack,
 )
 
 INVENTORY_CAPACITY = 60
@@ -42,23 +46,18 @@ async def inventory_slots(session: AsyncSession, character_id: UUID) -> int:
 
 
 async def warehouse_slots(session: AsyncSession, character_id: UUID) -> int:
-    from asterion.infrastructure.db.models import WarehouseEquipmentItem, WarehouseMaterialStack
-
-    equipment = int(
-        await session.scalar(
-            select(func.count(WarehouseEquipmentItem.id)).where(
-                WarehouseEquipmentItem.character_id == character_id
+    equipment = await session.scalar(
+        select(func.count(WarehouseEquipmentItem.id)).where(
+            WarehouseEquipmentItem.character_id == character_id
+        )
+    )
+    total = int(equipment or 0)
+    for model in (WarehouseMaterialStack, WarehouseConsumableStack, WarehouseRuneStack):
+        count = await session.scalar(
+            select(func.count(model.id)).where(
+                model.character_id == character_id,
+                model.quantity > 0,
             )
         )
-        or 0
-    )
-    materials = int(
-        await session.scalar(
-            select(func.count(WarehouseMaterialStack.id)).where(
-                WarehouseMaterialStack.character_id == character_id,
-                WarehouseMaterialStack.quantity > 0,
-            )
-        )
-        or 0
-    )
-    return equipment + materials
+        total += int(count or 0)
+    return total

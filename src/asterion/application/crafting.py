@@ -50,6 +50,7 @@ from asterion.infrastructure.db.models import (
     PendingItem,
     RuneStack,
     Unlock,
+    WarehouseEquipmentItem,
     WarehouseMaterialStack,
     WorldState,
 )
@@ -857,7 +858,7 @@ class CraftingService:
         return "BlockedDelivery"
 
     async def _delivery_exists(self, session, character_id, source_key) -> bool:
-        for model in (EquipmentItem, PendingItem, BlockedDelivery):
+        for model in (EquipmentItem, WarehouseEquipmentItem, PendingItem, BlockedDelivery):
             if (
                 await session.scalar(
                     select(model.id).where(

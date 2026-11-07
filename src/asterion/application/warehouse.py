@@ -16,6 +16,12 @@ from asterion.application.combat_configuration_guard import (
     lock_for_combat_configuration_mutation,
 )
 from asterion.application.equipment import equipment_instance_payload
+from asterion.application.inventory import (
+    MATERIAL_LABELS,
+    REGIONAL_RUNE_TITLES,
+    InventoryService,
+    consumable_inventory_entry,
+)
 from asterion.application.inventory_capacity import (
     INVENTORY_CAPACITY,
     WAREHOUSE_CAPACITY,
@@ -32,14 +38,69 @@ from asterion.infrastructure.db.models import (
     MaterialStack,
     PendingItem,
     RuneStack,
+    WarehouseConsumableStack,
     WarehouseEquipmentItem,
     WarehouseMaterialStack,
     WarehouseOperation,
+    WarehouseRuneStack,
 )
 
 OPERATION_TTL = timedelta(minutes=5)
 MATERIAL_STACK_LIMIT = 999
 CONSUMABLE_STACK_LIMIT = 99
+
+INVENTORY_MODELS = {
+    "equipment": EquipmentItem,
+    "material": MaterialStack,
+    "consumable": ConsumableStack,
+    "rune": RuneStack,
+}
+STORED_MODELS = {
+    "equipment": WarehouseEquipmentItem,
+    "material": WarehouseMaterialStack,
+    "consumable": WarehouseConsumableStack,
+    "rune": WarehouseRuneStack,
+}
+COPIED_FIELDS = {
+    "equipment": (
+        "id",
+        "character_id",
+        "source_key",
+        "item_name",
+        "rarity",
+        "slot",
+        "item_level",
+        "bound",
+        "payload",
+    ),
+    "material": ("id", "character_id", "material_id", "quantity", "bound"),
+    "consumable": ("id", "character_id", "consumable_id", "quantity"),
+    "rune": (
+        "id",
+        "character_id",
+        "family",
+        "rarity",
+        "grade",
+        "potency",
+        "quantity",
+        "bound",
+    ),
+}
+STACK_LIMITS = {
+    "material": MATERIAL_STACK_LIMIT,
+    "consumable": CONSUMABLE_STACK_LIMIT,
+    "rune": None,
+}
+STACK_IDENTITY = {
+    "material": ("material_id", "bound"),
+    "consumable": ("consumable_id",),
+    "rune": ("family", "rarity", "grade", "bound"),
+}
+STACK_ORDER = {
+    "material": ("material_id", "bound", "id"),
+    "consumable": ("consumable_id", "id"),
+    "rune": ("family", "rarity", "grade", "bound", "id"),
+}
 
 
 class WarehouseRejected(RuntimeError):
@@ -62,6 +123,7 @@ class WarehouseEntry:
     eligible: bool = True
     reason: str | None = None
     payload: dict | None = None
+    grade: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +142,7 @@ class WarehouseView:
     quantity: int = 0
     status: str | None = None
     origin: str | None = None
+    source_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +155,7 @@ class WarehouseResult:
 
 
 class WarehouseService:
-    """Moves whole equipment/material stacks while preserving their identities."""
+    """Moves items and stack quantities while preserving their identities."""
 
     def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
         if not server_id or len(server_id) > 64:
@@ -121,7 +184,7 @@ class WarehouseService:
             )
 
     async def inventory_sources(self, actor: int, kind: str) -> WarehouseView | None:
-        if kind not in {"equipment", "material"}:
+        if kind not in INVENTORY_MODELS:
             raise WarehouseRejected("INVALID_KIND")
         async with self.sessions() as session:
             character = await self._character(session, actor)
@@ -158,39 +221,17 @@ class WarehouseService:
                         item_level=row.item_level,
                         bound=row.bound,
                         source_key=row.source_key,
-                        eligible=(
-                            row.id not in equipped
-                            and not bool((row.payload or {}).get("locked"))
-                        ),
-                        reason=(
-                            "EQUIPPED"
-                            if row.id in equipped
-                            else "LOCKED" if bool((row.payload or {}).get("locked")) else None
-                        ),
+                        eligible=row.id not in equipped,
+                        reason="EQUIPPED" if row.id in equipped else None,
                         payload=dict(row.payload or {}),
                     )
                     for row in rows
                 )
             else:
-                rows = (
-                    await session.scalars(
-                        select(MaterialStack)
-                        .where(
-                            MaterialStack.character_id == character.id,
-                            MaterialStack.quantity > 0,
-                        )
-                        .order_by(MaterialStack.material_id, MaterialStack.bound, MaterialStack.id)
-                    )
-                ).all()
                 entries = tuple(
-                    WarehouseEntry(
-                        id=str(row.id),
-                        kind=kind,
-                        title=row.material_id,
-                        quantity=row.quantity,
-                        bound=row.bound,
+                    await self._stack_entries(
+                        session, INVENTORY_MODELS[kind], kind, character.id
                     )
-                    for row in rows
                 )
             return WarehouseView(
                 kind="warehouse_inventory_sources",
@@ -200,12 +241,50 @@ class WarehouseService:
                 inventory_used=sum(counts.values()),
                 warehouse_used=await warehouse_slots(session, character.id),
                 entries=entries,
+                item_kind=kind,
+            )
+
+    async def transfer_quantity(
+        self, actor: int, direction: str, kind: str, source_id: UUID
+    ) -> WarehouseView | None:
+        """Read the stack a player is choosing an amount from; nothing is reserved yet."""
+
+        if direction not in {"deposit", "withdraw"} or kind not in STACK_ORDER:
+            raise WarehouseRejected("INVALID_OPERATION")
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                return None
+            safe = await current_permanent_brazier(session, character.id)
+            if safe is None:
+                raise WarehouseRejected("SAFE_LOCATION_REQUIRED")
+            _record, _snapshot, title, quantity, _source_key = await self._transfer_source(
+                session, character.id, direction, kind, source_id, lock=False
+            )
+            counts = await inventory_slot_counts(session, character.id)
+            return WarehouseView(
+                kind="warehouse_quantity",
+                character_id=character.id,
+                accessible=True,
+                location=safe[1],
+                inventory_used=sum(counts.values()),
+                warehouse_used=await warehouse_slots(session, character.id),
+                direction=direction,
+                item_kind=kind,
+                title=title,
+                quantity=quantity,
+                source_id=source_id,
             )
 
     async def prepare_transfer(
-        self, actor: int, direction: str, kind: str, source_id: UUID
+        self,
+        actor: int,
+        direction: str,
+        kind: str,
+        source_id: UUID,
+        quantity: int | None = None,
     ) -> WarehouseView | None:
-        if direction not in {"deposit", "withdraw"} or kind not in {"equipment", "material"}:
+        if direction not in {"deposit", "withdraw"} or kind not in INVENTORY_MODELS:
             raise WarehouseRejected("INVALID_OPERATION")
         async with self.sessions.begin() as session:
             character = await self._lock_character(session, actor)
@@ -214,15 +293,17 @@ class WarehouseService:
             safe = await current_permanent_brazier(session, character.id)
             if safe is None:
                 raise WarehouseRejected("SAFE_LOCATION_REQUIRED")
-            record, snapshot, title, quantity, source_key = await self._transfer_source(
+            record, snapshot, title, available, source_key = await self._transfer_source(
                 session, character.id, direction, kind, source_id, lock=True
             )
-            if direction == "deposit":
-                if kind == "equipment":
-                    if await self._is_equipped(session, character.id, source_id):
-                        raise WarehouseRejected("EQUIPPED")
-                    if bool((record.payload or {}).get("locked")):
-                        raise WarehouseRejected("LOCKED")
+            amount = available if quantity is None else quantity
+            if not 1 <= amount <= available:
+                raise WarehouseRejected("INVALID_QUANTITY")
+            if kind != "equipment":
+                await self._stack_plan(session, character.id, direction, kind, record, amount)
+            elif direction == "deposit":
+                if await self._is_equipped(session, character.id, source_id):
+                    raise WarehouseRejected("EQUIPPED")
                 if await warehouse_slots(session, character.id) >= WAREHOUSE_CAPACITY:
                     raise WarehouseRejected("WAREHOUSE_FULL")
             elif await inventory_slots(session, character.id) >= INVENTORY_CAPACITY:
@@ -233,7 +314,7 @@ class WarehouseService:
                 kind,
                 str(source_id),
                 source_key,
-                quantity,
+                amount,
                 snapshot,
             )
             session.add(operation)
@@ -249,7 +330,7 @@ class WarehouseService:
                 direction=direction,
                 item_kind=kind,
                 title=title,
-                quantity=quantity,
+                quantity=amount,
                 status="preview",
             )
 
@@ -268,7 +349,7 @@ class WarehouseService:
             amount = await self._pending_recoverable_quantity(session, character.id, pending)
             if amount <= 0:
                 raise WarehouseRejected("INVENTORY_FULL")
-            title = self._pending_title(pending)
+            title = InventoryService.pending_entry(pending).title
             snapshot = self._pending_snapshot(pending)
             operation = self._new_operation(
                 character.id,
@@ -296,37 +377,6 @@ class WarehouseService:
                 quantity=amount,
                 status="preview",
                 origin=pending.source_key,
-            )
-
-    async def operation(self, actor: int, operation_id: UUID) -> WarehouseView | None:
-        async with self.sessions() as session:
-            character = await self._character(session, actor)
-            if character is None:
-                return None
-            operation = await session.scalar(
-                select(WarehouseOperation).where(
-                    WarehouseOperation.id == operation_id,
-                    WarehouseOperation.character_id == character.id,
-                )
-            )
-            if operation is None:
-                return None
-            counts = await inventory_slot_counts(session, character.id)
-            safe = await current_permanent_brazier(session, character.id)
-            return WarehouseView(
-                kind="warehouse_operation",
-                character_id=character.id,
-                accessible=True,
-                location=safe[1] if safe else None,
-                inventory_used=sum(counts.values()),
-                warehouse_used=await warehouse_slots(session, character.id),
-                operation_id=operation.id,
-                direction=operation.direction,
-                item_kind=operation.kind,
-                title=operation.source_key or operation.kind,
-                quantity=operation.quantity,
-                status=operation.status,
-                origin=operation.source_key,
             )
 
     async def cancel(self, actor: int, operation_id: UUID) -> str:
@@ -407,373 +457,85 @@ class WarehouseService:
             source_id = UUID(operation.source_id)
         except ValueError as exc:
             raise WarehouseRejected("STALE_PREVIEW") from exc
-        record, snapshot, _title, quantity, _source_key = await self._transfer_source(
-            session, character_id, operation.direction, operation.kind, source_id, lock=True
+        direction, kind, amount = operation.direction, operation.kind, operation.quantity
+        record, snapshot, _title, available, _source_key = await self._transfer_source(
+            session, character_id, direction, kind, source_id, lock=True
         )
-        if _fingerprint(snapshot) != operation.fingerprint or quantity != operation.quantity:
+        if _fingerprint(snapshot) != operation.fingerprint or amount > available:
             raise WarehouseRejected("STALE_PREVIEW")
-        if operation.direction == "deposit":
-            if operation.kind == "equipment":
+        target = STORED_MODELS[kind] if direction == "deposit" else INVENTORY_MODELS[kind]
+        if kind == "equipment":
+            if direction == "deposit":
                 if await self._is_equipped(session, character_id, source_id):
                     raise WarehouseRejected("STALE_PREVIEW")
-                if bool((record.payload or {}).get("locked")):
-                    raise WarehouseRejected("STALE_PREVIEW")
                 if await warehouse_slots(session, character_id) >= WAREHOUSE_CAPACITY:
                     raise WarehouseRejected("WAREHOUSE_FULL")
-                session.add(
-                    WarehouseEquipmentItem(
-                        id=record.id,
-                        character_id=record.character_id,
-                        source_key=record.source_key,
-                        item_name=record.item_name,
-                        rarity=record.rarity,
-                        slot=record.slot,
-                        item_level=record.item_level,
-                        bound=record.bound,
-                        payload=dict(record.payload or {}),
-                    )
-                )
-                await session.delete(record)
-            else:
-                if await warehouse_slots(session, character_id) >= WAREHOUSE_CAPACITY:
-                    raise WarehouseRejected("WAREHOUSE_FULL")
-                session.add(
-                    WarehouseMaterialStack(
-                        id=record.id,
-                        character_id=record.character_id,
-                        material_id=record.material_id,
-                        quantity=record.quantity,
-                        bound=record.bound,
-                    )
-                )
-                await session.delete(record)
-            return
-        if operation.kind == "equipment":
-            if await inventory_slots(session, character_id) >= INVENTORY_CAPACITY:
+            elif await inventory_slots(session, character_id) >= INVENTORY_CAPACITY:
                 raise WarehouseRejected("INVENTORY_FULL")
-            session.add(
-                EquipmentItem(
-                    id=record.id,
-                    character_id=record.character_id,
-                    source_key=record.source_key,
-                    item_name=record.item_name,
-                    rarity=record.rarity,
-                    slot=record.slot,
-                    item_level=record.item_level,
-                    bound=record.bound,
-                    payload=dict(record.payload or {}),
-                )
-            )
+            session.add(_copy(target, kind, record))
             await session.delete(record)
-        else:
-            if await inventory_slots(session, character_id) >= INVENTORY_CAPACITY:
-                raise WarehouseRejected("INVENTORY_FULL")
-            session.add(
-                MaterialStack(
-                    id=record.id,
-                    character_id=record.character_id,
-                    material_id=record.material_id,
-                    quantity=record.quantity,
-                    bound=record.bound,
-                )
-            )
+            return
+        merges, leftover = await self._stack_plan(
+            session, character_id, direction, kind, record, amount
+        )
+        for row, take in merges:
+            row.quantity += take
+        if leftover:
+            stack = _copy(target, kind, record)
+            if leftover != record.quantity:
+                stack.id = uuid4()
+            stack.quantity = leftover
+            session.add(stack)
+        record.quantity -= amount
+        if record.quantity == 0:
             await session.delete(record)
 
-    async def _legacy_commit_pending_claim(
-        self, session: AsyncSession, character_id: UUID, operation: WarehouseOperation
-    ) -> None:
-        pending = await session.scalar(
-            select(PendingItem)
-            .where(
-                PendingItem.id == UUID(operation.source_id),
-                PendingItem.character_id == character_id,
-            )
-            .with_for_update()
-        )
-        if (
-            pending is None
-            or _fingerprint(self._pending_snapshot(pending)) != operation.fingerprint
-        ):
-            raise WarehouseRejected("STALE_PREVIEW")
-        remaining = operation.quantity
-        payload = dict(pending.payload or {})
-        if pending.kind == "equipment":
-            if (
-                remaining != pending.quantity
-                or await inventory_slots(session, character_id) >= INVENTORY_CAPACITY
-            ):
-                raise WarehouseRejected("STALE_PREVIEW")
-            item_id, item_payload = equipment_instance_payload(payload)
-            existing = await session.get(EquipmentItem, item_id)
-            if (
-                existing is not None
-                or await session.get(WarehouseEquipmentItem, item_id) is not None
-            ):
-                raise WarehouseRejected("STALE_PREVIEW")
-            session.add(
-                EquipmentItem(
-                    id=item_id,
-                    character_id=character_id,
-                    source_key=pending.source_key,
-                    item_name=item_payload["item_name"],
-                    rarity=item_payload["rarity"],
-                    slot=item_payload["slot"],
-                    item_level=item_payload["item_level"],
-                    bound=bool(item_payload.get("bound", False)),
-                    payload=item_payload,
-                )
-            )
-            await session.delete(pending)
-            return
-        if pending.kind == "material":
-            material_id = str(payload.get("material_id", ""))
-            bound = bool(payload.get("bound", False))
-            stacks = (
-                await session.scalars(
-                    select(MaterialStack)
-                    .where(
-                        MaterialStack.character_id == character_id,
-                        MaterialStack.material_id == material_id,
-                        MaterialStack.bound.is_(bound),
-                        MaterialStack.quantity > 0,
-                    )
-                    .order_by(MaterialStack.id)
-                    .with_for_update()
-                )
-            ).all()
-            for stack in stacks:
-                take = min(remaining, MATERIAL_STACK_LIMIT - stack.quantity)
-                if take > 0:
-                    stack.quantity += take
-                    remaining -= take
-                if remaining == 0:
-                    break
-            if remaining > 0:
-                free = max(0, INVENTORY_CAPACITY - await inventory_slots(session, character_id))
-                while remaining > 0 and free > 0:
-                    take = min(remaining, MATERIAL_STACK_LIMIT)
-                    session.add(
-                        MaterialStack(
-                            character_id=character_id,
-                            material_id=material_id,
-                            quantity=take,
-                            bound=bound,
-                        )
-                    )
-                    remaining -= take
-                    free -= 1
-        elif pending.kind == "consumable":
-            consumable_id = str(payload.get("consumable_id", ""))
-            stack = await session.scalar(
-                select(ConsumableStack)
+    async def _stack_plan(self, session, character_id, direction, kind, record, amount):
+        """Validate the destination; return top-ups and what needs a new stack."""
+
+        deposit = direction == "deposit"
+        model = STORED_MODELS[kind] if deposit else INVENTORY_MODELS[kind]
+        rows = (
+            await session.scalars(
+                select(model)
                 .where(
-                    ConsumableStack.character_id == character_id,
-                    ConsumableStack.consumable_id == consumable_id,
+                    model.character_id == character_id,
+                    *(
+                        getattr(model, field) == getattr(record, field)
+                        for field in STACK_IDENTITY[kind]
+                    ),
                 )
+                .order_by(model.id)
                 .with_for_update()
             )
-            if stack is None:
-                if await inventory_slots(session, character_id) < INVENTORY_CAPACITY:
-                    take = min(remaining, CONSUMABLE_STACK_LIMIT)
-                    session.add(
-                        ConsumableStack(
-                            id=pending.id,
-                            character_id=character_id,
-                            consumable_id=consumable_id,
-                            quantity=take,
-                        )
-                    )
-                    remaining -= take
-            else:
-                take = min(remaining, CONSUMABLE_STACK_LIMIT - stack.quantity)
-                if take > 0:
-                    stack.quantity += take
-                    remaining -= take
-        elif pending.kind == "rune":
-            values = {
-                "family": payload.get("family"),
-                "rarity": payload.get("rarity"),
-                "grade": int(payload.get("grade", 1)),
-                "potency": payload.get("potency"),
-                "bound": bool(payload.get("bound", False)),
-            }
-            stack = await session.scalar(
-                select(RuneStack)
-                .where(
-                    RuneStack.character_id == character_id,
-                    RuneStack.family == values["family"],
-                    RuneStack.rarity == values["rarity"],
-                    RuneStack.grade == values["grade"],
-                    RuneStack.bound.is_(values["bound"]),
-                )
-                .with_for_update()
-            )
-            if stack is not None:
-                if stack.potency != values["potency"]:
-                    raise WarehouseRejected("STALE_PREVIEW")
-                stack.quantity += remaining
-                remaining = 0
-            elif await inventory_slots(session, character_id) < INVENTORY_CAPACITY:
-                session.add(
-                    RuneStack(
-                        id=pending.id,
-                        character_id=character_id,
-                        **values,
-                        quantity=remaining,
-                    )
-                )
-                remaining = 0
-        else:
-            raise WarehouseRejected("UNSUPPORTED_PENDING_KIND")
-        if remaining == 0:
-            await session.delete(pending)
-        else:
-            pending.quantity -= operation.quantity - remaining
-            if pending.quantity <= 0:
-                await session.delete(pending)
-
-    async def _legacy_pending_recoverable_quantity(
-        self, session: AsyncSession, character_id: UUID, pending: PendingItem
-    ) -> int:
-        payload = dict(pending.payload or {})
-        if pending.kind == "equipment":
-            item_id, _ = equipment_instance_payload(payload)
-            exists = await session.scalar(
-                select(EquipmentItem.id).where(EquipmentItem.id == item_id)
-            )
-            if (
-                exists is not None
-                or await inventory_slots(session, character_id) >= INVENTORY_CAPACITY
-            ):
-                return 0
-            return pending.quantity
-        if pending.kind == "material":
-            return await self._recoverable_stack_quantity(
-                session,
-                character_id,
-                pending.quantity,
-                MaterialStack,
-                "material_id",
-                payload.get("material_id"),
-                bool(payload.get("bound", False)),
-                MATERIAL_STACK_LIMIT,
-            )
-        if pending.kind == "consumable":
-            existing = await session.scalar(
-                select(ConsumableStack).where(
-                    ConsumableStack.character_id == character_id,
-                    ConsumableStack.consumable_id == payload.get("consumable_id"),
-                )
-            )
-            if existing is not None:
-                return min(pending.quantity, max(0, CONSUMABLE_STACK_LIMIT - existing.quantity))
-            if await inventory_slots(session, character_id) < INVENTORY_CAPACITY:
-                return min(pending.quantity, CONSUMABLE_STACK_LIMIT)
-            return 0
-        if pending.kind == "rune":
-            stack = await session.scalar(
-                select(RuneStack).where(
-                    RuneStack.character_id == character_id,
-                    RuneStack.family == payload.get("family"),
-                    RuneStack.rarity == payload.get("rarity"),
-                    RuneStack.grade == payload.get("grade", 1),
-                    RuneStack.bound.is_(bool(payload.get("bound", False))),
-                )
-            )
-            if stack is not None:
-                return pending.quantity if stack.potency == payload.get("potency") else 0
-            return (
-                pending.quantity
-                if await inventory_slots(session, character_id) < INVENTORY_CAPACITY
-                else 0
-            )
-        return 0
-
-    async def _recoverable_stack_quantity(
-        self,
-        session: AsyncSession,
-        character_id: UUID,
-        quantity: int,
-        model,
-        identity_field: str,
-        identity: str | None,
-        bound: bool,
-        limit: int,
-    ) -> int:
-        if not identity:
-            return 0
-        query = select(model).where(
-            model.character_id == character_id,
-            getattr(model, identity_field) == identity,
-            model.bound.is_(bound),
-            model.quantity > 0,
-        )
-        rows = (await session.scalars(query)).all()
-        room = sum(max(0, limit - row.quantity) for row in rows)
-        free = max(0, INVENTORY_CAPACITY - await inventory_slots(session, character_id))
-        return min(quantity, room + free * limit)
-
-    async def _legacy_transfer_source(
-        self,
-        session: AsyncSession,
-        character_id: UUID,
-        direction: str,
-        kind: str,
-        source_id: UUID,
-        *,
-        lock: bool,
-    ):
-        if direction == "deposit" and kind == "equipment":
-            statement = select(EquipmentItem).where(
-                EquipmentItem.id == source_id,
-                EquipmentItem.character_id == character_id,
-            )
-            if lock:
-                statement = statement.with_for_update()
-            row = await session.scalar(statement)
-            if row is None:
-                raise WarehouseRejected("ITEM_UNAVAILABLE")
-            snapshot = self._equipment_snapshot(row)
-            return row, snapshot, row.item_name, 1, row.source_key
-        if direction == "deposit" and kind == "material":
-            statement = select(MaterialStack).where(
-                MaterialStack.id == source_id,
-                MaterialStack.character_id == character_id,
-                MaterialStack.quantity > 0,
-            )
-            if lock:
-                statement = statement.with_for_update()
-            row = await session.scalar(statement)
-            if row is None:
-                raise WarehouseRejected("ITEM_UNAVAILABLE")
-            snapshot = self._material_snapshot(row)
-            return row, snapshot, row.material_id, row.quantity, None
-        if direction == "withdraw" and kind == "equipment":
-            statement = select(WarehouseEquipmentItem).where(
-                WarehouseEquipmentItem.id == source_id,
-                WarehouseEquipmentItem.character_id == character_id,
-            )
-            if lock:
-                statement = statement.with_for_update()
-            row = await session.scalar(statement)
-            if row is None:
-                raise WarehouseRejected("ITEM_UNAVAILABLE")
-            snapshot = self._warehouse_equipment_snapshot(row)
-            return row, snapshot, row.item_name, 1, row.source_key
-        if direction == "withdraw" and kind == "material":
-            statement = select(WarehouseMaterialStack).where(
-                WarehouseMaterialStack.id == source_id,
-                WarehouseMaterialStack.character_id == character_id,
-                WarehouseMaterialStack.quantity > 0,
-            )
-            if lock:
-                statement = statement.with_for_update()
-            row = await session.scalar(statement)
-            if row is None:
-                raise WarehouseRejected("ITEM_UNAVAILABLE")
-            snapshot = self._warehouse_material_snapshot(row)
-            return row, snapshot, row.material_id, row.quantity, None
-        raise WarehouseRejected("INVALID_OPERATION")
+        ).all()
+        if kind == "rune":
+            matching = [row for row in rows if row.potency == record.potency]
+            if not deposit and len(matching) != len(rows):
+                raise WarehouseRejected("STACK_CONFLICT")
+            rows = matching
+        limit = STACK_LIMITS[kind]
+        merges = []
+        remaining = amount
+        for row in rows:
+            take = remaining if limit is None else min(remaining, limit - row.quantity)
+            if row.quantity > 0 and take > 0:
+                merges.append((row, take))
+                remaining -= take
+        if not remaining:
+            return merges, 0
+        if not deposit and kind == "consumable" and any(row.quantity > 0 for row in rows):
+            raise WarehouseRejected("STACK_FULL")
+        if deposit:
+            if await warehouse_slots(session, character_id) >= WAREHOUSE_CAPACITY:
+                raise WarehouseRejected("WAREHOUSE_FULL")
+        elif await inventory_slots(session, character_id) >= INVENTORY_CAPACITY:
+            raise WarehouseRejected("INVENTORY_FULL")
+        empty = next((row for row in rows if row.quantity <= 0), None)
+        if empty is not None:
+            merges.append((empty, remaining))
+            return merges, 0
+        return merges, remaining
 
     async def _commit_pending_claim(self, session, character_id, operation):
         pending = await session.scalar(
@@ -969,27 +731,22 @@ class WarehouseService:
         return min(quantity, room + free * limit)
 
     async def _transfer_source(self, session, character_id, direction, kind, source_id, *, lock):
-        model = {
-            ("deposit", "equipment"): EquipmentItem,
-            ("deposit", "material"): MaterialStack,
-            ("withdraw", "equipment"): WarehouseEquipmentItem,
-            ("withdraw", "material"): WarehouseMaterialStack,
-        }.get((direction, kind))
+        models = {"deposit": INVENTORY_MODELS, "withdraw": STORED_MODELS}.get(direction, {})
+        model = models.get(kind)
         if model is None:
             raise WarehouseRejected("INVALID_OPERATION")
         statement = select(model).where(model.id == source_id, model.character_id == character_id)
-        if model in {MaterialStack, WarehouseMaterialStack}:
+        if kind != "equipment":
             statement = statement.where(model.quantity > 0)
         if lock:
             statement = statement.with_for_update()
         row = await session.scalar(statement)
         if row is None:
             raise WarehouseRejected("ITEM_UNAVAILABLE")
+        snapshot = self._snapshot(kind, row)
         if kind == "equipment":
-            snapshot = self._equipment_snapshot(row)
             return row, snapshot, row.item_name, 1, row.source_key
-        snapshot = self._material_snapshot(row)
-        return row, snapshot, row.material_id, row.quantity, None
+        return row, snapshot, _stack_title(kind, row), row.quantity, None
 
     async def _lock_character(self, session, actor):
         character_id = await session.scalar(select(Character.id).where(
@@ -1015,30 +772,39 @@ class WarehouseService:
                 .order_by(WarehouseEquipmentItem.item_name, WarehouseEquipmentItem.id)
             )
         ).all()
-        materials = (
-            await session.scalars(
-                select(WarehouseMaterialStack)
-                .where(
-                    WarehouseMaterialStack.character_id == character_id,
-                    WarehouseMaterialStack.quantity > 0,
-                )
-                .order_by(
-                    WarehouseMaterialStack.material_id,
-                    WarehouseMaterialStack.bound,
-                    WarehouseMaterialStack.id,
-                )
-            )
-        ).all()
-        return [
+        entries = [
             WarehouseEntry(
                 str(row.id), "equipment", row.item_name, 1, row.bound,
                 row.rarity, row.slot, row.item_level, row.source_key,
                 payload=dict(row.payload or {}),
             )
             for row in equipment
-        ] + [
-            WarehouseEntry(str(row.id), "material", row.material_id, row.quantity, row.bound)
-            for row in materials
+        ]
+        for kind in STACK_ORDER:
+            entries.extend(
+                await self._stack_entries(session, STORED_MODELS[kind], kind, character_id)
+            )
+        return entries
+
+    async def _stack_entries(self, session, model, kind, character_id):
+        rows = (
+            await session.scalars(
+                select(model)
+                .where(model.character_id == character_id, model.quantity > 0)
+                .order_by(*(getattr(model, column) for column in STACK_ORDER[kind]))
+            )
+        ).all()
+        return [
+            WarehouseEntry(
+                str(row.id),
+                kind,
+                _stack_title(kind, row),
+                row.quantity,
+                bool(getattr(row, "bound", False)),
+                rarity=getattr(row, "rarity", None),
+                grade=_stack_grade(kind, row),
+            )
+            for row in rows
         ]
 
     async def _is_equipped(self, session, character_id, item_id):
@@ -1068,28 +834,13 @@ class WarehouseService:
         )
 
     @staticmethod
-    def _equipment_snapshot(row):
-        return {
-            "id": str(row.id), "character_id": str(row.character_id),
-            "source_key": row.source_key, "item_name": row.item_name,
-            "rarity": row.rarity, "slot": row.slot, "item_level": row.item_level,
-            "bound": bool(row.bound), "payload": dict(row.payload or {}),
-        }
-
-    @staticmethod
-    def _warehouse_equipment_snapshot(row):
-        return WarehouseService._equipment_snapshot(row)
-
-    @staticmethod
-    def _material_snapshot(row):
-        return {
-            "id": str(row.id), "character_id": str(row.character_id),
-            "material_id": row.material_id, "quantity": row.quantity, "bound": bool(row.bound),
-        }
-
-    @staticmethod
-    def _warehouse_material_snapshot(row):
-        return WarehouseService._material_snapshot(row)
+    def _snapshot(kind, row):
+        values = {field: getattr(row, field) for field in COPIED_FIELDS[kind]}
+        values["id"] = str(row.id)
+        values["character_id"] = str(row.character_id)
+        if kind == "equipment":
+            values["payload"] = dict(row.payload or {})
+        return values
 
     @staticmethod
     def _pending_snapshot(row):
@@ -1099,12 +850,23 @@ class WarehouseService:
             "payload": dict(row.payload or {}), "quantity": row.quantity,
         }
 
-    @staticmethod
-    def _pending_title(row):
-        payload = dict(row.payload or {})
-        return str(payload.get("item_name") or payload.get("material_id")
-                   or payload.get("consumable_id") or payload.get("family")
-                   or "Entrega Pendente")
+
+def _copy(model, kind, record):
+    return model(**{field: getattr(record, field) for field in COPIED_FIELDS[kind]})
+
+
+def _stack_title(kind: str, row) -> str:
+    if kind == "consumable":
+        return consumable_inventory_entry(row.consumable_id, row.quantity).title
+    if kind == "rune":
+        return REGIONAL_RUNE_TITLES.get(row.family, f"Runa de {row.family}")
+    return MATERIAL_LABELS.get(row.material_id, row.material_id)
+
+
+def _stack_grade(kind: str, row) -> int | None:
+    if kind == "consumable":
+        return consumable_inventory_entry(row.consumable_id, row.quantity).grade
+    return row.grade if kind == "rune" else None
 
 
 def _fingerprint(value: dict) -> str:
