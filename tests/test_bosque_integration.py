@@ -85,7 +85,7 @@ async def _seed_bosque(
 
 
 def _terminal(result: str):
-    def finish(combat, action):
+    def finish(combat, action, **_kwargs):
         updated = deepcopy(combat)
         updated.version += 1
         updated.result = result

@@ -91,6 +91,7 @@ def test_character_hub_has_canonical_copy_and_only_live_navigation():
         ["Atributos", "Ofícios"],
         ["Perfil", "Caminho"],
         ["Doutrinas", "Cosméticos"],
+        ["Legado"],
         ["← Menu"],
     ]
     callbacks = [button.callback_data for button in _buttons(screen)]
@@ -105,6 +106,7 @@ def test_character_hub_has_canonical_copy_and_only_live_navigation():
         "character:path",
         "character:doctrines",
         "character:cosmetics",
+        "legacy:root",
         "menu:back",
     ]
     assert "🎴 Artes · Combate" in screen.text

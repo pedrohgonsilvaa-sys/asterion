@@ -187,7 +187,7 @@ async def test_p3_group_shares_present_evidence_and_cervo_but_keeps_rewards_pers
     assert started.encounter_id == resumed.encounter_id
     assert {started.combat_actor_key, resumed.combat_actor_key} == {"p1", "p2"}
 
-    def resolve_victory(combat, action, *, target_id=None, actor_key=None):
+    def resolve_victory(combat, action, *, target_id=None, actor_key=None, **_kwargs):
         updated = deepcopy(combat)
         updated.version += 1
         updated.result = "victory"
@@ -269,7 +269,7 @@ async def test_p3_group_shares_present_evidence_and_cervo_but_keeps_rewards_pers
 
 
 def _terminal(result: str):
-    def finish(combat, action):
+    def finish(combat, action, **_kwargs):
         updated = deepcopy(combat)
         updated.version += 1
         updated.result = result

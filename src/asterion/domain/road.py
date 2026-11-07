@@ -622,7 +622,7 @@ CUSTODIO_PRIMEIRO_SELO = Creature(
     (
         ("golpe_regulador", "Golpe Regulador", D("1.00"), 0, D(0), 0),
         ("marca_contencao", "Marca de Contenção", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "agility"),
-        ("egide_selo", "Égide do Selo", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), 0, False, "self", None, None, 2, (), (), D("0.50"), D("0.08")),
+        ("egide_selo", "Égide do Selo", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), 2, False, "self", None, None, 2, (), (), D("0.50"), D("0.08")),
         ("varredura_selo", "Varredura do Selo", D("0.80"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
         ("ruptura_selo", "Ruptura do Primeiro Selo", D("1.75"), 0, D(0), 0, None, 0, True, 5, None, D(0), D(0), 0, False, "opponent", None, D("0.35")),
     ),
@@ -4507,7 +4507,7 @@ ALTOS_BASTILHA_DUNGEON_CREATURES = (
         (
             ("impacto_sustentacao", "Impacto de Sustentação", D("1.00"), 0, D(0), 0),
             ("linha_carga", "Linha de Carga", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
-            ("ancora_postura", "Âncora de Postura", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), 0, True, "self", None, None, 2, (), (), D("0.50"), D("0.08")),
+            ("ancora_postura", "Âncora de Postura", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), 2, True, "self", None, None, 2, (), (), D("0.50"), D("0.08")),
             ("varredura_ponte", "Varredura de Ponte", D("0.85"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
             ("redistribuicao_forcada", "Redistribuição Forçada", D("1.80"), 0, D(0), 0, None, 0, True, 5),
         ),

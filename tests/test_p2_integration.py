@@ -117,7 +117,7 @@ async def _start_combat(service, actor, order=ASH_POINT_IDS):
 
 
 def _finish_with(outcome):
-    def finish(combat, action):
+    def finish(combat, action, **_kwargs):
         updated = deepcopy(combat)
         updated.version += 1
         updated.result = outcome
@@ -294,7 +294,7 @@ async def test_p2_group_shares_present_objectives_and_runs_one_confirmed_spider_
     assert started.group_size == resumed.group_size == 2
     assert {started.combat_actor_key, resumed.combat_actor_key} == {"p1", "p2"}
 
-    def resolve_victory(combat, action, *, target_id=None, actor_key=None):
+    def resolve_victory(combat, action, *, target_id=None, actor_key=None, **_kwargs):
         updated = deepcopy(combat)
         updated.version += 1
         updated.result = "victory"
@@ -690,7 +690,7 @@ async def test_p2_consumable_budget_is_shared_across_items(database, monkeypatch
     )
     assert used.combat.consumable_uses == 1
 
-    def next_player_opportunity(state, action):
+    def next_player_opportunity(state, action, **_kwargs):
         updated = deepcopy(state)
         updated.version += 1
         player = updated.fighters["player"]

@@ -17,7 +17,8 @@ CHARACTER_COPY = (
     "📇 Perfil · Identidade\n"
     "🎭 Caminho · Especialização\n"
     "🧩 Doutrinas · Configurações salvas\n"
-    "🎨 Cosméticos · Apresentação"
+    "🎨 Cosméticos · Apresentação\n"
+    "🔱 Legado · Ascensão"
 )
 
 
@@ -44,6 +45,7 @@ def render_character() -> Screen:
                 InlineKeyboardButton(text="Doutrinas", callback_data="character:doctrines"),
                 InlineKeyboardButton(text="Cosméticos", callback_data="character:cosmetics"),
             ],
+            [InlineKeyboardButton(text="Legado", callback_data="legacy:root")],
             [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
         ]
     )

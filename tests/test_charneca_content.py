@@ -464,7 +464,7 @@ async def test_overland_and_brazier_travel_are_distinct_and_free(database):
     assert await service.travel_route(actor, CHARNECA) is None
 
 
-def _forced_defeat(combat, _action):
+def _forced_defeat(combat, _action, **_kwargs):
     updated = deepcopy(combat)
     updated.version += 1
     updated.result = "defeat"

@@ -46,7 +46,7 @@ def _button(screen, label):
     )
 
 
-def _advance_one(combat, _action):
+def _advance_one(combat, _action, **_kwargs):
     updated = deepcopy(combat)
     updated.version += 1
     return updated
