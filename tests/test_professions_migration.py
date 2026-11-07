@@ -6,12 +6,20 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import command
 from asterion.domain.equipment_modifications import rune_potency_for
+
+
+def _head_revision() -> str:
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    revision = ScriptDirectory.from_config(config).get_current_head()
+    assert revision is not None
+    return revision
 
 
 def _migrate(connection, revision: str, direction: str = "upgrade") -> None:
@@ -64,7 +72,7 @@ async def test_0017_profession_and_crafting_state_upgrade_constraints_and_safe_d
         )
         await connection.run_sync(lambda sync: _migrate(sync, "head"))
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261010_0027"
+            _head_revision()
         )
         assert (
             await connection.scalar(
@@ -129,7 +137,7 @@ async def test_0017_profession_and_crafting_state_upgrade_constraints_and_safe_d
         assert await connection.scalar(text("SELECT to_regclass('crafting_receipts')")) is None
         await connection.run_sync(lambda sync: _migrate(sync, "head"))
         assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "20261010_0027"
+            _head_revision()
         )
 
 

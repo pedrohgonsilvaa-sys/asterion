@@ -17,10 +17,16 @@ from asterion.application.combat_configuration_guard import (
     lock_for_combat_configuration_mutation,
 )
 from asterion.application.equipment import equipment_instance_payload
+from asterion.application.inventory_capacity import (
+    INVENTORY_CAPACITY,
+    PENDING_CAPACITY,
+    inventory_slots,
+)
 from asterion.application.professions import (
     REFUGE,
     ProfessionService,
 )
+from asterion.application.safe_location import current_permanent_brazier
 from asterion.domain.professions import (
     MATERIAL_NAMES,
     RecipeDefinition,
@@ -44,12 +50,19 @@ from asterion.infrastructure.db.models import (
     PendingItem,
     RuneStack,
     Unlock,
+    WarehouseMaterialStack,
     WorldState,
 )
 
-INVENTORY_CAPACITY = 60
-PENDING_CAPACITY = 20
-SAFE_CRAFTING_LOCATIONS = frozenset((REFUGE, "Vigília do Vale"))
+SAFE_CRAFTING_LOCATIONS = frozenset(
+    (REFUGE, "Vigília do Vale", "Porto da Salmoura", "Último Refúgio")
+)
+
+
+def is_crafting_location(location: str | None) -> bool:
+    """Return whether crafting is canonically available at this exact location."""
+
+    return location in SAFE_CRAFTING_LOCATIONS
 
 
 class CraftingErrorCode:
@@ -84,6 +97,16 @@ class IngredientPreview:
     owned: int
     unbound_owned: int
     consumed_stacks: tuple[tuple[str, int, bool], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CraftingMaterialSource:
+    id: UUID
+    material_id: str
+    quantity: int
+    bound: bool
+    source: str
+    row: MaterialStack | WarehouseMaterialStack
 
 
 @dataclass(frozen=True, slots=True)
@@ -461,7 +484,7 @@ class CraftingService:
             reason = CraftingErrorCode.MATERIALS
         elif reason is None and character.crowns < cost:
             reason = CraftingErrorCode.CROWNS
-        elif reason is None and location not in SAFE_CRAFTING_LOCATIONS:
+        elif reason is None and not is_crafting_location(location):
             reason = CraftingErrorCode.WRONG_LOCATION
         elif reason is None and foreground:
             reason = CraftingErrorCode.FOREGROUND
@@ -514,7 +537,10 @@ class CraftingService:
                 )
             )
             if stack is not None and stack.quantity < 99:
-                return "Inventário"
+                if stack.quantity > 0 or await self._inventory_slots(session, character.id) < (
+                    INVENTORY_CAPACITY
+                ):
+                    return "Inventário"
             if stack is None and await self._inventory_slots(session, character.id) < (
                 INVENTORY_CAPACITY
             ):
@@ -530,7 +556,10 @@ class CraftingService:
                 )
             )
             if stack is not None:
-                return "Inventário"
+                if stack.quantity > 0 or await self._inventory_slots(session, character.id) < (
+                    INVENTORY_CAPACITY
+                ):
+                    return "Inventário"
             if await self._inventory_slots(session, character.id) < INVENTORY_CAPACITY:
                 return "Inventário"
         elif await self._inventory_slots(session, character.id) < INVENTORY_CAPACITY:
@@ -565,7 +594,8 @@ class CraftingService:
                 if remaining <= 0:
                     break
                 quantity = min(remaining, row.quantity)
-                consumed.append((str(row.id), quantity, bool(row.bound)))
+                key = f"warehouse:{row.id}" if row.source == "warehouse" else str(row.id)
+                consumed.append((key, quantity, bool(row.bound)))
                 if requirement.transmits_bind and row.bound:
                     result_bound = True
                 remaining -= quantity
@@ -610,7 +640,7 @@ class CraftingService:
                 for row in sorted(profession_rows, key=lambda item: item.slot)
             ],
             "materials": [
-                (str(row.id), row.material_id, row.quantity, bool(row.bound))
+                (row.source, str(row.id), row.material_id, row.quantity, bool(row.bound))
                 for row in sorted(
                     material_rows, key=lambda item: (item.material_id, item.bound, str(item.id))
                 )
@@ -624,19 +654,23 @@ class CraftingService:
 
     @staticmethod
     async def _consume_materials(session, material_rows, ingredients) -> None:
-        rows_by_id = {str(row.id): row for row in material_rows}
+        rows_by_id = {
+            (f"warehouse:{row.id}" if row.source == "warehouse" else str(row.id)): row
+            for row in material_rows
+        }
         for ingredient in ingredients:
             remaining = ingredient.required
             for stack_id, quantity, bound in ingredient.consumed_stacks:
                 row = rows_by_id.get(stack_id)
                 if row is None or row.material_id != ingredient.material_id or row.bound != bound:
                     raise CraftingRejected(CraftingErrorCode.STALE_PREVIEW)
-                if row.quantity < quantity:
+                source_row = row.row
+                if source_row.quantity < quantity:
                     raise CraftingRejected(CraftingErrorCode.STALE_PREVIEW)
-                row.quantity -= quantity
+                source_row.quantity -= quantity
                 remaining -= quantity
-                if row.quantity == 0:
-                    await session.delete(row)
+                if source_row.quantity == 0:
+                    await session.delete(source_row)
             if remaining:
                 raise CraftingRejected(CraftingErrorCode.MATERIALS)
 
@@ -727,7 +761,14 @@ class CraftingService:
             )
             .with_for_update()
         )
-        if stack is not None and stack.quantity + quantity <= 99:
+        if (
+            stack is not None
+            and stack.quantity + quantity <= 99
+            and (
+                stack.quantity > 0
+                or await self._inventory_slots(session, character.id) < INVENTORY_CAPACITY
+            )
+        ):
             stack.quantity += quantity
             return "Inventário"
         if (
@@ -761,7 +802,10 @@ class CraftingService:
             )
             .with_for_update()
         )
-        if stack is not None:
+        if stack is not None and (
+            stack.quantity > 0
+            or await self._inventory_slots(session, character.id) < INVENTORY_CAPACITY
+        ):
             stack.quantity += 1
             return "Inventário"
         if await self._inventory_slots(session, character.id) < INVENTORY_CAPACITY:
@@ -832,13 +876,7 @@ class CraftingService:
 
     @staticmethod
     async def _inventory_slots(session, character_id):
-        counts = []
-        for model in (EquipmentItem, ConsumableStack, MaterialStack, RuneStack):
-            statement = select(func.count(model.id)).where(model.character_id == character_id)
-            if model is not EquipmentItem:
-                statement = statement.where(model.quantity > 0)
-            counts.append(int(await session.scalar(statement) or 0))
-        return sum(counts)
+        return await inventory_slots(session, character_id)
 
     async def _lock_character(self, session, actor):
         character_id = await session.scalar(
@@ -911,7 +949,56 @@ class CraftingService:
         )
         if lock:
             statement = statement.with_for_update()
-        return list((await session.scalars(statement)).all())
+        inventory_rows = list((await session.scalars(statement)).all())
+        safe = await current_permanent_brazier(session, character_id)
+        if safe is None or not is_crafting_location(safe[1]):
+            return [
+                CraftingMaterialSource(
+                    id=row.id,
+                    material_id=row.material_id,
+                    quantity=row.quantity,
+                    bound=row.bound,
+                    source="inventory",
+                    row=row,
+                )
+                for row in inventory_rows
+            ]
+        warehouse_statement = (
+            select(WarehouseMaterialStack)
+            .where(
+                WarehouseMaterialStack.character_id == character_id,
+                WarehouseMaterialStack.quantity > 0,
+            )
+            .order_by(
+                WarehouseMaterialStack.material_id,
+                WarehouseMaterialStack.bound,
+                WarehouseMaterialStack.id,
+            )
+        )
+        if lock:
+            warehouse_statement = warehouse_statement.with_for_update()
+        warehouse_rows = list((await session.scalars(warehouse_statement)).all())
+        return [
+            CraftingMaterialSource(
+                id=row.id,
+                material_id=row.material_id,
+                quantity=row.quantity,
+                bound=row.bound,
+                source="inventory",
+                row=row,
+            )
+            for row in inventory_rows
+        ] + [
+            CraftingMaterialSource(
+                id=row.id,
+                material_id=row.material_id,
+                quantity=row.quantity,
+                bound=row.bound,
+                source="warehouse",
+                row=row,
+            )
+            for row in warehouse_rows
+        ]
 
     @staticmethod
     async def _location(session, character_id, *, lock=False):

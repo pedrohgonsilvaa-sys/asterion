@@ -38,7 +38,14 @@ from tests.test_s3_p4_integration import _seed_campaign
 
 
 def _terminal(result: str):
-    def finish(combat, action, *, effect_id: str | None = None):
+    def finish(
+        combat,
+        action,
+        *,
+        target_id: str | None = None,
+        actor_key: str | None = None,
+        effect_id: str | None = None,
+    ):
         assert effect_id is None
         updated = deepcopy(combat)
         updated.version += 1
@@ -501,7 +508,17 @@ async def test_s5_shares_lights_and_uses_confirmed_group_encounter(database, mon
     assert len({views[actor].activity_id for actor in actors}) == 2
     assert all(views[actor].combat == views[actors[0]].combat for actor in actors)
 
-    def terminal_victory(combat, action, *, actor_key=None, target_id=None):
+    forwarded_effect_ids: list[str | None] = []
+
+    def terminal_victory(
+        combat,
+        action,
+        *,
+        actor_key: str | None,
+        target_id: str | None,
+        effect_id: str | None,
+    ):
+        forwarded_effect_ids.append(effect_id)
         updated = deepcopy(combat)
         updated.version += 1
         updated.result = "victory"
@@ -520,6 +537,16 @@ async def test_s5_shares_lights_and_uses_confirmed_group_encounter(database, mon
         "attack",
     )
     assert resolved.step == 4 and resolved.progress["combat_result"] == "victory"
+    assert forwarded_effect_ids == [None]
+    replayed = await service.action_combat(
+        current_actor,
+        current.activity_id,
+        current.activity_state_version,
+        "attack",
+    )
+    assert replayed is not None
+    assert replayed.step == 4 and replayed.progress["combat_result"] == "victory"
+    assert forwarded_effect_ids == [None]
     for actor in actors:
         member_view = await service.resume(actor)
         assert member_view.step == 4
@@ -604,7 +631,17 @@ async def test_s4_shares_watches_and_uses_confirmed_group_vigia_combat(database,
     assert len({views[actor].activity_id for actor in actors}) == 2
     assert all(views[actor].combat == views[actors[0]].combat for actor in actors)
 
-    def terminal_victory(combat, action, *, actor_key=None, target_id=None):
+    forwarded_effect_ids: list[str | None] = []
+
+    def terminal_victory(
+        combat,
+        action,
+        *,
+        actor_key: str | None,
+        target_id: str | None,
+        effect_id: str | None,
+    ):
+        forwarded_effect_ids.append(effect_id)
         updated = deepcopy(combat)
         updated.version += 1
         updated.result = "victory"
@@ -623,6 +660,27 @@ async def test_s4_shares_watches_and_uses_confirmed_group_vigia_combat(database,
         "attack",
     )
     assert resolved.step == 4 and resolved.progress["combat_result"] == "victory"
+    assert forwarded_effect_ids == [None]
+    replayed = await service.action_combat(
+        current_actor,
+        current.activity_id,
+        current.activity_state_version,
+        "attack",
+    )
+    assert replayed is not None
+    assert replayed.step == 4 and replayed.progress["combat_result"] == "victory"
+    assert forwarded_effect_ids == [None]
     for actor in actors:
         member_view = await service.resume(actor)
         assert member_view.step == 4
+
+    async with sessions() as session:
+        rewards = (
+            await session.scalars(
+                select(RewardEvent).where(
+                    RewardEvent.character_id.in_(character_ids),
+                    RewardEvent.source_id.like(f"{S4_REWARD_SOURCE}:enemy-xp:%"),
+                )
+            )
+        ).all()
+        assert len(rewards) == 2

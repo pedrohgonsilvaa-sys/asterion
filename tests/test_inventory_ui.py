@@ -92,8 +92,64 @@ def test_pending_root_is_real_read_model_without_placeholder_actions():
     assert "⚠️ Entregas aguardando espaço · 1" in screen.text
     assert "Couro Escoriado · 3" in screen.text
     callbacks = _callbacks(screen)
-    assert callbacks == ["inventory:root"]
+    assert callbacks == ["pending:claim:pending1", "pending:retry", "inventory:root"]
     assert "menu:noop" not in callbacks
+
+
+def test_warehouse_root_requires_safe_access_and_shows_canonical_capacities():
+    from asterion.application.warehouse import WarehouseView
+    from asterion.bot.warehouse_ui import render_warehouse
+
+    unsafe = render_warehouse(
+        WarehouseView("warehouse_root", uuid4(), False, None, 60, 0)
+    )
+    assert "Braseiro permanente descoberto" in unsafe.text
+    assert _callbacks(unsafe) == ["inventory:root"]
+
+    safe = render_warehouse(
+        WarehouseView("warehouse_root", uuid4(), True, "Refúgio do Ocaso", 60, 100)
+    )
+    assert "Inventário · 60/60" in safe.text
+    assert "Armazém · 100/100" in safe.text
+    assert "warehouse:inventory:equipment" in _callbacks(safe)
+    assert "warehouse:inventory:material" in _callbacks(safe)
+
+
+def test_blocked_delivery_shows_reward_identity_and_only_exposes_retry():
+    screen = render_inventory(
+        InventoryView(
+            "pending_root",
+            uuid4(),
+            used_slots=60,
+            entries=(
+                InventoryEntry(
+                    kind="blocked_delivery",
+                    key="blocked-1",
+                    title="Guarda da Câmara",
+                    quantity=1,
+                    rarity="Épico",
+                    slot="Torso",
+                    item_level=30,
+                    bound=True,
+                    payload={
+                        "delivery_kind": "equipment",
+                        "origin": "mission:P18:choice",
+                        "enhancement": 2,
+                        "favorite": True,
+                    },
+                ),
+            ),
+            pending_count=20,
+            blocked_delivery_count=1,
+        )
+    )
+    assert "Guarda da Câmara" in screen.text
+    assert "Épico" in screen.text
+    assert "Nv.30" in screen.text
+    assert "Vinculado" in screen.text
+    assert "Favorito" in screen.text
+    assert "Origem · mission:P18:choice" in screen.text
+    assert _callbacks(screen) == ["pending:retry", "inventory:root"]
 
 
 def test_consumable_inventory_is_catalog_driven_and_callbacks_keep_stable_ids():

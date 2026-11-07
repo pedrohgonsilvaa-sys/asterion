@@ -142,6 +142,7 @@ def render_profession_detail(
     foreground: bool,
     *,
     can_create: bool,
+    location: str | None = None,
 ) -> Screen:
     item = PROFESSION_BY_ID[profession_id]
     lines = [f"{item.emoji} {item.name}", item.descriptor, ""]
@@ -159,7 +160,13 @@ def render_profession_detail(
         if foreground:
             lines.extend(["", "🔒 Criação · Bloqueada durante a atividade"])
         elif not can_create:
-            lines.extend(["", "📍 Local · Refúgio do Ocaso", "🔒 Criação · Disponível no Refúgio"])
+            lines.extend(
+                [
+                    "",
+                    f"📍 Local · {escape(location or 'Local atual')}",
+                    "🔒 Criação · Disponível somente em locais autorizados",
+                ]
+            )
         else:
             lines.append("🛠️ Criação · Produzir")
             rows.append(
@@ -319,9 +326,10 @@ def _ingredient_lines(ingredients: tuple[IngredientPreview, ...]) -> list[str]:
         lines.append(f"{escape(ingredient.name)} · {ingredient.owned}/{ingredient.required}")
         if ingredient.consumed_stacks:
             consumption = []
-            for _, quantity, bound in ingredient.consumed_stacks:
+            for stack_id, quantity, bound in ingredient.consumed_stacks:
                 suffix = " · Vinculado" if bound else " · Negociável"
-                consumption.append(f"{quantity}{suffix}")
+                location = "Armazém" if stack_id.startswith("warehouse:") else "Inventário"
+                consumption.append(f"{quantity} · {location}{suffix}")
             lines.append("  Consumir · " + ", ".join(consumption))
     return lines
 

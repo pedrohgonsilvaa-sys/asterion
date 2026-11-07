@@ -9,6 +9,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.consumables import daily_consumable_cycle
+from asterion.application.inventory_capacity import (
+    INVENTORY_CAPACITY,
+    PENDING_CAPACITY,
+    inventory_slot_counts,
+)
 from asterion.application.vigor import reconcile_character_vigor, utcnow
 from asterion.domain.consumables import VIGOR_USABLE_AT_OR_BELOW, ConsumableFamily
 from asterion.domain.consumables import definition as consumable_definition
@@ -43,9 +48,6 @@ REGIONAL_RUNE_TITLES = {
     "Margem": "Runa da Margem",
     "Válvula": "Runa da Válvula",
 }
-
-INVENTORY_CAPACITY = 60
-PENDING_CAPACITY = 20
 
 VALID_CATEGORIES = ("equipment", "consumables", "materials", "runes")
 
@@ -180,6 +182,23 @@ class InventoryService:
             if character is None:
                 return None
             counts = await self._counts(session, character.id)
+            pending = int(
+                await session.scalar(
+                    select(func.count(PendingItem.id)).where(
+                        PendingItem.character_id == character.id
+                    )
+                )
+                or 0
+            )
+            blocked = int(
+                await session.scalar(
+                    select(func.count(BlockedDelivery.id)).where(
+                        BlockedDelivery.character_id == character.id,
+                        BlockedDelivery.status == "pending",
+                    )
+                )
+                or 0
+            )
             return InventoryView(
                 kind="inventory_root",
                 character_id=character.id,
@@ -188,6 +207,8 @@ class InventoryService:
                 consumable_slots=counts["consumables"],
                 material_slots=counts["materials"],
                 rune_slots=counts["runes"],
+                pending_count=pending,
+                blocked_delivery_count=blocked,
             )
 
     async def category(self, actor: int, category: str) -> InventoryView | None:
@@ -279,13 +300,20 @@ class InventoryService:
                     .order_by(PendingItem.source_key, PendingItem.id)
                 )
             ).all()
-            blocked = await session.scalar(
-                select(func.count(BlockedDelivery.id)).where(
+            blocked_rows = (
+                await session.scalars(
+                    select(BlockedDelivery)
+                    .where(
                     BlockedDelivery.character_id == character.id,
                     BlockedDelivery.status == "pending",
+                    )
+                    .order_by(BlockedDelivery.created_at, BlockedDelivery.id)
                 )
-            ) or 0
-            entries = tuple(self._pending_entry(row) for row in rows)
+            ).all()
+            blocked = len(blocked_rows)
+            entries = tuple(self._pending_entry(row) for row in rows) + tuple(
+                self._blocked_entry(row) for row in blocked_rows
+            )
             return InventoryView(
                 kind="pending_root",
                 character_id=character.id,
@@ -308,35 +336,7 @@ class InventoryService:
         )
 
     async def _counts(self, session: AsyncSession, character_id: UUID) -> dict[str, int]:
-        equipment = await session.scalar(
-            select(func.count(EquipmentItem.id)).where(
-                EquipmentItem.character_id == character_id
-            )
-        ) or 0
-        consumables = await session.scalar(
-            select(func.count(ConsumableStack.id)).where(
-                ConsumableStack.character_id == character_id,
-                ConsumableStack.quantity > 0,
-            )
-        ) or 0
-        materials = await session.scalar(
-            select(func.count(MaterialStack.id)).where(
-                MaterialStack.character_id == character_id,
-                MaterialStack.quantity > 0,
-            )
-        ) or 0
-        runes = await session.scalar(
-            select(func.count(RuneStack.id)).where(
-                RuneStack.character_id == character_id,
-                RuneStack.quantity > 0,
-            )
-        ) or 0
-        return {
-            "equipment": int(equipment),
-            "consumables": int(consumables),
-            "materials": int(materials),
-            "runes": int(runes),
-        }
+        return await inventory_slot_counts(session, character_id)
 
     async def _entries(
         self,
@@ -372,7 +372,7 @@ class InventoryService:
                     slot=row.slot,
                     item_level=row.item_level,
                     bound=row.bound,
-                    payload=dict(row.payload or {}),
+                    payload={**dict(row.payload or {}), "warehouse_source_id": str(row.id)},
                     equipped_slot=equipped_slots.get(row.id),
                 )
                 for row in rows
@@ -407,6 +407,7 @@ class InventoryService:
                     title=MATERIAL_LABELS.get(row.material_id, row.material_id),
                     quantity=row.quantity,
                     bound=row.bound,
+                    payload={"warehouse_source_id": str(row.id)},
                 )
                 for row in rows
             ]
@@ -451,7 +452,7 @@ class InventoryService:
                 slot=payload.get("slot"),
                 item_level=payload.get("item_level"),
                 bound=bool(payload.get("bound", False)),
-                payload=payload,
+                payload={**payload, "origin": row.source_key},
             )
         if row.kind == "rune":
             family = payload.get("family", "Desconhecida")
@@ -463,7 +464,7 @@ class InventoryService:
                 rarity=payload.get("rarity"),
                 grade=payload.get("grade", 1),
                 bound=bool(payload.get("bound", False)),
-                payload=payload,
+                payload={**payload, "origin": row.source_key},
             )
         if row.kind == "material":
             material_id = payload.get("material_id", "material")
@@ -473,7 +474,7 @@ class InventoryService:
                 title=MATERIAL_LABELS.get(material_id, material_id),
                 quantity=row.quantity,
                 bound=bool(payload.get("bound", False)),
-                payload=payload,
+                payload={**payload, "origin": row.source_key},
             )
         if row.kind == "consumable":
             consumable_id = payload.get("consumable_id", "")
@@ -485,12 +486,40 @@ class InventoryService:
                 quantity=row.quantity,
                 grade=definition.grade if definition is not None else None,
                 bound=bool(payload.get("bound", False)),
-                payload=payload,
+                payload={**payload, "origin": row.source_key},
             )
         return InventoryEntry(
             kind=row.kind,
             key=str(row.id),
             title="Entrega Pendente",
             quantity=row.quantity,
-            payload=payload,
+            payload={**payload, "origin": row.source_key},
+        )
+
+    @staticmethod
+    def _blocked_entry(row: BlockedDelivery) -> InventoryEntry:
+        payload = dict(row.payload or {})
+        title = str(
+            payload.get("item_name")
+            or payload.get("material_id")
+            or payload.get("consumable_id")
+            or payload.get("family")
+            or row.kind
+        )
+        return InventoryEntry(
+            kind="blocked_delivery",
+            key=str(row.id),
+            title=title,
+            quantity=row.quantity,
+            rarity=payload.get("rarity"),
+            slot=payload.get("slot"),
+            item_level=payload.get("item_level"),
+            grade=payload.get("grade"),
+            bound=bool(payload.get("bound", False)),
+            payload={
+                **payload,
+                "origin": row.source_key,
+                "delivery_kind": row.kind,
+                "blocked": True,
+            },
         )

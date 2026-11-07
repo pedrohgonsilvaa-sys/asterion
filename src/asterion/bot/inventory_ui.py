@@ -168,6 +168,7 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
             for part in (
                 _rarity(entry),
                 escape(SLOT_LABEL.get(entry.slot or "", entry.slot or "")),
+                f"Nv.{entry.item_level}" if entry.item_level is not None else "",
             )
             if part
         )
@@ -175,6 +176,13 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
             lines.append(meta)
         if entry.bound:
             lines.append("🔗 Vinculado")
+        if (entry.payload or {}).get("favorite"):
+            lines.append("⭐ Favorito")
+        if (entry.payload or {}).get("locked"):
+            lines.append("🔒 Protegido")
+        runes = (entry.payload or {}).get("runes")
+        if isinstance(runes, (list, tuple)) and runes:
+            lines.append(f"🔷 Runas · {len(runes)}")
         if entry.equipped:
             lines.append("✅ Equipado")
         return lines
@@ -207,6 +215,53 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
             lines.append("🔗 Vinculado")
         return lines
 
+    if entry.kind == "blocked_delivery":
+        payload = entry.payload or {}
+        item_kind = payload.get("delivery_kind")
+        if item_kind == "equipment":
+            enhancement = int(payload.get("enhancement", 0))
+            lines = [f"{index} ⚠️ {escape(entry.title)} · +{enhancement}"]
+            details = " · ".join(
+                part
+                for part in (
+                    _rarity(entry),
+                    escape(SLOT_LABEL.get(entry.slot or "", entry.slot or "")),
+                    f"Nv.{entry.item_level}" if entry.item_level is not None else "",
+                )
+                if part
+            )
+            if details:
+                lines.append(details)
+            if entry.bound:
+                lines.append("🔗 Vinculado")
+            if payload.get("favorite"):
+                lines.append("⭐ Favorito")
+            if payload.get("locked"):
+                lines.append("🔒 Protegido")
+            return lines
+        if item_kind == "material":
+            lines = [f"{index} ⚠️ {escape(entry.title)} · {entry.quantity}"]
+            if entry.bound:
+                lines.append("🔗 Vinculado")
+            return lines
+        if item_kind == "rune":
+            lines = [f"{index} ⚠️ 🔷 {escape(entry.title)} · {entry.quantity}"]
+            if entry.rarity or entry.grade is not None:
+                details = " · ".join(
+                    part
+                    for part in (
+                        _rarity(entry),
+                        f"Grau {entry.grade}" if entry.grade is not None else "",
+                    )
+                    if part
+                )
+                lines.append(details)
+            if entry.bound:
+                lines.append("🔗 Vinculado")
+            return lines
+        if item_kind == "consumable":
+            return [f"{index} ⚠️ {escape(entry.title)} · {entry.quantity}"]
+
     return [f"{index} 📦 {escape(entry.title)} · {entry.quantity}"]
 
 
@@ -218,7 +273,13 @@ def render_inventory(view: InventoryView) -> Screen:
             f"1 🛡️ Equipamentos · {view.equipment_slots}\n"
             f"2 🧪 Consumíveis · {view.consumable_slots}\n"
             f"3 🧱 Materiais · {view.material_slots}\n"
-            f"4 🔷 Runas · {view.rune_slots}"
+            f"4 🔷 Runas · {view.rune_slots}\n"
+            f"📦 Pendentes · {view.pending_count}/{view.pending_capacity}"
+            + (
+                f" · {view.blocked_delivery_count} aguardando espaço"
+                if view.blocked_delivery_count
+                else ""
+            )
         )
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -227,6 +288,10 @@ def render_inventory(view: InventoryView) -> Screen:
                     InlineKeyboardButton(text="2", callback_data="inventory:category:consumables"),
                     InlineKeyboardButton(text="3", callback_data="inventory:category:materials"),
                     InlineKeyboardButton(text="4", callback_data="inventory:category:runes"),
+                ],
+                [
+                    InlineKeyboardButton(text="Armazém", callback_data="warehouse:root"),
+                    InlineKeyboardButton(text="Pendentes", callback_data="pending:root"),
                 ],
                 [InlineKeyboardButton(text="← Personagem", callback_data="character:root")],
             ]
@@ -254,6 +319,7 @@ def render_inventory(view: InventoryView) -> Screen:
                     lines.append("")
                 lines.extend(_entry_lines(index, entry))
         equipment_buttons = []
+        warehouse_equipment_buttons = []
         if view.category == "equipment":
             for index, entry in enumerate(view.entries, start=1):
                 if entry.kind != "equipment":
@@ -267,6 +333,13 @@ def render_inventory(view: InventoryView) -> Screen:
                         text=str(index), callback_data=f"eq:v:{item_id.hex}"
                     )
                 )
+                if not entry.equipped and not bool((entry.payload or {}).get("locked")):
+                    warehouse_equipment_buttons.append(
+                        InlineKeyboardButton(
+                            text=f"Guardar {index}",
+                            callback_data=f"warehouse:deposit:equipment:{item_id.hex}",
+                        )
+                    )
         consumable_buttons = [
             InlineKeyboardButton(
                 text=str(index),
@@ -279,6 +352,28 @@ def render_inventory(view: InventoryView) -> Screen:
             equipment_buttons[offset : offset + 5]
             for offset in range(0, len(equipment_buttons), 5)
         ]
+        rows.extend(
+            warehouse_equipment_buttons[offset : offset + 2]
+            for offset in range(0, len(warehouse_equipment_buttons), 2)
+        )
+        if view.category == "materials":
+            material_buttons = [
+                InlineKeyboardButton(
+                    text=f"Guardar {index}",
+                    callback_data=(
+                        "warehouse:deposit:material:"
+                        f"{entry.payload['warehouse_source_id'].replace('-', '')}"
+                    ),
+                )
+                for index, entry in enumerate(view.entries, start=1)
+                if entry.kind == "material"
+                and entry.payload
+                and entry.payload.get("warehouse_source_id")
+            ]
+            rows.extend(
+                material_buttons[offset : offset + 2]
+                for offset in range(0, len(material_buttons), 2)
+            )
         rows.extend(
             consumable_buttons[index : index + 5]
             for index in range(0, len(consumable_buttons), 5)
@@ -340,9 +435,25 @@ def render_inventory(view: InventoryView) -> Screen:
             if index > 1:
                 lines.append("")
             lines.extend(_entry_lines(index, entry))
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")],
-        ]
-    )
+            if entry.payload and entry.payload.get("origin"):
+                lines.append(f"Origem · {escape(str(entry.payload['origin']))}")
+    claim_buttons = [
+        InlineKeyboardButton(
+            text=f"Resgatar {index}",
+            callback_data=f"pending:claim:{entry.key.replace('-', '')}",
+        )
+        for index, entry in enumerate(view.entries, start=1)
+        if entry.kind in {"equipment", "material", "rune", "consumable"}
+    ]
+    rows = [claim_buttons[offset : offset + 3] for offset in range(0, len(claim_buttons), 3)]
+    if view.blocked_delivery_count:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="Tentar entregas bloqueadas", callback_data="pending:retry"
+                )
+            ]
+        )
+    rows.append([InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
     return Screen("\n".join(lines), "pending", keyboard, parse_mode="HTML")

@@ -1,17 +1,26 @@
 """Physical compatibility checks for migration 20260924_0009 on PostgreSQL."""
 
 import os
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import event, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from alembic import command
 from asterion.application.inventory import InventoryService
+
+
+def _head_revision() -> str:
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    revision = ScriptDirectory.from_config(config).get_current_head()
+    assert revision is not None
+    return revision
 
 
 def _migrate(sync_connection, revision: str, direction: str = "upgrade") -> None:
@@ -145,7 +154,7 @@ async def test_0008_stock_survives_global_consumables_upgrade_downgrade_and_reup
         # The current ORM includes columns from later revisions, so exercise
         # InventoryService only after upgrading its schema to the current head.
         await connection.run_sync(lambda sync: _migrate(sync, "head"))
-        assert await _current_revision(connection) == "20261010_0027"
+        assert await _current_revision(connection) == _head_revision()
         assert await _stock_rows(connection, character_id) == expected_stock
 
     view = await InventoryService(sessions, "ocaso").category(actor, "consumables")

@@ -58,6 +58,7 @@ class CombatView:
     ready_consumable_option: CombatConsumableOption | None = None
     trial_stage_caption: str | None = None
     combat_actor_key: str | None = None
+    campaign_shared: bool | None = None
 
 
 def view(character: Character, activity: GameActivity, encounter: Encounter, record: CombatRecord):

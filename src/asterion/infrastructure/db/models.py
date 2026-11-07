@@ -1045,6 +1045,21 @@ class MaterialStack(Base):
     )
 
 
+class WarehouseMaterialStack(Base):
+    """A material stack kept in the character's canonical 100-slot Warehouse."""
+
+    __tablename__ = "warehouse_material_stacks"
+    __table_args__ = (
+        CheckConstraint("quantity BETWEEN 1 AND 999", name="ck_warehouse_material_quantity"),
+        Index("ix_warehouse_material_character", "character_id"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    material_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    bound: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+
 class RewardEvent(Base):
     __tablename__ = "reward_events"
     __table_args__ = (
@@ -2035,6 +2050,28 @@ class EquipmentItem(Base):
     )
 
 
+class WarehouseEquipmentItem(Base):
+    """Exact equipment instance while unavailable from Inventory and combat builds."""
+
+    __tablename__ = "warehouse_equipment_items"
+    __table_args__ = (
+        UniqueConstraint("character_id", "source_key", name="uq_warehouse_equipment_source"),
+        Index("ix_warehouse_equipment_character", "character_id"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    source_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    item_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    rarity: Mapped[str] = mapped_column(String(16), nullable=False)
+    slot: Mapped[str] = mapped_column(String(24), nullable=False)
+    item_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    bound: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    stored_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class CharacterEquipmentSlot(Base):
     __tablename__ = "character_equipment_slots"
     __table_args__ = (
@@ -2199,6 +2236,45 @@ class PendingItem(Base):
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+
+
+class WarehouseOperation(Base):
+    """Durable preview/commit token for idempotent Inventory/Warehouse transfers."""
+
+    __tablename__ = "warehouse_operations"
+    __table_args__ = (
+        CheckConstraint(
+            "direction IN ('deposit','withdraw','claim_pending')",
+            name="ck_warehouse_operation_direction",
+        ),
+        CheckConstraint(
+            "kind IN ('equipment','material','rune','consumable')",
+            name="ck_warehouse_operation_kind",
+        ),
+        CheckConstraint(
+            "status IN ('preview','committed','cancelled','stale','expired')",
+            name="ck_warehouse_operation_status",
+        ),
+        CheckConstraint("quantity > 0", name="ck_warehouse_operation_quantity"),
+        Index("ix_warehouse_operation_character_status", "character_id", "status"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    direction: Mapped[str] = mapped_column(String(20), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_key: Mapped[str | None] = mapped_column(String(160))
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="preview", server_default="preview"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class BlockedDelivery(Base):

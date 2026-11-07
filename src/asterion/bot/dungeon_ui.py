@@ -388,9 +388,39 @@ def render_dungeon_targets(view: DungeonView, action_index: int) -> Screen:
     targets = action_target_ids(state, action_id, actor_key=actor_key or "player")
     if not targets:
         return render_combat(view)
+    # action_target_ids returns canonical entity IDs (fighter.id), while
+    # Combat.fighters is keyed by internal resolver keys such as "spider".
+    # Keep those identities distinct: multiple instances of one creature must
+    # remain individually selectable by the callback's versioned target index.
+    fighters_by_id = {fighter.id: fighter for fighter in state.fighters.values()}
+    target_fighters = [fighters_by_id.get(target_id) for target_id in targets]
+    if (
+        len(fighters_by_id) != len(state.fighters)
+        or len(set(targets)) != len(targets)
+        or any(fighter is None or fighter.hp <= 0 for fighter in target_fighters)
+    ):
+        return Screen(
+            "🎯 A lista de alvos ficou indisponível. Atualize o combate antes de escolher.",
+            "dungeon",
+            InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        _button(
+                            "← Combate",
+                            DungeonCombatCallback.for_intent(
+                                view.run_id,
+                                view.activity_id,
+                                state.version,
+                                action_index,
+                                "b",
+                            ).pack(),
+                        )
+                    ]
+                ]
+            ),
+        )
     rows = []
-    for index, key in enumerate(targets):
-        fighter = state.fighters[key]
+    for index, fighter in enumerate(target_fighters):
         callback = DungeonCombatCallback.for_intent(
             view.run_id, view.activity_id, state.version, action_index, f"d{index:x}"
         ).pack()
@@ -406,7 +436,8 @@ def render_dungeon_targets(view: DungeonView, action_index: int) -> Screen:
         ]
     )
     text = "🎯 Escolha o Alvo\n\n" + "\n".join(
-        f"{index + 1} · {state.fighters[key].name}" for index, key in enumerate(targets)
+        f"{index + 1} · {fighter.name}"
+        for index, fighter in enumerate(target_fighters)
     )
     return Screen(
         text,

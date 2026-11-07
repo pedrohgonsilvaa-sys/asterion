@@ -12,10 +12,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.bestiary import BESTIARY_STAGE_LABELS, BestiaryRecorder
+from asterion.application.combat_configuration_guard import (
+    CombatConfigurationLocked,
+    lock_for_combat_configuration_mutation,
+)
 from asterion.application.equipment import equipment_instance_payload
 from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     reconcile_character_hp,
+)
+from asterion.application.inventory_capacity import (
+    INVENTORY_CAPACITY,
+    PENDING_CAPACITY,
+    inventory_slots,
 )
 from asterion.application.progression import consolidate_character_level, level_xp
 from asterion.application.vigor import reconcile_character_vigor
@@ -2302,11 +2311,17 @@ class RoadService:
     async def retry_blocked_deliveries(self, actor: int) -> bool:
         """Retry durable delivery holds without rerolling or duplicating loot."""
         async with self.sessions.begin() as s:
-            c = await s.scalar(
-                select(Character)
-                .where(Character.telegram_id == actor, Character.server_id == self.server_id)
-                .with_for_update()
+            character_id = await s.scalar(
+                select(Character.id).where(
+                    Character.telegram_id == actor, Character.server_id == self.server_id
+                )
             )
+            if character_id is None:
+                return False
+            try:
+                c = await lock_for_combat_configuration_mutation(s, character_id)
+            except CombatConfigurationLocked:
+                return False
             if c is None:
                 return False
             await self._retry_blocked_deliveries(s, c)
@@ -2967,7 +2982,7 @@ class RoadService:
                     c.elite_legendary_pity = 0
             item = materialize_equipment(context.seed, rarity, context.enemy_level)
             item_instance_id, item = equipment_instance_payload(item)
-            if await self._inventory_slots(s, c.id) < 60:
+            if await self._inventory_slots(s, c.id) < INVENTORY_CAPACITY:
                 s.add(
                     EquipmentItem(
                         id=item_instance_id,
@@ -3018,7 +3033,7 @@ class RoadService:
                     "potency": rune_potency(family, rarity),
                     "bound": False,
                 }
-                if await self._inventory_slots(s, c.id) < 60:
+                if await self._inventory_slots(s, c.id) < INVENTORY_CAPACITY:
                     s.add(
                         RuneStack(
                             character_id=c.id,
@@ -3039,7 +3054,6 @@ class RoadService:
                         rune_payload,
                     )
             else:
-                stack.quantity += 1
                 rune_payload = {
                     "family": family,
                     "rarity": rarity,
@@ -3047,6 +3061,16 @@ class RoadService:
                     "potency": stack.potency,
                     "bound": stack.bound,
                 }
+                if stack.quantity > 0 or await self._inventory_slots(s, c.id) < INVENTORY_CAPACITY:
+                    stack.quantity += 1
+                else:
+                    await self._pending(
+                        s,
+                        c.id,
+                        f"activity:{context.game_activity_id}:rune",
+                        "rune",
+                        rune_payload,
+                    )
             components.append(("rune", family, 1, rune_payload))
 
     async def _settle_exploration(self, s, c, attempt):
@@ -7082,6 +7106,7 @@ class RoadService:
                     MaterialStack.character_id == c.id,
                     MaterialStack.material_id == material_id,
                     MaterialStack.bound.is_(bound),
+                    MaterialStack.quantity > 0,
                 )
                 .order_by(MaterialStack.id)
                 .with_for_update()
@@ -7095,43 +7120,64 @@ class RoadService:
             added = min(remaining, available)
             stack.quantity += added
             remaining -= added
-        while remaining > 0 and await self._inventory_slots(s, c.id) < 60:
+        while remaining > 0 and await self._inventory_slots(s, c.id) < INVENTORY_CAPACITY:
             added = min(remaining, 999)
-            s.add(
-                MaterialStack(
-                    character_id=c.id,
-                    material_id=material_id,
-                    quantity=added,
-                    bound=bound,
+            empty_stack = await s.scalar(
+                select(MaterialStack)
+                .where(
+                    MaterialStack.character_id == c.id,
+                    MaterialStack.material_id == material_id,
+                    MaterialStack.bound.is_(bound),
+                    MaterialStack.quantity == 0,
                 )
+                .order_by(MaterialStack.id)
+                .with_for_update()
             )
+            if empty_stack is not None:
+                empty_stack.quantity = added
+            else:
+                s.add(
+                    MaterialStack(
+                        character_id=c.id,
+                        material_id=material_id,
+                        quantity=added,
+                        bound=bound,
+                    )
+                )
             remaining -= added
         return remaining
 
+    async def _deliver_consumable_to_inventory(self, s, c, consumable_id, quantity):
+        stack = await s.scalar(
+            select(ConsumableStack)
+            .where(
+                ConsumableStack.character_id == c.id,
+                ConsumableStack.consumable_id == consumable_id,
+            )
+            .with_for_update()
+        )
+        if stack is not None:
+            room = max(0, 99 - stack.quantity)
+            if stack.quantity > 0 or await self._inventory_slots(s, c.id) < INVENTORY_CAPACITY:
+                added = min(quantity, room)
+                if added:
+                    stack.quantity += added
+                    quantity -= added
+            return quantity
+        if quantity > 0 and await self._inventory_slots(s, c.id) < INVENTORY_CAPACITY:
+            added = min(quantity, 99)
+            s.add(
+                ConsumableStack(
+                    character_id=c.id,
+                    consumable_id=consumable_id,
+                    quantity=added,
+                )
+            )
+            quantity -= added
+        return quantity
+
     async def _inventory_slots(self, s, character_id):
-        equipment = (
-            await s.scalar(
-                select(func.count(EquipmentItem.id)).where(
-                    EquipmentItem.character_id == character_id
-                )
-            )
-            or 0
-        )
-        materials = (
-            await s.scalar(
-                select(func.count(MaterialStack.id)).where(
-                    MaterialStack.character_id == character_id
-                )
-            )
-            or 0
-        )
-        runes = (
-            await s.scalar(
-                select(func.count(RuneStack.id)).where(RuneStack.character_id == character_id)
-            )
-            or 0
-        )
-        return int(equipment + materials + runes)
+        return await inventory_slots(s, character_id)
 
     async def _pending(self, s, character_id, source_key, kind, payload, quantity=1):
         if kind == "equipment":
@@ -7164,7 +7210,7 @@ class RoadService:
             )
             or 0
         )
-        if count < 20:
+        if count < PENDING_CAPACITY:
             s.add(
                 PendingItem(
                     character_id=character_id,
@@ -7229,7 +7275,7 @@ class RoadService:
                     self._resolve_delivery(hold)
             elif hold.kind == "equipment":
                 item_instance_id, payload = equipment_instance_payload(payload)
-                if await self._inventory_slots(s, c.id) < 60:
+                if await self._inventory_slots(s, c.id) < INVENTORY_CAPACITY:
                     s.add(
                         EquipmentItem(
                             id=item_instance_id,
@@ -7267,10 +7313,13 @@ class RoadService:
                     )
                     .with_for_update()
                 )
-                if stack is not None:
+                if stack is not None and (
+                    stack.quantity > 0
+                    or await self._inventory_slots(s, c.id) < INVENTORY_CAPACITY
+                ):
                     stack.quantity += hold.quantity
                     self._resolve_delivery(hold)
-                elif await self._inventory_slots(s, c.id) < 60:
+                elif await self._inventory_slots(s, c.id) < INVENTORY_CAPACITY:
                     s.add(
                         RuneStack(
                             character_id=c.id,
@@ -7294,6 +7343,23 @@ class RoadService:
                         )
                     )
                     self._resolve_delivery(hold)
+            elif hold.kind == "consumable":
+                remaining = await self._deliver_consumable_to_inventory(
+                    s, c, payload["consumable_id"], hold.quantity
+                )
+                if remaining and await self._pending_slots(s, c.id) > 0:
+                    s.add(
+                        PendingItem(
+                            character_id=c.id,
+                            source_key=hold.source_key,
+                            kind=hold.kind,
+                            payload=payload,
+                            quantity=remaining,
+                        )
+                    )
+                    remaining = 0
+                if remaining == 0:
+                    self._resolve_delivery(hold)
         c.delivery_blocked = bool(
             await s.scalar(
                 select(func.count(BlockedDelivery.id)).where(
@@ -7310,7 +7376,7 @@ class RoadService:
             )
             or 0
         )
-        return 20 - int(count)
+        return PENDING_CAPACITY - int(count)
 
     @staticmethod
     def _resolve_delivery(hold):

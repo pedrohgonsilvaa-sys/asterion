@@ -187,6 +187,42 @@ def test_p27_pedreiras_profiles_and_reward_choice_ui_match_the_final_source():
     } | {"world:missions"}
 
 
+@pytest.mark.parametrize(
+    ("location", "label", "callback"),
+    (
+        (ALTOS_ABRIGO_LABEL, "Seguir para Pontes de Fuligem", "road:route:altos_pontes"),
+        (
+            ALTOS_PONTES_LABEL,
+            "Seguir para Pedreiras Suspensas",
+            "road:route:altos_pedreiras",
+        ),
+    ),
+)
+def test_p27_step_one_routes_through_the_adjacent_public_edge(location, label, callback):
+    view = AltosMissionView(
+        character_id=uuid4(),
+        quest_id=P27_ID,
+        title=P27_TITLE,
+        kind="mission",
+        status="active",
+        step=1,
+        state_version=1,
+        progress={},
+        location=location,
+        level=45,
+    )
+
+    screen = render_altos_mission(view)
+    buttons = [
+        button
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+    ]
+
+    assert any(button.text == label and button.callback_data == callback for button in buttons)
+    assert callback in {button.callback_data for button in buttons}
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("level", "p26_status", "expected_status"),

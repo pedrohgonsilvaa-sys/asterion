@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.active_arts import load_active_art_configuration
@@ -15,6 +15,7 @@ from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     reconcile_character_hp,
 )
+from asterion.application.inventory_capacity import INVENTORY_CAPACITY
 from asterion.application.road import (
     BOSQUE,
     CHARNECA,
@@ -268,14 +269,7 @@ class RoundService(RoadService):
         return profile
 
     async def _inventory_slots(self, s, character_id):
-        base = await super()._inventory_slots(s, character_id)
-        consumables = await s.scalar(
-            select(func.count(ConsumableStack.id)).where(
-                ConsumableStack.character_id == character_id,
-                ConsumableStack.quantity > 0,
-            )
-        ) or 0
-        return int(base + consumables)
+        return await super()._inventory_slots(s, character_id)
 
     async def _open_round(self, s, character_id, *, lock=False):
         statement = (
@@ -802,7 +796,7 @@ class RoundService(RoadService):
             return
         await self._retry_blocked_deliveries(s, c)
         if c.delivery_blocked:
-            inventory_blocked = await self._inventory_slots(s, c.id) >= 60
+            inventory_blocked = await self._inventory_slots(s, c.id) >= INVENTORY_CAPACITY
             pending_blocked = await self._pending_slots(s, c.id) <= 0
             reason = (
                 "inventory_pending"
@@ -1292,7 +1286,7 @@ class RoundService(RoadService):
         elif state.completed_encounters >= state.batch_size:
             await self._finish_round(s, state, "completed")
         elif c.delivery_blocked:
-            inventory_blocked = await self._inventory_slots(s, c.id) >= 60
+            inventory_blocked = await self._inventory_slots(s, c.id) >= INVENTORY_CAPACITY
             pending_blocked = await self._pending_slots(s, c.id) <= 0
             reason = (
                 "inventory_pending"
