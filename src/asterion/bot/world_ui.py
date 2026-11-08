@@ -58,6 +58,7 @@ def render_adventure(
             InlineKeyboardButton(text="Missões", callback_data="world:missions"),
             InlineKeyboardButton(text="Masmorras", callback_data="dungeon:known"),
         ],
+        [InlineKeyboardButton(text="PvP", callback_data="pvp:hub")],
         [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
     ]
     return Screen(text, "adventure", InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -118,6 +119,7 @@ def render_world(view: WorldView) -> Screen:
         ("Códice", "knowledge:codex"),
         ("Vínculos", "links:root"),
         ("Mercado", "mkt:root"),
+        ("Classificação da Vigília", "pvp:rank"),
         ("Configurações", "settings:root"),
     ]
     rows = [

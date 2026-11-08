@@ -56,6 +56,7 @@ def test_adventure_root_only_exposes_navigation_and_contextual_activities():
         "world:map",
         "world:missions",
         "dungeon:known",
+        "pvp:hub",
         "menu:back",
     }
     assert not any(

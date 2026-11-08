@@ -327,6 +327,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
         "Configurações",
         "Vínculos",
         "Mercado",
+        "Classificação da Vigília",
     }
     update_id += 1
     await dispatcher.feed_raw_update(
@@ -344,6 +345,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
         "world:map",
         "world:missions",
         "dungeon:known",
+        "pvp:hub",
         "menu:back",
     }
     update_id += 1

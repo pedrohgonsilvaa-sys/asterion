@@ -4,8 +4,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from asterion.application.guilds import GuildService
 from asterion.application.market import MarketService
+from asterion.application.pvp import PvpService
 from asterion.application.round import RoundService
 from asterion.application.trades import TradeService
+from asterion.bot.pvp_handlers import deliver_notices
 from asterion.config import get_settings
 from asterion.infrastructure.db.session import SessionFactory
 
@@ -49,4 +51,23 @@ def build_round_scheduler() -> AsyncIOScheduler:
             coalesce=True,
             replace_existing=True,
         )
+    pvp = PvpService(SessionFactory, settings.server_id)
+
+    async def run_pvp_maintenance() -> None:
+        notices = await pvp.run_maintenance()
+        if notices and settings.telegram_bot_enabled and settings.telegram_bot_token:
+            from asterion.bot.runtime import get_bot_runtime
+
+            await deliver_notices(get_bot_runtime().bot, notices)
+
+    # Turn timers, Entry Confirmations, pairing, the Arena windows and decay.
+    scheduler.add_job(
+        run_pvp_maintenance,
+        "interval",
+        seconds=5,
+        id="pvp-upkeep",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
     return scheduler

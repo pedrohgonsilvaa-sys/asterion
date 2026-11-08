@@ -33,6 +33,7 @@ from asterion.application.p7 import P7Service
 from asterion.application.path_selection import PathSelectionService
 from asterion.application.professions import ProfessionService
 from asterion.application.prologue import PrologueService
+from asterion.application.pvp import PvpService
 from asterion.application.round import RoundService
 from asterion.application.s1 import S1Service
 from asterion.application.s2 import S2Service
@@ -83,6 +84,7 @@ from asterion.bot.p6_handlers import p6_router
 from asterion.bot.p7_handlers import p7_router
 from asterion.bot.path_handlers import path_router
 from asterion.bot.profession_handlers import profession_router
+from asterion.bot.pvp_handlers import pvp_router
 from asterion.bot.s1_handlers import s1_router
 from asterion.bot.s2_handlers import s2_router
 from asterion.bot.s3_handlers import s3_router
@@ -178,6 +180,10 @@ def get_bot_runtime() -> BotRuntime:
         SessionFactory,
         settings.server_id,
         NamePolicy(settings.blocked_character_names),
+    )
+    # First on purpose: /start and /menu must resume a PvP activity (39.4).
+    dispatcher.include_router(
+        pvp_router(PvpService(SessionFactory, settings.server_id), settings.creation_images)
     )
     dispatcher.include_router(
         settings_router(account, character_surfaces, settings.creation_images)
