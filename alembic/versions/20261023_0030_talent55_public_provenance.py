@@ -104,8 +104,7 @@ def upgrade() -> None:
                 ELSIF jsonb_typeof(value) = 'object' THEN
                     result := '{}'::jsonb;
                     FOR property_name, item IN
-                        SELECT key, val FROM jsonb_each(value) AS e(key, val)
-                    LOOP
+                        SELECT key, val FROM jsonb_each(value) AS e(key, val) LOOP
                         result := result || jsonb_build_object(
                             property_name,
                             pg_temp._c3_strip_unreleased_talent55(item)
