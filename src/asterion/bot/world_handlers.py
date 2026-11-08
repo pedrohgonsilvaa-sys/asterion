@@ -105,6 +105,7 @@ from asterion.application.vde_missions import (
     S12_ID,
     VDEMissionService,
 )
+from asterion.application.warehouse import WarehouseRejected, WarehouseService
 from asterion.application.world import WorldService
 from asterion.bot.altos_missions_ui import render_altos_mission
 from asterion.bot.class_trial_ui import render_class_trial_view
@@ -146,6 +147,31 @@ from asterion.bot.vde_missions_ui import render_vde_mission
 from asterion.bot.world_ui import render_adventure, render_legacy, render_world
 
 
+def _warehouse_error(code: str) -> str:
+    return {
+        "SAFE_LOCATION_REQUIRED": "O Armazém exige um Braseiro permanente descoberto.",
+        "FOREGROUND_LOCKED": "Encerre a atividade atual antes de transferir itens.",
+        "WAREHOUSE_FULL": "O Armazém está cheio.",
+        "INVENTORY_FULL": "Libere espaço no Inventário primeiro.",
+        "STACK_FULL": "A pilha do Inventário não comporta essa quantidade. Escolha menos.",
+        "INVALID_QUANTITY": "Quantidade indisponível. Escolha novamente.",
+        "STACK_CONFLICT": "Já existe no Inventário uma pilha incompatível com esta.",
+        "EQUIPPED": "Desequipe o equipamento antes de guardá-lo.",
+        "ITEM_UNAVAILABLE": "O item não está mais disponível nessa origem.",
+        "PENDING_UNAVAILABLE": "A Entrega Pendente não está mais disponível.",
+        "UNSUPPORTED_PENDING_KIND": "Esta entrega exige o fluxo de origem correspondente.",
+        "INVALID_KIND": "Categoria de transferência inválida.",
+        "INVALID_OPERATION": "Transferência inválida.",
+        "OPERATION_UNAVAILABLE": "A prévia não existe ou pertence a outra sessão.",
+        "CHARACTER_UNAVAILABLE": "Personagem indisponível.",
+    }.get(code, "A transferência não pôde ser concluída.")
+
+
+def _callback_page(data: str | None) -> int:
+    token = (data or "").rsplit(":", 1)[-1]
+    return int(token) if token.isdecimal() else 0
+
+
 def world_router(
     service: WorldService,
     images: dict[str, str],
@@ -184,6 +210,7 @@ def world_router(
     s35: S35Service | None = None,
     s36: S36Service | None = None,
     legacy: LegacyService | None = None,
+    warehouse: WarehouseService | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -1214,10 +1241,12 @@ def world_router(
         await query.answer()
         if inventory is None or not isinstance(query.message, Message):
             return
-        category = (query.data or "").rsplit(":", 1)[-1]
+        parts = (query.data or "").split(":")
+        category = parts[2] if len(parts) > 2 else ""
         view = await inventory.category(query.from_user.id, category)
         if view is not None:
-            await present(query.message, render_inventory(view), images, edit=True)
+            screen = render_inventory(view, _callback_page(query.data))
+            await present(query.message, screen, images, edit=True)
 
     @router.callback_query(F.data.startswith("inventory:consumable:"))
     async def inventory_consumable(query: CallbackQuery):
@@ -1228,6 +1257,169 @@ def world_router(
         view = await inventory.consumable_detail(query.from_user.id, item_id)
         if view is not None:
             await present(query.message, render_inventory(view), images, edit=True)
+
+    @router.callback_query(F.data == "warehouse:root")
+    @router.callback_query(F.data.startswith("warehouse:page:"))
+    async def warehouse_root(query: CallbackQuery):
+        await query.answer()
+        if warehouse is None or not isinstance(query.message, Message):
+            return
+        view = await warehouse.root(query.from_user.id)
+        if view is not None:
+            from asterion.bot.warehouse_ui import render_warehouse
+
+            screen = render_warehouse(view, _callback_page(query.data))
+            await present(query.message, screen, images, edit=True)
+
+    @router.callback_query(F.data.startswith("warehouse:inventory:"))
+    async def warehouse_inventory_list(query: CallbackQuery):
+        if warehouse is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        parts = (query.data or "").split(":")
+        kind = parts[2] if len(parts) > 2 else ""
+        try:
+            view = await warehouse.inventory_sources(query.from_user.id, kind)
+        except WarehouseRejected as exc:
+            await query.answer(_warehouse_error(exc.code), show_alert=True)
+            return
+        await query.answer()
+        if view is not None:
+            from asterion.bot.warehouse_ui import render_warehouse
+
+            screen = render_warehouse(view, _callback_page(query.data))
+            await present(query.message, screen, images, edit=True)
+
+    @router.callback_query(F.data.startswith("warehouse:deposit:"))
+    @router.callback_query(F.data.startswith("warehouse:withdraw:"))
+    async def warehouse_prepare_transfer(query: CallbackQuery):
+        if warehouse is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        parts = (query.data or "").split(":")
+        if len(parts) != 4:
+            await query.answer("Transferência inválida.", show_alert=True)
+            return
+        direction, kind, item_token = parts[1], parts[2], parts[3]
+        try:
+            item_id = UUID(hex=item_token)
+            choice = None
+            if kind != "equipment":
+                choice = await warehouse.transfer_quantity(
+                    query.from_user.id, direction, kind, item_id
+                )
+            if choice is not None and choice.quantity > 1:
+                from asterion.bot.warehouse_ui import render_warehouse_quantity
+
+                await query.answer()
+                screen = render_warehouse_quantity(choice, choice.quantity)
+                await present(query.message, screen, images, edit=True)
+                return
+            view = await warehouse.prepare_transfer(query.from_user.id, direction, kind, item_id)
+        except (ValueError, WarehouseRejected) as exc:
+            message = _warehouse_error(exc.code) if isinstance(exc, WarehouseRejected) else "Item indisponível."
+            await query.answer(message, show_alert=True)
+            return
+        await query.answer("Revise e confirme a transferência.")
+        if view is not None:
+            from asterion.bot.warehouse_ui import render_warehouse
+
+            await present(query.message, render_warehouse(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("warehouse:qty:"))
+    async def warehouse_choose_quantity(query: CallbackQuery):
+        if warehouse is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        from asterion.bot.warehouse_ui import parse_quantity_callback, render_warehouse_quantity
+
+        try:
+            direction, kind, item_id, selected = parse_quantity_callback(query.data or "")
+            view = await warehouse.transfer_quantity(query.from_user.id, direction, kind, item_id)
+        except (ValueError, WarehouseRejected) as exc:
+            message = (
+                _warehouse_error(exc.code)
+                if isinstance(exc, WarehouseRejected)
+                else "Item indisponível."
+            )
+            await query.answer(message, show_alert=True)
+            return
+        await query.answer()
+        if view is not None:
+            screen = render_warehouse_quantity(view, selected)
+            await present(query.message, screen, images, edit=True)
+
+    @router.callback_query(F.data.startswith("warehouse:go:"))
+    async def warehouse_prepare_quantity(query: CallbackQuery):
+        if warehouse is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        from asterion.bot.warehouse_ui import parse_quantity_callback, render_warehouse
+
+        try:
+            direction, kind, item_id, selected = parse_quantity_callback(query.data or "")
+            view = await warehouse.prepare_transfer(
+                query.from_user.id, direction, kind, item_id, selected
+            )
+        except (ValueError, WarehouseRejected) as exc:
+            message = (
+                _warehouse_error(exc.code)
+                if isinstance(exc, WarehouseRejected)
+                else "Item indisponível."
+            )
+            await query.answer(message, show_alert=True)
+            return
+        await query.answer("Revise e confirme a transferência.")
+        if view is not None:
+            await present(query.message, render_warehouse(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("warehouse:confirm:"))
+    async def warehouse_confirm(query: CallbackQuery):
+        if warehouse is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        try:
+            operation_id = UUID(hex=(query.data or "").rsplit(":", 1)[1])
+            result = await warehouse.confirm(query.from_user.id, operation_id)
+        except (ValueError, WarehouseRejected) as exc:
+            message = _warehouse_error(exc.code) if isinstance(exc, WarehouseRejected) else "Confirmação inválida."
+            await query.answer(message, show_alert=True)
+            return
+        messages = {
+            "COMMITTED": "Transferência concluída.",
+            "ALREADY_COMMITTED": "Esta transferência já foi concluída.",
+            "STALE": "A prévia ficou desatualizada. Confira os itens novamente.",
+            "EXPIRED": "A prévia expirou. Gere uma nova.",
+            "SAFE_LOCATION_REQUIRED": "O Armazém só está disponível em Braseiro permanente descoberto.",
+        }
+        await query.answer(messages.get(result.status, "Transferência não concluída."), show_alert=result.status != "COMMITTED")
+        if result.direction == "claim_pending" and inventory is not None:
+            view = await inventory.pending(query.from_user.id)
+            if view is not None:
+                await present(query.message, render_inventory(view), images, edit=True)
+        else:
+            view = await warehouse.root(query.from_user.id)
+            if view is not None:
+                from asterion.bot.warehouse_ui import render_warehouse
+
+                await present(query.message, render_warehouse(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("warehouse:cancel:"))
+    async def warehouse_cancel(query: CallbackQuery):
+        if warehouse is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        try:
+            operation_id = UUID(hex=(query.data or "").rsplit(":", 1)[1])
+            status = await warehouse.cancel(query.from_user.id, operation_id)
+        except ValueError:
+            status = "NOT_FOUND"
+        await query.answer("Prévia cancelada." if status == "CANCELLED" else "Prévia não está mais ativa.", show_alert=status != "CANCELLED")
+        view = await warehouse.root(query.from_user.id)
+        if view is not None:
+            from asterion.bot.warehouse_ui import render_warehouse
+
+            await present(query.message, render_warehouse(view), images, edit=True)
 
     @router.callback_query(F.data.startswith("consumable:vigor:"))
     async def use_vigor(query: CallbackQuery):
@@ -1261,6 +1453,38 @@ def world_router(
         if inventory is None or not isinstance(query.message, Message):
             return
         view = await inventory.pending(query.from_user.id)
+        if view is not None:
+            await present(query.message, render_inventory(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("pending:claim:"))
+    async def pending_claim(query: CallbackQuery):
+        if warehouse is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        try:
+            pending_id = UUID(hex=(query.data or "").rsplit(":", 1)[1])
+            view = await warehouse.prepare_pending_claim(query.from_user.id, pending_id)
+        except (ValueError, WarehouseRejected) as exc:
+            message = _warehouse_error(exc.code) if isinstance(exc, WarehouseRejected) else "Entrega indisponível."
+            await query.answer(message, show_alert=True)
+            return
+        await query.answer("Revise e confirme o resgate.")
+        if view is not None:
+            from asterion.bot.warehouse_ui import render_warehouse
+
+            await present(query.message, render_warehouse(view), images, edit=True)
+
+    @router.callback_query(F.data == "pending:retry")
+    async def retry_blocked_deliveries(query: CallbackQuery):
+        if road is None or inventory is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        succeeded = await road.retry_blocked_deliveries(query.from_user.id)
+        view = await inventory.pending(query.from_user.id)
+        await query.answer(
+            "Entregas reprocessadas." if succeeded else "Ainda há entregas aguardando espaço.",
+            show_alert=not succeeded,
+        )
         if view is not None:
             await present(query.message, render_inventory(view), images, edit=True)
 

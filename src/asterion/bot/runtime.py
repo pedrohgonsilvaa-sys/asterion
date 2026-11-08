@@ -53,6 +53,7 @@ from asterion.application.s36 import S36Service
 from asterion.application.talents import TalentService
 from asterion.application.varzeas_missions import VarzeasMissionService
 from asterion.application.vde_missions import VDEMissionService
+from asterion.application.warehouse import WarehouseService
 from asterion.application.world import WorldService
 from asterion.bot.altos_missions_handlers import altos_missions_router
 from asterion.bot.character_progression_handlers import character_progression_router
@@ -125,6 +126,7 @@ def get_bot_runtime() -> BotRuntime:
     p2 = P2Service(SessionFactory, settings.server_id, groups=groups)
     road = RoundService(SessionFactory, settings.server_id)
     inventory = InventoryService(SessionFactory, settings.server_id)
+    warehouse = WarehouseService(SessionFactory, settings.server_id)
     equipment = EquipmentService(SessionFactory, settings.server_id)
     equipment_views = EquipmentViewService(SessionFactory, settings.server_id)
     equipment_modifications = EquipmentModificationService(SessionFactory, settings.server_id)
@@ -330,6 +332,7 @@ def get_bot_runtime() -> BotRuntime:
             s35=s35,
             s36=s36,
             legacy=legacy,
+            warehouse=warehouse,
         )
     )
     dispatcher.include_router(

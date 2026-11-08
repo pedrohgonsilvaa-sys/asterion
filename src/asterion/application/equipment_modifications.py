@@ -22,7 +22,7 @@ from asterion.application.equipment_configuration import (
     resolve_character_combat_stats,
 )
 from asterion.application.equipment_view import EquipmentItemView, EquipmentViewService
-from asterion.application.inventory import INVENTORY_CAPACITY
+from asterion.application.inventory_capacity import INVENTORY_CAPACITY, inventory_slots
 from asterion.application.professions import REFUGE
 from asterion.domain.equipment import assignment_for_item_slot, parse_equipment_slot
 from asterion.domain.equipment_modifications import (
@@ -1262,24 +1262,7 @@ class EquipmentModificationService:
 
     @staticmethod
     async def _inventory_slots(session: AsyncSession, character_id: UUID) -> int:
-        total = 0
-        for model in (EquipmentItem, MaterialStack, RuneStack):
-            query = select(func.count(model.id)).where(model.character_id == character_id)
-            if model is not EquipmentItem:
-                query = query.where(model.quantity > 0)
-            total += int(await session.scalar(query) or 0)
-        from asterion.infrastructure.db.models import ConsumableStack
-
-        total += int(
-            await session.scalar(
-                select(func.count(ConsumableStack.id)).where(
-                    ConsumableStack.character_id == character_id,
-                    ConsumableStack.quantity > 0,
-                )
-            )
-            or 0
-        )
-        return total
+        return await inventory_slots(session, character_id)
 
     def _dismantle_materials(self, item: EquipmentItem) -> tuple[tuple[str, int], ...]:
         quantities = dismantle_quantities(item.slot, item.rarity)

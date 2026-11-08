@@ -8,11 +8,15 @@ from asterion.application.crafting import CraftingService
 from asterion.application.professions import ProfessionService
 from asterion.bot.character_ui import render_character
 from asterion.bot.profession_handlers import profession_router
+from asterion.domain.professions import RECIPE_DEFINITIONS, VARZEAS_ESSENCE, VARZEAS_REAGENT
 from asterion.infrastructure.db.models import (
+    Brazier,
     Character,
     CharacterProfession,
+    ConsumableStack,
     EquipmentItem,
     MaterialStack,
+    WorldState,
 )
 from tests.test_creation_ui import callback_update
 from tests.test_road_integration import _seed_road
@@ -175,3 +179,111 @@ async def test_telegram_character_to_professions_crafting_and_change(database):
             "primary": "alchemist",
             "secondary": "blacksmith",
         }
+
+
+@pytest.mark.asyncio
+async def test_telegram_porto_alchemy_preview_confirmation_and_duplicate_callback(database):
+    actor = 841102
+    actor, _road = await _seed_road(database, actor=actor)
+    sessions = database[1]
+    profession_service = ProfessionService(sessions, "ocaso")
+    assert await profession_service.initial_selection(actor, "alchemist", "artificer")
+    async with sessions.begin() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        character.level = 40
+        character.crowns = 41310
+        world = await session.get(WorldState, character.id)
+        world.region = "Várzeas Carmesins"
+        world.location = "Porto da Salmoura"
+        alchemist = await session.scalar(
+            select(CharacterProfession).where(
+                CharacterProfession.character_id == character.id,
+                CharacterProfession.profession_id == "alchemist",
+            )
+        )
+        alchemist.level = 12
+        session.add(Brazier(character_id=character.id, brazier_id="varzeas.brazier.porto"))
+        session.add_all(
+            [
+                MaterialStack(
+                    character_id=character.id,
+                    material_id=VARZEAS_REAGENT,
+                    quantity=3,
+                    bound=False,
+                ),
+                MaterialStack(
+                    character_id=character.id,
+                    material_id=VARZEAS_ESSENCE,
+                    quantity=1,
+                    bound=False,
+                ),
+            ]
+        )
+        character_id = character.id
+
+    crafting_service = CraftingService(sessions, "ocaso")
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(profession_router(profession_service, crafting_service, {}))
+    bot = _telegram()
+    step = 0
+    screen = await _click(dispatcher, bot, "character:professions", actor=actor, update_id=step)
+    step += 1
+    alchemist_index = 2
+    screen = await _click(
+        dispatcher,
+        bot,
+        f"prof:d:{alchemist_index}",
+        actor=actor,
+        update_id=step,
+    )
+    step += 1
+    assert "Criação · Produzir" in screen.text
+    assert "Criação" in [
+        button.text for row in screen.reply_markup.inline_keyboard for button in row
+    ]
+
+    screen = await _click(
+        dispatcher, bot, "craft:recipes:2", actor=actor, update_id=step
+    )
+    step += 1
+    recipe_index = next(
+        index
+        for index, recipe in enumerate(RECIPE_DEFINITIONS)
+        if recipe.recipe_id == "recipe.varzeas.alchemist.heal.varzeas.iv"
+    )
+    screen = await _click(
+        dispatcher,
+        bot,
+        f"craft:r:{recipe_index}",
+        actor=actor,
+        update_id=step,
+    )
+    step += 1
+    preview_callback = _button(screen, "Preview de Criação").callback_data
+    screen = await _click(dispatcher, bot, preview_callback, actor=actor, update_id=step)
+    step += 1
+    assert "🛠️ Criação · Preview" in screen.text
+    assert "Poção de Cura da Salmoura" in screen.text
+    create_callback = _button(screen, "Criar").callback_data
+    screen = await _click(dispatcher, bot, create_callback, actor=actor, update_id=step)
+    step += 1
+    assert "Criação concluída" in screen.text
+    screen = await _click(dispatcher, bot, create_callback, actor=actor, update_id=step)
+    assert "Criação concluída" in screen.text
+
+    async with sessions() as session:
+        character = await session.get(Character, character_id)
+        potion = await session.scalar(
+            select(ConsumableStack).where(
+                ConsumableStack.character_id == character_id,
+                ConsumableStack.consumable_id == "consumable.heal.varzeas.iv",
+            )
+        )
+        materials = (
+            await session.scalars(
+                select(MaterialStack).where(MaterialStack.character_id == character_id)
+            )
+        ).all()
+        assert character.crowns == 41240
+        assert potion is not None and potion.quantity == 1
+        assert materials == []
