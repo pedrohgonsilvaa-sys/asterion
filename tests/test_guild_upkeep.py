@@ -14,6 +14,8 @@ from asterion.application.guilds import GuildError, GuildService
 from asterion.domain.guilds import GuildRole, ProjectKind
 from asterion.infrastructure.db.models import (
     Account,
+    AccountLink,
+    AccountRiskFlag,
     Character,
     CharacterDeletionRequest,
     Guild,
@@ -368,3 +370,28 @@ async def test_permanent_ban_of_the_leader_starts_succession_at_once(database):
     roles = {m.character_id: m.role for m in view.members}
     assert roles[ids["Cedar"]] is GuildRole.LEADER
     assert roles[ids["Alpha"]] is GuildRole.MEMBER
+
+
+@pytest.mark.asyncio
+async def test_linked_accounts_funding_one_obra_are_flagged_once_and_never_blocked(database):
+    a = await _seed(database)
+    service = GuildService(database[1], "ocaso")
+    await _guild_with(service, a, members=("Bravo", "Cedar"))
+    first, second = sorted((a["Bravo"], a["Cedar"]))
+    async with database[1].begin() as session:
+        session.add(AccountLink(account_a=first, account_b=second))
+    started = await service.start_project(a["Alpha"], ProjectKind.FORGE, now=NOW)
+    project_id = started.active_projects[0].project_id
+
+    async def flags() -> list[AccountRiskFlag]:
+        async with database[1]() as session:
+            return list((await session.scalars(select(AccountRiskFlag))).all())
+
+    await service.contribute(a["Bravo"], project_id, 1_000, now=NOW)
+    await service.contribute(a["Alpha"], project_id, 1_000, now=NOW)
+    assert await flags() == []
+    assert (await service.contribute(a["Cedar"], project_id, 1_000, now=NOW)).applied == 1_000
+    await service.contribute(a["Cedar"], project_id, 1_000, now=NOW)
+    [flag] = await flags()
+    assert (flag.account_a, flag.account_b) == (first, second)
+    assert (flag.activity_kind, flag.activity_reference) == ("guild_project", str(project_id))

@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.account_risk import record_linked_cooccurrence
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.bestiary import BestiaryRecorder
 from asterion.application.equipment import equipment_instance_payload
@@ -4462,6 +4463,14 @@ class DungeonService:
             for ordinal in range(1, _encounter_count(family.family_id) + 1)
         )
         await session.flush()
+        await record_linked_cooccurrence(
+            session,
+            server_id=self.server_id,
+            activity_kind="dungeon_run",
+            activity_reference=f"{DUNGEON_ACTIVITY_PREFIX}{run_id.hex}",
+            characters=characters,
+            now=now,
+        )
         return run
 
     async def _create_lobby_activity(self, session, character, run):

@@ -35,6 +35,7 @@ from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.account_risk import record_linked_cooccurrence
 from asterion.application.guild_upkeep import (
     ACTIVE_PROJECT_STATES,
     audit,
@@ -919,6 +920,26 @@ class GuildService:
                 )  # fmt: skip
             guild.revision += 1
             await session.flush()
+            if not from_treasury:
+                # §36: review signal only; linked accounts funding one Obra are never blocked.
+                contributors = await session.scalars(
+                    select(Character).where(
+                        Character.id.in_(
+                            select(GuildProjectContribution.character_id).where(
+                                GuildProjectContribution.project_id == project.id,
+                                GuildProjectContribution.source == "wallet",
+                            )
+                        )
+                    )
+                )
+                await record_linked_cooccurrence(
+                    session,
+                    server_id=self.server_id,
+                    activity_kind="guild_project",
+                    activity_reference=str(project.id),
+                    characters=contributors.all(),
+                    now=now,
+                )
             return ContributionResult(
                 applied=applied, guild=await self._guild_view(session, guild, character.id)
             )
