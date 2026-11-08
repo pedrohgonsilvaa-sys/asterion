@@ -139,6 +139,19 @@ def character_surfaces_router(service: CharacterSurfacesService, images: dict[st
         await query.answer()
         await show_profile(query)
 
+    @router.callback_query(F.data.startswith("profile:rm:"))
+    async def remove_history(query: CallbackQuery) -> None:
+        parts = (query.data or "").split(":")
+        try:
+            revision = _parse_base36(parts[2])
+        except (IndexError, ValueError):
+            await query.answer("Perfil atualizado.", show_alert=True)
+            await show_profile(query)
+            return
+        removed = await service.remove_history(query.from_user.id, revision)
+        await query.answer("História removida." if removed else "Perfil atualizado.")
+        await show_profile(query)
+
     @router.callback_query(F.data.startswith("profile:edit:"))
     async def edit_history(query: CallbackQuery) -> None:
         parts = (query.data or "").split(":")
@@ -197,6 +210,12 @@ def character_surfaces_router(service: CharacterSurfacesService, images: dict[st
             await message.answer(
                 f"A História pode ter até {MAX_HISTORY_CHARACTERS} caracteres. "
                 "Responda novamente à solicitação de História com uma versão menor."
+            )
+            return
+        if result == HistoryInputResult.FORBIDDEN:
+            await message.answer(
+                "A História não pode ter links nem menções. "
+                "Responda novamente à solicitação de História sem eles."
             )
             return
         if result == HistoryInputResult.EMPTY:

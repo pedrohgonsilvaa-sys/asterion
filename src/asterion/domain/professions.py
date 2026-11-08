@@ -155,6 +155,7 @@ MATERIAL_NAMES = {
     "material.confins.musgo_limiar": "Musgo de Limiar",
     "material.confins.po_referencia": "Pó de Referência",
     "material.tdo.catalisador_elite_vi": "Catalisador de Elite VI",
+    FRAGMENT_V: "Fragmento de Aprimoramento V",
     "material.tdo.fragmento_aprimoramento_vi": "Fragmento de Aprimoramento VI",
     "material.special.confins.core.arquivo_retorno": "Núcleo do Arquivo do Retorno",
     "material.special.confins.core.camara_contradicoes": "Núcleo da Câmara das Contradições",

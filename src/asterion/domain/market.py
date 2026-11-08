@@ -62,6 +62,10 @@ class SaleSplit:
     net: int
 
 
+def contains_link(text: str) -> bool:
+    return _LINK.search(text) is not None
+
+
 def market_unlocked(stage: str) -> bool:
     """Author decision 2026-11-08: available once the Prologue is over."""
     return stage.split(":", 1)[0] != _PROLOGUE_STAGE

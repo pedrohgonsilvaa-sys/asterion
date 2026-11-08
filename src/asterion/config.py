@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # Community supergroup and its Mercado topic; unset means Divulgar shows copy text.
     community_chat_id: int | None = None
     community_market_topic_id: int | None = None
+    # Relatos topic of the same supergroup; unset means Compartilhar História is off.
+    community_relatos_topic_id: int | None = None
+    # §32.3 public invite link of the Comunidade Oficial; never hardcoded.
+    community_url: str | None = None
 
     @model_validator(mode="after")
     def validate_telegram(self) -> Self:

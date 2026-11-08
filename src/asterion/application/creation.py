@@ -1,6 +1,7 @@
 """Transactional creation use cases; PostgreSQL is the sole state authority."""
 
 from dataclasses import fields, replace
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -8,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.character_names import lock_character_name, name_available
+from asterion.application.recruitment import link_pending_invite
 from asterion.domain.combat_math import resolve_combat_stats
 from asterion.domain.creation import (
     PROLOGUE,
@@ -213,6 +215,9 @@ class CreationService:
             )
             return self.snapshot(row)
         self._save(row, replace(state, step="completed", editing=False))
+        await link_pending_invite(
+            session, row.telegram_id, row.server_id, character_id, datetime.now(UTC)
+        )
         return Creation(
             id=character_id,
             step=PROLOGUE,

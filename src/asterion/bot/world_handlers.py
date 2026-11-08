@@ -108,6 +108,7 @@ from asterion.application.vde_missions import (
 from asterion.application.warehouse import WarehouseRejected, WarehouseService
 from asterion.application.world import WorldService
 from asterion.bot.altos_missions_ui import render_altos_mission
+from asterion.bot.benefits_ui import community_invite_text, community_keyboard
 from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_handlers import present
@@ -211,6 +212,7 @@ def world_router(
     s36: S36Service | None = None,
     legacy: LegacyService | None = None,
     warehouse: WarehouseService | None = None,
+    community_url: str | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -835,6 +837,11 @@ def world_router(
         if view and isinstance(query.message, Message):
             await query.answer()
             await present(query.message, render_world(view), images, edit=True)
+            if view.first_menu and community_url:
+                await query.message.answer(
+                    community_invite_text(),
+                    reply_markup=community_keyboard(community_url, with_menu=False),
+                )
             return
         await query.answer(
             "Este botão de descanso não corresponde mais ao estado atual.",

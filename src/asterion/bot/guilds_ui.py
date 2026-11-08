@@ -77,6 +77,7 @@ GUILD_ERROR_MESSAGES = {
     "recruitment_closed": "Essa Guilda está com o recrutamento fechado.",
     "character_not_found": "Não encontrei esse personagem neste servidor.",
     "cannot_invite_self": "Você não pode convidar o próprio personagem.",
+    "invite_refused": "Esse personagem não pode receber o convite.",
     "cannot_target_self": "Você não pode fazer isso com o próprio personagem.",
     "target_in_guild": "Esse personagem já está em uma Guilda.",
     "target_not_member": "Esse personagem não é membro da sua Guilda.",

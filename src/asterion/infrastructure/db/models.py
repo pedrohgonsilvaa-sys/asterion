@@ -115,6 +115,10 @@ class Character(Base):
     max_vigor: Mapped[int] = mapped_column(
         Integer, nullable=False, default=100, server_default="100"
     )
+    # NULL on characters older than this column: they cannot become Chamado recruits.
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     crowns: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
     elite_equipment_pity: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
@@ -3063,3 +3067,323 @@ class ArenaDodge(Base):
         ForeignKey("pvp_matches.id", ondelete="CASCADE"), nullable=False
     )
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class FriendRequest(Base):
+    """§31 pending friend request. A resolved request simply stops existing."""
+
+    __tablename__ = "friend_requests"
+    __table_args__ = (
+        UniqueConstraint(
+            "sender_character_id", "recipient_character_id", name="uq_friend_request_pair"
+        ),
+        CheckConstraint(
+            "sender_character_id <> recipient_character_id", name="ck_friend_request_not_self"
+        ),
+        Index("ix_friend_requests_recipient", "recipient_character_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    sender_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    recipient_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class Friendship(Base):
+    """§31 mutual friendship, stored once with character_a < character_b."""
+
+    __tablename__ = "friendships"
+    __table_args__ = (
+        CheckConstraint("character_a < character_b", name="ck_friendship_order"),
+        Index("ix_friendships_character_b", "character_b"),
+    )
+
+    character_a: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    character_b: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CharacterBlock(Base):
+    """§31 one-directional block; it restricts both sides of direct interactions."""
+
+    __tablename__ = "character_blocks"
+    __table_args__ = (
+        CheckConstraint(
+            "blocker_character_id <> blocked_character_id", name="ck_character_block_not_self"
+        ),
+        Index("ix_character_blocks_blocked", "blocked_character_id"),
+    )
+
+    blocker_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    blocked_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RecentContact(Base):
+    """§31 Recentes: someone this character shared a Grupo, Masmorra, PvP or Troca with."""
+
+    __tablename__ = "recent_contacts"
+    __table_args__ = (
+        CheckConstraint(
+            "character_id <> other_character_id", name="ck_recent_contact_not_self"
+        ),
+        Index("ix_recent_contacts_character_seen", "character_id", "last_seen_at"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    other_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PlayerSearchAttempt(Base):
+    """§49.18 Busca de jogador rate limit; survives a bot restart."""
+
+    __tablename__ = "player_search_attempts"
+    __table_args__ = (Index("ix_player_search_character_time", "character_id", "attempted_at"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class Relato(Base):
+    """§31.1 snapshot of a História published to the official Relatos topic."""
+
+    __tablename__ = "relatos"
+    __table_args__ = (
+        CheckConstraint("status IN ('published','removed')", name="ck_relato_status"),
+        Index("ix_relatos_character_created", "character_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    author_name: Mapped[str] = mapped_column(String(16), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    chat_id: Mapped[int | None] = mapped_column(BigInteger)
+    message_id: Mapped[int | None] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ContentReport(Base):
+    """§31.1 report of a História or Relato, resolved by an operator."""
+
+    __tablename__ = "content_reports"
+    __table_args__ = (
+        CheckConstraint("kind IN ('history','relato')", name="ck_content_report_kind"),
+        CheckConstraint(
+            "status IN ('open','upheld','dismissed')", name="ck_content_report_status"
+        ),
+        Index(
+            "uq_content_report_open",
+            "reporter_character_id",
+            "target_key",
+            unique=True,
+            postgresql_where=text("status = 'open'"),
+        ),
+        Index("ix_content_reports_status_created", "status", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    target_key: Mapped[str] = mapped_column(String(48), nullable=False)
+    reporter_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    target_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    relato_id: Mapped[UUID | None] = mapped_column(ForeignKey("relatos.id", ondelete="SET NULL"))
+    snapshot: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    review_note: Mapped[str | None] = mapped_column(Text)
+
+
+class DailyGiftClaim(Base):
+    """§32.1 one claim per account, server and daily cycle (the primary key)."""
+
+    __tablename__ = "daily_gift_claims"
+    __table_args__ = (
+        CheckConstraint("claim_day BETWEEN 1 AND 7", name="ck_daily_gift_claim_day"),
+    )
+
+    telegram_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), primary_key=True
+    )
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    cycle_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    claim_day: Mapped[int] = mapped_column(Integer, nullable=False)
+    character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RecruitmentCode(Base):
+    """§32.2 the personal Chamado code of one account on one server."""
+
+    __tablename__ = "recruitment_codes"
+    __table_args__ = (UniqueConstraint("server_id", "code", name="uq_recruitment_code"),)
+
+    telegram_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), primary_key=True
+    )
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    code: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RecruitmentInvite(Base):
+    """A Chamado deep link opened before the newcomer has a character."""
+
+    __tablename__ = "recruitment_invites"
+
+    telegram_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), primary_key=True
+    )
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    code: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RecruitmentLink(Base):
+    """§32.2 one recruit per account and server; it survives character deletion."""
+
+    __tablename__ = "recruitment_links"
+    __table_args__ = (
+        CheckConstraint(
+            "recruit_telegram_id <> recruiter_telegram_id", name="ck_recruitment_not_self"
+        ),
+        CheckConstraint("peak_level BETWEEN 1 AND 60", name="ck_recruitment_peak_level"),
+        Index("ix_recruitment_links_recruiter", "server_id", "recruiter_telegram_id", "linked_at"),
+    )
+
+    recruit_telegram_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), primary_key=True
+    )
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    recruiter_telegram_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), nullable=False
+    )
+    peak_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    # §49.19: only the first 10 valid recruits pay the recruiter in Coroas.
+    pays_recruiter: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RecruitmentClaim(Base):
+    """§49.19 a milestone payment already taken by one side of a recruitment."""
+
+    __tablename__ = "recruitment_claims"
+    __table_args__ = (
+        CheckConstraint("milestone IN (10,30,60)", name="ck_recruitment_claim_milestone"),
+        CheckConstraint("side IN ('recruit','recruiter')", name="ck_recruitment_claim_side"),
+    )
+
+    recruit_telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    milestone: Mapped[int] = mapped_column(Integer, primary_key=True)
+    side: Mapped[str] = mapped_column(String(16), primary_key=True)
+    character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    crowns: Mapped[int] = mapped_column(Integer, nullable=False)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PromoCode(Base):
+    """§32.4 Código de Asterion, created by an operator."""
+
+    __tablename__ = "promo_codes"
+    __table_args__ = (
+        UniqueConstraint("server_id", "code", name="uq_promo_code"),
+        CheckConstraint("scope IN ('account','character')", name="ck_promo_code_scope"),
+        CheckConstraint("uses_per_account >= 1", name="ck_promo_code_uses_per_account"),
+        CheckConstraint(
+            "global_limit IS NULL OR global_limit >= 1", name="ck_promo_code_global_limit"
+        ),
+        CheckConstraint("redeemed_count >= 0", name="ck_promo_code_redeemed"),
+        CheckConstraint("expires_at > starts_at", name="ck_promo_code_window"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    code: Mapped[str] = mapped_column(String(24), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    global_limit: Mapped[int | None] = mapped_column(Integer)
+    uses_per_account: Mapped[int] = mapped_column(Integer, nullable=False)
+    scope: Mapped[str] = mapped_column(String(16), nullable=False)
+    # A list of {"weight", "c_multiplier", "basics", "fragments"}; one entry is a fixed prize.
+    reward_table: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    redeemed_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PromoRedemption(Base):
+    """§32.4 one redemption; the prize drawn is stored once and never redrawn."""
+
+    __tablename__ = "promo_redemptions"
+    __table_args__ = (
+        Index("ix_promo_redemptions_code_account", "code_id", "telegram_id"),
+        Index("ix_promo_redemptions_code_character", "code_id", "character_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    code_id: Mapped[UUID] = mapped_column(
+        ForeignKey("promo_codes.id", ondelete="CASCADE"), nullable=False
+    )
+    telegram_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), nullable=False
+    )
+    character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    entry_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    crowns: Mapped[int] = mapped_column(Integer, nullable=False)
+    basics: Mapped[int] = mapped_column(Integer, nullable=False)
+    fragments: Mapped[int] = mapped_column(Integer, nullable=False)
+    redeemed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PromoAttempt(Base):
+    """§49.19 attempt rate limit per account; survives a bot restart."""
+
+    __tablename__ = "promo_attempts"
+    __table_args__ = (Index("ix_promo_attempts_account_time", "telegram_id", "attempted_at"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    telegram_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), nullable=False
+    )
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

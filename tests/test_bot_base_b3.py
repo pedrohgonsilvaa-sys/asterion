@@ -328,6 +328,8 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
         "Vínculos",
         "Mercado",
         "Classificação da Vigília",
+        "Benefícios",
+        "Comunidade",
     }
     update_id += 1
     await dispatcher.feed_raw_update(

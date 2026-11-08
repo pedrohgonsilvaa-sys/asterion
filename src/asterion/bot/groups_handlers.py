@@ -487,6 +487,7 @@ def _error_text(code: str) -> str:
         "leader_only": "Somente o Líder pode fazer isso.",
         "character_not_found": "Não encontrei esse personagem neste servidor.",
         "cannot_invite_self": "Você não pode convidar o próprio personagem.",
+        "invite_refused": "Esse personagem não pode receber o convite.",
         "invite_pending": "Já existe um convite pendente para esse personagem.",
         "invite_expired": "Esse convite expirou ou já foi respondido.",
         "wrong_server": "Esse convite pertence a outro servidor.",
