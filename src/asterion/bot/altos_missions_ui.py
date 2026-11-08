@@ -33,6 +33,11 @@ from asterion.application.altos_missions import (
 )
 from asterion.application.prologue import CombatView
 from asterion.application.road import (
+    ALTOS_ABRIGO_LABEL,
+    ALTOS_BASTILHA_LABEL,
+    ALTOS_ESCARPA_LABEL,
+    ALTOS_PEDREIRAS_LABEL,
+    ALTOS_PONTES_LABEL,
     CONFINS_CAMARA_REGENCIA_LABEL,
     CONFINS_NO_CENTRAL_LABEL,
 )
@@ -86,6 +91,7 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
                 consumable_budget_limit=view.consumable_budget_limit,
                 ready_consumable_option=view.ready_consumable_option,
                 combat_actor_key=view.combat_actor_key,
+                campaign_shared=view.campaign_shared,
             )
         )
         combat_location = (
@@ -696,10 +702,19 @@ def _render_p27(view: AltosMissionView, title: str, rows) -> Screen:
         6: "Registre Prioridades de Carga no Códice.",
         7: "Escolha pessoalmente um Equipamento Raro Nv. 45.",
     }.get(view.step, "Retome a etapa atual da missão.")
-    local = "Abrigo do Peso" if view.step == 1 else "Pedreiras Suspensas"
+    local = (
+        "Abrigo do Peso"
+        if view.step == 1 and view.location == ALTOS_ABRIGO_LABEL
+        else "Pontes de Fuligem"
+        if view.step == 1 and view.location == ALTOS_PONTES_LABEL
+        else "Pedreiras Suspensas"
+    )
     lines = [f"📜 {title} · Em Andamento", f"Altos Cinéreos · {local}", "", step_text]
     if view.step == 1:
-        rows.append([_button("Seguir para Pedreiras Suspensas", "road:route:altos_pedreiras")])
+        if view.location == ALTOS_ABRIGO_LABEL:
+            rows.append([_button("Seguir para Pontes de Fuligem", "road:route:altos_pontes")])
+        elif view.location == ALTOS_PONTES_LABEL:
+            rows.append([_button("Seguir para Pedreiras Suspensas", "road:route:altos_pedreiras")])
     elif view.step == 2:
         examined = set(view.progress.get("pedreira_records", ()))
         for action, label in (
@@ -932,7 +947,16 @@ def _render_p30(view: AltosMissionView, title: str, rows) -> Screen:
         rows.append([_button("Recuperar registro incompleto", f"altos:action:{view.state_version}:recover_exceptional_coupling_record")])
     elif view.step == 4:
         if view.progress.get("awaiting_retry") and view.location != "Coração do Colosso":
-            rows.append([_button("Retornar ao Coração", "road:route:altos_coracao")])
+            next_route = {
+                ALTOS_ESCARPA_LABEL: ("Seguir ao Abrigo do Peso", "altos_abrigo"),
+                ALTOS_ABRIGO_LABEL: ("Seguir para Pontes de Fuligem", "altos_pontes"),
+                ALTOS_PONTES_LABEL: ("Seguir para Pedreiras Suspensas", "altos_pedreiras"),
+                ALTOS_PEDREIRAS_LABEL: ("Seguir para Bastilha de Carga", "altos_bastilha"),
+                ALTOS_BASTILHA_LABEL: ("Retornar ao Coração", "altos_coracao"),
+            }.get(view.location)
+            if next_route is not None:
+                label, route_key = next_route
+                rows.append([_button(label, f"road:route:{route_key}")])
         elif view.progress.get("awaiting_retry"):
             rows.append([_button("Tentar novamente", f"altos:retry:P30:{view.state_version}")])
         else:

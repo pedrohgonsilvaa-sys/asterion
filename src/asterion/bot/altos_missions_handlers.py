@@ -14,6 +14,7 @@ from asterion.application.s31 import S31Service, S31View
 from asterion.application.s32 import S32Service, S32View
 from asterion.bot.altos_missions_ui import render_altos_mission
 from asterion.bot.combat_ui import (
+    AltosSoloCombatCallback,
     CampaignCombatCallback,
     CombatCallback,
     CombatConsumableCallback,
@@ -221,6 +222,27 @@ def altos_missions_router(
                         return
                 else:
                     raise ValueError("invalid combat mode")
+            elif (
+                len(parts) == 5
+                and parts[1] == "combat"
+                and parts[2] in {"P31", "P32", "P33", "P34", "P35"}
+            ):
+                quest_id = parts[2]
+                version = int(parts[3])
+                if parts[4] == "solo":
+                    view = await service.start_solo_combat(
+                        query.from_user.id, version, quest_id
+                    )
+                elif parts[4] == "group":
+                    view = await service.propose_group_combat(
+                        query.from_user.id, version, quest_id
+                    )
+                    if view is not None and view.proposal_id is not None:
+                        await query.answer("Confirmação enviada ao Grupo.")
+                        await show_group(query)
+                        return
+                else:
+                    raise ValueError("invalid combat mode")
             elif len(parts) == 5 and parts[1] == "combat" and parts[2] == "S30":
                 version = int(parts[3])
                 if parts[4] == "solo":
@@ -378,6 +400,23 @@ def altos_missions_router(
             raise SkipHandler()
         await show(query, view)
 
+    @router.callback_query(F.data.startswith("asc:"))
+    async def altos_solo_fight(query: CallbackQuery) -> None:
+        try:
+            callback = AltosSoloCombatCallback.unpack(query.data or "")
+        except (KeyError, TypeError, ValueError):
+            raise SkipHandler() from None
+        view = await service.campaign_action(
+            query.from_user.id,
+            callback.activity_id,
+            callback.combat_version,
+            callback.action_index,
+            callback.target,
+        )
+        if view is None:
+            raise SkipHandler()
+        await show(query, view)
+
     @router.callback_query(F.data.startswith("cc:"))
     async def group_fight(query: CallbackQuery) -> None:
         try:
@@ -473,6 +512,18 @@ def altos_missions_router(
             )
         else:
             view = current
+        if view is None:
+            raise SkipHandler()
+        option = view.ready_consumable_option
+        if option is not None:
+            view = await service.action(
+                query.from_user.id,
+                callback.activity_id,
+                version,
+                consumable_id=option.item_id,
+                target_id=option.target_id,
+                effect_id=option.effect_id,
+            )
         if view is None:
             raise SkipHandler()
         await show(query, view)

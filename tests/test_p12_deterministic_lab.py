@@ -22,7 +22,7 @@ from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from asterion.domain.arts import DEVASTADOR_ART_IDS, SENTINEL_ART_IDS
 from asterion.domain.combat import (
@@ -64,6 +64,118 @@ class _CheckpointCaptured(Exception):
     pass
 
 
+async def _equip_owned_weapon_for_requirement(sessions, server_id, actor, required_tags):
+    """Use the public equipment service to select an owned legal weapon."""
+    from asterion.application.equipment import (
+        EquipmentMutationCode,
+        EquipmentMutationRejected,
+        EquipmentService,
+    )
+    from asterion.application.weapon_metadata import (
+        equipped_weapon_compatibility_tags,
+        resolve_equipment_weapon,
+    )
+    from asterion.domain.equipment import EquipmentSlot
+    from asterion.infrastructure.db.models import Character, EquipmentItem
+
+    required = frozenset(required_tags)
+    if not required:
+        return None
+
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(
+                Character.telegram_id == actor,
+                Character.server_id == server_id,
+            )
+        )
+        if character is None:
+            raise AssertionError("P12 capture actor has no persisted character")
+        current_tags = await equipped_weapon_compatibility_tags(session, character.id)
+        if required & current_tags:
+            return {
+                "changed": False,
+                "reason": "an owned compatible weapon is already equipped",
+            }
+
+        candidates = []
+        for item in await session.scalars(
+            select(EquipmentItem).where(EquipmentItem.character_id == character.id)
+        ):
+            if item.item_level < 1 or item.item_level > character.level:
+                continue
+            weapon = await resolve_equipment_weapon(session, item)
+            if weapon is None or not (required & weapon.compatibility_tags):
+                continue
+            candidates.append(
+                (
+                    item.item_level,
+                    weapon.persisted_item_slot == "Principal",
+                    str(item.id),
+                    item.id,
+                    item.item_name,
+                    weapon.persisted_item_slot,
+                )
+            )
+        if not candidates:
+            return None
+        _level, _principal, _key, item_id, item_name, item_slot = max(candidates)
+        version = character.combat_configuration_version
+
+    equipment = EquipmentService(sessions, server_id)
+    try:
+        result = await equipment.equip_item(
+            actor, item_id, expected_configuration_version=version
+        )
+    except EquipmentMutationRejected as exc:
+        if (
+            exc.code != EquipmentMutationCode.SECONDARY_BLOCKED_BY_TWO_HANDED
+            or item_slot != "Secundária"
+        ):
+            raise
+        # A two-handed principal weapon can prevent an owned off-hand weapon
+        # from being equipped. Clear only that slot through the public service,
+        # then retry the same owned item with the returned configuration version.
+        removed = await equipment.unequip_slot(
+            actor,
+            EquipmentSlot.PRINCIPAL,
+            expected_configuration_version=version,
+        )
+        if removed is None or not removed.changed:
+            raise AssertionError(
+                "Could not clear the two-handed weapon blocking an owned "
+                "compatible secondary weapon"
+            ) from exc
+        result = await equipment.equip_item(
+            actor,
+            item_id,
+            expected_configuration_version=removed.combat_configuration_version,
+        )
+
+    if result is None:
+        raise AssertionError("Public equipment service lost the capture character")
+    async with sessions() as session:
+        character = await session.scalar(
+            select(Character).where(
+                Character.telegram_id == actor,
+                Character.server_id == server_id,
+            )
+        )
+        assert character is not None
+        final_tags = await equipped_weapon_compatibility_tags(session, character.id)
+    if not (required & final_tags):
+        raise AssertionError(
+            f"Equipment service did not satisfy public weapon requirement {sorted(required)}"
+        )
+    return {
+        "changed": result.changed,
+        "item_name": item_name,
+        "item_slot": item_slot,
+        "item_level": _level,
+        "configuration_version": result.combat_configuration_version,
+    }
+
+
 def _combat_id(seed: int):
     return uuid5(NAMESPACE_URL, f"{P12_RNG_NAMESPACE}{seed}")
 
@@ -71,6 +183,67 @@ def _combat_id(seed: int):
 def _snapshot_hash(state) -> str:
     payload = _canonical_json(encode(state))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_capture_weapon_recovery_uses_owned_secondary_weapon(database):
+    """An owned off-hand melee weapon can recover a bow-first setup legally."""
+    from asterion.application.active_arts import ActiveArtService
+    from asterion.application.equipment import equipment_instance_payload
+    from asterion.domain.arts import DEVASTADOR_ART_IDS
+    from asterion.domain.road import materialize_equipment
+    from asterion.infrastructure.db.models import EquipmentItem
+    from tests.test_active_arts import _seed_character
+
+    actor = 88412001
+    character_id, sessions = await _seed_character(
+        database,
+        actor,
+        level=12,
+        selected_path="devastador",
+        weapon_type_id="weapon.type.tdo.arma_pesada_caminhante",
+    )
+    payload = materialize_equipment(
+        f"p12-lab-weapon-recovery:{actor}",
+        "Comum",
+        1,
+        weapon_type_id="weapon.type.tdo.guarda_caminhante",
+    )
+    item_id, payload = equipment_instance_payload(payload)
+    async with sessions.begin() as session:
+        session.add(
+            EquipmentItem(
+                id=item_id,
+                character_id=character_id,
+                source_key=f"p12-lab-weapon-recovery:{actor}:equipment",
+                item_name=payload["item_name"],
+                rarity=payload["rarity"],
+                slot=payload["slot"],
+                item_level=payload["item_level"],
+                bound=False,
+                payload=payload,
+            )
+        )
+
+    repair = await _equip_owned_weapon_for_requirement(
+        sessions, "ocaso", actor, {"weapon.compat.melee"}
+    )
+    assert repair is not None
+    assert repair["changed"]
+    assert repair["item_slot"] == "Secundária"
+    assert repair["item_name"] == "Guarda do Caminhante"
+
+    arts = ActiveArtService(sessions, "ocaso")
+    view = await arts.view(actor)
+    assert view is not None
+    assert DEVASTADOR_ART_IDS["ariete"] not in view.weapon_incompatible_art_ids
+    equipped = await arts.equip_art(
+        actor,
+        1,
+        DEVASTADOR_ART_IDS["ariete"],
+        expected_configuration_version=view.combat_configuration_version,
+    )
+    assert equipped is not None and equipped.changed
 
 
 def _canonical_json(value) -> str:
@@ -718,6 +891,7 @@ async def test_p12_checkpoint_capture(database, monkeypatch):
     from asterion.infrastructure.db.models import ConsumableStack
     actor_box: dict[str, int] = {}
     capture: dict = {}
+    sessions = database[1]
     seed_box = {"seed": 0}
     original_start = journey.VDEMissionService.start_solo_combat
     original_resume = journey.VDEMissionService.resume
@@ -737,14 +911,9 @@ async def test_p12_checkpoint_capture(database, monkeypatch):
 
     async def equip_best_with_melee_fallback(sessions, actor):
         changed = await original_equipper(sessions, actor)
-        # The A1 organic journey already uses this public fallback when the
-        # best owned weapon is incompatible with Aríete.
-        from asterion.application.equipment import EquipmentService
         from asterion.application.weapon_metadata import (
             equipped_weapon_compatibility_tags,
-            resolve_equipment_weapon,
         )
-        from asterion.infrastructure.db.models import EquipmentItem
 
         async with sessions() as session:
             character = await session.scalar(
@@ -757,23 +926,24 @@ async def test_p12_checkpoint_capture(database, monkeypatch):
             tags = await equipped_weapon_compatibility_tags(session, character.id)
             if "weapon.compat.melee" in tags:
                 return changed
-            candidates = []
-            for item in await session.scalars(
-                select(EquipmentItem).where(EquipmentItem.character_id == character.id)
-            ):
-                if item.slot != "Principal" or item.item_level > character.level:
-                    continue
-                weapon = await resolve_equipment_weapon(session, item)
-                if weapon is not None and "weapon.compat.melee" in weapon.compatibility_tags:
-                    candidates.append((item.item_level, str(item.id), item.id, item.item_name))
-            assert candidates, "Organic P12 preparation needs a legitimately owned melee weapon"
-            _level, _key, item_id, item_name = max(candidates)
-            version = character.combat_configuration_version
-        result = await EquipmentService(sessions, "ocaso").equip_item(
-            actor, item_id, expected_configuration_version=version
+        repair = await _equip_owned_weapon_for_requirement(
+            sessions, "ocaso", actor, {"weapon.compat.melee"}
         )
-        assert result is not None and result.changed
-        return (*changed, ("Principal", item_name, "melee compatible"))
+        assert repair is not None, (
+            "Organic P12 preparation owns no level-eligible melee weapon; "
+            "capture cannot equip a legal Sentinela loadout"
+        )
+        capture.setdefault("configuration_setup_repairs", []).append(
+            {
+                "service": "EquipmentService.equip_item",
+                "reason": (
+                    "best legal gear lacked the melee compatibility needed by "
+                    "the selected Arts"
+                ),
+                **repair,
+            }
+        )
+        return (*changed, (repair["item_slot"], repair["item_name"], "melee compatible"))
 
     async def resume_with_public_talents(self, actor, quest_id):
         view = await original_resume(self, actor, quest_id)
@@ -808,8 +978,35 @@ async def test_p12_checkpoint_capture(database, monkeypatch):
                 expected_configuration_version=expected_configuration_version,
             )
         except ActiveArtMutationRejected as exc:
-            if exc.code != ActiveArtMutationCode.INVALID_CURRENT_CONFIGURATION:
+            if exc.code not in {
+                ActiveArtMutationCode.INVALID_CURRENT_CONFIGURATION,
+                ActiveArtMutationCode.WEAPON_REQUIREMENT,
+            }:
                 raise
+            if exc.code == ActiveArtMutationCode.WEAPON_REQUIREMENT:
+                from asterion.domain.arts import active_art_definition
+
+                definition = active_art_definition(art_id)
+                assert definition is not None
+                repair = await _equip_owned_weapon_for_requirement(
+                    self.sessions,
+                    self.server_id,
+                    actor,
+                    definition.weapon_requirement,
+                )
+                if repair is None:
+                    raise RuntimeError(
+                        f"P12 capture cannot equip {art_id}: no owned, level-eligible "
+                        f"weapon satisfies {sorted(definition.weapon_requirement)}"
+                    ) from exc
+                capture.setdefault("configuration_setup_repairs", []).append(
+                    {
+                        "service": "EquipmentService.equip_item",
+                        "art_id": art_id,
+                        "reason": "public Art service rejected the currently equipped weapon",
+                        **repair,
+                    }
+                )
             # A legitimate equipment upgrade can invalidate an old loadout.
             # Clear those slots through the public service before applying S6's
             # already-published legal loadout, matching the UI recovery path.
@@ -1004,11 +1201,26 @@ async def test_p12_checkpoint_capture(database, monkeypatch):
     assert loaded_document["sha256"] == document["sha256"]
     assert encode(reconstructed) == encode(initial)
     assert reconstructed == initial
+    async with sessions() as session:
+        captured_schema = await session.scalar(text("SELECT current_schema()"))
+    assert isinstance(captured_schema, str) and captured_schema.startswith("test_creation_")
+    public_manifest = {
+        "format": "asterion-p12-public-capture",
+        "schema": captured_schema,
+        "synthetic_actor": actor_box["actor"],
+        "checkpoint_sha256": document["sha256"],
+        "captured_git_head": document["captured_git_head"],
+    }
+    manifest_path = checkpoint_path.with_name("public-capture-state.json")
+    manifest_tmp = manifest_path.with_suffix(".tmp")
+    manifest_tmp.write_text(_canonical_json(public_manifest), encoding="utf-8")
+    os.replace(manifest_tmp, manifest_path)
     print(
         "P12_CHECKPOINT_CAPTURED="
         + json.dumps(
             {
                 "path": str(checkpoint_path),
+                "public_state_manifest": str(manifest_path),
                 "sha256": document["sha256"],
                 "capture_seconds": round(journey_seconds, 2),
                 "level": capture["provenance"]["level"],

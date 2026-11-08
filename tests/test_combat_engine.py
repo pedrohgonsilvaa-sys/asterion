@@ -434,6 +434,20 @@ def test_four_stat_legacy_snapshot_decodes_without_changing_source_payload():
     )
 
 
+def test_combat_codec_serializes_set_fields_in_stable_order():
+    state = battle()
+    state.phase_triggered_ids = {"colosso.phase_iii", "colosso.phase_ii"}
+
+    payload = encode(state)
+
+    assert payload["phase_triggered_ids"] == [
+        "colosso.phase_ii",
+        "colosso.phase_iii",
+    ]
+    restored = decode(payload, state.id, state.ruleset, state.version)
+    assert encode(restored) == payload
+
+
 def test_extended_stats_and_evasion_state_roundtrip_losslessly_as_decimal_text():
     state = battle()
     player = state.fighters["player"]

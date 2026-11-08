@@ -15,6 +15,7 @@ from asterion.application.combat_configuration_guard import (
 from asterion.application.equipment_configuration import (
     build_equipment_configuration,
     hp_after_equipment_change,
+    load_equipment_configuration,
     reconcile_character_hp,
     resolve_character_combat_stats,
 )
@@ -179,16 +180,15 @@ class EquipmentService:
                 )
 
             try:
-                current_configuration = build_equipment_configuration(
-                    character,
-                    [(slot, equipped_items[item_id]) for slot, item_id in current.items()],
-                    version=character.combat_configuration_version,
+                current_configuration = await load_equipment_configuration(
+                    session, character
                 )
                 reconcile_character_hp(character, current_configuration)
                 configuration = build_equipment_configuration(
                     character,
                     [(slot, final_items[item_id]) for slot, item_id in final.items()],
                     version=character.combat_configuration_version + 1,
+                    talent_choices=current_configuration.talent_choices,
                 )
                 new_stats = resolve_character_combat_stats(character, configuration)
                 new_hp = hp_after_equipment_change(character, new_stats.hp)
@@ -249,16 +249,15 @@ class EquipmentService:
             final = dict(current)
             del final[target]
             try:
-                current_configuration = build_equipment_configuration(
-                    character,
-                    [(slot, equipped_items[item_id]) for slot, item_id in current.items()],
-                    version=character.combat_configuration_version,
+                current_configuration = await load_equipment_configuration(
+                    session, character
                 )
                 reconcile_character_hp(character, current_configuration)
                 configuration = build_equipment_configuration(
                     character,
                     [(slot, equipped_items[item_id]) for slot, item_id in final.items()],
                     version=character.combat_configuration_version + 1,
+                    talent_choices=current_configuration.talent_choices,
                 )
                 new_stats = resolve_character_combat_stats(character, configuration)
                 new_hp = hp_after_equipment_change(character, new_stats.hp)

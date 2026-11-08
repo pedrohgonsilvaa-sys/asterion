@@ -2332,3 +2332,399 @@ class BlockedDelivery(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Guild(Base):
+    """Server-bound Guild (GDD v1.6.0 §30). Never hard-deleted."""
+
+    __tablename__ = "guilds"
+    __table_args__ = (
+        CheckConstraint("name ~ '^[A-Za-z]{3,16}$'", name="ck_guild_name"),
+        CheckConstraint("tag ~ '^[A-Z]{3}$'", name="ck_guild_tag"),
+        CheckConstraint("status IN ('active','dissolved')", name="ck_guild_status"),
+        CheckConstraint("recruitment IN ('open','closed')", name="ck_guild_recruitment"),
+        CheckConstraint("lodging_level BETWEEN 0 AND 5", name="ck_guild_lodging_level"),
+        CheckConstraint("revision >= 0", name="ck_guild_revision"),
+        CheckConstraint("treasury_crowns >= 0", name="ck_guild_treasury"),
+        CheckConstraint(
+            "(dissolution_requested_at IS NULL) = (dissolution_due_at IS NULL)",
+            name="ck_guild_dissolution_pair",
+        ),
+        CheckConstraint(
+            "(status = 'dissolved') = (dissolved_at IS NOT NULL)", name="ck_guild_dissolved_at"
+        ),
+        Index(
+            "uq_guild_server_name",
+            "server_id",
+            text("lower(name)"),
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+        Index(
+            "uq_guild_server_tag",
+            "server_id",
+            "tag",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+        Index("ix_guild_recruiting", "server_id", "status", "recruitment", "id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(16), nullable=False)
+    tag: Mapped[str] = mapped_column(String(3), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    recruitment: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="closed", server_default="closed"
+    )
+    lodging_level: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    treasury_crowns: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    last_renamed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dissolution_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dissolution_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dissolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GuildMember(Base):
+    """One Guild per character; the character row already fixes the server."""
+
+    __tablename__ = "guild_members"
+    __table_args__ = (
+        CheckConstraint("role IN ('leader','officer','member')", name="ck_guild_member_role"),
+        Index(
+            "uq_guild_single_leader",
+            "guild_id",
+            unique=True,
+            postgresql_where=text("role = 'leader'"),
+        ),
+        Index("ix_guild_members_guild", "guild_id", "joined_at", "character_id"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    role: Mapped[str] = mapped_column(String(8), nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    role_since: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Last authenticated activity, used by the 168h Leader succession (§30.3).
+    last_active_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class GuildInvite(Base):
+    """Direct invite; valid until answered, cancelled or made unusable (§55.5)."""
+
+    __tablename__ = "guild_invites"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','accepted','declined','cancelled','invalidated')",
+            name="ck_guild_invite_status",
+        ),
+        CheckConstraint("revision >= 0", name="ck_guild_invite_revision"),
+        Index(
+            "uq_pending_guild_invite",
+            "guild_id",
+            "invitee_character_id",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_guild_invites_inbox", "invitee_character_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    inviter_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    invitee_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default="pending"
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GuildApplication(Base):
+    """Guild application (Inscrição, §30.1). Resolved rows stay as audit history."""
+
+    __tablename__ = "guild_applications"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','approved','rejected','cancelled')",
+            name="ck_guild_application_status",
+        ),
+        CheckConstraint(
+            "(status = 'cancelled') = (closed_by IS NOT NULL)",
+            name="ck_guild_application_cancel_origin",
+        ),
+        CheckConstraint(
+            "closed_by IS NULL OR closed_by IN ('player','system')",
+            name="ck_guild_application_closed_by",
+        ),
+        CheckConstraint("revision >= 0", name="ck_guild_application_revision"),
+        Index(
+            "uq_pending_guild_application",
+            "guild_id",
+            "character_id",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_guild_applications_character", "character_id", "created_at"),
+        Index("ix_guild_applications_guild", "guild_id", "status", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default="pending"
+    )
+    closed_by: Mapped[str | None] = mapped_column(String(8))
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+
+
+class GuildSwitchCooldown(Base):
+    """Last Guild exit per account + server, so recreating a character never resets it."""
+
+    __tablename__ = "guild_switch_cooldowns"
+
+    telegram_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id"), primary_key=True, autoincrement=False
+    )
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    last_exit_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GuildAuditEntry(Base):
+    """Append-only log of relevant Guild administration (§30)."""
+
+    __tablename__ = "guild_audit_log"
+    __table_args__ = (
+        CheckConstraint("action <> ''", name="ck_guild_audit_action"),
+        CheckConstraint("jsonb_typeof(details) = 'object'", name="ck_guild_audit_details"),
+        Index("ix_guild_audit_guild", "guild_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    target_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    details: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GuildProject(Base):
+    """One level of one Obra: Financiamento -> Construção -> concluída (§30.2)."""
+
+    __tablename__ = "guild_projects"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('lodging','forge','veil_altar','treasury','veil_archive',"
+            "'hunters_post','war_hall')",
+            name="ck_guild_project_kind",
+        ),
+        CheckConstraint("level BETWEEN 1 AND 5", name="ck_guild_project_level"),
+        CheckConstraint(
+            "status IN ('funding','building','completed','cancelled')",
+            name="ck_guild_project_status",
+        ),
+        CheckConstraint("cost > 0 AND funded BETWEEN 0 AND cost", name="ck_guild_project_funds"),
+        CheckConstraint(
+            "status NOT IN ('building','completed') OR funded = cost",
+            name="ck_guild_project_funded_before_build",
+        ),
+        CheckConstraint(
+            "(status = 'building') <= (completes_at IS NOT NULL)",
+            name="ck_guild_project_build_end",
+        ),
+        CheckConstraint("revision >= 0", name="ck_guild_project_revision"),
+        Index(
+            "uq_guild_project_level",
+            "guild_id",
+            "kind",
+            "level",
+            unique=True,
+            postgresql_where=text("status <> 'cancelled'"),
+        ),
+        Index(
+            "uq_guild_project_active_kind",
+            "guild_id",
+            "kind",
+            unique=True,
+            postgresql_where=text("status IN ('funding','building')"),
+        ),
+        Index("ix_guild_projects_due", "status", "completes_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    level: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    cost: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    funded: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    funded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GuildProjectContribution(Base):
+    """Final, non-refundable contribution to an Obra, from a wallet or the Treasury."""
+
+    __tablename__ = "guild_project_contributions"
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_guild_contribution_amount"),
+        CheckConstraint("source IN ('wallet','treasury')", name="ck_guild_contribution_source"),
+        Index("ix_guild_contributions_project", "project_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("guild_projects.id"), nullable=False)
+    character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    source: Mapped[str] = mapped_column(String(8), nullable=False)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GuildTreasuryEntry(Base):
+    """Treasury ledger. `amount` is signed and `balance_after` never goes negative."""
+
+    __tablename__ = "guild_treasury_ledger"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('deposit','project_funding','rename','forfeit')",
+            name="ck_guild_treasury_kind",
+        ),
+        CheckConstraint("amount <> 0", name="ck_guild_treasury_amount"),
+        CheckConstraint("balance_after >= 0", name="ck_guild_treasury_balance"),
+        Index("ix_guild_treasury_guild", "guild_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    balance_after: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    project_id: Mapped[UUID | None] = mapped_column(ForeignKey("guild_projects.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GuildNameHistory(Base):
+    """Rename history; the old Name/TAG stays reserved until `reserved_until`."""
+
+    __tablename__ = "guild_name_history"
+    __table_args__ = (
+        Index("ix_guild_name_history_name", "server_id", text("lower(old_name)")),
+        Index("ix_guild_name_history_tag", "server_id", "old_tag"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    old_name: Mapped[str] = mapped_column(String(16), nullable=False)
+    old_tag: Mapped[str] = mapped_column(String(3), nullable=False)
+    new_name: Mapped[str] = mapped_column(String(16), nullable=False)
+    new_tag: Mapped[str] = mapped_column(String(3), nullable=False)
+    actor_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    renamed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reserved_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AccountLink(Base):
+    """Admin-declared association between two Telegram accounts (GDD §36).
+
+    Association alone is never proof of guilt: it only makes co-occurrence of
+    the two accounts in the same activity produce a flag for human review.
+    """
+
+    __tablename__ = "account_links"
+    __table_args__ = (CheckConstraint("account_a < account_b", name="ck_account_link_order"),)
+
+    account_a: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), primary_key=True
+    )
+    account_b: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), primary_key=True
+    )
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class AccountRiskFlag(Base):
+    """One review item: two linked accounts were seen in the same activity (GDD §36)."""
+
+    __tablename__ = "account_risk_flags"
+    __table_args__ = (
+        CheckConstraint("account_a < account_b", name="ck_account_risk_flag_order"),
+        CheckConstraint(
+            "status IN ('open','reviewed','dismissed')", name="ck_account_risk_flag_status"
+        ),
+        UniqueConstraint(
+            "activity_kind",
+            "activity_reference",
+            "account_a",
+            "account_b",
+            name="uq_account_risk_flag_activity_pair",
+        ),
+        Index("ix_account_risk_flags_status_created", "status", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    account_a: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), nullable=False
+    )
+    account_b: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), nullable=False
+    )
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    activity_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    activity_reference: Mapped[str] = mapped_column(String(96), nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="open")
+    review_note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

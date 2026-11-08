@@ -40,8 +40,11 @@ async def database():
         yield engine, async_sessionmaker(engine, expire_on_commit=False)
     finally:
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        if os.getenv("ASTERION_TEST_PRESERVE_SCHEMA") == "1":
+            print(f"TEST_SCHEMA_PRESERVED={schema}", flush=True)
+        else:
+            async with admin.begin() as connection:
+                await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
         await admin.dispose()
 
 

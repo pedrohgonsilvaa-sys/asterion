@@ -28,6 +28,7 @@ from asterion.bot.combat_ui import (
     CombatCallback,
     CombatConsumableCallback,
     CombatConsumableFlowCallback,
+    VarzeasSoloCombatCallback,
 )
 from asterion.bot.creation_handlers import present
 from asterion.bot.groups_ui import render_group
@@ -192,6 +193,23 @@ def varzeas_missions_router(service: VarzeasMissionService, images: dict[str, st
         except (KeyError, TypeError, ValueError):
             raise SkipHandler() from None
         view = await service.campaign_action(
+            query.from_user.id,
+            callback.activity_id,
+            callback.combat_version,
+            callback.action_index,
+            callback.target,
+        )
+        if view is None:
+            raise SkipHandler()
+        await show(query, view)
+
+    @router.callback_query(F.data.startswith("vsc:"))
+    async def solo_campaign_fight(query: CallbackQuery) -> None:
+        try:
+            callback = VarzeasSoloCombatCallback.unpack(query.data or "")
+        except (KeyError, TypeError, ValueError):
+            raise SkipHandler() from None
+        view = await service.solo_campaign_action(
             query.from_user.id,
             callback.activity_id,
             callback.combat_version,

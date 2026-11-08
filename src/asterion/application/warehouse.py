@@ -381,7 +381,12 @@ class WarehouseService:
 
     async def cancel(self, actor: int, operation_id: UUID) -> str:
         async with self.sessions.begin() as session:
-            character = await self._lock_character(session, actor)
+            # Cancelling moves no item, so an activity in progress must not block it.
+            character = await session.scalar(
+                select(Character)
+                .where(Character.telegram_id == actor, Character.server_id == self.server_id)
+                .with_for_update()
+            )
             if character is None:
                 return "NOT_FOUND"
             operation = await self._operation(session, character.id, operation_id, lock=True)

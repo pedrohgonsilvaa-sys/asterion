@@ -30,7 +30,9 @@ def _json_value(value):
         return str(value)
     if isinstance(value, dict):
         return {key: _json_value(item) for key, item in value.items()}
-    if isinstance(value, (tuple, list, set, frozenset)):
+    if isinstance(value, (set, frozenset)):
+        return [_json_value(item) for item in sorted(value)]
+    if isinstance(value, (tuple, list)):
         return [_json_value(item) for item in value]
     return value
 

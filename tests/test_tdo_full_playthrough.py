@@ -432,7 +432,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     assert hunt is not None and hunt.kind == "hunt_victory", driver.diagnostic()
     await driver.snapshot("primeira vitória de Caçada Manual")
     await road.travel(actor, REFUGE)
-    await WorldService(sessions, "ocaso").rest(actor)
+    await road.rest(actor)
     await road.travel(actor, ROAD)
 
     # The timed Ronda is exercised with a test-only clock; game state still
@@ -1064,7 +1064,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
 
     async def rest_and_return(destination):
         await travel_to_refuge()
-        rested = await WorldService(sessions, "ocaso").rest(actor)
+        rested = await road.rest(actor)
         assert rested is not None and rested.hp == rested.max_hp
         if destination != REFUGE:
             await travel_from_refuge_to(destination)
@@ -1104,11 +1104,11 @@ async def run_tdo_full_playthrough(database, monkeypatch):
         await road.travel(actor, ROAD)
         await manual_hunt(f"Nv.3 · Caçada {attempt + 1}")
         await road.travel(actor, REFUGE)
-        rested = await WorldService(sessions, "ocaso").rest(actor)
+        rested = await road.rest(actor)
         assert rested is not None and rested.hp == rested.max_hp
     active_p2 = await p2.accept(actor, offer.state_version)
     assert active_p2 is not None and active_p2.status == "active", active_p2
-    rested_before_p2 = await WorldService(sessions, "ocaso").rest(actor)
+    rested_before_p2 = await road.rest(actor)
     assert rested_before_p2 is not None and rested_before_p2.hp == rested_before_p2.max_hp
     active_p2 = await p2.travel_to_charneca(actor, active_p2.state_version)
     assert active_p2.step == 2 and active_p2.location == "Charneca da Fuligem"
@@ -1259,7 +1259,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
         )
     await travel_to_refuge()
     await driver.snapshot("Nv.4+ · Cripta concluída ou derrota legítima registrada")
-    crypt_recovery = await WorldService(sessions, "ocaso").rest(actor)
+    crypt_recovery = await road.rest(actor)
     assert crypt_recovery is not None and crypt_recovery.hp == crypt_recovery.max_hp
 
     # Continue with level-appropriate public hunts until P3's level gate is met.
@@ -1474,7 +1474,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
                 await road.travel_route(actor, CHARNECA)
             if location in {BOSQUE, CHARNECA}:
                 await road.travel_route(actor, REFUGE)
-            await WorldService(sessions, "ocaso").rest(actor)
+            await road.rest(actor)
     nv7_mark = await driver.snapshot("progressão até Nv.7 após conteúdo atual")
     print(
         "TDO_LEVEL_7_GATE="
@@ -2196,7 +2196,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     await craft_torso_if_available("S6 · preparação legítima de equipamento")
     s6_gear = await equip_best_available_combat_gear()
     s6_runes = await install_best_owned_runes(sessions, actor, server_id="ocaso")
-    rested_before_s6 = await WorldService(sessions, "ocaso").rest(actor)
+    rested_before_s6 = await road.rest(actor)
     assert rested_before_s6 is not None and rested_before_s6.hp == rested_before_s6.max_hp
     await refill_p5_healing_stock(target_quantity=5)
     await driver.snapshot(
@@ -2291,7 +2291,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
         await driver.snapshot(f"S6 · derrota legítima · tentativa {attempt + 1}")
         if attempt < 7:
             await travel_to_refuge_from_ruins()
-            rested = await WorldService(sessions, "ocaso").rest(actor)
+            rested = await road.rest(actor)
             assert rested is not None and rested.hp == rested.max_hp
             await refill_p5_healing_stock(target_quantity=5)
             await travel_to_ruins()
@@ -2315,7 +2315,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
 
     # Use the same legitimate refuge crafting flow before the campaign boss.
     # The consumable budget and real ingredients remain authoritative.
-    rested_before_p6 = await WorldService(sessions, "ocaso").rest(actor)
+    rested_before_p6 = await road.rest(actor)
     assert rested_before_p6 is not None and rested_before_p6.hp == rested_before_p6.max_hp
     await refill_p5_healing_stock(target_quantity=5)
     await driver.snapshot("P6 · consumíveis fabricados no Refúgio quando disponíveis")
@@ -2413,7 +2413,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     )
     await driver.snapshot(outcome_label)
     await travel_to_refuge()
-    rested_before_p6 = await WorldService(sessions, "ocaso").rest(actor)
+    rested_before_p6 = await road.rest(actor)
     assert rested_before_p6 is not None and rested_before_p6.hp == rested_before_p6.max_hp
     await refill_p5_healing_stock()
     await driver.snapshot("P6 · consumíveis restantes preparados após a Ronda")
@@ -2699,7 +2699,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
             # permit it; consumed items are never restored by the harness.
             if p6_view.location != "Câmara do Poente":
                 await travel_to_refuge()
-                rested = await WorldService(sessions, "ocaso").rest(actor)
+                rested = await road.rest(actor)
                 assert rested is not None and rested.hp == rested.max_hp
                 await refill_p5_healing_stock()
                 # A depleted stack may only be refilled from earned materials.
@@ -2715,7 +2715,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
                         capture=False,
                     )
                     await road.travel(actor, REFUGE)
-                    rested = await WorldService(sessions, "ocaso").rest(actor)
+                    rested = await road.rest(actor)
                     assert rested is not None and rested.hp == rested.max_hp
                     await refill_p5_healing_stock()
             if p6_view.location != "Câmara do Poente":

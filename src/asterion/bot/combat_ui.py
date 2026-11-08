@@ -75,6 +75,62 @@ class CampaignCombatCallback(CallbackData, prefix="cc"):
         return _from_base36(self.action)
 
 
+class VarzeasSoloCombatCallback(CallbackData, prefix="vsc"):
+    activity: str
+    version: str
+    action: str
+    target: str
+
+    @classmethod
+    def for_intent(cls, activity_id: UUID, version: int, action_index: int, target: str):
+        return cls(
+            activity=activity_id.hex,
+            version=_base36(version),
+            action=_base36(action_index),
+            target=target,
+        )
+
+    @property
+    def activity_id(self) -> UUID:
+        return UUID(hex=self.activity)
+
+    @property
+    def combat_version(self) -> int:
+        return _from_base36(self.version)
+
+    @property
+    def action_index(self) -> int:
+        return _from_base36(self.action)
+
+
+class AltosSoloCombatCallback(CallbackData, prefix="asc"):
+    activity: str
+    version: str
+    action: str
+    target: str
+
+    @classmethod
+    def for_intent(cls, activity_id: UUID, version: int, action_index: int, target: str):
+        return cls(
+            activity=activity_id.hex,
+            version=_base36(version),
+            action=_base36(action_index),
+            target=target,
+        )
+
+    @property
+    def activity_id(self) -> UUID:
+        return UUID(hex=self.activity)
+
+    @property
+    def combat_version(self) -> int:
+        return _from_base36(self.version)
+
+    @property
+    def action_index(self) -> int:
+        return _from_base36(self.action)
+
+
 class P2CombatCallback(CallbackData, prefix="p2fight"):
     activity: str
     version: int
@@ -267,6 +323,12 @@ _CONSUMABLE_CALLBACK_KEYS = {
     "consumable.protection.vde.ii": "B",
     "consumable.dispeller.iii": "D",
     "consumable.warding.iv": "R",
+    # Regional healing/purification items are explicitly allowlisted too;
+    # compact tokens keep Telegram callback payloads within its size limit.
+    "consumable.heal.nareth.iii": "N",
+    "consumable.purification.nareth.iii": "n",
+    "consumable.heal.varzeas.iv": "W",
+    "consumable.purification.varzeas.iv": "w",
 }
 _CONSUMABLE_CALLBACK_IDS = {key: item_id for item_id, key in _CONSUMABLE_CALLBACK_KEYS.items()}
 
@@ -1469,7 +1531,28 @@ def render_combat(view: CombatView) -> Screen:
     is_dungeon = view.context == "dungeon"
     is_pvpve = view.context == "pvpve"
     is_party_combat = is_trial or is_dungeon or state.party_mode
-    is_campaign_party = state.party_mode and not is_trial and not is_dungeon
+    view_campaign_shared = getattr(view, "campaign_shared", None)
+    if is_dungeon:
+        campaign_shared = False
+    elif view_campaign_shared is None:
+        campaign_shared = state.party_mode
+    else:
+        campaign_shared = view_campaign_shared
+    is_campaign_party = campaign_shared and not is_trial and not is_dungeon
+    is_varzeas_solo_campaign = (
+        view.context == "varzeas"
+        and campaign_shared is False
+        and state.party_mode
+        and not is_trial
+        and not is_dungeon
+    )
+    is_altos_solo_campaign = (
+        view.context == "altos"
+        and campaign_shared is False
+        and state.party_mode
+        and not is_trial
+        and not is_dungeon
+    )
     actor_bound_party = is_campaign_party or view.context == "group_hunt"
     if not is_trial and view.consumable_screen is not None:
         return _render_consumable_selection(view)
@@ -1721,7 +1804,14 @@ def render_combat(view: CombatView) -> Screen:
             callback = DungeonCombatCallback.for_intent(
                 view.run_id, view.activity_id, state.version, action_index, target_code
             ).pack()
-        elif is_campaign_party:
+        elif is_campaign_party or is_varzeas_solo_campaign or is_altos_solo_campaign:
+            intent_callback = (
+                CampaignCombatCallback
+                if is_campaign_party
+                else AltosSoloCombatCallback
+                if is_altos_solo_campaign
+                else VarzeasSoloCombatCallback
+            )
             action_ids = class_trial_action_ids(state, actor_key=action_actor_key)
             action_index = action_ids.index(action)
             definition = player_actions.get(action)
@@ -1746,7 +1836,7 @@ def render_combat(view: CombatView) -> Screen:
                         [
                             InlineKeyboardButton(
                                 text=f"{label} · {target_name[:16]}",
-                                callback_data=CampaignCombatCallback.for_intent(
+                                callback_data=intent_callback.for_intent(
                                     view.activity_id,
                                     state.version,
                                     action_index,
@@ -1757,7 +1847,7 @@ def render_combat(view: CombatView) -> Screen:
                     )
                 continue
             target_code = "s" if len(targets) > 1 else "d0" if targets else "x"
-            callback = CampaignCombatCallback.for_intent(
+            callback = intent_callback.for_intent(
                 view.activity_id, state.version, action_index, target_code
             ).pack()
         else:

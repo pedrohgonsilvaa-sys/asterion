@@ -236,6 +236,7 @@ class VarzeasMissionView:
     ready_consumable_option: object | None = None
     proposal_id: UUID | None = None
     proposal_status: str | None = None
+    campaign_shared: bool = False
 
 
 class VarzeasMissionService:
@@ -2094,6 +2095,19 @@ class VarzeasMissionService:
         return next((item for item in ("a", "b", "c") if item not in used), None)
 
     @staticmethod
+    def _matrix_reservoir_credit_source_key(
+        character_id: UUID, window_id: str
+    ) -> str:
+        """Return a compact, stable per-character identity for one transfer window."""
+        if not window_id:
+            raise ValueError("matrix reservoir window identity is required")
+        identity = (
+            f"asterion:p24:reservoir-window:v1:{character_id.hex}:{window_id}"
+        )
+        digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+        return f"p24.rw.v1:{digest}"
+
+    @staticmethod
     def _reservoir_already_used(members, window_id: str, reservoir_id: str) -> bool:
         for _character, quest in members:
             progress = quest.progress or {}
@@ -2146,7 +2160,7 @@ class VarzeasMissionService:
             character_id,
             P24_ID,
             "p24.reservoir_window_recorded",
-            f"p24.reservoir_window:{character_id}:{window_id}",
+            self._matrix_reservoir_credit_source_key(character_id, window_id),
             {
                 "reservoir": reservoir_id,
                 "window_id": window_id,
@@ -2677,6 +2691,7 @@ class VarzeasMissionService:
                 encounter_id=shared.id,
                 combat_actor_key=member.actor_key,
                 group_size=shared.roster_size,
+                campaign_shared=True,
                 consumable_options=consumables[0],
                 consumable_quantities=consumables[1],
                 consumable_budget_limit=consumables[2],
@@ -3037,6 +3052,75 @@ class VarzeasMissionService:
             action, target_id = intent
         return await self.action_combat(actor, activity_id, version, action, target_id=target_id)
 
+    async def solo_campaign_action(
+        self,
+        actor: int,
+        activity_id: UUID,
+        version: int,
+        action_index: int,
+        target_code: str,
+    ):
+        """Resolve a compact public action for a Solo campaign-boss combat.
+
+        This callback is deliberately distinct from ``cc:``. It proves that
+        the Telegram actor owns an ordinary mission activity and that no
+        shared encounter/member backs it. The mutation still uses
+        ``action_combat`` and its transactional locks and version checks.
+        """
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                return None
+            activity = await session.scalar(
+                select(GameActivity).where(
+                    GameActivity.id == activity_id,
+                    GameActivity.character_id == character.id,
+                    GameActivity.content_id.in_(tuple(MISSION_CONTENT_IDS.values())),
+                )
+            )
+            if activity is None:
+                return None
+            shared, member, _shared_combat = await campaign_combat_for_activity(
+                session, activity_id, character.id
+            )
+            if shared is not None or member is not None:
+                return None
+            quest_id = next(
+                (
+                    candidate
+                    for candidate, content_id in MISSION_CONTENT_IDS.items()
+                    if content_id == activity.content_id
+                ),
+                None,
+            )
+            if quest_id not in {P24_ID, S24_ID}:
+                return None
+            config = self._combat_config(quest_id)
+            quest = await self._quest(session, character.id, quest_id, lock=False)
+            if (
+                config is None
+                or activity.status != "active"
+                or quest is None
+                or quest.status != "active"
+                or quest.step != config[0]
+                or (quest.progress or {}).get("activity_id") != str(activity_id)
+            ):
+                return None
+            combat, _encounter, _record = await current_combat(session, activity)
+            if combat is None:
+                return None
+            if combat.version != version or activity.state_version != version:
+                return await self._view_for_activity(session, character, activity_id)
+            intent = campaign_action_intent(
+                combat, "player", action_index, target_code
+            )
+            if intent is None:
+                return await self._view_for_activity(session, character, activity_id)
+            action, target_id = intent
+        return await self.action_combat(
+            actor, activity_id, version, action, target_id=target_id
+        )
+
     async def consumable_selection(self, actor: int, activity_id: UUID, version: int, **kwargs):
         current = await self._combat_view_for_actor(actor, activity_id)
         if current is None or current.combat is None:
@@ -3192,6 +3276,7 @@ class VarzeasMissionService:
                     combat=None,
                     combat_actor_key=member.actor_key,
                     group_size=shared.roster_size,
+                    campaign_shared=True,
                 )
             return replace(
                 view,
@@ -3201,6 +3286,7 @@ class VarzeasMissionService:
                 combat=None,
                 combat_actor_key=member.actor_key,
                 group_size=shared.roster_size,
+                campaign_shared=True,
             )
         config = self._combat_config(quest_id)
         consumables = await consumable_state(
@@ -3218,6 +3304,7 @@ class VarzeasMissionService:
             encounter_id=shared.id,
             combat_actor_key=member.actor_key,
             group_size=shared.roster_size,
+            campaign_shared=True,
             consumable_options=consumables[0],
             consumable_quantities=consumables[1],
             consumable_budget_limit=consumables[2],

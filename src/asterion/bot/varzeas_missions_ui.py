@@ -89,6 +89,7 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
                 consumable_budget_limit=view.consumable_budget_limit,
                 ready_consumable_option=view.ready_consumable_option,
                 combat_actor_key=view.combat_actor_key,
+                campaign_shared=view.campaign_shared,
             )
         )
         text = (

@@ -30,6 +30,7 @@ from asterion.domain.combat import (
     act,
     combat_consumable_options,
 )
+from asterion.domain.consumables import CONSUMABLE_CATALOG
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.prologue import PROFILE
 from asterion.domain.road import CREATURES, create_road_combat
@@ -611,6 +612,35 @@ def test_consumable_button_opens_numbered_list_even_for_one_option():
     assert item_callback.item_id == "consumable.heal"
     assert len(menu.keyboard.inline_keyboard[0][0].callback_data.encode()) <= 64
     assert view.combat.version == 0
+
+
+def test_combat_consumable_callbacks_cover_canonical_round_eligible_catalog():
+    activity_id = uuid4()
+    eligible = {
+        item_id
+        for item_id, item in CONSUMABLE_CATALOG.items()
+        if item.round_eligible
+    }
+    callbacks = {
+        item_id: CombatConsumableFlowCallback.for_step(
+            activity_id, 7, "i", item_id=item_id
+        )
+        for item_id in eligible
+    }
+
+    assert {item_id: callback.item_id for item_id, callback in callbacks.items()} == {
+        item_id: item_id for item_id in eligible
+    }
+    tokens = [callback.item for callback in callbacks.values()]
+    assert len(tokens) == len(set(tokens))
+    assert all(
+        len(callback.pack().encode("utf-8")) <= 64
+        for callback in callbacks.values()
+    )
+    with pytest.raises(KeyError):
+        CombatConsumableFlowCallback.for_step(
+            activity_id, 7, "i", item_id="consumable.unknown"
+        )
 
 
 def test_effect_selection_callbacks_carry_stable_identity_not_list_position():

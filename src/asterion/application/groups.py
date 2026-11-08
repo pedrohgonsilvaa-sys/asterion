@@ -12,6 +12,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.account_risk import record_linked_cooccurrence
 from asterion.infrastructure.db.models import (
     Character,
     GroupActivityParticipant,
@@ -834,6 +835,14 @@ class GroupService:
             proposal.started_at = now
             proposal.revision += 1
             await session.flush()
+            await record_linked_cooccurrence(
+                session,
+                server_id=self.server_id,
+                activity_kind="group_activity",
+                activity_reference=created_reference,
+                characters=characters,
+                now=now,
+            )
             view = await self._proposal_view(session, proposer.id, proposal)
             return ActivityStartResult(view, True, created_reference)
 

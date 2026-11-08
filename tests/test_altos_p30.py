@@ -1,7 +1,10 @@
-from decimal import Decimal
+from decimal import ROUND_FLOOR, Decimal
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from aiogram import Bot, Dispatcher
+from aiogram.methods import EditMessageText
 from sqlalchemy import select
 
 from asterion.application.altos_missions import (
@@ -20,14 +23,22 @@ from asterion.application.altos_missions import (
     P30_RECIPE_UNLOCK,
     P30_TITLE,
     AltosMissionService,
+    AltosMissionView,
 )
 from asterion.application.groups import GroupService
 from asterion.application.knowledge_catalog import ACHIEVEMENT_BY_ID, CODEX_FRAGMENTS
 from asterion.application.road import (
     ALTOS_ABRIGO_LABEL,
+    ALTOS_BASTILHA_LABEL,
     ALTOS_CORACAO_LABEL,
+    ALTOS_ESCARPA_LABEL,
+    ALTOS_PEDREIRAS_LABEL,
+    ALTOS_PONTES_LABEL,
     ALTOS_REGION_LABEL,
 )
+from asterion.bot.altos_missions_handlers import altos_missions_router
+from asterion.bot.altos_missions_ui import render_altos_mission
+from asterion.bot.combat_ui import CombatConsumableFlowCallback
 from asterion.domain.altos_colossus import (
     ESCORA_IDS,
     ESCORA_KEYS,
@@ -47,13 +58,17 @@ from asterion.domain.road import (
     CATEGORY,
     creature_for,
 )
+from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
     Achievement,
     CampaignSharedEncounter,
     Character,
     CodexEntry,
     CodexFragment,
+    CombatRecord,
+    ConsumableStack,
     EquipmentItem,
+    GameActivity,
     LocationDiscovery,
     Quest,
     RewardComponent,
@@ -65,6 +80,26 @@ from tests.test_altos_p28 import _seed_p28_character
 from tests.test_s4_s5_integration import _terminal
 
 D = Decimal
+P30_HEALING_POTION = "consumable.heal.varzeas.iv"
+
+
+def _callback_update(data: str, *, actor: int, update_id: int) -> dict:
+    return {
+        "update_id": update_id,
+        "callback_query": {
+            "id": str(update_id),
+            "from": {"id": actor, "is_bot": False, "first_name": "Player"},
+            "chat_instance": "altos-p30-consumable-test",
+            "data": data,
+            "message": {
+                "message_id": update_id,
+                "date": 1,
+                "from": {"id": 123456, "is_bot": True, "first_name": "Asterion"},
+                "chat": {"id": actor, "type": "private"},
+                "text": "Asterion",
+            },
+        },
+    }
 
 
 async def _seed_p30_character(database, actor: int, *, level: int = 50):
@@ -285,6 +320,205 @@ async def test_p30_level_gate_suspends_at_49_and_starts_at_50(database):
     assert active is not None
     assert (active.quest_id, active.status, active.step) == (P30_ID, "active", 2)
     assert active.progress["entered_coracao"] is True
+
+
+@pytest.mark.asyncio
+async def test_p30_solo_boss_with_party_mode_renders_solo_callbacks(database):
+    actor, _road, sessions = await _seed_p30_character(database, 783008)
+    mission = AltosMissionService(sessions, "ocaso")
+    view = await _reach_p30_combat(mission, actor)
+
+    combat_view = await mission.start_solo_combat(actor, view.state_version, P30_ID)
+    assert combat_view is not None and combat_view.combat is not None
+    assert combat_view.combat.party_mode is True
+    assert combat_view.campaign_shared is False
+    assert combat_view.group_size == 1
+
+    screen = render_altos_mission(combat_view)
+    buttons = [
+        button
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+    ]
+    callbacks = [button.callback_data for button in buttons]
+
+    assert any(callback.startswith("asc:") for callback in callbacks), callbacks
+    assert not any(callback.startswith("cc:") for callback in callbacks)
+
+
+@pytest.mark.asyncio
+async def test_p30_consumable_callback_executes_public_transaction_and_is_idempotent(
+    database,
+):
+    actor, _road, sessions = await _seed_p30_character(database, 783009)
+    async with sessions.begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        assert character is not None
+        character_id = character.id
+        session.add(
+            ConsumableStack(
+                character_id=character_id,
+                consumable_id=P30_HEALING_POTION,
+                quantity=1,
+            )
+        )
+
+    mission = AltosMissionService(sessions, "ocaso")
+    ready = await _reach_p30_combat(mission, actor)
+    started = await mission.start_solo_combat(actor, ready.state_version, P30_ID)
+    assert started is not None and started.activity_id is not None
+    assert started.combat is not None
+
+    # Prepare a damaged but otherwise untouched persisted combat fixture; the
+    # callback, healing action, and all resulting combat changes use public APIs.
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        activity = await session.get(GameActivity, started.activity_id)
+        record = await session.get(CombatRecord, started.combat.id)
+        assert character is not None and activity is not None and record is not None
+        combat = decode(
+            record.snapshot,
+            record.id,
+            activity.ruleset_version,
+            activity.state_version,
+        )
+        max_hp = combat.fighters["player"].stats.hp
+        missing_hp = Decimal(700)
+        combat.fighters["player"].hp = max_hp - missing_hp
+        character.hp = int(combat.fighters["player"].hp)
+        record.snapshot = encode(combat)
+
+    damaged = await mission.combat_view_for_actor(actor, started.activity_id)
+    assert damaged is not None and damaged.combat is not None
+    assert any(
+        option.item_id == P30_HEALING_POTION
+        for option in damaged.consumable_options
+    )
+    combat_screen = render_altos_mission(damaged)
+    assert combat_screen.keyboard is not None
+    open_button = next(
+        button
+        for row in combat_screen.keyboard.inline_keyboard
+        for button in row
+        if button.text == "Consumível"
+    )
+
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(return_value=True)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(altos_missions_router(mission, {}))
+    await dispatcher.feed_raw_update(
+        bot, _callback_update(open_button.callback_data, actor=actor, update_id=901)
+    )
+    menu_edits = [
+        call.args[1]
+        for call in bot.session.make_request.call_args_list
+        if len(call.args) > 1 and isinstance(call.args[1], EditMessageText)
+    ]
+    assert menu_edits and "Poção de Cura da Salmoura" in menu_edits[-1].text
+    item_button = next(
+        button
+        for row in menu_edits[-1].reply_markup.inline_keyboard
+        for button in row
+        if button.text == "1"
+    )
+    item_callback = CombatConsumableFlowCallback.unpack(item_button.callback_data)
+    assert item_callback.item_id == P30_HEALING_POTION
+
+    before = await mission.combat_view_for_actor(actor, started.activity_id)
+    assert before is not None and before.combat is not None
+    before_version = before.combat.version
+    before_round = before.combat.round
+    before_rng = before.combat.rng_cursor
+    expected_heal = min(
+        (max_hp * Decimal("0.22")).to_integral_value(rounding=ROUND_FLOOR),
+        missing_hp,
+    )
+
+    # A valid item selection must become the normal transaction service call.
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(item_button.callback_data, actor=actor, update_id=902),
+    )
+    restarted = AltosMissionService(sessions, "ocaso")
+    persisted = await restarted.combat_view_for_actor(actor, started.activity_id)
+    assert persisted is not None and persisted.combat is not None
+    assert persisted.combat.version == before_version + 1
+    assert persisted.combat.round == before_round + 1
+    assert persisted.combat.rng_cursor >= before_rng
+    heal_events = [
+        event
+        for event in persisted.combat.events
+        if event.action == f"consumable:{P30_HEALING_POTION}"
+    ]
+    assert len(heal_events) == 1
+    assert heal_events[0].healed == expected_heal
+    assert persisted.combat.consumable_uses == 1
+    async with sessions() as session:
+        stack = await session.scalar(
+            select(ConsumableStack).where(
+                ConsumableStack.character_id == character_id,
+                ConsumableStack.consumable_id == P30_HEALING_POTION,
+            )
+        )
+        activity = await session.get(GameActivity, started.activity_id)
+        character = await session.get(Character, character_id)
+        assert stack is not None and stack.quantity == 0
+        assert activity is not None and activity.state_version == persisted.combat.version
+        assert character is not None
+        assert character.hp == persisted.combat.fighters["player"].hp
+
+    # The original callback is stale after the transaction and cannot heal or
+    # consume the potion a second time.
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(item_button.callback_data, actor=actor, update_id=903),
+    )
+    final = await AltosMissionService(sessions, "ocaso").combat_view_for_actor(
+        actor, started.activity_id
+    )
+    assert final is not None and final.combat is not None
+    assert final.combat.version == persisted.combat.version
+    assert final.combat.rng_cursor == persisted.combat.rng_cursor
+    assert sum(
+        event.action == f"consumable:{P30_HEALING_POTION}"
+        for event in final.combat.events
+    ) == 1
+    await bot.session.close()
+
+
+@pytest.mark.parametrize(
+    ("location", "button_label", "callback"),
+    (
+        (ALTOS_ESCARPA_LABEL, "Seguir ao Abrigo do Peso", "road:route:altos_abrigo"),
+        (ALTOS_ABRIGO_LABEL, "Seguir para Pontes de Fuligem", "road:route:altos_pontes"),
+        (ALTOS_PONTES_LABEL, "Seguir para Pedreiras Suspensas", "road:route:altos_pedreiras"),
+        (ALTOS_PEDREIRAS_LABEL, "Seguir para Bastilha de Carga", "road:route:altos_bastilha"),
+        (ALTOS_BASTILHA_LABEL, "Retornar ao Coração", "road:route:altos_coracao"),
+    ),
+)
+def test_p30_retry_offers_only_the_next_adjacent_route(location, button_label, callback):
+    view = AltosMissionView(
+        character_id=uuid4(),
+        quest_id=P30_ID,
+        title=P30_TITLE,
+        kind="mission",
+        status="active",
+        step=4,
+        state_version=33,
+        progress={"awaiting_retry": True},
+        location=location,
+        level=50,
+    )
+
+    screen = render_altos_mission(view)
+    buttons = [button for row in screen.keyboard.inline_keyboard for button in row]
+    retry_route = next(button for button in buttons if button.text == button_label)
+
+    assert retry_route.callback_data == callback
+    assert callback != "road:route:altos_coracao" or location == ALTOS_BASTILHA_LABEL
 
 
 @pytest.mark.asyncio
@@ -554,7 +788,22 @@ async def test_p30_group_shares_encounter_and_freezes_boss_scaling(database):
         actors[0], proposal.proposal_id, expected_revision=accepted.revision
     )
     assert started is not None and started.combat is not None
+    assert started.campaign_shared is True
     assert started.group_size == 2
+    helper_combat_view = await mission.resume(actors[1], P30_ID)
+    assert helper_combat_view is not None and helper_combat_view.combat is not None
+    group_screens = [
+        render_altos_mission(member_view) for member_view in (started, helper_combat_view)
+    ]
+    group_callbacks = [
+        button.callback_data
+        for screen in group_screens
+        if screen.keyboard is not None
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+    ]
+    assert any(callback.startswith("cc:") for callback in group_callbacks)
+    assert not any(callback.startswith("asc:") for callback in group_callbacks)
     assert {fighter.side for fighter in started.combat.fighters.values()} >= {
         "player",
         "enemy",

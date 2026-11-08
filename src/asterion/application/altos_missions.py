@@ -668,6 +668,7 @@ class AltosMissionView:
     ready_consumable_option: object | None = None
     proposal_id: UUID | None = None
     proposal_status: str | None = None
+    campaign_shared: bool = False
 
 
 class AltosMissionService:
@@ -7668,11 +7669,17 @@ class AltosMissionService:
         if (
             view.combat is None
             or view.combat.version != version
-            or view.combat_actor_key != active_player_key(view.combat)
+            or (
+                view.combat_actor_key is not None
+                and view.combat_actor_key != active_player_key(view.combat)
+            )
         ):
             return view
+        actor_key = view.combat_actor_key or active_player_key(view.combat)
+        if actor_key is None:
+            return view
         intent = campaign_action_intent(
-            view.combat, view.combat_actor_key, action_index, target_code
+            view.combat, actor_key, action_index, target_code
         )
         if intent is None:
             return view
@@ -7731,6 +7738,7 @@ class AltosMissionService:
         combat = encounter = member = None
         actor_key = None
         group_size = 1
+        campaign_shared = False
         if activity is not None:
             shared_encounter = await session.scalar(
                 select(CampaignSharedEncounterMember).where(
@@ -7753,6 +7761,7 @@ class AltosMissionService:
                     member = shared_encounter
                     actor_key = member.actor_key
                     group_size = encounter_row.roster_size
+                    campaign_shared = True
             else:
                 combat, encounter, _combat_record = await current_combat(session, activity)
             if combat is not None:
@@ -7804,6 +7813,7 @@ class AltosMissionService:
             encounter_id=encounter.id if encounter is not None else None,
             combat_actor_key=actor_key,
             group_size=group_size,
+            campaign_shared=campaign_shared,
             consumable_options=options,
             consumable_quantities=quantities,
             consumable_budget_limit=budget,

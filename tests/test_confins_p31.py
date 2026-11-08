@@ -1,7 +1,9 @@
 from collections import Counter
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
+from aiogram import Bot, Dispatcher
 from sqlalchemy import select
 
 from asterion.application import road as road_module
@@ -39,6 +41,8 @@ from asterion.application.road import (
     RoadService,
 )
 from asterion.application.round import RoundService
+from asterion.bot.altos_missions_handlers import altos_missions_router
+from asterion.bot.altos_missions_ui import render_altos_mission
 from asterion.domain.combat import active_player_key
 from asterion.domain.road import (
     CONFINS_CAO_NEVOA,
@@ -74,7 +78,7 @@ from asterion.infrastructure.db.models import (
 from tests.helpers.pvpve import (
     disable_round_pvpve_for_test,
 )
-from tests.test_altos_p30 import _seed_p30_character
+from tests.test_altos_p30 import _callback_update, _seed_p30_character
 from tests.test_campaign_coop_integration import _seed_enemy_at_one_hp
 from tests.test_s4_s5_integration import _terminal
 
@@ -646,3 +650,58 @@ def test_confins_catalog_and_activity_pools_match_the_opening_contract():
     assert "codex.confins.duas_leituras_rota" in CODEX_BY_ID
     assert CODEX_FRAGMENTS["codex.confins.duas_leituras_rota"].title == "Dois marcos honestos"
     assert ACHIEVEMENT_BY_ID["achievement.confins.primeira_marcha"].name == "Primeira Marcha"
+
+
+@pytest.mark.asyncio
+async def test_p31_visible_solo_combat_callback_starts_public_encounter(database):
+    actor, road, sessions = await _seed_confins_actor(database, 790390)
+    mission = AltosMissionService(sessions, "ocaso")
+    view = await _enter_marcha(road, mission, actor)
+    view = await mission.advance(actor, view.state_version, "inspect_talen_marker")
+    assert view is not None and view.step == 2
+    view = await mission.advance(actor, view.state_version, "inspect_ground_marker")
+    assert view is not None and view.step == 3
+    view = await mission.advance(actor, view.state_version, "discover_marco_duplo")
+    assert view is not None and view.step == 4
+
+    screen = render_altos_mission(view)
+    assert screen.keyboard is not None
+    button = next(
+        button
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+        if button.text == "Iniciar encontro Solo"
+    )
+    assert button.callback_data == f"altos:combat:P31:{view.state_version}:solo"
+
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(return_value=True)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(altos_missions_router(mission, {}))
+    try:
+        await dispatcher.feed_raw_update(
+            bot,
+            _callback_update(
+                button.callback_data, actor=actor, update_id=1201
+            ),
+        )
+    finally:
+        await bot.session.close()
+
+    restarted_mission = AltosMissionService(sessions, "ocaso")
+    persisted = await restarted_mission.resume(actor, P31_ID)
+    assert persisted is not None
+    assert persisted.kind == "combat"
+    assert persisted.combat is not None
+    assert persisted.combat.version == 0
+    enemies = [fighter for fighter in persisted.combat.fighters.values() if fighter.side == "enemy"]
+    assert len(enemies) == 1
+    assert enemies[0].name == "Cão de Névoa"
+    async with sessions() as session:
+        active = await session.scalar(
+            select(GameActivity).where(
+                GameActivity.character_id == persisted.character_id,
+                GameActivity.status == "active",
+            )
+        )
+        assert active is not None

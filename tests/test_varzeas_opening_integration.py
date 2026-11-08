@@ -1,9 +1,16 @@
+import asyncio
 from collections import Counter
+from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from decimal import ROUND_FLOOR, Decimal
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
+from aiogram import Bot, Dispatcher
+from aiogram.methods import EditMessageText
 from sqlalchemy import func, select
 
 from asterion.application.bestiary import BestiaryRecorder
@@ -50,9 +57,20 @@ from asterion.application.varzeas_missions import (
     S24_REWARD_SOURCE,
     VarzeasMissionService,
 )
+from asterion.bot.combat_ui import (
+    CampaignCombatCallback,
+    CombatConsumableFlowCallback,
+    VarzeasSoloCombatCallback,
+    class_trial_action_ids,
+)
 from asterion.bot.road_ui import render_current_local
+from asterion.bot.varzeas_missions_handlers import varzeas_missions_router
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
-from asterion.domain.combat import allowed_actions
+from asterion.domain.combat import (
+    active_player_key,
+    allowed_actions,
+    use_combat_consumable,
+)
 from asterion.domain.road import (
     VARZEAS_BREJOS_BRAZIER,
     VARZEAS_BREJOS_EXPLORE_UNLOCK,
@@ -87,19 +105,24 @@ from asterion.domain.road import (
     creature_for,
     material_for,
 )
+from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
     Achievement,
     BestiaryEntry,
     BestiaryEvidence,
     Brazier,
     CampaignObjectiveCredit,
+    CampaignSharedEncounterMember,
     Character,
     CodexEntry,
     CodexFragment,
+    CombatRecord,
+    ConsumableStack,
     DungeonRun,
     DungeonRunMember,
     EquipmentItem,
     ExplorationAttempt,
+    GameActivity,
     HuntContext,
     HuntRound,
     HuntRoundEncounter,
@@ -332,6 +355,25 @@ async def _seed_varzeas_p23_endgame(
                 )
             )
     return character_id, sessions
+
+
+def _callback_update(data: str, *, actor: int, update_id: int) -> dict:
+    return {
+        "update_id": update_id,
+        "callback_query": {
+            "id": str(update_id),
+            "from": {"id": actor, "is_bot": False, "first_name": "Player"},
+            "chat_instance": "varzeas-solo-callback-test",
+            "data": data,
+            "message": {
+                "message_id": update_id,
+                "date": 1,
+                "from": {"id": 123456, "is_bot": True, "first_name": "Asterion"},
+                "chat": {"id": actor, "type": "private"},
+                "text": "Asterion",
+            },
+        },
+    }
 
 
 @pytest.mark.asyncio
@@ -3151,6 +3193,544 @@ async def test_varzeas_p23_requires_p22_and_level_39(database, level, p22_comple
 
 
 @pytest.mark.asyncio
+async def test_p24_solo_defender_visible_callback_dispatches_and_persists(database):
+    from copy import deepcopy
+
+    from asterion.domain.combat import act
+
+    actor = 993608
+    outsider = 993609
+    character_id, sessions = await _seed_varzeas_p23_endgame(
+        database, actor, level=40, location=VARZEAS_CAMARA
+    )
+    await _seed_varzeas_p23_endgame(
+        database, outsider, level=40, location=VARZEAS_CAMARA
+    )
+    async with sessions.begin() as session:
+        session.add(
+            Quest(
+                character_id=character_id,
+                quest_id=P24_ID,
+                title="A Matriz Rubra",
+                status="active",
+                step=4,
+                state_version=3,
+                content_version="varzeas-1.0.0",
+                progress={},
+            )
+        )
+
+    missions = VarzeasMissionService(sessions, "ocaso")
+    started = await missions.start_solo_combat(actor, P24_ID, 3)
+    assert started is not None and started.kind == "combat"
+    assert started.combat is not None and started.combat.party_mode
+    assert started.campaign_shared is False
+    initial_version = started.combat.version
+    initial_cursor = started.combat.rng_cursor
+
+    screen = render_varzeas_mission(started)
+    defender = next(
+        button
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+        if button.text == "Defender"
+    )
+    assert len(defender.callback_data.encode("utf-8")) <= 64
+    callback = VarzeasSoloCombatCallback.unpack(defender.callback_data)
+    assert callback.activity_id == started.activity_id
+    assert callback.combat_version == initial_version
+    assert class_trial_action_ids(
+        started.combat, actor_key="player"
+    )[callback.action_index] == "defend"
+    assert callback.target == "x"
+    expected = act(deepcopy(started.combat), "defend")
+    assert expected.version == initial_version + 1
+
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(return_value=True)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(varzeas_missions_router(missions, {}))
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(
+            defender.callback_data, actor=actor, update_id=1
+        ),
+    )
+
+    restarted_missions = VarzeasMissionService(sessions, "ocaso")
+    persisted = await restarted_missions.combat_view_for_actor(
+        actor, started.activity_id
+    )
+    assert persisted is not None and persisted.combat is not None
+    assert persisted.combat.version == initial_version + 1
+    assert persisted.combat.result is None
+    assert persisted.combat.rng_cursor == expected.rng_cursor
+    assert persisted.combat.rng_cursor >= initial_cursor
+    async with sessions() as session:
+        activity = await session.get(GameActivity, started.activity_id)
+        quest = await session.scalar(
+            select(Quest).where(
+                Quest.character_id == character_id, Quest.quest_id == P24_ID
+            )
+        )
+        assert activity is not None and activity.state_version == initial_version + 1
+        assert quest is not None and quest.step == 4
+
+    # Replaying the original versioned intent only refreshes the public view.
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(
+            defender.callback_data, actor=actor, update_id=2
+        ),
+    )
+    repeated = await missions.combat_view_for_actor(actor, started.activity_id)
+    assert repeated is not None and repeated.combat is not None
+    assert repeated.combat.version == persisted.combat.version
+    assert repeated.combat.rng_cursor == persisted.combat.rng_cursor
+
+    # A different character cannot use the owner's callback.
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(
+            defender.callback_data, actor=outsider, update_id=3
+        ),
+    )
+    unauthorized = await missions.combat_view_for_actor(actor, started.activity_id)
+    assert unauthorized is not None and unauthorized.combat is not None
+    assert unauthorized.combat.version == persisted.combat.version
+
+    # The shared-only cc: route remains strict for a Solo activity.
+    cc_callback = CampaignCombatCallback.for_intent(
+        started.activity_id,
+        unauthorized.combat.version,
+        0,
+        "x",
+    ).pack()
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(cc_callback, actor=actor, update_id=4),
+    )
+    after_cc = await missions.combat_view_for_actor(actor, started.activity_id)
+    assert after_cc is not None and after_cc.combat is not None
+    assert after_cc.combat.version == persisted.combat.version
+    assert after_cc.combat.rng_cursor == persisted.combat.rng_cursor
+
+    # A prepared transfer window still renders and dispatches through its
+    # dedicated public reservoir callback, without changing combat version.
+    from asterion.infrastructure.db.combat_codec import decode, encode
+
+    async with sessions.begin() as session:
+        record = await session.get(CombatRecord, started.combat.id)
+        activity = await session.get(GameActivity, started.activity_id)
+        assert record is not None and activity is not None
+        transfer_window = decode(
+            record.snapshot,
+            record.id,
+            activity.ruleset_version,
+            activity.state_version,
+        )
+        transfer_window.prepared_action = "transferencia_externa"
+        window_id = (
+            f"{started.combat.id.hex}:1:2:enemy:transferencia_externa:prepared"
+        )
+        transfer_window.prepared_action_instance_id = window_id
+        record.snapshot = encode(transfer_window)
+    window_view = await missions.combat_view_for_actor(actor, started.activity_id)
+    assert window_view is not None and window_view.combat is not None
+    window_screen = render_varzeas_mission(window_view)
+    reservoir_button = next(
+        button
+        for row in window_screen.keyboard.inline_keyboard
+        for button in row
+        if button.text == "Resolver Reservatório A"
+    )
+    assert reservoir_button.callback_data == (
+        f"varzeas:reservoir:{started.activity_id.hex}:"
+        f"{window_view.combat.version}:a"
+    )
+    await asyncio.gather(
+        dispatcher.feed_raw_update(
+            bot,
+            _callback_update(
+                reservoir_button.callback_data, actor=actor, update_id=6
+            ),
+        ),
+        dispatcher.feed_raw_update(
+            bot,
+            _callback_update(
+                reservoir_button.callback_data, actor=actor, update_id=7
+            ),
+        ),
+    )
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(reservoir_button.callback_data, actor=actor, update_id=8),
+    )
+    after_reservoir = await missions.combat_view_for_actor(actor, started.activity_id)
+    assert after_reservoir is not None and after_reservoir.combat is not None
+    assert after_reservoir.combat.version == window_view.combat.version
+    assert after_reservoir.progress["reservoirs_used"] == ["a"]
+    assert after_reservoir.progress["reservoir_window_results"] == {
+        window_id: {
+            "reservoir_id": "a",
+            "state": "resolved",
+            "consumed": True,
+        }
+    }
+    async with sessions() as session:
+        credits = list(
+            (
+                await session.scalars(
+                    select(CampaignObjectiveCredit).where(
+                        CampaignObjectiveCredit.character_id == character_id,
+                        CampaignObjectiveCredit.quest_id == P24_ID,
+                        CampaignObjectiveCredit.objective_id
+                        == "p24.reservoir_window_recorded",
+                    )
+                )
+            ).all()
+        )
+    assert len(f"p24.reservoir_window:{character_id}:{window_id}") > 128
+    assert len(credits) == 1
+    assert len(credits[0].source_key) <= 128
+    assert credits[0].source_key == missions._matrix_reservoir_credit_source_key(
+        character_id, window_id
+    )
+    assert len(credits[0].source_key) == 74
+
+    # A different actor cannot consume the owner's contextual callback.
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(
+            reservoir_button.callback_data, actor=outsider, update_id=9
+        ),
+    )
+    still_once = await missions.combat_view_for_actor(actor, started.activity_id)
+    assert still_once is not None and still_once.combat is not None
+    assert still_once.progress["reservoirs_used"] == ["a"]
+    async with sessions() as session:
+        assert await session.scalar(
+            select(func.count(CampaignObjectiveCredit.id)).where(
+                CampaignObjectiveCredit.character_id == character_id,
+                CampaignObjectiveCredit.quest_id == P24_ID,
+                CampaignObjectiveCredit.objective_id
+                == "p24.reservoir_window_recorded",
+            )
+        ) == 1
+
+
+@pytest.mark.parametrize("heal_case", ["full_amount", "capped_by_missing_hp"])
+@pytest.mark.asyncio
+async def test_p24_varzeas_heal_uses_public_menu_dispatcher_and_postgres(
+    database, heal_case
+):
+    actor = 993618 if heal_case == "full_amount" else 993619
+    outsider = actor + 100
+    item_id = "consumable.heal.varzeas.iv"
+    character_id, sessions = await _seed_varzeas_p23_endgame(
+        database, actor, level=40, location=VARZEAS_CAMARA
+    )
+    await _seed_varzeas_p23_endgame(
+        database, outsider, level=40, location=VARZEAS_CAMARA
+    )
+    async with sessions.begin() as session:
+        session.add(
+            Quest(
+                character_id=character_id,
+                quest_id=P24_ID,
+                title="A Matriz Rubra",
+                status="active",
+                step=4,
+                state_version=3,
+                content_version="varzeas-1.0.0",
+                progress={},
+            )
+        )
+        session.add(
+            ConsumableStack(
+                character_id=character_id,
+                consumable_id=item_id,
+                quantity=1,
+            )
+        )
+
+    missions = VarzeasMissionService(sessions, "ocaso")
+    started = await missions.start_solo_combat(actor, P24_ID, 3)
+    assert started is not None and started.kind == "combat"
+    assert started.combat is not None
+    assert started.consumable_budget_limit == 3
+
+    # Prepare the isolated integration fixture with the character and combat
+    # records consistently damaged. All menu, action, and persistence behavior
+    # below uses the public bot dispatcher and transaction services.
+    combat_max = started.combat.fighters["player"].stats.hp
+    nominal_heal = (combat_max * Decimal("0.22")).to_integral_value(
+        rounding=ROUND_FLOOR
+    )
+    missing_hp = (
+        nominal_heal + Decimal("17")
+        if heal_case == "full_amount"
+        else nominal_heal - Decimal("7")
+    )
+    expected_heal = min(nominal_heal, missing_hp)
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        activity = await session.get(GameActivity, started.activity_id)
+        record = await session.get(CombatRecord, started.combat.id)
+        assert character is not None and activity is not None and record is not None
+        combat = decode(
+            record.snapshot,
+            record.id,
+            activity.ruleset_version,
+            activity.state_version,
+        )
+        combat.fighters["player"].hp = combat_max - missing_hp
+        character.hp = combat.fighters["player"].hp
+        record.snapshot = encode(combat)
+
+    damaged = await missions.combat_view_for_actor(actor, started.activity_id)
+    assert damaged is not None and damaged.combat is not None
+    assert any(option.item_id == item_id for option in damaged.consumable_options)
+    hud = render_varzeas_mission(damaged)
+    assert hud.keyboard is not None
+    open_button = next(
+        button
+        for row in hud.keyboard.inline_keyboard
+        for button in row
+        if button.text == "Consumível"
+    )
+
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(return_value=True)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(varzeas_missions_router(missions, {}))
+    await dispatcher.feed_raw_update(
+        bot, _callback_update(open_button.callback_data, actor=actor, update_id=101)
+    )
+    menu_edits = [
+        call.args[1]
+        for call in bot.session.make_request.call_args_list
+        if len(call.args) > 1 and isinstance(call.args[1], EditMessageText)
+    ]
+    assert menu_edits
+    menu = menu_edits[-1]
+    assert "Poção de Cura da Salmoura" in menu.text
+    item_button = next(
+        button
+        for row in menu.reply_markup.inline_keyboard
+        for button in row
+        if button.text == "1"
+    )
+    item_callback = CombatConsumableFlowCallback.unpack(item_button.callback_data)
+    assert item_callback.item_id == item_id
+    assert len(item_button.callback_data.encode("utf-8")) <= 64
+
+    before = await missions.combat_view_for_actor(actor, started.activity_id)
+    assert before is not None and before.combat is not None
+    before_version = before.combat.version
+    before_cursor = before.combat.rng_cursor
+    expected = use_combat_consumable(
+        deepcopy(before.combat),
+        item_id,
+        target_id="player",
+        budget_limit=before.consumable_budget_limit,
+    )
+
+    # Unknown item tokens and a valid callback from another character cannot
+    # consume stock or advance the persisted combat.
+    invalid_callback = CombatConsumableFlowCallback(
+        activity=item_callback.activity,
+        version=item_callback.version,
+        step="i",
+        item="?",
+        target="-",
+        effect="-",
+        parent="i",
+    ).pack()
+    await dispatcher.feed_raw_update(
+        bot, _callback_update(invalid_callback, actor=actor, update_id=102)
+    )
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(item_button.callback_data, actor=outsider, update_id=103),
+    )
+    unchanged = await missions.combat_view_for_actor(actor, started.activity_id)
+    assert unchanged is not None and unchanged.combat is not None
+    assert unchanged.combat.version == before_version
+    async with sessions() as session:
+        stack = await session.scalar(
+            select(ConsumableStack).where(
+                ConsumableStack.character_id == character_id,
+                ConsumableStack.consumable_id == item_id,
+            )
+        )
+        assert stack is not None and stack.quantity == 1
+
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(item_button.callback_data, actor=actor, update_id=104),
+    )
+    restarted = VarzeasMissionService(sessions, "ocaso")
+    persisted = await restarted.combat_view_for_actor(actor, started.activity_id)
+    assert persisted is not None and persisted.combat is not None
+    assert persisted.combat.version == before_version + 1
+    assert persisted.combat.round == expected.round
+    assert persisted.combat.rng_cursor == expected.rng_cursor
+    assert persisted.combat.rng_cursor >= before_cursor
+    assert persisted.combat.consumable_uses == 1
+    assert persisted.combat.fighters["player"].cooldowns["consumable"] == (
+        before.combat.fighters["player"].opportunity + 2
+    )
+    heal_events = [
+        event
+        for event in persisted.combat.events
+        if event.action == f"consumable:{item_id}"
+    ]
+    assert len(heal_events) == 1
+    assert heal_events[0].healed == expected_heal
+    assert persisted.combat.fighters["player"].hp == expected.fighters["player"].hp
+    async with sessions() as session:
+        stack = await session.scalar(
+            select(ConsumableStack).where(
+                ConsumableStack.character_id == character_id,
+                ConsumableStack.consumable_id == item_id,
+            )
+        )
+        activity = await session.get(GameActivity, started.activity_id)
+        character = await session.get(Character, character_id)
+        assert stack is not None and stack.quantity == 0
+        assert activity is not None and activity.state_version == persisted.combat.version
+        assert character is not None
+        assert character.hp == persisted.combat.fighters["player"].hp
+
+    # Reusing the original versioned selection is stale and must not heal or
+    # consume again after application-service reconstruction.
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(item_button.callback_data, actor=actor, update_id=105),
+    )
+    final = await VarzeasMissionService(sessions, "ocaso").combat_view_for_actor(
+        actor, started.activity_id
+    )
+    assert final is not None and final.combat is not None
+    assert final.combat.version == persisted.combat.version
+    assert final.combat.rng_cursor == persisted.combat.rng_cursor
+    assert sum(
+        event.action == f"consumable:{item_id}" for event in final.combat.events
+    ) == 1
+    async with sessions() as session:
+        quantity = await session.scalar(
+            select(ConsumableStack.quantity).where(
+                ConsumableStack.character_id == character_id,
+                ConsumableStack.consumable_id == item_id,
+            )
+        )
+        assert quantity == 0
+
+
+@pytest.mark.asyncio
+async def test_varzeas_shared_boss_callback_remains_cc_and_dispatches(database):
+    leader, helper = 993606, 993607
+    leader_id, sessions = await _seed_varzeas_p23_endgame(
+        database, leader, level=40, location=VARZEAS_CAMARA
+    )
+    helper_id, _ = await _seed_varzeas_p23_endgame(
+        database, helper, level=40, location=VARZEAS_CAMARA
+    )
+    async with sessions.begin() as session:
+        for character_id in (leader_id, helper_id):
+            session.add(
+                Quest(
+                    character_id=character_id,
+                    quest_id=P24_ID,
+                    title="A Matriz Rubra",
+                    status="active",
+                    step=4,
+                    state_version=1,
+                    content_version="varzeas-1.0.0",
+                    progress={},
+                )
+            )
+        helper_character = await session.get(Character, helper_id)
+        assert helper_character is not None
+        helper_name = helper_character.name
+
+    groups = GroupService(sessions, "ocaso")
+    group = await groups.create_group(leader)
+    invite = await groups.invite(
+        leader, helper_name, expected_group_revision=group.revision
+    )
+    await groups.respond_invite(
+        helper, invite.invite_id, expected_revision=invite.revision, accept=True
+    )
+    missions = VarzeasMissionService(sessions, "ocaso", groups=groups)
+    proposal_view = await missions.propose_group_combat(leader, P24_ID, 1)
+    assert proposal_view is not None and proposal_view.proposal_id is not None
+    proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
+    accepted = await groups.respond_activity(
+        helper,
+        proposal.proposal_id,
+        expected_revision=proposal.revision,
+        accept=True,
+    )
+    started = await missions.start_group_combat(
+        leader, proposal.proposal_id, expected_revision=accepted.revision
+    )
+    assert started is not None and started.combat is not None
+    assert started.group_size == 2 and started.campaign_shared is True
+    assert started.encounter_id is not None
+
+    active_key = active_player_key(started.combat)
+    assert active_key is not None
+    async with sessions() as session:
+        active_actor = await session.scalar(
+            select(Character.telegram_id)
+            .join(
+                CampaignSharedEncounterMember,
+                CampaignSharedEncounterMember.character_id == Character.id,
+            )
+            .where(
+                CampaignSharedEncounterMember.shared_encounter_id
+                == started.encounter_id,
+                CampaignSharedEncounterMember.actor_key == active_key,
+            )
+        )
+    assert active_actor is not None
+    active_view = await missions.combat_view_for_actor(
+        active_actor, started.activity_id
+    )
+    assert active_view is not None and active_view.combat is not None
+    assert active_view.combat_actor_key == active_key
+
+    screen = render_varzeas_mission(active_view)
+    defender = next(
+        button
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+        if button.text == "Defender"
+    )
+    assert defender.callback_data.startswith("cc:")
+    callback = CampaignCombatCallback.unpack(defender.callback_data)
+    assert callback.activity_id == active_view.activity_id
+    assert callback.combat_version == active_view.combat.version
+
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(return_value=True)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(varzeas_missions_router(missions, {}))
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(defender.callback_data, actor=active_actor, update_id=5),
+    )
+    updated = await missions.combat_view_for_actor(
+        active_actor, active_view.activity_id
+    )
+    assert updated is not None and updated.combat is not None
+    assert updated.combat.version == active_view.combat.version + 1
+    assert updated.campaign_shared is True
+
+
+@pytest.mark.asyncio
 async def test_varzeas_p24_autostarts_at_level_40_without_optional_quests_or_dungeons(database):
     actor = 993610
     character_id, sessions = await _seed_varzeas_p23_endgame(
@@ -3220,25 +3800,59 @@ async def test_matrix_reservoir_success_and_omission_are_persisted_once_without_
         character = await session.get(Character, character_id)
         assert character is not None
         initial_economy = (character.xp, character.crowns)
+    success_window_id = (
+        "a" * 32 + ":0:2:enemy:transferencia_externa:prepared"
+    )
+    failed_window_id = (
+        "b" * 32 + ":1:5:enemy:transferencia_externa:prepared"
+    )
+    third_window_id = (
+        "c" * 32 + ":2:8:enemy:transferencia_externa:prepared"
+    )
+    fourth_window_id = (
+        "d" * 32 + ":3:11:enemy:transferencia_externa:prepared"
+    )
     success_window = SimpleNamespace(
         action="transferencia_externa",
         prepared_resolution=True,
-        prepared_action_instance_id="transfer-window-success",
+        prepared_action_instance_id=success_window_id,
     )
     failed_window = SimpleNamespace(
         action="transferencia_externa",
         prepared_resolution=True,
-        prepared_action_instance_id="transfer-window-failed",
+        prepared_action_instance_id=failed_window_id,
     )
     third_window = SimpleNamespace(
         action="transferencia_externa",
         prepared_resolution=True,
-        prepared_action_instance_id="transfer-window-third",
+        prepared_action_instance_id=third_window_id,
     )
     fourth_window = SimpleNamespace(
         action="transferencia_externa",
         prepared_resolution=True,
-        prepared_action_instance_id="transfer-window-fourth",
+        prepared_action_instance_id=fourth_window_id,
+    )
+    success_key = missions._matrix_reservoir_credit_source_key(
+        character_id, success_window_id
+    )
+    assert success_key == missions._matrix_reservoir_credit_source_key(
+        character_id, success_window_id
+    )
+    assert success_key != missions._matrix_reservoir_credit_source_key(
+        character_id, failed_window_id
+    )
+    assert success_key != missions._matrix_reservoir_credit_source_key(
+        uuid4(), success_window_id
+    )
+    assert len(success_key) == 74
+    assert all(
+        len(f"p24.reservoir_window:{character_id}:{window_id}") > 128
+        for window_id in (
+            success_window_id,
+            failed_window_id,
+            third_window_id,
+            fourth_window_id,
+        )
     )
 
     async with sessions.begin() as session:
@@ -3253,7 +3867,7 @@ async def test_matrix_reservoir_success_and_omission_are_persisted_once_without_
             session,
             character_id,
             quest,
-            "transfer-window-success",
+            success_window_id,
             "a",
             outcome="resolved",
         )
@@ -3306,29 +3920,29 @@ async def test_matrix_reservoir_success_and_omission_are_persisted_once_without_
 
         assert quest.progress["reservoirs_used"] == ["a", "b", "c"]
         assert quest.progress["resolved_transfer_windows"] == [
-            "transfer-window-success",
+            success_window_id,
         ]
         assert quest.progress["recorded_transfer_windows"] == [
-            "transfer-window-success",
-            "transfer-window-failed",
-            "transfer-window-third",
+            success_window_id,
+            failed_window_id,
+            third_window_id,
         ]
         assert quest.progress["failed_transfer_windows"] == [
-            "transfer-window-failed",
-            "transfer-window-third",
+            failed_window_id,
+            third_window_id,
         ]
         assert quest.progress["reservoir_window_results"] == {
-            "transfer-window-success": {
+            success_window_id: {
                 "reservoir_id": "a",
                 "state": "resolved",
                 "consumed": True,
             },
-            "transfer-window-failed": {
+            failed_window_id: {
                 "reservoir_id": "b",
                 "state": "failed",
                 "consumed": True,
             },
-            "transfer-window-third": {
+            third_window_id: {
                 "reservoir_id": "c",
                 "state": "failed",
                 "consumed": True,
@@ -3360,9 +3974,9 @@ async def test_matrix_reservoir_success_and_omission_are_persisted_once_without_
             )
             for row in credits
         } == {
-            ("transfer-window-success", "a", "resolved", "consumed"),
-            ("transfer-window-failed", "b", "failed", "consumed"),
-            ("transfer-window-third", "c", "failed", "consumed"),
+            (success_window_id, "a", "resolved", "consumed"),
+            (failed_window_id, "b", "failed", "consumed"),
+            (third_window_id, "c", "failed", "consumed"),
         }
         assert await session.scalar(
             select(func.count(RewardEvent.id)).where(
@@ -3378,6 +3992,242 @@ async def test_matrix_reservoir_success_and_omission_are_persisted_once_without_
                 BestiaryEvidence.creature_id == "matriz_rubra",
             )
         ) is None
+
+
+@pytest.mark.asyncio
+async def test_matrix_failed_reservoir_window_is_persisted_by_public_combat_callback(
+    database,
+):
+    actor = 993614
+    character_id, sessions = await _seed_varzeas_p23_endgame(
+        database, actor, level=40, location=VARZEAS_CAMARA
+    )
+    async with sessions.begin() as session:
+        session.add(
+            Quest(
+                character_id=character_id,
+                quest_id=P24_ID,
+                title="A Matriz Rubra",
+                status="active",
+                step=4,
+                state_version=1,
+                content_version="varzeas-1.0.0",
+                progress={},
+            )
+        )
+    missions = VarzeasMissionService(sessions, "ocaso")
+    view = await missions.start_solo_combat(actor, P24_ID, 1)
+    assert view is not None and view.combat is not None
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(return_value=True)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(varzeas_missions_router(missions, {}))
+
+    reservoir_button = None
+    screen = render_varzeas_mission(view)
+    for update_id in range(30, 38):
+        buttons = [
+            button
+            for row in screen.keyboard.inline_keyboard
+            for button in row
+        ]
+        reservoir_button = next(
+            (
+                button
+                for button in buttons
+                if button.text == "Resolver Reservatório A"
+                and (button.callback_data or "").startswith("varzeas:reservoir:")
+            ),
+            None,
+        )
+        if reservoir_button is not None:
+            break
+        action_button = next(
+            (
+                button
+                for button in buttons
+                if button.text == "Atacar"
+                and (button.callback_data or "").startswith("vsc:")
+            ),
+            None,
+        )
+        if action_button is None:
+            action_button = next(
+                (
+                    button
+                    for button in buttons
+                    if button.text == "Defender"
+                    and (button.callback_data or "").startswith("vsc:")
+                ),
+                None,
+            )
+        assert action_button is not None
+        await dispatcher.feed_raw_update(
+            bot,
+            _callback_update(
+                action_button.callback_data,
+                actor=actor,
+                update_id=update_id,
+            ),
+        )
+        view = await missions.combat_view_for_actor(actor, view.activity_id)
+        assert view is not None and view.combat is not None
+        assert view.combat.result is None
+        screen = render_varzeas_mission(view)
+    assert reservoir_button is not None
+    assert view.combat.prepared_action == "transferencia_externa"
+    window_id = view.combat.prepared_action_instance_id
+    assert window_id
+    before_version = view.combat.version
+    assert view.progress.get("reservoirs_used", []) == []
+
+    # Leave the contextual button untouched; the public combat action advances
+    # the announced telegraph and records the normal failed-window outcome.
+    defender = next(
+        button
+        for row in screen.keyboard.inline_keyboard
+        for button in row
+        if button.text == "Defender"
+        and (button.callback_data or "").startswith("vsc:")
+    )
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(defender.callback_data, actor=actor, update_id=38),
+    )
+    after = await missions.combat_view_for_actor(actor, view.activity_id)
+    assert after is not None and after.combat is not None
+    assert after.combat.version == before_version + 1
+    assert after.combat.result is None
+    assert (
+        after.combat.fighters["player"].hp
+        < view.combat.fighters["player"].hp
+    )
+    assert after.progress["reservoirs_used"] == ["a"]
+    assert after.progress["failed_transfer_windows"] == [window_id]
+    assert after.progress["reservoir_window_results"][window_id] == {
+        "reservoir_id": "a",
+        "state": "failed",
+        "consumed": True,
+    }
+    resolution = next(
+        event
+        for event in after.combat.events
+        if event.prepared_resolution and event.action == "transferencia_externa"
+    )
+    assert resolution.prepared_action_instance_id == window_id
+    assert resolution.damage > 0
+
+    async with sessions() as session:
+        credits = list(
+            (
+                await session.scalars(
+                    select(CampaignObjectiveCredit).where(
+                        CampaignObjectiveCredit.character_id == character_id,
+                        CampaignObjectiveCredit.quest_id == P24_ID,
+                        CampaignObjectiveCredit.objective_id
+                        == "p24.reservoir_window_recorded",
+                    )
+                )
+            ).all()
+        )
+        assert len(credits) == 1
+        assert credits[0].evidence["window_id"] == window_id
+        assert credits[0].evidence["outcome"] == "failed"
+        assert credits[0].source_key == missions._matrix_reservoir_credit_source_key(
+            character_id, window_id
+        )
+        assert len(credits[0].source_key) <= 128
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == character_id,
+                RewardEvent.source_id.in_(
+                    (P24_REWARD_SOURCE, "p24.matriz_rubra.first_victory.core")
+                ),
+            )
+        ) == 0
+
+    # Replayed stale action and service reconstruction preserve exactly one result.
+    await dispatcher.feed_raw_update(
+        bot,
+        _callback_update(defender.callback_data, actor=actor, update_id=39),
+    )
+    restarted = VarzeasMissionService(sessions, "ocaso")
+    persisted = await restarted.combat_view_for_actor(actor, view.activity_id)
+    assert persisted is not None and persisted.combat is not None
+    assert persisted.combat.version == after.combat.version
+    assert persisted.progress["failed_transfer_windows"] == [window_id]
+    async with sessions() as session:
+        assert await session.scalar(
+            select(func.count(CampaignObjectiveCredit.id)).where(
+                CampaignObjectiveCredit.character_id == character_id,
+                CampaignObjectiveCredit.quest_id == P24_ID,
+                CampaignObjectiveCredit.objective_id
+                == "p24.reservoir_window_recorded",
+            )
+        ) == 1
+
+
+@pytest.mark.asyncio
+async def test_matrix_reservoir_credit_and_progress_roll_back_together(database):
+    actor = 993615
+    character_id, sessions = await _seed_varzeas_p23_endgame(
+        database, actor, level=40, location=VARZEAS_CAMARA
+    )
+    async with sessions.begin() as session:
+        session.add(
+            Quest(
+                character_id=character_id,
+                quest_id=P24_ID,
+                title="A Matriz Rubra",
+                status="active",
+                step=4,
+                state_version=1,
+                content_version="varzeas-1.0.0",
+                progress={},
+            )
+        )
+    missions = VarzeasMissionService(sessions, "ocaso")
+    window_id = (
+        "e" * 32 + ":1:7:enemy:transferencia_externa:prepared"
+    )
+
+    with pytest.raises(RuntimeError, match="rollback reservoir credit"):
+        async with sessions.begin() as session:
+            quest = await session.scalar(
+                select(Quest).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == P24_ID,
+                ).with_for_update()
+            )
+            assert quest is not None
+            await missions._save_reservoir_resolution(
+                session,
+                character_id,
+                quest,
+                window_id,
+                "a",
+                outcome="resolved",
+            )
+            raise RuntimeError("rollback reservoir credit")
+
+    async with sessions() as session:
+        quest = await session.scalar(
+            select(Quest).where(
+                Quest.character_id == character_id,
+                Quest.quest_id == P24_ID,
+            )
+        )
+        assert quest is not None
+        assert quest.progress == {}
+        assert quest.state_version == 1
+        assert await session.scalar(
+            select(func.count(CampaignObjectiveCredit.id)).where(
+                CampaignObjectiveCredit.character_id == character_id,
+                CampaignObjectiveCredit.quest_id == P24_ID,
+                CampaignObjectiveCredit.objective_id
+                == "p24.reservoir_window_recorded",
+            )
+        ) == 0
 
 
 @pytest.mark.asyncio

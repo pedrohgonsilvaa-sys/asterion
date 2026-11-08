@@ -13,6 +13,10 @@ from asterion.application.equipment import (
     EquipmentMutationStatus,
     EquipmentService,
 )
+from asterion.application.equipment_configuration import (
+    load_equipment_configuration,
+    resolve_character_combat_stats,
+)
 from asterion.application.inventory import InventoryService
 from asterion.application.progression import consolidate_character_level, level_xp
 from asterion.application.road import ROAD
@@ -25,6 +29,7 @@ from asterion.infrastructure.db.models import (
     BlockedDelivery,
     Character,
     CharacterEquipmentSlot,
+    CharacterTalentChoice,
     EquipmentItem,
     GameActivity,
     HuntRound,
@@ -188,7 +193,9 @@ async def test_equip_replace_noops_unequip_and_configuration_version(database):
     assert slots == {EquipmentSlot.PRINCIPAL.value: replacement}
     async with database[1]() as session:
         assert await session.scalar(select(EquipmentItem.id).where(EquipmentItem.id == first))
-        assert await session.scalar(select(EquipmentItem.id).where(EquipmentItem.id == replacement))
+        assert await session.scalar(
+            select(EquipmentItem.id).where(EquipmentItem.id == replacement)
+        )
 
     empty = await service.unequip_slot(
         actor, EquipmentSlot.SECUNDARIA, expected_configuration_version=2
@@ -201,6 +208,60 @@ async def test_equip_replace_noops_unequip_and_configuration_version(database):
     assert removed is not None and removed.changed and removed.combat_configuration_version == 3
     version, slots = await _equipment_state(database, actor)
     assert version == 3 and slots == {}
+
+
+@pytest.mark.asyncio
+async def test_equipment_mutations_preserve_talent_derived_stats(database):
+    actor = 907130
+    character_id = await _seed_actor(database, actor)
+    item_id = await _add_item(database, character_id, "equip:talent-hp", "Cabeça")
+    talent_id = "talent.sentinela.carne_de_pedra"
+    base_stats = resolve_combat_stats(
+        "sentinela",
+        5,
+        "remanescente",
+        talent_ids=(talent_id,),
+    )
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        character.level = 5
+        character.max_hp = base_stats.hp
+        character.hp = base_stats.hp
+        session.add(
+            CharacterTalentChoice(
+                character_id=character_id,
+                point_slot=1,
+                talent_id=talent_id,
+            )
+        )
+
+    service = EquipmentService(database[1], "ocaso")
+    equipped = await service.equip_item(actor, item_id)
+    assert equipped is not None and equipped.changed
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        configuration = await load_equipment_configuration(session, character)
+        resolved = resolve_character_combat_stats(character, configuration)
+        assert configuration.talent_choices == ((1, talent_id),)
+        assert resolved.hp > base_stats.hp
+        assert character.max_hp == resolved.hp
+
+    removed = await service.unequip_slot(
+        actor, EquipmentSlot.CABECA, expected_configuration_version=1
+    )
+    assert removed is not None and removed.changed
+    async with database[1].begin() as session:
+        character = await session.scalar(
+            select(Character).where(Character.telegram_id == actor)
+        )
+        configuration = await load_equipment_configuration(session, character)
+        resolved = resolve_character_combat_stats(character, configuration)
+        assert configuration.talent_choices == ((1, talent_id),)
+        assert character.max_hp == resolved.hp == base_stats.hp
 
 
 @pytest.mark.asyncio

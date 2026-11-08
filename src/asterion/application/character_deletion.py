@@ -7,10 +7,20 @@ from uuid import UUID
 
 from sqlalchemy import and_, delete, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.schema import Table
+from sqlalchemy.sql.schema import ForeignKeyConstraint, Table
 
 import asterion.infrastructure.db.models  # noqa: F401 - populate the declarative metadata
 from asterion.infrastructure.db.base import Base
+
+
+def _owning_constraints(table: Table) -> list[ForeignKeyConstraint]:
+    """FKs that mean ownership. ON DELETE SET NULL is a mere reference: the row
+    (an audit entry, someone else's invite) must survive and only lose the link."""
+    return [
+        constraint
+        for constraint in table.foreign_key_constraints
+        if (constraint.ondelete or "").upper() != "SET NULL"
+    ]
 
 
 def _character_descendants() -> tuple[list[Table], dict[str, set[str]]]:
@@ -18,7 +28,7 @@ def _character_descendants() -> tuple[list[Table], dict[str, set[str]]]:
     children: dict[str, set[str]] = defaultdict(set)
     parents_by_child: dict[str, set[str]] = defaultdict(set)
     for table in tables.values():
-        for constraint in table.foreign_key_constraints:
+        for constraint in _owning_constraints(table):
             for element in constraint.elements:
                 parent_name = element.column.table.name
                 if parent_name in tables:
@@ -62,7 +72,7 @@ async def delete_character_owned_data(session: AsyncSession, character_id: UUID)
     for child in ordered[1:]:
         child_pk = tuple(child.primary_key.columns)
         child_keys: set[tuple[object, ...]] = set()
-        for constraint in child.foreign_key_constraints:
+        for constraint in _owning_constraints(child):
             elements = tuple(constraint.elements)
             if not elements:
                 continue

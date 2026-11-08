@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from asterion.application.character_deletion import delete_character_owned_data
 from asterion.application.character_names import lock_character_name, name_available, utc_now
 from asterion.application.groups import prepare_character_deletion
+from asterion.application.guild_upkeep import prepare_guild_departure
 from asterion.domain.creation import NamePolicy, normalize_name
 from asterion.infrastructure.db.models import (
     Character,
@@ -33,6 +34,8 @@ from asterion.infrastructure.db.models import (
     DungeonRun,
     DungeonRunMember,
     GameActivity,
+    Guild,
+    GuildMember,
     HuntRound,
     SocialGroup,
     SocialGroupMember,
@@ -153,6 +156,20 @@ async def finalize_due_character_deletions(
                 )
                 if locked_group is None:
                     continue
+            # Guild mutations also lock the Guild before the Character (§30.3).
+            candidate_guild_id = await session.scalar(
+                select(GuildMember.guild_id).where(
+                    GuildMember.character_id == candidate_character_id
+                )
+            )
+            if candidate_guild_id is not None:
+                locked_guild = await session.scalar(
+                    select(Guild)
+                    .where(Guild.id == candidate_guild_id)
+                    .with_for_update(skip_locked=True)
+                )
+                if locked_guild is None:
+                    continue
             character = await session.scalar(
                 select(Character)
                 .where(
@@ -207,11 +224,17 @@ async def finalize_due_character_deletions(
             )
             if current_group_id != candidate_group_id:
                 continue
+            current_guild_id = await session.scalar(
+                select(GuildMember.guild_id).where(GuildMember.character_id == character.id)
+            )
+            if current_guild_id != candidate_guild_id:
+                continue
             # A due request must never delete a character still holding gameplay state.
             if await _has_foreground(session, character.id):
                 continue
             if not await prepare_character_deletion(session, character.id):
                 continue
+            await prepare_guild_departure(session, character.id, now)
             old_name = character.name
             await lock_character_name(session, server_id, old_name)
             await _reserve_name(

@@ -64,13 +64,14 @@ from asterion.application.vde_missions import (
     VDE_CAMPAIGN_UNLOCK,
     VDEMissionService,
 )
-from asterion.domain.arts import SENTINEL_ART_IDS
+from asterion.domain.arts import DEVASTADOR_ART_IDS, SENTINEL_ART_IDS
 from asterion.domain.combat import action_target_ids, allowed_actions
 from asterion.domain.equipment import assignment_for_item_slot, parse_equipment_slot
 from asterion.domain.professions import RECIPE_DEFINITIONS
 from asterion.domain.road import (
     EXPLORATION_PROFILES,
     LOCATION_LEVEL_BANDS,
+    VDE_CLAUSTRO_BRAZIER,
     hunt_profile_for_location,
 )
 from asterion.infrastructure.db.models import (
@@ -102,6 +103,8 @@ pytestmark = pytest.mark.skipif(
     os.getenv("ASTERION_RUN_VDE_FULL_PLAYTHROUGH") != "1",
     reason="playthrough regional longo; habilite ASTERION_RUN_VDE_FULL_PLAYTHROUGH=1",
 )
+
+ARIETE_ART_ID = DEVASTADOR_ART_IDS["ariete"]
 
 
 async def _free_p12_crafting_slot(inventory, modifications, actor):
@@ -1189,6 +1192,39 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     print(f"VDE_P12_OFFICIAL_EQUIPMENT_CHANGES={p12_equipment_changes!r}", flush=True)
     print(f"VDE_P12_OFFICIAL_RUNES_INSTALLED={p12_runes!r}", flush=True)
     print(f"VDE_P12_MODIFICATION_ACCESS={p12_modification_access!r}", flush=True)
+
+    # P11 leaves the character at Vigília with P12 pending. Use the already
+    # discovered permanent Claustro Brazier through RoadService, preserving
+    # every other progression and economy field, then return by the public
+    # route graph before entering the Berço.
+    before_rest = await _character(sessions, actor)
+    assert before_rest is not None
+    before_rest_state = (
+        before_rest.level,
+        before_rest.xp,
+        before_rest.crowns,
+        before_rest.vigor,
+    )
+    before_rest_hp = before_rest.hp
+    await _move_to(road, actor, VDE_CLAUSTRO)
+    rested = await road.rest(actor, expected_brazier_id=VDE_CLAUSTRO_BRAZIER)
+    assert rested is not None and rested.location == VDE_CLAUSTRO
+    after_rest = await _character(sessions, actor)
+    assert after_rest is not None and after_rest.hp == after_rest.max_hp
+    assert (
+        after_rest.level,
+        after_rest.xp,
+        after_rest.crowns,
+        after_rest.vigor,
+    ) == before_rest_state
+    print(
+        f"VDE_P12_PERMANENT_BRAZIER_REST={{'brazier': {VDE_CLAUSTRO_BRAZIER!r}, "
+        f"'hp_before': {before_rest_hp}, 'hp_after': {after_rest.hp}, "
+        f"'vigor': {after_rest.vigor}}}",
+        flush=True,
+    )
+    await _move_to(road, actor, VDE_VIGILIA)
+
     p12_preparation = await _p12_preparation_snapshot(sessions, actor)
     print(f"VDE_P12_PREPARATION={p12_preparation!r}", flush=True)
 
@@ -1205,11 +1241,13 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     active_arts = ActiveArtService(sessions, "ocaso")
     desired_p12_arts = (
         SENTINEL_ART_IDS["golpe_de_guarda"],
+        ARIETE_ART_ID,
         SENTINEL_ART_IDS["muralha_breve"],
-        SENTINEL_ART_IDS["impacto_resoluto"],
     )
     art_view = await active_arts.view(actor)
     assert art_view is not None
+    assert ARIETE_ART_ID in art_view.available_art_ids
+    assert ARIETE_ART_ID not in art_view.weapon_incompatible_art_ids
     initial_slots = {entry.slot: entry.art_id for entry in art_view.slots}
     initial_art_ids = set(initial_slots.values())
     for target_slot, art_id in enumerate(desired_p12_arts, start=1):
@@ -1264,18 +1302,18 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     p12_loadouts = {
         "C": (
             SENTINEL_ART_IDS["golpe_de_guarda"],
+            ARIETE_ART_ID,
             SENTINEL_ART_IDS["muralha_breve"],
-            SENTINEL_ART_IDS["impacto_resoluto"],
         ),
         "A": (
             SENTINEL_ART_IDS["golpe_de_guarda"],
-            SENTINEL_ART_IDS["quebra_postura"],
+            ARIETE_ART_ID,
             SENTINEL_ART_IDS["impacto_resoluto"],
         ),
         "D": (
             SENTINEL_ART_IDS["golpe_de_guarda"],
+            ARIETE_ART_ID,
             SENTINEL_ART_IDS["quebra_postura"],
-            SENTINEL_ART_IDS["muralha_breve"],
         ),
     }
     p12_attempt_target_connections = False
@@ -1399,8 +1437,6 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     def p12_policy(view):
         combat = view.combat
         available = allowed_actions(combat)
-        if combat.prepared_action == "estrangulamento_vale" and "defend" in available:
-            return "defend"
         player = combat.fighters["player"]
         hp_fraction = player.hp / player.stats.hp
         item_ids = {option.item_id for option in view.consumable_options}
@@ -1412,6 +1448,17 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             ),
             None,
         )
+        if (
+            combat.prepared_action == "estrangulamento_vale"
+            and healing_id is not None
+            and hp_fraction <= Decimal("0.40")
+        ):
+            # A legal healing action is a valid response to the telegraph. At
+            # critical HP its effective heal can exceed the 45% mitigation
+            # from Defender; the prepared attack still resolves normally.
+            return f"consumable:{healing_id}"
+        if combat.prepared_action == "estrangulamento_vale" and "defend" in available:
+            return "defend"
         if healing_id is not None and hp_fraction <= Decimal("0.60"):
             return f"consumable:{healing_id}"
 
@@ -1442,6 +1489,12 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
                     key=lambda action: combat.player_actions[action].coefficient,
                 )
 
+        # Use the equipped Path Art whenever it is ready, except below the
+        # Devastador policy's existing defensive threshold where its Barrier
+        # option remains preferable. Resolution stays in the campaign service.
+        if ARIETE_ART_ID in available and hp_fraction >= Decimal("0.45"):
+            return ARIETE_ART_ID
+
         # Use Devastador's actual charge, Retaliação and DEF-break logic. The
         # Devastador policy only spends a turn on Muralha at critical HP and
         # allows safe ordinary hits to trigger Ímpeto Doloroso.
@@ -1455,14 +1508,14 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
     after_boss = None
     p12_attempt_diagnostics = []
     p12_retry_plan = (
-        ("C", False, "devastador"),
-        ("C", False, "devastador"),
-        ("A", False, "devastador"),
-        ("A", True, "devastador"),
-        ("D", False, "devastador"),
-        ("D", True, "devastador"),
+        # The earlier bounded comparison showed that spending six actions on
+        # the optional Connections was less effective than focusing the boss.
+        # This run first uses direct burst while preserving a healing option
+        # for the prepared phase-III telegraph, then compares defensive and
+        # defense-break slots if a legitimate retry is still needed.
+        ("A", False, "sentinela_devastador"),
         ("C", False, "sentinela_devastador"),
-        ("C", False, "sentinela_devastador"),
+        ("D", False, "sentinela_devastador"),
     )
     for retry, (loadout_name, target_connections, combat_policy) in enumerate(
         p12_retry_plan, start=1
@@ -1490,6 +1543,11 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         assert fight is not None and fight.kind == "combat" and fight.activity_id is not None
         starting_combat = fight.combat
         assert starting_combat is not None
+        assert ARIETE_ART_ID in starting_combat.player_actions
+        ariete_snapshot = starting_combat.player_actions[ARIETE_ART_ID]
+        assert ariete_snapshot.coefficient == Decimal("1.35")
+        assert ariete_snapshot.actor_per_bonus == Decimal(10)
+        assert ariete_snapshot.cooldown == 2
         start_player = starting_combat.fighters["player"]
         start_boss = starting_combat.fighters["enemy"]
         after_boss = await driver.combat_to_result(
@@ -1532,6 +1590,9 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             },
             "equipment": attempt_preparation["equipment"],
             "arts": configured_p12_arts,
+            "ariete_uses": sum(
+                action == ARIETE_ART_ID for action in p12_attempt_metrics["actions"]
+            ),
             "loadout": loadout_name,
             "target_connections": target_connections,
             "policy": combat_policy,
@@ -1575,6 +1636,7 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
         p12_attempt_diagnostics.append(attempt_report)
         print(f"VDE_P12_ATTEMPT_DIAGNOSTIC={attempt_report!r}", flush=True)
         if after_boss is not None and after_boss.kind == "examine_center":
+            assert attempt_report["ariete_uses"] > 0
             break
         assert after_boss is not None and after_boss.progress.get("awaiting_retry"), (
             f"Matriarca encerrou em estado inesperado: {after_boss!r}"
@@ -1590,9 +1652,34 @@ async def test_vde_full_playthrough_from_fresh_tdo_exit(database, monkeypatch):
             await _move_to(road, actor, VDE_BERCO)
             p12 = await missions.resume(actor, P12_ID)
             assert p12 is not None and p12.progress.get("awaiting_retry")
+    diagnostic_fields = (
+        "attempt",
+        "result",
+        "loadout",
+        "arts",
+        "ariete_uses",
+        "player_hp_start",
+        "boss_hp_start",
+        "consumables_used",
+        "connections_destroyed",
+        "phase_reached",
+        "rounds",
+        "actions",
+        "defend_actions",
+        "muralha_actions",
+        "devastador_charges_consumed",
+        "boss_hp_remaining",
+        "player_hp_remaining",
+        "damage_to_boss",
+        "damage_received",
+    )
+    compact_diagnostics = tuple(
+        {key: attempt.get(key) for key in diagnostic_fields}
+        for attempt in p12_attempt_diagnostics
+    )
     assert after_boss is not None and after_boss.kind == "examine_center", (
         f"Matriarca não concluiu vitória persistida: {after_boss!r}; "
-        f"diagnóstico por tentativa={p12_attempt_diagnostics!r}\n{driver.diagnostic()}"
+        f"diagnóstico compacto por tentativa={compact_diagnostics!r}"
     )
     p12 = await missions.advance(actor, P12_ID, after_boss.state_version, "examine_center")
     p12 = await missions.advance(actor, P12_ID, p12.state_version, "register")
