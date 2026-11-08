@@ -2345,6 +2345,14 @@ class Guild(Base):
         CheckConstraint("recruitment IN ('open','closed')", name="ck_guild_recruitment"),
         CheckConstraint("lodging_level BETWEEN 0 AND 5", name="ck_guild_lodging_level"),
         CheckConstraint("revision >= 0", name="ck_guild_revision"),
+        CheckConstraint("treasury_crowns >= 0", name="ck_guild_treasury"),
+        CheckConstraint(
+            "(dissolution_requested_at IS NULL) = (dissolution_due_at IS NULL)",
+            name="ck_guild_dissolution_pair",
+        ),
+        CheckConstraint(
+            "(status = 'dissolved') = (dissolved_at IS NOT NULL)", name="ck_guild_dissolved_at"
+        ),
         Index(
             "uq_guild_server_name",
             "server_id",
@@ -2379,6 +2387,13 @@ class Guild(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    treasury_crowns: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    last_renamed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dissolution_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dissolution_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dissolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class GuildMember(Base):
@@ -2403,6 +2418,10 @@ class GuildMember(Base):
     role: Mapped[str] = mapped_column(String(8), nullable=False)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     role_since: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Last authenticated activity, used by the 168h Leader succession (§30.3).
+    last_active_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class GuildInvite(Base):
@@ -2523,3 +2542,129 @@ class GuildAuditEntry(Base):
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GuildProject(Base):
+    """One level of one Obra: Financiamento -> Construção -> concluída (§30.2)."""
+
+    __tablename__ = "guild_projects"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('lodging','forge','veil_altar','treasury','veil_archive',"
+            "'hunters_post','war_hall')",
+            name="ck_guild_project_kind",
+        ),
+        CheckConstraint("level BETWEEN 1 AND 5", name="ck_guild_project_level"),
+        CheckConstraint(
+            "status IN ('funding','building','completed','cancelled')",
+            name="ck_guild_project_status",
+        ),
+        CheckConstraint("cost > 0 AND funded BETWEEN 0 AND cost", name="ck_guild_project_funds"),
+        CheckConstraint(
+            "status NOT IN ('building','completed') OR funded = cost",
+            name="ck_guild_project_funded_before_build",
+        ),
+        CheckConstraint(
+            "(status = 'building') <= (completes_at IS NOT NULL)",
+            name="ck_guild_project_build_end",
+        ),
+        CheckConstraint("revision >= 0", name="ck_guild_project_revision"),
+        Index(
+            "uq_guild_project_level",
+            "guild_id",
+            "kind",
+            "level",
+            unique=True,
+            postgresql_where=text("status <> 'cancelled'"),
+        ),
+        Index(
+            "uq_guild_project_active_kind",
+            "guild_id",
+            "kind",
+            unique=True,
+            postgresql_where=text("status IN ('funding','building')"),
+        ),
+        Index("ix_guild_projects_due", "status", "completes_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    level: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    cost: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    funded: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    funded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GuildProjectContribution(Base):
+    """Final, non-refundable contribution to an Obra, from a wallet or the Treasury."""
+
+    __tablename__ = "guild_project_contributions"
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_guild_contribution_amount"),
+        CheckConstraint("source IN ('wallet','treasury')", name="ck_guild_contribution_source"),
+        Index("ix_guild_contributions_project", "project_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("guild_projects.id"), nullable=False)
+    character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    source: Mapped[str] = mapped_column(String(8), nullable=False)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GuildTreasuryEntry(Base):
+    """Treasury ledger. `amount` is signed and `balance_after` never goes negative."""
+
+    __tablename__ = "guild_treasury_ledger"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('deposit','project_funding','rename','forfeit')",
+            name="ck_guild_treasury_kind",
+        ),
+        CheckConstraint("amount <> 0", name="ck_guild_treasury_amount"),
+        CheckConstraint("balance_after >= 0", name="ck_guild_treasury_balance"),
+        Index("ix_guild_treasury_guild", "guild_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    balance_after: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    project_id: Mapped[UUID | None] = mapped_column(ForeignKey("guild_projects.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GuildNameHistory(Base):
+    """Rename history; the old Name/TAG stays reserved until `reserved_until`."""
+
+    __tablename__ = "guild_name_history"
+    __table_args__ = (
+        Index("ix_guild_name_history_name", "server_id", text("lower(old_name)")),
+        Index("ix_guild_name_history_tag", "server_id", "old_tag"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    old_name: Mapped[str] = mapped_column(String(16), nullable=False)
+    old_tag: Mapped[str] = mapped_column(String(3), nullable=False)
+    new_name: Mapped[str] = mapped_column(String(16), nullable=False)
+    new_tag: Mapped[str] = mapped_column(String(3), nullable=False)
+    actor_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    renamed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reserved_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

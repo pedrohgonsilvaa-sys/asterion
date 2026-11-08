@@ -131,13 +131,13 @@ async def test_closed_guild_still_invites_and_full_guild_blocks_every_entry(data
     assert guild.recruitment is Recruitment.CLOSED
     for name in ("Bravo", "Cedar", "Doran", "Elian"):
         await _invite_in(service, a["Alpha"], a[name], name)
-    full = await service.my_guild(a["Alpha"])
+    full = await service.my_guild(a["Alpha"], now=NOW)
     assert (full.member_count, full.capacity) == (5, 5)
 
     assert await _code(service.invite(a["Alpha"], "Faris", now=NOW)) == "guild_full"
     await service.set_recruitment(a["Alpha"], Recruitment.OPEN, now=NOW)
     assert await _code(service.apply(a["Faris"], guild.guild_id, now=NOW)) == "guild_full"
-    page = await service.public_page(guild.guild_id)
+    page = await service.public_page(guild.guild_id, now=NOW)
     assert page.accepts_applications is False
     assert (await service.recruiting()).items == ()
 
@@ -382,13 +382,13 @@ async def test_search_public_page_and_stable_recruiting_pages(database):
     assert await service.search("Bra sa") == ()
     other_server = GuildService(database[1], "outro")
     assert await other_server.search("Brasa") == ()
-    assert await other_server.public_page(created[0]) is None
+    assert await other_server.public_page(created[0], now=NOW) is None
 
     first = await service.recruiting(limit=1)
     second = await service.recruiting(after=first.next_after, limit=1)
     assert second.next_after is None
     assert {first.items[0].tag, second.items[0].tag} == {"VGL", "BRS"}
-    page = await service.public_page(created[0])
+    page = await service.public_page(created[0], now=NOW)
     assert (page.name, page.tag, page.member_count, page.capacity) == ("Vigilia", "VGL", 1, 5)
 
 

@@ -6,8 +6,11 @@ Sources: GDD Estrutural v1.6.0 §30, §44.1, §49.10, §49.18 and §55.5.
 from __future__ import annotations
 
 import re
-from datetime import timedelta
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from enum import StrEnum
+from uuid import UUID
 
 GUILD_NAME_RE = re.compile(r"^[A-Za-z]{3,16}$")
 GUILD_TAG_RE = re.compile(r"^[A-Za-z]{3}$")
@@ -101,3 +104,72 @@ def can_remove(actor: GuildRole, target: GuildRole) -> bool:
     if actor is GuildRole.LEADER:
         return True
     return actor is GuildRole.OFFICER and target is GuildRole.MEMBER
+
+
+# Obras, Treasury and Rename (§30.2, §49.10). Only Lodging has a defined effect;
+# the author chose (2026-11-07) to let the other six be built without effect yet.
+
+
+class ProjectKind(StrEnum):
+    LODGING = "lodging"  # Alojamentos
+    FORGE = "forge"  # Forja
+    VEIL_ALTAR = "veil_altar"  # Altar do Véu
+    TREASURY = "treasury"  # Tesouraria
+    VEIL_ARCHIVE = "veil_archive"  # Arquivo do Véu
+    HUNTERS_POST = "hunters_post"  # Posto dos Caçadores
+    WAR_HALL = "war_hall"  # Salão de Guerra
+
+
+PROJECT_LEVEL_COSTS = (20_000, 35_000, 60_000, 100_000, 160_000)
+PROJECT_LEVEL_BUILD_TIMES = (
+    timedelta(hours=6),
+    timedelta(hours=12),
+    timedelta(hours=24),
+    timedelta(hours=48),
+    timedelta(hours=72),
+)
+MAX_PROJECT_LEVEL = 5
+MAX_ACTIVE_PROJECTS = 2
+
+RENAME_COST = 15_000
+RENAME_COOLDOWN = timedelta(days=30)
+# The GDD retains the old Name/TAG without a period; the author chose 30 days.
+OLD_NAME_RETENTION = timedelta(days=30)
+
+# §30.3 / §49.18
+DISSOLUTION_PERIOD = timedelta(hours=72)
+LEADER_INACTIVITY_LIMIT = timedelta(hours=168)
+
+
+def project_cost(level: int) -> int:
+    if not 1 <= level <= MAX_PROJECT_LEVEL:
+        raise ValueError("project level must be 1..5")
+    return PROJECT_LEVEL_COSTS[level - 1]
+
+
+def project_build_time(level: int) -> timedelta:
+    if not 1 <= level <= MAX_PROJECT_LEVEL:
+        raise ValueError("project level must be 1..5")
+    return PROJECT_LEVEL_BUILD_TIMES[level - 1]
+
+
+@dataclass(frozen=True, slots=True)
+class SuccessionCandidate:
+    character_id: UUID
+    role: GuildRole
+    role_since: datetime
+    joined_at: datetime
+
+
+def pick_successor(candidates: Sequence[SuccessionCandidate]) -> UUID | None:
+    """§49.18: the Officer longest in continuous office, then the longest member,
+    then the lowest `character_id`."""
+    eligible = [c for c in candidates if c.role is not GuildRole.LEADER]
+    if not eligible:
+        return None
+    officers = [c for c in eligible if c.role is GuildRole.OFFICER]
+    if officers:
+        return min(
+            officers, key=lambda c: (c.role_since, c.joined_at, str(c.character_id))
+        ).character_id
+    return min(eligible, key=lambda c: (c.joined_at, str(c.character_id))).character_id

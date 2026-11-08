@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from uuid import UUID
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -21,11 +22,38 @@ from asterion.application.guilds import (
     PublicGuildView,
 )
 from asterion.bot.creation_ui import Screen
-from asterion.domain.guilds import GuildRole, Recruitment
+from asterion.domain.guilds import (
+    MAX_ACTIVE_PROJECTS,
+    MAX_PROJECT_LEVEL,
+    GuildRole,
+    ProjectKind,
+    Recruitment,
+    project_build_time,
+    project_cost,
+)
 
 FOUND_PROMPT = "Envie o Nome e a TAG da Guilda, separados por espaço. Exemplo: Aurora AUR"
 SEARCH_PROMPT = "Envie o Nome ou a TAG da Guilda que você procura."
 INVITE_PROMPT = "Envie o nome do personagem que você quer convidar para a Guilda."
+DEPOSIT_PROMPT = (
+    "Envie quantas Coroas da sua carteira depositar na Tesouraria. O depósito é definitivo."
+)
+RENAME_PROMPT = (
+    "Envie o novo Nome e a nova TAG, separados por espaço. Use - para manter um deles. "
+    "Exemplo: Aurora - . O Renome custa 15.000 Coroas da Tesouraria e tem recarga de 30 dias."
+)
+CONTRIBUTE_WALLET_PREFIX = "Quantas Coroas da sua carteira para a Obra "
+CONTRIBUTE_TREASURY_PREFIX = "Quantas Coroas da Tesouraria para a Obra "
+
+OBRA_LABELS = {
+    ProjectKind.LODGING: "Alojamentos",
+    ProjectKind.FORGE: "Forja",
+    ProjectKind.VEIL_ALTAR: "Altar do Véu",
+    ProjectKind.TREASURY: "Tesouraria",
+    ProjectKind.VEIL_ARCHIVE: "Arquivo do Véu",
+    ProjectKind.HUNTERS_POST: "Posto dos Caçadores",
+    ProjectKind.WAR_HALL: "Salão de Guerra",
+}
 
 ROLE_LABELS = {
     GuildRole.LEADER: "Líder",
@@ -62,6 +90,18 @@ GUILD_ERROR_MESSAGES = {
     "too_many_pending": "Você já tem 3 inscrições pendentes. Cancele uma para enviar outra.",
     "leader_must_transfer": "O Líder não pode sair. Transfira a liderança antes.",
     "wrong_server": "Isso pertence a outro servidor.",
+    "invalid_amount": "Informe uma quantia inteira de Coroas maior que zero.",
+    "not_enough_crowns": "Você não tem Coroas suficientes.",
+    "treasury_insufficient": "A Tesouraria não tem Coroas suficientes.",
+    "guild_dissolving": "A Guilda está em dissolução. Tesouraria e Obras estão congeladas.",
+    "project_active": "Essa Obra já está em Financiamento ou Construção.",
+    "too_many_projects": "A Guilda já tem 2 Obras em andamento.",
+    "project_max_level": "Essa Obra já está no nível máximo.",
+    "project_missing": "Essa Obra não existe mais.",
+    "project_not_funding": "Essa Obra não está mais recebendo contribuições.",
+    "rename_unchanged": "O novo Nome e a nova TAG são iguais aos atuais.",
+    "rename_cooldown": "O Renome está em recarga. Ele pode ser usado uma vez a cada 30 dias.",
+    "name_or_tag_reserved": "Esse Nome ou TAG foi usado há pouco por outra Guilda e está reservado.",  # noqa: E501
 }
 GUILD_ERROR_FALLBACK = "Não foi possível concluir essa ação."
 
@@ -119,8 +159,14 @@ def render_guild_menu(
         f"Recrutamento · {_recruitment_label(guild.recruitment)}",
         f"Seu cargo · {ROLE_LABELS[guild.viewer_role]}",
     ]
+    lines.append(f"Tesouraria · {_crowns(guild.treasury_crowns)} Coroas")
     if guild.over_cap:
         lines.append("⚠️ A Guilda está acima da capacidade e não aceita novos membros.")
+    if guild.dissolution_due_at is not None:
+        lines.append(
+            f"⚠️ Dissolução marcada para {_when(guild.dissolution_due_at)}. "
+            "Tesouraria e Obras estão congeladas."
+        )
     lines.append("")
     for member in guild.members:
         lines.append(
@@ -144,10 +190,122 @@ def render_guild_menu(
         )
     if len(guild.members) > 1 and guild.viewer_role in (GuildRole.LEADER, GuildRole.OFFICER):
         rows.append([_button("Gerenciar membros", f"guild:mem:{gid}")])
+    rows.append([_button("Tesouraria e Obras", f"guild:works:{gid}")])
+    if guild.viewer_role is GuildRole.LEADER:
+        if guild.dissolution_due_at is None:
+            rows.append([_button("Renomear Guilda", f"guild:ren:{gid}")])
+            rows.append([_button("Dissolver Guilda", f"guild:diss:{gid}")])
+        else:
+            rows.append([_button("Cancelar dissolução", f"guild:dissno:{gid}")])
     if guild.viewer_role is not GuildRole.LEADER:
         rows.append([_button("Sair da Guilda", f"guild:leave:{gid}")])
     rows.append([_button("← Vínculos", "links:root")])
     return Screen("\n".join(lines), "links", _keyboard(rows))
+
+
+def _crowns(value: int) -> str:
+    return f"{value:,}".replace(",", ".")
+
+
+def _when(value: datetime) -> str:
+    return value.astimezone(UTC).strftime("%d/%m %H:%M UTC")
+
+
+def contribute_prompt(kind: ProjectKind, *, from_treasury: bool) -> str:
+    prefix = CONTRIBUTE_TREASURY_PREFIX if from_treasury else CONTRIBUTE_WALLET_PREFIX
+    return f"{prefix}{OBRA_LABELS[kind]}? A contribuição é definitiva."
+
+
+def kind_from_contribute_prompt(text: str) -> tuple[ProjectKind, bool] | None:
+    for from_treasury in (False, True):
+        for kind in OBRA_LABELS:
+            if text == contribute_prompt(kind, from_treasury=from_treasury):
+                return kind, from_treasury
+    return None
+
+
+def parse_crowns(text: str) -> int | None:
+    """Accept `20000` or `20.000`; anything else is not an amount."""
+    digits = text.strip().replace(".", "")
+    if not digits.isdigit() or len(digits) > 12:
+        return None
+    return int(digits)
+
+
+def render_works(guild: GuildView) -> Screen:
+    """Treasury and Obras (§30.2). Members only; never shown on the public page."""
+    gid = pack(guild.guild_id)
+    leader = guild.viewer_role is GuildRole.LEADER
+    frozen = guild.dissolution_due_at is not None
+    levels = dict(guild.obra_levels)
+    lines = [
+        "🏛️ Tesouraria e Obras",
+        "",
+        f"Tesouraria · {_crowns(guild.treasury_crowns)} Coroas",
+        "Depósitos e contribuições são definitivos: nada volta para a carteira.",
+        "",
+        "Obras",
+    ]
+    for kind, label in OBRA_LABELS.items():
+        lines.append(f"· {label} · nível {levels.get(kind, 0)}/{MAX_PROJECT_LEVEL}")
+    rows: list[list[InlineKeyboardButton]] = []
+    if guild.active_projects:
+        lines.extend(["", "Em andamento"])
+    for project in guild.active_projects:
+        label = OBRA_LABELS[project.kind]
+        if project.status == "funding":
+            lines.append(
+                f"· {label} {_ROMAN[project.level]} · Financiamento · "
+                f"{_crowns(project.funded)}/{_crowns(project.cost)}"
+            )
+            if not frozen:
+                pid = pack(project.project_id)
+                rows.append([_button(f"Contribuir · {label}", f"guild:con:w:{gid}:{pid}")])
+                if leader:
+                    rows.append([_button(f"Tesouraria → {label}", f"guild:con:t:{gid}:{pid}")])
+        else:
+            done = _when(project.completes_at) if project.completes_at else "—"
+            lines.append(f"· {label} {_ROMAN[project.level]} · Construção até {done}")
+    lines.extend(["", "Só Alojamentos tem efeito por enquanto: mais vagas na Guilda."])
+    if frozen:
+        lines.append("⚠️ A Guilda está em dissolução: Tesouraria e Obras estão congeladas.")
+    else:
+        rows.append([_button("Depositar na Tesouraria", f"guild:dep:{gid}")])
+        if leader:
+            rows.append([_button("Iniciar Obra", f"guild:newp:{gid}")])
+    rows.append([_button("← Guilda", "guild:root")])
+    return Screen("\n".join(lines), "links", _keyboard(rows))
+
+
+def render_new_project(guild: GuildView) -> Screen:
+    gid = pack(guild.guild_id)
+    levels = dict(guild.obra_levels)
+    active = {project.kind for project in guild.active_projects}
+    lines = ["🏗️ Iniciar Obra", ""]
+    rows: list[list[InlineKeyboardButton]] = []
+    if len(guild.active_projects) >= MAX_ACTIVE_PROJECTS:
+        lines.append("A Guilda já tem 2 Obras em andamento. Conclua uma antes de iniciar outra.")
+    else:
+        lines.append("Escolha a Obra. O próximo nível abre em Financiamento.")
+        for kind, label in OBRA_LABELS.items():
+            level = levels.get(kind, 0) + 1
+            if kind in active or level > MAX_PROJECT_LEVEL:
+                continue
+            cost = _crowns(project_cost(level))
+            hours = int(project_build_time(level).total_seconds() // 3600)
+            rows.append(
+                [
+                    _button(
+                        f"{label} {_ROMAN[level]} · {cost} · {hours}h",
+                        f"guild:np:{gid}:{kind.value}",
+                    )
+                ]
+            )
+    rows.append([_button("← Tesouraria e Obras", f"guild:works:{gid}")])
+    return Screen("\n".join(lines), "links", _keyboard(rows))
+
+
+_ROMAN = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V"}
 
 
 def render_manage_members(guild: GuildView) -> Screen:

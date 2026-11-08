@@ -23,11 +23,16 @@ from aiogram.types import (
 from asterion.application.guilds import GuildError, GuildService, GuildView
 from asterion.bot.creation_handlers import present
 from asterion.bot.guilds_ui import (
+    DEPOSIT_PROMPT,
     FOUND_PROMPT,
     INVITE_PROMPT,
+    RENAME_PROMPT,
     SEARCH_PROMPT,
+    contribute_prompt,
     error_text,
+    kind_from_contribute_prompt,
     pack,
+    parse_crowns,
     render_browse,
     render_confirm,
     render_expired,
@@ -35,12 +40,14 @@ from asterion.bot.guilds_ui import (
     render_inbox,
     render_manage_members,
     render_my_applications,
+    render_new_project,
     render_public_page,
     render_received_applications,
     render_search_results,
+    render_works,
     unpack,
 )
-from asterion.domain.guilds import GuildRole, Recruitment
+from asterion.domain.guilds import GuildRole, ProjectKind, Recruitment
 
 # Errors that mean "your screen is out of date" rather than "you did something invalid".
 _STALE_CODES = {"not_in_guild", "guild_missing", "target_not_member"}
@@ -288,6 +295,10 @@ def guilds_router(service: GuildService, images: dict[str, str]) -> Router:
             if guild is None:
                 raise ValueError("stale guild")
             application_id = unpack(parts[4])
+            pending = {
+                item.application_id: item
+                for item in await service.received_applications(query.from_user.id)
+            }
             if parts[2] == "a":
                 await service.approve_application(query.from_user.id, application_id)
             else:
@@ -300,6 +311,21 @@ def guilds_router(service: GuildService, images: dict[str, str]) -> Router:
             await stale(query)
             return
         await query.answer("Inscrição aprovada." if parts[2] == "a" else "Inscrição recusada.")
+        applicant = pending.get(application_id)
+        if applicant is not None and applicant.character_telegram_id is not None:
+            result = (
+                "foi aprovada. Você agora faz parte da Guilda."
+                if parts[2] == "a"
+                else "foi recusada."
+            )
+            try:
+                await query.bot.send_message(
+                    applicant.character_telegram_id,
+                    f"Sua Inscrição na Guilda {guild.name} [{guild.tag}] {result}",
+                )
+            except TelegramAPIError:
+                # The result is durable and shows under Guilda → Minhas Inscrições.
+                pass
         await _refresh_received(query)
 
     async def _refresh_received(query: CallbackQuery) -> None:
@@ -487,13 +513,193 @@ def guilds_router(service: GuildService, images: dict[str, str]) -> Router:
         await query.answer("Você saiu da Guilda.")
         await show_menu(query)
 
+    # --------------------------------------------- Treasury, Obras, Rename
+
+    async def show_works(target: Message | CallbackQuery) -> None:
+        message = _target(target)
+        guild = await service.my_guild(target.from_user.id)
+        if message is None or guild is None:
+            await show_menu(target)
+            return
+        await present(message, render_works(guild), images, edit=isinstance(target, CallbackQuery))
+
+    @router.callback_query(F.data.startswith("guild:works:"))
+    async def guild_works(query: CallbackQuery) -> None:
+        if await current_guild(query, (query.data or "").split(":")[-1]) is None:
+            await stale(query)
+            return
+        await query.answer()
+        await show_works(query)
+
+    @router.callback_query(F.data.startswith("guild:dep:"))
+    async def guild_deposit_prompt(query: CallbackQuery) -> None:
+        if await current_guild(query, (query.data or "").split(":")[-1]) is None:
+            await stale(query)
+            return
+        await ask(query, DEPOSIT_PROMPT, "Quantidade de Coroas")
+
+    @router.callback_query(F.data.startswith("guild:newp:"))
+    async def guild_new_project(query: CallbackQuery) -> None:
+        guild = await current_guild(query, (query.data or "").split(":")[-1])
+        message = _target(query)
+        if guild is None or message is None:
+            await stale(query)
+            return
+        if guild.viewer_role is not GuildRole.LEADER:
+            await query.answer(error_text("no_permission"), show_alert=True)
+            return
+        await query.answer()
+        await present(message, render_new_project(guild), images, edit=True)
+
+    @router.callback_query(F.data.startswith("guild:np:"))
+    async def guild_start_project(query: CallbackQuery) -> None:
+        parts = (query.data or "").split(":")
+        try:
+            if len(parts) != 4 or await current_guild(query, parts[2]) is None:
+                raise ValueError("stale guild")
+            kind = ProjectKind(parts[3])
+            await service.start_project(query.from_user.id, kind)
+        except GuildError as exc:
+            await fail(query, exc)
+            return
+        except ValueError:
+            await stale(query)
+            return
+        await query.answer("Obra aberta para Financiamento.")
+        await show_works(query)
+
+    @router.callback_query(F.data.startswith("guild:con:"))
+    async def guild_contribute_prompt(query: CallbackQuery) -> None:
+        parts = (query.data or "").split(":")
+        guild = None
+        if len(parts) == 5 and parts[2] in {"w", "t"}:
+            guild = await current_guild(query, parts[3])
+        try:
+            project_id = unpack(parts[4]) if guild is not None else None
+        except ValueError:
+            project_id = None
+        project = next(
+            (
+                p
+                for p in (guild.active_projects if guild else ())
+                if p.project_id == project_id and p.status == "funding"
+            ),
+            None,
+        )
+        if guild is None or project is None:
+            await stale(query)
+            return
+        from_treasury = parts[2] == "t"
+        if from_treasury and guild.viewer_role is not GuildRole.LEADER:
+            await query.answer(error_text("no_permission"), show_alert=True)
+            return
+        await ask(
+            query,
+            contribute_prompt(project.kind, from_treasury=from_treasury),
+            "Quantidade de Coroas",
+        )
+
+    @router.callback_query(F.data.startswith("guild:ren:"))
+    async def guild_rename_prompt(query: CallbackQuery) -> None:
+        guild = await current_guild(query, (query.data or "").split(":")[-1])
+        if guild is None:
+            await stale(query)
+            return
+        if guild.viewer_role is not GuildRole.LEADER:
+            await query.answer(error_text("no_permission"), show_alert=True)
+            return
+        await ask(query, RENAME_PROMPT, "Nome TAG")
+
+    # ---------------------------------------------------------- dissolution
+
+    @router.callback_query(F.data.startswith("guild:diss:"))
+    async def guild_dissolve_confirm(query: CallbackQuery) -> None:
+        parts = (query.data or "").split(":")
+        guild = await current_guild(query, parts[-1])
+        message = _target(query)
+        if guild is None or message is None:
+            await stale(query)
+            return
+        if guild.viewer_role is not GuildRole.LEADER:
+            await query.answer(error_text("no_permission"), show_alert=True)
+            return
+        await query.answer()
+        await present(
+            message,
+            render_confirm(
+                f"Dissolver a Guilda {guild.name}? Você terá 72 horas para cancelar. "
+                "Nesse período a Tesouraria e as Obras ficam congeladas. No fim, o saldo da "
+                "Tesouraria e as Coroas das Obras em Financiamento são perdidos, e todos os "
+                "membros só poderão entrar em outra Guilda após 12 horas.",
+                f"guild:dissok:{parts[-1]}",
+            ),
+            images,
+            edit=True,
+        )
+
+    @router.callback_query(F.data.regexp(r"^guild:diss(ok|no):"))
+    async def guild_dissolution(query: CallbackQuery) -> None:
+        parts = (query.data or "").split(":")
+        if len(parts) != 3 or await current_guild(query, parts[2]) is None:
+            await stale(query)
+            return
+        try:
+            if parts[1] == "dissok":
+                await service.request_dissolution(query.from_user.id)
+            else:
+                await service.cancel_dissolution(query.from_user.id)
+        except GuildError as exc:
+            await fail(query, exc)
+            return
+        await query.answer(
+            "Dissolução marcada para daqui a 72 horas."
+            if parts[1] == "dissok"
+            else "Dissolução cancelada."
+        )
+        await show_menu(query)
+
+    @router.message(
+        F.text,
+        F.reply_to_message.text.func(lambda text: kind_from_contribute_prompt(text) is not None),
+        F.reply_to_message.from_user.is_bot,
+    )
+    async def guild_contribute_reply(message: Message) -> None:
+        prompt = message.reply_to_message
+        parsed = kind_from_contribute_prompt(prompt.text or "") if prompt else None
+        if message.from_user is None or parsed is None:
+            return
+        kind, from_treasury = parsed
+        amount = parse_crowns(message.text or "")
+        if amount is None:
+            await message.answer(error_text("invalid_amount"))
+            return
+        guild = await service.my_guild(message.from_user.id)
+        project = next(
+            (p for p in (guild.active_projects if guild else ()) if p.kind is kind),
+            None,
+        )
+        if project is None:
+            await message.answer(error_text("project_not_funding"))
+            return
+        try:
+            result = await service.contribute(
+                message.from_user.id, project.project_id, amount, from_treasury=from_treasury
+            )
+        except GuildError as exc:
+            await message.answer(error_text(exc.code))
+            return
+        await message.answer(f"Contribuição registrada: {result.applied} Coroas.")
+        await present(message, render_works(result.guild), images)
+
     # ------------------------------------------------------- text replies
 
     # The prompt text is part of the filter so replies to other features' prompts
     # keep propagating to their own routers.
     @router.message(
         F.text,
-        F.reply_to_message.text.in_({FOUND_PROMPT, SEARCH_PROMPT, INVITE_PROMPT}),
+        F.reply_to_message.text.in_(
+            {FOUND_PROMPT, SEARCH_PROMPT, INVITE_PROMPT, DEPOSIT_PROMPT, RENAME_PROMPT}
+        ),
         F.reply_to_message.from_user.is_bot,
     )
     async def guild_reply(message: Message) -> None:
@@ -514,6 +720,34 @@ def guilds_router(service: GuildService, images: dict[str, str]) -> Router:
             except GuildError as exc:
                 await message.answer(error_text(exc.code))
                 return
+            await show_menu(message)
+        elif prompt.text == DEPOSIT_PROMPT:
+            amount = parse_crowns(text)
+            if amount is None:
+                await message.answer(error_text("invalid_amount"))
+                return
+            try:
+                guild = await service.deposit(actor, amount)
+            except GuildError as exc:
+                await message.answer(error_text(exc.code))
+                return
+            await message.answer(f"Depósito registrado: {amount} Coroas.")
+            await present(message, render_works(guild), images)
+        elif prompt.text == RENAME_PROMPT:
+            parts = text.split()
+            if len(parts) != 2 or parts == ["-", "-"]:
+                await message.answer("Envie o Nome e a TAG separados por espaço. Ex.: Aurora -")
+                return
+            try:
+                await service.rename(
+                    actor,
+                    name=None if parts[0] == "-" else parts[0],
+                    tag=None if parts[1] == "-" else parts[1],
+                )
+            except GuildError as exc:
+                await message.answer(error_text(exc.code))
+                return
+            await message.answer("Guilda renomeada.")
             await show_menu(message)
         elif prompt.text == SEARCH_PROMPT:
             results = await service.search(text)

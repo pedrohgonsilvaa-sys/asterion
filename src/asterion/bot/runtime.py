@@ -68,6 +68,7 @@ from asterion.bot.dungeon_handlers import dungeon_router
 from asterion.bot.equipment_handlers import equipment_router
 from asterion.bot.equipment_modification_handlers import equipment_modification_router
 from asterion.bot.groups_handlers import groups_router
+from asterion.bot.guild_activity import GuildActivityMiddleware
 from asterion.bot.guilds_handlers import guilds_router
 from asterion.bot.nareth_missions_handlers import nareth_missions_router
 from asterion.bot.p1_handlers import p1_router
@@ -198,6 +199,8 @@ def get_bot_runtime() -> BotRuntime:
         )
     )
     guilds = GuildService(SessionFactory, settings.server_id)
+    # Every authenticated update counts as activity for the Leader succession.
+    dispatcher.update.outer_middleware(GuildActivityMiddleware(guilds))
     dispatcher.include_router(guilds_router(guilds, settings.creation_images))
     dispatcher.include_router(
         groups_router(
