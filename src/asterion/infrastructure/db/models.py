@@ -2332,3 +2332,194 @@ class BlockedDelivery(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Guild(Base):
+    """Server-bound Guild (GDD v1.6.0 §30). Never hard-deleted."""
+
+    __tablename__ = "guilds"
+    __table_args__ = (
+        CheckConstraint("name ~ '^[A-Za-z]{3,16}$'", name="ck_guild_name"),
+        CheckConstraint("tag ~ '^[A-Z]{3}$'", name="ck_guild_tag"),
+        CheckConstraint("status IN ('active','dissolved')", name="ck_guild_status"),
+        CheckConstraint("recruitment IN ('open','closed')", name="ck_guild_recruitment"),
+        CheckConstraint("lodging_level BETWEEN 0 AND 5", name="ck_guild_lodging_level"),
+        CheckConstraint("revision >= 0", name="ck_guild_revision"),
+        Index(
+            "uq_guild_server_name",
+            "server_id",
+            text("lower(name)"),
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+        Index(
+            "uq_guild_server_tag",
+            "server_id",
+            "tag",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+        Index("ix_guild_recruiting", "server_id", "status", "recruitment", "id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(16), nullable=False)
+    tag: Mapped[str] = mapped_column(String(3), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    recruitment: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="closed", server_default="closed"
+    )
+    lodging_level: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class GuildMember(Base):
+    """One Guild per character; the character row already fixes the server."""
+
+    __tablename__ = "guild_members"
+    __table_args__ = (
+        CheckConstraint("role IN ('leader','officer','member')", name="ck_guild_member_role"),
+        Index(
+            "uq_guild_single_leader",
+            "guild_id",
+            unique=True,
+            postgresql_where=text("role = 'leader'"),
+        ),
+        Index("ix_guild_members_guild", "guild_id", "joined_at", "character_id"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    role: Mapped[str] = mapped_column(String(8), nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    role_since: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GuildInvite(Base):
+    """Direct invite; valid until answered, cancelled or made unusable (§55.5)."""
+
+    __tablename__ = "guild_invites"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','accepted','declined','cancelled','invalidated')",
+            name="ck_guild_invite_status",
+        ),
+        CheckConstraint("revision >= 0", name="ck_guild_invite_revision"),
+        Index(
+            "uq_pending_guild_invite",
+            "guild_id",
+            "invitee_character_id",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_guild_invites_inbox", "invitee_character_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    inviter_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    invitee_character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default="pending"
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GuildApplication(Base):
+    """Guild application (Inscrição, §30.1). Resolved rows stay as audit history."""
+
+    __tablename__ = "guild_applications"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','approved','rejected','cancelled')",
+            name="ck_guild_application_status",
+        ),
+        CheckConstraint(
+            "(status = 'cancelled') = (closed_by IS NOT NULL)",
+            name="ck_guild_application_cancel_origin",
+        ),
+        CheckConstraint(
+            "closed_by IS NULL OR closed_by IN ('player','system')",
+            name="ck_guild_application_closed_by",
+        ),
+        CheckConstraint("revision >= 0", name="ck_guild_application_revision"),
+        Index(
+            "uq_pending_guild_application",
+            "guild_id",
+            "character_id",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_guild_applications_character", "character_id", "created_at"),
+        Index("ix_guild_applications_guild", "guild_id", "status", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default="pending"
+    )
+    closed_by: Mapped[str | None] = mapped_column(String(8))
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+
+
+class GuildSwitchCooldown(Base):
+    """Last Guild exit per account + server, so recreating a character never resets it."""
+
+    __tablename__ = "guild_switch_cooldowns"
+
+    telegram_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id"), primary_key=True, autoincrement=False
+    )
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    last_exit_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GuildAuditEntry(Base):
+    """Append-only log of relevant Guild administration (§30)."""
+
+    __tablename__ = "guild_audit_log"
+    __table_args__ = (
+        CheckConstraint("action <> ''", name="ck_guild_audit_action"),
+        CheckConstraint("jsonb_typeof(details) = 'object'", name="ck_guild_audit_details"),
+        Index("ix_guild_audit_guild", "guild_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    target_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    details: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
