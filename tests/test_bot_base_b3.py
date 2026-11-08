@@ -326,6 +326,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
         "Códice",
         "Configurações",
         "Vínculos",
+        "Mercado",
     }
     update_id += 1
     await dispatcher.feed_raw_update(

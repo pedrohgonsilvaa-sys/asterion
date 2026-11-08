@@ -117,6 +117,7 @@ def render_world(view: WorldView) -> Screen:
         ("Personagem", "character:root"),
         ("Códice", "knowledge:codex"),
         ("Vínculos", "links:root"),
+        ("Mercado", "mkt:root"),
         ("Configurações", "settings:root"),
     ]
     rows = [

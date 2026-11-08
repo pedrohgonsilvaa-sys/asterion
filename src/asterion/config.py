@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_mode: Literal["polling", "webhook"] = "polling"
     telegram_webhook_secret: str | None = None
+    # Community supergroup and its Mercado topic; unset means Divulgar shows copy text.
+    community_chat_id: int | None = None
+    community_market_topic_id: int | None = None
 
     @model_validator(mode="after")
     def validate_telegram(self) -> Self:
