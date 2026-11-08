@@ -47,6 +47,30 @@ class P1CombatCallback(CallbackData, prefix="p1fight"):
         return UUID(hex=self.activity)
 
 
+class PvpCombatCallback(CallbackData, prefix="pv"):
+    activity: str
+    version: str
+    action: str
+    target: str
+
+    @classmethod
+    def for_intent(cls, activity_id: UUID, version: int, action_index: int, target: str):
+        return cls(
+            activity=activity_id.hex,
+            version=_base36(version),
+            action=_base36(action_index),
+            target=target,
+        )
+
+    @property
+    def combat_version(self) -> int:
+        return _from_base36(self.version)
+
+    @property
+    def action_index(self) -> int:
+        return _from_base36(self.action)
+
+
 class CampaignCombatCallback(CallbackData, prefix="cc"):
     activity: str
     version: str
@@ -1529,7 +1553,8 @@ def render_combat(view: CombatView) -> Screen:
     state = view.combat
     is_trial = view.context == "class_trial"
     is_dungeon = view.context == "dungeon"
-    is_pvpve = view.context == "pvpve"
+    is_pvp_match = view.context in {"pvp_arena", "pvp_duel"}
+    is_pvpve = view.context == "pvpve" or is_pvp_match
     is_party_combat = is_trial or is_dungeon or state.party_mode
     view_campaign_shared = getattr(view, "campaign_shared", None)
     if is_dungeon:
@@ -1565,7 +1590,11 @@ def render_combat(view: CombatView) -> Screen:
         if not is_dungeon and not actor_bound_party
         else None
     )
-    player_key = active_key or requested_actor_key or "player"
+    # A PvP match always renders from the viewer's side: the rival's private
+    # state must not appear while it is the rival's turn (Section 59).
+    player_key = (
+        requested_actor_key if is_pvp_match else None
+    ) or active_key or requested_actor_key or "player"
     player = state.fighters.get(player_key, state.fighters.get("player"))
     if player is None:
         return Screen("⚔️ Combate indisponível.", view.context)
@@ -1578,6 +1607,9 @@ def render_combat(view: CombatView) -> Screen:
         lines = []
         if is_trial and view.trial_stage_caption:
             lines.extend([f"⚔️ Provação · {escape(view.trial_stage_caption)}", ""])
+        elif is_pvp_match:
+            title = "Arena da Vigília" if view.context == "pvp_arena" else "Duelo"
+            lines.extend([f"⚔️ {title}", ""])
         elif is_pvpve:
             lines.extend(["⚔️ Confronto PvPvE · Disputa pelo Rastro", ""])
         elif is_dungeon:
@@ -1806,7 +1838,9 @@ def render_combat(view: CombatView) -> Screen:
             ).pack()
         elif is_campaign_party or is_varzeas_solo_campaign or is_altos_solo_campaign:
             intent_callback = (
-                CampaignCombatCallback
+                PvpCombatCallback
+                if is_pvp_match
+                else CampaignCombatCallback
                 if is_campaign_party
                 else AltosSoloCombatCallback
                 if is_altos_solo_campaign

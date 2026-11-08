@@ -21,7 +21,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from asterion.infrastructure.db.models import AccountLink, AccountRiskFlag, Character
 
 ActivityKind = Literal[
-    "group_activity", "dungeon_run", "guild_project", "market_purchase", "direct_trade"
+    "group_activity",
+    "dungeon_run",
+    "guild_project",
+    "market_purchase",
+    "direct_trade",
+    "arena_match",
+    "duel",
 ]
 FlagStatus = Literal["open", "reviewed", "dismissed"]
 FLAG_STATUSES: frozenset[str] = frozenset({"open", "reviewed", "dismissed"})
