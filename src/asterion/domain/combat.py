@@ -21,6 +21,7 @@ from asterion.domain.consumables import ConsumableFamily, UseContext, definition
 
 D = Decimal
 ZERO = D(0)
+PVP_HEALING_RATE = D("0.90")
 PERCENT_POINT_STATS = frozenset({"per", "crit", "evasion", "block"})
 
 
@@ -1281,8 +1282,9 @@ def _apply_barrier(
         return ZERO
 
     if target.barrier_cap_fraction is not None and round_number >= 20:
-        exhaustion = max(D("0.35"), D(1) - D("0.10") * (round_number - 19))
-        requested = (requested * exhaustion).to_integral_value(rounding=ROUND_FLOOR)
+        requested = (requested * pvp_exhaustion_multiplier(round_number)).to_integral_value(
+            rounding=ROUND_FLOOR
+        )
         if requested <= ZERO:
             return ZERO
 
@@ -2316,6 +2318,24 @@ def _advance_barrier_sources(fighter: Fighter) -> tuple[BarrierLayer, ...]:
     return tuple(expired)
 
 
+def pvp_exhaustion_multiplier(round_number: int) -> Decimal:
+    """GDD §13: share of PvP Healing and Barrier kept in one Round."""
+    if round_number < 20:
+        return D(1)
+    if round_number >= 25:
+        return D("0.35")
+    return D(1) - D("0.10") * (round_number - 19)
+
+
+def _pvp_adjusted_healing(state: Combat, amount: Decimal) -> Decimal:
+    """Apply the 90% PvP Healing rate (§9.4) and then Exhaustion (§13)."""
+    if not state.pvp_mode:
+        return amount
+    return (
+        amount * PVP_HEALING_RATE * pvp_exhaustion_multiplier(state.round)
+    ).to_integral_value(rounding=ROUND_FLOOR)
+
+
 def _deal_combat_damage(
     state: Combat,
     target_key: str,
@@ -2325,6 +2345,11 @@ def _deal_combat_damage(
     absorbed_sources: list[str] | None = None,
 ) -> tuple[Decimal, Decimal]:
     target = state.fighters[target_key]
+    if state.pvp_mode and state.round >= 26:
+        # §13: Final Damage from Round 26 on, with no artificial cap.
+        amount = (
+            D(amount) * (D(1) + D("0.10") * (state.round - 25))
+        ).to_integral_value(rounding=ROUND_FLOOR)
     hp_before = target.hp
     layers_before = tuple(target.barrier_layers)
     actual_damage, barrier_absorbed = _deal_damage(
@@ -2752,6 +2777,7 @@ def _grant_nv55_hp_threshold_effects(
     amount = (fighter.stats.hp * D("0.05")).to_integral_value(
         rounding=ROUND_FLOOR
     )
+    amount = _pvp_adjusted_healing(state, amount)
     healed = min(max(ZERO, fighter.stats.hp - fighter.hp), amount)
     if healed <= ZERO:
         return
@@ -6078,6 +6104,7 @@ def _perform(
             calculated_healing = (
                 base_healing * received_healing_multiplier
             ).to_integral_value(rounding=ROUND_FLOOR)
+            calculated_healing = _pvp_adjusted_healing(state, calculated_healing)
             target_healed = calculated_healing
             target_healed = min(
                 max(ZERO, target_healed),
@@ -6344,11 +6371,16 @@ def _perform(
             else actor.stats.hp - actor.hp
         )
         action_vamp_healed = min(
-            (total_vamp_damage * action.vampirism_fraction).to_integral_value(
-                rounding=ROUND_FLOOR
+            _pvp_adjusted_healing(
+                state,
+                min(
+                    (total_vamp_damage * action.vampirism_fraction).to_integral_value(
+                        rounding=ROUND_FLOOR
+                    ),
+                    action_vamp_cap,
+                ),
             ),
             actor.stats.hp - actor.hp,
-            action_vamp_cap,
         )
         action_vamp_healed = max(ZERO, action_vamp_healed)
         actor.hp += action_vamp_healed
@@ -6375,8 +6407,10 @@ def _perform(
         and total_vamp_damage > ZERO
     ):
         vamp_healed = min(
-            total_vamp_damage * D("0.12"),
-            actor.stats.hp * D("0.03"),
+            _pvp_adjusted_healing(
+                state,
+                min(total_vamp_damage * D("0.12"), actor.stats.hp * D("0.03")),
+            ),
             actor.stats.hp - actor.hp,
         ).to_integral_value(rounding=ROUND_FLOOR)
         vamp_healed = max(ZERO, vamp_healed)
@@ -7401,6 +7435,21 @@ def _resolve_action_effect_removal(
             remaining_effect_stacks=remaining_stacks,
             effect_removal_kind=removal_kinds[0] if removal_kinds else None,
         )
+
+
+def pass_turn(state: Combat, actor_key: str) -> Combat:
+    """Spend the current opportunity without acting, as a PvP turn timeout does."""
+    if state.result or active_player_key(state) != actor_key:
+        return state
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        updated = deepcopy(state)
+        _perform(updated, actor_key, "hold")
+        if not updated.result:
+            _end_turn(updated)
+            _advance_to_player(updated)
+        updated.version += 1
+        return updated
 
 
 def act(

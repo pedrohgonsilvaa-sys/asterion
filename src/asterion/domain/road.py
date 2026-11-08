@@ -4037,6 +4037,7 @@ def create_player_versus_player_combat(
     ruleset_version: str | None = None,
     flavor: str = "",
     opening_log: str = "",
+    full_hp: bool = False,
 ) -> Combat:
     """Create a shared manual-vs-manual combat using each real frozen setup."""
     if not 1 <= len(left) <= 4 or len(left) != len(right):
@@ -4077,7 +4078,7 @@ def create_player_versus_player_combat(
                 name=member.name,
                 level=member.level,
                 stats=stats,
-                hp=member.hp,
+                hp=stats.hp if full_hp else member.hp,
                 race=member.race,
                 character_class=member.character_class,
                 selected_path=equipment.selected_path,

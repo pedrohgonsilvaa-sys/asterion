@@ -2920,3 +2920,146 @@ class TradeItem(Base):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="escrow")
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ArenaProfile(Base):
+    """Career of one character in the Arena; Legado never resets it."""
+
+    __tablename__ = "arena_profiles"
+    __table_args__ = (
+        CheckConstraint("renome >= 0", name="ck_arena_profile_renome"),
+        CheckConstraint(
+            "placement_played BETWEEN 0 AND 5 AND placement_wins BETWEEN 0 AND placement_played",
+            name="ck_arena_profile_placement",
+        ),
+        Index("ix_arena_profiles_ranking", "server_id", "renome"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    renome: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    mmr: Mapped[int] = mapped_column(Integer, nullable=False, default=1500)
+    placement_played: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    placement_wins: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    matches_played: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    wins: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    losses: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    draws: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    queue_blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_match_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_decay_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ArenaQueueEntry(Base):
+    """One entry in the competitive queue; it owns the Combat Configuration lock."""
+
+    __tablename__ = "arena_queue_entries"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('waiting','matched','left','released')",
+            name="ck_arena_queue_status",
+        ),
+        Index(
+            "uq_arena_queue_open_character",
+            "character_id",
+            unique=True,
+            postgresql_where=text("status IN ('waiting','matched')"),
+        ),
+        Index("ix_arena_queue_waiting", "server_id", "status", "entered_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    account_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    game_activity_id: Mapped[UUID] = mapped_column(ForeignKey("game_activities.id"), nullable=False)
+    level: Mapped[int] = mapped_column(Integer, nullable=False)
+    mmr: Mapped[int] = mapped_column(Integer, nullable=False)
+    configuration_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="waiting")
+    entered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PvpMatch(Base):
+    """One Duelo or Arena match, from invite or pairing until the settlement."""
+
+    __tablename__ = "pvp_matches"
+    __table_args__ = (
+        CheckConstraint("kind IN ('duel','arena')", name="ck_pvp_match_kind"),
+        CheckConstraint(
+            "status IN ('invited','confirming','active','finished','cancelled')",
+            name="ck_pvp_match_status",
+        ),
+        CheckConstraint(
+            "winner_side IS NULL OR winner_side IN ('a','b')", name="ck_pvp_match_winner"
+        ),
+        Index("ix_pvp_matches_due", "server_id", "status", "deadline_at"),
+        Index("ix_pvp_matches_finished", "server_id", "kind", "finished_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Invite, Entry Confirmation or current turn, according to the status.
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    combat_id: Mapped[UUID | None] = mapped_column(Uuid)
+    ruleset_version: Mapped[str | None] = mapped_column(String(48))
+    state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    combat_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    winner_side: Mapped[str | None] = mapped_column(String(1))
+    end_reason: Mapped[str | None] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PvpMatchMember(Base):
+    __tablename__ = "pvp_match_members"
+    __table_args__ = (
+        CheckConstraint("side IN ('a','b')", name="ck_pvp_member_side"),
+        UniqueConstraint("match_id", "side", name="uq_pvp_member_side"),
+        Index("ix_pvp_member_character", "character_id"),
+    )
+
+    match_id: Mapped[UUID] = mapped_column(
+        ForeignKey("pvp_matches.id", ondelete="CASCADE"), primary_key=True
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    account_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    side: Mapped[str] = mapped_column(String(1), nullable=False)
+    actor_key: Mapped[str] = mapped_column(String(8), nullable=False)
+    is_challenger: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    game_activity_id: Mapped[UUID | None] = mapped_column(ForeignKey("game_activities.id"))
+    queue_entry_id: Mapped[UUID | None] = mapped_column(ForeignKey("arena_queue_entries.id"))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    consecutive_timeouts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_timeouts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    renome_before: Mapped[int | None] = mapped_column(Integer)
+    renome_after: Mapped[int | None] = mapped_column(Integer)
+    placed_before: Mapped[bool | None] = mapped_column(Boolean)
+    placed_after: Mapped[bool | None] = mapped_column(Boolean)
+    placement_played_after: Mapped[int | None] = mapped_column(Integer)
+
+
+class ArenaDodge(Base):
+    """Refused or expired Entry Confirmation, read in a rolling 60 minutes."""
+
+    __tablename__ = "arena_dodges"
+    __table_args__ = (Index("ix_arena_dodges_character_at", "character_id", "occurred_at"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    match_id: Mapped[UUID] = mapped_column(
+        ForeignKey("pvp_matches.id", ondelete="CASCADE"), nullable=False
+    )
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
