@@ -2523,3 +2523,63 @@ class GuildAuditEntry(Base):
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AccountLink(Base):
+    """Admin-declared association between two Telegram accounts (GDD §36).
+
+    Association alone is never proof of guilt: it only makes co-occurrence of
+    the two accounts in the same activity produce a flag for human review.
+    """
+
+    __tablename__ = "account_links"
+    __table_args__ = (CheckConstraint("account_a < account_b", name="ck_account_link_order"),)
+
+    account_a: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), primary_key=True
+    )
+    account_b: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), primary_key=True
+    )
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class AccountRiskFlag(Base):
+    """One review item: two linked accounts were seen in the same activity (GDD §36)."""
+
+    __tablename__ = "account_risk_flags"
+    __table_args__ = (
+        CheckConstraint("account_a < account_b", name="ck_account_risk_flag_order"),
+        CheckConstraint(
+            "status IN ('open','reviewed','dismissed')", name="ck_account_risk_flag_status"
+        ),
+        UniqueConstraint(
+            "activity_kind",
+            "activity_reference",
+            "account_a",
+            "account_b",
+            name="uq_account_risk_flag_activity_pair",
+        ),
+        Index("ix_account_risk_flags_status_created", "status", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    account_a: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), nullable=False
+    )
+    account_b: Mapped[int] = mapped_column(
+        ForeignKey("accounts.telegram_id", ondelete="CASCADE"), nullable=False
+    )
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    activity_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    activity_reference: Mapped[str] = mapped_column(String(96), nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="open")
+    review_note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
