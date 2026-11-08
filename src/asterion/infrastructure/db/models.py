@@ -2728,3 +2728,195 @@ class AccountRiskFlag(Base):
     review_note: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PlayerShop(Base):
+    """§28.2 Personal Shop. The row outlives its owner so a Code is never reused."""
+
+    __tablename__ = "player_shops"
+    __table_args__ = (UniqueConstraint("code", name="uq_player_shop_code"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    owner_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL"), unique=True
+    )
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    code: Mapped[str] = mapped_column(String(16), nullable=False)
+    public_name: Mapped[str | None] = mapped_column(String(36))
+    description: Mapped[str | None] = mapped_column(String(240))
+    last_promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class MarketListing(Base):
+    """§28.10 offer. While active, its item exists only in `item_snapshot` (escrow)."""
+
+    __tablename__ = "market_listings"
+    __table_args__ = (
+        CheckConstraint("unit_price > 0", name="ck_market_listing_price"),
+        CheckConstraint(
+            "remaining_quantity >= 0 AND remaining_quantity <= initial_quantity",
+            name="ck_market_listing_quantity",
+        ),
+        CheckConstraint(
+            "status IN ('active','sold_out','removed','expired','closed')",
+            name="ck_market_listing_status",
+        ),
+        CheckConstraint(
+            "item_kind IN ('equipment','material','consumable','rune')",
+            name="ck_market_listing_kind",
+        ),
+        Index("ix_market_listing_shop_status", "shop_id", "status"),
+        Index(
+            "ix_market_listing_active_expiry",
+            "expires_at",
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(ForeignKey("player_shops.id"), nullable=False)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    item_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    rarity: Mapped[str | None] = mapped_column(String(16))
+    item_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    initial_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    remaining_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    terms_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    gross_sold_total: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    fee_charged_total: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MarketPriceChange(Base):
+    """§28.15 internal price history."""
+
+    __tablename__ = "market_price_changes"
+    __table_args__ = (Index("ix_market_price_change_listing", "listing_id"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    listing_id: Mapped[UUID] = mapped_column(ForeignKey("market_listings.id"), nullable=False)
+    owner_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    old_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    new_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    terms_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class MarketPurchase(Base):
+    """§28.11 confirmation reference; once committed it is the sale record."""
+
+    __tablename__ = "market_purchases"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_market_purchase_quantity"),
+        CheckConstraint("status IN ('preview','committed')", name="ck_market_purchase_status"),
+        Index("ix_market_purchase_listing", "listing_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    listing_id: Mapped[UUID] = mapped_column(ForeignKey("market_listings.id"), nullable=False)
+    buyer_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    seller_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    terms_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    gross: Mapped[int | None] = mapped_column(BigInteger)
+    fee: Mapped[int | None] = mapped_column(BigInteger)
+    net: Mapped[int | None] = mapped_column(BigInteger)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="preview")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ShopSearchAttempt(Base):
+    """§49.18 Buscar Loja rate limit; survives a bot restart."""
+
+    __tablename__ = "shop_search_attempts"
+    __table_args__ = (Index("ix_shop_search_character_time", "character_id", "attempted_at"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class TradeSession(Base):
+    """§29 Direct Trade between two characters of one server."""
+
+    __tablename__ = "trade_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('invited','open','committed','cancelled','expired','declined')",
+            name="ck_trade_session_status",
+        ),
+        Index(
+            "ix_trade_session_live",
+            "status",
+            "last_activity_at",
+            postgresql_where=text("status IN ('invited','open')"),
+        ),
+        Index("ix_trade_session_initiator", "initiator_character_id"),
+        Index("ix_trade_session_partner", "partner_character_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    initiator_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    partner_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    initiator_steps: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    partner_steps: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_activity_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    close_reason: Mapped[str | None] = mapped_column(String(32))
+
+
+class TradeItem(Base):
+    """An offered item in Direct Trade escrow; kept afterwards as the §29 log."""
+
+    __tablename__ = "trade_items"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_trade_item_quantity"),
+        CheckConstraint(
+            "status IN ('escrow','delivered','returned','withdrawn','discarded')",
+            name="ck_trade_item_status",
+        ),
+        CheckConstraint(
+            "item_kind IN ('equipment','material','consumable','rune')",
+            name="ck_trade_item_kind",
+        ),
+        Index("ix_trade_item_trade", "trade_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    trade_id: Mapped[UUID] = mapped_column(ForeignKey("trade_sessions.id"), nullable=False)
+    owner_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    item_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    rarity: Mapped[str | None] = mapped_column(String(16))
+    item_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="escrow")
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

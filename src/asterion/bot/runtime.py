@@ -21,6 +21,7 @@ from asterion.application.groups import GroupService
 from asterion.application.guilds import GuildService
 from asterion.application.inventory import InventoryService
 from asterion.application.legacy import LegacyService
+from asterion.application.market import MarketService
 from asterion.application.nareth_missions import NarethMissionService
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import P2Service
@@ -52,6 +53,7 @@ from asterion.application.s34 import S34Service
 from asterion.application.s35 import S35Service
 from asterion.application.s36 import S36Service
 from asterion.application.talents import TalentService
+from asterion.application.trades import TradeService
 from asterion.application.varzeas_missions import VarzeasMissionService
 from asterion.application.vde_missions import VDEMissionService
 from asterion.application.warehouse import WarehouseService
@@ -70,6 +72,7 @@ from asterion.bot.equipment_modification_handlers import equipment_modification_
 from asterion.bot.groups_handlers import groups_router
 from asterion.bot.guild_activity import GuildActivityMiddleware
 from asterion.bot.guilds_handlers import guilds_router
+from asterion.bot.market_handlers import market_router
 from asterion.bot.nareth_missions_handlers import nareth_missions_router
 from asterion.bot.p1_handlers import p1_router
 from asterion.bot.p2_handlers import p2_router
@@ -202,6 +205,16 @@ def get_bot_runtime() -> BotRuntime:
     # Every authenticated update counts as activity for the Leader succession.
     dispatcher.update.outer_middleware(GuildActivityMiddleware(guilds))
     dispatcher.include_router(guilds_router(guilds, settings.creation_images))
+    # Before creation_router: its /start would swallow Shop deep links.
+    dispatcher.include_router(
+        market_router(
+            MarketService(SessionFactory, settings.server_id),
+            TradeService(SessionFactory, settings.server_id),
+            settings.creation_images,
+            community_chat_id=settings.community_chat_id,
+            community_topic_id=settings.community_market_topic_id,
+        )
+    )
     dispatcher.include_router(
         groups_router(
             groups,
