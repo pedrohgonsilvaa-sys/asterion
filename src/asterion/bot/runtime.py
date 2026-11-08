@@ -18,6 +18,7 @@ from asterion.application.equipment import EquipmentService
 from asterion.application.equipment_modifications import EquipmentModificationService
 from asterion.application.equipment_view import EquipmentViewService
 from asterion.application.groups import GroupService
+from asterion.application.guilds import GuildService
 from asterion.application.inventory import InventoryService
 from asterion.application.legacy import LegacyService
 from asterion.application.nareth_missions import NarethMissionService
@@ -67,6 +68,7 @@ from asterion.bot.dungeon_handlers import dungeon_router
 from asterion.bot.equipment_handlers import equipment_router
 from asterion.bot.equipment_modification_handlers import equipment_modification_router
 from asterion.bot.groups_handlers import groups_router
+from asterion.bot.guilds_handlers import guilds_router
 from asterion.bot.nareth_missions_handlers import nareth_missions_router
 from asterion.bot.p1_handlers import p1_router
 from asterion.bot.p2_handlers import p2_router
@@ -195,6 +197,8 @@ def get_bot_runtime() -> BotRuntime:
             altos_missions, settings.creation_images, s30=s30, s31=s31, s32=s32
         )
     )
+    guilds = GuildService(SessionFactory, settings.server_id)
+    dispatcher.include_router(guilds_router(guilds, settings.creation_images))
     dispatcher.include_router(
         groups_router(
             groups,

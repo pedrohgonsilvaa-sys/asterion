@@ -32,6 +32,7 @@ def render_links(group: GroupView | None, incoming_count: int) -> Screen:
         inline_keyboard=[
             [InlineKeyboardButton(text="Grupo", callback_data="group:root")],
             [InlineKeyboardButton(text="Convites", callback_data="group:inbox")],
+            [InlineKeyboardButton(text="Guilda", callback_data="guild:root")],
             [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
         ]
     )
