@@ -15,6 +15,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from asterion.application.guild_battle_locks import guild_has_open_battle
 from asterion.domain.guilds import (
     LEADER_INACTIVITY_LIMIT,
     GuildRole,
@@ -166,7 +167,7 @@ async def settle(session: AsyncSession, guild: Guild, now: datetime) -> None:
             .limit(1)
         )
         # §30.3: an Obra under Construção must finish before the final dissolution,
-        # and so must an ongoing Juramento or Expedição.
+        # and so must an ongoing Juramento, Expedição or Batalha de Guildas.
         if building is None and not await _has_cooperative_commitment(session, guild.id):
             await finalize_dissolution(session, guild, now, reason="requested")
 
@@ -184,7 +185,9 @@ async def _has_cooperative_commitment(session: AsyncSession, guild_id: UUID) -> 
         .where(Expedition.guild_id == guild_id, Expedition.status == "active")
         .limit(1)
     )
-    return expedition is not None
+    if expedition is not None:
+        return True
+    return await guild_has_open_battle(session, guild_id)
 
 
 async def _complete_due_projects(session: AsyncSession, guild: Guild, now: datetime) -> None:

@@ -7452,6 +7452,31 @@ def pass_turn(state: Combat, actor_key: str) -> Combat:
         return updated
 
 
+def withdraw_fighter(state: Combat, fighter_key: str) -> Combat:
+    """Remove an AFK fighter as defeated; the team fights on (Batalha de Guildas).
+
+    The fighter drops to zero HP without any damage, death or on-hit trigger. If it
+    held the open opportunity, the turn moves on as after a spent opportunity.
+    """
+    fighter = state.fighters.get(fighter_key)
+    if state.result or fighter is None or fighter.hp <= ZERO:
+        return state
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        updated = deepcopy(state)
+        held_turn = active_player_key(updated) == fighter_key
+        updated.fighters[fighter_key].hp = ZERO
+        _refresh_result(updated)
+        if updated.result:
+            updated.order = ()
+            updated.turn_index = 0
+        elif held_turn:
+            _advance_turn_cursor(updated)
+            _advance_to_player(updated)
+        updated.version += 1
+        return updated
+
+
 def act(
     state: Combat,
     action: str,

@@ -16,6 +16,7 @@ from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     reconcile_character_hp,
 )
+from asterion.application.guild_battle_locks import character_roster_locked
 from asterion.domain.legacy import legacy_xp_factor
 from asterion.infrastructure.db.models import (
     Brazier,
@@ -343,6 +344,8 @@ class LegacyService:
 
     async def _has_incompatible_activity(self, session: AsyncSession, character_id: UUID) -> bool:
         if await _has_foreground(session, character_id):
+            return True
+        if await character_roster_locked(session, character_id):
             return True
         journey_lock = await session.scalar(
             select(CampaignJourney.id)
