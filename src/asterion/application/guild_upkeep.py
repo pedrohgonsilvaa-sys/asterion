@@ -24,6 +24,7 @@ from asterion.domain.guilds import (
 )
 from asterion.infrastructure.db.models import (
     Character,
+    Expedition,
     Guild,
     GuildApplication,
     GuildAuditEntry,
@@ -32,6 +33,7 @@ from asterion.infrastructure.db.models import (
     GuildProject,
     GuildSwitchCooldown,
     GuildTreasuryEntry,
+    OathGuildProgress,
 )
 
 ACTIVE_PROJECT_STATES = ("funding", "building")
@@ -163,9 +165,26 @@ async def settle(session: AsyncSession, guild: Guild, now: datetime) -> None:
             .where(GuildProject.guild_id == guild.id, GuildProject.status == "building")
             .limit(1)
         )
-        # §30.3: an Obra under Construção must finish before the final dissolution.
-        if building is None:
+        # §30.3: an Obra under Construção must finish before the final dissolution,
+        # and so must an ongoing Juramento or Expedição.
+        if building is None and not await _has_cooperative_commitment(session, guild.id):
             await finalize_dissolution(session, guild, now, reason="requested")
+
+
+async def _has_cooperative_commitment(session: AsyncSession, guild_id: UUID) -> bool:
+    oath = await session.scalar(
+        select(OathGuildProgress.cycle_id)
+        .where(OathGuildProgress.guild_id == guild_id, OathGuildProgress.finalized_at.is_(None))
+        .limit(1)
+    )
+    if oath is not None:
+        return True
+    expedition = await session.scalar(
+        select(Expedition.id)
+        .where(Expedition.guild_id == guild_id, Expedition.status == "active")
+        .limit(1)
+    )
+    return expedition is not None
 
 
 async def _complete_due_projects(session: AsyncSession, guild: Guild, now: datetime) -> None:

@@ -2,12 +2,16 @@
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from asterion.application.expeditions import ExpeditionService
 from asterion.application.guilds import GuildService
 from asterion.application.market import MarketService
+from asterion.application.oaths import OathService
 from asterion.application.pvp import PvpService
 from asterion.application.round import RoundService
 from asterion.application.trades import TradeService
 from asterion.application.world_events import WorldEventService
+from asterion.bot.expedition_handlers import deliver_expedition_notices
+from asterion.bot.oath_handlers import deliver_oath_notices
 from asterion.bot.pvp_handlers import deliver_notices
 from asterion.bot.world_event_handlers import deliver_world_event_notices
 from asterion.config import get_settings
@@ -91,4 +95,36 @@ def build_round_scheduler() -> AsyncIOScheduler:
         coalesce=True,
         replace_existing=True,
     )
+    oaths = OathService(SessionFactory, settings.server_id)
+    expeditions = ExpeditionService(SessionFactory, settings.server_id)
+
+    async def run_oath_maintenance() -> None:
+        notices = await oaths.run_maintenance()
+        if notices and settings.telegram_bot_enabled and settings.telegram_bot_token:
+            from asterion.bot.runtime import get_bot_runtime
+
+            await deliver_oath_notices(get_bot_runtime().bot, notices)
+
+    async def run_expedition_maintenance() -> None:
+        notices = await expeditions.run_maintenance()
+        if notices and settings.telegram_bot_enabled and settings.telegram_bot_token:
+            from asterion.bot.runtime import get_bot_runtime
+
+            await deliver_expedition_notices(get_bot_runtime().bot, notices)
+
+    # Cycle openings, idle Provações, the grace period and paying finished cycles.
+    # Frozen rosters, closed stages and paying finished Expedições.
+    for job_id, job in (
+        ("oath-upkeep", run_oath_maintenance),
+        ("expedition-upkeep", run_expedition_maintenance),
+    ):
+        scheduler.add_job(
+            job,
+            "interval",
+            seconds=15,
+            id=job_id,
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
     return scheduler

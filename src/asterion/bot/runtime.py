@@ -18,12 +18,14 @@ from asterion.application.engagement import DailyGiftService
 from asterion.application.equipment import EquipmentService
 from asterion.application.equipment_modifications import EquipmentModificationService
 from asterion.application.equipment_view import EquipmentViewService
+from asterion.application.expeditions import ExpeditionService
 from asterion.application.groups import GroupService
 from asterion.application.guilds import GuildService
 from asterion.application.inventory import InventoryService
 from asterion.application.legacy import LegacyService
 from asterion.application.market import MarketService
 from asterion.application.nareth_missions import NarethMissionService
+from asterion.application.oaths import OathService
 from asterion.application.p1 import P1Service
 from asterion.application.p2 import P2Service
 from asterion.application.p3 import P3Service
@@ -76,11 +78,13 @@ from asterion.bot.doctrines_handlers import doctrines_router
 from asterion.bot.dungeon_handlers import dungeon_router
 from asterion.bot.equipment_handlers import equipment_router
 from asterion.bot.equipment_modification_handlers import equipment_modification_router
+from asterion.bot.expedition_handlers import expedition_router
 from asterion.bot.groups_handlers import groups_router
 from asterion.bot.guild_activity import GuildActivityMiddleware
 from asterion.bot.guilds_handlers import guilds_router
 from asterion.bot.market_handlers import market_router
 from asterion.bot.nareth_missions_handlers import nareth_missions_router
+from asterion.bot.oath_handlers import oath_router, runtime_oath_notifier
 from asterion.bot.p1_handlers import p1_router
 from asterion.bot.p2_handlers import p2_router
 from asterion.bot.p3_handlers import p3_router
@@ -196,6 +200,14 @@ def get_bot_runtime() -> BotRuntime:
     world_events = WorldEventService(SessionFactory, settings.server_id)
     # Also before the world routers: /start must resume an Event combat.
     dispatcher.include_router(world_event_router(world_events, settings.creation_images))
+    oaths = OathService(SessionFactory, settings.server_id, notifier=runtime_oath_notifier)
+    # Also before the world routers: /start must resume a Provação.
+    dispatcher.include_router(oath_router(oaths, settings.creation_images))
+    dispatcher.include_router(
+        expedition_router(
+            ExpeditionService(SessionFactory, settings.server_id), settings.creation_images
+        )
+    )
     dispatcher.include_router(
         settings_router(account, character_surfaces, settings.creation_images)
     )
@@ -266,6 +278,7 @@ def get_bot_runtime() -> BotRuntime:
             s5=s5,
             s6=s6,
             road=road,
+            oaths=oaths,
         )
     )
     dispatcher.include_router(p2_router(p2, settings.creation_images, s3=s3, p4=p4, p5=p5, p6=p6))
@@ -329,6 +342,7 @@ def get_bot_runtime() -> BotRuntime:
             p6=p6,
             dungeons=dungeons,
             world_events=world_events,
+            oaths=oaths,
         )
     )
     dispatcher.include_router(

@@ -192,6 +192,9 @@ def render_guild_menu(
     if len(guild.members) > 1 and guild.viewer_role in (GuildRole.LEADER, GuildRole.OFFICER):
         rows.append([_button("Gerenciar membros", f"guild:mem:{gid}")])
     rows.append([_button("Tesouraria e Obras", f"guild:works:{gid}")])
+    rows.append(
+        [_button("⚜️ Juramento", "oath:hub"), _button("🚩 Expedição", "exp:hub")]
+    )
     if guild.viewer_role is GuildRole.LEADER:
         if guild.dissolution_due_at is None:
             rows.append([_button("Renomear Guilda", f"guild:ren:{gid}")])

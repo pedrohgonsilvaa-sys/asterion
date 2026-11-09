@@ -4,6 +4,12 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
 from asterion.application.dungeons import DungeonService
+from asterion.application.oaths import (
+    OathAttemptResultView,
+    OathCycleResultView,
+    OathHubView,
+    OathService,
+)
 from asterion.application.p2 import P2Service
 from asterion.application.p3 import P3Service
 from asterion.application.p4 import P4Service
@@ -39,6 +45,7 @@ from asterion.bot.combat_ui import (
     render_combat,
 )
 from asterion.bot.creation_handlers import present
+from asterion.bot.oath_ui import render_oath
 from asterion.bot.p2_ui import render_p2
 from asterion.bot.p3_ui import render_p3
 from asterion.bot.p4_ui import render_p4
@@ -54,6 +61,7 @@ from asterion.bot.world_event_ui import render_world_event
 from asterion.bot.world_ui import render_world
 
 WorldEventViews = (WorldEventHubView, WorldEventResultView)
+OathViews = (OathHubView, OathAttemptResultView, OathCycleResultView)
 
 
 def combat_router(
@@ -73,11 +81,19 @@ def combat_router(
     p6: P6Service | None = None,
     dungeons: DungeonService | None = None,
     world_events: WorldEventService | None = None,
+    oaths: OathService | None = None,
 ) -> Router:
     router = Router(name="foreground_combat")
     router.callback_query.filter(F.message.chat.type == "private")
 
     async def consumable_action(actor, activity_id, version, *, item_id, target_id, effect_id):
+        if oaths is not None:
+            oath_view = await oaths.consume_for_activity(
+                actor, activity_id, version, item_id=item_id,
+                target_id=target_id, effect_id=effect_id,
+            )
+            if oath_view is not None:
+                return oath_view
         if world_events is not None:
             event_view = await world_events.consume_for_activity(
                 actor, activity_id, version, item_id=item_id,
@@ -171,6 +187,12 @@ def combat_router(
         return view
 
     async def consumable_selection(actor, activity_id, version, **kwargs):
+        if oaths is not None:
+            oath_view = await oaths.consumable_selection(
+                actor, activity_id, version, **kwargs
+            )
+            if oath_view is not None:
+                return oath_view
         if world_events is not None:
             event_view = await world_events.consumable_selection(
                 actor, activity_id, version, **kwargs
@@ -213,6 +235,8 @@ def combat_router(
         return view
 
     def render_service_view(view):
+        if isinstance(view, OathViews) or getattr(view, "context", None) == "oath_trial":
+            return render_oath(view)
         if isinstance(view, WorldEventViews):
             return render_world_event(view)
         if getattr(view, "context", None) == "world_event":
@@ -514,6 +538,7 @@ def combat_router(
                 and p6 is None
                 and dungeons is None
                 and world_events is None
+                and oaths is None
             )
             or not isinstance(query.message, Message)
         ):
