@@ -318,8 +318,8 @@ async def test_tie_goes_to_champion_and_settles_ratings(database):
         statuses = set((await session.scalars(select(GuildBattleRegistration.status))).all())
         assert statuses == {"finished"}
         assert not await character_roster_locked(session, aurora[1])
-        assert await individual_participations(session, aurora[2]) == 1
-        assert await individual_participations(session, aurora[1]) == 0
+        assert await individual_participations(session, aurora[2], "ocaso") == 1
+        assert await individual_participations(session, aurora[1], "ocaso") == 0
     standings = await service.standings()
     assert [row.guild_name for row in standings] == ["Aurora", "Brasas"]
     assert not standings[0].reward_eligible
@@ -437,7 +437,7 @@ async def test_reserve_substitution_and_champion_draw(database):
         assert battle.status == "finished" and battle.winner_side is None
         profiles = (await session.scalars(select(GuildBattleProfile))).all()
         assert {(p.points, p.draws, p.rating) for p in profiles} == {(1, 1, 1500)}
-        assert await individual_participations(session, aurora[5]) == 1
+        assert await individual_participations(session, aurora[5], "ocaso") == 1
 
 
 @pytest.mark.asyncio

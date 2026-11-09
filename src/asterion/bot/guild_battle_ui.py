@@ -42,6 +42,7 @@ from asterion.domain.guild_battle import (
     classification_points,
     schedule_for,
 )
+from asterion.domain.pvp_flavor import pvp_flavor
 
 _IMAGE = "links"
 # Author decision 2026-11-09: the top 10 Guilds, plus the viewer's own if lower.
@@ -71,6 +72,10 @@ _ERRORS = {
     "not_in_guild": "Você precisa estar em uma Guilda.",
     "no_permission": "Só o Líder pode inscrever a Guilda e trocar combatentes.",
     "registration_closed": "A Inscrição está fechada. Ela abre 24h antes e fecha às 20:30.",
+    "cycle_closed": (
+        "Esta Batalha começaria depois do fim da Crônica. A Inscrição volta a abrir "
+        "depois da finalização do ciclo."
+    ),
     "invalid_roster": (
         f"A Inscrição precisa de {FRONT_SIZES[FightKind.FRONT_I]} na Frente I, "
         f"{FRONT_SIZES[FightKind.FRONT_II]} na Frente II, um Campeão entre os "
@@ -544,6 +549,8 @@ def _render_result(view: GuildBattleResultView) -> Screen:
         lines.append(f"👑 Campeão · {label}")
     score = {"win": Decimal(1), "draw": Decimal("0.5"), "loss": Decimal(0)}[view.outcome]
     lines.extend(["", f"📈 Classificação · +{classification_points(score)}"])
+    flavor = pvp_flavor("guild_battle", view.outcome, str(view.battle_id))
+    lines.extend(["", f"<i>{escape(flavor)}</i>"])
     return Screen("\n".join(lines), _IMAGE, _keyboard(_BACK_TO_GUILD), "HTML")
 
 

@@ -1582,13 +1582,14 @@ O plano de lançamento é o backlog da auditoria Fase 4A (`docs/audits/ASTERION_
 | 6 | Eventos Mundiais (catálogo vazio de propósito) | #103 |
 | 7 | Juramento e Expedição (catálogos vazios de propósito) | #104 |
 | 8 | Batalha de Guildas (núcleo e telas) | #105, #106 |
+| 9 (bloco A) | Crônica I (ciclo, calendário, voto), Nova Vigília, Trilha da Crônica, fechamento competitivo de Arena e Batalha de Guildas, Salão da Vigília | branch `claude/cronica-ecos-convergencia-s8fs2t` |
 
 Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem.
 
 **Sistemas de jogo que faltam** (conferido no código em 2026-11-09):
 
-- Crônica I "Ecos da Convergência" e Nova Vigília (§5, §5.1–5.3, §49.16): não existe. Destrava o soft reset e as recompensas de Elo da Arena, o corte por Crônica da Batalha de Guildas, a Trilha, o Salão da Vigília e o histórico de Crônicas no perfil.
-- Trilha/Passe da Crônica (§5.4, §49.16): não existe.
+- Crônica I "Ecos da Convergência": o bloco A da etapa 9 entregou o sistema (ver "Etapa 9 · bloco A" abaixo). Falta o conteúdo jogável dos capítulos (bloco B).
+- Passe da Crônica: a camada Premium existe, mas só é ativada pelo operador (`chronicle_cli pass-grant`), porque ainda não há provedor de pagamento.
 - Serviços de Ofícios entre jogadores (§27.3): não existe; ficou fora da etapa 3.
 - Marcas de Legado (§16.1): não existem; a Ascensão existe.
 - Patrono e pagamentos: não existem; depende de escolher um provedor.
@@ -1599,7 +1600,32 @@ Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem
 
 **Pendências das etapas entregues:** recompensas da Batalha de Guildas e efeitos de 6 das 7 Obras; frases de flavor dos resultados da Arena, do Duelo e da Batalha de Guildas; conteúdo dos catálogos de Eventos, Juramento e Expedição (o autor define).
 
-**Próxima etapa (9):** Crônica I, Nova Vigília e Trilha, integradas com Arena e Batalha de Guildas. O conteúdo está proposto em `ASTERION_CRONICA_I_ECOS_DA_CONVERGENCIA_v0_2_PROPOSTA.md` (2026-11-09). Os kits das 9 criaturas novas estão em `SIMULAR` e precisam de Balanceamento antes do lançamento.
+#### Etapa 9 · bloco A (entregue)
+
+- **Regras puras** em `domain/chronicle.py`: calendário derivado do Dia 1, fases (`scheduled`, `active`, `closing` T→T+2h, `rescue` T+2h→T+14d, `archived`), os 32 objetivos e 8 conclusões com pontos da proposta v0.2, fontes repetíveis e limites, Trilha (20 Marcos Livres e 10 Premium, 15 cosméticos `cos_cr01_*`), voto (elegibilidade 4/8 + 1, apuração, runoff, `em_espera`, ordem embaralhada por conta), camadas de spoiler C1–C4/H por missão concluída e faixa da recompensa de Elo.
+- **Serviço** em `application/chronicle.py`: `record_objective` e `record_repeatable` (para as fontes chamarem dentro da própria transação; idempotentes por conta), conclusão de capítulo, Resgatar Disponíveis, voto, Salão da Vigília, histórico por conta e a manutenção (fecha voto e congela o eleitorado, fecha runoff, finaliza em T+2h e liquida em T+14d). Job `chronicle-upkeep` a cada 60s.
+- **Integração competitiva** (`application/competitive_cycle.py`): entre T e a finalização a fila da Arena e a Inscrição de Batalhas com início ≥ T ficam fechadas. Na finalização: Salão da Vigília (Arena, Guildas e participações individuais), soft reset de Renome `1000+0,5×(R−1000)` só para quem completou a Colocação, MMR intacto, `cycle_matches` zerado, classificação da Batalha de Guildas zerada (rating e `career_real_battles` persistem). As participações individuais passam a contar só o ciclo atual.
+- **Fontes já ligadas:** só `rep_cr01_masmorra` (fim de run de Masmorra com participação > 0).
+- **Telas:** Benefícios → Trilha da Crônica → Crônica (capítulos, objetivos, conclusão, voto, epílogo depois de T) e Classificação da Vigília → Salão da Vigília. Frases de flavor da proposta §10 nos resultados de Arena, Duelo e Batalha de Guildas.
+- **Operação:** `python -m asterion.chronicle_cli status | set-day1 AAAA-MM-DD --note … | extend AAAA-MM-DDTHH:MM --note … | pass-grant <telegram_id> | maintenance`. Sem Dia 1 nada abre. Toda troca fica em `chronicle_cycle_logs`.
+- **Banco:** migration `20261110_0043`.
+
+**Escolhas do bloco A que o autor precisa confirmar** (as fontes não decidem):
+
+1. Os capítulos abrem às 06:00 (reset diário, §34) do dia D1, D8…D50.
+2. T é o último dia da semana 8 (D56) às 21:00.
+3. "Semanas liberadas" do teto de repetíveis = capítulos já abertos.
+4. O soft reset de Renome só vale para quem completou a Colocação (quem nunca jogou não vai para 400).
+5. Regente com 20–29 partidas recebe a recompensa do Elo logo abaixo (Arauto I).
+6. Depois da finalização a Arena e a Batalha de Guildas reabrem e acumulam para o próximo ciclo, mesmo sem Crônica II definida.
+7. Excluir o personagem apaga o estado narrativo dele; pontos, resgates, voto e elegibilidade continuam da conta. Os cosméticos da Trilha voltam ao novo personagem ao abrir a Trilha.
+8. Personagem sem conta no servidor na liquidação: o direito é marcado como liquidado sem entrega.
+
+**Ainda falta (sem número ou conteúdo definido):** os cosméticos das recompensas de Elo e da Batalha de Guildas (hoje o Salão só registra quem é elegível e o Elo); a entrada Calendário do menu (a Crônica está em Benefícios → Trilha).
+
+**Bloco B (próximo):** conteúdo jogável dos capítulos: Leituras (`lei_cr01_*`), resultados de Desbravar (`dsc_cr01_*`), Falar com NPC por Região de Ressonância, Masmorra em foco/espelho e o alternativo `dsc_cr01_vestigio_profundo`, os 8 Encontros e as 9 criaturas (kits em `SIMULAR`, precisam de Balanceamento), o Evento Mundial O Compasso, Entradas do Códice, Feitos, Crônica Arquivada e a regra `pr_cr01_encontro_grupo`.
+
+**Etapa 9 (origem):** Crônica I, Nova Vigília e Trilha, integradas com Arena e Batalha de Guildas. O conteúdo está proposto em `ASTERION_CRONICA_I_ECOS_DA_CONVERGENCIA_v0_2_PROPOSTA.md` (2026-11-09). Os kits das 9 criaturas novas estão em `SIMULAR` e precisam de Balanceamento antes do lançamento.
 
 **Decisões do autor sobre a proposta (2026-11-09):**
 

@@ -2954,6 +2954,10 @@ class ArenaProfile(Base):
     queue_blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_match_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_decay_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Arena matches of the current competitive cycle (Crônica); reset at finalization.
+    cycle_matches: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
 
 class ArenaQueueEntry(Base):
@@ -3699,6 +3703,11 @@ class GuildBattleProfile(Base):
     guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), primary_key=True)
     server_id: Mapped[str] = mapped_column(String(64), nullable=False)
     rating: Mapped[int] = mapped_column(Integer, nullable=False, default=1500)
+    # Standings below belong to the current Crônica and reset at its finalization;
+    # the rating and ``career_real_battles`` (its K factor) persist (§49.14).
+    career_real_battles: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     real_battles: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     wins: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     draws: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -3863,3 +3872,210 @@ class GuildBattleFightMember(Base):
     consecutive_timeouts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_timeouts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# ------------------------------------------------------------------ Crônica (§5, §49.16)
+
+
+class ChronicleCycle(Base):
+    """One Crônica on one server. Day 1 is set by the operator; T derives from it."""
+
+    __tablename__ = "chronicle_cycles"
+    __table_args__ = (
+        CheckConstraint(
+            "outcome IS NULL OR outcome IN "
+            "('selar','estabilizar','herdeiros','destruir','em_espera')",
+            name="ck_chronicle_cycle_outcome",
+        ),
+        CheckConstraint("revision >= 0", name="ck_chronicle_cycle_revision"),
+    )
+
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    chronicle_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    day1: Mapped[date] = mapped_column(Date, nullable=False)
+    end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    vote_closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    runoff_options: Mapped[list[str] | None] = mapped_column(JSONB)
+    runoff_closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    outcome: Mapped[str | None] = mapped_column(String(16))
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    liquidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ChronicleCycleLog(Base):
+    """Every Day 1 change and every exceptional extension of T (§5.3)."""
+
+    __tablename__ = "chronicle_cycle_logs"
+    __table_args__ = (
+        CheckConstraint("action IN ('set_day1','extend')", name="ck_chronicle_log_action"),
+        Index("ix_chronicle_cycle_logs_cycle", "server_id", "chronicle_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    chronicle_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    before: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    after: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    note: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ChronicleAccount(Base):
+    """Trilha progress per ``conta + servidor + Crônica`` (§5.4); also the account lock."""
+
+    __tablename__ = "chronicle_accounts"
+    __table_args__ = (
+        CheckConstraint(
+            "points >= 0 AND repeatable_points >= 0 AND repeatable_points <= points",
+            name="ck_chronicle_account_points",
+        ),
+    )
+
+    account_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    chronicle_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    repeatable_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    premium_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    premium_source: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ChronicleCompletion(Base):
+    """A completed objective or chapter conclusion of one character (narrative state)."""
+
+    __tablename__ = "chronicle_completions"
+    __table_args__ = (
+        Index("ix_chronicle_completions_account", "account_id", "server_id", "chronicle_id"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    chronicle_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    objective_id: Mapped[str] = mapped_column(String(48), primary_key=True)
+    account_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ChroniclePointGrant(Base):
+    """One idempotent Trilha grant; ``source_key`` is unique per account (§5.4)."""
+
+    __tablename__ = "chronicle_point_grants"
+    __table_args__ = (
+        CheckConstraint("points > 0", name="ck_chronicle_grant_points"),
+        Index(
+            "ix_chronicle_grants_daily",
+            "account_id",
+            "server_id",
+            "chronicle_id",
+            "source_id",
+            "cycle_date",
+        ),
+    )
+
+    account_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    chronicle_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    source_key: Mapped[str] = mapped_column(String(160), primary_key=True)
+    source_id: Mapped[str] = mapped_column(String(48), nullable=False)
+    repeatable: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    points: Mapped[int] = mapped_column(Integer, nullable=False)
+    character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    cycle_date: Mapped[date] = mapped_column(Date, nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ChronicleClaim(Base):
+    """One delivered Marco reward; claim and liquidation never duplicate it."""
+
+    __tablename__ = "chronicle_claims"
+    __table_args__ = (
+        CheckConstraint("track IN ('free','premium')", name="ck_chronicle_claim_track"),
+        CheckConstraint("milestone BETWEEN 1 AND 40", name="ck_chronicle_claim_milestone"),
+        CheckConstraint("via IN ('claim','liquidation')", name="ck_chronicle_claim_via"),
+    )
+
+    account_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    chronicle_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    track: Mapped[str] = mapped_column(String(8), primary_key=True)
+    milestone: Mapped[int] = mapped_column(Integer, primary_key=True)
+    character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    via: Mapped[str] = mapped_column(String(16), nullable=False)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ChronicleVote(Base):
+    """The single active vote of an account in one round (§5.1)."""
+
+    __tablename__ = "chronicle_votes"
+    __table_args__ = (
+        CheckConstraint("round IN ('main','runoff')", name="ck_chronicle_vote_round"),
+        CheckConstraint(
+            "option IN ('selar','estabilizar','herdeiros','destruir')",
+            name="ck_chronicle_vote_option",
+        ),
+    )
+
+    account_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    chronicle_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    round: Mapped[str] = mapped_column(String(8), primary_key=True)
+    option: Mapped[str] = mapped_column(String(16), nullable=False)
+    character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ChronicleElector(Base):
+    """Electorate frozen when the main vote closes; the runoff uses only it."""
+
+    __tablename__ = "chronicle_electorate"
+
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    chronicle_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    account_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    frozen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class VigilHallEntry(Base):
+    """Salão da Vigília: what the Classificação showed when a Crônica was finalized."""
+
+    __tablename__ = "vigil_hall_entries"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('arena','guild_battle','guild_battle_member')",
+            name="ck_vigil_hall_kind",
+        ),
+        UniqueConstraint(
+            "server_id", "chronicle_id", "kind", "subject_id", name="uq_vigil_hall_subject"
+        ),
+        Index("ix_vigil_hall_position", "server_id", "chronicle_id", "kind", "position"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    chronicle_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    subject_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    account_id: Mapped[int | None] = mapped_column(BigInteger)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    elo: Mapped[str | None] = mapped_column(String(24))
+    matches: Mapped[int] = mapped_column(Integer, nullable=False)
+    points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reward_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    reward_tier: Mapped[str | None] = mapped_column(String(24))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

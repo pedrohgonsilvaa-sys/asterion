@@ -1,0 +1,273 @@
+"""Telegram screens for the Crônica, its vote, the Trilha and the Salão da Vigília."""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from asterion.application.chronicle import (
+    ChapterView,
+    ChronicleView,
+    ClaimResult,
+    HallRow,
+    HallView,
+    TrackView,
+)
+from asterion.bot.benefits_ui import granted_lines
+from asterion.bot.creation_ui import Screen
+from asterion.domain.chronicle import (
+    CHAPTER_COUNT,
+    CHRONICLE_COSMETICS_BY_ID,
+    CHRONICLE_NAME,
+    EPILOGUES,
+    FREE_TRACK,
+    KIND_LABELS,
+    MAX_POINTS,
+    MILESTONE_COUNT,
+    MILESTONE_STEP,
+    OPENING_TEXT,
+    PREMIUM_TRACK,
+    TIMEZONE,
+    VOTE_FOOTER,
+    VOTE_TEXTS,
+    Layer,
+    Outcome,
+    Phase,
+    TrackReward,
+)
+
+_IMAGE = "menu"
+
+_ERRORS = {
+    "no_character": "Crie um personagem para acompanhar a Crônica.",
+    "nothing_to_claim": "Ainda não há Marco para resgatar.",
+    "chronicle_closed": "A Crônica não está aceitando progresso agora.",
+    "chronicle_chapter_locked": "Este capítulo ainda não foi liberado.",
+    "chronicle_already_concluded": "Você já concluiu este capítulo.",
+    "chronicle_objectives_missing": "Ainda faltam objetivos obrigatórios deste capítulo.",
+    "chronicle_gate": "Conclua P1 · Vozes na Estrada para participar da Crônica.",
+    "chronicle_claim_closed": "O período de resgate da Trilha está encerrado.",
+    "chronicle_vote_closed": "A votação não está aberta agora.",
+    "chronicle_vote_counting": "A votação principal está sendo apurada. Tente em instantes.",
+    "chronicle_vote_ineligible": "Você ainda não pode votar.",
+    "chronicle_vote_invalid": "Esta opção não está disponível.",
+    "chronicle_unknown": "Este capítulo não existe.",
+}
+
+
+def error_text(code: str) -> str:
+    return _ERRORS.get(code, "Esta ação não está mais disponível.")
+
+
+def _button(text: str, data: str) -> InlineKeyboardButton:
+    return InlineKeyboardButton(text=text, callback_data=data)
+
+
+def _keyboard(rows: list[list[InlineKeyboardButton]]) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _when(moment: datetime) -> str:
+    return moment.astimezone(TIMEZONE).strftime("%d/%m às %H:%M")
+
+
+_BACK = [_button("← Crônica", "cr:root")]
+
+
+def reward_text(reward: TrackReward) -> str:
+    parts = []
+    if reward.crowns:
+        parts.append(f"{reward.crowns} Coroas")
+    if reward.basics:
+        parts.append(f"{reward.basics} Materiais Básicos")
+    if reward.fragments:
+        parts.append(f"{reward.fragments} Fragmentos")
+    if reward.cosmetic_id:
+        cosmetic = CHRONICLE_COSMETICS_BY_ID[reward.cosmetic_id]
+        noun = {"title": "Título", "frame": "Moldura", "appearance": "Aparência"}
+        parts.append(f"{noun[cosmetic.cosmetic_type]} {cosmetic.name}")
+    return " + ".join(parts)
+
+
+# ------------------------------------------------------------------- Crônica
+
+
+def render_chronicle(view: ChronicleView) -> Screen:
+    lines = [f"🌌 Crônica I · {CHRONICLE_NAME}", ""]
+    rows: list[list[InlineKeyboardButton]] = []
+    if view.phase is Phase.UNSCHEDULED or view.calendar is None:
+        lines.append("A Crônica ainda não tem data. Ela abre quando o Dia 1 for anunciado.")
+    elif view.phase is Phase.SCHEDULED:
+        lines.append(f"Começa em {_when(view.calendar.starts_at)}.")
+    else:
+        lines.extend([OPENING_TEXT, ""])
+        if view.phase is Phase.ACTIVE:
+            lines.append(
+                f"Capítulos liberados · {view.chapters_open}/{CHAPTER_COUNT} · "
+                f"termina em {_when(view.calendar.end_at)}"
+            )
+        elif view.phase in (Phase.CLOSING, Phase.RESCUE):
+            lines.append(
+                f"A Crônica terminou. Resgate da Trilha até {_when(view.calendar.rescue_ends_at)}."
+            )
+        else:
+            lines.append("A Crônica terminou e foi arquivada.")
+        if not view.gate_ok and view.phase is Phase.ACTIVE:
+            lines.extend(["", "Conclua P1 · Vozes na Estrada para participar."])
+        for chapter in view.chapters:
+            mark = "✅" if chapter.concluded else "▫️"
+            label = f"{mark} {chapter.number} · {chapter.title}"
+            rows.append([_button(label, f"cr:ch:{chapter.number}")])
+        if view.outcome is not None:
+            lines.extend(["", "📜 O Que Foi Respondido", EPILOGUES[view.outcome]])
+        if view.vote is not None and view.vote.round is not None:
+            rows.append([_button("🗳️ Votação final", "cr:vote")])
+    lines.extend(
+        [
+            "",
+            f"🧭 Trilha · {view.points} pontos · Marco {view.milestones}/{MILESTONE_COUNT}",
+        ]
+    )
+    if view.claimable:
+        lines.append(f"🎁 {view.claimable} recompensa(s) para resgatar")
+    rows.append([_button("Trilha da Crônica", "cr:trail")])
+    rows.append([_button("← Benefícios", "bn:root")])
+    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+
+
+def _objective_line(item) -> str:
+    objective = item.objective
+    if item.done:
+        mark = "✅"
+    elif item.level_locked:
+        mark = f"⏳ Requer Nv. {objective.min_level} ·"
+    else:
+        mark = "▫️"
+    optional = "" if objective.required else " · opcional"
+    return (
+        f"{mark} {objective.title} · {KIND_LABELS[objective.kind]}{optional} · "
+        f"{objective.points} pts"
+    )
+
+
+def render_chapter(view: ChronicleView, chapter: ChapterView) -> Screen:
+    lines = [f"🌌 Capítulo {chapter.number} · {chapter.title}", "", chapter.summary, ""]
+    lines.extend(_objective_line(item) for item in chapter.objectives)
+    lines.append(f"{'✅' if chapter.concluded else '▫️'} Conclusão do capítulo · 250 pts")
+    if chapter.concluded:
+        lines.extend(["", chapter.conclusion])
+    rows = []
+    if chapter.can_conclude:
+        rows.append([_button("Concluir capítulo", f"cr:conclude:{chapter.number}")])
+    rows.append(_BACK)
+    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+
+
+# ----------------------------------------------------------------------- vote
+
+
+def render_vote(view: ChronicleView, notice: str | None = None) -> Screen:
+    vote = view.vote
+    lines = ["🗳️ A Resposta · Votação final", ""]
+    if notice:
+        lines.extend([notice, ""])
+    rows: list[list[InlineKeyboardButton]] = []
+    if vote is None or vote.round is None:
+        lines.append("A votação não está aberta agora.")
+        rows.append(_BACK)
+        return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+    if vote.round == "runoff":
+        lines.extend(["Desempate de 24h entre as opções empatadas.", ""])
+    if vote.closes_at is not None:
+        lines.append(f"Fecha em {_when(vote.closes_at)}.")
+    if not vote.eligible:
+        lines.append(
+            f"Para votar: 4 de 8 capítulos concluídos ({vote.chapters_concluded}/4) e "
+            f"1 objetivo da fase final ({min(vote.final_objectives, 1)}/1)."
+        )
+    lines.append("")
+    for option in vote.options:
+        texts = VOTE_TEXTS[option]
+        chosen = " · seu voto" if vote.choice is option else ""
+        lines.append(f"{'☑️' if chosen else '▫️'} {texts.label}{chosen}")
+        lines.append(texts.text)
+        if Layer.C3 in view.layers:
+            lines.append(texts.c3)
+        lines.append("")
+        if vote.eligible:
+            rows.append([_button(f"Votar · {texts.label}", f"cr:vote:{option.value}")])
+    lines.append(VOTE_FOOTER)
+    rows.append(_BACK)
+    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+
+
+def vote_notice(option: Outcome) -> str:
+    return f"Voto registrado: {VOTE_TEXTS[option].label}. Você pode mudar até o fechamento."
+
+
+# --------------------------------------------------------------------- Trilha
+
+
+def render_trail(view: TrackView, result: ClaimResult | None = None) -> Screen:
+    lines = ["🧭 Trilha da Crônica", ""]
+    if result is not None:
+        lines.append(f"Resgatado: {len(result.milestones)} recompensa(s).")
+        lines.extend(granted_lines(result.granted))
+        lines.extend(f"🎖️ {name}" for name in result.cosmetics)
+        lines.append("")
+    lines.append(f"Pontos · {view.points}/{MAX_POINTS} · Marco {view.milestones}/{MILESTONE_COUNT}")
+    lines.append(f"Repetíveis · {view.repeatable_points}/{view.repeatable_cap}")
+    lines.append(f"Passe da Crônica · {'ativo' if view.premium else 'inativo'}")
+    upcoming = [m for m in sorted(FREE_TRACK) if m > view.milestones][:3]
+    if upcoming:
+        lines.extend(["", "Próximos Marcos Livres"])
+        lines.extend(
+            f"▫️ Marco {m} · {m * MILESTONE_STEP} pts · {reward_text(FREE_TRACK[m])}"
+            for m in upcoming
+        )
+    premium = [m for m in sorted(PREMIUM_TRACK) if m > view.milestones][:2]
+    if premium:
+        lines.extend(["", "Próximos Marcos Premium"])
+        lines.extend(f"▫️ Marco {m} · {reward_text(PREMIUM_TRACK[m])}" for m in premium)
+    if view.claimable:
+        lines.extend(["", f"🎁 Disponíveis para resgate: {len(view.claimable)}"])
+    rows = []
+    if view.claimable and view.can_claim:
+        rows.append([_button("Resgatar Disponíveis", "cr:trail:claim")])
+    rows.append([_button("🌌 Crônica", "cr:root")])
+    rows.append([_button("← Benefícios", "bn:root")])
+    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+
+
+# ------------------------------------------------------------ Salão da Vigília
+
+
+def _hall_line(row: HallRow, *, arena: bool) -> str:
+    if arena:
+        reward = f" · 🎁 {row.reward_tier}" if row.reward_tier else ""
+        return f"{row.position}. {row.name} · {row.elo} · {row.rating} Renome{reward}"
+    reward = " · 🎁 Elegível" if row.reward_eligible else ""
+    return f"{row.position}. {row.name} · {row.points} pts · {row.matches} batalhas{reward}"
+
+
+def render_hall(view: HallView) -> Screen:
+    lines = ["🏛️ Salão da Vigília", ""]
+    if view.chronicle_id is None:
+        lines.append("Nenhuma Crônica foi encerrada ainda.")
+    else:
+        lines.extend([f"Crônica I · {CHRONICLE_NAME}", "", "⚔️ Arena da Vigília"])
+        lines.extend(_hall_line(row, arena=True) for row in view.arena)
+        if not view.arena:
+            lines.append("Ninguém completou a Colocação neste ciclo.")
+        if view.own_arena is not None:
+            lines.extend(["", "Sua posição", _hall_line(view.own_arena, arena=True)])
+        lines.extend(["", "🛡️ Batalha de Guildas"])
+        lines.extend(_hall_line(row, arena=False) for row in view.guilds)
+        if not view.guilds:
+            lines.append("Nenhuma Guilda batalhou neste ciclo.")
+    return Screen(
+        "\n".join(lines),
+        _IMAGE,
+        _keyboard([[_button("← Classificação da Vigília", "pvp:rank")]]),
+    )

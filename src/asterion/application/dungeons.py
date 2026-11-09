@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from asterion.application.account_risk import record_linked_cooccurrence
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.bestiary import BestiaryRecorder
+from asterion.application.chronicle import record_repeatable
 from asterion.application.equipment import equipment_instance_payload
 from asterion.application.equipment_configuration import (
     load_equipment_configuration,
@@ -2758,6 +2759,16 @@ class DungeonService:
                 continue
             if event is not None:
                 continue
+            # Trilha da Crônica: 25 points per valid run, once per run (§49.16).
+            await record_repeatable(
+                session,
+                character.server_id,
+                character,
+                "rep_cr01_masmorra",
+                run.id.hex,
+                now=datetime.now(UTC),
+                started_at=run.created_at,
+            )
             first_clear_id = family.first_clear_prefix + run.difficulty
             first_clear = not await self._has_unlock(session, character.id, first_clear_id)
             family_completion = dict(family.completion_xp_by_difficulty)

@@ -29,6 +29,7 @@ from asterion.application.account_risk import record_linked_cooccurrence
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.campaign_coop import campaign_action_intent
 from asterion.application.combat_configuration_guard import find_combat_configuration_blocker
+from asterion.application.competitive_cycle import entry_closed
 from asterion.application.equipment_configuration import load_equipment_configuration
 from asterion.application.prologue import CombatView
 from asterion.application.social_graph import blocked_between, record_recent_contacts
@@ -426,6 +427,8 @@ class PvpService:
                 raise PvpError("arena_level")
             if not is_arena_window_open(now):
                 raise PvpError("window_closed")
+            if await entry_closed(session, self.server_id, now):
+                raise PvpError("cycle_closed")
             profile = await self._profile(session, character)
             if profile.queue_blocked_until is not None and profile.queue_blocked_until > now:
                 raise PvpError("queue_blocked", profile.queue_blocked_until)
@@ -1039,6 +1042,7 @@ class PvpService:
                     placement_played=0,
                     placement_wins=0,
                     matches_played=0,
+                    cycle_matches=0,
                     wins=0,
                     losses=0,
                     draws=0,
@@ -1073,6 +1077,7 @@ class PvpService:
                 before[member.character_id][1], opponent_mmr, score, profile.matches_played
             )
             profile.matches_played += 1
+            profile.cycle_matches += 1
             profile.wins += 1 if result == "win" else 0
             profile.losses += 1 if result == "loss" else 0
             profile.draws += 1 if result == "draw" else 0

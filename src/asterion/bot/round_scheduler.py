@@ -2,6 +2,7 @@
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from asterion.application.chronicle import ChronicleService
 from asterion.application.expeditions import ExpeditionService
 from asterion.application.guild_battle import GuildBattleService
 from asterion.application.guilds import GuildService
@@ -113,6 +114,17 @@ def build_round_scheduler() -> AsyncIOScheduler:
         "interval",
         seconds=15,
         id="world-event-upkeep",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    # Crônica: vote close and snapshot, runoff, finalization (Renome soft reset,
+    # Salão da Vigília, new Batalha de Guildas standings) and the T+14d liquidation.
+    scheduler.add_job(
+        ChronicleService(SessionFactory, settings.server_id).run_maintenance,
+        "interval",
+        seconds=60,
+        id="chronicle-upkeep",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

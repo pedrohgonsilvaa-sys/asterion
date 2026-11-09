@@ -37,6 +37,7 @@ from asterion.application.account import notification_enabled
 from asterion.application.account_risk import record_linked_cooccurrence
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.campaign_coop import campaign_action_intent
+from asterion.application.competitive_cycle import current_cycle_started_at, entry_closed
 from asterion.application.equipment_configuration import load_equipment_configuration
 from asterion.application.guild_battle_locks import (
     OPEN_REGISTRATION as _OPEN_REGISTRATION,
@@ -225,9 +226,11 @@ def _seconds_left(deadline: datetime | None, now: datetime) -> int:
     return 0 if deadline is None else max(0, int((deadline - now).total_seconds()))
 
 
-async def individual_participations(session: AsyncSession, character_id: UUID) -> int:
-    """Real battles a character fought in; the Champion counts once per battle."""
-    count = await session.scalar(
+async def individual_participations(
+    session: AsyncSession, character_id: UUID, server_id: str
+) -> int:
+    """Real battles of the current Crônica; the Champion counts once per battle."""
+    statement = (
         select(func.count(func.distinct(GuildBattleFight.battle_id)))
         .join(GuildBattleFightMember, GuildBattleFightMember.fight_id == GuildBattleFight.id)
         .join(GuildBattle, GuildBattle.id == GuildBattleFight.battle_id)
@@ -236,7 +239,10 @@ async def individual_participations(session: AsyncSession, character_id: UUID) -
             GuildBattle.status == "finished",
         )
     )
-    return int(count or 0)
+    since = await current_cycle_started_at(session, server_id)
+    if since is not None:
+        statement = statement.where(GuildBattle.finished_at > since)
+    return int(await session.scalar(statement) or 0)
 
 
 class GuildBattleService:
@@ -276,6 +282,8 @@ class GuildBattleService:
             raise GuildBattleError("invalid_roster")
         async with self.sessions.begin() as session:
             await self._advisory_lock(session)
+            if await entry_closed(session, self.server_id, schedule.starts_at):
+                raise GuildBattleError("cycle_closed")
             character, guild = await self._leader_guild(session, actor)
             if guild.dissolution_due_at is not None:
                 raise GuildBattleError("guild_dissolving")
@@ -987,13 +995,14 @@ class GuildBattleService:
         score_a, score_b = battle_score(winner)
         battle.rating_a_before, battle.rating_b_before = profile_a.rating, profile_b.rating
         new_a = rating_after_battle(
-            profile_a.rating, profile_b.rating, score_a, profile_a.real_battles
+            profile_a.rating, profile_b.rating, score_a, profile_a.career_real_battles
         )
         new_b = rating_after_battle(
-            profile_b.rating, profile_a.rating, score_b, profile_b.real_battles
+            profile_b.rating, profile_a.rating, score_b, profile_b.career_real_battles
         )
         for profile, score, rating in ((profile_a, score_a, new_a), (profile_b, score_b, new_b)):
             profile.rating = rating
+            profile.career_real_battles += 1
             profile.real_battles += 1
             profile.points += classification_points(score)
             if score == 1:
@@ -1078,7 +1087,7 @@ class GuildBattleService:
             if character is None:
                 return False
             return individual_reward_eligible(
-                await individual_participations(session, character.id)
+                await individual_participations(session, character.id, self.server_id)
             )
 
     # --------------------------------------------------------------- helpers
@@ -1347,6 +1356,7 @@ class GuildBattleService:
                 guild_id=guild_id,
                 server_id=self.server_id,
                 rating=INITIAL_RATING,
+                career_real_battles=0,
                 real_battles=0,
                 wins=0,
                 draws=0,
