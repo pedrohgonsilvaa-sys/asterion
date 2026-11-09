@@ -7,7 +7,12 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from asterion.infrastructure.db.models import Character, GameActivity, HuntRound
+from asterion.infrastructure.db.models import (
+    Character,
+    GameActivity,
+    HuntRound,
+    WorldEventParticipation,
+)
 
 HUNT_ROUND_CONFIGURATION_LOCK_STATUSES = ("active", "interrupted")
 
@@ -16,7 +21,7 @@ HUNT_ROUND_CONFIGURATION_LOCK_STATUSES = ("active", "interrupted")
 class CombatConfigurationBlocker:
     """Minimal authoritative activity metadata for a rejected mutation."""
 
-    kind: Literal["foreground_activity", "hunt_round"]
+    kind: Literal["foreground_activity", "hunt_round", "world_event"]
     id: UUID
     status: str
     content_id: str | None = None
@@ -65,6 +70,22 @@ async def find_combat_configuration_blocker(
             kind="hunt_round",
             id=hunt_round.id,
             status=hunt_round.status,
+        )
+
+    # §21: the lock lasts the whole participation, also between combats.
+    world_event = await session.scalar(
+        select(WorldEventParticipation)
+        .where(
+            WorldEventParticipation.character_id == character_id,
+            WorldEventParticipation.status == "active",
+        )
+        .limit(1)
+    )
+    if world_event is not None:
+        return CombatConfigurationBlocker(
+            kind="world_event",
+            id=world_event.occurrence_id,
+            status=world_event.status,
         )
     return None
 

@@ -7,7 +7,9 @@ from asterion.application.market import MarketService
 from asterion.application.pvp import PvpService
 from asterion.application.round import RoundService
 from asterion.application.trades import TradeService
+from asterion.application.world_events import WorldEventService
 from asterion.bot.pvp_handlers import deliver_notices
+from asterion.bot.world_event_handlers import deliver_world_event_notices
 from asterion.config import get_settings
 from asterion.infrastructure.db.session import SessionFactory
 
@@ -66,6 +68,25 @@ def build_round_scheduler() -> AsyncIOScheduler:
         "interval",
         seconds=5,
         id="pvp-upkeep",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    world_events = WorldEventService(SessionFactory, settings.server_id)
+
+    async def run_world_event_maintenance() -> None:
+        notices = await world_events.run_maintenance()
+        if notices and settings.telegram_bot_enabled and settings.telegram_bot_token:
+            from asterion.bot.runtime import get_bot_runtime
+
+            await deliver_world_event_notices(get_bot_runtime().bot, notices)
+
+    # Openings, phase timers, the deadline and paying finished occurrences.
+    scheduler.add_job(
+        run_world_event_maintenance,
+        "interval",
+        seconds=15,
+        id="world-event-upkeep",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

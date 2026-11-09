@@ -29,6 +29,7 @@ ActivityKind = Literal[
     "arena_match",
     "duel",
     "recruitment",
+    "world_event",
 ]
 FlagStatus = Literal["open", "reviewed", "dismissed"]
 FLAG_STATUSES: frozenset[str] = frozenset({"open", "reviewed", "dismissed"})

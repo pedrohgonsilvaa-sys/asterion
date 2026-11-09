@@ -58,7 +58,10 @@ def render_adventure(
             InlineKeyboardButton(text="Missões", callback_data="world:missions"),
             InlineKeyboardButton(text="Masmorras", callback_data="dungeon:known"),
         ],
-        [InlineKeyboardButton(text="PvP", callback_data="pvp:hub")],
+        [
+            InlineKeyboardButton(text="Eventos", callback_data="wev:hub"),
+            InlineKeyboardButton(text="PvP", callback_data="pvp:hub"),
+        ],
         [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
     ]
     return Screen(text, "adventure", InlineKeyboardMarkup(inline_keyboard=keyboard))

@@ -48,16 +48,22 @@ class DailyGiftResult:
 
 
 async def grant_bundle(
-    session: AsyncSession, character: Character, bundle: Bundle, source_key: str
+    session: AsyncSession,
+    character: Character,
+    bundle: Bundle,
+    source_key: str,
+    *,
+    region: str | None = None,
 ) -> Granted:
     """Coroas plus bound materials. The caller holds the Character lock.
 
     Items that do not fit go to Pending, then to a durable delivery hold.
     """
     character.crowns += bundle.crowns
-    region = await session.scalar(
-        select(WorldState.region).where(WorldState.character_id == character.id)
-    )
+    if region is None:
+        region = await session.scalar(
+            select(WorldState.region).where(WorldState.character_id == character.id)
+        )
     items = []
     for material_id, quantity in sorted(bundle_materials(bundle, region).items()):
         await return_to_owner(
