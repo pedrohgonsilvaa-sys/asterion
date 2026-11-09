@@ -120,6 +120,8 @@ def render_world(view: WorldView) -> Screen:
         ("Vínculos", "links:root"),
         ("Mercado", "mkt:root"),
         ("Classificação da Vigília", "pvp:rank"),
+        ("Benefícios", "bn:root"),
+        ("Comunidade", "community:open"),
         ("Configurações", "settings:root"),
     ]
     rows = [

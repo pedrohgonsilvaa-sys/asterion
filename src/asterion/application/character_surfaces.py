@@ -30,6 +30,7 @@ from asterion.application.knowledge_catalog import (
 from asterion.application.tdo_feats import reconcile_tdo_feats
 from asterion.application.vigor import reconcile_character_vigor
 from asterion.domain.road import creature_for
+from asterion.domain.social import MAX_STORY_CHARACTERS, story_is_allowed
 from asterion.infrastructure.db.models import (
     Achievement,
     BestiaryEntry,
@@ -43,7 +44,7 @@ from asterion.infrastructure.db.models import (
     LocationDiscovery,
 )
 
-MAX_HISTORY_CHARACTERS = 1200
+MAX_HISTORY_CHARACTERS = MAX_STORY_CHARACTERS  # §49.18
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +130,7 @@ class HistoryInputResult:
     STALE = "stale"
     TOO_LONG = "too_long"
     EMPTY = "empty"
+    FORBIDDEN = "forbidden"
     MISSING_CHARACTER = "missing_character"
 
 
@@ -257,12 +259,32 @@ class CharacterSurfacesService:
                 return True
             return history_cleared
 
+    async def remove_history(self, actor_id: int, expected_revision: int) -> bool:
+        """§31.1: the player may remove their own História."""
+        async with self.sessions.begin() as session:
+            character = await self._character(session, actor_id, lock=True)
+            if character is None:
+                return False
+            profile = await session.scalar(
+                select(CharacterProfile)
+                .where(CharacterProfile.character_id == character.id)
+                .with_for_update()
+            )
+            if profile is None or profile.revision != expected_revision:
+                return False
+            profile.history = None
+            profile.revision += 1
+            profile.updated_at = datetime.now(UTC)
+            return True
+
     async def save_history(self, actor_id: int, prompt_message_id: int, raw_text: str) -> str:
         text = _clean_history(raw_text)
         if not text:
             return HistoryInputResult.EMPTY
         if len(text) > MAX_HISTORY_CHARACTERS:
             return HistoryInputResult.TOO_LONG
+        if not story_is_allowed(text):
+            return HistoryInputResult.FORBIDDEN
         async with self.sessions.begin() as session:
             character = await self._character(session, actor_id, lock=True)
             if character is None:

@@ -235,6 +235,8 @@ async def test_s4_s5_routers_are_registered_by_runtime(monkeypatch):
         blocked_character_names=(),
         community_chat_id=None,
         community_market_topic_id=None,
+        community_relatos_topic_id=None,
+        community_url=None,
     )
     monkeypatch.setattr(runtime, "get_settings", lambda: settings)
     runtime.get_bot_runtime.cache_clear()

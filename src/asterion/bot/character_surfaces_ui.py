@@ -134,12 +134,12 @@ def render_profile(view: ProfileView) -> Screen:
             "e o que ainda busca em Asterion."
         )
         button = "Escrever História"
-    keyboard = _keyboard(
-        [
-            [_button(button, f"profile:edit:{_base36(view.revision)}")],
-            [_button("← Personagem", "character:root")],
-        ]
-    )
+    rows = [[_button(button, f"profile:edit:{_base36(view.revision)}")]]
+    if view.history:
+        rows.append([_button("Compartilhar História", "so:share")])
+        rows.append([_button("Remover História", f"profile:rm:{_base36(view.revision)}")])
+    rows.append([_button("← Personagem", "character:root")])
+    keyboard = _keyboard(rows)
     return Screen("\n".join(lines), "character", keyboard, parse_mode="HTML")
 
 

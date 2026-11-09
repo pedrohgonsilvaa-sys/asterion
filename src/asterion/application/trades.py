@@ -36,6 +36,7 @@ from asterion.application.item_escrow import (
     return_to_owner,
     take_from_inventory,
 )
+from asterion.application.social_graph import blocked_between, record_recent_contacts
 from asterion.domain.market import (
     TRADE_IDLE_TIMEOUT,
     TRADE_MAX_DURATION,
@@ -225,6 +226,8 @@ class TradeService:
                 raise TradeError("partner_unavailable")
             if not market_unlocked(locked[partner_id].stage):
                 raise TradeError("partner_unavailable")
+            if await blocked_between(session, initiator_id, partner_id):
+                raise TradeError("partner_unavailable")
             busy = await session.scalar(
                 select(func.count(TradeSession.id)).where(
                     TradeSession.status.in_(LIVE_STATUSES),
@@ -262,6 +265,10 @@ class TradeService:
             if trade.partner_character_id != character.id:
                 raise TradeError("not_invited")
             if accept:
+                if await blocked_between(
+                    session, trade.initiator_character_id, trade.partner_character_id
+                ):
+                    raise TradeError("trade_unavailable")
                 trade.status = "open"
                 trade.last_activity_at = now
             else:
@@ -419,6 +426,7 @@ class TradeService:
         trade.status = "committed"
         trade.close_reason = "committed"
         trade.closed_at = now
+        await record_recent_contacts(session, [row.id for row in parties.values()], now)
         await record_linked_cooccurrence(
             session,
             server_id=self.server_id,

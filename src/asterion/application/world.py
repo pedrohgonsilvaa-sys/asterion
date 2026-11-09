@@ -1,6 +1,6 @@
 """Persistent post-prologue brazier and menu boundary."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from uuid import UUID
 
@@ -40,6 +40,8 @@ class WorldView:
     level: int = 1
     xp_required: int = 4800
     tracked_secondary_quest_title: str | None = None
+    # True only on the rest that opens the Menu, for the §32.3 onboarding invite.
+    first_menu: bool = False
 
 
 class WorldService:
@@ -159,6 +161,7 @@ class WorldService:
             )
 
     async def rest(self, actor: int) -> WorldView | None:
+        first_menu = False
         async with self.sessions.begin() as session:
             c = await session.scalar(
                 select(Character)
@@ -194,8 +197,10 @@ class WorldService:
                     )
                 )
                 c.stage = "menu:ready"
+                first_menu = True
             elif c.stage != "menu:ready":
                 return None
             # The legacy callback only reconstructs the current view for a
             # ready character. Permanent rest is authorized by RoadService.
-        return await self.resume(actor)
+        view = await self.resume(actor)
+        return replace(view, first_menu=True) if view and first_menu else view

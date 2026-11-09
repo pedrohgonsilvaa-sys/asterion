@@ -9,9 +9,12 @@ class CosmeticDefinition:
     cosmetic_type: str
     name: str
     achievement_id: str | None
+    origin_label: str | None = None
 
     @property
     def origin(self) -> str:
+        if self.origin_label:
+            return self.origin_label
         if self.achievement_id:
             return f"Feito · {self.achievement_id}"
         return "Concessão não definida pela Fonte"
@@ -266,6 +269,24 @@ COSMETICS = (
         "appearance",
         "Viajante do Véu",
         "achievement.confins.regiao",
+    ),
+    *(
+        CosmeticDefinition(cosmetic_id, kind, name, None, "Chamado de Asterion")
+        for cosmetic_id, kind, name in (
+            ("cosmetic.title.chamado.guia_da_estrada", "title", "Guia da Estrada"),
+            ("cosmetic.title.chamado.voz_que_reune", "title", "Voz que Reúne"),
+            ("cosmetic.frame.chamado.laco_das_cinzas", "frame", "Laço das Cinzas"),
+            (
+                "cosmetic.frame.chamado.circulo_dos_caminhantes",
+                "frame",
+                "Círculo dos Caminhantes",
+            ),
+            (
+                "cosmetic.appearance.chamado.arauto_de_asterion",
+                "appearance",
+                "Arauto de Asterion",
+            ),
+        )
     ),
 )
 

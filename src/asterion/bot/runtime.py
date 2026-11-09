@@ -14,6 +14,7 @@ from asterion.application.crafting import CraftingService
 from asterion.application.creation import CreationService
 from asterion.application.doctrines import DoctrineService
 from asterion.application.dungeons import DungeonService
+from asterion.application.engagement import DailyGiftService
 from asterion.application.equipment import EquipmentService
 from asterion.application.equipment_modifications import EquipmentModificationService
 from asterion.application.equipment_view import EquipmentViewService
@@ -33,7 +34,9 @@ from asterion.application.p7 import P7Service
 from asterion.application.path_selection import PathSelectionService
 from asterion.application.professions import ProfessionService
 from asterion.application.prologue import PrologueService
+from asterion.application.promo_codes import PromoCodeService
 from asterion.application.pvp import PvpService
+from asterion.application.recruitment import RecruitmentService
 from asterion.application.round import RoundService
 from asterion.application.s1 import S1Service
 from asterion.application.s2 import S2Service
@@ -53,6 +56,7 @@ from asterion.application.s33 import S33Service
 from asterion.application.s34 import S34Service
 from asterion.application.s35 import S35Service
 from asterion.application.s36 import S36Service
+from asterion.application.social import SocialService
 from asterion.application.talents import TalentService
 from asterion.application.trades import TradeService
 from asterion.application.varzeas_missions import VarzeasMissionService
@@ -60,6 +64,7 @@ from asterion.application.vde_missions import VDEMissionService
 from asterion.application.warehouse import WarehouseService
 from asterion.application.world import WorldService
 from asterion.bot.altos_missions_handlers import altos_missions_router
+from asterion.bot.benefits_handlers import benefits_router
 from asterion.bot.character_progression_handlers import character_progression_router
 from asterion.bot.character_surfaces_handlers import character_surfaces_router
 from asterion.bot.class_trial_handlers import class_trial_router
@@ -104,6 +109,7 @@ from asterion.bot.s34_handlers import s34_router
 from asterion.bot.s35_handlers import s35_router
 from asterion.bot.s36_handlers import s36_router
 from asterion.bot.settings_handlers import settings_router
+from asterion.bot.social_handlers import social_router
 from asterion.bot.varzeas_missions_handlers import varzeas_missions_router
 from asterion.bot.vde_missions_handlers import vde_missions_router
 from asterion.bot.world_handlers import world_router
@@ -221,6 +227,24 @@ def get_bot_runtime() -> BotRuntime:
             community_topic_id=settings.community_market_topic_id,
         )
     )
+    # Also before creation_router, for the same deep-link reason.
+    dispatcher.include_router(
+        social_router(
+            SocialService(SessionFactory, settings.server_id),
+            settings.creation_images,
+            community_chat_id=settings.community_chat_id,
+            relatos_topic_id=settings.community_relatos_topic_id,
+        )
+    )
+    dispatcher.include_router(
+        benefits_router(
+            DailyGiftService(SessionFactory, settings.server_id),
+            RecruitmentService(SessionFactory, settings.server_id),
+            PromoCodeService(SessionFactory, settings.server_id),
+            settings.creation_images,
+            community_url=settings.community_url,
+        )
+    )
     dispatcher.include_router(
         groups_router(
             groups,
@@ -329,6 +353,7 @@ def get_bot_runtime() -> BotRuntime:
             s1,
             consumables,
             prologue=prologue,
+            community_url=settings.community_url,
             p2=p2,
             s2=s2,
             p3=p3,

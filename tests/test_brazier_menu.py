@@ -104,7 +104,9 @@ async def test_rest_creates_p1_and_achievement_once(database):
     service = WorldService(database[1], "ocaso")
     view = await service.rest(1)
     assert view is not None and view.kind == "menu"
-    await service.rest(1)
+    # §32.3: the Community invite is sent once, when the Menu opens for the first time.
+    assert view.first_menu is True
+    assert (await service.rest(1)).first_menu is False
     async with database[1]() as session:
         assert len((await session.scalars(select(Achievement))).all()) == 1
         assert len((await session.scalars(select(Quest))).all()) == 1

@@ -33,6 +33,15 @@ def render_links(group: GroupView | None, incoming_count: int) -> Screen:
             [InlineKeyboardButton(text="Grupo", callback_data="group:root")],
             [InlineKeyboardButton(text="Convites", callback_data="group:inbox")],
             [InlineKeyboardButton(text="Guilda", callback_data="guild:root")],
+            [
+                InlineKeyboardButton(text="Amigos", callback_data="so:friends"),
+                InlineKeyboardButton(text="Pedidos", callback_data="so:requests"),
+            ],
+            [
+                InlineKeyboardButton(text="Recentes", callback_data="so:recents"),
+                InlineKeyboardButton(text="Bloqueados", callback_data="so:blocked"),
+            ],
+            [InlineKeyboardButton(text="Buscar Jogador", callback_data="so:search")],
             [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
         ]
     )

@@ -152,6 +152,7 @@ class InventoryView:
 ORIGIN_PREFIXES = (
     (("activity:", "explore:", "dungeon:", "dungeon."), "Loot"),
     (("market:",), "Mercado"),
+    (("benefit:",), "Benefícios"),
     (("craft:",), "Crafting"),
     (("service:",), "Serviço"),
 )

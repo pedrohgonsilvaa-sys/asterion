@@ -46,6 +46,7 @@ from asterion.application.guild_upkeep import (
     settle,
     start_cooldown,
 )
+from asterion.application.social_graph import blocked_between
 from asterion.domain.guilds import (
     DISSOLUTION_PERIOD,
     GUILD_SWITCH_COOLDOWN,
@@ -491,6 +492,8 @@ class GuildService:
                 raise GuildError("character_not_found")
             if target.id == character.id:
                 raise GuildError("cannot_invite_self")
+            if await blocked_between(session, character.id, target.id):
+                raise GuildError("invite_refused")
             if await session.get(GuildMember, target.id) is not None:
                 raise GuildError("target_in_guild")
             if not accepts_entry(await self._member_count(session, guild.id), _capacity(guild)):
