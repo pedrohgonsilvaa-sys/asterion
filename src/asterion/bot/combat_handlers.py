@@ -17,6 +17,11 @@ from asterion.application.s4 import S4Service
 from asterion.application.s5 import S5Service
 from asterion.application.s6 import S6Service
 from asterion.application.world import WorldService
+from asterion.application.world_events import (
+    WorldEventHubView,
+    WorldEventResultView,
+    WorldEventService,
+)
 from asterion.bot.combat_ui import (
     CombatCallback,
     CombatConsumableCallback,
@@ -45,7 +50,10 @@ from asterion.bot.s3_ui import render_s3
 from asterion.bot.s4_ui import render_s4
 from asterion.bot.s5_ui import render_s5
 from asterion.bot.s6_ui import render_s6
+from asterion.bot.world_event_ui import render_world_event
 from asterion.bot.world_ui import render_world
+
+WorldEventViews = (WorldEventHubView, WorldEventResultView)
 
 
 def combat_router(
@@ -64,11 +72,19 @@ def combat_router(
     s6: S6Service | None = None,
     p6: P6Service | None = None,
     dungeons: DungeonService | None = None,
+    world_events: WorldEventService | None = None,
 ) -> Router:
     router = Router(name="foreground_combat")
     router.callback_query.filter(F.message.chat.type == "private")
 
     async def consumable_action(actor, activity_id, version, *, item_id, target_id, effect_id):
+        if world_events is not None:
+            event_view = await world_events.consume_for_activity(
+                actor, activity_id, version, item_id=item_id,
+                target_id=target_id, effect_id=effect_id,
+            )
+            if event_view is not None:
+                return event_view
         view = (
             await dungeons.consume_for_activity(
                 actor, activity_id, version, item_id=item_id,
@@ -155,6 +171,12 @@ def combat_router(
         return view
 
     async def consumable_selection(actor, activity_id, version, **kwargs):
+        if world_events is not None:
+            event_view = await world_events.consumable_selection(
+                actor, activity_id, version, **kwargs
+            )
+            if event_view is not None:
+                return event_view
         view = (
             await dungeons.consumable_selection(actor, activity_id, version, **kwargs)
             if dungeons is not None
@@ -191,6 +213,10 @@ def combat_router(
         return view
 
     def render_service_view(view):
+        if isinstance(view, WorldEventViews):
+            return render_world_event(view)
+        if getattr(view, "context", None) == "world_event":
+            return render_world_event(view)
         if getattr(view, "context", None) == "dungeon":
             from asterion.bot.dungeon_ui import render_dungeons
 
@@ -487,6 +513,7 @@ def combat_router(
                 and s6 is None
                 and p6 is None
                 and dungeons is None
+                and world_events is None
             )
             or not isinstance(query.message, Message)
         ):

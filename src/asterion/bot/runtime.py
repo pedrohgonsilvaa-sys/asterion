@@ -63,6 +63,7 @@ from asterion.application.varzeas_missions import VarzeasMissionService
 from asterion.application.vde_missions import VDEMissionService
 from asterion.application.warehouse import WarehouseService
 from asterion.application.world import WorldService
+from asterion.application.world_events import WorldEventService
 from asterion.bot.altos_missions_handlers import altos_missions_router
 from asterion.bot.benefits_handlers import benefits_router
 from asterion.bot.character_progression_handlers import character_progression_router
@@ -112,6 +113,7 @@ from asterion.bot.settings_handlers import settings_router
 from asterion.bot.social_handlers import social_router
 from asterion.bot.varzeas_missions_handlers import varzeas_missions_router
 from asterion.bot.vde_missions_handlers import vde_missions_router
+from asterion.bot.world_event_handlers import world_event_router
 from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
 from asterion.domain.creation import NamePolicy
@@ -191,6 +193,9 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(
         pvp_router(PvpService(SessionFactory, settings.server_id), settings.creation_images)
     )
+    world_events = WorldEventService(SessionFactory, settings.server_id)
+    # Also before the world routers: /start must resume an Event combat.
+    dispatcher.include_router(world_event_router(world_events, settings.creation_images))
     dispatcher.include_router(
         settings_router(account, character_surfaces, settings.creation_images)
     )
@@ -323,6 +328,7 @@ def get_bot_runtime() -> BotRuntime:
             s6=s6,
             p6=p6,
             dungeons=dungeons,
+            world_events=world_events,
         )
     )
     dispatcher.include_router(

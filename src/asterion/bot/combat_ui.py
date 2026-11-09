@@ -71,6 +71,10 @@ class PvpCombatCallback(CallbackData, prefix="pv"):
         return _from_base36(self.action)
 
 
+class WorldEventCombatCallback(PvpCombatCallback, prefix="we"):
+    """Same payload as a PvP intent, for the Event router."""
+
+
 class CampaignCombatCallback(CallbackData, prefix="cc"):
     activity: str
     version: str
@@ -1554,6 +1558,7 @@ def render_combat(view: CombatView) -> Screen:
     is_trial = view.context == "class_trial"
     is_dungeon = view.context == "dungeon"
     is_pvp_match = view.context in {"pvp_arena", "pvp_duel"}
+    is_world_event = view.context == "world_event"
     is_pvpve = view.context == "pvpve" or is_pvp_match
     is_party_combat = is_trial or is_dungeon or state.party_mode
     view_campaign_shared = getattr(view, "campaign_shared", None)
@@ -1836,9 +1841,16 @@ def render_combat(view: CombatView) -> Screen:
             callback = DungeonCombatCallback.for_intent(
                 view.run_id, view.activity_id, state.version, action_index, target_code
             ).pack()
-        elif is_campaign_party or is_varzeas_solo_campaign or is_altos_solo_campaign:
+        elif (
+            is_campaign_party
+            or is_varzeas_solo_campaign
+            or is_altos_solo_campaign
+            or is_world_event
+        ):
             intent_callback = (
-                PvpCombatCallback
+                WorldEventCombatCallback
+                if is_world_event
+                else PvpCombatCallback
                 if is_pvp_match
                 else CampaignCombatCallback
                 if is_campaign_party

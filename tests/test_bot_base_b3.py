@@ -347,6 +347,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
         "world:map",
         "world:missions",
         "dungeon:known",
+        "wev:hub",
         "pvp:hub",
         "menu:back",
     }

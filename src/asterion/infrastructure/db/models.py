@@ -3387,3 +3387,80 @@ class PromoAttempt(Base):
     )
     server_id: Mapped[str] = mapped_column(String(64), nullable=False)
     attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class WorldEventOccurrence(Base):
+    """One scheduled opening of a World Event (GDD §21); unique per opening."""
+
+    __tablename__ = "world_event_occurrences"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('gathering','active','completed','failed')",
+            name="ck_world_event_occurrence_status",
+        ),
+        UniqueConstraint("server_id", "occurrence_key", name="uq_world_event_occurrence"),
+        Index("ix_world_event_occurrence_status", "server_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    event_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    occurrence_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    phase: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    phase_one_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    entry_closes_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    phase_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    participants_snapshot: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    boss_hp: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
+    boss_max_hp: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ruleset_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class WorldEventParticipation(Base):
+    """Contribution per occurrence and character (§21); re-entering never duplicates it."""
+
+    __tablename__ = "world_event_participations"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active','withdrawn','settled')",
+            name="ck_world_event_participation_status",
+        ),
+        Index(
+            "uq_world_event_active_participation",
+            "character_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+    occurrence_id: Mapped[UUID] = mapped_column(
+        ForeignKey("world_event_occurrences.id", ondelete="CASCADE"), primary_key=True
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    combat_configuration: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    hp: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
+    reentry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    activity_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("game_activities.id", ondelete="SET NULL")
+    )
+    combat_phase: Mapped[int | None] = mapped_column(Integer)
+    vigor_reserved: Mapped[int] = mapped_column(Integer, nullable=False)
+    vigor_refunded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    consumable_uses: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    significant_actions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    major_contributions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    phases: Mapped[list[int]] = mapped_column(JSONB, nullable=False)
+    damage_dealt: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    eligible: Mapped[bool | None] = mapped_column(Boolean)
+    reward: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
