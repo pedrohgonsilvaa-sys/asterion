@@ -20,6 +20,7 @@ from asterion.application.equipment_modifications import EquipmentModificationSe
 from asterion.application.equipment_view import EquipmentViewService
 from asterion.application.expeditions import ExpeditionService
 from asterion.application.groups import GroupService
+from asterion.application.guild_battle import GuildBattleService
 from asterion.application.guilds import GuildService
 from asterion.application.inventory import InventoryService
 from asterion.application.legacy import LegacyService
@@ -81,6 +82,7 @@ from asterion.bot.equipment_modification_handlers import equipment_modification_
 from asterion.bot.expedition_handlers import expedition_router
 from asterion.bot.groups_handlers import groups_router
 from asterion.bot.guild_activity import GuildActivityMiddleware
+from asterion.bot.guild_battle_handlers import guild_battle_router
 from asterion.bot.guilds_handlers import guilds_router
 from asterion.bot.market_handlers import market_router
 from asterion.bot.nareth_missions_handlers import nareth_missions_router
@@ -196,6 +198,12 @@ def get_bot_runtime() -> BotRuntime:
     # First on purpose: /start and /menu must resume a PvP activity (39.4).
     dispatcher.include_router(
         pvp_router(PvpService(SessionFactory, settings.server_id), settings.creation_images)
+    )
+    # Also before the world routers: /start must resume a Batalha de Guildas fight.
+    dispatcher.include_router(
+        guild_battle_router(
+            GuildBattleService(SessionFactory, settings.server_id), settings.creation_images
+        )
     )
     world_events = WorldEventService(SessionFactory, settings.server_id)
     # Also before the world routers: /start must resume an Event combat.

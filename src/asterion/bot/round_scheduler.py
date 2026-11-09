@@ -1,8 +1,9 @@
-"""Background jobs: timed Ronda de Caça encounters, Guild and Market upkeep."""
+"""Background jobs: timed Ronda de Caça encounters, Guild and Market upkeep, PvP."""
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from asterion.application.expeditions import ExpeditionService
+from asterion.application.guild_battle import GuildBattleService
 from asterion.application.guilds import GuildService
 from asterion.application.market import MarketService
 from asterion.application.oaths import OathService
@@ -11,6 +12,7 @@ from asterion.application.round import RoundService
 from asterion.application.trades import TradeService
 from asterion.application.world_events import WorldEventService
 from asterion.bot.expedition_handlers import deliver_expedition_notices
+from asterion.bot.guild_battle_handlers import deliver_guild_battle_notices
 from asterion.bot.oath_handlers import deliver_oath_notices
 from asterion.bot.pvp_handlers import deliver_notices
 from asterion.bot.world_event_handlers import deliver_world_event_notices
@@ -72,6 +74,26 @@ def build_round_scheduler() -> AsyncIOScheduler:
         "interval",
         seconds=5,
         id="pvp-upkeep",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    guild_battle = GuildBattleService(SessionFactory, settings.server_id)
+
+    async def run_guild_battle_maintenance() -> None:
+        notices = await guild_battle.run_maintenance()
+        if notices and settings.telegram_bot_enabled and settings.telegram_bot_token:
+            from asterion.bot.runtime import get_bot_runtime
+
+            await deliver_guild_battle_notices(guild_battle, get_bot_runtime().bot, notices)
+
+    # Pairing at 20:30, both Fronts at 21:00, the Champion and the 60s turn timers.
+    # Each notice follows its notification category (Essenciais or PvP/Batalha).
+    scheduler.add_job(
+        run_guild_battle_maintenance,
+        "interval",
+        seconds=5,
+        id="guild-battle-upkeep",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

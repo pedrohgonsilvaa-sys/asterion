@@ -23,6 +23,7 @@ Linked accounts in one fight are only flagged (§36); nothing here blocks them.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -32,6 +33,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.account import notification_enabled
 from asterion.application.account_risk import record_linked_cooccurrence
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.campaign_coop import campaign_action_intent
@@ -57,6 +59,7 @@ from asterion.domain.guild_battle import (
     classification_points,
     front_points,
     individual_reward_eligible,
+    next_battle_start,
     no_show_winner,
     open_registration,
     order_standings,
@@ -107,6 +110,7 @@ class RosterSlotView:
     slot: str
     is_champion: bool
     confirmed: bool
+    replaced: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +120,28 @@ class RegistrationView:
     status: str
     roster: tuple[RosterSlotView, ...]
     opponent_name: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class MemberOption:
+    character_id: UUID
+    name: str
+    level: int
+
+
+@dataclass(frozen=True, slots=True)
+class GuildBattleHubView:
+    """Entry screen: the viewer's Guild, the next battle and its current entry."""
+
+    guild_name: str
+    character_id: UUID
+    is_leader: bool
+    next_starts_at: datetime
+    registration_open: bool
+    registration: RegistrationView | None
+    # Members at the current Nv.30 or more, by name; only filled for the Leader.
+    candidates: tuple[MemberOption, ...]
+    in_fight: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +180,20 @@ GuildBattleView = GuildBattleFightView | GuildBattleResultView | GuildBattleMess
 class GuildBattleNotice:
     telegram_id: int
     view: GuildBattleView
+
+
+def notice_category(view: GuildBattleView) -> str:
+    """Notification category (UI: Essenciais vs PvP/Batalha de Guildas).
+
+    Author decision 2026-11-09: what asks for an action (the pairing that opens
+    the Entry Confirmation, and the live fight turns) is Essential; bye, end of a
+    Front and the result follow the competitive category.
+    """
+    if isinstance(view, GuildBattleFightView):
+        return "essentials"
+    if isinstance(view, GuildBattleMessageView) and view.code == "paired":
+        return "essentials"
+    return "competitive"
 
 
 @dataclass(frozen=True, slots=True)
@@ -310,6 +350,72 @@ class GuildBattleService:
             registration.status = "cancelled"
             registration.revision += 1
             registration.updated_at = now
+
+    async def hub(self, actor: int, *, now: datetime | None = None) -> GuildBattleHubView:
+        now = _utcnow(now)
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                raise GuildBattleError("no_character")
+            membership = await session.get(GuildMember, character.id)
+            if membership is None:
+                raise GuildBattleError("not_in_guild")
+            guild = await session.get(Guild, membership.guild_id)
+            if guild is None or guild.status != "active":
+                raise GuildBattleError("not_in_guild")
+            is_leader = membership.role == GuildRole.LEADER.value
+            candidates: tuple[MemberOption, ...] = ()
+            if is_leader:
+                rows = (
+                    await session.scalars(
+                        select(Character)
+                        .join(GuildMember, GuildMember.character_id == Character.id)
+                        .where(
+                            GuildMember.guild_id == guild.id,
+                            Character.server_id == self.server_id,
+                            Character.level >= GUILD_BATTLE_MIN_LEVEL,
+                        )
+                        .order_by(Character.name, Character.id)
+                    )
+                ).all()
+                candidates = tuple(MemberOption(row.id, row.name, row.level) for row in rows)
+            in_fight = await session.scalar(
+                select(GuildBattleFightMember.fight_id)
+                .join(GuildBattleFight, GuildBattleFight.id == GuildBattleFightMember.fight_id)
+                .where(
+                    GuildBattleFightMember.character_id == character.id,
+                    GuildBattleFight.status == "active",
+                )
+                .limit(1)
+            )
+        registration = await self.registration(actor)
+        return GuildBattleHubView(
+            guild.name,
+            character.id,
+            is_leader,
+            next_battle_start(now),
+            open_registration(now) is not None,
+            registration,
+            candidates,
+            in_fight is not None,
+        )
+
+    async def deliverable(
+        self, notices: Sequence[GuildBattleNotice]
+    ) -> list[GuildBattleNotice]:
+        """Drop notices whose category the player switched off (GDD §37.3 Notificações)."""
+        if not notices:
+            return []
+        allowed: dict[tuple[int, str], bool] = {}
+        async with self.sessions() as session:
+            for notice in notices:
+                key = (notice.telegram_id, notice_category(notice.view))
+                if key not in allowed:
+                    character = await self._character(session, notice.telegram_id)
+                    allowed[key] = character is not None and await notification_enabled(
+                        session, character.id, key[1]
+                    )
+        return [item for item in notices if allowed[(item.telegram_id, notice_category(item.view))]]
 
     async def registration(self, actor: int) -> RegistrationView | None:
         """The actor's Guild entry for the next battle that is not settled yet."""
@@ -1051,6 +1157,7 @@ class GuildBattleService:
                 row.slot,
                 row.is_champion,
                 row.status == "confirmed",
+                row.status == "replaced",
             )
             for row in sorted(
                 entries, key=lambda row: (order[row.slot], characters[row.character_id].name)
