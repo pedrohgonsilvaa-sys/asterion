@@ -199,6 +199,7 @@ def render_guild_menu(
     rows.append(
         [_button("⚜️ Juramento", "oath:hub"), _button("🚩 Expedição", "exp:hub")]
     )
+    rows.append([_button("🛡️ Batalha de Guildas", "gb:hub")])
     if guild.viewer_role is GuildRole.LEADER:
         if guild.dissolution_due_at is None:
             rows.append([_button("Renomear Guilda", f"guild:ren:{gid}")])

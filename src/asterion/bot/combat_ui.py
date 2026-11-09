@@ -79,6 +79,10 @@ class WorldEventCombatCallback(PvpCombatCallback, prefix="we"):
     """Same payload as a PvP intent, for the Event router."""
 
 
+class GuildBattleCombatCallback(PvpCombatCallback, prefix="gbf"):
+    """Same payload as a PvP intent, for the Batalha de Guildas router."""
+
+
 class CampaignCombatCallback(CallbackData, prefix="cc"):
     activity: str
     version: str
@@ -1564,7 +1568,8 @@ def render_combat(view: CombatView) -> Screen:
     is_pvp_match = view.context in {"pvp_arena", "pvp_duel"}
     is_world_event = view.context == "world_event"
     is_oath = view.context == "oath_trial"
-    is_pvpve = view.context == "pvpve" or is_pvp_match
+    is_guild_battle = view.context == "guild_battle"
+    is_pvpve = view.context == "pvpve" or is_pvp_match or is_guild_battle
     is_party_combat = is_trial or is_dungeon or state.party_mode
     view_campaign_shared = getattr(view, "campaign_shared", None)
     if is_dungeon:
@@ -1588,7 +1593,9 @@ def render_combat(view: CombatView) -> Screen:
         and not is_trial
         and not is_dungeon
     )
-    actor_bound_party = is_campaign_party or view.context == "group_hunt" or is_oath
+    actor_bound_party = (
+        is_campaign_party or view.context == "group_hunt" or is_oath or is_guild_battle
+    )
     if not is_trial and view.consumable_screen is not None:
         return _render_consumable_selection(view)
     active_key = active_player_key(state)
@@ -1603,7 +1610,7 @@ def render_combat(view: CombatView) -> Screen:
     # A PvP match always renders from the viewer's side: the rival's private
     # state must not appear while it is the rival's turn (Section 59).
     player_key = (
-        requested_actor_key if is_pvp_match else None
+        requested_actor_key if is_pvp_match or is_guild_battle else None
     ) or active_key or requested_actor_key or "player"
     player = state.fighters.get(player_key, state.fighters.get("player"))
     if player is None:
@@ -1620,6 +1627,8 @@ def render_combat(view: CombatView) -> Screen:
         elif is_pvp_match:
             title = "Arena da Vigília" if view.context == "pvp_arena" else "Duelo"
             lines.extend([f"⚔️ {title}", ""])
+        elif is_guild_battle:
+            lines.extend(["🛡️ Batalha de Guildas", ""])
         elif is_pvpve:
             lines.extend(["⚔️ Confronto PvPvE · Disputa pelo Rastro", ""])
         elif is_dungeon:
@@ -1852,9 +1861,12 @@ def render_combat(view: CombatView) -> Screen:
             or is_altos_solo_campaign
             or is_world_event
             or is_oath
+            or is_guild_battle
         ):
             intent_callback = (
-                WorldEventCombatCallback
+                GuildBattleCombatCallback
+                if is_guild_battle
+                else WorldEventCombatCallback
                 if is_world_event
                 else OathCombatCallback
                 if is_oath
