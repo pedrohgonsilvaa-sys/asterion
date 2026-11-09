@@ -90,6 +90,10 @@ GUILD_ERROR_MESSAGES = {
     ),
     "too_many_pending": "Você já tem 3 inscrições pendentes. Cancele uma para enviar outra.",
     "leader_must_transfer": "O Líder não pode sair. Transfira a liderança antes.",
+    "guild_battle_roster_locked": (
+        "Esse personagem está no roster travado de uma Batalha de Guildas. "
+        "Espere a Batalha terminar."
+    ),
     "wrong_server": "Isso pertence a outro servidor.",
     "invalid_amount": "Informe uma quantia inteira de Coroas maior que zero.",
     "not_enough_crowns": "Você não tem Coroas suficientes.",

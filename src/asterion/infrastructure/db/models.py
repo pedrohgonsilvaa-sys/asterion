@@ -3681,3 +3681,185 @@ class ExpeditionChoice(Base):
     points: Mapped[int] = mapped_column(Integer, nullable=False)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False)
     chosen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GuildBattleProfile(Base):
+    """Technical Guild rating and standings (§15, §49.14); persists between Crônicas."""
+
+    __tablename__ = "guild_battle_profiles"
+    __table_args__ = (
+        CheckConstraint(
+            "real_battles >= 0 AND wins >= 0 AND draws >= 0 AND losses >= 0 AND byes >= 0"
+            " AND points >= 0",
+            name="ck_guild_battle_profile_counts",
+        ),
+        Index("ix_guild_battle_profiles_server", "server_id", "points", "rating"),
+    )
+
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), primary_key=True)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False, default=1500)
+    real_battles: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    wins: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    draws: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    losses: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    byes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_battle_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GuildBattleRegistration(Base):
+    """One Guild entered in one Batalha de Guildas, from Inscrição to the result."""
+
+    __tablename__ = "guild_battle_registrations"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('registered','paired','bye','finished','cancelled')",
+            name="ck_guild_battle_registration_status",
+        ),
+        UniqueConstraint("guild_id", "starts_at", name="uq_guild_battle_registration_slot"),
+        Index("ix_guild_battle_registrations_due", "server_id", "status", "starts_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    registered_by: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GuildBattleRosterEntry(Base):
+    """A registered combatant or reserve; confirmation takes the configuration lock."""
+
+    __tablename__ = "guild_battle_roster"
+    __table_args__ = (
+        CheckConstraint(
+            "slot IN ('front_1','front_2','reserve')", name="ck_guild_battle_roster_slot"
+        ),
+        CheckConstraint(
+            "status IN ('registered','confirmed','replaced')",
+            name="ck_guild_battle_roster_status",
+        ),
+        CheckConstraint(
+            "NOT is_champion OR slot <> 'reserve'", name="ck_guild_battle_roster_champion"
+        ),
+        Index("ix_guild_battle_roster_character", "character_id"),
+    )
+
+    registration_id: Mapped[UUID] = mapped_column(
+        ForeignKey("guild_battle_registrations.id", ondelete="CASCADE"), primary_key=True
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    account_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    slot: Mapped[str] = mapped_column(String(8), nullable=False)
+    is_champion: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    game_activity_id: Mapped[UUID | None] = mapped_column(ForeignKey("game_activities.id"))
+
+
+class GuildBattle(Base):
+    """Two paired Guilds: Frente I, Frente II and, on a tie, the Champion."""
+
+    __tablename__ = "guild_battles"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('confirming','fronts','champion','finished')",
+            name="ck_guild_battle_status",
+        ),
+        CheckConstraint(
+            "winner_side IS NULL OR winner_side IN ('a','b')", name="ck_guild_battle_winner"
+        ),
+        UniqueConstraint("registration_a_id", name="uq_guild_battle_registration_a"),
+        UniqueConstraint("registration_b_id", name="uq_guild_battle_registration_b"),
+        Index("ix_guild_battles_due", "server_id", "status", "starts_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    registration_a_id: Mapped[UUID] = mapped_column(
+        ForeignKey("guild_battle_registrations.id"), nullable=False
+    )
+    registration_b_id: Mapped[UUID] = mapped_column(
+        ForeignKey("guild_battle_registrations.id"), nullable=False
+    )
+    guild_a_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    guild_b_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    points_a: Mapped[Decimal] = mapped_column(Numeric(3, 1), nullable=False, default=0)
+    points_b: Mapped[Decimal] = mapped_column(Numeric(3, 1), nullable=False, default=0)
+    winner_side: Mapped[str | None] = mapped_column(String(1))
+    rating_a_before: Mapped[int | None] = mapped_column(Integer)
+    rating_a_after: Mapped[int | None] = mapped_column(Integer)
+    rating_b_before: Mapped[int | None] = mapped_column(Integer)
+    rating_b_after: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GuildBattleFight(Base):
+    """One combat of a Batalha de Guildas: a Front or the Champion duel."""
+
+    __tablename__ = "guild_battle_fights"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('front_1','front_2','champion')", name="ck_guild_battle_fight_kind"
+        ),
+        CheckConstraint("status IN ('active','finished')", name="ck_guild_battle_fight_status"),
+        CheckConstraint(
+            "winner_side IS NULL OR winner_side IN ('a','b')",
+            name="ck_guild_battle_fight_winner",
+        ),
+        UniqueConstraint("battle_id", "kind", name="uq_guild_battle_fight_kind"),
+        Index("ix_guild_battle_fights_due", "status", "deadline_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    battle_id: Mapped[UUID] = mapped_column(
+        ForeignKey("guild_battles.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    absent_a: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    absent_b: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    winner_side: Mapped[str | None] = mapped_column(String(1))
+    end_reason: Mapped[str | None] = mapped_column(String(16))
+    combat_id: Mapped[UUID | None] = mapped_column(Uuid)
+    ruleset_version: Mapped[str | None] = mapped_column(String(48))
+    state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    combat_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GuildBattleFightMember(Base):
+    __tablename__ = "guild_battle_fight_members"
+    __table_args__ = (
+        CheckConstraint("side IN ('a','b')", name="ck_guild_battle_fight_member_side"),
+        UniqueConstraint("fight_id", "actor_key", name="uq_guild_battle_fight_member_key"),
+        Index("ix_guild_battle_fight_member_character", "character_id"),
+    )
+
+    fight_id: Mapped[UUID] = mapped_column(
+        ForeignKey("guild_battle_fights.id", ondelete="CASCADE"), primary_key=True
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    account_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    side: Mapped[str] = mapped_column(String(1), nullable=False)
+    actor_key: Mapped[str] = mapped_column(String(8), nullable=False)
+    game_activity_id: Mapped[UUID | None] = mapped_column(ForeignKey("game_activities.id"))
+    consecutive_timeouts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_timeouts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

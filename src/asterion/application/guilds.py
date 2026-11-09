@@ -36,6 +36,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.account_risk import record_linked_cooccurrence
+from asterion.application.guild_battle_locks import character_roster_locked
 from asterion.application.guild_upkeep import (
     ACTIVE_PROJECT_STATES,
     audit,
@@ -759,6 +760,8 @@ class GuildService:
             target = await self._lock_member(session, guild.id, target_character_id)
             if not can_remove(GuildRole(membership.role), GuildRole(target.role)):
                 raise GuildError("no_permission")
+            if await character_roster_locked(session, target_character_id):
+                raise GuildError("guild_battle_roster_locked")
             await session.delete(target)
             if target_character is not None:
                 await start_cooldown(
@@ -779,6 +782,8 @@ class GuildService:
             character, guild, membership = await self._actor_guild(session, actor, now)
             if membership.role == GuildRole.LEADER.value:
                 raise GuildError("leader_must_transfer")
+            if await character_roster_locked(session, character.id):
+                raise GuildError("guild_battle_roster_locked")
             await session.delete(membership)
             await start_cooldown(session, character.telegram_id, character.server_id, now)
             guild.revision += 1
