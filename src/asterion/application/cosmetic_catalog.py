@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from asterion.domain.chronicle import CHRONICLE_COSMETICS
+
 
 @dataclass(frozen=True, slots=True)
 class CosmeticDefinition:
@@ -287,6 +289,12 @@ COSMETICS = (
                 "Arauto de Asterion",
             ),
         )
+    ),
+    *(
+        CosmeticDefinition(
+            item.cosmetic_id, item.cosmetic_type, item.name, None, "Trilha da Crônica"
+        )
+        for item in CHRONICLE_COSMETICS
     ),
 )
 

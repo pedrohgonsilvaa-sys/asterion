@@ -29,6 +29,7 @@ from asterion.domain.arena import (
     PLACEMENT_MATCHES,
     elo_for,
 )
+from asterion.domain.pvp_flavor import pvp_flavor
 
 DUEL_PROMPT_REF = "pvp:duel"
 _IMAGE = "pvp"
@@ -51,6 +52,10 @@ _ERRORS = {
     "duel_level": f"O Duelo abre no Nv. {DUEL_MIN_LEVEL}.",
     "opponent_level": f"O oponente precisa estar no Nv. {DUEL_MIN_LEVEL} ou acima.",
     "window_closed": "A Arena da Vigília está fechada agora.",
+    "cycle_closed": (
+        "A Crônica terminou e a Classificação da Vigília está sendo fechada. "
+        "A fila volta a abrir depois da finalização."
+    ),
     "queue_blocked": "Sua entrada na fila está em Recarga.",
     "busy": "Conclua sua atividade atual antes de entrar no PvP.",
     "opponent_busy": "Esse personagem não pode duelar agora.",
@@ -227,6 +232,8 @@ def _render_result(view: PvpResultView) -> Screen:
         lines.extend(["", reason])
     if view.kind == "arena":
         lines.extend(["", *_arena_lines(view)])
+    seed = f"{view.name}:{view.opponent}:{view.renome_before}:{view.placement_played}"
+    lines.extend(["", f"<i>{escape(pvp_flavor(view.kind, view.outcome, seed))}</i>"])
     return Screen("\n".join(lines), _IMAGE, _keyboard(_BACK), "HTML")
 
 
@@ -291,4 +298,5 @@ def render_ranking(view: RankingView) -> Screen:
             lines.extend([f"{row.position} {escape(row.name)}", f"{row.elo} · {row.renome} Renome"])
     else:
         lines.append("Nenhum nome registrado ainda.")
-    return Screen("\n".join(lines), _IMAGE, _keyboard(_BACK), "HTML")
+    rows = [[_button("🏛️ Salão da Vigília", "cr:hall")], _BACK]
+    return Screen("\n".join(lines), _IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")

@@ -7,6 +7,7 @@ from asterion.application.account import AccountService
 from asterion.application.active_arts import ActiveArtService
 from asterion.application.altos_missions import AltosMissionService
 from asterion.application.character_surfaces import CharacterSurfacesService
+from asterion.application.chronicle import ChronicleService
 from asterion.application.class_trials import ClassTrialService
 from asterion.application.consumables import ConsumableService
 from asterion.application.cosmetics import CosmeticService
@@ -71,6 +72,7 @@ from asterion.bot.altos_missions_handlers import altos_missions_router
 from asterion.bot.benefits_handlers import benefits_router
 from asterion.bot.character_progression_handlers import character_progression_router
 from asterion.bot.character_surfaces_handlers import character_surfaces_router
+from asterion.bot.chronicle_handlers import chronicle_router
 from asterion.bot.class_trial_handlers import class_trial_router
 from asterion.bot.combat_handlers import combat_router
 from asterion.bot.cosmetics_handlers import cosmetics_router
@@ -203,6 +205,11 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(
         guild_battle_router(
             GuildBattleService(SessionFactory, settings.server_id), settings.creation_images
+        )
+    )
+    dispatcher.include_router(
+        chronicle_router(
+            ChronicleService(SessionFactory, settings.server_id), settings.creation_images
         )
     )
     world_events = WorldEventService(SessionFactory, settings.server_id)
