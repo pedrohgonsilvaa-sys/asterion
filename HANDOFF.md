@@ -1568,6 +1568,39 @@ Não foi feito teste de execução, migração em banco ou leitura de issue trac
 - Um único remote configurado: `origin` (URL no cabeçalho). Sem tags Git observadas. O histórico da branch excede o ref remoto local, mas não inferir estado atual do GitHub a partir de refs sem fetch.
 - Há muitas modificações rastreadas em `src/asterion/**`, `tests/**` e no manifesto Fase 2E, além de arquivos novos e `.worktrees/`. Leia `git status --short` e `git diff` antes de alternar branch, resetar, limpar ou criar commit. Não descarte os arquivos locais inadvertidamente.
 
+### Status do Beta (atualizado em 2026-11-09)
+
+O plano de lançamento é o backlog da auditoria Fase 4A (`docs/audits/ASTERION_AUDITORIA_GLOBAL_LANCAMENTO_FASE4A.md`, seção H). A numeração "etapa N do Beta" aparece nos PRs desde a saída do Codex.
+
+| Etapa | Entregue | PR |
+|---|---|---|
+| (antes) | Legado (Ascensão transacional e XP de reprogressão), Armazém | #95, #96 |
+| 1–2 | Guildas (núcleo, telas, Tesouraria, Obras, Dissolução, Sucessão) e flags de multicontas (§36) | #97, #98, #99 |
+| 3 | Mercado, Loja Pessoal e Troca Direta | #100 |
+| 4 | Duelo e Arena da Vigília | #101 |
+| 5 | Vínculos, Relatos, Dádiva, Chamado, Códigos e Comunidade | #102 |
+| 6 | Eventos Mundiais (catálogo vazio de propósito) | #103 |
+| 7 | Juramento e Expedição (catálogos vazios de propósito) | #104 |
+| 8 | Batalha de Guildas (núcleo e telas) | #105, #106 |
+
+Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem.
+
+**Sistemas de jogo que faltam** (conferido no código em 2026-11-09):
+
+- Crônica I "Ecos da Convergência" e Nova Vigília (§5, §5.1–5.3, §49.16): não existe. Destrava o soft reset e as recompensas de Elo da Arena, o corte por Crônica da Batalha de Guildas, a Trilha, o Salão da Vigília e o histórico de Crônicas no perfil.
+- Trilha/Passe da Crônica (§5.4, §49.16): não existe.
+- Serviços de Ofícios entre jogadores (§27.3): não existe; ficou fora da etapa 3.
+- Marcas de Legado (§16.1): não existem; a Ascensão existe.
+- Patrono e pagamentos: não existem; depende de escolher um provedor.
+- Catálogo de Flavor Text contextual: não existe.
+- Integração de visuais/skins: não existe.
+
+**Operação que falta:** worker da Outbox (só existe a tabela), agendador que sobreviva a restart e a várias instâncias, métricas e alertas, deploy/rollback de produção, backup e restore, administração/RBAC/sanções (hoje só CLIs), rate limiting e antiabuso geral, jornada E2E criação→Nv.60→Legado com as 6 Classes e smoke test no Telegram real.
+
+**Pendências das etapas entregues:** recompensas da Batalha de Guildas e efeitos de 6 das 7 Obras; frases de flavor dos resultados da Arena, do Duelo e da Batalha de Guildas; conteúdo dos catálogos de Eventos, Juramento e Expedição (o autor define).
+
+**Próxima etapa (9):** Crônica I, Nova Vigília e Trilha, integradas com Arena e Batalha de Guildas. O conteúdo narrativo (capítulos, objetivos, epílogos do voto e cosméticos) não existe em nenhuma fonte e vem do autor.
+
 ## 9. Próximos passos recomendados
 
 Não foi encontrado backlog/sprint ativo confiável para afirmar “o próximo item planejado” pelo autor. A ordem abaixo é uma reconstrução técnica a partir do estado do Git e dos gates dos próprios documentos:
