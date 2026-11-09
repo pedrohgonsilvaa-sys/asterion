@@ -1599,7 +1599,15 @@ Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem
 
 **Pendências das etapas entregues:** recompensas da Batalha de Guildas e efeitos de 6 das 7 Obras; frases de flavor dos resultados da Arena, do Duelo e da Batalha de Guildas; conteúdo dos catálogos de Eventos, Juramento e Expedição (o autor define).
 
-**Próxima etapa (9):** Crônica I, Nova Vigília e Trilha, integradas com Arena e Batalha de Guildas. O conteúdo narrativo (capítulos, objetivos, epílogos do voto e cosméticos) não existe em nenhuma fonte e vem do autor.
+**Próxima etapa (9):** Crônica I, Nova Vigília e Trilha, integradas com Arena e Batalha de Guildas. O conteúdo está proposto em `ASTERION_CRONICA_I_ECOS_DA_CONVERGENCIA_v0_2_PROPOSTA.md` (2026-11-09). Os kits das 9 criaturas novas estão em `SIMULAR` e precisam de Balanceamento antes do lançamento.
+
+**Decisões do autor sobre a proposta (2026-11-09):**
+
+- **Data:** o Dia 1 da Crônica é configurável e o autor define depois. Sem data configurada, nada abre. D8…D50, voto, T, T+2h e T+14d derivam do Dia 1. A data pode ser trocada antes do início; depois, só pela extensão excepcional do GDD §5.3, com registro.
+- **Bíblia:** o documento usa a Bíblia Canônica v4.0.7, que o autor aprovou como referência, mas o arquivo ainda não está no repositório e o `SOURCE_AUTHORITY.md` ainda registra a v3.0 FINAL. O autor vai enviar o arquivo; até lá, a validação de lore fica pendente.
+- **Dúvidas 1–7 e 9–22:** aprovadas as recomendações. Gate de entrada: P1 concluída. Evento da Crônica nos horários normais, com uma versão do Chefe por faixa de Região no mesmo horário. Voto abre em D50 e T às 21:00 America/Sao_Paulo. A Entrada do desfecho vai para quem concluiu ao menos 1 capítulo. Os básicos usam o Grau da Dádiva Diária. Os limites de 2/dia são conteúdo, sujeitos a revisão de Balanceamento. Ajudante não conta. Uma run vale para objetivo e repetível. O alternativo de Masmorra por Desbravar é aceito. As opções do voto são embaralhadas por jogador. A Crônica Arquivada é jogável sem pontos. Elegibilidade 4/8 + 1. As 9 criaturas são aprovadas, com um único material visual no lançamento. Os kits passam por simulação de Balanceamento. XP normal na primeira vitória. Elite Nv.3 e Chefe Nv.5. A luta acontece na Região de Ressonância do jogador.
+- **Dúvida 8 (Aparências):** a skin da Crônica é **especial e única**, com **fundo próprio da Crônica**; não segue o padrão regional nem o céu neutro.
+- **PROPOSTAS DE REGRA:** `pr_cr01_encontro_grupo` e `pr_cr01_feito_resposta` aprovadas; `pr_cr01_eco_residual` adiada (o desfecho fica só narrativo).
 
 ## 9. Próximos passos recomendados
 
