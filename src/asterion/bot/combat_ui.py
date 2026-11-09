@@ -71,6 +71,10 @@ class PvpCombatCallback(CallbackData, prefix="pv"):
         return _from_base36(self.action)
 
 
+class OathCombatCallback(PvpCombatCallback, prefix="oa"):
+    pass
+
+
 class WorldEventCombatCallback(PvpCombatCallback, prefix="we"):
     """Same payload as a PvP intent, for the Event router."""
 
@@ -1559,6 +1563,7 @@ def render_combat(view: CombatView) -> Screen:
     is_dungeon = view.context == "dungeon"
     is_pvp_match = view.context in {"pvp_arena", "pvp_duel"}
     is_world_event = view.context == "world_event"
+    is_oath = view.context == "oath_trial"
     is_pvpve = view.context == "pvpve" or is_pvp_match
     is_party_combat = is_trial or is_dungeon or state.party_mode
     view_campaign_shared = getattr(view, "campaign_shared", None)
@@ -1583,7 +1588,7 @@ def render_combat(view: CombatView) -> Screen:
         and not is_trial
         and not is_dungeon
     )
-    actor_bound_party = is_campaign_party or view.context == "group_hunt"
+    actor_bound_party = is_campaign_party or view.context == "group_hunt" or is_oath
     if not is_trial and view.consumable_screen is not None:
         return _render_consumable_selection(view)
     active_key = active_player_key(state)
@@ -1846,10 +1851,13 @@ def render_combat(view: CombatView) -> Screen:
             or is_varzeas_solo_campaign
             or is_altos_solo_campaign
             or is_world_event
+            or is_oath
         ):
             intent_callback = (
                 WorldEventCombatCallback
                 if is_world_event
+                else OathCombatCallback
+                if is_oath
                 else PvpCombatCallback
                 if is_pvp_match
                 else CampaignCombatCallback

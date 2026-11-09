@@ -10,6 +10,7 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from asterion.application.groups import GroupError, GroupService
+from asterion.application.oaths import OATH_ACTIVITY_TYPE, OathError
 from asterion.bot.creation_handlers import present
 from asterion.bot.groups_ui import (
     render_expired_group_action,
@@ -19,6 +20,8 @@ from asterion.bot.groups_ui import (
     render_links,
     revision36,
 )
+from asterion.bot.oath_ui import error_text as oath_error_text
+from asterion.bot.oath_ui import render_oath
 from asterion.bot.road_ui import render_road
 
 
@@ -43,6 +46,7 @@ def groups_router(
     s5=None,
     s6=None,
     road=None,
+    oaths=None,
 ) -> Router:
     router = Router(name="groups")
     router.message.filter(F.chat.type == "private")
@@ -357,6 +361,32 @@ def groups_router(
         await query.answer("Confirmação de Caçada enviada.")
         await show_group(query)
 
+    @router.callback_query(F.data == "group:oath:p")
+    async def oath_propose(query: CallbackQuery) -> None:
+        group = await service.group(query.from_user.id)
+        if oaths is None or group is None:
+            await query.answer("Entre em um Grupo para iniciar em conjunto.", show_alert=True)
+            return
+        try:
+            context_payload = await oaths.group_proposal(query.from_user.id)
+            await service.propose_activity(
+                query.from_user.id,
+                activity_type=OATH_ACTIVITY_TYPE,
+                participant_character_ids=tuple(
+                    member.character_id for member in group.members
+                ),
+                eligibility_resolver=oaths.eligibility,
+                context_payload=context_payload,
+            )
+        except OathError as exc:
+            await query.answer(oath_error_text(exc.code), show_alert=True)
+            return
+        except GroupError as exc:
+            await query.answer(_error_text(exc.code), show_alert=True)
+            return
+        await query.answer("Confirmação da Provação enviada ao Grupo.")
+        await show_group(query)
+
     @router.callback_query(F.data.startswith("group:proposal:"))
     async def activity_proposal_action(query: CallbackQuery) -> None:
         parts = (query.data or "").split(":")
@@ -398,6 +428,33 @@ def groups_router(
                     view = await road.resume(query.from_user.id)
                     if view is not None:
                         await present(query.message, render_road(view), images, edit=True)
+                return
+            if proposal.activity_type == OATH_ACTIVITY_TYPE:
+                if oaths is None:
+                    await query.answer("Juramento indisponível.", show_alert=True)
+                    return
+                try:
+                    result = await service.start_activity(
+                        query.from_user.id,
+                        proposal_id,
+                        expected_revision=revision,
+                        eligibility_resolver=oaths.eligibility,
+                        create_activity=oaths.create_activity,
+                    )
+                except OathError as exc:
+                    await query.answer(oath_error_text(exc.code), show_alert=True)
+                    await show_group(query)
+                    return
+                if not result.started:
+                    await query.answer("A confirmação expirou ou o roster mudou.", show_alert=True)
+                    await show_group(query)
+                    return
+                await query.answer("Provação iniciada.")
+                await oaths.announce_start(result.activity_reference, query.from_user.id)
+                if isinstance(query.message, Message):
+                    view = await oaths.foreground(query.from_user.id)
+                    if view is not None:
+                        await present(query.message, render_oath(view), images, edit=True)
                 return
             service_by_type = {
                 "campaign_p1": p1,

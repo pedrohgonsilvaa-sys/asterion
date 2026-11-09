@@ -2631,7 +2631,7 @@ class GuildTreasuryEntry(Base):
     __tablename__ = "guild_treasury_ledger"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('deposit','project_funding','rename','forfeit')",
+            "kind IN ('deposit','project_funding','rename','forfeit','oath','expedition')",
             name="ck_guild_treasury_kind",
         ),
         CheckConstraint("amount <> 0", name="ck_guild_treasury_amount"),
@@ -3464,3 +3464,220 @@ class WorldEventParticipation(Base):
     eligible: Mapped[bool | None] = mapped_column(Boolean)
     reward: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OathCycle(Base):
+    """One weekly Juramento window (GDD §22.1); unique per opening."""
+
+    __tablename__ = "oath_cycles"
+    __table_args__ = (
+        CheckConstraint("status IN ('open','finalizing','closed')", name="ck_oath_cycle_status"),
+        UniqueConstraint("server_id", "cycle_key", name="uq_oath_cycle"),
+        Index("ix_oath_cycle_status", "server_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    cycle_key: Mapped[str] = mapped_column(String(16), nullable=False)
+    trial_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    opens_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    grace_ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ruleset_version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class OathGuildProgress(Base):
+    """Collective contribution of one Guild in one cycle (§22.1)."""
+
+    __tablename__ = "oath_guild_progress"
+    __table_args__ = (
+        CheckConstraint("contribution >= 0", name="ck_oath_guild_contribution"),
+        CheckConstraint("tier IS NULL OR tier BETWEEN 0 AND 4", name="ck_oath_guild_tier"),
+        Index("ix_oath_guild_progress_guild", "guild_id", "finalized_at"),
+    )
+
+    cycle_id: Mapped[UUID] = mapped_column(
+        ForeignKey("oath_cycles.id", ondelete="CASCADE"), primary_key=True
+    )
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), primary_key=True)
+    contribution: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    tier: Mapped[int | None] = mapped_column(Integer)
+    treasury_crowns: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OathMember(Base):
+    """A character's binding to ``guild_id + cycle_id`` (§22.1): one Guild per cycle."""
+
+    __tablename__ = "oath_members"
+    __table_args__ = (
+        CheckConstraint("provacoes_used BETWEEN 0 AND 3", name="ck_oath_member_provacoes"),
+        CheckConstraint("contribution BETWEEN 0 AND 180", name="ck_oath_member_contribution"),
+        Index("ix_oath_members_guild", "cycle_id", "guild_id"),
+    )
+
+    cycle_id: Mapped[UUID] = mapped_column(
+        ForeignKey("oath_cycles.id", ondelete="CASCADE"), primary_key=True
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    reference_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    provacoes_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    contribution: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    bound_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    eligible: Mapped[bool | None] = mapped_column(Boolean)
+    reward: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OathAttempt(Base):
+    """One Provação: the shared combat of its roster (§22.1)."""
+
+    __tablename__ = "oath_attempts"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active','completed','failed','abandoned','expired')",
+            name="ck_oath_attempt_status",
+        ),
+        CheckConstraint("stage BETWEEN 1 AND 3", name="ck_oath_attempt_stage"),
+        CheckConstraint("roster_size BETWEEN 1 AND 4", name="ck_oath_attempt_roster"),
+        Index("ix_oath_attempts_status", "cycle_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    cycle_id: Mapped[UUID] = mapped_column(
+        ForeignKey("oath_cycles.id", ondelete="CASCADE"), nullable=False
+    )
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    trial_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    proposal_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("group_activity_proposals.id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    stage: Mapped[int] = mapped_column(Integer, nullable=False)
+    roster_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    reference_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    combat_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    combat_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ruleset_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_action_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OathAttemptMember(Base):
+    """A participant of one Provação, with its own HP: never writes ``Character.hp``."""
+
+    __tablename__ = "oath_attempt_members"
+    __table_args__ = (
+        Index("ix_oath_attempt_members_activity", "game_activity_id"),
+    )
+
+    attempt_id: Mapped[UUID] = mapped_column(
+        ForeignKey("oath_attempts.id", ondelete="CASCADE"), primary_key=True
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    game_activity_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("game_activities.id", ondelete="SET NULL")
+    )
+    actor_key: Mapped[str] = mapped_column(String(16), nullable=False)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    level: Mapped[int] = mapped_column(Integer, nullable=False)
+    hp: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
+    combat_configuration: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    consumable_uses: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    acted_stages: Mapped[list[int]] = mapped_column(JSONB, nullable=False)
+    contribution: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class OathMilestone(Base):
+    """Authoritative, idempotent record of a milestone won in a Provação (§22.1)."""
+
+    __tablename__ = "oath_milestones"
+
+    attempt_id: Mapped[UUID] = mapped_column(
+        ForeignKey("oath_attempts.id", ondelete="CASCADE"), primary_key=True
+    )
+    milestone: Mapped[str] = mapped_column(String(16), primary_key=True)
+    points: Mapped[int] = mapped_column(Integer, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class Expedition(Base):
+    """One weekly Expedição of a Guild (GDD §22.2); a Background Commitment."""
+
+    __tablename__ = "expeditions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('forming','active','completed','cancelled')",
+            name="ck_expedition_status",
+        ),
+        CheckConstraint("resolved_stages BETWEEN 0 AND 3", name="ck_expedition_stages"),
+        CheckConstraint("score IS NULL OR score BETWEEN 0 AND 300", name="ck_expedition_score"),
+        UniqueConstraint("guild_id", "week_key", name="uq_expedition_guild_week"),
+        Index("ix_expedition_status", "server_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    guild_id: Mapped[UUID] = mapped_column(ForeignKey("guilds.id"), nullable=False)
+    week_key: Mapped[str] = mapped_column(String(16), nullable=False)
+    route_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_stages: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    score: Mapped[int | None] = mapped_column(Integer)
+    result: Mapped[str | None] = mapped_column(String(16))
+    treasury_crowns: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ruleset_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ExpeditionMember(Base):
+    """Roster row, frozen when the Expedição starts (§22.2)."""
+
+    __tablename__ = "expedition_members"
+
+    expedition_id: Mapped[UUID] = mapped_column(
+        ForeignKey("expeditions.id", ondelete="CASCADE"), primary_key=True
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    reference_level: Mapped[int | None] = mapped_column(Integer)
+    active_stages: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    eligible: Mapped[bool | None] = mapped_column(Boolean)
+    reward: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ExpeditionChoice(Base):
+    """One choice per member and stage (§49.15), active or the explicit default."""
+
+    __tablename__ = "expedition_choices"
+    __table_args__ = (
+        CheckConstraint("stage BETWEEN 1 AND 3", name="ck_expedition_choice_stage"),
+    )
+
+    expedition_id: Mapped[UUID] = mapped_column(
+        ForeignKey("expeditions.id", ondelete="CASCADE"), primary_key=True
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    stage: Mapped[int] = mapped_column(Integer, primary_key=True)
+    option_id: Mapped[str | None] = mapped_column(String(64))
+    points: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    chosen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
