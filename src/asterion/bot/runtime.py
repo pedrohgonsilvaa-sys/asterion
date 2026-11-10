@@ -9,6 +9,7 @@ from asterion.application.altos_missions import AltosMissionService
 from asterion.application.character_surfaces import CharacterSurfacesService
 from asterion.application.chronicle import ChronicleService
 from asterion.application.chronicle_activities import ChronicleActivityService
+from asterion.application.chronicle_encounters import ChronicleEncounterService
 from asterion.application.class_trials import ClassTrialService
 from asterion.application.consumables import ConsumableService
 from asterion.application.cosmetics import CosmeticService
@@ -211,11 +212,19 @@ def get_bot_runtime() -> BotRuntime:
     chronicle_activities = ChronicleActivityService(
         SessionFactory, settings.server_id, road.latest_explorable_local
     )
+    chronicle_encounters = ChronicleEncounterService(
+        SessionFactory,
+        settings.server_id,
+        road.latest_explorable_local,
+        road.recover_normal_pve_defeat,
+    )
+    # Also before the world routers: /start must resume an Encontro da Crônica.
     dispatcher.include_router(
         chronicle_router(
             ChronicleService(SessionFactory, settings.server_id),
             settings.creation_images,
             chronicle_activities,
+            chronicle_encounters,
         )
     )
     world_events = WorldEventService(SessionFactory, settings.server_id)
@@ -364,6 +373,7 @@ def get_bot_runtime() -> BotRuntime:
             dungeons=dungeons,
             world_events=world_events,
             oaths=oaths,
+            chronicle=chronicle_encounters,
         )
     )
     dispatcher.include_router(
@@ -426,6 +436,7 @@ def get_bot_runtime() -> BotRuntime:
             legacy=legacy,
             warehouse=warehouse,
             chronicle_activities=chronicle_activities,
+            chronicle_encounters=chronicle_encounters,
         )
     )
     dispatcher.include_router(

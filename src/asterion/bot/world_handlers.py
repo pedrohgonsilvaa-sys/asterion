@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from asterion.application.altos_missions import AltosMissionService, AltosMissionView
 from asterion.application.chronicle_activities import ChronicleActivityService
+from asterion.application.chronicle_encounters import ChronicleEncounterService
 from asterion.application.class_trials import ClassTrialService
 from asterion.application.consumables import ConsumableService
 from asterion.application.dungeons import DungeonService
@@ -215,6 +216,7 @@ def world_router(
     warehouse: WarehouseService | None = None,
     community_url: str | None = None,
     chronicle_activities: ChronicleActivityService | None = None,
+    chronicle_encounters: ChronicleEncounterService | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -3454,7 +3456,9 @@ def world_router(
                     InlineKeyboardMarkup(inline_keyboard=rows),
                     parse_mode=local_screen.parse_mode,
                 )
-        if chronicle_activities is not None and await chronicle_activities.here(actor):
+        if (chronicle_activities is not None and await chronicle_activities.here(actor)) or (
+            chronicle_encounters is not None and await chronicle_encounters.here(actor)
+        ):
             rows = list(local_screen.keyboard.inline_keyboard) if local_screen.keyboard else []
             rows.append([InlineKeyboardButton(text="🌌 Crônica · Neste Local", callback_data="cr:here")])
             local_screen = Screen(

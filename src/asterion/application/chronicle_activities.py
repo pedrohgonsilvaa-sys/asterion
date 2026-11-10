@@ -108,11 +108,16 @@ class _Resolver:
             local_id = await self.local_in(region)
             if local_id is not None:
                 return Route(region, local_id, True)
+        resonance = await self.resonance()
+        # A chapter without focus has only one version of its text.
+        return None if resonance is None else replace(resonance, focus=focus is None)
+
+    async def resonance(self) -> Route | None:
+        """The Região and Local de Ressonância, where every Encontro is fought (§0.3.7)."""
         for region in reversed(REGIONS):
             local_id = await self.local_in(region)
             if local_id is not None:
-                # A chapter without focus has only one version of its text.
-                return Route(region, local_id, focus is None)
+                return Route(region, local_id, True)
         return None
 
 

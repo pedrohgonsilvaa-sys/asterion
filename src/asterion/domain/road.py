@@ -4893,3 +4893,72 @@ CONFINS_CONTRADICOES_CREATURES = (
     ),
 )
 CREATURE_CATALOG = (*CREATURE_CATALOG, *CONFINS_CONTRADICOES_CREATURES)
+
+
+# Crônica I creatures (proposal v0.2 §11.3). They are never in a Caçada, Ronda or
+# Desbravar pool: only the Encontros da Crônica use them. Kits are in SIMULAR.
+# Barreiras last 2T (author decision, 2026-11-10). Hit counts and the DEF-mark skip
+# rule are applied by ``chronicle_encounters.configure_encounter``.
+CR01_REPETIDOR = Creature(
+    "creature.cr01.repetidor", "Repetidor", "common", "brute", 1, 60, 0, (),
+    (
+        ("gesto_oficio", "Gesto de Ofício", D("1.00"), 0, D(0), 0),
+        ("golpe_repetido", "Golpe Repetido", D("0.60"), 0, D(0), 0, None, 0, False, 3),
+    ),
+    ai_priority=("golpe_repetido", "gesto_oficio"),
+)
+CR01_MARCADOR = Creature(
+    "creature.cr01.marcador", "Marcador", "common", "controller", 1, 60, 0, (),
+    (
+        ("toque_medida", "Toque de Medida", D("0.95"), 0, D(0), 0),
+        ("marca_desvio", "Marca de Desvio", D("0.90"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+    ),
+    ai_priority=("marca_desvio", "toque_medida"),
+)
+CR01_GUARDA_REPETIDA = Creature(
+    "creature.cr01.guarda_repetida", "Guarda Repetida", "uncommon", "armored", 1, 60, 0, (),
+    (
+        ("golpe_posto", "Golpe de Posto", D("1.00"), 0, D(0), 0),
+        ("postura_copiada", "Postura Copiada", D(0), 0, D(0), 0, None, 0, False, 3, None, D(0), D("0.70"), 2, True, "self"),
+        ("avanco_posto", "Avanço de Posto", D("1.25"), 0, D(0), 0, None, 0, False, 3),
+    ),
+    ai_priority=("postura_copiada", "avanco_posto", "golpe_posto"),
+)
+# The engine has no creature Defender yet, so "pode usar Defender" (GDD §9.6) is not applied.
+CR01_CARREGADOR_REPETIDO = Creature(
+    "creature.cr01.carregador_repetido", "Carregador Repetido", "uncommon", "balanced", 1, 60, 0, (),
+    (
+        ("peso_largado", "Peso Largado", D("1.05"), 0, D(0), 0),
+        ("carga_preparada", "Carga Preparada", D("1.60"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("carga_preparada", "peso_largado"),
+)
+# Coro (AoE 75%, CD3) needs 2+ targets: it arrives with the Group rule of the Encontros.
+CR01_MULTIDAO_REPETIDA = Creature(
+    "elite.cr01.multidao_repetida", "Multidão Repetida", "elite", "caster", 3, 60, 0, (),
+    (
+        ("empurrao", "Empurrão", D("1.00"), 0, D(0), 0),
+        ("muitas_maos", "Muitas Mãos", D("0.40"), 0, D(0), 0, None, 0, False, 2),
+        ("a_palavra", "A Palavra", D("1.70"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("a_palavra", "muitas_maos", "empurrao"),
+)
+CR01_ESCRIBA_REPETIDO = Creature(
+    "elite.cr01.escriba_repetido", "Escriba Repetido", "elite", "controller", 3, 60, 0, (),
+    (
+        ("traco", "Traço", D("1.00"), 0, D(0), 0),
+        ("rasura", "Rasura", D("0.90"), 0, D("0.12"), 2, None, 0, False, 3, "defense"),
+        ("revisao", "Revisão", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D("0.80"), 2, True, "self", D("0.50"), None, 2),
+        ("registro_imposto", "Registro Imposto", D("1.60"), 0, D(0), 0, None, 0, True, 4),
+    ),
+    ai_priority=("revisao", "rasura", "registro_imposto", "traco"),
+)
+CR01_CREATURES = (
+    CR01_REPETIDOR,
+    CR01_MARCADOR,
+    CR01_GUARDA_REPETIDA,
+    CR01_CARREGADOR_REPETIDO,
+    CR01_MULTIDAO_REPETIDA,
+    CR01_ESCRIBA_REPETIDO,
+)
+CREATURE_CATALOG = (*CREATURE_CATALOG, *CR01_CREATURES)

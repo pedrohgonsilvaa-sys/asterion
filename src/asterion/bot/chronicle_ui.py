@@ -15,7 +15,10 @@ from asterion.application.chronicle import (
     TrackView,
 )
 from asterion.application.chronicle_activities import ActionView, ReadingsView, TalkView
+from asterion.application.chronicle_encounters import EncounterActionView, EncounterResultView
+from asterion.application.prologue import CombatView
 from asterion.bot.benefits_ui import granted_lines
+from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 from asterion.domain.chronicle import (
     CHAPTER_COUNT,
@@ -56,6 +59,10 @@ _ERRORS = {
     "chronicle_vote_invalid": "Esta opção não está disponível.",
     "chronicle_unknown": "Este capítulo não existe.",
     "chronicle_not_here": "Vá ao Local indicado na Crônica para fazer isso.",
+    "chronicle_level": "Seu nível ainda não permite este Encontro.",
+    "chronicle_busy": "Termine a atividade em andamento antes de enfrentar o Eco.",
+    "chronicle_repeat_limit": "O Eco não rende mais pontos de Trilha hoje. Volte amanhã.",
+    "chronicle_fight_over": "Este combate já terminou.",
 }
 
 
@@ -175,14 +182,41 @@ def _action_line(action: ActionView) -> str:
     return f"📍 {title} · Desbravar em {action.location}"
 
 
+def _fight_listed(item: EncounterActionView) -> bool:
+    """Pending Encontros, and won ones while the Eco still pays Trilha today."""
+    return not item.level_locked and (not item.won or item.repeat_open)
+
+
+def _encounter_line(item: EncounterActionView) -> str:
+    name = item.encounter.creature.name
+    if item.won:
+        return f"🔁 {name} · Enfrentar o Eco de novo em {item.location}"
+    return f"📍 {item.objective.title} · {name} · {item.location}"
+
+
+def _encounter_button(item: EncounterActionView) -> list[InlineKeyboardButton]:
+    objective = item.objective
+    data = f"cr:fight:{objective.chapter}:{objective.objective_id[-2:].lstrip('0')}"
+    name = item.encounter.creature.name
+    if item.won:
+        return [_button(f"🔁 Enfrentar o Eco de novo · {name}", data)]
+    return [_button(f"⚔️ Enfrentar · {name}", data)]
+
+
 def render_chapter(
-    view: ChronicleView, chapter: ChapterView, actions: tuple[ActionView, ...] = ()
+    view: ChronicleView,
+    chapter: ChapterView,
+    actions: tuple[ActionView, ...] = (),
+    encounters: tuple[EncounterActionView, ...] = (),
 ) -> Screen:
     lines = [f"🌌 Capítulo {chapter.number} · {chapter.title}", "", chapter.summary, ""]
     lines.extend(_objective_line(item) for item in chapter.objectives)
     lines.append(f"{'✅' if chapter.concluded else '▫️'} Conclusão do capítulo · 250 pts")
-    if actions:
-        lines.extend(["", *(_action_line(item) for item in actions)])
+    fights = tuple(item for item in encounters if _fight_listed(item))
+    if actions or fights:
+        lines.append("")
+        lines.extend(_action_line(item) for item in actions)
+        lines.extend(_encounter_line(item) for item in fights)
     if chapter.concluded:
         lines.extend(["", chapter.conclusion])
     rows = [
@@ -190,6 +224,7 @@ def render_chapter(
         for item in actions
         if item.here and item.objective.kind is not ObjectiveKind.DESBRAVAR
     ]
+    rows.extend(_encounter_button(item) for item in fights if item.here)
     if chapter.can_conclude:
         rows.append([_button("Concluir capítulo", f"cr:conclude:{chapter.number}")])
     rows.append(_BACK)
@@ -200,12 +235,16 @@ def _back_to_chapter(chapter: int) -> list[InlineKeyboardButton]:
     return [_button(f"← Capítulo {chapter}", f"cr:ch:{chapter}")]
 
 
-def render_here(actions: tuple[ActionView, ...]) -> Screen:
+def render_here(
+    actions: tuple[ActionView, ...], encounters: tuple[EncounterActionView, ...] = ()
+) -> Screen:
     lines = ["🌌 Crônica · Neste Local", ""]
-    if not actions:
+    if not actions and not encounters:
         lines.append("Nada da Crônica para fazer aqui agora.")
     lines.extend(_action_line(item) for item in actions)
+    lines.extend(_encounter_line(item) for item in encounters)
     rows = [_action_button(item) for item in actions]
+    rows.extend(_encounter_button(item) for item in encounters)
     rows.append([_button("🌌 Crônica", "cr:root")])
     return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
 
@@ -235,6 +274,43 @@ def render_readings(view: ReadingsView) -> Screen:
     ]
     rows.append(_back_to_chapter(objective.chapter))
     return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+
+
+# ------------------------------------------------------------------ Encontros
+
+
+def render_encounter(view: CombatView | EncounterResultView) -> Screen:
+    """The fight itself, or its result: only XP, Trilha, Bestiário and Feito."""
+    if isinstance(view, CombatView):
+        return render_combat(view)
+    name = view.encounter.creature.name
+    back = _keyboard([_back_to_chapter(view.objective.chapter)])
+    if not view.victory:
+        lines = [
+            f"💀 {name} · Nv.{view.enemy_level}",
+            "",
+            "O Eco continua onde estava. Você não perdeu nada.",
+        ]
+        if view.recovery_location:
+            lines.append(f"🔥 Você desperta em {view.recovery_location}.")
+        lines.append("Enfrente-o de novo quando quiser.")
+        return Screen("\n".join(lines), _IMAGE, back)
+    lines = [f"🏆 {name} · Nv.{view.enemy_level} · Vitória", ""]
+    if view.repeat:
+        if view.trail_points:
+            lines.append(f"🧭 Trilha da Crônica · +{view.trail_points} pontos")
+        else:
+            lines.append("🧭 Trilha da Crônica · limite de repetíveis já atingido")
+    else:
+        if view.objective_completed:
+            lines.append(f"✅ {view.objective.title} concluído · {view.objective.points} pts")
+        if view.xp:
+            lines.append(f"✨ +{view.xp} XP")
+        if view.feat:
+            lines.append(f"🎖️ Feito · {view.feat}")
+    if view.bestiary_stage:
+        lines.append(f"🐾 Bestiário · {name} · {view.bestiary_stage}")
+    return Screen("\n".join(lines), _IMAGE, back)
 
 
 # ----------------------------------------------------------------------- vote

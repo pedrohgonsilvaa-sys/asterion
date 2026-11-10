@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from aiogram import F, Router
+from aiogram.dispatcher.event.bases import SkipHandler
+from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, Message
 
 from asterion.application.chronicle import ChronicleError, ChronicleService
 from asterion.application.chronicle_activities import ChronicleActivityService
+from asterion.application.chronicle_encounters import ChronicleEncounterService
 from asterion.bot.chronicle_ui import (
     error_text,
     render_chapter,
     render_chronicle,
+    render_encounter,
     render_hall,
     render_here,
     render_readings,
@@ -19,6 +23,7 @@ from asterion.bot.chronicle_ui import (
     render_vote,
     vote_notice,
 )
+from asterion.bot.combat_ui import ChronicleCombatCallback
 from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
 from asterion.domain.chronicle import Outcome
@@ -28,6 +33,7 @@ def chronicle_router(
     service: ChronicleService,
     images: dict[str, str],
     activities: ChronicleActivityService | None = None,
+    encounters: ChronicleEncounterService | None = None,
 ) -> Router:
     router = Router(name="chronicle")
 
@@ -41,8 +47,12 @@ def chronicle_router(
         if chapter is None:
             raise ChronicleError("chronicle_chapter_locked")
         actions = () if activities is None else await activities.actions(actor)
+        fights = () if encounters is None else await encounters.encounters(actor)
         return render_chapter(
-            view, chapter, tuple(a for a in actions if a.objective.chapter == number)
+            view,
+            chapter,
+            tuple(a for a in actions if a.objective.chapter == number),
+            tuple(f for f in fights if f.objective.chapter == number),
         )
 
     def active() -> ChronicleActivityService:
@@ -61,7 +71,14 @@ def chronicle_router(
                 await service.conclude_chapter(actor, int(number))
                 await show(query, await chapter_screen(actor, int(number)))
             case ["cr", "here"]:
-                await show(query, render_here(await active().here(actor)))
+                actions = () if activities is None else await activities.here(actor)
+                fights = () if encounters is None else await encounters.here(actor)
+                await show(query, render_here(actions, fights))
+            case ["cr", "fight", number, slot] if number.isdigit() and slot.isdigit():
+                if encounters is None:
+                    raise ChronicleError("unknown")
+                fight_view = await encounters.start(actor, int(number), int(slot))
+                await show(query, render_encounter(fight_view))
             case ["cr", "talk", number, slot] if number.isdigit() and slot.isdigit():
                 await show(query, render_talk(await active().talk(actor, int(number), int(slot))))
             case ["cr", "read", number, slot] if number.isdigit() and slot.isdigit():
@@ -84,6 +101,32 @@ def chronicle_router(
                 await show(query, render_hall(await service.hall(actor)))
             case _:
                 raise ChronicleError("unknown")
+
+    @router.message(CommandStart(), F.chat.type == "private")
+    @router.message(Command("menu"), F.chat.type == "private")
+    async def resume_fight(message: Message) -> None:
+        if encounters is None or message.from_user is None:
+            raise SkipHandler
+        view = await encounters.foreground(message.from_user.id)
+        if view is None:
+            raise SkipHandler
+        await present(message, render_encounter(view), images)
+
+    @router.callback_query(ChronicleCombatCallback.filter())
+    async def fight(query: CallbackQuery, callback_data: ChronicleCombatCallback) -> None:
+        view = None
+        if encounters is not None:
+            view = await encounters.action(
+                query.from_user.id,
+                callback_data.activity_id,
+                callback_data.version,
+                callback_data.action,
+            )
+        if view is None:
+            await query.answer(error_text("chronicle_fight_over"), show_alert=True)
+            return
+        await query.answer()
+        await show(query, render_encounter(view))
 
     @router.callback_query(F.data.startswith("cr:"))
     async def callback(query: CallbackQuery) -> None:

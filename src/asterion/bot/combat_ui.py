@@ -167,6 +167,16 @@ class AltosSoloCombatCallback(CallbackData, prefix="asc"):
         return _from_base36(self.action)
 
 
+class ChronicleCombatCallback(CallbackData, prefix="crf"):
+    activity: str
+    version: int
+    action: str
+
+    @property
+    def activity_id(self) -> UUID:
+        return UUID(hex=self.activity)
+
+
 class P2CombatCallback(CallbackData, prefix="p2fight"):
     activity: str
     version: int
@@ -1955,6 +1965,8 @@ def render_combat(view: CombatView) -> Screen:
                 if view.context == "s4"
                 else S5CombatCallback
                 if view.context == "s5"
+                else ChronicleCombatCallback
+                if view.context == "chronicle"
                 else CombatCallback
             )(
                 activity=view.activity_id.hex,

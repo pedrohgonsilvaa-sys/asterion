@@ -1583,6 +1583,15 @@ ACHIEVEMENTS = (
         "pve",
         "Concluiu pela primeira vez a Câmara das Contradições em dificuldade Estável.",
     ),
+    # Crônica I (proposal v0.2 §11.3): no Cosmético. Names and texts are a draft.
+    AchievementPresentation(
+        "feito_cr01_multidao", "Multidão Repetida", "chronicles",
+        "Venceu pela primeira vez a Multidão Repetida.",
+    ),
+    AchievementPresentation(
+        "feito_cr01_escriba", "Escriba Repetido", "chronicles",
+        "Venceu pela primeira vez o Escriba Repetido.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
