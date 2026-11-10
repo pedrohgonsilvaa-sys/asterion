@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal
 from hashlib import sha256
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.bestiary import BESTIARY_STAGE_LABELS, BestiaryRecorder
+from asterion.application.chronicle_activities import desbravar_offer, settle_desbravar
 from asterion.application.combat_configuration_guard import (
     CombatConfigurationLocked,
     lock_for_combat_configuration_mutation,
@@ -28,6 +30,7 @@ from asterion.application.inventory_capacity import (
 )
 from asterion.application.progression import consolidate_character_level, level_xp
 from asterion.application.vigor import reconcile_character_vigor
+from asterion.domain.chronicle_content import REGIONS_BY_NAME, is_chronicle_result
 from asterion.domain.combat import (
     CombatConsumableOption,
     act,
@@ -2546,13 +2549,19 @@ class RoadService:
                     )
                 ):
                     resolved_unique = (*resolved_unique, "explore.confins.no.camara_contradicoes")
-            result = _explore_result(
-                seed,
-                c.level,
-                tuple(str(item).rsplit(".", 1)[-1] for item in recent_rows),
-                tuple(str(item) for item in resolved_unique),
-                explore_profile,
+            offer = await desbravar_offer(
+                s, c, explore_profile, attempt_local_id, self.latest_explorable_local, now
             )
+            if offer.forced is not None:
+                result = (offer.forced.category, offer.forced.result_id, offer.forced.text)
+            else:
+                result = _explore_result(
+                    seed,
+                    c.level,
+                    tuple(str(item).rsplit(".", 1)[-1] for item in recent_rows),
+                    tuple(str(item) for item in resolved_unique),
+                    offer.profile,
+                )
             category, result_id, result_text = result
             selected_creature_id = None
             if (
@@ -3077,6 +3086,9 @@ class RoadService:
         if (attempt.progress or {}).get("settled"):
             return
         await reconcile_character_vigor(s, c)
+        if is_chronicle_result(attempt.result_id):
+            await settle_desbravar(s, c, attempt, datetime.now(UTC))
+            return
         base_text = (attempt.progress or {}).get("result_text", "")
         if attempt.local_id in {
             ALTOS_ESCARPA_LOCATION,
@@ -5279,6 +5291,16 @@ class RoadService:
                 )
             )
         )
+
+    async def latest_explorable_local(self, s, c, region: str) -> str | None:
+        """The most advanced Local of ``region`` where Desbravar is released (Crônica)."""
+        for local_id in reversed(REGIONS_BY_NAME[region].locals):
+            world = SimpleNamespace(
+                region=region, location=hunt_profile_for_local_id(local_id).label
+            )
+            if await self._available_local_profile(s, c, world, "explore") is not None:
+                return local_id
+        return None
 
     async def _available_local_profile(self, s, c, world, activity_kind: str):
         profile = hunt_profile_for_location(world.location) if world is not None else None

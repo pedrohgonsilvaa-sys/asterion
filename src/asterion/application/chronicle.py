@@ -49,6 +49,7 @@ from asterion.domain.chronicle import (
     Objective,
     Outcome,
     Phase,
+    RepeatableSource,
     TrackReward,
     calendar_for,
     can_conclude,
@@ -270,6 +271,58 @@ async def record_objective(
     return True
 
 
+async def _repeatable_open(
+    session: AsyncSession,
+    server_id: str,
+    account_id: int,
+    repeatable_points: int,
+    source: RepeatableSource,
+    calendar: Calendar,
+    now: datetime,
+    started_at: datetime | None = None,
+) -> bool:
+    """Whether one more completion still fits the weekly cap and the daily limit."""
+    cap = repeatable_cap(calendar.chapters_open(started_at or now))
+    if repeatable_points + REPEATABLE_POINTS > cap:
+        return False
+    if source.daily_limit is None:
+        return True
+    today = await session.scalar(
+        select(func.count())
+        .select_from(ChroniclePointGrant)
+        .where(
+            ChroniclePointGrant.account_id == account_id,
+            ChroniclePointGrant.server_id == server_id,
+            ChroniclePointGrant.chronicle_id == CHRONICLE_ID,
+            ChroniclePointGrant.source_id == source.source_id,
+            ChroniclePointGrant.cycle_date == daily_cycle(now),
+        )
+    )
+    return int(today or 0) < source.daily_limit
+
+
+async def repeatable_available(
+    session: AsyncSession,
+    character: Character,
+    source_id: str,
+    calendar: Calendar,
+    now: datetime,
+) -> bool:
+    """Read-only check, so a source can leave its result out once it would pay nothing."""
+    row = await session.get(
+        ChronicleAccount, (character.telegram_id, character.server_id, CHRONICLE_ID)
+    )
+    return await _repeatable_open(
+        session,
+        character.server_id,
+        character.telegram_id,
+        0 if row is None else row.repeatable_points,
+        REPEATABLE_SOURCES[source_id],
+        calendar,
+        now,
+    )
+
+
 async def record_repeatable(
     session: AsyncSession,
     server_id: str,
@@ -294,27 +347,10 @@ async def record_repeatable(
     if not await _participates(session, character, calendar, now, started_at):
         return 0
     row = await _account_row(session, character.telegram_id, server_id, now)
-    if row.repeatable_points + REPEATABLE_POINTS > repeatable_cap(
-        calendar.chapters_open(started_at or now)
+    if not await _repeatable_open(
+        session, server_id, row.account_id, row.repeatable_points, source, calendar, now, started_at
     ):
         return 0
-    if source.daily_limit is not None:
-        today = int(
-            await session.scalar(
-                select(func.count())
-                .select_from(ChroniclePointGrant)
-                .where(
-                    ChroniclePointGrant.account_id == row.account_id,
-                    ChroniclePointGrant.server_id == server_id,
-                    ChroniclePointGrant.chronicle_id == CHRONICLE_ID,
-                    ChroniclePointGrant.source_id == source_id,
-                    ChroniclePointGrant.cycle_date == daily_cycle(now),
-                )
-            )
-            or 0
-        )
-        if today >= source.daily_limit:
-            return 0
     return await _grant(
         session,
         row,

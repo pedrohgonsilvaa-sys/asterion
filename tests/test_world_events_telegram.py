@@ -210,6 +210,8 @@ async def test_join_and_fight_through_the_buttons(database):
     token = pack((await client.service.hub(A)).status.occurrence_id)
     joined = await client.click(A, f"wev:in:{token}")
     assert "Participação" in joined.text
+    # Enter through the gathering window, then make the phase transition deterministic.
+    await _start_phase_for_test(database, (await client.service.hub(A)).status.occurrence_id)
     combat = await client.click(A, f"wev:go:{token}")
     assert combat.text.startswith("🌍 Evento de Teste · Fase 1/3")
     packed = [item for item in _keyboard_data(combat) if item.startswith("we:")]
@@ -248,3 +250,13 @@ async def _force_open_occurrence(database) -> None:
                 ruleset_version="world_event_v1",
             )
         )
+
+
+async def _start_phase_for_test(database, occurrence_id: UUID) -> None:
+    """Make the phase transition due without depending on wall-clock timing."""
+    from asterion.infrastructure.db.models import WorldEventOccurrence
+
+    async with database[1].begin() as session:
+        occurrence = await session.get(WorldEventOccurrence, occurrence_id, with_for_update=True)
+        assert occurrence is not None
+        occurrence.phase_one_at = datetime.now(UTC) - timedelta(seconds=1)
