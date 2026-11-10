@@ -3,6 +3,7 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
+from asterion.application.chronicle_encounters import ChronicleEncounterService
 from asterion.application.dungeons import DungeonService
 from asterion.application.oaths import (
     OathAttemptResultView,
@@ -82,11 +83,19 @@ def combat_router(
     dungeons: DungeonService | None = None,
     world_events: WorldEventService | None = None,
     oaths: OathService | None = None,
+    chronicle: ChronicleEncounterService | None = None,
 ) -> Router:
     router = Router(name="foreground_combat")
     router.callback_query.filter(F.message.chat.type == "private")
 
     async def consumable_action(actor, activity_id, version, *, item_id, target_id, effect_id):
+        if chronicle is not None:
+            chronicle_view = await chronicle.consume_for_activity(
+                actor, activity_id, version, item_id=item_id,
+                target_id=target_id, effect_id=effect_id,
+            )
+            if chronicle_view is not None:
+                return chronicle_view
         if oaths is not None:
             oath_view = await oaths.consume_for_activity(
                 actor, activity_id, version, item_id=item_id,
@@ -187,6 +196,12 @@ def combat_router(
         return view
 
     async def consumable_selection(actor, activity_id, version, **kwargs):
+        if chronicle is not None:
+            chronicle_view = await chronicle.consumable_selection(
+                actor, activity_id, version, **kwargs
+            )
+            if chronicle_view is not None:
+                return chronicle_view
         if oaths is not None:
             oath_view = await oaths.consumable_selection(
                 actor, activity_id, version, **kwargs
@@ -235,6 +250,10 @@ def combat_router(
         return view
 
     def render_service_view(view):
+        if getattr(view, "context", None) == "chronicle":
+            from asterion.bot.chronicle_ui import render_encounter
+
+            return render_encounter(view)
         if isinstance(view, OathViews) or getattr(view, "context", None) == "oath_trial":
             return render_oath(view)
         if isinstance(view, WorldEventViews):

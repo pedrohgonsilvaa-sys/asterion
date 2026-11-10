@@ -1630,13 +1630,13 @@ Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem
 **Divisão em partes:**
 
 1. Falar com NPC, Leituras e Desbravar (`dsc_cr01_*` e `dsc_cr01_vestigio`): entregue nesta parte.
-2. Encontros e criaturas Comum/Incomum/Elite (capítulos 1, 2, 3, 5, 6 e 7), `[Enfrentar]`, recompensa da primeira vitória, `rep_cr01_encontro` e Feitos das Elites.
+2. Encontros e criaturas Comum/Incomum/Elite (capítulos 1, 2, 3, 5, 6 e 7), `[Enfrentar]`, recompensa da primeira vitória, `rep_cr01_encontro` e Feitos das Elites: entregue (ver "Parte 2" abaixo).
 3. Chefes Mestre de Turno e O Que Aguarda Resposta (capítulos 4 e 8) e a regra `pr_cr01_encontro_grupo`.
 4. Masmorra em foco/espelho e o alternativo `dsc_cr01_vestigio_profundo`.
 5. Evento Mundial O Compasso e `rep_cr01_evento`.
 6. Entradas do Códice, Feitos restantes e Crônica Arquivada.
 
-Os capítulos só podem ser concluídos depois das partes 2 e 3, porque todo capítulo tem um Encontro obrigatório. Os kits das criaturas continuam em `SIMULAR`.
+Todo capítulo tem um Encontro obrigatório. Com a parte 2, os capítulos 1, 2, 3, 5, 6 e 7 já podem ser concluídos; os capítulos 4 e 8 dependem dos Chefes (parte 3). Os kits das criaturas continuam em `SIMULAR`.
 
 **Parte 1 (entregue):**
 
@@ -1653,6 +1653,27 @@ Os capítulos só podem ser concluídos depois das partes 2 e 3, porque todo cap
 3. Com vários capítulos pendentes no mesmo Local, sai primeiro o mais antigo.
 4. O Vestígio sai do sorteio quando o limite diário ou o teto semanal já não pagariam pontos.
 5. **Os textos são rascunho:** a proposta define quem, onde e quantos, mas não as falas de NPC, as Leituras e os resultados de Desbravar. Eles foram escritos a partir dos resumos de cada capítulo, e os complementos de camada usam o texto da proposta. O autor precisa revisar `domain/chronicle_content.py`.
+
+**Parte 2 (entregue):**
+
+- **Criaturas** em `domain/road.py` (`CR01_*`, no `CREATURE_CATALOG`, fora de qualquer pool de Caçada, Ronda ou Desbravar): Repetidor, Marcador, Guarda Repetida, Carregador Repetido, Multidão Repetida e Escriba Repetido, com os coeficientes da proposta §11.3 e os atributos da fórmula do GDD §49.6. Continuam em `SIMULAR`.
+- **Encontros** em `domain/chronicle_encounters.py`: qual criatura cada objetivo usa, o nível (nível do personagem dentro da faixa da Região de Ressonância), a matéria por Região (§11.2) e os ajustes que a tupla posicional não cobre (multi-hit e marca de DEF).
+- **Serviço** em `application/chronicle_encounters.py`: `start` (`[Enfrentar]` e `[Enfrentar o Eco de novo]`), `action`, consumíveis, `foreground` (o `/start` e o `/menu` voltam à luta) e a lista de Encontros por capítulo. Usa o motor de combate compartilhado e `scripted_combat`.
+- **Regras:** a luta exige estar no Local de Ressonância (decisão do autor em 2026-11-10). O nível é congelado na criação; depois de uma derrota, a nova tentativa reaproveita o nível e a cena da anterior. Primeira vitória: XP normal de inimigo (uma vez por personagem por encontro), objetivo da Crônica e Bestiário; nada de Coroas, Materiais, Saque, Equipamento ou Vigor. Derrota: sem perda, HP restaurado pela regra regional de derrota de PvE. Repetição: 0 XP, só `rep_cr01_encontro` (25 pontos, 2 por dia por conta). Elites exigem Nv.3 e concedem `feito_cr01_multidao` e `feito_cr01_escriba`.
+- **Barreiras:** Postura Copiada e Revisão duram 2 turnos (decisão do autor em 2026-11-10; a proposta só dava o valor).
+- **Telas:** o capítulo lista o Encontro e mostra `⚔️ Enfrentar` ou `🔁 Enfrentar o Eco de novo` quando o personagem está no Local. `🌌 Crônica · Neste Local` também os oferece. Os botões de combate usam o prefixo `crf:`.
+- **Banco:** sem migration. O nível congelado é lido do snapshot do combate anterior (`game_activities.content_id` = `chronicle.enc_cr01_cNN` e `….eco` na repetição).
+
+**Escolhas da parte 2 que o autor precisa confirmar** (as fontes não decidem):
+
+1. **Defender do Carregador Repetido não foi aplicado.** O motor não tem Defender de criatura (o `defend` no ciclo de qualquer criatura é ignorado hoje). Aplicar exige mexer no motor compartilhado.
+2. **Coro da Multidão Repetida não existe ainda.** Ele só é usado com 2+ alvos, então entra junto com a regra de Grupo (parte 3).
+3. **"Redução de DEF igual ou maior"** (Marcador e Escriba) virou "a criatura não reaplica enquanto a própria marca estiver ativa". O motor não compara reduções de outras fontes.
+4. **Telegraph próprio** das Ações Preparadas ("ergue algo que não está ali" etc.) não aparece: a tela mostra o aviso padrão "prepara <Arte>".
+5. `[Enfrentar o Eco de novo]` some quando o limite diário ou o teto semanal já não pagariam pontos (mesma regra do Vestígio na parte 1).
+6. Os Feitos das Elites usam o nome da criatura e a frase "Venceu pela primeira vez…" como rascunho, na categoria Crônicas.
+7. As 6 criaturas registram progresso de Bestiário, mas **ainda não aparecem na tela do Bestiário**: ela agrupa por Região e habitat, e estas criaturas não têm Região. Fica para a parte 6, com o Códice.
+8. Depois de uma derrota fora das Terras do Ocaso o personagem fica onde está, com HP cheio: é a regra regional de derrota que já existe (só o Ocaso move para um Braseiro).
 
 **Etapa 9 (origem):** Crônica I, Nova Vigília e Trilha, integradas com Arena e Batalha de Guildas. O conteúdo está proposto em `ASTERION_CRONICA_I_ECOS_DA_CONVERGENCIA_v0_2_PROPOSTA.md` (2026-11-09). Os kits das 9 criaturas novas estão em `SIMULAR` e precisam de Balanceamento antes do lançamento.
 
