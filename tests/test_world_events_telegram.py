@@ -253,16 +253,10 @@ async def _force_open_occurrence(database) -> None:
 
 
 async def _start_phase_for_test(database, occurrence_id: UUID) -> None:
-    """Move the seeded occurrence into phase 1 without depending on wall-clock timing."""
+    """Make the phase transition due without depending on wall-clock timing."""
     from asterion.infrastructure.db.models import WorldEventOccurrence
 
     async with database[1].begin() as session:
         occurrence = await session.get(WorldEventOccurrence, occurrence_id, with_for_update=True)
         assert occurrence is not None
-        occurrence.status = "active"
-        occurrence.phase = 1
-        occurrence.boss_hp = Decimal(500)
-        occurrence.boss_max_hp = Decimal(1000)
-        occurrence.phase_started_at = datetime.now(UTC)
-        occurrence.participants_snapshot = 1
-        occurrence.state_version += 1
+        occurrence.phase_one_at = datetime.now(UTC) - timedelta(seconds=1)
