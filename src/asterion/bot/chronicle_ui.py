@@ -14,6 +14,7 @@ from asterion.application.chronicle import (
     HallView,
     TrackView,
 )
+from asterion.application.chronicle_activities import ActionView, ReadingsView, TalkView
 from asterion.bot.benefits_ui import granted_lines
 from asterion.bot.creation_ui import Screen
 from asterion.domain.chronicle import (
@@ -32,6 +33,7 @@ from asterion.domain.chronicle import (
     VOTE_FOOTER,
     VOTE_TEXTS,
     Layer,
+    ObjectiveKind,
     Outcome,
     Phase,
     TrackReward,
@@ -53,6 +55,7 @@ _ERRORS = {
     "chronicle_vote_ineligible": "Você ainda não pode votar.",
     "chronicle_vote_invalid": "Esta opção não está disponível.",
     "chronicle_unknown": "Este capítulo não existe.",
+    "chronicle_not_here": "Vá ao Local indicado na Crônica para fazer isso.",
 }
 
 
@@ -151,16 +154,86 @@ def _objective_line(item) -> str:
     )
 
 
-def render_chapter(view: ChronicleView, chapter: ChapterView) -> Screen:
+def _action_data(action: ActionView) -> str:
+    objective = action.objective
+    verb = "talk" if objective.kind is ObjectiveKind.NPC else "read"
+    return f"cr:{verb}:{objective.chapter}:{objective.objective_id[-2:].lstrip('0')}"
+
+
+def _action_button(action: ActionView) -> list[InlineKeyboardButton]:
+    if action.objective.kind is ObjectiveKind.NPC:
+        return [_button(f"💬 Falar com {action.npc}", _action_data(action))]
+    return [_button(f"🔎 {action.objective.title}", _action_data(action))]
+
+
+def _action_line(action: ActionView) -> str:
+    title = action.objective.title
+    if action.objective.kind is ObjectiveKind.NPC:
+        return f"📍 {title} · {action.npc} · {action.location}"
+    if action.objective.kind is ObjectiveKind.EVIDENCE:
+        return f"📍 {title} · {action.points_done}/{action.points_total} · {action.location}"
+    return f"📍 {title} · Desbravar em {action.location}"
+
+
+def render_chapter(
+    view: ChronicleView, chapter: ChapterView, actions: tuple[ActionView, ...] = ()
+) -> Screen:
     lines = [f"🌌 Capítulo {chapter.number} · {chapter.title}", "", chapter.summary, ""]
     lines.extend(_objective_line(item) for item in chapter.objectives)
     lines.append(f"{'✅' if chapter.concluded else '▫️'} Conclusão do capítulo · 250 pts")
+    if actions:
+        lines.extend(["", *(_action_line(item) for item in actions)])
     if chapter.concluded:
         lines.extend(["", chapter.conclusion])
-    rows = []
+    rows = [
+        _action_button(item)
+        for item in actions
+        if item.here and item.objective.kind is not ObjectiveKind.DESBRAVAR
+    ]
     if chapter.can_conclude:
         rows.append([_button("Concluir capítulo", f"cr:conclude:{chapter.number}")])
     rows.append(_BACK)
+    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+
+
+def _back_to_chapter(chapter: int) -> list[InlineKeyboardButton]:
+    return [_button(f"← Capítulo {chapter}", f"cr:ch:{chapter}")]
+
+
+def render_here(actions: tuple[ActionView, ...]) -> Screen:
+    lines = ["🌌 Crônica · Neste Local", ""]
+    if not actions:
+        lines.append("Nada da Crônica para fazer aqui agora.")
+    lines.extend(_action_line(item) for item in actions)
+    rows = [_action_button(item) for item in actions]
+    rows.append([_button("🌌 Crônica", "cr:root")])
+    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+
+
+def render_talk(view: TalkView) -> Screen:
+    lines = [f"💬 {view.objective.title}", "", view.text]
+    if view.completed_now:
+        lines.extend(["", f"✅ {view.objective.title} concluído"])
+    rows = [_back_to_chapter(view.objective.chapter)]
+    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+
+
+def render_readings(view: ReadingsView) -> Screen:
+    done = sum(item.done for item in view.points)
+    lines = [f"🔎 {view.objective.title} · {done}/{len(view.points)}", f"📍 {view.location}", ""]
+    if view.last_text:
+        lines.extend([view.last_text, ""])
+    if view.completed_now:
+        lines.extend([f"✅ {view.objective.title} concluído", ""])
+    lines.extend(f"{'✅' if item.done else '⚪'} {item.label}" for item in view.points)
+    objective = view.objective
+    slot = objective.objective_id[-2:].lstrip("0")
+    rows = [
+        [_button(f"Examinar · {item.label}", f"cr:read:{objective.chapter}:{slot}:{item.point_id}")]
+        for item in view.points
+        if not item.done
+    ]
+    rows.append(_back_to_chapter(objective.chapter))
     return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
 
 

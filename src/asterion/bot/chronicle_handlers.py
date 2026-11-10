@@ -6,11 +6,15 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
 from asterion.application.chronicle import ChronicleError, ChronicleService
+from asterion.application.chronicle_activities import ChronicleActivityService
 from asterion.bot.chronicle_ui import (
     error_text,
     render_chapter,
     render_chronicle,
     render_hall,
+    render_here,
+    render_readings,
+    render_talk,
     render_trail,
     render_vote,
     vote_notice,
@@ -20,7 +24,11 @@ from asterion.bot.creation_ui import Screen
 from asterion.domain.chronicle import Outcome
 
 
-def chronicle_router(service: ChronicleService, images: dict[str, str]) -> Router:
+def chronicle_router(
+    service: ChronicleService,
+    images: dict[str, str],
+    activities: ChronicleActivityService | None = None,
+) -> Router:
     router = Router(name="chronicle")
 
     async def show(query: CallbackQuery, screen: Screen) -> None:
@@ -32,7 +40,15 @@ def chronicle_router(service: ChronicleService, images: dict[str, str]) -> Route
         chapter = next((item for item in view.chapters if item.number == number), None)
         if chapter is None:
             raise ChronicleError("chronicle_chapter_locked")
-        return render_chapter(view, chapter)
+        actions = () if activities is None else await activities.actions(actor)
+        return render_chapter(
+            view, chapter, tuple(a for a in actions if a.objective.chapter == number)
+        )
+
+    def active() -> ChronicleActivityService:
+        if activities is None:
+            raise ChronicleError("unknown")
+        return activities
 
     async def dispatch(query: CallbackQuery, actor: int) -> None:
         parts = (query.data or "").split(":")
@@ -42,9 +58,18 @@ def chronicle_router(service: ChronicleService, images: dict[str, str]) -> Route
             case ["cr", "ch", number] if number.isdigit():
                 await show(query, await chapter_screen(actor, int(number)))
             case ["cr", "conclude", number] if number.isdigit():
-                view = await service.conclude_chapter(actor, int(number))
-                chapter = next(item for item in view.chapters if item.number == int(number))
-                await show(query, render_chapter(view, chapter))
+                await service.conclude_chapter(actor, int(number))
+                await show(query, await chapter_screen(actor, int(number)))
+            case ["cr", "here"]:
+                await show(query, render_here(await active().here(actor)))
+            case ["cr", "talk", number, slot] if number.isdigit() and slot.isdigit():
+                await show(query, render_talk(await active().talk(actor, int(number), int(slot))))
+            case ["cr", "read", number, slot] if number.isdigit() and slot.isdigit():
+                view = await active().readings(actor, int(number), int(slot))
+                await show(query, render_readings(view))
+            case ["cr", "read", number, slot, point] if number.isdigit() and slot.isdigit():
+                view = await active().examine(actor, int(number), int(slot), point)
+                await show(query, render_readings(view))
             case ["cr", "vote"]:
                 await show(query, render_vote(await service.view(actor)))
             case ["cr", "vote", option]:

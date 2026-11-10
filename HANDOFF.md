@@ -1610,7 +1610,7 @@ Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem
 - **Operação:** `python -m asterion.chronicle_cli status | set-day1 AAAA-MM-DD --note … | extend AAAA-MM-DDTHH:MM --note … | pass-grant <telegram_id> | maintenance`. Sem Dia 1 nada abre. Toda troca fica em `chronicle_cycle_logs`.
 - **Banco:** migration `20261110_0043`.
 
-**Escolhas do bloco A que o autor precisa confirmar** (as fontes não decidem):
+**Escolhas do bloco A (aprovadas pelo autor):**
 
 1. Os capítulos abrem às 06:00 (reset diário, §34) do dia D1, D8…D50.
 2. T é o último dia da semana 8 (D56) às 21:00.
@@ -1624,6 +1624,35 @@ Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem
 **Ainda falta (sem número ou conteúdo definido):** os cosméticos das recompensas de Elo e da Batalha de Guildas (hoje o Salão só registra quem é elegível e o Elo); a entrada Calendário do menu (a Crônica está em Benefícios → Trilha).
 
 **Bloco B (próximo):** conteúdo jogável dos capítulos: Leituras (`lei_cr01_*`), resultados de Desbravar (`dsc_cr01_*`), Falar com NPC por Região de Ressonância, Masmorra em foco/espelho e o alternativo `dsc_cr01_vestigio_profundo`, os 8 Encontros e as 9 criaturas (kits em `SIMULAR`, precisam de Balanceamento), o Evento Mundial O Compasso, Entradas do Códice, Feitos, Crônica Arquivada e a regra `pr_cr01_encontro_grupo`.
+
+#### Etapa 9 · bloco B
+
+**Divisão em partes:**
+
+1. Falar com NPC, Leituras e Desbravar (`dsc_cr01_*` e `dsc_cr01_vestigio`): entregue nesta parte.
+2. Encontros e criaturas Comum/Incomum/Elite (capítulos 1, 2, 3, 5, 6 e 7), `[Enfrentar]`, recompensa da primeira vitória, `rep_cr01_encontro` e Feitos das Elites.
+3. Chefes Mestre de Turno e O Que Aguarda Resposta (capítulos 4 e 8) e a regra `pr_cr01_encontro_grupo`.
+4. Masmorra em foco/espelho e o alternativo `dsc_cr01_vestigio_profundo`.
+5. Evento Mundial O Compasso e `rep_cr01_evento`.
+6. Entradas do Códice, Feitos restantes e Crônica Arquivada.
+
+Os capítulos só podem ser concluídos depois das partes 2 e 3, porque todo capítulo tem um Encontro obrigatório. Os kits das criaturas continuam em `SIMULAR`.
+
+**Parte 1 (entregue):**
+
+- **Conteúdo** em `domain/chronicle_content.py`: Regiões, hubs, NPCs por papel, 8 falas, 18 pontos de Leitura (3, 3, 4 e 8) e 5 resultados de Desbravar, com versão em foco, espelho e complementos de camada.
+- **Serviço** em `application/chronicle_activities.py`: `talk`, `readings`, `examine`, `actions`, `here` e o gancho `desbravar_offer`/`settle_desbravar`, ligados a `record_objective` e `record_repeatable`.
+- **Desbravar:** enquanto há resultado de capítulo pendente no Local, ele ocupa a categoria Narrativo (decisão do autor em 2026-11-09). A 3ª tentativa é garantida (GDD §49.15). O `dsc_cr01_vestigio` tem peso 100 no Narrativo (decisão do autor, sujeita a Balanceamento). Nenhum dos dois gasta Vigor nem concede XP ou economia.
+- **Telas:** o capítulo mostra onde fazer cada objetivo e os botões quando o personagem está no lugar certo. O Local Atual ganha `🌌 Crônica · Neste Local` quando há algo a fazer ali.
+- **Banco:** sem migration. As flags de Leitura ficam em `chronicle_completions`.
+
+**Escolhas da parte 1 que o autor precisa confirmar** (as fontes não decidem):
+
+1. A Região de Ressonância considera só Regiões onde o personagem já tem Desbravar liberado. Assim, quem acabou de chegar a uma Região continua na anterior até liberar o Desbravar, em vez de ficar sem hub e sem Local. A Região-foco segue a mesma regra.
+2. A garantia da 3ª tentativa conta as tentativas no Local desde a abertura do capítulo.
+3. Com vários capítulos pendentes no mesmo Local, sai primeiro o mais antigo.
+4. O Vestígio sai do sorteio quando o limite diário ou o teto semanal já não pagariam pontos.
+5. **Os textos são rascunho:** a proposta define quem, onde e quantos, mas não as falas de NPC, as Leituras e os resultados de Desbravar. Eles foram escritos a partir dos resumos de cada capítulo, e os complementos de camada usam o texto da proposta. O autor precisa revisar `domain/chronicle_content.py`.
 
 **Etapa 9 (origem):** Crônica I, Nova Vigília e Trilha, integradas com Arena e Batalha de Guildas. O conteúdo está proposto em `ASTERION_CRONICA_I_ECOS_DA_CONVERGENCIA_v0_2_PROPOSTA.md` (2026-11-09). Os kits das 9 criaturas novas estão em `SIMULAR` e precisam de Balanceamento antes do lançamento.
 
