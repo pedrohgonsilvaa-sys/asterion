@@ -2651,6 +2651,11 @@ class RoadService:
                 progress={
                     "result_text": result_text,
                     **({"creature_id": selected_creature_id} if selected_creature_id else {}),
+                    **(
+                        {"chronicle_objective": offer.objective_id}
+                        if offer.objective_id and is_chronicle_result(result_id)
+                        else {}
+                    ),
                 },
             )
             s.add(attempt)

@@ -5,6 +5,9 @@ has Desbravar released; its most advanced such Local is the Local de Ressonânci
 A chapter runs in focus when the character can already Desbravar in the focus Region,
 and in mirror otherwise. Leituras and talks cost nothing and create no economy.
 
+Masmorra objectives (§0.3.4) are completed at the end of a valid run; while no accepted
+Masmorra has Estável released, ``dsc_cr01_vestigio_profundo`` in the LR replaces them.
+
 Which Locals are released comes from ``latest_local``, injected by the Road service so
 this module never imports it (the Road imports this module for the Desbravar hook).
 """
@@ -43,9 +46,12 @@ from asterion.domain.chronicle import (
 from asterion.domain.chronicle_content import (
     CHAPTER_FOCUS,
     CHAPTER_RESULT_WEIGHT,
+    DEEP_VESTIGIO_RESULT,
+    DEEP_VESTIGIO_TEXT,
     DESBRAVAR_GUARANTEE_ATTEMPT,
     DESBRAVAR_OBJECTIVES,
     DESBRAVAR_STEPS,
+    DUNGEON_FOCUS,
     NPC_STEPS,
     READING_STEPS,
     REGIONS,
@@ -71,7 +77,14 @@ from asterion.infrastructure.db.models import (
 
 LatestLocal = Callable[[AsyncSession, Character, str], Awaitable[str | None]]
 
-_ACTION_KINDS = (ObjectiveKind.NPC, ObjectiveKind.EVIDENCE, ObjectiveKind.DESBRAVAR)
+_ACTION_KINDS = (
+    ObjectiveKind.NPC,
+    ObjectiveKind.EVIDENCE,
+    ObjectiveKind.DESBRAVAR,
+    ObjectiveKind.DUNGEON,
+)
+# Started elsewhere: Desbravar has its own button in the Local, a Masmorra its own menu.
+_NO_BUTTON = (ObjectiveKind.DESBRAVAR, ObjectiveKind.DUNGEON)
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +104,7 @@ class _Resolver:
     def __init__(self, session: AsyncSession, character: Character, latest: LatestLocal):
         self.session, self.character, self.latest = session, character, latest
         self._locals: dict[str, str | None] = {}
+        self._released: dict[str, bool] = {}
 
     async def local_in(self, region: RegionInfo) -> str | None:
         if self.character.level < region.min_level:
@@ -111,6 +125,21 @@ class _Resolver:
         resonance = await self.resonance()
         # A chapter without focus has only one version of its text.
         return None if resonance is None else replace(resonance, focus=focus is None)
+
+    async def dungeons(self, objective: Objective, route: Route) -> tuple[str, ...]:
+        """Accepted Masmorras with Estável released: the focus pair, or any in mirror."""
+        from asterion.application.dungeons import DUNGEON_FAMILIES, stable_released
+
+        accepted = DUNGEON_FOCUS[objective.objective_id] if route.focus else DUNGEON_FAMILIES
+        result = []
+        for family_id in accepted:
+            if family_id not in self._released:
+                self._released[family_id] = await stable_released(
+                    self.session, self.character, family_id
+                )
+            if self._released[family_id]:
+                result.append(family_id)
+        return tuple(result)
 
     async def resonance(self) -> Route | None:
         """The Região and Local de Ressonância, where every Encontro is fought (§0.3.7)."""
@@ -133,6 +162,8 @@ class ActionView:
     npc: str | None = None
     points_done: int = 0
     points_total: int = 0
+    dungeons: tuple[str, ...] = ()  # Masmorra names; empty means the Desbravar alternative
+    focus: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,6 +225,9 @@ class ChronicleActivityService:
                 for objective in objectives_of(chapter):
                     if objective.kind not in _ACTION_KINDS or objective.objective_id in done:
                         continue
+                    if objective.kind is ObjectiveKind.DUNGEON:
+                        result.append(await _dungeon_action(objective, route, world, resolver))
+                        continue
                     result.append(_action(objective, route, world, done))
             return tuple(result)
 
@@ -202,7 +236,7 @@ class ChronicleActivityService:
         return tuple(
             item
             for item in await self.actions(actor, now=now)
-            if item.here and item.objective.kind is not ObjectiveKind.DESBRAVAR
+            if item.here and item.objective.kind not in _NO_BUTTON
         )
 
     async def talk(
@@ -357,6 +391,65 @@ def _action(objective: Objective, route: Route, world: WorldState | None, done: 
     return ActionView(objective, label, location == label)
 
 
+async def _dungeon_action(
+    objective: Objective, route: Route, world: WorldState | None, resolver: _Resolver
+) -> ActionView:
+    from asterion.application.dungeons import DUNGEON_FAMILIES
+
+    location = world.location if world is not None else None
+    names = tuple(
+        DUNGEON_FAMILIES[family_id].name
+        for family_id in await resolver.dungeons(objective, route)
+    )
+    label = route.local_label
+    return ActionView(objective, label, location == label, dungeons=names, focus=route.focus)
+
+
+async def record_dungeon_run(
+    session: AsyncSession,
+    character: Character,
+    family_id: str,
+    latest_local: LatestLocal,
+    *,
+    now: datetime,
+    started_at: datetime | None = None,
+) -> str | None:
+    """Complete the oldest pending Masmorra objective this run is accepted for.
+
+    The Masmorra calls it for each participant with participation above 0, holding the
+    Character lock. One run completes at most one objective.
+    """
+    cycle = await load_cycle(session, character.server_id)
+    if cycle is None:
+        return None
+    calendar = calendar_of(cycle)
+    if not calendar.accepts_progress(now, started_at):
+        return None
+    if ENTRY_GATE_QUEST not in await completed_quests(session, character.id):
+        return None
+    done = await _flags(session, character)
+    resolver = _Resolver(session, character, latest_local)
+    for chapter in range(1, calendar.chapters_open(started_at or now) + 1):
+        for objective in objectives_of(chapter):
+            if objective.kind is not ObjectiveKind.DUNGEON or objective.objective_id in done:
+                continue
+            route = await resolver.route(chapter)
+            if route is None:
+                continue
+            if route.focus and family_id not in DUNGEON_FOCUS[objective.objective_id]:
+                continue
+            if await record_objective(
+                session,
+                character.server_id,
+                character,
+                objective.objective_id,
+                now=now,
+                started_at=started_at,
+            ):
+                return objective.objective_id
+    return None
+
+
 async def _flags(session: AsyncSession, character: Character) -> set[str]:
     return set(
         (
@@ -377,6 +470,7 @@ async def _flags(session: AsyncSession, character: Character) -> set[str]:
 class DesbravarOffer:
     profile: ExplorationLocationProfile
     forced: ExplorationResultDefinition | None = None
+    objective_id: str | None = None  # the Crônica objective of the chapter result offered
 
 
 async def desbravar_offer(
@@ -402,12 +496,17 @@ async def desbravar_offer(
     resolver = _Resolver(session, character, latest_local)
     for chapter in range(1, calendar.chapters_open(now) + 1):
         for objective in objectives_of(chapter):
-            if objective.kind is not ObjectiveKind.DESBRAVAR or objective.objective_id in done:
+            if objective.kind not in _NO_BUTTON or objective.objective_id in done:
                 continue
             route = await resolver.route(chapter)
             if route is None or route.local_id != profile.local_id:
                 continue
-            definition = _chapter_result(objective, route, layers_for(quests))
+            if objective.kind is ObjectiveKind.DUNGEON:
+                if await resolver.dungeons(objective, route):
+                    continue
+                definition = _deep_vestigio()
+            else:
+                definition = _chapter_result(objective, route, layers_for(quests))
             attempts = await session.scalar(
                 select(func.count(ExplorationAttempt.id)).where(
                     ExplorationAttempt.character_id == character.id,
@@ -416,15 +515,28 @@ async def desbravar_offer(
                 )
             )
             if (attempts or 0) >= DESBRAVAR_GUARANTEE_ATTEMPT - 1:
-                return DesbravarOffer(profile, definition)
+                return DesbravarOffer(profile, definition, objective.objective_id)
             others = tuple(item for item in profile.results if item.category != "narrative")
-            return DesbravarOffer(replace(profile, results=(*others, definition)))
+            return DesbravarOffer(
+                replace(profile, results=(*others, definition)), None, objective.objective_id
+            )
     if await repeatable_available(session, character, VESTIGIO_SOURCE, calendar, now):
         vestigio = ExplorationResultDefinition(
             VESTIGIO_RESULT, "narrative", VESTIGIO_RESULT, VESTIGIO_WEIGHT, VESTIGIO_TEXT
         )
         return DesbravarOffer(replace(profile, results=(*profile.results, vestigio)))
     return unchanged
+
+
+def _deep_vestigio() -> ExplorationResultDefinition:
+    return ExplorationResultDefinition(
+        DEEP_VESTIGIO_RESULT,
+        "narrative",
+        DEEP_VESTIGIO_RESULT,
+        CHAPTER_RESULT_WEIGHT,
+        DEEP_VESTIGIO_TEXT,
+        unique=True,
+    )
 
 
 def _chapter_result(objective, route: Route, layers: frozenset[Layer]):
@@ -446,10 +558,13 @@ async def settle_desbravar(
     """Register a ``dsc_cr01_*`` result: never Vigor, Coroas, XP or Materiais (§0.3.6)."""
     lines = [(attempt.progress or {}).get("result_text", "")]
     objective_id = DESBRAVAR_OBJECTIVES.get(attempt.result_id)
+    if attempt.result_id == DEEP_VESTIGIO_RESULT:
+        # One result id serves the four Masmorra objectives; the offer names which one.
+        objective_id = (attempt.progress or {}).get("chronicle_objective")
     if objective_id is not None:
         if await record_objective(session, character.server_id, character, objective_id, now=now):
             lines.append(f"🌌 Crônica · {OBJECTIVES_BY_ID[objective_id].title} concluído")
-    elif (
+    elif attempt.result_id == VESTIGIO_RESULT and (
         await record_repeatable(
             session, character.server_id, character, VESTIGIO_SOURCE, attempt.id.hex, now=now
         )

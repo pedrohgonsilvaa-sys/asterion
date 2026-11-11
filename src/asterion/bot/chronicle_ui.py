@@ -165,6 +165,10 @@ def _objective_line(item) -> str:
     )
 
 
+# Started elsewhere: Desbravar has its own button in the Local, a Masmorra its own menu.
+_NO_BUTTON = (ObjectiveKind.DESBRAVAR, ObjectiveKind.DUNGEON)
+
+
 def _action_data(action: ActionView) -> str:
     objective = action.objective
     verb = "talk" if objective.kind is ObjectiveKind.NPC else "read"
@@ -183,6 +187,12 @@ def _action_line(action: ActionView) -> str:
         return f"📍 {title} · {action.npc} · {action.location}"
     if action.objective.kind is ObjectiveKind.EVIDENCE:
         return f"📍 {title} · {action.points_done}/{action.points_total} · {action.location}"
+    if action.objective.kind is ObjectiveKind.DUNGEON:
+        if not action.dungeons:
+            return f"📍 {title} · sem Masmorra liberada: Desbravar em {action.location}"
+        if not action.focus:
+            return f"📍 {title} · qualquer Masmorra com Estável liberada"
+        return f"📍 {title} · Masmorra: {' ou '.join(action.dungeons)}"
     return f"📍 {title} · Desbravar em {action.location}"
 
 
@@ -231,7 +241,7 @@ def render_chapter(
     rows = [
         _action_button(item)
         for item in actions
-        if item.here and item.objective.kind is not ObjectiveKind.DESBRAVAR
+        if item.here and item.objective.kind not in _NO_BUTTON
     ]
     rows.extend(_encounter_button(item) for item in fights if item.here)
     if chapter.can_conclude:

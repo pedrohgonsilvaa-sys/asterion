@@ -1632,7 +1632,7 @@ Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem
 1. Falar com NPC, Leituras e Desbravar (`dsc_cr01_*` e `dsc_cr01_vestigio`): entregue nesta parte.
 2. Encontros e criaturas Comum/Incomum/Elite (capítulos 1, 2, 3, 5, 6 e 7), `[Enfrentar]`, recompensa da primeira vitória, `rep_cr01_encontro` e Feitos das Elites: entregue (ver "Parte 2" abaixo).
 3. Chefes Mestre de Turno e O Que Aguarda Resposta (capítulos 4 e 8), a regra `pr_cr01_encontro_grupo`, o Coro e os Feitos dos Chefes e do voto: entregue (ver "Parte 3" abaixo).
-4. Masmorra em foco/espelho e o alternativo `dsc_cr01_vestigio_profundo`.
+4. Masmorra em foco/espelho e o alternativo `dsc_cr01_vestigio_profundo`: entregue (ver "Parte 4" abaixo).
 5. Evento Mundial O Compasso e `rep_cr01_evento`.
 6. Entradas do Códice, Feitos restantes e Crônica Arquivada.
 
@@ -1695,6 +1695,27 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 5. Em Grupo, o nível congelado vem da última luta perdida da Referência naquele Encontro (como no Solo).
 6. A proposta não manda aviso no Telegram: aparece na tela 👥 Grupo, como na Campanha. O resultado só aparece para quem deu o último golpe; os outros voltam ao menu sem a tela de resultado.
 7. O id `feito_cr01_respondeu_ao_eco` e as descrições dos 3 Feitos são rascunho.
+
+**Parte 4 (entregue):**
+
+- **Conteúdo** em `domain/chronicle_content.py`: `DUNGEON_FOCUS` liga cada objetivo de Masmorra às 2 Masmorras da Região-foco (`cap_02_obj_04` Galerias do Vigia ou Cripta do Ocaso; `cap_03_obj_03` Santuário do Nó Antigo ou Fosso das Raízes; `cap_05_obj_04` Cisterna de Transferência ou Enfermaria Afundada; `cap_06_obj_03` Bastilha Profunda ou Pedreira do Contrapeso). `DEEP_VESTIGIO_RESULT` e `DEEP_VESTIGIO_TEXT` são o alternativo.
+- **Fim da run** (`DungeonService._settle_run`): para cada participante com participação > 0, além de `rep_cr01_masmorra`, chama `record_dungeon_run` (`application/chronicle_activities.py`), que conclui o objetivo de Masmorra pendente mais antigo aceito por aquela Masmorra. Em foco, só o par da Região-foco; em espelho, qualquer Masmorra. Usa `started_at = run.created_at`.
+- **"Estável liberada"** (`stable_released` em `application/dungeons.py`): Masmorra descoberta, missões exigidas concluídas e nível mínimo da família. É a mesma regra da tela da Masmorra.
+- **Alternativo:** com o objetivo pendente e nenhuma Masmorra aceita liberada, `desbravar_offer` põe `dsc_cr01_vestigio_profundo` no Narrativo do LR do capítulo, com a garantia da 3ª tentativa da parte 1. O objetivo vai em `ExplorationAttempt.progress["chronicle_objective"]`, porque o mesmo resultado serve aos 4 capítulos. Paga os pontos do objetivo (70, 70, 60 e 60), sem Vigor, XP ou economia.
+- **Telas:** o capítulo mostra `Masmorra: <A> ou <B>` em foco, `qualquer Masmorra com Estável liberada` em espelho, ou `sem Masmorra liberada: Desbravar em <Local>`. Não há botão: a Masmorra entra pelo próprio menu e o alternativo pelo Desbravar.
+- **Banco:** sem migration.
+
+**Escolhas da parte 4 (por delegação, aguardam aprovação do autor):**
+
+1. Em foco, só as 2 Masmorras da Região-foco contam. Se nenhuma das duas tem Estável liberada, vale o alternativo, mesmo que outra Masmorra esteja liberada (leitura literal da regra 0.3.4).
+2. Uma run conclui no máximo 1 objetivo de Masmorra (o do capítulo mais antigo), além do repetível.
+3. Qualquer dificuldade conta, porque Fraturada e Ruptura já exigem a Estável.
+4. A garantia da 3ª tentativa do alternativo conta as tentativas no Local desde a abertura do capítulo, como na escolha 2 da parte 1. Quem já desbravou 2 vezes ali no capítulo recebe o alternativo na tentativa seguinte.
+5. O alternativo não conta como `rep_cr01_desbravar`: só o `dsc_cr01_vestigio` conta.
+6. Enquanto o alternativo está pendente no Local, o `dsc_cr01_vestigio` não aparece ali (o resultado de capítulo ocupa o Narrativo).
+7. A liberação é conferida a cada tentativa: liberar uma Masmorra depois tira o alternativo do Desbravar.
+8. Masmorra não tem Ajudante: todo membro passou pelos gates de entrada. Conta quem tem participação > 0, o capítulo aberto no início da run e a P1 concluída.
+9. O texto do Vestígio Profundo é rascunho e é o mesmo nos 4 capítulos. A tela de resultado da run não ganha linha da Crônica (como já acontece com o repetível); o ✅ aparece no capítulo.
 
 **Etapa 9 (origem):** Crônica I, Nova Vigília e Trilha, integradas com Arena e Batalha de Guildas. O conteúdo está proposto em `ASTERION_CRONICA_I_ECOS_DA_CONVERGENCIA_v0_2_PROPOSTA.md` (2026-11-09). Os kits das 9 criaturas novas estão em `SIMULAR` e precisam de Balanceamento antes do lançamento.
 
