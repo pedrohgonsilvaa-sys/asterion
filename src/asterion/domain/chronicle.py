@@ -132,6 +132,15 @@ class Calendar:
             and now < self.finalization_at
         )
 
+    def archived(self, now: datetime) -> bool:
+        """Crônica Arquivada (proposal §9): after the rescue period, chapters are replayed
+        as a personal instance, with no points, vote or reward (author, 2026-11-11)."""
+        return now >= self.rescue_ends_at
+
+    def playable(self, now: datetime, started_at: datetime | None = None) -> bool:
+        """Story activities run while the Crônica accepts progress or once it is archived."""
+        return self.accepts_progress(now, started_at) or self.archived(now)
+
     def vote_round(self, now: datetime) -> str | None:
         if self.vote_opens_at <= now < self.vote_closes_at:
             return "main"

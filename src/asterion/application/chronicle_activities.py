@@ -217,7 +217,7 @@ class ChronicleActivityService:
             if cycle is None:
                 return ()
             calendar = calendar_of(cycle)
-            if not calendar.accepts_progress(moment):
+            if not calendar.playable(moment):
                 return ()
             if ENTRY_GATE_QUEST not in await completed_quests(session, character.id):
                 return ()
@@ -353,7 +353,7 @@ class ChronicleActivityService:
         if cycle is None:
             raise ChronicleError("chronicle_closed")
         calendar: Calendar = calendar_of(cycle)
-        if not calendar.accepts_progress(now):
+        if not calendar.playable(now):
             raise ChronicleError("chronicle_closed")
         if calendar.chapter_opens_at(chapter) > now:
             raise ChronicleError("chronicle_chapter_locked")
@@ -513,7 +513,7 @@ async def record_dungeon_run(
     if cycle is None:
         return None
     calendar = calendar_of(cycle)
-    if not calendar.accepts_progress(now, started_at):
+    if not calendar.playable(now, started_at):
         return None
     if ENTRY_GATE_QUEST not in await completed_quests(session, character.id):
         return None
@@ -577,7 +577,7 @@ async def desbravar_offer(
     if cycle is None:
         return unchanged
     calendar = calendar_of(cycle)
-    if not calendar.accepts_progress(now):
+    if not calendar.playable(now):
         return unchanged
     quests = await completed_quests(session, character.id)
     if ENTRY_GATE_QUEST not in quests:

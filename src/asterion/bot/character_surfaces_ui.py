@@ -19,6 +19,8 @@ from asterion.application.knowledge_catalog import (
     ALTOS_REGION_LABEL,
     CODEX_CATEGORY_ORDER,
     CODEX_ENTRIES,
+    CR01_BESTIARY_GROUP,
+    CR01_BESTIARY_LABEL,
     CREATURE_PRESENTATION,
     LOCATION_LABELS,
     TDO_REGION_ID,
@@ -167,24 +169,21 @@ def render_codex_category(view: KnowledgeView, category: str) -> Screen:
         return render_codex_root(view)
     rows: list[list[InlineKeyboardButton]] = []
     lines = ["📚 Códice", "", label, ""]
-    if category == "regions":
-        regions = _known_codex_regions(view)
-        if not regions:
-            return render_codex_root(view)
-        for index, (region_id, region_label) in enumerate(regions, 1):
-            lines.append(f"{index} {region_label}")
-            rows.append([_button(str(index), f"kb:r:{region_id}")])
-    else:
-        entries = [
-            entry
-            for entry in view.codex_entries
-            if entry.category == category and entry.location_id is None
-        ]
-        if not entries:
-            return render_codex_root(view)
-        for index, entry in enumerate(entries, 1):
-            lines.append(f"{index} {entry.title}")
-            rows.append([_button(str(index), f"kb:e:{CODEX_ENTRY_KEYS[entry.entry_id]}")])
+    regions = _known_codex_regions(view) if category == "regions" else []
+    # Entries without a Local (the Crônica's) are listed after the Regions.
+    entries = [
+        entry
+        for entry in view.codex_entries
+        if entry.category == category and entry.location_id is None
+    ]
+    if not regions and not entries:
+        return render_codex_root(view)
+    for region_id, region_label in regions:
+        lines.append(f"{len(rows) + 1} {region_label}")
+        rows.append([_button(str(len(rows) + 1), f"kb:r:{region_id}")])
+    for entry in entries:
+        lines.append(f"{len(rows) + 1} {entry.title}")
+        rows.append([_button(str(len(rows) + 1), f"kb:e:{CODEX_ENTRY_KEYS[entry.entry_id]}")])
     rows.extend(_knowledge_navigation("kb"))
     return Screen("\n".join(lines), "codex", _keyboard(rows))
 
@@ -248,7 +247,7 @@ def render_bestiary_root(view: KnowledgeView) -> Screen:
 
 
 def render_bestiary_region(view: KnowledgeView, region_id: str) -> Screen:
-    region_labels = _region_labels()
+    region_labels = _bestiary_labels()
     if region_id not in region_labels:
         return render_bestiary_root(view)
     records = _bestiary_in_region(view, region_id)
@@ -268,7 +267,7 @@ def render_bestiary_detail(view: KnowledgeView, record: BestiaryRecordView) -> S
     if record not in view.bestiary:
         return render_bestiary_root(view)
     presentation = CREATURE_PRESENTATION.get(record.creature_id)
-    region_labels = _region_labels()
+    region_labels = _bestiary_labels()
     region_id = presentation.region_id if presentation else TDO_REGION_ID
     lines = [
         f"🐾 {record.name}",
@@ -375,12 +374,19 @@ def _known_bestiary_regions(view: KnowledgeView) -> list[tuple[str, str, int]]:
         TDO_REGION_ID: "🌑 Terras do Ocaso",
         VDE_REGION_ID: "🪢 Vales dos Enforcados",
         ALTOS_REGION_ID: "🌋 Altos Cinéreos",
+        CR01_BESTIARY_GROUP: CR01_BESTIARY_LABEL,
     }
     return [
         (region_id, labels[region_id], count)
-        for region_id, count in sorted(counts.items())
+        for region_id, count in sorted(
+            counts.items(), key=lambda item: (item[0] == CR01_BESTIARY_GROUP, item[0])
+        )
         if count and region_id in labels
     ]
+
+
+def _bestiary_labels() -> dict[str, str]:
+    return _region_labels() | {CR01_BESTIARY_GROUP: CR01_BESTIARY_LABEL}
 
 
 def _region_labels() -> dict[str, str]:

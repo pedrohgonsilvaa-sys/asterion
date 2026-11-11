@@ -1634,7 +1634,7 @@ Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem
 3. Chefes Mestre de Turno e O Que Aguarda Resposta (capítulos 4 e 8), a regra `pr_cr01_encontro_grupo`, o Coro e os Feitos dos Chefes e do voto: entregue (ver "Parte 3" abaixo).
 4. Masmorra em foco/espelho e o alternativo `dsc_cr01_vestigio_profundo`: entregue (ver "Parte 4" abaixo).
 5. Evento Mundial O Compasso e `rep_cr01_evento`: entregue (ver "Parte 5" abaixo).
-6. Entradas do Códice, Feitos restantes e Crônica Arquivada.
+6. Entradas do Códice, Feitos restantes e Crônica Arquivada: entregue (ver "Parte 6" abaixo). O bloco B está completo.
 
 Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos podem ser concluídos. Os kits das criaturas e dos Chefes continuam em `SIMULAR`.
 
@@ -1672,7 +1672,7 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 4. **Telegraph próprio** das Ações Preparadas ("ergue algo que não está ali" etc.) não aparece: a tela mostra o aviso padrão "prepara <Arte>".
 5. `[Enfrentar o Eco de novo]` some quando o limite diário ou o teto semanal já não pagariam pontos (mesma regra do Vestígio na parte 1).
 6. Os Feitos das Elites usam o nome da criatura e a frase "Venceu pela primeira vez…" como rascunho, na categoria Crônicas.
-7. As 6 criaturas registram progresso de Bestiário, mas **ainda não aparecem na tela do Bestiário**: ela agrupa por Região e habitat, e estas criaturas não têm Região. Fica para a parte 6, com o Códice.
+7. As 6 criaturas registram progresso de Bestiário, mas **ainda não aparecem na tela do Bestiário**: ela agrupa por Região e habitat, e estas criaturas não têm Região. ~~Fica para a parte 6.~~ Entrou na parte 6: grupo próprio na tela do Bestiário.
 8. Depois de uma derrota fora das Terras do Ocaso o personagem fica onde está, com HP cheio: é a regra regional de derrota que já existe (só o Ocaso move para um Braseiro).
 
 **Parte 3 (entregue):**
@@ -1744,6 +1744,38 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 4. Onda de Compasso e Batida Plena não têm a regra de "2+ alvos": cada instância é Solo, então elas acertam só o jogador. A proposta não dá restrição.
 5. Os textos das 3 fases e da conclusão são rascunho. Os nomes na tela são "Ressonância" e "Ressonância Plena".
 6. A manutenção agendada (`round_scheduler`) não recebe a consulta de Locais: ele só abre, encerra e acerta ocorrências.
+
+**Parte 6 (entregue):**
+
+- **Códice** em `domain/chronicle_codex.py`: as 12 Entradas da proposta §6 (`codex_cr01_ecos` contínua, as 10 por capítulo e `codex_cr01_desfecho`) e seus Trechos, com o texto da proposta. Cada Trecho de camada (`_c1`, `_c2`, `_h`, `_c3`, `_c4`) é separado e só é registrado com a flag da camada (P6, P18, P24, P29, P35). O desfecho usa o epílogo já aprovado (`EPILOGUES`) e o complemento C3/C4 do epílogo da proposta §4.
+- **Registro** em `application/chronicle_codex.py` (`sync_chronicle_codex`): idempotente por `character_id + fragment_id`. Roda depois de concluir um capítulo e sempre que o Códice abre (`CharacterSurfacesService.knowledge`), então uma camada ganha depois, uma Região descoberta depois e o desfecho publicado em T aparecem sem job. Trechos nunca são removidos.
+- **Crônica Arquivada:** `Calendar.archived` (depois de T+14d) e `Calendar.playable` (Crônica aceitando progresso ou arquivada). Falar, Leituras, Desbravar (`dsc_cr01_*` e o alternativo), Masmorra, Encontros e a conclusão de capítulo voltam a funcionar, com todos os 8 capítulos abertos. `record_objective` grava o objetivo, mas não paga pontos. As fontes `rep_cr01_*` ficam fechadas (`repeatable_available` exige a Crônica aceitando progresso), então somem o Vestígio e `[Enfrentar o Eco de novo]`. O Evento Mundial continua só na Crônica ativa. Sem Grupo (`👥 Em Grupo` some e a proposta vira Solo). Durante o resgate (T+2h a T+14d) nada da história é jogável.
+- **Recompensa na Arquivada:** primeira vitória dá Bestiário e Feito, sem XP (decisão do autor em 2026-11-11). Nada de pontos, voto ou economia.
+- **Feitos:** a proposta só cita 5 Feitos e todos já existiam (partes 2 e 3). Nada a criar (decisão do autor em 2026-11-11).
+- **Bestiário:** as 8 criaturas e Chefes `*.cr01.*` e O Compasso têm `CreaturePresentation` no grupo `cr01`, exibido como `🌌 Crônica I · Ecos da Convergência`, depois das Regiões, sem habitat.
+- **Telas:** na fase arquivada, a Crônica mostra o texto da Crônica Arquivada e o capítulo não mostra pontos. A categoria Regiões e Locais do Códice agora lista também Entradas sem Local (é o caso de `codex_cr01_marcas_que_vibram`).
+- **Banco:** sem migration. A Arquivada usa `chronicle_completions` (o histórico do perfil conta pontos, que a Arquivada não gera).
+
+**Decisões do autor na parte 6 (2026-11-11):**
+
+1. A Crônica Arquivada abre depois de T+14d e continua o progresso do personagem: o que ele já fez continua ✅.
+2. Só Solo, sem Evento Mundial e sem repetível. Masmorra e o alternativo continuam valendo para o objetivo opcional, sem pontos.
+3. Primeira vitória na Arquivada: Bestiário e Feito, sem XP.
+4. Quem conclui o primeiro capítulo só na Arquivada também recebe a Entrada do desfecho.
+5. Nenhum Feito novo.
+
+**Escolhas da parte 6 (aguardam aprovação do autor):**
+
+1. As Entradas e Trechos de cada capítulo são registrados na **conclusão** do capítulo (a proposta só dá o capítulo). Assim `codex_cr01_formas_do_pulso` não sai na primeira luta, e sim ao concluir o Capítulo 1.
+2. Os Trechos `codex_cr01_herdeiros_altos` (Maro Keln) e `_confins` (Eris Val) exigem um Local descoberto dos Altos ou dos Confins, para não nomear NPC de Região que o personagem não conhece.
+3. A Entrada do desfecho aparece a partir de T, como o epílogo na tela da Crônica, para quem tem ao menos 1 capítulo concluído.
+4. Ordem dentro de cada categoria: as Entradas da Crônica vêm depois das regionais.
+5. **Textos rascunho:** os títulos dos Trechos (a proposta não traz títulos): "Capítulo N · <título>" na Entrada contínua; o título da Entrada no Trecho base; e, nos de camada, "Perto da Âncora", "Estados guardados", "Referências sem resposta", "Protocolos em espera", "A noite da Ruptura", "Maro Keln", "Eris Val", "A etapa final", "A origem do pedido" e "Além do registro". Também é rascunho o texto da tela da Crônica Arquivada (`ARCHIVED_TEXT` em `bot/chronicle_ui.py`).
+
+**Pendências encontradas (fora do escopo da parte 6):**
+
+- A tela do Bestiário só tem rótulo para Ocaso, Vales e Altos: as criaturas de Nareth, Várzeas e Confins têm `CreaturePresentation`, mas não aparecem.
+- `codex.altos.regiao` e `codex.confins.regiao` geram a mesma chave de botão (`kb:e:regiao`), então um dos dois botões abre a Entrada errada.
 
 **Etapa 9 (origem):** Crônica I, Nova Vigília e Trilha, integradas com Arena e Batalha de Guildas. O conteúdo está proposto em `ASTERION_CRONICA_I_ECOS_DA_CONVERGENCIA_v0_2_PROPOSTA.md` (2026-11-09). Os kits das 9 criaturas novas estão em `SIMULAR` e precisam de Balanceamento antes do lançamento.
 

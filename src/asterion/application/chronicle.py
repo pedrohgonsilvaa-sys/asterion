@@ -211,7 +211,7 @@ def _objective_points(objective_id: str) -> tuple[int, int]:
 
 
 async def _participates(session, character: Character, calendar: Calendar, now, started_at):
-    if not calendar.accepts_progress(now, started_at):
+    if not calendar.playable(now, started_at):
         return False
     return ENTRY_GATE_QUEST in await completed_quests(session, character.id)
 
@@ -259,6 +259,9 @@ async def record_objective(
     )
     if inserted is None:
         return False
+    if calendar.archived(now):
+        # Crônica Arquivada: the story is recorded, never the points (§9).
+        return True
     row = await _account_row(session, character.telegram_id, server_id, now)
     await _grant(
         session,
@@ -311,6 +314,8 @@ async def repeatable_available(
     now: datetime,
 ) -> bool:
     """Read-only check, so a source can leave its result out once it would pay nothing."""
+    if not calendar.accepts_progress(now):
+        return False  # the ``rep_cr01_*`` sources end at the cutoff (§9)
     row = await session.get(
         ChronicleAccount, (character.telegram_id, character.server_id, CHRONICLE_ID)
     )
@@ -493,7 +498,7 @@ class ChronicleService:
         async with self.sessions.begin() as session:
             character = await self._character(session, actor, lock=True)
             cycle = await load_cycle(session, self.server_id)
-            if cycle is None or not calendar_of(cycle).accepts_progress(now):
+            if cycle is None or not calendar_of(cycle).playable(now):
                 raise ChronicleError("chronicle_closed")
             if now < calendar_of(cycle).chapter_opens_at(chapter):
                 raise ChronicleError("chronicle_chapter_locked")
@@ -511,6 +516,9 @@ class ChronicleService:
             )
             if not recorded:
                 raise ChronicleError("chronicle_gate")
+            from asterion.application.chronicle_codex import sync_chronicle_codex
+
+            await sync_chronicle_codex(session, character, now)
             return await self._view(session, character, now)
 
     async def track(self, actor: int, *, now: datetime | None = None) -> TrackView:
@@ -1188,7 +1196,7 @@ class ChronicleService:
                     objectives,
                     concluded,
                     not concluded
-                    and calendar.accepts_progress(now)
+                    and calendar.playable(now)
                     and can_conclude(chapter.number, done),
                 )
             )

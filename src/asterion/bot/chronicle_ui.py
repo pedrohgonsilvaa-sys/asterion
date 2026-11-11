@@ -108,6 +108,14 @@ def reward_text(reward: TrackReward) -> str:
 # ------------------------------------------------------------------- Crônica
 
 
+# Draft text (HANDOFF.md): the proposal §9 gives the rule, not the line.
+ARCHIVED_TEXT = (
+    "📦 Crônica Arquivada. A Crônica terminou, mas a história continua aqui: os capítulos "
+    "podem ser jogados sozinho, sem pontos, voto ou recompensa, para recuperar a história "
+    "e o Códice."
+)
+
+
 def render_chronicle(view: ChronicleView) -> Screen:
     lines = [f"🌌 Crônica I · {CHRONICLE_NAME}", ""]
     rows: list[list[InlineKeyboardButton]] = []
@@ -127,7 +135,7 @@ def render_chronicle(view: ChronicleView) -> Screen:
                 f"A Crônica terminou. Resgate da Trilha até {_when(view.calendar.rescue_ends_at)}."
             )
         else:
-            lines.append("A Crônica terminou e foi arquivada.")
+            lines.append(ARCHIVED_TEXT)
         if not view.gate_ok and view.phase is Phase.ACTIVE:
             lines.extend(["", "Conclua P1 · Vozes na Estrada para participar."])
         for chapter in view.chapters:
@@ -151,7 +159,7 @@ def render_chronicle(view: ChronicleView) -> Screen:
     return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
 
 
-def _objective_line(item) -> str:
+def _objective_line(item, archived: bool = False) -> str:
     objective = item.objective
     if item.done:
         mark = "✅"
@@ -160,10 +168,9 @@ def _objective_line(item) -> str:
     else:
         mark = "▫️"
     optional = "" if objective.required else " · opcional"
-    return (
-        f"{mark} {objective.title} · {KIND_LABELS[objective.kind]}{optional} · "
-        f"{objective.points} pts"
-    )
+    points = "" if archived else f" · {objective.points} pts"
+    return f"{mark} {objective.title} · {KIND_LABELS[objective.kind]}{optional}{points}"
+
 
 
 # Started elsewhere: Desbravar has its own button in the Local, a Masmorra its own menu.
@@ -243,8 +250,10 @@ def render_chapter(
     encounters: tuple[EncounterActionView, ...] = (),
 ) -> Screen:
     lines = [f"🌌 Capítulo {chapter.number} · {chapter.title}", "", chapter.summary, ""]
-    lines.extend(_objective_line(item) for item in chapter.objectives)
-    lines.append(f"{'✅' if chapter.concluded else '▫️'} Conclusão do capítulo · 250 pts")
+    archived = view.phase is Phase.ARCHIVED
+    lines.extend(_objective_line(item, archived) for item in chapter.objectives)
+    points = "" if archived else " · 250 pts"
+    lines.append(f"{'✅' if chapter.concluded else '▫️'} Conclusão do capítulo{points}")
     fights = tuple(item for item in encounters if _fight_listed(item))
     if actions or fights:
         lines.append("")
