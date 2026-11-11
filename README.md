@@ -5,11 +5,39 @@ Fundação técnica do **Asterion**, RPG/MMORPG dark fantasy para Telegram.
 ## Estado atual
 
 Este repositório começou do zero em setembro de 2026. As fontes autoritativas
-vigentes e sua hierarquia estão listadas em [`docs/SOURCE_AUTHORITY.md`](docs/SOURCE_AUTHORITY.md).
-Nesta sincronização, elas são a Fonte Mestra v1.6.0, Terras do Ocaso v1.0.15,
-Vales dos Enforcados v1.0.6 e a consolidação Visual/UI v1.6.0 de 2026-10-11.
+vigentes e sua hierarquia estão em [`SOURCE_AUTHORITY.md`](SOURCE_AUTHORITY.md), na raiz.
+Hoje elas são a Fonte Mestra (GDD Estrutural) v1.6.0, o Contrato de Weapon Metadata
+v1.0.0, a Bíblia Canônica v3.0 FINAL, as seis Regiões (Terras do Ocaso v1.0.16, Vales dos
+Enforcados v1.0.6, Planícies de Nareth v1.0.2, Várzeas Carmesins v1.0.3, Altos Cinéreos
+v1.0.1 e Confins do Véu v1.0.0) e a consolidação Visual/UI de 2026-10-13. Duas divergências
+seguem abertas: Terras do Ocaso v1.0.16 × v1.0.17 e Bíblia v3.0 × v4.0.7.
 
-A primeira meta de produção é uma **vertical slice das Terras do Ocaso**, antes da produção integral do conteúdo de lançamento.
+O jogo está em fase de **Beta amplo**: a ordem das etapas, o que falta e o plano de
+fechamento estão no [`HANDOFF.md`](HANDOFF.md) (§8 e §9) e em [`docs/PLANO_DE_ACAO.md`](docs/PLANO_DE_ACAO.md).
+
+## O que já está no `main`
+
+- Criação de personagem, Prólogo e Menu Principal.
+- Regiões jogáveis, missões, Caçada, Ronda, Desbravar, Masmorras, Grupo e campanha cooperativa.
+- Combate por turnos, talentos, Artes, crafting e Legado (Ascensão).
+- Armazém e capacidade de inventário.
+- Guildas, Mercado, Loja Pessoal e Troca Direta, Duelo e Arena, Batalha de Guildas (núcleo),
+  Vínculos e Comunidade, Eventos Mundiais, Juramento e Expedição (os catálogos de Eventos,
+  Juramento e Expedição estão vazios de propósito: o autor define o conteúdo).
+- Crônica I "Ecos da Convergência": sistema e conteúdo jogável dos 8 capítulos.
+- Antiexploit (§36) com flags de multicontas.
+- **Outbox transacional com worker:** os avisos do Telegram gerados pelos jobs do agendador
+  passam pela Outbox. O agendador usa lock no PostgreSQL por execução de job.
+
+## O que ainda não está no `main`
+
+- **Fase 2E (proficiências/equipamentos v1.9.x):** documentação candidata, não canônica, só em
+  branch. Não integrar nem publicar.
+- Obras de Guilda (6 de 7 efeitos) e recompensas da Batalha de Guildas, Marcas de Legado,
+  Serviços de Ofícios, Calendário no menu, Flavor Text contextual, visuais e skins.
+- Operação: backup e restore, deploy/rollback (o Dockerfile ainda não copia `assets/`),
+  rate limiting geral, Admin com RBAC, métricas e alertas, E2E.
+- Monetização (Patrono, pagamentos): por último.
 
 ## Stack oficial
 
@@ -94,12 +122,21 @@ No Windows, ative a virtualenv conforme o shell utilizado.
 alembic upgrade head
 ```
 
-A migration inicial cria a infraestrutura de **Transactional Outbox**. A migration
-`20260920_0002` adiciona contas Telegram, drafts versionados, deduplicação de entrada
-e personagens com o estágio inicial persistente do prólogo. A `20260920_0003`
-adiciona a atividade Foreground e o primeiro combate persistente; a `20260920_0004`
-adiciona Vigor, Braseiros permanentes, estado mundial, Feitos e Missões mínimos
-necessários para o fim do Prólogo e o Menu Principal.
+A migration inicial cria a infraestrutura de **Transactional Outbox**. As demais ficam em
+`alembic/versions/` em ordem cronológica (hoje até `20261110_0043_chronicle`). Teste
+`alembic upgrade head` e `alembic check` num banco descartável.
+
+## Outbox
+
+O dispatcher roda como job do agendador (`outbox-dispatch`, a cada 5 s). Para devolver à
+fila as mensagens que falharam de vez:
+
+```bash
+python -m asterion.outbox_cli requeue
+```
+
+Detalhes (tópico `telegram.send_message`, tentativas, deduplicação) na seção "Outbox com
+Telegram" do `HANDOFF.md`.
 
 ## Criação persistente implementada
 
@@ -112,8 +149,7 @@ primeiro Cão Cinéreo. O tutorial implementa Atacar, Defender, primeira Arte,
 combate normal, vitória e o grant fixo de 320 XP. O **Braseiro da Estrada**, a ação
 `Descansar`, a conclusão do Prólogo, o Feito **Cinzas na Estrada**, o início
 automático de **P1 — Vozes na Estrada** e o Menu Principal persistente também já
-estão implementados. O próximo bloco jogável é a execução de P1 conforme Terras do
-Ocaso v1.0.2 + Visual/UI sincronizada de 21/09/2026.
+estão implementados. O que veio depois está resumido em "O que já está no `main`".
 
 As imagens oficiais ainda não estão disponíveis. Todas as telas funcionam com
 texto e inline keyboard; a configuração opcional `ASTERION_CREATION_IMAGES`
