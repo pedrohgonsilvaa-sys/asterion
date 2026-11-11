@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from aiogram import Bot, F, Router
-from aiogram.exceptions import TelegramAPIError
+from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
 from asterion.application.expeditions import (
@@ -17,21 +16,14 @@ from asterion.application.expeditions import (
 from asterion.bot.creation_handlers import present
 from asterion.bot.expedition_ui import error_text, render_expedition
 from asterion.bot.guilds_ui import unpack
+from asterion.bot.telegram_outbox import TelegramOutbox, enqueue_notices
 
 
-async def deliver_expedition_notices(bot: Bot, notices: Iterable[ExpeditionNotice]) -> None:
+async def deliver_expedition_notices(
+    outbox: TelegramOutbox, notices: Iterable[ExpeditionNotice]
+) -> None:
     """Best effort: the state stays reachable from the Expedição screen."""
-    for notice in notices:
-        screen = render_expedition(notice.view)
-        try:
-            await bot.send_message(
-                notice.telegram_id,
-                screen.text,
-                reply_markup=screen.keyboard,
-                parse_mode=screen.parse_mode,
-            )
-        except TelegramAPIError:
-            continue
+    await enqueue_notices(outbox, "expedition", notices, render_expedition)
 
 
 def expedition_router(service: ExpeditionService, images: dict[str, str]) -> Router:
