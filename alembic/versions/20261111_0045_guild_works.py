@@ -1,7 +1,7 @@
 """guild works: market fee fixed per listing (Tesouraria Obra)
 
-Revision ID: 20261111_0044
-Revises: 20261110_0043
+Revision ID: 20261111_0045
+Revises: 20261111_0044
 Create Date: 2026-11-11 00:00:00
 """
 
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "20261111_0044"
-down_revision: str | None = "20261110_0043"
+revision: str = "20261111_0045"
+down_revision: str | None = "20261111_0044"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
