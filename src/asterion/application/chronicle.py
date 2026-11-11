@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -74,6 +74,7 @@ from asterion.domain.guild_battle import (
     reward_eligible,
 )
 from asterion.infrastructure.db.models import (
+    Achievement,
     ArenaProfile,
     Character,
     CharacterCosmetic,
@@ -95,6 +96,7 @@ from asterion.infrastructure.db.models import (
 )
 
 COSMETIC_SOURCE = "trilha_cr01"
+ANSWER_FEAT = "feito_cr01_respondeu_ao_eco"  # pr_cr01_feito_resposta (§4.5).
 
 
 class ChronicleError(EngagementError):
@@ -765,6 +767,7 @@ class ChronicleService:
                 )
             )
         votes = await self._round_votes(session, cycle, "main", electorate)
+        await self._grant_answer_feat(session, cycle, "main", electorate)
         result = resolve_main(votes)
         if result.outcome is not None:
             cycle.outcome = result.outcome.value
@@ -789,10 +792,46 @@ class ChronicleService:
             )
         ).all()
         votes = await self._round_votes(session, cycle, "runoff", list(electorate))
+        await self._grant_answer_feat(session, cycle, "runoff", list(electorate))
         options = tuple(Outcome(item) for item in cycle.runoff_options)
         cycle.outcome = resolve_runoff(votes, options).value
         cycle.runoff_closed_at = now
         cycle.updated_at = now
+
+    async def _grant_answer_feat(self, session, cycle, round_: str, electorate) -> None:
+        """pr_cr01_feito_resposta: the same Feito for every valid vote, whatever the option.
+
+        A valid vote is one cast by an account in the frozen electorate. The Feito goes to
+        the account's character on this server; idempotent per character.
+        """
+        if not electorate:
+            return
+        voters = (
+            await session.scalars(
+                select(ChronicleVote.account_id).where(
+                    ChronicleVote.server_id == self.server_id,
+                    ChronicleVote.chronicle_id == cycle.chronicle_id,
+                    ChronicleVote.round == round_,
+                    ChronicleVote.account_id.in_(list(electorate)),
+                )
+            )
+        ).all()
+        if not voters:
+            return
+        characters = (
+            await session.scalars(
+                select(Character.id).where(
+                    Character.server_id == self.server_id,
+                    Character.telegram_id.in_(sorted(set(voters))),
+                )
+            )
+        ).all()
+        for character_id in characters:
+            await session.execute(
+                insert(Achievement)
+                .values(id=uuid4(), character_id=character_id, achievement_id=ANSWER_FEAT)
+                .on_conflict_do_nothing()
+            )
 
     async def _round_votes(self, session, cycle, round_: str, electorate) -> list[Outcome]:
         if not electorate:

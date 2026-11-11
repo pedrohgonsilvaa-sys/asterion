@@ -514,6 +514,9 @@ def decode(payload: dict, combat_id: UUID, ruleset: str, version: int) -> Combat
                                     )
                                 ),
                                 "ai_priority": tuple(trigger.get("ai_priority", ())),
+                                "cooldown_action_ids": tuple(
+                                    trigger.get("cooldown_action_ids", ())
+                                ),
                             }
                         )
                     )

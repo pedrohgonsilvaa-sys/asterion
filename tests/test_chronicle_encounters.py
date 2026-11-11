@@ -102,6 +102,7 @@ _KITS = {
         {
             "empurrao": ("1.00", None, 1, False),
             "muitas_maos": ("0.40", 2, 3, False),
+            "coro": ("0.75", 3, 1, False),
             "a_palavra": ("1.70", 4, 1, True),
         },
     ),
@@ -113,6 +114,29 @@ _KITS = {
             "rasura": ("0.90", 3, 1, False),
             "revisao": ("0", 4, 1, False),
             "registro_imposto": ("1.60", 4, 1, True),
+        },
+    ),
+    "boss.cr01.mestre_de_turno": (
+        "boss",
+        "brute",
+        {
+            "ordem_turno": ("1.00", None, 1, False),
+            "martelada_ritmo": ("1.35", 3, 1, False),
+            "chamada": ("0", None, 1, False),
+            "ordem_coletiva": ("0.80", 3, 1, False),
+            "fim_de_turno": ("1.75", 5, 1, True),
+        },
+    ),
+    "boss.cr01.o_que_aguarda_resposta": (
+        "boss",
+        "balanced",
+        {
+            "oferta": ("1.00", None, 1, False),
+            "pedido_repetido": ("0.90", 3, 1, False),
+            "insistencia": ("0.80", 3, 1, False),
+            "selo_pendente": ("0", 4, 1, False),
+            "espera": ("0", 4, 1, False),
+            "confirmacao_exigida": ("1.85", 5, 1, True),
         },
     ),
 }
@@ -192,11 +216,13 @@ def test_encounter_level_stays_in_the_band_of_the_region():
     assert "névoa" in scene_text(ENCOUNTERS[0], CONFINS)
 
 
-def test_encounters_cover_chapters_1_2_3_5_6_and_7():
-    assert [item.chapter for item in ENCOUNTERS] == [1, 2, 3, 5, 6, 7]
+def test_encounters_cover_all_eight_chapters():
+    assert [item.chapter for item in ENCOUNTERS] == [1, 2, 3, 4, 5, 6, 7, 8]
     assert [item.feat_id for item in ENCOUNTERS if item.feat_id] == [
+        "feito_cr01_mestre_de_turno",
         "feito_cr01_multidao",
         "feito_cr01_escriba",
+        "feito_cr01_aguarda_resposta",
     ]
     assert all(len(item.repeat_content_id) <= 64 for item in ENCOUNTERS)
 
@@ -293,13 +319,13 @@ async def test_fight_needs_the_local_the_level_and_an_open_chapter(database):
         await service.start(ANA, 6, 4, now=WEEK6)
     assert error.value.code == "chronicle_level"
     assert ELITE_MIN_LEVEL == 3
-    # Chapter 4 is a Chefe: not part of this delivery.
+    # Chapter 4 is a Chefe: Nv.5.
     with pytest.raises(ChronicleError) as error:
         await service.start(ANA, 4, 4, now=WEEK6)
-    assert error.value.code == "chronicle_unknown"
+    assert error.value.code == "chronicle_level"
     listed = await service.encounters(ANA, now=WEEK6)
     assert [(item.objective.chapter, item.level_locked) for item in listed] == [
-        (1, False), (2, False), (3, False), (5, False), (6, True),
+        (1, False), (2, False), (3, False), (4, True), (5, False), (6, True),
     ]  # fmt: skip
     assert await service.here(ANA, now=WEEK6) == ()
 

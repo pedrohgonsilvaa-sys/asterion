@@ -1631,12 +1631,12 @@ Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem
 
 1. Falar com NPC, Leituras e Desbravar (`dsc_cr01_*` e `dsc_cr01_vestigio`): entregue nesta parte.
 2. Encontros e criaturas Comum/Incomum/Elite (capítulos 1, 2, 3, 5, 6 e 7), `[Enfrentar]`, recompensa da primeira vitória, `rep_cr01_encontro` e Feitos das Elites: entregue (ver "Parte 2" abaixo).
-3. Chefes Mestre de Turno e O Que Aguarda Resposta (capítulos 4 e 8) e a regra `pr_cr01_encontro_grupo`.
+3. Chefes Mestre de Turno e O Que Aguarda Resposta (capítulos 4 e 8), a regra `pr_cr01_encontro_grupo`, o Coro e os Feitos dos Chefes e do voto: entregue (ver "Parte 3" abaixo).
 4. Masmorra em foco/espelho e o alternativo `dsc_cr01_vestigio_profundo`.
 5. Evento Mundial O Compasso e `rep_cr01_evento`.
 6. Entradas do Códice, Feitos restantes e Crônica Arquivada.
 
-Todo capítulo tem um Encontro obrigatório. Com a parte 2, os capítulos 1, 2, 3, 5, 6 e 7 já podem ser concluídos; os capítulos 4 e 8 dependem dos Chefes (parte 3). Os kits das criaturas continuam em `SIMULAR`.
+Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos podem ser concluídos. Os kits das criaturas e dos Chefes continuam em `SIMULAR`.
 
 **Parte 1 (entregue):**
 
@@ -1667,13 +1667,34 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 2, os capítulos 1, 2, 
 **Escolhas da parte 2 que o autor precisa confirmar** (as fontes não decidem):
 
 1. **Defender do Carregador Repetido não foi aplicado.** O motor não tem Defender de criatura (o `defend` no ciclo de qualquer criatura é ignorado hoje). Aplicar exige mexer no motor compartilhado.
-2. **Coro da Multidão Repetida não existe ainda.** Ele só é usado com 2+ alvos, então entra junto com a regra de Grupo (parte 3).
+2. ~~Coro da Multidão Repetida não existe ainda.~~ Entrou na parte 3.
 3. **"Redução de DEF igual ou maior"** (Marcador e Escriba) virou "a criatura não reaplica enquanto a própria marca estiver ativa". O motor não compara reduções de outras fontes.
 4. **Telegraph próprio** das Ações Preparadas ("ergue algo que não está ali" etc.) não aparece: a tela mostra o aviso padrão "prepara <Arte>".
 5. `[Enfrentar o Eco de novo]` some quando o limite diário ou o teto semanal já não pagariam pontos (mesma regra do Vestígio na parte 1).
 6. Os Feitos das Elites usam o nome da criatura e a frase "Venceu pela primeira vez…" como rascunho, na categoria Crônicas.
 7. As 6 criaturas registram progresso de Bestiário, mas **ainda não aparecem na tela do Bestiário**: ela agrupa por Região e habitat, e estas criaturas não têm Região. Fica para a parte 6, com o Códice.
 8. Depois de uma derrota fora das Terras do Ocaso o personagem fica onde está, com HP cheio: é a regra regional de derrota que já existe (só o Ocaso move para um Braseiro).
+
+**Parte 3 (entregue):**
+
+- **Chefes** em `domain/road.py`: Mestre de Turno (Bruto) e O Que Aguarda Resposta (Equilibrado), perfil de Chefe do GDD §49.6, Nv.5, coeficientes da proposta §11.4, em `SIMULAR`. Encontros `enc_cr01_c04` e `enc_cr01_c08` em `domain/chronicle_encounters.py`. Com isso os 8 capítulos podem ser concluídos.
+- **Fases** em `70%` e `35%` (`CombatPhaseTrigger`, snapshotadas). Mestre: Chamada invoca 1 add com o kit do Repetidor e HP ×0,50 (decisão do autor em 2026-11-10), opcional, sem escala de Grupo, sem XP nem Bestiário; Ordem Coletiva na Fase II+; Fim de Turno na Fase III. Aguarda: Espera (sem ataque, `DEF −12%` em si por 1T) na 4ª, 8ª… oportunidade contada da entrada na Fase II (decisão do autor em 2026-11-10); Insistência na Fase II+; Confirmação Exigida na Fase III; Selo Pendente dura 2 turnos (decisão do autor em 2026-11-10).
+- **Coro** da Multidão Repetida (AoE `75%`, CD3) entrou. Coro, Ordem Coletiva e Insistência só saem com 2+ alvos vivos.
+- **Motor:** dois campos novos e opcionais: `Action.min_living_opponents` e `CombatPhaseTrigger.cooldown_action_ids/cooldown_opportunities`. Reviver um fighter agora também o mostra (`encounter_hidden = False`).
+- **Grupo (`pr_cr01_encontro_grupo`):** botão `👥 Em Grupo` ao lado de `⚔️ Enfrentar` para quem está num Grupo social. Usa a Confirmação de Entrada de 60s (`GroupService`, tipo `chronicle_encounter`) e o combate compartilhado da Campanha (`campaign_coop`). A proposta e o início ficam na tela 👥 Grupo. Todos precisam estar no Local de Ressonância da Referência (decisão do autor em 2026-11-10). Membro com o mesmo objetivo ativo, a mesma Região de Ressonância e o nível mínimo é `eligible`; outro presente é Ajudante e não conta. Só os Chefes escalam (GDD §51.5).
+- **Feitos:** `feito_cr01_mestre_de_turno` (Fim de Turno), `feito_cr01_aguarda_resposta` (Sem Resposta) e `feito_cr01_respondeu_ao_eco` (Respondeu ao Eco, `pr_cr01_feito_resposta`), entregue no fechamento do voto principal e do desempate a quem votou estando no eleitorado.
+- **Telas:** o Chefe com add e a luta em Grupo usam o callback `cri:` (ação por índice e alvo).
+- **Banco:** sem migration.
+
+**Escolhas da parte 3 que o autor precisa confirmar** (as fontes não decidem):
+
+1. A Chamada é uma ação do Chefe (gasta a vez dele), na primeira oportunidade depois de cair abaixo de 70%, mesmo se ele pular direto para a Fase III.
+2. O N da escala de Chefe conta todo o roster confirmado, Ajudantes incluídos ("roster ativo inicial", GDD §51.5).
+3. Na repetição em Grupo (Eco), conta só quem já venceu e ainda recebe Trilha hoje; quem nunca venceu entra como Ajudante. Na primeira luta, quem já venceu entra como Ajudante.
+4. Ajudante não recebe XP, Bestiário, Feito, objetivo nem Trilha; recupera o HP como os demais.
+5. Em Grupo, o nível congelado vem da última luta perdida da Referência naquele Encontro (como no Solo).
+6. A proposta não manda aviso no Telegram: aparece na tela 👥 Grupo, como na Campanha. O resultado só aparece para quem deu o último golpe; os outros voltam ao menu sem a tela de resultado.
+7. O id `feito_cr01_respondeu_ao_eco` e as descrições dos 3 Feitos são rascunho.
 
 **Etapa 9 (origem):** Crônica I, Nova Vigília e Trilha, integradas com Arena e Batalha de Guildas. O conteúdo está proposto em `ASTERION_CRONICA_I_ECOS_DA_CONVERGENCIA_v0_2_PROPOSTA.md` (2026-11-09). Os kits das 9 criaturas novas estão em `SIMULAR` e precisam de Balanceamento antes do lançamento.
 

@@ -4933,15 +4933,16 @@ CR01_CARREGADOR_REPETIDO = Creature(
     ),
     ai_priority=("carga_preparada", "peso_largado"),
 )
-# Coro (AoE 75%, CD3) needs 2+ targets: it arrives with the Group rule of the Encontros.
+# Coro (AoE 75%, CD3) is only used with 2+ living targets, so Solo never sees it.
 CR01_MULTIDAO_REPETIDA = Creature(
     "elite.cr01.multidao_repetida", "Multidão Repetida", "elite", "caster", 3, 60, 0, (),
     (
         ("empurrao", "Empurrão", D("1.00"), 0, D(0), 0),
         ("muitas_maos", "Muitas Mãos", D("0.40"), 0, D(0), 0, None, 0, False, 2),
+        ("coro", "Coro", D("0.75"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
         ("a_palavra", "A Palavra", D("1.70"), 0, D(0), 0, None, 0, True, 4),
     ),
-    ai_priority=("a_palavra", "muitas_maos", "empurrao"),
+    ai_priority=("coro", "a_palavra", "muitas_maos", "empurrao"),
 )
 CR01_ESCRIBA_REPETIDO = Creature(
     "elite.cr01.escriba_repetido", "Escriba Repetido", "elite", "controller", 3, 60, 0, (),
@@ -4953,6 +4954,35 @@ CR01_ESCRIBA_REPETIDO = Creature(
     ),
     ai_priority=("revisao", "rasura", "registro_imposto", "traco"),
 )
+# Chefes (§11.4): GDD §49.6 boss profile, phases at 70% and 35%. Phase gates, the
+# Chamada add, the Espera rhythm and the 2+ target rule are applied by
+# ``chronicle_encounters.configure_encounter``. Selo Pendente lasts 2T (author decision,
+# 2026-11-10).
+CR01_MESTRE_DE_TURNO = Creature(
+    "boss.cr01.mestre_de_turno", "Mestre de Turno", "boss", "brute", 5, 60, 0, (),
+    (
+        ("ordem_turno", "Ordem de Turno", D("1.00"), 0, D(0), 0),
+        ("martelada_ritmo", "Martelada de Ritmo", D("1.35"), 0, D(0), 0, None, 0, False, 3),
+        ("chamada", "Chamada", D(0), 0, D(0), 0, None, 0, False, None, None, D(0), D(0), 0, False, "self", None, None, 1),
+        ("ordem_coletiva", "Ordem Coletiva", D("0.80"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+        ("fim_de_turno", "Fim de Turno", D("1.75"), 0, D(0), 0, None, 0, True, 5),
+    ),
+    ai_priority=("chamada", "fim_de_turno", "ordem_coletiva", "martelada_ritmo", "ordem_turno"),
+)
+CR01_AGUARDA_RESPOSTA = Creature(
+    "boss.cr01.o_que_aguarda_resposta", "O Que Aguarda Resposta", "boss", "balanced", 5, 60, 0, (),
+    (
+        ("oferta", "Oferta", D("1.00"), 0, D(0), 0),
+        ("pedido_repetido", "Pedido Repetido", D("0.90"), 0, D("0.12"), 2, None, 0, False, 3, "defense"),
+        ("insistencia", "Insistência", D("0.80"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+        ("selo_pendente", "Selo Pendente", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), 2, True, "self", None, None, 2, (), (), D("0.50"), D("0.08")),
+        ("espera", "Espera", D(0), 0, D(0), 0, None, 0, False, 4, None, D(0), D(0), 0, False, "self"),
+        ("confirmacao_exigida", "Confirmação Exigida", D("1.85"), 0, D(0), 0, None, 0, True, 5),
+    ),
+    ai_priority=(
+        "espera", "selo_pendente", "confirmacao_exigida", "insistencia", "pedido_repetido", "oferta",
+    ),
+)
 CR01_CREATURES = (
     CR01_REPETIDOR,
     CR01_MARCADOR,
@@ -4960,5 +4990,7 @@ CR01_CREATURES = (
     CR01_CARREGADOR_REPETIDO,
     CR01_MULTIDAO_REPETIDA,
     CR01_ESCRIBA_REPETIDO,
+    CR01_MESTRE_DE_TURNO,
+    CR01_AGUARDA_RESPOSTA,
 )
 CREATURE_CATALOG = (*CREATURE_CATALOG, *CR01_CREATURES)

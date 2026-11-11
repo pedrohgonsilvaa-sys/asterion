@@ -217,6 +217,7 @@ def get_bot_runtime() -> BotRuntime:
         settings.server_id,
         road.latest_explorable_local,
         road.recover_normal_pve_defeat,
+        groups,
     )
     # Also before the world routers: /start must resume an Encontro da Crônica.
     dispatcher.include_router(
@@ -309,6 +310,7 @@ def get_bot_runtime() -> BotRuntime:
             s6=s6,
             road=road,
             oaths=oaths,
+            chronicle=chronicle_encounters,
         )
     )
     dispatcher.include_router(p2_router(p2, settings.creation_images, s3=s3, p4=p4, p5=p5, p6=p6))

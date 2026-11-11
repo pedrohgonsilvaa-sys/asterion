@@ -332,8 +332,9 @@ def test_trama_duradoura_extends_surto_origin_and_consumption_talents_apply_once
 
     assert event.path_power_multiplier == D("1.17")
     assert event.path_crit_bonus == D(2)
+    # The crit roll is random (Trama Precisa raises its chance): follow the event's roll.
     assert event.calculated_damage == direct_damage(
-        D("100"), D("1.45") * D("1.17"), D(0), 55, critical=False
+        D("100"), D("1.45") * D("1.17"), D(0), 55, critical=event.critical
     )
     assert "trama_state" not in result.fighters["player"].path_state
     assert any(

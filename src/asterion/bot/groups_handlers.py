@@ -47,6 +47,7 @@ def groups_router(
     s6=None,
     road=None,
     oaths=None,
+    chronicle=None,
 ) -> Router:
     router = Router(name="groups")
     router.message.filter(F.chat.type == "private")
@@ -455,6 +456,23 @@ def groups_router(
                     view = await oaths.foreground(query.from_user.id)
                     if view is not None:
                         await present(query.message, render_oath(view), images, edit=True)
+                return
+            if proposal.activity_type == "chronicle_encounter":
+                if chronicle is None:
+                    await query.answer("Encontros da Crônica indisponíveis.", show_alert=True)
+                    return
+                from asterion.bot.chronicle_ui import render_encounter
+
+                fight = await chronicle.start_group(
+                    query.from_user.id, proposal_id, expected_revision=revision
+                )
+                if fight is None:
+                    await query.answer("A confirmação expirou ou o roster mudou.", show_alert=True)
+                    await show_group(query)
+                    return
+                await query.answer("Encontro da Crônica iniciado.")
+                if isinstance(query.message, Message):
+                    await present(query.message, render_encounter(fight), images, edit=True)
                 return
             service_by_type = {
                 "campaign_p1": p1,

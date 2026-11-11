@@ -63,6 +63,10 @@ _ERRORS = {
     "chronicle_busy": "Termine a atividade em andamento antes de enfrentar o Eco.",
     "chronicle_repeat_limit": "O Eco não rende mais pontos de Trilha hoje. Volte amanhã.",
     "chronicle_fight_over": "Este combate já terminou.",
+    "group_participant_busy": "Alguém do Grupo já está em outra atividade.",
+    "group_not_in_group": "Você precisa estar num Grupo para enfrentar em Grupo.",
+    "group_proposer_ineligible": "Você não pode propor este Encontro agora.",
+    "group_empty_eligible_roster": "Ninguém do Grupo pode entrar neste Encontro agora.",
 }
 
 
@@ -198,9 +202,14 @@ def _encounter_button(item: EncounterActionView) -> list[InlineKeyboardButton]:
     objective = item.objective
     data = f"cr:fight:{objective.chapter}:{objective.objective_id[-2:].lstrip('0')}"
     name = item.encounter.creature.name
-    if item.won:
-        return [_button(f"🔁 Enfrentar o Eco de novo · {name}", data)]
-    return [_button(f"⚔️ Enfrentar · {name}", data)]
+    row = (
+        [_button(f"🔁 Enfrentar o Eco de novo · {name}", data)]
+        if item.won
+        else [_button(f"⚔️ Enfrentar · {name}", data)]
+    )
+    if item.in_group:
+        row.append(_button("👥 Em Grupo", data.replace("cr:fight:", "cr:gfight:", 1)))
+    return row
 
 
 def render_chapter(
@@ -285,6 +294,16 @@ def render_encounter(view: CombatView | EncounterResultView) -> Screen:
         return render_combat(view)
     name = view.encounter.creature.name
     back = _keyboard([_back_to_chapter(view.objective.chapter)])
+    if view.helper:
+        outcome = "Vitória" if view.victory else "Derrota"
+        lines = [
+            f"{'🏆' if view.victory else '💀'} {name} · Nv.{view.enemy_level} · {outcome}",
+            "",
+            "Você lutou como Ajudante: este Encontro não conta para a sua Crônica.",
+        ]
+        if view.recovery_location:
+            lines.append(f"🔥 Você desperta em {view.recovery_location}.")
+        return Screen("\n".join(lines), _IMAGE, back)
     if not view.victory:
         lines = [
             f"💀 {name} · Nv.{view.enemy_level}",
@@ -420,3 +439,15 @@ def render_hall(view: HallView) -> Screen:
         _IMAGE,
         _keyboard([[_button("← Classificação da Vigília", "pvp:rank")]]),
     )
+
+
+def render_group_proposal(chapter: int) -> Screen:
+    """The Confirmação de Entrada went to the Group (GDD §51.2)."""
+    lines = [
+        "👥 Confirmação de Entrada enviada ao Grupo.",
+        "",
+        "Cada membro confirma em 👥 Grupo em até 60 segundos. Depois, inicie o Encontro "
+        "por lá. Quem não estiver no mesmo Local fica de fora; quem já venceu ou não "
+        "tem este objetivo entra como Ajudante e não conta.",
+    ]
+    return Screen("\n".join(lines), _IMAGE, _keyboard([_back_to_chapter(chapter)]))

@@ -338,6 +338,9 @@ class Action:
     skip_if_self_effect_active: str | None = None
     skip_if_any_self_effect_active: tuple[str, ...] = ()
     skip_if_actor_last_action: tuple[str, ...] = ()
+    # The AI only picks this action with at least this many living opponents
+    # (an AoE "só com 2+ alvos válidos"). Zero keeps the legacy contract.
+    min_living_opponents: int = 0
     ai_priority_after: tuple[str, ...] = ()
     barrier_bound_effect_ids: tuple[str, ...] = ()
     effect_removal: ActionEffectRemoval | None = None
@@ -918,6 +921,10 @@ class CombatPhaseTrigger:
     consume_active_fighter_keys: tuple[str, ...] = ()
     barrier_source_per_active_fighter_fraction: Decimal = ZERO
     ai_priority: tuple[str, ...] = ()
+    # Puts these source actions on cooldown for N opportunities when the trigger
+    # fires, so a "every Nth opportunity of the phase" action counts from the entry.
+    cooldown_action_ids: tuple[str, ...] = ()
+    cooldown_opportunities: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -1135,6 +1142,8 @@ def _resolve_phase_triggers(state: Combat) -> None:
             state.phase_id = trigger.phase_id
         if trigger.ai_priority:
             state.ai_priorities[trigger.source_fighter_key] = trigger.ai_priority
+        for action_id in trigger.cooldown_action_ids:
+            source.cooldowns[action_id] = source.opportunity + trigger.cooldown_opportunities
         for key in trigger.activate_fighter_keys:
             fighter = state.fighters.get(key)
             if fighter is not None and fighter.hp <= ZERO:
@@ -6470,6 +6479,7 @@ def _perform(
             revived_key = defeated[0]
             revived = state.fighters[revived_key]
             revived.hp = revived.stats.hp * action.revive_hp_fraction
+            revived.encounter_hidden = False
             state.mechanic_events.append(
                 CombatEvent(
                     len(state.mechanic_events),
@@ -6626,6 +6636,12 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
         if action.phase_ids and state.phase_id not in action.phase_ids:
             return False
         if enemy.last_action in action.skip_if_actor_last_action:
+            return False
+        if action.min_living_opponents and sum(
+            1
+            for key, fighter in state.fighters.items()
+            if fighter.hp > ZERO and _fighter_side(state, key) != _fighter_side(state, actor_key)
+        ) < action.min_living_opponents:
             return False
         if (
             action.max_uses_per_combat is not None
