@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.bestiary import BESTIARY_STAGE_LABELS
+from asterion.application.chronicle_codex import sync_chronicle_codex
 from asterion.application.cosmetic_catalog import COSMETICS_BY_ID
 from asterion.application.equipment_configuration import (
     load_equipment_configuration,
@@ -320,6 +321,7 @@ class CharacterSurfacesService:
             if character is None:
                 return None
             await reconcile_tdo_feats(session, character)
+            await sync_chronicle_codex(session, character, datetime.now(UTC))
             character_id = character.id
             codex_rows = list(
                 (

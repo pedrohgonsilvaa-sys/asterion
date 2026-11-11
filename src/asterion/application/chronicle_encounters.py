@@ -194,7 +194,11 @@ class ChronicleEncounterService:
             )
             label = scope.route.local_label
             here = scope.world is not None and scope.world.location == label
-            in_group = await self._group_size(session, character) > 1
+            # The Crônica Arquivada is a personal instance (§9): Solo only.
+            in_group = (
+                not scope.calendar.archived(moment)
+                and await self._group_size(session, character) > 1
+            )
             result = []
             for chapter in range(1, scope.calendar.chapters_open(moment) + 1):
                 for objective in objectives_of(chapter):
@@ -272,7 +276,7 @@ class ChronicleEncounterService:
         if self.groups is None:
             return await self.start(actor, chapter, slot, now=moment)
         group = await self.groups.group(actor)
-        if group is None or len(group.members) < 2:
+        if group is None or len(group.members) < 2 or await self._archived(moment):
             return await self.start(actor, chapter, slot, now=moment)
         async with self.sessions() as session:
             character = await session.scalar(self._character_query(actor))
@@ -347,6 +351,7 @@ class ChronicleEncounterService:
             scope = await self._scope(session, character, moment)
             if (
                 scope is not None
+                and not scope.calendar.archived(moment)
                 and scope.route.region.name == payload.get("region")
                 and character.level >= objective.min_level
             ):
@@ -609,6 +614,13 @@ class ChronicleEncounterService:
             return character, None
         return character, activity
 
+    async def _archived(self, now: datetime, session: AsyncSession | None = None) -> bool:
+        if session is None:
+            async with self.sessions() as own:
+                return await self._archived(now, own)
+        cycle = await load_cycle(session, self.server_id)
+        return cycle is not None and calendar_of(cycle).archived(now)
+
     async def _scope(
         self, session: AsyncSession, character: Character, now: datetime
     ) -> _Scope | None:
@@ -616,7 +628,7 @@ class ChronicleEncounterService:
         if cycle is None:
             return None
         calendar = calendar_of(cycle)
-        if not calendar.accepts_progress(now):
+        if not calendar.playable(now):
             return None
         if ENTRY_GATE_QUEST not in await completed_quests(session, character.id):
             return None
@@ -642,7 +654,7 @@ class ChronicleEncounterService:
         if objective is None or encounter is None:
             raise ChronicleError("chronicle_unknown")
         cycle = await load_cycle(session, self.server_id)
-        if cycle is None or not calendar_of(cycle).accepts_progress(moment):
+        if cycle is None or not calendar_of(cycle).playable(moment):
             raise ChronicleError("chronicle_closed")
         if calendar_of(cycle).chapter_opens_at(chapter) > moment:
             raise ChronicleError("chronicle_chapter_locked")
@@ -954,7 +966,13 @@ class ChronicleEncounterService:
         await normalize_character_hp(session, character)
         if not counts:
             return EncounterResultView(encounter, objective, True, repeat, level, helper=True)
-        xp = 0 if repeat else await self._grant_first_xp(session, character, encounter, level)
+        # Crônica Arquivada: Bestiário and Feito, but no XP (author, 2026-11-11).
+        archived = await self._archived(now, session)
+        xp = (
+            0
+            if repeat or archived
+            else await self._grant_first_xp(session, character, encounter, level)
+        )
         notice = await self.bestiary.record(
             session,
             character.id,

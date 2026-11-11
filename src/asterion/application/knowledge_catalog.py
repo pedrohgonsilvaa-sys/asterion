@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from asterion.domain import chronicle_codex
+
 CODEX_CATEGORY_ORDER = (
     ("world", "🪐 Mundo e Cosmologia"),
     ("regions", "🗺️ Regiões e Locais"),
@@ -513,6 +515,11 @@ CODEX_ENTRIES = (
         320,
         "location.confins.no_central",
     ),
+)
+# Crônica I (proposal v0.2 §6): no Local, so they are listed by category.
+CODEX_ENTRIES += tuple(
+    CodexPresentation(entry.entry_id, entry.title, entry.category, entry.order)
+    for entry in chronicle_codex.ENTRIES
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -1186,6 +1193,14 @@ CODEX_FRAGMENTS = {
 }
 
 
+CODEX_FRAGMENTS.update(
+    {
+        item.fragment_id: FragmentPresentation(item.title, item.text)
+        for item in chronicle_codex.FRAGMENTS
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class AchievementPresentation:
     achievement_id: str
@@ -1621,6 +1636,9 @@ TDO_REGION_LABEL = "🌑 Terras do Ocaso · Nv. 1–10"
 ALTOS_REGION_LABEL = "🌋 Altos Cinéreos · Nv. 41–50"
 CONFINS_REGION_LABEL = "🌫️ Confins do Véu · Nv. 51–60"
 VDE_REGION_ID = "vde"
+# Crônica I creatures have no Region (proposal §11): the Bestiário lists them apart.
+CR01_BESTIARY_GROUP = "cr01"
+CR01_BESTIARY_LABEL = "🌌 Crônica I · Ecos da Convergência"
 VDE_REGION_LABEL = "🪢 Vales dos Enforcados · Nv. 11–20"
 NARETH_REGION_ID = "nareth"
 NARETH_REGION_LABEL = "🌾 Planícies de Nareth · Nv. 21–30"
@@ -2044,6 +2062,22 @@ CREATURE_PRESENTATION = {
         ALTOS_REGION_ID, ("location.altos.bastilha_carga",)
     ),
 }
+CREATURE_PRESENTATION.update(
+    {
+        creature_id: CreaturePresentation(CR01_BESTIARY_GROUP, ())
+        for creature_id in (
+            "creature.cr01.repetidor",
+            "creature.cr01.marcador",
+            "creature.cr01.guarda_repetida",
+            "creature.cr01.carregador_repetido",
+            "elite.cr01.multidao_repetida",
+            "elite.cr01.escriba_repetido",
+            "boss.cr01.mestre_de_turno",
+            "boss.cr01.o_que_aguarda_resposta",
+            "boss_evento.cr01.o_compasso",
+        )
+    }
+)
 CREATURE_NOTES = {
     # The regional source explicitly leaves this creature's origin and nature unconfirmed.
     "peregrino_calcinado": "Origem e natureza ainda não confirmadas.",
