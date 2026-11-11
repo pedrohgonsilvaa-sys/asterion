@@ -4,10 +4,11 @@ from fastapi import FastAPI, Header, HTTPException, Request, status
 from redis.asyncio import Redis
 from sqlalchemy import text
 
+from asterion.application.outbox import outbox_stats
 from asterion.bot.round_scheduler import build_round_scheduler
 from asterion.bot.runtime import get_bot_runtime
 from asterion.config import get_settings
-from asterion.infrastructure.db.session import engine
+from asterion.infrastructure.db.session import SessionFactory, engine
 
 settings = get_settings()
 app = FastAPI(title="Asterion", version="0.1.0")
@@ -33,6 +34,15 @@ async def stop_round_scheduler() -> None:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "service": "asterion"}
+
+
+@app.get("/health/outbox")
+async def outbox_health() -> dict[str, object]:
+    stats = await outbox_stats(SessionFactory)
+    return {
+        "counts": stats.counts,
+        "oldest_open_age_seconds": stats.oldest_open_age_seconds,
+    }
 
 
 @app.get("/ready")

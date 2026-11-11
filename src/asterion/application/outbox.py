@@ -201,3 +201,43 @@ class OutboxDispatcher:
             text,
         )
         return PENDING
+
+
+@dataclass(frozen=True)
+class OutboxStats:
+    counts: dict[str, int]
+    oldest_open_age_seconds: float | None
+
+
+async def outbox_stats(sessions: async_sessionmaker[AsyncSession]) -> OutboxStats:
+    """Rows per status and the age of the oldest row still waiting (pending/processing)."""
+    async with sessions() as session:
+        rows = (
+            await session.execute(
+                select(OutboxMessage.status, func.count()).group_by(OutboxMessage.status)
+            )
+        ).all()
+        age = await session.scalar(
+            select(func.extract("epoch", func.now() - func.min(OutboxMessage.created_at))).where(
+                OutboxMessage.status.in_((PENDING, PROCESSING))
+            )
+        )
+    counts = {PENDING: 0, PROCESSING: 0, DELIVERED: 0, DEAD: 0}
+    counts.update({status: int(n) for status, n in rows})
+    return OutboxStats(counts, None if age is None else float(age))
+
+
+async def requeue_dead(
+    sessions: async_sessionmaker[AsyncSession], ids: list[Any] | None = None
+) -> int:
+    """Send `dead` rows back to `pending` with a fresh attempt budget. Returns the count."""
+    statement = (
+        update(OutboxMessage)
+        .where(OutboxMessage.status == DEAD)
+        .values(status=PENDING, attempt_count=0, available_at=func.now())
+    )
+    if ids is not None:
+        statement = statement.where(OutboxMessage.id.in_(ids))
+    async with sessions.begin() as session:
+        result = await session.execute(statement)
+    return int(result.rowcount or 0)
