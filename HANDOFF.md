@@ -1586,6 +1586,8 @@ O plano de lançamento é o backlog da auditoria Fase 4A (`docs/audits/ASTERION_
 
 Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem.
 
+**Ganchos do antiexploit (§36)**, conferidos em 2026-11-11: `record_linked_cooccurrence` (em `application/account_risk.py`) gera 1 flag por par de contas vinculadas em cada atividade, só marca e não grava IP. Tipos ligados: `group_activity` (toda atividade que passa por `GroupService.start_activity`, o que inclui Caçada em Grupo, combates de grupo das Províncias/Missões e Encontros em Grupo da Crônica), `dungeon_run`, `guild_project`, `market_purchase`, `direct_trade`, `arena_match`, `duel`, `recruitment`, `world_event`, `expedition` (Juramento/Expedição), `guild_battle` e `pvpve_collision` (colisão de caçadores na trilha, solo ou em grupo; referência `pvpve:<id>`). Caçada solo sem colisão não tem outra conta, então não gera flag.
+
 **Sistemas de jogo que faltam** (conferido no código em 2026-11-09):
 
 - Crônica I "Ecos da Convergência": o bloco A da etapa 9 entregou o sistema (ver "Etapa 9 · bloco A" abaixo). Falta o conteúdo jogável dos capítulos (bloco B).
