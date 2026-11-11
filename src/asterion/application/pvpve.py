@@ -11,6 +11,7 @@ from sqlalchemy import func, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.account_risk import record_linked_cooccurrence
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.campaign_coop import campaign_action_intent
 from asterion.application.equipment_configuration import (
@@ -1438,6 +1439,15 @@ class PvpveService:
                 )
             )
         await session.flush()
+        # §36: linked accounts on either side of the same trail clash are flagged.
+        await record_linked_cooccurrence(
+            session,
+            server_id=collision.server_id,
+            activity_kind="pvpve_collision",
+            activity_reference=f"pvpve:{collision.id.hex}",
+            characters=[row[1] for row in member_specs],
+            now=now,
+        )
 
         members = list(
             (

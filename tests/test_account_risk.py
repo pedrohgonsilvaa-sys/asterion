@@ -14,6 +14,8 @@ from asterion.application.groups import ActivityEligibility
 from asterion.infrastructure.db.models import AccountRiskFlag
 from tests.test_dungeon_multiplayer import _form_matchmade_party, _seed_party
 from tests.test_groups import NOW, _invite_and_join, _seed_characters, _service
+from tests.test_pvpve_integration import ACTORS as HUNTERS
+from tests.test_pvpve_integration import _collision_for, _seed_hunters
 
 
 async def _eligible(_session, character, _context):
@@ -117,6 +119,26 @@ async def test_matchmade_dungeon_flags_linked_accounts(database, linked):
         (782101, 782102, "dungeon_run")
     ]
     assert flags[0].activity_reference == f"{DUNGEON_ACTIVITY_PREFIX}{ready.run_id.hex}"
+
+
+@pytest.mark.parametrize("linked", (True, False))
+async def test_pvpve_collision_flags_linked_accounts_on_opposite_sides(database, linked):
+    characters, road = await _seed_hunters(database)
+    if linked:
+        await AccountRiskAdmin(database[1]).link(*HUNTERS[:2])
+    assert (await road.start_hunt(HUNTERS[0])).kind == "hunt_queue"
+    clash = await road.start_hunt(HUNTERS[1])
+    assert clash.kind == "combat" and clash.combat_context == "pvpve"
+    flags = await _flags(database[1])
+    if not linked:
+        assert flags == []
+        return
+    collision = await _collision_for(database, characters[HUNTERS[0]])
+    assert [(f.account_a, f.account_b, f.activity_kind) for f in flags] == [
+        (*sorted(HUNTERS[:2]), "pvpve_collision")
+    ]
+    assert flags[0].activity_reference == f"pvpve:{collision.id.hex}"
+    assert collision.status == "active"  # only marks; the clash goes on
 
 
 async def test_admin_links_reviews_and_cli(database):
