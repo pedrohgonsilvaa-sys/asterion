@@ -19,7 +19,8 @@ from asterion.bot.oath_handlers import deliver_oath_notices
 from asterion.bot.pvp_handlers import deliver_notices
 from asterion.bot.world_event_handlers import deliver_world_event_notices
 from asterion.config import get_settings
-from asterion.infrastructure.db.session import SessionFactory
+from asterion.infrastructure.db.job_lock import run_exclusive
+from asterion.infrastructure.db.session import SessionFactory, engine
 
 
 def build_round_scheduler() -> AsyncIOScheduler:
@@ -172,4 +173,15 @@ def build_round_scheduler() -> AsyncIOScheduler:
             coalesce=True,
             replace_existing=True,
         )
+    # One execution per tick across all instances (the Outbox claims rows itself).
+    for job in scheduler.get_jobs():
+        if job.id != "outbox-dispatch":
+            job.modify(func=_exclusive(job.id, job.func))
     return scheduler
+
+
+def _exclusive(job_id, job):
+    async def run() -> None:
+        await run_exclusive(engine, job_id, job)
+
+    return run
