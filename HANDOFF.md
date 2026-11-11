@@ -1772,10 +1772,10 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 4. Ordem dentro de cada categoria: as Entradas da Crônica vêm depois das regionais.
 5. **Textos rascunho:** os títulos dos Trechos (a proposta não traz títulos): "Capítulo N · <título>" na Entrada contínua; o título da Entrada no Trecho base; e, nos de camada, "Perto da Âncora", "Estados guardados", "Referências sem resposta", "Protocolos em espera", "A noite da Ruptura", "Maro Keln", "Eris Val", "A etapa final", "A origem do pedido" e "Além do registro". Também é rascunho o texto da tela da Crônica Arquivada (`ARCHIVED_TEXT` em `bot/chronicle_ui.py`).
 
-**Pendências encontradas (fora do escopo da parte 6):**
+**Pendências encontradas na parte 6 (corrigidas no PR seguinte, `fix/bestiario-codice-regioes`):**
 
-- A tela do Bestiário só tem rótulo para Ocaso, Vales e Altos: as criaturas de Nareth, Várzeas e Confins têm `CreaturePresentation`, mas não aparecem.
-- `codex.altos.regiao` e `codex.confins.regiao` geram a mesma chave de botão (`kb:e:regiao`), então um dos dois botões abre a Entrada errada.
+- As telas do Bestiário e de Regiões e Locais do Códice só tinham rótulo para Ocaso, Vales e Altos, e os Locais dos Confins (`location.confins.*`) não eram reconhecidos como Região. Agora as 6 Regiões aparecem, na ordem de progressão; a Crônica fica por último no Bestiário.
+- `codex.altos.regiao` e `codex.confins.regiao` geravam a mesma chave de botão (`kb:e:regiao`). Agora, quando o último trecho do id se repete, a chave usa os dois últimos (`altos_regiao`, `confins_regiao`). Botões antigos com `kb:e:regiao` deixam de abrir essas duas Entradas.
 
 **Etapa 9 (origem):** Crônica I, Nova Vigília e Trilha, integradas com Arena e Batalha de Guildas. O conteúdo está proposto em `ASTERION_CRONICA_I_ECOS_DA_CONVERGENCIA_v0_2_PROPOSTA.md` (2026-11-09). Os kits das 9 criaturas novas estão em `SIMULAR` e precisam de Balanceamento antes do lançamento.
 
