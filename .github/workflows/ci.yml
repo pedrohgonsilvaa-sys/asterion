@@ -36,6 +36,9 @@ jobs:
           cache: pip
       - name: Install
         run: pip install -e ".[dev]"
+      - name: Point backup tests at the Postgres service container
+        # pg_dump must match the server (16); the runner's newer client emits SQL it rejects.
+        run: echo "ASTERION_TEST_PG_CONTAINER=$(docker ps -q --filter ancestor=postgres:16-alpine | head -n1)" >> "$GITHUB_ENV"
       - name: Lint
         run: ruff check .
       - name: Test
