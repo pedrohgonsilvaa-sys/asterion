@@ -5,9 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from uuid import UUID
 
-from aiogram import Bot, F, Router
+from aiogram import F, Router
 from aiogram.dispatcher.event.bases import SkipHandler
-from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, Message
 
@@ -20,6 +19,7 @@ from asterion.application.world_events import (
 from asterion.bot.combat_ui import WorldEventCombatCallback
 from asterion.bot.creation_handlers import present
 from asterion.bot.guilds_ui import unpack
+from asterion.bot.telegram_outbox import TelegramOutbox, enqueue_notices
 from asterion.bot.world_event_ui import (
     error_text,
     render_withdraw_confirm,
@@ -27,19 +27,11 @@ from asterion.bot.world_event_ui import (
 )
 
 
-async def deliver_world_event_notices(bot: Bot, notices: Iterable[WorldEventNotice]) -> None:
+async def deliver_world_event_notices(
+    outbox: TelegramOutbox, notices: Iterable[WorldEventNotice]
+) -> None:
     """Best effort: the result is durable and can be reopened in Eventos."""
-    for notice in notices:
-        screen = render_world_event(notice.view)
-        try:
-            await bot.send_message(
-                notice.telegram_id,
-                screen.text,
-                reply_markup=screen.keyboard,
-                parse_mode=screen.parse_mode,
-            )
-        except TelegramAPIError:
-            continue
+    await enqueue_notices(outbox, "world_event", notices, render_world_event)
 
 
 def world_event_router(service: WorldEventService, images: dict[str, str]) -> Router:
