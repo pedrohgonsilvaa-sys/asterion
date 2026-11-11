@@ -11,18 +11,50 @@ from sqlalchemy.engine import make_url
 from asterion import db_backup_cli as cli
 
 URL = os.environ.get("ASTERION_TEST_DATABASE_URL")
-CONTAINER = os.environ.get("ASTERION_TEST_PG_CONTAINER", "asterion-test-pg")
+_NAME = os.environ.get("ASTERION_TEST_PG_CONTAINER", "asterion-test-pg")
+
+
+def _container_running(name: str) -> bool:
+    if shutil.which("docker") is None:
+        return False
+    result = subprocess.run(
+        ["docker", "inspect", "-f", "{{.State.Running}}", name],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0 and result.stdout.strip() == "true"
+
+
+# Local dev: Postgres runs in the named container (docker exec).
+# CI: Postgres is a service container, so use psql/pg_dump from the PATH.
+CONTAINER = _NAME if URL and _container_running(_NAME) else None
 
 pytestmark = pytest.mark.skipif(
-    not URL or shutil.which("docker") is None,
-    reason="needs ASTERION_TEST_DATABASE_URL and docker",
+    not URL or (CONTAINER is None and shutil.which("pg_dump") is None),
+    reason="needs ASTERION_TEST_DATABASE_URL and either the test container or pg_dump",
 )
 
 
 def _psql(db: str, sql: str) -> str:
     url = make_url(URL)
-    result = subprocess.run(
-        [
+    if CONTAINER is None:
+        command = [
+            "psql",
+            "-h",
+            url.host or "localhost",
+            "-p",
+            str(url.port or 5432),
+            "-U",
+            url.username,
+            "-d",
+            db,
+            "-tA",
+            "-c",
+            sql,
+        ]
+    else:
+        command = [
             "docker",
             "exec",
             "-e",
@@ -36,7 +68,10 @@ def _psql(db: str, sql: str) -> str:
             "-tA",
             "-c",
             sql,
-        ],
+        ]
+    result = subprocess.run(
+        command,
+        env={**os.environ, "PGPASSWORD": url.password or ""},
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -58,7 +93,9 @@ def databases():
 
 
 def _target(db: str) -> cli.Target:
-    return cli.parse_target(str(make_url(URL).set(database=db)), CONTAINER)
+    return cli.parse_target(
+        make_url(URL).set(database=db).render_as_string(hide_password=False), CONTAINER
+    )
 
 
 def test_backup_and_restore_round_trip(databases, tmp_path: Path):
