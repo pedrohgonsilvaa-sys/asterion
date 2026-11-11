@@ -17,3 +17,6 @@ build/
 
 # Backups locais do banco (nunca versionar)
 backups/
+
+# Produção
+.env.prod

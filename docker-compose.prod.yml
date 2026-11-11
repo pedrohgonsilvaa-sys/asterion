@@ -1,0 +1,50 @@
+# Produção em uma VPS. Use sempre com o arquivo de variáveis:
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+# Copie .env.example para .env.prod e preencha. Nunca faça commit do .env.prod.
+# Este arquivo roda UM único processo de bot (o agendador roda dentro dele).
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: asterion
+      POSTGRES_USER: asterion
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.prod}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U asterion -d asterion"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build: .
+    environment:
+      ASTERION_DATABASE_URL: postgresql+asyncpg://asterion:${POSTGRES_PASSWORD}@postgres:5432/asterion
+    command: alembic upgrade head
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      ASTERION_APP_ENV: production
+      ASTERION_DATABASE_URL: postgresql+asyncpg://asterion:${POSTGRES_PASSWORD}@postgres:5432/asterion
+      ASTERION_TELEGRAM_BOT_ENABLED: "true"
+      ASTERION_TELEGRAM_MODE: polling
+    command: asterion-bot
+    volumes:
+      # Imagens referenciadas por "file:" (somente leitura).
+      - ./assets:/app/assets:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
