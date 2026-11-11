@@ -10,11 +10,13 @@ from aiogram.types import CallbackQuery, Message
 from asterion.application.chronicle import ChronicleError, ChronicleService
 from asterion.application.chronicle_activities import ChronicleActivityService
 from asterion.application.chronicle_encounters import ChronicleEncounterService
+from asterion.application.groups import ActivityProposalView
 from asterion.bot.chronicle_ui import (
     error_text,
     render_chapter,
     render_chronicle,
     render_encounter,
+    render_group_proposal,
     render_hall,
     render_here,
     render_readings,
@@ -23,7 +25,7 @@ from asterion.bot.chronicle_ui import (
     render_vote,
     vote_notice,
 )
-from asterion.bot.combat_ui import ChronicleCombatCallback
+from asterion.bot.combat_ui import ChronicleCombatCallback, ChronicleIntentCallback
 from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
 from asterion.domain.chronicle import Outcome
@@ -79,6 +81,14 @@ def chronicle_router(
                     raise ChronicleError("unknown")
                 fight_view = await encounters.start(actor, int(number), int(slot))
                 await show(query, render_encounter(fight_view))
+            case ["cr", "gfight", number, slot] if number.isdigit() and slot.isdigit():
+                if encounters is None:
+                    raise ChronicleError("unknown")
+                proposed = await encounters.propose_group(actor, int(number), int(slot))
+                if isinstance(proposed, ActivityProposalView):
+                    await show(query, render_group_proposal(int(number)))
+                else:
+                    await show(query, render_encounter(proposed))
             case ["cr", "talk", number, slot] if number.isdigit() and slot.isdigit():
                 await show(query, render_talk(await active().talk(actor, int(number), int(slot))))
             case ["cr", "read", number, slot] if number.isdigit() and slot.isdigit():
@@ -121,6 +131,23 @@ def chronicle_router(
                 callback_data.activity_id,
                 callback_data.version,
                 callback_data.action,
+            )
+        if view is None:
+            await query.answer(error_text("chronicle_fight_over"), show_alert=True)
+            return
+        await query.answer()
+        await show(query, render_encounter(view))
+
+    @router.callback_query(ChronicleIntentCallback.filter())
+    async def fight_intent(query: CallbackQuery, callback_data: ChronicleIntentCallback) -> None:
+        view = None
+        if encounters is not None:
+            view = await encounters.intent(
+                query.from_user.id,
+                callback_data.activity_id,
+                callback_data.combat_version,
+                callback_data.action_index,
+                callback_data.target,
             )
         if view is None:
             await query.answer(error_text("chronicle_fight_over"), show_alert=True)

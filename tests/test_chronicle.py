@@ -26,6 +26,7 @@ from asterion.domain.chronicle import (
 )
 from asterion.infrastructure.db.models import (
     Account,
+    Achievement,
     ArenaProfile,
     Character,
     CharacterCosmetic,
@@ -232,6 +233,19 @@ async def test_cosmetics_follow_the_account(database):
     assert owned == ["cos_cr01_titulo_contador_de_pulsos"]
 
 
+async def _answer_feats(database) -> list[int]:
+    async with database[1]() as session:
+        return sorted(
+            (
+                await session.scalars(
+                    select(Character.telegram_id)
+                    .join(Achievement, Achievement.character_id == Character.id)
+                    .where(Achievement.achievement_id == "feito_cr01_respondeu_ao_eco")
+                )
+            ).all()
+        )
+
+
 async def test_vote_snapshot_runoff_and_neutral_outcome(database):
     await _schedule(database)
     for actor, name in ((ANA, "Ana"), (BEA, "Bea"), (CAIO, "Caio")):
@@ -262,6 +276,7 @@ async def test_vote_snapshot_runoff_and_neutral_outcome(database):
         status = await ChronicleAdmin(database[1], SERVER).status(now=CAL.vote_closes_at)
     assert sorted(electorate) == [ANA, BEA]
     assert status.runoff_options == ("selar", "destruir")
+    assert await _answer_feats(database) == [ANA, BEA]  # pr_cr01_feito_resposta
     runoff = CAL.vote_closes_at + timedelta(hours=1)
     with pytest.raises(ChronicleError):
         await service.vote(CAIO, "selar", now=runoff)
@@ -272,6 +287,7 @@ async def test_vote_snapshot_runoff_and_neutral_outcome(database):
     await service.run_maintenance(now=CAL.runoff_closes_at)
     status = await ChronicleAdmin(database[1], SERVER).status(now=CAL.runoff_closes_at)
     assert status.outcome == "em_espera"
+    assert await _answer_feats(database) == [ANA, BEA]  # once, whatever the option
     # The epilogue is published only at T.
     assert (await service.view(ANA, now=CAL.runoff_closes_at)).outcome is None
     assert (await service.view(ANA, now=CAL.end_at)).outcome is Outcome.EM_ESPERA

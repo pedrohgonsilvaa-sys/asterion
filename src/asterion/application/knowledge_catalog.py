@@ -1592,6 +1592,19 @@ ACHIEVEMENTS = (
         "feito_cr01_escriba", "Escriba Repetido", "chronicles",
         "Venceu pela primeira vez o Escriba Repetido.",
     ),
+    # §11.4 Chefes and pr_cr01_feito_resposta (§4.5). Texts are a draft.
+    AchievementPresentation(
+        "feito_cr01_mestre_de_turno", "Fim de Turno", "chronicles",
+        "Venceu pela primeira vez o Mestre de Turno.",
+    ),
+    AchievementPresentation(
+        "feito_cr01_aguarda_resposta", "Sem Resposta", "chronicles",
+        "Venceu pela primeira vez O Que Aguarda Resposta.",
+    ),
+    AchievementPresentation(
+        "feito_cr01_respondeu_ao_eco", "Respondeu ao Eco", "chronicles",
+        "Deu um voto válido na Resposta da Crônica I.",
+    ),
     # Technical campaign gate; never listed as a player-facing Feito.
     AchievementPresentation(
         "feat.tdo.campaign.completed", "", "", "",
