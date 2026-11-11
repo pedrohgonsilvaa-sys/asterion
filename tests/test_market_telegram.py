@@ -23,6 +23,7 @@ from asterion.bot.market_ui import (
     parse_whole,
     with_ref,
 )
+from tests.outbox_drain import drain_telegram_outbox
 from tests.test_guilds_telegram import _button, _message_update, callback_update
 from tests.test_market import BUYER, SELLER, _give_equipment, _give_material, _material_total, _seed
 
@@ -73,7 +74,9 @@ class _Client:
         await self.dispatcher.feed_raw_update(
             self.bot, callback_update(data, actor=actor, update_id=self.update_id)
         )
-        return self._screen_of(actor)
+        screen = self._screen_of(actor)
+        await drain_telegram_outbox(self.market.sessions, self.bot)
+        return screen
 
     async def say(self, actor, text, reply_prompt=None):
         self.update_id += 1
@@ -90,7 +93,9 @@ class _Client:
             self.bot,
             _message_update(text, actor=actor, update_id=self.update_id, reply_to=reply),
         )
-        return self._screen_of(actor)
+        screen = self._screen_of(actor)
+        await drain_telegram_outbox(self.market.sessions, self.bot)
+        return screen
 
     def _screen_of(self, actor):
         """The last screen shown to this player, skipping notices sent to the other one."""

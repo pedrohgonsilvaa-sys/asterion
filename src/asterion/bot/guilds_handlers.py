@@ -10,7 +10,6 @@ from __future__ import annotations
 from uuid import UUID
 
 from aiogram import F, Router
-from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
@@ -47,6 +46,7 @@ from asterion.bot.guilds_ui import (
     render_works,
     unpack,
 )
+from asterion.bot.telegram_outbox import TelegramOutbox
 from asterion.domain.guilds import GuildRole, ProjectKind, Recruitment
 
 # Errors that mean "your screen is out of date" rather than "you did something invalid".
@@ -318,14 +318,12 @@ def guilds_router(service: GuildService, images: dict[str, str]) -> Router:
                 if parts[2] == "a"
                 else "foi recusada."
             )
-            try:
-                await query.bot.send_message(
-                    applicant.character_telegram_id,
-                    f"Sua Inscrição na Guilda {guild.name} [{guild.tag}] {result}",
-                )
-            except TelegramAPIError:
-                # The result is durable and shows under Guilda → Minhas Inscrições.
-                pass
+            # Through the Outbox; the result also shows under Guilda → Minhas Inscrições.
+            await TelegramOutbox(service.sessions).send(
+                applicant.character_telegram_id,
+                f"Sua Inscrição na Guilda {guild.name} [{guild.tag}] {result}",
+                key=f"guild-application:{application_id.hex}:{parts[2]}",
+            )
         await _refresh_received(query)
 
     async def _refresh_received(query: CallbackQuery) -> None:
@@ -771,15 +769,13 @@ def guilds_router(service: GuildService, images: dict[str, str]) -> Router:
                     ]
                 ]
             )
-            try:
-                await message.bot.send_message(
-                    invite.invitee_telegram_id,
-                    f"{invite.inviter_name} convidou você para a Guilda "
-                    f"{invite.guild_name} [{invite.guild_tag}].",
-                    reply_markup=keyboard,
-                )
-            except TelegramAPIError:
-                # The invite is durable and still appears under Guilda → Convites recebidos.
-                return
+            # Through the Outbox; the invite also appears under Guilda → Convites recebidos.
+            await TelegramOutbox(service.sessions).send(
+                invite.invitee_telegram_id,
+                f"{invite.inviter_name} convidou você para a Guilda "
+                f"{invite.guild_name} [{invite.guild_tag}].",
+                key=f"guild-invite:{invite.invite_id.hex}",
+                reply_markup=keyboard,
+            )
 
     return router

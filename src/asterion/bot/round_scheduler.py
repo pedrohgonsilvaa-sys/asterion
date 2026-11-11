@@ -17,6 +17,7 @@ from asterion.bot.expedition_handlers import deliver_expedition_notices
 from asterion.bot.guild_battle_handlers import deliver_guild_battle_notices
 from asterion.bot.oath_handlers import deliver_oath_notices
 from asterion.bot.pvp_handlers import deliver_notices
+from asterion.bot.telegram_outbox import TelegramOutbox
 from asterion.bot.world_event_handlers import deliver_world_event_notices
 from asterion.config import get_settings
 from asterion.infrastructure.db.job_lock import run_exclusive
@@ -62,14 +63,14 @@ def build_round_scheduler() -> AsyncIOScheduler:
             coalesce=True,
             replace_existing=True,
         )
+    # Notices go through the Outbox; importing telegram_outbox registers its handler.
+    outbox = TelegramOutbox(SessionFactory)
     pvp = PvpService(SessionFactory, settings.server_id)
 
     async def run_pvp_maintenance() -> None:
         notices = await pvp.run_maintenance()
         if notices and settings.telegram_bot_enabled and settings.telegram_bot_token:
-            from asterion.bot.runtime import get_bot_runtime
-
-            await deliver_notices(get_bot_runtime().bot, notices)
+            await deliver_notices(outbox, notices)
 
     # Turn timers, Entry Confirmations, pairing, the Arena windows and decay.
     scheduler.add_job(
@@ -86,9 +87,7 @@ def build_round_scheduler() -> AsyncIOScheduler:
     async def run_guild_battle_maintenance() -> None:
         notices = await guild_battle.run_maintenance()
         if notices and settings.telegram_bot_enabled and settings.telegram_bot_token:
-            from asterion.bot.runtime import get_bot_runtime
-
-            await deliver_guild_battle_notices(guild_battle, get_bot_runtime().bot, notices)
+            await deliver_guild_battle_notices(guild_battle, outbox, notices)
 
     # Pairing at 20:30, both Fronts at 21:00, the Champion and the 60s turn timers.
     # Each notice follows its notification category (Essenciais or PvP/Batalha).
@@ -106,9 +105,7 @@ def build_round_scheduler() -> AsyncIOScheduler:
     async def run_world_event_maintenance() -> None:
         notices = await world_events.run_maintenance()
         if notices and settings.telegram_bot_enabled and settings.telegram_bot_token:
-            from asterion.bot.runtime import get_bot_runtime
-
-            await deliver_world_event_notices(get_bot_runtime().bot, notices)
+            await deliver_world_event_notices(outbox, notices)
 
     # Openings, phase timers, the deadline and paying finished occurrences.
     scheduler.add_job(
@@ -147,16 +144,12 @@ def build_round_scheduler() -> AsyncIOScheduler:
     async def run_oath_maintenance() -> None:
         notices = await oaths.run_maintenance()
         if notices and settings.telegram_bot_enabled and settings.telegram_bot_token:
-            from asterion.bot.runtime import get_bot_runtime
-
-            await deliver_oath_notices(get_bot_runtime().bot, notices)
+            await deliver_oath_notices(outbox, notices)
 
     async def run_expedition_maintenance() -> None:
         notices = await expeditions.run_maintenance()
         if notices and settings.telegram_bot_enabled and settings.telegram_bot_token:
-            from asterion.bot.runtime import get_bot_runtime
-
-            await deliver_expedition_notices(get_bot_runtime().bot, notices)
+            await deliver_expedition_notices(outbox, notices)
 
     # Cycle openings, idle Provações, the grace period and paying finished cycles.
     # Frozen rosters, closed stages and paying finished Expedições.

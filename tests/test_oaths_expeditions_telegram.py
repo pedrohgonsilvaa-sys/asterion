@@ -8,7 +8,6 @@ from uuid import UUID
 
 import pytest
 from aiogram import Bot, Dispatcher
-from aiogram.exceptions import TelegramForbiddenError
 from aiogram.methods import EditMessageText, SendMessage
 from aiogram.types import Chat, User
 from aiogram.types import Message as TelegramMessage
@@ -40,6 +39,7 @@ from asterion.bot.oath_ui import error_text, render_abandon_confirm, render_oath
 from asterion.domain.expeditions import ExpeditionResult
 from asterion.domain.guilds import GuildRole, Recruitment
 from asterion.infrastructure.db.models import Expedition, OathCycle
+from tests.outbox_drain import RecordingOutbox
 from tests.test_expeditions import LEADER, ROUTE
 from tests.test_expeditions import _seed as seed_expedition
 from tests.test_guilds_telegram import callback_update
@@ -181,20 +181,18 @@ def test_expedition_result_follows_ui_48_5():
 
 
 @pytest.mark.asyncio
-async def test_deliveries_survive_a_blocked_chat():
-    blocked = TelegramForbiddenError(method=SendMessage(chat_id=1, text="x"), message="blocked")
-    oath_bot = AsyncMock()
-    oath_bot.send_message.side_effect = [blocked, None]
+async def test_notices_are_enqueued_once_per_player():
+    oath_outbox = RecordingOutbox()
     notice = OathTurnNotice("Provação")
-    await deliver_oath_notices(oath_bot, [OathNotice(1, notice), OathNotice(2, notice)])
-    assert oath_bot.send_message.await_count == 2
-    expedition_bot = AsyncMock()
-    expedition_bot.send_message.side_effect = [blocked, None]
+    await deliver_oath_notices(oath_outbox, [OathNotice(1, notice), OathNotice(2, notice)])
+    assert [m.chat_id for m in oath_outbox.messages] == [1, 2]
+    assert len({m.dedup_key for m in oath_outbox.messages}) == 2
+    expedition_outbox = RecordingOutbox()
     stage = ExpeditionStageNotice("Rota", 1)
     await deliver_expedition_notices(
-        expedition_bot, [ExpeditionNotice(1, stage), ExpeditionNotice(2, stage)]
+        expedition_outbox, [ExpeditionNotice(1, stage), ExpeditionNotice(2, stage)]
     )
-    assert expedition_bot.send_message.await_count == 2
+    assert [m.chat_id for m in expedition_outbox.messages] == [1, 2]
 
 
 class _Client:

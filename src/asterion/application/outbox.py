@@ -14,7 +14,10 @@ This dispatcher delivers it later, at least once:
   still `pending` or `processing`. `dead` and `delivered` do not block.
 
 Handlers are delivered at least once, so they must tolerate a repeat and can use
-`dedup_key` for that. The registry starts empty: topics register their handler.
+`dedup_key` for that. Topics register their handler in `OUTBOX_HANDLERS`.
+
+A handler raises `PermanentOutboxError` when a retry cannot help (the row goes
+straight to `dead`) and `OutboxRetryLater` when the receiver names its own wait.
 """
 
 from __future__ import annotations
@@ -52,6 +55,18 @@ LEASE = timedelta(minutes=2)
 HANDLER_TIMEOUT_SECONDS = 60.0
 BATCH_SIZE = 20
 MAX_ERROR_LENGTH = 2000
+
+class PermanentOutboxError(Exception):
+    """Delivery can never succeed (for example, the user blocked the bot)."""
+
+
+class OutboxRetryLater(Exception):
+    """The receiver asked to wait `seconds` before the next attempt."""
+
+    def __init__(self, seconds: float, message: str = ""):
+        super().__init__(message or f"retry after {seconds}s")
+        self.seconds = seconds
+
 
 OutboxHandler = Callable[[Mapping[str, Any]], Awaitable[None]]
 
@@ -173,13 +188,18 @@ class OutboxDispatcher:
 
     async def _fail(self, message: _Claimed, error: BaseException) -> str:
         text = f"{type(error).__name__}: {error}"[:MAX_ERROR_LENGTH]
-        exhausted = message.attempt_count >= MAX_ATTEMPTS
+        exhausted = message.attempt_count >= MAX_ATTEMPTS or isinstance(
+            error, PermanentOutboxError
+        )
         values: dict[str, Any] = {"last_error": text}
         if exhausted:
             values["status"] = DEAD
         else:
+            delay = retry_delay(message.attempt_count)
+            if isinstance(error, OutboxRetryLater):
+                delay = max(delay, timedelta(seconds=error.seconds))
             values["status"] = PENDING
-            values["available_at"] = func.now() + retry_delay(message.attempt_count)
+            values["available_at"] = func.now() + delay
         async with self.sessions.begin() as session:
             await session.execute(
                 update(OutboxMessage).where(OutboxMessage.id == message.id).values(**values)

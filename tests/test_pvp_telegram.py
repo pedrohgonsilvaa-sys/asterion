@@ -26,6 +26,7 @@ from asterion.application.pvp import (
 from asterion.bot.guilds_ui import pack
 from asterion.bot.pvp_handlers import DUEL_PROMPT, deliver_notices, pvp_router
 from asterion.bot.pvp_ui import error_text, render_pvp, render_ranking
+from tests.outbox_drain import RecordingOutbox, drain_telegram_outbox
 from tests.test_guilds_telegram import _button, _message_update, callback_update
 from tests.test_pvp import A, B, _seed
 
@@ -59,7 +60,9 @@ class _Client:
         await self.dispatcher.feed_raw_update(
             self.bot, callback_update(data, actor=actor, update_id=self.update_id)
         )
-        return self.screen_of(actor)
+        screen = self.screen_of(actor)
+        await drain_telegram_outbox(self.service.sessions, self.bot)
+        return screen
 
     async def say(self, actor, text, reply_prompt=None):
         self.update_id += 1
@@ -76,7 +79,9 @@ class _Client:
             self.bot,
             _message_update(text, actor=actor, update_id=self.update_id, reply_to=reply),
         )
-        return self.screen_of(actor)
+        screen = self.screen_of(actor)
+        await drain_telegram_outbox(self.service.sessions, self.bot)
+        return screen
 
     def screen_of(self, actor):
         for call in reversed(self.bot.session.make_request.call_args_list):
@@ -186,19 +191,13 @@ def test_ranking_screen():
 
 
 @pytest.mark.asyncio
-async def test_delivery_survives_a_blocked_player():
-    from aiogram.exceptions import TelegramForbiddenError
-
+async def test_notices_are_enqueued_one_per_player():
     from asterion.application.pvp import PvpNotice
 
-    bot = AsyncMock()
-    bot.send_message.side_effect = [
-        TelegramForbiddenError(method=SendMessage(chat_id=1, text="x"), message="blocked"),
-        None,
-    ]
+    outbox = RecordingOutbox()
     view = PvpMessageView("duel_expired")
-    await deliver_notices(bot, [PvpNotice(1, view), PvpNotice(2, view)])
-    assert bot.send_message.await_count == 2
+    await deliver_notices(outbox, [PvpNotice(1, view), PvpNotice(2, view)])
+    assert [m.chat_id for m in outbox.messages] == [1, 2]
 
 
 @pytest.mark.asyncio

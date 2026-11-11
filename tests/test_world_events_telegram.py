@@ -9,7 +9,6 @@ from uuid import UUID
 
 import pytest
 from aiogram import Bot, Dispatcher
-from aiogram.exceptions import TelegramForbiddenError
 from aiogram.methods import EditMessageText, SendMessage
 from aiogram.types import Chat, User
 from aiogram.types import Message as TelegramMessage
@@ -29,6 +28,7 @@ from asterion.bot.world_event_handlers import (
     world_event_router,
 )
 from asterion.bot.world_event_ui import error_text, render_withdraw_confirm, render_world_event
+from tests.outbox_drain import RecordingOutbox
 from tests.test_guilds_telegram import callback_update
 from tests.test_world_events import EVENT, A, _seed
 
@@ -146,15 +146,13 @@ def test_error_text_shows_the_wait():
 
 
 @pytest.mark.asyncio
-async def test_deliver_notices_survives_a_blocked_chat():
-    bot = AsyncMock()
-    bot.send_message.side_effect = [
-        TelegramForbiddenError(method=SendMessage(chat_id=1, text="x"), message="blocked"),
-        None,
-    ]
+async def test_deliver_notices_enqueues_one_per_player():
+    outbox = RecordingOutbox()
     view = WorldEventResultView("Evento", "Região", "", True, False)
-    await deliver_world_event_notices(bot, [WorldEventNotice(1, view), WorldEventNotice(2, view)])
-    assert bot.send_message.await_count == 2
+    await deliver_world_event_notices(
+        outbox, [WorldEventNotice(1, view), WorldEventNotice(2, view)]
+    )
+    assert [m.chat_id for m in outbox.messages] == [1, 2]
 
 
 class _Client:

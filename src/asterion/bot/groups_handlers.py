@@ -5,7 +5,6 @@ from __future__ import annotations
 from uuid import UUID
 
 from aiogram import F, Router
-from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
@@ -23,6 +22,7 @@ from asterion.bot.groups_ui import (
 from asterion.bot.oath_ui import error_text as oath_error_text
 from asterion.bot.oath_ui import render_oath
 from asterion.bot.road_ui import render_road
+from asterion.bot.telegram_outbox import TelegramOutbox
 
 
 def _parse_revision(value: str) -> int:
@@ -139,16 +139,15 @@ def groups_router(
                 ]
             ]
         )
-        try:
-            await message.bot.send_message(
-                invite.invitee_telegram_id,
-                f"{invite.inviter_name} convidou você para um Grupo de Asterion. "
-                "O convite expira em 10 minutos.",
-                reply_markup=keyboard,
-            )
-        except TelegramAPIError:
-            # The invitation remains durable and can be accepted from Vínculos → Convites.
-            return
+        # Through the Outbox; the invitation also stays under Vínculos → Convites.
+        await TelegramOutbox(service.sessions).send(
+            invite.invitee_telegram_id,
+            f"{invite.inviter_name} convidou você para um Grupo de Asterion. "
+            "O convite expira em 10 minutos.",
+            key=f"group-invite:{invite.invite_id.hex}:{invite.revision}",
+            reply_markup=keyboard,
+            expires_at=invite.expires_at,
+        )
 
     @router.callback_query(F.data == "links:root")
     async def links_root(query: CallbackQuery) -> None:
