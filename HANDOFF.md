@@ -1,7 +1,7 @@
 # ASTERION — Handoff técnico e de produto
 
-**Data da auditoria:** 2026-11-06  
-**Checkout:** `docs/asterion-proficiency-equipment-v1.9.0` · `HEAD 5abfb64` (`docs: add Asterion proficiency phase 2E drafts`)  
+**Data da auditoria:** 2026-11-06 (§8 e §9 atualizados em 2026-11-11)  
+**Checkout:** `main` · `d39d111` (merge do PR 123). Seções fora de §8 e §9 ainda descrevem o retrato de 2026-11-06 (checkout sujo, Armazém e Outbox em andamento); onde divergirem de §8, vale §8.  
 **Repositório:** `origin` → `https://github.com/pedrohgonsilvaa-sys/asterion.git`  
 **Estado deste documento:** retrato estático do repositório e dos documentos presentes nesta data. Não representa homologação de release nem afirma que os testes passaram.
 
@@ -1552,22 +1552,28 @@ Os nomes literais de botões por contexto podem mudar conforme estado e disponib
 
 ### Em andamento ou não integrado
 
-1. **Armazém/capacidade:** alterações locais em `inventory_capacity.py`, `safe_location.py`, `warehouse.py`, `warehouse_ui.py`, `models.py` e migration 0032. Migration, implementação, UI e teste `test_warehouse_integration.py` estão sem commit. Estado do banco local/remoto não foi consultado.
-2. **Fase 2E — proficiências/equipamentos:** branch e pacote v1.9.1 contêm documentação candidata. O README do pacote diz “não canônico, não publicado, não pronto para importação ou integração operacional”. Três decisões de Game Design ainda estão abertas: identidade/ID de templates e release snapshot (0/226 IDs verificados); contratos/saídas de receitas e itens; elegibilidade individual de Saque (24 pares excluídos, 63 evidências favoráveis ainda não finais e 633 combinações pendentes). Há 160 vínculos existentes + 198 propostas de receita/output sem validação de release; 24 recompensas de campanha não reconciliadas com identidade publicada. GDD v1.6.0 e contrato Weapon Metadata v1.0.0 permanecem as fontes da raiz.
-3. **Assets:** há diretório `assets/` local não rastreado. `config.py` aceita Telegram `file_id` ou `file:` path, mas o Dockerfile não empacota `assets/`. Assets não são considerados bundle oficial até revisar procedência e versionamento.
-4. **Autoridade regional divergente:** `SOURCE_AUTHORITY.md` da raiz seleciona Terras do Ocaso v1.0.16. Uma worktree local de Phase 2B aponta v1.0.17 como alvo aprovado, ainda não operacional. Resolver e publicar por processo documental antes de usar no conteúdo.
+1. **Fase 2E — proficiências/equipamentos:** **fora do `main`.** Só existe na branch `docs/asterion-proficiency-equipment-v1.9.0` (commit `5abfb64`) e nos ZIPs v1.9.0/v1.9.1 da raiz, que não vão para o Git. O README do pacote diz "não canônico, não publicado, não pronto para importação ou integração operacional". Não integrar nem publicar. Três decisões de Game Design seguem abertas: identidade/ID de templates e release snapshot (0/226 IDs verificados); contratos/saídas de receitas e itens; elegibilidade individual de Saque (24 pares excluídos, 63 evidências favoráveis ainda não finais e 633 combinações pendentes). Há 160 vínculos existentes + 198 propostas de receita/output sem validação de release; 24 recompensas de campanha não reconciliadas com identidade publicada. GDD v1.6.0 e contrato Weapon Metadata v1.0.0 permanecem as fontes da raiz.
+2. **Assets:** o diretório `assets/` continua local e não rastreado. `config.py` aceita Telegram `file_id` ou `file:` path, mas o Dockerfile não copia `assets/` (só `src`, `alembic`, `alembic.ini`, `pyproject.toml` e `README.md`). Assets não são bundle oficial até revisar procedência e versionamento. Item B3 do `docs/PLANO_DE_ACAO.md`.
+3. **Autoridade regional divergente:** `SOURCE_AUTHORITY.md` da raiz seleciona Terras do Ocaso v1.0.16 e Bíblia Canônica v3.0 FINAL. Há indício de alvo v1.0.17 (worktree local de Phase 2B) e o autor aprovou a Bíblia v4.0.7 como referência, mas o arquivo ainda não está no repositório. Resolver pelo processo documental antes de usar no conteúdo. Item C5 do plano.
+4. **Balanceamento:** os kits das criaturas e Chefes da Crônica I continuam em `SIMULAR`. Item C6 do plano.
 
-O GDD também especifica Duelo/Arena ranked, Batalha de Guildas (GvG), Eventos Públicos/Sintonização do Véu, Juramento/Expedição, Mercado/Loja Pessoal, Trade direto e Guildas. Não foram encontrados módulos de aplicação/routers correspondentes a esses sistemas completos neste checkout; Grupo, Caçada em Grupo e colisão PvPvE são funcionalidades diferentes e parciais, não substitutos para todos eles.
+**Já no `main` (antes listados como em andamento):**
+
+- **Armazém/capacidade:** integrado (PR #95 e #96). Migrations `20261026_0032_inventory_warehouse` e `20261107_0033_warehouse_consumables_runes` estão rastreadas.
+- **Outbox:** completa. Dispatcher e job `outbox-dispatch` (PR #118), estatísticas, CLI de reenvio (`python -m asterion.outbox_cli requeue`) e lock por job no PostgreSQL (PR #119) e o tópico `telegram.send_message` para os avisos do `round_scheduler.py` (PR #123). Detalhes em "Outbox com Telegram" na §10.
+- **Antiexploit (§36):** flags de multicontas e ganchos completos (PR #99 e #122).
+- **Sistemas antes marcados como ausentes:** Duelo/Arena, Batalha de Guildas, Eventos Mundiais, Juramento/Expedição, Mercado/Loja Pessoal/Troca Direta, Guildas, Vínculos e Crônica I existem no código (ver tabela do Beta abaixo). O que falta neles está em "Pendências das etapas entregues".
 
 ### Quebrado/bugs conhecidos
 
-Não foi feito teste de execução, migração em banco ou leitura de issue tracker nesta auditoria; portanto, não há base para declarar “sem bugs” nem para confirmar um bug reproduzível específico. O que está objetivamente pendente são as integrações/gates acima, o risco de scheduler duplicado em deployment multi-réplica, a ausência de worker de Outbox localizado e a divergência entre fontes de design. Trate como **não verificado** o resultado da suíte e o funcionamento do código alterado localmente. O `README.md` também está desatualizado: seu resumo cita TDO v1.0.15, não lista Nareth e aponta uma meta inicial P1, enquanto `SOURCE_AUTHORITY.md` da raiz seleciona conteúdo até Confins e o código já cobre sistemas além da fundação.
+Esta seção não vem de uma auditoria de execução: não há base para declarar "sem bugs". O CI do PR 123 (check `test`, suíte completa com PostgreSQL 16) passou em 2026-11-11. Dois testes são instáveis por sorteio de crítico (não fixam o crítico ao comparar o dano de dois golpes): `test_talents_tier25_unlock.py::test_publicly_acquired_vigia_tier25_effects_are_per_combat_and_per_target` e `test_talents_tier15_unlock.py::test_publicly_acquired_sentinela_talents_drive_retalie_and_guard_barrier`. Pendências objetivas: scheduler em deployment multi-réplica: cada processo tem o seu APScheduler, mas desde o PR #119 todos os jobs, exceto `outbox-dispatch` (que reserva as linhas sozinho), rodam sob lock consultivo do PostgreSQL por execução (`infrastructure/db/job_lock.py`, `run_exclusive`); o item B1 do plano ainda deve conferir isso com teste e cobrir o restart, a divergência entre fontes de design e os itens da seção "Operação que falta" abaixo.
 
 ### Git e estado do checkout
 
-- Branch atual `docs/asterion-proficiency-equipment-v1.9.0`; `HEAD 5abfb64`, commit local de documentação Fase 2E. Branch `main` local está em `7f67903`; o ref local `origin/main` em `d76b420` é de 2026-10-14 e não foi atualizado por fetch durante a auditoria.
-- Um único remote configurado: `origin` (URL no cabeçalho). Sem tags Git observadas. O histórico da branch excede o ref remoto local, mas não inferir estado atual do GitHub a partir de refs sem fetch.
-- Há muitas modificações rastreadas em `src/asterion/**`, `tests/**` e no manifesto Fase 2E, além de arquivos novos e `.worktrees/`. Leia `git status --short` e `git diff` antes de alternar branch, resetar, limpar ou criar commit. Não descarte os arquivos locais inadvertidamente.
+- Referência: `main` no commit `d39d111` (merge do PR #123), em 2026-11-11. Remote único: `origin`. Sem tags Git observadas.
+- Untracked locais que **não** vão para o Git (nunca usar `git add .`): ZIPs da raiz, `assets/`, `balanceamento/` (tem um arquivo acima do limite de 100 MB do GitHub) e `.worktrees/`.
+- A branch `docs/asterion-proficiency-equipment-v1.9.0` guarda a documentação candidata da Fase 2E e não foi mesclada.
+
 
 ### Status do Beta (atualizado em 2026-11-09)
 
@@ -1584,6 +1590,9 @@ O plano de lançamento é o backlog da auditoria Fase 4A (`docs/audits/ASTERION_
 | 7 | Juramento e Expedição (catálogos vazios de propósito) | #104 |
 | 8 | Batalha de Guildas (núcleo e telas) | #105, #106 |
 | 9 (bloco A) | Crônica I (ciclo, calendário, voto), Nova Vigília, Trilha da Crônica, fechamento competitivo de Arena e Batalha de Guildas, Salão da Vigília | branch `claude/cronica-ecos-convergencia-s8fs2t` |
+| 9 (bloco B) | Conteúdo jogável da Crônica I em 6 partes (ver abaixo) | #110, #111, #112, #114, #117, #120, #121 |
+| Ops | Outbox: dispatcher, estatísticas, CLI e lock por job; avisos do Telegram pela Outbox | #118, #119, #123 |
+| Antiexploit | Ganchos completos do §36 | #99, #122 |
 
 Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem.
 
@@ -1599,7 +1608,7 @@ Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem
 - Catálogo de Flavor Text contextual: não existe.
 - Integração de visuais/skins: não existe.
 
-**Operação que falta:** produtores e handlers reais da Outbox (o dispatcher já existe), agendador que sobreviva a restart e a várias instâncias, métricas e alertas, deploy/rollback de produção, backup e restore, administração/RBAC/sanções (hoje só CLIs), rate limiting e antiabuso geral, jornada E2E criação→Nv.60→Legado com as 6 Classes e smoke test no Telegram real.
+**Operação que falta:** agendador que sobreviva a restart e a várias instâncias, métricas e alertas, deploy/rollback de produção, backup e restore, administração/RBAC/sanções (hoje só CLIs), rate limiting e antiabuso geral, jornada E2E criação→Nv.60→Legado com as 6 Classes e smoke test no Telegram real.
 
 **Pendências das etapas entregues:** balanceamento dos efeitos das Obras e das recompensas da Batalha de Guildas (valores provisórios); frases de flavor dos resultados da Arena, do Duelo e da Batalha de Guildas; conteúdo dos catálogos de Eventos, Juramento e Expedição (o autor define).
 
@@ -1739,7 +1748,7 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 5. A Barreira da Ressonância dura 2 turnos e sai só na 1ª instância de Fase 3 de cada participante (quem reentra não a enfrenta de novo).
 6. Ordem de IA de O Compasso: resolver Batida Plena pendente; Ressonância; preparar Batida Plena; Onda de Compasso; Contratempo (não reaplica enquanto a própria marca está ativa); Batida.
 
-**Escolhas da parte 5 (aguardam aprovação do autor):**
+**Escolhas da parte 5 (aprovadas pelo autor em 2026-11-11):**
 
 1. "Região já acessada" é a Região com Desbravar liberado, a mesma regra da Região de Ressonância (escolha 1 da parte 1).
 2. Elegibilidade é a do Evento normal: exige a ocorrência concluída. Se o tempo acaba, ninguém conta, nem para objetivo nem para Trilha.
@@ -1767,7 +1776,7 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 4. Quem conclui o primeiro capítulo só na Arquivada também recebe a Entrada do desfecho.
 5. Nenhum Feito novo.
 
-**Escolhas da parte 6 (aguardam aprovação do autor):**
+**Escolhas da parte 6 (aprovadas pelo autor em 2026-11-11):**
 
 1. As Entradas e Trechos de cada capítulo são registrados na **conclusão** do capítulo (a proposta só dá o capítulo). Assim `codex_cr01_formas_do_pulso` não sai na primeira luta, e sim ao concluir o Capítulo 1.
 2. Os Trechos `codex_cr01_herdeiros_altos` (Maro Keln) e `_confins` (Eris Val) exigem um Local descoberto dos Altos ou dos Confins, para não nomear NPC de Região que o personagem não conhece.
@@ -1785,22 +1794,23 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 **Decisões do autor sobre a proposta (2026-11-09):**
 
 - **Data:** o Dia 1 da Crônica é configurável e o autor define depois. Sem data configurada, nada abre. D8…D50, voto, T, T+2h e T+14d derivam do Dia 1. A data pode ser trocada antes do início; depois, só pela extensão excepcional do GDD §5.3, com registro.
-- **Bíblia:** o documento usa a Bíblia Canônica v4.0.7, que o autor aprovou como referência, mas o arquivo ainda não está no repositório e o `SOURCE_AUTHORITY.md` ainda registra a v3.0 FINAL. O autor vai enviar o arquivo; até lá, a validação de lore fica pendente.
+- **Bíblia:** a Bíblia Canônica v4.0.7 foi adicionada ao repositório em 2026-11-11 (`ASTERION_BIBLIA_CANONICA_v4_0_7.md`) e o `SOURCE_AUTHORITY.md` a registra no lugar da v3.0 FINAL. A validação de lore da Crônica contra ela ainda não foi feita.
 - **Dúvidas 1–7 e 9–22:** aprovadas as recomendações. Gate de entrada: P1 concluída. Evento da Crônica nos horários normais, com uma versão do Chefe por faixa de Região no mesmo horário. Voto abre em D50 e T às 21:00 America/Sao_Paulo. A Entrada do desfecho vai para quem concluiu ao menos 1 capítulo. Os básicos usam o Grau da Dádiva Diária. Os limites de 2/dia são conteúdo, sujeitos a revisão de Balanceamento. Ajudante não conta. Uma run vale para objetivo e repetível. O alternativo de Masmorra por Desbravar é aceito. As opções do voto são embaralhadas por jogador. A Crônica Arquivada é jogável sem pontos. Elegibilidade 4/8 + 1. As 9 criaturas são aprovadas, com um único material visual no lançamento. Os kits passam por simulação de Balanceamento. XP normal na primeira vitória. Elite Nv.3 e Chefe Nv.5. A luta acontece na Região de Ressonância do jogador.
 - **Dúvida 8 (Aparências):** a skin da Crônica é **especial e única**, com **fundo próprio da Crônica**; não segue o padrão regional nem o céu neutro.
 - **PROPOSTAS DE REGRA:** `pr_cr01_encontro_grupo` e `pr_cr01_feito_resposta` aprovadas; `pr_cr01_eco_residual` adiada (o desfecho fica só narrativo).
 
 ## 9. Próximos passos recomendados
 
-Não foi encontrado backlog/sprint ativo confiável para afirmar “o próximo item planejado” pelo autor. A ordem abaixo é uma reconstrução técnica a partir do estado do Git e dos gates dos próprios documentos:
+A fonte do plano é `docs/PLANO_DE_ACAO.md` (trilhas A, B e C). Resumo do que está aberto em 2026-11-11:
 
-1. **Congelar o retrato e revisar diffs:** registrar `git status --short`, comparar `HEAD`, `main`, refs remotos e cada worktree; identificar autoria/objetivo das alterações antes de editar ou limpar. Separar candidato documental Fase 2E de código WIP de Armazém.
-2. **Escolher a autoridade de design operacional:** resolver v1.0.16 vs alvo v1.0.17 de TDO e qualquer diferença de Bíblia/metadata; atualizar somente pelo fluxo de publicação e `SOURCE_AUTHORITY.md`.
-3. **Fechar os gates de Fase 2E com Game Design/Release:** aprovar as três linhas pendentes, conferir os 226 template IDs contra um snapshot de release, consolidar receitas/output IDs e as combinações de elegibilidade de loot. O pacote marca publicação/importação/migration/flag/merge/deploy como NO-GO enquanto isso não for resolvido.
-4. **Concluir Armazém/capacidade como feature independente:** revisar o diff completo e migration 0032, confirmar constraints/índices/idempotência/locks e entrega pendente, então validar numa base PostgreSQL limpa e numa base de upgrade antes de considerar integrar. Revisar se item ligado/equipado, stacks e operação concorrente seguem a regra de negócio pretendida.
-5. **Alinhar schema e migrations:** `alembic heads`, `upgrade head` e `alembic check` precisam concordar com o modelo da branch; separar o schema local de Armazém do restante do diff de `models.py`.
-6. **Executar validação automatizada depois de estabilizar diffs:** Ruff, suíte completa com `ASTERION_TEST_DATABASE_URL`, playthroughs regionais e CI. A auditoria atual não executou essas verificações.
-7. **Definir deployment real:** escolher polling ou webhook, processo único de scheduler, número de réplicas, segredo/TLS/registro webhook, backups e migração pre-deploy; garantir que assets `file:` estejam acessíveis no container. Confirmar se Outbox será implementada agora ou removida da promessa operacional.
+1. **Trilha A (jogo):** Obras de Guilda (efeitos de 6 das 7 e recompensas da Batalha de Guildas), Marcas de Legado (§16.1), Serviços de Ofícios (§27.3), entrada Calendário no menu, catálogo de Flavor Text e mecanismo de visuais/skins.
+2. **Trilha B (operação):** agendador único (o lock por job já existe, falta teste entre duas instâncias), backup e restore, deploy/rollback com `assets/` no Dockerfile, rate limiting, Admin com RBAC e sanções, métricas e alertas, E2E até Nv.60 e Legado com as 6 Classes e smoke test no Telegram real (feito pelo autor).
+3. **Trilha C (fechamento):** o autor aprova as escolhas pendentes das partes 5 e 6 da Crônica; suíte completa em segundo plano (cerca de 1 hora) corrigindo as falhas; resolver TDO v1.0.16 × v1.0.17 e Bíblia v3.0 × v4.0.7 no `SOURCE_AUTHORITY.md`; balanceamento dos kits em `SIMULAR`.
+4. **Fase 2E:** fechar as três decisões de Game Design (IDs/release snapshot, receitas e saídas, elegibilidade de Saque) antes de qualquer integração. Publicação, importação, migration, flag, merge e deploy continuam NO-GO.
+5. **Depois:** Beta fechado no ar com A e B prontas; o autor define o Dia 1 da Crônica, envia a Bíblia v4.0.7 e revisa os textos rascunho; por último, a Monetização (§35).
+
+Antes de qualquer regra de jogo, consulte `SOURCE_AUTHORITY.md`. Número que a fonte não define vai para o autor.
+
 
 ## 10. Pontos de atenção e riscos
 
@@ -1808,8 +1818,9 @@ Não foi encontrado backlog/sprint ativo confiável para afirmar “o próximo i
 - **WIP no mesmo checkout:** alterações locais de regra/sistema e testes coexistem com documentação de Fase 2E. Um `git add .` pode incluir `.worktrees/`, assets, ZIPs e candidatos. Revisar staged diff arquivo a arquivo.
 - **Schema vs banco:** 80 tabelas são derivadas do ORM alterado; código de migration 0032 não está rastreado. Não assumir que produção/banco de outra branch tem essas tabelas ou colunas.
 - **Idempotência, concorrência e callback replay:** o GDD exige resolução autoritativa, locks e callbacks como intenção do cliente. Manter commits de recompensas/consumo/estado em transação única; validar actor, server, estado, revisão, cooldown e origem no serviço. Nunca confiar em `callback_data` ou texto para conceder acesso/recompensa.
-- **Agendador:** `replace_existing`/`max_instances=1` são por processo. Um API por réplica em webhook inicia scheduler na inicialização; cada processo polling também inicia um. Uma implantação horizontal pode avançar a mesma Ronda em paralelo.
-- **Outbox sem produtor:** o dispatcher existe (`application/outbox.py`, job `outbox-dispatch` a cada 5 s): lock por `FOR UPDATE SKIP LOCKED` com lease de 2 min, entrega fora da transação, 5 tentativas com espera de 30 s/2 min/10 min/1 h, depois `status='dead'` + warning no log (reenvio manual: voltar para `pending`). Mensagens com o mesmo `aggregate_key` seguem a ordem de criação. Porém nenhum código grava na Outbox e `OUTBOX_HANDLERS` está vazio: sem tópico real, nada é entregue. Entrega é *at-least-once*; cada handler deve tolerar repetição (use `dedup_key`).
+- **Guardas do bot e suspensões (2026-11-11):** `bot/guards.py` tem dois middlewares de update registrados antes de todos os outros em `runtime.py`. `FloodGuardMiddleware` é um balde de fichas por jogador, em memória (vale para um único processo do bot): `ASTERION_RATE_LIMIT_BURST` (12) e `ASTERION_RATE_LIMIT_PER_SECOND` (4,0); excesso é descartado, com aviso só em callback. `SuspensionMiddleware` bloqueia contas suspensas (cache de 30 s; se o banco falhar, deixa passar). Suspensões ficam em `account_sanctions` (migration `20261111_0044`), nunca apagadas: encerrar grava `revoked_at`. CLI: `python -m asterion.admin_cli suspend <telegram_id> --reason "..." [--hours N]`, `lift`, `list`, `history`. Não é regra de jogo; flags do §36 continuam sem bloqueio automático.
+- **Agendador:** cada processo (API em webhook ou polling) inicia seu próprio APScheduler, e `max_instances=1` vale só por processo. Por isso `round_scheduler.py` envolve todo job, menos `outbox-dispatch` (que já reserva linhas com `SKIP LOCKED`), em `run_exclusive` (`infrastructure/db/job_lock.py`): um advisory lock do PostgreSQL por job, com `pg_try_advisory_lock`; a instância que o encontra ocupado pula aquela rodada. O lock é da conexão, então um processo que cai o libera. Os locks usam um pool próprio, com uma conexão por job, para não disputar conexões com o jogo. Duas instâncias podem rodar o mesmo job uma depois da outra na mesma janela, nunca ao mesmo tempo; os jobs leem o estado no banco e os avisos têm deduplicação na Outbox, então a segunda passada não repete efeitos.
+- **Outbox com Telegram (2026-11-11):** o dispatcher (`application/outbox.py`, job `outbox-dispatch` a cada 5 s) usa `FOR UPDATE SKIP LOCKED` com lease de 2 min, entrega fora da transação, 5 tentativas com espera de 30 s/2 min/10 min/1 h e depois `status='dead'` (reenvio: `python -m asterion.outbox_cli requeue`). Mesmo `aggregate_key` segue a ordem de criação. Handler pode lançar `PermanentOutboxError` (vai direto a `dead`) ou `OutboxRetryLater(segundos)`. Tópico real: `telegram.send_message` em `bot/telegram_outbox.py` (`TelegramOutbox.send`/`send_many` grava com `ON CONFLICT (dedup_key) DO NOTHING`, `aggregate_key=telegram:<chat>`). O handler respeita o flood wait do Telegram, manda bot bloqueado/chat inexistente/pedido inválido direto para `dead` e descarta aviso vencido (`expires_at` vindo de `seconds_left`/`deadline` da tela). Passam pela Outbox (escopo aprovado pelo autor em 2026-11-11): só os avisos que os jobs de `round_scheduler.py` geram (Arena/Duelo, Batalha de Guildas, Evento Mundial, Juramento e Expedição, incluindo avisos de turno). A chave de deduplicação é estável: fonte + chat + resumo do conteúdo (sem o contador `seconds_left`/`deadline`) + janela de 10 min, então repetir a rodada do job não manda a mensagem de novo (um aviso idêntico depois da janela sai outra vez). Flood wait do Telegram devolve a tentativa. Ficam diretos (`bot.send_message`): convite de Grupo, convite de Guilda, resultado da Inscrição, venda no Mercado, Troca Direta e os avisos de PvP, Batalha de Guildas e Juramento disparados por botão. Ficam fora: Relato na comunidade, Divulgação do Mercado e `engagement_cli.py`. Limites: o aviso é gravado logo depois do commit do jogo, não na mesma transação (as telas são montadas na camada do bot); e o Telegram não tem chave de idempotência, então um crash entre o envio e a marca `delivered` pode repetir uma mensagem. Nos testes, `tests/outbox_drain.py` entrega a fila por um bot falso.
 - **Redis subutilizado:** variável e health check estão presentes, mas não há cache/lock/fila identificado no fluxo atual; não o trate como requisito de persistência do jogo.
 - **Segredos/configuração:** o token Telegram e webhook secret não podem ser commitados/logados. Os defaults locais de DB são previsíveis; produção precisa credencial forte, TLS/rede restrita, rotação, backup e permissões mínimas. `.env` não faz parte do handoff.
 - **Assets:** referências `file:` dependem de caminho dentro do processo; Docker não copia `assets/`. Evite path traversal e assets não revisados; preferir IDs hospedados/volumes declarados para operação.

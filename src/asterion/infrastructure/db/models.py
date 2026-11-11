@@ -4082,3 +4082,20 @@ class VigilHallEntry(Base):
     reward_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
     reward_tier: Mapped[str | None] = mapped_column(String(24))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AccountSanction(Base):
+    """Operator suspension of a Telegram account. Append-only: lifting sets revoked_at."""
+
+    __tablename__ = "account_sanctions"
+    __table_args__ = (Index("ix_account_sanctions_account", "telegram_id", "created_at"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="suspension")
+    reason: Mapped[str] = mapped_column(String(300), nullable=False)
+    created_by: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_by: Mapped[str | None] = mapped_column(String(64))
