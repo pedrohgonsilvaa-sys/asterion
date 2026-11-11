@@ -19,7 +19,9 @@ from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     resolve_character_combat_stats,
 )
+from asterion.application.guild_works import character_work_levels
 from asterion.domain.economy import crowns_per_level
+from asterion.domain.guild_works import discounted
 from asterion.domain.talents import (
     IMPLEMENTED_TALENT_LEVELS,
     TALENT_DEFINITIONS,
@@ -80,10 +82,12 @@ class TalentView:
     crowns: int
     location: str | None
     foreground: bool
+    # Altar do Véu discount (percent) of the character's current Guilda.
+    respec_discount: int = 0
 
     @property
     def respec_cost(self) -> int:
-        return 2 * crowns_per_level(self.level)
+        return discounted(2 * crowns_per_level(self.level), self.respec_discount)
 
     @property
     def talents(self) -> tuple[TalentDefinition, ...]:
@@ -181,7 +185,10 @@ class TalentService:
             )
             if world is None or world.location not in SAFE_RESPEC_LOCATIONS:
                 raise TalentMutationRejected(TalentMutationCode.WRONG_LOCATION)
-            cost = 2 * crowns_per_level(character.level)
+            cost = discounted(
+                2 * crowns_per_level(character.level),
+                (await character_work_levels(session, character.id)).respec_discount,
+            )
             if character.crowns < cost:
                 raise TalentMutationRejected(TalentMutationCode.INSUFFICIENT_CROWNS)
             for row in rows:
@@ -307,4 +314,5 @@ class TalentService:
             character.crowns,
             world.location if world is not None else None,
             blocker is not None,
+            (await character_work_levels(session, character.id)).respec_discount,
         )

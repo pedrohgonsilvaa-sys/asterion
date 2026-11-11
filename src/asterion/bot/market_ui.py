@@ -262,7 +262,10 @@ def listing_prompt(kind: str, source_id: UUID, title: str, available: int) -> st
         )
     else:
         text = f"Anunciar {title}. Envie o preço de venda em Coroas."
-    return with_ref(f"{text} A venda paga {MARKET_FEE_PERCENT}% de taxa.", ref)
+    return with_ref(
+        f"{text} A venda paga {MARKET_FEE_PERCENT}% de taxa, menos com a Tesouraria da Guilda.",
+        ref,
+    )
 
 
 def render_confirm_mythic_listing(kind: str, source_id: UUID, quantity: int, price: int) -> Screen:

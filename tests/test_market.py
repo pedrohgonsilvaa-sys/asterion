@@ -22,6 +22,9 @@ from asterion.infrastructure.db.models import (
     CharacterEquipmentSlot,
     ConsumableStack,
     EquipmentItem,
+    Guild,
+    GuildMember,
+    GuildProject,
     MarketListing,
     MarketPriceChange,
     MarketPurchase,
@@ -633,3 +636,43 @@ async def test_deleted_owner_retires_the_code_and_closes_listings(database):
         assert shop is not None and shop.owner_character_id is None
         assert (await session.get(MarketListing, listing.listing_id)).status == "closed"
         assert (await session.get(MarketPurchase, preview.purchase_id)) is not None
+
+
+@pytest.mark.asyncio
+async def test_treasury_obra_fixes_a_lower_fee_on_new_listings(database):
+    await _seed(database)
+    service = _service(database)
+    before = await _listing(service, database, quantity=10, price=20)
+    async with database[1].begin() as session:
+        seller = await _char(session, SELLER)
+        guild = Guild(server_id="ocaso", name="Cofre", tag="CFR")
+        session.add(guild)
+        await session.flush()
+        session.add(
+            GuildMember(
+                character_id=seller.id,
+                guild_id=guild.id,
+                role="leader",
+                joined_at=NOW,
+                role_since=NOW,
+            )
+        )
+        for level in (1, 2):  # Tesouraria II: 4%.
+            session.add(
+                GuildProject(
+                    guild_id=guild.id,
+                    kind="treasury",
+                    level=level,
+                    status="completed",
+                    cost=1,
+                    funded=1,
+                    started_at=NOW,
+                )
+            )
+    after = await _listing(service, database, quantity=10, price=20)
+    # The fee is fixed when the listing is created.
+    assert (await _buy(service, BUYER, before.listing_id, 10)).fee == 10
+    assert (await _buy(service, BUYER, after.listing_id, 10)).fee == 8
+    async with database[1]() as session:
+        bps = set((await session.scalars(select(MarketListing.fee_bps))).all())
+    assert bps == {500, 400}

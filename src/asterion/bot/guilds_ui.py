@@ -22,6 +22,7 @@ from asterion.application.guilds import (
     PublicGuildView,
 )
 from asterion.bot.creation_ui import Screen
+from asterion.domain.guild_works import effect_text as work_effect_text
 from asterion.domain.guilds import (
     MAX_ACTIVE_PROJECTS,
     MAX_PROJECT_LEVEL,
@@ -241,6 +242,16 @@ def parse_crowns(text: str) -> int | None:
     return int(digits)
 
 
+def _work_effect(kind: ProjectKind, level: int) -> str | None:
+    """Current effect, or what level I gives while the Obra is not built."""
+    if kind is ProjectKind.LODGING:
+        return None
+    if level <= 0:
+        effect = work_effect_text(kind, 1)
+        return f"Nível I: {effect}" if effect else None
+    return work_effect_text(kind, level)
+
+
 def render_works(guild: GuildView) -> Screen:
     """Treasury and Obras (§30.2). Members only; never shown on the public page."""
     gid = pack(guild.guild_id)
@@ -256,7 +267,11 @@ def render_works(guild: GuildView) -> Screen:
         "Obras",
     ]
     for kind, label in OBRA_LABELS.items():
-        lines.append(f"· {label} · nível {levels.get(kind, 0)}/{MAX_PROJECT_LEVEL}")
+        level = levels.get(kind, 0)
+        lines.append(f"· {label} · nível {level}/{MAX_PROJECT_LEVEL}")
+        effect = _work_effect(kind, level)
+        if effect:
+            lines.append(f"  ↳ {effect}")
     rows: list[list[InlineKeyboardButton]] = []
     if guild.active_projects:
         lines.extend(["", "Em andamento"])

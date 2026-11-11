@@ -2770,6 +2770,7 @@ class MarketListing(Base):
             "item_kind IN ('equipment','material','consumable','rune')",
             name="ck_market_listing_kind",
         ),
+        CheckConstraint("fee_bps BETWEEN 0 AND 500", name="ck_market_listing_fee_bps"),
         Index("ix_market_listing_shop_status", "shop_id", "status"),
         Index(
             "ix_market_listing_active_expiry",
@@ -2791,6 +2792,8 @@ class MarketListing(Base):
     terms_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
     gross_sold_total: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
     fee_charged_total: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    # Fee in basis points, fixed at creation (Tesouraria Obra, domain/guild_works.py).
+    fee_bps: Mapped[int] = mapped_column(Integer, nullable=False, server_default="500")
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

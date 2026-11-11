@@ -23,6 +23,7 @@ from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     reconcile_character_hp,
 )
+from asterion.application.guild_works import character_work_levels
 from asterion.application.inventory_capacity import (
     INVENTORY_CAPACITY,
     PENDING_CAPACITY,
@@ -45,6 +46,7 @@ from asterion.domain.consumables import (
 from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.equipment_modifications import equipment_grade
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
+from asterion.domain.guild_works import with_bonus
 from asterion.domain.legacy import legacy_xp_factor
 from asterion.domain.road import (
     ALTOS_ABRIGO,
@@ -2854,7 +2856,15 @@ class RoadService:
             legacy_factor=legacy_xp_factor(c.legacy_level),
         )
         c.xp += xp
-        crowns_award = crowns(context.enemy_level, context.category) if enough else 0
+        crowns_award = (
+            with_bonus(
+                crowns(context.enemy_level, context.category),
+                # Posto dos Caçadores of the current Guilda (domain/guild_works.py).
+                (await character_work_levels(s, c.id)).hunt_crown_bonus,
+            )
+            if enough
+            else 0
+        )
         c.crowns += crowns_award
         components = [("xp", None, xp, {})]
         if crowns_award:

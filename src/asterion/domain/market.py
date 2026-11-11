@@ -71,15 +71,24 @@ def market_unlocked(stage: str) -> bool:
     return stage.split(":", 1)[0] != _PROLOGUE_STAGE
 
 
-def cumulative_fee(gross_total: int) -> int:
-    """§49.10: floor(gross_sold_total × 5%), so split purchases cannot dodge rounding."""
-    return gross_total * MARKET_FEE_PERCENT // 100
+MARKET_FEE_BPS = MARKET_FEE_PERCENT * 100
 
 
-def split_sale(gross_sold_before: int, fee_charged_before: int, gross: int) -> SaleSplit:
+def cumulative_fee(gross_total: int, fee_bps: int = MARKET_FEE_BPS) -> int:
+    """§49.10: floor(gross_sold_total × 5%), so split purchases cannot dodge rounding.
+
+    ``fee_bps`` is fixed per listing when it is created; the Tesouraria Obra of
+    the seller's Guilda can lower it (domain/guild_works.py).
+    """
+    return gross_total * fee_bps // 10_000
+
+
+def split_sale(
+    gross_sold_before: int, fee_charged_before: int, gross: int, fee_bps: int = MARKET_FEE_BPS
+) -> SaleSplit:
     if gross <= 0:
         raise ValueError("gross must be positive")
-    fee = cumulative_fee(gross_sold_before + gross) - fee_charged_before
+    fee = cumulative_fee(gross_sold_before + gross, fee_bps) - fee_charged_before
     return SaleSplit(fee=fee, net=gross - fee)
 
 

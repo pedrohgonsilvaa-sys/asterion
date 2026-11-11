@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.account import notification_enabled
 from asterion.application.account_risk import record_linked_cooccurrence
+from asterion.application.guild_works import character_work_levels
 from asterion.application.item_escrow import (
     EscrowError,
     NegotiableEntry,
@@ -418,6 +419,7 @@ class MarketService:
                 terms_version=1,
                 gross_sold_total=0,
                 fee_charged_total=0,
+                fee_bps=(await character_work_levels(session, character.id)).market_fee_bps,
                 status="active",
                 created_at=now,
                 expires_at=now + LISTING_DURATION,
@@ -594,7 +596,9 @@ class MarketService:
             gross = purchase.unit_price * purchase.quantity
             if buyer.crowns < gross:
                 raise MarketError("not_enough_crowns")
-            split = split_sale(listing.gross_sold_total, listing.fee_charged_total, gross)
+            split = split_sale(
+                listing.gross_sold_total, listing.fee_charged_total, gross, listing.fee_bps
+            )
             if seller.crowns + split.net > BIGINT_MAX:
                 raise MarketError("seller_wallet_limit")
             undelivered = await deliver_to_inventory(
