@@ -14,3 +14,6 @@ build/
 .idea/
 .vscode/
 .local/
+
+# Produção
+.env.prod
