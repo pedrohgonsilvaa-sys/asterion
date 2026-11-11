@@ -1646,7 +1646,7 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 - **Telas:** o capítulo mostra onde fazer cada objetivo e os botões quando o personagem está no lugar certo. O Local Atual ganha `🌌 Crônica · Neste Local` quando há algo a fazer ali.
 - **Banco:** sem migration. As flags de Leitura ficam em `chronicle_completions`.
 
-**Escolhas da parte 1 que o autor precisa confirmar** (as fontes não decidem):
+**Escolhas da parte 1 (aprovadas pelo autor em 2026-11-11, por delegação):**
 
 1. A Região de Ressonância considera só Regiões onde o personagem já tem Desbravar liberado. Assim, quem acabou de chegar a uma Região continua na anterior até liberar o Desbravar, em vez de ficar sem hub e sem Local. A Região-foco segue a mesma regra.
 2. A garantia da 3ª tentativa conta as tentativas no Local desde a abertura do capítulo.
@@ -1664,7 +1664,7 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 - **Telas:** o capítulo lista o Encontro e mostra `⚔️ Enfrentar` ou `🔁 Enfrentar o Eco de novo` quando o personagem está no Local. `🌌 Crônica · Neste Local` também os oferece. Os botões de combate usam o prefixo `crf:`.
 - **Banco:** sem migration. O nível congelado é lido do snapshot do combate anterior (`game_activities.content_id` = `chronicle.enc_cr01_cNN` e `….eco` na repetição).
 
-**Escolhas da parte 2 que o autor precisa confirmar** (as fontes não decidem):
+**Escolhas da parte 2 (aprovadas pelo autor em 2026-11-11, por delegação):**
 
 1. **Defender do Carregador Repetido não foi aplicado.** O motor não tem Defender de criatura (o `defend` no ciclo de qualquer criatura é ignorado hoje). Aplicar exige mexer no motor compartilhado.
 2. ~~Coro da Multidão Repetida não existe ainda.~~ Entrou na parte 3.
@@ -1686,7 +1686,7 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 - **Telas:** o Chefe com add e a luta em Grupo usam o callback `cri:` (ação por índice e alvo).
 - **Banco:** sem migration.
 
-**Escolhas da parte 3 que o autor precisa confirmar** (as fontes não decidem):
+**Escolhas da parte 3 (aprovadas pelo autor em 2026-11-11, por delegação):**
 
 1. A Chamada é uma ação do Chefe (gasta a vez dele), na primeira oportunidade depois de cair abaixo de 70%, mesmo se ele pular direto para a Fase III.
 2. O N da escala de Chefe conta todo o roster confirmado, Ajudantes incluídos ("roster ativo inicial", GDD §51.5).
