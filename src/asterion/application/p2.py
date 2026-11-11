@@ -32,6 +32,7 @@ from asterion.application.equipment_configuration import (
     reconcile_character_hp,
 )
 from asterion.application.groups import ActivityEligibility, GroupError, GroupService
+from asterion.application.narrative_identity import resolve_character_scene
 from asterion.application.progression import consolidate_character_level
 from asterion.application.road import REFUGE, REGION, RoadService
 from asterion.domain.combat import (
@@ -47,6 +48,7 @@ from asterion.domain.consumables import (
 )
 from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.legacy import legacy_xp_factor
+from asterion.domain.narrative_identity import P2_ALDA_OFFER_SCENE
 from asterion.domain.road import (
     RULESET,
     SPIDER,
@@ -138,6 +140,10 @@ class P2View:
     group_size: int = 1
     proposal_id: UUID | None = None
     proposal_status: str | None = None
+    # Identity-aware lines of the offer, resolved for this character only.
+    identity_lines: tuple[str, ...] = ()
+    identity_options: tuple[tuple[str, str], ...] = ()
+    identity_reply: str | None = None
 
 
 class P2Service:
@@ -1716,6 +1722,15 @@ class P2Service:
                 .limit(1)
             )
             proposal_pair = proposal_rows.first()
+        identity_lines: tuple[str, ...] = ()
+        identity_options: tuple[tuple[str, str], ...] = ()
+        if kind == "offer":
+            offer = await resolve_character_scene(session, character.id, P2_ALDA_OFFER_SCENE)
+            if offer is not None:
+                identity_lines = offer.spoken_lines
+                identity_options = tuple(
+                    (option.option_id, option.label) for option in offer.options
+                )
         return P2View(
             character_id=character.id,
             kind=kind,
@@ -1744,7 +1759,26 @@ class P2Service:
             group_size=group_size,
             proposal_id=proposal_pair[1].id if proposal_pair else None,
             proposal_status=proposal_pair[1].status if proposal_pair else None,
+            identity_lines=identity_lines,
+            identity_options=identity_options,
         )
+
+    async def ask_alda(self, actor: int, option_id: str) -> P2View | None:
+        """Answer an identity option of the offer; read-only, records nothing."""
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                return None
+            quest = await self._quest(session, character.id)
+            world = await self._world(session, character.id)
+            view = await self._view(session, character, quest, world)
+            if view.kind != "offer":
+                return view
+            offer = await resolve_character_scene(session, character.id, P2_ALDA_OFFER_SCENE)
+            option = offer.option(option_id) if offer is not None else None
+            if option is None:
+                return view
+            return replace(view, identity_reply=option.reply)
 
     def _valid(self, quest, version, *, step=None):
         return bool(
