@@ -228,7 +228,9 @@ def get_bot_runtime() -> BotRuntime:
             chronicle_encounters,
         )
     )
-    world_events = WorldEventService(SessionFactory, settings.server_id)
+    world_events = WorldEventService(
+        SessionFactory, settings.server_id, latest_local=road.latest_explorable_local
+    )
     # Also before the world routers: /start must resume an Event combat.
     dispatcher.include_router(world_event_router(world_events, settings.creation_images))
     oaths = OathService(SessionFactory, settings.server_id, notifier=runtime_oath_notifier)

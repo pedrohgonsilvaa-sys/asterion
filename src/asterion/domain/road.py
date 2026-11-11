@@ -4983,6 +4983,21 @@ CR01_AGUARDA_RESPOSTA = Creature(
         "espera", "selo_pendente", "confirmacao_exigida", "insistencia", "pedido_repetido", "oferta",
     ),
 )
+# Chefe de Evento Mundial (§11.5). Each Event phase is its own combat, so the phase
+# gates, the Contratempo DEF mark, the Ressonância once-per-participant rule and the
+# Plena Repetidor are applied by ``chronicle_events.configure_compasso``. The AI order
+# follows the other Crônica Chefes and Ressonância lasts 2T (author decisions, 2026-11-11).
+CR01_O_COMPASSO = Creature(
+    "boss_evento.cr01.o_compasso", "O Compasso", "boss", "balanced", 1, 60, 0, (),
+    (
+        ("batida", "Batida", D("1.00"), 0, D(0), 0),
+        ("onda_de_compasso", "Onda de Compasso", D("0.75"), 0, D(0), 0, None, 0, False, 3, None, D(0), D(0), 0, False, "all_opponents"),
+        ("contratempo", "Contratempo", D("0.95"), 0, D("0.10"), 2, None, 0, False, 3, "defense"),
+        ("batida_plena", "Batida Plena", D("1.10"), 0, D(0), 0, None, 0, True, 4, None, D(0), D(0), 0, False, "all_opponents"),
+        ("ressonancia", "Ressonância", D(0), 0, D(0), 0, None, 0, False, None, None, D(0), D(0), 2, True, "self", None, None, 1, (), (), D("0.50"), D("0.06")),
+    ),
+    ai_priority=("ressonancia", "batida_plena", "onda_de_compasso", "contratempo", "batida"),
+)
 CR01_CREATURES = (
     CR01_REPETIDOR,
     CR01_MARCADOR,
@@ -4992,5 +5007,6 @@ CR01_CREATURES = (
     CR01_ESCRIBA_REPETIDO,
     CR01_MESTRE_DE_TURNO,
     CR01_AGUARDA_RESPOSTA,
+    CR01_O_COMPASSO,
 )
 CREATURE_CATALOG = (*CREATURE_CATALOG, *CR01_CREATURES)

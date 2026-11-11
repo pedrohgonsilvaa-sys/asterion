@@ -1633,7 +1633,7 @@ Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem
 2. Encontros e criaturas Comum/Incomum/Elite (capítulos 1, 2, 3, 5, 6 e 7), `[Enfrentar]`, recompensa da primeira vitória, `rep_cr01_encontro` e Feitos das Elites: entregue (ver "Parte 2" abaixo).
 3. Chefes Mestre de Turno e O Que Aguarda Resposta (capítulos 4 e 8), a regra `pr_cr01_encontro_grupo`, o Coro e os Feitos dos Chefes e do voto: entregue (ver "Parte 3" abaixo).
 4. Masmorra em foco/espelho e o alternativo `dsc_cr01_vestigio_profundo`: entregue (ver "Parte 4" abaixo).
-5. Evento Mundial O Compasso e `rep_cr01_evento`.
+5. Evento Mundial O Compasso e `rep_cr01_evento`: entregue (ver "Parte 5" abaixo).
 6. Entradas do Códice, Feitos restantes e Crônica Arquivada.
 
 Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos podem ser concluídos. Os kits das criaturas e dos Chefes continuam em `SIMULAR`.
@@ -1716,6 +1716,34 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 7. A liberação é conferida a cada tentativa: liberar uma Masmorra depois tira o alternativo do Desbravar.
 8. Masmorra não tem Ajudante: todo membro passou pelos gates de entrada. Conta quem tem participação > 0, o capítulo aberto no início da run e a P1 concluída.
 9. O texto do Vestígio Profundo é rascunho e é o mesmo nos 4 capítulos. A tela de resultado da run não ganha linha da Crônica (como já acontece com o repetível); o ✅ aparece no capítulo.
+
+**Parte 5 (entregue):**
+
+- **Chefe** `boss_evento.cr01.o_compasso` em `domain/road.py` (`CR01_O_COMPASSO`, Equilibrado, perfil de Chefe de Evento do GDD §49.15), kit da proposta §11.5, em `SIMULAR`. Como cada fase do Evento é um combate próprio, as travas de fase ficam em `domain/chronicle_events.py` (`configure_compasso`): Fase 1 Batida e Contratempo; Fase 2 + Onda de Compasso e Batida Plena; Fase 3 + Ressonância.
+- **Agenda** em `domain/chronicle_events.py`: do Dia 1 até T, todo horário normal (ter/qui/sáb, 12:00 e 20:00) roda O Compasso, com 6 ocorrências no mesmo horário, uma por faixa de Região (nível de evento 10/20/30/40/50/60, com Sintonização do Véu). Até o D42 é `evt_cr01_ressonancia`; do D43 em diante, `evt_cr01_ressonancia_plena`. Fora da Crônica vale o catálogo normal (vazio).
+- **Serviço** (`application/world_events.py`): a versão vai no `occurrence_key` (`<horário>.cr01r1` … `cr01p6`), então não há migration. O personagem escolhe uma versão por horário, de uma Região onde já tem Desbravar liberado (erros `region_locked` e `other_version`). As regras do Evento não mudam: HP compartilhado, 3 fases, escala `N^0,88`, elegibilidade ≥2 fases + 8 Ações Significativas, reentrada em 2 min, economia padrão.
+- **Plena:** na Fase 2, cada instância ganha 1 Repetidor (kit do Repetidor, HP ×0,30, opcional, sem XP nem Bestiário). O dano nele não reduz a barra do Chefe.
+- **Crônica:** no acerto da ocorrência, cada participante elegível chama `record_world_event` (`application/chronicle_activities.py`): `rep_cr01_evento` com chave `occurrence_id` (1 por ocorrência) e, no máximo, 1 objetivo de Evento (o pendente mais antigo que aceita aquele Evento). `cap_04_obj_03` aceita Ressonância; `cap_07_obj_04` e `cap_08_obj_03` aceitam Plena.
+- **Telas:** o capítulo mostra `📍 <objetivo> · <dia> às <hora> · Eventos Mundiais, versão <Região de Ressonância>`, ou `acontecendo agora, entrada até <hora>`. Não há botão: entra pelo menu 🌍 Eventos, que lista as versões liberadas quando o horário tem mais de uma.
+- **Banco:** sem migration. O `content_id` da atividade de combate do Evento agora leva a fase (`world_event:<id>:<fase>`), para saber se é a primeira instância da Fase 3.
+
+**Decisões do autor na parte 5 (2026-11-11):**
+
+1. A Plena começa no D43: até o D42 só Ressonância; a partir do D43 só Plena. O `cap_04_obj_03` (opcional) deixa de ser possível no D43.
+2. O jogador escolhe a versão entre as Regiões já liberadas; nas inferiores, Sintonização do Véu.
+3. Repetidores da Plena: 1 por instância, HP ×0,30.
+4. Durante a Crônica, todos os horários de Evento são da Crônica.
+5. A Barreira da Ressonância dura 2 turnos e sai só na 1ª instância de Fase 3 de cada participante (quem reentra não a enfrenta de novo).
+6. Ordem de IA de O Compasso: resolver Batida Plena pendente; Ressonância; preparar Batida Plena; Onda de Compasso; Contratempo (não reaplica enquanto a própria marca está ativa); Batida.
+
+**Escolhas da parte 5 (aguardam aprovação do autor):**
+
+1. "Região já acessada" é a Região com Desbravar liberado, a mesma regra da Região de Ressonância (escolha 1 da parte 1).
+2. Elegibilidade é a do Evento normal: exige a ocorrência concluída. Se o tempo acaba, ninguém conta, nem para objetivo nem para Trilha.
+3. Uma ocorrência conclui no máximo 1 objetivo de Evento, o mais antigo. Assim o `cap_08_obj_03` sempre vem de uma ocorrência diferente da do `cap_07_obj_04`.
+4. Onda de Compasso e Batida Plena não têm a regra de "2+ alvos": cada instância é Solo, então elas acertam só o jogador. A proposta não dá restrição.
+5. Os textos das 3 fases e da conclusão são rascunho. Os nomes na tela são "Ressonância" e "Ressonância Plena".
+6. A manutenção agendada (`round_scheduler`) não recebe a consulta de Locais: ele só abre, encerra e acerta ocorrências.
 
 **Etapa 9 (origem):** Crônica I, Nova Vigília e Trilha, integradas com Arena e Batalha de Guildas. O conteúdo está proposto em `ASTERION_CRONICA_I_ECOS_DA_CONVERGENCIA_v0_2_PROPOSTA.md` (2026-11-09). Os kits das 9 criaturas novas estão em `SIMULAR` e precisam de Balanceamento antes do lançamento.
 
