@@ -14,3 +14,6 @@ build/
 .idea/
 .vscode/
 .local/
+
+# Backups locais do banco (nunca versionar)
+backups/
