@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from uuid import uuid4
 
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from asterion.application.outbox import outbox_stats, requeue_dead
 from asterion.infrastructure.db.job_lock import run_exclusive
@@ -81,3 +81,15 @@ def test_scheduler_wraps_every_job_but_outbox():
     assert "outbox-dispatch" in jobs and "hunt-round-advance" in jobs
     assert jobs["hunt-round-advance"].func.__name__ == "run"
     assert jobs["outbox-dispatch"].func.__name__ == "run_maintenance"
+    # The locks use their own pool, one connection per locked job.
+    from asterion.infrastructure.db import session
+
+    cells = [c.cell_contents for c in jobs["hunt-round-advance"].func.__closure__]
+    lock_engine = next(c for c in cells if isinstance(c, AsyncEngine))
+    assert lock_engine is not session.engine
+    assert lock_engine.pool.size() == len(jobs) - 1
+    assert all(
+        lock_engine in [c.cell_contents for c in job.func.__closure__]
+        for job_id, job in jobs.items()
+        if job_id != "outbox-dispatch"
+    )

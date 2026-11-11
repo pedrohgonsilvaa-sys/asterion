@@ -1,6 +1,7 @@
 """Background jobs: timed Ronda de Caça encounters, Guild and Market upkeep, PvP."""
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from asterion.application.chronicle import ChronicleService
 from asterion.application.expeditions import ExpeditionService
@@ -20,7 +21,7 @@ from asterion.bot.pvp_handlers import deliver_notices
 from asterion.bot.world_event_handlers import deliver_world_event_notices
 from asterion.config import get_settings
 from asterion.infrastructure.db.job_lock import run_exclusive
-from asterion.infrastructure.db.session import SessionFactory, engine
+from asterion.infrastructure.db.session import SessionFactory
 
 
 def build_round_scheduler() -> AsyncIOScheduler:
@@ -174,14 +175,19 @@ def build_round_scheduler() -> AsyncIOScheduler:
             replace_existing=True,
         )
     # One execution per tick across all instances (the Outbox claims rows itself).
-    for job in scheduler.get_jobs():
-        if job.id != "outbox-dispatch":
-            job.modify(func=_exclusive(job.id, job.func))
+    # Each lock holds a connection while its job runs, so the locks get their own
+    # pool: one connection per job (max_instances=1), never the game's pool.
+    locked = [job for job in scheduler.get_jobs() if job.id != "outbox-dispatch"]
+    lock_engine = create_async_engine(
+        settings.database_url, pool_pre_ping=True, pool_size=len(locked), max_overflow=0
+    )
+    for job in locked:
+        job.modify(func=_exclusive(lock_engine, job.id, job.func))
     return scheduler
 
 
-def _exclusive(job_id, job):
+def _exclusive(lock_engine: AsyncEngine, job_id, job):
     async def run() -> None:
-        await run_exclusive(engine, job_id, job)
+        await run_exclusive(lock_engine, job_id, job)
 
     return run
