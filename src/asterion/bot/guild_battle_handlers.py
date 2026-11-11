@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.dispatcher.event.bases import SkipHandler
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, Message
 
@@ -33,15 +34,23 @@ from asterion.bot.guild_battle_ui import (
     render_substitution,
 )
 from asterion.bot.guilds_ui import unpack
-from asterion.bot.telegram_outbox import TelegramOutbox, enqueue_notices
 
 
 async def deliver_guild_battle_notices(
-    service: GuildBattleService, outbox: TelegramOutbox, notices: Iterable[GuildBattleNotice]
+    service: GuildBattleService, bot: Bot, notices: Iterable[GuildBattleNotice]
 ) -> None:
     """Best effort, after the notification categories: every screen can be reopened."""
-    allowed = await service.deliverable(list(notices))
-    await enqueue_notices(outbox, "guild_battle", allowed, render_guild_battle)
+    for notice in await service.deliverable(list(notices)):
+        screen = render_guild_battle(notice.view)
+        try:
+            await bot.send_message(
+                notice.telegram_id,
+                screen.text,
+                reply_markup=screen.keyboard,
+                parse_mode=screen.parse_mode,
+            )
+        except TelegramAPIError:
+            continue
 
 
 def _utcnow() -> datetime:
@@ -77,9 +86,7 @@ def guild_battle_router(
 
     async def finish(query: CallbackQuery, outcome: GuildBattleOutcome) -> None:
         await show(query, render_guild_battle(outcome.view))
-        await deliver_guild_battle_notices(
-            service, TelegramOutbox(service.sessions), outcome.notices
-        )
+        await deliver_guild_battle_notices(service, query.bot, outcome.notices)
 
     @router.message(CommandStart())
     @router.message(Command("menu"))

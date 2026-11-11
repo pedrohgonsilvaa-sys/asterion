@@ -1,7 +1,7 @@
 """Telegram messages sent through the Transactional Outbox (GDD §43.5).
 
-Notices to a player who did not just press a button (job notices, invites, the
-other side of a Trade) are not sent inline any more. They become an
+Notices that scheduler jobs produce (Arena/Duel, Guild Battle, World Event, Oath,
+Expedition) are not sent inline any more. They become an
 `OutboxMessage` with topic `telegram.send_message`, and the dispatcher job sends
 them with retry. Approved by the author on 2026-11-11.
 
@@ -18,6 +18,7 @@ Telegram has no idempotency key, so a crash between a successful send and the
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import logging
@@ -25,7 +26,6 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
-from uuid import uuid4
 
 from aiogram.exceptions import (
     TelegramBadRequest,
@@ -86,6 +86,29 @@ def screen_digest(text: str, markup: InlineKeyboardMarkup | None) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
+VOLATILE_FIELDS = frozenset({"seconds_left", "deadline"})
+DEDUP_WINDOW_SECONDS = 600
+
+
+def view_digest(view: object, markup: InlineKeyboardMarkup | None) -> str:
+    """Hash of what the notice says, without the countdown that changes every run."""
+    state = dataclasses.asdict(view) if dataclasses.is_dataclass(view) else repr(view)
+    if isinstance(state, dict):
+        state = {k: v for k, v in state.items() if k not in VOLATILE_FIELDS}
+    raw = json.dumps(
+        [state, markup.model_dump(mode="json", exclude_none=True) if markup else None],
+        sort_keys=True,
+        ensure_ascii=False,
+        default=str,
+    )
+    return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
+def dedup_window(now: datetime) -> str:
+    """Repeats of one run fall in the same window, so they share the key."""
+    return str(int(now.timestamp()) // DEDUP_WINDOW_SECONDS)
+
+
 def screen_deadline(view: object, now: datetime) -> datetime | None:
     """The prompt's own deadline: `seconds_left` (Arena, Duel, turns) or `deadline`."""
     seconds = getattr(view, "seconds_left", None)
@@ -100,18 +123,21 @@ def notice_message(
     chat_id: int,
     screen: _Screen,
     *,
-    scope: str,
     view: object | None = None,
     now: datetime,
 ) -> OutboundTelegram:
-    """A job notice. `scope` names the job run, so one run never enqueues twice."""
-    digest = screen_digest(screen.text, screen.keyboard)
+    """A job notice. The key is stable: source, chat, content and a 10 min window."""
+    digest = (
+        view_digest(view, screen.keyboard)
+        if view is not None
+        else screen_digest(screen.text, screen.keyboard)
+    )
     return OutboundTelegram(
         chat_id=chat_id,
         text=screen.text,
         reply_markup=screen.keyboard,
         parse_mode=screen.parse_mode,
-        dedup_key=f"{source}:{scope}:{chat_id}:{digest}",
+        dedup_key=f"{source}:{dedup_window(now)}:{chat_id}:{digest}",
         expires_at=screen_deadline(view, now) if view is not None else None,
     )
 
@@ -178,13 +204,11 @@ async def enqueue_notices(
 ) -> int:
     """Render job/peer notices (`telegram_id` + `view`) and enqueue them in one batch."""
     current = now or datetime.now(UTC)
-    scope = uuid4().hex[:12]
     return await outbox.send_many(
         notice_message(
             source,
             notice.telegram_id,
             render(notice.view),
-            scope=scope,
             view=notice.view,
             now=current,
         )

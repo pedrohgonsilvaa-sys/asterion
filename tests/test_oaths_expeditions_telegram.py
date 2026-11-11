@@ -8,6 +8,7 @@ from uuid import UUID
 
 import pytest
 from aiogram import Bot, Dispatcher
+from aiogram.exceptions import TelegramForbiddenError
 from aiogram.methods import EditMessageText, SendMessage
 from aiogram.types import Chat, User
 from aiogram.types import Message as TelegramMessage
@@ -182,11 +183,14 @@ def test_expedition_result_follows_ui_48_5():
 
 @pytest.mark.asyncio
 async def test_notices_are_enqueued_once_per_player():
-    oath_outbox = RecordingOutbox()
+    # Oath: a button-driven send stays direct and survives a blocked chat.
+    blocked = TelegramForbiddenError(method=SendMessage(chat_id=1, text="x"), message="blocked")
+    oath_bot = AsyncMock()
+    oath_bot.send_message.side_effect = [blocked, None]
     notice = OathTurnNotice("Provação")
-    await deliver_oath_notices(oath_outbox, [OathNotice(1, notice), OathNotice(2, notice)])
-    assert [m.chat_id for m in oath_outbox.messages] == [1, 2]
-    assert len({m.dedup_key for m in oath_outbox.messages}) == 2
+    await deliver_oath_notices(oath_bot, [OathNotice(1, notice), OathNotice(2, notice)])
+    assert oath_bot.send_message.await_count == 2
+    # Expedition: scheduler-only, goes through the Outbox.
     expedition_outbox = RecordingOutbox()
     stage = ExpeditionStageNotice("Rota", 1)
     await deliver_expedition_notices(

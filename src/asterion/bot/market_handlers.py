@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
 from uuid import UUID
 
 from aiogram import Bot, F, Router
@@ -52,7 +51,6 @@ from asterion.bot.market_ui import (
     trade_quantity_prompt,
     with_ref,
 )
-from asterion.bot.telegram_outbox import TelegramOutbox, screen_digest
 from asterion.domain.market import SHOP_DESCRIPTION_MAX, SHOP_NAME_MAX
 
 _Failure = (MarketError, TradeError)
@@ -87,36 +85,24 @@ def market_router(
     async def shop_screen(shop: ShopView, notice: str | None = None) -> Screen:
         return render_my_shop(shop, notice) if shop.is_owner else render_public_shop(shop, notice)
 
-    outbox = TelegramOutbox(market.sessions)
-
     async def notify(
         bot: Bot,
         telegram_id: int | None,
         text: str,
         markup: InlineKeyboardMarkup | None = None,
-        *,
-        key: str,
-        expires_at: datetime | None = None,
     ) -> None:
-        # Through the Outbox; the state is durable and shows on the next screen anyway.
-        await outbox.send(telegram_id, text, key=key, reply_markup=markup, expires_at=expires_at)
+        if telegram_id is None:
+            return
+        try:
+            await bot.send_message(telegram_id, text, reply_markup=markup)
+        except TelegramAPIError:
+            return  # The state is durable; the player sees it on the next screen.
 
     async def notify_trade(bot: Bot, view: TradeView, text: str) -> None:
         keyboard = render_trade_closed("").keyboard
-        open_trade = view.status in {"invited", "open"}
-        if open_trade:
+        if view.status in {"invited", "open"}:
             keyboard = _open_trade_keyboard()
-        await notify(
-            bot,
-            view.counterpart_telegram_id,
-            text,
-            keyboard,
-            key=(
-                f"trade:{view.trade_id.hex}:{view.revision}:{view.status}:"
-                f"{view.counterpart_telegram_id}:{screen_digest(text, None)}"
-            ),
-            expires_at=view.expires_at if open_trade else None,
-        )
+        await notify(bot, view.counterpart_telegram_id, text, keyboard)
 
     async def deep_link(bot: Bot) -> Callable[[str], str] | None:
         try:
@@ -253,12 +239,7 @@ def market_router(
             return
         await show(query, render_purchase_done(result))
         if result.notify_seller and not result.already_committed:
-            await notify(
-                query.bot,
-                result.seller_telegram_id,
-                sale_notice(result),
-                key=f"market-sale:{result.purchase_id.hex}",
-            )
+            await notify(query.bot, result.seller_telegram_id, sale_notice(result))
 
     async def handle_trade(query: CallbackQuery, actor: int, parts: list[str]) -> None:
         action = parts[1]

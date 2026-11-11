@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.dispatcher.event.bases import SkipHandler
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, ForceReply, Message
 
@@ -27,14 +28,23 @@ from asterion.bot.pvp_ui import (
     render_ranking,
     render_surrender_confirm,
 )
-from asterion.bot.telegram_outbox import TelegramOutbox, enqueue_notices
 
 DUEL_PROMPT = with_ref("Envie o nome do personagem que você quer desafiar.", DUEL_PROMPT_REF)
 
 
-async def deliver_notices(outbox: TelegramOutbox, notices: Iterable[PvpNotice]) -> None:
-    """Through the Outbox: the state is durable and every screen can be reopened."""
-    await enqueue_notices(outbox, "pvp", notices, render_pvp)
+async def deliver_notices(bot: Bot, notices: Iterable[PvpNotice]) -> None:
+    """Best effort: the state is durable and every screen can be reopened."""
+    for notice in notices:
+        screen = render_pvp(notice.view)
+        try:
+            await bot.send_message(
+                notice.telegram_id,
+                screen.text,
+                reply_markup=screen.keyboard,
+                parse_mode=screen.parse_mode,
+            )
+        except TelegramAPIError:
+            continue
 
 
 def pvp_router(service: PvpService, images: dict[str, str]) -> Router:
@@ -46,7 +56,7 @@ def pvp_router(service: PvpService, images: dict[str, str]) -> Router:
         await query.answer()
         if isinstance(query.message, Message):
             await present(query.message, render_pvp(outcome.view), images, edit=True)
-        await deliver_notices(TelegramOutbox(service.sessions), outcome.notices)
+        await deliver_notices(query.bot, outcome.notices)
 
     async def fail(query: CallbackQuery, error: PvpError) -> None:
         await query.answer(error_text(error.code), show_alert=True)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import partial
 from unittest.mock import AsyncMock
@@ -16,6 +17,7 @@ from asterion.bot.telegram_outbox import (
     TOPIC,
     OutboundTelegram,
     TelegramOutbox,
+    enqueue_notices,
     send_outbox_message,
 )
 from asterion.infrastructure.db.models import OutboxMessage
@@ -42,6 +44,45 @@ async def test_enqueue_is_idempotent_by_key_and_ordered_by_chat(database):
     assert (row.topic, row.dedup_key, row.aggregate_key) == (TOPIC, "k1", "telegram:7")
     assert row.payload["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "x:a"
     assert "parse_mode" not in row.payload  # keeps the bot's default
+
+
+@dataclass(frozen=True)
+class _View:
+    text: str
+    seconds_left: int = 0
+
+
+@dataclass(frozen=True)
+class _Notice:
+    telegram_id: int
+    view: _View
+
+
+@dataclass(frozen=True)
+class _Screen:
+    text: str
+    keyboard: InlineKeyboardMarkup | None = None
+    parse_mode: str | None = None
+
+
+async def test_job_notice_key_is_stable_across_runs(database):
+    sessions = database[1]
+    outbox = TelegramOutbox(sessions)
+    now = datetime(2026, 11, 11, 12, 0, 30, tzinfo=UTC)
+
+    def render(view):
+        return _Screen(f"{view.text} ({view.seconds_left}s)", MARKUP)
+
+    first = [_Notice(7, _View("Sua vez", 45)), _Notice(8, _View("Sua vez", 45))]
+    again = [_Notice(7, _View("Sua vez", 41)), _Notice(8, _View("Sua vez", 41))]
+    assert await enqueue_notices(outbox, "pvp", first, render, now=now) == 2
+    # Repeat of the same run: countdown differs, key does not.
+    later = now + timedelta(seconds=4)
+    assert await enqueue_notices(outbox, "pvp", again, render, now=later) == 0
+    # Another text, or another recipient, is another notice.
+    other = [_Notice(7, _View("Turno do rival", 45))]
+    assert await enqueue_notices(outbox, "pvp", other, render, now=now) == 1
+    assert len(await _rows(sessions)) == 3
 
 
 async def test_handler_sends_with_keyboard_and_drops_expired():
@@ -84,3 +125,4 @@ async def test_blocked_bot_is_dead_at_once_and_flood_wait_is_honoured(database):
     flood = rows["flood"]
     assert flood.status == "pending"
     assert flood.available_at - datetime.now(UTC) > timedelta(minutes=14)
+    assert flood.attempt_count == 0

@@ -44,7 +44,6 @@ from asterion.infrastructure.db.models import (
     CharacterNotificationPreference,
     GuildBattleRegistration,
 )
-from tests.outbox_drain import RecordingOutbox
 from tests.test_guild_battle import (
     CLOSED,
     CONFIRM,
@@ -215,9 +214,9 @@ async def test_delivery_skips_what_the_player_switched_off():
     service = AsyncMock()
     notices = [GuildBattleNotice(1, GuildBattleMessageView("bye"))]
     service.deliverable.return_value = []
-    outbox = RecordingOutbox()
-    await deliver_guild_battle_notices(service, outbox, notices)
-    assert outbox.messages == []
+    bot = AsyncMock()
+    await deliver_guild_battle_notices(service, bot, notices)
+    bot.send_message.assert_not_awaited()
 
 
 # ---------------------------------------------------------------- database

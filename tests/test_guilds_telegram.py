@@ -37,7 +37,6 @@ from asterion.bot.guilds_ui import (
     unpack,
 )
 from asterion.domain.guilds import GuildRole, Recruitment
-from tests.outbox_drain import drain_telegram_outbox
 from tests.test_character_surfaces_telegram import _last_screen, _message_update
 from tests.test_creation_ui import callback_update
 from tests.test_groups import _seed_characters
@@ -231,9 +230,7 @@ class _Client:
         await self.dispatcher.feed_raw_update(
             self.bot, callback_update(data, actor=actor, update_id=self.update_id)
         )
-        screen = _last_screen(self.bot)
-        await drain_telegram_outbox(self.service.sessions, self.bot)
-        return screen
+        return _last_screen(self.bot)
 
     async def say(self, actor, text, reply_prompt=None):
         self.update_id += 1
@@ -250,9 +247,7 @@ class _Client:
             self.bot,
             _message_update(text, actor=actor, update_id=self.update_id, reply_to=reply),
         )
-        screen = _last_screen(self.bot)
-        await drain_telegram_outbox(self.service.sessions, self.bot)
-        return screen
+        return _last_screen(self.bot)
 
 
 def _button(screen, label):

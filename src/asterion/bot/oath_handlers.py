@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from uuid import UUID
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.dispatcher.event.bases import SkipHandler
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, Message
 
@@ -14,18 +15,27 @@ from asterion.application.oaths import OathError, OathNotice, OathService, OathV
 from asterion.bot.combat_ui import OathCombatCallback
 from asterion.bot.creation_handlers import present
 from asterion.bot.oath_ui import error_text, render_abandon_confirm, render_oath
-from asterion.bot.telegram_outbox import TelegramOutbox, enqueue_notices
 
 
-async def deliver_oath_notices(outbox: TelegramOutbox, notices: Iterable[OathNotice]) -> None:
+async def deliver_oath_notices(bot: Bot, notices: Iterable[OathNotice]) -> None:
     """Best effort: every state stays reachable from the Juramento screen."""
-    await enqueue_notices(outbox, "oath", notices, render_oath)
+    for notice in notices:
+        screen = render_oath(notice.view)
+        try:
+            await bot.send_message(
+                notice.telegram_id,
+                screen.text,
+                reply_markup=screen.keyboard,
+                parse_mode=screen.parse_mode,
+            )
+        except TelegramAPIError:
+            continue
 
 
 async def runtime_oath_notifier(notices: Sequence[OathNotice]) -> None:
-    from asterion.infrastructure.db.session import SessionFactory
+    from asterion.bot.runtime import get_bot_runtime
 
-    await deliver_oath_notices(TelegramOutbox(SessionFactory), notices)
+    await deliver_oath_notices(get_bot_runtime().bot, notices)
 
 
 def oath_router(service: OathService, images: dict[str, str]) -> Router:

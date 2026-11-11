@@ -188,8 +188,10 @@ class OutboxDispatcher:
 
     async def _fail(self, message: _Claimed, error: BaseException) -> str:
         text = f"{type(error).__name__}: {error}"[:MAX_ERROR_LENGTH]
-        exhausted = message.attempt_count >= MAX_ATTEMPTS or isinstance(
-            error, PermanentOutboxError
+        # A receiver's own wait (flood control) is not a failure: it refunds the attempt.
+        waiting = isinstance(error, OutboxRetryLater)
+        exhausted = not waiting and (
+            message.attempt_count >= MAX_ATTEMPTS or isinstance(error, PermanentOutboxError)
         )
         values: dict[str, Any] = {"last_error": text}
         if exhausted:
@@ -197,7 +199,8 @@ class OutboxDispatcher:
         else:
             delay = retry_delay(message.attempt_count)
             if isinstance(error, OutboxRetryLater):
-                delay = max(delay, timedelta(seconds=error.seconds))
+                delay = timedelta(seconds=max(error.seconds, 1))
+                values["attempt_count"] = OutboxMessage.attempt_count - 1
             values["status"] = PENDING
             values["available_at"] = func.now() + delay
         async with self.sessions.begin() as session:
