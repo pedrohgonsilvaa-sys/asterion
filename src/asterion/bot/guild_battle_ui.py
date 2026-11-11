@@ -549,6 +549,8 @@ def _render_result(view: GuildBattleResultView) -> Screen:
         lines.append(f"👑 Campeão · {label}")
     score = {"win": Decimal(1), "draw": Decimal("0.5"), "loss": Decimal(0)}[view.outcome]
     lines.extend(["", f"📈 Classificação · +{classification_points(score)}"])
+    if view.war_hall_crowns > 0:
+        lines.append(f"🏰 Salão de Guerra · +{view.war_hall_crowns} Coroas por combatente")
     flavor = pvp_flavor("guild_battle", view.outcome, str(view.battle_id))
     lines.extend(["", f"<i>{escape(flavor)}</i>"])
     return Screen("\n".join(lines), _IMAGE, _keyboard(_BACK_TO_GUILD), "HTML")

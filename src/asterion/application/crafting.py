@@ -17,6 +17,7 @@ from asterion.application.combat_configuration_guard import (
     lock_for_combat_configuration_mutation,
 )
 from asterion.application.equipment import equipment_instance_payload
+from asterion.application.guild_works import character_work_levels
 from asterion.application.inventory_capacity import (
     INVENTORY_CAPACITY,
     PENDING_CAPACITY,
@@ -27,6 +28,7 @@ from asterion.application.professions import (
     ProfessionService,
 )
 from asterion.application.safe_location import current_permanent_brazier
+from asterion.domain.guild_works import discounted
 from asterion.domain.professions import (
     MATERIAL_NAMES,
     RecipeDefinition,
@@ -460,7 +462,14 @@ class CraftingService:
         )
 
     def _recipe_view(
-        self, character, recipe, active_row, material_rows, location, foreground
+        self,
+        character,
+        recipe,
+        active_row,
+        material_rows,
+        location,
+        foreground,
+        recipe_discount: int = 0,
     ) -> RecipeView:
         item_level = None
         reason = None
@@ -471,10 +480,8 @@ class CraftingService:
                 reason = CraftingErrorCode.CHARACTER_LEVEL
         required = recipe_materials(recipe, item_level or character.level)
         ingredients, bound = self._plan_ingredients(required, material_rows)
-        if recipe.output_kind == "equipment":
-            cost = recipe_crown_cost(recipe, item_level or character.level)
-        else:
-            cost = recipe_crown_cost(recipe, item_level or character.level)
+        # Arquivo do Véu of the character's current Guilda (domain/guild_works.py).
+        cost = discounted(recipe_crown_cost(recipe, item_level or character.level), recipe_discount)
         if recipe.output_kind == "enchantment" and not recipe.creation_enabled:
             reason = CraftingErrorCode.REQUIRES_EQUIPMENT
         elif active_row is None:
@@ -513,7 +520,10 @@ class CraftingService:
         location,
         foreground,
     ) -> RecipeView:
-        view = self._recipe_view(character, recipe, active_row, material_rows, location, foreground)
+        discount = (await character_work_levels(session, character.id)).recipe_discount
+        view = self._recipe_view(
+            character, recipe, active_row, material_rows, location, foreground, discount
+        )
         delivery = await self._delivery_destination(session, character, recipe, view.result_bound)
         if (
             view.reason is None

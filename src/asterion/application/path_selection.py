@@ -17,8 +17,10 @@ from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     resolve_character_combat_stats,
 )
+from asterion.application.guild_works import character_work_levels
 from asterion.domain.arts import active_art_definition
 from asterion.domain.economy import path_switch_cost
+from asterion.domain.guild_works import discounted
 from asterion.domain.paths import path_belongs_to_class, paths_for_class
 from asterion.infrastructure.db.models import (
     Character,
@@ -68,6 +70,8 @@ class PathView:
     foreground: bool
     configuration_version: int
     incompatible_art_count: int = 0
+    # Altar do Véu discount (percent) of the character's current Guilda.
+    respec_discount: int = 0
 
     @property
     def available_paths(self) -> tuple[str, ...]:
@@ -75,7 +79,7 @@ class PathView:
 
     @property
     def switch_cost(self) -> int:
-        return path_switch_cost(self.level)
+        return discounted(path_switch_cost(self.level), self.respec_discount)
 
     @property
     def safe_location(self) -> bool:
@@ -158,7 +162,10 @@ class PathSelectionService:
             )
             if world is None or world.location not in SAFE_PATH_CHANGE_LOCATIONS:
                 raise PathMutationRejected(PathMutationCode.WRONG_LOCATION)
-            cost = path_switch_cost(character.level)
+            cost = discounted(
+                path_switch_cost(character.level),
+                (await character_work_levels(session, character.id)).respec_discount,
+            )
             if character.crowns < cost:
                 raise PathMutationRejected(PathMutationCode.INSUFFICIENT_CROWNS)
 
@@ -303,4 +310,5 @@ class PathSelectionService:
             foreground=blocker is not None,
             configuration_version=character.combat_configuration_version,
             incompatible_art_count=incompatible_count,
+            respec_discount=(await character_work_levels(session, character.id)).respec_discount,
         )

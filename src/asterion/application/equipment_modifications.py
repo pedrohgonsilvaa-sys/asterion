@@ -22,6 +22,7 @@ from asterion.application.equipment_configuration import (
     resolve_character_combat_stats,
 )
 from asterion.application.equipment_view import EquipmentItemView, EquipmentViewService
+from asterion.application.guild_works import character_work_levels
 from asterion.application.inventory_capacity import INVENTORY_CAPACITY, inventory_slots
 from asterion.application.professions import REFUGE
 from asterion.domain.equipment import assignment_for_item_slot, parse_equipment_slot
@@ -42,6 +43,7 @@ from asterion.domain.equipment_stats import (
     equipment_stat_contribution,
     item_snapshot_from_persisted,
 )
+from asterion.domain.guild_works import discounted
 from asterion.domain.professions import (
     IRON,
     MATERIAL_NAMES,
@@ -111,7 +113,10 @@ class EquipmentModificationService:
             fragment_id = f"material.tdo.fragmento_aprimoramento_{grade_id}"
             required = enhancement_fragment_cost(item.slot, target)
             owned = await self._material_total(session, character.id, fragment_id)
-            cost = enhancement_crown_cost(item.item_level, item.slot, item.rarity, target)
+            cost = discounted(
+                enhancement_crown_cost(item.item_level, item.slot, item.rarity, target),
+                (await character_work_levels(session, character.id)).enhancement_discount,
+            )
             now = self._contribution(item, payload)
             next_payload = {**payload, "enhancement": target}
             next_stats = self._contribution(item, next_payload)
@@ -458,7 +463,10 @@ class EquipmentModificationService:
             target = int(payload.get("enhancement", 0)) + 1
             if target > 10:
                 raise EquipmentModificationRejected("MAX_ENHANCEMENT")
-            cost = enhancement_crown_cost(item.item_level, item.slot, item.rarity, target)
+            cost = discounted(
+                enhancement_crown_cost(item.item_level, item.slot, item.rarity, target),
+                (await character_work_levels(session, character.id)).enhancement_discount,
+            )
             grade = equipment_grade(item.item_level)
             grade_id = ("i", "ii", "iii", "iv", "v", "vi")[grade - 1]
             fragment_id = f"material.tdo.fragmento_aprimoramento_{grade_id}"

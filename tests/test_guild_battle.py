@@ -35,6 +35,7 @@ from asterion.infrastructure.db.models import (
     GuildBattleProfile,
     GuildBattleRegistration,
     GuildMember,
+    GuildProject,
 )
 
 D = Decimal
@@ -524,3 +525,47 @@ async def test_player_actions_follow_turn_and_version(database):
         await _code(service.action(_actor("Aurora", 6), front.id, version, 0, "d0", now=START))
         == "not_found"
     )
+
+
+async def test_war_hall_pays_each_combatant_of_its_guild(database):
+    await _seed(database)
+    service = _service(database)
+    async with database[1].begin() as session:
+        aurora_id = await session.scalar(select(Guild.id).where(Guild.name == "Aurora"))
+        for level in (1, 2):  # Salão de Guerra II: 110 Coroas per combatant.
+            session.add(
+                GuildProject(
+                    guild_id=aurora_id,
+                    kind="war_hall",
+                    level=level,
+                    status="completed",
+                    cost=1,
+                    funded=1,
+                    started_at=REGISTER,
+                )
+            )
+    await _register(database, service, "Aurora")
+    await _register(database, service, "Brasas")
+    await service.run_maintenance(now=PAIR)
+    await _confirm(service, "Aurora", (1, 2, 3, 4, 5))
+    await _confirm(service, "Brasas", (1, 2, 3, 4, 5))
+    await service.run_maintenance(now=START)
+    async with database[1]() as session:
+        battle = await session.scalar(select(GuildBattle))
+    brasas_side = "b" if battle.guild_a_id == aurora_id else "a"
+    await _finish(database, service, "front_1", brasas_side, START + timedelta(minutes=3))
+    notices = await _finish(database, service, "front_2", brasas_side, START + timedelta(minutes=4))
+    results = {
+        item.view.guild_name: item.view
+        for item in notices
+        if isinstance(item.view, GuildBattleResultView)
+    }
+    assert results["Aurora"].outcome == "win"
+    assert (results["Aurora"].war_hall_crowns, results["Brasas"].war_hall_crowns) == (110, 0)
+    async with database[1]() as session:
+        crowns = {
+            row.telegram_id: row.crowns
+            for row in (await session.scalars(select(Character))).all()
+        }
+    assert [crowns[_actor("Aurora", i)] for i in range(1, 8)] == [110] * 5 + [0, 0]
+    assert {crowns[_actor("Brasas", i)] for i in range(1, 8)} == {0}

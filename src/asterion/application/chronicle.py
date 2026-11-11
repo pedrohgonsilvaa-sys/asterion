@@ -23,11 +23,12 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.competitive_cycle import advisory_key, current_cycle_started_at
+from asterion.application.cosmetic_catalog import COSMETICS_BY_ID
 from asterion.application.engagement import EngagementError, Granted, GrantedItem, grant_bundle
 from asterion.domain.arena import elo_for, soft_reset_renome
 from asterion.domain.chronicle import (
@@ -68,7 +69,9 @@ from asterion.domain.chronicle import (
 )
 from asterion.domain.engagement import Bundle
 from asterion.domain.guild_battle import (
+    REWARD_COSMETICS,
     StandingCandidate,
+    guild_reward_tier,
     individual_reward_eligible,
     order_standings,
     reward_eligible,
@@ -927,9 +930,12 @@ class ChronicleService:
                 if profile.real_battles > 0 or profile.byes > 0
             ]
         )
+        tiers: dict = {}
         for position, item in enumerate(ordered, start=1):
             profile, name = by_id[item.guild_id]
             eligible = reward_eligible(profile.real_battles)
+            if eligible:
+                tiers[profile.guild_id] = guild_reward_tier(len(tiers) + 1)
             session.add(
                 VigilHallEntry(
                     server_id=self.server_id,
@@ -942,9 +948,11 @@ class ChronicleService:
                     matches=profile.real_battles,
                     points=profile.points,
                     reward_eligible=eligible,
+                    reward_tier=tiers.get(profile.guild_id),
                     created_at=now,
                 )
             )
+        await self._grant_guild_battle_rewards(session, cycle, since, tiers, now)
         participations = (
             select(
                 GuildBattleFightMember.character_id,
@@ -996,6 +1004,53 @@ class ChronicleService:
             profile.real_battles = 0
             profile.wins = profile.draws = profile.losses = profile.byes = 0
             profile.points = 0
+
+    async def _grant_guild_battle_rewards(self, session, cycle, since, tiers, now) -> None:
+        """Cosmetics of each eligible Guild's tier to the characters with the
+        individual minimum of battles fought for that Guild in this cycle."""
+        if not tiers:
+            return
+        guild_id = case(
+            (GuildBattleFightMember.side == "a", GuildBattle.guild_a_id),
+            else_=GuildBattle.guild_b_id,
+        )
+        query = (
+            select(
+                GuildBattleFightMember.character_id,
+                guild_id.label("guild_id"),
+                func.count(func.distinct(GuildBattleFight.battle_id)).label("battles"),
+            )
+            .join(GuildBattleFight, GuildBattleFight.id == GuildBattleFightMember.fight_id)
+            .join(GuildBattle, GuildBattle.id == GuildBattleFight.battle_id)
+            .where(GuildBattle.server_id == self.server_id, GuildBattle.status == "finished")
+        )
+        if since is not None:
+            query = query.where(GuildBattle.finished_at > since)
+        rows = (
+            await session.execute(
+                query.group_by(GuildBattleFightMember.character_id, guild_id).order_by(
+                    GuildBattleFightMember.character_id
+                )
+            )
+        ).all()
+        source = f"guild_battle:{cycle.chronicle_id}"
+        for character_id, member_guild, battles in rows:
+            tier = tiers.get(member_guild)
+            if tier is None or not individual_reward_eligible(int(battles)):
+                continue
+            for cosmetic_id in REWARD_COSMETICS[tier]:
+                definition = COSMETICS_BY_ID[cosmetic_id]
+                await session.execute(
+                    insert(CharacterCosmetic)
+                    .values(
+                        character_id=character_id,
+                        cosmetic_id=cosmetic_id,
+                        cosmetic_type=definition.cosmetic_type,
+                        source_achievement_id=source,
+                        acquired_at=now,
+                    )
+                    .on_conflict_do_nothing()
+                )
 
     async def _liquidate(self, session, cycle, calendar: Calendar, now) -> None:
         """§5.2: after the rescue period, deliver every pending right exactly once."""

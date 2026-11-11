@@ -30,7 +30,7 @@ from decimal import Decimal
 from hashlib import sha256
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.account import notification_enabled
@@ -42,6 +42,7 @@ from asterion.application.equipment_configuration import load_equipment_configur
 from asterion.application.guild_battle_locks import (
     OPEN_REGISTRATION as _OPEN_REGISTRATION,
 )
+from asterion.application.guild_works import guild_work_levels
 from asterion.application.prologue import CombatView
 from asterion.domain.arena import AFK_CONSECUTIVE_TIMEOUTS, AFK_TOTAL_TIMEOUTS
 from asterion.domain.combat import Combat, act, active_player_key, pass_turn, withdraw_fighter
@@ -166,6 +167,8 @@ class GuildBattleResultView:
     opponent_points: Decimal
     rating_before: int
     rating_after: int
+    # Salão de Guerra: Coroas paid to each combatant of the viewer's Guild.
+    war_hall_crowns: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -1014,6 +1017,7 @@ class GuildBattleService:
             profile.last_battle_at = now
         battle.rating_a_after, battle.rating_b_after = new_a, new_b
         await session.flush()
+        war_hall = await self._pay_war_hall(session, battle)
         names = {
             row.id: row.name
             for row in (
@@ -1035,6 +1039,7 @@ class GuildBattleService:
                 battle.points_b if mine else battle.points_a,
                 battle.rating_a_before if mine else battle.rating_b_before,
                 new_a if mine else new_b,
+                war_hall[side],
             )
             notices.extend(
                 GuildBattleNotice(entry.account_id, view)
@@ -1307,6 +1312,36 @@ class GuildBattleService:
         for entry in await GuildBattleService._roster(session, registration_id):
             await session.delete(entry)
         await session.flush()
+
+    @staticmethod
+    async def _pay_war_hall(session, battle) -> dict[str, int]:
+        """Salão de Guerra (domain/guild_works.py): Coroas to each combatant who
+        fought for the Guild in this real battle, once per character."""
+        paid = {}
+        for side, guild_id in (("a", battle.guild_a_id), ("b", battle.guild_b_id)):
+            amount = (await guild_work_levels(session, guild_id)).battle_crowns
+            paid[side] = amount
+            if amount <= 0:
+                continue
+            fighters = (
+                await session.scalars(
+                    select(GuildBattleFightMember.character_id)
+                    .join(GuildBattleFight, GuildBattleFight.id == GuildBattleFightMember.fight_id)
+                    .where(
+                        GuildBattleFight.battle_id == battle.id,
+                        GuildBattleFightMember.side == side,
+                    )
+                    .distinct()
+                )
+            ).all()
+            if fighters:
+                await session.execute(
+                    update(Character)
+                    .where(Character.id.in_(sorted(fighters, key=str)))
+                    .values(crowns=Character.crowns + amount)
+                    .execution_options(synchronize_session="fetch")
+                )
+        return paid
 
     async def _battle_rosters(self, session, battle) -> dict[str, list[GuildBattleRosterEntry]]:
         return {

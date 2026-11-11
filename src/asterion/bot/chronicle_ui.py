@@ -448,8 +448,18 @@ def _hall_line(row: HallRow, *, arena: bool) -> str:
     if arena:
         reward = f" · 🎁 {row.reward_tier}" if row.reward_tier else ""
         return f"{row.position}. {row.name} · {row.elo} · {row.rating} Renome{reward}"
-    reward = " · 🎁 Elegível" if row.reward_eligible else ""
+    tier = _GUILD_REWARD_LABELS.get(row.reward_tier or "")
+    reward = f" · 🎁 {tier}" if tier else " · 🎁 Elegível" if row.reward_eligible else ""
     return f"{row.position}. {row.name} · {row.points} pts · {row.matches} batalhas{reward}"
+
+
+# Batalha de Guildas reward tiers (domain/guild_battle.py) and what each grants.
+_GUILD_REWARD_LABELS = {
+    "champion": "Campeã: Campeão da Vigília, Estandarte Invicto",
+    "podium": "Pódio: Linha que Não Cedeu",
+    "top10": "Top 10: Frente Firme",
+    "veteran": "Veterano das Frentes",
+}
 
 
 def render_hall(view: HallView) -> Screen:

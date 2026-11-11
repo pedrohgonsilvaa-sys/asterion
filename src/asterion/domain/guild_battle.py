@@ -16,7 +16,8 @@ Author decisions for gaps the GDD leaves open (2026-11-09):
 - an AFK combatant is withdrawn as defeated and the team fights on;
 - there is no surrender;
 - a reserve may replace an unconfirmed combatant until 20:50 and must confirm;
-- final rewards are not delivered yet, only standings and eligibility;
+- final rewards are cosmetic only (§15: no power snowball), delivered when the
+  Crônica is finalized; the author delegated the tiers and names on 2026-11-11.
 - standings tie-break by technical rating, then by Guild id.
 """
 
@@ -199,3 +200,46 @@ def reward_eligible(real_battles: int) -> bool:
 
 def individual_reward_eligible(participations: int) -> bool:
     return participations >= MIN_INDIVIDUAL_PARTICIPATIONS
+
+
+# Final rewards (author delegation 2026-11-11). Only Guildas with the minimum of
+# real battles rank; a character must have the individual minimum of
+# participations fighting for that Guild in the cycle (§30.4, §49.14).
+REWARD_CHAMPION = "champion"  # 1st
+REWARD_PODIUM = "podium"  # 2nd-3rd
+REWARD_TOP_TEN = "top10"  # 4th-10th
+REWARD_VETERAN = "veteran"  # any other eligible Guild
+
+TITLE_CHAMPION = "cosmetic.title.gvg.campeao_da_vigilia"
+FRAME_CHAMPION = "cosmetic.frame.gvg.estandarte_invicto"
+TITLE_PODIUM = "cosmetic.title.gvg.linha_que_nao_cedeu"
+FRAME_TOP_TEN = "cosmetic.frame.gvg.frente_firme"
+TITLE_VETERAN = "cosmetic.title.gvg.veterano_das_frentes"
+
+GUILD_BATTLE_COSMETICS: tuple[tuple[str, str, str], ...] = (
+    (TITLE_CHAMPION, "title", "Campeão da Vigília"),
+    (FRAME_CHAMPION, "frame", "Estandarte Invicto"),
+    (TITLE_PODIUM, "title", "Linha que Não Cedeu"),
+    (FRAME_TOP_TEN, "frame", "Frente Firme"),
+    (TITLE_VETERAN, "title", "Veterano das Frentes"),
+)
+
+REWARD_COSMETICS: dict[str, tuple[str, ...]] = {
+    REWARD_CHAMPION: (TITLE_CHAMPION, FRAME_CHAMPION, TITLE_VETERAN),
+    REWARD_PODIUM: (TITLE_PODIUM, TITLE_VETERAN),
+    REWARD_TOP_TEN: (FRAME_TOP_TEN, TITLE_VETERAN),
+    REWARD_VETERAN: (TITLE_VETERAN,),
+}
+
+
+def guild_reward_tier(eligible_rank: int) -> str:
+    """Tier from the rank among reward-eligible Guildas only (1 = best)."""
+    if eligible_rank < 1:
+        raise ValueError("rank must be positive")
+    if eligible_rank == 1:
+        return REWARD_CHAMPION
+    if eligible_rank <= 3:
+        return REWARD_PODIUM
+    if eligible_rank <= 10:
+        return REWARD_TOP_TEN
+    return REWARD_VETERAN

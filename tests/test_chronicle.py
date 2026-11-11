@@ -34,7 +34,11 @@ from asterion.infrastructure.db.models import (
     ChronicleCycleLog,
     ChronicleElector,
     Guild,
+    GuildBattle,
+    GuildBattleFight,
+    GuildBattleFightMember,
     GuildBattleProfile,
+    GuildBattleRegistration,
     Quest,
     VigilHallEntry,
 )
@@ -362,7 +366,7 @@ async def test_finalization_archives_and_soft_resets(database):
     assert (guild_profile.points, guild_profile.real_battles, guild_profile.byes) == (0, 0, 0)
     assert [(row.kind, row.name, row.reward_tier, row.reward_eligible) for row in hall] == [
         ("arena", "Ana", "Arauto II", True),
-        ("guild_battle", "Cinzas", None, True),
+        ("guild_battle", "Cinzas", "champion", True),
     ]
     view = await service.hall(ANA)
     assert view.own_arena.elo == "Arauto II" and view.guilds[0].points == 22
@@ -405,3 +409,111 @@ async def test_vote_eligibility_survives_character_deletion(database):
     view = await ChronicleService(database[1], SERVER).vote(ANA, "destruir", now=d50)
     assert view.vote.eligible and view.vote.choice is Outcome.DESTRUIR
     assert view.chapters[0].concluded is False  # the story is replayed, not the vote
+
+
+async def _guild(session, name, tag, real_battles, points):
+    guild = Guild(server_id=SERVER, name=name, tag=tag, created_at=BEFORE)
+    session.add(guild)
+    await session.flush()
+    session.add(
+        GuildBattleProfile(
+            guild_id=guild.id,
+            server_id=SERVER,
+            rating=1500,
+            career_real_battles=real_battles,
+            real_battles=real_battles,
+            wins=0,
+            draws=0,
+            losses=0,
+            byes=0,
+            points=points,
+        )
+    )
+    return guild.id
+
+
+async def test_finalization_grants_guild_battle_cosmetics_by_tier(database):
+    await _schedule(database)
+    ana = await _make(database, ANA, "Ana", level=30)
+    bea = await _make(database, BEA, "Bea", level=30)
+    caio = await _make(database, CAIO, "Caio", level=30)
+    async with database[1].begin() as session:
+        # Lodo leads on points but has 9 real battles: it ranks nothing, so
+        # Cinzas is the champion and Brasas the podium among eligible Guildas.
+        await _guild(session, "Lodo", "LOD", 9, 27)
+        cinzas = await _guild(session, "Cinzas", "CNZ", 11, 22)
+        brasas = await _guild(session, "Brasas", "BRS", 10, 12)
+        for index in range(4):
+            at = BEFORE + timedelta(days=index)
+            regs = []
+            for guild_id in (cinzas, brasas):
+                reg = GuildBattleRegistration(
+                    server_id=SERVER,
+                    guild_id=guild_id,
+                    starts_at=at,
+                    status="finished",
+                    created_at=at,
+                    updated_at=at,
+                )
+                session.add(reg)
+                regs.append(reg)
+            await session.flush()
+            battle = GuildBattle(
+                server_id=SERVER,
+                starts_at=at,
+                registration_a_id=regs[0].id,
+                registration_b_id=regs[1].id,
+                guild_a_id=cinzas,
+                guild_b_id=brasas,
+                status="finished",
+                created_at=at,
+                finished_at=at,
+            )
+            session.add(battle)
+            await session.flush()
+            fight = GuildBattleFight(battle_id=battle.id, kind="front_1", status="finished")
+            session.add(fight)
+            await session.flush()
+            fighters = [(ana, ANA, "a"), (caio, CAIO, "b")]
+            if index < 3:
+                fighters.append((bea, BEA, "a"))
+            for key, (character_id, account, side) in enumerate(fighters):
+                session.add(
+                    GuildBattleFightMember(
+                        fight_id=fight.id,
+                        character_id=character_id,
+                        account_id=account,
+                        side=side,
+                        actor_key=f"{side}{key}",
+                    )
+                )
+    service = ChronicleService(database[1], SERVER)
+    await service.run_maintenance(now=CAL.finalization_at)
+    await service.run_maintenance(now=CAL.finalization_at + timedelta(minutes=1))
+    async with database[1]() as session:
+        owned = {
+            (row.character_id, row.cosmetic_id)
+            for row in (
+                await session.scalars(
+                    select(CharacterCosmetic).where(
+                        CharacterCosmetic.source_achievement_id.like("guild_battle:%")
+                    )
+                )
+            ).all()
+        }
+        tiers = {
+            row.name: row.reward_tier
+            for row in (
+                await session.scalars(
+                    select(VigilHallEntry).where(VigilHallEntry.kind == "guild_battle")
+                )
+            ).all()
+        }
+    assert tiers == {"Lodo": None, "Cinzas": "champion", "Brasas": "podium"}
+    assert owned == {
+        (ana, "cosmetic.title.gvg.campeao_da_vigilia"),
+        (ana, "cosmetic.frame.gvg.estandarte_invicto"),
+        (ana, "cosmetic.title.gvg.veterano_das_frentes"),
+        (caio, "cosmetic.title.gvg.linha_que_nao_cedeu"),
+        (caio, "cosmetic.title.gvg.veterano_das_frentes"),
+    }
