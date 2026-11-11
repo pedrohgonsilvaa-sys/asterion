@@ -14,6 +14,11 @@ never writes ``Character.hp``. Only the combat itself is Foreground; the Combat
 Configuration lock lasts the whole participation (``combat_configuration_guard``).
 
 Linked accounts are only flagged (§36); nothing here blocks them.
+
+During Crônica I every slot runs O Compasso, one occurrence per Region version
+(``domain/chronicle_events.py``). A character joins at most one version per slot, of a
+Region where Desbravar is already released; when several occurrences share the slot
+their locks are taken in id order.
 """
 
 from __future__ import annotations
@@ -30,12 +35,25 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from asterion.application.account_risk import record_linked_cooccurrence
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.campaign_coop import campaign_action_intent
+from asterion.application.chronicle import calendar_of, load_cycle
+from asterion.application.chronicle_activities import (
+    LatestLocal,
+    record_world_event,
+    region_accessible,
+)
 from asterion.application.combat_configuration_guard import find_combat_configuration_blocker
 from asterion.application.engagement import grant_bundle
 from asterion.application.equipment_configuration import load_equipment_configuration
 from asterion.application.progression import consolidate_character_level, level_xp
 from asterion.application.prologue import CombatView
 from asterion.application.vigor import add_vigor_state, reconcile_character_vigor
+from asterion.domain.chronicle_events import ALL_DEFINITIONS as CHRONICLE_DEFINITIONS
+from asterion.domain.chronicle_events import (
+    configure_compasso,
+    definitions_for_slot,
+    next_chronicle_slot,
+)
+from asterion.domain.chronicle_events import enemy_specs as chronicle_enemy_specs
 from asterion.domain.combat import (
     Combat,
     act,
@@ -123,11 +141,24 @@ class WorldEventStatus:
 
 
 @dataclass(frozen=True, slots=True)
+class WorldEventVersion:
+    """One version of a multi-version slot the character may join (Crônica)."""
+
+    occurrence_id: UUID
+    name: str
+    region: str
+    level: int
+    participants: int
+
+
+@dataclass(frozen=True, slots=True)
 class WorldEventHubView:
     status: WorldEventStatus | None
     next_opening: datetime | None
     has_last_result: bool = False
     notice: str | None = None
+    versions: tuple[WorldEventVersion, ...] = ()  # choose one; ``status`` is None then
+    seconds_to_start: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,13 +207,18 @@ class WorldEventService:
         sessions: async_sessionmaker[AsyncSession],
         server_id: str,
         catalog: tuple[WorldEventDefinition, ...] = WORLD_EVENT_CATALOG,
+        latest_local: LatestLocal | None = None,
     ):
         if not server_id or len(server_id) > 64:
             raise ValueError("server_id must contain 1..64 characters")
         self.sessions = sessions
         self.server_id = server_id
         self.catalog = catalog
-        self._by_id = {definition.event_id: definition for definition in catalog}
+        # Without it no Crônica version can be joined (maintenance needs none).
+        self.latest_local = latest_local
+        self._by_id = {
+            definition.event_id: definition for definition in (*catalog, *CHRONICLE_DEFINITIONS)
+        }
 
     # ---------------------------------------------------------------- reading
 
@@ -193,9 +229,12 @@ class WorldEventService:
         await self._ensure_occurrence(now)
         async with self.sessions.begin() as session:
             character = await self._character(session, actor)
-            occurrence = await self._current_occurrence(session, lock=True)
-            if occurrence is not None:
+            occurrences = await self._slot_occurrences(session, lock=True)
+            for occurrence in occurrences:
                 await self._tick(session, occurrence, now)
+            occurrence = await self._chosen(session, character, occurrences)
+            if occurrence is None and len(occurrences) > 1:
+                return await self._versions_view(session, character, occurrences, now, notice)
             return await self._hub_view(session, character, occurrence, now, notice)
 
     async def foreground(self, actor: int, *, now: datetime | None = None) -> CombatView | None:
@@ -250,7 +289,7 @@ class WorldEventService:
             )
             found = row.first()
             if found is None:
-                return WorldEventHubView(None, self._next_opening(datetime.now(UTC)))
+                return WorldEventHubView(None, await self._next_opening(session, datetime.now(UTC)))
             return self._result_view(found[1], found[0])
 
     # ---------------------------------------------------------------- actions
@@ -270,6 +309,9 @@ class WorldEventService:
                 return await self._hub_view(session, character, occurrence, now, None)
             if not self._entry_open(occurrence, now):
                 raise WorldEventError("entry_closed")
+            definition = self._definition(occurrence)
+            if definition is not None and definition.family:
+                await self._check_version(session, character, occurrence, definition)
             if await find_combat_configuration_blocker(session, character.id) is not None:
                 raise WorldEventError("busy")
             if character.hp <= 0:
@@ -337,9 +379,24 @@ class WorldEventService:
             definition = self._definition(occurrence)
             if definition is None:
                 raise WorldEventError("not_found")
-            combat = self._new_combat(character, definition, occurrence, participation)
+            # One content id per phase: it tells a first instance of the phase from a reentry.
+            content_id = f"{WORLD_EVENT_ACTIVITY_PREFIX}{occurrence.id.hex}:{occurrence.phase}"
+            first_instance = (
+                await session.scalar(
+                    select(GameActivity.id)
+                    .where(
+                        GameActivity.character_id == character.id,
+                        GameActivity.content_id == content_id,
+                    )
+                    .limit(1)
+                )
+                is None
+            )
+            combat = self._new_combat(
+                character, definition, occurrence, participation, first_instance=first_instance
+            )
             activity, _, record = await CombatRepository(session).create(
-                character, f"{WORLD_EVENT_ACTIVITY_PREFIX}{occurrence.id.hex}", combat
+                character, content_id, combat
             )
             participation.activity_id = activity.id
             participation.combat_phase = occurrence.phase
@@ -729,6 +786,16 @@ class WorldEventService:
                 xp = reward_xp(level_xp(definition.reference_level))
                 character.xp += xp
                 await consolidate_character_level(session, character)
+                if definition.family:
+                    # §0.3.8 and §8: the same occurrence counts for objective and Trilha.
+                    await record_world_event(
+                        session,
+                        character,
+                        definition.family,
+                        occurrence.id.hex,
+                        now=now,
+                        started_at=occurrence.opened_at,
+                    )
                 reward = {
                     "crowns": granted.crowns,
                     "xp": xp,
@@ -788,34 +855,43 @@ class WorldEventService:
     async def _ensure_occurrence(self, now: datetime) -> None:
         """A restart or a second process lands on the same row (§21)."""
         slot = latest_slot(now)
-        definition = definition_for_slot(self.catalog, slot) if slot is not None else None
-        if slot is None or definition is None:
+        if slot is None:
             return
         opened_at = slot.astimezone(UTC)
         if now >= opened_at + DEADLINE:
             return
         async with self.sessions.begin() as session:
-            await session.execute(
-                insert(WorldEventOccurrence)
-                .values(
-                    id=uuid4(),
-                    server_id=self.server_id,
-                    event_id=definition.event_id,
-                    occurrence_key=occurrence_key(slot),
-                    status="gathering",
-                    phase=0,
-                    opened_at=opened_at,
-                    phase_one_at=opened_at + GATHERING_WINDOW,
-                    entry_closes_at=opened_at + ENTRY_WINDOW,
-                    deadline_at=opened_at + DEADLINE,
-                    participants_snapshot=0,
-                    boss_hp=Decimal(0),
-                    boss_max_hp=Decimal(0),
-                    state_version=0,
-                    ruleset_version=RULESET,
-                )
-                .on_conflict_do_nothing(constraint="uq_world_event_occurrence")
+            cycle = await load_cycle(session, self.server_id)
+            # During the Crônica every slot is O Compasso (author decision, 2026-11-11).
+            definitions = definitions_for_slot(calendar_of(cycle), slot) if cycle else ()
+            if not definitions:
+                definition = definition_for_slot(self.catalog, slot)
+                definitions = (definition,) if definition is not None else ()
+            for definition in definitions:
+                await self._insert_occurrence(session, definition, slot, opened_at)
+
+    async def _insert_occurrence(self, session, definition, slot, opened_at) -> None:
+        await session.execute(
+            insert(WorldEventOccurrence)
+            .values(
+                id=uuid4(),
+                server_id=self.server_id,
+                event_id=definition.event_id,
+                occurrence_key=occurrence_key(slot, definition.version),
+                status="gathering",
+                phase=0,
+                opened_at=opened_at,
+                phase_one_at=opened_at + GATHERING_WINDOW,
+                entry_closes_at=opened_at + ENTRY_WINDOW,
+                deadline_at=opened_at + DEADLINE,
+                participants_snapshot=0,
+                boss_hp=Decimal(0),
+                boss_max_hp=Decimal(0),
+                state_version=0,
+                ruleset_version=RULESET,
             )
+            .on_conflict_do_nothing(constraint="uq_world_event_occurrence")
+        )
 
     async def _tick(self, session, occurrence, now: datetime) -> None:
         """Time-driven transitions. The caller holds the occurrence lock."""
@@ -874,7 +950,9 @@ class WorldEventService:
             .execution_options(synchronize_session=False)
         )
 
-    def _new_combat(self, character, definition, occurrence, participation) -> Combat:
+    def _new_combat(
+        self, character, definition, occurrence, participation, *, first_instance: bool = True
+    ) -> Combat:
         configuration = participation.combat_configuration
         equipment = equipment_configuration_from_data(configuration)
         level = character.level
@@ -887,26 +965,35 @@ class WorldEventService:
             if isinstance(entry, dict) and entry.get("art_id")
         )
         phase = definition.phase(occurrence.phase)
+        boss = CreatureCombatantSpec(
+            phase.creature,
+            definition.reference_level,
+            _ENEMY_KEY,
+            stat_multipliers=boss_engine_multipliers(occurrence.participants_snapshot),
+        )
+        enemies = (boss,)
+        configure = None
+        if definition.family:
+            enemies = chronicle_enemy_specs(definition, occurrence.phase, boss)
+            number = occurrence.phase
+
+            def configure(state: Combat) -> None:
+                configure_compasso(state, number, resonance=first_instance)
+
         combat = create_creature_party_combat(
             uuid4(),
             character.name,
             character.character_class,
             character.race,
             Decimal(participation.hp) if participation.hp > 0 else Decimal(character.max_hp),
-            (
-                CreatureCombatantSpec(
-                    phase.creature,
-                    definition.reference_level,
-                    _ENEMY_KEY,
-                    stat_multipliers=boss_engine_multipliers(occurrence.participants_snapshot),
-                ),
-            ),
+            enemies,
             player_level=level,
             equipment_configuration=equipment,
             ruleset_version=COMBAT_RULESET,
             flavor=phase.flavor,
             opening_log=phase.flavor,
             active_art_ids=art_ids,
+            configure_combat=configure,
         )
         enemy = combat.fighters[_ENEMY_KEY]
         enemy.stats = boss_stats(
@@ -984,7 +1071,7 @@ class WorldEventService:
         )
         definition = self._definition(occurrence) if occurrence is not None else None
         if occurrence is None or definition is None or occurrence.status not in _OPEN_STATUSES:
-            return WorldEventHubView(None, self._next_opening(now), has_last, notice)
+            return WorldEventHubView(None, await self._next_opening(session, now), has_last, notice)
         participation = await self._participation(session, occurrence.id, character.id)
         count = await session.scalar(
             select(func.count())
@@ -1033,7 +1120,7 @@ class WorldEventService:
                     else 0
                 ),
             ),
-            self._next_opening(now),
+            await self._next_opening(session, now),
             has_last,
             notice,
         )
@@ -1063,8 +1150,93 @@ class WorldEventService:
             and occurrence.phase < PHASE_COUNT
         )
 
-    def _next_opening(self, now: datetime) -> datetime | None:
-        return next_slot(now) if self.catalog else None
+    async def _next_opening(self, session, now: datetime) -> datetime | None:
+        if self.catalog:
+            return next_slot(now)
+        cycle = await load_cycle(session, self.server_id)
+        return next_chronicle_slot(calendar_of(cycle), now) if cycle is not None else None
+
+    async def _has_last(self, session, character) -> bool:
+        found = await session.scalar(
+            select(WorldEventParticipation.occurrence_id)
+            .where(
+                WorldEventParticipation.character_id == character.id,
+                WorldEventParticipation.settled_at.is_not(None),
+            )
+            .limit(1)
+        )
+        return found is not None
+
+    async def _versions_view(
+        self, session, character, occurrences, now: datetime, notice: str | None
+    ) -> WorldEventHubView:
+        """A multi-version slot the character has not joined: the versions open to them."""
+        versions = []
+        for occurrence in occurrences:
+            definition = self._definition(occurrence)
+            if definition is None or not self._entry_open(occurrence, now):
+                continue
+            if not await self._version_open(session, character, definition):
+                continue
+            count = await session.scalar(
+                select(func.count())
+                .select_from(WorldEventParticipation)
+                .where(
+                    WorldEventParticipation.occurrence_id == occurrence.id,
+                    WorldEventParticipation.status == "active",
+                )
+            )
+            versions.append(
+                WorldEventVersion(
+                    occurrence.id,
+                    definition.name,
+                    definition.region,
+                    definition.reference_level,
+                    count,
+                )
+            )
+        versions.sort(key=lambda item: item.level)
+        next_opening = await self._next_opening(session, now)
+        has_last = await self._has_last(session, character)
+        if not versions:
+            if any(row.status in _OPEN_STATUSES for row in occurrences):
+                notice = notice or "Nenhuma versão deste Evento está aberta para você agora."
+            return WorldEventHubView(None, next_opening, has_last, notice)
+        return WorldEventHubView(
+            None,
+            next_opening,
+            has_last,
+            notice,
+            tuple(versions),
+            _seconds_left(occurrences[0].phase_one_at, now),
+        )
+
+    async def _version_open(self, session, character, definition) -> bool:
+        """§11.5: any version of a Region where Desbravar is already released."""
+        if self.latest_local is None:
+            return False
+        return await region_accessible(session, character, definition.region, self.latest_local)
+
+    async def _check_version(self, session, character, occurrence, definition) -> None:
+        """One version per slot, of a Region the character already reached."""
+        other = await session.scalar(
+            select(WorldEventParticipation.occurrence_id)
+            .join(
+                WorldEventOccurrence,
+                WorldEventOccurrence.id == WorldEventParticipation.occurrence_id,
+            )
+            .where(
+                WorldEventParticipation.character_id == character.id,
+                WorldEventOccurrence.server_id == self.server_id,
+                WorldEventOccurrence.opened_at == occurrence.opened_at,
+                WorldEventOccurrence.id != occurrence.id,
+            )
+            .limit(1)
+        )
+        if other is not None:
+            raise WorldEventError("other_version")
+        if not await self._version_open(session, character, definition):
+            raise WorldEventError("region_locked")
 
     def _definition(self, occurrence) -> WorldEventDefinition | None:
         return self._by_id.get(occurrence.event_id)
@@ -1083,12 +1255,16 @@ class WorldEventService:
             return found is not None
 
     async def _stale_hub(self, session, character, now: datetime) -> WorldEventHubView:
-        occurrence = await self._current_occurrence(session)
+        occurrences = await self._slot_occurrences(session)
+        occurrence = await self._chosen(session, character, occurrences)
+        if occurrence is None and len(occurrences) > 1:
+            return await self._versions_view(session, character, occurrences, now, None)
         return await self._hub_view(session, character, occurrence, now, None)
 
-    async def _current_occurrence(self, session, *, lock: bool = False):
-        query = (
-            select(WorldEventOccurrence)
+    async def _slot_occurrences(self, session, *, lock: bool = False) -> list:
+        """The occurrences of the latest unfinished slot, in id order (the lock order)."""
+        latest = (
+            select(func.max(WorldEventOccurrence.opened_at))
             .where(
                 WorldEventOccurrence.server_id == self.server_id,
                 or_(
@@ -1096,10 +1272,32 @@ class WorldEventService:
                     WorldEventOccurrence.settled_at.is_(None),
                 ),
             )
-            .order_by(WorldEventOccurrence.opened_at.desc())
-            .limit(1)
+            .scalar_subquery()
         )
-        return await session.scalar(query.with_for_update() if lock else query)
+        query = (
+            select(WorldEventOccurrence)
+            .where(
+                WorldEventOccurrence.server_id == self.server_id,
+                WorldEventOccurrence.opened_at == latest,
+            )
+            .order_by(WorldEventOccurrence.id)
+        )
+        return list((await session.scalars(query.with_for_update() if lock else query)).all())
+
+    async def _chosen(self, session, character, occurrences: list):
+        """The occurrence the character joined; the only one of a single-version slot."""
+        if not occurrences:
+            return None
+        joined = await session.scalar(
+            select(WorldEventParticipation.occurrence_id).where(
+                WorldEventParticipation.character_id == character.id,
+                WorldEventParticipation.occurrence_id.in_([row.id for row in occurrences]),
+            )
+        )
+        for occurrence in occurrences:
+            if occurrence.id == joined:
+                return occurrence
+        return occurrences[0] if len(occurrences) == 1 else None
 
     async def _character(self, session, actor: int) -> Character:
         character = await session.scalar(

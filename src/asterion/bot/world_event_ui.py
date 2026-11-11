@@ -40,6 +40,8 @@ _ERRORS = {
     "not_joined": "Você não está participando deste Evento.",
     "gathering": "O Evento ainda está reunindo participantes.",
     "reentry_wait": "Sua reentrada ainda não abriu.",
+    "other_version": "Você já entrou em outra versão deste Evento neste horário.",
+    "region_locked": "Esta versão é de uma Região que você ainda não alcançou.",
 }
 
 
@@ -62,6 +64,39 @@ def _render_empty(view: WorldEventHubView) -> Screen:
         local = view.next_opening.astimezone(EVENT_TIMEZONE)
         lines.append(f"Próximo Evento · {_WEEKDAYS[local.weekday()]} às {local:%H:%M}")
     rows = []
+    if view.has_last_result:
+        rows.append([_button("Último Resultado", "wev:last")])
+    rows.append(_BACK_TO_ADVENTURE)
+    return Screen(
+        "\n".join(lines), "world_events", InlineKeyboardMarkup(inline_keyboard=rows), "HTML"
+    )
+
+
+def _render_versions(view: WorldEventHubView) -> Screen:
+    """Crônica: one version per Region in the same slot; the character picks one."""
+    first = view.versions[0]
+    lines = [f"🌍 Evento Mundial · {escape(first.name)}", ""]
+    if view.notice:
+        lines.extend([escape(view.notice), ""])
+    if view.seconds_to_start:
+        lines.extend([f"⏳ Reunindo participantes · {view.seconds_to_start}s", ""])
+    lines.append("Escolha a versão. Você participa de uma só neste horário.")
+    lines.append("Nas versões abaixo do seu nível, vale a Sintonização do Véu.")
+    lines.append("")
+    lines.extend(
+        f"• {escape(item.region)} · Nv. {item.level} · 👥 {item.participants}"
+        for item in view.versions
+    )
+    rows = [
+        [
+            _button(
+                f"Entrar · {item.region} · {VIGOR_COST} Vigor",
+                f"wev:in:{pack(item.occurrence_id)}",
+            )
+        ]
+        for item in view.versions
+    ]
+    rows.append([_button("Atualizar", "wev:hub")])
     if view.has_last_result:
         rows.append([_button("Último Resultado", "wev:last")])
     rows.append(_BACK_TO_ADVENTURE)
@@ -181,5 +216,5 @@ def render_world_event(view: WorldEventView) -> Screen:
     if isinstance(view, WorldEventResultView):
         return _render_result(view)
     if view.status is None:
-        return _render_empty(view)
+        return _render_versions(view) if view.versions else _render_empty(view)
     return _render_status(view, view.status)

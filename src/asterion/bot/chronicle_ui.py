@@ -41,6 +41,7 @@ from asterion.domain.chronicle import (
     Phase,
     TrackReward,
 )
+from asterion.domain.world_events import ENTRY_WINDOW, EVENT_TIMEZONE
 
 _IMAGE = "menu"
 
@@ -166,7 +167,7 @@ def _objective_line(item) -> str:
 
 
 # Started elsewhere: Desbravar has its own button in the Local, a Masmorra its own menu.
-_NO_BUTTON = (ObjectiveKind.DESBRAVAR, ObjectiveKind.DUNGEON)
+_NO_BUTTON = (ObjectiveKind.DESBRAVAR, ObjectiveKind.DUNGEON, ObjectiveKind.EVENT)
 
 
 def _action_data(action: ActionView) -> str:
@@ -181,8 +182,21 @@ def _action_button(action: ActionView) -> list[InlineKeyboardButton]:
     return [_button(f"🔎 {action.objective.title}", _action_data(action))]
 
 
+_WEEKDAYS = ("Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo")
+
+
+def _event_when(action: ActionView) -> str:
+    local = action.event_at.astimezone(EVENT_TIMEZONE)
+    if action.event_live:
+        closes = (action.event_at + ENTRY_WINDOW).astimezone(EVENT_TIMEZONE)
+        return f"acontecendo agora, entrada até {closes:%H:%M}"
+    return f"{_WEEKDAYS[local.weekday()]} {local:%d/%m} às {local:%H:%M}"
+
+
 def _action_line(action: ActionView) -> str:
     title = action.objective.title
+    if action.objective.kind is ObjectiveKind.EVENT:
+        return f"📍 {title} · {_event_when(action)} · Eventos Mundiais, versão {action.location}"
     if action.objective.kind is ObjectiveKind.NPC:
         return f"📍 {title} · {action.npc} · {action.location}"
     if action.objective.kind is ObjectiveKind.EVIDENCE:

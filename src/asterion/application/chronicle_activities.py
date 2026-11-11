@@ -7,6 +7,8 @@ and in mirror otherwise. Leituras and talks cost nothing and create no economy.
 
 Masmorra objectives (§0.3.4) are completed at the end of a valid run; while no accepted
 Masmorra has Estável released, ``dsc_cr01_vestigio_profundo`` in the LR replaces them.
+Evento Mundial objectives (§0.3.8) are completed when an O Compasso occurrence settles
+with the participant eligible (``record_world_event``).
 
 Which Locals are released comes from ``latest_local``, injected by the Road service so
 this module never imports it (the Road imports this module for the Desbravar hook).
@@ -63,6 +65,7 @@ from asterion.domain.chronicle_content import (
     RegionInfo,
     with_complement,
 )
+from asterion.domain.chronicle_events import EVENT_SOURCE, OBJECTIVE_FAMILY, next_occurrence
 from asterion.domain.road import (
     ExplorationLocationProfile,
     ExplorationResultDefinition,
@@ -82,9 +85,11 @@ _ACTION_KINDS = (
     ObjectiveKind.EVIDENCE,
     ObjectiveKind.DESBRAVAR,
     ObjectiveKind.DUNGEON,
+    ObjectiveKind.EVENT,
 )
-# Started elsewhere: Desbravar has its own button in the Local, a Masmorra its own menu.
-_NO_BUTTON = (ObjectiveKind.DESBRAVAR, ObjectiveKind.DUNGEON)
+# Started elsewhere: Desbravar has its own button in the Local, a Masmorra its own menu,
+# the Evento Mundial the Eventos menu.
+_NO_BUTTON = (ObjectiveKind.DESBRAVAR, ObjectiveKind.DUNGEON, ObjectiveKind.EVENT)
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,6 +169,8 @@ class ActionView:
     points_total: int = 0
     dungeons: tuple[str, ...] = ()  # Masmorra names; empty means the Desbravar alternative
     focus: bool = True
+    event_at: datetime | None = None  # Evento Mundial: the open or next occurrence
+    event_live: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,6 +234,11 @@ class ChronicleActivityService:
                         continue
                     if objective.kind is ObjectiveKind.DUNGEON:
                         result.append(await _dungeon_action(objective, route, world, resolver))
+                        continue
+                    if objective.kind is ObjectiveKind.EVENT:
+                        event = await _event_action(objective, calendar, moment, resolver)
+                        if event is not None:
+                            result.append(event)
                         continue
                     result.append(_action(objective, route, world, done))
             return tuple(result)
@@ -403,6 +415,84 @@ async def _dungeon_action(
     )
     label = route.local_label
     return ActionView(objective, label, location == label, dungeons=names, focus=route.focus)
+
+
+async def region_accessible(
+    session: AsyncSession, character: Character, region_name: str, latest_local: LatestLocal
+) -> bool:
+    """A Region counts as reached once it has a Local with Desbravar released (§0.3)."""
+    return await _Resolver(session, character, latest_local).local_in(
+        REGIONS_BY_NAME[region_name]
+    ) is not None
+
+
+async def _event_action(
+    objective: Objective, calendar: Calendar, now: datetime, resolver: _Resolver
+) -> ActionView | None:
+    """When and where: the open or next occurrence, in the version of the RR (§11.5)."""
+    upcoming = next_occurrence(calendar, OBJECTIVE_FAMILY[objective.objective_id], now)
+    resonance = await resolver.resonance()
+    if upcoming is None or resonance is None:
+        return None
+    return ActionView(
+        objective,
+        resonance.region.name,
+        False,
+        event_at=upcoming.at,
+        event_live=upcoming.live,
+    )
+
+
+async def record_world_event(
+    session: AsyncSession,
+    character: Character,
+    family: str,
+    occurrence_id: str,
+    *,
+    now: datetime,
+    started_at: datetime,
+) -> str | None:
+    """An eligible participant of an O Compasso occurrence (§0.3.8, §8).
+
+    The Event calls it at settlement, holding the Character lock. The same occurrence
+    pays ``rep_cr01_evento`` once and completes at most one Evento Mundial objective,
+    the oldest pending one that accepts ``family``; so ``cap_08_obj_03`` always comes
+    from an occurrence other than the one of ``cap_07_obj_04``.
+    """
+    await record_repeatable(
+        session,
+        character.server_id,
+        character,
+        EVENT_SOURCE,
+        occurrence_id,
+        now=now,
+        started_at=started_at,
+    )
+    cycle = await load_cycle(session, character.server_id)
+    if cycle is None:
+        return None
+    calendar = calendar_of(cycle)
+    if not calendar.accepts_progress(now, started_at):
+        return None
+    if ENTRY_GATE_QUEST not in await completed_quests(session, character.id):
+        return None
+    done = await _flags(session, character)
+    for chapter in range(1, calendar.chapters_open(started_at) + 1):
+        for objective in objectives_of(chapter):
+            if objective.kind is not ObjectiveKind.EVENT or objective.objective_id in done:
+                continue
+            if OBJECTIVE_FAMILY[objective.objective_id] != family:
+                continue
+            if await record_objective(
+                session,
+                character.server_id,
+                character,
+                objective.objective_id,
+                now=now,
+                started_at=started_at,
+            ):
+                return objective.objective_id
+    return None
 
 
 async def record_dungeon_run(

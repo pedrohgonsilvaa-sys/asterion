@@ -80,6 +80,10 @@ class WorldEventDefinition:
     phases: tuple[WorldEventPhase, ...]
     conclusion_flavor: str
     attuned: bool = False
+    # A Crônica runs several versions of one Event in the same slot: ``family`` is the
+    # Event the objectives count (``evt_cr01_ressonancia``), ``version`` tells them apart.
+    family: str = ""
+    version: str = ""
 
     def __post_init__(self) -> None:
         if len(self.phases) != PHASE_COUNT:
@@ -122,9 +126,10 @@ def next_slot(now: datetime) -> datetime:
     raise RuntimeError("The weekly schedule always has a next opening.")
 
 
-def occurrence_key(slot: datetime) -> str:
-    """Stable per opening: a restart or deploy resolves to the same occurrence."""
-    return slot.astimezone(EVENT_TIMEZONE).strftime("%Y%m%dT%H%M")
+def occurrence_key(slot: datetime, version: str = "") -> str:
+    """Stable per opening (and version): a restart or deploy resolves to the same row."""
+    key = slot.astimezone(EVENT_TIMEZONE).strftime("%Y%m%dT%H%M")
+    return f"{key}.{version}" if version else key
 
 
 def definition_for_slot(

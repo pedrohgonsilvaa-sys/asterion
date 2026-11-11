@@ -63,6 +63,7 @@ _DEFENSE_MARKS = {
     "marca_desvio": "cr01.marca_desvio",
     "rasura": "cr01.rasura",
     "pedido_repetido": "cr01.pedido_repetido",
+    "contratempo": "cr01.contratempo",
 }
 # AoEs that the AI only uses with 2+ living targets (§11.3 Coro, §11.4).
 _GROUP_ONLY = ("coro", "ordem_coletiva", "insistencia")
