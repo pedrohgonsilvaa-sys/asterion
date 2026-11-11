@@ -1705,7 +1705,7 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 - **Telas:** o capítulo mostra `Masmorra: <A> ou <B>` em foco, `qualquer Masmorra com Estável liberada` em espelho, ou `sem Masmorra liberada: Desbravar em <Local>`. Não há botão: a Masmorra entra pelo próprio menu e o alternativo pelo Desbravar.
 - **Banco:** sem migration.
 
-**Escolhas da parte 4 (por delegação, aguardam aprovação do autor):**
+**Escolhas da parte 4 (aprovadas pelo autor em 2026-11-11, por delegação):**
 
 1. Em foco, só as 2 Masmorras da Região-foco contam. Se nenhuma das duas tem Estável liberada, vale o alternativo, mesmo que outra Masmorra esteja liberada (leitura literal da regra 0.3.4).
 2. Uma run conclui no máximo 1 objetivo de Masmorra (o do capítulo mais antigo), além do repetível.
