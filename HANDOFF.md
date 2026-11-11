@@ -1633,7 +1633,7 @@ Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem
 7. Excluir o personagem apaga o estado narrativo dele; pontos, resgates, voto e elegibilidade continuam da conta. Os cosméticos da Trilha voltam ao novo personagem ao abrir a Trilha.
 8. Personagem sem conta no servidor na liquidação: o direito é marcado como liquidado sem entrega.
 
-**Ainda falta (sem número ou conteúdo definido):** os cosméticos das recompensas de Elo (hoje o Salão só registra quem é elegível e o Elo); a entrada Calendário do menu (a Crônica está em Benefícios → Trilha).
+**Ainda falta (sem número ou conteúdo definido):** os cosméticos das recompensas de Elo (hoje o Salão só registra quem é elegível e o Elo). A entrada **Calendário** do menu (`calendar:root`, `render_calendar` em `bot/chronicle_ui.py`; horários em `domain/calendar_cycles.py`) mostra reset diário, Nova Vigília e a fase da Crônica; a Crônica continua também em Benefícios → Trilha.
 
 **Bloco B (próximo):** conteúdo jogável dos capítulos: Leituras (`lei_cr01_*`), resultados de Desbravar (`dsc_cr01_*`), Falar com NPC por Região de Ressonância, Masmorra em foco/espelho e o alternativo `dsc_cr01_vestigio_profundo`, os 8 Encontros e as 9 criaturas (kits em `SIMULAR`, precisam de Balanceamento), o Evento Mundial O Compasso, Entradas do Códice, Feitos, Crônica Arquivada e a regra `pr_cr01_encontro_grupo`.
 
@@ -1803,7 +1803,7 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 
 A fonte do plano é `docs/PLANO_DE_ACAO.md` (trilhas A, B e C). Resumo do que está aberto em 2026-11-11:
 
-1. **Trilha A (jogo):** Obras de Guilda (efeitos de 6 das 7 e recompensas da Batalha de Guildas), Marcas de Legado (§16.1), Serviços de Ofícios (§27.3), entrada Calendário no menu, catálogo de Flavor Text e mecanismo de visuais/skins.
+1. **Trilha A (jogo):** Obras de Guilda (efeitos de 6 das 7 e recompensas da Batalha de Guildas), Marcas de Legado (§16.1), Serviços de Ofícios (§27.3), catálogo de Flavor Text e mecanismo de visuais/skins.
 2. **Trilha B (operação):** agendador único (o lock por job já existe, falta teste entre duas instâncias), backup e restore, deploy/rollback com `assets/` no Dockerfile, rate limiting, Admin com RBAC e sanções, métricas e alertas, E2E até Nv.60 e Legado com as 6 Classes e smoke test no Telegram real (feito pelo autor).
 3. **Trilha C (fechamento):** o autor aprova as escolhas pendentes das partes 5 e 6 da Crônica; suíte completa em segundo plano (cerca de 1 hora) corrigindo as falhas; resolver TDO v1.0.16 × v1.0.17 e Bíblia v3.0 × v4.0.7 no `SOURCE_AUTHORITY.md`; balanceamento dos kits em `SIMULAR`.
 4. **Fase 2E:** fechar as três decisões de Game Design (IDs/release snapshot, receitas e saídas, elegibilidade de Saque) antes de qualquer integração. Publicação, importação, migration, flag, merge e deploy continuam NO-GO.
