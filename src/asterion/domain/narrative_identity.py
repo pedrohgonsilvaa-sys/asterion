@@ -10,8 +10,8 @@ stores a second copy. Every input belongs to one character, so two players in
 the same scene, including a host and a helper in a cooperative fight, are
 resolved independently.
 
-The scene catalog starts empty: lines and options are canonical content and
-are added only when the author defines them.
+Lines and options are canonical content: a scene enters the catalog only after
+the author approves its text.
 """
 
 from __future__ import annotations
@@ -136,12 +136,16 @@ class NarrativeLine:
 
 @dataclass(frozen=True, slots=True)
 class NarrativeOption:
-    """A dialogue choice. Every matching option is offered, in declared order."""
+    """A dialogue choice. Every matching option is offered, in declared order.
+
+    ``reply`` is what the speaker answers when the option is picked.
+    """
 
     option_id: str
     label: str
     condition: NarrativeCondition = NarrativeCondition()
     consequence_flags: frozenset[str] = frozenset()
+    reply: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,8 +176,6 @@ class NarrativeScene:
             raise ValueError(f"Duplicate beat id in scene {self.scene_id}.")
         if len(option_ids) != len(set(option_ids)):
             raise ValueError(f"Duplicate option id in scene {self.scene_id}.")
-        if self.options and not any(option.condition.is_fallback for option in self.options):
-            raise ValueError(f"Scene {self.scene_id} needs at least one common option.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +184,11 @@ class ResolvedScene:
     character_id: str
     lines: tuple[NarrativeLine, ...]
     options: tuple[NarrativeOption, ...]
+
+    @property
+    def spoken_lines(self) -> tuple[str, ...]:
+        """Lines to show; an empty common fallback means the beat adds nothing."""
+        return tuple(line.text for line in self.lines if line.text)
 
     def option(self, option_id: str) -> NarrativeOption | None:
         return next((row for row in self.options if row.option_id == option_id), None)
@@ -209,5 +216,44 @@ def resolve_scene(scene: NarrativeScene, context: NarrativeContext) -> ResolvedS
     )
 
 
-# Canonical scenes. Empty until the author defines identity-aware content.
-NARRATIVE_SCENES: Mapping[str, NarrativeScene] = {}
+P2_ALDA_OFFER_SCENE = "p2.alda.offer"
+
+# Canonical scenes. Text approved by the author on 2026-11-11.
+NARRATIVE_SCENES: Mapping[str, NarrativeScene] = {
+    P2_ALDA_OFFER_SCENE: NarrativeScene(
+        scene_id=P2_ALDA_OFFER_SCENE,
+        beats=(
+            # Shown after Alda's fixed P2 line; the empty fallback keeps the
+            # official offer unchanged for every other identity.
+            NarrativeBeat(
+                beat_id="identity",
+                lines=(
+                    NarrativeLine("identity.common", ""),
+                    NarrativeLine(
+                        "identity.cinereo",
+                        "— O nome que você carrega veio das rotas de cinza, não da cor "
+                        "de ninguém. Se as histórias da sua gente falam de fuligem que "
+                        "aparece sem fogo, quero ouvir antes de você sair.",
+                        NarrativeCondition(races=frozenset({"cinereo"})),
+                        priority=1,
+                    ),
+                    NarrativeLine(
+                        "identity.vigia",
+                        "— Você olha para o chão antes de olhar para mim. Bom. Conte os "
+                        "pontos de fuligem, não as impressões que eles deixam.",
+                        NarrativeCondition(classes=frozenset({"vigia"})),
+                    ),
+                ),
+            ),
+        ),
+        options=(
+            NarrativeOption(
+                "rotas",
+                "Perguntar pelas rotas antigas",
+                NarrativeCondition(race_classes=frozenset({("cinereo", "vigia")})),
+                reply="— Rotas de cinza não andam sozinhas. Se essa fuligem seguir uma "
+                "linha, me traga a linha. Se não seguir, me traga isso também.",
+            ),
+        ),
+    ),
+}

@@ -60,6 +60,30 @@ def test_offer_renders_canonical_mission_and_explicit_accept():
     assert buttons[-1].text == "← Refúgio do Ocaso"
 
 
+def test_offer_shows_identity_line_option_and_reply_after_the_canonical_line():
+    screen = render_p2(
+        _view(
+            "offer",
+            status=None,
+            step=None,
+            available=True,
+            identity_lines=("— Linha de identidade.",),
+            identity_options=(("rotas", "Perguntar pelas rotas antigas"),),
+            identity_reply="— Resposta da Alda.",
+        )
+    )
+
+    canonical = screen.text.index("Fuligem sem fogo significa")
+    assert canonical < screen.text.index("Linha de identidade") < screen.text.index(
+        "Resposta da Alda"
+    ) < screen.text.index("🎯 Objetivo")
+    buttons = _buttons(screen)
+    assert buttons[0].callback_data == "p2:0:accept"
+    assert buttons[1].text == "Perguntar pelas rotas antigas"
+    assert buttons[1].callback_data == "p2:0:ask:rotas"
+    assert buttons[-1].callback_data == "road:local"
+
+
 def test_unavailable_is_neutral_and_has_no_accept_button():
     screen = render_p2(_view("unavailable", status=None, step=None, blocked_by_foreground=True))
 

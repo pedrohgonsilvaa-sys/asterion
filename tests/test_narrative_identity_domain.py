@@ -2,6 +2,7 @@ import pytest
 
 from asterion.domain.narrative_identity import (
     NARRATIVE_SCENES,
+    P2_ALDA_OFFER_SCENE,
     NarrativeBeat,
     NarrativeCondition,
     NarrativeContext,
@@ -164,12 +165,6 @@ def test_scene_rules_reject_missing_fallback_and_unknown_identity():
             "b",
             (NarrativeLine("x", "x", NarrativeCondition(races=frozenset({"velado"}))),),
         )
-    with pytest.raises(ValueError, match="common option"):
-        NarrativeScene(
-            "s",
-            (NarrativeBeat("b", (NarrativeLine("x", "x"),)),),
-            (NarrativeOption("o", "o", NarrativeCondition(classes=frozenset({"vigia"}))),),
-        )
     with pytest.raises(ValueError, match="Unknown race"):
         NarrativeCondition(races=frozenset({"elfo"}))
     with pytest.raises(ValueError, match="Unknown class"):
@@ -186,5 +181,25 @@ def test_one_scene_serves_every_identity_without_duplicating_the_mission():
     assert all(len(row.lines) == len(SCENE.beats) for row in resolved.values())
 
 
-def test_canonical_catalog_has_no_invented_content():
-    assert NARRATIVE_SCENES == {}
+def test_canonical_catalog_holds_only_the_approved_p2_alda_offer():
+    assert set(NARRATIVE_SCENES) == {P2_ALDA_OFFER_SCENE}
+
+
+@pytest.mark.parametrize(
+    ("race", "klass", "line", "options"),
+    [
+        ("remanescente", "sentinela", (), ()),
+        ("hemario", "luminar", (), ()),
+        ("cinereo", "sentinela", ("O nome que você carrega",), ()),
+        ("velado", "vigia", ("Você olha para o chão",), ()),
+        ("cinereo", "vigia", ("O nome que você carrega",), ("rotas",)),
+    ],
+)
+def test_p2_alda_offer_reacts_only_where_identity_matters(race, klass, line, options):
+    resolved = resolve_scene(NARRATIVE_SCENES[P2_ALDA_OFFER_SCENE], _context(race, klass))
+    spoken = resolved.spoken_lines
+    assert len(spoken) == len(line)
+    assert all(text.startswith(f"— {prefix}") for text, prefix in zip(spoken, line, strict=True))
+    assert _options(resolved) == list(options)
+    if options:
+        assert resolved.option("rotas").reply.startswith("— Rotas de cinza")

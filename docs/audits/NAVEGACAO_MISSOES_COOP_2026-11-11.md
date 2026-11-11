@@ -45,8 +45,21 @@ implementação seguiu apenas o brief, sem inventar conteúdo.
   tabelas existentes (`characters`, `quests`, `unlocks`, `codex_entries`,
   `location_discoveries`, `braziers`, `world_states`). Sem tabela nova, sem migration.
 
+## Primeira cena: oferta da P2 (Alda Veyr)
+
+Texto aprovado pelo autor em 2026-11-11. A fala canônica da oferta não muda; a fala de
+identidade aparece depois dela.
+
+- Raça Cinéreo: Alda liga o nome à história das rotas de cinza (Bíblia v3.0 §2:
+  "Cinéreo" não descreve a cor da pele).
+- Classe Vigia (sem ser Cinéreo): Alda, que coordena os vigias do Refúgio, reconhece
+  o ofício.
+- Par Cinéreo + Vigia: opção `[Perguntar pelas rotas antigas]` com resposta da Alda.
+  Ela só mostra a fala e não grava estado nem altera a Missão.
+- Demais combinações: só a fala canônica. Hemário não recebe fala porque o único gancho
+  seria Hemaris, protegido pelo limite de revelação das Terras do Ocaso.
+
 ## Não implementado
 
-- Nenhuma cena canônica usa o resolvedor: falas por Raça/Classe são conteúdo e dependem
-  do autor.
+- Só a oferta da P2 usa o resolvedor; outras cenas dependem de texto aprovado pelo autor.
 - Relacionamento/reputação por NPC: não existe modelo reutilizável no código.

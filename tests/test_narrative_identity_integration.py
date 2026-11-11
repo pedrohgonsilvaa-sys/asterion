@@ -189,3 +189,44 @@ async def test_alda_choices_stay_individual_through_a_cooperative_fight(database
     assert helper_ctx.quests["P1"].status == "completed"
     assert helper_ctx.quests["P1"].step == 7
     assert len(helper_rewards) == 1
+
+
+async def _p2_offer_for(database, actor, race, klass):
+    from tests.test_p2_integration import _seed as seed_p2
+
+    character_id, service = await seed_p2(database, actor)
+    async with database[1].begin() as session:
+        character = await session.get(Character, character_id)
+        character.race = race
+        character.character_class = klass
+    return character_id, service
+
+
+@pytest.mark.asyncio
+async def test_p2_alda_offer_recognizes_each_character_without_touching_the_quest(database):
+    plain_id, plain = await _p2_offer_for(database, 993301, "remanescente", "sentinela")
+    pair_id, pair = await _p2_offer_for(database, 993302, "cinereo", "vigia")
+
+    plain_offer = await plain.alda(993301)
+    pair_offer = await pair.alda(993302)
+    assert plain_offer.kind == pair_offer.kind == "offer"
+    assert plain_offer.identity_lines == () and plain_offer.identity_options == ()
+    assert pair_offer.identity_lines[0].startswith("— O nome que você carrega")
+    assert pair_offer.identity_options == (("rotas", "Perguntar pelas rotas antigas"),)
+
+    answered = await pair.ask_alda(993302, "rotas")
+    retried = await pair.ask_alda(993302, "rotas")
+    assert answered.identity_reply.startswith("— Rotas de cinza")
+    assert retried == answered
+    # Another character cannot use an option that is not theirs.
+    refused = await plain.ask_alda(993301, "rotas")
+    assert refused.identity_reply is None
+    async with database[1]() as session:
+        p2_rows = (
+            await session.scalars(
+                select(Quest).where(
+                    Quest.character_id.in_((plain_id, pair_id)), Quest.quest_id == "P2"
+                )
+            )
+        ).all()
+    assert p2_rows == []

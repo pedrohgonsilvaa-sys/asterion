@@ -123,6 +123,8 @@ def p2_router(
             if version is not None:
                 if action == "accept" and len(parts) == 3:
                     view = await service.accept(actor, version)
+                elif action == "ask" and len(parts) == 4:
+                    view = await service.ask_alda(actor, parts[3])
                 elif action == "travel" and len(parts) == 3:
                     view = await service.travel_to_charneca(actor, version)
                 elif action == "ash" and len(parts) == 4:

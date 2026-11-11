@@ -1,5 +1,7 @@
 """Player-facing screens for P2, derived only from the persisted P2View."""
 
+from html import escape
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.p2 import P2View
@@ -120,20 +122,28 @@ def render_p2(view: P2View) -> Screen:
         return _combat_screen(view)
 
     if view.kind == "offer":
+        identity = "".join(f"<i>{escape(line)}</i>\n\n" for line in view.identity_lines)
+        reply = f"<i>{escape(view.identity_reply)}</i>\n\n" if view.identity_reply else ""
         text = (
             "📜 Fuligem sem Fogo\n"
             "Missão Principal · Terras do Ocaso\n\n"
             "🪖 Alda Veyr\n\n"
             "<i>— Fuligem sem fogo significa que alguém chegou antes de nós — "
             "ou que estamos olhando para o problema errado.</i>\n\n"
+            f"{identity}{reply}"
             "🎯 Objetivo · Investigar a fuligem sem queima recente na Charneca da Fuligem.\n\n"
             f"{_reward_block()}"
         )
+        option_rows = [
+            [_button(label, f"p2:{version}:ask:{option_id}")]
+            for option_id, label in view.identity_options
+        ]
         return Screen(
             text,
             "p2",
             _keyboard(
                 [_button("Aceitar Missão", f"p2:{version}:accept")],
+                *option_rows,
                 [_button("← Refúgio do Ocaso", "road:local")],
             ),
             parse_mode="HTML",
