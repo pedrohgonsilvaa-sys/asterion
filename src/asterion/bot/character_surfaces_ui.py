@@ -19,12 +19,18 @@ from asterion.application.knowledge_catalog import (
     ALTOS_REGION_LABEL,
     CODEX_CATEGORY_ORDER,
     CODEX_ENTRIES,
+    CONFINS_REGION_ID,
+    CONFINS_REGION_LABEL,
     CR01_BESTIARY_GROUP,
     CR01_BESTIARY_LABEL,
     CREATURE_PRESENTATION,
     LOCATION_LABELS,
+    NARETH_REGION_ID,
+    NARETH_REGION_LABEL,
     TDO_REGION_ID,
     TDO_REGION_LABEL,
+    VARZEAS_REGION_ID,
+    VARZEAS_REGION_LABEL,
     VDE_REGION_ID,
     VDE_REGION_LABEL,
 )
@@ -56,9 +62,18 @@ def _slug(value: str) -> str:
     return value.replace("-", "_")
 
 
-CODEX_ENTRY_KEYS = {
-    entry.entry_id: _slug(entry.entry_id.rsplit(".", 1)[-1]) for entry in CODEX_ENTRIES
-}
+def _entry_keys() -> dict[str, str]:
+    """Short callback keys: the last id segment, or the last two when that one repeats."""
+    last = [entry.entry_id.rsplit(".", 1)[-1] for entry in CODEX_ENTRIES]
+    keys = {}
+    for entry, tail in zip(CODEX_ENTRIES, last, strict=True):
+        if last.count(tail) > 1:
+            tail = "_".join(entry.entry_id.rsplit(".", 2)[-2:])
+        keys[entry.entry_id] = _slug(tail)
+    return keys
+
+
+CODEX_ENTRY_KEYS = _entry_keys()
 CODEX_ENTRY_BY_KEY = {value: key for key, value in CODEX_ENTRY_KEYS.items()}
 ACHIEVEMENT_CATEGORY_KEYS = {
     key: str(index) for index, (key, _) in enumerate(ACHIEVEMENT_CATEGORIES)
@@ -370,18 +385,15 @@ def _known_bestiary_regions(view: KnowledgeView) -> list[tuple[str, str, int]]:
         presentation = CREATURE_PRESENTATION.get(record.creature_id)
         if presentation:
             counts[presentation.region_id] = counts.get(presentation.region_id, 0) + 1
+    # Short names ("🌑 Terras do Ocaso"), in Region order, the Crônica last.
     labels = {
-        TDO_REGION_ID: "🌑 Terras do Ocaso",
-        VDE_REGION_ID: "🪢 Vales dos Enforcados",
-        ALTOS_REGION_ID: "🌋 Altos Cinéreos",
-        CR01_BESTIARY_GROUP: CR01_BESTIARY_LABEL,
+        region_id: label.split(" · ", 1)[0] for region_id, label in _region_labels().items()
     }
+    labels[CR01_BESTIARY_GROUP] = CR01_BESTIARY_LABEL
     return [
-        (region_id, labels[region_id], count)
-        for region_id, count in sorted(
-            counts.items(), key=lambda item: (item[0] == CR01_BESTIARY_GROUP, item[0])
-        )
-        if count and region_id in labels
+        (region_id, label, counts[region_id])
+        for region_id, label in labels.items()
+        if counts.get(region_id)
     ]
 
 
@@ -390,10 +402,14 @@ def _bestiary_labels() -> dict[str, str]:
 
 
 def _region_labels() -> dict[str, str]:
+    """The six Regions, in progression order."""
     return {
         TDO_REGION_ID: TDO_REGION_LABEL,
         VDE_REGION_ID: VDE_REGION_LABEL,
+        NARETH_REGION_ID: NARETH_REGION_LABEL,
+        VARZEAS_REGION_ID: VARZEAS_REGION_LABEL,
         ALTOS_REGION_ID: ALTOS_REGION_LABEL,
+        CONFINS_REGION_ID: CONFINS_REGION_LABEL,
     }
 
 
@@ -406,7 +422,7 @@ def _known_codex_regions(view: KnowledgeView) -> list[tuple[str, str]]:
     labels = _region_labels()
     return [
         (region_id, labels[region_id])
-        for region_id in (TDO_REGION_ID, VDE_REGION_ID, ALTOS_REGION_ID)
+        for region_id in labels
         if region_id in region_ids and _locations_in_region(view, region_id)
     ]
 
@@ -414,6 +430,8 @@ def _known_codex_regions(view: KnowledgeView) -> list[tuple[str, str]]:
 def _codex_region_id(location_id: str) -> str:
     if location_id.startswith("location.altos."):
         return ALTOS_REGION_ID
+    if location_id.startswith("location.confins."):
+        return CONFINS_REGION_ID
     return location_id.split(".", 1)[0]
 
 
