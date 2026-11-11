@@ -8,6 +8,7 @@ from asterion.application.guild_battle import GuildBattleService
 from asterion.application.guilds import GuildService
 from asterion.application.market import MarketService
 from asterion.application.oaths import OathService
+from asterion.application.outbox import OutboxDispatcher
 from asterion.application.pvp import PvpService
 from asterion.application.round import RoundService
 from asterion.application.trades import TradeService
@@ -125,6 +126,16 @@ def build_round_scheduler() -> AsyncIOScheduler:
         "interval",
         seconds=60,
         id="chronicle-upkeep",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    # Transactional Outbox: claims with SKIP LOCKED, so several instances are safe.
+    scheduler.add_job(
+        OutboxDispatcher(SessionFactory).run_maintenance,
+        "interval",
+        seconds=5,
+        id="outbox-dispatch",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

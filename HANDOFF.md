@@ -1596,7 +1596,7 @@ Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem
 - Catálogo de Flavor Text contextual: não existe.
 - Integração de visuais/skins: não existe.
 
-**Operação que falta:** worker da Outbox (só existe a tabela), agendador que sobreviva a restart e a várias instâncias, métricas e alertas, deploy/rollback de produção, backup e restore, administração/RBAC/sanções (hoje só CLIs), rate limiting e antiabuso geral, jornada E2E criação→Nv.60→Legado com as 6 Classes e smoke test no Telegram real.
+**Operação que falta:** produtores e handlers reais da Outbox (o dispatcher já existe), agendador que sobreviva a restart e a várias instâncias, métricas e alertas, deploy/rollback de produção, backup e restore, administração/RBAC/sanções (hoje só CLIs), rate limiting e antiabuso geral, jornada E2E criação→Nv.60→Legado com as 6 Classes e smoke test no Telegram real.
 
 **Pendências das etapas entregues:** recompensas da Batalha de Guildas e efeitos de 6 das 7 Obras; frases de flavor dos resultados da Arena, do Duelo e da Batalha de Guildas; conteúdo dos catálogos de Eventos, Juramento e Expedição (o autor define).
 
@@ -1746,7 +1746,7 @@ Não foi encontrado backlog/sprint ativo confiável para afirmar “o próximo i
 - **Schema vs banco:** 80 tabelas são derivadas do ORM alterado; código de migration 0032 não está rastreado. Não assumir que produção/banco de outra branch tem essas tabelas ou colunas.
 - **Idempotência, concorrência e callback replay:** o GDD exige resolução autoritativa, locks e callbacks como intenção do cliente. Manter commits de recompensas/consumo/estado em transação única; validar actor, server, estado, revisão, cooldown e origem no serviço. Nunca confiar em `callback_data` ou texto para conceder acesso/recompensa.
 - **Agendador:** `replace_existing`/`max_instances=1` são por processo. Um API por réplica em webhook inicia scheduler na inicialização; cada processo polling também inicia um. Uma implantação horizontal pode avançar a mesma Ronda em paralelo.
-- **Outbox incompleta:** a tabela existe e é citada no README/GDD, mas nenhum worker de envio foi localizado. Não prometer eventos externos confiáveis sem implementar/operar dispatcher, retry, lock e política de entrega.
+- **Outbox sem produtor:** o dispatcher existe (`application/outbox.py`, job `outbox-dispatch` a cada 5 s): lock por `FOR UPDATE SKIP LOCKED` com lease de 2 min, entrega fora da transação, 5 tentativas com espera de 30 s/2 min/10 min/1 h, depois `status='dead'` + warning no log (reenvio manual: voltar para `pending`). Mensagens com o mesmo `aggregate_key` seguem a ordem de criação. Porém nenhum código grava na Outbox e `OUTBOX_HANDLERS` está vazio: sem tópico real, nada é entregue. Entrega é *at-least-once*; cada handler deve tolerar repetição (use `dedup_key`).
 - **Redis subutilizado:** variável e health check estão presentes, mas não há cache/lock/fila identificado no fluxo atual; não o trate como requisito de persistência do jogo.
 - **Segredos/configuração:** o token Telegram e webhook secret não podem ser commitados/logados. Os defaults locais de DB são previsíveis; produção precisa credencial forte, TLS/rede restrita, rotação, backup e permissões mínimas. `.env` não faz parte do handoff.
 - **Assets:** referências `file:` dependem de caminho dentro do processo; Docker não copia `assets/`. Evite path traversal e assets não revisados; preferir IDs hospedados/volumes declarados para operação.
