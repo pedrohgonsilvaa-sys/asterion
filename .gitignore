@@ -17,4 +17,3 @@ build/
 
 # Produção
 .env.prod
-backups/

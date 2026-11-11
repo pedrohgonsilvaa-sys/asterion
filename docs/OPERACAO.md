@@ -1,7 +1,7 @@
 # Operação em produção (VPS)
 
 Guia curto para colocar o Asterion no ar, fazer backup, restaurar e voltar uma versão.
-Requisitos na VPS: Linux com Docker e Docker Compose instalados, e o repositório clonado.
+Requisitos na VPS: Linux com Docker e Docker Compose, Python 3.12 e o repositório clonado.
 
 ## 1. Primeira instalação
 
@@ -25,53 +25,39 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml ps
 docker compose --env-file .env.prod -f docker-compose.prod.yml logs --tail 100 bot
 ```
 
-## 3. Backup
+## 3. Backup e restauração
 
-Cria um arquivo `backups/asterion-AAAAMMDDTHHMMSSZ.dump`, confere que ele é legível e apaga os de mais de 14 dias:
+Use a ferramenta `python -m asterion.db_backup_cli`, descrita em [BACKUP_RESTORE.md](BACKUP_RESTORE.md). Na VPS, o Postgres roda dentro do Docker, então use a opção `--docker-container` com o nome do container do banco (veja com `docker compose ... ps`; costuma ser `<pasta>-postgres-1`).
+
+Prepare a ferramenta uma vez na VPS:
 
 ```bash
-scripts/backup.sh
+python3 -m venv .venv && .venv/bin/pip install .
 ```
 
-Agende todo dia (exemplo: 04:00 UTC) com `crontab -e`:
+Agende um backup por dia (exemplo: 04:00 UTC) com `crontab -e`:
 
 ```
-0 4 * * * cd /caminho/do/asterion && scripts/backup.sh >> backups/backup.log 2>&1
+0 4 * * * cd /caminho/do/asterion && ASTERION_DATABASE_URL=postgresql+asyncpg://asterion:SENHA@localhost/asterion .venv/bin/python -m asterion.db_backup_cli --docker-container asterion-postgres-1 backup >> backups/backup.log 2>&1
 ```
 
 **Cópia fora da VPS:** backup só na mesma máquina não protege contra perda da VPS. Copie a pasta `backups/` para outro lugar (outro servidor ou armazenamento em nuvem). Este passo depende do serviço que você escolher e ainda não está automatizado.
 
-## 4. Teste de restauração (faça antes do lançamento e todo mês)
+**Teste de restauração:** faça antes do lançamento e uma vez por mês, num banco vazio de teste (veja o BACKUP_RESTORE.md). Um backup que nunca foi restaurado não é prova de nada.
 
-Restaura num banco de teste, sem tocar no jogo:
+## 4. Atualizar versão (deploy)
 
-```bash
-scripts/restore.sh backups/asterion-XXXX.dump
-```
-
-O script mostra quantas tabelas foram restauradas em `asterion_restore_check`.
-
-## 5. Restaurar de verdade (desastre)
-
-1. Pare o bot: `docker compose --env-file .env.prod -f docker-compose.prod.yml stop bot`.
-2. Restaure: `FORCE_PRODUCAO=1 scripts/restore.sh backups/asterion-XXXX.dump asterion`.
-3. Suba o bot de novo: `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d bot`.
-
-Isso **apaga** o banco atual e põe o do backup no lugar. Antes, faça um backup do estado atual, se o banco ainda abrir.
-
-## 6. Atualizar versão (deploy)
-
-1. `scripts/backup.sh` (sempre antes).
+1. Faça um backup (seção 3).
 2. `git pull origin main`.
 3. `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build`.
 4. Confira os logs do bot.
 
-## 7. Voltar uma versão (rollback)
+## 5. Voltar uma versão (rollback)
 
 Migrations novas podem mudar o banco, então não dá para só voltar o código. Faça assim:
 
-1. Pare o bot.
-2. Restaure o backup tirado no passo 1 do deploy (seção 5).
+1. Pare o bot: `docker compose --env-file .env.prod -f docker-compose.prod.yml stop bot`.
+2. Restaure o backup tirado antes do deploy (seção 3, restauração com `--clean --yes`).
 3. Volte o código: `git checkout <commit anterior>`.
 4. Suba de novo com `up -d --build`.
 
