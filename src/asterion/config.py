@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_mode: Literal["polling", "webhook"] = "polling"
     telegram_webhook_secret: str | None = None
+    # Technical flood guard per player (not a game rule): burst size and refill per second.
+    rate_limit_burst: int = Field(default=12, ge=1)
+    rate_limit_per_second: float = Field(default=4.0, gt=0)
     # Community supergroup and its Mercado topic; unset means Divulgar shows copy text.
     community_chat_id: int | None = None
     community_market_topic_id: int | None = None
