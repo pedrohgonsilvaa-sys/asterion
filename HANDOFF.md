@@ -1747,7 +1747,7 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 5. A Barreira da Ressonância dura 2 turnos e sai só na 1ª instância de Fase 3 de cada participante (quem reentra não a enfrenta de novo).
 6. Ordem de IA de O Compasso: resolver Batida Plena pendente; Ressonância; preparar Batida Plena; Onda de Compasso; Contratempo (não reaplica enquanto a própria marca está ativa); Batida.
 
-**Escolhas da parte 5 (aguardam aprovação do autor):**
+**Escolhas da parte 5 (aprovadas pelo autor em 2026-11-11):**
 
 1. "Região já acessada" é a Região com Desbravar liberado, a mesma regra da Região de Ressonância (escolha 1 da parte 1).
 2. Elegibilidade é a do Evento normal: exige a ocorrência concluída. Se o tempo acaba, ninguém conta, nem para objetivo nem para Trilha.
@@ -1775,7 +1775,7 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 4. Quem conclui o primeiro capítulo só na Arquivada também recebe a Entrada do desfecho.
 5. Nenhum Feito novo.
 
-**Escolhas da parte 6 (aguardam aprovação do autor):**
+**Escolhas da parte 6 (aprovadas pelo autor em 2026-11-11):**
 
 1. As Entradas e Trechos de cada capítulo são registrados na **conclusão** do capítulo (a proposta só dá o capítulo). Assim `codex_cr01_formas_do_pulso` não sai na primeira luta, e sim ao concluir o Capítulo 1.
 2. Os Trechos `codex_cr01_herdeiros_altos` (Maro Keln) e `_confins` (Eris Val) exigem um Local descoberto dos Altos ou dos Confins, para não nomear NPC de Região que o personagem não conhece.
@@ -1793,7 +1793,7 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 **Decisões do autor sobre a proposta (2026-11-09):**
 
 - **Data:** o Dia 1 da Crônica é configurável e o autor define depois. Sem data configurada, nada abre. D8…D50, voto, T, T+2h e T+14d derivam do Dia 1. A data pode ser trocada antes do início; depois, só pela extensão excepcional do GDD §5.3, com registro.
-- **Bíblia:** o documento usa a Bíblia Canônica v4.0.7, que o autor aprovou como referência, mas o arquivo ainda não está no repositório e o `SOURCE_AUTHORITY.md` ainda registra a v3.0 FINAL. O autor vai enviar o arquivo; até lá, a validação de lore fica pendente.
+- **Bíblia:** a Bíblia Canônica v4.0.7 foi adicionada ao repositório em 2026-11-11 (`ASTERION_BIBLIA_CANONICA_v4_0_7.md`) e o `SOURCE_AUTHORITY.md` a registra no lugar da v3.0 FINAL. A validação de lore da Crônica contra ela ainda não foi feita.
 - **Dúvidas 1–7 e 9–22:** aprovadas as recomendações. Gate de entrada: P1 concluída. Evento da Crônica nos horários normais, com uma versão do Chefe por faixa de Região no mesmo horário. Voto abre em D50 e T às 21:00 America/Sao_Paulo. A Entrada do desfecho vai para quem concluiu ao menos 1 capítulo. Os básicos usam o Grau da Dádiva Diária. Os limites de 2/dia são conteúdo, sujeitos a revisão de Balanceamento. Ajudante não conta. Uma run vale para objetivo e repetível. O alternativo de Masmorra por Desbravar é aceito. As opções do voto são embaralhadas por jogador. A Crônica Arquivada é jogável sem pontos. Elegibilidade 4/8 + 1. As 9 criaturas são aprovadas, com um único material visual no lançamento. Os kits passam por simulação de Balanceamento. XP normal na primeira vitória. Elite Nv.3 e Chefe Nv.5. A luta acontece na Região de Ressonância do jogador.
 - **Dúvida 8 (Aparências):** a skin da Crônica é **especial e única**, com **fundo próprio da Crônica**; não segue o padrão regional nem o céu neutro.
 - **PROPOSTAS DE REGRA:** `pr_cr01_encontro_grupo` e `pr_cr01_feito_resposta` aprovadas; `pr_cr01_eco_residual` adiada (o desfecho fica só narrativo).
