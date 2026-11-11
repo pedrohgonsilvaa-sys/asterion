@@ -36,6 +36,12 @@ jobs:
           cache: pip
       - name: Install
         run: pip install -e ".[dev]"
+      - name: PostgreSQL 16 client tools
+        # pg_dump must match the server (16); newer clients emit SQL it rejects.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
       - name: Lint
         run: ruff check .
       - name: Test
