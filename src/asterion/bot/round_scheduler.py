@@ -8,6 +8,7 @@ from asterion.application.guild_battle import GuildBattleService
 from asterion.application.guilds import GuildService
 from asterion.application.market import MarketService
 from asterion.application.oaths import OathService
+from asterion.application.outbox import OutboxDispatcher
 from asterion.application.pvp import PvpService
 from asterion.application.round import RoundService
 from asterion.application.trades import TradeService
@@ -18,7 +19,8 @@ from asterion.bot.oath_handlers import deliver_oath_notices
 from asterion.bot.pvp_handlers import deliver_notices
 from asterion.bot.world_event_handlers import deliver_world_event_notices
 from asterion.config import get_settings
-from asterion.infrastructure.db.session import SessionFactory
+from asterion.infrastructure.db.job_lock import run_exclusive
+from asterion.infrastructure.db.session import SessionFactory, engine
 
 
 def build_round_scheduler() -> AsyncIOScheduler:
@@ -129,6 +131,16 @@ def build_round_scheduler() -> AsyncIOScheduler:
         coalesce=True,
         replace_existing=True,
     )
+    # Transactional Outbox: claims with SKIP LOCKED, so several instances are safe.
+    scheduler.add_job(
+        OutboxDispatcher(SessionFactory).run_maintenance,
+        "interval",
+        seconds=5,
+        id="outbox-dispatch",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
     oaths = OathService(SessionFactory, settings.server_id)
     expeditions = ExpeditionService(SessionFactory, settings.server_id)
 
@@ -161,4 +173,15 @@ def build_round_scheduler() -> AsyncIOScheduler:
             coalesce=True,
             replace_existing=True,
         )
+    # One execution per tick across all instances (the Outbox claims rows itself).
+    for job in scheduler.get_jobs():
+        if job.id != "outbox-dispatch":
+            job.modify(func=_exclusive(job.id, job.func))
     return scheduler
+
+
+def _exclusive(job_id, job):
+    async def run() -> None:
+        await run_exclusive(engine, job_id, job)
+
+    return run
