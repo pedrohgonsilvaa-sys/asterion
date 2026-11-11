@@ -6,7 +6,9 @@
 
 > **Sincronização 2026-10-17:** este índice registra Fonte Mestra v1.6.0, Terras do Ocaso v1.0.16 FINAL, Vales dos Enforcados v1.0.6 FINAL, Planícies de Nareth v1.0.2 FINAL, Várzeas Carmesins v1.0.3 FINAL, Altos Cinéreos v1.0.1 FINAL, Lore v1.2, Visual/UI de 2026-10-13 e anatomia racial v2.0. Notas históricas mais abaixo podem citar versões anteriores apenas como registro; não reativam autoridade superada.
 
-> **Sincronização 2026-10-18:** Confins do Véu v1.0.0 FINAL (`FINAL_APPROVED`, conteúdo regional C aprovado) está registrado na Região 6. O Contrato Global de Weapon Metadata v1.0.0 FINAL permanece íntegro e vigente, SHA-256 `c283b398949dc0a864d98b9e0e9031080a50b937db6932ffcde7d46e600aa740`. O GDD v1.6.0 permanece superior para sistemas globais; a Bíblia Canônica v3.0 FINAL rege Lore, identidades e limites; a Fonte Regional rege o conteúdo fechado da Região 6. **HANDOFF À ENGENHARIA AUTORIZADO** após esta sincronização; isto não declara P31 implementada.
+> **Sincronização 2026-10-18:** Confins do Véu v1.0.0 FINAL (`FINAL_APPROVED`, conteúdo regional C aprovado) está registrado na Região 6. O Contrato Global de Weapon Metadata v1.0.0 FINAL permanece íntegro e vigente, SHA-256 `c283b398949dc0a864d98b9e0e9031080a50b937db6932ffcde7d46e600aa740`. O GDD v1.6.0 permanece superior para sistemas globais; a Bíblia Canônica Consolidada v4.0.7 (`ASTERION_BIBLIA_CANONICA_v4_0_7.md`) rege Lore, identidades e limites; a Fonte Regional rege o conteúdo fechado da Região 6. **HANDOFF À ENGENHARIA AUTORIZADO** após esta sincronização; isto não declara P31 implementada.
+
+> **Sincronização 2026-11-11:** a Bíblia Canônica Consolidada de Mundo, Raças, NPCs e Regiões **v4.0.7** (`ASTERION_BIBLIA_CANONICA_v4_0_7.md`, SHA-256 `011ad3fb0ab2f2e940baca5cbe11ee89460353ee9709693005dcc26c398a431d`) passa a reger Lore, identidades, NPCs e limites, por decisão do autor. Substitui a v3.0 FINAL e, por sucessão, a v3.2 e a v3.3. O arquivo v3.0 permanece no repositório só como registro histórico. Nenhuma regra mecânica muda; o GDD v1.6.0 segue superior para sistemas.
 
 ## Fonte Mestra vigente
 
@@ -95,7 +97,7 @@ Quando uma Fonte Regional especificar conteúdo dentro de parâmetros sistêmico
 Arquivo vigente: `ASTERION_CONTEUDO_CONFINS_DO_VEU_v1.0.0_FINAL.md`.
 SHA-256 integral verificado: `c86a0208888d14bbd653cda6174956df89b2233304dcca523d878b5b42a102fc`.
 
-A aprovação de conteúdo regional C foi confirmada em 2026-10-18. Para sistemas, fórmulas e regras globais, prevalece o GDD Estrutural v1.6.0; para Lore, NPCs, identidades e limites, prevalece a Bíblia Canônica Mundo/Regiões/Bestiário/NPCs v3.0 FINAL; esta Fonte define as decisões regionais C aprovadas, sem sobrepor aquelas autoridades. A §19.2 está sincronizada com o Contrato Global de Weapon Metadata v1.0.0 FINAL, registrado acima.
+A aprovação de conteúdo regional C foi confirmada em 2026-10-18. Para sistemas, fórmulas e regras globais, prevalece o GDD Estrutural v1.6.0; para Lore, NPCs, identidades e limites, prevalece a Bíblia Canônica Consolidada v4.0.7 (substitui a v3.0 FINAL); esta Fonte define as decisões regionais C aprovadas, sem sobrepor aquelas autoridades. A §19.2 está sincronizada com o Contrato Global de Weapon Metadata v1.0.0 FINAL, registrado acima.
 
 **Handoff à Engenharia:** autorizado após o registro desta Fonte FINAL e do Contrato Global de Weapon Metadata no índice. O handoff não significa que o conteúdo tenha sido implementado.
 
