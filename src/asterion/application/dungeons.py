@@ -15,6 +15,7 @@ from asterion.application.account_risk import record_linked_cooccurrence
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.bestiary import BestiaryRecorder
 from asterion.application.chronicle import record_repeatable
+from asterion.application.chronicle_activities import record_dungeon_run
 from asterion.application.equipment import equipment_instance_payload
 from asterion.application.equipment_configuration import (
     load_equipment_configuration,
@@ -770,6 +771,34 @@ def _family(family_id: str | None) -> DungeonFamily:
         return DUNGEON_FAMILIES[selected_id]
     except KeyError as exc:
         raise ValueError(f"Unknown dungeon family: {selected_id}") from exc
+
+
+async def stable_released(session: AsyncSession, character, family_id: str) -> bool:
+    """Whether the Estável difficulty is released, by the same gates as the detail screen."""
+    family = DUNGEON_FAMILIES[family_id]
+    if character.level < family.minimum_level:
+        return False
+    discovered = await session.scalar(
+        select(Unlock.id).where(
+            Unlock.character_id == character.id, Unlock.unlock_id == family.discovery_unlock
+        )
+    )
+    if discovered is None:
+        return False
+    if not family.required_quest_ids:
+        return True
+    completed = set(
+        (
+            await session.scalars(
+                select(Quest.quest_id).where(
+                    Quest.character_id == character.id,
+                    Quest.quest_id.in_(family.required_quest_ids),
+                    Quest.status == "completed",
+                )
+            )
+        ).all()
+    )
+    return set(family.required_quest_ids) <= completed
 
 
 def _encounter_count(family_id: str) -> int:
@@ -2766,6 +2795,15 @@ class DungeonService:
                 character,
                 "rep_cr01_masmorra",
                 run.id.hex,
+                now=datetime.now(UTC),
+                started_at=run.created_at,
+            )
+            # The same run also completes one Masmorra objective of the Crônica (§0.3.4).
+            await record_dungeon_run(
+                session,
+                character,
+                family.family_id,
+                self.road.latest_explorable_local,
                 now=datetime.now(UTC),
                 started_at=run.created_at,
             )

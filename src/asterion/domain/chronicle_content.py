@@ -16,7 +16,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from asterion.domain.altos_bastilha_dungeon import ALTOS_BASTILHA_FAMILY_ID
+from asterion.domain.altos_pedreira_dungeon import ALTOS_PEDREIRA_FAMILY_ID
 from asterion.domain.chronicle import Layer
+from asterion.domain.dungeons import CRYPT_FAMILY_ID
 from asterion.domain.road import (
     ALTOS_BASTILHA_LOCATION,
     ALTOS_ESCARPA_LOCATION,
@@ -43,6 +46,13 @@ from asterion.domain.road import (
     VDE_GARGANTA_LOCATION,
     VDE_MATA_LOCATION,
 )
+from asterion.domain.tdo_galleries import GALLERIES_FAMILY_ID
+from asterion.domain.varzeas_dungeons import (
+    VARZEAS_CISTERN_FAMILY_ID,
+    VARZEAS_INFIRMARY_FAMILY_ID,
+)
+from asterion.domain.vde_fosso import FOSSO_FAMILY_ID
+from asterion.domain.vde_santuario import SANCTUARY_FAMILY_ID
 
 DESBRAVAR_GUARANTEE_ATTEMPT = 3  # GDD §49.15: mandatory content is protected for 3 attempts.
 VESTIGIO_WEIGHT = 100
@@ -50,6 +60,8 @@ CHAPTER_RESULT_WEIGHT = 100  # Alone in its category, so the value does not chan
 RESULT_PREFIX = "dsc_cr01_"
 VESTIGIO_RESULT = "dsc_cr01_vestigio"
 VESTIGIO_SOURCE = "rep_cr01_desbravar"
+# §0.3.4: Desbravar in the LR replaces the Masmorra while none is released (same points).
+DEEP_VESTIGIO_RESULT = "dsc_cr01_vestigio_profundo"
 
 
 @dataclass(frozen=True, slots=True)
@@ -443,6 +455,21 @@ DESBRAVAR_OBJECTIVES: dict[str, str] = {
 VESTIGIO_TEXT = (
     "Um resto de pulso corre pela pedra e some. Nada que valha um relatório inteiro, mas você "
     "anota a hora e o lugar para os registradores."
+)
+
+
+# §0.3.4 and §2: in focus, a Masmorra objective takes one of the two Masmorras of the
+# focus Region; in mirror, any Masmorra with Estável released.
+DUNGEON_FOCUS: dict[str, tuple[str, str]] = {
+    "cap_02_obj_04": (GALLERIES_FAMILY_ID, CRYPT_FAMILY_ID),
+    "cap_03_obj_03": (SANCTUARY_FAMILY_ID, FOSSO_FAMILY_ID),
+    "cap_05_obj_04": (VARZEAS_CISTERN_FAMILY_ID, VARZEAS_INFIRMARY_FAMILY_ID),
+    "cap_06_obj_03": (ALTOS_BASTILHA_FAMILY_ID, ALTOS_PEDREIRA_FAMILY_ID),
+}
+
+DEEP_VESTIGIO_TEXT = (
+    "Sob o chão do Local, o pulso volta mais fundo do que de costume, como se viesse de "
+    "salas que você ainda não abriu. Você marca a profundidade e a hora para os registradores."
 )
 
 
