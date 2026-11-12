@@ -70,6 +70,7 @@ def render_benefits() -> Screen:
                 [_button("Trilha da Crônica", "cr:trail")],
                 [_button("Chamado de Asterion", "bn:call")],
                 [_button("Códigos de Asterion", "bn:code")],
+                [_button("Apoiar Asterion", "pay:root")],
                 [_button("← Menu", "menu:back")],
             ]
         ),

@@ -2,6 +2,11 @@
 #   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 # Copie .env.example para .env.prod e preencha. Nunca faça commit do .env.prod.
 # Este arquivo roda UM único processo de bot (o agendador roda dentro dele).
+# A API só recebe o webhook de pagamento. O Caddy publica só essa rota, com HTTPS
+# automático (Let's Encrypt). Para isso, ASTERION_PAYMENTS_DOMAIN precisa apontar
+# (registro DNS A) para esta VPS e as portas 80 e 443 precisam estar abertas.
+# API e Caddy só sobem com o perfil de pagamentos:
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml --profile payments up -d --build
 services:
   postgres:
     image: postgres:16-alpine
@@ -46,5 +51,44 @@ services:
       postgres:
         condition: service_healthy
 
+  api:
+    profiles: ["payments"]
+    build: .
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      ASTERION_APP_ENV: production
+      ASTERION_APP_HOST: 0.0.0.0
+      ASTERION_APP_PORT: 8000
+      ASTERION_DATABASE_URL: postgresql+asyncpg://asterion:${POSTGRES_PASSWORD}@postgres:5432/asterion
+      # A API não roda o bot nem o agendador: só grava o aviso e enfileira a checagem.
+      ASTERION_TELEGRAM_BOT_ENABLED: "false"
+    command: asterion-api
+    expose:
+      - "8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  caddy:
+    profiles: ["payments"]
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    environment:
+      ASTERION_PAYMENTS_DOMAIN: ${ASTERION_PAYMENTS_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

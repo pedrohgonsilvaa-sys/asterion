@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from asterion.domain.chronicle import CHRONICLE_COSMETICS
 from asterion.domain.guild_battle import GUILD_BATTLE_COSMETICS
+from asterion.domain.payments import PATRON_COSMETICS
 
 
 @dataclass(frozen=True, slots=True)
@@ -300,6 +301,10 @@ COSMETICS = (
     *(
         CosmeticDefinition(cosmetic_id, cosmetic_type, name, None, "Batalha de Guildas")
         for cosmetic_id, cosmetic_type, name in GUILD_BATTLE_COSMETICS
+    ),
+    *(
+        CosmeticDefinition(cosmetic_id, cosmetic_type, name, None, "Patrono de Asterion")
+        for cosmetic_id, cosmetic_type, name in PATRON_COSMETICS
     ),
 )
 
