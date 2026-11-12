@@ -10,6 +10,9 @@ class Settings(BaseSettings):
         env_prefix="ASTERION_",
         env_file=".env",
         env_file_encoding="utf-8",
+        # Uma variável vazia (ex.: ASTERION_COMMUNITY_CHAT_ID=) vale o padrão do código,
+        # como se a linha não existisse. Assim o .env.example pode ser copiado sem quebrar.
+        env_ignore_empty=True,
         extra="ignore",
     )
 
