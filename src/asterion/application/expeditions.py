@@ -75,6 +75,7 @@ class ExpeditionOptionView:
     index: int
     label: str
     chosen: bool
+    description: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -622,7 +623,9 @@ class ExpeditionService:
             stage_flavor=stage_data.flavor if stage_data is not None else None,
             options=(
                 tuple(
-                    ExpeditionOptionView(index, option.label, option.option_id == chosen)
+                    ExpeditionOptionView(
+                        index, option.label, option.option_id == chosen, option.description
+                    )
                     for index, option in enumerate(stage_data.options)
                 )
                 if stage_data is not None and member is not None

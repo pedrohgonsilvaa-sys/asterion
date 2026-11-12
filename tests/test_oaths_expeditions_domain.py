@@ -114,9 +114,8 @@ def test_material_region_follows_the_character_level(level, region):
     assert oaths.region_for_level(level) == region
 
 
-def test_catalogs_are_empty_until_the_author_defines_content():
+def test_oath_catalog_is_empty_until_the_author_defines_content():
     assert oaths.OATH_TRIAL_CATALOG == ()
-    assert exp.EXPEDITION_ROUTE_CATALOG == ()
     assert oaths.definition_for_opening((), FRIDAY_OPENING) is None
     assert exp.route_for_start((), MONDAY_START) is None
 
@@ -176,3 +175,19 @@ def test_stage_needs_one_option_of_each_quality():
     exp.ExpeditionStage("x", (good, middle, bad))
     with pytest.raises(ValueError):
         exp.ExpeditionStage("x", (good, good, bad))
+
+
+def test_expedition_catalog_has_the_six_final_routes():
+    catalog = exp.EXPEDITION_ROUTE_CATALOG
+    assert len(catalog) == 6
+    assert len({route.route_id for route in catalog}) == 6
+    first_slots = []
+    for route in catalog:
+        assert route.route_id.startswith("expedition.")
+        assert route.name and route.return_flavor
+        for stage in route.stages:
+            assert stage.flavor
+            assert all(option.label and option.description for option in stage.options)
+            first_slots.append(stage.options[0].quality)
+    # Button order is mixed, so the first button does not give the answer away.
+    assert len(set(first_slots)) == 3

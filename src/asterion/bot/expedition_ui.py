@@ -119,6 +119,8 @@ def _active(view, lines, rows) -> None:
     elif view.answered:
         chosen = next((option for option in view.options if option.chosen), None)
         lines.append(f"Sua escolha · {escape(chosen.label)}" if chosen else "Escolha registrada.")
+        if chosen and chosen.description:
+            lines.extend(["", escape(chosen.description)])
     else:
         lines.append("Escolha o que fazer. Sem resposta, vale a opção padrão.")
         token = pack(view.expedition_id)
