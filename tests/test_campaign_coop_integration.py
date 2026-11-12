@@ -5,7 +5,7 @@ from uuid import UUID
 import pytest
 from sqlalchemy import select
 
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.p1 import P1Service
 from asterion.application.p5 import P5_ID, P5_VERSION, P5Service
 from asterion.application.p6 import (
@@ -30,7 +30,6 @@ from asterion.infrastructure.db.models import (
     Account,
     CampaignObjectiveCredit,
     CampaignSharedEncounter,
-    CampaignSharedEncounterMember,
     Character,
     GroupActivityParticipant,
     Quest,
@@ -161,6 +160,19 @@ async def _finish_p1_group_fight(service, actors, database, encounter_id):
     assert result == "victory"
 
 
+async def _finish_p1_solo_fight(service, actor, database):
+    """Fight the Solo P1 combat to the end; the hero must win it."""
+    for _ in range(100):
+        view = await service.resume(actor)
+        if view.combat is None or view.combat.result:
+            break
+        await service.action(
+            actor, view.activity_id, view.combat.version, "attack", target_id="enemy"
+        )
+    final = await service.resume(actor)
+    assert final.step == 4
+
+
 async def _seed_enemy_at_one_hp(database, encounter_id):
     """Make settlement assertions deterministic without simulating balance."""
     async with database[1].begin() as session:
@@ -236,7 +248,7 @@ async def _start_group_boss(groups, service, actor, helper, activity_type, versi
 
 
 @pytest.mark.asyncio
-async def test_p1_group_shares_objective_credit_and_reconnectable_combat(database, monkeypatch):
+async def test_p1_group_keeps_objectives_solo_and_refuses_group_combat(database, monkeypatch):
     import asterion.application.p1 as p1_module
 
     monkeypatch.setattr(p1_module, "uuid4", lambda: UUID(int=7001))
@@ -246,19 +258,29 @@ async def test_p1_group_shares_objective_credit_and_reconnectable_combat(databas
     await _create_group(groups, actors[0], actors[1:], names)
     services = {actor: P1Service(database[1], "ocaso", groups) for actor in actors}
 
+    async def steps():
+        async with database[1]() as session:
+            rows = (
+                await session.execute(
+                    select(Character.telegram_id, Quest.step)
+                    .join(Quest, Quest.character_id == Character.id)
+                    .where(Character.telegram_id.in_(actors), Quest.quest_id == "P1")
+                )
+            ).all()
+        return dict(rows)
+
+    # Principais are Solo (Ação × Consequência §5): only the actor advances.
     followed = await services[actors[0]].follow_road(actors[0], 0)
     assert followed.step == 2
-    for actor in actors:
-        async with database[1]() as session:
-            quest = await session.scalar(
-                select(Quest).join(Character).where(Character.telegram_id == actor)
-            )
-            assert quest.step == 2
+    assert await steps() == {actors[0]: 2, actors[1]: 1, actors[2]: 1, actors[3]: 1}
 
     tracks = await services[actors[0]].examine(actors[0], "pegadas", 1)
     assert tracks.progress["pegadas"] is True
     dog = await services[actors[0]].examine(actors[0], "sulcos", tracks.state_version)
-    assert dog.step == 3 and dog.combat is None and dog.group_size == 4
+    # The fight opens as a Solo combat even though the actor belongs to a Group.
+    assert dog.step == 3 and dog.combat is not None and dog.group_size == 1
+    assert not dog.combat.party_mode
+    assert await steps() == {actors[0]: 3, actors[1]: 1, actors[2]: 1, actors[3]: 1}
     async with database[1]() as session:
         credits = list(
             (
@@ -269,70 +291,46 @@ async def test_p1_group_shares_objective_credit_and_reconnectable_combat(databas
                 )
             ).all()
         )
-        assert len(credits) == 12
+        actor_id = await session.scalar(
+            select(Character.id).where(Character.telegram_id == actors[0])
+        )
+        assert len(credits) == 3
+        assert {credit.character_id for credit in credits} == {actor_id}
+    # The other members are still at the first step, with no progress at all.
+    for actor in actors[1:]:
+        view = await services[actor].resume(actor)
+        assert view.step == 1 and not view.progress.get("pegadas")
 
-    proposal = await services[actors[0]].propose_group_combat(
-        actors[0], dog.state_version
-    )
-    assert proposal.proposal_id is not None
-    ready_view = await _confirm_and_start(
-        groups, services[actors[0]], actors[0], proposal.proposal_id, actors
-    )
-    assert ready_view is not None
-    assert ready_view.combat is not None and ready_view.combat.party_mode
-    assert ready_view.group_size == 4
-    shared_id = ready_view.encounter_id
-    assert shared_id is not None
+    # P1 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await services[actors[0]].propose_group_combat(actors[0], dog.state_version)
+    assert not await groups.activity_proposals(actors[0])
 
-    views = [await services[actor].resume(actor) for actor in actors]
-    assert {view.encounter_id for view in views} == {shared_id}
-    assert len({view.activity_id for view in views}) == 4
-    assert len({view.combat.version for view in views}) == 1
-    first_turn = active_player_key(ready_view.combat)
-    assert first_turn is not None
-    owner_index = next(
-        index for index, view in enumerate(views) if view.combat_actor_key == first_turn
+    # The Solo fight reconnects to the same combat.
+    ready = dog
+    reconnected = await services[actors[0]].resume(actors[0])
+    assert reconnected.activity_id == ready.activity_id
+    assert reconnected.combat.version == ready.combat.version
+    stale_view = await services[actors[0]].action(
+        actors[0], ready.activity_id, ready.combat.version, "attack", target_id="enemy"
     )
-    owner = views[owner_index]
-    changed = await services[actors[owner_index]].action(
-        actors[owner_index], owner.activity_id, owner.combat.version, "attack"
-    )
-    assert changed is not None and changed.combat is not None
-    stale = await services[actors[owner_index]].action(
-        actors[owner_index], owner.activity_id, owner.combat.version, "attack"
-    )
-    assert stale.combat.version == changed.combat.version
-    await _finish_p1_group_fight(services[actors[0]], actors, database, shared_id)
+    assert stale_view is not None
+    await _finish_p1_solo_fight(services[actors[0]], actors[0], database)
 
+    assert await steps() == {actors[0]: 4, actors[1]: 1, actors[2]: 1, actors[3]: 1}
     async with database[1]() as session:
-        encounter = await session.get(CampaignSharedEncounter, shared_id)
-        assert encounter.status == "completed"
-        members = list(
-            (
-                await session.scalars(
-                    select(CampaignSharedEncounterMember).where(
-                        CampaignSharedEncounterMember.shared_encounter_id == shared_id
-                    )
-                )
-            ).all()
+        assert not await session.scalar(
+            select(CampaignSharedEncounter.id).limit(1)
         )
-        assert len(members) == 4
-        assert all(member.settlement_state == "settled" for member in members)
-        quests = list(
-            (
-                await session.scalars(
-                    select(Quest).join(Character).where(Character.telegram_id.in_(actors))
-                )
-            ).all()
-        )
-        assert {quest.step for quest in quests} == {4}
         assert not await session.scalar(
             select(RewardEvent).where(RewardEvent.source_id == "p1.vozes_na_estrada")
         )
 
 
 @pytest.mark.asyncio
-async def test_p1_helpers_join_without_quest_regression_or_repeat_reward(database, monkeypatch):
+async def test_p1_completed_members_keep_quest_and_reward_when_group_combat_is_refused(
+    database, monkeypatch
+):
     import asterion.application.p1 as p1_module
 
     monkeypatch.setattr(p1_module, "uuid4", lambda: UUID(int=7001))
@@ -369,19 +367,14 @@ async def test_p1_helpers_join_without_quest_regression_or_repeat_reward(databas
     groups = GroupService(database[1], "ocaso")
     await _create_group(groups, actors[0], actors[1:], names)
     service = P1Service(database[1], "ocaso", groups)
-    proposal = await service.propose_group_combat(actors[0], 3)
-    assert proposal.proposal_id is not None
-    proposal_view = await groups.activity_proposal(actors[0], proposal.proposal_id)
-    assert {member.eligibility for member in proposal_view.participants} == {
-        "eligible",
-        "helper",
-    }
-    started = await _confirm_and_start(
-        groups, service, actors[0], proposal.proposal_id, actors
-    )
-    assert started.combat is not None
-    await _seed_enemy_at_one_hp(database, started.encounter_id)
-    await _finish_p1_group_fight(service, actors, database, started.encounter_id)
+    # P1 is not a Boss: a Group of already-finished members cannot be proposed.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await service.propose_group_combat(actors[0], 3)
+    assert not await groups.activity_proposals(actors[0])
+    # Only the actor fights, Solo, and the finished members are left untouched.
+    started = await service.start_solo_combat(actors[0], 3)
+    assert started.combat is not None and not started.combat.party_mode
+    await _finish_p1_solo_fight(service, actors[0], database)
     async with database[1]() as session:
         quests = {
             character.telegram_id: quest
@@ -414,16 +407,7 @@ async def test_p1_helpers_join_without_quest_regression_or_repeat_reward(databas
             ).all()
         )
         assert len(rewards) == 3
-        rows = list(
-            (
-                await session.scalars(
-                    select(GroupActivityParticipant).where(
-                        GroupActivityParticipant.proposal_id == proposal.proposal_id
-                    )
-                )
-            ).all()
-        )
-        assert {row.eligibility for row in rows} == {"eligible", "helper"}
+        assert not await session.scalar(select(GroupActivityParticipant).limit(1))
 
 
 @pytest.mark.asyncio

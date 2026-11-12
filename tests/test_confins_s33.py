@@ -312,7 +312,7 @@ async def test_s33_inscriptions_abandon_codex_and_reward_are_idempotent(database
 
 
 @pytest.mark.asyncio
-async def test_s33_shares_only_inscriptions_with_present_accepted_eligible_members(database):
+async def test_s33_inscriptions_advance_only_the_acting_member(database):
     actors = (833020, 833021, 833022)
     _leader, sessions, _mission, _service = await _seed_s33(
         database, actors[0], level=55
@@ -362,12 +362,12 @@ async def test_s33_shares_only_inscriptions_with_present_accepted_eligible_membe
             assert world is not None
             world.location = CONFINS_FRATURAS_LIMIAR_LABEL
 
+    # Inscriptions are Solo (Ação × Consequência §5): only the leader advances.
     leader = await service.advance(actors[0], leader.state_version, "inspect_inscription_a")
     helper = await service.resume(actors[1])
     assert leader is not None and helper is not None
-    assert leader.field_inscriptions == helper.field_inscriptions == (
-        S33_FIELD_INSCRIPTIONS[0],
-    )
+    assert leader.field_inscriptions == (S33_FIELD_INSCRIPTIONS[0],)
+    assert helper.step == 2 and helper.field_inscriptions == ()
     spectator_view = await service.resume(actors[2])
     assert spectator_view is None
 
@@ -376,10 +376,9 @@ async def test_s33_shares_only_inscriptions_with_present_accepted_eligible_membe
     leader = await service.advance(actors[0], leader.state_version, "inspect_inscription_b")
     helper = await service.resume(actors[1])
     assert leader is not None and helper is not None
-    assert leader.step == helper.step == 3
-    assert set(leader.field_inscriptions) == set(helper.field_inscriptions) == set(
-        S33_FIELD_INSCRIPTIONS
-    )
+    assert leader.step == 3 and helper.step == 2
+    assert set(leader.field_inscriptions) == set(S33_FIELD_INSCRIPTIONS)
+    assert helper.field_inscriptions == ()
 
     async with sessions.begin() as session:
         for telegram_id in actors:
@@ -393,7 +392,7 @@ async def test_s33_shares_only_inscriptions_with_present_accepted_eligible_membe
     leader = await service.advance(actors[0], leader.state_version, "analyze_documents")
     assert leader is not None and leader.step == 4
     helper = await service.resume(actors[1])
-    assert helper is not None and helper.step == 3 and not helper.analysis_recorded
+    assert helper is not None and helper.step == 2 and not helper.analysis_recorded
 
     async with sessions() as session:
         leader_character = await session.scalar(

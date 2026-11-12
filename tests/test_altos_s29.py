@@ -472,7 +472,7 @@ async def test_s29_abandon_reaccept_rebuilds_only_temporary_progress(
 
 
 @pytest.mark.asyncio
-async def test_s29_group_shares_physical_records_but_keeps_analysis_personal(database):
+async def test_s29_group_member_records_alone_and_helper_stays_on_first_step(database):
     leader, road, sessions, service = await _seed_s29(database, 789298)
     helper, _helper_road, _helper_sessions, helper_service = await _seed_s29(
         database, 789299
@@ -497,18 +497,19 @@ async def test_s29_group_shares_physical_records_but_keeps_analysis_personal(dat
     await _accept_s29(service, leader)
     await _accept_s29(helper_service, helper)
 
+    # Objectives are Solo (Ação × Consequência §5): only the leader advances.
     for record_id in S29_RECORDS:
         await _locate_record(service, leader, record_id)
     leader_view = await service.resume(leader)
     helper_view = await helper_service.resume(helper)
     assert leader_view is not None and helper_view is not None
-    assert leader_view.step == helper_view.step == 2
+    assert leader_view.step == 2 and helper_view.step == 1
     assert set(leader_view.refusal_records) == set(S29_RECORDS)
-    assert set(helper_view.refusal_records) == set(S29_RECORDS)
+    assert not helper_view.refusal_records
 
     await _advance(service, leader, "verify_civil_maintenance", 3)
     helper_view = await helper_service.resume(helper)
-    assert helper_view is not None and helper_view.step == 2
+    assert helper_view is not None and helper_view.step == 1
     async with sessions() as session:
         helper_character = await session.scalar(
             select(Character).where(Character.telegram_id == helper)
@@ -518,6 +519,5 @@ async def test_s29_group_shares_physical_records_but_keeps_analysis_personal(dat
             select(CampaignObjectiveCredit.id).where(
                 CampaignObjectiveCredit.character_id == helper_character.id,
                 CampaignObjectiveCredit.quest_id == S29_ID,
-                CampaignObjectiveCredit.objective_id == "s29.civil_maintenance_verified",
             )
         ) is None

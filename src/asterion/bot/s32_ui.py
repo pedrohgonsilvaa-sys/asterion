@@ -150,7 +150,6 @@ def render_s32(view: S32View) -> Screen:
             rows.extend(
                 (
                     [_button("Enfrentar Solo", f"altos:combat:S32:{view.state_version}:solo")],
-                    [_button("Enfrentar em Grupo", f"altos:combat:S32:{view.state_version}:group")],
                 )
             )
     elif view.step == 5 and view.action_available:

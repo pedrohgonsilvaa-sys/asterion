@@ -93,6 +93,20 @@ def s1_router(service: S1Service, images: dict[str, str]) -> Router:
             return
         await show(query, await service.observe_light(query.from_user.id, version))
 
+    @router.callback_query(F.data.startswith("s1:") & F.data.contains(":nc:"))
+    async def narrative_choice(query: CallbackQuery):
+        await query.answer()
+        parts = (query.data or "").split(":")
+        try:
+            version = int(parts[1])
+        except (TypeError, ValueError, IndexError):
+            return
+        kind = "oren" if parts[2] == "o" else "objective"
+        await show(
+            query,
+            await service.choose_response(query.from_user.id, version, parts[-1], kind),
+        )
+
     @router.callback_query(F.data.startswith("s1:") & F.data.endswith(":complete"))
     async def complete(query: CallbackQuery):
         await query.answer()

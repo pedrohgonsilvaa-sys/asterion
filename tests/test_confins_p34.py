@@ -16,7 +16,7 @@ from asterion.application.altos_missions import (
     P34_REWARD_SOURCE,
     AltosMissionService,
 )
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.knowledge_catalog import ACHIEVEMENT_BY_ID, CODEX_BY_ID
 from asterion.application.road import (
     CONFINS_CARTOGRAPHER_UNIQUE_IDS,
@@ -393,8 +393,8 @@ async def test_p34_scripted_combat_conclusion_rewards_and_local_round(
 
 
 @pytest.mark.asyncio
-async def test_p34_shared_evidence_is_individually_eligible_and_starts_group_encounter(
-    database,
+async def test_p34_evidence_is_individually_eligible_and_group_encounter_is_refused(
+    database, monkeypatch
 ):
     actors = (793430, 793431)
     await _seed_p34_actor(database, actors[0])
@@ -457,6 +457,7 @@ async def test_p34_shared_evidence_is_individually_eligible_and_starts_group_enc
         )
         assert helper is not None
         helper.level = 57
+    # Objectives are Solo (Ação × Consequência §5): each member records alone.
     helper = await mission.resume(actors[1], P34_ID)
     assert helper is not None and helper.step == 2
     await mission.advance(
@@ -467,37 +468,37 @@ async def test_p34_shared_evidence_is_individually_eligible_and_starts_group_enc
         assert leader is not None and leader.step == 2
         await mission.advance(actors[0], leader.state_version, action)
 
-    for actor in actors:
-        view = await mission.resume(actor, P34_ID)
-        assert view is not None and view.step == 3
-        assert set(view.progress["physical_point_evidence_ids"]) == {
-            "inspect_reference_conduction",
-            "inspect_route_alignment",
-            "inspect_failure_communication",
-        }
-
+    # The leader recorded the three points; the helper only their own.
     leader = await mission.resume(actors[0], P34_ID)
-    assert leader is not None
-    pending = await mission.propose_group_combat(
-        actors[0], leader.state_version, P34_ID
-    )
-    assert pending is not None and pending.proposal_id is not None
-    proposal = await groups.activity_proposal(actors[0], pending.proposal_id)
-    accepted = await groups.respond_activity(
-        actors[1],
-        proposal.proposal_id,
-        expected_revision=proposal.revision,
-        accept=True,
-    )
-    started = await mission.start_group_combat(
-        actors[0], pending.proposal_id, expected_revision=accepted.revision
-    )
+    assert leader is not None and leader.step == 3
+    assert set(leader.progress["physical_point_evidence_ids"]) == {
+        "inspect_reference_conduction",
+        "inspect_route_alignment",
+        "inspect_failure_communication",
+    }
+    helper = await mission.resume(actors[1], P34_ID)
+    assert helper is not None and helper.step == 2
+    assert helper.progress["physical_point_evidence_ids"] == ["inspect_reference_conduction"]
+
+    # P34 is not a Boss: the Group proposal is refused, the encounter is Solo.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await mission.propose_group_combat(actors[0], leader.state_version, P34_ID)
+    assert not await groups.activity_proposals(actors[0])
+    started = await mission.start_solo_combat(actors[0], leader.state_version, P34_ID)
     assert started is not None and started.combat is not None
+    assert started.group_size == 1 and not started.combat.party_mode
     enemies = [fighter for fighter in started.combat.fighters.values() if fighter.side == "enemy"]
     assert len(enemies) == 1
     assert enemies[0].name == "Custódio Desfasado"
     assert enemies[0].level == 57
     assert started.combat.variant is None
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
+    victory = await mission.action(
+        actors[0], started.activity_id, started.combat.version, "attack"
+    )
+    assert victory is not None and victory.step == 4
+    helper = await mission.resume(actors[1], P34_ID)
+    assert helper is not None and helper.step == 2
 
 
 @pytest.mark.asyncio

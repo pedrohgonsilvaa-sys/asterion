@@ -1,6 +1,4 @@
 from collections import Counter
-from dataclasses import replace
-from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -21,7 +19,7 @@ from asterion.application.character_surfaces import (
     CodexFragmentView,
     KnowledgeView,
 )
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.inventory import MATERIAL_LABELS as INVENTORY_MATERIAL_LABELS
 from asterion.application.knowledge_catalog import (
     ALTOS_REGION_ID,
@@ -48,7 +46,6 @@ from asterion.bot.character_surfaces_ui import (
     render_codex_detail,
     render_codex_region,
 )
-from asterion.domain.combat import active_player_key
 from asterion.domain.professions import MATERIAL_NAMES
 from asterion.domain.road import (
     ALTOS_ABRIGO_ACCESS_UNLOCK,
@@ -72,7 +69,6 @@ from asterion.domain.road import (
     VARZEAS_REGION,
     VARZEAS_REGION_ENTRY_UNLOCK,
 )
-from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
     Achievement,
     BestiaryEntry,
@@ -600,7 +596,11 @@ async def test_p25_opening_persistence_rewards_and_escarpa_round_gate(database, 
 
 
 @pytest.mark.asyncio
-async def test_p25_scripted_combat_uses_shared_campaign_progress_without_economy(database):
+async def test_p25_group_member_does_not_share_scripted_combat_progress_or_economy(
+    database, monkeypatch
+):
+    import asterion.application.scripted_combat as scripted_combat
+
     leader, helper = 779042, 779043
     _leader, road, sessions = await _seed_altos_exit(
         database, leader, level=41, p24_status="completed"
@@ -644,64 +644,27 @@ async def test_p25_scripted_combat_uses_shared_campaign_progress_without_economy
         leader_view = await mission.advance(leader, leader_view.state_version, action)
         assert leader_view is not None
     assert leader_view.step == 3
+    # Principais are Solo (Ação × Consequência §5): the helper stays on step 2.
     helper_view = await mission.resume(helper)
-    assert helper_view is not None and helper_view.step == 3
+    assert helper_view is not None and helper_view.step == 2
+    assert not helper_view.progress.get("support_points")
 
-    proposal_view = await mission.propose_group_combat(
-        leader, leader_view.state_version
-    )
-    assert proposal_view is not None and proposal_view.proposal_id is not None
-    proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
-    accepted = await groups.respond_activity(
-        helper,
-        proposal.proposal_id,
-        expected_revision=proposal.revision,
-        accept=True,
-    )
-    started = await mission.start_group_combat(
-        leader,
-        proposal.proposal_id,
-        expected_revision=accepted.revision,
-    )
+    # P25 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await mission.propose_group_combat(leader, leader_view.state_version)
+    assert not await groups.activity_proposals(leader)
+
+    started = await mission.start_solo_combat(leader, leader_view.state_version)
     assert started is not None and started.combat is not None
-    assert started.group_size == 2 and started.combat.party_mode
-    encounter_id = started.encounter_id
-    assert encounter_id is not None
-
-    async with sessions.begin() as session:
-        encounter = await session.get(CampaignSharedEncounter, encounter_id)
-        assert encounter is not None
-        combat = decode(
-            encounter.combat_snapshot,
-            encounter.id,
-            encounter.ruleset_version,
-            encounter.state_version,
-        )
-        enemy = combat.fighters["enemy"]
-        enemy.hp = Decimal("1")
-        enemy.stats = replace(enemy.stats, hp=Decimal("1"))
-        enemy.takes_turn = False
-        combat.order = tuple(key for key in combat.order if key != "enemy")
-        combat.turn_index = 0
-        encounter.combat_snapshot = encode(combat)
-
-    views = [await mission.resume(actor) for actor in (leader, helper)]
-    current_combat = next(view.combat for view in views if view and view.combat)
-    turn_owner = active_player_key(current_combat)
-    current = next(
-        view for view in views if view and view.combat_actor_key == turn_owner
+    assert started.group_size == 1 and not started.combat.party_mode
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
+    victory = await mission.action(
+        leader, started.activity_id, started.combat.version, "attack"
     )
-    actor = (leader, helper)[views.index(current)]
-    await mission.action(
-        actor,
-        current.activity_id,
-        current_combat.version,
-        "attack",
-        target_id="enemy",
-    )
+    assert victory is not None and victory.step == 4 and victory.kind == "mission"
 
     async with sessions() as session:
-        for actor in (leader, helper):
+        for actor, expected_step, expected_wins in ((leader, 4, 1), (helper, 2, 0)):
             character = await session.scalar(
                 select(Character).where(Character.telegram_id == actor)
             )
@@ -712,17 +675,18 @@ async def test_p25_scripted_combat_uses_shared_campaign_progress_without_economy
                     Quest.quest_id == P25_ID,
                 )
             )
-            assert quest is not None and quest.step == 4
+            assert quest is not None and quest.step == expected_step
             bestiary = await session.scalar(
                 select(BestiaryEntry).where(
                     BestiaryEntry.character_id == character.id,
                     BestiaryEntry.creature_id == "creature.altos.lobo_escarpa",
                 )
             )
-            assert bestiary is not None and bestiary.wins == 1
+            assert (bestiary.wins if bestiary is not None else 0) == expected_wins
             assert not await session.scalar(
                 select(RewardEvent.id).where(
                     RewardEvent.character_id == character.id,
                     RewardEvent.source_id == P25_REWARD_SOURCE,
                 )
             )
+        assert not await session.scalar(select(CampaignSharedEncounter).limit(1))

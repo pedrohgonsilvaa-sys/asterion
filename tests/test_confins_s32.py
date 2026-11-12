@@ -12,7 +12,7 @@ from asterion.application.altos_missions import (
     S32_ID,
     AltosMissionService,
 )
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.road import (
     CONFINS_ESTRADAS_AUSENTES_LABEL,
     CONFINS_REGION_LABEL,
@@ -361,12 +361,10 @@ async def test_s32_solo_abandon_retry_codex_fragments_and_reward_once(
 
 
 @pytest.mark.asyncio
-async def test_s32_group_shares_only_accepted_present_eligible_participants(
+async def test_s32_group_member_observes_alone_and_scripted_encounter_is_solo(
     database, monkeypatch
 ):
     from asterion.application import scripted_combat
-    from asterion.domain.combat import active_player_key
-    from tests.test_campaign_coop_integration import _seed_enemy_at_one_hp
     from tests.test_s4_s5_integration import _terminal
 
     actors = (832020, 832021)
@@ -432,8 +430,9 @@ async def test_s32_group_shares_only_accepted_present_eligible_participants(
         actors[0], leader.state_version, "recognize_foundation_a"
     )
     assert leader is not None
+    # Evidence is Solo (Ação × Consequência §5): nothing reaches the other member.
     helper = await service.resume(actors[1])
-    assert helper is not None and helper.foundation_elements == (S32_FOUNDATION_ELEMENTS[0],)
+    assert helper is not None and helper.step == 2 and helper.foundation_elements == ()
 
     for action in (
         "recognize_foundation_b",
@@ -450,51 +449,40 @@ async def test_s32_group_shares_only_accepted_present_eligible_participants(
         assert leader is not None
     assert leader.step == 4
     helper = await service.resume(actors[1])
-    assert helper is not None and helper.step == 4
+    assert helper is not None and helper.step == 2 and helper.foundation_elements == ()
 
-    pending = await service.propose_group_combat(actors[0], leader.state_version)
-    assert pending is not None and pending.proposal_id is not None
-    proposal = await groups.activity_proposal(actors[0], pending.proposal_id)
-    accepted = await groups.respond_activity(
-        actors[1], proposal.proposal_id, expected_revision=proposal.revision, accept=True
-    )
-    started = await mission.start_group_combat(
-        actors[0], proposal.proposal_id, expected_revision=accepted.revision, quest_id=S32_ID
-    )
-    assert started is not None and started.combat is not None and started.group_size == 2
-    assert started.combat.variant is None
+    # S32 is not a Boss: the Group proposal is refused, the fight is Solo.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await service.propose_group_combat(actors[0], leader.state_version)
+    assert not await groups.activity_proposals(actors[0])
+    started = await service.start_solo_combat(actors[0], leader.state_version)
+    assert started is not None and started.combat is not None and started.group_size == 1
+    assert not started.combat.party_mode and started.combat.variant is None
     enemy = [fighter for fighter in started.combat.fighters.values() if fighter.side == "enemy"]
     assert len(enemy) == 1 and enemy[0].level == 54
-    await _seed_enemy_at_one_hp(database, started.encounter_id)
-    views = {actor: await mission.resume(actor, S32_ID) for actor in actors}
-    combat = next(view.combat for view in views.values() if view is not None)
-    active_actor = next(
-        actor
-        for actor, view in views.items()
-        if view is not None and view.combat_actor_key == active_player_key(combat)
-    )
-    active_view = views[active_actor]
     monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     result = await mission.action(
-        active_actor, active_view.activity_id, combat.version, "attack"
+        actors[0], started.activity_id, started.combat.version, "attack"
     )
     assert result is not None and result.step == 5
-    for actor in actors:
-        resumed = await mission.resume(actor, S32_ID)
-        assert resumed is not None and resumed.step == 5
+    helper = await mission.resume(actors[1], S32_ID)
+    assert helper is not None and helper.step == 2
     async with sessions() as session:
-        for actor in actors:
+        for actor, credited in ((actors[0], True), (actors[1], False)):
             character = await session.scalar(
                 select(Character).where(Character.telegram_id == actor)
             )
             assert character is not None
-            assert await session.scalar(
-                select(CampaignObjectiveCredit.id).where(
-                    CampaignObjectiveCredit.character_id == character.id,
-                    CampaignObjectiveCredit.quest_id == S32_ID,
-                    CampaignObjectiveCredit.objective_id == "s32.aranha_defeated",
+            assert (
+                await session.scalar(
+                    select(CampaignObjectiveCredit.id).where(
+                        CampaignObjectiveCredit.character_id == character.id,
+                        CampaignObjectiveCredit.quest_id == S32_ID,
+                        CampaignObjectiveCredit.objective_id == "s32.aranha_defeated",
+                    )
                 )
-            ) is not None
+                is not None
+            ) is credited
             assert await session.scalar(
                 select(RewardEvent.id).where(
                     RewardEvent.character_id == character.id,

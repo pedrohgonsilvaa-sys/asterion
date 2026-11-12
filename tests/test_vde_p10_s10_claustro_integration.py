@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import func, select
 
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.p7 import REGION as VDE_REGION
 from asterion.application.p7 import VIGILIA as VDE_VIGILIA
 from asterion.application.road import (
@@ -25,7 +25,6 @@ from asterion.application.vde_missions import (
     S10_REWARD_SOURCE,
     VDEMissionService,
 )
-from asterion.domain.combat import active_player_key
 from asterion.domain.combat_math import Stats
 from asterion.domain.road import (
     EXPLORATION_PROFILES,
@@ -496,7 +495,7 @@ async def test_claustro_desbravar_brazier_and_sanctuary_are_idempotent(database,
 
 
 @pytest.mark.asyncio
-async def test_p10_group_entry_and_scripted_encounter_use_shared_campaign_engine(database):
+async def test_p10_group_member_enters_alone_and_scripted_encounter_is_solo(database):
     leader, helper = 998711, 998712
     leader_id, sessions = await _seed_late_region(database, leader, level=18)
     helper_id, _ = await _seed_late_region(database, helper, level=18)
@@ -521,43 +520,40 @@ async def test_p10_group_entry_and_scripted_encounter_use_shared_campaign_engine
     assert lead is not None and lead.step == 2
     lead = await missions.advance(leader, P10_ID, lead.state_version, "passage")
     assert lead is not None and lead.step == 3 and lead.location == VDE_CLAUSTRO
+    # Objectives are Solo (Ação × Consequência §5): the helper stays on step 1.
     async with sessions() as session:
         helper_quest = await session.scalar(
             select(Quest).where(Quest.character_id == helper_id, Quest.quest_id == P10_ID)
         )
         helper_world = await session.get(WorldState, helper_id)
-        assert helper_quest is not None and helper_quest.step == 3
-        assert helper_world is not None and helper_world.location == VDE_CLAUSTRO
+        assert helper_quest is not None and helper_quest.step == 1
+        assert helper_world is not None and helper_world.location != VDE_CLAUSTRO
         assert await session.scalar(
             select(LocationDiscovery.id).where(
                 LocationDiscovery.character_id == helper_id,
                 LocationDiscovery.location_id == CLAUSTRO_LOCATION_ID,
             )
-        ) is not None
+        ) is None
         assert leader_id != helper_id
 
     lead = await missions.examine(leader, P10_ID, lead.state_version, "a")
     lead = await missions.examine(leader, P10_ID, lead.state_version, "b")
-    proposal_view = await missions.propose_group_combat(leader, P10_ID, lead.state_version)
-    assert proposal_view is not None and proposal_view.proposal_id is not None
-    proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
-    accepted = await groups.respond_activity(
-        helper,
-        proposal.proposal_id,
-        expected_revision=proposal.revision,
-        accept=True,
-    )
-    started = await missions.start_group_combat(
-        leader, proposal.proposal_id, expected_revision=accepted.revision
-    )
+    # P10 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await missions.propose_group_combat(leader, P10_ID, lead.state_version)
+    assert not await groups.activity_proposals(leader)
+    assert not await groups.activity_proposals(helper)
+
+    started = await missions.start_solo_combat(leader, P10_ID, lead.state_version)
     assert started is not None and started.kind == "combat"
-    assert started.activity_id is not None and started.group_size == 2
-    resumed = await missions.resume_active(helper)
-    assert resumed is not None and resumed.encounter_id == started.encounter_id
+    assert started.activity_id is not None and started.group_size == 1
+    resumed = await missions.resume_active(leader)
+    assert resumed is not None and resumed.activity_id == started.activity_id
+    helper_active = await missions.resume_active(helper)
+    assert helper_active is not None and helper_active.step == 1
+    assert helper_active.activity_id is None
     async with sessions() as session:
-        shared_encounter = await session.get(CampaignSharedEncounter, started.encounter_id)
-        assert shared_encounter is not None and shared_encounter.roster_size == 2
-        assert shared_encounter.scaling_snapshot is None
+        assert not await session.scalar(select(CampaignSharedEncounter).limit(1))
 
 
 @pytest.mark.asyncio
@@ -659,8 +655,8 @@ async def test_s10_keeps_neutral_encounter_and_unknown_explorer_status(database,
 
 
 @pytest.mark.asyncio
-async def test_s10_shares_objectives_and_scripted_combat_with_group(database, monkeypatch):
-    import asterion.application.campaign_coop as campaign_coop
+async def test_s10_group_member_plays_alone_and_scripted_combat_is_solo(database, monkeypatch):
+    import asterion.application.scripted_combat as scripted_combat
 
     leader, helper = 998714, 998715
     leader_id, sessions = await _seed_late_region(database, leader, level=18, p10=True)
@@ -687,59 +683,53 @@ async def test_s10_shares_objectives_and_scripted_combat_with_group(database, mo
     assert lead is not None and lead.kind == "zone" and lead.step == 2
     lead = await missions.advance(leader, S10_ID, lead.state_version, "zone")
     assert lead is not None and lead.kind == "bag" and lead.step == 3
+    # Objectives are Solo (Ação × Consequência §5): the helper stays on step 1.
     async with sessions() as session:
         helper_quest = await session.scalar(
             select(Quest).where(Quest.character_id == helper_id, Quest.quest_id == S10_ID)
         )
-        assert helper_quest is not None and helper_quest.step == 3
-        for character_id in (leader_id, helper_id):
-            assert await session.scalar(
-                select(BestiaryEntry.id).where(
-                    BestiaryEntry.character_id == character_id,
-                    BestiaryEntry.creature_id == VDE_TURF_LEECH.creature_id,
-                )
-            ) is not None
+        assert helper_quest is not None and helper_quest.step == 1
+        assert await session.scalar(
+            select(BestiaryEntry.id).where(
+                BestiaryEntry.character_id == leader_id,
+                BestiaryEntry.creature_id == VDE_TURF_LEECH.creature_id,
+            )
+        ) is not None
 
     lead = await missions.advance(leader, S10_ID, lead.state_version, "bag")
     lead = await missions.advance(leader, S10_ID, lead.state_version, "tracks")
-    proposal_view = await missions.propose_group_combat(leader, S10_ID, lead.state_version)
-    assert proposal_view is not None and proposal_view.proposal_id is not None
-    proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
-    accepted = await groups.respond_activity(
-        helper,
-        proposal.proposal_id,
-        expected_revision=proposal.revision,
-        accept=True,
-    )
-    started = await missions.start_group_combat(
-        leader, proposal.proposal_id, expected_revision=accepted.revision
-    )
-    assert started is not None and started.kind == "combat" and started.group_size == 2
-    resumed = await missions.resume_active(helper)
-    assert resumed is not None and resumed.encounter_id == started.encounter_id
+    # S10 is not a Boss: the Group proposal is refused, the fight is Solo.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await missions.propose_group_combat(leader, S10_ID, lead.state_version)
+    assert not await groups.activity_proposals(leader)
+    assert not await groups.activity_proposals(helper)
+    started = await missions.start_solo_combat(leader, S10_ID, lead.state_version)
+    assert started is not None and started.kind == "combat" and started.group_size == 1
+    resumed = await missions.resume_active(leader)
+    assert resumed is not None and resumed.activity_id == started.activity_id
 
-    monkeypatch.setattr(campaign_coop, "act", _terminal("victory"))
-    active_key = active_player_key(started.combat)
-    assert active_key is not None
-    turn_owner = leader if active_key == started.combat_actor_key else helper
-    active_view = started if turn_owner == leader else resumed
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     result = await missions.action_combat(
-        turn_owner, active_view.activity_id, active_view.combat.version, "attack"
+        leader, started.activity_id, started.combat.version, "attack"
     )
     assert result is not None and result.kind == "survivor"
     async with sessions() as session:
-        for character_id in (leader_id, helper_id):
+        for character_id, expected_step in ((leader_id, 6), (helper_id, 1)):
             quest = await session.scalar(
                 select(Quest).where(Quest.character_id == character_id, Quest.quest_id == S10_ID)
             )
-            assert quest is not None and quest.step == 6
+            assert quest is not None and quest.step == expected_step
 
     result = await missions.advance(leader, S10_ID, result.state_version, "survivor")
     assert result is not None and result.step == 7
     async with sessions() as session:
-        for character_id in (leader_id, helper_id):
-            quest = await session.scalar(
-                select(Quest).where(Quest.character_id == character_id, Quest.quest_id == S10_ID)
-            )
-            assert quest is not None and quest.step == 7
-            assert quest.progress["second_explorer_status"] == "missing"
+        quest = await session.scalar(
+            select(Quest).where(Quest.character_id == leader_id, Quest.quest_id == S10_ID)
+        )
+        assert quest is not None and quest.step == 7
+        assert quest.progress["second_explorer_status"] == "missing"
+        helper_quest = await session.scalar(
+            select(Quest).where(Quest.character_id == helper_id, Quest.quest_id == S10_ID)
+        )
+        assert helper_quest is not None and helper_quest.step == 1
+        assert "second_explorer_status" not in (helper_quest.progress or {})

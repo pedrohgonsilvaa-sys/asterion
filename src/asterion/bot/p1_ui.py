@@ -3,6 +3,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.p1 import P1View
 from asterion.bot.creation_ui import Screen
+from asterion.bot.narrative_choice_ui import immediate_reaction, narrative_option_rows
 
 
 def _button(text: str, data: str) -> InlineKeyboardButton:
@@ -121,10 +122,10 @@ def render_p1(view: P1View) -> Screen:
             "<i>— Se chegou até aqui sozinho, já aprendeu a primeira regra do Ocaso: estrada nenhuma permanece segura só porque alguém a chamou de estrada.</i>\n\n"
             "<i>Ela explica que o Refúgio sobrevive mantendo rotas, recursos e vigias funcionando.</i>\n\n🎯 Objetivo · Falar com Alda Veyr"
         )
-        keyboard = [
-            [_button("Seguir a Indicação", f"p1:{version}:alda")],
-            [_button("← Missões", "world:missions")],
+        keyboard = narrative_option_rows(view.narrative, f"p1:{version}") or [
+            [_button("Seguir a Indicação", f"p1:{version}:alda")]
         ]
+        keyboard.append([_button("← Missões", "world:missions")])
     elif view.step == 6:
         text = (
             "✒️ Oren Cal\n\n"
@@ -132,6 +133,9 @@ def render_p1(view: P1View) -> Screen:
             "<i>— Se ouvir nomes no vento, não os descarte depressa. Há coisas nestas terras que sobrevivem apenas porque alguém se lembra delas.</i>\n\n"
             "<i>Ele registra relatos, nomes e inscrições trazidos das estradas.</i>\n\n🎯 Objetivo · Conhecer Oren Cal"
         )
+        reaction = immediate_reaction(view.narrative)
+        if reaction:
+            text = f"{reaction}\n\n{text}"
         keyboard = [
             [_button("Ir ao Braseiro", f"p1:{version}:oren")],
             [_button("← Missões", "world:missions")],

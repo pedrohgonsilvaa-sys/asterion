@@ -8,6 +8,11 @@ from asterion.application.p2 import P2View
 from asterion.application.prologue import CombatView
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
+from asterion.bot.narrative_choice_ui import (
+    future_reaction,
+    immediate_reaction,
+    narrative_option_rows,
+)
 
 _REWARD_LINES = (
     "✨ XP · 3.300",
@@ -124,13 +129,16 @@ def render_p2(view: P2View) -> Screen:
     if view.kind == "offer":
         identity = "".join(f"<i>{escape(line)}</i>\n\n" for line in view.identity_lines)
         reply = f"<i>{escape(view.identity_reply)}</i>\n\n" if view.identity_reply else ""
+        posture = "".join(
+            f"<i>{escape(future_reaction(line))}</i>\n\n" for line in view.future_reactions
+        )
         text = (
             "📜 Fuligem sem Fogo\n"
             "Missão Principal · Terras do Ocaso\n\n"
             "🪖 Alda Veyr\n\n"
             "<i>— Fuligem sem fogo significa que alguém chegou antes de nós — "
             "ou que estamos olhando para o problema errado.</i>\n\n"
-            f"{identity}{reply}"
+            f"{posture}{identity}{reply}"
             "🎯 Objetivo · Investigar a fuligem sem queima recente na Charneca da Fuligem.\n\n"
             f"{_reward_block()}"
         )
@@ -270,14 +278,19 @@ def render_p2(view: P2View) -> Screen:
             "🎯 Objetivo · Entregar o registro da Pedra Marcada.",
             "p2",
             _keyboard(
-                [_button("Falar com Oren Cal", f"p2:{version}:oren")],
+                *(
+                    narrative_option_rows(view.narrative, f"p2:{version}")
+                    or [[_button("Falar com Oren Cal", f"p2:{version}:oren")]]
+                ),
                 [_button("← Missões", "world:missions")],
             ),
         )
 
     if view.kind == "alda":
+        reaction = immediate_reaction(view.narrative)
         return Screen(
-            "🪖 Alda Veyr\nRefúgio do Ocaso · Terras do Ocaso\n\n"
+            (f"{escape(reaction)}\n\n" if reaction else "")
+            + "🪖 Alda Veyr\nRefúgio do Ocaso · Terras do Ocaso\n\n"
             "<i>— Esta marca não é decoração. Também não vou chamá-la de escrita "
             "até termos prova.</i>\n\n"
             "🎯 Objetivo · Reportar a situação a Alda Veyr.",

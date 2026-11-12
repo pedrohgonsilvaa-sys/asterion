@@ -12,7 +12,7 @@ from asterion.application.altos_missions import (
     S34_ID,
     AltosMissionService,
 )
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.road import (
     CONFINS_FRATURAS_LIMIAR_LABEL,
     CONFINS_NO_CENTRAL_LABEL,
@@ -40,7 +40,6 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
-from tests.test_campaign_coop_integration import _seed_enemy_at_one_hp
 from tests.test_confins_p34 import _seed_p34_actor
 from tests.test_s4_s5_integration import _terminal
 
@@ -463,10 +462,9 @@ async def test_s34_shared_evidence_requires_acceptance_presence_and_individual_g
 
 
 @pytest.mark.asyncio
-async def test_s34_shared_scripted_victory_credits_only_present_eligible_participants(
+async def test_s34_group_member_plays_alone_and_scripted_victory_is_solo(
     database, monkeypatch
 ):
-    from asterion.domain.combat import active_player_key
 
     actors = (834050, 834051)
     await _seed_s34_actor(database, actors[0])
@@ -494,37 +492,28 @@ async def test_s34_shared_scripted_victory_credits_only_present_eligible_partici
     leader = await _collect_all_s34_evidence(
         service, actors[0], present_group_actors=actors
     )
-    proposal_view = await service.propose_group_combat(actors[0], leader.state_version)
-    assert proposal_view is not None and proposal_view.proposal_id is not None
-    proposal = await groups.activity_proposal(actors[0], proposal_view.proposal_id)
-    accepted = await groups.respond_activity(
-        actors[1], proposal.proposal_id, expected_revision=proposal.revision, accept=True
-    )
-    started = await mission.start_group_combat(
-        actors[0], proposal.proposal_id, expected_revision=accepted.revision, quest_id=S34_ID
-    )
-    assert started is not None and started.combat is not None and started.group_size == 2
-    assert started.combat.variant is None
+    # Evidence is Solo (Ação × Consequência §5): the other member is untouched.
+    helper = await service.resume(actors[1])
+    assert helper is not None and helper.step == 2 and not helper.evidence
+
+    # S34 is not a Boss: the Group proposal is refused, the fight is Solo.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await service.propose_group_combat(actors[0], leader.state_version)
+    assert not await groups.activity_proposals(actors[0])
+    started = await service.start_solo_combat(actors[0], leader.state_version)
+    assert started is not None and started.combat is not None and started.group_size == 1
+    assert not started.combat.party_mode and started.combat.variant is None
     enemies = [fighter for fighter in started.combat.fighters.values() if fighter.side == "enemy"]
     assert len(enemies) == 1 and enemies[0].level == 57
-    await _seed_enemy_at_one_hp(database, started.encounter_id)
-    views = {actor: await mission.resume(actor, S34_ID) for actor in actors}
-    combat = next(view.combat for view in views.values() if view is not None)
-    active_actor = next(
-        actor
-        for actor, view in views.items()
-        if view is not None and view.combat_actor_key == active_player_key(combat)
-    )
-    active_view = views[active_actor]
     monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     result = await mission.action(
-        active_actor, active_view.activity_id, combat.version, "attack"
+        actors[0], started.activity_id, started.combat.version, "attack"
     )
     assert result is not None and result.step == 4
-    for actor in actors:
-        resumed = await service.resume(actor)
-        assert resumed is not None and resumed.step == 4
-        assert resumed.andarilho_victory
+    resumed = await service.resume(actors[0])
+    assert resumed is not None and resumed.step == 4 and resumed.andarilho_victory
+    helper = await service.resume(actors[1])
+    assert helper is not None and helper.step == 2 and not helper.andarilho_victory
     async with sessions() as session:
         for character_id in ids_by_actor.values():
             assert await session.scalar(

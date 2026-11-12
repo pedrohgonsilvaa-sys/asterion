@@ -27,6 +27,7 @@ from asterion.application.vde_missions import (
 )
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
+from asterion.domain.mission_coop import mission_coop_allowed
 
 
 def _button(label: str, callback: str) -> InlineKeyboardButton:
@@ -523,8 +524,14 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
         rows.extend(
             [
                 [_button("Enfrentar Solo", f"vde:{quest}:{version}:solo")],
-                [_button("Formar/Usar Grupo", f"vde:{quest}:{version}:group")],
-                [_button("Grupo", "group:root")],
+                *(
+                    [
+                        [_button("Formar/Usar Grupo", f"vde:{quest}:{version}:group")],
+                        [_button("Grupo", "group:root")],
+                    ]
+                    if mission_coop_allowed(quest)
+                    else []
+                ),
             ]
         )
     elif view.kind == "retry":
@@ -535,7 +542,11 @@ def render_vde_mission(view: VDEMissionView) -> Screen:
         rows.extend(
             [
                 [_button("Tentar Solo", f"vde:{quest}:{version}:solo")],
-                [_button("Formar/Usar Grupo", f"vde:{quest}:{version}:group")],
+                *(
+                    [[_button("Formar/Usar Grupo", f"vde:{quest}:{version}:group")]]
+                    if mission_coop_allowed(quest)
+                    else []
+                ),
             ]
         )
     elif view.kind == "rope":

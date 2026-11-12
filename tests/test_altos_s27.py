@@ -390,7 +390,7 @@ async def test_s27_abandon_requires_no_foreground_and_reaccept_preserves_codex(d
 
 
 @pytest.mark.asyncio
-async def test_s27_shareable_physical_evidence_and_personal_steps(database):
+async def test_s27_group_member_advances_alone_and_helper_keeps_own_steps(database):
     leader, _road, sessions, service = await _seed_s27(database, 787278)
     helper, _road, _sessions, _other_service = await _seed_s27(database, 787279)
     async with sessions() as session:
@@ -414,61 +414,28 @@ async def test_s27_shareable_physical_evidence_and_personal_steps(database):
         accepted = await service.accept(actor)
         assert accepted is not None and accepted.step == 1
 
+    # Objectives are Solo (Ação × Consequência §5): only the leader advances.
     leader_view = await service.resume(leader)
     assert leader_view is not None
-    leader_view = await service.advance(
-        leader, leader_view.state_version, S27_ACTIONS[0]
-    )
-    assert leader_view is not None and leader_view.step == 2
-    helper_view = await service.resume(helper)
-    assert helper_view is not None and helper_view.step == 2
-
-    leader_view = await service.advance(
-        leader, leader_view.state_version, S27_ACTIONS[1]
-    )
-    assert leader_view is not None and leader_view.step == 3
-    helper_view = await service.resume(helper)
-    assert helper_view is not None and helper_view.step == 2
-    helper_view = await service.advance(
-        helper, helper_view.state_version, S27_ACTIONS[1]
-    )
-    assert helper_view is not None and helper_view.step == 3
-
-    leader_view = await service.resume(leader)
-    assert leader_view is not None and leader_view.step == 3
-    leader_view = await service.advance(
-        leader, leader_view.state_version, S27_ACTIONS[2]
-    )
-    assert leader_view is not None and leader_view.step == 4
-    helper_view = await service.resume(helper)
-    assert helper_view is not None and helper_view.step == 4
-
-    leader_view = await service.advance(
-        leader, leader_view.state_version, S27_ACTIONS[3]
-    )
-    assert leader_view is not None and leader_view.step == 5
-    helper_view = await service.resume(helper)
-    assert helper_view is not None and helper_view.step == 5
-
-    leader_view = await service.advance(
-        leader, leader_view.state_version, S27_ACTIONS[4]
-    )
-    assert leader_view is not None and leader_view.step == 6
-    helper_view = await service.resume(helper)
-    assert helper_view is not None and helper_view.step == 5
+    for index, expected_step in enumerate((2, 3, 4, 5, 6)):
+        leader_view = await service.advance(
+            leader, leader_view.state_version, S27_ACTIONS[index]
+        )
+        assert leader_view is not None and leader_view.step == expected_step
+        helper_view = await service.resume(helper)
+        assert helper_view is not None and helper_view.step == 1
 
     async with sessions() as session:
-        character_ids = set(
-            (
-                await session.scalars(
-                    select(Character.id).where(Character.telegram_id.in_((leader, helper)))
-                )
-            ).all()
+        leader_id = await session.scalar(
+            select(Character.id).where(Character.telegram_id == leader)
+        )
+        helper_id = await session.scalar(
+            select(Character.id).where(Character.telegram_id == helper)
         )
         credits = (
             await session.scalars(
                 select(CampaignObjectiveCredit).where(
-                    CampaignObjectiveCredit.character_id.in_(character_ids),
+                    CampaignObjectiveCredit.character_id.in_((leader_id, helper_id)),
                     CampaignObjectiveCredit.quest_id == S27_ID,
                     CampaignObjectiveCredit.objective_id.in_(
                         (
@@ -480,4 +447,9 @@ async def test_s27_shareable_physical_evidence_and_personal_steps(database):
                 )
             )
         ).all()
-        assert {credit.character_id for credit in credits} == character_ids
+        assert credits and {credit.character_id for credit in credits} == {leader_id}
+
+    # The helper still plays the same mission on their own, from the first step.
+    helper_view = await service.advance(helper, helper_view.state_version, S27_ACTIONS[0])
+    assert helper_view is not None and helper_view.step == 2
+    assert (await service.resume(leader)).step == 6

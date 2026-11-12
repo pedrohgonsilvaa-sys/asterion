@@ -1,0 +1,1127 @@
+{
+ "version": "1.0.1",
+ "reactions": {
+  "P1_choice_posture": {
+   "o1": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Você não enfeitou o relato. Isso facilita o trabalho. Quando eu pedir uma hipótese, você vai saber que estou pedindo uma hipótese — não um fato."
+   },
+   "o2": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Você admitiu que a estrada assustou você e ainda assim voltou. Não preciso que finja coragem aqui. Preciso que me diga quando algo passar do limite."
+   },
+   "o3": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Você perguntou pelos sinais antes de aceitar abrigo. Então não vou desperdiçar seu tempo com ordens vagas. Veja o que puder e me traga algo que eu consiga usar."
+   }
+  },
+  "S1_response_to_light": {
+   "o1": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você foi atrás da luz mesmo sem saber o que esperava encontrar. Não digo que estava certo. Digo que, pelo menos, trouxe uma observação que os outros não teriam."
+   },
+   "o2": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você deixou a luz onde estava e trouxe o registro. Às vezes, preservar a pergunta é mais útil do que correr atrás dela."
+   },
+   "o3": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você preferiu saber quem mais viu antes de seguir. Isso reduz a chance de transformar uma impressão particular em uma certeza pública."
+   }
+  },
+  "P2_evidentiary_posture": {
+   "o1": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você não deu nome ao que não conhecia. Ótimo. Vamos continuar trabalhando com aquilo que a pedra realmente mostra."
+   },
+   "o2": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você chamou de escrita, mas deixou claro que era uma hipótese. Essa diferença parece pequena até alguém começar a copiar a hipótese como se fosse fato."
+   },
+   "o3": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você segurou a conclusão. É uma irritação útil. Agora eu sei que, quando faltar uma peça, você vai dizer que falta uma peça."
+   }
+  },
+  "S2_priority": {
+   "o1": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você voltou aos nomes antes de fechar a história. Vamos fazer o mesmo aqui. Um registro incompleto ainda é um registro."
+   },
+   "o2": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você escolheu os vivos primeiro. Eu não esqueci. Quando encontrarmos outra ameaça, não vou presumir que você queira sacrificar quem está aqui por um nome que já se perdeu."
+   },
+   "o3": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você tentou manter as duas coisas na mesma mão. É mais difícil, mas evita que a prova sobreviva enquanto as pessoas ficam para trás."
+   }
+  },
+  "P3_heritage_method": {
+   "o1": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você sabe quando uma descoberta precisa de espaço. O fragmento ainda está inteiro porque você resistiu à tentação de arrancar mais dele."
+   },
+   "o2": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você examina antes de nomear. Isso me serve. Só não confunda examinar mais com entender mais."
+   },
+   "o3": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você questionou a própria origem da peça. É uma boa defesa contra o hábito de ver 'antigo' e preencher o resto com imaginação."
+   }
+  },
+  "S3_priority": {
+   "o1": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Você sempre quer saber por que a rota falhou. Então vou lhe dar o problema antes da solução. Quero a causa, não apenas um caminho remendado."
+   },
+   "o2": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Você colocou a próxima viagem acima da explicação. Entendido. Primeiro deixamos a rota utilizável. Depois perguntamos por que ela quase matou alguém."
+   },
+   "o3": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Você perguntou primeiro por quem passaria pela rota. Isso muda o cálculo. Uma estrada não é segura só porque parece segura no mapa."
+   }
+  },
+  "P4_guard_protocol": {
+   "o1": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Você não mexeu na defesa. Foi prudente. Na Porta do Poente, quero o mesmo princípio até termos motivo para arriscar."
+   },
+   "o2": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você preferiu descobrir o limite da defesa sem quebrá-la. Isso me diz como lhe apresentar a Porta: primeiro o comportamento, depois a interpretação."
+   },
+   "o3": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Você quis saber para quem aquela defesa ainda operava. Na próxima porta, essa pergunta vem antes de qualquer ordem para atravessar."
+   }
+  },
+  "S4_patrol_reading": {
+   "o1": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você registrou a mudança sem inventar motivo. É assim que uma anomalia continua sendo útil depois que a surpresa passa."
+   },
+   "o2": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você repetiu a rota para testar a mudança. Bom. Um único desvio é uma história; dois começos de padrão são outra coisa."
+   },
+   "o3": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você procurou uma função prática antes de procurar um significado maior. Vou apresentar o que sabemos da mesma forma."
+   }
+  },
+  "S5_risk_posture": {
+   "o1": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você se aproxima quando consegue medir o preço. Então, quando eu disser que algo é incerto, não vou esperar nem imprudência nem recuo automático — vou esperar cálculo."
+   },
+   "o2": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você soube encerrar a busca. Diante da Âncora, isso importa. Há coisas que podem ser observadas sem serem tocadas."
+   },
+   "o3": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você procura uma segunda testemunha antes de apostar na primeira leitura. É o melhor antídoto que temos contra o fascínio do inexplicável."
+   }
+  },
+  "P5_threshold": {
+   "o1": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Você não esperou que a porta ficasse confortável. Então vamos entrar sabendo que sua escolha foi descoberta primeiro e segurança depois."
+   },
+   "o2": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você segurou a travessia por mais uma prova. Não sabemos se isso será suficiente. Mas agora a entrada não acontece sem que o que encontramos esteja registrado."
+   },
+   "o3": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Você preparou a volta antes de apostar na ida. Isso não torna a Câmara segura. Só significa que você pensou no que acontece se ela não for."
+   }
+  },
+  "P6_anchor_posture": {
+   "o1": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você saiu com o nome e deixou o resto em aberto. Leve isso com você. Nos Vales, uma lacuna continua sendo melhor do que uma resposta inventada."
+   },
+   "o2": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Você quer comparar antes de fechar a história. Faz sentido. Só não deixe a busca por uma segunda pedra fazer você esquecer a primeira."
+   },
+   "o3": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Você quer saber quem ainda protege essas estruturas. É uma pergunta legítima. A resposta não está aqui, então não aceite a primeira pessoa que se oferecer como dona da verdade."
+   }
+  },
+  "S6_missing_people": {
+   "o1": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você deixou o vazio escrito em vez de apagá-lo. Isso importa. O nome não terminou só porque a resposta terminou."
+   },
+   "o2": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você ainda quer completar o nome. Está certo — desde que a busca continue sendo busca. Não vamos preencher o silêncio com certeza."
+   },
+   "o3": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Você soube parar antes de inventar quem faltava. É uma disciplina rara. Leve-a para os Vales."
+   }
+  },
+  "P7_route_priority": {
+   "o1": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Você fechou a questão da rota primeiro. Então vamos partir dessa regra: qualquer pista que nos mate antes de esclarecer o resto não ajuda ninguém."
+   },
+   "o2": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Você parou a passagem para olhar a pedra. Na próxima rota, vou considerar que você aceita perder tempo se houver algo antigo que valha ser compreendido."
+   },
+   "o3": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Você deixou a estrutura onde está e guardou a pista para depois. Gosto disso. Nem toda descoberta precisa ser resolvida no mesmo minuto."
+   }
+  },
+  "S7_cordage_reading": {
+   "o1": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Você viu a corda e pensou primeiro em quem pode precisar dela. É assim que eu separo um traste de um recurso."
+   },
+   "o2": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você tratou a corda como pista de quem passava por aqui. Então, quando eu lhe mostrar outra marca de travessia, vou começar pela origem, não pela aparência."
+   },
+   "o3": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você não tocou antes de entender. Às vezes é a única maneira de garantir que a próxima pessoa ainda tenha algo para estudar."
+   }
+  },
+  "P8_root_hypothesis": {
+   "o1": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Você aceita uma explicação simples até ela falhar. Então vou trazer primeiro o que funciona no terreno, não a teoria mais bonita."
+   },
+   "o2": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você procura padrão onde outros veem acaso. Tudo bem — mas vou continuar separando o padrão observado da intenção que você imagina por trás dele."
+   },
+   "o3": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Você quer manter duas leituras abertas. Melhor assim. Escolher cedo demais faz a estrada parecer obedecer ao mapa."
+   }
+  },
+  "S8_route_policy": {
+   "o1": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Você prefere a rota que arrisca menos agora. Vou considerar isso antes de mandar alguém testar uma passagem só para ganhar tempo."
+   },
+   "o2": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Você aceita um custo maior hoje para não repetir o problema amanhã. É uma escolha difícil quando todo mundo quer chegar logo."
+   },
+   "o3": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Você olha para quem mantém a passagem, não só para quem a usa. Isso muda o que chamamos de uma rota 'barata'."
+   }
+  },
+  "P9_priority": {
+   "o1": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você tirou as pessoas do caminho antes de salvar o papel. Eu não vou pedir que faça o contrário só porque eu gosto de documentos."
+   },
+   "o2": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você protegeu a evidência mesmo quando seria mais rápido abandonar tudo. Agora sei que posso lhe entregar uma peça frágil sem esperar que ela seja sacrificada ao próximo perigo."
+   },
+   "o3": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você tentou salvar o registro e quem ainda estava aqui. Não é sempre possível. Mas sei que essa é a tentativa que você fará primeiro."
+   }
+  },
+  "S9_focus": {
+   "o1": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você seguiu a pista mesmo quando ela desviava do problema imediato. Quando eu tiver uma hipótese difícil de encaixar, vou mostrar primeiro a você."
+   },
+   "o2": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você não deixou a curiosidade tomar o lugar da ameaça. Eu respeito isso. Uma hipótese não vale a vida que ela coloca em risco."
+   },
+   "o3": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você anotou a pista e voltou ao objetivo. É o tipo de disciplina que impede uma investigação de virar desculpa para abandonar o que foi prometido."
+   }
+  },
+  "P10_structure_policy": {
+   "o1": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você protege a estrutura mesmo quando ela ainda pode ser útil. Eu discordo de parte do custo, mas sei que sua cautela não é descaso."
+   },
+   "o2": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você aceita tocar no mecanismo para descobrir onde ele falha. Posso não escolher o mesmo caminho, mas agora sei que sua curiosidade tem um método."
+   },
+   "o3": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você aceita perder a estrutura se isso mantiver a rota aberta. Não é minha escolha favorita, mas sei por que você a fez."
+   }
+  },
+  "S10_codex_method": {
+   "o1": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Então o Códice vai começar pelo que os olhos conseguem sustentar. O resto fica separado até alguém trazer prova."
+   },
+   "o2": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Hipótese marcada, certo. Assim podemos pensar sem esquecer onde a observação termina."
+   },
+   "o3": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Você quer ouvir mais gente antes de fechar o registro. Faz sentido. Estradas diferentes produzem histórias diferentes — e às vezes uma delas entrega o detalhe que falta."
+   }
+  },
+  "S11_guard_belief": {
+   "o1": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você concede crédito ao padrão até que ele prove que falhou. Vou manter essa mesma ordem no que ainda nos falta observar."
+   },
+   "o2": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você não confia em uma função antiga sem saber para quem ela servia. É uma boa trava contra tratar ruína como autoridade."
+   },
+   "o3": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você quer um teste antes de aceitar a regra. Quando chegarmos ao Berço, essa será a pergunta certa."
+   }
+  },
+  "P11_conflicting_evidence": {
+   "o1": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Você prefere errar pelo lado da contenção. Então é assim que vou colocar o risco quando chegarmos ao centro."
+   },
+   "o2": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você quer a leitura que encaixa melhor os fatos. Eu vou lhe mostrar primeiro o modelo e depois onde ele ainda quebra."
+   },
+   "o3": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Você aceita duas versões enquanto escolhe a ação menos perigosa. Isso é uma boa forma de não transformar dúvida em aposta."
+   }
+  },
+  "P12_climax_interpretation": {
+   "o1": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você não saiu do Berço com uma resposta maior que a prova. Em Nareth, vou confiar nessa mesma disciplina."
+   },
+   "o2": {
+    "speaker": "dara",
+    "speaker_name": "Dara Venn",
+    "text": "Você viu o tamanho do perigo antes de fingir que o entendia. Isso é prudência, não pessimismo."
+   },
+   "o3": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você acha que já temos base para continuar. Talvez. A diferença é que você quer investigar, não declarar encerrada a pergunta."
+   }
+  },
+  "S12_names_policy": {
+   "o1": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Quando um nome aparecer de novo, vou lembrar que você quer descobrir o que ele quer dizer antes de simplesmente arquivá-lo."
+   },
+   "o2": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você não deixou os nomes desaparecerem só porque ainda não os entende. Isso tem valor aqui também."
+   },
+   "o3": {
+    "speaker": "iven",
+    "speaker_name": "Iven Raal",
+    "text": "Você prefere nome, rota e pessoa na mesma comparação. Ótimo. Registro isolado costuma esconder tanto quanto revela."
+   }
+  },
+  "P13_reference_method": {
+   "o1": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você segue o que os moradores usam agora. Então vou começar pelos caminhos que existem de verdade, antes de abrir os mapas antigos."
+   },
+   "o2": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você ainda dá peso aos marcos antigos. Vou manter essas referências visíveis — mas sempre contra o terreno."
+   },
+   "o3": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você quer duas fontes antes de escolher. Certo. Vou lhe mostrar onde elas concordam e onde começam a mentir de modos diferentes."
+   }
+  },
+  "S13_trust_marker": {
+   "o1": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você confia no marco que ainda serve às pessoas. Isso diz muito sobre o tipo de mapa que você considera útil."
+   },
+   "o2": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você dá valor ao que sobreviveu ao tempo. Então vou manter a antiguidade como dado, sem confundi-la com autoridade."
+   },
+   "o3": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você não aceita nenhum dos três sem passar pela estrada. Faz sentido. O chão não mente do mesmo modo que um desenho pode mentir."
+   }
+  },
+  "P14_map_vs_world": {
+   "o1": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você seguiu a obra diante de você. Quando eu lhe mostrar um mapa velho, vou tratá-lo como referência — não como ordem."
+   },
+   "o2": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você quer saber onde o mundo deixou o mapa para trás. Isso transforma a divergência em dado, não em erro de navegação."
+   },
+   "o3": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você anotou a diferença antes de escolher. É exatamente o que precisamos quando versões diferentes precisam ser comparadas depois."
+   }
+  },
+  "S14_route_cost": {
+   "o1": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você paga risco para ganhar tempo quando a situação aperta. Eu lhe entrego tarefas rápidas quando cada minuto realmente importar."
+   },
+   "o2": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você aceita gastar mais para errar menos. É a postura que eu procuro quando uma rota não pode falhar duas vezes."
+   },
+   "o3": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você prefere uma segunda rota a uma única estrada perfeita. Isso é útil quando o primeiro caminho deixa de existir."
+   }
+  },
+  "P15_anomaly_method": {
+   "o1": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você quis testar a explicação mais simples antes de abrir outras frentes. Na próxima discrepância, vou lhe dar primeiro o dado que permite fazer exatamente esse teste."
+   },
+   "o2": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você preferiu deixar o que não sabemos explicitamente aberto. Então não vou preencher o vazio com uma resposta só porque ela parece conveniente."
+   },
+   "o3": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você não aceitou escolher entre duas medidas que não fechavam. Quando houver outro ponto disponível, vou lhe mostrar essa terceira verificação antes da conclusão."
+   }
+  },
+  "S15_result_vs_cause": {
+   "o1": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você quis chegar antes de explicar. Quando eu lhe mostrar o mapa, vou começar pelo que permite alcançar o destino sem transformar o caminho em uma teoria."
+   },
+   "o2": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você quer entender o ponto de partida antes de aceitar a rota. Vou mostrar primeiro o que explica de onde a divergência começa."
+   },
+   "o3": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você preferiu fazer o caminho e guardar resultado e causa juntos. Então o próximo mapa virá com os dois registros lado a lado."
+   }
+  },
+  "P16_axis_priority": {
+   "o1": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você quis garantir que o mecanismo não causasse dano antes de entender o resto. No próximo registro, vou separar primeiro o que mantém a operação segura."
+   },
+   "o2": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você quis saber como ele mede referências antes de decidir o que significa. Então começo pela função que podemos observar, não pela interpretação."
+   },
+   "o3": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você registrou antes de tocar. Então vou lhe entregar a cadeia do que foi observado antes de pedir qualquer intervenção."
+   }
+  },
+  "S16_mapping_policy": {
+   "o1": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você quer que o mapa carregue apenas caminhos verificados. Certo. O restante ficará fora da rota principal até termos confirmação."
+   },
+   "o2": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você aceita preservar rotas antigas, desde que o risco viaje junto com o desenho. Assim ninguém confunde memória de caminho com segurança atual."
+   },
+   "o3": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você prefere mostrar a contradição em vez de escondê-la. Então as divergências ficam visíveis, mas separadas do caminho confirmado."
+   }
+  },
+  "S17_calibration_policy": {
+   "o1": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você devolveu a peça sem experimentar. Vou tratar o que não testamos como desconhecido, não como defeito comprovado."
+   },
+   "o2": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você aceitou um teste controlado. Então cada mudança fica registrada antes de qualquer nova tentativa."
+   },
+   "o3": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você preferiu registrar o estado e adiar a intervenção. Quando retomarmos isso, teremos um ponto de partida claro."
+   }
+  },
+  "P17_veil_evidence": {
+   "o1": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você considerou o registro suficiente para trabalhar a partir dele. Vou lhe apresentar o próximo material como continuidade dessa evidência, sem tratá-la como prova de tudo."
+   },
+   "o2": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você tratou o registro como incompleto. Então o que faltar continuará marcado como falta, mesmo quando uma resposta fácil estiver à mão."
+   },
+   "o3": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você quis outra fonte antes de usar a conclusão. Quando chegarmos ao Arconte, vou separar claramente o que este registro sustenta do que ainda precisa de corroboração."
+   }
+  },
+  "P18_anchors_posture": {
+   "o1": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você escolheu registrar e preservar o que aprendeu. Então, quando essa informação voltar a ser útil, vou tratar seu registro com o cuidado que você exige."
+   },
+   "o2": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você quer confirmação em outras regiões antes de fechar a leitura. Quando outra fonte aparecer, vou lembrar que a comparação ainda faz parte do trabalho."
+   },
+   "o3": {
+    "speaker": "talen_orm",
+    "speaker_name": "Talen Orm",
+    "text": "Você não quis parar no funcionamento; quis saber quem decidiu e quem pagaria o custo. Quando houver registro para seguir essa pergunta, vou colocá-lo na frente."
+   }
+  },
+  "S18_route_closure": {
+   "o1": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você encerrou a rota quando ela deixou de servir aos viajantes. Em terreno instável, vou lembrar que segurança não é um detalhe do mapa."
+   },
+   "o2": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você manteve a rota registrada mesmo sem usá-la. Quando uma fonte antiga voltar a ser útil, vou saber que você prefere preservar o passado antes de apagá-lo."
+   },
+   "o3": {
+    "speaker": "nera",
+    "speaker_name": "Nera Voss",
+    "text": "Você quis testar uma última utilidade antes de fechar. Então, quando avaliarmos uma rota obsoleta de novo, vou considerar esse teste parte do encerramento."
+   }
+  },
+  "P19_priority": {
+   "o1": {
+    "speaker": "sera_morn",
+    "speaker_name": "Sera Morn",
+    "text": "Você colocou passagem segura antes do mistério. Então, quando o pulso aparecer, eu vou lhe dizer primeiro o que ele ameaça."
+   },
+   "o2": {
+    "speaker": "sera_morn",
+    "speaker_name": "Sera Morn",
+    "text": "Você quer entender a infraestrutura antes de mexer nela. Certo. Só não esqueça que a água continua passando enquanto estudamos."
+   },
+   "o3": {
+    "speaker": "sera_morn",
+    "speaker_name": "Sera Morn",
+    "text": "Você perguntou primeiro por quem vive aqui. É assim que vou enquadrar o resto: o que isso faz com as pessoas vem antes do que isso significa."
+   }
+  },
+  "S19_response": {
+   "o1": {
+    "speaker": "sera_morn",
+    "speaker_name": "Sera Morn",
+    "text": "Você prefere fechar o vazamento antes de descobrir toda a história. Eu consigo trabalhar com isso."
+   },
+   "o2": {
+    "speaker": "sera_morn",
+    "speaker_name": "Sera Morn",
+    "text": "Você quer saber por que o problema continua. Quando eu lhe mostrar o próximo ponto, vou incluir o que temos da origem — não só o dano."
+   },
+   "o3": {
+    "speaker": "sera_morn",
+    "speaker_name": "Sera Morn",
+    "text": "Você cria contenção antes de decidir o reparo. É uma boa maneira de ganhar tempo sem fingir que o risco sumiu."
+   }
+  },
+  "P20_pulse_interpretation": {
+   "o1": {
+    "speaker": "sera_morn",
+    "speaker_name": "Sera Morn",
+    "text": "Você quer risco primeiro. Então, quando eu falar de Hemaris, vou separar o que exige cautela do que exige apenas investigação."
+   },
+   "o2": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você quer medida antes de significado. É uma boa defesa contra confundir um efeito com uma intenção."
+   },
+   "o3": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você procura para que a estrutura servia antes de julgar o que ela fez. É assim que pretendo lhe mostrar os registros."
+   }
+  },
+  "S20_ethics": {
+   "o1": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você colocou a vida antes da regra. Quando chegarmos aos registros, não vou esconder de você quem pagava o preço por uma rotina."
+   },
+   "o2": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você quer entender o protocolo antes de condená-lo. Tudo bem. Vou mostrar onde termina a descrição e começa o julgamento."
+   },
+   "o3": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você foi direto sobre consentimento. Isso vai voltar quando encontrarmos o nome Hemaris. E eu vou tratar o assunto com a mesma precisão."
+   }
+  },
+  "P21_hemeris_archive": {
+   "o1": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você separa o que ainda pode ajudar do que nunca deveria ser repetido. Vou organizar os protocolos dessa forma."
+   },
+   "o2": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você não quer que o abuso desapareça junto com a utilidade. Então o arquivo vai carregar as duas coisas, lado a lado."
+   },
+   "o3": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você quer função, prática e abuso em registros diferentes. É exatamente o tipo de distinção que impede um arquivo de virar defesa ou acusação."
+   }
+  },
+  "S21_resource_ethic": {
+   "o1": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você usa primeiro e pergunta depois quando o recurso pode ajudar agora. Vou lhe dizer de antemão onde esse impulso encontra limite."
+   },
+   "o2": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você quer entender o custo antes de usar. Nesse caso, vou lhe mostrar não só o que funciona, mas o que pode voltar a funcionar errado."
+   },
+   "o3": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você prefere não tocar no que ainda não entende. É uma escolha prudente quando o preço de descobrir tarde demais é alto."
+   }
+  },
+  "P22_protocol_response": {
+   "o1": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você corta uma rotina quando ela passa a usar pessoas sem consentimento. Eu sei exatamente onde você vai traçar a linha."
+   },
+   "o2": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você suportou ver o processo continuar para registrar o máximo possível. Não é uma escolha simples. Eu não a confundirei com aprovação."
+   },
+   "o3": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você quer diminuir o dano sem destruir o registro. É a parte mais difícil: preservar a prova sem continuar alimentando o mecanismo."
+   }
+  },
+  "S22_protocol_legacy": {
+   "o1": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você deixa a ordem como evidência. Certo. Um arquivo não precisa obedecer ao que descreve."
+   },
+   "o2": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você desmonta o protocolo para impedir que alguém o use de novo. Eu vou marcar isso como decisão de segurança, não como apagamento da história."
+   },
+   "o3": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você mantém o texto e marca que ele já não é aplicável. É uma forma de preservar o passado sem entregá-lo ao presente."
+   }
+  },
+  "S23_priority": {
+   "o1": {
+    "speaker": "sera_morn",
+    "speaker_name": "Sera Morn",
+    "text": "Você escolhe quem corre perigo agora. Então vou apresentar a Matriz primeiro pelo dano que ela ainda pode causar."
+   },
+   "o2": {
+    "speaker": "sera_morn",
+    "speaker_name": "Sera Morn",
+    "text": "Você olha para quem mantém a infraestrutura em pé. Eu vou mostrar o que quebra quando essa estrutura falha — e quem fica sem ela."
+   },
+   "o3": {
+    "speaker": "sera_morn",
+    "speaker_name": "Sera Morn",
+    "text": "Você distribui o risco em vez de entregá-lo a um único lado. É assim que vamos discutir a Matriz."
+   }
+  },
+  "P23_continuity_cost": {
+   "o1": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você não aceita chamar outra pessoa de custo necessário. Então vamos medir a Matriz por aquilo que ela exige, não só pelo que ela produz."
+   },
+   "o2": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você aceita um custo quando o ganho é concreto e imediato. Vou lhe mostrar onde a Matriz deixa de caber nessa justificativa."
+   },
+   "o3": {
+    "speaker": "sera_morn",
+    "speaker_name": "Sera Morn",
+    "text": "Você não é contra continuidade. É contra continuidade sem limite. Isso muda a conversa inteira."
+   }
+  },
+  "P24_legacy_judgment": {
+   "o1": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você não chamou a máquina de má. Chamou o abandono de problema. É uma distinção que vai ajudar quando encontrarmos outras estruturas."
+   },
+   "o2": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você colocou a escolha humana no centro. Então, quando um sistema antigo parecer culpado por si só, vou lembrar que você prefere procurar quem decidiu usá-lo."
+   },
+   "o3": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você recusou uma resposta simples. Sistema, uso e responsabilidade ficam separados no seu registro. Boa prática para uma história cheia de camadas."
+   }
+  },
+  "S24_quarantine_choice": {
+   "o1": {
+    "speaker": "ilyan",
+    "speaker_name": "Ilyan Korr",
+    "text": "Você fecha primeiro quando o risco pode se espalhar. Então é isso que vou presumir quando a próxima crise não der tempo para debate."
+   },
+   "o2": {
+    "speaker": "sera_morn",
+    "speaker_name": "Sera Morn",
+    "text": "Você tenta alcançar quem ainda pode ser salvo. Eu vou lembrar disso antes de chamar uma porta fechada de solução."
+   },
+   "o3": {
+    "speaker": "sera_morn",
+    "speaker_name": "Sera Morn",
+    "text": "Você não aceita escolher entre salvar e conter sem tentar uma terceira via. Nem sempre vai funcionar. Mas sei qual tentativa vem primeiro."
+   }
+  },
+  "P25_infrastructure_ethic": {
+   "o1": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você começa pela função que já mantém gente de pé. Então, antes de abandonar um sistema, vou lhe mostrar o que dependia dele."
+   },
+   "o2": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você não aceita manutenção só porque sempre foi assim. Certo. Quando chegar uma ordem de emergência, vou lhe dar também o motivo — não apenas a instrução."
+   },
+   "o3": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você procura uma forma de manter a utilidade sem carregar o mesmo peso. É mais trabalho, mas pode ser o único caminho que vale a pena."
+   }
+  },
+  "S25_priority": {
+   "o1": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você atende primeiro quem pode cair primeiro. Vou manter isso em mente quando a ponte exigir mais de uma equipe."
+   },
+   "o2": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você prioriza quem não pode simplesmente procurar outro caminho. É uma medida de vulnerabilidade, não de barulho."
+   },
+   "o3": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você divide o serviço para não deixar dois grupos esperando pela mesma solução. É o tipo de planejamento que uma montanha exige."
+   }
+  },
+  "P26_authority": {
+   "o1": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você segue o documento mais novo. Quando lhe trouxer duas versões, vou lhe dizer qual chegou por último antes de pedir sua decisão."
+   },
+   "o2": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você pergunta quem tinha o direito de mandar antes de obedecer. É incômodo, mas evita que uma assinatura seja tratada como prova de legitimidade."
+   },
+   "o3": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você coloca a vida acima da hierarquia quando as duas entram em conflito. Eu não vou fingir que isso é simples — só que você já mostrou onde fica sua prioridade."
+   }
+  },
+  "S26_burden_policy": {
+   "o1": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você aceita empurrar a estrutura até ela quebrar. Então, quando falarmos de custo, vou considerar que seu limite é mais distante que o meu."
+   },
+   "o2": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você impõe limite antes da falha. Isso não é fraqueza. É reconhecer que uma estrutura pode sobreviver mais que quem a mantém."
+   },
+   "o3": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você registra antes de decidir. Bom. Quando a mesma pressão aparecer em outro sistema, teremos números e não só memória."
+   }
+  },
+  "S27_repair_policy": {
+   "o1": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você conserta primeiro para não deixar o lugar cair. Quando o próximo dano surgir, vou saber que essa será sua primeira preocupação."
+   },
+   "o2": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você quer a causa antes do remendo. Então, se eu lhe entregar uma falha, não espere que eu ofereça só uma ferramenta — oferecerei o que sabemos sobre a origem."
+   },
+   "o3": {
+    "speaker": "rava",
+    "speaker_name": "Rava Kern",
+    "text": "Você não escolhe entre remendo e causa. Primeiro segura, depois pergunta. É uma ordem de trabalho que eu consigo respeitar."
+   }
+  },
+  "P28_dissident_reading": {
+   "o1": {
+    "speaker": "eris",
+    "speaker_name": "Eris Val",
+    "text": "Você separa a crítica do crime. Isso significa que não precisamos apagar a primeira para condenar o segundo."
+   },
+   "o2": {
+    "speaker": "eris",
+    "speaker_name": "Eris Val",
+    "text": "Você quer o contexto antes da sentença. Então vou lhe mostrar a cadeia de decisões antes de pedir que chame qualquer grupo de culpado."
+   },
+   "o3": {
+    "speaker": "eris",
+    "speaker_name": "Eris Val",
+    "text": "Você reconhece o contexto, mas não deixa que ele apague a consequência. Isso será importante quando reconstruirmos a Convergência."
+   }
+  },
+  "P31_source_conflict": {
+   "o1": {
+    "speaker": "sera_nol",
+    "speaker_name": "Sera Nol",
+    "text": "Você deixou as duas leituras abertas. Aqui, isso não é indecisão. É impedir que o arquivo escolha uma realidade por nós."
+   },
+   "o2": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Você olha primeiro para a cadeia de custódia. Então, quando duas folhas disserem coisas diferentes, começaremos por quem tocou cada uma delas e quando."
+   },
+   "o3": {
+    "speaker": "sera_nol",
+    "speaker_name": "Sera Nol",
+    "text": "Você aceitou deixar o conflito escrito. Prefiro isso a uma paz fabricada por apagamento."
+   }
+  },
+  "S31_trail_method": {
+   "o1": {
+    "speaker": "talen_nyr",
+    "speaker_name": "Talen Nyr",
+    "text": "Você segue a marca que o terreno consegue sustentar. No próximo trecho, vou separar primeiro pegada, desgaste e impressão."
+   },
+   "o2": {
+    "speaker": "talen_nyr",
+    "speaker_name": "Talen Nyr",
+    "text": "Você quer ver as duas trilhas sobreviverem à comparação. Bom. Uma rota que só funciona uma vez não é uma rota em que eu confio."
+   },
+   "o3": {
+    "speaker": "talen_nyr",
+    "speaker_name": "Talen Nyr",
+    "text": "Você não entra em uma trilha sem entender o que torna a outra falsa. Às vezes isso salva mais do que velocidade."
+   }
+  },
+  "P32_fracture_language": {
+   "o1": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Você aceita o nome sem transformá-lo em explicação. É assim que uma palavra continua sendo ferramenta."
+   },
+   "o2": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Você prefere não usar o nome antes de sabermos o que ele cobre. É um freio útil quando a linguagem começa a correr na frente da prova."
+   },
+   "o3": {
+    "speaker": "sera_nol",
+    "speaker_name": "Sera Nol",
+    "text": "Você usa 'Fratura' para descrever o que vemos, não para dizer que já entendemos o fenômeno. Essa distinção vai nos poupar problemas."
+   }
+  },
+  "S32_record_conflict": {
+   "o1": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Você confia no que a parede, o chão e o objeto conseguem provar. Então vou colocar os elementos físicos à frente quando outra ficha discordar."
+   },
+   "o2": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Você segue a origem do documento. Certo. Vamos descobrir quem escreveu, quem guardou e quem trouxe antes de chamá-lo de falso."
+   },
+   "o3": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Você não apagou nenhum dos dois. Isso será útil quando uma nova prova discordar dos dois ao mesmo tempo."
+   }
+  },
+  "P33_avesso_posture": {
+   "o1": {
+    "speaker": "eris",
+    "speaker_name": "Eris Val",
+    "text": "Você vê o Avesso como algo que ainda pode ser estudado. Ótimo — mas continue tratando o nome como descrição, não como explicação."
+   },
+   "o2": {
+    "speaker": "sera_nol",
+    "speaker_name": "Sera Nol",
+    "text": "Você prefere cautela a uma resposta total. Nesse lugar, isso pode ser a diferença entre observar e repetir um erro."
+   },
+   "o3": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Você reconhece que nossas categorias falham. É uma forma honesta de continuar o arquivo sem forçar o mundo a caber nele."
+   }
+  },
+  "S33_correction_policy": {
+   "o1": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Você corrige a cópia para não espalhar o erro. Certo. O original, ainda assim, continua guardado."
+   },
+   "o2": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Você quer o original intacto e a correção junto. É a forma mais segura de mostrar o que mudou sem fingir que nunca esteve errado."
+   },
+   "o3": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Você prefere deixar a marca aberta até termos mais prova. Então não vou fechar o registro antes de você."
+   }
+  },
+  "P34_anchor_model": {
+   "o1": {
+    "speaker": "eris",
+    "speaker_name": "Eris Val",
+    "text": "Você a trata como nó de coordenação. É uma leitura útil — desde que continuemos lembrando que útil não significa completa."
+   },
+   "o2": {
+    "speaker": "eris",
+    "speaker_name": "Eris Val",
+    "text": "Você aceita a hipótese sem chamá-la de resposta final. É assim que devemos reconstruir a Convergência: por aproximações, não por certezas emprestadas."
+   },
+   "o3": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Você pergunta o que a Âncora não fazia. Boa pergunta. Limite também é evidência."
+   }
+  },
+  "S34_temporal_discrepancy": {
+   "o1": {
+    "speaker": "talen_nyr",
+    "speaker_name": "Talen Nyr",
+    "text": "Você guardou o depoimento sem explicar o impossível. É assim que uma anomalia continua sendo revisável."
+   },
+   "o2": {
+    "speaker": "talen_nyr",
+    "speaker_name": "Talen Nyr",
+    "text": "Você marcou a hipótese e deixou a prova faltando à vista. Isso me permite continuar a investigação sem herdar sua certeza."
+   },
+   "o3": {
+    "speaker": "talen_nyr",
+    "speaker_name": "Talen Nyr",
+    "text": "Você quer reforçar a cadeia antes de confiar no depoimento. Justo. Uma testemunha sem procedência ainda é uma peça incompleta."
+   }
+  },
+  "P35_responsibility_model": {
+   "o1": {
+    "speaker": "eris",
+    "speaker_name": "Eris Val",
+    "text": "Você separou decisão de contexto. Então, no registro final, nomes e instituições ficarão ligados apenas onde a evidência permitir."
+   },
+   "o2": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Você quer a cadeia inteira. O registro final vai acompanhar causas, decisões e consequências sem reduzir tudo a um único culpado."
+   },
+   "o3": {
+    "speaker": "sera_nol",
+    "speaker_name": "Sera Nol",
+    "text": "Você não força o arquivo a responder onde ele ainda não consegue. Isso também é uma decisão responsável."
+   }
+  },
+  "S35_orders_policy": {
+   "o1": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Você não apagou nenhuma das ordens. Então o registro final carregará o conflito em vez de fingir que uma delas nunca existiu."
+   },
+   "o2": {
+    "speaker": "eris",
+    "speaker_name": "Eris Val",
+    "text": "Você escolhe a ordem melhor sustentada, mas mantém a outra visível. É decisão sem limpeza artificial."
+   },
+   "o3": {
+    "speaker": "sera_nol",
+    "speaker_name": "Sera Nol",
+    "text": "Você prefere esperar por mais prova. Então a ausência de decisão ficará registrada como escolha, não como esquecimento."
+   }
+  },
+  "P36_final_record": {
+   "o1": {
+    "speaker": "roven",
+    "speaker_name": "Roven Pell",
+    "text": "Seu registro termina onde termina a prova. Isso é uma marca útil: quando você diz 'confirmado', eu sei o que essa palavra vale."
+   },
+   "o2": {
+    "speaker": "eris",
+    "speaker_name": "Eris Val",
+    "text": "Você permite interpretação, mas não a esconde dentro do fato. É assim que uma crônica continua aberta a revisão."
+   },
+   "o3": {
+    "speaker": "haro",
+    "speaker_name": "Haro Sen",
+    "text": "Você guardou também quem viu o quê. Não é só história. É responsabilidade por quem ficou para contar."
+   }
+  },
+  "S36_civil_continuity": {
+   "o1": {
+    "speaker": "sera_nol",
+    "speaker_name": "Sera Nol",
+    "text": "Você escolheu o que já provou que funciona. Talvez seja simples. Às vezes é justamente por isso que sobrevive."
+   },
+   "o2": {
+    "speaker": "haro",
+    "speaker_name": "Haro Sen",
+    "text": "Você ouviu quem continua vivendo aqui. Uma rotina só vale como continuidade quando as pessoas ainda reconhecem nela um lugar para ficar."
+   },
+   "o3": {
+    "speaker": "sera_nol",
+    "speaker_name": "Sera Nol",
+    "text": "Você escolheu mudar sem fingir que o passado nunca existiu. Vamos registrar a nova rotina como decisão de agora, não como verdade eterna."
+   }
+  }
+ }
+}

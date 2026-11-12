@@ -1,6 +1,4 @@
 from collections import Counter
-from dataclasses import replace
-from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
@@ -14,7 +12,7 @@ from asterion.application.altos_missions import (
     P28_TITLE,
     AltosMissionService,
 )
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.knowledge_catalog import (
     ACHIEVEMENT_BY_ID,
     ALTOS_REGION_ID,
@@ -31,7 +29,6 @@ from asterion.application.road import (
     _grade_fragment_for_level,
 )
 from asterion.application.round import RoundService
-from asterion.domain.combat import active_player_key
 from asterion.domain.road import (
     ALTOS_BASTILHA,
     ALTOS_BASTILHA_ACCESS_UNLOCK,
@@ -55,12 +52,10 @@ from asterion.domain.road import (
     VARIANT_POOL,
     creature_for,
 )
-from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
     Achievement,
     Brazier,
     CampaignObjectiveCredit,
-    CampaignSharedEncounter,
     Character,
     CodexEntry,
     CodexFragment,
@@ -529,9 +524,11 @@ async def test_p28_unique_bastilha_discoveries_are_independent_and_idempotent(
 
 
 @pytest.mark.asyncio
-async def test_p28_shares_evidence_and_scripted_combat_but_keeps_analysis_personal(
-    database,
+async def test_p28_group_member_advances_alone_and_scripted_combat_is_solo(
+    database, monkeypatch
 ):
+    import asterion.application.scripted_combat as scripted_combat
+
     actors = (781330, 781331)
     seeded = [await _seed_p28_character(database, actor) for actor in actors]
     sessions = seeded[0][2]
@@ -559,65 +556,34 @@ async def test_p28_shares_evidence_and_scripted_combat_but_keeps_analysis_person
     view = await mission.resume_active(actors[0])
     assert view is not None
     view = await mission.advance(actors[0], view.state_version, "locate_containment_archive")
+    # Objectives are Solo (Ação × Consequência §5): the helper stays on step 2.
     helper_view = await mission.resume_active(actors[1])
-    assert helper_view is not None and helper_view.step == 3
-    assert helper_view.progress["containment_archive_located"] is True
+    assert helper_view is not None and helper_view.step == 2
+    assert not helper_view.progress.get("containment_archive_located")
     view = await mission.advance(actors[0], view.state_version, "locate_critical_memorial")
     assert view is not None and view.step == 4
-    assert (await mission.resume_active(actors[1])).step == 4
+    assert (await mission.resume_active(actors[1])).step == 2
 
-    pending = await mission.propose_group_combat(actors[0], view.state_version, P28_ID)
-    assert pending is not None and pending.proposal_id is not None
-    proposal = await groups.activity_proposal(actors[0], pending.proposal_id)
-    accepted = await groups.respond_activity(
-        actors[1], proposal.proposal_id, expected_revision=proposal.revision, accept=True
-    )
-    started = await mission.start_group_combat(
-        actors[0], proposal.proposal_id, expected_revision=accepted.revision
-    )
-    assert started is not None and started.combat is not None and started.group_size == 2
-    async with sessions.begin() as session:
-        encounter = await session.get(CampaignSharedEncounter, started.encounter_id)
-        assert encounter is not None
-        combat = decode(
-            encounter.combat_snapshot,
-            encounter.id,
-            encounter.ruleset_version,
-            encounter.state_version,
-        )
-        enemy = combat.fighters["enemy"]
-        enemy.hp = Decimal("1")
-        enemy.stats = replace(enemy.stats, hp=Decimal("1"))
-        enemy.takes_turn = False
-        combat.order = tuple(key for key in combat.order if key != "enemy")
-        combat.turn_index = 0
-        encounter.combat_snapshot = encode(combat)
-    views = {actor: await mission.resume(actor, P28_ID) for actor in actors}
-    combat = next(view.combat for view in views.values() if view is not None)
-    actor = next(
-        actor
-        for actor, view in views.items()
-        if view is not None and view.combat_actor_key == active_player_key(combat)
-    )
-    turn = views[actor]
+    # P28 is not a Boss: the Group proposal is refused, the fight is Solo.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await mission.propose_group_combat(actors[0], view.state_version, P28_ID)
+    assert not await groups.activity_proposals(actors[0])
+    started = await mission.start_solo_combat(actors[0], view.state_version, P28_ID)
+    assert started is not None and started.combat is not None
+    assert started.group_size == 1 and not started.combat.party_mode
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     victory = await mission.action(
-        actor,
-        turn.activity_id,
-        combat.version,
-        "attack",
-        target_id="enemy",
+        actors[0], started.activity_id, started.combat.version, "attack"
     )
     assert victory is not None and victory.step == 5
-    for participant in actors:
-        resumed = await mission.resume_active(participant)
-        assert resumed is not None and resumed.step == 5
+    assert (await mission.resume_active(actors[1])).step == 2
 
     personal = await mission.advance(
         actors[0], victory.state_version, "compare_sources_with_sel_and_maro"
     )
     assert personal is not None and personal.step == 6
     helper_after = await mission.resume_active(actors[1])
-    assert helper_after is not None and helper_after.step == 5
+    assert helper_after is not None and helper_after.step == 2
     async with sessions() as session:
         character_ids = set(
             (
@@ -635,7 +601,8 @@ async def test_p28_shares_evidence_and_scripted_combat_but_keeps_analysis_person
                 )
             )
         ).all()
-        assert len(shared_credits) == 2
+        assert len(shared_credits) == 1
+        assert shared_credits[0].character_id == personal.character_id
         personal_credits = (
             await session.scalars(
                 select(CampaignObjectiveCredit).where(
@@ -646,4 +613,4 @@ async def test_p28_shares_evidence_and_scripted_combat_but_keeps_analysis_person
             )
         ).all()
         assert len(personal_credits) == 1
-        assert personal_credits[0].character_id == views[actors[0]].character_id
+        assert personal_credits[0].character_id == personal.character_id

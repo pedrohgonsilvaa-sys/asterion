@@ -20,7 +20,7 @@ from asterion.application.altos_missions import (
     P31_TITLE_COSMETIC,
     AltosMissionService,
 )
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.knowledge_catalog import (
     ACHIEVEMENT_BY_ID,
     CODEX_BY_ID,
@@ -43,7 +43,6 @@ from asterion.application.road import (
 from asterion.application.round import RoundService
 from asterion.bot.altos_missions_handlers import altos_missions_router
 from asterion.bot.altos_missions_ui import render_altos_mission
-from asterion.domain.combat import active_player_key
 from asterion.domain.road import (
     CONFINS_CAO_NEVOA,
     CONFINS_CERVO_PASSO_DUPLO,
@@ -61,7 +60,6 @@ from asterion.infrastructure.db.models import (
     Achievement,
     Brazier,
     CampaignObjectiveCredit,
-    CampaignSharedEncounter,
     Character,
     CharacterCosmetic,
     CodexEntry,
@@ -79,7 +77,6 @@ from tests.helpers.pvpve import (
     disable_round_pvpve_for_test,
 )
 from tests.test_altos_p30 import _callback_update, _seed_p30_character
-from tests.test_campaign_coop_integration import _seed_enemy_at_one_hp
 from tests.test_s4_s5_integration import _terminal
 
 
@@ -475,7 +472,7 @@ async def test_p31_solo_entry_story_rewards_hunt_round_and_exploration(
 
 
 @pytest.mark.asyncio
-async def test_p31_shared_marker_evidence_is_individual_and_persistent(database):
+async def test_p31_marker_evidence_is_individual_and_combat_is_solo(database, monkeypatch):
     actors = (790340, 790341)
     _leader, road, sessions = await _seed_confins_actor(database, actors[0])
     await _seed_confins_actor(database, actors[1])
@@ -498,19 +495,16 @@ async def test_p31_shared_marker_evidence_is_individual_and_persistent(database)
     for actor in actors:
         views[actor] = await _enter_marcha(road, mission, actor)
 
+    # Objectives are Solo (Ação × Consequência §5): the helper stays on step 1.
     first = await mission.advance(actors[0], views[actors[0]].state_version, "inspect_talen_marker")
     assert first is not None and first.step == 2
     helper = await mission.resume_active(actors[1])
-    assert helper is not None and helper.step == 2
-    assert helper.progress["route_marker_evidence"] == ["inspect_talen_marker"]
+    assert helper is not None and helper.step == views[actors[1]].step
+    assert not helper.progress.get("route_marker_evidence")
     second = await mission.advance(actors[0], first.state_version, "inspect_ground_marker")
     assert second is not None and second.step == 3
     helper = await mission.resume_active(actors[1])
-    assert helper is not None and helper.step == 3
-    assert set(helper.progress["route_marker_evidence"]) == {
-        "inspect_talen_marker",
-        "inspect_ground_marker",
-    }
+    assert helper is not None and helper.step == views[actors[1]].step
     async with sessions() as session:
         characters = (
             await session.scalars(
@@ -531,56 +525,35 @@ async def test_p31_shared_marker_evidence_is_individual_and_persistent(database)
                 )
             )
         ).all()
-        assert len(credits) == 4
-        assert {row.character_id for row in credits} == {
-            character_by_actor[actor].id for actor in actors
-        }
+        assert len(credits) == 2
+        assert {row.character_id for row in credits} == {character_by_actor[actors[0]].id}
 
     view = await mission.advance(
         actors[0], second.state_version, "discover_marco_duplo"
     )
     assert view is not None and view.step == 4
     helper = await mission.resume_active(actors[1])
-    assert helper is not None and helper.step == 4
-    pending = await mission.propose_group_combat(actors[0], view.state_version, P31_ID)
-    assert pending is not None and pending.proposal_id is not None
-    proposal = await groups.activity_proposal(actors[0], pending.proposal_id)
-    accepted = await groups.respond_activity(
-        actors[1], proposal.proposal_id, expected_revision=proposal.revision, accept=True
-    )
-    started = await mission.start_group_combat(
-        actors[0], proposal.proposal_id, expected_revision=accepted.revision
-    )
-    assert started is not None and started.combat is not None and started.group_size == 2
-    assert started.combat.variant is None
+    assert helper is not None and helper.step == views[actors[1]].step
+
+    # P31 is not a Boss: the Group proposal is refused, the fight is Solo.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await mission.propose_group_combat(actors[0], view.state_version, P31_ID)
+    assert not await groups.activity_proposals(actors[0])
+    started = await mission.start_solo_combat(actors[0], view.state_version, P31_ID)
+    assert started is not None and started.combat is not None and started.group_size == 1
+    assert not started.combat.party_mode and started.combat.variant is None
     assert len(
         [fighter for fighter in started.combat.fighters.values() if fighter.side == "enemy"]
     ) == 1
-    async with sessions() as session:
-        encounter = await session.get(CampaignSharedEncounter, started.encounter_id)
-        assert encounter is not None and encounter.roster_size == 2
-
-    await _seed_enemy_at_one_hp(database, started.encounter_id)
-    views = {actor: await mission.resume(actor, P31_ID) for actor in actors}
-    combat = next(item.combat for item in views.values() if item is not None)
-    active_actor = next(
-        actor
-        for actor, item in views.items()
-        if item is not None and item.combat_actor_key == active_player_key(combat)
-    )
-    active_view = views[active_actor]
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     victory = await mission.action(
-        active_actor,
-        active_view.activity_id,
-        combat.version,
-        "attack",
-        target_id="enemy",
+        actors[0], started.activity_id, started.combat.version, "attack"
     )
     assert victory is not None and victory.step == 5
-    for actor in actors:
-        resumed = await mission.resume_active(actor)
-        assert resumed is not None and resumed.step == 5
-        assert resumed.progress["cao_nevoa_victory"] is True
+    assert victory.progress["cao_nevoa_victory"] is True
+    helper = await mission.resume_active(actors[1])
+    assert helper is not None and helper.step == views[actors[1]].step
+    assert not helper.progress.get("cao_nevoa_victory")
 
 
 def test_confins_catalog_and_activity_pools_match_the_opening_contract():

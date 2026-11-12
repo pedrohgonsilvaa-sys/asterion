@@ -150,6 +150,8 @@ def p2_router(
                     view = await service.examine_pedra_marcada(actor, version)
                 elif action == "refuge" and len(parts) == 3:
                     view = await service.return_to_refuge(actor, version)
+                elif action == "nc" and len(parts) == 4:
+                    view = await service.oren(actor, version, parts[3])
                 elif action == "oren" and len(parts) == 3:
                     view = await service.oren(actor, version)
                 elif action == "report" and len(parts) == 3:

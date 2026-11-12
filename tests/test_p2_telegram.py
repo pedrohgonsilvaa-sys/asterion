@@ -213,7 +213,7 @@ async def test_p2_callbacks_run_mission_and_route_combat_hud(database, monkeypat
         button
         for row in render_p2(oren).keyboard.inline_keyboard
         for button in row
-        if button.text == "Falar com Oren Cal"
+        if ":nc:" in (button.callback_data or "")
     )
     await dispatcher.feed_raw_update(
         bot, callback_update(oren_button.callback_data, update_id=984014, actor=actor)
@@ -767,7 +767,7 @@ async def test_start_reconstructs_every_active_p2_narrative_state(database, monk
                 )
                 refuge = await service.return_to_refuge(actor, stone.state_version)
                 if state == "alda":
-                    await service.oren(actor, refuge.state_version)
+                    await service.oren(actor, refuge.state_version, "o1")
         await dispatcher.feed_raw_update(
             bot,
             message_update("/start", update_id=update_id, actor=actor),

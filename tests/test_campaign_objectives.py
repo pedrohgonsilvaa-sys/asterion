@@ -81,6 +81,8 @@ async def test_objective_credit_targets_only_present_same_checkpoint_members(dat
         )
         group_id, roster = await lock_campaign_roster(session, owner.id)
         assert group_id is not None
+        # Missions are Solo (Ação × Consequência §5): the Group never receives objectives.
+        assert roster == (owner.id,)
         assert await campaign_roster_ids(session, owner.id) == roster
         present = await present_campaign_members(
             session,
@@ -91,7 +93,7 @@ async def test_objective_credit_targets_only_present_same_checkpoint_members(dat
             region="Terras do Ocaso",
             location="Estrada das Cinzas",
         )
-        assert {member.character.telegram_id for member in present} == set(actors[:2])
+        assert {member.character.telegram_id for member in present} == {actors[0]}
         for member in present:
             await record_campaign_objective_credit(
                 session,
@@ -112,7 +114,7 @@ async def test_objective_credit_targets_only_present_same_checkpoint_members(dat
 
     async with sessions() as session:
         credits = list((await session.scalars(select(CampaignObjectiveCredit))).all())
-        assert len(credits) == 2
+        assert len(credits) == 1
         assert {credit.character_id for credit in credits} == {
             member.character.id for member in present
         }

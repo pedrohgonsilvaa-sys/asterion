@@ -2,9 +2,9 @@ from copy import deepcopy
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import select
 
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.p3 import P3_ID
 from asterion.application.p4 import P4_ID, P4_REWARD_SOURCE, P4Service
 from asterion.application.progression import level_xp
@@ -12,7 +12,6 @@ from asterion.application.road import BOSQUE, CHARNECA, REFUGE, RoadService
 from asterion.application.s3 import S3_ID, S3_REWARD_SOURCE, S3Service
 from asterion.infrastructure.db.models import (
     Brazier,
-    CampaignObjectiveCredit,
     CampaignSharedEncounter,
     Character,
     CodexEntry,
@@ -135,9 +134,8 @@ async def test_s3_offer_tracks_and_fixed_combat_are_persistent(database):
 
 
 @pytest.mark.asyncio
-async def test_s3_shares_tracks_and_runs_confirmed_group_encounter(database, monkeypatch):
-    import asterion.application.campaign_coop as campaign_coop
-    from asterion.domain.combat import active_player_key
+async def test_s3_group_member_tracks_alone_and_group_encounter_is_refused(database, monkeypatch):
+    import asterion.application.scripted_combat as scripted_combat
 
     actors = (998410, 998411)
     seeded = [await _seed_campaign(database, actor, level=5) for actor in actors]
@@ -164,55 +162,32 @@ async def test_s3_shares_tracks_and_runs_confirmed_group_encounter(database, mon
     await _reach_bosque(sessions, actors[0])
     await _reach_bosque(sessions, actors[1])
 
+    # Objectives are Solo (Ação × Consequência §5): only the actor advances.
     view = await service.resume(actors[0])
     view = await service.interact(actors[0], view.state_version, "route")
     companion = await service.resume(actors[1])
-    assert view.step == companion.step == 2
+    assert view.step == 2 and companion.step == 1
     for track_id in ("s3.track.2", "s3.track.1", "s3.track.3"):
         view = await service.interact(actors[0], view.state_version, "track", track_id)
     companion = await service.resume(actors[1])
-    assert view.kind == "combat_pending" and view.group_size == 2
-    assert companion.step == 3 and len(companion.progress["tracks"]) == 3
+    # The fight opens as a Solo combat even though the actor belongs to a Group.
+    assert view.kind == "combat" and view.group_size == 1
+    assert companion.step == 1 and not companion.progress.get("tracks")
 
-    proposal = await service.propose_group_combat(actors[0], view.state_version)
-    invitee_proposals = await groups.activity_proposals(actors[1])
-    pending = next(row for row in invitee_proposals if row.proposal_id == proposal.proposal_id)
-    ready = await groups.respond_activity(
-        actors[1], pending.proposal_id, expected_revision=pending.revision, accept=True
-    )
-    started = await service.start_group_combat(
-        actors[0], ready.proposal_id, expected_revision=ready.revision
-    )
-    views = {actor: await service.resume(actor) for actor in actors}
-    assert started.kind == "combat"
-    assert len({views[actor].encounter_id for actor in actors}) == 1
-    assert len({views[actor].activity_id for actor in actors}) == 2
-    assert all(views[actor].combat == views[actors[0]].combat for actor in actors)
-    assert all(views[actor].combat_actor_key != "player" for actor in actors)
+    # S3 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await service.propose_group_combat(actors[0], view.state_version)
+    assert not await groups.activity_proposals(actors[1])
+    resumed = await service.resume(actors[0])
+    assert resumed.activity_id == view.activity_id
 
-    def terminal_victory(combat, action, *, actor_key=None, target_id=None, **_kwargs):
-        updated = deepcopy(combat)
-        updated.version += 1
-        updated.result = "victory"
-        return updated
-
-    monkeypatch.setattr(campaign_coop, "act", terminal_victory)
-    active_key = active_player_key(views[actors[0]].combat)
-    current_actor = next(
-        actor for actor in actors if views[actor].combat_actor_key == active_key
-    )
-    current = views[current_actor]
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     resolved = await service.action(
-        current_actor,
-        current.activity_id,
-        current.activity_state_version,
-        "attack",
+        actors[0], view.activity_id, view.activity_state_version, "attack"
     )
-    assert resolved.step == 4 and resolved.progress["combat_result"] == "victory"
-    for actor in actors:
-        member_view = await service.resume(actor)
-        assert member_view.step == 4
-        assert member_view.progress["combat_result"] == "victory"
+    assert resolved.step == 4
+    companion = await service.resume(actors[1])
+    assert companion.step == 1
 
     async with sessions() as session:
         activities = (
@@ -223,8 +198,9 @@ async def test_s3_shares_tracks_and_runs_confirmed_group_encounter(database, mon
                 )
             )
         ).all()
-        assert len(activities) == 2
+        assert [activity.character_id for activity in activities] == [character_ids[0]]
         assert {activity.status for activity in activities} == {"completed"}
+        assert not await session.scalar(select(CampaignSharedEncounter).limit(1))
 
 
 @pytest.mark.asyncio
@@ -516,11 +492,10 @@ async def test_p4_fixed_vigia_barrier_and_reward_unlocks(database, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_p4_group_shares_ruins_and_vigia_without_sharing_mission_rewards(
+async def test_p4_group_member_enters_ruins_alone_and_group_encounter_is_refused(
     database, monkeypatch
 ):
-    import asterion.application.campaign_coop as campaign_coop
-    from asterion.domain.combat import active_player_key
+    import asterion.application.scripted_combat as scripted_combat
 
     actors = (998421, 998422)
     seeded = [await _seed_campaign(database, actor, level=7) for actor in actors]
@@ -550,88 +525,42 @@ async def test_p4_group_shares_ruins_and_vigia_without_sharing_mission_rewards(
         accept=True,
     )
 
+    # Objectives are Solo (Ação × Consequência §5): only the actor advances.
     view = await service.resume(actors[0])
     assert view is not None and view.step == 1
     path = await service.action(actors[0], view.state_version, "path")
     assert path is not None and path.step == 2
     ruins = await service.action(actors[0], path.state_version, "enter")
+    # The fight opens as a Solo combat even though the actor belongs to a Group.
     assert ruins is not None and ruins.step == 3
-    assert ruins.kind == "combat_pending" and ruins.group_size == 2
+    assert ruins.kind == "combat" and ruins.group_size == 1
     second = await service.resume(actors[1])
-    assert second is not None and second.step == 3 and second.location == "Ruínas do Vigia"
+    assert second is not None and second.step == 1
 
-    proposed = await service.propose_group_combat(actors[0], ruins.state_version)
-    assert proposed is not None and proposed.proposal_id is not None
-    incoming = await groups.activity_proposals(actors[1])
-    proposal = next(row for row in incoming if row.proposal_id == proposed.proposal_id)
-    assert all(
-        participant.reward_eligible is True
-        for participant in proposal.participants
-        if participant.eligibility == "eligible"
-    )
-    ready = await groups.respond_activity(
-        actors[1], proposal.proposal_id, expected_revision=proposal.revision, accept=True
-    )
-    started = await service.start_group_combat(
-        actors[0], ready.proposal_id, expected_revision=ready.revision
-    )
-    resumed = await service.resume(actors[1])
-    assert started is not None and resumed is not None
-    assert started.kind == resumed.kind == "combat"
-    assert started.encounter_id == resumed.encounter_id
-    assert started.group_size == resumed.group_size == 2
-    assert {started.combat_actor_key, resumed.combat_actor_key} == {"p1", "p2"}
+    # P4 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await service.propose_group_combat(actors[0], ruins.state_version)
+    assert not await groups.activity_proposals(actors[1])
 
-    def resolve_victory(combat, action, *, target_id=None, actor_key=None, **_kwargs):
-        updated = deepcopy(combat)
-        updated.version += 1
-        updated.result = "victory"
-        return updated
-
-    monkeypatch.setattr(campaign_coop, "act", resolve_victory)
-    active_key = active_player_key(started.combat)
-    actor_view, actor = next(
-        (current, actor)
-        for current, actor in ((started, actors[0]), (resumed, actors[1]))
-        if current.combat_actor_key == active_key
-    )
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     victory = await service.action_combat(
-        actor,
-        actor_view.activity_id,
-        actor_view.activity_state_version,
-        "attack",
-        target_id="enemy",
+        actors[0], ruins.activity_id, ruins.activity_state_version, "attack"
     )
     assert victory is not None and victory.step == 4
-    await service.action_combat(
-        actor,
-        actor_view.activity_id,
-        actor_view.activity_state_version,
-        "attack",
-        target_id="enemy",
-    )
 
     async with sessions() as session:
-        quests = list(
-            (
+        quests = {
+            row.character_id: row.step
+            for row in (
                 await session.scalars(
                     select(Quest).where(
                         Quest.character_id.in_(character_ids), Quest.quest_id == P4_ID
                     )
                 )
             ).all()
-        )
-        assert len(quests) == 2 and all(row.step == 4 for row in quests)
-        assert await session.scalar(
-            select(func.count()).where(
-                CampaignObjectiveCredit.objective_id == "p4.vigia_rachado"
-            )
-        ) == 2
-        assert await session.scalar(
-            select(func.count()).where(
-                CampaignSharedEncounter.content_id == "p4_scripted_vigia_rachado"
-            )
-        ) == 1
+        }
+        assert quests == {character_ids[0]: 4, character_ids[1]: 1}
+        assert not await session.scalar(select(CampaignSharedEncounter).limit(1))
         assert await session.scalar(
             select(RewardEvent.id).where(
                 RewardEvent.character_id.in_(character_ids),

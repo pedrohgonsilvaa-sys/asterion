@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.account_risk import record_linked_cooccurrence
 from asterion.application.social_graph import blocked_between, record_recent_contacts
+from asterion.domain.mission_coop import mission_coop_allowed
 from asterion.infrastructure.db.models import (
     Character,
     GroupActivityParticipant,
@@ -587,6 +588,11 @@ class GroupService:
         if len(set(participant_ids)) != len(participant_ids):
             raise GroupError("roster_invalid")
         payload = dict(context_payload or {})
+        if activity_type.startswith("campaign_") and not mission_coop_allowed(
+            payload.get("quest_id")
+        ):
+            # Only Boss encounters of Principais/Secundárias accept a Group (§5).
+            raise GroupError("mission_coop_boss_only")
         try:
             async with self.sessions.begin() as session:
                 proposer = await self._character(session, actor)

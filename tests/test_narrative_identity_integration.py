@@ -10,7 +10,7 @@ from uuid import UUID
 import pytest
 from sqlalchemy import select
 
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.narrative_identity import (
     load_narrative_context,
     resolve_character_scene,
@@ -25,10 +25,8 @@ from asterion.domain.narrative_identity import (
 )
 from asterion.infrastructure.db.models import Character, Quest, RewardEvent, Unlock
 from tests.test_campaign_coop_integration import (
-    _confirm_and_start,
     _create_group,
-    _finish_p1_group_fight,
-    _seed_enemy_at_one_hp,
+    _finish_p1_solo_fight,
     _seed_party,
 )
 
@@ -110,7 +108,9 @@ async def _resolved(database, character_id):
 
 
 @pytest.mark.asyncio
-async def test_alda_choices_stay_individual_through_a_cooperative_fight(database, monkeypatch):
+async def test_alda_choices_stay_individual_when_the_group_is_refused_and_host_fights_solo(
+    database, monkeypatch
+):
     import asterion.application.p1 as p1_module
 
     monkeypatch.setattr(p1_module, "uuid4", lambda: UUID(int=7101))
@@ -151,20 +151,17 @@ async def test_alda_choices_stay_individual_through_a_cooperative_fight(database
         contexts = {cid: await load_narrative_context(session, cid) for cid in before}
     assert len({context.flags for context in contexts.values()}) == 3
 
-    # A calls B for the cooperative fight; C stays out.
+    # A cannot call B: P1 is not a Boss, so the Group proposal is refused and A
+    # fights alone (Ação × Consequência §5). C stays out either way.
     groups = GroupService(database[1], "ocaso")
     await _create_group(groups, actors[0], actors[1:2], names)
     service = P1Service(database[1], "ocaso", groups)
-    proposal = await service.propose_group_combat(actors[0], 3)
-    proposal_view = await groups.activity_proposal(actors[0], proposal.proposal_id)
-    roles = {row.character_id: row.eligibility for row in proposal_view.participants}
-    assert roles == {host: "eligible", helper: "helper"}
-    started = await _confirm_and_start(
-        groups, service, actors[0], proposal.proposal_id, actors[:2]
-    )
-    assert started.combat is not None and started.group_size == 2
-    await _seed_enemy_at_one_hp(database, started.encounter_id)
-    await _finish_p1_group_fight(service, actors[:2], database, started.encounter_id)
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await service.propose_group_combat(actors[0], 3)
+    assert not await groups.activity_proposals(actors[0])
+    started = await service.start_solo_combat(actors[0], 3)
+    assert started.combat is not None and started.group_size == 1
+    await _finish_p1_solo_fight(service, actors[0], database)
 
     # Reconnect and retry: resolving again reads the same personal state.
     after = {cid: await _resolved(database, cid) for cid in before}

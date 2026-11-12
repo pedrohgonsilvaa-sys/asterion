@@ -1,6 +1,4 @@
 from collections import Counter
-from dataclasses import replace
-from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
@@ -14,7 +12,7 @@ from asterion.application.altos_missions import (
     S26_REWARD_SOURCE,
     AltosMissionService,
 )
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.knowledge_catalog import CODEX_BY_ID, CODEX_FRAGMENTS
 from asterion.application.road import (
     ALTOS_ABRIGO_LABEL,
@@ -28,12 +26,9 @@ from asterion.application.s26 import (
     S26Service,
 )
 from asterion.bot.s26_ui import render_s26
-from asterion.domain.combat import active_player_key
-from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
     Achievement,
     CampaignObjectiveCredit,
-    CampaignSharedEncounter,
     Character,
     CodexEntry,
     CodexFragment,
@@ -405,8 +400,10 @@ async def test_s26_abandonment_is_blocked_in_foreground_and_reaccept_preserves_c
 
 
 @pytest.mark.asyncio
-async def test_s26_shareable_rescue_and_group_scripted_encounter(database):
-    leader, _road, sessions, service, _combat = await _seed_s26(database, 786265)
+async def test_s26_group_member_advances_alone_and_scripted_encounter_is_solo(
+    database, monkeypatch
+):
+    leader, _road, sessions, service, combat = await _seed_s26(database, 786265)
     helper, _road, _sessions, _service, _combat = await _seed_s26(database, 786266)
     async with sessions() as session:
         helper_character = await session.scalar(
@@ -438,77 +435,27 @@ async def test_s26_shareable_rescue_and_group_scripted_encounter(database):
         leader, leader_view.state_version, "accompany_rescue_team"
     )
     assert leader_view is not None and leader_view.step == 3
-    helper_view = await S26Service(
-        sessions, "ocaso", AltosMissionService(sessions, "ocaso")
-    ).resume(helper)
-    assert helper_view is not None and helper_view.step == 3
+    # Objectives are Solo (Ação × Consequência §5): the helper stays on step 2.
+    helper_view = await service.resume(helper)
+    assert helper_view is not None and helper_view.step == 2
 
-    pending = await shared_combat.propose_group_combat(
-        leader, leader_view.state_version, S26_ID
-    )
-    assert pending is not None and pending.proposal_id is not None
-    proposal = await groups.activity_proposal(leader, pending.proposal_id)
-    accepted_proposal = await groups.respond_activity(
-        helper,
-        proposal.proposal_id,
-        expected_revision=proposal.revision,
-        accept=True,
-    )
-    started = await shared_combat.start_group_combat(
-        leader,
-        proposal.proposal_id,
-        expected_revision=accepted_proposal.revision,
-        quest_id=S26_ID,
-    )
+    # S26 is not a Boss: the Group proposal is refused, the fight is Solo.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await shared_combat.propose_group_combat(
+            leader, leader_view.state_version, S26_ID
+        )
+    assert not await groups.activity_proposals(leader)
+    started = await combat.start_solo_combat(leader, leader_view.state_version, S26_ID)
     assert started is not None and started.combat is not None
-    assert started.group_size == 2 and started.combat.party_mode
+    assert started.group_size == 1 and not started.combat.party_mode
     assert started.combat.fighters["enemy"].level == 44
     assert started.combat.variant is None
-
-    async with sessions.begin() as session:
-        encounter = await session.get(CampaignSharedEncounter, started.encounter_id)
-        assert encounter is not None
-        encounter_combat = decode(
-            encounter.combat_snapshot,
-            encounter.id,
-            encounter.ruleset_version,
-            encounter.state_version,
-        )
-        enemy = encounter_combat.fighters["enemy"]
-        enemy.hp = Decimal("1")
-        enemy.stats = replace(enemy.stats, hp=Decimal("1"))
-        enemy.takes_turn = False
-        encounter_combat.order = tuple(
-            key for key in encounter_combat.order if key != "enemy"
-        )
-        encounter_combat.turn_index = 0
-        encounter.combat_snapshot = encode(encounter_combat)
-
-    member_views = {
-        actor: await shared_combat.resume(actor, S26_ID)
-        for actor in (leader, helper)
-    }
-    active_combat = next(view.combat for view in member_views.values() if view and view.combat)
-    owner = active_player_key(active_combat)
-    acting = next(
-        actor
-        for actor, view in member_views.items()
-        if view is not None and view.combat_actor_key == owner
-    )
-    turn = member_views[acting]
-    victory = await shared_combat.action(
-        acting,
-        turn.activity_id,
-        active_combat.version,
-        "attack",
-        target_id="enemy",
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
+    victory = await combat.action(
+        leader, started.activity_id, started.combat.version, "attack"
     )
     assert victory is not None and victory.step == 4
-    for actor in (leader, helper):
-        resumed = await S26Service(
-            sessions, "ocaso", AltosMissionService(sessions, "ocaso")
-        ).resume(actor)
-        assert resumed is not None and resumed.step == 4
+    assert (await service.resume(helper)).step == 2
 
     leader_s26 = await service.resume(leader)
     assert leader_s26 is not None and leader_s26.step == 4
@@ -517,7 +464,7 @@ async def test_s26_shareable_rescue_and_group_scripted_encounter(database):
     )
     assert old_record is not None and old_record.step == 5
     helper_s26 = await service.resume(helper)
-    assert helper_s26 is not None and helper_s26.step == 5
+    assert helper_s26 is not None and helper_s26.step == 2
 
     async with sessions() as session:
         character_ids = set(
@@ -529,35 +476,21 @@ async def test_s26_shareable_rescue_and_group_scripted_encounter(database):
                 )
             ).all()
         )
-        credits = (
-            await session.scalars(
-                select(CampaignObjectiveCredit).where(
-                    CampaignObjectiveCredit.character_id.in_(character_ids),
-                    CampaignObjectiveCredit.quest_id == S26_ID,
-                    CampaignObjectiveCredit.objective_id
-                    == "s26.scripted_carneiro_victory",
+        leader_id = await session.scalar(
+            select(Character.id).where(Character.telegram_id == leader)
+        )
+        for objective_id in (
+            "s26.scripted_carneiro_victory",
+            "s26.accompanied_rescue_team",
+            "s26.found_old_shift_record",
+        ):
+            credits = (
+                await session.scalars(
+                    select(CampaignObjectiveCredit).where(
+                        CampaignObjectiveCredit.character_id.in_(character_ids),
+                        CampaignObjectiveCredit.quest_id == S26_ID,
+                        CampaignObjectiveCredit.objective_id == objective_id,
+                    )
                 )
-            )
-        ).all()
-        rescue_credits = (
-            await session.scalars(
-                select(CampaignObjectiveCredit).where(
-                    CampaignObjectiveCredit.character_id.in_(character_ids),
-                    CampaignObjectiveCredit.quest_id == S26_ID,
-                    CampaignObjectiveCredit.objective_id == "s26.accompanied_rescue_team",
-                )
-            )
-        ).all()
-        old_record_credits = (
-            await session.scalars(
-                select(CampaignObjectiveCredit).where(
-                    CampaignObjectiveCredit.character_id.in_(character_ids),
-                    CampaignObjectiveCredit.quest_id == S26_ID,
-                    CampaignObjectiveCredit.objective_id
-                    == "s26.found_old_shift_record",
-                )
-            )
-        ).all()
-        assert {credit.character_id for credit in credits} == character_ids
-        assert {credit.character_id for credit in rescue_credits} == character_ids
-        assert {credit.character_id for credit in old_record_credits} == character_ids
+            ).all()
+            assert {credit.character_id for credit in credits} == {leader_id}

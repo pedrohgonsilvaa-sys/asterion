@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass, replace
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.active_arts import load_active_art_configuration
@@ -65,7 +65,6 @@ from asterion.infrastructure.db.models import (
     RewardComponent,
     RewardEvent,
     SocialGroup,
-    SocialGroupMember,
     WorldState,
 )
 
@@ -1135,25 +1134,8 @@ class S4Service:
         )
 
     async def _group_size(self, session, character_id):
-        membership = await session.scalar(
-            select(SocialGroupMember).where(
-                SocialGroupMember.character_id == character_id
-            )
-        )
-        if membership is None:
-            return 1
-        group = await session.get(SocialGroup, membership.group_id)
-        if group is None or group.status != "active":
-            return 1
-        return int(
-            await session.scalar(
-                select(func.count())
-                .select_from(SocialGroupMember)
-                .where(SocialGroupMember.group_id == group.id)
-            )
-            or 1
-        )
-
+        """This encounter is not a Boss: missions stay Solo (Ação × Consequência §5)."""
+        return 1
     async def _quest_for_update(self, session, character_id):
         return await session.scalar(
             select(Quest)

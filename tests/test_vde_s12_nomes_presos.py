@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import select
 
 from asterion.application.cosmetic_catalog import COSMETIC_BY_ACHIEVEMENT
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.knowledge_catalog import CODEX_BY_ID, CODEX_FRAGMENTS
 from asterion.application.p7 import REGION
 from asterion.application.vde_missions import (
@@ -19,12 +19,12 @@ from asterion.application.vde_missions import (
     VDEMissionService,
 )
 from asterion.bot.vde_missions_ui import _route_toward, render_vde_mission
-from asterion.domain.combat import active_player_key
 from asterion.domain.road import VDE_TANGLED_PILGRIM, road_enemy_stats
 from asterion.infrastructure.db.models import (
     Achievement,
     BestiaryEntry,
     BestiaryEvidence,
+    CampaignSharedEncounter,
     Character,
     CharacterCosmetic,
     CodexEntry,
@@ -370,10 +370,10 @@ async def test_s12_solo_flow_records_enemy_codex_reward_and_feat_once(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("group_size", [2, 3, 4])
-async def test_s12_group_uses_one_level_20_peregrino_and_rewards_members_individually(
+async def test_s12_group_refuses_coop_and_each_member_fights_own_level_20_peregrino(
     database, monkeypatch, group_size
 ):
-    import asterion.application.campaign_coop as campaign_coop
+    import asterion.application.scripted_combat as scripted_combat
 
     leader = 998820 + group_size * 10
     actors = [leader + offset for offset in range(group_size)]
@@ -390,78 +390,86 @@ async def test_s12_group_uses_one_level_20_peregrino_and_rewards_members_individ
         started = await missions.start(actor, S12_ID)
         assert started is not None and started.status == "active"
 
-    view = await missions.advance(
-        leader, S12_ID, (await missions.resume(leader, S12_ID)).state_version, "read_record"
-    )
-    view = await _advance(missions, actors, leader, "visit_garganta", GARGANTA)
-    view = await missions.advance(leader, S12_ID, view.state_version, "find_mark")
-    view = await _advance(missions, actors, leader, "visit_mata", MATA)
-    view = await missions.advance(leader, S12_ID, view.state_version, "recover_object")
-    view = await _advance(missions, actors, leader, "visit_baixios", BAIXIOS)
-    assert view is not None and view.step == 7
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
 
-    proposal_view = await missions.propose_group_combat(leader, S12_ID, view.state_version)
-    assert proposal_view is not None and proposal_view.proposal_id is not None
-    proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
-    for actor in actors[1:]:
-        await groups.respond_activity(
-            actor,
-            proposal.proposal_id,
-            expected_revision=proposal.revision,
-            accept=True,
+    async def play_to_combat(actor):
+        view = await missions.advance(
+            actor, S12_ID, (await missions.resume(actor, S12_ID)).state_version, "read_record"
         )
-        proposal = await groups.activity_proposal(leader, proposal.proposal_id)
-    started = await missions.start_group_combat(
-        leader, proposal.proposal_id, expected_revision=proposal.revision
-    )
-    assert started is not None and started.kind == "combat"
-    assert started.group_size == group_size and started.combat is not None
-    enemy = started.combat.fighters["enemy"]
-    assert enemy.name == VDE_TANGLED_PILGRIM.name
-    assert enemy.level == 20
-    assert enemy.stats == road_enemy_stats(VDE_TANGLED_PILGRIM, 20)
-    assert started.combat.variant is None
-    player_fighters = [
-        fighter for fighter in started.combat.fighters.values() if fighter.side == "player"
-    ]
-    assert len(player_fighters) == group_size
-    enemy_fighters = [
-        fighter for fighter in started.combat.fighters.values() if fighter.side == "enemy"
-    ]
-    assert len(enemy_fighters) == 1
+        view = await _advance(missions, [actor], actor, "visit_garganta", GARGANTA)
+        view = await missions.advance(actor, S12_ID, view.state_version, "find_mark")
+        view = await _advance(missions, [actor], actor, "visit_mata", MATA)
+        view = await missions.advance(actor, S12_ID, view.state_version, "recover_object")
+        view = await _advance(missions, [actor], actor, "visit_baixios", BAIXIOS)
+        assert view is not None and view.step == 7
+        return view
 
-    monkeypatch.setattr(campaign_coop, "act", _terminal("victory"))
-    member_views = [await missions.resume(actor, S12_ID) for actor in actors]
-    current_key = active_player_key(started.combat)
-    turn_owner = next(
-        actor
-        for actor, member_view in zip(actors, member_views, strict=True)
-        if member_view is not None and member_view.combat_actor_key == current_key
-    )
-    current_view = next(
-        member_view
-        for member_view in member_views
-        if member_view is not None and member_view.combat_actor_key == current_key
-    )
-    victory = await missions.action_combat(
-        turn_owner, current_view.activity_id, current_view.combat.version, "attack"
-    )
-    assert victory is not None
-    for actor in actors:
+    async def fight_and_finish(actor, view):
+        fight = await missions.start_solo_combat(actor, S12_ID, view.state_version)
+        assert fight is not None and fight.kind == "combat" and fight.combat is not None
+        assert fight.group_size == 1 and not fight.combat.party_mode
+        enemy = fight.combat.fighters["enemy"]
+        assert enemy.name == VDE_TANGLED_PILGRIM.name
+        assert enemy.level == 20
+        assert enemy.stats == road_enemy_stats(VDE_TANGLED_PILGRIM, 20)
+        assert fight.combat.variant is None
+        enemy_fighters = [
+            fighter for fighter in fight.combat.fighters.values() if fighter.side == "enemy"
+        ]
+        assert len(enemy_fighters) == 1
+        victory = await missions.action_combat(
+            actor, fight.activity_id, fight.combat.version, "attack"
+        )
+        assert victory is not None
         member_view = await missions.resume(actor, S12_ID)
         assert member_view is not None and member_view.step == 8
-    lead_view = await missions.resume(leader, S12_ID)
-    assert lead_view is not None
-    view = await missions.advance(
-        leader, S12_ID, lead_view.state_version, "examine_site"
-    )
-    view = await _advance(missions, actors, leader, "visit_claustro", CLAUSTRO)
-    view = await missions.advance(leader, S12_ID, view.state_version, "last_record")
-    view = await missions.advance(leader, S12_ID, view.state_version, "report_iven")
-    view = await _advance(missions, actors, leader, "register_names", VIGILIA)
-    assert view is not None and view.status == "completed"
+        view = await missions.advance(
+            actor, S12_ID, member_view.state_version, "examine_site"
+        )
+        view = await _advance(missions, [actor], actor, "visit_claustro", CLAUSTRO)
+        view = await missions.advance(actor, S12_ID, view.state_version, "last_record")
+        view = await missions.advance(actor, S12_ID, view.state_version, "report_iven")
+        view = await _advance(missions, [actor], actor, "register_names", VIGILIA)
+        assert view is not None and view.status == "completed"
+
+    async def quest_of(character_id):
+        async with sessions() as session:
+            return await session.scalar(
+                select(Quest).where(Quest.character_id == character_id, Quest.quest_id == S12_ID)
+            )
+
+    # Objectives are Solo (Ação × Consequência §5): the leader advances alone
+    # and the other members stay on the first step.
+    view = await play_to_combat(leader)
+    for character_id in character_ids[1:]:
+        quest = await quest_of(character_id)
+        assert quest is not None and quest.status == "active" and quest.step == 1
+
+    # S12 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await missions.propose_group_combat(leader, S12_ID, view.state_version)
+    for actor in actors:
+        assert not await groups.activity_proposals(actor)
+
+    await fight_and_finish(leader, view)
+    async with sessions() as session:
+        for character_id in character_ids[1:]:
+            assert await session.scalar(
+                select(RewardEvent.id).where(
+                    RewardEvent.character_id == character_id,
+                    RewardEvent.source_id == S12_REWARD_SOURCE,
+                )
+            ) is None
+    for character_id in character_ids[1:]:
+        quest = await quest_of(character_id)
+        assert quest is not None and quest.status == "active" and quest.step == 1
+
+    # Every other member plays the whole mission on their own.
+    for actor in actors[1:]:
+        await fight_and_finish(actor, await play_to_combat(actor))
 
     async with sessions() as session:
+        assert not await session.scalar(select(CampaignSharedEncounter).limit(1))
         for character_id in character_ids:
             quest = await session.scalar(
                 select(Quest).where(Quest.character_id == character_id, Quest.quest_id == S12_ID)

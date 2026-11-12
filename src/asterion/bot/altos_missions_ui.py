@@ -188,7 +188,6 @@ def render_altos_mission(view: AltosMissionView) -> Screen:
             rows.extend(
                 (
                     [_button("Iniciar encontro Solo", f"altos:combat:{view.state_version}:solo")],
-                    [_button("Solicitar encontro em Grupo", f"altos:combat:{view.state_version}:group")],
                 )
             )
     elif view.step == 4:
@@ -286,7 +285,6 @@ def _render_p33(view: AltosMissionView, title: str, rows) -> Screen:
             rows.extend(
                 (
                     [_button("Iniciar encontro Solo", f"altos:combat:P33:{view.state_version}:solo")],
-                    [_button("Solicitar encontro em Grupo", f"altos:combat:P33:{view.state_version}:group")],
                 )
             )
     elif view.step == 4:
@@ -368,7 +366,6 @@ def _render_p34(view: AltosMissionView, title: str, rows) -> Screen:
             rows.extend(
                 (
                     [_button("Iniciar encontro Solo", f"altos:combat:P34:{view.state_version}:solo")],
-                    [_button("Solicitar encontro em Grupo", f"altos:combat:P34:{view.state_version}:group")],
                 )
             )
     elif view.step == 4:
@@ -466,7 +463,6 @@ def _render_p35(view: AltosMissionView, title: str, rows) -> Screen:
             rows.extend(
                 (
                     [_button("Iniciar encontro Solo", f"altos:combat:P35:{view.state_version}:solo")],
-                    [_button("Solicitar encontro em Grupo", f"altos:combat:P35:{view.state_version}:group")],
                 )
             )
     elif view.step == 4:
@@ -591,7 +587,6 @@ def _render_s26_combat_step(view: AltosMissionView, title: str, rows) -> Screen:
             rows.extend(
                 (
                     [_button("Iniciar encontro Solo", f"altos:combat:S26:{view.state_version}:solo")],
-                    [_button("Solicitar encontro em Grupo", f"altos:combat:S26:{view.state_version}:group")],
                 )
             )
     else:
@@ -731,7 +726,6 @@ def _render_p27(view: AltosMissionView, title: str, rows) -> Screen:
             rows.extend(
                 (
                     [_button("Iniciar encontro Solo", f"altos:combat:P27:{view.state_version}:solo")],
-                    [_button("Solicitar encontro em Grupo", f"altos:combat:P27:{view.state_version}:group")],
                 )
             )
     elif view.step == 4:
@@ -805,7 +799,6 @@ def _render_p28(view: AltosMissionView, title: str, rows) -> Screen:
             rows.extend(
                 (
                     [_button("Iniciar encontro Solo", f"altos:combat:P28:{view.state_version}:solo")],
-                    [_button("Solicitar encontro em Grupo", f"altos:combat:P28:{view.state_version}:group")],
                 )
             )
     elif view.step == 5:
@@ -880,7 +873,6 @@ def _render_p29(view: AltosMissionView, title: str, rows) -> Screen:
             rows.extend(
                 (
                     [_button("Iniciar encontro Solo", f"altos:combat:P29:{view.state_version}:solo")],
-                    [_button("Solicitar encontro em Grupo", f"altos:combat:P29:{view.state_version}:group")],
                 )
             )
     elif view.step == 5:
@@ -1021,7 +1013,6 @@ def _render_p31(view: AltosMissionView, title: str, rows) -> Screen:
             rows.extend(
                 (
                     [_button("Iniciar encontro Solo", f"altos:combat:P31:{view.state_version}:solo")],
-                    [_button("Solicitar encontro em Grupo", f"altos:combat:P31:{view.state_version}:group")],
                 )
             )
     elif view.step == 5:
@@ -1105,7 +1096,6 @@ def _render_p32(view: AltosMissionView, title: str, rows) -> Screen:
             rows.extend(
                 (
                     [_button("Iniciar encontro Solo", f"altos:combat:P32:{view.state_version}:solo")],
-                    [_button("Solicitar encontro em Grupo", f"altos:combat:P32:{view.state_version}:group")],
                 )
             )
     elif view.step == 5:

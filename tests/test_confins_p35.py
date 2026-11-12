@@ -16,7 +16,7 @@ from asterion.application.altos_missions import (
     P35_TITLE,
     AltosMissionService,
 )
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.knowledge_catalog import (
     ACHIEVEMENT_BY_ID,
     CODEX_BY_ID,
@@ -359,7 +359,7 @@ async def test_p34_to_p35_progress_chamber_at_59_scripted_combat_and_rewards(
 
 
 @pytest.mark.asyncio
-async def test_p35_shared_documentary_steps_stay_independent_from_personal_steps(
+async def test_p35_documentary_steps_are_solo_and_helper_keeps_own_progress(
     database, monkeypatch
 ):
     actors = (793560, 793561)
@@ -384,6 +384,7 @@ async def test_p35_shared_documentary_steps_stay_independent_from_personal_steps
         view = await mission.start_p35(actor)
         assert view is not None and view.status == "active"
 
+    # Objectives are Solo (Ação × Consequência §5): only the leader records.
     for chain in (
         "custodia_ancoras",
         "regencia_continuidade",
@@ -392,10 +393,12 @@ async def test_p35_shared_documentary_steps_stay_independent_from_personal_steps
         view = await mission.resume(actors[0], P35_ID)
         assert view is not None and view.step == 1
         await mission.advance(actors[0], view.state_version, f"record_chain_{chain}")
-    for actor in actors:
-        view = await mission.resume(actor, P35_ID)
-        assert view is not None and view.step == 2
-        assert len(view.progress["documentary_chain_evidence_ids"]) == 3
+    view = await mission.resume(actors[0], P35_ID)
+    assert view is not None and view.step == 2
+    assert len(view.progress["documentary_chain_evidence_ids"]) == 3
+    helper = await mission.resume(actors[1], P35_ID)
+    assert helper is not None and helper.step == 1
+    assert not helper.progress.get("documentary_chain_evidence_ids")
 
     for evidence in (
         "pre_civil_deterioration",
@@ -408,19 +411,25 @@ async def test_p35_shared_documentary_steps_stay_independent_from_personal_steps
         await mission.advance(
             actors[0], view.state_version, f"verify_sequence_{evidence}"
         )
-    for actor in actors:
-        view = await mission.resume(actor, P35_ID)
-        assert view is not None and view.step == 3
-        assert len(view.progress["technical_sequence_evidence_ids"]) == 4
+    view = await mission.resume(actors[0], P35_ID)
+    assert view is not None and view.step == 3
+    assert len(view.progress["technical_sequence_evidence_ids"]) == 4
+    helper = await mission.resume(actors[1], P35_ID)
+    assert helper is not None and helper.step == 1
 
+    # P35 is not a Boss: the Group proposal is refused, the fight is Solo.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await mission.propose_group_combat(actors[0], view.state_version, P35_ID)
+    assert not await groups.activity_proposals(actors[0])
     battle = await mission.start_solo_combat(
         actors[0], view.state_version, P35_ID
     )
     assert battle is not None and battle.combat is not None
+    assert battle.group_size == 1 and not battle.combat.party_mode
     monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     leader = await mission.action(
         actors[0], battle.activity_id, battle.combat.version, "attack"
     )
     assert leader is not None and leader.step == 4
     helper = await mission.resume(actors[1], P35_ID)
-    assert helper is not None and helper.step == 3
+    assert helper is not None and helper.step == 1

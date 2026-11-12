@@ -117,8 +117,6 @@ def render_p7(view: P7View) -> Screen:
     if view.kind == "start_fauna":
         rows = [
             [_b("Enfrentar Solo", f"p7:{version}:solo")],
-            [_b("Formar/Usar Grupo", f"p7:{version}:group")],
-            [_b("Grupo", "group:root")],
             [_b("← Missões", "world:missions")],
         ]
         return Screen(
@@ -140,7 +138,6 @@ def render_p7(view: P7View) -> Screen:
             _kb(
                 [
                     [_b("Tentar Solo", f"p7:{version}:retry")],
-                    [_b("Formar/Usar Grupo", f"p7:{version}:group")],
                     [_b("← Missões", "world:missions")],
                 ]
             ),

@@ -379,7 +379,12 @@ async def run_tdo_full_playthrough(database, monkeypatch):
             label="P1 · retry",
         )
     assert quest.progress.get("arrival"), driver.diagnostic()
-    for mutation in (p1.enter_refuge, p1.follow_alda, p1.go_brazier, p1.activate_brazier):
+    for mutation in (
+        p1.enter_refuge,
+        lambda a, v: p1.choose_posture(a, v, "o1"),
+        p1.go_brazier,
+        p1.activate_brazier,
+    ):
         quest = await mutation(actor, quest.state_version)
     assert quest.status == "completed"
     await driver.snapshot("P1 concluída e Braseiro do Refúgio ativado")
@@ -1090,6 +1095,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     accepted_s1 = await s1.examine_ashes(actor, accepted_s1.state_version)
     accepted_s1 = await s1.observe_light(actor, accepted_s1.state_version)
     assert accepted_s1.step == 4
+    accepted_s1 = await s1.choose_response(actor, accepted_s1.state_version, "o2")
     await road.travel(actor, REFUGE)
     completed_s1 = await s1.complete_with_oren(actor, accepted_s1.state_version)
     assert completed_s1 is not None and completed_s1.status == "completed"
@@ -1152,7 +1158,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     assert active_p2.progress.get("combat_result") == "victory", driver.diagnostic()
     active_p2 = await p2.examine_pedra_marcada(actor, active_p2.state_version)
     active_p2 = await p2.return_to_refuge(actor, active_p2.state_version)
-    active_p2 = await p2.oren(actor, active_p2.state_version)
+    active_p2 = await p2.oren(actor, active_p2.state_version, "o1")
     active_p2 = await p2.report_to_alda(actor, active_p2.state_version)
     assert active_p2.status == "completed"
     await driver.snapshot("P2 concluída")
@@ -1715,6 +1721,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
             assert s5_view.kind == "combat" and s5_view.combat is not None
     assert s5_view.progress.get("combat_result") == "victory", driver.diagnostic()
     s5_view = await s5.action(actor, s5_view.state_version, "record")
+    s5_view = await s5.action(actor, s5_view.state_version, "nc", "o2")
     await travel_to_refuge_from_ruins()
     s5_view = await s5.action(actor, s5_view.state_version, "report")
     assert s5_view.status == "completed"

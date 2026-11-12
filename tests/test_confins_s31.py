@@ -12,7 +12,7 @@ from asterion.application.altos_missions import (
     S31_ID,
     AltosMissionService,
 )
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.road import CONFINS_MARCHA_LABEL, CONFINS_REGION_LABEL
 from asterion.application.s31 import (
     S31_CODEX_ENTRY,
@@ -281,7 +281,7 @@ async def test_s31_abandon_and_reaccept_preserve_only_committed_evidence(databas
 
 
 @pytest.mark.asyncio
-async def test_s31_shared_evidence_requires_each_character_to_accept(database):
+async def test_s31_each_character_accepts_and_observes_evidence_alone(database):
     actors = (831030, 831031)
     _leader, sessions, _mission, _service = await _seed_s31(database, actors[0])
     await _seed_s31(database, actors[1])
@@ -326,18 +326,17 @@ async def test_s31_shared_evidence_requires_each_character_to_accept(database):
 
     leader = await service.advance(actors[0], leader.state_version, "observe_trail_point_b")
     assert leader is not None and set(leader.trail_points) == set(S31_TRAIL_POINTS[:2])
+    # Evidence is Solo (Ação × Consequência §5): nothing reaches the other member.
     helper = await service.resume(actors[1])
     assert helper is not None and helper.step == 2
-    assert helper.trail_points == (S31_TRAIL_POINTS[1],)
+    assert helper.trail_points == ()
 
 
 @pytest.mark.asyncio
-async def test_s31_group_scripted_victory_credits_eligible_members_without_reward(
+async def test_s31_group_refuses_scripted_encounter_and_solo_victory_gives_no_reward(
     database, monkeypatch
 ):
     from asterion.application import scripted_combat
-    from asterion.domain.combat import active_player_key
-    from tests.test_campaign_coop_integration import _seed_enemy_at_one_hp
     from tests.test_s4_s5_integration import _terminal
 
     actors = (831040, 831041)
@@ -365,42 +364,27 @@ async def test_s31_group_scripted_victory_credits_eligible_members_without_rewar
         assert view is not None and view.step == 2
     view = await _observe_all_shared_evidence(service, actors[0])
     helper = await service.resume(actors[1])
-    assert helper is not None and helper.step == 4
+    assert helper is not None and helper.step == 2
+    assert helper.trail_points == ()
 
-    pending = await service.propose_group_combat(actors[0], view.state_version)
-    assert pending is not None and pending.proposal_id is not None
-    proposal = await groups.activity_proposal(actors[0], pending.proposal_id)
-    accepted = await groups.respond_activity(
-        actors[1], proposal.proposal_id, expected_revision=proposal.revision, accept=True
-    )
-    started = await mission.start_group_combat(
-        actors[0], proposal.proposal_id, expected_revision=accepted.revision, quest_id=S31_ID
-    )
-    assert started is not None and started.combat is not None and started.group_size == 2
-    assert started.combat.variant is None
+    # S31 is not a Boss: the Group proposal is refused, the fight is Solo.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await service.propose_group_combat(actors[0], view.state_version)
+    assert not await groups.activity_proposals(actors[0])
+    started = await service.start_solo_combat(actors[0], view.state_version)
+    assert started is not None and started.combat is not None and started.group_size == 1
+    assert not started.combat.party_mode and started.combat.variant is None
     enemies = [fighter for fighter in started.combat.fighters.values() if fighter.side == "enemy"]
     assert len(enemies) == 1 and enemies[0].level == 52
-    await _seed_enemy_at_one_hp(database, started.encounter_id)
-
-    views = {actor: await mission.resume(actor, S31_ID) for actor in actors}
-    combat = next(view.combat for view in views.values() if view is not None)
-    active_actor = next(
-        actor
-        for actor, view in views.items()
-        if view is not None and view.combat_actor_key == active_player_key(combat)
-    )
-    active_view = views[active_actor]
     monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     result = await mission.action(
-        active_actor,
-        active_view.activity_id,
-        combat.version,
-        "attack",
+        actors[0], started.activity_id, started.combat.version, "attack"
     )
     assert result is not None and result.step == 5
-    for actor in actors:
-        resumed = await service.resume(actor)
-        assert resumed is not None and resumed.step == 5 and resumed.victory_recorded
+    resumed = await service.resume(actors[0])
+    assert resumed is not None and resumed.step == 5 and resumed.victory_recorded
+    helper = await service.resume(actors[1])
+    assert helper is not None and helper.step == 2 and not helper.victory_recorded
 
     async with sessions() as session:
         characters = (

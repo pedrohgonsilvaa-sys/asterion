@@ -25,6 +25,8 @@ from asterion.domain.combat import (
     player_actions_for,
     use_combat_consumable,
 )
+from asterion.domain.mission_coop import mission_coop_allowed
+from asterion.domain.narrative_choices import NARRATIVE_MISSION_IDS
 from asterion.domain.road import (
     RULESET,
     Creature,
@@ -205,6 +207,9 @@ async def create_campaign_encounter(
         raise ValueError("Campaign combat actor keys must be unique.")
     if any(member.role not in {"eligible", "helper"} for member in roster):
         raise ValueError("Campaign roster role must be eligible or helper.")
+    if len(roster) > 1 and not (campaign_boss and mission_coop_allowed(quest_id)):
+        if quest_id in NARRATIVE_MISSION_IDS:
+            raise ValueError("Mission encounters accept a Group only for Bosses.")
 
     now = datetime.now(UTC)
     reference_id = proposal.journey_reference_character_id or proposal.proposer_character_id
