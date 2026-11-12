@@ -103,6 +103,16 @@ A aprovação de conteúdo regional C foi confirmada em 2026-10-18. Para sistema
 
 **Handoff à Engenharia:** autorizado após o registro desta Fonte FINAL e do Contrato Global de Weapon Metadata no índice. O handoff não significa que o conteúdo tenha sido implementado.
 
+## Catálogos de atividades recorrentes
+
+Entregues pelo autor em 2026-11-12. Para sistemas, fórmulas e regras globais, prevalece o GDD Estrutural v1.6.0; estes arquivos definem só o conteúdo dos catálogos.
+
+- **Eventos Públicos v1.1.0:** `ASTERION_EVENTOS_PUBLICOS_IMPLEMENTACAO_v1_1_0.md`. SHA-256: `fe40973e752f87628d97df690339725443968ada4cd7a4de9565b7fe422098c9`.
+- **Provações do Juramento v1.1.0:** `ASTERION_PROVACOES_JURAMENTO_IMPLEMENTACAO_v1_1_0.md`. SHA-256: `f39181effc96ce209120d2c839d998fceb05463e6bca7993b82338daa0e66704`.
+- **Rotas da Expedição FINAL:** `ASTERION_ROTAS_EXPEDICAO_FINAL.md`. SHA-256: `a4ed180645663798deec01c60b02c564053240e5fc604b726979c0078e891d4f`.
+
+Decisões do autor na implementação (2026-11-12): nos Eventos, cada jogador enfrenta o Chefe numa instância própria, então as AoE não usam a condição "2+ alvos válidos"; O Trançador de Ossos, sem ação Simples na ficha, usa Arrasto Cruzado como fallback, sem Recarga e sem condição. Na Expedição, o texto de cada opção aparece depois da escolha, e a ordem dos botões é misturada.
+
 ## Fonte Visual/UI
 
 A apresentação player-facing deve seguir:

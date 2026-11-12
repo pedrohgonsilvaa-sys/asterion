@@ -917,8 +917,12 @@ class WorldEventService:
                 WorldEventParticipation.status == "active",
             )
         )
+        phase_definition = definition.phase(number)
         stats = boss_stats(
-            definition.phase(number).creature, definition.reference_level, participants
+            phase_definition.creature,
+            definition.reference_level,
+            participants,
+            phase_definition.variant,
         )
         occurrence.status = "active"
         occurrence.phase = number
@@ -997,7 +1001,10 @@ class WorldEventService:
         )
         enemy = combat.fighters[_ENEMY_KEY]
         enemy.stats = boss_stats(
-            phase.creature, definition.reference_level, occurrence.participants_snapshot
+            phase.creature,
+            definition.reference_level,
+            occurrence.participants_snapshot,
+            phase.variant,
         )
         enemy.hp = Decimal(occurrence.boss_hp)
         player = combat.fighters[_ACTOR_KEY]

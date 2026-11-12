@@ -1,7 +1,7 @@
 """Pure, deterministic rules for the Estrada das Cinzas repeatable content."""
 # ruff: noqa: E501
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal, localcontext
 from hashlib import sha256
 from uuid import UUID
@@ -340,6 +340,10 @@ class Creature:
     actions: tuple[tuple, ...]
     ai_priority: tuple[str, ...] = ()
     damage_taken_modifiers: tuple[tuple[str, Decimal], ...] = ()
+    # Action fields the positional tuple does not reach, by action key.
+    action_extras: tuple[tuple[str, tuple[tuple[str, object], ...]], ...] = ()
+    # "" keeps the engine's target rotation; "lowest_hp" is the PvE kit rule.
+    target_policy: str = ""
 
 
 CREATURES = (
@@ -4197,6 +4201,10 @@ def _creature_actions(
             vampirism_cap_hp_fraction=vampirism_cap_hp_fraction,
             heal_coefficient=heal_coefficient,
         )
+    for key, extras in creature.action_extras:
+        if key in key_map:
+            actual_key = key_map[key]
+            actions[actual_key] = replace(actions[actual_key], **dict(extras))
     cycle = tuple(key_map[key] for key in creature.ai if key in key_map)
     priority = tuple(key_map[key] for key in creature.ai_priority if key in key_map)
     return actions, cycle, priority
@@ -4394,6 +4402,7 @@ def create_creature_party_combat(
             party_mode=party is not None and len(party) > 1,
             ai_target_cycle=(tuple(member.character_id for member in party or ())
                              if party is not None and len(party) > 1 else ()),
+            ai_target_policy=enemies[0].creature.target_policy,
         )
     if configure_combat is not None:
         configure_combat(state)

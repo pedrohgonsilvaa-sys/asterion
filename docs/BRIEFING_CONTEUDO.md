@@ -1,5 +1,7 @@
 # Briefing de conteúdo (2026-11-12)
 
+> **Estado:** os blocos 1, 2 e 3 (Eventos, Provações e Rotas) foram entregues e estão nos catálogos (ver `SOURCE_AUTHORITY.md`, Catálogos de atividades recorrentes). Faltam os blocos 4 e 5.
+
 O código destes sistemas está pronto e testado. Os catálogos estão vazios de propósito: nada aparece no jogo até o conteúdo ser definido. Este documento diz o que escrever e em que formato, para que a engenharia só precise copiar para o catálogo.
 
 Regras para quem escrever:

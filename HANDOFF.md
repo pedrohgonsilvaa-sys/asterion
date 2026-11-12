@@ -1589,7 +1589,7 @@ O plano de lançamento é o backlog da auditoria Fase 4A (`docs/audits/ASTERION_
 | 4 | Duelo e Arena da Vigília | #101 |
 | 5 | Vínculos, Relatos, Dádiva, Chamado, Códigos e Comunidade | #102 |
 | 6 | Eventos Mundiais (catálogo vazio de propósito) | #103 |
-| 7 | Juramento e Expedição (catálogos vazios de propósito) | #104 |
+| 7 | Juramento e Expedição (catálogos preenchidos em 2026-11-12) | #104 |
 | 8 | Batalha de Guildas (núcleo e telas) | #105, #106 |
 | 9 (bloco A) | Crônica I (ciclo, calendário, voto), Nova Vigília, Trilha da Crônica, fechamento competitivo de Arena e Batalha de Guildas, Salão da Vigília | branch `claude/cronica-ecos-convergencia-s8fs2t` |
 | 9 (bloco B) | Conteúdo jogável da Crônica I em 6 partes (ver abaixo) | #110, #111, #112, #114, #117, #120, #121 |

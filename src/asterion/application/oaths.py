@@ -531,7 +531,9 @@ class OathService:
             party=party,
         )
         boss = combat.fighters[_ENEMY_KEY]
-        boss.stats = encounter_stats(encounter.creature, reference_level, roster_size)
+        boss.stats = encounter_stats(
+            encounter.creature, reference_level, roster_size, encounter.variant
+        )
         boss.hp = boss.stats.hp
         for _, member in rows:
             fighter = combat.fighters[member.actor_key]

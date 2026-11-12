@@ -987,6 +987,9 @@ class Combat:
     external_consumables_allowed: bool = True
     ai_target_cycle: tuple[str, ...] = ()
     ai_target_position: int = 0
+    # "lowest_hp": single-target enemy actions hit the living opponent with the lowest
+    # current HP, among those the action's effect condition still allows.
+    ai_target_policy: str = ""
     ai_cycles: dict[str, tuple[str, ...]] = field(default_factory=dict)
     ai_positions: dict[str, int] = field(default_factory=dict)
     ai_priorities: dict[str, tuple[str, ...]] = field(default_factory=dict)
@@ -6564,6 +6567,42 @@ def _apply_action_self_effect(
     return tuple(applied_ids)
 
 
+def _effect_condition_targets(state: Combat, actor_key: str, action: Action) -> list[str]:
+    """Living opponents of ``actor_key`` that the action's effect condition allows."""
+    keys = []
+    for key, fighter in state.fighters.items():
+        if fighter.hp <= ZERO or _fighter_side(state, key) == _fighter_side(state, actor_key):
+            continue
+        if action.skip_if_target_effect_active and any(
+            effect.id == action.skip_if_target_effect_active and effect.remaining > 0
+            for effect in fighter.effects
+        ):
+            continue
+        if action.skip_if_target_dot_at_cap:
+            cap = _DOT_STACK_CAPS.get(action.skip_if_target_dot_at_cap, 3)
+            if any(
+                dot.kind == action.skip_if_target_dot_at_cap
+                and dot.remaining > 0
+                and dot.stacks >= cap
+                for dot in state.dot_states.get(fighter.id, ())
+            ):
+                continue
+        keys.append(key)
+    return keys
+
+
+def _lowest_hp_target(state: Combat, actor_key: str, action: Action) -> str | None:
+    keys = _effect_condition_targets(state, actor_key, action) or [
+        key
+        for key, fighter in state.fighters.items()
+        if fighter.hp > ZERO and _fighter_side(state, key) != _fighter_side(state, actor_key)
+    ]
+    if not keys:
+        return None
+    key = min(keys, key=lambda item: (state.fighters[item].hp, state.fighters[item].id))
+    return state.fighters[key].id
+
+
 def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
     if state.pressure_start_opportunity and state.pressure_cap:
         enemy = state.fighters[actor_key]
@@ -6637,7 +6676,15 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
             return False
         if enemy.last_action in action.skip_if_actor_last_action:
             return False
-        if action.min_living_opponents and sum(
+        if state.ai_target_policy == "lowest_hp":
+            allowed = len(_effect_condition_targets(state, actor_key, action))
+            if action.min_living_opponents and allowed < action.min_living_opponents:
+                return False
+            if (
+                action.skip_if_target_effect_active or action.skip_if_target_dot_at_cap
+            ) and not allowed:
+                return False
+        elif action.min_living_opponents and sum(
             1
             for key, fighter in state.fighters.items()
             if fighter.hp > ZERO and _fighter_side(state, key) != _fighter_side(state, actor_key)
@@ -6673,7 +6720,7 @@ def _enemy_action(state: Combat, actor_key: str = "enemy") -> str:
             and enemy.hp > enemy.stats.hp * action.enemy_hp_fraction_at_most
         ):
             return False
-        if target_condition_blocks(action):
+        if state.ai_target_policy != "lowest_hp" and target_condition_blocks(action):
             return False
         return not (
             action.skip_if_barrier_active
@@ -6736,7 +6783,14 @@ def _advance_to_player(state: Combat) -> None:
                 and not resolving_prepared
             )
             target_id = None
-            if action and action.target_mode == "opponent" and state.ai_target_cycle:
+            lowest_hp = state.ai_target_policy == "lowest_hp"
+            if action and action.target_mode == "opponent" and lowest_hp:
+                target_id = (
+                    state.prepared_target
+                    if resolving_prepared
+                    else _lowest_hp_target(state, actor_key, action)
+                )
+            elif action and action.target_mode == "opponent" and state.ai_target_cycle:
                 if resolving_prepared:
                     target_id = state.prepared_target
                 else:

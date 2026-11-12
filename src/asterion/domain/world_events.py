@@ -3,8 +3,10 @@
 Every number below comes from §49.15, except the ones marked as author decisions
 (2026-11-08): the source does not define them.
 
-``WORLD_EVENT_CATALOG`` is empty on purpose: the source names no Event yet. With an
-empty catalog no occurrence is ever created.
+``WORLD_EVENT_CATALOG`` comes from ``ASTERION_EVENTOS_PUBLICOS_IMPLEMENTACAO_v1_1_0.md``.
+Author decisions (2026-11-12), since each player fights the boss in their own instance:
+the AoE actions drop the "2+ alvos válidos" condition, and O Trançador de Ossos, whose
+sheet has no Simples action, uses Arrasto Cruzado as fallback (no Recarga, no condition).
 """
 
 from __future__ import annotations
@@ -23,7 +25,25 @@ from asterion.domain.combat_math import (
 from asterion.domain.economy import crowns_per_level, round_10
 from asterion.domain.engagement import Bundle
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
-from asterion.domain.road import ARCHETYPE, Creature
+from asterion.domain.pve_kits import (
+    AGI,
+    AOE,
+    ATK,
+    BARRIER,
+    BLEED,
+    BURN,
+    DEF,
+    DOT,
+    HEALING,
+    PER,
+    PREPARED,
+    SIMPLE,
+    STRONG,
+    KitAction,
+    debuff,
+    kit_creature,
+)
+from asterion.domain.road import ARCHETYPE, VARIANTS, Creature
 
 D = Decimal
 
@@ -69,6 +89,8 @@ _BOSS_CATEGORY_HP = D("2.20")
 class WorldEventPhase:
     creature: Creature
     flavor: str
+    # A §49.6 Variant on the global stats only, e.g. "agile".
+    variant: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +117,620 @@ class WorldEventDefinition:
         return self.phases[number - 1]
 
 
-WORLD_EVENT_CATALOG: tuple[WorldEventDefinition, ...] = ()
+WORLD_EVENT_CATALOG: tuple[WorldEventDefinition, ...] = (
+    WorldEventDefinition(
+        'evt_tdo_cerco_das_cinzas',
+        'O Cerco das Cinzas',
+        'Terras do Ocaso',
+        10,
+        (
+            WorldEventPhase(
+                kit_creature(
+                    'event.tdo_cerco_das_cinzas.cortador_marcos',
+                    'O Cortador de Marcos',
+                    'boss',
+                    'predator',
+                    (
+                        KitAction('quebra_passagem', 'Quebra de Passagem', PREPARED, cooldown=4),
+                        KitAction(
+                            'rasgo_rota',
+                            'Rasgo de Rota',
+                            STRONG,
+                            cooldown=2,
+                            **debuff(AGI, 10),
+                        ),
+                        KitAction('passagem_lateral', 'Passagem Lateral', AOE, cooldown=3),
+                        KitAction('corte_marco', 'Corte de Marco', SIMPLE),
+                    ),
+                ),
+                (
+                    'Os primeiros sinais do cerco não são gritos. São marcos de estrada tombando '
+                    'um após o outro.'
+                ),
+                variant='agile',
+            ),
+            WorldEventPhase(
+                kit_creature(
+                    'event.tdo_cerco_das_cinzas.arrastador_fornalha',
+                    'O Arrastador de Fornalha',
+                    'boss',
+                    'armored',
+                    (
+                        KitAction(
+                            'investida_fornalha',
+                            'Investida de Fornalha',
+                            PREPARED,
+                            cooldown=4,
+                        ),
+                        KitAction(
+                            'muralha_cinza',
+                            'Muralha de Cinza',
+                            BARRIER,
+                            cooldown=3,
+                            hp_at_most=D("0.60"),
+                        ),
+                        KitAction(
+                            'golpe_incandescente',
+                            'Golpe Incandescente',
+                            STRONG,
+                            cooldown=2,
+                            dot=BURN,
+                        ),
+                        KitAction('arrasto_fornalha', 'Arrasto de Fornalha', SIMPLE),
+                    ),
+                ),
+                (
+                    'A estrada começa a escurecer quando o inimigo puxa uma fornalha ainda acesa '
+                    'para dentro da passagem.'
+                ),
+            ),
+            WorldEventPhase(
+                kit_creature(
+                    'event.tdo_cerco_das_cinzas.quebrador_ultimo_marco',
+                    'O Quebrador do Último Marco',
+                    'boss',
+                    'brute',
+                    (
+                        KitAction(
+                            'investida_final',
+                            'Investida Final',
+                            PREPARED,
+                            cooldown=4,
+                            hp_at_most=D("0.40"),
+                        ),
+                        KitAction(
+                            'golpe_demolicao',
+                            'Golpe de Demolição',
+                            STRONG,
+                            cooldown=3,
+                            **debuff(DEF, 10),
+                        ),
+                        KitAction('avanco_cinzas', 'Avanço de Cinzas', AOE, cooldown=3),
+                        KitAction('golpe_ultimo_marco', 'Golpe do Último Marco', SIMPLE),
+                    ),
+                ),
+                (
+                    'O último marco cai. O que resta da estrada precisa ser defendido sem qualquer'
+                    ' sinal para guiá-los.'
+                ),
+            ),
+        ),
+        (
+            'O cerco termina quando o último marco já não existe. A estrada permanece, mas agora '
+            'depende de quem aprendeu a atravessá-la sem sinais para guiá-los.'
+        ),
+        attuned=True,
+    ),
+    WorldEventDefinition(
+        'evt_vales_raiz_que_puxa',
+        'A Raiz que Puxa',
+        'Vales dos Enforcados',
+        20,
+        (
+            WorldEventPhase(
+                kit_creature(
+                    'event.vales_raiz_que_puxa.escavador_lacos',
+                    'O Escavador de Laços',
+                    'boss',
+                    'balanced',
+                    (
+                        KitAction('mergulho_laco', 'Mergulho de Laço', PREPARED, cooldown=4),
+                        KitAction(
+                            'puxao_raiz',
+                            'Puxão de Raiz',
+                            STRONG,
+                            cooldown=3,
+                            **debuff(AGI, 10),
+                        ),
+                        KitAction('rasgo_solo', 'Rasgo de Solo', AOE, cooldown=3),
+                        KitAction('escavacao_laco', 'Escavação de Laço', SIMPLE),
+                    ),
+                ),
+                (
+                    'A terra se move antes que qualquer coisa apareça. Quando a primeira raiz '
+                    'rompe a superfície, alguém já foi marcado.'
+                ),
+            ),
+            WorldEventPhase(
+                kit_creature(
+                    'event.vales_raiz_que_puxa.trancador_ossos',
+                    'O Trançador de Ossos',
+                    'boss',
+                    'controller',
+                    (
+                        KitAction(
+                            'aprisionamento_preparado',
+                            'Aprisionamento Preparado',
+                            PREPARED,
+                            cooldown=4,
+                        ),
+                        KitAction('tranca_ossos', 'Trança de Ossos', DOT, cooldown=2, dot=BLEED),
+                        KitAction('imovel', 'Nó Imóvel', STRONG, cooldown=3, **debuff(AGI, 15)),
+                        KitAction(
+                            'arrasto_cruzado',
+                            'Arrasto Cruzado',
+                            AOE,
+                            **debuff(DEF, 10),
+                            conditional=False,
+                        ),
+                    ),
+                ),
+                (
+                    'As raízes não crescem sozinhas. Algo está usando restos antigos para dar '
+                    'forma ao que prende os vivos.'
+                ),
+            ),
+            WorldEventPhase(
+                kit_creature(
+                    'event.vales_raiz_que_puxa.caminha',
+                    'O Nó que Caminha',
+                    'boss',
+                    'brute',
+                    (
+                        KitAction(
+                            'quebra_raiz',
+                            'Quebra de Raiz',
+                            PREPARED,
+                            cooldown=4,
+                            hp_at_most=D("0.40"),
+                        ),
+                        KitAction(
+                            'aperto_convergente',
+                            'Aperto Convergente',
+                            STRONG,
+                            cooldown=3,
+                            **debuff(DEF, 10),
+                        ),
+                        KitAction(
+                            'arrasto_coletivo',
+                            'Arrasto Coletivo',
+                            AOE,
+                            cooldown=3,
+                            **debuff(AGI, 10),
+                        ),
+                        KitAction('passo', 'Passo do Nó', SIMPLE),
+                    ),
+                ),
+                (
+                    'O emaranhado deixa de estar preso ao chão e começa a caminhar em direção ao '
+                    'grupo.'
+                ),
+            ),
+        ),
+        (
+            'Quando o nó se desfaz, as raízes permanecem. O vale não ficou mais seguro; apenas '
+            'voltou a lembrar que ainda tem chão.'
+        ),
+        attuned=True,
+    ),
+    WorldEventDefinition(
+        'evt_nareth_campo_que_nao_devolve',
+        'O Campo que Não Devolve',
+        'Planícies de Nareth',
+        30,
+        (
+            WorldEventPhase(
+                kit_creature(
+                    'event.nareth_campo_que_nao_devolve.contador_passagens',
+                    'O Contador de Passagens',
+                    'boss',
+                    'balanced',
+                    (
+                        KitAction('retorno_ponto', 'Retorno ao Ponto', PREPARED, cooldown=4),
+                        KitAction(
+                            'registro_alvo',
+                            'Registro de Alvo',
+                            STRONG,
+                            cooldown=3,
+                            **debuff(PER, 10),
+                        ),
+                        KitAction('correcao_rota', 'Correção de Rota', AOE, cooldown=3),
+                        KitAction('contagem_passagem', 'Contagem de Passagem', SIMPLE),
+                    ),
+                ),
+                (
+                    'O inimigo não ataca primeiro. Ele observa cada passagem e parece registrar '
+                    'quem já cruzou o campo.'
+                ),
+            ),
+            WorldEventPhase(
+                kit_creature(
+                    'event.nareth_campo_que_nao_devolve.recolhedor_vazio',
+                    'O Recolhedor Vazio',
+                    'boss',
+                    'armored',
+                    (
+                        KitAction(
+                            'retencao_passagem',
+                            'Retenção de Passagem',
+                            PREPARED,
+                            cooldown=4,
+                        ),
+                        KitAction(
+                            'caixa_vazia',
+                            'Caixa Vazia',
+                            BARRIER,
+                            cooldown=3,
+                            hp_at_most=D("0.60"),
+                        ),
+                        KitAction(
+                            'avanco_pesado',
+                            'Avanço Pesado',
+                            STRONG,
+                            cooldown=3,
+                            **debuff(DEF, 10),
+                        ),
+                        KitAction('recolha_vestigio', 'Recolha de Vestígio', SIMPLE),
+                    ),
+                ),
+                (
+                    'Objetos deixados no campo desaparecem quando chegam perto dele. Não há sinal '
+                    'do que acontece depois.'
+                ),
+            ),
+            WorldEventPhase(
+                kit_creature(
+                    'event.nareth_campo_que_nao_devolve.lavrador_ausencias',
+                    'O Lavrador de Ausências',
+                    'boss',
+                    'controller',
+                    (
+                        KitAction(
+                            'repeticao_caminho',
+                            'Repetição de Caminho',
+                            PREPARED,
+                            cooldown=4,
+                        ),
+                        KitAction(
+                            'sulco_ausencia',
+                            'Sulco de Ausência',
+                            STRONG,
+                            cooldown=3,
+                            **debuff(AGI, 10),
+                        ),
+                        KitAction(
+                            'campo_negado',
+                            'Campo Negado',
+                            AOE,
+                            cooldown=3,
+                            **debuff(PER, 10),
+                        ),
+                        KitAction('sinal_sulco', 'Sinal de Sulco', SIMPLE),
+                    ),
+                ),
+                'As marcas no chão formam linhas onde ninguém deveria ter passado.',
+            ),
+        ),
+        (
+            'O campo não devolve o que toma. A única certeza é que algumas passagens continuam '
+            'sendo registradas.'
+        ),
+        attuned=True,
+    ),
+    WorldEventDefinition(
+        'evt_varzeas_agua_vermelha',
+        'A Água Vermelha',
+        'Várzeas Carmesins',
+        40,
+        (
+            WorldEventPhase(
+                kit_creature(
+                    'event.varzeas_agua_vermelha.carregador_reservas',
+                    'O Carregador de Reservas',
+                    'boss',
+                    'balanced',
+                    (
+                        KitAction(
+                            'sobrecarga_reservatorio',
+                            'Sobrecarga do Reservatório',
+                            PREPARED,
+                            cooldown=4,
+                        ),
+                        KitAction(
+                            'descarga_controlada',
+                            'Descarga Controlada',
+                            STRONG,
+                            cooldown=2,
+                            dot=BURN,
+                        ),
+                        KitAction('avanco_tanque', 'Avanço de Tanque', AOE, cooldown=3),
+                        KitAction('transporte_reserva', 'Transporte de Reserva', SIMPLE),
+                    ),
+                ),
+                (
+                    'A água sobe entre estruturas antigas enquanto alguma coisa transporta '
+                    'recipientes que ainda não deveriam estar cheios.'
+                ),
+            ),
+            WorldEventPhase(
+                kit_creature(
+                    'event.varzeas_agua_vermelha.operador_membranas',
+                    'O Operador de Membranas',
+                    'boss',
+                    'controller',
+                    (
+                        KitAction('ruptura_conduto', 'Ruptura de Conduto', PREPARED, cooldown=4),
+                        KitAction(
+                            'vedacao_local',
+                            'Vedação Local',
+                            BARRIER,
+                            cooldown=3,
+                            hp_at_most=D("0.60"),
+                        ),
+                        KitAction(
+                            'pressao_membrana',
+                            'Pressão de Membrana',
+                            STRONG,
+                            cooldown=3,
+                            **debuff(ATK, 10),
+                        ),
+                        KitAction('golpe_membrana', 'Golpe de Membrana', SIMPLE),
+                    ),
+                ),
+                (
+                    'O operador não parece lutar contra o grupo. Parece tentar manter uma '
+                    'instalação funcionando apesar dele.'
+                ),
+            ),
+            WorldEventPhase(
+                kit_creature(
+                    'event.varzeas_agua_vermelha.triador_emergencia',
+                    'O Triador de Emergência',
+                    'boss',
+                    'brute',
+                    (
+                        KitAction(
+                            'sobrecarga_final',
+                            'Sobrecarga Final',
+                            PREPARED,
+                            cooldown=4,
+                            hp_at_most=D("0.40"),
+                        ),
+                        KitAction(
+                            'desvio_emergencia',
+                            'Desvio de Emergência',
+                            STRONG,
+                            cooldown=3,
+                            **debuff(HEALING, 15),
+                        ),
+                        KitAction('colisao_contencao', 'Colisão de Contenção', AOE, cooldown=3),
+                        KitAction('triagem_brutal', 'Triagem Brutal', SIMPLE),
+                    ),
+                ),
+                (
+                    'A estrutura não distingue aliado de ameaça. Ela apenas continua decidindo o '
+                    'que pode ser preservado.'
+                ),
+            ),
+        ),
+        (
+            'A água baixa. Os diques permanecem. O que foi separado para sobreviver à emergência '
+            'nunca volta ao mesmo lugar.'
+        ),
+        attuned=True,
+    ),
+    WorldEventDefinition(
+        'evt_altos_peso_que_cede',
+        'O Peso que Cede',
+        'Altos Cinéreos',
+        50,
+        (
+            WorldEventPhase(
+                kit_creature(
+                    'event.altos_peso_que_cede.rachador_tirantes',
+                    'O Rachador de Tirantes',
+                    'boss',
+                    'brute',
+                    (
+                        KitAction('queda_escarpa', 'Queda de Escarpa', PREPARED, cooldown=4),
+                        KitAction(
+                            'pancada_contraforte',
+                            'Pancada de Contraforte',
+                            STRONG,
+                            cooldown=3,
+                            **debuff(DEF, 10),
+                        ),
+                        KitAction('ruptura_cabo', 'Ruptura de Cabo', AOE, cooldown=3),
+                        KitAction('corte_tirante', 'Corte de Tirante', SIMPLE),
+                    ),
+                ),
+                (
+                    'Uma estrutura acima da estrada range. O inimigo começa pelo que parece '
+                    'suportá-la.'
+                ),
+            ),
+            WorldEventPhase(
+                kit_creature(
+                    'event.altos_peso_que_cede.distribuidor_peso',
+                    'O Distribuidor de Peso',
+                    'boss',
+                    'controller',
+                    (
+                        KitAction(
+                            'compensacao_estrutura',
+                            'Compensação de Estrutura',
+                            BARRIER,
+                            cooldown=3,
+                            hp_at_most=D("0.60"),
+                        ),
+                        KitAction(
+                            'pressao_cruzada',
+                            'Pressão Cruzada',
+                            STRONG,
+                            cooldown=3,
+                            **debuff(ATK, 10),
+                        ),
+                        KitAction(
+                            'desvio_peso',
+                            'Desvio de Peso',
+                            AOE,
+                            cooldown=3,
+                            **debuff(AGI, 10),
+                        ),
+                        KitAction('redistribuicao_carga', 'Redistribuição de Carga', SIMPLE),
+                    ),
+                ),
+                (
+                    'O problema deixa de ser derrubar a ponte e passa a ser descobrir qual parte '
+                    'ainda merece ser sustentada.'
+                ),
+            ),
+            WorldEventPhase(
+                kit_creature(
+                    'event.altos_peso_que_cede.sustentador_partido',
+                    'O Sustentador Partido',
+                    'boss',
+                    'armored',
+                    (
+                        KitAction(
+                            'queda_contida',
+                            'Queda Contida',
+                            PREPARED,
+                            cooldown=4,
+                            hp_at_most=D("0.40"),
+                        ),
+                        KitAction(
+                            'reforco_emergencia',
+                            'Reforço de Emergência',
+                            BARRIER,
+                            cooldown=3,
+                            hp_at_most=D("0.60"),
+                        ),
+                        KitAction(
+                            'carga_invertida',
+                            'Carga Invertida',
+                            STRONG,
+                            cooldown=3,
+                            **debuff(DEF, 10),
+                        ),
+                        KitAction('guarda_contraforte', 'Guarda do Contraforte', SIMPLE),
+                    ),
+                ),
+                'A criatura foi feita para sustentar. Agora tenta sustentar a própria ruína.',
+            ),
+        ),
+        'O peso não desaparece. Ele apenas deixa de cair sobre a mesma estrutura.',
+        attuned=True,
+    ),
+    WorldEventDefinition(
+        'evt_confins_duas_estradas',
+        'Duas Estradas para o Mesmo Lugar',
+        'Confins do Véu',
+        60,
+        (
+            WorldEventPhase(
+                kit_creature(
+                    'event.confins_duas_estradas.passante_duas_bordas',
+                    'O Passante de Duas Bordas',
+                    'boss',
+                    'predator',
+                    (
+                        KitAction('salto_entre_bordas', 'Salto entre Bordas', PREPARED, cooldown=4),
+                        KitAction(
+                            'travessia_cruzada',
+                            'Travessia Cruzada',
+                            STRONG,
+                            cooldown=2,
+                            **debuff(AGI, 10),
+                        ),
+                        KitAction('dupla_margem', 'Dupla Margem', AOE, cooldown=3),
+                        KitAction('passagem_borda', 'Passagem de Borda', SIMPLE),
+                    ),
+                ),
+                (
+                    'A primeira estrada termina no mesmo ponto em que a segunda começa. Ninguém '
+                    'lembra quando as duas deixaram de ser diferentes.'
+                ),
+                variant='agile',
+            ),
+            WorldEventPhase(
+                kit_creature(
+                    'event.confins_duas_estradas.escrivao_desfasado',
+                    'O Escrivão Desfasado',
+                    'boss',
+                    'controller',
+                    (
+                        KitAction('reescrita_final', 'Reescrita Final', PREPARED, cooldown=4),
+                        KitAction(
+                            'rasura_linha',
+                            'Rasura de Linha',
+                            STRONG,
+                            cooldown=3,
+                            **debuff(PER, 10),
+                        ),
+                        KitAction(
+                            'pagina_desfasada',
+                            'Página Desfasada',
+                            AOE,
+                            cooldown=3,
+                            **debuff(ATK, 10),
+                        ),
+                        KitAction('registro_incompleto', 'Registro Incompleto', SIMPLE),
+                    ),
+                ),
+                (
+                    'O registro muda enquanto é lido. A tinta parece obedecer a uma ordem que '
+                    'nunca foi a mesma.'
+                ),
+            ),
+            WorldEventPhase(
+                kit_creature(
+                    'event.confins_duas_estradas.retornador_incompleto',
+                    'O Retornador Incompleto',
+                    'boss',
+                    'balanced',
+                    (
+                        KitAction(
+                            'retorno_chegada',
+                            'Retorno sem Chegada',
+                            PREPARED,
+                            cooldown=4,
+                            hp_at_most=D("0.40"),
+                        ),
+                        KitAction(
+                            'passo_repetido',
+                            'Passo Repetido',
+                            STRONG,
+                            cooldown=3,
+                            **debuff(AGI, 10),
+                        ),
+                        KitAction('reaparicao', 'Reaparição', AOE, cooldown=3),
+                        KitAction('retorno_incompleto', 'Retorno Incompleto', SIMPLE),
+                    ),
+                ),
+                (
+                    'Algo retorna sem ter terminado de partir. A repetição é pequena demais para '
+                    'ser chamada de milagre.'
+                ),
+            ),
+        ),
+        (
+            'As duas estradas continuam visíveis. O problema é que ambas chegam ao mesmo lugar sem'
+            ' explicar por quê.'
+        ),
+        attuned=True,
+    ),
+)
 
 
 def latest_slot(now: datetime) -> datetime | None:
@@ -152,9 +787,14 @@ def phase_scale(participants: int) -> StatMultipliers:
     return StatMultipliers(D(count) ** HP_SCALE_EXPONENT, attack, D(1), D(1))
 
 
-def boss_stats(creature: Creature, level: int, participants: int) -> CombatStats:
+def boss_stats(
+    creature: Creature, level: int, participants: int, variant: str | None = None
+) -> CombatStats:
     """One single rounding on the final attribute (§49.6)."""
-    return enemy_stats(level, BOSS_BASE, ARCHETYPE[creature.archetype], phase_scale(participants))
+    factors = [BOSS_BASE, ARCHETYPE[creature.archetype]]
+    if variant is not None:
+        factors.append(VARIANTS[variant])
+    return enemy_stats(level, *factors, phase_scale(participants))
 
 
 def boss_engine_multipliers(participants: int) -> StatMultipliers:
