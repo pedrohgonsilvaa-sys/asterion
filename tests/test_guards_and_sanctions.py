@@ -115,9 +115,16 @@ async def test_suspension_middleware_blocks_and_fails_open(database):
 @pytest.mark.asyncio
 async def test_admin_cli_roundtrip(database):
     _engine, sessions = database
-    out = await cli_run(["suspend", "20", "--reason", "multicontas", "--hours", "5"], sessions)
+    assert await cli_run(["bootstrap-owner", "1", "--reason", "início"], sessions) == [
+        "1 agora é owner"
+    ]
+    out = await cli_run(
+        ["--as", "1", "suspend", "20", "--reason", "multicontas", "--hours", "5"], sessions
+    )
     assert "20" in out[0] and "ativa" in out[0]
-    assert "20" in (await cli_run(["list"], sessions))[0]
-    assert await cli_run(["lift", "20"], sessions) == ["1 suspensão(ões) encerrada(s)"]
-    assert await cli_run(["list"], sessions) == ["nenhuma suspensão ativa"]
-    assert "encerrada" in (await cli_run(["history", "20"], sessions))[0]
+    assert "20" in (await cli_run(["--as", "1", "list"], sessions))[0]
+    assert await cli_run(["--as", "1", "lift", "20", "--reason", "ok"], sessions) == [
+        "1 suspensão(ões) encerrada(s)"
+    ]
+    assert await cli_run(["--as", "1", "list"], sessions) == ["nenhuma suspensão ativa"]
+    assert "encerrada" in (await cli_run(["--as", "1", "history", "20"], sessions))[0]

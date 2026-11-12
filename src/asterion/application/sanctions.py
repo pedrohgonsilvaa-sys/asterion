@@ -89,6 +89,7 @@ class SanctionService:
         )
         async with self.sessions.begin() as session:
             session.add(row)
+            await session.flush()
         self._cache.pop(telegram_id, None)
         return _view(row)
 
