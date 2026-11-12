@@ -131,6 +131,8 @@ class Character(Base):
     )
     tracked_secondary_quest_id: Mapped[str | None] = mapped_column(String(32))
     vigor_consumable_cycle: Mapped[date | None] = mapped_column(Date)
+    # Last paid Marca de Legado removal; the next one waits RESPEC_COOLDOWN.
+    legacy_mark_respec_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     combat_configuration_version: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
@@ -191,6 +193,28 @@ class LegacyAscensionConfirmation(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CharacterLegacyMark(Base):
+    """One active Marca de Legado; the row exists only while the Marca is active."""
+
+    __tablename__ = "character_legacy_marks"
+    __table_args__ = (
+        CheckConstraint(
+            "mark_id IN ('bolsa_funda','armazem_amplo','entregas_guardadas','banca_extra',"
+            "'sexta_doutrina','chamado_do_braseiro','pregao_constante','vigia_do_vigor',"
+            "'mensageiro','lembrete_de_recargas')",
+            name="ck_character_legacy_mark_id",
+        ),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    mark_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    activated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class SocialGroup(Base):

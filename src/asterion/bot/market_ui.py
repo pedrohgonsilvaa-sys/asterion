@@ -26,7 +26,6 @@ from asterion.application.trades import TradeItemView, TradeView
 from asterion.bot.creation_ui import Screen
 from asterion.bot.guilds_ui import pack
 from asterion.domain.market import (
-    LISTING_SLOTS,
     MARKET_FEE_PERCENT,
     SHOP_DESCRIPTION_MAX,
     SHOP_NAME_MAX,
@@ -73,7 +72,7 @@ ERROR_MESSAGES = {
     "item_bound": "Item vinculado não pode ser negociado.",
     "item_locked": "Desbloqueie o item antes de negociar.",
     "item_component_bound": "Remova o componente vinculado antes de negociar.",
-    "promotion_cooldown": "Você divulgou a Loja há pouco. A recarga é de 30 minutos.",
+    "promotion_cooldown": "Você divulgou a Loja há pouco. A Recarga ainda não terminou.",
     "promotion_failed": "Não foi possível publicar agora. Tente de novo.",
     "name_empty": "O nome não pode ficar vazio.",
     "name_too_long": f"O nome pode ter até {SHOP_NAME_MAX} caracteres.",
@@ -165,7 +164,7 @@ def render_my_shop(shop: ShopView, notice: str | None = None) -> Screen:
     lines = [f"🏪 {shop.name}", f"Código · {shop.code}"]
     if shop.description:
         lines += ["", shop.description]
-    lines += ["", f"Ofertas ativas · {len(shop.listings)}/{LISTING_SLOTS}"]
+    lines += ["", f"Ofertas ativas · {len(shop.listings)}/{shop.listing_slots}"]
     lines += [f"• {row.title} · {_offer_price(row)}" for row in shop.listings]
     if notice:
         lines = [notice, "", *lines]
@@ -173,7 +172,7 @@ def render_my_shop(shop: ShopView, notice: str | None = None) -> Screen:
         [_button(f"{row.title} · {_offer_price(row)}", f"mkt:own:{pack(row.listing_id)}")]
         for row in shop.listings
     ]
-    if len(shop.listings) < LISTING_SLOTS:
+    if len(shop.listings) < shop.listing_slots:
         rows.append([_button("Adicionar oferta", "mkt:add")])
     rows.append([_button("Editar Loja", "mkt:edit"), _button("Divulgar Loja", "mkt:promote")])
     rows.append([_button("← Mercado", "mkt:root")])

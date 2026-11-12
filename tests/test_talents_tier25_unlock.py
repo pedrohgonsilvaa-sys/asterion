@@ -128,7 +128,7 @@ async def _acquire_and_load(database, actor: int, character_class: str, talent_i
 
 
 def _battle(character_class, level, race, path, talent_ids, stats, arts, *,
-            enemy_effects=(), enemy_takes_turn=False, player_hp=None):
+            enemy_effects=(), enemy_takes_turn=False, player_hp=None, combat_id=None):
     player = Fighter(
         "player.entity",
         "Public Talent User",
@@ -161,7 +161,7 @@ def _battle(character_class, level, race, path, talent_ids, stats, arts, *,
         "enemy.wait": Action("enemy.wait", "Aguardar", D(0), target_mode="self"),
     }
     state = Combat(
-        uuid4(),
+        combat_id or uuid4(),
         CURRENT_COMBAT_RULESET,
         {"player": player, "enemy": enemy},
         player_actions,
@@ -405,8 +405,14 @@ async def test_publicly_acquired_vigia_tier25_effects_are_per_combat_and_per_tar
         database, 841722, "vigia", TIER25["vigia"], path="atirador"
     )
     cls, level, race, path, ids, _, stats = loaded
-    protected = _battle(cls, level, race, path, ids, stats, (), enemy_takes_turn=True)
-    baseline = _battle(cls, level, race, path, (), stats, (), enemy_takes_turn=True)
+    # Mesmo id de combate nos dois: o sorteio de crítico é idêntico e só o talento difere.
+    shared_id = uuid4()
+    protected = _battle(
+        cls, level, race, path, ids, stats, (), enemy_takes_turn=True, combat_id=shared_id
+    )
+    baseline = _battle(
+        cls, level, race, path, (), stats, (), enemy_takes_turn=True, combat_id=shared_id
+    )
     protected_result = act(protected, "defend")
     baseline_result = act(baseline, "defend")
     protected_hit = next(
