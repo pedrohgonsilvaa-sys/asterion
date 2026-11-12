@@ -1,5 +1,7 @@
 """Telegram callbacks for cosmetic collection and selection."""
 
+from dataclasses import replace
+
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
@@ -12,6 +14,7 @@ from asterion.bot.cosmetics_ui import (
     render_cosmetics_root,
 )
 from asterion.bot.creation_handlers import present
+from asterion.bot.media import visual_image_key
 
 
 def cosmetics_router(service: CosmeticService, images: dict[str, str]) -> Router:
@@ -37,6 +40,16 @@ def cosmetics_router(service: CosmeticService, images: dict[str, str]) -> Router
             except ValueError:
                 index = -1
             rendered = render_cosmetic_detail(view, index)
+            if 0 <= index < len(COSMETICS):
+                cosmetic_id = COSMETICS[index].cosmetic_id
+                owned = any(
+                    item.cosmetic_id == cosmetic_id
+                    for category in view.categories
+                    for item in (*category.items, *(filter(None, [category.selected])))
+                )
+                key = visual_image_key(images, cosmetic_id=cosmetic_id) if owned else None
+                if key:
+                    rendered = replace(rendered, image_key=key)
         else:
             rendered = render_cosmetics_root(view)
         await present(query.message, rendered, images, edit=True)
