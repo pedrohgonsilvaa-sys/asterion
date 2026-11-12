@@ -1,7 +1,8 @@
 """Visual/skin catalog (A6): presentation-only art bound to an appearance cosmetic.
 
 A visual never carries game rules and never reads or infers ``weapon_family``
-or other mechanical metadata (Weapon Metadata contract v1.0.0). Artwork is not bundled: the image of a visual comes from configuration under the key ``image_key(visual_id)``.
+or other mechanical metadata (Weapon Metadata contract v1.0.0). Artwork is not bundled: the image of a visual
+comes from configuration under the key ``image_key(visual_id)``.
 """
 
 from __future__ import annotations
