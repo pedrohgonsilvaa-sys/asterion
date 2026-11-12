@@ -80,7 +80,8 @@ def test_scheduler_wraps_every_job_but_outbox():
     jobs = {j.id: j for j in build_round_scheduler().get_jobs()}
     assert "outbox-dispatch" in jobs and "hunt-round-advance" in jobs
     assert jobs["hunt-round-advance"].func.__name__ == "run"
-    assert jobs["outbox-dispatch"].func.__name__ == "run_maintenance"
+    # Metrics wrap every job (B6); only the lock is left out of the Outbox.
+    assert jobs["outbox-dispatch"].func.__name__ == "instrumented"
     # The locks use their own pool, one connection per locked job.
     from asterion.infrastructure.db import session
 

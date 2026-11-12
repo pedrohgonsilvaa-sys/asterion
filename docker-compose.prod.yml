@@ -41,7 +41,12 @@ services:
       ASTERION_DATABASE_URL: postgresql+asyncpg://asterion:${POSTGRES_PASSWORD}@postgres:5432/asterion
       ASTERION_TELEGRAM_BOT_ENABLED: "true"
       ASTERION_TELEGRAM_MODE: polling
+      # Métricas (/metrics) dentro do bot. Veja docs/OPERACAO.md, seção 6.
+      ASTERION_METRICS_PORT: "9000"
     command: asterion-bot
+    ports:
+      # Só a própria VPS acessa (127.0.0.1). Não abra esta porta para a internet.
+      - "127.0.0.1:9000:9000"
     volumes:
       # Imagens referenciadas por "file:" (somente leitura).
       - ./assets:/app/assets:ro

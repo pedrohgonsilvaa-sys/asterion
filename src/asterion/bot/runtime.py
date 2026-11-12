@@ -13,6 +13,7 @@ from asterion.application.chronicle_encounters import ChronicleEncounterService
 from asterion.application.class_trials import ClassTrialService
 from asterion.application.consumables import ConsumableService
 from asterion.application.cosmetics import CosmeticService
+from asterion.application.craft_services import CraftServiceService
 from asterion.application.crafting import CraftingService
 from asterion.application.creation import CreationService
 from asterion.application.doctrines import DoctrineService
@@ -81,6 +82,7 @@ from asterion.bot.chronicle_handlers import chronicle_router
 from asterion.bot.class_trial_handlers import class_trial_router
 from asterion.bot.combat_handlers import combat_router
 from asterion.bot.cosmetics_handlers import cosmetics_router
+from asterion.bot.craft_service_handlers import craft_service_router
 from asterion.bot.creation_handlers import creation_router
 from asterion.bot.doctrines_handlers import doctrines_router
 from asterion.bot.dungeon_handlers import dungeon_router
@@ -94,6 +96,7 @@ from asterion.bot.guild_battle_handlers import guild_battle_router
 from asterion.bot.guilds_handlers import guilds_router
 from asterion.bot.legacy_marks_handlers import legacy_marks_router
 from asterion.bot.market_handlers import market_router
+from asterion.bot.metrics_middleware import MetricsMiddleware
 from asterion.bot.nareth_missions_handlers import nareth_missions_router
 from asterion.bot.oath_handlers import oath_router, runtime_oath_notifier
 from asterion.bot.p1_handlers import p1_router
@@ -151,6 +154,8 @@ def get_bot_runtime() -> BotRuntime:
 
     dispatcher = Dispatcher(disable_fsm=True)
     # Registered first, so they run before every other update middleware and handler.
+    # Metrics come first of all, so dropped and failed updates are counted too.
+    dispatcher.update.outer_middleware(MetricsMiddleware())
     dispatcher.update.outer_middleware(
         FloodGuardMiddleware(
             burst=settings.rate_limit_burst, per_second=settings.rate_limit_per_second
@@ -290,6 +295,11 @@ def get_bot_runtime() -> BotRuntime:
             settings.creation_images,
             community_chat_id=settings.community_chat_id,
             community_topic_id=settings.community_market_topic_id,
+        )
+    )
+    dispatcher.include_router(
+        craft_service_router(
+            CraftServiceService(SessionFactory, settings.server_id), settings.creation_images
         )
     )
     # Also before creation_router, for the same deep-link reason.

@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,6 +39,34 @@ class Settings(BaseSettings):
     community_relatos_topic_id: int | None = None
     # §32.3 public invite link of the Comunidade Oficial; never hardcoded.
     community_url: str | None = None
+    # Operation metrics and alerts (B6). Not game rules: technical thresholds.
+    # Port of the /metrics server inside the polling bot; unset means no server.
+    metrics_port: int | None = Field(default=None, ge=1, le=65535)
+    # When set, /metrics requires "Authorization: Bearer <token>".
+    metrics_token: str | None = None
+    # Telegram chat that receives operator alerts; unset means alerts are off.
+    alert_chat_id: int | None = None
+    alert_job_failures: int = Field(default=3, ge=1)
+    alert_outbox_backlog: int = Field(default=500, ge=1)
+    alert_outbox_age_seconds: int = Field(default=1800, ge=60)
+    alert_cooldown_seconds: int = Field(default=1800, ge=60)
+
+    @field_validator(
+        "community_chat_id",
+        "community_market_topic_id",
+        "community_relatos_topic_id",
+        "metrics_port",
+        "alert_chat_id",
+        "patron_price_cents",
+        "chronicle_pass_price_cents",
+        mode="before",
+    )
+    @classmethod
+    def blank_is_none(cls, value: object) -> object:
+        # .env.example leaves these blank ("VAR="); blank means unset, not an error.
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     # GDD §35 paid products through the InfinitePay checkout. Prices are commercial
     # configuration in centavos; a product without a price is not for sale.
