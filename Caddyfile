@@ -1,0 +1,14 @@
+# Proxy reverso com HTTPS automático (Let's Encrypt) para o webhook de pagamento.
+# Só o webhook e o health ficam públicos; todo o resto responde 404.
+{$ASTERION_PAYMENTS_DOMAIN} {
+	encode gzip
+
+	@public path /payments/infinitepay/webhook /health
+	handle @public {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		respond 404
+	}
+}

@@ -4123,3 +4123,84 @@ class AccountSanction(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_by: Mapped[str | None] = mapped_column(String(64))
+
+
+class PaymentOrder(Base):
+    """One external purchase (GDD §35.2). Rows are never deleted.
+
+    ``order_nsu`` is our id sent to the provider; ``transaction_nsu`` is the
+    provider's payment id, unique, so one payment confirms one order once.
+    ``grant`` records exactly what this order gave, so a refund revokes only that.
+    """
+
+    __tablename__ = "payment_orders"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('created','paid','expired','refunded','reversed')",
+            name="ck_payment_order_status",
+        ),
+        CheckConstraint("product IN ('patron','chronicle_pass')", name="ck_payment_order_product"),
+        CheckConstraint("amount_cents > 0", name="ck_payment_order_amount"),
+        Index("ix_payment_orders_account_created", "account_id", "created_at"),
+        Index("ix_payment_orders_status_expires", "status", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    order_nsu: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
+    account_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    product: Mapped[str] = mapped_column(String(32), nullable=False)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    checkout_url: Mapped[str | None] = mapped_column(Text)
+    invoice_slug: Mapped[str | None] = mapped_column(String(128))
+    transaction_nsu: Mapped[str | None] = mapped_column(String(128), unique=True)
+    capture_method: Mapped[str | None] = mapped_column(String(32))
+    paid_amount_cents: Mapped[int | None] = mapped_column(Integer)
+    # True when the row was rebuilt from a provider notice (backup restore).
+    recovered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    terms_version: Mapped[str | None] = mapped_column(String(32))
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    grant: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    grant_error: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    granted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PaymentOrderEvent(Base):
+    """Audit trail of one order: notices, checks, grants, refunds, revocations."""
+
+    __tablename__ = "payment_order_events"
+    __table_args__ = (Index("ix_payment_order_events_order", "order_id", "created_at"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    order_id: Mapped[UUID] = mapped_column(ForeignKey("payment_orders.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor: Mapped[str] = mapped_column(String(64), nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PatronAccount(Base):
+    """§49.19 Patrono entitlement per Telegram account (account-wide)."""
+
+    __tablename__ = "patron_accounts"
+    __table_args__ = (CheckConstraint("paid_days >= 0", name="ck_patron_paid_days"),)
+
+    account_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    active_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Accumulated valid paid support; refunds subtract what they revoke.
+    paid_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # The temporary Title/Frame are on the characters; the expiry job removes them.
+    temporary_granted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
