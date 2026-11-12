@@ -28,6 +28,7 @@ from asterion.application.guild_battle import GuildBattleService
 from asterion.application.guilds import GuildService
 from asterion.application.inventory import InventoryService
 from asterion.application.legacy import LegacyService
+from asterion.application.legacy_marks import LegacyMarksService
 from asterion.application.market import MarketService
 from asterion.application.nareth_missions import NarethMissionService
 from asterion.application.oaths import OathService
@@ -92,6 +93,7 @@ from asterion.bot.guards import FloodGuardMiddleware, SuspensionMiddleware
 from asterion.bot.guild_activity import GuildActivityMiddleware
 from asterion.bot.guild_battle_handlers import guild_battle_router
 from asterion.bot.guilds_handlers import guilds_router
+from asterion.bot.legacy_marks_handlers import legacy_marks_router
 from asterion.bot.market_handlers import market_router
 from asterion.bot.nareth_missions_handlers import nareth_missions_router
 from asterion.bot.oath_handlers import oath_router, runtime_oath_notifier
@@ -158,6 +160,7 @@ def get_bot_runtime() -> BotRuntime:
     prologue = PrologueService(SessionFactory, settings.server_id, PROFILE)
     world = WorldService(SessionFactory, settings.server_id)
     legacy = LegacyService(SessionFactory, settings.server_id)
+    legacy_marks = LegacyMarksService(SessionFactory, settings.server_id)
     groups = GroupService(SessionFactory, settings.server_id)
     p1 = P1Service(SessionFactory, settings.server_id, groups=groups)
     p2 = P2Service(SessionFactory, settings.server_id, groups=groups)
@@ -260,6 +263,7 @@ def get_bot_runtime() -> BotRuntime:
     )
     dispatcher.include_router(cosmetics_router(cosmetics, settings.creation_images))
     dispatcher.include_router(doctrines_router(doctrines, settings.creation_images))
+    dispatcher.include_router(legacy_marks_router(legacy_marks, settings.creation_images))
     # P7 is deliberately placed before the shared Group/Combat/World routers so
     # its self-contained regional callbacks can fall through safely when they
     # do not belong to P7.

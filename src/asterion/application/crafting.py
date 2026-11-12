@@ -19,9 +19,9 @@ from asterion.application.combat_configuration_guard import (
 from asterion.application.equipment import equipment_instance_payload
 from asterion.application.guild_works import character_work_levels
 from asterion.application.inventory_capacity import (
-    INVENTORY_CAPACITY,
-    PENDING_CAPACITY,
+    inventory_capacity,
     inventory_slots,
+    pending_capacity,
 )
 from asterion.application.professions import (
     REFUGE,
@@ -549,11 +549,11 @@ class CraftingService:
             )
             if stack is not None and stack.quantity < 99:
                 if stack.quantity > 0 or await self._inventory_slots(session, character.id) < (
-                    INVENTORY_CAPACITY
+                    await inventory_capacity(session, character.id)
                 ):
                     return "Inventário"
             if stack is None and await self._inventory_slots(session, character.id) < (
-                INVENTORY_CAPACITY
+                await inventory_capacity(session, character.id)
             ):
                 return "Inventário"
         elif recipe.output_kind == "rune":
@@ -568,12 +568,16 @@ class CraftingService:
             )
             if stack is not None:
                 if stack.quantity > 0 or await self._inventory_slots(session, character.id) < (
-                    INVENTORY_CAPACITY
+                    await inventory_capacity(session, character.id)
                 ):
                     return "Inventário"
-            if await self._inventory_slots(session, character.id) < INVENTORY_CAPACITY:
+            if await self._inventory_slots(session, character.id) < (
+                await inventory_capacity(session, character.id)
+            ):
                 return "Inventário"
-        elif await self._inventory_slots(session, character.id) < INVENTORY_CAPACITY:
+        elif await self._inventory_slots(session, character.id) < (
+            await inventory_capacity(session, character.id)
+        ):
             return "Inventário"
 
         pending_count = int(
@@ -582,7 +586,8 @@ class CraftingService:
             )
             or 0
         )
-        return "Pending" if pending_count < PENDING_CAPACITY else "BlockedDelivery"
+        capacity = await pending_capacity(session, character.id)
+        return "Pending" if pending_count < capacity else "BlockedDelivery"
 
     @staticmethod
     def _plan_ingredients(required, material_rows) -> tuple[tuple[IngredientPreview, ...], bool]:
@@ -742,7 +747,9 @@ class CraftingService:
     async def _deliver_equipment(self, session, character, source_key, item_id, payload) -> str:
         if await self._delivery_exists(session, character.id, source_key):
             return "pending_or_inventory"
-        if await self._inventory_slots(session, character.id) < INVENTORY_CAPACITY:
+        if await self._inventory_slots(session, character.id) < (
+            await inventory_capacity(session, character.id)
+        ):
             session.add(
                 EquipmentItem(
                     id=item_id,
@@ -777,14 +784,18 @@ class CraftingService:
             and stack.quantity + quantity <= 99
             and (
                 stack.quantity > 0
-                or await self._inventory_slots(session, character.id) < INVENTORY_CAPACITY
+                or await self._inventory_slots(session, character.id) < (
+                    await inventory_capacity(session, character.id)
+                )
             )
         ):
             stack.quantity += quantity
             return "Inventário"
         if (
             stack is None
-            and await self._inventory_slots(session, character.id) < INVENTORY_CAPACITY
+            and await self._inventory_slots(session, character.id) < (
+                await inventory_capacity(session, character.id)
+            )
         ):
             session.add(
                 ConsumableStack(character_id=character.id, consumable_id=item_id, quantity=quantity)
@@ -815,11 +826,15 @@ class CraftingService:
         )
         if stack is not None and (
             stack.quantity > 0
-            or await self._inventory_slots(session, character.id) < INVENTORY_CAPACITY
+            or await self._inventory_slots(session, character.id) < (
+                await inventory_capacity(session, character.id)
+            )
         ):
             stack.quantity += 1
             return "Inventário"
-        if await self._inventory_slots(session, character.id) < INVENTORY_CAPACITY:
+        if await self._inventory_slots(session, character.id) < (
+            await inventory_capacity(session, character.id)
+        ):
             session.add(
                 RuneStack(
                     character_id=character.id,
@@ -843,7 +858,7 @@ class CraftingService:
             )
             or 0
         )
-        if count < PENDING_CAPACITY:
+        if count < await pending_capacity(session, character.id):
             session.add(
                 PendingItem(
                     character_id=character.id,

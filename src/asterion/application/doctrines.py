@@ -22,6 +22,7 @@ from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     resolve_character_combat_stats,
 )
+from asterion.application.legacy_mark_effects import BASE_DOCTRINES, doctrine_limit
 from asterion.application.weapon_metadata import resolve_equipment_weapon
 from asterion.domain.arts import active_art_definition, weapon_requirement_satisfied
 from asterion.domain.economy import crowns_per_level, path_switch_cost
@@ -46,7 +47,7 @@ from asterion.infrastructure.db.models import (
     WorldState,
 )
 
-MAX_DOCTRINES = 5
+MAX_DOCTRINES = BASE_DOCTRINES
 MAX_DOCTRINE_NAME_CHARACTERS = 40
 SAFE_CONFIGURATION_LOCATIONS = frozenset({"Refúgio do Ocaso"})
 COMPLETED_TRIAL_UNLOCK = "class_trial_completed"
@@ -81,6 +82,7 @@ class DoctrineCollectionView:
     doctrines: tuple[DoctrineView, ...]
     crowns: int
     level: int
+    limit: int = BASE_DOCTRINES
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +198,7 @@ class DoctrineService:
                 tuple(doctrines),
                 character.crowns,
                 character.level,
+                await doctrine_limit(session, character.id),
             )
 
     async def create(
@@ -216,7 +219,7 @@ class DoctrineService:
                     )
                 ).all()
             )
-            if len(rows) >= MAX_DOCTRINES:
+            if len(rows) >= await doctrine_limit(session, character.id):
                 raise DoctrineRejected("limit")
             config = await self._current_configuration(session, character, lock_rows=True)
             row = CharacterDoctrine(
@@ -251,7 +254,7 @@ class DoctrineService:
                     .select_from(CharacterDoctrine)
                     .where(CharacterDoctrine.character_id == character.id)
                 )
-                if count >= MAX_DOCTRINES:
+                if count >= await doctrine_limit(session, character.id):
                     raise DoctrineRejected("limit")
             else:
                 doctrine = await session.scalar(
@@ -338,7 +341,7 @@ class DoctrineService:
                         )
                     ).all()
                 )
-                if len(rows) >= MAX_DOCTRINES:
+                if len(rows) >= await doctrine_limit(session, character.id):
                     await session.delete(state)
                     await session.delete(lease)
                     raise DoctrineRejected("limit")

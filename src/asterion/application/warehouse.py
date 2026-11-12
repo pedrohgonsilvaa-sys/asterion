@@ -25,8 +25,10 @@ from asterion.application.inventory import (
 from asterion.application.inventory_capacity import (
     INVENTORY_CAPACITY,
     WAREHOUSE_CAPACITY,
+    inventory_capacity,
     inventory_slot_counts,
     inventory_slots,
+    warehouse_capacity,
     warehouse_slots,
 )
 from asterion.application.safe_location import current_permanent_brazier
@@ -143,6 +145,8 @@ class WarehouseView:
     status: str | None = None
     origin: str | None = None
     source_id: UUID | None = None
+    inventory_capacity: int = INVENTORY_CAPACITY
+    warehouse_capacity: int = WAREHOUSE_CAPACITY
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,6 +183,8 @@ class WarehouseService:
                 accessible=safe is not None,
                 location=safe[1] if safe else None,
                 inventory_used=sum(counts.values()),
+                inventory_capacity=await inventory_capacity(session, character.id),
+                warehouse_capacity=await warehouse_capacity(session, character.id),
                 warehouse_used=len(stored),
                 entries=tuple(stored),
             )
@@ -239,6 +245,8 @@ class WarehouseService:
                 accessible=True,
                 location=safe[1],
                 inventory_used=sum(counts.values()),
+                inventory_capacity=await inventory_capacity(session, character.id),
+                warehouse_capacity=await warehouse_capacity(session, character.id),
                 warehouse_used=await warehouse_slots(session, character.id),
                 entries=entries,
                 item_kind=kind,
@@ -268,6 +276,8 @@ class WarehouseService:
                 accessible=True,
                 location=safe[1],
                 inventory_used=sum(counts.values()),
+                inventory_capacity=await inventory_capacity(session, character.id),
+                warehouse_capacity=await warehouse_capacity(session, character.id),
                 warehouse_used=await warehouse_slots(session, character.id),
                 direction=direction,
                 item_kind=kind,
@@ -304,9 +314,13 @@ class WarehouseService:
             elif direction == "deposit":
                 if await self._is_equipped(session, character.id, source_id):
                     raise WarehouseRejected("EQUIPPED")
-                if await warehouse_slots(session, character.id) >= WAREHOUSE_CAPACITY:
+                if await warehouse_slots(session, character.id) >= (
+                    await warehouse_capacity(session, character.id)
+                ):
                     raise WarehouseRejected("WAREHOUSE_FULL")
-            elif await inventory_slots(session, character.id) >= INVENTORY_CAPACITY:
+            elif await inventory_slots(session, character.id) >= (
+                await inventory_capacity(session, character.id)
+            ):
                 raise WarehouseRejected("INVENTORY_FULL")
             operation = self._new_operation(
                 character.id,
@@ -325,6 +339,8 @@ class WarehouseService:
                 accessible=True,
                 location=safe[1],
                 inventory_used=sum(counts.values()),
+                inventory_capacity=await inventory_capacity(session, character.id),
+                warehouse_capacity=await warehouse_capacity(session, character.id),
                 warehouse_used=await warehouse_slots(session, character.id),
                 operation_id=operation.id,
                 direction=direction,
@@ -369,6 +385,8 @@ class WarehouseService:
                 accessible=True,
                 location=safe[1] if safe else None,
                 inventory_used=sum(counts.values()),
+                inventory_capacity=await inventory_capacity(session, character.id),
+                warehouse_capacity=await warehouse_capacity(session, character.id),
                 warehouse_used=await warehouse_slots(session, character.id),
                 operation_id=operation.id,
                 direction="claim_pending",
@@ -473,9 +491,13 @@ class WarehouseService:
             if direction == "deposit":
                 if await self._is_equipped(session, character_id, source_id):
                     raise WarehouseRejected("STALE_PREVIEW")
-                if await warehouse_slots(session, character_id) >= WAREHOUSE_CAPACITY:
+                if await warehouse_slots(session, character_id) >= (
+                    await warehouse_capacity(session, character_id)
+                ):
                     raise WarehouseRejected("WAREHOUSE_FULL")
-            elif await inventory_slots(session, character_id) >= INVENTORY_CAPACITY:
+            elif await inventory_slots(session, character_id) >= (
+                await inventory_capacity(session, character_id)
+            ):
                 raise WarehouseRejected("INVENTORY_FULL")
             session.add(_copy(target, kind, record))
             await session.delete(record)
@@ -532,9 +554,13 @@ class WarehouseService:
         if not deposit and kind == "consumable" and any(row.quantity > 0 for row in rows):
             raise WarehouseRejected("STACK_FULL")
         if deposit:
-            if await warehouse_slots(session, character_id) >= WAREHOUSE_CAPACITY:
+            if await warehouse_slots(session, character_id) >= (
+                await warehouse_capacity(session, character_id)
+            ):
                 raise WarehouseRejected("WAREHOUSE_FULL")
-        elif await inventory_slots(session, character_id) >= INVENTORY_CAPACITY:
+        elif await inventory_slots(session, character_id) >= (
+            await inventory_capacity(session, character_id)
+        ):
             raise WarehouseRejected("INVENTORY_FULL")
         empty = next((row for row in rows if row.quantity <= 0), None)
         if empty is not None:
@@ -569,7 +595,9 @@ class WarehouseService:
         if pending.kind == "equipment":
             if (
                 quantity != pending.quantity
-                or await inventory_slots(session, character_id) >= INVENTORY_CAPACITY
+                or await inventory_slots(session, character_id) >= (
+                    await inventory_capacity(session, character_id)
+                )
             ):
                 raise WarehouseRejected("STALE_PREVIEW")
             item_id, item_payload = equipment_instance_payload(payload)
@@ -602,7 +630,8 @@ class WarehouseService:
                 remaining -= take
                 if not remaining:
                     break
-            free = max(0, INVENTORY_CAPACITY - await inventory_slots(session, character_id))
+            capacity = await inventory_capacity(session, character_id)
+            free = max(0, capacity - await inventory_slots(session, character_id))
             while remaining and free:
                 take = min(remaining, MATERIAL_STACK_LIMIT)
                 session.add(MaterialStack(
@@ -620,7 +649,9 @@ class WarehouseService:
                 ConsumableStack.consumable_id == consumable_id,
             ).with_for_update())
             if row is None:
-                if await inventory_slots(session, character_id) < INVENTORY_CAPACITY:
+                if await inventory_slots(session, character_id) < (
+                    await inventory_capacity(session, character_id)
+                ):
                     take = min(remaining, CONSUMABLE_STACK_LIMIT)
                     session.add(ConsumableStack(
                         id=pending.id, character_id=character_id,
@@ -647,7 +678,9 @@ class WarehouseService:
                     raise WarehouseRejected("STALE_PREVIEW")
                 row.quantity += remaining
                 remaining = 0
-            elif await inventory_slots(session, character_id) < INVENTORY_CAPACITY:
+            elif await inventory_slots(session, character_id) < (
+                await inventory_capacity(session, character_id)
+            ):
                 session.add(RuneStack(
                     id=pending.id, character_id=character_id, **values, quantity=remaining,
                 ))
@@ -671,7 +704,9 @@ class WarehouseService:
                 return 0
             return (
                 pending.quantity
-                if await inventory_slots(session, character_id) < INVENTORY_CAPACITY
+                if await inventory_slots(session, character_id) < (
+                    await inventory_capacity(session, character_id)
+                )
                 else 0
             )
         if pending.kind == "material":
@@ -690,13 +725,17 @@ class WarehouseService:
             if row is not None:
                 if (
                     row.quantity <= 0
-                    and await inventory_slots(session, character_id) >= INVENTORY_CAPACITY
+                    and await inventory_slots(session, character_id) >= (
+                        await inventory_capacity(session, character_id)
+                    )
                 ):
                     return 0
                 return min(pending.quantity, max(0, CONSUMABLE_STACK_LIMIT - row.quantity))
             return (
                 min(pending.quantity, CONSUMABLE_STACK_LIMIT)
-                if await inventory_slots(session, character_id) < INVENTORY_CAPACITY
+                if await inventory_slots(session, character_id) < (
+                    await inventory_capacity(session, character_id)
+                )
                 else 0
             )
         if pending.kind == "rune":
@@ -710,13 +749,17 @@ class WarehouseService:
             if row is not None:
                 if (
                     row.quantity <= 0
-                    and await inventory_slots(session, character_id) >= INVENTORY_CAPACITY
+                    and await inventory_slots(session, character_id) >= (
+                        await inventory_capacity(session, character_id)
+                    )
                 ):
                     return 0
                 return pending.quantity if row.potency == payload.get("potency") else 0
             return (
                 pending.quantity
-                if await inventory_slots(session, character_id) < INVENTORY_CAPACITY
+                if await inventory_slots(session, character_id) < (
+                    await inventory_capacity(session, character_id)
+                )
                 else 0
             )
         return 0
@@ -732,7 +775,8 @@ class WarehouseService:
             model.bound.is_(bound), model.quantity > 0,
         ))).all()
         room = sum(max(0, limit - row.quantity) for row in rows)
-        free = max(0, INVENTORY_CAPACITY - await inventory_slots(session, character_id))
+        capacity = await inventory_capacity(session, character_id)
+        free = max(0, capacity - await inventory_slots(session, character_id))
         return min(quantity, room + free * limit)
 
     async def _transfer_source(self, session, character_id, direction, kind, source_id, *, lock):

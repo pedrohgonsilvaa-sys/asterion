@@ -42,6 +42,13 @@ from asterion.infrastructure.db.models import (
 from tests.test_road_integration import _seed_road
 
 
+def _fixed_capacity(value: int):
+    async def capacity(_session, _character_id) -> int:
+        return value
+
+    return capacity
+
+
 async def _seed_character(database, actor: int, *, level: int = 10, crowns: int = 5000):
     actor, _road = await _seed_road(database, actor=actor)
     async with database[1].begin() as session:
@@ -568,7 +575,7 @@ async def test_crafting_requires_inventory_space_before_preview(database, monkey
     actor = 840105
     character_id = await _seed_active_professions(database, actor, "blacksmith", "alchemist")
     await _add_materials(database, character_id, {IRON: 7, RESIDUE: 3})
-    monkeypatch.setattr(crafting_module, "INVENTORY_CAPACITY", 0)
+    monkeypatch.setattr(crafting_module, "inventory_capacity", _fixed_capacity(0))
     service = CraftingService(database[1], "ocaso")
 
     with pytest.raises(CraftingRejected, match="inventory_full"):
@@ -603,7 +610,7 @@ async def test_pending_and_blocked_delivery_recover_capacity_race_after_preview(
     preview = await service.preview(actor, "recipe.tdo.blacksmith.walker_weapon.comum")
     assert preview is not None and preview.delivery == "Inventário"
 
-    monkeypatch.setattr(crafting_module, "INVENTORY_CAPACITY", 0)
+    monkeypatch.setattr(crafting_module, "inventory_capacity", _fixed_capacity(0))
     result = await service.commit(actor, preview.receipt_id)
     assert result is not None and result.delivery == "Pending"
     pending_view = await InventoryService(database[1], "ocaso").pending(actor)
@@ -613,12 +620,12 @@ async def test_pending_and_blocked_delivery_recover_capacity_race_after_preview(
     actor = 840109
     character_id = await _seed_active_professions(database, actor, "blacksmith", "alchemist")
     await _add_materials(database, character_id, {IRON: 7, RESIDUE: 3})
-    monkeypatch.setattr(crafting_module, "INVENTORY_CAPACITY", 60)
+    monkeypatch.setattr(crafting_module, "inventory_capacity", _fixed_capacity(60))
     preview = await service.preview(actor, "recipe.tdo.blacksmith.walker_weapon.comum")
     assert preview is not None and preview.delivery == "Inventário"
 
-    monkeypatch.setattr(crafting_module, "INVENTORY_CAPACITY", 0)
-    monkeypatch.setattr(crafting_module, "PENDING_CAPACITY", 0)
+    monkeypatch.setattr(crafting_module, "inventory_capacity", _fixed_capacity(0))
+    monkeypatch.setattr(crafting_module, "pending_capacity", _fixed_capacity(0))
     result = await service.commit(actor, preview.receipt_id)
     assert result is not None and result.delivery == "BlockedDelivery"
     async with database[1]() as session:

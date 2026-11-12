@@ -27,9 +27,9 @@ from asterion.application.inventory import (
     consumable_inventory_entry,
 )
 from asterion.application.inventory_capacity import (
-    INVENTORY_CAPACITY,
-    PENDING_CAPACITY,
+    inventory_capacity,
     inventory_slots,
+    pending_capacity,
 )
 from asterion.domain.equipment import assign_equipment_instance_id
 from asterion.domain.market import MYTHIC_RARITY, market_unlocked
@@ -275,7 +275,8 @@ async def take_from_inventory(
 
 
 async def _free_slots(session: AsyncSession, character_id: UUID) -> int:
-    return max(0, INVENTORY_CAPACITY - await inventory_slots(session, character_id))
+    capacity = await inventory_capacity(session, character_id)
+    return max(0, capacity - await inventory_slots(session, character_id))
 
 
 async def _deliver_material(session, character_id, snapshot, quantity) -> int:
@@ -451,7 +452,7 @@ async def return_to_owner(
     pending_count = await session.scalar(
         select(func.count(PendingItem.id)).where(PendingItem.character_id == character.id)
     )
-    if int(pending_count or 0) < PENDING_CAPACITY:
+    if int(pending_count or 0) < await pending_capacity(session, character.id):
         session.add(
             PendingItem(
                 character_id=character.id,
