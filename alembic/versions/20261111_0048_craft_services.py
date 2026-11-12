@@ -1,7 +1,7 @@
 """craft services: public Crafting Services in the Personal Shop (§27.3)
 
-Revision ID: 20261111_0047
-Revises: 20261111_0045
+Revision ID: 20261111_0048
+Revises: 20261111_0047
 Create Date: 2026-11-11 00:00:00
 """
 
@@ -12,8 +12,8 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "20261111_0047"
-down_revision: str | None = "20261111_0046"
+revision: str = "20261111_0048"
+down_revision: str | None = "20261111_0047"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
