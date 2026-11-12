@@ -4233,6 +4233,52 @@ class AccountSanction(Base):
     revoked_by: Mapped[str | None] = mapped_column(String(64))
 
 
+class AdminRoleGrant(Base):
+    """Operator role (B5). Append-only: revoking sets revoked_at; one active row per role."""
+
+    __tablename__ = "admin_role_grants"
+    __table_args__ = (
+        Index(
+            "uq_admin_role_grants_active",
+            "telegram_id",
+            "role",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    granted_by: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_by: Mapped[int | None] = mapped_column(BigInteger)
+
+
+class AdminAction(Base):
+    """Audit row for every operator write and every denied attempt (GDD §43.7).
+
+    Append-only: a database trigger rejects UPDATE and DELETE.
+    """
+
+    __tablename__ = "admin_actions"
+    __table_args__ = (
+        Index("ix_admin_actions_actor", "actor_telegram_id", "created_at"),
+        Index("ix_admin_actions_target", "target_type", "target_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    actor_telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    target_type: Mapped[str | None] = mapped_column(String(32))
+    target_id: Mapped[str | None] = mapped_column(String(64))
+    reason: Mapped[str | None] = mapped_column(String(500))
+    details: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class PaymentOrder(Base):
     """One external purchase (GDD §35.2). Rows are never deleted.
 

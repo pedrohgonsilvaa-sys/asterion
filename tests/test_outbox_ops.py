@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
+from asterion.application.admin import AdminService
 from asterion.application.outbox import outbox_stats, requeue_dead
 from asterion.infrastructure.db.job_lock import run_exclusive
 from asterion.infrastructure.db.models import OutboxMessage
@@ -35,7 +36,8 @@ async def test_stats_and_requeue(database, capsys):
     assert stats.oldest_open_age_seconds is not None
     assert await requeue_dead(sessions, [dead_a]) == 1
     assert (await outbox_stats(sessions)).counts["dead"] == 1
-    assert await cli_run(["requeue"], sessions) == 0
+    await AdminService(sessions).bootstrap_owner(1, "teste")
+    assert await cli_run(["--as", "1", "requeue", "--reason", "falha"], sessions) == 0
     assert "1 mensagem" in capsys.readouterr().out
     assert (await outbox_stats(sessions)).counts == {
         "pending": 3,
@@ -43,7 +45,7 @@ async def test_stats_and_requeue(database, capsys):
         "delivered": 1,
         "dead": 0,
     }
-    assert await cli_run(["stats"], sessions) == 0
+    assert await cli_run(["--as", "1", "stats"], sessions) == 0
     assert "pending" in capsys.readouterr().out
 
 

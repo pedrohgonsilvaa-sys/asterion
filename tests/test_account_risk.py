@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 
 from asterion.account_risk_cli import run as cli_run
 from asterion.application.account_risk import AccountRiskAdmin
+from asterion.application.admin import AdminService
 from asterion.application.dungeons import DUNGEON_ACTIVITY_PREFIX, DungeonService
 from asterion.application.groups import ActivityEligibility
 from asterion.infrastructure.db.models import AccountRiskFlag
@@ -141,36 +142,41 @@ async def test_pvpve_collision_flags_linked_accounts_on_opposite_sides(database,
     assert collision.status == "active"  # only marks; the clash goes on
 
 
+OP = ("--as", "1")
+WHY = ("--reason", "revisão")
+
+
 async def test_admin_links_reviews_and_cli(database):
     actors = await _seed_characters(database)
     sessions = database[1]
+    await AdminService(sessions).bootstrap_owner(1, "teste")
     admin = AccountRiskAdmin(sessions)
     with pytest.raises(ValueError):
         await admin.link(actors["Alpha"], actors["Alpha"])
-    assert await cli_run(["link", str(actors["Alpha"]), str(actors["Bravo"])], sessions) == [
-        "vínculo criado"
-    ]
-    assert await cli_run(["link", str(actors["Bravo"]), str(actors["Alpha"])], sessions) == [
-        "vínculo já existia"
-    ]
+    assert await cli_run(
+        [*OP, "link", str(actors["Alpha"]), str(actors["Bravo"]), *WHY], sessions
+    ) == ["vínculo criado"]
+    assert await cli_run(
+        [*OP, "link", str(actors["Bravo"]), str(actors["Alpha"]), *WHY], sessions
+    ) == ["vínculo já existia"]
     start = await _start_trio(database, actors)
     await start()
 
-    [line] = await cli_run(["flags"], sessions)
+    [line] = await cli_run([*OP, "flags"], sessions)
     flag_id = line.split()[0]
     [reviewed] = await cli_run(
-        ["review", flag_id, "dismissed", "--note", "jogaram separados"], sessions
+        [*OP, "review", flag_id, "dismissed", "--note", "jogaram separados", *WHY], sessions
     )
     assert "dismissed" in reviewed and "jogaram separados" in reviewed
-    assert await cli_run(["flags"], sessions) == ["nenhuma flag"]
+    assert await cli_run([*OP, "flags"], sessions) == ["nenhuma flag"]
     async with sessions() as session:
         flag = await session.scalar(select(AccountRiskFlag))
         assert flag.reviewed_at is not None
         assert await session.scalar(select(func.count()).select_from(AccountRiskFlag)) == 1
 
-    assert await cli_run(["unlink", str(actors["Alpha"]), str(actors["Bravo"])], sessions) == [
-        "vínculo removido"
-    ]
-    assert await cli_run(["links"], sessions) == ["nenhum vínculo"]
+    assert await cli_run(
+        [*OP, "unlink", str(actors["Alpha"]), str(actors["Bravo"]), *WHY], sessions
+    ) == ["vínculo removido"]
+    assert await cli_run([*OP, "links"], sessions) == ["nenhum vínculo"]
     # Removing the link keeps the historical flag for audit.
-    assert len(await cli_run(["flags", "--status", "all"], sessions)) == 1
+    assert len(await cli_run([*OP, "flags", "--status", "all"], sessions)) == 1
