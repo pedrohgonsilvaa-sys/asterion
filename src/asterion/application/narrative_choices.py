@@ -25,6 +25,8 @@ from asterion.domain.narrative_choices import (
     ChoiceCatalog,
     ChoiceNode,
     CommittedChoice,
+    ReactionLine,
+    legitimate_reaction,
     narrative_catalog,
     resolve_hook,
 )
@@ -246,6 +248,23 @@ async def resolve_future_hook(
     node, hook = found
     committed = await load_committed_choice(session, character_id, node.choice_id)
     return resolve_hook(node, hook, committed)
+
+
+async def resolve_future_reaction(
+    session: AsyncSession,
+    character_id: UUID,
+    hook_id: str,
+    *,
+    catalog: ChoiceCatalog | None = None,
+) -> ReactionLine | None:
+    """Approved line for ``hook_id``; None unless its speaker legitimately knows the choice."""
+    catalog = catalog or narrative_catalog()
+    found = catalog.hook(hook_id)
+    if found is None:
+        return None
+    node, hook = found
+    committed = await load_committed_choice(session, character_id, node.choice_id)
+    return legitimate_reaction(node, hook, committed)
 
 
 async def npc_rapport(session: AsyncSession, character_id: UUID, npc_id: str) -> str:

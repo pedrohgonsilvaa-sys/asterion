@@ -130,9 +130,7 @@ def render_p2(view: P2View) -> Screen:
         identity = "".join(f"<i>{escape(line)}</i>\n\n" for line in view.identity_lines)
         reply = f"<i>{escape(view.identity_reply)}</i>\n\n" if view.identity_reply else ""
         posture = "".join(
-            f"<i>{escape(line)}</i>\n\n"
-            for hook_id, option_id in view.future_reactions
-            if (line := future_reaction(hook_id, option_id))
+            f"<i>{escape(future_reaction(line))}</i>\n\n" for line in view.future_reactions
         )
         text = (
             "📜 Fuligem sem Fogo\n"

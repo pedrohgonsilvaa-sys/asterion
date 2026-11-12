@@ -13,9 +13,9 @@ from asterion.application.narrative_choices import (
     commit_narrative_choice,
     npc_rapport,
     resolve_future_hook,
+    resolve_future_reaction,
 )
 from asterion.application.p1 import P1Service
-from asterion.application.p2 import P1_POSTURE_HOOK
 from asterion.domain.combat_math import resolve_combat_stats
 from asterion.domain.narrative_choices import build_catalog
 from asterion.infrastructure.db.models import (
@@ -132,7 +132,8 @@ async def test_p1_posture_commits_once_and_p2_alda_reacts_from_her_own_memory(da
         quest.status, quest.step = "completed", 7
     offer = await p2.alda(actor)
     assert offer.kind == "offer"
-    assert offer.future_reactions == ((P1_POSTURE_HOOK, "o3"),)
+    assert [line.speaker_name for line in offer.future_reactions] == ["Alda Veyr"]
+    assert offer.future_reactions[0].text.startswith("Você perguntou pelos sinais")
 
 
 @pytest.mark.asyncio
@@ -302,6 +303,8 @@ async def test_s1_abandon_and_reaccept_keep_the_single_memory(database):
         assert await _count(session, NarrativeChoiceRecord, character.id) == 1
         assert await _count(session, CharacterNarrativeMemory, character.id) == 1
         assert await resolve_future_hook(session, character.id, "S1_response_to_light->S5") == "o2"
+        line = await resolve_future_reaction(session, character.id, "S1_response_to_light->S5")
+        assert line.speaker_name == "Oren Cal" and line.text.startswith("Você deixou a luz")
 
 
 @pytest.mark.asyncio

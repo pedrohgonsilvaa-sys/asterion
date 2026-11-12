@@ -44,6 +44,13 @@ NOT_PLAYER_CONDITIONS = {
     "S32": {"hemario"},
     "P34": {"alvorano"},
 }
+# Two pairs of NPCs share a first name (Bíblia v4.0.7 / Regionais): they are
+# different people and must never share memory.
+HOMONYMS = {
+    "varzeas_carmesins": {"sera": "sera_morn"},
+    "planicies_de_nareth": {"talen": "talen_orm"},
+    "confins_do_veu": {"sera": "sera_nol", "talen": "talen_nyr"},
+}
 TARGET_RE = re.compile(r"\b(?:Pós-)?[PS]\d+\b")
 
 
@@ -193,6 +200,14 @@ def build(source: str) -> list[dict]:
         match = re.match(r"#### ([PS]\d+) — ", line)
         if match and match.group(1) in order:
             order[match.group(1)]["region"] = current
+    for node in nodes:
+        rename = HOMONYMS.get(node["region"], {})
+        for option in node["options"]:
+            for target in option["npc_memory_targets"]:
+                if target["npc_id"] in {"sera", "talen"}:
+                    target["npc_id"] = rename[target["npc_id"]]
+        for hook in node["future_hooks"]:
+            hook["knowledge_holders"] = [rename.get(npc, npc) for npc in hook["knowledge_holders"]]
     return nodes
 
 

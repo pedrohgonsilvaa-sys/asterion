@@ -2070,7 +2070,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "racionalidade"
       }
      ]
@@ -2083,7 +2083,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "rigor"
       }
      ]
@@ -2096,7 +2096,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "investigacao"
       }
      ]
@@ -2107,7 +2107,7 @@
      "hook_id": "P15_anomaly_method->P16",
      "target": "P16",
      "knowledge_holders": [
-      "talen"
+      "talen_orm"
      ],
      "summary": "P16/P17: Talen escolhe que tipo de dado compartilhar primeiro."
     },
@@ -2115,7 +2115,7 @@
      "hook_id": "P15_anomaly_method->P17",
      "target": "P17",
      "knowledge_holders": [
-      "talen"
+      "talen_orm"
      ],
      "summary": "P16/P17: Talen escolhe que tipo de dado compartilhar primeiro."
     }
@@ -2149,7 +2149,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "pragmatico"
       }
      ]
@@ -2162,7 +2162,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "curioso"
       }
      ]
@@ -2175,7 +2175,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "metodo"
       }
      ]
@@ -2186,7 +2186,7 @@
      "hook_id": "S15_result_vs_cause->S16",
      "target": "S16",
      "knowledge_holders": [
-      "talen"
+      "talen_orm"
      ],
      "summary": "S16: Talen usa esse padrão para apresentar o mapa."
     }
@@ -2219,7 +2219,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "seguranca"
       }
      ]
@@ -2232,7 +2232,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "investigacao"
       }
      ]
@@ -2360,7 +2360,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "cautela"
       }
      ]
@@ -2373,7 +2373,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "experimental"
       }
      ]
@@ -2386,7 +2386,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "planejamento"
       }
      ]
@@ -2432,7 +2432,7 @@
        "tag": "confianca"
       },
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "confianca"
       }
      ]
@@ -2458,7 +2458,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "investigativo"
       }
      ]
@@ -2507,7 +2507,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "confianca"
       }
      ]
@@ -2533,7 +2533,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_orm",
        "tag": "critico"
       },
       {
@@ -2649,7 +2649,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "confianca_pratica"
       }
      ]
@@ -2662,7 +2662,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "curiosidade_tecnica"
       }
      ]
@@ -2675,7 +2675,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "empatia_local"
       }
      ]
@@ -2686,7 +2686,7 @@
      "hook_id": "P19_priority->P20",
      "target": "P20",
      "knowledge_holders": [
-      "sera"
+      "sera_morn"
      ],
      "summary": "P20: Sera enquadra o pulso conforme sua prioridade."
     }
@@ -2726,7 +2726,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "pragmatismo"
       }
      ]
@@ -2739,7 +2739,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "investigacao"
       }
      ]
@@ -2752,7 +2752,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "planejamento"
       }
      ]
@@ -2763,7 +2763,7 @@
      "hook_id": "S19_response->S20",
      "target": "S20",
      "knowledge_holders": [
-      "sera"
+      "sera_morn"
      ],
      "summary": "S20: Sera pode lembrar do método."
     }
@@ -2797,7 +2797,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "cautela"
       }
      ]
@@ -3226,7 +3226,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "pragmatismo"
       }
      ]
@@ -3239,7 +3239,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "continuidade"
       }
      ]
@@ -3252,7 +3252,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "equilibrio"
       }
      ]
@@ -3263,7 +3263,7 @@
      "hook_id": "S23_priority->P24",
      "target": "P24",
      "knowledge_holders": [
-      "sera"
+      "sera_morn"
      ],
      "summary": "P24: Sera lembra sua lógica ao conversar sobre a Matriz."
     }
@@ -3296,7 +3296,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "respeito_etico"
       },
       {
@@ -3326,7 +3326,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "equilibrio"
       }
      ]
@@ -3394,7 +3394,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "maturidade"
       },
       {
@@ -3453,7 +3453,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "protecao"
       }
      ]
@@ -3466,7 +3466,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_morn",
        "tag": "respeito"
       },
       {
@@ -4261,7 +4261,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_nol",
        "tag": "rigor"
       }
      ]
@@ -4287,7 +4287,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_nol",
        "tag": "maturidade"
       },
       {
@@ -4346,7 +4346,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_nyr",
        "tag": "empirico"
       }
      ]
@@ -4359,7 +4359,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_nyr",
        "tag": "experimental"
       }
      ]
@@ -4372,7 +4372,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_nyr",
        "tag": "cautela"
       }
      ]
@@ -4383,7 +4383,7 @@
      "hook_id": "S31_trail_method->P32",
      "target": "P32",
      "knowledge_holders": [
-      "talen"
+      "talen_nyr"
      ],
      "summary": "P32: Talen reconhece seu método de investigação."
     }
@@ -4443,7 +4443,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_nol",
        "tag": "precisao"
       }
      ]
@@ -4559,7 +4559,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_nol",
        "tag": "prudencia"
       }
      ]
@@ -4755,7 +4755,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_nyr",
        "tag": "rigor"
       }
      ]
@@ -4768,7 +4768,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_nyr",
        "tag": "curiosidade"
       }
      ]
@@ -4781,7 +4781,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "talen",
+       "npc_id": "talen_nyr",
        "tag": "prudencia"
       }
      ]
@@ -4849,7 +4849,7 @@
      "character_memory_tags": [],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_nol",
        "tag": "rigor_epistemico"
       }
      ]
@@ -4913,7 +4913,7 @@
      "character_memory_tags": [],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_nol",
        "tag": "cautela"
       }
      ]
@@ -4960,7 +4960,7 @@
        "tag": "rigor"
       },
       {
-       "npc_id": "sera",
+       "npc_id": "sera_nol",
        "tag": "rigor"
       }
      ]
@@ -4990,7 +4990,7 @@
        "tag": "responsabilidade_testemunhal"
       },
       {
-       "npc_id": "sera",
+       "npc_id": "sera_nol",
        "tag": "responsabilidade_testemunhal"
       }
      ]
@@ -5040,7 +5040,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_nol",
        "tag": "pragmatismo"
       }
      ]
@@ -5066,7 +5066,7 @@
      ],
      "npc_memory_targets": [
       {
-       "npc_id": "sera",
+       "npc_id": "sera_nol",
        "tag": "adaptacao"
       },
       {

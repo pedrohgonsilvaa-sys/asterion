@@ -220,11 +220,7 @@ def render_s5(view: S5View) -> Screen:
             "s5", _keyboard(rows),
         )
     if view.kind == "report":
-        memory = "".join(
-            f"\n\n{line}"
-            for hook_id, option_id in view.future_reactions
-            if (line := future_reaction(hook_id, option_id))
-        )
+        memory = "".join(f"\n\n{future_reaction(line)}" for line in view.future_reactions)
         reaction = immediate_reaction(view.narrative)
         rows = narrative_option_rows(view.narrative, f"s5:{version}") or [
             [_button("Reportar a Oren Cal", f"s5:{version}:report")]

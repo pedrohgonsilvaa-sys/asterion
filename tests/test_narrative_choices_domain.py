@@ -9,7 +9,6 @@ import pytest
 
 from asterion.application.narrative_choices import NarrativeNodeView
 from asterion.bot.narrative_choice_ui import (
-    FUTURE_REACTIONS,
     IMMEDIATE_REACTIONS,
     future_reaction,
     narrative_option_rows,
@@ -21,7 +20,9 @@ from asterion.domain.narrative_choices import (
     RAPPORT_STATES,
     CommittedChoice,
     build_catalog,
+    legitimate_reaction,
     narrative_catalog,
+    reaction_lines,
     resolve_hook,
 )
 
@@ -174,7 +175,7 @@ def test_future_hook_reads_only_legitimate_memory():
 
 
 def test_ui_shows_labels_only_and_no_unapproved_copy():
-    assert IMMEDIATE_REACTIONS == {} and FUTURE_REACTIONS == {}
+    assert IMMEDIATE_REACTIONS == {}
     node = narrative_catalog().nodes["P1_choice_posture"]
     view = NarrativeNodeView(
         node.choice_id, None, tuple((o.option_id, o.label) for o in node.options)
@@ -189,5 +190,65 @@ def test_ui_shows_labels_only_and_no_unapproved_copy():
     assert (
         narrative_option_rows(NarrativeNodeView(node.choice_id, "o1", view.options), "p1:7") == []
     )
-    assert future_reaction("P1_choice_posture->P2", "o1") is None
     assert "neutral" in RAPPORT_STATES
+
+
+COPY = ROOT / "docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_0.md"
+REACTIONS = ROOT / "src/asterion/domain/narrative_reactions_catalog.json"
+
+
+def test_reaction_json_is_exactly_what_the_copy_generates(tmp_path):
+    target = tmp_path / "reactions.json"
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/build_narrative_reaction_copy.py"),
+            str(COPY),
+            str(CATALOG),
+            str(target),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    assert json.loads(target.read_text(encoding="utf-8")) == json.loads(
+        REACTIONS.read_text(encoding="utf-8")
+    )
+    lines = reaction_lines()
+    catalog = narrative_catalog()
+    assert {choice for choice, _ in lines} <= set(catalog.nodes)
+    # Nareth P15–S18 and P19 use choice_ids the contract does not have: no copy loaded.
+    assert ("P15_anomaly_method", "o1") not in lines
+
+
+def test_homonym_npcs_never_share_memory():
+    catalog = narrative_catalog()
+    assert {t.npc_id for t in catalog.nodes["P19_priority"].option("o1").npc_memory_targets} == {
+        "sera_morn"
+    }
+    assert {
+        t.npc_id for t in catalog.nodes["P31_source_conflict"].option("o1").npc_memory_targets
+    } == {"sera_nol"}
+    assert {
+        t.npc_id for t in catalog.nodes["P15_anomaly_method"].option("o1").npc_memory_targets
+    } == {"talen_orm"}
+    assert {
+        t.npc_id for t in catalog.nodes["S31_trail_method"].option("o1").npc_memory_targets
+    } == {"talen_nyr"}
+
+
+def test_reaction_line_needs_the_speaker_to_hold_the_memory():
+    catalog = narrative_catalog()
+    node, hook = catalog.hook("P1_choice_posture->P2")
+    alda_knows = CommittedChoice(
+        "P1_choice_posture", "o1", PLAYER_SOURCE, frozenset({("alda", "cautela_no_relato")})
+    )
+    line = legitimate_reaction(node, hook, alda_knows)
+    assert line is not None and line.speaker_name == "Alda Veyr"
+    assert future_reaction(line).startswith("Alda Veyr: “Você não enfeitou o relato.")
+    assert legitimate_reaction(node, hook, None) is None
+    # P14: Talen speaks, but only Nera received the memory — the line stays hidden.
+    node, hook = catalog.hook("P14_map_vs_world->P15")
+    nera_only = CommittedChoice(
+        "P14_map_vs_world", "o1", PLAYER_SOURCE, frozenset({("nera", "pragmatismo")})
+    )
+    assert legitimate_reaction(node, hook, nera_only) is None

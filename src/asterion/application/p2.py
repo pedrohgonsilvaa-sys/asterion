@@ -36,7 +36,7 @@ from asterion.application.narrative_choices import (
     NarrativeNodeView,
     commit_mission_choice,
     narrative_node_view,
-    resolve_future_hook,
+    resolve_future_reaction,
 )
 from asterion.application.narrative_identity import resolve_character_scene
 from asterion.application.progression import consolidate_character_level
@@ -54,6 +54,7 @@ from asterion.domain.consumables import (
 )
 from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.legacy import legacy_xp_factor
+from asterion.domain.narrative_choices import ReactionLine
 from asterion.domain.narrative_identity import P2_ALDA_OFFER_SCENE
 from asterion.domain.road import (
     RULESET,
@@ -150,8 +151,8 @@ class P2View:
     identity_options: tuple[tuple[str, str], ...] = ()
     identity_reply: str | None = None
     narrative: NarrativeNodeView | None = None
-    # (hook_id, option_id) a scene may react to; resolved only from legitimate memory.
-    future_reactions: tuple[tuple[str, str], ...] = ()
+    # Approved lines a scene may add; resolved only from legitimate NPC memory.
+    future_reactions: tuple[ReactionLine, ...] = ()
 
 
 P1_POSTURE_HOOK = "P1_choice_posture->P2"
@@ -1734,16 +1735,16 @@ class P2Service:
             proposal_pair = proposal_rows.first()
         identity_lines: tuple[str, ...] = ()
         identity_options: tuple[tuple[str, str], ...] = ()
-        future_reactions: tuple[tuple[str, str], ...] = ()
+        future_reactions: tuple[ReactionLine, ...] = ()
         narrative = (
             await narrative_node_view(session, character, P2_ID)
             if kind in {"oren", "alda"}
             else None
         )
         if kind == "offer":
-            posture = await resolve_future_hook(session, character.id, P1_POSTURE_HOOK)
+            posture = await resolve_future_reaction(session, character.id, P1_POSTURE_HOOK)
             if posture is not None:
-                future_reactions = ((P1_POSTURE_HOOK, posture),)
+                future_reactions = (posture,)
             offer = await resolve_character_scene(session, character.id, P2_ALDA_OFFER_SCENE)
             if offer is not None:
                 identity_lines = offer.spoken_lines

@@ -38,7 +38,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "asterion.bot" = ["creation_copy.json"]
-"asterion.domain" = ["narrative_choices_catalog.json"]
+"asterion.domain" = ["narrative_choices_catalog.json", "narrative_reactions_catalog.json"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

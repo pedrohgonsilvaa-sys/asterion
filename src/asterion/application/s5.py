@@ -35,7 +35,7 @@ from asterion.application.narrative_choices import (
     NarrativeNodeView,
     commit_mission_choice,
     narrative_node_view,
-    resolve_future_hook,
+    resolve_future_reaction,
 )
 from asterion.application.progression import consolidate_character_level
 from asterion.application.road import REFUGE, REGION, RUINS, RoadService
@@ -48,6 +48,7 @@ from asterion.application.scripted_combat import (
 )
 from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
 from asterion.domain.legacy import legacy_xp_factor
+from asterion.domain.narrative_choices import ReactionLine
 from asterion.domain.road import (
     FACELESS_CUSTODIAN,
     MOTH,
@@ -141,7 +142,7 @@ class S5View:
     group_size: int = 1
     combat_actor_key: str = "player"
     narrative: NarrativeNodeView | None = None
-    future_reactions: tuple[tuple[str, str], ...] = ()
+    future_reactions: tuple[ReactionLine, ...] = ()
 
 
 S1_LIGHT_HOOK = "S1_response_to_light->S5"
@@ -1127,11 +1128,11 @@ class S5Service:
             kind = "light_points"
         else:
             kind = "record"
-        future_reactions: tuple[tuple[str, str], ...] = ()
+        future_reactions: tuple[ReactionLine, ...] = ()
         if kind == "report":
-            light = await resolve_future_hook(session, character.id, S1_LIGHT_HOOK)
+            light = await resolve_future_reaction(session, character.id, S1_LIGHT_HOOK)
             if light is not None:
-                future_reactions = ((S1_LIGHT_HOOK, light),)
+                future_reactions = (light,)
         options = quantities = ()
         budget = 0
         creature = S5_CREATURES.get(progress.get("encounter_creature_id"))

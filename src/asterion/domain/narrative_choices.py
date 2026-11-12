@@ -294,3 +294,35 @@ def resolve_hook(
         if not known.intersection(hook.knowledge_holders):
             return None
     return option.option_id
+
+
+@dataclass(frozen=True, slots=True)
+class ReactionLine:
+    speaker: str
+    speaker_name: str
+    text: str
+
+
+@cache
+def reaction_lines() -> Mapping[tuple[str, str], ReactionLine]:
+    """Approved future-reaction copy (Textos de Reação dos NPCs v1.0.0), by choice and option."""
+    raw = resources.files("asterion.domain").joinpath("narrative_reactions_catalog.json")
+    data = json.loads(raw.read_text(encoding="utf-8"))
+    return {
+        (choice_id, option_id): ReactionLine(**line)
+        for choice_id, options in data["reactions"].items()
+        for option_id, line in options.items()
+    }
+
+
+def legitimate_reaction(
+    node: ChoiceNode, hook: FutureHook, committed: CommittedChoice | None
+) -> ReactionLine | None:
+    """The approved line a later scene may show, only if its speaker holds the memory."""
+    option_id = resolve_hook(node, hook, committed)
+    if option_id is None:
+        return None
+    line = reaction_lines().get((node.choice_id, option_id))
+    if line is None or line.speaker not in {npc for npc, _tag in committed.npc_memories}:
+        return None
+    return line
