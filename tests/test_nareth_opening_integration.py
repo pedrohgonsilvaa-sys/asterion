@@ -321,7 +321,7 @@ async def test_nareth_p13_s13_route_rewards_and_persistence_are_character_scoped
 
 
 @pytest.mark.asyncio
-async def test_nareth_shared_p13_credit_is_persisted_individually(database):
+async def test_nareth_p13_credit_is_persisted_only_for_the_acting_member(database):
     leader, member = 991311, 991312
     leader_id, sessions = await _seed_nareth_entry(database, leader)
     member_id, _ = await _seed_nareth_entry(database, member)
@@ -357,21 +357,31 @@ async def test_nareth_shared_p13_credit_is_persisted_individually(database):
     assert view is not None and view.step == 3
     view = await missions.advance(leader, P13_ID, view.state_version, "line")
     assert view is not None and view.step == 4
+    # Objectives are Solo (Ação × Consequência §5): only the leader advances.
     async with sessions() as session:
-        for character_id in (leader_id, member_id):
-            quest = await session.scalar(
-                select(Quest).where(
-                    Quest.character_id == character_id, Quest.quest_id == P13_ID
-                )
+        quest = await session.scalar(
+            select(Quest).where(Quest.character_id == leader_id, Quest.quest_id == P13_ID)
+        )
+        assert quest is not None and quest.status == "active" and quest.step == 4
+        assert await session.scalar(
+            select(CampaignObjectiveCredit.id).where(
+                CampaignObjectiveCredit.character_id == leader_id,
+                CampaignObjectiveCredit.quest_id == P13_ID,
+                CampaignObjectiveCredit.objective_id == "p13.old_stone_line",
             )
-            assert quest is not None and quest.status == "active" and quest.step == 4
-            assert await session.scalar(
-                select(CampaignObjectiveCredit.id).where(
-                    CampaignObjectiveCredit.character_id == character_id,
-                    CampaignObjectiveCredit.quest_id == P13_ID,
-                    CampaignObjectiveCredit.objective_id == "p13.old_stone_line",
-                )
-            ) is not None
+        ) is not None
+        member_quest = await session.scalar(
+            select(Quest).where(Quest.character_id == member_id, Quest.quest_id == P13_ID)
+        )
+        assert member_quest is not None and member_quest.status == "active"
+        assert member_quest.step == 3
+        assert await session.scalar(
+            select(CampaignObjectiveCredit.id).where(
+                CampaignObjectiveCredit.character_id == member_id,
+                CampaignObjectiveCredit.quest_id == P13_ID,
+                CampaignObjectiveCredit.objective_id == "p13.old_stone_line",
+            )
+        ) is None
 
 
 def test_nareth_material_table_matches_authority_and_uses_independent_ordinals():

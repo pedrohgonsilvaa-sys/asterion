@@ -4,7 +4,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import func, select
 
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.road import BOSQUE, CHARNECA, REFUGE, RUINS, RoadService
 from asterion.application.s4 import S4_ID, S4_REWARD_SOURCE, S4Service
 from asterion.application.s5 import (
@@ -444,9 +444,8 @@ async def test_s5_offer_does_not_require_s4_and_reaccept_preserves_single_quest(
 
 
 @pytest.mark.asyncio
-async def test_s5_shares_lights_and_uses_confirmed_group_encounter(database, monkeypatch):
-    import asterion.application.campaign_coop as campaign_coop
-    from asterion.domain.combat import active_player_key
+async def test_s5_group_member_lights_alone_and_group_encounter_is_refused(database, monkeypatch):
+    import asterion.application.scripted_combat as scripted_combat
 
     actors = (998630, 998631)
     seeded = [await _seed_p4(database, actor, level=8) for actor in actors]
@@ -473,87 +472,50 @@ async def test_s5_shares_lights_and_uses_confirmed_group_encounter(database, mon
     for character_id in character_ids:
         await _set_location(sessions, character_id, RUINS)
 
+    # Objectives are Solo (Ação × Consequência §5): only the actor advances.
     view = await service.resume(actors[0])
     view = await service.action(actors[0], view.state_version, "investigate")
     companion = await service.resume(actors[1])
-    assert view.step == companion.step == 2
+    assert view.step == 2 and companion.step == 1
     for light_point in ("s5.light_point.2", "s5.light_point.1"):
         view = await service.action(actors[0], view.state_version, "light_point", light_point)
     companion = await service.resume(actors[1])
-    assert view.kind == "combat_pending" and view.group_size == 2
-    assert companion.step == 3
-    assert view.progress["encounter_creature_id"] == companion.progress["encounter_creature_id"]
+    # The fight opens as a Solo combat even though the actor belongs to a Group.
+    assert view.kind == "combat" and view.group_size == 1
+    assert companion.step == 1 and not companion.progress.get("light_points")
 
-    proposal = await service.propose_group_combat(actors[0], view.state_version)
-    pending_view = await service.detail(actors[0])
-    assert pending_view.kind == "combat_pending"
-    assert pending_view.proposal_id == proposal.proposal_id
-    invitee_proposals = await groups.activity_proposals(actors[1])
-    pending = next(row for row in invitee_proposals if row.proposal_id == proposal.proposal_id)
-    ready = await groups.respond_activity(
-        actors[1], pending.proposal_id, expected_revision=pending.revision, accept=True
-    )
-    started = await service.start_group_combat(
-        actors[0], ready.proposal_id, expected_revision=ready.revision
-    )
-    views = {actor: await service.resume(actor) for actor in actors}
-    assert started.kind == "combat"
-    assert len({views[actor].encounter_id for actor in actors}) == 1
-    assert len({views[actor].activity_id for actor in actors}) == 2
-    assert all(views[actor].combat == views[actors[0]].combat for actor in actors)
+    # S5 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await service.propose_group_combat(actors[0], view.state_version)
+    assert not await groups.activity_proposals(actors[1])
+    resumed = await service.resume(actors[0])
+    assert resumed.activity_id == view.activity_id
 
-    forwarded_effect_ids: list[str | None] = []
-
-    def terminal_victory(
-        combat,
-        action,
-        *,
-        actor_key: str | None,
-        target_id: str | None,
-        effect_id: str | None,
-    ):
-        forwarded_effect_ids.append(effect_id)
-        updated = deepcopy(combat)
-        updated.version += 1
-        updated.result = "victory"
-        return updated
-
-    monkeypatch.setattr(campaign_coop, "act", terminal_victory)
-    active_key = active_player_key(views[actors[0]].combat)
-    current_actor = next(
-        actor for actor in actors if views[actor].combat_actor_key == active_key
-    )
-    current = views[current_actor]
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     resolved = await service.action_combat(
-        current_actor,
-        current.activity_id,
-        current.activity_state_version,
-        "attack",
+        actors[0], view.activity_id, view.activity_state_version, "attack"
     )
     assert resolved.step == 4 and resolved.progress["combat_result"] == "victory"
-    assert forwarded_effect_ids == [None]
     replayed = await service.action_combat(
-        current_actor,
-        current.activity_id,
-        current.activity_state_version,
-        "attack",
+        actors[0], view.activity_id, view.activity_state_version, "attack"
     )
     assert replayed is not None
     assert replayed.step == 4 and replayed.progress["combat_result"] == "victory"
-    assert forwarded_effect_ids == [None]
-    for actor in actors:
-        member_view = await service.resume(actor)
-        assert member_view.step == 4
+    assert (await service.resume(actors[1])).step == 1
 
     async with sessions() as session:
-        quests = (
-            await session.scalars(
-                select(Quest).where(
-                    Quest.character_id.in_(character_ids), Quest.quest_id == S5_ID
+        quests = {
+            row.character_id: row
+            for row in (
+                await session.scalars(
+                    select(Quest).where(
+                        Quest.character_id.in_(character_ids), Quest.quest_id == S5_ID
+                    )
                 )
-            )
-        ).all()
-        assert {row.progress["combat_result"] for row in quests} == {"victory"}
+            ).all()
+        }
+        assert quests[character_ids[0]].progress["combat_result"] == "victory"
+        assert "combat_result" not in (quests[character_ids[1]].progress or {})
         rewards = (
             await session.scalars(
                 select(RewardEvent).where(
@@ -562,13 +524,14 @@ async def test_s5_shares_lights_and_uses_confirmed_group_encounter(database, mon
                 )
             )
         ).all()
-        assert len(rewards) == 2
+        assert [reward.character_id for reward in rewards] == [character_ids[0]]
 
 
 @pytest.mark.asyncio
-async def test_s4_shares_watches_and_uses_confirmed_group_vigia_combat(database, monkeypatch):
-    import asterion.application.campaign_coop as campaign_coop
-    from asterion.domain.combat import active_player_key
+async def test_s4_group_member_watches_alone_and_group_vigia_combat_is_refused(
+    database, monkeypatch
+):
+    import asterion.application.scripted_combat as scripted_combat
 
     actors = (998620, 998621)
     seeded = [await _seed_p4(database, actor, level=7) for actor in actors]
@@ -595,78 +558,38 @@ async def test_s4_shares_watches_and_uses_confirmed_group_vigia_combat(database,
     for character_id in character_ids:
         await _set_location(sessions, character_id, RUINS)
 
+    # Objectives are Solo (Ação × Consequência §5): only the actor advances.
     view = await service.resume(actors[0])
     for point in ("s4.watch_point.2", "s4.watch_point.3", "s4.watch_point.1"):
         view = await service.action(actors[0], view.state_version, "watch", point)
     companion = await service.resume(actors[1])
-    assert view.step == companion.step == 2
+    assert view.step == 2 and companion.step == 1
     assert len(view.progress["watch_points"]) == 3
-    assert len(companion.progress["watch_points"]) == 3
+    assert not companion.progress.get("watch_points")
     view = await service.action(actors[0], view.state_version, "orientation")
     companion = await service.resume(actors[1])
-    assert view.kind == "combat_pending" and view.group_size == 2
-    assert companion.step == 3 and companion.progress["patrol_orientation_recorded"]
+    # The fight opens as a Solo combat even though the actor belongs to a Group.
+    assert view.kind == "combat" and view.group_size == 1
+    assert companion.step == 1 and not companion.progress.get("patrol_orientation_recorded")
 
-    proposal = await service.propose_group_combat(actors[0], view.state_version)
-    pending_view = await service.detail(actors[0])
-    assert pending_view.kind == "combat_pending"
-    assert pending_view.proposal_id == proposal.proposal_id
-    invitee_proposals = await groups.activity_proposals(actors[1])
-    pending = next(row for row in invitee_proposals if row.proposal_id == proposal.proposal_id)
-    ready = await groups.respond_activity(
-        actors[1], pending.proposal_id, expected_revision=pending.revision, accept=True
-    )
-    started = await service.start_group_combat(
-        actors[0], ready.proposal_id, expected_revision=ready.revision
-    )
-    views = {actor: await service.resume(actor) for actor in actors}
-    assert started.kind == "combat"
-    assert len({views[actor].encounter_id for actor in actors}) == 1
-    assert len({views[actor].activity_id for actor in actors}) == 2
-    assert all(views[actor].combat == views[actors[0]].combat for actor in actors)
+    # S4 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await service.propose_group_combat(actors[0], view.state_version)
+    assert not await groups.activity_proposals(actors[1])
+    resumed = await service.resume(actors[0])
+    assert resumed.activity_id == view.activity_id
 
-    forwarded_effect_ids: list[str | None] = []
-
-    def terminal_victory(
-        combat,
-        action,
-        *,
-        actor_key: str | None,
-        target_id: str | None,
-        effect_id: str | None,
-    ):
-        forwarded_effect_ids.append(effect_id)
-        updated = deepcopy(combat)
-        updated.version += 1
-        updated.result = "victory"
-        return updated
-
-    monkeypatch.setattr(campaign_coop, "act", terminal_victory)
-    active_key = active_player_key(views[actors[0]].combat)
-    current_actor = next(
-        actor for actor in actors if views[actor].combat_actor_key == active_key
-    )
-    current = views[current_actor]
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     resolved = await service.action_combat(
-        current_actor,
-        current.activity_id,
-        current.activity_state_version,
-        "attack",
+        actors[0], view.activity_id, view.activity_state_version, "attack"
     )
     assert resolved.step == 4 and resolved.progress["combat_result"] == "victory"
-    assert forwarded_effect_ids == [None]
     replayed = await service.action_combat(
-        current_actor,
-        current.activity_id,
-        current.activity_state_version,
-        "attack",
+        actors[0], view.activity_id, view.activity_state_version, "attack"
     )
     assert replayed is not None
     assert replayed.step == 4 and replayed.progress["combat_result"] == "victory"
-    assert forwarded_effect_ids == [None]
-    for actor in actors:
-        member_view = await service.resume(actor)
-        assert member_view.step == 4
+    assert (await service.resume(actors[1])).step == 1
 
     async with sessions() as session:
         rewards = (
@@ -677,4 +600,4 @@ async def test_s4_shares_watches_and_uses_confirmed_group_vigia_combat(database,
                 )
             )
         ).all()
-        assert len(rewards) == 2
+        assert [reward.character_id for reward in rewards] == [character_ids[0]]

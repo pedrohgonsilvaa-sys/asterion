@@ -369,7 +369,7 @@ async def test_s8_p9_and_s9_solo_missions_settle_exact_rewards_once(database, mo
 
 
 @pytest.mark.asyncio
-async def test_p9_cooperative_objectives_match_v104_quest_version(database):
+async def test_p9_group_objectives_are_solo_and_match_v104_quest_version(database):
     leader, helper = 999782, 999783
     leader_id, sessions = await _seed_mid_region(database, leader, level=15)
     helper_id, _ = await _seed_mid_region(database, helper, level=15)
@@ -397,20 +397,16 @@ async def test_p9_cooperative_objectives_match_v104_quest_version(database):
         await road.travel_route(actor, BAIXIOS)
     lead = await missions.enter_baixios(leader, lead.state_version)
     assert lead is not None and lead.step == 3
+    # Objectives are Solo (Ação × Consequência §5): the helper stays on step 1.
     async with sessions() as session:
         helper_quest = await session.scalar(
             select(Quest).where(Quest.character_id == helper_id, Quest.quest_id == P9_ID)
         )
         assert helper_quest is not None
-        assert helper_quest.step == 3
+        assert helper_quest.step == 1
         assert helper_quest.content_version == "vales-1.0.4"
-        assert await session.scalar(
-            select(LocationDiscovery.id).where(
-                LocationDiscovery.character_id == helper_id,
-                LocationDiscovery.location_id == "vde.location.baixios_enredados",
-            )
-        ) is not None
         assert leader_id != helper_id
+
 
 
 @pytest.mark.asyncio

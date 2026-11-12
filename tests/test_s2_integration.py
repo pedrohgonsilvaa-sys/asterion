@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import select
 
 from asterion.application.active_arts import ActiveArtService
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.road import CHARNECA, REFUGE, RoadService
 from asterion.application.s2 import (
     S2_CODEX_ENTRY,
@@ -439,11 +439,10 @@ async def test_s2_abandon_and_reaccept_reset_only_transient_progress(database):
 
 
 @pytest.mark.asyncio
-async def test_s2_shares_vestiges_and_uses_confirmed_persistent_group_combat(
+async def test_s2_group_members_find_vestiges_alone_and_group_combat_is_refused(
     database, monkeypatch
 ):
-    import asterion.application.campaign_coop as campaign_coop
-    from asterion.domain.combat import active_player_key
+    import asterion.application.s2 as s2_module
 
     actors = (997120, 997121, 997122)
     seeded = [await _seed_s2(database, actor) for actor in actors]
@@ -496,80 +495,53 @@ async def test_s2_shares_vestiges_and_uses_confirmed_persistent_group_combat(
             )
             world.location = CHARNECA
 
+    async def play_to_fight(actor):
+        view = await service.resume(actor)
+        view = await service.find_camp(actor, view.state_version)
+        assert view.step == 2
+        for vestige_id in ("s2.vestige.2", "s2.vestige.1", "s2.vestige.3"):
+            view = await service.examine_vestige(actor, vestige_id, view.state_version)
+        return view
+
+    # Objectives are Solo (Ação × Consequência §5): only the actor advances.
     view = await service.resume(actors[0])
     view = await service.find_camp(actors[0], view.state_version)
     assert view.step == 2
     other = await service.resume(actors[1])
-    assert other.step == 2 and other.progress["camp_found"] is True
+    assert other.step == 1 and not other.progress.get("camp_found")
     for vestige_id in ("s2.vestige.2", "s2.vestige.1", "s2.vestige.3"):
         view = await service.examine_vestige(actors[0], vestige_id, view.state_version)
-    assert view.kind == "combat_pending" and view.group_size == 3
+    # The fight opens as a Solo combat even though the actor belongs to a Group.
+    assert view.step == 3 and view.kind == "combat" and view.group_size == 1
     other = await service.resume(actors[1])
-    assert other.step == 3 and len(other.progress["vestiges"]) == 3
-    async with sessions() as session:
-        active = (
-            await session.scalars(
-                select(GameActivity).where(
-                    GameActivity.character_id.in_(character_ids),
-                    GameActivity.content_id == "s2_scripted_peregrino_calcinado",
-                    GameActivity.status == "active",
-                )
-            )
-        ).all()
-        assert active == []
+    assert other.step == 1 and not other.progress.get("vestiges")
 
-    proposal = await service.propose_group_combat(actors[0], view.state_version)
-    assert proposal.proposal_id is not None
-    incoming = await groups.activity_proposals(actors[1])
-    pending = next(row for row in incoming if row.proposal_id == proposal.proposal_id)
-    ready = await groups.respond_activity(
-        actors[1], pending.proposal_id, expected_revision=pending.revision, accept=True
-    )
-    helper_proposals = await groups.activity_proposals(actors[2])
-    helper_pending = next(
-        row for row in helper_proposals if row.proposal_id == proposal.proposal_id
-    )
-    ready = await groups.respond_activity(
-        actors[2], helper_pending.proposal_id, expected_revision=ready.revision, accept=True
-    )
-    started = await service.start_group_combat(
-        actors[0], ready.proposal_id, expected_revision=ready.revision
-    )
-    views = {actor: await service.resume(actor) for actor in actors}
-    assert started.kind == "combat"
-    assert len({views[actor].encounter_id for actor in actors}) == 1
-    assert len({views[actor].activity_id for actor in actors}) == 3
-    assert all(views[actor].combat == views[actors[0]].combat for actor in actors)
+    # S2 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await service.propose_group_combat(actors[0], view.state_version)
+    for actor in actors:
+        assert not await groups.activity_proposals(actor)
+    reconnected = await service.resume(actors[0])
+    assert reconnected.activity_id == view.activity_id
 
-    def terminal_victory(combat, action, *, actor_key=None, target_id=None, **_kwargs):
-        updated = deepcopy(combat)
-        updated.version += 1
-        updated.result = "victory"
-        return updated
-
-    monkeypatch.setattr(campaign_coop, "act", terminal_victory)
-    current_actor_key = active_player_key(views[actors[0]].combat)
-    actor = next(
-        candidate
-        for candidate in actors
-        if views[candidate].combat_actor_key == current_actor_key
-    )
-    combat_view = views[actor]
+    monkeypatch.setattr(s2_module, "act", _terminal("victory"))
     resolved = await service.action(
-        actor,
-        combat_view.activity_id,
-        combat_view.activity_state_version,
-        "attack",
+        actors[0], view.activity_id, view.activity_state_version, "attack"
     )
-    if actor in actors[:2]:
-        assert resolved.step == 5 and resolved.progress["encounter_result"] == "victory"
-    else:
-        assert resolved.status == "completed"
-    for member_actor in actors[:2]:
-        resumed = await service.resume(member_actor)
-        assert resumed.step == 5 and resumed.kind == "fragment"
+    assert resolved.step == 5 and resolved.kind == "fragment"
+    assert resolved.progress["encounter_result"] == "victory"
+    other = await service.resume(actors[1])
+    assert other.status == "active" and other.step == 1
     helper_view = await service.resume(actors[2])
     assert helper_view.status == "completed"
+
+    # The other member plays the same steps on their own.
+    second = await play_to_fight(actors[1])
+    assert second.kind == "combat" and second.group_size == 1
+    second = await service.action(
+        actors[1], second.activity_id, second.activity_state_version, "attack"
+    )
+    assert second.step == 5 and second.kind == "fragment"
 
     async with sessions() as session:
         quests = (
@@ -584,15 +556,17 @@ async def test_s2_shares_vestiges_and_uses_confirmed_persistent_group_combat(
             row for row in quests if row.character_id == character_ids[2]
         )
         assert helper_quest.status == "completed"
-        credits = (
-            await session.scalars(
-                select(CampaignObjectiveCredit).where(
-                    CampaignObjectiveCredit.character_id.in_(character_ids),
-                    CampaignObjectiveCredit.quest_id == S2_ID,
+        credited = set(
+            (
+                await session.scalars(
+                    select(CampaignObjectiveCredit.character_id).where(
+                        CampaignObjectiveCredit.character_id.in_(character_ids),
+                        CampaignObjectiveCredit.quest_id == S2_ID,
+                    )
                 )
-            )
-        ).all()
-        assert len(credits) == 11
+            ).all()
+        )
+        assert credited == set(character_ids[:2])
         enemy_xp_events = (
             await session.scalars(
                 select(RewardEvent).where(
@@ -601,6 +575,7 @@ async def test_s2_shares_vestiges_and_uses_confirmed_persistent_group_combat(
                 )
             )
         ).all()
+        assert {event.character_id for event in enemy_xp_events} == set(character_ids[:2])
         assert len(enemy_xp_events) == 2
         assert await session.scalar(
             select(RewardEvent).where(

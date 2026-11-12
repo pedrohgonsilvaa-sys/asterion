@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import func, select
 
 from asterion.application.active_arts import ActiveArtService
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.p3 import (
     P3_COMBAT_CONTENT_ID,
     P3_FRAGMENTS,
@@ -21,6 +21,7 @@ from asterion.infrastructure.db.models import (
     Account,
     Brazier,
     CampaignObjectiveCredit,
+    CampaignSharedEncounter,
     Character,
     CodexEntry,
     CodexFragment,
@@ -128,11 +129,10 @@ async def test_p3_scripted_combat_freezes_equipped_class_art(database):
 
 
 @pytest.mark.asyncio
-async def test_p3_group_shares_present_evidence_and_cervo_but_keeps_rewards_personal(
+async def test_p3_group_members_play_alone_and_group_fight_is_refused(
     database, monkeypatch
 ):
-    import asterion.application.campaign_coop as campaign_coop
-    from asterion.domain.combat import active_player_key
+    import asterion.application.p3 as p3_module
 
     actors = (998411, 998412)
     seeded = [await _seed_p3(database, actor) for actor in actors]
@@ -161,58 +161,59 @@ async def test_p3_group_shares_present_evidence_and_cervo_but_keeps_rewards_pers
         accept=True,
     )
 
-    view = await service.resume(actors[0])
-    assert view is not None
-    view = await service.mission_route(actors[0], view.state_version, CHARNECA)
-    assert view is not None and view.location == CHARNECA
-    view = await service.enter_bosque(actors[0], view.state_version)
-    assert view is not None and view.step == 2 and view.location == BOSQUE
-    for fragment in P3_FRAGMENTS:
-        view = await service.examine_fragment(actors[0], fragment, view.state_version)
-    assert view is not None and view.kind == "combat_pending" and view.group_size == 2
+    async def play_to_fight(actor):
+        view = await service.resume(actor)
+        assert view is not None
+        view = await service.mission_route(actor, view.state_version, CHARNECA)
+        assert view is not None and view.location == CHARNECA
+        view = await service.enter_bosque(actor, view.state_version)
+        assert view is not None and view.step == 2 and view.location == BOSQUE
+        for fragment in P3_FRAGMENTS:
+            view = await service.examine_fragment(actor, fragment, view.state_version)
+        return view
 
-    proposed = await service.propose_group_combat(actors[0], view.state_version)
-    assert proposed is not None and proposed.proposal_id is not None
-    incoming = await groups.activity_proposals(actors[1])
-    proposal = next(row for row in incoming if row.proposal_id == proposed.proposal_id)
-    ready = await groups.respond_activity(
-        actors[1], proposal.proposal_id, expected_revision=proposal.revision, accept=True
-    )
-    started = await service.start_group_combat(
-        actors[0], ready.proposal_id, expected_revision=ready.revision
-    )
-    resumed = await service.resume(actors[1])
-    assert started is not None and resumed is not None
-    assert started.kind == resumed.kind == "combat"
-    assert started.encounter_id == resumed.encounter_id
-    assert {started.combat_actor_key, resumed.combat_actor_key} == {"p1", "p2"}
+    async def finish(actor, view, reward):
+        # Solo fight: victory is forced, then the personal way back to Oren.
+        victory = await service.action(
+            actor, view.activity_id, view.activity_state_version, "attack"
+        )
+        assert victory is not None and victory.step == 4
+        view = await service.examine_carved_fragment(actor, victory.state_version)
+        view = await service.mission_route(actor, view.state_version, CHARNECA)
+        view = await service.mission_route(actor, view.state_version, REFUGE)
+        view = await service.talk_to_oren(actor, view.state_version)
+        assert view is not None and view.step == 6
+        chosen = await service.choose_reward(actor, view.state_version, reward)
+        assert chosen is not None and chosen.status == "completed"
 
-    def resolve_victory(combat, action, *, target_id=None, actor_key=None, **_kwargs):
-        updated = deepcopy(combat)
-        updated.version += 1
-        updated.result = "victory"
-        return updated
+    # Objectives are Solo (Ação × Consequência §5): only the actor advances.
+    view = await play_to_fight(actors[0])
+    # The fight opens as a Solo combat even though the actor belongs to a Group.
+    assert view is not None and view.step == 3 and view.kind == "combat"
+    assert view.group_size == 1 and view.activity_id is not None
+    other = await service.resume(actors[1])
+    assert other is not None and other.status == "active" and other.step == 1
+    async with sessions() as session:
+        credited = set(
+            (
+                await session.scalars(select(CampaignObjectiveCredit.character_id))
+            ).all()
+        )
+        assert credited <= {character_ids[0]}
 
-    monkeypatch.setattr(campaign_coop, "act", resolve_victory)
-    active_key = active_player_key(started.combat)
-    actor_view, actor = next(
-        (view, actor)
-        for view, actor in ((started, actors[0]), (resumed, actors[1]))
-        if view.combat_actor_key == active_key
-    )
-    victory = await service.action(
-        actor,
-        actor_view.activity_id,
-        actor_view.activity_state_version,
-        "attack",
-    )
-    assert victory is not None and victory.step == 4
-    await service.action(
-        actor,
-        actor_view.activity_id,
-        actor_view.activity_state_version,
-        "attack",
-    )
+    # P3 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await service.propose_group_combat(actors[0], view.state_version)
+    assert not await groups.activity_proposals(actors[1])
+
+    monkeypatch.setattr(p3_module, "act", _terminal("victory"))
+    await finish(actors[0], view, "veil")
+    second = await service.resume(actors[1])
+    assert second is not None and second.status == "active" and second.step == 1
+
+    # The other member plays the same mission on their own.
+    await finish(actors[1], await play_to_fight(actors[1]), "seal")
+
     async with sessions() as session:
         quests = list(
             (
@@ -223,27 +224,8 @@ async def test_p3_group_shares_present_evidence_and_cervo_but_keeps_rewards_pers
                 )
             ).all()
         )
-        assert len(quests) == 2 and all(row.step == 4 for row in quests)
-        assert await session.scalar(
-            select(func.count()).where(
-                CampaignObjectiveCredit.objective_id == "p3.cervo_escoriado"
-            )
-        ) == 2
-
-    view = await service.resume(actors[0])
-    view = await service.examine_carved_fragment(actors[0], view.state_version)
-    view = await service.mission_route(actors[0], view.state_version, CHARNECA)
-    view = await service.mission_route(actors[0], view.state_version, REFUGE)
-    view = await service.talk_to_oren(actors[0], view.state_version)
-    assert view is not None and view.step == 6
-    chosen = await service.choose_reward(actors[0], view.state_version, "veil")
-    assert chosen is not None and chosen.status == "completed"
-    second = await service.resume(actors[1])
-    assert second is not None and second.status == "active" and second.step == 6
-    completed = await service.choose_reward(actors[1], second.state_version, "seal")
-    assert completed is not None and completed.status == "completed"
-
-    async with sessions() as session:
+        assert len(quests) == 2 and all(row.status == "completed" for row in quests)
+        assert not await session.scalar(select(CampaignSharedEncounter).limit(1))
         reward_events = list(
             (
                 await session.scalars(

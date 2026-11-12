@@ -18,7 +18,7 @@ from asterion.application.altos_missions import (
     P33_TITLE_COSMETIC,
     AltosMissionService,
 )
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.knowledge_catalog import ACHIEVEMENT_BY_ID, CODEX_BY_ID
 from asterion.application.road import (
     CONFINS_ESTRADAS_AUSENTES_LABEL,
@@ -28,7 +28,6 @@ from asterion.application.road import (
     RoadService,
 )
 from asterion.application.round import RoundService
-from asterion.domain.combat import active_player_key
 from asterion.domain.road import (
     CONFINS_ANDARILHO_REPETIDO,
     CONFINS_ARANHA_LIMIAR,
@@ -65,7 +64,6 @@ from asterion.infrastructure.db.models import (
     WorldState,
 )
 from tests.helpers.pvpve import disable_round_pvpve_for_test
-from tests.test_campaign_coop_integration import _seed_enemy_at_one_hp
 from tests.test_confins_p32 import _seed_p32_actor
 from tests.test_s4_s5_integration import _terminal
 
@@ -552,8 +550,8 @@ async def test_p33_shared_physical_evidence_skips_individually_ineligible_member
 
 
 @pytest.mark.asyncio
-async def test_p33_shares_physical_evidence_and_scripted_victory_with_eligible_group(
-    database,
+async def test_p33_group_member_collects_evidence_alone_and_scripted_victory_is_solo(
+    database, monkeypatch
 ):
     actors = (793350, 793351)
     await _seed_p33_actor(database, actors[0])
@@ -582,6 +580,7 @@ async def test_p33_shares_physical_evidence_and_scripted_victory_with_eligible_g
         assert arrived is not None and arrived.location == CONFINS_FRATURAS_LIMIAR_LABEL
         await mission.on_location(actor)
 
+    # Objectives are Solo (Ação × Consequência §5): the helper stays on step 2.
     for evidence in (
         "inspect_stone_position",
         "inspect_wear_state",
@@ -590,45 +589,32 @@ async def test_p33_shares_physical_evidence_and_scripted_victory_with_eligible_g
         leader = await mission.resume(actors[0], P33_ID)
         assert leader is not None and leader.step == 2
         await mission.advance(actors[0], leader.state_version, evidence)
-        for actor in actors:
-            view = await mission.resume(actor, P33_ID)
-            assert view is not None and evidence in view.progress["physical_evidence_ids"]
+        view = await mission.resume(actors[0], P33_ID)
+        assert view is not None and evidence in view.progress["physical_evidence_ids"]
+        helper_view = await mission.resume(actors[1], P33_ID)
+        assert helper_view is not None and helper_view.step == 2
+        assert not helper_view.progress.get("physical_evidence_ids")
 
     leader = await mission.resume(actors[0], P33_ID)
     assert leader is not None and leader.step == 3
-    pending = await mission.propose_group_combat(actors[0], leader.state_version, P33_ID)
-    assert pending is not None and pending.proposal_id is not None
-    proposal = await groups.activity_proposal(actors[0], pending.proposal_id)
-    accepted = await groups.respond_activity(
-        actors[1], proposal.proposal_id, expected_revision=proposal.revision, accept=True
-    )
-    started = await mission.start_group_combat(
-        actors[0], proposal.proposal_id, expected_revision=accepted.revision
-    )
+    # P33 is not a Boss: the Group proposal is refused, the fight is Solo.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await mission.propose_group_combat(actors[0], leader.state_version, P33_ID)
+    assert not await groups.activity_proposals(actors[0])
+    started = await mission.start_solo_combat(actors[0], leader.state_version, P33_ID)
     assert started is not None and started.combat is not None
+    assert started.group_size == 1 and not started.combat.party_mode
     assert started.combat.variant is None
     enemies = [fighter for fighter in started.combat.fighters.values() if fighter.side == "enemy"]
     assert len(enemies) == 1 and enemies[0].level == 55
-    await _seed_enemy_at_one_hp(database, started.encounter_id)
-
-    views = {actor: await mission.resume(actor, P33_ID) for actor in actors}
-    combat = next(view.combat for view in views.values() if view is not None)
-    active_actor = next(
-        actor
-        for actor, view in views.items()
-        if view is not None and view.combat_actor_key == active_player_key(combat)
-    )
-    current = views[active_actor]
-    assert current is not None and current.activity_id is not None
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     victory = await mission.action(
-        active_actor,
-        current.activity_id,
-        combat.version,
-        "attack",
-        target_id="enemy",
+        actors[0], started.activity_id, started.combat.version, "attack"
     )
     assert victory is not None
-    for actor in actors:
-        view = await mission.resume(actor, P33_ID)
-        assert view is not None and view.step == 4
-        assert view.progress["scripted_casca_victory"] is True
+    view = await mission.resume(actors[0], P33_ID)
+    assert view is not None and view.step == 4
+    assert view.progress["scripted_casca_victory"] is True
+    helper_view = await mission.resume(actors[1], P33_ID)
+    assert helper_view is not None and helper_view.step == 2
+    assert not helper_view.progress.get("scripted_casca_victory")

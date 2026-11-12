@@ -14,7 +14,7 @@ from aiogram.methods import EditMessageText
 from sqlalchemy import func, select
 
 from asterion.application.bestiary import BestiaryRecorder
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.road import (
     NARETH_CAMARA_LABEL,
     NARETH_REGION,
@@ -112,6 +112,7 @@ from asterion.infrastructure.db.models import (
     BestiaryEvidence,
     Brazier,
     CampaignObjectiveCredit,
+    CampaignSharedEncounter,
     CampaignSharedEncounterMember,
     Character,
     CodexEntry,
@@ -784,7 +785,7 @@ async def test_varzeas_region_requires_p18_and_posto_is_a_safe_hub(database):
 
 
 @pytest.mark.asyncio
-async def test_varzeas_p19_shared_objective_credit_is_recorded_per_present_member(database):
+async def test_varzeas_p19_objective_credit_is_recorded_only_for_the_acting_member(database):
     leader, helper = 993194, 993195
     leader_id, sessions = await _seed_nareth_exit(database, leader, level=31)
     helper_id, _ = await _seed_nareth_exit(database, helper, level=31)
@@ -817,23 +818,31 @@ async def test_varzeas_p19_shared_objective_credit_is_recorded_per_present_membe
     leader_view = await missions.resume(leader, P19_ID)
     helper_view = await missions.resume(helper, P19_ID)
     assert leader_view is not None and leader_view.step == helper_view.step == 3
+    # Objectives are Solo (Ação × Consequência §5): only the leader advances.
     shared = await missions.advance(
         leader, P19_ID, leader_view.state_version, "inspect_water"
     )
     assert shared is not None and shared.step == 4
     async with sessions() as session:
-        for character_id in (leader_id, helper_id):
+        for character_id, expected_step, credited in (
+            (leader_id, 4, True),
+            (helper_id, 3, False),
+        ):
             quest = await session.scalar(
                 select(Quest).where(Quest.character_id == character_id, Quest.quest_id == P19_ID)
             )
-            assert quest is not None and quest.status == "active" and quest.step == 4
-            assert await session.scalar(
-                select(CampaignObjectiveCredit.id).where(
-                    CampaignObjectiveCredit.character_id == character_id,
-                    CampaignObjectiveCredit.quest_id == P19_ID,
-                    CampaignObjectiveCredit.objective_id == "p19.examined_water_and_gate",
+            assert quest is not None and quest.status == "active"
+            assert quest.step == expected_step
+            assert (
+                await session.scalar(
+                    select(CampaignObjectiveCredit.id).where(
+                        CampaignObjectiveCredit.character_id == character_id,
+                        CampaignObjectiveCredit.quest_id == P19_ID,
+                        CampaignObjectiveCredit.objective_id == "p19.examined_water_and_gate",
+                    )
                 )
-            ) is not None
+                is not None
+            ) is credited
 
 
 @pytest.mark.asyncio
@@ -1578,7 +1587,7 @@ async def test_varzeas_enfermaria_exploration_records_entry_without_starting_dun
 
 
 @pytest.mark.asyncio
-async def test_varzeas_p20_objective_credit_is_shared_only_with_present_members(database):
+async def test_varzeas_p20_objective_credit_stays_with_the_acting_member(database):
     leader, helper = 993202, 993203
     leader_id, sessions = await _seed_varzeas_porto(
         database, leader, level=33, p19=True
@@ -1634,6 +1643,8 @@ async def test_varzeas_p20_objective_credit_is_shared_only_with_present_members(
             )
         ) is None
 
+    # Objectives are Solo (Ação × Consequência §5): the helper gets nothing,
+    # even after reaching the same place.
     assert await road.travel_route(helper, VARZEAS_BREJOS) is not None
     await missions.on_location(helper)
     leader_view = await missions.resume(leader, P20_ID)
@@ -1643,7 +1654,7 @@ async def test_varzeas_p20_objective_credit_is_shared_only_with_present_members(
     )
     assert leader_view is not None
     async with sessions() as session:
-        for character_id in (leader_id, helper_id):
+        for character_id, credited in ((leader_id, True), (helper_id, False)):
             quest = await session.scalar(
                 select(Quest).where(
                     Quest.character_id == character_id,
@@ -1651,18 +1662,27 @@ async def test_varzeas_p20_objective_credit_is_shared_only_with_present_members(
                 )
             )
             assert quest is not None
-            assert "b" in quest.progress["water_occurrences"]
-            assert await session.scalar(
-                select(CampaignObjectiveCredit.id).where(
-                    CampaignObjectiveCredit.character_id == character_id,
-                    CampaignObjectiveCredit.quest_id == P20_ID,
-                    CampaignObjectiveCredit.objective_id == "p20.water_occurrence_b",
+            assert ("b" in quest.progress.get("water_occurrences", [])) is credited
+            assert (
+                await session.scalar(
+                    select(CampaignObjectiveCredit.id).where(
+                        CampaignObjectiveCredit.character_id == character_id,
+                        CampaignObjectiveCredit.quest_id == P20_ID,
+                        CampaignObjectiveCredit.objective_id == "p20.water_occurrence_b",
+                    )
                 )
-            ) is not None
+                is not None
+            ) is credited
+    helper_view = await missions.resume(helper, P20_ID)
+    assert helper_view is not None and helper_view.step == 2
+    assert not helper_view.progress.get("water_occurrences")
 
 
 @pytest.mark.asyncio
-async def test_varzeas_p20_scripted_spider_uses_shared_campaign_combat(database):
+async def test_varzeas_p20_scripted_spider_is_solo_and_group_is_refused(database, monkeypatch):
+    import asterion.application.scripted_combat as scripted_combat
+
+
     leader, helper = 993204, 993205
     leader_id, sessions = await _seed_varzeas_porto(
         database, leader, level=33, p19=True
@@ -1713,40 +1733,35 @@ async def test_varzeas_p20_scripted_spider_uses_shared_campaign_combat(database)
     )
     assert leader_view is not None and leader_view.step == 4
 
-    proposal_view = await missions.propose_group_combat(
-        leader, P20_ID, leader_view.state_version
-    )
-    assert proposal_view is not None and proposal_view.proposal_id is not None
-    proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
-    accepted = await groups.respond_activity(
-        helper,
-        proposal.proposal_id,
-        expected_revision=proposal.revision,
-        accept=True,
-    )
-    started = await missions.start_group_combat(
-        leader, proposal.proposal_id, expected_revision=accepted.revision
-    )
-    helper_view = await missions.resume(helper, P20_ID)
+    # P20 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await missions.propose_group_combat(leader, P20_ID, leader_view.state_version)
+    assert not await groups.activity_proposals(leader)
+    started = await missions.start_solo_combat(leader, P20_ID, leader_view.state_version)
     assert started is not None and started.kind == "combat"
-    assert started.group_size == 2 and started.combat is not None
+    assert started.group_size == 1 and started.combat is not None
+    assert not started.combat.party_mode
     assert started.combat.fighters["enemy"].name == "Aranha de Junco"
     assert started.combat.fighters["enemy"].level == 33
     assert started.combat.variant is None
-    assert helper_view is not None and helper_view.kind == "combat"
-    assert helper_view.group_size == 2
-    assert helper_view.encounter_id == started.encounter_id
-    assert helper_view.activity_id != started.activity_id
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
+    victory = await missions.action_combat(
+        leader, started.activity_id, started.combat.version, "attack"
+    )
+    assert victory is not None and victory.step == 5
     async with sessions() as session:
-        for character_id in (leader_id, helper_id):
-            quest = await session.scalar(
+        quests = {
+            character_id: await session.scalar(
                 select(Quest).where(
                     Quest.character_id == character_id,
                     Quest.quest_id == P20_ID,
                 )
             )
-            assert quest is not None and quest.step == 4
-            assert quest.progress["activity_id"]
+            for character_id in (leader_id, helper_id)
+        }
+        assert quests[leader_id] is not None and quests[leader_id].step == 5
+        assert quests[helper_id] is not None and quests[helper_id].step == 2
+        assert not await session.scalar(select(CampaignSharedEncounter).limit(1))
 
 
 @pytest.mark.asyncio
@@ -1943,7 +1958,7 @@ async def test_varzeas_p21_gate_journey_choice_and_rewards_are_idempotent(databa
 
 
 @pytest.mark.asyncio
-async def test_varzeas_p21_shared_objective_credit_is_individual_for_present_group_members(
+async def test_varzeas_p21_objective_credit_is_individual_for_group_members(
     database,
 ):
     leader, helper = 993227, 993228
@@ -1971,26 +1986,31 @@ async def test_varzeas_p21_shared_objective_credit_is_individual_for_present_gro
     assert leader_view is not None and leader_view.step == 2
     assert helper_view is not None and helper_view.step == 2
 
+    # Objectives are Solo (Ação × Consequência §5): only the leader is credited.
     result = await missions.advance(
         leader, P21_ID, leader_view.state_version, "examine_bed_a"
     )
     assert result is not None and result.step == 2
     async with sessions() as session:
-        for character_id in (leader_id, helper_id):
+        for character_id, credited in ((leader_id, True), (helper_id, False)):
             quest = await session.scalar(
                 select(Quest).where(
                     Quest.character_id == character_id,
                     Quest.quest_id == P21_ID,
                 )
             )
-            assert quest is not None and quest.progress["beds_examined"] == ["a"]
-            assert await session.scalar(
-                select(CampaignObjectiveCredit.id).where(
-                    CampaignObjectiveCredit.character_id == character_id,
-                    CampaignObjectiveCredit.quest_id == P21_ID,
-                    CampaignObjectiveCredit.objective_id == "p21.examined_bed_a",
+            assert quest is not None
+            assert (quest.progress.get("beds_examined") == ["a"]) is credited
+            assert (
+                await session.scalar(
+                    select(CampaignObjectiveCredit.id).where(
+                        CampaignObjectiveCredit.character_id == character_id,
+                        CampaignObjectiveCredit.quest_id == P21_ID,
+                        CampaignObjectiveCredit.objective_id == "p21.examined_bed_a",
+                    )
                 )
-            ) is not None
+                is not None
+            ) is credited
 
 
 @pytest.mark.asyncio
@@ -2636,7 +2656,7 @@ async def test_varzeas_p22_and_s22_galleries_progress_rewards_and_codex_are_idem
 
 
 @pytest.mark.asyncio
-async def test_varzeas_p22_reuses_prior_brazier_and_shares_objectives_with_present_group(
+async def test_varzeas_p22_reuses_prior_brazier_and_keeps_objectives_with_the_actor(
     database, monkeypatch
 ):
     import asterion.application.road as road_module
@@ -2757,26 +2777,33 @@ async def test_varzeas_p22_reuses_prior_brazier_and_shares_objectives_with_prese
     helper_p22 = await missions.resume(helper, P22_ID)
     assert leader_p22 is not None and leader_p22.step == 2
     assert helper_p22 is not None and helper_p22.step == 2
+    # Objectives are Solo (Ação × Consequência §5): only the leader advances.
     result = await missions.advance(
         leader, P22_ID, leader_p22.state_version, "register_valves_brazier"
     )
     assert result is not None and result.step == 3
     async with sessions() as session:
-        for member_id in (leader_id, helper_id):
+        for member_id, expected_step, credited in (
+            (leader_id, 3, True),
+            (helper_id, 2, False),
+        ):
             quest = await session.scalar(
                 select(Quest).where(
                     Quest.character_id == member_id,
                     Quest.quest_id == P22_ID,
                 )
             )
-            assert quest is not None and quest.step == 3
-            assert await session.scalar(
-                select(CampaignObjectiveCredit.id).where(
-                    CampaignObjectiveCredit.character_id == member_id,
-                    CampaignObjectiveCredit.quest_id == P22_ID,
-                    CampaignObjectiveCredit.objective_id == "p22.registered_brazier",
+            assert quest is not None and quest.step == expected_step
+            assert (
+                await session.scalar(
+                    select(CampaignObjectiveCredit.id).where(
+                        CampaignObjectiveCredit.character_id == member_id,
+                        CampaignObjectiveCredit.quest_id == P22_ID,
+                        CampaignObjectiveCredit.objective_id == "p22.registered_brazier",
+                    )
                 )
-            ) is not None
+                is not None
+            ) is credited
 
 
 @pytest.mark.asyncio

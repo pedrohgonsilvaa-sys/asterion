@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import func, select
 
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.p7 import REGION
 from asterion.application.road import (
     VDE_BERCO,
@@ -19,7 +19,6 @@ from asterion.application.vde_missions import (
     S11_REWARD_SOURCE,
     VDEMissionService,
 )
-from asterion.domain.combat import active_player_key
 from asterion.infrastructure.db.models import (
     BestiaryEntry,
     CampaignSharedEncounter,
@@ -303,8 +302,8 @@ async def test_p11_opens_berco_navigably_without_climax_activities(database, mon
 
 
 @pytest.mark.asyncio
-async def test_p11_shared_pressure_points_and_helper_reward_safety(database, monkeypatch):
-    import asterion.application.campaign_coop as campaign_coop
+async def test_p11_pressure_points_are_solo_and_group_fight_is_refused(database, monkeypatch):
+    import asterion.application.scripted_combat as scripted_combat
 
     leader, eligible, helper = 998803, 998804, 998805
     leader_id, sessions = await _seed_claustro(database, leader, level=19)
@@ -337,59 +336,42 @@ async def test_p11_shared_pressure_points_and_helper_reward_safety(database, mon
         view = await missions.examine(leader, P11_ID, view.state_version, point)
     assert view is not None and view.kind == "clear_roots"
     view = await missions.advance(leader, P11_ID, view.state_version, "roots")
+    # Objectives are Solo (Ação × Consequência §5): only the leader advances.
     async with sessions() as session:
-        for character_id in (leader_id, eligible_id):
-            quest = await session.scalar(
-                select(Quest).where(Quest.character_id == character_id, Quest.quest_id == P11_ID)
-            )
-            assert quest is not None and quest.step == 3
-            assert len(quest.progress["pressure_points"]) == 3
-
-    proposal_view = await missions.propose_group_combat(leader, P11_ID, view.state_version)
-    assert proposal_view is not None and proposal_view.proposal_id is not None
-    proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
-    for actor in (eligible, helper):
-        await groups.respond_activity(
-            actor,
-            proposal.proposal_id,
-            expected_revision=proposal.revision,
-            accept=True,
+        leader_quest = await session.scalar(
+            select(Quest).where(Quest.character_id == leader_id, Quest.quest_id == P11_ID)
         )
-        proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
-    started = await missions.start_group_combat(
-        leader, proposal.proposal_id, expected_revision=proposal.revision
-    )
-    assert started is not None and started.kind == "combat" and started.group_size == 3
-    async with sessions() as session:
-        encounter = await session.get(CampaignSharedEncounter, started.encounter_id)
-        assert encounter is not None and encounter.roster_size == 3
+        assert leader_quest is not None and leader_quest.step == 3
+        assert len(leader_quest.progress["pressure_points"]) == 3
+        eligible_quest = await session.scalar(
+            select(Quest).where(Quest.character_id == eligible_id, Quest.quest_id == P11_ID)
+        )
+        assert eligible_quest is not None and eligible_quest.step == 1
+        assert not (eligible_quest.progress or {}).get("pressure_points")
 
-    resumed = await missions.resume_active(eligible)
-    helper_view = await missions.resume_active(helper)
-    assert resumed is not None and resumed.encounter_id == started.encounter_id
-    assert helper_view is not None and helper_view.encounter_id == started.encounter_id
-    monkeypatch.setattr(campaign_coop, "act", _terminal("victory"))
-    active_key = active_player_key(started.combat)
-    assert active_key is not None
-    views_by_actor = {leader: started, eligible: resumed, helper: helper_view}
-    turn_owner = next(
-        actor
-        for actor, participant_view in views_by_actor.items()
-        if participant_view.combat_actor_key == active_key
-    )
-    active_view = views_by_actor[turn_owner]
+    # P11 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await missions.propose_group_combat(leader, P11_ID, view.state_version)
+    for actor in (leader, eligible, helper):
+        assert not await groups.activity_proposals(actor)
+
+    started = await missions.start_solo_combat(leader, P11_ID, view.state_version)
+    assert started is not None and started.kind == "combat" and started.group_size == 1
+    resumed = await missions.resume_active(leader)
+    assert resumed is not None and resumed.activity_id == started.activity_id
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     result = await missions.action_combat(
-        turn_owner, active_view.activity_id, active_view.combat.version, "attack"
+        leader, started.activity_id, started.combat.version, "attack"
     )
     if result is not None and result.kind == "combat_result":
         result = await missions.resume(leader, P11_ID)
     assert result is not None and result.kind == "chamber"
     async with sessions() as session:
-        for character_id in (leader_id, eligible_id):
+        for character_id, expected_step in ((leader_id, 4), (eligible_id, 1)):
             quest = await session.scalar(
                 select(Quest).where(Quest.character_id == character_id, Quest.quest_id == P11_ID)
             )
-            assert quest is not None and quest.step == 4
+            assert quest is not None and quest.step == expected_step
         assert await session.scalar(
             select(Quest.id).where(Quest.character_id == helper_id, Quest.quest_id == P11_ID)
         ) is None
@@ -399,11 +381,12 @@ async def test_p11_shared_pressure_points_and_helper_reward_safety(database, mon
                 RewardEvent.source_id == P11_REWARD_SOURCE,
             )
         ) is None
+        assert not await session.scalar(select(CampaignSharedEncounter).limit(1))
 
 
 @pytest.mark.asyncio
-async def test_s11_group_helper_reconnect_and_one_time_rewards(database, monkeypatch):
-    import asterion.application.campaign_coop as campaign_coop
+async def test_s11_group_member_plays_alone_reconnects_and_rewards_once(database, monkeypatch):
+    import asterion.application.scripted_combat as scripted_combat
 
     leader, eligible, helper = 998808, 998809, 998810
     leader_id, sessions = await _seed_claustro(database, leader, level=18)
@@ -436,49 +419,37 @@ async def test_s11_group_helper_reconnect_and_one_time_rewards(database, monkeyp
     for point in ("a", "b"):
         view = await missions.examine(leader, S11_ID, view.state_version, point)
     assert view is not None and view.kind == "combat_start"
+    # Objectives are Solo (Ação × Consequência §5): only the leader advances.
     async with sessions() as session:
-        for character_id in (leader_id, eligible_id):
-            quest = await session.scalar(
-                select(Quest).where(Quest.character_id == character_id, Quest.quest_id == S11_ID)
-            )
-            assert quest is not None and quest.step == 2
-            assert quest.progress["patrols"] == ["a", "b"]
-
-    proposal_view = await missions.propose_group_combat(leader, S11_ID, view.state_version)
-    assert proposal_view is not None and proposal_view.proposal_id is not None
-    proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
-    for actor in (eligible, helper):
-        await groups.respond_activity(
-            actor,
-            proposal.proposal_id,
-            expected_revision=proposal.revision,
-            accept=True,
+        leader_quest = await session.scalar(
+            select(Quest).where(Quest.character_id == leader_id, Quest.quest_id == S11_ID)
         )
-        proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
-    started = await missions.start_group_combat(
-        leader, proposal.proposal_id, expected_revision=proposal.revision
-    )
-    assert started is not None and started.kind == "combat" and started.group_size == 3
+        assert leader_quest is not None and leader_quest.step == 2
+        assert leader_quest.progress["patrols"] == ["a", "b"]
+        eligible_quest = await session.scalar(
+            select(Quest).where(Quest.character_id == eligible_id, Quest.quest_id == S11_ID)
+        )
+        assert eligible_quest is not None and eligible_quest.step == 1
+        assert not (eligible_quest.progress or {}).get("patrols")
 
-    # Reconnect through the persisted shared encounter for both an eligible player and helper.
+    # S11 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await missions.propose_group_combat(leader, S11_ID, view.state_version)
+    for actor in (leader, eligible, helper):
+        assert not await groups.activity_proposals(actor)
+
+    started = await missions.start_solo_combat(leader, S11_ID, view.state_version)
+    assert started is not None and started.kind == "combat" and started.group_size == 1
+
+    # Reconnect through the persisted encounter; the others have no combat.
     leader_view = await missions.resume_active(leader)
+    assert leader_view is not None and leader_view.activity_id == started.activity_id
+    assert leader_view.encounter_id == started.encounter_id
     eligible_view = await missions.resume_active(eligible)
-    helper_view = await missions.resume_active(helper)
-    assert leader_view is not None and leader_view.encounter_id == started.encounter_id
-    assert eligible_view is not None and eligible_view.encounter_id == started.encounter_id
-    assert helper_view is not None and helper_view.encounter_id == started.encounter_id
-    monkeypatch.setattr(campaign_coop, "act", _terminal("victory"))
-    active_key = active_player_key(started.combat)
-    assert active_key is not None
-    views_by_actor = {leader: leader_view, eligible: eligible_view, helper: helper_view}
-    turn_owner = next(
-        actor
-        for actor, participant_view in views_by_actor.items()
-        if participant_view.combat_actor_key == active_key
-    )
-    active_view = views_by_actor[turn_owner]
+    assert eligible_view is not None and eligible_view.activity_id is None
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
     result = await missions.action_combat(
-        turn_owner, active_view.activity_id, active_view.combat.version, "attack"
+        leader, started.activity_id, started.combat.version, "attack"
     )
     if result is not None and result.kind == "combat_result":
         result = await missions.resume(leader, S11_ID)
@@ -495,17 +466,27 @@ async def test_s11_group_helper_reconnect_and_one_time_rewards(database, monkeyp
     await missions.advance(leader, S11_ID, stale_version, "report")
 
     async with sessions() as session:
-        for character_id in (leader_id, eligible_id):
-            quest = await session.scalar(
-                select(Quest).where(Quest.character_id == character_id, Quest.quest_id == S11_ID)
+        leader_quest = await session.scalar(
+            select(Quest).where(Quest.character_id == leader_id, Quest.quest_id == S11_ID)
+        )
+        assert leader_quest is not None and leader_quest.status == "completed"
+        assert await session.scalar(
+            select(func.count(RewardEvent.id)).where(
+                RewardEvent.character_id == leader_id,
+                RewardEvent.source_id == S11_REWARD_SOURCE,
             )
-            assert quest is not None and quest.status == "completed"
-            assert await session.scalar(
-                select(func.count(RewardEvent.id)).where(
-                    RewardEvent.character_id == character_id,
-                    RewardEvent.source_id == S11_REWARD_SOURCE,
-                )
-            ) == 1
+        ) == 1
+        eligible_quest = await session.scalar(
+            select(Quest).where(Quest.character_id == eligible_id, Quest.quest_id == S11_ID)
+        )
+        assert eligible_quest is not None and eligible_quest.status == "active"
+        assert eligible_quest.step == 1
+        assert await session.scalar(
+            select(RewardEvent.id).where(
+                RewardEvent.character_id == eligible_id,
+                RewardEvent.source_id == S11_REWARD_SOURCE,
+            )
+        ) is None
         assert await session.scalar(
             select(Quest.id).where(Quest.character_id == helper_id, Quest.quest_id == S11_ID)
         ) is None

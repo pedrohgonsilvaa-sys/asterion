@@ -467,7 +467,7 @@ async def test_s36_solo_full_progress_retry_reaccept_and_exact_one_time_reward(
 
 
 @pytest.mark.asyncio
-async def test_s36_group_shares_only_present_eligible_progress_and_scripted_victory(
+async def test_s36_members_do_earlier_steps_alone_and_fight_the_boss_together(
     database, monkeypatch
 ):
     actors = (796380, 796381, 796382)
@@ -511,11 +511,60 @@ async def test_s36_group_shares_only_present_eligible_progress_and_scripted_vict
         assert views[actor] is not None and views[actor].step == 2
         await _travel_to_node(road, actor)
 
+    # Steps before the Boss are Solo (Ação × Consequência §5): each member
+    # collects the evidence alone and the other one stays on the same step.
+    steps = (
+        "inspect_control_safety",
+        "inspect_control_obsolete_order",
+        "inspect_control_verification",
+        "collect_return_proof_a",
+        "collect_return_proof_b",
+    )
     actor = actors[0]
     view = views[actor]
     assert view is not None
-    view = await service.advance(actor, view.state_version, "inspect_control_safety")
+    view = await service.advance(actor, view.state_version, steps[0])
     assert view is not None and view.step == 2
+    other_view = await service.resume(actors[1])
+    assert other_view is not None and other_view.step == 2
+    async with sessions() as session:
+        credit_by_actor = {}
+        for eligible_actor in actors[:2]:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == eligible_actor)
+            )
+            assert character is not None
+            credit_by_actor[eligible_actor] = await session.scalar(
+                select(CampaignObjectiveCredit.id).where(
+                    CampaignObjectiveCredit.character_id == character.id,
+                    CampaignObjectiveCredit.quest_id == S36_ID,
+                    CampaignObjectiveCredit.source_key == "evidence.confins.s36.controle_seguranca",
+                )
+            )
+        assert credit_by_actor[actors[0]] is not None
+        assert credit_by_actor[actors[1]] is None
+        late_character = await session.scalar(
+            select(Character).where(Character.telegram_id == actors[2])
+        )
+        assert late_character is not None
+        assert await session.scalar(
+            select(Quest.id).where(
+                Quest.character_id == late_character.id,
+                Quest.quest_id == S36_ID,
+            )
+        ) is None
+
+    for action in steps[1:]:
+        view = await service.advance(actor, view.state_version, action)
+        assert view is not None
+    assert view.step == 4
+    other_view = await service.resume(actors[1])
+    assert other_view is not None and other_view.step == 2
+    # The other member does the same steps on their own.
+    for action in steps:
+        other_view = await service.advance(actors[1], other_view.state_version, action)
+        assert other_view is not None
+    assert other_view.step == 4
     async with sessions() as session:
         for eligible_actor in actors[:2]:
             character = await session.scalar(
@@ -529,26 +578,8 @@ async def test_s36_group_shares_only_present_eligible_progress_and_scripted_vict
                     CampaignObjectiveCredit.source_key == "evidence.confins.s36.controle_seguranca",
                 )
             ) is not None
-        late_character = await session.scalar(
-            select(Character).where(Character.telegram_id == actors[2])
-        )
-        assert late_character is not None
-        assert await session.scalar(
-            select(Quest.id).where(
-                Quest.character_id == late_character.id,
-                Quest.quest_id == S36_ID,
-            )
-        ) is None
 
-    for action in (
-        "inspect_control_obsolete_order",
-        "inspect_control_verification",
-        "collect_return_proof_a",
-        "collect_return_proof_b",
-    ):
-        view = await service.advance(actor, view.state_version, action)
-        assert view is not None
-    assert view.step == 4
+    # Boss: both members fight together in one shared encounter.
     pending = await service.propose_group_combat(actor, view.state_version)
     assert pending is not None and pending.proposal_id is not None
     proposal = await groups.activity_proposal(actor, pending.proposal_id)

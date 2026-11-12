@@ -423,7 +423,7 @@ async def test_s28_cannot_corroborate_without_all_three_letters(database):
         ) is None
 
 @pytest.mark.asyncio
-async def test_s28_shareable_letters_only_credit_eligible_present_participants(database):
+async def test_s28_letters_credit_only_the_acting_member(database):
     leader, _road, sessions, service = await _seed_s28(database, 788289)
     helper, _road, _sessions, helper_service = await _seed_s28(database, 788290)
     async with sessions() as session:
@@ -449,49 +449,59 @@ async def test_s28_shareable_letters_only_credit_eligible_present_participants(d
     await _move(sessions, helper, ALTOS_PONTES_LABEL)
     leader_view = await service.resume(leader)
     assert leader_view is not None and leader_view.step == 1
+    # Objectives are Solo (Ação × Consequência §5): only the leader advances.
     shared = await service.advance(
         leader, leader_view.state_version, S28_ACTIONS[0]
     )
     assert shared is not None and shared.step == 2
+    helper_view = await helper_service.resume(helper)
+    assert helper_view is not None and helper_view.step == 1
 
     async with sessions() as session:
-        ids = set(
-            (
+        leader_id = await session.scalar(
+            select(Character.id).where(Character.telegram_id == leader)
+        )
+        helper_id = await session.scalar(
+            select(Character.id).where(Character.telegram_id == helper)
+        )
+        quests = {
+            quest.character_id: quest
+            for quest in (
                 await session.scalars(
-                    select(Character.id).where(Character.telegram_id.in_((leader, helper)))
+                    select(Quest).where(
+                        Quest.character_id.in_((leader_id, helper_id)),
+                        Quest.quest_id == S28_ID,
+                    )
                 )
             ).all()
-        )
-        quests = (
-            await session.scalars(
-                select(Quest).where(Quest.character_id.in_(ids), Quest.quest_id == S28_ID)
+        }
+        assert quests[leader_id].step == 2 and quests[helper_id].step == 1
+        assert await session.scalar(
+            select(CodexFragment.id).where(
+                CodexFragment.character_id == leader_id,
+                CodexFragment.fragment_id == S28_LETTER_FRAGMENTS[0],
             )
-        ).all()
-        assert all(quest.step == 2 for quest in quests)
-        for character_id in ids:
-            assert await session.scalar(
-                select(CodexFragment.id).where(
-                    CodexFragment.character_id == character_id,
-                    CodexFragment.fragment_id == S28_LETTER_FRAGMENTS[0],
-                )
-            ) is not None
+        ) is not None
+        assert await session.scalar(
+            select(CodexFragment.id).where(
+                CodexFragment.character_id == helper_id,
+                CodexFragment.fragment_id == S28_LETTER_FRAGMENTS[0],
+            )
+        ) is None
         credits = (
             await session.scalars(
                 select(CampaignObjectiveCredit).where(
-                    CampaignObjectiveCredit.character_id.in_(ids),
+                    CampaignObjectiveCredit.character_id.in_((leader_id, helper_id)),
                     CampaignObjectiveCredit.quest_id == S28_ID,
                     CampaignObjectiveCredit.objective_id == "s28.letter.civil",
                 )
             )
         ).all()
-        assert {credit.character_id for credit in credits} == ids
+        assert {credit.character_id for credit in credits} == {leader_id}
 
-    # The first three physical letters are shareable; the Maro comparison and
-    # final corroboration remain personal to each character.
     for step in (2, 3):
         location = S28_LOCATIONS[step - 1]
         await _move(sessions, leader, location)
-        await _move(sessions, helper, location)
         leader_view = await service.resume(leader)
         assert leader_view is not None and leader_view.step == step
         leader_view = await service.advance(
@@ -499,18 +509,16 @@ async def test_s28_shareable_letters_only_credit_eligible_present_participants(d
         )
         assert leader_view is not None and leader_view.step == step + 1
         helper_view = await helper_service.resume(helper)
-        assert helper_view is not None and helper_view.step == step + 1
+        assert helper_view is not None and helper_view.step == 1
 
     leader_view = await service.resume(leader)
-    helper_view = await helper_service.resume(helper)
-    assert leader_view is not None and helper_view is not None
-    assert leader_view.step == helper_view.step == 4
+    assert leader_view is not None and leader_view.step == 4
     leader_view = await service.advance(
         leader, leader_view.state_version, "compare_with_maro"
     )
     assert leader_view is not None and leader_view.step == 5
     helper_view = await helper_service.resume(helper)
-    assert helper_view is not None and helper_view.step == 4
+    assert helper_view is not None and helper_view.step == 1
 
 
 @pytest.mark.asyncio

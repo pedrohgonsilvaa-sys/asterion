@@ -1,5 +1,3 @@
-from dataclasses import replace
-from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
@@ -13,7 +11,7 @@ from asterion.application.altos_missions import (
     P29_TITLE,
     AltosMissionService,
 )
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.knowledge_catalog import (
     ACHIEVEMENT_BY_ID,
     CODEX_BY_ID,
@@ -21,17 +19,14 @@ from asterion.application.knowledge_catalog import (
     LOCATION_LABELS,
 )
 from asterion.application.road import ALTOS_CORACAO_LABEL
-from asterion.domain.combat import active_player_key
 from asterion.domain.road import (
     ALTOS_CORACAO_ACCESS_UNLOCK,
     ALTOS_CORACAO_LOCATION,
     EXPLORATION_PROFILES,
     HUNT_PROFILES,
 )
-from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
     Achievement,
-    CampaignSharedEncounter,
     Character,
     CodexEntry,
     CodexFragment,
@@ -296,7 +291,11 @@ async def test_p29_shareable_steps_scripted_combat_and_personal_codex(
 
 
 @pytest.mark.asyncio
-async def test_p29_group_shares_evidence_but_keeps_risk_comparison_personal(database):
+async def test_p29_group_members_play_the_mission_alone_and_in_solo_combat(
+    database, monkeypatch
+):
+    import asterion.application.scripted_combat as scripted_combat
+
     actors = (781592, 781593)
     seeded = [
         await _seed_p28_character(database, actor, level=49, p28_status="completed")
@@ -333,99 +332,53 @@ async def test_p29_group_shares_evidence_but_keeps_risk_comparison_personal(data
             ).all()
         }
 
-    view = await mission.resume_active(actors[0])
-    assert view is not None
-    for record in ("priority_record_1", "priority_record_2", "priority_record_3"):
-        view = await mission.advance(actors[0], view.state_version, f"collect_{record}")
-        assert view is not None
-    helper_view = await mission.resume_active(actors[1])
-    assert helper_view is not None and helper_view.step == 2
-    assert len(helper_view.progress["priority_records"]) == 3
+    monkeypatch.setattr(scripted_combat, "act", _terminal("victory"))
 
-    view = await mission.advance(actors[0], view.state_version, "locate_convergence_order")
-    assert view is not None and view.step == 3
-    assert (await mission.resume_active(actors[1])).step == 3
-    view = await mission.advance(
-        actors[0], view.state_version, "inspect_network_coupling_diagram"
-    )
-    assert view is not None and view.step == 4
-
-    pending = await mission.propose_group_combat(actors[0], view.state_version, P29_ID)
-    assert pending is not None and pending.proposal_id is not None
-    proposal = await groups.activity_proposal(actors[0], pending.proposal_id)
-    accepted = await groups.respond_activity(
-        actors[1], proposal.proposal_id, expected_revision=proposal.revision, accept=True
-    )
-    started = await mission.start_group_combat(
-        actors[0], proposal.proposal_id, expected_revision=accepted.revision
-    )
-    assert started is not None and started.combat is not None and started.group_size == 2
-
-    async with sessions.begin() as session:
-        encounter = await session.get(CampaignSharedEncounter, started.encounter_id)
-        assert encounter is not None
-        combat = decode(
-            encounter.combat_snapshot,
-            encounter.id,
-            encounter.ruleset_version,
-            encounter.state_version,
+    async def play_until_combat(actor):
+        view = await mission.resume_active(actor)
+        assert view is not None and view.step == 1
+        for record in ("priority_record_1", "priority_record_2", "priority_record_3"):
+            view = await mission.advance(actor, view.state_version, f"collect_{record}")
+            assert view is not None
+        view = await mission.advance(actor, view.state_version, "locate_convergence_order")
+        assert view is not None and view.step == 3
+        view = await mission.advance(
+            actor, view.state_version, "inspect_network_coupling_diagram"
         )
-        enemy = combat.fighters["enemy"]
-        enemy.hp = Decimal("1")
-        enemy.stats = replace(enemy.stats, hp=Decimal("1"))
-        enemy.takes_turn = False
-        combat.order = tuple(key for key in combat.order if key != "enemy")
-        combat.turn_index = 0
-        encounter.combat_snapshot = encode(combat)
+        assert view is not None and view.step == 4
+        return view
 
-    views = {actor: await mission.resume(actor, P29_ID) for actor in actors}
-    combat = next(item.combat for item in views.values() if item is not None)
-    actor = next(
-        actor
-        for actor, item in views.items()
-        if item is not None and item.combat_actor_key == active_player_key(combat)
-    )
-    turn = views[actor]
-    victory = await mission.action(
-        actor, turn.activity_id, combat.version, "attack", target_id="enemy"
-    )
-    assert victory is not None and victory.step == 5
-    async with sessions() as session:
-        characters = (
-            await session.scalars(
-                select(Character).where(Character.telegram_id.in_(actors))
-            )
-        ).all()
-        assert {row.telegram_id: (row.xp, row.crowns) for row in characters} == before
-        assert not (
-            await session.scalars(
-                select(RewardEvent).where(
-                    RewardEvent.character_id.in_(row.id for row in characters),
-                    RewardEvent.source_id == P29_MISSION_ID,
-                )
-            )
-        ).all()
-    for participant in actors:
-        resumed = await mission.resume_active(participant)
-        assert resumed is not None and resumed.step == 5
+    async def finish(actor, view):
+        started = await mission.start_solo_combat(actor, view.state_version, P29_ID)
+        assert started is not None and started.combat is not None
+        assert started.group_size == 1 and not started.combat.party_mode
+        victory = await mission.action(
+            actor, started.activity_id, started.combat.version, "attack"
+        )
+        assert victory is not None and victory.step == 5
+        personal = await mission.advance(
+            actor, victory.state_version, "compare_documented_risks_with_sel_and_maro"
+        )
+        assert personal is not None and personal.step == 6
+        codex = await mission.advance(
+            actor, personal.state_version, "record_convergence_codex"
+        )
+        assert codex is not None and codex.step == 7
+        done = await mission.advance(actor, codex.state_version, "open_route_to_coracao")
+        assert done is not None and done.status == "completed"
 
-    personal = await mission.advance(
-        actors[0],
-        victory.state_version,
-        "compare_documented_risks_with_sel_and_maro",
-    )
-    assert personal is not None and personal.step == 6
-    helper_after = await mission.resume_active(actors[1])
-    assert helper_after is not None and helper_after.step == 5
-    actor_zero_codex = await mission.advance(
-        actors[0], personal.state_version, "record_convergence_codex"
-    )
-    assert actor_zero_codex is not None and actor_zero_codex.step == 7
-    actor_zero_complete = await mission.advance(
-        actors[0], actor_zero_codex.state_version, "open_route_to_coracao"
-    )
-    assert actor_zero_complete is not None
-    assert actor_zero_complete.status == "completed"
+    # Objectives are Solo (Ação × Consequência §5): the leader advances alone.
+    view = await play_until_combat(actors[0])
+    helper_view = await mission.resume_active(actors[1])
+    assert helper_view is not None and helper_view.step == 1
+    assert not helper_view.progress.get("priority_records")
+
+    # P29 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await mission.propose_group_combat(actors[0], view.state_version, P29_ID)
+    assert not await groups.activity_proposals(actors[0])
+
+    await finish(actors[0], view)
     async with sessions() as session:
         characters = (
             await session.scalars(
@@ -433,6 +386,9 @@ async def test_p29_group_shares_evidence_but_keeps_risk_comparison_personal(data
             )
         ).all()
         ids = {character.telegram_id: character.id for character in characters}
+        assert {row.telegram_id: (row.xp, row.crowns) for row in characters}[
+            actors[1]
+        ] == before[actors[1]]
         assert await session.scalar(
             select(Unlock.id).where(
                 Unlock.character_id == ids[actors[0]],
@@ -445,26 +401,20 @@ async def test_p29_group_shares_evidence_but_keeps_risk_comparison_personal(data
                 Unlock.unlock_id == ALTOS_CORACAO_ACCESS_UNLOCK,
             )
         ) is None
-
-    helper_personal = await mission.advance(
-        actors[1], helper_after.state_version, "compare_documented_risks_with_sel_and_maro"
-    )
-    assert helper_personal is not None and helper_personal.step == 6
-    helper_codex = await mission.advance(
-        actors[1], helper_personal.state_version, "record_convergence_codex"
-    )
-    assert helper_codex is not None and helper_codex.step == 7
-    helper_complete = await mission.advance(
-        actors[1], helper_codex.state_version, "open_route_to_coracao"
-    )
-    assert helper_complete is not None and helper_complete.status == "completed"
-    async with sessions() as session:
-        characters = (
+        assert not (
             await session.scalars(
-                select(Character).where(Character.telegram_id.in_(actors))
+                select(RewardEvent).where(
+                    RewardEvent.character_id == ids[actors[1]],
+                    RewardEvent.source_id == P29_MISSION_ID,
+                )
             )
         ).all()
-        ids = {character.telegram_id: character.id for character in characters}
+    helper_after = await mission.resume_active(actors[1])
+    assert helper_after is not None and helper_after.step == 1
+
+    # The other member does every earlier step alone, then the Solo fight.
+    await finish(actors[1], await play_until_combat(actors[1]))
+    async with sessions() as session:
         for actor in actors:
             assert await session.scalar(
                 select(Unlock.id).where(

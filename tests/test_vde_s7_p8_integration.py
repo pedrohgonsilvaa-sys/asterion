@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import func, select
 
-from asterion.application.groups import GroupService
+from asterion.application.groups import GroupError, GroupService
 from asterion.application.p7 import (
     GARGANTA as VDE_GARGANTA,
 )
@@ -1417,7 +1417,7 @@ async def test_s7_and_p8_solo_flow_routes_codex_rewards_and_idempotence(database
 
 
 @pytest.mark.asyncio
-async def test_s7_group_shares_objectives_and_reconnects_to_same_encounter(database):
+async def test_s7_group_member_examines_alone_and_reconnects_to_own_solo_encounter(database):
     leader = 999734
     helper = 999735
     leader_id, sessions = await _seed_vde_ready(database, leader)
@@ -1450,6 +1450,7 @@ async def test_s7_group_shares_objectives_and_reconnects_to_same_encounter(datab
     assert leader_view is not None and leader_view.status == "active"
     assert helper_view is not None and helper_view.status == "active"
 
+    # Objectives are Solo (Ação × Consequência §5): only the leader advances.
     for point in ("a", "b", "c"):
         leader_view = await missions.examine(leader, S7_ID, leader_view.state_version, point)
     assert leader_view is not None and leader_view.step == 2
@@ -1458,8 +1459,8 @@ async def test_s7_group_shares_objectives_and_reconnects_to_same_encounter(datab
             select(Quest).where(Quest.character_id == helper_id, Quest.quest_id == S7_ID)
         )
         assert helper_quest is not None
-        assert helper_quest.step == 2
-        assert set(helper_quest.progress["markers"]) == {"a", "b", "c"}
+        assert helper_quest.step == 1
+        assert not (helper_quest.progress or {}).get("markers")
         assert (
             await session.scalar(
                 select(func.count(CampaignObjectiveCredit.id)).where(
@@ -1468,34 +1469,39 @@ async def test_s7_group_shares_objectives_and_reconnects_to_same_encounter(datab
                     CampaignObjectiveCredit.objective_id.like("s7.markers.%"),
                 )
             )
+            == 0
+        )
+        assert (
+            await session.scalar(
+                select(func.count(CampaignObjectiveCredit.id)).where(
+                    CampaignObjectiveCredit.character_id == leader_id,
+                    CampaignObjectiveCredit.quest_id == S7_ID,
+                    CampaignObjectiveCredit.objective_id.like("s7.markers.%"),
+                )
+            )
             == 3
         )
 
-    proposal_view = await missions.propose_group_combat(leader, S7_ID, leader_view.state_version)
-    assert proposal_view is not None and proposal_view.proposal_id is not None
-    proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
-    accepted = await groups.respond_activity(
-        helper,
-        proposal.proposal_id,
-        expected_revision=proposal.revision,
-        accept=True,
-    )
-    started = await missions.start_group_combat(
-        leader,
-        proposal.proposal_id,
-        expected_revision=accepted.revision,
-    )
+    # S7 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await missions.propose_group_combat(leader, S7_ID, leader_view.state_version)
+    assert not await groups.activity_proposals(leader)
+    assert not await groups.activity_proposals(helper)
+
+    started = await missions.start_solo_combat(leader, S7_ID, leader_view.state_version)
     assert started is not None and started.activity_id is not None
-    assert started.group_size == 2
-    resumed_helper = await missions.resume_active(helper)
-    assert resumed_helper is not None
-    assert resumed_helper.activity_id is not None
-    assert resumed_helper.activity_id != started.activity_id
-    assert resumed_helper.encounter_id == started.encounter_id
+    assert started.group_size == 1
+    resumed = await missions.resume_active(leader)
+    assert resumed is not None
+    assert resumed.activity_id == started.activity_id
+    assert resumed.encounter_id == started.encounter_id
+    helper_active = await missions.resume_active(helper)
+    assert helper_active is not None and helper_active.step == 1
+    assert helper_active.activity_id is None
 
 
 @pytest.mark.asyncio
-async def test_p8_group_shares_mata_entry_roots_and_reconnects_to_same_encounter(database):
+async def test_p8_group_member_enters_mata_alone_and_reconnects_to_own_solo_encounter(database):
     leader = 999736
     helper = 999737
     leader_id, sessions = await _seed_vde_ready(database, leader, level=13)
@@ -1537,55 +1543,58 @@ async def test_p8_group_shares_mata_entry_roots_and_reconnects_to_same_encounter
         )
     assert leader_view is not None and leader_view.step == 3
 
+    # Objectives are Solo (Ação × Consequência §5): only the leader advances.
     async with sessions() as session:
         helper_quest = await session.scalar(
             select(Quest).where(Quest.character_id == helper_id, Quest.quest_id == P8_ID)
         )
         assert helper_quest is not None
-        assert helper_quest.step == 3
-        assert set(helper_quest.progress["roots"]) == {"a", "b", "c"}
-        assert (
-            await session.scalar(
-                select(func.count(CampaignObjectiveCredit.id)).where(
-                    CampaignObjectiveCredit.character_id == helper_id,
-                    CampaignObjectiveCredit.quest_id == P8_ID,
-                    CampaignObjectiveCredit.objective_id.like("p8.roots.%"),
-                )
-            )
-            == 3
-        )
-
-    proposal_view = await missions.propose_group_combat(
-        leader, P8_ID, leader_view.state_version
-    )
-    assert proposal_view is not None and proposal_view.proposal_id is not None
-    proposal = await groups.activity_proposal(leader, proposal_view.proposal_id)
-    accepted = await groups.respond_activity(
-        helper,
-        proposal.proposal_id,
-        expected_revision=proposal.revision,
-        accept=True,
-    )
-    started = await missions.start_group_combat(
-        leader,
-        proposal.proposal_id,
-        expected_revision=accepted.revision,
-    )
-    assert started is not None and started.group_size == 2
-    resumed_helper = await missions.resume_active(helper)
-    assert resumed_helper is not None
-    assert resumed_helper.activity_id is not None
-    assert resumed_helper.activity_id != started.activity_id
-    assert resumed_helper.encounter_id == started.encounter_id
-
-    async with sessions() as session:
-        for character_id in (leader_id, helper_id):
+        assert helper_quest.step == 1
+        assert not (helper_quest.progress or {}).get("roots")
+        for character_id, expected in ((leader_id, 3), (helper_id, 0)):
             assert (
                 await session.scalar(
-                    select(LocationDiscovery.id).where(
-                        LocationDiscovery.character_id == character_id,
-                        LocationDiscovery.location_id == "vde.location.mata_suspensa",
+                    select(func.count(CampaignObjectiveCredit.id)).where(
+                        CampaignObjectiveCredit.character_id == character_id,
+                        CampaignObjectiveCredit.quest_id == P8_ID,
+                        CampaignObjectiveCredit.objective_id.like("p8.roots.%"),
                     )
                 )
-                is not None
+                == expected
             )
+
+    # P8 is not a Boss: the Group proposal is refused and nothing is reserved.
+    with pytest.raises(GroupError, match="mission_coop_boss_only"):
+        await missions.propose_group_combat(leader, P8_ID, leader_view.state_version)
+    assert not await groups.activity_proposals(leader)
+    assert not await groups.activity_proposals(helper)
+
+    started = await missions.start_solo_combat(leader, P8_ID, leader_view.state_version)
+    assert started is not None and started.group_size == 1
+    resumed = await missions.resume_active(leader)
+    assert resumed is not None
+    assert resumed.activity_id == started.activity_id
+    assert resumed.encounter_id == started.encounter_id
+    helper_active = await missions.resume_active(helper)
+    assert helper_active is not None and helper_active.step == 1
+    assert helper_active.activity_id is None
+
+    async with sessions() as session:
+        assert (
+            await session.scalar(
+                select(LocationDiscovery.id).where(
+                    LocationDiscovery.character_id == leader_id,
+                    LocationDiscovery.location_id == "vde.location.mata_suspensa",
+                )
+            )
+            is not None
+        )
+        assert (
+            await session.scalar(
+                select(LocationDiscovery.id).where(
+                    LocationDiscovery.character_id == helper_id,
+                    LocationDiscovery.location_id == "vde.location.mata_suspensa",
+                )
+            )
+            is None
+        )

@@ -270,7 +270,7 @@ async def test_s1_existing_lights_fragment_is_not_announced_as_new(database):
 
 
 @pytest.mark.asyncio
-async def test_s1_shares_present_objectives_but_keeps_completion_rewards_personal(database):
+async def test_s1_group_member_advances_alone_and_completion_rewards_stay_personal(database):
     actors = (774006, 774007)
     services = [await _seed_s1(database, actor) for actor in actors]
     sessions = database[1]
@@ -305,24 +305,26 @@ async def test_s1_shares_present_objectives_but_keeps_completion_rewards_persona
             )
             world.location = "Estrada das Cinzas"
 
+    # Objectives are Solo (Ação × Consequência §5): only the actor advances.
     first = await services[0].resume(actors[0])
     second = await services[1].resume(actors[1])
     assert first is not None and second is not None
     first = await services[0].investigate_point(actors[0], 2, first.state_version)
     second = await services[1].resume(actors[1])
-    assert first.progress["points"] == second.progress["points"] == [2]
+    assert first.progress["points"] == [2]
+    assert not second.progress.get("points")
 
     for point in (1, 3):
         first = await services[0].investigate_point(actors[0], point, first.state_version)
     assert first.step == 2
     second = await services[1].resume(actors[1])
-    assert second.step == 2 and second.progress["points"] == [1, 2, 3]
+    assert second.step == 1 and not second.progress.get("points")
     first = await services[0].examine_ashes(actors[0], first.state_version)
     second = await services[1].resume(actors[1])
-    assert first.step == second.step == 3
+    assert first.step == 3 and second.step == 1
     first = await services[0].observe_light(actors[0], first.state_version)
     second = await services[1].resume(actors[1])
-    assert first.step == second.step == 4
+    assert first.step == 4 and second.step == 1
 
     async with sessions.begin() as session:
         characters = list(
@@ -342,7 +344,7 @@ async def test_s1_shares_present_objectives_but_keeps_completion_rewards_persona
     completed = await services[0].complete_with_oren(actors[0], first.state_version)
     assert completed.status == "completed"
     remaining = await services[1].resume(actors[1])
-    assert remaining.status == "active" and remaining.step == 4
+    assert remaining.status == "active" and remaining.step == 1
     async with sessions() as session:
         credits = (
             await session.scalars(
@@ -351,7 +353,8 @@ async def test_s1_shares_present_objectives_but_keeps_completion_rewards_persona
                 )
             )
         ).all()
-        assert len(credits) == 10
+        assert len(credits) == 5
+        assert {credit.character_id for credit in credits} == {characters[0].id}
         assert await session.scalar(
             select(RewardEvent).where(
                 RewardEvent.character_id == characters[0].id,

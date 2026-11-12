@@ -555,7 +555,7 @@ async def test_p26_persistence_rewards_local_gates_exploration_and_round(databas
 
 
 @pytest.mark.asyncio
-async def test_p26_shareable_evidence_is_persisted_for_eligible_group_members(database):
+async def test_p26_group_evidence_is_persisted_only_for_the_acting_member(database):
     leader, road, sessions = await _seed_p26_character(database, 780263)
     helper, _helper_road, _ = await _seed_p26_character(database, 780264)
     async with sessions() as session:
@@ -592,8 +592,9 @@ async def test_p26_shareable_evidence_is_persisted_for_eligible_group_members(da
     view = await mission.advance(leader, view.state_version, "inspect_order_station_1")
     assert view is not None and view.step == 3
     reconnected = await AltosMissionService(sessions, "ocaso", groups=groups).resume_active(helper)
+    # Objectives are Solo (Ação × Consequência §5): the other member stays put.
     assert reconnected is not None and reconnected.step == 3
-    assert reconnected.progress["order_stations"] == ["inspect_order_station_1"]
+    assert not reconnected.progress.get("order_stations")
 
     async with sessions() as session:
         character_ids = set(
@@ -615,8 +616,11 @@ async def test_p26_shareable_evidence_is_persisted_for_eligible_group_members(da
                 )
             )
         ).all()
-        assert len(credits) == 2
-        assert len({credit.character_id for credit in credits}) == 2
+        leader_id = await session.scalar(
+            select(Character.id).where(Character.telegram_id == leader)
+        )
+        assert len(credits) == 1
+        assert {credit.character_id for credit in credits} == {leader_id}
 
     view = await mission.resume_active(leader)
     assert view is not None
@@ -625,12 +629,13 @@ async def test_p26_shareable_evidence_is_persisted_for_eligible_group_members(da
         assert view is not None
     assert view.step == 4
     helper_view = await mission.resume_active(helper)
-    assert helper_view is not None and helper_view.step == 4
+    assert helper_view is not None and helper_view.step == 3
     view = await mission.advance(leader, view.state_version, "verify_waiting_bridge")
     assert view is not None and view.step == 5
     helper_view = await mission.resume_active(helper)
-    assert helper_view is not None and helper_view.step == 5
+    assert helper_view is not None and helper_view.step == 3
     view = await mission.advance(leader, view.state_version, "compare_records_with_sel")
     assert view is not None and view.step == 6
     helper_view = await mission.resume_active(helper)
-    assert helper_view is not None and helper_view.step == 5
+    assert helper_view is not None and helper_view.step == 3
+    assert not helper_view.progress.get("order_stations")
