@@ -175,6 +175,7 @@ def render_my_shop(shop: ShopView, notice: str | None = None) -> Screen:
     ]
     if len(shop.listings) < LISTING_SLOTS:
         rows.append([_button("Adicionar oferta", "mkt:add")])
+    rows.append([_button("🛠️ Meus Serviços", "svc:mine")])
     rows.append([_button("Editar Loja", "mkt:edit"), _button("Divulgar Loja", "mkt:promote")])
     rows.append([_button("← Mercado", "mkt:root")])
     return Screen("\n".join(lines), IMAGE_KEY, _keyboard(*rows))
@@ -195,6 +196,8 @@ def render_public_shop(shop: ShopView, notice: str | None = None) -> Screen:
         [_button(f"{row.title} · {_offer_price(row)}", f"mkt:l:{pack(row.listing_id)}")]
         for row in shop.listings
     ]
+    # §27.3: Services are found only here, inside the artisan's Shop.
+    rows.append([_button("🛠️ Serviços da Loja", f"svc:shop:{pack(shop.shop_id)}")])
     rows.append([_button("Buscar outra Loja", "mkt:search")])
     rows.append([_button("← Mercado", "mkt:root")])
     return Screen("\n".join(lines), IMAGE_KEY, _keyboard(*rows))
