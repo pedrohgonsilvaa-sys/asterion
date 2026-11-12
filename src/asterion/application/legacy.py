@@ -17,9 +17,9 @@ from asterion.application.equipment_configuration import (
     reconcile_character_hp,
 )
 from asterion.application.guild_battle_locks import character_roster_locked
+from asterion.application.safe_location import current_permanent_brazier
 from asterion.domain.legacy import legacy_xp_factor
 from asterion.infrastructure.db.models import (
-    Brazier,
     CampaignJourney,
     CampaignJourneyMember,
     CampaignObjectiveCredit,
@@ -305,17 +305,11 @@ class LegacyService:
         world = await session.scalar(
             select(WorldState).where(WorldState.character_id == character.id)
         )
-        brazier = await session.scalar(
-            select(Brazier.id).where(
-                Brazier.character_id == character.id,
-                Brazier.brazier_id == REFUGE_BRAZIER,
-            )
-        )
-        safe_location = bool(
-            world is not None
-            and world.region == REFUGE_REGION
-            and world.location == REFUGE
-            and brazier is not None
+        # Any discovered permanent Braseiro is safe. P36 ends in the Confins and
+        # Braseiro travel never crosses regions, so requiring the Refúgio do
+        # Ocaso would make the first Ascensão unreachable.
+        safe_location = (
+            await current_permanent_brazier(session, character.id) is not None
         )
         reasons: list[LegacyReason] = []
         if character.legacy_level != 0:

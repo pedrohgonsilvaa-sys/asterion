@@ -152,7 +152,7 @@ def render_legacy(
     reasons = {
         "level_required": "Alcance o Nv.60.",
         "campaign_required": "Conclua a campanha principal.",
-        "safe_location_required": "Venha ao Refúgio do Ocaso.",
+        "safe_location_required": "Descanse num Braseiro permanente.",
         "activity_locked": "Encerre atividades e vínculos incompatíveis antes de ascender.",
         "legacy_transition_undefined": "A próxima transição ainda não está disponível.",
     }

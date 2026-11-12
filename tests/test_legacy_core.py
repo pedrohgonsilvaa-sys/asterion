@@ -581,3 +581,28 @@ async def test_public_legacy_callbacks_prepare_confirm_and_reject_replay(databas
                 LegacyAscensionRecord.character_id == character_id
             )
         )
+
+
+@pytest.mark.asyncio
+async def test_ascension_is_allowed_at_any_discovered_permanent_brazier(database):
+    """P36 ends in the Confins and Braseiro travel stays inside one region."""
+    actor = 671_299
+    character_id, sessions = await _seed_character(database, actor)
+    service = LegacyService(sessions, "ocaso")
+    async with sessions.begin() as session:
+        world = await session.get(WorldState, character_id)
+        assert world is not None
+        world.region = "Confins do Véu"
+        world.location = "Marcha Nebulosa"
+    undiscovered = await service.view(actor)
+    assert undiscovered is not None and not undiscovered.can_ascend
+
+    async with sessions.begin() as session:
+        session.add(
+            Brazier(character_id=character_id, brazier_id=CONFINS_MARCO_DUPLO_BRAZIER)
+        )
+    prepared = await _prepare(service, actor)
+    assert prepared is not None and prepared.confirmation_key is not None
+    result = await service.confirm(actor, prepared.confirmation_key)
+    assert result is not None and result.succeeded
+    assert (result.legacy_level, result.level, result.location) == (1, 1, REFUGE)
