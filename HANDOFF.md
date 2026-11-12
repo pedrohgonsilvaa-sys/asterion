@@ -1607,7 +1607,7 @@ Os números 1 e 2 não aparecem nos PRs; a divisão acima é inferida pela ordem
 - Marcas de Legado (§16.1): não existem; a Ascensão existe.
 - Patrono e pagamentos: não existem; depende de escolher um provedor.
 - Catálogo de Flavor Text contextual: não existe.
-- Integração de visuais/skins: não existe.
+- Integração de visuais/skins (A6): estrutura pronta, sem arte nem skin definidas pela Fonte. `domain/visuals.py` (catálogo vazio, validação, vínculo a cosmético `appearance` ou a `item_id`; sem campos de regra, sem `weapon_family`); `bot/media.py` (`resolve_asset_file` só aceita `file:` dentro de `assets/`, sem `..`, caminho absoluto ou symlink fora; `ASTERION_ASSETS_DIR` opcional); imagem do visual vem de `creation_images[visual_id]`; a tela de detalhe do cosmético mostra o visual só se o personagem possui o cosmético. Sem migration.
 
 **Operação que falta:** agendador que sobreviva a restart e a várias instâncias, métricas e alertas, deploy/rollback de produção, backup e restore, administração/RBAC/sanções (hoje só CLIs), rate limiting e antiabuso geral, jornada E2E criação→Nv.60→Legado com as 6 Classes e smoke test no Telegram real.
 

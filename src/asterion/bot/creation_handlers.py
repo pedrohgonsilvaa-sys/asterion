@@ -1,7 +1,5 @@
 """aiogram adapters. Identity is always from Telegram's authenticated sender."""
 
-from pathlib import Path
-
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
@@ -28,6 +26,7 @@ from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import CreationCallback, Screen, render
 from asterion.bot.dungeon_ui import render_dungeons
+from asterion.bot.media import resolve_asset_file
 from asterion.bot.p1_ui import render_p1
 from asterion.bot.p2_ui import render_p2
 from asterion.bot.p3_ui import render_p3
@@ -56,8 +55,8 @@ def unavailable_media(exc: TelegramBadRequest) -> bool:
 async def present(message: Message, screen: Screen, images: dict[str, str], *, edit=False):
     image = images.get(screen.image_key)
     if image and image.startswith("file:"):
-        path = Path(image.removeprefix("file:"))
-        media = FSInputFile(path) if path.is_file() else None
+        path = resolve_asset_file(image)
+        media = FSInputFile(path) if path else None
     else:
         media = image
     if edit:
