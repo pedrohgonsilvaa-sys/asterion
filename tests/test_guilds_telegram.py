@@ -1,7 +1,8 @@
 import re
+from itertools import count
 from pathlib import Path
 from unittest.mock import AsyncMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from aiogram import Bot, Dispatcher
@@ -50,9 +51,17 @@ def _callbacks(screen):
     ]
 
 
+# Fixed ids: a random uuid4 can encode to a callback that contains "AUR" by chance.
+_ids = count(1)
+
+
+def _uid():
+    return UUID(int=next(_ids))
+
+
 def _member(role, name="Alpha"):
     return GuildMemberView(
-        character_id=uuid4(),
+        character_id=_uid(),
         name=name,
         level=4,
         character_class="sentinela",
@@ -68,7 +77,7 @@ def _view(viewer_role, recruitment=Recruitment.OPEN):
         _member(GuildRole.MEMBER, "Cedar"),
     ]
     return GuildView(
-        guild_id=uuid4(),
+        guild_id=_uid(),
         name="Aurora",
         tag="AUR",
         recruitment=recruitment,
@@ -84,7 +93,7 @@ def _view(viewer_role, recruitment=Recruitment.OPEN):
 
 def _public(open_=True):
     return PublicGuildView(
-        guild_id=uuid4(),
+        guild_id=_uid(),
         name="Aurora",
         tag="AUR",
         member_count=2,
@@ -118,11 +127,11 @@ def test_guild_screens_use_ids_only_and_fit_telegram_limit():
         _view(GuildRole.MEMBER),
     )
     application = GuildApplicationView(
-        application_id=uuid4(),
+        application_id=_uid(),
         guild_id=leader.guild_id,
         guild_name="Aurora",
         guild_tag="AUR",
-        character_id=uuid4(),
+        character_id=_uid(),
         character_name="Doran",
         character_level=3,
         status="pending",
@@ -130,11 +139,11 @@ def test_guild_screens_use_ids_only_and_fit_telegram_limit():
         created_at=None,
     )
     invite = GuildInviteView(
-        invite_id=uuid4(),
+        invite_id=_uid(),
         guild_id=leader.guild_id,
         guild_name="Aurora",
         guild_tag="AUR",
-        invitee_character_id=uuid4(),
+        invitee_character_id=_uid(),
         invitee_name="Doran",
         invitee_telegram_id=1,
         inviter_name="Alpha",
@@ -151,7 +160,7 @@ def test_guild_screens_use_ids_only_and_fit_telegram_limit():
         render_public_page(_public(open_=False)),
         render_public_page(None),
         render_search_results("Aurora", [_public()]),
-        render_browse(GuildPage(items=(_public(),), next_after=uuid4()), first=False),
+        render_browse(GuildPage(items=(_public(),), next_after=_uid()), first=False),
         render_my_applications([application]),
         render_inbox([invite]),
         render_received_applications(leader.guild_id, [application]),
