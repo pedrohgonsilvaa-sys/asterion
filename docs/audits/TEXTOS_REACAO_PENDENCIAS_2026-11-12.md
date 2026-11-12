@@ -1,5 +1,7 @@
 # Textos de Reação dos NPCs v1.0.0 — pendências de copy (2026-11-12)
 
+> **Resolvido na v1.0.1** (`docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_1.md`). Este arquivo fica como histórico do que foi pedido.
+
 Decisão do autor (2026-11-12): **o contrato `ASTERION_SISTEMA_ACAO_CONSEQUENCIA_NARRATIVA_v1_0_0.md` prevalece** sobre o pacote de textos, e a regra de NPC não onisciente (§3 e critério de aceite 5) não tem exceção. O runtime já carrega as falas compatíveis; os itens abaixo ficam sem fala até a copy ser revista. O catálogo é regenerado por `scripts/build_narrative_reaction_copy.py`, que imprime estas mesmas listas.
 
 ## A. Nós com `choice_id` e opções diferentes do contrato (9)

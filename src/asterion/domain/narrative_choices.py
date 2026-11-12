@@ -305,7 +305,7 @@ class ReactionLine:
 
 @cache
 def reaction_lines() -> Mapping[tuple[str, str], ReactionLine]:
-    """Approved future-reaction copy (Textos de Reação dos NPCs v1.0.0), by choice and option."""
+    """Approved future-reaction copy (Textos de Reação dos NPCs v1.0.1), by choice and option."""
     raw = resources.files("asterion.domain").joinpath("narrative_reactions_catalog.json")
     data = json.loads(raw.read_text(encoding="utf-8"))
     return {

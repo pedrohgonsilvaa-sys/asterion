@@ -1,8 +1,8 @@
-"""Gera o catálogo de falas de reação a partir do pacote de textos v1.0.0.
+"""Gera o catálogo de falas de reação a partir do pacote de textos (v1.0.1).
 
 Uso:
     python scripts/build_narrative_reaction_copy.py \
-        docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_0.md \
+        docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_1.md \
         src/asterion/domain/narrative_choices_catalog.json \
         src/asterion/domain/narrative_reactions_catalog.json
 
@@ -17,6 +17,8 @@ import json
 import re
 import sys
 from pathlib import Path
+
+NO_NPC = "Sem fala NPC"
 
 SPEAKERS = {
     "Alda Veyr": "alda",
@@ -43,8 +45,11 @@ def parse(source: str) -> list[dict]:
         if not header:
             continue
         choice = re.search(r"\*\*choice_id:\*\* `([^`]+)`", block)
+        # "Sem fala NPC" (memória só do personagem) não tem aspas: vira fala vazia.
         options = re.findall(
-            r"^### Opção (\d) — .+?\n\*\*(.+?):\*\* “(.+?)”\s*$", block, flags=re.M
+            r"^### Opção (\d) — .+?\n\*\*(.+?):\*\* (?:“(.+?)”|[^\n]*)\s*$",
+            block,
+            flags=re.M,
         )
         sections.append(
             {
@@ -74,6 +79,12 @@ def main() -> None:
             continue
         entry = {}
         for option, line in zip(node["options"], section["options"], strict=True):
+            if line["speaker_name"] == NO_NPC:
+                if option["npc_memory_targets"]:
+                    unheard.append(
+                        f"{node['choice_id']}/{option['option_id']} (sem fala, mas há alvo de NPC)"
+                    )
+                continue
             speaker = SPEAKERS[line["speaker_name"]]
             holders = {target["npc_id"] for target in option["npc_memory_targets"]}
             if speaker not in holders:
@@ -85,9 +96,10 @@ def main() -> None:
                 "speaker_name": line["speaker_name"],
                 "text": line["text"],
             }
-        reactions[node["choice_id"]] = entry
+        if entry:
+            reactions[node["choice_id"]] = entry
     target_path.write_text(
-        json.dumps({"version": "1.0.0", "reactions": reactions}, ensure_ascii=False, indent=1)
+        json.dumps({"version": "1.0.1", "reactions": reactions}, ensure_ascii=False, indent=1)
         + "\n",
         encoding="utf-8",
     )

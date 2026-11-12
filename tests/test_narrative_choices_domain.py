@@ -193,7 +193,7 @@ def test_ui_shows_labels_only_and_no_unapproved_copy():
     assert "neutral" in RAPPORT_STATES
 
 
-COPY = ROOT / "docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_0.md"
+COPY = ROOT / "docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_1.md"
 REACTIONS = ROOT / "src/asterion/domain/narrative_reactions_catalog.json"
 
 
@@ -216,8 +216,18 @@ def test_reaction_json_is_exactly_what_the_copy_generates(tmp_path):
     lines = reaction_lines()
     catalog = narrative_catalog()
     assert {choice for choice, _ in lines} <= set(catalog.nodes)
-    # Nareth P15–S18 and P19 use choice_ids the contract does not have: no copy loaded.
-    assert ("P15_anomaly_method", "o1") not in lines
+    # The 9 Nareth/Várzeas nodes now use the contract's choice_ids: their copy is loaded.
+    assert ("P15_anomaly_method", "o1") in lines
+    assert ("P19_priority", "o3") in lines
+    # Options the contract gives no NPC target ("Sem fala NPC") have no line at all.
+    assert not any(choice.startswith(("P27_", "P29_", "P30_")) for choice, _ in lines)
+
+
+def test_every_loaded_line_is_spoken_by_an_npc_that_holds_the_memory():
+    catalog = narrative_catalog()
+    for (choice_id, option_id), line in reaction_lines().items():
+        holders = {t.npc_id for t in catalog.nodes[choice_id].option(option_id).npc_memory_targets}
+        assert line.speaker in holders, (choice_id, option_id, line.speaker)
 
 
 def test_homonym_npcs_never_share_memory():
@@ -246,9 +256,14 @@ def test_reaction_line_needs_the_speaker_to_hold_the_memory():
     assert line is not None and line.speaker_name == "Alda Veyr"
     assert future_reaction(line).startswith("Alda Veyr: “Você não enfeitou o relato.")
     assert legitimate_reaction(node, hook, None) is None
-    # P14: Talen speaks, but only Nera received the memory — the line stays hidden.
+    # P14: only Nera received the memory, so Nera speaks; with Talen's memory alone it stays hidden.
     node, hook = catalog.hook("P14_map_vs_world->P15")
     nera_only = CommittedChoice(
         "P14_map_vs_world", "o1", PLAYER_SOURCE, frozenset({("nera", "pragmatismo")})
     )
-    assert legitimate_reaction(node, hook, nera_only) is None
+    line = legitimate_reaction(node, hook, nera_only)
+    assert line is not None and line.speaker_name == "Nera Voss"
+    talen_only = CommittedChoice(
+        "P14_map_vs_world", "o1", PLAYER_SOURCE, frozenset({("talen_orm", "pragmatismo")})
+    )
+    assert legitimate_reaction(node, hook, talen_only) is None

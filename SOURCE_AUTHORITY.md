@@ -57,7 +57,7 @@ Arquivos: `docs/specs/ASTERION_SISTEMA_ACAO_CONSEQUENCIA_NARRATIVA_v1_0_0.md` (c
 - As Fontes Regionais continuam autoridade de missões, gates, recompensas e encontros. A camada narrativa não altera XP, Coroas, Materiais, Equipamentos, combate, economia nem `world_state`.
 - O catálogo `src/asterion/domain/narrative_choices_catalog.json` é derivado do contrato por `scripts/build_narrative_choice_catalog.py`; não editar à mão.
 - `rapport_state` fica `neutral` até o autor definir as transições.
-- Falas de reação: `docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_0.md`, subordinado ao contrato (decisão do autor, 2026-11-12). Fala com `choice_id` fora do contrato, ou dita por NPC sem a memória da opção, não é exibida. Pendências em `docs/audits/TEXTOS_REACAO_PENDENCIAS_2026-11-12.md`.
+- Falas de reação: `docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_1.md` (v1.0.0 substituída), subordinado ao contrato (decisão do autor, 2026-11-12). Fala com `choice_id` fora do contrato, ou dita por NPC sem a memória da opção, não é exibida. Pendências de 2026-11-12 resolvidas na v1.0.1 (histórico em `docs/audits/TEXTOS_REACAO_PENDENCIAS_2026-11-12.md`).
 
 ## Fontes regionais vigentes
 
