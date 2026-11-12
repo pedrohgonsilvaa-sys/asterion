@@ -12,6 +12,7 @@ from aiogram.methods import EditMessageText, SendPhoto
 
 from asterion.bot.creation_handlers import creation_router, present
 from asterion.bot.creation_ui import COPY, PROLOGUE_TEXT, CreationCallback, render
+from asterion.bot.p1_handlers import p1_router
 from asterion.domain.creation import CLASSES, PROLOGUE, RACES, Creation
 
 
@@ -224,6 +225,21 @@ async def test_real_dispatcher_uses_sender_and_backend_state(telegram):
         await dispatcher.feed_raw_update(telegram, callback_update(malformed))
     assert not service.callback.called
 
+
+
+async def test_creation_buttons_pass_through_campaign_router_registered_first(telegram):
+    """Production includes p1 before creation; both use the "cc:" prefix."""
+    service = AsyncMock()
+    state = Creation(uuid4(), step="race")
+    service.callback.return_value = replace(state, step="race:remanescente")
+    campaign = AsyncMock()
+    campaign.campaign_action.return_value = None
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(p1_router(campaign, {}))
+    dispatcher.include_router(creation_router(service, {}))
+    data = CreationCallback(draft=state.id.hex, version=1, action="r0").pack()
+    await dispatcher.feed_raw_update(telegram, callback_update(data))
+    service.callback.assert_awaited_once_with(10, state.id, 1, "r0")
 
 async def test_dispatcher_start_restores_each_persistent_screen(service, telegram):
     from tests.test_creation_persistence import click
