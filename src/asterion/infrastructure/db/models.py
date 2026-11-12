@@ -2871,6 +2871,114 @@ class MarketPurchase(Base):
     committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class CraftServiceOffer(Base):
+    """§27.3 public Service of an artisan, shown only inside that artisan's Shop.
+
+    No escrow lives here: the client's materials and payment move in the same
+    commit that executes the Recipe (see application/craft_services.py).
+    """
+
+    __tablename__ = "craft_service_offers"
+    __table_args__ = (
+        CheckConstraint("price > 0", name="ck_craft_service_offer_price"),
+        CheckConstraint("service_offer_revision >= 1", name="ck_craft_service_offer_revision"),
+        CheckConstraint(
+            "status IN ('active','cancelled','expired','republished','closed')",
+            name="ck_craft_service_offer_status",
+        ),
+        CheckConstraint("fee_bps BETWEEN 0 AND 500", name="ck_craft_service_offer_fee_bps"),
+        Index("ix_craft_service_offer_shop_status", "shop_id", "status"),
+        Index(
+            "ix_craft_service_offer_active_expiry",
+            "expires_at",
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(ForeignKey("player_shops.id"), nullable=False)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    recipe_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    profession_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    # Hash of the Recipe definition at creation; a patch that changes it suspends the offer.
+    recipe_signature: Mapped[str] = mapped_column(String(64), nullable=False)
+    price: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    service_offer_revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="1"
+    )
+    gross_total: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    fee_total: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    executions: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # Fee in basis points, fixed at creation (Tesouraria Obra, domain/guild_works.py).
+    fee_bps: Mapped[int] = mapped_column(Integer, nullable=False, server_default="500")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CraftServicePriceChange(Base):
+    """Internal price history of a Service offer, like §28.15 for listings."""
+
+    __tablename__ = "craft_service_price_changes"
+    __table_args__ = (Index("ix_craft_service_price_change_offer", "offer_id"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    offer_id: Mapped[UUID] = mapped_column(
+        ForeignKey("craft_service_offers.id"), nullable=False
+    )
+    owner_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    old_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    new_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    service_offer_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CraftServiceOrder(Base):
+    """§27.3 confirmation reference; once committed it is the execution record."""
+
+    __tablename__ = "craft_service_orders"
+    __table_args__ = (
+        CheckConstraint("status IN ('preview','committed')", name="ck_craft_service_order_status"),
+        UniqueConstraint("source_key", name="uq_craft_service_order_source_key"),
+        Index("ix_craft_service_order_offer", "offer_id"),
+        Index(
+            "ix_craft_service_order_preview_expiry",
+            "expires_at",
+            postgresql_where=text("status = 'preview'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    offer_id: Mapped[UUID] = mapped_column(
+        ForeignKey("craft_service_offers.id"), nullable=False
+    )
+    client_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    artisan_character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    recipe_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    service_offer_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    price: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    recipe_cost: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    item_level: Mapped[int | None] = mapped_column(Integer)
+    preview_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    seed: Mapped[str] = mapped_column(String(120), nullable=False)
+    gross: Mapped[int | None] = mapped_column(BigInteger)
+    fee: Mapped[int | None] = mapped_column(BigInteger)
+    net: Mapped[int | None] = mapped_column(BigInteger)
+    output_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="preview")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ShopSearchAttempt(Base):
     """§49.18 Buscar Loja rate limit; survives a bot restart."""
 
