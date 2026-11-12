@@ -35,6 +35,7 @@ def benefits_router(
     images: dict[str, str],
     *,
     community_url: str | None = None,
+    shop_open: bool = False,
 ) -> Router:
     router = Router(name="benefits")
 
@@ -62,7 +63,7 @@ def benefits_router(
     async def dispatch(query: CallbackQuery, actor: int) -> None:
         data = query.data or ""
         if data == "bn:root":
-            await show(query, render_benefits())
+            await show(query, render_benefits(shop_open=shop_open))
         elif data == "bn:gift":
             await show(query, render_gift(await gifts.view(actor)))
         elif data == "bn:gift:claim":

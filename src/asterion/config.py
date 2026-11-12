@@ -40,6 +40,38 @@ class Settings(BaseSettings):
     # §32.3 public invite link of the Comunidade Oficial; never hardcoded.
     community_url: str | None = None
 
+    # GDD §35 paid products through the InfinitePay checkout. Prices are commercial
+    # configuration in centavos; a product without a price is not for sale.
+    infinitepay_handle: str | None = None
+    # Secret: only in the environment, never in the code or in commits.
+    infinitepay_api_key: str | None = None
+    infinitepay_api_url: str = "https://api.checkout.infinitepay.io"
+    # Public HTTPS address of the API, e.g. https://pagamentos.exemplo.com.br
+    payments_public_url: str | None = None
+    # Secret path token: the webhook URL carries it, forged notices without it fail.
+    payments_webhook_token: str | None = Field(default=None, min_length=24)
+    patron_price_cents: int | None = Field(default=None, ge=100)
+    chronicle_pass_price_cents: int | None = Field(default=None, ge=100)
+    payment_link_minutes: int = Field(default=60, ge=5, le=1440)
+
+    @property
+    def payments_enabled(self) -> bool:
+        return bool(
+            self.infinitepay_handle and self.payments_public_url and self.payments_webhook_token
+        )
+
+    def product_price_cents(self, product_id: str) -> int | None:
+        return {
+            "patron": self.patron_price_cents,
+            "chronicle_pass": self.chronicle_pass_price_cents,
+        }.get(product_id)
+
+    @model_validator(mode="after")
+    def validate_payments(self) -> Self:
+        if self.payments_public_url and not self.payments_public_url.startswith("https://"):
+            raise ValueError("PAYMENTS_PUBLIC_URL must use https://")
+        return self
+
     @model_validator(mode="after")
     def validate_telegram(self) -> Self:
         if self.telegram_bot_enabled and not self.telegram_bot_token:

@@ -10,6 +10,12 @@ from asterion.application.guilds import GuildService
 from asterion.application.market import MarketService
 from asterion.application.oaths import OathService
 from asterion.application.outbox import OutboxDispatcher
+from asterion.application.payments import (
+    PaymentService,
+    build_provider,
+    payment_config,
+    register_outbox_handler,
+)
 from asterion.application.pvp import PvpService
 from asterion.application.round import RoundService
 from asterion.application.trades import TradeService
@@ -126,6 +132,21 @@ def build_round_scheduler() -> AsyncIOScheduler:
         "interval",
         seconds=60,
         id="chronicle-upkeep",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    # §35.2 payments: the Outbox confirms each notice with the provider; this job
+    # expires unpaid orders and removes the temporary Patrono cosmetics when due.
+    payments = PaymentService(
+        SessionFactory, settings.server_id, payment_config(settings), build_provider(settings)
+    )
+    register_outbox_handler(payments)
+    scheduler.add_job(
+        payments.run_maintenance,
+        "interval",
+        seconds=60,
+        id="payments-upkeep",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

@@ -39,6 +39,7 @@ from asterion.application.p5 import P5Service
 from asterion.application.p6 import P6Service
 from asterion.application.p7 import P7Service
 from asterion.application.path_selection import PathSelectionService
+from asterion.application.payments import PaymentService, build_provider, payment_config
 from asterion.application.professions import ProfessionService
 from asterion.application.prologue import PrologueService
 from asterion.application.promo_codes import PromoCodeService
@@ -124,6 +125,7 @@ from asterion.bot.s34_handlers import s34_router
 from asterion.bot.s35_handlers import s35_router
 from asterion.bot.s36_handlers import s36_router
 from asterion.bot.settings_handlers import settings_router
+from asterion.bot.shop_handlers import shop_router
 from asterion.bot.social_handlers import social_router
 from asterion.bot.varzeas_missions_handlers import varzeas_missions_router
 from asterion.bot.vde_missions_handlers import vde_missions_router
@@ -300,12 +302,24 @@ def get_bot_runtime() -> BotRuntime:
         )
     )
     dispatcher.include_router(
+        shop_router(
+            PaymentService(
+                SessionFactory,
+                settings.server_id,
+                payment_config(settings),
+                build_provider(settings),
+            ),
+            settings.creation_images,
+        )
+    )
+    dispatcher.include_router(
         benefits_router(
             DailyGiftService(SessionFactory, settings.server_id),
             RecruitmentService(SessionFactory, settings.server_id),
             PromoCodeService(SessionFactory, settings.server_id),
             settings.creation_images,
             community_url=settings.community_url,
+            shop_open=bool(getattr(settings, "payments_enabled", False)),
         )
     )
     dispatcher.include_router(

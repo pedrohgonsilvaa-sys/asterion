@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -42,6 +42,7 @@ from asterion.domain.chronicle import (
     FINAL_PHASE_OBJECTIVES,
     LAYER_QUESTS,
     OBJECTIVES_BY_ID,
+    PREMIUM_TRACK,
     REPEATABLE_POINTS,
     REPEATABLE_SOURCES,
     VOTE_OPTIONS,
@@ -139,6 +140,78 @@ async def completed_quests(session: AsyncSession, character_id: UUID) -> set[str
             )
         ).all()
     )
+
+
+async def pass_open(session: AsyncSession, server_id: str, now: datetime) -> bool:
+    """The Passe can be bought only while the Crônica runs, before T (§5.2)."""
+    cycle = await load_cycle(session, server_id)
+    return cycle is not None and now < cycle.end_at
+
+
+async def pass_active(session: AsyncSession, server_id: str, account_id: int) -> bool:
+    row = await session.get(ChronicleAccount, (account_id, server_id, CHRONICLE_ID))
+    return row is not None and row.premium_at is not None
+
+
+async def grant_pass_in(
+    session: AsyncSession, server_id: str, account_id: int, source: str, now: datetime
+) -> tuple[datetime, bool]:
+    """Activate the Passe inside the caller's transaction.
+
+    Returns ``(premium_at, activated)``; ``activated`` is False when the Passe was
+    already active, so the caller knows this grant changed nothing.
+    """
+    if not await pass_open(session, server_id, now):
+        raise ChronicleError("chronicle_pass_closed")
+    row = await _account_row(session, account_id, server_id, now)
+    if row.premium_at is not None:
+        return row.premium_at, False
+    row.premium_at = now
+    row.premium_source = source[:32]
+    return row.premium_at, True
+
+
+async def revoke_pass_in(
+    session: AsyncSession, server_id: str, account_id: int, source: str
+) -> tuple[int, ...] | None:
+    """Undo a Passe granted by ``source`` (§35.1): the Premium layer, its claims and
+    the Premium cosmetics they gave. Free-track rewards stay. Returns the revoked
+    Premium milestones, or None when this source did not grant the active Passe."""
+    row = await session.get(
+        ChronicleAccount, (account_id, server_id, CHRONICLE_ID), with_for_update=True
+    )
+    if row is None or row.premium_at is None or row.premium_source != source[:32]:
+        return None
+    row.premium_at = None
+    row.premium_source = None
+    milestones = tuple(
+        (
+            await session.scalars(
+                delete(ChronicleClaim)
+                .where(
+                    ChronicleClaim.account_id == account_id,
+                    ChronicleClaim.server_id == server_id,
+                    ChronicleClaim.chronicle_id == CHRONICLE_ID,
+                    ChronicleClaim.track == "premium",
+                )
+                .returning(ChronicleClaim.milestone)
+            )
+        ).all()
+    )
+    premium_cosmetics = [
+        reward.cosmetic_id for reward in PREMIUM_TRACK.values() if reward.cosmetic_id
+    ]
+    characters = select(Character.id).where(
+        Character.telegram_id == account_id, Character.server_id == server_id
+    )
+    await session.execute(
+        delete(CharacterCosmetic).where(
+            CharacterCosmetic.character_id.in_(characters),
+            CharacterCosmetic.source_achievement_id == COSMETIC_SOURCE,
+            CharacterCosmetic.cosmetic_id.in_(premium_cosmetics),
+        )
+    )
+    return tuple(sorted(milestones))
 
 
 async def _account_row(
@@ -1398,14 +1471,8 @@ class ChronicleAdmin:
         """Activate the Passe da Crônica; buying it after T is blocked (§5.2)."""
         now = _utcnow(now)
         async with self.sessions.begin() as session:
-            cycle = await load_cycle(session, self.server_id)
-            if cycle is None or now >= cycle.end_at:
-                raise ChronicleError("chronicle_pass_closed")
-            row = await _account_row(session, account_id, self.server_id, now)
-            if row.premium_at is None:
-                row.premium_at = now
-                row.premium_source = source[:32]
-            return row.premium_at
+            premium_at, _ = await grant_pass_in(session, self.server_id, account_id, source, now)
+            return premium_at
 
     async def status(self, *, now: datetime | None = None) -> CycleStatus | None:
         now = _utcnow(now)
