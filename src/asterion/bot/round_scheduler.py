@@ -4,6 +4,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from asterion.application.chronicle import ChronicleService
+from asterion.application.craft_services import CraftServiceService
 from asterion.application.expeditions import ExpeditionService
 from asterion.application.guild_battle import GuildBattleService
 from asterion.application.guilds import GuildService
@@ -60,6 +61,10 @@ def build_round_scheduler() -> AsyncIOScheduler:
     for job_id, job in (
         ("market-upkeep", MarketService(SessionFactory, settings.server_id).run_maintenance),
         ("trade-upkeep", TradeService(SessionFactory, settings.server_id).run_maintenance),
+        (
+            "craft-service-upkeep",
+            CraftServiceService(SessionFactory, settings.server_id).run_maintenance,
+        ),
     ):
         scheduler.add_job(
             job,
