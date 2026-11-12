@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from uuid import uuid4
 
 import pytest
 from sqlalchemy import update
@@ -24,7 +23,7 @@ from asterion.bot.guilds_ui import (
 from asterion.domain.guilds import GuildRole, ProjectKind
 from asterion.infrastructure.db.models import Character
 from tests.test_groups import _seed_characters
-from tests.test_guilds_telegram import _button, _callbacks, _Client, _view
+from tests.test_guilds_telegram import _button, _callbacks, _Client, _uid, _view
 
 
 def _with(view, **changes):
@@ -35,7 +34,7 @@ def _with(view, **changes):
 
 def _project(kind=ProjectKind.LODGING, status="funding"):
     return GuildProjectView(
-        project_id=uuid4(),
+        project_id=_uid(),
         kind=kind,
         level=1,
         status=status,
