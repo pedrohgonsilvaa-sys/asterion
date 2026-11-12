@@ -40,7 +40,7 @@ Meta: fechar o código de jogo, com 3 trilhas em paralelo. A Crônica abre depoi
 2. Atualizar HANDOFF §8–9 e `README.md`.
 3. Autor aprova as escolhas pendentes das partes 5 e 6 da Crônica.
 4. Suíte completa em segundo plano, corrigindo as falhas.
-5. Resolver a divergência TDO v1.0.16 × v1.0.17 no `SOURCE_AUTHORITY.md` (Bíblia v4.0.7 já registrada em 2026-11-11).
+5. ~~Resolver a divergência TDO v1.0.16 × v1.0.17.~~ Feito em 2026-11-12: v1.0.17 adotada (Bíblia v4.0.7 registrada em 2026-11-11).
 6. Balanceamento dos kits em `SIMULAR`.
 
 ## Depois

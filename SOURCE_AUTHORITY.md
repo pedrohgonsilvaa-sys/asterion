@@ -4,7 +4,7 @@
 
 > **Índice geral único:** `SOURCE_AUTHORITY.md` é o registro de governança que seleciona as versões autoritativas por escopo. Patches de sincronização são artefatos operacionais e não constituem uma segunda autoridade. Em conflito com índices/patches anteriores, este arquivo prevalece quanto à seleção de versões, sem alterar o conteúdo interno das Fontes.
 
-> **Sincronização 2026-10-17:** este índice registra Fonte Mestra v1.6.0, Terras do Ocaso v1.0.16 FINAL, Vales dos Enforcados v1.0.6 FINAL, Planícies de Nareth v1.0.2 FINAL, Várzeas Carmesins v1.0.3 FINAL, Altos Cinéreos v1.0.1 FINAL, Lore v1.2, Visual/UI de 2026-10-13 e anatomia racial v2.0. Notas históricas mais abaixo podem citar versões anteriores apenas como registro; não reativam autoridade superada.
+> **Sincronização 2026-10-17:** este índice registra Fonte Mestra v1.6.0, Terras do Ocaso v1.0.17 FINAL (adotada em 2026-11-12), Vales dos Enforcados v1.0.6 FINAL, Planícies de Nareth v1.0.2 FINAL, Várzeas Carmesins v1.0.3 FINAL, Altos Cinéreos v1.0.1 FINAL, Lore v1.2, Visual/UI de 2026-10-13 e anatomia racial v2.0. Notas históricas mais abaixo podem citar versões anteriores apenas como registro; não reativam autoridade superada.
 
 > **Sincronização 2026-10-18:** Confins do Véu v1.0.0 FINAL (`FINAL_APPROVED`, conteúdo regional C aprovado) está registrado na Região 6. O Contrato Global de Weapon Metadata v1.0.0 FINAL permanece íntegro e vigente, SHA-256 `c283b398949dc0a864d98b9e0e9031080a50b937db6932ffcde7d46e600aa740`. O GDD v1.6.0 permanece superior para sistemas globais; a Bíblia Canônica Consolidada v4.0.7 (`ASTERION_BIBLIA_CANONICA_v4_0_7.md`) rege Lore, identidades e limites; a Fonte Regional rege o conteúdo fechado da Região 6. **HANDOFF À ENGENHARIA AUTORIZADO** após esta sincronização; isto não declara P31 implementada.
 
@@ -50,11 +50,13 @@ As Fontes Regionais FINAL possuem o mesmo nível hierárquico entre si dentro de
 
 ### Região 1 — Terras do Ocaso · Nv.1–10
 
-**ASTERION — Conteúdo: Terras do Ocaso v1.0.16 FINAL**
+**ASTERION — Conteúdo: Terras do Ocaso v1.0.17 FINAL**
 
-Arquivo vigente: `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.16_FINAL.md`.
+Arquivo vigente: `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.17_FINAL.md`.
 
-A v1.0.16 substitui integralmente a v1.0.15 como autoridade regional vigente. Preserva o conteúdo e os valores anteriores e fecha exclusivamente os pools temáticos de Material Básico do **Corvo de Fuligem**, **Alfa Cinéreo** e **Peregrino Calcinado**. Os pesos escolhem somente a identidade de cada unidade depois que chance e quantidade globais do contexto já foram resolvidas; não alteram Catalisadores, XP, Coroas, Equipamentos, Caçadas, Rondas, Desbravar ou qualquer outra regra econômica.
+> **Sincronização 2026-11-12:** o autor adotou a v1.0.17 no lugar da v1.0.16. A única mudança é a duração de `2T` da Barreira da **Égide do Selo** (mantém 8% do HP Máximo, CD4 e máximo 2 usos). O código já usava `2T` (`domain/road.py`, `egide_selo`); nenhum outro conteúdo ou valor regional muda.
+
+A v1.0.16 substituiu integralmente a v1.0.15 como autoridade regional vigente. Preserva o conteúdo e os valores anteriores e fecha exclusivamente os pools temáticos de Material Básico do **Corvo de Fuligem**, **Alfa Cinéreo** e **Peregrino Calcinado**. Os pesos escolhem somente a identidade de cada unidade depois que chance e quantidade globais do contexto já foram resolvidas; não alteram Catalisadores, XP, Coroas, Equipamentos, Caçadas, Rondas, Desbravar ou qualquer outra regra econômica.
 
 ### Região 2 — Vales dos Enforcados · Nv.11–20
 
