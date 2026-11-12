@@ -161,7 +161,7 @@ Estrutura funcional (arquivos de conteúdo e testes longos omitidos da árvore c
 
 O índice `SOURCE_AUTHORITY.md` é a seleção operacional; o GDD estrutural v1.6.0 é a autoridade de regras globais e a baseline numérica está fechada. Fontes regionais atuais: Terras do Ocaso v1.0.16, Vales dos Enforcados v1.0.6, Planícies de Nareth v1.0.2, Várzeas Carmesins v1.0.3, Altos Cinéreos v1.0.1 e Confins do Véu v1.0.0 FINAL_APPROVED. O Contrato Global de Weapon Metadata v1.0.0 FINAL rege metadata mecânica de armas. UI: `ASTERION_UI_DECISOES_2026-10-13_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.6.md`.
 
-Existem muitos snapshots e propostas antigos. Não escolha a versão pelo nome/recência isoladamente. Em particular, o `SOURCE_AUTHORITY.md` da raiz mantém TDO v1.0.16 como atual; uma cópia em worktree seleciona TDO v1.0.17 como alvo e não é autoridade operacional deste checkout. A Bíblia Canônica v3.0 FINAL e Lore v1.2 constam no índice; a Bíblia v3.2 no diretório raiz não está selecionada pelo índice e está sem rastreamento. `docs/REPASSE_TECNICO.md` é anterior e não reflete integralmente o estado atual.
+Existem muitos snapshots e propostas antigos. Não escolha a versão pelo nome/recência isoladamente. Em particular, o `SOURCE_AUTHORITY.md` seleciona TDO v1.0.17 FINAL desde 2026-11-12 (só acrescenta a duração 2T da Barreira da Égide do Selo, que o código já usava). A Bíblia Canônica v3.0 FINAL e Lore v1.2 constam no índice; a Bíblia v3.2 no diretório raiz não está selecionada pelo índice e está sem rastreamento. `docs/REPASSE_TECNICO.md` é anterior e não reflete integralmente o estado atual.
 
 ## 4. Arquitetura e fluxo de uma ação
 
@@ -1556,7 +1556,7 @@ Os nomes literais de botões por contexto podem mudar conforme estado e disponib
 
 1. **Fase 2E — proficiências/equipamentos:** **fora do `main`.** Só existe na branch `docs/asterion-proficiency-equipment-v1.9.0` (commit `5abfb64`) e nos ZIPs v1.9.0/v1.9.1 da raiz, que não vão para o Git. O README do pacote diz "não canônico, não publicado, não pronto para importação ou integração operacional". Não integrar nem publicar. Três decisões de Game Design seguem abertas: identidade/ID de templates e release snapshot (0/226 IDs verificados); contratos/saídas de receitas e itens; elegibilidade individual de Saque (24 pares excluídos, 63 evidências favoráveis ainda não finais e 633 combinações pendentes). Há 160 vínculos existentes + 198 propostas de receita/output sem validação de release; 24 recompensas de campanha não reconciliadas com identidade publicada. GDD v1.6.0 e contrato Weapon Metadata v1.0.0 permanecem as fontes da raiz.
 2. **Assets:** o diretório `assets/` continua local e não rastreado. `config.py` aceita Telegram `file_id` ou `file:` path, mas o Dockerfile não copia `assets/` (só `src`, `alembic`, `alembic.ini`, `pyproject.toml` e `README.md`). Assets não são bundle oficial até revisar procedência e versionamento. Item B3 do `docs/PLANO_DE_ACAO.md`.
-3. **Autoridade regional divergente:** `SOURCE_AUTHORITY.md` da raiz seleciona Terras do Ocaso v1.0.16 e Bíblia Canônica v3.0 FINAL. Há indício de alvo v1.0.17 (worktree local de Phase 2B) e o autor aprovou a Bíblia v4.0.7 como referência, mas o arquivo ainda não está no repositório. Resolver pelo processo documental antes de usar no conteúdo. Item C5 do plano.
+3. ~~**Autoridade regional divergente.**~~ Resolvido: TDO v1.0.17 adotada em 2026-11-12 e Bíblia v4.0.7 registrada em 2026-11-11 no `SOURCE_AUTHORITY.md`.
 4. **Balanceamento:** os kits das criaturas e Chefes da Crônica I continuam em `SIMULAR`. Item C6 do plano.
 
 **Já no `main` (antes listados como em andamento):**
@@ -1806,7 +1806,7 @@ A fonte do plano é `docs/PLANO_DE_ACAO.md` (trilhas A, B e C). Resumo do que es
 
 1. **Trilha A (jogo):** Marcas de Legado (§16.1), catálogo de Flavor Text e mecanismo de visuais/skins.
 2. **Trilha B (operação):** agendador único (o lock por job já existe, falta teste entre duas instâncias), backup e restore, deploy/rollback com `assets/` no Dockerfile, rate limiting, Admin com RBAC e sanções, métricas e alertas, E2E até Nv.60 e Legado com as 6 Classes e smoke test no Telegram real (feito pelo autor).
-3. **Trilha C (fechamento):** o autor aprova as escolhas pendentes das partes 5 e 6 da Crônica; suíte completa em segundo plano (cerca de 1 hora) corrigindo as falhas; resolver TDO v1.0.16 × v1.0.17 e Bíblia v3.0 × v4.0.7 no `SOURCE_AUTHORITY.md`; balanceamento dos kits em `SIMULAR`.
+3. **Trilha C (fechamento):** suíte completa em segundo plano (cerca de 1 hora) corrigindo as falhas; balanceamento dos kits em `SIMULAR`.
 4. **Fase 2E:** fechar as três decisões de Game Design (IDs/release snapshot, receitas e saídas, elegibilidade de Saque) antes de qualquer integração. Publicação, importação, migration, flag, merge e deploy continuam NO-GO.
 5. **Depois:** Beta fechado no ar com A e B prontas; o autor define o Dia 1 da Crônica, envia a Bíblia v4.0.7 e revisa os textos rascunho; por último, a Monetização (§35).
 
