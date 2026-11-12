@@ -3,6 +3,7 @@
 import os
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 
 import pytest
@@ -83,7 +84,9 @@ def _psql(db: str, sql: str) -> str:
 
 @pytest.fixture
 def databases():
-    names = ("bk_src_test", "bk_dst_test")
+    # Unique names: pytest-xdist runs these tests in parallel on the same server.
+    suffix = uuid.uuid4().hex[:8]
+    names = (f"bk_src_{suffix}", f"bk_dst_{suffix}")
     for name in names:
         _psql("postgres", f'DROP DATABASE IF EXISTS "{name}"')
         _psql("postgres", f'CREATE DATABASE "{name}"')

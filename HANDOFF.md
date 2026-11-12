@@ -1557,7 +1557,7 @@ Os nomes literais de botões por contexto podem mudar conforme estado e disponib
 1. **Fase 2E — proficiências/equipamentos:** **fora do `main`.** Só existe na branch `docs/asterion-proficiency-equipment-v1.9.0` (commit `5abfb64`) e nos ZIPs v1.9.0/v1.9.1 da raiz, que não vão para o Git. O README do pacote diz "não canônico, não publicado, não pronto para importação ou integração operacional". Não integrar nem publicar. Três decisões de Game Design seguem abertas: identidade/ID de templates e release snapshot (0/226 IDs verificados); contratos/saídas de receitas e itens; elegibilidade individual de Saque (24 pares excluídos, 63 evidências favoráveis ainda não finais e 633 combinações pendentes). Há 160 vínculos existentes + 198 propostas de receita/output sem validação de release; 24 recompensas de campanha não reconciliadas com identidade publicada. GDD v1.6.0 e contrato Weapon Metadata v1.0.0 permanecem as fontes da raiz.
 2. **Assets:** o diretório `assets/` continua local e não rastreado. `config.py` aceita Telegram `file_id` ou `file:` path, mas o Dockerfile não copia `assets/` (só `src`, `alembic`, `alembic.ini`, `pyproject.toml` e `README.md`). Assets não são bundle oficial até revisar procedência e versionamento. Item B3 do `docs/PLANO_DE_ACAO.md`.
 3. **Autoridade regional divergente:** `SOURCE_AUTHORITY.md` da raiz seleciona Terras do Ocaso v1.0.16 e Bíblia Canônica v3.0 FINAL. Há indício de alvo v1.0.17 (worktree local de Phase 2B) e o autor aprovou a Bíblia v4.0.7 como referência, mas o arquivo ainda não está no repositório. Resolver pelo processo documental antes de usar no conteúdo. Item C5 do plano.
-4. **Balanceamento:** os kits das criaturas e Chefes da Crônica I continuam em `SIMULAR`. Item C6 do plano.
+4. **Balanceamento (C6, 2026-11-12):** os 9 kits da Crônica I foram conferidos contra as faixas do GDD §49.6 e estão dentro delas: golpes simples 90–110%, fortes 120–145%, multi-hit 120% total, AoE de Chefe 75–80%, Preparados 160–175%, Barreiras 70–80% ATQ ou 6–8% do HP. A única exceção é Confirmação Exigida (185%, Fase III, CD5), mantida por decisão delegada pelo autor: é o mesmo valor dos golpes finais dos Chefes regionais canônicos (Queda do Ocaso, Desfecho da Última Ordem, Afirmação Final). O ajuste de TTK fica para a telemetria do Beta, como o GDD §49 prevê.
 
 **Já no `main` (antes listados como em andamento):**
 
@@ -1802,13 +1802,14 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 
 ## 9. Próximos passos recomendados
 
-A fonte do plano é `docs/PLANO_DE_ACAO.md` (trilhas A, B e C). Resumo do que está aberto em 2026-11-11:
+A fonte do plano é `docs/PLANO_DE_ACAO.md` (trilhas A, B e C). Estado em 2026-11-12:
 
-1. **Trilha A (jogo):** Marcas de Legado (§16.1), catálogo de Flavor Text e mecanismo de visuais/skins.
-2. **Trilha B (operação):** agendador único (o lock por job já existe, falta teste entre duas instâncias), backup e restore, deploy/rollback com `assets/` no Dockerfile, rate limiting, Admin com RBAC e sanções, métricas e alertas, E2E até Nv.60 e Legado com as 6 Classes e smoke test no Telegram real (feito pelo autor).
-3. **Trilha C (fechamento):** o autor aprova as escolhas pendentes das partes 5 e 6 da Crônica; suíte completa em segundo plano (cerca de 1 hora) corrigindo as falhas; resolver TDO v1.0.16 × v1.0.17 e Bíblia v3.0 × v4.0.7 no `SOURCE_AUTHORITY.md`; balanceamento dos kits em `SIMULAR`.
-4. **Fase 2E:** fechar as três decisões de Game Design (IDs/release snapshot, receitas e saídas, elegibilidade de Saque) antes de qualquer integração. Publicação, importação, migration, flag, merge e deploy continuam NO-GO.
-5. **Depois:** Beta fechado no ar com A e B prontas; o autor define o Dia 1 da Crônica, envia a Bíblia v4.0.7 e revisa os textos rascunho; por último, a Monetização (§35).
+1. **Trilha A (jogo): concluída.** A1 Obras (PR 130), A2 Marcas de Legado (PR 134), A3 Serviços de Ofícios (PR 132), A4 Calendário (PR 131), A5 Flavor Text (PRs 139 e 146), A6 visuais e skins (PR 142).
+2. **Trilha B (operação): concluída.** B1 agendador (PR 125), B2 backup (PR 128), B3 deploy (PR 127), B4 rate limiting (PR 129), B5 RBAC (PRs 129 e 135), B6 métricas (PR 137), B7 E2E (PR 144). Falta só o smoke test no Telegram real, feito pelo autor.
+3. **Trilha C (fechamento):** as escolhas das partes 5 e 6 já estavam aprovadas (2026-11-11); balanceamento C6 feito (ver §8, item 4); TDO v1.0.17 no PR 145; suíte completa rodada em 2026-11-12 no `main` (0f5d07f): 3587 aprovados, 5 pulados (todos playthroughs longos opcionais, ligados por variável de ambiente), 0 falhas, em 3h16 com `-n 3`. Ela revelou que `test_db_backup_cli.py` usava nomes de banco fixos e falhava em paralelo; corrigido com nomes únicos por teste.
+4. **Conteúdo pendente:** catálogos de Eventos, Provações e Rotas vazios, revisão do Flavor Text rascunho e Dia 1 da Crônica. O que escrever e em que formato está em `docs/BRIEFING_CONTEUDO.md`.
+5. **Fase 2E:** fechar as três decisões de Game Design (IDs/release snapshot, receitas e saídas, elegibilidade de Saque) antes de qualquer integração. Publicação, importação, migration, flag, merge e deploy continuam NO-GO.
+6. **Depois:** Beta fechado no ar; por último, a Monetização (§35). A venda pela InfinitePay existe (PR 133); faltam domínio, CPF e preço.
 
 Antes de qualquer regra de jogo, consulte `SOURCE_AUTHORITY.md`. Número que a fonte não define vai para o autor.
 
