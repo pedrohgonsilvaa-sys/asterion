@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import replace
 
 from asterion.domain.flavor import (
-    FLAVOR_CATALOG,
     LENGTH_LIMITS,
     FlavorContext,
     FlavorEntry,
@@ -14,6 +13,7 @@ from asterion.domain.flavor import (
     validate_catalog,
     validate_entry,
 )
+from asterion.domain.flavor_catalog import FLAVOR_CATALOG
 
 
 def _entry(id_: str, **kw) -> FlavorEntry:
@@ -35,20 +35,34 @@ def _ctx(**kw) -> FlavorContext:
     return FlavorContext(**base)
 
 
-def test_catalog_is_valid_and_all_draft():
+def test_catalog_is_valid():
     assert validate_catalog(FLAVOR_CATALOG) == []
     assert FLAVOR_CATALOG
-    assert all(entry.draft for entry in FLAVOR_CATALOG)
 
 
-def test_catalog_meets_system_base_bank():
+def test_catalog_texts_inside_recommended_length():
+    for entry in FLAVOR_CATALOG:
+        low, high, _ = LENGTH_LIMITS[entry.kind]
+        if entry.kind is FlavorKind.SYSTEM:
+            low = 60  # telas de Sistema podem ser mais curtas que o recomendado
+        assert low <= len(entry.text) <= high, (entry.id, len(entry.text))
+
+
+def test_catalog_meets_base_bank():
     assert base_bank_shortfall(FLAVOR_CATALOG) == {}
 
 
+def test_catalog_has_all_six_regions_and_selects():
+    for key in ("tdo", "vde", "nareth", "varzeas", "altos", "confins"):
+        ctx = FlavorContext(kind=FlavorKind.NARRATIVE, scope="region", key=key)
+        assert len(eligible_entries(FLAVOR_CATALOG, ctx)) == 6
+        assert select_flavor(FLAVOR_CATALOG, ctx) is not None
+
+
 def test_drafts_hidden_unless_requested():
-    ctx = FlavorContext(kind=FlavorKind.SYSTEM, scope="system", key="personagem")
-    assert select_flavor(FLAVOR_CATALOG, ctx) is None
-    assert select_flavor(FLAVOR_CATALOG, ctx, include_drafts=True) is not None
+    draft = _entry("d", draft=True)
+    assert select_flavor([draft], _ctx()) is None
+    assert select_flavor([draft], _ctx(), include_drafts=True) is draft
 
 
 def test_validation_flags_problems():

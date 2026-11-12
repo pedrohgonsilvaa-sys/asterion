@@ -6,8 +6,8 @@ opacas) e recebe uma entrada. A escolha é determinística: o mesmo contexto na
 mesma janela de estabilidade devolve sempre a mesma entrada, então clique,
 paginação e redesenho da tela não sorteiam de novo (§37.4.4).
 
-Todo texto do catálogo é RASCUNHO (``draft=True``) até o autor aprovar (§37.4.5).
-Entradas em rascunho só aparecem quando o chamador pede ``include_drafts=True``.
+Entradas em rascunho (``draft=True``) só aparecem quando o chamador pede
+``include_drafts=True``. Os textos ficam em ``flavor_catalog.py``.
 """
 
 from __future__ import annotations
@@ -197,46 +197,3 @@ def select_flavor(
             return entry
         point -= entry.weight
     return pool[-1]  # inalcançável; satisfaz o tipo
-
-
-def _system(key: str, lines: tuple[str, ...]) -> tuple[FlavorEntry, ...]:
-    return tuple(
-        FlavorEntry(
-            id=f"system.{key}.{index:02d}",
-            kind=FlavorKind.SYSTEM,
-            scope="system",
-            key=key,
-            text=text,
-        )
-        for index, text in enumerate(lines, start=1)
-    )
-
-
-# RASCUNHO: frases de sistema sem fato de lore, só para exercitar a estrutura.
-# O autor escreve e aprova o banco final (§37.4.5); trocar ``draft`` só com aprovação.
-FLAVOR_CATALOG: tuple[FlavorEntry, ...] = (
-    *_system(
-        "personagem",
-        (
-            "Cada cicatriz aqui tem dono e data. O resto é o que você ainda vai se tornar.",
-            "O nome fica gravado; o que ele significa ainda está sendo escrito pelos seus atos.",
-            "Olhe com calma. O que você carrega diz mais do que o que você promete.",
-        ),
-    ),
-    *_system(
-        "inventario",
-        (
-            "Tudo o que cabe na bolsa já pesou em outra mão. Escolha o que vale carregar.",
-            "Cada item guarda uma história que ninguém contou. A bolsa só guarda o peso.",
-            "Peso é decisão. A estrada cobra de quem leva demais e de quem leva de menos.",
-        ),
-    ),
-    *_system(
-        "mercado",
-        (
-            "Preço é só uma promessa em voz alta. Confira antes de apertar a mão.",
-            "Quem vende tem pressa; quem compra tem tempo. Use a sua vantagem.",
-            "No balcão, toda moeda conta uma pequena história de necessidade.",
-        ),
-    ),
-)
