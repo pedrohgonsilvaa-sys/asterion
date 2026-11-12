@@ -116,6 +116,7 @@ from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
 from asterion.bot.dungeon_ui import render_dungeons
+from asterion.bot.flavor_ui import with_region_flavor
 from asterion.bot.inventory_ui import render_inventory
 from asterion.bot.nareth_missions_ui import render_nareth_mission
 from asterion.bot.p1_ui import render_p1
@@ -4055,10 +4056,13 @@ def world_router(
         keyboard.append([InlineKeyboardButton(text="← Mapa", callback_data=map_callback)])
         await present(
             query.message,
-            Screen(
-                "\n".join(lines),
-                "map",
-                InlineKeyboardMarkup(inline_keyboard=keyboard),
+            with_region_flavor(
+                Screen(
+                    "\n".join(lines),
+                    "map",
+                    InlineKeyboardMarkup(inline_keyboard=keyboard),
+                ),
+                "tdo",
             ),
             images,
             edit=True,
@@ -4105,7 +4109,10 @@ def world_router(
         keyboard = ([buttons] if buttons else []) + [[InlineKeyboardButton(text="← Mapa", callback_data=map_callback)]]
         await present(
             query.message,
-            Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+            with_region_flavor(
+                Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+                "vde",
+            ),
             images,
             edit=True,
         )
@@ -4166,7 +4173,10 @@ def world_router(
         ]
         await present(
             query.message,
-            Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+            with_region_flavor(
+                Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+                "nareth",
+            ),
             images,
             edit=True,
         )
@@ -4220,7 +4230,10 @@ def world_router(
         ]
         await present(
             query.message,
-            Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+            with_region_flavor(
+                Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+                "varzeas",
+            ),
             images,
             edit=True,
         )
@@ -4283,7 +4296,10 @@ def world_router(
         ]
         await present(
             query.message,
-            Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+            with_region_flavor(
+                Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+                "altos",
+            ),
             images,
             edit=True,
         )
@@ -4351,7 +4367,10 @@ def world_router(
         ]
         await present(
             query.message,
-            Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+            with_region_flavor(
+                Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+                "confins",
+            ),
             images,
             edit=True,
         )

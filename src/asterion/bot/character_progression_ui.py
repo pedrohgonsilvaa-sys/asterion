@@ -7,6 +7,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.active_arts import ActiveArtCharacterView
 from asterion.application.talents import TalentView
 from asterion.bot.creation_ui import Screen
+from asterion.bot.flavor_ui import with_flavor
 from asterion.domain.arts import (
     ACTIVE_ART_IDS_BY_CLASS,
     LUMINAR_ART_IDS,
@@ -84,7 +85,7 @@ def render_talent_root(view: TalentView) -> Screen:
     if view.foreground:
         lines.extend(["", "🔒 Configuração · Bloqueada durante a atividade"])
     rows.append([_button("← Personagem", "character:root")])
-    return Screen("\n".join(lines), "character", _keyboard(rows))
+    return with_flavor(Screen("\n".join(lines), "character", _keyboard(rows)), "talentos")
 
 
 def _talent_state(view: TalentView, talent: TalentDefinition) -> tuple[str, str]:
@@ -557,7 +558,7 @@ def render_art_root(view: ActiveArtCharacterView) -> Screen:
     if view.foreground:
         lines.extend(["", "🔒 Configuração · Bloqueada durante a atividade"])
     rows.append([_button("← Personagem", "character:root")])
-    return Screen("\n".join(lines), "character", _keyboard(rows))
+    return with_flavor(Screen("\n".join(lines), "character", _keyboard(rows)), "artes")
 
 
 def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:

@@ -16,6 +16,7 @@ from asterion.application.professions import (
     ProfessionProgress,
 )
 from asterion.bot.creation_ui import Screen
+from asterion.bot.flavor_ui import with_flavor
 from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.professions import (
     PROFESSION_BY_ID,
@@ -96,11 +97,12 @@ def render_profession_home(view: ProfessionHomeView) -> Screen:
             ]
         )
     rows.append([_button("← Personagem", "character:root")])
-    return Screen(
+    screen = Screen(
         "\n".join(line for line in lines if line is not None),
         "character",
         InlineKeyboardMarkup(inline_keyboard=rows),
     )
+    return with_flavor(screen, "oficios")
 
 
 def render_profession_initial_primary() -> Screen:

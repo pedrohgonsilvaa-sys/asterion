@@ -22,6 +22,7 @@ from asterion.application.guilds import (
     PublicGuildView,
 )
 from asterion.bot.creation_ui import Screen
+from asterion.bot.flavor_ui import with_flavor
 from asterion.domain.guild_works import effect_text as work_effect_text
 from asterion.domain.guilds import (
     MAX_ACTIVE_PROJECTS,
@@ -143,7 +144,7 @@ def render_guild_menu(
     guild: GuildView | None, *, invites: int = 0, applications: int = 0
 ) -> Screen:
     if guild is None:
-        return Screen(
+        screen = Screen(
             "🏰 Guilda\n\nVocê ainda não faz parte de uma Guilda. Funde a sua, procure uma "
             "Guilda aberta ou responda aos convites que recebeu.",
             "links",
@@ -158,6 +159,7 @@ def render_guild_menu(
                 ]
             ),
         )
+        return with_flavor(screen, "guilda")
     lines = [
         f"🏰 {guild.name} [{guild.tag}]",
         "",
@@ -210,7 +212,7 @@ def render_guild_menu(
     if guild.viewer_role is not GuildRole.LEADER:
         rows.append([_button("Sair da Guilda", f"guild:leave:{gid}")])
     rows.append([_button("← Vínculos", "links:root")])
-    return Screen("\n".join(lines), "links", _keyboard(rows))
+    return with_flavor(Screen("\n".join(lines), "links", _keyboard(rows)), "guilda")
 
 
 def _crowns(value: int) -> str:

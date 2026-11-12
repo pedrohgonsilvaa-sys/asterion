@@ -12,6 +12,7 @@ from asterion.application.equipment_view import (
     EquipmentRootView,
 )
 from asterion.bot.creation_ui import Screen
+from asterion.bot.flavor_ui import with_flavor
 from asterion.domain.equipment import EquipmentSlot
 
 SLOT_PRESENTATION = (
@@ -80,12 +81,13 @@ def render_equipment_root(view: EquipmentRootView) -> Screen:
         )
     rows = [buttons[offset : offset + 4] for offset in range(0, len(buttons), 4)]
     rows.append([InlineKeyboardButton(text="← Personagem", callback_data="character:root")])
-    return Screen(
+    screen = Screen(
         "\n".join(lines),
         "equipment",
         InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode="HTML",
     )
+    return with_flavor(screen, "equipamentos")
 
 
 def render_equipment_detail(view: EquipmentDetailView, *, context: str) -> Screen:
