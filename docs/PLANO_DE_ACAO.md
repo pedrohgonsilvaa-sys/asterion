@@ -41,7 +41,7 @@ Meta: fechar o código de jogo, com 3 trilhas em paralelo. A Crônica abre depoi
 3. Autor aprova as escolhas pendentes das partes 5 e 6 da Crônica.
 4. ~~Suíte completa em segundo plano, corrigindo as falhas.~~ Feito em 2026-11-12 no main `0f5d07f`: 0 falhas (3.298 passaram; os 290 que perderam o banco no meio foram refeitos por arquivo: 482 passaram).
 5. ~~Resolver a divergência TDO v1.0.16 × v1.0.17.~~ Feito em 2026-11-12: v1.0.17 adotada (Bíblia v4.0.7 registrada em 2026-11-11).
-6. Balanceamento dos kits em `SIMULAR`.
+6. ~~Balanceamento dos kits em `SIMULAR`.~~ Feito no PR 147.
 
 ## Depois
 
