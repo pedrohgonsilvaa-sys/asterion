@@ -1792,6 +1792,8 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 
 **Etapa 9 (origem):** Crônica I, Nova Vigília e Trilha, integradas com Arena e Batalha de Guildas. O conteúdo está proposto em `ASTERION_CRONICA_I_ECOS_DA_CONVERGENCIA_v0_2_PROPOSTA.md` (2026-11-09). Os kits das 9 criaturas novas estão em `SIMULAR` e precisam de Balanceamento antes do lançamento.
 
+**Etapa C6 (2026-11-12):** simulador determinístico em `scripts/simulate_cronica_kits.py` (6 Classes × 9 kits, controles regionais publicados); tabela em `docs/balance/cronica_c6_antes.md`. Meta aprovada pelo autor: cada kit igual à criatura regional da mesma Categoria e nível. Resultado: Comuns, Incomuns, Elites e O Que Aguarda Resposta ficam na curva dos controles. O Mestre de Turno é mais duro (≈5,5 ações até morrer contra 10–12), por estrutura (ataca todo turno, add junto); nem os pisos de faixa do GDD §49.6 o igualam (≈8). O autor decidiu **manter o Mestre como está**. O Compasso fica só registrado (Evento com HP compartilhado). Nenhum valor de jogo mudou.
+
 **Decisões do autor sobre a proposta (2026-11-09):**
 
 - **Data:** o Dia 1 da Crônica é configurável e o autor define depois. Sem data configurada, nada abre. D8…D50, voto, T, T+2h e T+14d derivam do Dia 1. A data pode ser trocada antes do início; depois, só pela extensão excepcional do GDD §5.3, com registro.
