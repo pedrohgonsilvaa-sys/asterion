@@ -464,3 +464,13 @@ async def test_webhook_endpoint_checks_token_and_answers_fast(database):
     # The webhook itself never delivers: it only queues the server-side check.
     assert (await service.find(order.order_nsu)).status == "created"
     assert await _count(database, PaymentOrderEvent, PaymentOrderEvent.kind == "notice") == 1
+
+
+def test_benefits_shows_the_shop_only_when_open():
+    from asterion.bot.benefits_ui import render_benefits
+
+    def labels(screen):
+        return {b.text for row in screen.keyboard.inline_keyboard for b in row}
+
+    assert "Apoiar Asterion" not in labels(render_benefits())
+    assert "Apoiar Asterion" in labels(render_benefits(shop_open=True))

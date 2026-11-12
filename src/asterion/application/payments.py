@@ -101,6 +101,9 @@ class PaymentConfig:
 
 
 def payment_config(settings: Any) -> PaymentConfig:
+    if not getattr(settings, "payments_enabled", False):
+        # Shop closed (also for test doubles without payment settings).
+        return PaymentConfig({}, None)
     webhook_url = None
     if settings.payments_enabled:
         base = settings.payments_public_url.rstrip("/")
@@ -113,7 +116,7 @@ def payment_config(settings: Any) -> PaymentConfig:
 
 
 def build_provider(settings: Any) -> PaymentProvider | None:
-    if not settings.infinitepay_handle:
+    if not getattr(settings, "infinitepay_handle", None):
         return None
     from asterion.infrastructure.infinitepay import InfinitePayClient
 

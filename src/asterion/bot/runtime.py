@@ -315,6 +315,7 @@ def get_bot_runtime() -> BotRuntime:
             PromoCodeService(SessionFactory, settings.server_id),
             settings.creation_images,
             community_url=settings.community_url,
+            shop_open=bool(getattr(settings, "payments_enabled", False)),
         )
     )
     dispatcher.include_router(

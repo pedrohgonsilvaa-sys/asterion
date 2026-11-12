@@ -60,7 +60,8 @@ def _keyboard(rows: list[list[InlineKeyboardButton]]) -> InlineKeyboardMarkup:
 _BACK = [_button("← Benefícios", "bn:root")]
 
 
-def render_benefits() -> Screen:
+def render_benefits(*, shop_open: bool = False) -> Screen:
+    shop = [[_button("Apoiar Asterion", "pay:root")]] if shop_open else []
     return Screen(
         "🎁 Benefícios\n\nRecompensas, recrutamento e códigos de Asterion.",
         _IMAGE,
@@ -70,7 +71,7 @@ def render_benefits() -> Screen:
                 [_button("Trilha da Crônica", "cr:trail")],
                 [_button("Chamado de Asterion", "bn:call")],
                 [_button("Códigos de Asterion", "bn:code")],
-                [_button("Apoiar Asterion", "pay:root")],
+                *shop,
                 [_button("← Menu", "menu:back")],
             ]
         ),
