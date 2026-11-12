@@ -23,7 +23,7 @@ from asterion.application.equipment_configuration import (
 )
 from asterion.application.equipment_view import EquipmentItemView, EquipmentViewService
 from asterion.application.guild_works import character_work_levels
-from asterion.application.inventory_capacity import INVENTORY_CAPACITY, inventory_slots
+from asterion.application.inventory_capacity import inventory_capacity, inventory_slots
 from asterion.application.professions import REFUGE
 from asterion.domain.equipment import assignment_for_item_slot, parse_equipment_slot
 from asterion.domain.equipment_modifications import (
@@ -1092,7 +1092,7 @@ class EquipmentModificationService:
             return True
         return (
             await self._inventory_slots(session, character_id) - int(release_stack)
-            < INVENTORY_CAPACITY
+            < await inventory_capacity(session, character_id)
         )
 
     @staticmethod
@@ -1335,7 +1335,7 @@ class EquipmentModificationService:
             )
             if existing is None:
                 missing += 1
-        return current - 1 + missing <= INVENTORY_CAPACITY
+        return current - 1 + missing <= await inventory_capacity(session, character_id)
 
     @staticmethod
     async def _put_material(

@@ -12,7 +12,9 @@ from asterion.application.consumables import daily_consumable_cycle
 from asterion.application.inventory_capacity import (
     INVENTORY_CAPACITY,
     PENDING_CAPACITY,
+    inventory_capacity,
     inventory_slot_counts,
+    pending_capacity,
 )
 from asterion.application.vigor import reconcile_character_vigor, utcnow
 from asterion.domain.consumables import VIGOR_USABLE_AT_OR_BELOW, ConsumableFamily
@@ -230,6 +232,8 @@ class InventoryService:
                 kind="inventory_root",
                 character_id=character.id,
                 used_slots=sum(counts.values()),
+                capacity=await inventory_capacity(session, character.id),
+                pending_capacity=await pending_capacity(session, character.id),
                 equipment_slots=counts["equipment"],
                 consumable_slots=counts["consumables"],
                 material_slots=counts["materials"],
@@ -257,6 +261,8 @@ class InventoryService:
                 kind="inventory_category",
                 character_id=character.id,
                 used_slots=sum(counts.values()),
+                capacity=await inventory_capacity(session, character.id),
+                pending_capacity=await pending_capacity(session, character.id),
                 equipment_slots=counts["equipment"],
                 consumable_slots=counts["consumables"],
                 material_slots=counts["materials"],
@@ -306,6 +312,8 @@ class InventoryService:
                 kind="inventory_consumable_detail",
                 character_id=character.id,
                 used_slots=sum(counts.values()),
+                capacity=await inventory_capacity(session, character.id),
+                pending_capacity=await pending_capacity(session, character.id),
                 consumable_slots=counts["consumables"],
                 category="consumables",
                 entries=(entry,),
@@ -345,6 +353,8 @@ class InventoryService:
                 kind="pending_root",
                 character_id=character.id,
                 used_slots=sum(counts.values()),
+                capacity=await inventory_capacity(session, character.id),
+                pending_capacity=await pending_capacity(session, character.id),
                 equipment_slots=counts["equipment"],
                 consumable_slots=counts["consumables"],
                 material_slots=counts["materials"],

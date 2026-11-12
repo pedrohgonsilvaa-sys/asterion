@@ -45,12 +45,12 @@ from asterion.application.item_escrow import (
     return_to_owner,
     take_from_inventory,
 )
+from asterion.application.legacy_mark_effects import listing_slots, promotion_cooldown
 from asterion.domain.market import (
     BIGINT_MAX,
     LISTING_DURATION,
     LISTING_SLOTS,
     MIN_UNIT_PRICE,
-    PROMOTION_COOLDOWN,
     PURCHASE_PREVIEW_TTL,
     SEARCH_BURST_LIMIT,
     SEARCH_BURST_WINDOW,
@@ -108,6 +108,7 @@ class ShopView:
     is_owner: bool
     listings: tuple[ListingView, ...]
     promotion_available_at: datetime | None
+    listing_slots: int = LISTING_SLOTS
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,7 +292,8 @@ class MarketService:
             is_owner = shop.owner_character_id == viewer.id
             available_at = None
             if is_owner and shop.last_promoted_at is not None:
-                ready = shop.last_promoted_at + PROMOTION_COOLDOWN
+                cooldown = await promotion_cooldown(session, viewer.id)
+                ready = shop.last_promoted_at + cooldown
                 available_at = ready if ready > now else None
             return ShopView(
                 shop_id=shop.id,
@@ -302,6 +304,7 @@ class MarketService:
                 is_owner=is_owner,
                 listings=tuple(_listing_view(row) for row in rows),
                 promotion_available_at=available_at,
+                listing_slots=await listing_slots(session, shop.owner_character_id),
             )
 
     async def edit_shop(
@@ -344,7 +347,8 @@ class MarketService:
             character = await self._require_character(session, actor, lock=True)
             shop = await self._ensure_shop(session, character, now)
             previous = shop.last_promoted_at
-            if previous is not None and previous + PROMOTION_COOLDOWN > now:
+            cooldown = await promotion_cooldown(session, character.id)
+            if previous is not None and previous + cooldown > now:
                 raise MarketError("promotion_cooldown")
             shop.last_promoted_at = now
             offers = await self._active_listings(session, shop.id, now)
@@ -398,7 +402,8 @@ class MarketService:
         async with self.sessions.begin() as session:
             character = await self._require_character(session, actor, guard=True)
             shop = await self._ensure_shop(session, character, now)
-            if await self._active_listings(session, shop.id, now) >= LISTING_SLOTS:
+            slots = await listing_slots(session, character.id)
+            if await self._active_listings(session, shop.id, now) >= slots:
                 raise MarketError("listing_slots_full")
             try:
                 taken = await take_from_inventory(session, character.id, kind, source_id, quantity)

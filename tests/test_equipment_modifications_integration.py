@@ -27,6 +27,13 @@ from tests.test_equipment_integration import _add_item
 from tests.test_road_integration import _seed_road
 
 
+def _fixed_capacity(value: int):
+    async def capacity(_session, _character_id) -> int:
+        return value
+
+    return capacity
+
+
 async def _seed(database, actor: int, *, crowns: int = 5000) -> UUID:
     await _seed_road(database, actor=actor)
     async with database[1].begin() as session:
@@ -373,7 +380,7 @@ async def test_voluntary_dismantle_and_rune_extraction_block_on_inventory_capaci
     await service.install_rune(actor, rune_item_id, "A", rune_id,
                                expected_item_version=install.item_version,
                                expected_configuration_version=install.combat_configuration_version)
-    monkeypatch.setattr(modifications_module, "INVENTORY_CAPACITY", 2)
+    monkeypatch.setattr(modifications_module, "inventory_capacity", _fixed_capacity(2))
     blocked = await service.runes(actor, rune_item_id)
     assert blocked is not None and blocked.details["can_remove"] is False
     with pytest.raises(EquipmentModificationRejected, match="INVENTORY_FULL"):

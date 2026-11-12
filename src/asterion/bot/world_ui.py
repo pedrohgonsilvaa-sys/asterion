@@ -163,7 +163,8 @@ def render_legacy(
     if succeeded:
         text += (
             "\nAscensão concluída. Sua campanha e conquistas permanecem; sua progressão foi "
-            "reiniciada no Nv.1. Equipamentos incompatíveis continuam no Inventário."
+            "reiniciada no Nv.1. Equipamentos incompatíveis continuam no Inventário.\n"
+            "Uma nova vaga de Marca de Legado foi liberada."
         )
     elif confirmation_key is not None:
         text += (
@@ -208,6 +209,9 @@ def render_legacy(
                     )
                 ]
             )
+        rows.append(
+            [InlineKeyboardButton(text="🎗️ Marcas de Legado", callback_data="lmk:root")]
+        )
         rows.append(
             [InlineKeyboardButton(text="← Personagem", callback_data="character:root")]
         )

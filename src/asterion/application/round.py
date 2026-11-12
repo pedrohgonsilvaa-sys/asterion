@@ -15,7 +15,7 @@ from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     reconcile_character_hp,
 )
-from asterion.application.inventory_capacity import INVENTORY_CAPACITY
+from asterion.application.inventory_capacity import inventory_capacity
 from asterion.application.road import (
     BOSQUE,
     CHARNECA,
@@ -796,7 +796,9 @@ class RoundService(RoadService):
             return
         await self._retry_blocked_deliveries(s, c)
         if c.delivery_blocked:
-            inventory_blocked = await self._inventory_slots(s, c.id) >= INVENTORY_CAPACITY
+            inventory_blocked = await self._inventory_slots(s, c.id) >= (
+                await inventory_capacity(s, c.id)
+            )
             pending_blocked = await self._pending_slots(s, c.id) <= 0
             reason = (
                 "inventory_pending"
@@ -1286,7 +1288,9 @@ class RoundService(RoadService):
         elif state.completed_encounters >= state.batch_size:
             await self._finish_round(s, state, "completed")
         elif c.delivery_blocked:
-            inventory_blocked = await self._inventory_slots(s, c.id) >= INVENTORY_CAPACITY
+            inventory_blocked = await self._inventory_slots(s, c.id) >= (
+                await inventory_capacity(s, c.id)
+            )
             pending_blocked = await self._pending_slots(s, c.id) <= 0
             reason = (
                 "inventory_pending"
