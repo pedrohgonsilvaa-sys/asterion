@@ -25,6 +25,7 @@ from asterion.application.nareth_missions import (
 from asterion.application.prologue import CombatView
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
+from asterion.domain.mission_coop import mission_coop_allowed
 
 
 def _button(label: str, callback: str) -> InlineKeyboardButton:
@@ -464,7 +465,11 @@ def _render_midgame_mission(view: NarethMissionView) -> Screen:
         rows.extend(
             [
                 [_button(label + " · Solo", f"nareth:combat:{quest}:{version}:solo")],
-                [_button("Formar Grupo", f"nareth:combat:{quest}:{version}:group")],
+                *(
+                    [[_button("Formar Grupo", f"nareth:combat:{quest}:{version}:group")]]
+                    if mission_coop_allowed(quest)
+                    else []
+                ),
             ]
         )
     elif quest == S17_ID and step == 4 and not (view.progress or {}).get("submerged_entry_discovered"):

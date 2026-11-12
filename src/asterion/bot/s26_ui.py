@@ -136,12 +136,6 @@ def render_s26(view: S26View) -> Screen:
                             f"altos:combat:S26:{view.state_version}:solo",
                         )
                     ],
-                    [
-                        _button(
-                            "Solicitar encontro em Grupo",
-                            f"altos:combat:S26:{view.state_version}:group",
-                        )
-                    ],
                 )
             )
         elif action is not None:

@@ -78,7 +78,6 @@ from asterion.infrastructure.db.models import (
     RewardComponent,
     RewardEvent,
     SocialGroup,
-    SocialGroupMember,
     Unlock,
     WorldState,
 )
@@ -1273,25 +1272,8 @@ class P4Service:
         return character, quest, world
 
     async def _social_group_size(self, session, character_id):
-        membership = await session.scalar(
-            select(SocialGroupMember).where(
-                SocialGroupMember.character_id == character_id
-            )
-        )
-        if membership is None:
-            return 1
-        group = await session.get(SocialGroup, membership.group_id)
-        if group is None or group.status != "active":
-            return 1
-        members = (
-            await session.scalars(
-                select(SocialGroupMember.character_id).where(
-                    SocialGroupMember.group_id == group.id
-                )
-            )
-        ).all()
-        return max(1, len(members))
-
+        """This encounter is not a Boss: missions stay Solo (Ação × Consequência §5)."""
+        return 1
     async def _character(self, session, actor):
         return await session.scalar(select(Character).where(
             Character.telegram_id == actor, Character.server_id == self.server_id

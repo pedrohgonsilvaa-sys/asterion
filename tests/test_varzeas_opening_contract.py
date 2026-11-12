@@ -578,7 +578,8 @@ def test_varzeas_p22_s22_codex_and_screens_stay_within_published_scope():
         for button in row
     }
     assert "varzeas:combat:P22:7:solo" in p22_callbacks
-    assert "varzeas:combat:P22:7:group" in p22_callbacks
+    # P22's Vigia is a scripted encounter, not a Boss: no Group (Ação × Consequência §5).
+    assert "varzeas:combat:P22:7:group" not in p22_callbacks
 
     s22 = VarzeasMissionView(
         character_id=uuid4(),

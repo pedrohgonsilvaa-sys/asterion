@@ -1,4 +1,11 @@
-"""Transaction helpers for sharing objective evidence with present group members."""
+"""Transaction helpers for mission objectives.
+
+Since the narrative override of 2026-11-12 (Ação × Consequência v1.0.0 §5),
+objectives of Principais and Secundárias are never shared: the "roster" these
+helpers return is always the acting character alone. The Group is still locked
+in the same order as before so concurrent transactions keep one lock order.
+Only Boss encounters (``campaign_coop``) gather a Group.
+"""
 
 from __future__ import annotations
 
@@ -77,32 +84,14 @@ async def lock_campaign_roster(
         .order_by(Character.id)
         .with_for_update()
     )
-    return group.id, character_ids
+    return group.id, (character_id,)
 
 
 async def campaign_roster_ids(
     session: AsyncSession, character_id: UUID
 ) -> tuple[UUID, ...]:
-    """Return the roster after lock_campaign_roster has serialized membership changes."""
-    membership = await session.scalar(
-        select(SocialGroupMember).where(SocialGroupMember.character_id == character_id)
-    )
-    if membership is None:
-        return (character_id,)
-    group = await session.get(SocialGroup, membership.group_id)
-    if group is None or group.status != "active":
-        return (character_id,)
-    return tuple(
-        sorted(
-            (
-                await session.scalars(
-                    select(SocialGroupMember.character_id).where(
-                        SocialGroupMember.group_id == group.id
-                    )
-                )
-            ).all()
-        )
-    )
+    """Characters that receive objective progress: only the actor (Solo missions)."""
+    return (character_id,)
 
 
 async def present_campaign_members(

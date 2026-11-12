@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.campaign_coop import (
@@ -766,33 +766,13 @@ class P1Service:
         return c, q
 
     async def _social_group_size(self, session, character_id: UUID) -> int:
-        membership = await session.get(SocialGroupMember, character_id)
-        if membership is None:
-            return 1
-        return int(
-            await session.scalar(
-                select(func.count())
-                .select_from(SocialGroupMember)
-                .where(SocialGroupMember.group_id == membership.group_id)
-            )
-            or 1
-        )
-
+        """This encounter is not a Boss: missions stay Solo (Ação × Consequência §5)."""
+        return 1
     async def _p1_present_participants(
         self, session, actor_character, actor_quest, *, step, location
     ):
-        membership = await session.get(SocialGroupMember, actor_character.id)
+        # Missions are Solo for objectives (Ação × Consequência v1.0.0 §5).
         character_ids = [actor_character.id]
-        if membership is not None:
-            character_ids = list(
-                (
-                    await session.scalars(
-                        select(SocialGroupMember.character_id)
-                        .where(SocialGroupMember.group_id == membership.group_id)
-                        .order_by(SocialGroupMember.character_id)
-                    )
-                ).all()
-            )
         active_ids = set(
             (
                 await session.scalars(

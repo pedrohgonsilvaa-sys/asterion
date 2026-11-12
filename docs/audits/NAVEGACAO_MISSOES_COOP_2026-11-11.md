@@ -29,6 +29,8 @@ implementação seguiu apenas o brief, sem inventar conteúdo.
    (alcançar Local, examinar pista) é creditada a cada participante elegível presente.
    Pela precedência do próprio brief (§24: GDD acima das decisões finais), o comportamento
    do GDD foi mantido. Escolhas e estado narrativo já são individuais (GDD §51.3).
+   **Superado em 2026-11-12:** a especificação Ação × Consequência v1.0.0 limita o Coop de
+   Missão aos Chefes, por decisão do autor (ver `SOURCE_AUTHORITY.md`).
 2. **Votação.** Só existem a votação de abandono de Masmorra (não narrativa) e a votação
    da Crônica (evento global por conta, GDD §49, não é Campanha). Nenhuma foi removida.
 3. **Caso Alda.** Alda é a NPC da P2, mas "Entregar/Ajudar/Abandonar Alda" não é conteúdo

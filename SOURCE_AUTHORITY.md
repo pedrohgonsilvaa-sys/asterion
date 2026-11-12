@@ -1,6 +1,6 @@
 # Autoridade das Fontes
 
-**Índice atualizado:** 2026-10-18.
+**Índice atualizado:** 2026-11-12.
 
 > **Índice geral único:** `SOURCE_AUTHORITY.md` é o registro de governança que seleciona as versões autoritativas por escopo. Patches de sincronização são artefatos operacionais e não constituem uma segunda autoridade. Em conflito com índices/patches anteriores, este arquivo prevalece quanto à seleção de versões, sem alterar o conteúdo interno das Fontes.
 
@@ -9,6 +9,8 @@
 > **Sincronização 2026-10-18:** Confins do Véu v1.0.0 FINAL (`FINAL_APPROVED`, conteúdo regional C aprovado) está registrado na Região 6. O Contrato Global de Weapon Metadata v1.0.0 FINAL permanece íntegro e vigente, SHA-256 `c283b398949dc0a864d98b9e0e9031080a50b937db6932ffcde7d46e600aa740`. O GDD v1.6.0 permanece superior para sistemas globais; a Bíblia Canônica Consolidada v4.0.7 (`ASTERION_BIBLIA_CANONICA_v4_0_7.md`) rege Lore, identidades e limites; a Fonte Regional rege o conteúdo fechado da Região 6. **HANDOFF À ENGENHARIA AUTORIZADO** após esta sincronização; isto não declara P31 implementada.
 
 > **Sincronização 2026-11-11:** a Bíblia Canônica Consolidada de Mundo, Raças, NPCs e Regiões **v4.0.7** (`ASTERION_BIBLIA_CANONICA_v4_0_7.md`, SHA-256 `011ad3fb0ab2f2e940baca5cbe11ee89460353ee9709693005dcc26c398a431d`) passa a reger Lore, identidades, NPCs e limites, por decisão do autor. Substitui a v3.0 FINAL e, por sucessão, a v3.2 e a v3.3. O arquivo v3.0 permanece no repositório só como registro histórico. Nenhuma regra mecânica muda; o GDD v1.6.0 segue superior para sistemas.
+
+> **Sincronização 2026-11-12:** a especificação **Ação × Consequência Narrativa v1.0.0** (`docs/specs/ASTERION_SISTEMA_ACAO_CONSEQUENCIA_NARRATIVA_v1_0_0.md`) passa a reger a camada de escolha/memória das 72 Missões, por decisão do autor. Ela **sobrescreve explicitamente o GDD v1.6.0 §51.3/§55.1** quanto ao Coop: Principais e Secundárias são Solo em progresso, objetivos, escolhas e estado narrativo; só encontros de Chefe aceitam Grupo 1–4. Esta divergência deve entrar na próxima revisão do GDD. Nenhum número de jogo muda.
 
 ## Fonte Mestra vigente
 
@@ -43,6 +45,18 @@ A presença de entradas de Altos Cinéreos na tabela de metadata limita-se aos i
 
 A §19.2 de Confins do Véu v1.0.0 FINAL declara metadata explícita para as cinco armas regionais Grau VI usando os vocabulários de forma, handedness, slot e tags funcionais deste contrato. A compatibilidade foi conferida; `weapon_family` permanece não armazenado e não inferível. O conteúdo regional está registrado separadamente na Região 6.
 
+
+## Camada narrativa — Ação × Consequência
+
+**ASTERION — Sistema Narrativo de Ação × Consequência v1.0.0**
+
+Arquivos: `docs/specs/ASTERION_SISTEMA_ACAO_CONSEQUENCIA_NARRATIVA_v1_0_0.md` (contrato) e `docs/specs/ASTERION_HANDOFF_CLAUDE_CODE_NARRATIVA_v1_0_0.md` (handoff).
+
+- Rege os 72 nós de escolha (36 Principais + 36 Secundárias), as memórias de personagem e de NPC, o rapport qualitativo e os ganchos futuros. Contratos ficam fora.
+- **Override do GDD v1.6.0 §51.3/§55.1 (decisão do autor, 2026-11-12):** Coop de Missão é exclusivo de Chefes (P5, P6, S6, P12, P18, S18, P24, S24, P30, P36, S30, S36). Objetivos comuns, Elites e encontros roteirizados são Solo. Não reativar Coop de Missão por inferência a partir do GDD.
+- As Fontes Regionais continuam autoridade de missões, gates, recompensas e encontros. A camada narrativa não altera XP, Coroas, Materiais, Equipamentos, combate, economia nem `world_state`.
+- O catálogo `src/asterion/domain/narrative_choices_catalog.json` é derivado do contrato por `scripts/build_narrative_choice_catalog.py`; não editar à mão.
+- `rapport_state` fica `neutral` até o autor definir as transições. As falas de reação são conteúdo editorial pendente.
 
 ## Fontes regionais vigentes
 

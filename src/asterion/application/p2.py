@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.active_arts import load_active_art_configuration
@@ -81,7 +81,6 @@ from asterion.infrastructure.db.models import (
     RewardComponent,
     RewardEvent,
     SocialGroup,
-    SocialGroupMember,
     Unlock,
     WorldState,
 )
@@ -1514,18 +1513,8 @@ class P2Service:
         return character, quest, world
 
     async def _social_group_size(self, session, character_id):
-        membership = await session.get(SocialGroupMember, character_id)
-        if membership is None:
-            return 1
-        return int(
-            await session.scalar(
-                select(func.count())
-                .select_from(SocialGroupMember)
-                .where(SocialGroupMember.group_id == membership.group_id)
-            )
-            or 1
-        )
-
+        """This encounter is not a Boss: missions stay Solo (Ação × Consequência §5)."""
+        return 1
     async def _character(self, session, actor):
         return await session.scalar(
             select(Character).where(

@@ -245,7 +245,6 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             description = "O Cervo Ferrugem bloqueia o setor. Prepare-se para a investida telegráfica."
             rows.extend((
                 [_button("Enfrentar sozinho", f"varzeas:combat:P21:{view.state_version}:solo")],
-                [_button("Propor ao Grupo", f"varzeas:combat:P21:{view.state_version}:group")],
             ))
         elif view.kind == "find_technical_plate":
             description = "Encontre a placa técnica que relaciona cultivo, recuperação e Hemaris."
@@ -301,7 +300,6 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             description = "Um Vigia Hemaris Nv.37 guarda a linha."
             rows.extend((
                 [_button("Enfrentar sozinho", f"varzeas:combat:P22:{view.state_version}:solo")],
-                [_button("Propor ao Grupo", f"varzeas:combat:P22:{view.state_version}:group")],
             ))
         elif view.kind == "recover_transfer_record":
             description = "Recupere o registro técnico que contém o termo Transferência."
@@ -473,7 +471,6 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             elif view.kind == "combat_start":
                 rows.extend((
                     [_button("Enfrentar sozinho", f"varzeas:combat:P20:{view.state_version}:solo")],
-                    [_button("Propor ao Grupo", f"varzeas:combat:P20:{view.state_version}:group")],
                 ))
             elif view.kind == "return_sera":
                 rows.append([_button("Retornar ao Porto da Salmoura", "road:route:varzeas_porto")])
@@ -494,7 +491,6 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
             elif view.kind == "combat_start":
                 rows.extend((
                     [_button("Enfrentar sozinho", f"varzeas:combat:S20:{view.state_version}:solo")],
-                    [_button("Propor ao Grupo", f"varzeas:combat:S20:{view.state_version}:group")],
                 ))
             elif view.kind == "return_sera":
                 rows.append([_button("Retornar ao Porto da Salmoura", "road:route:varzeas_porto")])

@@ -107,9 +107,7 @@ async def _seed_p30_character(database, actor: int, *, level: int = 50):
         database, actor, level=level, p28_status="completed"
     )
     async with sessions.begin() as session:
-        character = await session.scalar(
-            select(Character).where(Character.telegram_id == actor)
-        )
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert character is not None
         character.level = level
         world = await session.get(WorldState, character.id)
@@ -156,14 +154,10 @@ async def _reach_p30_combat(mission: AltosMissionService, actor: int):
     view = await mission.resume_active(actor)
     assert view is not None and view.quest_id == P30_ID and view.step == 2
     for path in ("contraforte", "cabo", "escora"):
-        view = await mission.advance(
-            actor, view.state_version, f"inspect_load_path_{path}"
-        )
+        view = await mission.advance(actor, view.state_version, f"inspect_load_path_{path}")
         assert view is not None
     assert view.step == 3
-    view = await mission.advance(
-        actor, view.state_version, "recover_exceptional_coupling_record"
-    )
+    view = await mission.advance(actor, view.state_version, "recover_exceptional_coupling_record")
     assert view is not None and view.step == 4
     return view
 
@@ -264,9 +258,7 @@ def test_p30_colossus_phase_machine_matches_final_escora_contract():
     combat.fighters[ESCORA_KEYS[0]].hp = 0
     boss.hp = boss.stats.hp * D("0.35")
     _resolve_phase_triggers(combat)
-    expected_barrier = (boss.stats.hp * D("0.06")).to_integral_value(
-        rounding="ROUND_FLOOR"
-    )
+    expected_barrier = (boss.stats.hp * D("0.06")).to_integral_value(rounding="ROUND_FLOOR")
     assert combat.phase_id == "phase_iii"
     assert boss.barrier == expected_barrier
     assert boss.barrier_remaining == -1
@@ -279,9 +271,7 @@ def test_p30_colossus_phase_machine_matches_final_escora_contract():
     assert actions["placa_sustentacao"].max_uses_per_combat == 2
     assert actions["placa_sustentacao"].self_barrier_hp_fraction == D("0.08")
     assert "phase_iii" not in actions["placa_sustentacao"].phase_ids
-    assert actions["carga_distribuida"].skip_if_actor_last_action == (
-        "carga_distribuida",
-    )
+    assert actions["carga_distribuida"].skip_if_actor_last_action == ("carga_distribuida",)
 
 
 @pytest.mark.asyncio
@@ -293,26 +283,26 @@ async def test_p30_level_gate_suspends_at_49_and_starts_at_50(database):
     assert suspended is not None
     assert (suspended.quest_id, suspended.status) == (P30_ID, "suspended")
     async with sessions.begin() as session:
-        character = await session.scalar(
-            select(Character).where(Character.telegram_id == actor)
-        )
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert character is not None
-        assert await session.scalar(
-            select(Unlock.id).where(
-                Unlock.character_id == character.id,
-                Unlock.unlock_id == "unlock.location.altos.coracao_colosso",
+        assert (
+            await session.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == character.id,
+                    Unlock.unlock_id == "unlock.location.altos.coracao_colosso",
+                )
             )
-        ) is not None
-        assert await session.scalar(
-            select(Quest.id).where(
-                Quest.character_id == character.id, Quest.quest_id == P30_ID
+            is not None
+        )
+        assert (
+            await session.scalar(
+                select(Quest.id).where(Quest.character_id == character.id, Quest.quest_id == P30_ID)
             )
-        ) is None
+            is None
+        )
 
     async with sessions.begin() as session:
-        character = await session.scalar(
-            select(Character).where(Character.telegram_id == actor)
-        )
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert character is not None
         character.level = 50
 
@@ -335,11 +325,7 @@ async def test_p30_solo_boss_with_party_mode_renders_solo_callbacks(database):
     assert combat_view.group_size == 1
 
     screen = render_altos_mission(combat_view)
-    buttons = [
-        button
-        for row in screen.keyboard.inline_keyboard
-        for button in row
-    ]
+    buttons = [button for row in screen.keyboard.inline_keyboard for button in row]
     callbacks = [button.callback_data for button in buttons]
 
     assert any(callback.startswith("asc:") for callback in callbacks), callbacks
@@ -352,9 +338,7 @@ async def test_p30_consumable_callback_executes_public_transaction_and_is_idempo
 ):
     actor, _road, sessions = await _seed_p30_character(database, 783009)
     async with sessions.begin() as session:
-        character = await session.scalar(
-            select(Character).where(Character.telegram_id == actor)
-        )
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert character is not None
         character_id = character.id
         session.add(
@@ -392,10 +376,7 @@ async def test_p30_consumable_callback_executes_public_transaction_and_is_idempo
 
     damaged = await mission.combat_view_for_actor(actor, started.activity_id)
     assert damaged is not None and damaged.combat is not None
-    assert any(
-        option.item_id == P30_HEALING_POTION
-        for option in damaged.consumable_options
-    )
+    assert any(option.item_id == P30_HEALING_POTION for option in damaged.consumable_options)
     combat_screen = render_altos_mission(damaged)
     assert combat_screen.keyboard is not None
     open_button = next(
@@ -482,10 +463,10 @@ async def test_p30_consumable_callback_executes_public_transaction_and_is_idempo
     assert final is not None and final.combat is not None
     assert final.combat.version == persisted.combat.version
     assert final.combat.rng_cursor == persisted.combat.rng_cursor
-    assert sum(
-        event.action == f"consumable:{P30_HEALING_POTION}"
-        for event in final.combat.events
-    ) == 1
+    assert (
+        sum(event.action == f"consumable:{P30_HEALING_POTION}" for event in final.combat.events)
+        == 1
+    )
     await bot.session.close()
 
 
@@ -522,18 +503,14 @@ def test_p30_retry_offers_only_the_next_adjacent_route(location, button_label, c
 
 
 @pytest.mark.asyncio
-async def test_p30_solo_victory_claims_core_and_personal_rewards_once(
-    database, monkeypatch
-):
+async def test_p30_solo_victory_claims_core_and_personal_rewards_once(database, monkeypatch):
     import asterion.application.scripted_combat as scripted_combat
 
     actor, _road, sessions = await _seed_p30_character(database, 783002)
     mission = AltosMissionService(sessions, "ocaso")
     view = await _reach_p30_combat(mission, actor)
 
-    combat_view = await mission.start_solo_combat(
-        actor, view.state_version, P30_ID
-    )
+    combat_view = await mission.start_solo_combat(actor, view.state_version, P30_ID)
     assert combat_view is not None and combat_view.combat is not None
     assert combat_view.combat.fighters["enemy"].name == "Colosso Cinéreo"
     assert combat_view.combat.fighters["enemy"].level == 50
@@ -550,9 +527,7 @@ async def test_p30_solo_victory_claims_core_and_personal_rewards_once(
     assert victory.progress["completed_steps"] == [1, 2, 3, 4, 5, 6]
 
     async with sessions.begin() as session:
-        character = await session.scalar(
-            select(Character).where(Character.telegram_id == actor)
-        )
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert character is not None
         core_event = await session.scalar(
             select(RewardEvent).where(
@@ -561,43 +536,46 @@ async def test_p30_solo_victory_claims_core_and_personal_rewards_once(
             )
         )
         assert core_event is not None
-        assert await session.scalar(
-            select(RewardComponent.id).where(
-                RewardComponent.reward_event_id == core_event.id,
-                RewardComponent.item_id == P30_CORE_ID,
-                RewardComponent.quantity == 1,
+        assert (
+            await session.scalar(
+                select(RewardComponent.id).where(
+                    RewardComponent.reward_event_id == core_event.id,
+                    RewardComponent.item_id == P30_CORE_ID,
+                    RewardComponent.quantity == 1,
+                )
             )
-        ) is not None
-        assert await session.scalar(
-            select(RewardEvent.id).where(
-                RewardEvent.character_id == character.id,
-                RewardEvent.source_id == P30_MISSION_ID,
+            is not None
+        )
+        assert (
+            await session.scalar(
+                select(RewardEvent.id).where(
+                    RewardEvent.character_id == character.id,
+                    RewardEvent.source_id == P30_MISSION_ID,
+                )
             )
-        ) is None
+            is None
+        )
 
-    view = await mission.advance(
-        actor, victory.state_version, "inspect_postcombat_sabotage_record"
-    )
+    view = await mission.advance(actor, victory.state_version, "inspect_postcombat_sabotage_record")
     assert view is not None and view.step == 8
     assert view.progress["collective_attribution"] is False
     codex = await mission.advance(actor, view.state_version, "record_sabotage_codex")
     assert codex is not None and codex.step == 9
-    recipe_step = await mission.advance(
-        actor, codex.state_version, "reveal_colossus_recipe"
-    )
+    recipe_step = await mission.advance(actor, codex.state_version, "reveal_colossus_recipe")
     assert recipe_step is not None and recipe_step.step == 10
     assert recipe_step.progress["recipe_revealed"] is True
     async with sessions() as session:
-        character = await session.scalar(
-            select(Character).where(Character.telegram_id == actor)
-        )
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert character is not None
-        assert await session.scalar(
-            select(Unlock.id).where(
-                Unlock.character_id == character.id,
-                Unlock.unlock_id == P30_RECIPE_UNLOCK,
+        assert (
+            await session.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == character.id,
+                    Unlock.unlock_id == P30_RECIPE_UNLOCK,
+                )
             )
-        ) is None
+            is None
+        )
 
     completed = await mission.choose_p30_reward(
         actor, recipe_step.state_version, "relicario_ordem_interrompida"
@@ -611,9 +589,7 @@ async def test_p30_solo_victory_claims_core_and_personal_rewards_once(
     assert replay.progress["reward_choice"] == "relicario_ordem_interrompida"
 
     async with sessions() as session:
-        character = await session.scalar(
-            select(Character).where(Character.telegram_id == actor)
-        )
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert character is not None
         reward_events = (
             await session.scalars(
@@ -632,8 +608,7 @@ async def test_p30_solo_victory_claims_core_and_personal_rewards_once(
             )
         ).all()
         assert {
-            (component.kind, component.item_id, component.quantity)
-            for component in components
+            (component.kind, component.item_id, component.quantity) for component in components
         } == {
             ("xp", None, 134_100),
             ("crowns", None, 1_700),
@@ -659,48 +634,64 @@ async def test_p30_solo_victory_claims_core_and_personal_rewards_once(
             50,
             True,
         )
-        assert await session.scalar(
-            select(Unlock.id).where(
-                Unlock.character_id == character.id,
-                Unlock.unlock_id == P30_RECIPE_UNLOCK,
+        assert (
+            await session.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == character.id,
+                    Unlock.unlock_id == P30_RECIPE_UNLOCK,
+                )
             )
-        ) is not None
-        assert await session.scalar(
-            select(Unlock.id).where(
-                Unlock.character_id == character.id,
-                Unlock.unlock_id == P30_NARRATIVE_UNLOCK,
+            is not None
+        )
+        assert (
+            await session.scalar(
+                select(Unlock.id).where(
+                    Unlock.character_id == character.id,
+                    Unlock.unlock_id == P30_NARRATIVE_UNLOCK,
+                )
             )
-        ) is not None
-        assert await session.scalar(
-            select(CodexEntry.id).where(
-                CodexEntry.character_id == character.id,
-                CodexEntry.entry_id == P30_CODEX_ENTRY,
+            is not None
+        )
+        assert (
+            await session.scalar(
+                select(CodexEntry.id).where(
+                    CodexEntry.character_id == character.id,
+                    CodexEntry.entry_id == P30_CODEX_ENTRY,
+                )
             )
-        ) is not None
-        assert await session.scalar(
-            select(CodexFragment.id).where(
-                CodexFragment.character_id == character.id,
-                CodexFragment.fragment_id == P30_CODEX_ENTRY,
+            is not None
+        )
+        assert (
+            await session.scalar(
+                select(CodexFragment.id).where(
+                    CodexFragment.character_id == character.id,
+                    CodexFragment.fragment_id == P30_CODEX_ENTRY,
+                )
             )
-        ) is not None
-        assert await session.scalar(
-            select(Achievement.id).where(
-                Achievement.character_id == character.id,
-                Achievement.achievement_id == P30_ACHIEVEMENT,
+            is not None
+        )
+        assert (
+            await session.scalar(
+                select(Achievement.id).where(
+                    Achievement.character_id == character.id,
+                    Achievement.achievement_id == P30_ACHIEVEMENT,
+                )
             )
-        ) is not None
-        assert await session.scalar(
-            select(Achievement.id).where(
-                Achievement.character_id == character.id,
-                Achievement.achievement_id == ALTOS_REGION_ACHIEVEMENT,
+            is not None
+        )
+        assert (
+            await session.scalar(
+                select(Achievement.id).where(
+                    Achievement.character_id == character.id,
+                    Achievement.achievement_id == ALTOS_REGION_ACHIEVEMENT,
+                )
             )
-        ) is not None
+            is not None
+        )
 
 
 @pytest.mark.asyncio
-async def test_p30_defeat_keeps_encounter_retryable_without_rewards(
-    database, monkeypatch
-):
+async def test_p30_defeat_keeps_encounter_retryable_without_rewards(database, monkeypatch):
     import asterion.application.scripted_combat as scripted_combat
 
     actor, _road, sessions = await _seed_p30_character(database, 783003)
@@ -711,24 +702,23 @@ async def test_p30_defeat_keeps_encounter_retryable_without_rewards(
     encounter_id = started.activity_id
     initial_escora_hp = started.combat.fighters[ESCORA_KEYS[0]].stats.hp
     monkeypatch.setattr(scripted_combat, "act", _terminal("defeat"))
-    defeated = await mission.action(
-        actor, started.activity_id, started.combat.version, "defend"
-    )
+    defeated = await mission.action(actor, started.activity_id, started.combat.version, "defend")
     assert defeated is not None and defeated.step == 4
     assert defeated.progress["awaiting_retry"] is True
     assert defeated.location == ALTOS_ABRIGO_LABEL
 
     async with sessions.begin() as session:
-        character = await session.scalar(
-            select(Character).where(Character.telegram_id == actor)
-        )
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert character is not None
-        assert await session.scalar(
-            select(RewardEvent.id).where(
-                RewardEvent.character_id == character.id,
-                RewardEvent.source_id.in_((P30_CORE_REWARD_SOURCE, P30_MISSION_ID)),
+        assert (
+            await session.scalar(
+                select(RewardEvent.id).where(
+                    RewardEvent.character_id == character.id,
+                    RewardEvent.source_id.in_((P30_CORE_REWARD_SOURCE, P30_MISSION_ID)),
+                )
             )
-        ) is None
+            is None
+        )
         world = await session.get(WorldState, character.id)
         assert world is not None and world.location == ALTOS_ABRIGO_LABEL
         world.location = ALTOS_CORACAO_LABEL
@@ -748,32 +738,35 @@ async def test_p30_group_shares_encounter_and_freezes_boss_scaling(database):
     seeded = [await _seed_p30_character(database, actor) for actor in actors]
     sessions = seeded[0][2]
     async with sessions() as session:
-        helper = await session.scalar(
-            select(Character).where(Character.telegram_id == actors[1])
-        )
+        helper = await session.scalar(select(Character).where(Character.telegram_id == actors[1]))
         assert helper is not None
         helper_name = helper.name
     groups = GroupService(sessions, "ocaso")
     group = await groups.create_group(actors[0])
-    invitation = await groups.invite(
-        actors[0], helper_name, expected_group_revision=group.revision
-    )
+    invitation = await groups.invite(actors[0], helper_name, expected_group_revision=group.revision)
     await groups.respond_invite(
         actors[1], invitation.invite_id, expected_revision=invitation.revision, accept=True
     )
     mission = AltosMissionService(sessions, "ocaso", groups=groups)
     views = {actor: await mission.resume_active(actor) for actor in actors}
     assert all(view is not None and view.step == 2 for view in views.values())
-    view = views[actors[0]]
-    for path in ("contraforte", "cabo", "escora"):
+    # Objectives are Solo (Ação × Consequência §5): each member advances alone.
+    for actor in actors:
+        view = views[actor]
+        for path in ("contraforte", "cabo", "escora"):
+            view = await mission.advance(actor, view.state_version, f"inspect_load_path_{path}")
+            assert view is not None
+            if actor == actors[0]:
+                helper_view = await mission.resume(actors[1], P30_ID)
+                assert helper_view.step == 2 and not helper_view.progress.get(
+                    "coupling_record_recovered"
+                )
         view = await mission.advance(
-            actors[0], view.state_version, f"inspect_load_path_{path}"
+            actor, view.state_version, "recover_exceptional_coupling_record"
         )
-        assert view is not None
-    view = await mission.advance(
-        actors[0], view.state_version, "recover_exceptional_coupling_record"
-    )
-    assert view is not None and view.step == 4
+        assert view is not None and view.step == 4
+        views[actor] = view
+    view = views[actors[0]]
     helper_view = await mission.resume(actors[1], P30_ID)
     assert helper_view is not None and helper_view.step == 4
     assert helper_view.progress["coupling_record_recovered"] is True
