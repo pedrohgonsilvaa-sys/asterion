@@ -44,8 +44,8 @@ def _definition(event_id: str = "evento") -> WorldEventDefinition:
     )
 
 
-def test_the_catalog_ships_empty_because_the_source_names_no_event():
-    assert WORLD_EVENT_CATALOG == ()
+def test_the_catalog_has_one_event_per_region():
+    assert len({event.region for event in WORLD_EVENT_CATALOG}) == len(WORLD_EVENT_CATALOG) == 6
     assert definition_for_slot((), TUESDAY_NOON) is None
 
 

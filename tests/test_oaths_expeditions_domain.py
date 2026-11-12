@@ -114,8 +114,8 @@ def test_material_region_follows_the_character_level(level, region):
     assert oaths.region_for_level(level) == region
 
 
-def test_oath_catalog_is_empty_until_the_author_defines_content():
-    assert oaths.OATH_TRIAL_CATALOG == ()
+def test_oath_catalog_has_the_six_final_trials():
+    assert len(oaths.OATH_TRIAL_CATALOG) == 6
     assert oaths.definition_for_opening((), FRIDAY_OPENING) is None
     assert exp.route_for_start((), MONDAY_START) is None
 
