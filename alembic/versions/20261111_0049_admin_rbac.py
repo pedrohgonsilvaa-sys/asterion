@@ -1,7 +1,7 @@
 """admin roles and audit log
 
-Revision ID: 20261111_0048
-Revises: 20261111_0047
+Revision ID: 20261111_0049
+Revises: 20261111_0048
 Create Date: 2026-11-11 00:00:00
 """
 
@@ -12,8 +12,8 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "20261111_0048"
-down_revision: str | None = "20261111_0047"
+revision: str = "20261111_0049"
+down_revision: str | None = "20261111_0048"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
