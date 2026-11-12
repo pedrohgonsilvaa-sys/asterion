@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import FastAPI, Header, HTTPException, Request, status
+from fastapi import FastAPI, Header, HTTPException, Request, Response, status
 from redis.asyncio import Redis
 from sqlalchemy import text
 
@@ -9,6 +9,7 @@ from asterion.bot.round_scheduler import build_round_scheduler
 from asterion.bot.runtime import get_bot_runtime
 from asterion.config import get_settings
 from asterion.infrastructure.db.session import SessionFactory, engine
+from asterion.infrastructure.metrics import CONTENT_TYPE, authorized, render_metrics
 
 settings = get_settings()
 app = FastAPI(title="Asterion", version="0.1.0")
@@ -43,6 +44,14 @@ async def outbox_health() -> dict[str, object]:
         "counts": stats.counts,
         "oldest_open_age_seconds": stats.oldest_open_age_seconds,
     }
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics(authorization: Annotated[str | None, Header()] = None) -> Response:
+    if not authorized(authorization, settings.metrics_token):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    body = await render_metrics(engine, SessionFactory)
+    return Response(content=body, media_type=CONTENT_TYPE)
 
 
 @app.get("/ready")

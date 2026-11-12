@@ -17,12 +17,16 @@ from asterion.application.world_events import WorldEventService
 from asterion.bot.expedition_handlers import deliver_expedition_notices
 from asterion.bot.guild_battle_ui import render_guild_battle
 from asterion.bot.oath_ui import render_oath
+from asterion.bot.ops_alerts import AlertThresholds, OpsAlerter, check_and_alert
 from asterion.bot.pvp_ui import render_pvp
 from asterion.bot.telegram_outbox import TelegramOutbox, enqueue_notices
 from asterion.bot.world_event_handlers import deliver_world_event_notices
 from asterion.config import get_settings
 from asterion.infrastructure.db.job_lock import run_exclusive
-from asterion.infrastructure.db.session import SessionFactory
+from asterion.infrastructure.db.session import SessionFactory, engine
+from asterion.infrastructure.metrics import instrument_job
+
+OPS_ALERTS_JOB = "ops-alerts"
 
 
 def build_round_scheduler() -> AsyncIOScheduler:
@@ -168,16 +172,54 @@ def build_round_scheduler() -> AsyncIOScheduler:
             coalesce=True,
             replace_existing=True,
         )
+    # Operator alerts (B6): direct Telegram message, never the Outbox.
+    if settings.alert_chat_id is not None and settings.telegram_bot_enabled:
+        alerter = OpsAlerter(
+            send=_alert_sender(settings.alert_chat_id),
+            thresholds=AlertThresholds(
+                job_failures=settings.alert_job_failures,
+                outbox_backlog=settings.alert_outbox_backlog,
+                outbox_age_seconds=settings.alert_outbox_age_seconds,
+                cooldown_seconds=settings.alert_cooldown_seconds,
+            ),
+        )
+
+        async def run_ops_alerts() -> None:
+            await check_and_alert(alerter, engine, SessionFactory)
+
+        scheduler.add_job(
+            run_ops_alerts,
+            "interval",
+            seconds=60,
+            id=OPS_ALERTS_JOB,
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
+    # Metrics (B6): runs, failures in a row and duration of every job.
+    for job in scheduler.get_jobs():
+        job.modify(func=instrument_job(job.id, job.func))
     # One execution per tick across all instances (the Outbox claims rows itself).
     # Each lock holds a connection while its job runs, so the locks get their own
     # pool: one connection per job (max_instances=1), never the game's pool.
-    locked = [job for job in scheduler.get_jobs() if job.id != "outbox-dispatch"]
+    # The alerts skip the lock: they must still run when the database is down.
+    unlocked = {"outbox-dispatch", OPS_ALERTS_JOB}
+    locked = [job for job in scheduler.get_jobs() if job.id not in unlocked]
     lock_engine = create_async_engine(
         settings.database_url, pool_pre_ping=True, pool_size=len(locked), max_overflow=0
     )
     for job in locked:
         job.modify(func=_exclusive(lock_engine, job.id, job.func))
     return scheduler
+
+
+def _alert_sender(chat_id: int):
+    async def send(text: str) -> None:
+        from asterion.bot.runtime import get_bot_runtime
+
+        await get_bot_runtime().bot.send_message(chat_id, text)
+
+    return send
 
 
 def _exclusive(lock_engine: AsyncEngine, job_id, job):

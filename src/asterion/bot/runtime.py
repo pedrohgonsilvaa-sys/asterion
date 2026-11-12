@@ -93,6 +93,7 @@ from asterion.bot.guild_battle_handlers import guild_battle_router
 from asterion.bot.guilds_handlers import guilds_router
 from asterion.bot.legacy_marks_handlers import legacy_marks_router
 from asterion.bot.market_handlers import market_router
+from asterion.bot.metrics_middleware import MetricsMiddleware
 from asterion.bot.nareth_missions_handlers import nareth_missions_router
 from asterion.bot.oath_handlers import oath_router, runtime_oath_notifier
 from asterion.bot.p1_handlers import p1_router
@@ -149,6 +150,8 @@ def get_bot_runtime() -> BotRuntime:
 
     dispatcher = Dispatcher(disable_fsm=True)
     # Registered first, so they run before every other update middleware and handler.
+    # Metrics come first of all, so dropped and failed updates are counted too.
+    dispatcher.update.outer_middleware(MetricsMiddleware())
     dispatcher.update.outer_middleware(
         FloodGuardMiddleware(
             burst=settings.rate_limit_burst, per_second=settings.rate_limit_per_second
