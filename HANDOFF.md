@@ -1808,7 +1808,7 @@ A fonte do plano é `docs/PLANO_DE_ACAO.md` (trilhas A, B e C). Resumo do que es
 
 1. **Trilha A (jogo):** Marcas de Legado (§16.1), catálogo de Flavor Text e mecanismo de visuais/skins.
 2. **Trilha B (operação):** agendador único (o lock por job já existe, falta teste entre duas instâncias), backup e restore, deploy/rollback com `assets/` no Dockerfile, rate limiting, Admin com RBAC e sanções, métricas e alertas, E2E até Nv.60 e Legado com as 6 Classes e smoke test no Telegram real (feito pelo autor).
-3. **Trilha C (fechamento):** suíte completa em segundo plano (cerca de 1 hora) corrigindo as falhas; balanceamento dos kits em `SIMULAR`.
+3. **Trilha C (fechamento):** suíte completa verde em 2026-11-12 (main `0f5d07f`, 0 falhas); falta o balanceamento dos kits em `SIMULAR`.
 4. **Fase 2E:** fechar as três decisões de Game Design (IDs/release snapshot, receitas e saídas, elegibilidade de Saque) antes de qualquer integração. Publicação, importação, migration, flag, merge e deploy continuam NO-GO.
 5. **Depois:** Beta fechado no ar com A e B prontas; o autor define o Dia 1 da Crônica, envia a Bíblia v4.0.7 e revisa os textos rascunho; por último, a Monetização (§35).
 
