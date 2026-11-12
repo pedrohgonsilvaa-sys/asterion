@@ -307,9 +307,10 @@ def test_scheduler_adds_unlocked_alert_job_and_instruments_jobs(monkeypatch) -> 
 def test_blank_optional_ids_from_env_example_mean_unset(monkeypatch) -> None:
     from asterion.config import Settings
 
-    for name in ("METRICS_PORT", "ALERT_CHAT_ID", "COMMUNITY_CHAT_ID"):
+    for name in ("METRICS_PORT", "ALERT_CHAT_ID", "COMMUNITY_CHAT_ID", "PATRON_PRICE_CENTS"):
         monkeypatch.setenv(f"ASTERION_{name}", "")
     settings = Settings(_env_file=None)
     assert settings.metrics_port is None
     assert settings.alert_chat_id is None
     assert settings.community_chat_id is None
+    assert settings.patron_price_cents is None

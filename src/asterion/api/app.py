@@ -1,16 +1,28 @@
+import hmac
+import json
+import logging
+from functools import lru_cache
 from typing import Annotated
 
-from fastapi import FastAPI, Header, HTTPException, Request, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, status
+from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 from sqlalchemy import text
 
 from asterion.application.outbox import outbox_stats
+from asterion.application.payments import (
+    PaymentError,
+    PaymentService,
+    build_provider,
+    payment_config,
+)
 from asterion.bot.round_scheduler import build_round_scheduler
 from asterion.bot.runtime import get_bot_runtime
 from asterion.config import get_settings
 from asterion.infrastructure.db.session import SessionFactory, engine
 from asterion.infrastructure.metrics import CONTENT_TYPE, authorized, render_metrics
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 app = FastAPI(title="Asterion", version="0.1.0")
 round_scheduler = (
@@ -86,3 +98,40 @@ async def telegram_webhook(
     update = await request.json()
     await runtime.dispatcher.feed_raw_update(runtime.bot, update)
     return {"ok": True}
+
+
+@lru_cache
+def get_payment_service() -> PaymentService:
+    return PaymentService(
+        SessionFactory, settings.server_id, payment_config(settings), build_provider(settings)
+    )
+
+
+def _webhook_token() -> str | None:
+    return settings.payments_webhook_token
+
+
+@app.post("/payments/infinitepay/webhook", include_in_schema=False)
+async def infinitepay_webhook(
+    request: Request,
+    payments: Annotated[PaymentService, Depends(get_payment_service)],
+    expected: Annotated[str | None, Depends(_webhook_token)],
+    token: Annotated[str, Query()] = "",
+) -> JSONResponse:
+    """GDD §35.2. The notice has no signature: it is only stored and queued; the
+    Outbox confirms it with /payment_check before anything is delivered.
+    200 = stored (or already known); 400 = rejected, the provider retries."""
+    if not expected or not hmac.compare_digest(token, expected):
+        return JSONResponse({"ok": False}, status_code=status.HTTP_400_BAD_REQUEST)
+    try:
+        body = json.loads(await request.body())
+    except ValueError:
+        return JSONResponse({"ok": False}, status_code=status.HTTP_400_BAD_REQUEST)
+    if not isinstance(body, dict):
+        return JSONResponse({"ok": False}, status_code=status.HTTP_400_BAD_REQUEST)
+    try:
+        outcome = await payments.record_notice(body)
+    except PaymentError:
+        logger.warning("payment notice rejected: %s", str(body.get("order_nsu"))[:160])
+        return JSONResponse({"ok": False}, status_code=status.HTTP_400_BAD_REQUEST)
+    return JSONResponse({"ok": True, "result": outcome})
