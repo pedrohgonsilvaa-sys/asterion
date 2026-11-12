@@ -8,6 +8,11 @@ from asterion.application.road import BOSQUE, CHARNECA, REFUGE, RUINS
 from asterion.application.s5 import S5_LIGHT_POINTS, S5_TITLE, S5View
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
+from asterion.bot.narrative_choice_ui import (
+    future_reaction,
+    immediate_reaction,
+    narrative_option_rows,
+)
 
 
 def _button(label: str, data: str) -> InlineKeyboardButton:
@@ -202,7 +207,7 @@ def render_s5(view: S5View) -> Screen:
             ]),
         )
     if view.kind == "return":
-        rows = []
+        rows = narrative_option_rows(view.narrative, f"s5:{version}")
         if view.location == RUINS:
             rows.append([_button("Retornar ao Bosque", "road:route:bosque")])
         elif view.location == BOSQUE:
@@ -215,12 +220,21 @@ def render_s5(view: S5View) -> Screen:
             "s5", _keyboard(rows),
         )
     if view.kind == "report":
+        memory = "".join(
+            f"\n\n{line}"
+            for hook_id, option_id in view.future_reactions
+            if (line := future_reaction(hook_id, option_id))
+        )
+        reaction = immediate_reaction(view.narrative)
+        rows = narrative_option_rows(view.narrative, f"s5:{version}") or [
+            [_button("Reportar a Oren Cal", f"s5:{version}:report")]
+        ]
+        rows.append([_button("← Missões", "world:missions")])
         return Screen(
             "✒️ Oren Cal\n\n📜 A Luz que Não Aquece\n\n"
-            "— A primeira vez podia ser engano. A segunda, coincidência. Agora temos um padrão — e ainda não temos uma explicação.",
-            "s5", _keyboard([
-                [_button("Reportar a Oren Cal", f"s5:{version}:report")],
-                [_button("← Missões", "world:missions")],
-            ]),
+            "— A primeira vez podia ser engano. A segunda, coincidência. Agora temos um padrão — e ainda não temos uma explicação."
+            + memory
+            + (f"\n\n{reaction}" if reaction else ""),
+            "s5", _keyboard(rows),
         )
     return render_s5_detail(view)

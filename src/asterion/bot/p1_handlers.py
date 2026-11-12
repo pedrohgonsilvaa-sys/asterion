@@ -152,6 +152,8 @@ def p1_router(
             view = await service.retry(actor, version)
         elif action == "refuge":
             view = await service.enter_refuge(actor, version)
+        elif action == "nc" and len(parts) == 4:
+            view = await service.choose_posture(actor, version, parts[3])
         elif action == "alda":
             view = await service.follow_alda(actor, version)
         elif action == "oren":

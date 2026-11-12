@@ -187,6 +187,7 @@ async def test_s1_completion_is_atomic_idempotent_and_clears_tracking(database):
         world.location = "Refúgio do Ocaso"
         await session.commit()
 
+    view = await service.choose_response(actor, view.state_version, "o2")
     completed = await service.complete_with_oren(actor, view.state_version)
     assert completed.status == "completed"
     assert completed.fragment_new_this_attempt is True
@@ -337,6 +338,7 @@ async def test_s1_shares_present_objectives_but_keeps_completion_rewards_persona
             )
             world.location = "Refúgio do Ocaso"
 
+    first = await services[0].choose_response(actors[0], first.state_version, "o1")
     completed = await services[0].complete_with_oren(actors[0], first.state_version)
     assert completed.status == "completed"
     remaining = await services[1].resume(actors[1])

@@ -60,6 +60,8 @@ def s5_router(service: S5Service, images: dict[str, str]) -> Router:
                         view = await service.toggle_tracking(actor, version)
                     else:
                         view = await service.action(actor, version, operation)
+                elif operation == "nc" and len(parts) == 4:
+                    view = await service.action(actor, version, "nc", parts[3])
                 elif operation == "group" and len(parts) == 3:
                     try:
                         view = await service.propose_group_combat(actor, version)

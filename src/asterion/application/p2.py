@@ -32,6 +32,12 @@ from asterion.application.equipment_configuration import (
     reconcile_character_hp,
 )
 from asterion.application.groups import ActivityEligibility, GroupError, GroupService
+from asterion.application.narrative_choices import (
+    NarrativeNodeView,
+    commit_mission_choice,
+    narrative_node_view,
+    resolve_future_hook,
+)
 from asterion.application.narrative_identity import resolve_character_scene
 from asterion.application.progression import consolidate_character_level
 from asterion.application.road import REFUGE, REGION, RoadService
@@ -144,6 +150,12 @@ class P2View:
     identity_lines: tuple[str, ...] = ()
     identity_options: tuple[tuple[str, str], ...] = ()
     identity_reply: str | None = None
+    narrative: NarrativeNodeView | None = None
+    # (hook_id, option_id) a scene may react to; resolved only from legitimate memory.
+    future_reactions: tuple[tuple[str, str], ...] = ()
+
+
+P1_POSTURE_HOOK = "P1_choice_posture->P2"
 
 
 class P2Service:
@@ -1224,7 +1236,10 @@ class P2Service:
                 )
             return await self._view(session, character, quest, world)
 
-    async def oren(self, actor: int, version: int) -> P2View | None:
+    async def oren(
+        self, actor: int, version: int, option_id: str | None = None
+    ) -> P2View | None:
+        """Etapa 5 ends through P2_evidentiary_posture (individual, commit once)."""
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor)
             if character is None or quest is None:
@@ -1236,6 +1251,12 @@ class P2Service:
                 or await self._foreground(session, character.id) is not None
             ):
                 return await self._view(session, character, quest, world)
+            node = await narrative_node_view(session, character, P2_ID)
+            if node is not None and node.pending:
+                if option_id is None or (
+                    await commit_mission_choice(session, character, quest, option_id)
+                ) is None:
+                    return await self._view(session, character, quest, world)
             await self._ensure(
                 session,
                 CodexEntry,
@@ -1724,7 +1745,16 @@ class P2Service:
             proposal_pair = proposal_rows.first()
         identity_lines: tuple[str, ...] = ()
         identity_options: tuple[tuple[str, str], ...] = ()
+        future_reactions: tuple[tuple[str, str], ...] = ()
+        narrative = (
+            await narrative_node_view(session, character, P2_ID)
+            if kind in {"oren", "alda"}
+            else None
+        )
         if kind == "offer":
+            posture = await resolve_future_hook(session, character.id, P1_POSTURE_HOOK)
+            if posture is not None:
+                future_reactions = ((P1_POSTURE_HOOK, posture),)
             offer = await resolve_character_scene(session, character.id, P2_ALDA_OFFER_SCENE)
             if offer is not None:
                 identity_lines = offer.spoken_lines
@@ -1757,7 +1787,9 @@ class P2Service:
             consumable_budget_limit=consumable_budget_limit,
             combat_actor_key=combat_actor_key,
             group_size=group_size,
-            proposal_id=proposal_pair[1].id if proposal_pair else None,
+narrative=narrative,
+            future_reactions=future_reactions,
+                        proposal_id=proposal_pair[1].id if proposal_pair else None,
             proposal_status=proposal_pair[1].status if proposal_pair else None,
             identity_lines=identity_lines,
             identity_options=identity_options,

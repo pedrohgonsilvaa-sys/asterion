@@ -4358,3 +4358,104 @@ class PatronAccount(Base):
     # The temporary Title/Frame are on the characters; the expiry job removes them.
     temporary_granted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class NarrativeChoiceRecord(Base):
+    """One committed narrative choice per character and node (commit once, §6.1)."""
+
+    __tablename__ = "narrative_choices"
+    __table_args__ = (
+        UniqueConstraint("character_id", "choice_id", name="uq_narrative_choice"),
+        CheckConstraint(
+            "source IN ('player','neutral_backfill')", name="ck_narrative_choice_source"
+        ),
+        Index("ix_narrative_choice_mission", "character_id", "mission_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    choice_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    mission_id: Mapped[str] = mapped_column(String(8), nullable=False)
+    step_context: Mapped[str] = mapped_column(Text, nullable=False)
+    selected_option: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[str] = mapped_column(String(24), nullable=False)
+    catalog_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    character_memory_tags: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
+    npc_memory_targets: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
+    future_hooks: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
+    identity_conditions: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
+    committed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CharacterNarrativeMemory(Base):
+    """A persistent memory tag the character carries; never shown as a score."""
+
+    __tablename__ = "character_narrative_memories"
+    __table_args__ = (
+        UniqueConstraint(
+            "character_id", "source_choice_id", "tag", name="uq_character_narrative_memory"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    tag: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_choice_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class NpcNarrativeMemory(Base):
+    """What one NPC legitimately knows about one character, and how it learned it."""
+
+    __tablename__ = "npc_narrative_memories"
+    __table_args__ = (
+        UniqueConstraint(
+            "character_id", "npc_id", "source_choice_id", "tag", name="uq_npc_narrative_memory"
+        ),
+        CheckConstraint(
+            "knowledge IN ('witnessed','report','record')", name="ck_npc_memory_knowledge"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    npc_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    tag: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_choice_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    knowledge: Mapped[str] = mapped_column(String(16), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class NpcRapport(Base):
+    """Qualitative relationship of one NPC with one character; no numeric value."""
+
+    __tablename__ = "npc_rapport_states"
+    __table_args__ = (
+        PrimaryKeyConstraint("character_id", "npc_id", name="pk_npc_rapport_states"),
+        CheckConstraint(
+            "rapport_state IN ('neutral','open','trusting','guarded','skeptical',"
+            "'respectful','strained')",
+            name="ck_npc_rapport_state",
+        ),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    npc_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    rapport_state: Mapped[str] = mapped_column(String(16), nullable=False, default="neutral")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

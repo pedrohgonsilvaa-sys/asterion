@@ -31,6 +31,12 @@ from asterion.application.equipment_configuration import (
     reconcile_character_hp,
 )
 from asterion.application.groups import ActivityEligibility, GroupError, GroupService
+from asterion.application.narrative_choices import (
+    NarrativeNodeView,
+    commit_mission_choice,
+    narrative_node_view,
+    resolve_future_hook,
+)
 from asterion.application.progression import consolidate_character_level
 from asterion.application.road import REFUGE, REGION, RUINS, RoadService
 from asterion.application.scripted_combat import (
@@ -135,6 +141,11 @@ class S5View:
     proposal_status: str | None = None
     group_size: int = 1
     combat_actor_key: str = "player"
+    narrative: NarrativeNodeView | None = None
+    future_reactions: tuple[tuple[str, str], ...] = ()
+
+
+S1_LIGHT_HOOK = "S1_response_to_light->S5"
 
 
 class S5Service:
@@ -330,7 +341,15 @@ class S5Service:
                         evidence={"location": RUINS},
                     )
                 return await self._view(session, character, quest, world)
+            if operation == "nc" and quest.step == 5 and item is not None:
+                result = await commit_mission_choice(session, character, quest, item)
+                if result is not None and result.created:
+                    quest.state_version += 1
+                return await self._view(session, character, quest, world)
             if operation == "report" and quest.step == 5 and self._at(world, REFUGE):
+                node = await narrative_node_view(session, character, S5_ID)
+                if node is not None and node.pending:
+                    return await self._view(session, character, quest, world)
                 await self._complete(session, character, quest)
                 return await self._view(session, character, quest, world)
             return await self._view(session, character, quest, world)
@@ -1109,6 +1128,11 @@ class S5Service:
             kind = "light_points"
         else:
             kind = "record"
+        future_reactions: tuple[tuple[str, str], ...] = ()
+        if kind == "report":
+            light = await resolve_future_hook(session, character.id, S1_LIGHT_HOOK)
+            if light is not None:
+                future_reactions = ((S1_LIGHT_HOOK, light),)
         options = quantities = ()
         budget = 0
         creature = S5_CREATURES.get(progress.get("encounter_creature_id"))
@@ -1134,6 +1158,12 @@ class S5Service:
             proposal_status=proposal_pair[1].status if proposal_pair else None,
             group_size=group_size,
             combat_actor_key=combat_actor_key,
+            narrative=(
+                await narrative_node_view(session, character, S5_ID)
+                if quest is not None and status == "active" and quest.step == 5
+                else None
+            ),
+            future_reactions=future_reactions,
         )
 
     async def _eligible(self, session, character):

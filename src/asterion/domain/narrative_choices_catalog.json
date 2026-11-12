@@ -1,0 +1,5099 @@
+{
+ "version": "1.0.0",
+ "nodes": [
+  {
+   "choice_id": "P1_choice_posture",
+   "mission_id": "P1",
+   "mission_kind": "principal",
+   "title": "Vozes na Estrada",
+   "region": "terras_do_ocaso",
+   "step": 5,
+   "step_context": "Etapa 5, primeira conversa com Alda.",
+   "question": "Como você se apresenta depois de sobreviver à estrada?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Prudência: falar só do que viu.",
+     "character_memory_tags": [],
+     "npc_memory_targets": [
+      {
+       "npc_id": "alda",
+       "tag": "cautela_no_relato"
+      },
+      {
+       "npc_id": "oren",
+       "tag": "fatos_primeiro"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Abertura: admitir medo, mas pedir orientação.",
+     "character_memory_tags": [],
+     "npc_memory_targets": [
+      {
+       "npc_id": "alda",
+       "tag": "aceita_vulnerabilidade"
+      },
+      {
+       "npc_id": "oren",
+       "tag": "honestidade"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Curiosidade: perguntar pelos sinais antes de aceitar abrigo.",
+     "character_memory_tags": [],
+     "npc_memory_targets": [
+      {
+       "npc_id": "alda",
+       "tag": "curiosidade_ativa"
+      },
+      {
+       "npc_id": "oren",
+       "tag": "investigador"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P1_choice_posture->P2",
+     "target": "P2",
+     "knowledge_holders": [
+      "alda"
+     ],
+     "summary": "P2: Alda usa a postura para modular a primeira cobrança."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: qualquer Classe pode ter uma formulação; Vigia recebe pergunta sobre sinais."
+  },
+  {
+   "choice_id": "S1_response_to_light",
+   "mission_id": "S1",
+   "mission_kind": "secundaria",
+   "title": "Luzes sob as Cinzas",
+   "region": "terras_do_ocaso",
+   "step": null,
+   "step_context": "Depois de observar a luz distante.",
+   "question": "O que fazer com uma ocorrência sem explicação?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Investigar a direção imediatamente.",
+     "character_memory_tags": [
+      "busca_ativa"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "respeita_ousadia"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Registrar e voltar sem perseguir.",
+     "character_memory_tags": [
+      "preserva_evidencia"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "respeita_prudencia"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Perguntar primeiro se alguém já viu o fenômeno.",
+     "character_memory_tags": [
+      "busca_testemunha"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "prudencia_social"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S1_response_to_light->S5",
+     "target": "S5",
+     "knowledge_holders": [
+      "oren"
+     ],
+     "summary": "S5: Oren lembra se você perseguiu o fenômeno ou preservou distância."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "oraculo"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Oráculo pode formular uma pergunta sobre presságio sem afirmar certeza."
+  },
+  {
+   "choice_id": "P2_evidentiary_posture",
+   "mission_id": "P2",
+   "mission_kind": "principal",
+   "title": "Fuligem sem Fogo",
+   "region": "terras_do_ocaso",
+   "step": 5,
+   "step_context": "Etapa 5, ao levar o registro a Oren.",
+   "question": "Que tipo de conclusão você aceita sobre a Pedra Marcada?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Registrar só a aparência e localização.",
+     "character_memory_tags": [
+      "documental"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "evidencia_primeiro"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Dizer que a marca parece escrita, mas marcar como hipótese.",
+     "character_memory_tags": [
+      "inferencia"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "hipotese_controlada"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Insistir que ainda falta contexto e procurar outro registro antes de concluir.",
+     "character_memory_tags": [
+      "exige_corroboracao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "ceticismo_respeitado"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P2_evidentiary_posture->S2",
+     "target": "S2",
+     "knowledge_holders": [
+      "oren"
+     ],
+     "summary": "S2/P3: Oren escolhe o tipo de pergunta que fará depois"
+    },
+    {
+     "hook_id": "P2_evidentiary_posture->P3",
+     "target": "P3",
+     "knowledge_holders": [
+      "oren"
+     ],
+     "summary": "S2/P3: Oren escolhe o tipo de pergunta que fará depois"
+    },
+    {
+     "hook_id": "P2_evidentiary_posture->P4",
+     "target": "P4",
+     "knowledge_holders": [],
+     "summary": "P4: Alda percebe seu grau de prudência."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "cinereo"
+     ]
+    },
+    {
+     "kind": "class",
+     "values": [
+      "oraculo",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Raça: Cinéreo pode ter reação de experiência prática; Classe: Vigia/Oráculo podem abrir observação contextual."
+  },
+  {
+   "choice_id": "S2_priority",
+   "mission_id": "S2",
+   "mission_kind": "secundaria",
+   "title": "Os Nomes Esquecidos",
+   "region": "terras_do_ocaso",
+   "step": null,
+   "step_context": "Após o terceiro vestígio, antes de enfrentar o Peregrino Calcinado.",
+   "question": "O que merece prioridade diante de pessoas ausentes?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Preservar os nomes e vestígios.",
+     "character_memory_tags": [
+      "preserva_identidades"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "memoria_primaria"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Perseguir o risco que ainda ameaça viajantes.",
+     "character_memory_tags": [
+      "vivos_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "pragmatico"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Buscar evidência que una os dois objetivos.",
+     "character_memory_tags": [
+      "concilia_pessoas_e_prova"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "equilibrado"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S2_priority->S6",
+     "target": "S6",
+     "knowledge_holders": [
+      "oren"
+     ],
+     "summary": "S6: Oren retoma a prioridade que você escolheu ao lidar com o último registro."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "luminar",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Luminar pode enfatizar proteção; Vigia pode enfatizar evidência."
+  },
+  {
+   "choice_id": "P3_heritage_method",
+   "mission_id": "P3",
+   "mission_kind": "principal",
+   "title": "Sob Galhos Calcinados",
+   "region": "terras_do_ocaso",
+   "step": 4,
+   "step_context": "Etapa 4, diante do fragmento entalhado.",
+   "question": "Como lidar com um vestígio asteriano que ainda não entende?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Preservar sem tocar mais do que o necessário.",
+     "character_memory_tags": [
+      "preserva_artefato"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "preservacionista"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Examinar cuidadosamente mecanismos e marcas.",
+     "character_memory_tags": [
+      "inspecao_ativa"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "investigador"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Questionar a hipótese antes de aceitá-la como antiga.",
+     "character_memory_tags": [
+      "testa_autoria"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "ceticismo"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P3_heritage_method->P4",
+     "target": "P4",
+     "knowledge_holders": [
+      "oren"
+     ],
+     "summary": "P4/S4: Oren pode reconhecer seu método ao interpretar a função dos Vigias."
+    },
+    {
+     "hook_id": "P3_heritage_method->S4",
+     "target": "S4",
+     "knowledge_holders": [
+      "oren"
+     ],
+     "summary": "P4/S4: Oren pode reconhecer seu método ao interpretar a função dos Vigias."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "tecelao",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Tecelão/Vigia pode abrir análise técnica sem revelar lore."
+  },
+  {
+   "choice_id": "S3_priority",
+   "mission_id": "S3",
+   "mission_kind": "secundaria",
+   "title": "Rastros sob os Galhos",
+   "region": "terras_do_ocaso",
+   "step": null,
+   "step_context": "Após localizar a carga abandonada.",
+   "question": "O que importa mais naquele instante?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Descobrir o que causou a perda.",
+     "character_memory_tags": [
+      "causa_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "alda",
+       "tag": "investigacao_pratica"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Garantir que a próxima carga passe segura.",
+     "character_memory_tags": [
+      "seguranca_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "alda",
+       "tag": "pragmatismo"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Verificar primeiro quem será afetado pela próxima rota.",
+     "character_memory_tags": [
+      "comunidade_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "alda",
+       "tag": "protetivo"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S3_priority->P4",
+     "target": "P4",
+     "knowledge_holders": [
+      "alda"
+     ],
+     "summary": "P4/P5: Alda adapta o enquadramento da próxima tarefa."
+    },
+    {
+     "hook_id": "S3_priority->P5",
+     "target": "P5",
+     "knowledge_holders": [
+      "alda"
+     ],
+     "summary": "P4/P5: Alda adapta o enquadramento da próxima tarefa."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "errante",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Errante/Vigia pode ter observação de rota."
+  },
+  {
+   "choice_id": "P4_guard_protocol",
+   "mission_id": "P4",
+   "mission_kind": "principal",
+   "title": "Pedras que Ainda Vigiam",
+   "region": "terras_do_ocaso",
+   "step": 4,
+   "step_context": "Etapa 4, ao perceber que a estrutura ainda impede passagem.",
+   "question": "Como tratar uma defesa antiga que continua ativa?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Desviar e não interferir.",
+     "character_memory_tags": [
+      "nao_interfere"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "alda",
+       "tag": "cautela_com_estruturas"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Testar o limite da defesa com cuidado.",
+     "character_memory_tags": [
+      "testa_sistema"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "curiosidade_tecnica"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Tentar descobrir primeiro para quem a defesa parece operar.",
+     "character_memory_tags": [
+      "procura_finalidade"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "alda",
+       "tag": "investigacao_de_funcao"
+      },
+      {
+       "npc_id": "oren",
+       "tag": "investigacao_de_funcao"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P4_guard_protocol->P5",
+     "target": "P5",
+     "knowledge_holders": [],
+     "summary": "P5: a preparação para a Porta do Poente muda a conversa."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "sentinela",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Sentinela/Vigia pode ganhar pergunta de leitura de defesa."
+  },
+  {
+   "choice_id": "S4_patrol_reading",
+   "mission_id": "S4",
+   "mission_kind": "secundaria",
+   "title": "Vigília sem Voz",
+   "region": "terras_do_ocaso",
+   "step": 5,
+   "step_context": "Etapa 5, onde a patrulha muda de direção sem obstáculo.",
+   "question": "Você trata a mudança como erro ou sinal?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Registrar como anomalia sem explicação.",
+     "character_memory_tags": [
+      "anomalia_documentada"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "disciplina"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Testar a rota novamente.",
+     "character_memory_tags": [
+      "verifica_padrao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "experimental"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Procurar uma função prática que explique a mudança.",
+     "character_memory_tags": [
+      "busca_funcao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "racionalista"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S4_patrol_reading->P5",
+     "target": "P5",
+     "knowledge_holders": [
+      "oren"
+     ],
+     "summary": "P5/P6: Oren recupera sua postura ao interpretar estruturas."
+    },
+    {
+     "hook_id": "S4_patrol_reading->P6",
+     "target": "P6",
+     "knowledge_holders": [
+      "oren"
+     ],
+     "summary": "P5/P6: Oren recupera sua postura ao interpretar estruturas."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "oraculo"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Oráculo pode receber uma formulação de pressentimento sem confirmar causa."
+  },
+  {
+   "choice_id": "S5_risk_posture",
+   "mission_id": "S5",
+   "mission_kind": "secundaria",
+   "title": "A Luz que Não Aquece",
+   "region": "terras_do_ocaso",
+   "step": 4,
+   "step_context": "Etapa 4, depois de medir direção e duração.",
+   "question": "Quanto risco você aceita para entender a luz?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Acompanhar o fenômeno até onde for seguro.",
+     "character_memory_tags": [
+      "risco_calculado"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "prudente_ousado"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Encerrar a investigação e registrar o padrão.",
+     "character_memory_tags": [
+      "evita_risco"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "prudente"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Buscar outra testemunha antes de seguir.",
+     "character_memory_tags": [
+      "procura_corroboracao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "socialmente_cauteloso"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S5_risk_posture->P6",
+     "target": "P6",
+     "knowledge_holders": [
+      "oren"
+     ],
+     "summary": "P6: Oren pode usar seu histórico para enquadrar a atitude diante da Âncora."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "oraculo"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Oráculo ganha linha especial de leitura, sem profecia automática."
+  },
+  {
+   "choice_id": "P5_threshold",
+   "mission_id": "P5",
+   "mission_kind": "principal",
+   "title": "A Porta do Poente",
+   "region": "terras_do_ocaso",
+   "step": 5,
+   "step_context": "Etapa 5, após registrar o símbolo recorrente.",
+   "question": "O que você fará com uma porta que claramente protege algo?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Entrar assim que possível.",
+     "character_memory_tags": [
+      "prioridade_descoberta"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "alda",
+       "tag": "respeita_ousadia"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Reunir mais evidência antes de atravessar.",
+     "character_memory_tags": [
+      "prioridade_evidencia"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "respeita_prudencia"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Preparar primeiro uma forma de retorno seguro.",
+     "character_memory_tags": [
+      "prioridade_retorno"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "alda",
+       "tag": "respeita_planejamento"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P5_threshold->P6",
+     "target": "P6",
+     "knowledge_holders": [],
+     "summary": "P6: o preâmbulo do Chefe muda conforme o preparo narrativo."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "sentinela",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Sentinela/Vigia pode abrir opção de preparar defesa/rota."
+  },
+  {
+   "choice_id": "P6_anchor_posture",
+   "mission_id": "P6",
+   "mission_kind": "principal",
+   "title": "O Vigia Partido",
+   "region": "terras_do_ocaso",
+   "step": 7,
+   "step_context": "Etapa 7, depois de registrar Âncora do Poente.",
+   "question": "O que fazer com o primeiro nome que conecta tudo a uma estrutura maior?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Registrar o nome e não extrapolar.",
+     "character_memory_tags": [
+      "limites_da_evidencia"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "rigoroso"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Procurar outra Âncora para comparar.",
+     "character_memory_tags": [
+      "busca_corroboracao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "alda",
+       "tag": "investigativo"
+      },
+      {
+       "npc_id": "oren",
+       "tag": "investigativo"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Questionar quem ainda protege essas estruturas e por quê.",
+     "character_memory_tags": [
+      "pergunta_por_guardioes"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "alda",
+       "tag": "questiona_autoridade"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P6_anchor_posture->P7",
+     "target": "P7",
+     "knowledge_holders": [],
+     "summary": "P7: o personagem carrega uma postura de investigação ou contenção, não uma resposta pronta."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "oraculo"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Oráculo pode perguntar sobre presságio sem revelar o futuro."
+  },
+  {
+   "choice_id": "S6_missing_people",
+   "mission_id": "S6",
+   "mission_kind": "secundaria",
+   "title": "Onde os Nomes Terminaram",
+   "region": "vales_dos_enforcados",
+   "step": 5,
+   "step_context": "Etapa 5, depois de encontrar o último registro legível da rota.",
+   "question": "Quando um nome termina sem resposta, o que você faz com a ausência?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Preservar o registro mesmo incompleto.",
+     "character_memory_tags": [
+      "nao_apaga_ausencia"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "preserva_identidade"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Procurar mais uma pista para tentar completar o nome.",
+     "character_memory_tags": [
+      "busca_resposta"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "investigacao"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Aceitar que a evidência acabou e não inventar uma identidade.",
+     "character_memory_tags": [
+      "nao_inventa_vazio"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "oren",
+       "tag": "rigor"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S6_missing_people->P7",
+     "target": "P7",
+     "knowledge_holders": [],
+     "summary": "P7: o personagem leva para os Vales uma postura definida sobre como tratar pessoas que desapareceram sem registro completo."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "luminar",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Luminar pode enfatizar dignidade; Vigia pode enfatizar rastreamento; nenhuma Raça recebe culpa ou privilégio automático."
+  },
+  {
+   "choice_id": "P7_route_priority",
+   "mission_id": "P7",
+   "mission_kind": "principal",
+   "title": "A Estrada Estrangulada",
+   "region": "vales_dos_enforcados",
+   "step": 5,
+   "step_context": "Etapa 5, diante da pedra trabalhada sob raízes.",
+   "question": "O que merece atenção primeiro?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Garantir que a rota continue segura.",
+     "character_memory_tags": [
+      "seguranca_rotas"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "pragmatismo"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Examinar a estrutura antiga.",
+     "character_memory_tags": [
+      "ruina_investigada"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "curiosidade"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Marcar a estrutura e voltar depois.",
+     "character_memory_tags": [
+      "preserva_pista"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "planejamento"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P7_route_priority->P8",
+     "target": "P8",
+     "knowledge_holders": [
+      "dara"
+     ],
+     "summary": "P8: Dara retoma sua prioridade ao escolher a próxima rota."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "errante",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Errante/Vigia recebe leitura de terreno."
+  },
+  {
+   "choice_id": "S7_cordage_reading",
+   "mission_id": "S7",
+   "mission_kind": "secundaria",
+   "title": "Cordas na Névoa",
+   "region": "vales_dos_enforcados",
+   "step": 3,
+   "step_context": "Etapa 3, diante da corda antiga.",
+   "question": "O que a corda significa para você?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Uma ferramenta de rota que ainda pode salvar alguém.",
+     "character_memory_tags": [
+      "recurso_reaproveitado"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "utilitario"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Um vestígio que pode indicar quem usava a passagem.",
+     "character_memory_tags": [
+      "origem_da_rota"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "investigativo"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Algo que não deve ser tocado antes de entender o contexto.",
+     "character_memory_tags": [
+      "preservacao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "cautela"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S7_cordage_reading->S10",
+     "target": "S10",
+     "knowledge_holders": [
+      "dara",
+      "iven"
+     ],
+     "summary": "S10: Dara/Iven podem lembrar sua postura diante de vestígios de passagem."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "errante",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Errante pode sugerir uso prático; Vigia pode notar marcas de tensão."
+  },
+  {
+   "choice_id": "P8_root_hypothesis",
+   "mission_id": "P8",
+   "mission_kind": "principal",
+   "title": "Entre Galhos Suspensos",
+   "region": "vales_dos_enforcados",
+   "step": 4,
+   "step_context": "Etapa 4, comparando as três concentrações de raízes.",
+   "question": "Você aceita uma explicação simples?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Sim, até haver prova do contrário.",
+     "character_memory_tags": [
+      "naturalista"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "pragmatico"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Não; procurar padrão intencional.",
+     "character_memory_tags": [
+      "busca_intencionalidade"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "curiosidade"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Manter as duas hipóteses abertas.",
+     "character_memory_tags": [
+      "hipoteses_duplas"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "equilibrado"
+      },
+      {
+       "npc_id": "iven",
+       "tag": "equilibrado"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P8_root_hypothesis->P9",
+     "target": "P9",
+     "knowledge_holders": [],
+     "summary": "P9/P10: a hipótese adotada muda como eles apresentam evidências."
+    },
+    {
+     "hook_id": "P8_root_hypothesis->P10",
+     "target": "P10",
+     "knowledge_holders": [],
+     "summary": "P9/P10: a hipótese adotada muda como eles apresentam evidências."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "velado"
+     ]
+    }
+   ],
+   "identity_note": "Raça: Velado pode ter uma formulação de percepção, sem afirmar magia."
+  },
+  {
+   "choice_id": "S8_route_policy",
+   "mission_id": "S8",
+   "mission_kind": "secundaria",
+   "title": "O Peso da Passagem",
+   "region": "vales_dos_enforcados",
+   "step": 5,
+   "step_context": "Etapa 5, ao definir a rota alternativa.",
+   "question": "Que princípio governa a nova rota?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Menor risco imediato.",
+     "character_memory_tags": [
+      "risco_minimo"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "seguranca"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Maior capacidade de suportar o próximo ciclo.",
+     "character_memory_tags": [
+      "longo_prazo"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "sustentabilidade"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Menor custo para quem mantém a passagem.",
+     "character_memory_tags": [
+      "custo_compartilhado"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "comunidade"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S8_route_policy->S11",
+     "target": "S11",
+     "knowledge_holders": [
+      "dara"
+     ],
+     "summary": "S11: Dara pode lembrar qual custo você considera aceitável."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "sentinela"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Sentinela pode abrir leitura de sustentação."
+  },
+  {
+   "choice_id": "P9_priority",
+   "mission_id": "P9",
+   "mission_kind": "principal",
+   "title": "Sob a Madeira Morta",
+   "region": "vales_dos_enforcados",
+   "step": 5,
+   "step_context": "Etapa 5, depois de encontrar Baixios e registros.",
+   "question": "Quando vivos e registros entram em tensão, o que vem primeiro?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Segurança dos vivos.",
+     "character_memory_tags": [
+      "vivos_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "protecao"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Preservação do registro a qualquer custo razoável.",
+     "character_memory_tags": [
+      "registro_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "documental"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Tentar proteger ambos mesmo com custo de tempo.",
+     "character_memory_tags": [
+      "dupla_prioridade"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "equilibrio"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P9_priority->P10",
+     "target": "P10",
+     "knowledge_holders": [
+      "iven"
+     ],
+     "summary": "P10/P11: Iven pode confiar mais sua investigação ao personagem."
+    },
+    {
+     "hook_id": "P9_priority->P11",
+     "target": "P11",
+     "knowledge_holders": [
+      "iven"
+     ],
+     "summary": "P10/P11: Iven pode confiar mais sua investigação ao personagem."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "luminar",
+      "sentinela",
+      "tecelao"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Luminar/Sentinela pode reforçar proteção; Tecelão pode reforçar registro."
+  },
+  {
+   "choice_id": "S9_focus",
+   "mission_id": "S9",
+   "mission_kind": "secundaria",
+   "title": "Sob a Casca",
+   "region": "vales_dos_enforcados",
+   "step": 4,
+   "step_context": "Etapa 4, após encontrar o padrão na casca.",
+   "question": "Você segue o fenômeno ou o problema prático?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Seguir o fenômeno.",
+     "character_memory_tags": [
+      "segue_fenomeno"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "curioso"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Manter foco na ameaça local.",
+     "character_memory_tags": [
+      "foco_ameaca"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "pragmatico"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Registrar a pista e voltar ao objetivo principal.",
+     "character_memory_tags": [
+      "nao_abandona_objetivo"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "disciplinado"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S9_focus->P10",
+     "target": "P10",
+     "knowledge_holders": [
+      "iven"
+     ],
+     "summary": "P10: Iven pode escolher confiar primeiro suas hipóteses ao personagem."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "cinereo"
+     ]
+    }
+   ],
+   "identity_note": "Raça: Cinéreo pode comentar persistência do terreno sem estereótipo."
+  },
+  {
+   "choice_id": "P10_structure_policy",
+   "mission_id": "P10",
+   "mission_kind": "principal",
+   "title": "Pedra sob as Raízes",
+   "region": "vales_dos_enforcados",
+   "step": 4,
+   "step_context": "Etapa 4, diante da estrutura antiga no Claustro.",
+   "question": "O que fazer com algo que ainda funciona parcialmente?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Preservar e contornar.",
+     "character_memory_tags": [
+      "nao_destroi"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "preservacionista"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Testar seu comportamento para entender o limite.",
+     "character_memory_tags": [
+      "testa_limites"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "experimental"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Priorizar a passagem mesmo que a estrutura seja perdida.",
+     "character_memory_tags": [
+      "custo_de_acesso"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "pragmatismo_aceito"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P10_structure_policy->P11",
+     "target": "P11",
+     "knowledge_holders": [],
+     "summary": "P11: a equipe pode discordar de você sem romper a confiança."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "sentinela",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Sentinela/Vigia pode reconhecer mecanismo defensivo."
+  },
+  {
+   "choice_id": "S10_codex_method",
+   "mission_id": "S10",
+   "mission_kind": "secundaria",
+   "title": "Água sem Reflexo",
+   "region": "vales_dos_enforcados",
+   "step": 6,
+   "step_context": "Etapa 6, ao registrar o fenômeno.",
+   "question": "Como o Códice deve tratar algo que você não consegue explicar?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Fato observado, sem interpretação.",
+     "character_memory_tags": [
+      "observacao_pura"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "rigor"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Hipótese explicitamente marcada.",
+     "character_memory_tags": [
+      "hipotese_marcada"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "raciocinio"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Comparação com testemunhas antes de registrar conclusão.",
+     "character_memory_tags": [
+      "busca_testemunho"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "corroboracao"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S10_codex_method->S12",
+     "target": "S12",
+     "knowledge_holders": [],
+     "summary": "S12: a escolha define como os registros sobre os Vales são compostos."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "oraculo"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Oráculo recebe reação especial para intuição sem afirmar verdade."
+  },
+  {
+   "choice_id": "S11_guard_belief",
+   "mission_id": "S11",
+   "mission_kind": "secundaria",
+   "title": "A Guarda que Não Dorme",
+   "region": "vales_dos_enforcados",
+   "step": 3,
+   "step_context": "Etapa 3, diante do padrão de guarda persistente.",
+   "question": "Você trata o padrão como confiável?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Sim, até encontrar contradição.",
+     "character_memory_tags": [
+      "confianca_no_padrao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "respeita_consistencia"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Não, porque função antiga pode estar fora de contexto.",
+     "character_memory_tags": [
+      "contexto_importa"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "critico"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Testar o padrão com uma hipótese controlada.",
+     "character_memory_tags": [
+      "teste_controlado"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "cientifico"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S11_guard_belief->P12",
+     "target": "P12",
+     "knowledge_holders": [],
+     "summary": "P12: o personagem entra no clímax com uma postura definida diante de sistemas antigos."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "sentinela",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Vigia/Sentinela pode ler protocolo de guarda."
+  },
+  {
+   "choice_id": "P11_conflicting_evidence",
+   "mission_id": "P11",
+   "mission_kind": "principal",
+   "title": "Onde Tudo se Enreda",
+   "region": "vales_dos_enforcados",
+   "step": 5,
+   "step_context": "Etapa 5, diante de evidências conflitantes.",
+   "question": "Quando duas leituras parecem plausíveis, como agir?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Escolher a leitura mais conservadora.",
+     "character_memory_tags": [
+      "conserva_duvida"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "cauteloso"
+      },
+      {
+       "npc_id": "iven",
+       "tag": "cauteloso"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Escolher a leitura que melhor explica os fatos.",
+     "character_memory_tags": [
+      "modelo_explicativo"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "analitico"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Preservar as duas e agir pelo risco mais baixo.",
+     "character_memory_tags": [
+      "duas_hipoteses"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "seguranca"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P11_conflicting_evidence->P12",
+     "target": "P12",
+     "knowledge_holders": [],
+     "summary": "P12: a equipe poderá apresentar a questão do Berço segundo sua postura."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race_class",
+     "values": [
+      [
+       "velado",
+       "oraculo"
+      ]
+     ]
+    }
+   ],
+   "identity_note": "Raça + Classe: Velado + Oráculo pode receber uma linha sobre percepção, nunca verdade absoluta."
+  },
+  {
+   "choice_id": "P12_climax_interpretation",
+   "mission_id": "P12",
+   "mission_kind": "principal",
+   "title": "A Matriarca das Raízes",
+   "region": "vales_dos_enforcados",
+   "step": 7,
+   "step_context": "Etapa 7, depois da vitória.",
+   "question": "O que a vitória permite afirmar sobre os Vales?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Só o que foi observado diretamente.",
+     "character_memory_tags": [
+      "pos_chefe_evidencia"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "rigor"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "A ameaça é maior do que o que ainda conseguimos explicar.",
+     "character_memory_tags": [
+      "ameaca_aberta"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "prudencia"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Temos informação suficiente para seguir investigando além da região.",
+     "character_memory_tags": [
+      "impulso_investigativo"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "dara",
+       "tag": "confianca"
+      },
+      {
+       "npc_id": "iven",
+       "tag": "confianca"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P12_climax_interpretation->P13",
+     "target": "P13",
+     "knowledge_holders": [],
+     "summary": "P13: o personagem leva uma postura de investigação, não uma solução cosmológica."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "oraculo"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Oráculo pode interpretar pressentimento apenas como reação pessoal."
+  },
+  {
+   "choice_id": "S12_names_policy",
+   "mission_id": "S12",
+   "mission_kind": "secundaria",
+   "title": "Os Nomes Presos à Madeira",
+   "region": "vales_dos_enforcados",
+   "step": 6,
+   "step_context": "Etapa 6, no último conjunto de nomes.",
+   "question": "O que vale mais: significado ou preservação?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Descobrir o significado.",
+     "character_memory_tags": [
+      "significado_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "interpretacao"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Preservar os nomes mesmo sem entendê-los.",
+     "character_memory_tags": [
+      "preserva_nomes"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "respeito"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Comparar nomes com rotas e pessoas antes de interpretar.",
+     "character_memory_tags": [
+      "nomes_contexto"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "iven",
+       "tag": "corroboracao"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S12_names_policy->nareth",
+     "target": "nareth",
+     "knowledge_holders": [],
+     "summary": "Nareth: qualquer retorno à questão de registros pode lembrar o método."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "luminar",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Vigia pode priorizar evidência de percurso; Luminar, identidade das pessoas."
+  },
+  {
+   "choice_id": "P13_reference_method",
+   "mission_id": "P13",
+   "mission_kind": "principal",
+   "title": "Linhas no Horizonte",
+   "region": "planicies_de_nareth",
+   "step": 5,
+   "step_context": "Etapa 5, depois de chegar ao Posto.",
+   "question": "Qual referência deve guiar a próxima decisão?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Viajar pela referência usada pelos moradores atuais.",
+     "character_memory_tags": [
+      "referencia_local"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "confianca_comunidade"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Confiar nos marcos antigos enquanto testa a rota.",
+     "character_memory_tags": [
+      "referencia_antiga"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "respeito_ao_arquivo"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Comparar as duas antes de escolher.",
+     "character_memory_tags": [
+      "valida_duas_fontes"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "metodo"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P13_reference_method->P14",
+     "target": "P14",
+     "knowledge_holders": [
+      "nera"
+     ],
+     "summary": "P14: Nera adapta seus próximos mapas conforme seu método."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "errante",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Vigia recebe leitura de marcos; Errante, leitura de rota."
+  },
+  {
+   "choice_id": "S13_trust_marker",
+   "mission_id": "S13",
+   "mission_kind": "secundaria",
+   "title": "Pedras que Apontam",
+   "region": "planicies_de_nareth",
+   "step": 6,
+   "step_context": "Etapa 6, ao classificar o terceiro marco.",
+   "question": "Qual dos três marcos merece confiança provisória?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "O usado pelos viajantes atuais.",
+     "character_memory_tags": [
+      "tradicao_atual"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "pratica"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "O mais antigo e ainda legível.",
+     "character_memory_tags": [
+      "antiguidade_importa"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "documental"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Nenhum sem uma rota de teste.",
+     "character_memory_tags": [
+      "validacao_empirica"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "ceticismo"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S13_trust_marker->P14",
+     "target": "P14",
+     "knowledge_holders": [],
+     "summary": "P14/S14: a próxima orientação pode refletir sua preferência."
+    },
+    {
+     "hook_id": "S13_trust_marker->S14",
+     "target": "S14",
+     "knowledge_holders": [],
+     "summary": "P14/S14: a próxima orientação pode refletir sua preferência."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Vigia pode abrir exame de desgaste/ângulo."
+  },
+  {
+   "choice_id": "P14_map_vs_world",
+   "mission_id": "P14",
+   "mission_kind": "principal",
+   "title": "O Canal sem Norte",
+   "region": "planicies_de_nareth",
+   "step": 5,
+   "step_context": "Etapa 5, diante da infraestrutura que contradiz o mapa.",
+   "question": "O que fazer quando a construção e o mapa discordam?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Seguir a estrutura real.",
+     "character_memory_tags": [
+      "mundo_atual"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "pragmatismo"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Seguir o mapa e investigar onde a estrutura divergiu.",
+     "character_memory_tags": [
+      "arquivo_atualizado"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "preservacao_historica"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Registrar a divergência antes de decidir.",
+     "character_memory_tags": [
+      "discrepancia_formal"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "rigor"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P14_map_vs_world->P15",
+     "target": "P15",
+     "knowledge_holders": [],
+     "summary": "P15: Talen recebe a abordagem adotada como ponto de partida."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "alvorano"
+     ]
+    },
+    {
+     "kind": "class",
+     "values": [
+      "tecelao",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Vigia/Tecelão pode notar detalhe técnico; Alvorano pode ter reação de organização sem nobreza implícita."
+  },
+  {
+   "choice_id": "S14_route_cost",
+   "mission_id": "S14",
+   "mission_kind": "secundaria",
+   "title": "O Peso da Distância",
+   "region": "planicies_de_nareth",
+   "step": 6,
+   "step_context": "Etapa 6, com a rota de suprimentos.",
+   "question": "Qual prioridade deve guiar a correção?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Chegar mais rápido.",
+     "character_memory_tags": [
+      "tempo_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "urgencia"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Reduzir o risco de erro futuro.",
+     "character_memory_tags": [
+      "confiabilidade_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "planejamento"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Deixar uma rota redundante mesmo que leve mais tempo.",
+     "character_memory_tags": [
+      "redundancia"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "resiliencia"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S14_route_cost->P16",
+     "target": "P16",
+     "knowledge_holders": [
+      "nera"
+     ],
+     "summary": "P16: Nera pode confiar ao personagem uma tarefa mais sensível."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "errante",
+      "sentinela"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Errante pode reconhecer risco de percurso; Sentinela, redundância."
+  },
+  {
+   "choice_id": "P15_anomaly_method",
+   "mission_id": "P15",
+   "mission_kind": "principal",
+   "title": "A Distância Errada",
+   "region": "planicies_de_nareth",
+   "step": 5,
+   "step_context": "Etapa 5, quando a discrepância deixa de parecer erro simples.",
+   "question": "Você força uma explicação ou preserva a anomalia?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Testar a explicação mais simples primeiro.",
+     "character_memory_tags": [
+      "simples_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "racionalidade"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Marcar a discrepância como não resolvida.",
+     "character_memory_tags": [
+      "nao_resolvido"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "rigor"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Procurar uma terceira medição.",
+     "character_memory_tags": [
+      "terceira_verificacao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "investigacao"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P15_anomaly_method->P16",
+     "target": "P16",
+     "knowledge_holders": [
+      "talen"
+     ],
+     "summary": "P16/P17: Talen escolhe que tipo de dado compartilhar primeiro."
+    },
+    {
+     "hook_id": "P15_anomaly_method->P17",
+     "target": "P17",
+     "knowledge_holders": [
+      "talen"
+     ],
+     "summary": "P16/P17: Talen escolhe que tipo de dado compartilhar primeiro."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "oraculo",
+      "tecelao"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Oráculo pode perguntar sobre sensação de desvio; Tecelão sobre estrutura."
+  },
+  {
+   "choice_id": "S15_result_vs_cause",
+   "mission_id": "S15",
+   "mission_kind": "secundaria",
+   "title": "Sob o Mesmo Céu",
+   "region": "planicies_de_nareth",
+   "step": 5,
+   "step_context": "Etapa 5, quando a rota correta parte de um ponto aparentemente errado.",
+   "question": "O que você prefere: resultado ou explicação?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Chegar ao destino primeiro.",
+     "character_memory_tags": [
+      "resultado_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "pragmatico"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Entender o ponto de partida antes de seguir.",
+     "character_memory_tags": [
+      "causa_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "curioso"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Fazer a rota e registrar os dois fatos.",
+     "character_memory_tags": [
+      "fato_e_causa"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "metodo"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S15_result_vs_cause->S16",
+     "target": "S16",
+     "knowledge_holders": [
+      "talen"
+     ],
+     "summary": "S16: Talen usa esse padrão para apresentar o mapa."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "errante"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Errante recebe opção de leitura de terreno."
+  },
+  {
+   "choice_id": "P16_axis_priority",
+   "mission_id": "P16",
+   "mission_kind": "principal",
+   "title": "O Eixo sob a Terra",
+   "region": "planicies_de_nareth",
+   "step": 7,
+   "step_context": "Etapa 7, diante do Vigia e do mecanismo.",
+   "question": "O que merece prioridade durante a descoberta?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Garantir que o mecanismo não cause dano.",
+     "character_memory_tags": [
+      "preserva_operacao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "seguranca"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Entender como ele mede referências.",
+     "character_memory_tags": [
+      "funcao_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "investigacao"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Registrar tudo antes de tocar.",
+     "character_memory_tags": [
+      "cadeia_de_evidencia"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "documentacao"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P16_axis_priority->P17",
+     "target": "P17",
+     "knowledge_holders": [],
+     "summary": "P17: o registro técnico disponível pode ser apresentado de modo diferente."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "sentinela",
+      "tecelao",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Tecelão/Vigia ganha linha técnica; Sentinela, segurança."
+  },
+  {
+   "choice_id": "S16_mapping_policy",
+   "mission_id": "S16",
+   "mission_kind": "secundaria",
+   "title": "Cartografia do Erro",
+   "region": "planicies_de_nareth",
+   "step": 7,
+   "step_context": "Etapa 7, ao decidir o que entra no mapa.",
+   "question": "O que merece ser desenhado como rota?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Somente caminhos verificados.",
+     "character_memory_tags": [
+      "mapa_conservador"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "rigor"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Incluir rotas antigas com aviso de risco.",
+     "character_memory_tags": [
+      "arquivo_util"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "memoria_historica"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Marcar as divergências como camada separada.",
+     "character_memory_tags": [
+      "contradicao_visivel"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "transparencia"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S16_mapping_policy->P17",
+     "target": "P17",
+     "knowledge_holders": [
+      "nera"
+     ],
+     "summary": "P17: Nera confia em você para comparar fontes."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "errante",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Vigia/Errante pode ter formulação própria de mapa."
+  },
+  {
+   "choice_id": "S17_calibration_policy",
+   "mission_id": "S17",
+   "mission_kind": "secundaria",
+   "title": "O Prumo Afundado",
+   "region": "planicies_de_nareth",
+   "step": 5,
+   "step_context": "Etapa 5, com a peça de calibração.",
+   "question": "O que fazer com uma peça que pode ser útil, mas é pouco compreendida?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Devolver sem experimentar.",
+     "character_memory_tags": [
+      "nao_experimenta"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "cautela"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Testar o funcionamento de modo controlado.",
+     "character_memory_tags": [
+      "teste_calibrado"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "experimental"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Registrar o estado e deixar para análise posterior.",
+     "character_memory_tags": [
+      "adia_intervencao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "planejamento"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S17_calibration_policy->P17",
+     "target": "P17",
+     "knowledge_holders": [],
+     "summary": "P17: a abordagem influencia como a equipe trata o mecanismo central."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "tecelao"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Tecelão pode abrir uma leitura técnica da peça."
+  },
+  {
+   "choice_id": "P17_veil_evidence",
+   "mission_id": "P17",
+   "mission_kind": "principal",
+   "title": "Medir o que Permanece",
+   "region": "planicies_de_nareth",
+   "step": 8,
+   "step_context": "Etapa 8, ao acessar o registro que liga Âncoras e Véu.",
+   "question": "Como reagir ao primeiro vínculo explícito com o Véu?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Aceitar como evidência suficiente.",
+     "character_memory_tags": [
+      "aceita_registro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "confianca"
+      },
+      {
+       "npc_id": "talen",
+       "tag": "confianca"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Tratar como registro incompleto.",
+     "character_memory_tags": [
+      "registro_incompleto"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "rigor"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Buscar outra fonte antes de usar a conclusão.",
+     "character_memory_tags": [
+      "corrobora_veu"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "investigativo"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P17_veil_evidence->P18",
+     "target": "P18",
+     "knowledge_holders": [],
+     "summary": "P18: o preâmbulo do Arconte reconhece sua postura."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "velado"
+     ]
+    },
+    {
+     "kind": "class",
+     "values": [
+      "oraculo",
+      "tecelao"
+     ]
+    }
+   ],
+   "identity_note": "Raça: Velado pode receber linha de percepção; Classe: Oráculo/Tecelão pode abrir pergunta contextual."
+  },
+  {
+   "choice_id": "P18_anchors_posture",
+   "mission_id": "P18",
+   "mission_kind": "principal",
+   "title": "O Arconte Invertido",
+   "region": "planicies_de_nareth",
+   "step": null,
+   "step_context": "Etapa final, após a revelação sobre Âncoras.",
+   "question": "O que você fará com o que aprendeu sobre a função das Âncoras?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Registrar e preservar o conhecimento.",
+     "character_memory_tags": [
+      "arquivista_da_verdade"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "confianca"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Buscar confirmação em outras regiões.",
+     "character_memory_tags": [
+      "atravessa_fronteiras"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "investigativo"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Questionar quem decidiu usar as Âncoras e com quais custos.",
+     "character_memory_tags": [
+      "pergunta_por_responsabilidade"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "critico"
+      },
+      {
+       "npc_id": "nera",
+       "tag": "critico"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P18_anchors_posture->P19",
+     "target": "P19",
+     "knowledge_holders": [],
+     "summary": "P19: a postura regional viaja como memória pessoal; não como segredo que todos conhecem."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "oraculo",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Oráculo/Vigia pode receber linha extra sobre leitura; Alvorano não ganha autoridade automática."
+  },
+  {
+   "choice_id": "S18_route_closure",
+   "mission_id": "S18",
+   "mission_kind": "secundaria",
+   "title": "Os Caminhos que Não Coincidem",
+   "region": "planicies_de_nareth",
+   "step": 5,
+   "step_context": "Etapa 5, diante da rota obsoleta.",
+   "question": "Você resolve o problema atual ou preserva a rota antiga como evidência?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Encerrar a rota e priorizar os viajantes.",
+     "character_memory_tags": [
+      "presente_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "comunidade"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Manter a rota documentada, mesmo sem uso.",
+     "character_memory_tags": [
+      "preserva_passado"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "arquivo"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Testar se ainda existe alguma utilidade antes de fechar.",
+     "character_memory_tags": [
+      "encerra_com_testes"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "nera",
+       "tag": "metodo"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S18_route_closure->P19",
+     "target": "P19",
+     "knowledge_holders": [],
+     "summary": "P19: memória pessoal de relação entre segurança e evidência."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "errante",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Errante/Vigia pode abrir leitura da rota."
+  },
+  {
+   "choice_id": "P19_priority",
+   "mission_id": "P19",
+   "mission_kind": "principal",
+   "title": "Águas de Ferro",
+   "region": "varzeas_carmesins",
+   "step": 6,
+   "step_context": "Etapa 6, chegada ao Porto.",
+   "question": "O que merece sua prioridade agora?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Rotas e segurança.",
+     "character_memory_tags": [
+      "seguranca"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "confianca_pratica"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Entender a infraestrutura antiga.",
+     "character_memory_tags": [
+      "infraestrutura"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "curiosidade_tecnica"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Ouvir primeiro quem vive ali.",
+     "character_memory_tags": [
+      "pessoas_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "empatia_local"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P19_priority->P20",
+     "target": "P20",
+     "knowledge_holders": [
+      "sera"
+     ],
+     "summary": "P20: Sera enquadra o pulso conforme sua prioridade."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "hemario"
+     ]
+    },
+    {
+     "kind": "class",
+     "values": [
+      "luminar",
+      "sentinela"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Sentinela/Luminar podem ter reação de proteção; Hemário pode receber linha sobre cuidado sem culpa histórica."
+  },
+  {
+   "choice_id": "S19_response",
+   "mission_id": "S19",
+   "mission_kind": "secundaria",
+   "title": "Sal nas Feridas",
+   "region": "varzeas_carmesins",
+   "step": 4,
+   "step_context": "Etapa 4, após verificar a origem imediata do problema.",
+   "question": "Quando um problema é urgente e antigo, o que vem primeiro?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Reparar agora.",
+     "character_memory_tags": [
+      "reparo_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "pragmatismo"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Descobrir por que continua acontecendo.",
+     "character_memory_tags": [
+      "causa_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "investigacao"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Registrar o risco e criar um plano de contenção.",
+     "character_memory_tags": [
+      "contencao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "planejamento"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S19_response->S20",
+     "target": "S20",
+     "knowledge_holders": [
+      "sera"
+     ],
+     "summary": "S20: Sera pode lembrar do método."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "luminar",
+      "sentinela"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Luminar pode priorizar cuidado; Sentinela, segurança estrutural."
+  },
+  {
+   "choice_id": "P20_pulse_interpretation",
+   "mission_id": "P20",
+   "mission_kind": "principal",
+   "title": "O Pulso sob a Lama",
+   "region": "varzeas_carmesins",
+   "step": 4,
+   "step_context": "Etapa 4, diante do pulso periódico.",
+   "question": "Como tratar algo cujo significado ainda é incerto?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Como ameaça até prova contrária.",
+     "character_memory_tags": [
+      "risco_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "cautela"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Como fenômeno físico a ser medido.",
+     "character_memory_tags": [
+      "mede_fenomeno"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "rigor"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Como sinal de infraestrutura antiga que merece investigação.",
+     "character_memory_tags": [
+      "busca_funcao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "historico"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P20_pulse_interpretation->P21",
+     "target": "P21",
+     "knowledge_holders": [
+      "ilyan"
+     ],
+     "summary": "P21: Ilyan apresenta Hemaris de acordo com o método escolhido."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "hemario",
+      "velado"
+     ]
+    }
+   ],
+   "identity_note": "Raça: Velado pode receber percepção; Hemário recebe respeito, não culpa."
+  },
+  {
+   "choice_id": "S20_ethics",
+   "mission_id": "S20",
+   "mission_kind": "secundaria",
+   "title": "Um Corpo que Continua",
+   "region": "varzeas_carmesins",
+   "step": 4,
+   "step_context": "Etapa 4, diante do dilema sobre o que está sendo preservado.",
+   "question": "Qual é o limite entre preservar vida e transformar vida em recurso?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Vida vem antes do protocolo.",
+     "character_memory_tags": [
+      "vida_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "respeito"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "O protocolo merece ser entendido antes de julgá-lo.",
+     "character_memory_tags": [
+      "entende_antes_de_julgar"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "analitico"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Interromper qualquer processo que não tenha consentimento claro.",
+     "character_memory_tags": [
+      "consentimento_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "etica_firme"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S20_ethics->P21",
+     "target": "P21",
+     "knowledge_holders": [
+      "ilyan"
+     ],
+     "summary": "P21/P22: Ilyan reconhece sua posição ao abordar o Projeto."
+    },
+    {
+     "hook_id": "S20_ethics->P22",
+     "target": "P22",
+     "knowledge_holders": [
+      "ilyan"
+     ],
+     "summary": "P21/P22: Ilyan reconhece sua posição ao abordar o Projeto."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "hemario"
+     ]
+    }
+   ],
+   "identity_note": "Hemário: opção de responder pessoalmente ao tema sem admitir culpa ancestral."
+  },
+  {
+   "choice_id": "P21_hemeris_archive",
+   "mission_id": "P21",
+   "mission_kind": "principal",
+   "title": "Os Hortos Vazios",
+   "region": "varzeas_carmesins",
+   "step": 5,
+   "step_context": "Etapa 5, ao identificar função médica/biológica.",
+   "question": "Como preservar um legado médico comprometido?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Salvar os registros úteis e descartar o resto.",
+     "character_memory_tags": [
+      "separa_uso_de_abuso"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "utilitario"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Preservar tudo para impedir que a história seja apagada.",
+     "character_memory_tags": [
+      "preserva_totalidade"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "arquivista"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Separar evidência, prática e abuso em registros distintos.",
+     "character_memory_tags": [
+      "distingue_camadas"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "rigor"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P21_hemeris_archive->P22",
+     "target": "P22",
+     "knowledge_holders": [],
+     "summary": "P22: os protocolos são apresentados conforme sua leitura ética."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "hemario"
+     ]
+    }
+   ],
+   "identity_note": "Hemário recebe opção especial de comentar como o nome Hemaris é tratado, sem culpa."
+  },
+  {
+   "choice_id": "S21_resource_ethic",
+   "mission_id": "S21",
+   "mission_kind": "secundaria",
+   "title": "Cicatrizes de Cultivo",
+   "region": "varzeas_carmesins",
+   "step": 3,
+   "step_context": "Etapa 3, diante de cultivo antigo ainda funcional.",
+   "question": "O que fazer com um recurso que poderia ser útil hoje?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Reaproveitar imediatamente.",
+     "character_memory_tags": [
+      "reaproveita"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "pragmatico"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Preservar e estudar antes de usar.",
+     "character_memory_tags": [
+      "estudo_antes_de_uso"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "cauteloso"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Deixar intacto por não saber o custo.",
+     "character_memory_tags": [
+      "evita_risco_desconhecido"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "prudente"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S21_resource_ethic->S22",
+     "target": "S22",
+     "knowledge_holders": [],
+     "summary": "S22: o protocolo legado é lido à luz dessa escolha."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "luminar"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Alquimia não é Classe; Luminar pode reagir sobre cuidado, não profissão."
+  },
+  {
+   "choice_id": "P22_protocol_response",
+   "mission_id": "P22",
+   "mission_kind": "principal",
+   "title": "Transferência",
+   "region": "varzeas_carmesins",
+   "step": 5,
+   "step_context": "Etapa 5, diante dos protocolos que redistribuem recursos biológicos.",
+   "question": "Você interrompe o sistema, obedece ao protocolo ou registra antes?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Interromper a rotina de uso da vida.",
+     "character_memory_tags": [
+      "interrompe_coercao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "confianca_etica"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Deixar funcionar enquanto documenta o máximo possível.",
+     "character_memory_tags": [
+      "testemunha_o_abuso"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "tensao"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Buscar uma forma de limitar o dano sem destruir o registro.",
+     "character_memory_tags": [
+      "reduz_dano"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "pragmatismo_etico"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P22_protocol_response->P23",
+     "target": "P23",
+     "knowledge_holders": [
+      "ilyan"
+     ],
+     "summary": "P23: Ilyan pode confiar ou desconfiar da sua disposição para cortar sistemas antigos."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "hemario"
+     ]
+    }
+   ],
+   "identity_note": "Hemário recebe linha de identidade forte, mas nunca de culpa coletiva."
+  },
+  {
+   "choice_id": "S22_protocol_legacy",
+   "mission_id": "S22",
+   "mission_kind": "secundaria",
+   "title": "Protocolos sem Paciente",
+   "region": "varzeas_carmesins",
+   "step": 4,
+   "step_context": "Etapa 4, ao encontrar protocolo sem sujeito.",
+   "question": "O que fazer com uma ordem que ninguém mais pode executar legitimamente?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Arquivar como evidência.",
+     "character_memory_tags": [
+      "prova_historica"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "documental"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Desmontar o protocolo para impedir uso indevido.",
+     "character_memory_tags": [
+      "bloqueia_repeticao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "protetor"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Manter o protocolo intacto, mas marcado como não aplicável.",
+     "character_memory_tags": [
+      "contexto_preservado"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "preservacionista"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S22_protocol_legacy->S24",
+     "target": "S24",
+     "knowledge_holders": [],
+     "summary": "S24/P24: postura diante de legado técnico retorna."
+    },
+    {
+     "hook_id": "S22_protocol_legacy->P24",
+     "target": "P24",
+     "knowledge_holders": [],
+     "summary": "S24/P24: postura diante de legado técnico retorna."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "hemario"
+     ]
+    }
+   ],
+   "identity_note": "Hemário: resposta pode reconhecer o peso histórico sem transformar o personagem em símbolo racial."
+  },
+  {
+   "choice_id": "S23_priority",
+   "mission_id": "S23",
+   "mission_kind": "secundaria",
+   "title": "Fluxo de Emergência",
+   "region": "varzeas_carmesins",
+   "step": 5,
+   "step_context": "Etapa 5, diante de prioridades conflitantes de recursos.",
+   "question": "Quem deve receber prioridade?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Quem está em risco imediato.",
+     "character_memory_tags": [
+      "urgencia_humana"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "pragmatismo"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Quem sustenta a infraestrutura de todos.",
+     "character_memory_tags": [
+      "sistema_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "continuidade"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Distribuir a decisão entre os dois riscos.",
+     "character_memory_tags": [
+      "peso_compartilhado"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "equilibrio"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S23_priority->P24",
+     "target": "P24",
+     "knowledge_holders": [
+      "sera"
+     ],
+     "summary": "P24: Sera lembra sua lógica ao conversar sobre a Matriz."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "sentinela"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Sentinela pode ter linha de proteção."
+  },
+  {
+   "choice_id": "P23_continuity_cost",
+   "mission_id": "P23",
+   "mission_kind": "principal",
+   "title": "O Custo da Persistência",
+   "region": "varzeas_carmesins",
+   "step": 5,
+   "step_context": "Etapa 5, depois de compreender o custo humano do sistema.",
+   "question": "Quanto custo você aceita para manter uma função útil?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Nenhum custo humano adicional.",
+     "character_memory_tags": [
+      "limite_humano"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "respeito_etico"
+      },
+      {
+       "npc_id": "ilyan",
+       "tag": "respeito_etico"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Custo limitado se salvar mais vidas agora.",
+     "character_memory_tags": [
+      "utilidade_sobre_custo"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "pragmatismo"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Preservar o sistema somente se houver consentimento e controle.",
+     "character_memory_tags": [
+      "continuidade_com_limites"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "equilibrio"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P23_continuity_cost->P24",
+     "target": "P24",
+     "knowledge_holders": [],
+     "summary": "P24: a pergunta sobre a Matriz é moldada pela resposta."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "hemario"
+     ]
+    }
+   ],
+   "identity_note": "Hemário recebe reação que separa sua existência da história do projeto."
+  },
+  {
+   "choice_id": "P24_legacy_judgment",
+   "mission_id": "P24",
+   "mission_kind": "principal",
+   "title": "A Matriz Rubra",
+   "region": "varzeas_carmesins",
+   "step": 6,
+   "step_context": "Etapa 6, após confrontar a Matriz.",
+   "question": "O que você leva da Matriz como julgamento?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Era uma máquina útil que foi deixada sem supervisão.",
+     "character_memory_tags": [
+      "sistema_sem_moralidade"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "nuance"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "O problema central foi o uso humano coercitivo.",
+     "character_memory_tags": [
+      "agencia_humana"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "responsabiliza_agentes"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Ambas as coisas importam e não devem ser confundidas.",
+     "character_memory_tags": [
+      "separa_sistema_e_responsabilidade"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "maturidade"
+      },
+      {
+       "npc_id": "ilyan",
+       "tag": "maturidade"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P24_legacy_judgment->altos",
+     "target": "altos",
+     "knowledge_holders": [],
+     "summary": "Altos: personagem leva uma postura sobre continuidade, responsabilidade e custo."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "hemario"
+     ]
+    }
+   ],
+   "identity_note": "Hemário: linha especial sobre não herdar culpa; Alvorano não aparece aqui como autoridade."
+  },
+  {
+   "choice_id": "S24_quarantine_choice",
+   "mission_id": "S24",
+   "mission_kind": "secundaria",
+   "title": "A Porta de Quarentena",
+   "region": "varzeas_carmesins",
+   "step": 5,
+   "step_context": "Etapa 5, quando segurança e resgate entram em conflito.",
+   "question": "Quem ou o que recebe prioridade?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Conter o risco primeiro.",
+     "character_memory_tags": [
+      "quarentena_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "ilyan",
+       "tag": "seguranca"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Salvar quem ainda pode ser alcançado.",
+     "character_memory_tags": [
+      "resgate_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "protecao"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Criar uma contenção mínima para tentar os dois.",
+     "character_memory_tags": [
+      "risco_com_contencao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "respeito"
+      },
+      {
+       "npc_id": "ilyan",
+       "tag": "respeito"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S24_quarantine_choice->altos",
+     "target": "altos",
+     "knowledge_holders": [],
+     "summary": "Altos: pode haver referência a quem você prioriza em crises."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "luminar",
+      "sentinela"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Sentinela/Luminar pode receber resposta contextual."
+  },
+  {
+   "choice_id": "P25_infrastructure_ethic",
+   "mission_id": "P25",
+   "mission_kind": "principal",
+   "title": "O Peso Antigo",
+   "region": "altos_cinereos",
+   "step": 5,
+   "step_context": "Etapa 5, ao escolher a rota de sustentação.",
+   "question": "Qual princípio deve governar uma estrutura carregada?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Manter a função atual.",
+     "character_memory_tags": [
+      "funcao_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "continuidade"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Questionar se a função ainda serve aos moradores.",
+     "character_memory_tags": [
+      "funcao_deve_servir"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "critico"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Buscar uma alternativa que preserve ambos.",
+     "character_memory_tags": [
+      "sustentacao_alternativa"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "planejamento"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P25_infrastructure_ethic->P26",
+     "target": "P26",
+     "knowledge_holders": [],
+     "summary": "P26: ordens de emergência são apresentadas conforme sua confiança em continuidade."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "cinereo"
+     ]
+    }
+   ],
+   "identity_note": "Cinéreo: reação ligada a tenacidade, nunca cultura tribal."
+  },
+  {
+   "choice_id": "S25_priority",
+   "mission_id": "S25",
+   "mission_kind": "secundaria",
+   "title": "A Ponte que Espera",
+   "region": "altos_cinereos",
+   "step": 4,
+   "step_context": "Etapa 4, na disputa de prioridade de manutenção.",
+   "question": "Qual grupo deve receber a ponte primeiro?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Quem corre maior risco agora.",
+     "character_memory_tags": [
+      "risco_imediato"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "urgencia"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Quem não tem alternativa de rota.",
+     "character_memory_tags": [
+      "vulnerabilidade"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "equidade"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Dividir o reparo em etapas para atender os dois.",
+     "character_memory_tags": [
+      "solucao_compartilhada"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "planejamento"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S25_priority->S26",
+     "target": "S26",
+     "knowledge_holders": [],
+     "summary": "S26: prioridade de turnos pode refletir isso."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "sentinela"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Sentinela pode reconhecer risco estrutural."
+  },
+  {
+   "choice_id": "P26_authority",
+   "mission_id": "P26",
+   "mission_kind": "principal",
+   "title": "Ordens de Emergência",
+   "region": "altos_cinereos",
+   "step": 6,
+   "step_context": "Etapa 6, diante de ordens conflitantes.",
+   "question": "O que fazer quando duas ordens parecem legítimas?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Cumprir a mais recente.",
+     "character_memory_tags": [
+      "ordem_recente"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "disciplina"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Investigar a autoridade e o contexto de ambas.",
+     "character_memory_tags": [
+      "examina_autoridade"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "ceticismo"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Executar apenas o que protege vidas sem depender da hierarquia.",
+     "character_memory_tags": [
+      "vidas_acima_ordem"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "pragmatismo"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P26_authority->P27",
+     "target": "P27",
+     "knowledge_holders": [],
+     "summary": "P27/P28: registros de emergência podem ser lembrados conforme sua postura."
+    },
+    {
+     "hook_id": "P26_authority->P28",
+     "target": "P28",
+     "knowledge_holders": [],
+     "summary": "P27/P28: registros de emergência podem ser lembrados conforme sua postura."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "oraculo",
+      "sentinela"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Sentinela ganha linha de dever; Oráculo de dúvida."
+  },
+  {
+   "choice_id": "S26_burden_policy",
+   "mission_id": "S26",
+   "mission_kind": "secundaria",
+   "title": "Turno sem Fim",
+   "region": "altos_cinereos",
+   "step": 4,
+   "step_context": "Etapa 4, diante de rotina que produz desgaste.",
+   "question": "O que vale mais: continuidade ou limite?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Manter o turno até a falha.",
+     "character_memory_tags": [
+      "continuidade_excessiva"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "desconfia_do_limite"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Impor um limite e redistribuir carga.",
+     "character_memory_tags": [
+      "limite_humano"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "respeita_limites"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Documentar o desgaste antes de decidir.",
+     "character_memory_tags": [
+      "custo_documentado"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "rigor"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S26_burden_policy->P27",
+     "target": "P27",
+     "knowledge_holders": [],
+     "summary": "P27: a questão do custo aparece novamente."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "cinereo"
+     ]
+    }
+   ],
+   "identity_note": "Cinéreo pode comentar resistência física, sem presumir que aguenta tudo."
+  },
+  {
+   "choice_id": "P27_continuity_cost",
+   "mission_id": "P27",
+   "mission_kind": "principal",
+   "title": "A Continuidade a Qualquer Custo",
+   "region": "altos_cinereos",
+   "step": 5,
+   "step_context": "Etapa 5, quando o preço da manutenção fica claro.",
+   "question": "Até onde o personagem aceita pagar para manter a estrutura?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Manter a estrutura, mesmo com sacrifício controlado.",
+     "character_memory_tags": [
+      "aceita_custo_controlado"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o2",
+     "label": "Recusar qualquer sacrifício humano adicional.",
+     "character_memory_tags": [
+      "recusa_coercao"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o3",
+     "label": "Buscar uma terceira solução mesmo que atrase a resposta.",
+     "character_memory_tags": [
+      "resolve_sem_coercao"
+     ],
+     "npc_memory_targets": []
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P27_continuity_cost->P28",
+     "target": "P28",
+     "knowledge_holders": [],
+     "summary": "P28/P29: o personagem já tem uma postura sobre continuidade versus pessoas."
+    },
+    {
+     "hook_id": "P27_continuity_cost->P29",
+     "target": "P29",
+     "knowledge_holders": [],
+     "summary": "P28/P29: o personagem já tem uma postura sobre continuidade versus pessoas."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "cinereo",
+      "hemario"
+     ]
+    }
+   ],
+   "identity_note": "Cinéreo/Hemário podem receber reação contextual sem transformar raça em moralidade."
+  },
+  {
+   "choice_id": "S27_repair_policy",
+   "mission_id": "S27",
+   "mission_kind": "secundaria",
+   "title": "Cabo Partido",
+   "region": "altos_cinereos",
+   "step": 3,
+   "step_context": "Etapa 3, depois de localizar a falha.",
+   "question": "Você repara ou procura a causa?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Reparar agora.",
+     "character_memory_tags": [
+      "reparo_imediato"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "pragmatismo"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Descobrir por que partiu antes de reparar.",
+     "character_memory_tags": [
+      "causa_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "investigacao"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Registrar a falha, estabilizar e investigar depois.",
+     "character_memory_tags": [
+      "estabiliza_e_investiga"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "metodo"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S27_repair_policy->S30",
+     "target": "S30",
+     "knowledge_holders": [],
+     "summary": "S30: a postura sobre manutenção volta a ser relevante."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "errante"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Errante pode ter leitura de esforço/movimento."
+  },
+  {
+   "choice_id": "P28_dissident_reading",
+   "mission_id": "P28",
+   "mission_kind": "principal",
+   "title": "Os Desvelados",
+   "region": "altos_cinereos",
+   "step": 4,
+   "step_context": "Etapa 4, ao montar o quadro da dissidência.",
+   "question": "Como interpretar pessoas que começaram com críticas legítimas e depois radicalizaram?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Críticas legítimas não justificam sabotagem.",
+     "character_memory_tags": [
+      "separa_critica_e_crime"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "rava",
+       "tag": "nuance"
+      },
+      {
+       "npc_id": "eris",
+       "tag": "nuance"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "O contexto importa antes do julgamento.",
+     "character_memory_tags": [
+      "contexto_antes_de_julgamento"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "eris",
+       "tag": "contextual"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "A sabotagem mudou o peso moral do grupo.",
+     "character_memory_tags": [
+      "ato_com_consequencia"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "eris",
+       "tag": "responsabiliza_ato"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P28_dissident_reading->P29",
+     "target": "P29",
+     "knowledge_holders": [],
+     "summary": "P29: a discussão sobre Convergência reconhece sua leitura."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "alvorano",
+      "cinereo"
+     ]
+    }
+   ],
+   "identity_note": "Alvorano pode receber resposta sobre arquivo institucional; Cinéreo sobre custo material, sem estereótipo."
+  },
+  {
+   "choice_id": "S28_source_policy",
+   "mission_id": "S28",
+   "mission_kind": "secundaria",
+   "title": "Cartas de Emergência",
+   "region": "altos_cinereos",
+   "step": 5,
+   "step_context": "Etapa 5, ao escolher como preservar cartas conflitantes.",
+   "question": "Como você registra uma ordem que pode contradizer outra?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Preservar ambas lado a lado.",
+     "character_memory_tags": [
+      "preserva_fontes"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o2",
+     "label": "Escolher a mais confiável e anotar por quê.",
+     "character_memory_tags": [
+      "hierarquiza_fontes"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o3",
+     "label": "Registrar a contradição como problema ainda aberto.",
+     "character_memory_tags": [
+      "mantem_contradicao"
+     ],
+     "npc_memory_targets": []
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S28_source_policy->S29",
+     "target": "S29",
+     "knowledge_holders": [],
+     "summary": "S29: a investigação dos que disseram não retoma esse método."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Vigia recebe leitura de procedência documental."
+  },
+  {
+   "choice_id": "P29_convergence_ethic",
+   "mission_id": "P29",
+   "mission_kind": "principal",
+   "title": "Antes da Convergência",
+   "region": "altos_cinereos",
+   "step": 5,
+   "step_context": "Etapa 5, quando o risco da intervenção fica claro.",
+   "question": "Como julgar uma solução que poderia salvar gerações e ainda assim era perigosa?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Pelo benefício esperado.",
+     "character_memory_tags": [
+      "utilidade_historica"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o2",
+     "label": "Pelo risco que não podia ser ignorado.",
+     "character_memory_tags": [
+      "risco_primeiro"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o3",
+     "label": "Pelo fato de que ninguém tinha uma opção segura.",
+     "character_memory_tags": [
+      "tragedia_sem_simplificacao"
+     ],
+     "npc_memory_targets": []
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P29_convergence_ethic->P30",
+     "target": "P30",
+     "knowledge_holders": [],
+     "summary": "P30: interpretação da sabotagem e Regência pode usar esta postura."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "oraculo",
+      "tecelao"
+     ]
+    }
+   ],
+   "identity_note": "Oráculo/Tecelão podem ter linguagem própria sobre incerteza, sem previsão."
+  },
+  {
+   "choice_id": "S29_refusal",
+   "mission_id": "S29",
+   "mission_kind": "secundaria",
+   "title": "Os que Disseram Não",
+   "region": "altos_cinereos",
+   "step": 4,
+   "step_context": "Etapa 4, diante da recusa de uma ordem.",
+   "question": "Você julga a recusa como quê?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Desobediência perigosa.",
+     "character_memory_tags": [
+      "ordem_tem_peso"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o2",
+     "label": "Resistência legítima diante de uma ordem ruim.",
+     "character_memory_tags": [
+      "questiona_autoridade"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o3",
+     "label": "Uma decisão compreensível que ainda teve consequências.",
+     "character_memory_tags": [
+      "entende_sem_absolver"
+     ],
+     "npc_memory_targets": []
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S29_refusal->P30",
+     "target": "P30",
+     "knowledge_holders": [],
+     "summary": "P30: o quadro de responsabilidade pode recuperar essa leitura."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "errante",
+      "sentinela"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Sentinela pode ter linha sobre dever; Errante sobre independência."
+  },
+  {
+   "choice_id": "P30_accountability",
+   "mission_id": "P30",
+   "mission_kind": "principal",
+   "title": "O Colosso Cinéreo",
+   "region": "altos_cinereos",
+   "step": 9,
+   "step_context": "Etapa 9, após a descoberta da sabotagem.",
+   "question": "Como registrar responsabilidade pelo que aconteceu?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Nomear os atos e seus autores conhecidos.",
+     "character_memory_tags": [
+      "responsabilidade_especifica"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o2",
+     "label": "Registrar apenas a cadeia de fatores.",
+     "character_memory_tags": [
+      "causalidade_sistemica"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o3",
+     "label": "Manter os dois: ato individual e contexto sistêmico.",
+     "character_memory_tags": [
+      "responsabilidade_e_contexto"
+     ],
+     "npc_memory_targets": []
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P30_accountability->confins",
+     "target": "confins",
+     "knowledge_holders": [],
+     "summary": "Confins: essa postura influencia como o personagem lê Regência/Desvelados, sem que NPCs mágicos saibam."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "cinereo"
+     ]
+    }
+   ],
+   "identity_note": "Cinéreo recebe identidade contextual de presença física e custo, não autoridade racial."
+  },
+  {
+   "choice_id": "S30_legacy_routine",
+   "mission_id": "S30",
+   "mission_kind": "secundaria",
+   "title": "A Ordem que Restou",
+   "region": "altos_cinereos",
+   "step": 5,
+   "step_context": "Etapa 5, quando uma rotina antiga não tem mais autoridade clara.",
+   "question": "O que merece sobreviver?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "O procedimento mais comprovado.",
+     "character_memory_tags": [
+      "preserva_procedimento"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o2",
+     "label": "O procedimento mais útil para os moradores.",
+     "character_memory_tags": [
+      "utilidade_atual"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o3",
+     "label": "Um procedimento novo que combine ambos.",
+     "character_memory_tags": [
+      "reforma_continua"
+     ],
+     "npc_memory_targets": []
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S30_legacy_routine->confins",
+     "target": "confins",
+     "knowledge_holders": [],
+     "summary": "Confins: Haro/Sera podem reconhecer sua relação com tradição e mudança."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "sentinela",
+      "tecelao"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Sentinela/Tecelão podem receber formulações de procedimento."
+  },
+  {
+   "choice_id": "P31_source_conflict",
+   "mission_id": "P31",
+   "mission_kind": "principal",
+   "title": "Onde o Véu Afina",
+   "region": "confins_do_veu",
+   "step": 4,
+   "step_context": "Etapa 4, após duas leituras honestas incompatíveis.",
+   "question": "Como registrar duas versões que não cabem na mesma linha do tempo?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Preservar ambas.",
+     "character_memory_tags": [
+      "fontes_preservadas"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "rigor"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Escolher a que tem melhor cadeia de custódia.",
+     "character_memory_tags": [
+      "procedencia_primeiro"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "metodo"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Registrar o conflito sem declarar vencedor.",
+     "character_memory_tags": [
+      "conflito_aberto"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "maturidade"
+      },
+      {
+       "npc_id": "roven",
+       "tag": "maturidade"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P31_source_conflict->S32",
+     "target": "S32",
+     "knowledge_holders": [],
+     "summary": "S32/S35/P34: forma de tratamento de documentos reaparece."
+    },
+    {
+     "hook_id": "P31_source_conflict->S35",
+     "target": "S35",
+     "knowledge_holders": [],
+     "summary": "S32/S35/P34: forma de tratamento de documentos reaparece."
+    },
+    {
+     "hook_id": "P31_source_conflict->P34",
+     "target": "P34",
+     "knowledge_holders": [],
+     "summary": "S32/S35/P34: forma de tratamento de documentos reaparece."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "alvorano",
+      "velado"
+     ]
+    }
+   ],
+   "identity_note": "Alvorano pode ter linha sobre arquivo; Velado sobre percepção de discrepância, sem magia automática."
+  },
+  {
+   "choice_id": "S31_trail_method",
+   "mission_id": "S31",
+   "mission_kind": "secundaria",
+   "title": "Duas Vezes a Mesma Estrada",
+   "region": "confins_do_veu",
+   "step": 5,
+   "step_context": "Etapa 5, comparando pegadas incompatíveis.",
+   "question": "O que você faz com duas trilhas plausíveis?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Seguir a que tem mais evidência física.",
+     "character_memory_tags": [
+      "evidencia_fisica"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "empirico"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Preservar ambas e comparar o retorno.",
+     "character_memory_tags": [
+      "rota_comparada"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "experimental"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Não seguir nenhuma sem testemunha.",
+     "character_memory_tags": [
+      "evita_risco_inexplicado"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "cautela"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S31_trail_method->P32",
+     "target": "P32",
+     "knowledge_holders": [
+      "talen"
+     ],
+     "summary": "P32: Talen reconhece seu método de investigação."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "errante",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Errante/Vigia podem ter fala de terreno."
+  },
+  {
+   "choice_id": "P32_fracture_language",
+   "mission_id": "P32",
+   "mission_kind": "principal",
+   "title": "A Fratura",
+   "region": "confins_do_veu",
+   "step": 3,
+   "step_context": "Etapa 3, quando o fenômeno precisa ser nomeado.",
+   "question": "Como tratar algo que agora tem um nome, mas não uma explicação completa?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Usar o termo e registrar limites.",
+     "character_memory_tags": [
+      "nome_sem_extrapolacao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "rigor"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Evitar o termo até haver explicação.",
+     "character_memory_tags": [
+      "exige_definicao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "ceticismo"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Usar o termo como ferramenta descritiva, não como entidade.",
+     "character_memory_tags": [
+      "termo_descritivo"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "precisao"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P32_fracture_language->P33",
+     "target": "P33",
+     "knowledge_holders": [],
+     "summary": "P33: a escolha prepara a introdução do Avesso."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "velado"
+     ]
+    }
+   ],
+   "identity_note": "Velado pode receber linha de sensibilidade ao fenômeno sem explicá-lo."
+  },
+  {
+   "choice_id": "S32_record_conflict",
+   "mission_id": "S32",
+   "mission_kind": "secundaria",
+   "title": "A Casa que Não Chegou",
+   "region": "confins_do_veu",
+   "step": 5,
+   "step_context": "Etapa 5, comparando fichas de presença/ausência.",
+   "question": "Qual registro deve vencer?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "O que a matéria física demonstra.",
+     "character_memory_tags": [
+      "prova_material"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "material"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "O documento com melhor cadeia de custódia.",
+     "character_memory_tags": [
+      "cadeia_de_custodia"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "documental"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Nenhum; preservar a coexistência.",
+     "character_memory_tags": [
+      "coexistencia_preservada"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "respeito"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S32_record_conflict->S35",
+     "target": "S35",
+     "knowledge_holders": [],
+     "summary": "S35: ordem documental e matéria voltam a divergir."
+    }
+   ],
+   "identity_conditions": [],
+   "identity_note": "Hemário Haro pode reagir ao custo humano de chamar alguém de mentiroso."
+  },
+  {
+   "choice_id": "P33_avesso_posture",
+   "mission_id": "P33",
+   "mission_kind": "principal",
+   "title": "O Avesso",
+   "region": "confins_do_veu",
+   "step": 6,
+   "step_context": "Etapa 6, depois de compreender Avesso como estado.",
+   "question": "O que significa saber que o Avesso existe?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Uma nova coisa para estudar.",
+     "character_memory_tags": [
+      "avesso_como_estado"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "eris",
+       "tag": "curiosidade_controlada"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Um limite que exige cautela, não explicação total.",
+     "character_memory_tags": [
+      "avesso_como_risco"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "prudencia"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Uma prova de que nossas categorias são incompletas.",
+     "character_memory_tags": [
+      "limites_das_categorias"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "humildade"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P33_avesso_posture->P34",
+     "target": "P34",
+     "knowledge_holders": [],
+     "summary": "P34: leitura da Âncora Central pode refletir isso."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "oraculo",
+      "tecelao"
+     ]
+    }
+   ],
+   "identity_note": "Oráculo/Tecelão podem ter formulação temática, sem criar poder novo."
+  },
+  {
+   "choice_id": "S33_correction_policy",
+   "mission_id": "S33",
+   "mission_kind": "secundaria",
+   "title": "Nomes em Ordem Errada",
+   "region": "confins_do_veu",
+   "step": 4,
+   "step_context": "Etapa 4, separando erro de discrepância real.",
+   "question": "Quando um registro está errado, o que você faz?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Corrigir a cópia.",
+     "character_memory_tags": [
+      "corrige_copia"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "precisao"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Preservar o original e anexar correção.",
+     "character_memory_tags": [
+      "anexa_correcao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "cadeia_de_procedencia"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Não decidir até achar mais evidência.",
+     "character_memory_tags": [
+      "adia_conclusao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "ceticismo"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S33_correction_policy->S35",
+     "target": "S35",
+     "knowledge_holders": [],
+     "summary": "S35: método de preservação dos dois lados é reconhecido."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Vigia pode observar materialidade das inscrições."
+  },
+  {
+   "choice_id": "P34_anchor_model",
+   "mission_id": "P34",
+   "mission_kind": "principal",
+   "title": "A Âncora Central",
+   "region": "confins_do_veu",
+   "step": 5,
+   "step_context": "Etapa 5, diante do registro técnico sobre coordenação.",
+   "question": "Como interpretar a Âncora Central?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Como nó de coordenação.",
+     "character_memory_tags": [
+      "ancora_como_no"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "eris",
+       "tag": "concordancia_tecnica"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Como solução provável, mas não definitiva.",
+     "character_memory_tags": [
+      "ancora_sem_totalidade"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "eris",
+       "tag": "prudencia"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Procurar evidência do que ela não fazia.",
+     "character_memory_tags": [
+      "limites_da_ancora"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "investigacao"
+      },
+      {
+       "npc_id": "eris",
+       "tag": "investigacao"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P34_anchor_model->P35",
+     "target": "P35",
+     "knowledge_holders": [],
+     "summary": "P35: reconstrução da Convergência reconhece o seu modelo."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "velado"
+     ]
+    }
+   ],
+   "identity_note": "Alvorano Eris pode ter fala de identidade; Velado recebe linha de percepção técnica apenas se justificada."
+  },
+  {
+   "choice_id": "S34_temporal_discrepancy",
+   "mission_id": "S34",
+   "mission_kind": "secundaria",
+   "title": "A Testemunha de Ontem",
+   "region": "confins_do_veu",
+   "step": 5,
+   "step_context": "Etapa 5, registrando a discrepância temporal local.",
+   "question": "Como registrar um depoimento que parece anteceder seu próprio registro?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Fato observável, sem teoria.",
+     "character_memory_tags": [
+      "tempo_sem_teoria"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "rigor"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Hipótese explicitamente marcada como impossível de provar ainda.",
+     "character_memory_tags": [
+      "hipotese_temporal"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "curiosidade"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Guardar o depoimento e buscar cadeia de custódia adicional.",
+     "character_memory_tags": [
+      "testemunho_em_revisao"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "talen",
+       "tag": "prudencia"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S34_temporal_discrepancy->P35",
+     "target": "P35",
+     "knowledge_holders": [],
+     "summary": "P35/P36: personagem não recebe “verdade secreta” só porque investigou cedo."
+    },
+    {
+     "hook_id": "S34_temporal_discrepancy->P36",
+     "target": "P36",
+     "knowledge_holders": [],
+     "summary": "P35/P36: personagem não recebe “verdade secreta” só porque investigou cedo."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "oraculo"
+     ]
+    }
+   ],
+   "identity_note": "Oráculo pode receber reação de intuição sem transformar em profecia."
+  },
+  {
+   "choice_id": "P35_responsibility_model",
+   "mission_id": "P35",
+   "mission_kind": "principal",
+   "title": "A Noite da Convergência",
+   "region": "confins_do_veu",
+   "step": 8,
+   "step_context": "Etapa 8, reconstruindo Regência, Custódia e Desvelados.",
+   "question": "Como distribuir responsabilidade?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Separar decisões individuais de contexto institucional.",
+     "character_memory_tags": [],
+     "npc_memory_targets": [
+      {
+       "npc_id": "eris",
+       "tag": "responsabilidade_especifica"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Registrar a cadeia de fatores como sistema.",
+     "character_memory_tags": [],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "causalidade_sistemica"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Preservar a incerteza onde a evidência não fecha.",
+     "character_memory_tags": [],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "rigor_epistemico"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P35_responsibility_model->P36",
+     "target": "P36",
+     "knowledge_holders": [],
+     "summary": "P36: o fechamento do protocolo ecoa a postura adotada na reconstrução."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "alvorano",
+      "hemario",
+      "velado"
+     ]
+    }
+   ],
+   "identity_note": "Alvorano/Hemário/Velado podem receber linhas de identidade apenas quando testemunho/arquivo o justificar."
+  },
+  {
+   "choice_id": "S35_orders_policy",
+   "mission_id": "S35",
+   "mission_kind": "secundaria",
+   "title": "O Registro que Discorda",
+   "region": "confins_do_veu",
+   "step": 4,
+   "step_context": "Etapa 4, diante de duas ordens oficiais incompatíveis.",
+   "question": "Você apaga uma, escolhe uma ou preserva ambas?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Preservar ambas.",
+     "character_memory_tags": [],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "memoria_documental"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Escolher a mais bem sustentada e registrar a outra.",
+     "character_memory_tags": [],
+     "npc_memory_targets": [
+      {
+       "npc_id": "eris",
+       "tag": "hierarquia_critica"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Não escolher enquanto não houver prova adicional.",
+     "character_memory_tags": [],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "cautela"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S35_orders_policy->P36",
+     "target": "P36",
+     "knowledge_holders": [],
+     "summary": "P36: registro final pode refletir sua preferência por preservação, hierarquia ou suspensão."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "tecelao",
+      "vigia"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Vigia/Tecelão recebe leitura de procedência."
+  },
+  {
+   "choice_id": "P36_final_record",
+   "mission_id": "P36",
+   "mission_kind": "principal",
+   "title": "O Regente Fraturado",
+   "region": "confins_do_veu",
+   "step": 7,
+   "step_context": "Etapa 7, após o registro sobre o Regente.",
+   "question": "O que merece entrar no registro final da Campanha?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Os fatos confirmados.",
+     "character_memory_tags": [
+      "final_factual"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "roven",
+       "tag": "rigor"
+      },
+      {
+       "npc_id": "sera",
+       "tag": "rigor"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "Os fatos e as interpretações claramente marcadas.",
+     "character_memory_tags": [
+      "interpretacao_marcada"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "eris",
+       "tag": "contexto"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Os fatos, as lacunas e quem testemunhou o quê.",
+     "character_memory_tags": [
+      "testemunho_preservado"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "haro",
+       "tag": "responsabilidade_testemunhal"
+      },
+      {
+       "npc_id": "sera",
+       "tag": "responsabilidade_testemunhal"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "P36_final_record->legado",
+     "target": "legado",
+     "knowledge_holders": [],
+     "summary": "Legado/Crônica: o personagem leva um perfil de como trata evidência e memória."
+    },
+    {
+     "hook_id": "P36_final_record->cronica",
+     "target": "cronica",
+     "knowledge_holders": [],
+     "summary": "Legado/Crônica: o personagem leva um perfil de como trata evidência e memória."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "race",
+     "values": [
+      "alvorano",
+      "hemario",
+      "velado"
+     ]
+    }
+   ],
+   "identity_note": "Alvorano/Hemário/Velado têm linhas finais possíveis sem tornar raça determinante."
+  },
+  {
+   "choice_id": "S36_civil_continuity",
+   "mission_id": "S36",
+   "mission_kind": "secundaria",
+   "title": "Depois da Última Ordem",
+   "region": "confins_do_veu",
+   "step": 6,
+   "step_context": "Etapa 6, decidindo como narrar continuidade civil.",
+   "question": "Que tipo de continuidade deve sobreviver?",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "A rotina comprovadamente útil.",
+     "character_memory_tags": [
+      "rotina_util"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "pragmatismo"
+      }
+     ]
+    },
+    {
+     "option_id": "o2",
+     "label": "A rotina que os moradores reconhecem como confiável.",
+     "character_memory_tags": [
+      "rotina_comunitaria"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "haro",
+       "tag": "comunidade"
+      }
+     ]
+    },
+    {
+     "option_id": "o3",
+     "label": "Uma combinação nova, registrada como decisão presente.",
+     "character_memory_tags": [
+      "reforma_local"
+     ],
+     "npc_memory_targets": [
+      {
+       "npc_id": "sera",
+       "tag": "adaptacao"
+      },
+      {
+       "npc_id": "haro",
+       "tag": "adaptacao"
+      }
+     ]
+    }
+   ],
+   "future_hooks": [
+    {
+     "hook_id": "S36_civil_continuity->POS_P36",
+     "target": "POS_P36",
+     "knowledge_holders": [],
+     "summary": "Pós-P36: não muda o mundo global; muda a memória pessoal sobre continuidade."
+    }
+   ],
+   "identity_conditions": [
+    {
+     "kind": "class",
+     "values": [
+      "sentinela",
+      "tecelao"
+     ]
+    }
+   ],
+   "identity_note": "Classe: Sentinela/Tecelão pode ter reação sobre protocolo."
+  }
+ ]
+}

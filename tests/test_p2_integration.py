@@ -138,7 +138,7 @@ async def _complete_p2(service, actor, monkeypatch):
     )
     stone = await service.examine_pedra_marcada(actor, victory.state_version)
     refuge = await service.return_to_refuge(actor, stone.state_version)
-    oren = await service.oren(actor, refuge.state_version)
+    oren = await service.oren(actor, refuge.state_version, "o1")
     final = await service.report_to_alda(actor, oren.state_version)
     return combat, victory, stone, refuge, oren, final
 
@@ -943,7 +943,7 @@ async def test_p2_victory_pedra_return_and_final_reward_are_idempotent(
     assert refuge is not None and refuge.step == 5
     assert refuge.location == "Refúgio do Ocaso"
     assert (await P2Service(database[1], "ocaso").resume(actor)).step == 5
-    oren = await service.oren(actor, refuge.state_version)
+    oren = await service.oren(actor, refuge.state_version, "o1")
     assert oren.step == 6
     assert (await P2Service(database[1], "ocaso").resume(actor)).step == 6
     final = await service.report_to_alda(actor, (await service.resume(actor)).state_version)

@@ -25,6 +25,11 @@ from asterion.application.groups import (
     GroupError,
     GroupService,
 )
+from asterion.application.narrative_choices import (
+    NarrativeNodeView,
+    commit_mission_choice,
+    narrative_node_view,
+)
 from asterion.domain.combat import Combat, act
 from asterion.domain.creation import RULESET as CHARACTER_RULESET
 from asterion.domain.prologue import (
@@ -87,6 +92,7 @@ class P1View:
     group_size: int = 1
     proposal_id: UUID | None = None
     proposal_status: str | None = None
+    narrative: NarrativeNodeView | None = None
 
 
 class P1Service:
@@ -458,9 +464,27 @@ class P1Service:
         )
 
     async def follow_alda(self, actor: int, version: int):
-        return await self._advance_shared_objective(
-            actor, version, 5, REFUGE, "p1.meet_alda", self._alda
-        )
+        """Etapa 5 now ends through the narrative node; a stale button only refreshes."""
+        return await self.resume(actor)
+
+    async def choose_posture(self, actor: int, version: int, option_id: str):
+        """P1_choice_posture: first talk with Alda. Individual and commit once."""
+        async with self.sessions.begin() as s:
+            c, q = await self._locked(s, actor)
+            if not self._valid(c, q, version, 5):
+                return await self._view(s, c, q)
+            world = await s.scalar(select(WorldState).where(WorldState.character_id == c.id))
+            if world is None or world.location != REFUGE:
+                return await self._view(s, c, q)
+            result = await commit_mission_choice(s, c, q, option_id)
+            if result is None:
+                return await self._view(s, c, q)
+            await self._alda(s, c, q)
+            q.state_version += 1
+            await self._record_objective_credit(
+                s, c.id, q, "p1.meet_alda", {"location": REFUGE, "shared_group": False}
+            )
+            return await self._view(s, c, q)
 
     async def go_brazier(self, actor: int, version: int):
         return await self._advance_shared_objective(
@@ -982,6 +1006,11 @@ class P1Service:
                 group_size=await self._social_group_size(s, c.id),
                 proposal_id=proposal_pair[1].id if proposal_pair else None,
                 proposal_status=proposal_pair[1].status if proposal_pair else None,
+                narrative=(
+                    await narrative_node_view(s, c, P1_ID)
+                    if q.status == "active" and q.step in (5, 6)
+                    else None
+                ),
             )
         shared_member = await s.scalar(
             select(CampaignSharedEncounterMember).where(

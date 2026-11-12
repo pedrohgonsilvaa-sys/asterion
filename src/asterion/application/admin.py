@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.account_risk import AccountRiskAdmin, FlagView
 from asterion.application.chronicle import ChronicleAdmin, ChronicleService, CycleStatus
+from asterion.application.narrative_choices import audit_character_choices
 from asterion.application.outbox import OutboxStats, outbox_stats, requeue_dead
 from asterion.application.promo_codes import PromoCodeAdmin, PromoCodeRow
 from asterion.application.sanctions import SanctionService, SanctionView
@@ -448,6 +449,17 @@ class AdminService:
         return await self._read(
             actor, "risk.flags", lambda s: AccountRiskAdmin(s).flags(status=status, limit=limit)
         )
+
+    # -- narrative debug (Ação × Consequência v1.0.0 §6.1) ---------------------
+
+    async def narrative_audit(self, actor: int, character_id: UUID) -> list[dict[str, Any]]:
+        """Chain choice → option → memories → future hooks; operator-only, read-only."""
+
+        async def call(joined: _Joined) -> list[dict[str, Any]]:
+            async with joined() as session:
+                return await audit_character_choices(session, character_id)
+
+        return await self._read(actor, "narrative.audit", call)
 
     # -- content reports §31.1 (Moderador) ------------------------------------
 

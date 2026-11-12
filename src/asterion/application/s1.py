@@ -12,6 +12,11 @@ from asterion.application.campaign_objectives import (
     present_campaign_members,
     record_campaign_objective_credit,
 )
+from asterion.application.narrative_choices import (
+    NarrativeNodeView,
+    commit_mission_choice,
+    narrative_node_view,
+)
 from asterion.application.progression import consolidate_character_level
 from asterion.infrastructure.db.models import (
     Character,
@@ -51,6 +56,7 @@ class S1View:
     reacceptable: bool = False
     fragment_owned: bool = False
     fragment_new_this_attempt: bool = False
+    narrative: NarrativeNodeView | None = None
 
 
 class S1Service:
@@ -289,6 +295,7 @@ class S1Service:
                 not self._valid_active(q, version, 4)
                 or world.location != REFUGE
                 or await self._foreground(session, c.id)
+                or (await narrative_node_view(session, c, S1_ID)).pending
             ):
                 return await self._view(session, c, q, world, "oren")
             event = await session.scalar(
@@ -336,6 +343,24 @@ class S1Service:
                 c.tracked_secondary_quest_id = None
             await consolidate_character_level(session, c)
             return await self._view(session, c, q, world, "completed")
+
+    async def choose_response(
+        self, actor: int, version: int, option_id: str, kind: str = "objective"
+    ) -> S1View | None:
+        """S1_response_to_light: individual, commit once, after the light is observed."""
+        async with self.sessions.begin() as session:
+            c, q, world = await self._locked_state(session, actor)
+            if c is None or q is None or world is None:
+                return None
+            if (
+                self._valid_active(q, version, 4)
+                and (q.progress or {}).get("light_observed")
+                and not await self._foreground(session, c.id)
+            ):
+                result = await commit_mission_choice(session, c, q, option_id)
+                if result is not None and result.created:
+                    q.state_version += 1
+            return await self._view(session, c, q, world, kind)
 
     async def abandon(self, actor: int, version: int) -> S1View | None:
         async with self.sessions.begin() as session:
@@ -401,6 +426,11 @@ class S1Service:
             reacceptable=reacceptable,
             fragment_owned=fragment_owned,
             fragment_new_this_attempt=bool(progress.get("fragment_new_this_attempt")),
+            narrative=(
+                await narrative_node_view(session, c, S1_ID)
+                if q is not None and q.status == "active" and step == 4
+                else None
+            ),
         )
 
     async def _locked_state(self, session: AsyncSession, actor: int):

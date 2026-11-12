@@ -235,7 +235,7 @@ async def test_public_start_creation_tutorial_and_p1_survive_reconnect(database)
         assert quest is not None and quest.combat is not None
     assert quest.progress.get("arrival"), quest
 
-    for action in ("refuge", "alda", "oren", "activate"):
+    for action in ("refuge", "nc:o1", "oren", "activate"):
         await dispatcher.feed_raw_update(
             telegram,
             _callback_update(

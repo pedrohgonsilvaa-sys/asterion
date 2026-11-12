@@ -5,6 +5,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.s1 import REFUGE, ROAD, S1View
 from asterion.bot.creation_ui import Screen
+from asterion.bot.narrative_choice_ui import immediate_reaction, narrative_option_rows
 
 
 def _button(text: str, data: str) -> InlineKeyboardButton:
@@ -34,7 +35,11 @@ def render_s1(view: S1View) -> Screen:
             lines.extend(["", "🕯️ Luzes sob as Cinzas · Em Andamento"])
             if view.step == 4:
                 lines.extend(["", "🎯 Objetivo · Retornar a Oren Cal"])
-                keyboard.append([_button("Falar com Oren", f"s1:{version}:complete")])
+                choice_rows = narrative_option_rows(view.narrative, f"s1:{version}:o")
+                if choice_rows:
+                    keyboard.extend(choice_rows)
+                else:
+                    keyboard.append([_button("Falar com Oren", f"s1:{version}:complete")])
         elif view.reacceptable:
             lines.extend(["", "🕯️ Luzes sob as Cinzas · Reaceitável", "Missão Secundária"])
             keyboard.append([_button("Luzes sob as Cinzas", "s1:offer")])
@@ -222,7 +227,10 @@ def _render_objective(view: S1View) -> Screen:
         "Refúgio do Ocaso · Terras do Ocaso\n\n"
         "🎯 Objetivo · Retornar a Oren Cal"
     )
-    keyboard = []
+    reaction = immediate_reaction(view.narrative)
+    if reaction:
+        text += f"\n\n{reaction}"
+    keyboard = narrative_option_rows(view.narrative, f"s1:{version}")
     if view.location != REFUGE:
         keyboard.append([_button("Ver no Mapa", "world:map")])
     keyboard.append([_button("← Luzes sob as Cinzas", "s1:detail")])

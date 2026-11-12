@@ -388,6 +388,7 @@ async def test_s5_deterministic_encounter_defeat_retry_reward_and_codex(database
     assert record.progress["direction_observed"] and record.progress["duration_observed"]
     await _set_location(sessions, character_id, REFUGE)
     report = await service.resume(actor)
+    report = await service.action(actor, report.state_version, "nc", "o1")
     complete = await service.action(actor, report.state_version, "report")
     assert complete is not None and complete.status == "completed"
     await service.action(actor, report.state_version, "report")

@@ -107,9 +107,12 @@ async def test_p1_refuge_codex_and_reward_are_persistent_and_idempotent(database
     view = await service.enter_refuge(actor, 1)
     assert view.step == 5
     assert view.known_locations.count("tdo.location.refugio_do_ocaso") == 1
-    view = await service.follow_alda(actor, view.state_version)
+    stale = view.state_version
+    view = await service.follow_alda(actor, stale)
+    assert view.step == 5
+    view = await service.choose_posture(actor, stale, "o1")
     assert view.step == 6
-    view = await service.follow_alda(actor, view.state_version)
+    view = await service.choose_posture(actor, stale, "o2")
     assert view.step == 6
     view = await service.go_brazier(actor, view.state_version)
     assert view.step == 7
