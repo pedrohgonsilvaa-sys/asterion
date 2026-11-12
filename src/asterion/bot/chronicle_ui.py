@@ -20,6 +20,7 @@ from asterion.application.prologue import CombatView
 from asterion.bot.benefits_ui import granted_lines
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
+from asterion.domain.calendar_cycles import next_daily_reset, next_new_vigil
 from asterion.domain.chronicle import (
     CHAPTER_COUNT,
     CHRONICLE_COSMETICS_BY_ID,
@@ -114,6 +115,31 @@ ARCHIVED_TEXT = (
     "podem ser jogados sozinho, sem pontos, voto ou recompensa, para recuperar a história "
     "e o Códice."
 )
+
+
+def render_calendar(view: ChronicleView, now: datetime) -> Screen:
+    """Menu → Calendário: cycles, times, Nova Vigília and the Crônica (GDD §34, §37.2)."""
+    lines = [
+        "🗓️ Calendário",
+        "",
+        f"🌅 Reset diário · {_when(next_daily_reset(now))}",
+        f"🛡️ Nova Vigília · {_when(next_new_vigil(now))}",
+        "",
+        f"🌌 Crônica I · {CHRONICLE_NAME}",
+    ]
+    if view.phase is Phase.UNSCHEDULED or view.calendar is None:
+        lines.append("Sem data ainda. Ela abre quando o Dia 1 for anunciado.")
+    elif view.phase is Phase.SCHEDULED:
+        lines.append(f"Começa em {_when(view.calendar.starts_at)}.")
+    elif view.phase is Phase.ACTIVE:
+        lines.append(f"Em andamento · termina em {_when(view.calendar.end_at)}.")
+    elif view.phase in (Phase.CLOSING, Phase.RESCUE):
+        lines.append(f"Encerrada · resgate da Trilha até {_when(view.calendar.rescue_ends_at)}.")
+    else:
+        lines.append("Arquivada.")
+    lines.extend(["", "Horários de Brasília (America/Sao_Paulo)."])
+    rows = [[_button("Crônica", "cr:root")], [_button("← Menu", "menu:back")]]
+    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
 
 
 def render_chronicle(view: ChronicleView) -> Screen:

@@ -84,10 +84,10 @@ def render_doctrine_root(view: DoctrineCollectionView) -> Screen:
             rows.append([_btn(str(index), f"doc:d:{item.doctrine_id.hex}:{b36(item.revision)}")])
     elif not current:
         lines.append("Nenhuma Doutrina foi salva.")
-    if len(view.doctrines) < 5 and not view.foreground:
+    if len(view.doctrines) < view.limit and not view.foreground:
         rows.append([_btn("Nova Doutrina", f"doc:n:{b36(view.configuration_version)}")])
-    elif len(view.doctrines) >= 5:
-        lines.extend(["", "🔒 Limite de Doutrinas · 5/5"])
+    elif len(view.doctrines) >= view.limit:
+        lines.extend(["", f"🔒 Limite de Doutrinas · {view.limit}/{view.limit}"])
     if view.foreground:
         lines.extend(["", "🔒 Configuração · Bloqueada durante atividade"])
     rows.append([_btn("← Personagem", "character:root")])

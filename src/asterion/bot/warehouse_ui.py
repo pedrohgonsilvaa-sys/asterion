@@ -6,7 +6,6 @@ from uuid import UUID
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.inventory import origin_label
-from asterion.application.inventory_capacity import INVENTORY_CAPACITY, WAREHOUSE_CAPACITY
 from asterion.application.warehouse import WarehouseEntry, WarehouseView
 from asterion.bot.creation_ui import Screen
 from asterion.bot.inventory_ui import (
@@ -241,8 +240,8 @@ def _render_root(view: WarehouseView, page: int) -> Screen:
 
 def _capacity_lines(view: WarehouseView) -> list[str]:
     return [
-        f"Inventário · {view.inventory_used}/{INVENTORY_CAPACITY}",
-        f"Armazém · {view.warehouse_used}/{WAREHOUSE_CAPACITY}",
+        f"Inventário · {view.inventory_used}/{view.inventory_capacity}",
+        f"Armazém · {view.warehouse_used}/{view.warehouse_capacity}",
     ]
 
 
