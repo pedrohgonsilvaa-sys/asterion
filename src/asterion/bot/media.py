@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from asterion.domain.visuals import VISUAL_BY_COSMETIC, VISUAL_BY_ITEM, image_key
+from asterion.domain.visuals import VISUAL_BY_COSMETIC, image_key
 
 
 def assets_root() -> Path:
@@ -37,17 +37,9 @@ def resolve_asset_file(ref: str, root: Path | None = None) -> Path | None:
     return None
 
 
-def visual_image_key(
-    images: dict[str, str], *, cosmetic_id: str | None = None, item_id: str | None = None
-) -> str | None:
-    """Image key of the visual bound to a cosmetic/item, only if art is configured."""
-    visual = (
-        VISUAL_BY_COSMETIC.get(cosmetic_id)
-        if cosmetic_id
-        else VISUAL_BY_ITEM.get(item_id)
-        if item_id
-        else None
-    )
+def visual_image_key(images: dict[str, str], *, cosmetic_id: str) -> str | None:
+    """Image key of the visual bound to a cosmetic, only if art is configured."""
+    visual = VISUAL_BY_COSMETIC.get(cosmetic_id)
     if visual is None:
         return None
     key = image_key(visual.visual_id)

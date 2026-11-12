@@ -19,10 +19,7 @@ def test_real_catalog_is_valid():
 
 
 def test_valid_catalog_and_bindings():
-    catalog = (
-        VisualDefinition("visual.a", "appearance", "A", cosmetic_id=APPEARANCE),
-        VisualDefinition("visual.skin.b", "item_skin", "B", item_id="item.x"),
-    )
+    catalog = (VisualDefinition("visual.a", "appearance", "A", cosmetic_id=APPEARANCE),)
     validate_visuals(catalog, TYPES)
 
 
@@ -30,13 +27,11 @@ def test_valid_catalog_and_bindings():
     "bad",
     [
         VisualDefinition("A", "appearance", "A", cosmetic_id=APPEARANCE),
-        VisualDefinition("visual.a", "weapon_family", "A", item_id="i"),
+        VisualDefinition("visual.a", "weapon_family", "A", cosmetic_id=APPEARANCE),
         VisualDefinition("visual.a", "appearance", "A", cosmetic_id=TITLE),
         VisualDefinition("visual.a", "appearance", "A", cosmetic_id="nope"),
-        VisualDefinition("visual.a", "appearance", "A", cosmetic_id=APPEARANCE, item_id="i"),
-        VisualDefinition("visual.a", "item_skin", "A"),
-        VisualDefinition("visual.a", "item_skin", "A", cosmetic_id=APPEARANCE, item_id="i"),
-        VisualDefinition("visual.a", "item_skin", " ", item_id="i"),
+        VisualDefinition("visual.a", "appearance", "A"),
+        VisualDefinition("visual.a", "appearance", " ", cosmetic_id=APPEARANCE),
     ],
 )
 def test_invalid_visuals_rejected(bad):
@@ -45,16 +40,17 @@ def test_invalid_visuals_rejected(bad):
 
 
 def test_duplicate_id_and_binding_rejected():
-    one = VisualDefinition("visual.a", "item_skin", "A", item_id="i")
+    one = VisualDefinition("visual.a", "appearance", "A", cosmetic_id=APPEARANCE)
     with pytest.raises(ValueError):
         validate_visuals((one, one), TYPES)
     with pytest.raises(ValueError):
-        validate_visuals((one, VisualDefinition("visual.b", "item_skin", "B", item_id="i")), TYPES)
+        other = VisualDefinition("visual.b", "appearance", "B", cosmetic_id=APPEARANCE)
+        validate_visuals((one, other), TYPES)
 
 
 def test_visual_has_no_mechanical_fields():
     fields = set(VisualDefinition.__slots__)
-    assert fields == {"visual_id", "kind", "name", "cosmetic_id", "item_id"}
+    assert fields == {"visual_id", "kind", "name", "cosmetic_id"}
     assert "weapon_family" not in fields
 
 
