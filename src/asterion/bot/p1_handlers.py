@@ -45,8 +45,8 @@ def p1_router(
         try:
             cb = CampaignCombatCallback.unpack(query.data or "")
         except (KeyError, TypeError, ValueError):
-            await query.answer()
-            return
+            # "cc:" is shared with Character Creation buttons: let the next router try.
+            raise SkipHandler() from None
         candidates = (service, p2, p3, p4, p5, p6, s6)
         renderers = {
             "p1": render_p1,
