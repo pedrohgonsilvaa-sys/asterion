@@ -16,9 +16,11 @@ from asterion.application.account import (
 )
 from asterion.application.character_names import name_available
 from asterion.application.character_surfaces import CharacterSurfacesService
+from asterion.application.chronicle import ChronicleService
 from asterion.application.creation import CreationService
 from asterion.application.world import WorldService
 from asterion.bot.character_surfaces_handlers import character_surfaces_router
+from asterion.bot.chronicle_handlers import chronicle_router
 from asterion.bot.settings_handlers import settings_router
 from asterion.bot.world_handlers import world_router
 from asterion.domain.creation import NamePolicy
@@ -292,6 +294,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     dispatcher.include_router(settings_router(account_service, surfaces, {}))
     dispatcher.include_router(character_surfaces_router(surfaces, {}))
     dispatcher.include_router(world_router(WorldService(sessions, "ocaso"), {}))
+    dispatcher.include_router(chronicle_router(ChronicleService(sessions, "ocaso"), {}))
     bot = Bot("123456:local-test-token")
     message_ids = iter(range(1200, 1250))
 
@@ -324,6 +327,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
         "Aventura",
         "Personagem",
         "Códice",
+        "Calendário",
         "Configurações",
         "Vínculos",
         "Mercado",
@@ -331,6 +335,12 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
         "Benefícios",
         "Comunidade",
     }
+    update_id += 1
+    await dispatcher.feed_raw_update(
+        bot, callback_update("calendar:root", actor=actor, update_id=update_id)
+    )
+    screen = _last_screen(bot)
+    assert "Calendário" in screen.text and "Nova Vigília" in screen.text
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, callback_update("world:adventure", actor=actor, update_id=update_id)

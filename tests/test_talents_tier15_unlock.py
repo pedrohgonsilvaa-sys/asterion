@@ -377,6 +377,7 @@ async def test_publicly_acquired_sentinela_talents_drive_retalie_and_guard_barri
         D("1.45"),
         state.fighters["enemy"].stats.defense,
         level,
+        critical=retribution_event.critical,  # O crítico é sorteado: compara com o que ocorreu.
         penetration=D(14),
     )
     assert result.fighters["player"].retaliation_charges == 0

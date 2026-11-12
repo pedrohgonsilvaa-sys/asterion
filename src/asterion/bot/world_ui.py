@@ -120,6 +120,7 @@ def render_world(view: WorldView) -> Screen:
         ("Aventura", "world:adventure"),
         ("Personagem", "character:root"),
         ("Códice", "knowledge:codex"),
+        ("Calendário", "calendar:root"),
         ("Vínculos", "links:root"),
         ("Mercado", "mkt:root"),
         ("Classificação da Vigília", "pvp:rank"),

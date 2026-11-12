@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from aiogram import F, Router
 from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.filters import Command, CommandStart
@@ -13,6 +15,7 @@ from asterion.application.chronicle_encounters import ChronicleEncounterService
 from asterion.application.groups import ActivityProposalView
 from asterion.bot.chronicle_ui import (
     error_text,
+    render_calendar,
     render_chapter,
     render_chronicle,
     render_encounter,
@@ -154,6 +157,12 @@ def chronicle_router(
             return
         await query.answer()
         await show(query, render_encounter(view))
+
+    @router.callback_query(F.data == "calendar:root")
+    async def calendar(query: CallbackQuery) -> None:
+        view = await service.view(query.from_user.id)
+        await show(query, render_calendar(view, datetime.now(UTC)))
+        await query.answer()
 
     @router.callback_query(F.data.startswith("cr:"))
     async def callback(query: CallbackQuery) -> None:
