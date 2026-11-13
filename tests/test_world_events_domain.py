@@ -44,8 +44,7 @@ def _definition(event_id: str = "evento") -> WorldEventDefinition:
     )
 
 
-def test_the_catalog_ships_empty_because_the_source_names_no_event():
-    assert WORLD_EVENT_CATALOG == ()
+def test_empty_catalog_never_opens_an_occurrence():
     assert definition_for_slot((), TUESDAY_NOON) is None
 
 

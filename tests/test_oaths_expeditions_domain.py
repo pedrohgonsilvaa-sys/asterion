@@ -114,8 +114,7 @@ def test_material_region_follows_the_character_level(level, region):
     assert oaths.region_for_level(level) == region
 
 
-def test_catalogs_are_empty_until_the_author_defines_content():
-    assert oaths.OATH_TRIAL_CATALOG == ()
+def test_empty_catalog_never_opens_a_cycle_or_route():
     assert oaths.definition_for_opening((), FRIDAY_OPENING) is None
     assert exp.route_for_start((), MONDAY_START) is None
 
