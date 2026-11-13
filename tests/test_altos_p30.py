@@ -403,7 +403,7 @@ async def test_p30_consumable_callback_executes_public_transaction_and_is_idempo
         button
         for row in menu_edits[-1].reply_markup.inline_keyboard
         for button in row
-        if button.text == "1"
+        if button.callback_data.startswith("cf:")
     )
     item_callback = CombatConsumableFlowCallback.unpack(item_button.callback_data)
     assert item_callback.item_id == P30_HEALING_POTION

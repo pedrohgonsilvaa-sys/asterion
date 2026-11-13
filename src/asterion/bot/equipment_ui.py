@@ -65,21 +65,21 @@ def render_equipment_root(view: EquipmentRootView) -> Screen:
     for index, slot_view in enumerate(view.slots, start=1):
         slot, label, icon, code = SLOT_PRESENTATION[index - 1]
         if slot_view.blocked_by_two_handed:
-            lines.append(f"{index} {icon} {label} · Bloqueada")
+            lines.append(f"{icon} {label} · Bloqueada")
             lines.append("🔒 Arma de 2 mãos equipada")
             continue
         item = slot_view.item
         if item is None:
-            lines.append(f"{index} {icon} {label} · Vazio")
+            lines.append(f"{icon} {label} · Vazio")
         else:
-            lines.append(f"{index} {icon} {label} · {escape(item.name)} · +{item.enhancement}")
+            lines.append(f"{icon} {label} · {escape(item.name)} · +{item.enhancement}")
         buttons.append(
             InlineKeyboardButton(
-                text=str(index),
+                text=label,
                 callback_data=f"eq:s:{code}:{view.combat_configuration_version}",
             )
         )
-    rows = [buttons[offset : offset + 4] for offset in range(0, len(buttons), 4)]
+    rows = [buttons[offset : offset + 2] for offset in range(0, len(buttons), 2)]
     rows.append([InlineKeyboardButton(text="← Personagem", callback_data="character:root")])
     screen = Screen(
         "\n".join(lines),
@@ -238,7 +238,7 @@ def render_equipment_candidates(view: EquipmentCandidatesView) -> Screen:
         for index, item in enumerate(view.candidates, start=1):
             if index > 1:
                 lines.append("")
-            lines.append(f"{index} {escape(item.name)} · +{item.enhancement}")
+            lines.append(f"{escape(item.name)} · +{item.enhancement}")
             lines.append(
                 f"{RARITY_ICON.get(_rarity_label(item.rarity), '⚪')} "
                 f"{escape(_rarity_label(item.rarity))} · {SLOT_LABELS[item.slot]}"
@@ -247,14 +247,14 @@ def render_equipment_candidates(view: EquipmentCandidatesView) -> Screen:
             lines.extend(_attribute_lines(item))
     buttons = [
         InlineKeyboardButton(
-            text=str(index),
+            text=f"{item.name} +{item.enhancement}",
             callback_data=(
                 f"eq:e:{item.item_instance_id.hex}:{view.combat_configuration_version}:s"
             ),
         )
         for index, item in enumerate(view.candidates, start=1)
     ]
-    rows = [buttons[offset : offset + 5] for offset in range(0, len(buttons), 5)]
+    rows = [[button] for button in buttons]
     rows.append([InlineKeyboardButton(text="← Equipamentos", callback_data="eq:r")])
     return Screen(
         "\n".join(lines),

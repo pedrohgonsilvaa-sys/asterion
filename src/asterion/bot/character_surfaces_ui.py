@@ -167,10 +167,9 @@ def render_codex_root(view: KnowledgeView) -> Screen:
     for category_id, label in CODEX_CATEGORY_ORDER:
         if category_id not in categories:
             continue
-        visible_number = len(rows) + 1
-        lines.append(f"{visible_number} {label}")
+        lines.append(label)
         key = CODEX_CATEGORY_KEYS[category_id]
-        rows.append([_button(str(len(rows) + 1), f"kb:c:{key}")])
+        rows.append([_button(label, f"kb:c:{key}")])
     rows.append([_button("Bestiário", "kb:b"), _button("Feitos", "kb:a")])
     rows.append([_button("← Menu", "menu:back")])
     if not categories:
@@ -194,11 +193,11 @@ def render_codex_category(view: KnowledgeView, category: str) -> Screen:
     if not regions and not entries:
         return render_codex_root(view)
     for region_id, region_label in regions:
-        lines.append(f"{len(rows) + 1} {region_label}")
-        rows.append([_button(str(len(rows) + 1), f"kb:r:{region_id}")])
+        lines.append(region_label)
+        rows.append([_button(region_label, f"kb:r:{region_id}")])
     for entry in entries:
-        lines.append(f"{len(rows) + 1} {entry.title}")
-        rows.append([_button(str(len(rows) + 1), f"kb:e:{CODEX_ENTRY_KEYS[entry.entry_id]}")])
+        lines.append(entry.title)
+        rows.append([_button(entry.title, f"kb:e:{CODEX_ENTRY_KEYS[entry.entry_id]}")])
     rows.extend(_knowledge_navigation("kb"))
     return Screen("\n".join(lines), "codex", _keyboard(rows))
 
@@ -212,9 +211,9 @@ def render_codex_region(view: KnowledgeView, region_id: str) -> Screen:
         return render_codex_category(view, "regions")
     lines = ["🗺️ Regiões e Locais", "", region_labels[region_id], ""]
     rows = []
-    for index, entry in enumerate(locations, 1):
-        lines.append(f"{index} {entry.title}")
-        rows.append([_button(str(index), f"kb:l:{CODEX_ENTRY_KEYS[entry.entry_id]}")])
+    for entry in locations:
+        lines.append(entry.title)
+        rows.append([_button(entry.title, f"kb:l:{CODEX_ENTRY_KEYS[entry.entry_id]}")])
     rows.append([_button("← Regiões e Locais", "kb:c:r")])
     rows.extend(_knowledge_navigation("kb"))
     return Screen("\n".join(lines), "codex", _keyboard(rows))
@@ -254,9 +253,9 @@ def render_bestiary_root(view: KnowledgeView) -> Screen:
             ]
         )
     else:
-        for index, (region_id, label, count) in enumerate(regions, 1):
-            lines.extend([f"{index} {label}", f"{count} Criaturas Conhecidas", ""])
-            rows.append([_button(str(index), f"kb:br:{region_id}")])
+        for region_id, label, count in regions:
+            lines.extend([label, f"{count} Criaturas Conhecidas", ""])
+            rows.append([_button(label, f"kb:br:{region_id}")])
     rows.extend(_knowledge_navigation("kb"))
     return Screen("\n".join(lines).rstrip(), "bestiary", _keyboard(rows))
 
@@ -270,9 +269,9 @@ def render_bestiary_region(view: KnowledgeView, region_id: str) -> Screen:
         return render_bestiary_root(view)
     lines = ["🐾 Bestiário", "", region_labels[region_id], ""]
     rows = []
-    for index, record in enumerate(records, 1):
-        lines.append(f"{index} {record.name} · {record.stage_label}")
-        rows.append([_button(str(index), f"kb:be:{_slug(record.creature_id)}")])
+    for record in records:
+        lines.append(f"{record.name} · {record.stage_label}")
+        rows.append([_button(record.name, f"kb:be:{_slug(record.creature_id)}")])
     rows.append([_button("← Bestiário", "kb:b")])
     rows.extend(_knowledge_navigation("kb"))
     return Screen("\n".join(lines), "bestiary", _keyboard(rows))
@@ -325,11 +324,8 @@ def render_achievement_root(view: KnowledgeView) -> Screen:
         for category, label in ACHIEVEMENT_CATEGORIES:
             if category not in present:
                 continue
-            visible_number = len(rows) + 1
-            lines.append(f"{visible_number} {label}")
-            rows.append(
-                [_button(str(visible_number), f"kb:ac:{ACHIEVEMENT_CATEGORY_KEYS[category]}")]
-            )
+            lines.append(label)
+            rows.append([_button(label, f"kb:ac:{ACHIEVEMENT_CATEGORY_KEYS[category]}")])
     rows.extend(_knowledge_navigation("kb"))
     return Screen("\n".join(lines), "achievements", _keyboard(rows))
 
@@ -342,8 +338,8 @@ def render_achievement_category(view: KnowledgeView, category: str) -> Screen:
     if not entries:
         return render_achievement_root(view)
     lines = ["🏆 Feitos", "", label, ""]
-    for index, entry in enumerate(entries, 1):
-        lines.append(f"{index} ✅ {entry.name}")
+    for entry in entries:
+        lines.append(f"✅ {entry.name}")
         lines.append(entry.description)
         if entry.reward:
             lines.append(f"🎁 {entry.reward}")

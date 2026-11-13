@@ -146,7 +146,7 @@ async def test_character_knowledge_telegram_navigation_and_history_reply(databas
         bot, callback_update("kb:br:tdo", actor=actor, update_id=update_id)
     )
     screen = _last_screen(bot)
-    dog_button = _button(screen, "2")
+    dog_button = _button(screen, "Cão Cinéreo")
     update_id += 1
     await dispatcher.feed_raw_update(
         bot,
@@ -158,7 +158,12 @@ async def test_character_knowledge_telegram_navigation_and_history_reply(databas
     await dispatcher.feed_raw_update(bot, callback_update("kb:a", actor=actor, update_id=update_id))
     screen = _last_screen(bot)
     assert "Feitos" in screen.text
-    category_button = _button(screen, "1")
+    category_button = next(
+        button
+        for row in screen.reply_markup.inline_keyboard
+        for button in row
+        if button.callback_data.startswith("kb:ac:")
+    )
     update_id += 1
     await dispatcher.feed_raw_update(
         bot,

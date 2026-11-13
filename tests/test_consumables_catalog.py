@@ -269,7 +269,7 @@ def test_inventory_resolves_stable_id_and_renders_actual_grade():
             entries=(entry,),
         )
     )
-    assert "1 🧪 Poção de Cura · 4" in screen.text
+    assert "🧪 Poção de Cura · 4" in screen.text
     assert "Consumível · Grau I" in screen.text
 
     protection = consumable_inventory_entry("consumable.protection.vde.ii", 3)

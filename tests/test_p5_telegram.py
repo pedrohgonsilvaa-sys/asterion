@@ -284,7 +284,7 @@ async def test_p5_stage_and_report_screens_follow_real_callbacks(database, monke
     assert "Elementos da Estrutura · 0/3" in screen.text
     for update_id in (998731, 998732, 998733):
         screen = render_p5(await p5.resume(actor))
-        number = str(update_id - 998730)
+        number = ("Batente da Porta", "Verga Entalhada", "Soleira Gasta")[update_id - 998731]
         await dispatcher.feed_raw_update(
             bot,
             callback_update(

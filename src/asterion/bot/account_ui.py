@@ -160,9 +160,9 @@ def render_notifications(view: NotificationPreferenceView) -> Screen:
 def render_help_root() -> Screen:
     rows = []
     lines = ["🛟 Ajuda", "", "Escolha um assunto.", ""]
-    for index, (key, title, _body) in enumerate(HELP_TOPICS, 1):
-        lines.append(f"{index} {title}")
-        rows.append([_button(str(index), f"help:{key}")])
+    for key, title, _body in HELP_TOPICS:
+        lines.append(title)
+        rows.append([_button(title, f"help:{key}")])
     rows.extend([[_button("← Configurações", "settings:root")]])
     return Screen("\n".join(lines), "menu", _keyboard(rows))
 

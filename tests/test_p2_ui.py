@@ -147,17 +147,19 @@ def test_ash_points_show_progress_and_only_unexamined_callbacks(progress, expect
 
     assert expected_count in screen.text
     buttons = _buttons(screen)
-    point_buttons = [button for button in buttons if button.text.isdigit()]
+    point_buttons = [button for button in buttons if button.callback_data.startswith('p2:14:ash:')]
     examined = progress.get("ash_points", [])
     expected_ids = [point_id for point_id in ASH_POINT_IDS if point_id not in examined]
     assert [button.callback_data for button in point_buttons] == [
         f"p2:14:ash:{point_id}" for point_id in expected_ids
     ]
-    for index, point_id in enumerate(ASH_POINT_IDS, start=1):
+    names = ("Montículo de Cinza", "Terra Revirada", "Marca na Fuligem")
+    for name, point_id in zip(names, ASH_POINT_IDS, strict=True):
         if point_id in progress.get("ash_points", []):
-            assert f"{index} ✅ Ponto de Fuligem · {index}" in screen.text
+            assert f"✅ {name}" in screen.text
         else:
-            assert f"{index} ⚪ Ponto de Fuligem · {index}" in screen.text
+            assert f"⚪ {name}" in screen.text
+            assert any(button.text == name for button in point_buttons)
 
 
 def test_recovery_is_contextual_and_does_not_offer_road_brazier_rest():

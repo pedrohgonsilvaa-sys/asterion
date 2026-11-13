@@ -144,26 +144,26 @@ def test_main_menu_personagem_button_has_real_character_destination():
 def test_equipment_root_always_renders_eight_slots_and_stable_numeric_callbacks():
     screen = render_equipment_root(_root(version=2147483647))
     expected = [
-        "1 🗡️ Arma Principal · Vazio",
-        "2 ⚔️ Arma Secundária · Vazio",
-        "3 🪖 Cabeça · Vazio",
-        "4 🥋 Torso · Vazio",
-        "5 🧤 Mãos · Vazio",
-        "6 🥾 Pés · Vazio",
-        "7 💍 Acessório · Vazio",
-        "8 🧿 Artefato · Vazio",
+        "🗡️ Arma Principal · Vazio",
+        "⚔️ Arma Secundária · Vazio",
+        "🪖 Cabeça · Vazio",
+        "🥋 Torso · Vazio",
+        "🧤 Mãos · Vazio",
+        "🥾 Pés · Vazio",
+        "💍 Acessório · Vazio",
+        "🧿 Artefato · Vazio",
     ]
     assert all(line in screen.text for line in expected)
     buttons = _buttons(screen)
     assert [button.text for button in buttons] == [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5",
-        "6",
-        "7",
-        "8",
+        "Arma Principal",
+        "Arma Secundária",
+        "Cabeça",
+        "Torso",
+        "Mãos",
+        "Pés",
+        "Acessório",
+        "Artefato",
         "← Personagem",
     ]
     assert [button.callback_data for button in buttons[:8]] == [
@@ -189,19 +189,19 @@ def test_equipment_root_shows_partial_equipment_and_blocks_secondary_for_two_han
         equipped_slot=EquipmentSlot.PRINCIPAL,
     )
     screen = render_equipment_root(_root({EquipmentSlot.PRINCIPAL: weapon}, blocked_secondary=True))
-    assert "1 🗡️ Arma Principal · Lâmina &lt;da Ruptura&gt; · +6" in screen.text
-    assert "2 ⚔️ Arma Secundária · Bloqueada" in screen.text
+    assert "🗡️ Arma Principal · Lâmina &lt;da Ruptura&gt; · +6" in screen.text
+    assert "⚔️ Arma Secundária · Bloqueada" in screen.text
     assert "🔒 Arma de 2 mãos equipada" in screen.text
-    assert "3 🪖 Cabeça · Vazio" in screen.text
+    assert "🪖 Cabeça · Vazio" in screen.text
     buttons = _buttons(screen)
     assert [button.text for button in buttons] == [
-        "1",
-        "3",
-        "4",
-        "5",
-        "6",
-        "7",
-        "8",
+        "Arma Principal",
+        "Cabeça",
+        "Torso",
+        "Mãos",
+        "Pés",
+        "Acessório",
+        "Artefato",
         "← Personagem",
     ]
     assert all(button.callback_data != "eq:s:s:4" for button in buttons)
@@ -329,13 +329,13 @@ def test_candidate_selection_uses_stable_item_identity_and_no_lore():
         uuid4(), 4, 9999999999999999999, EquipmentSlot.CABECA, (candidate,)
     )
     screen = render_equipment_candidates(view)
-    assert "1 Capacete de Cinzas · +2" in screen.text
+    assert "Capacete de Cinzas · +2" in screen.text
     assert "⚪ Comum · Cabeça" in screen.text
     assert "📈 Nível do Item · 4" in screen.text
     assert "❤️ HP +3.25" in screen.text
     assert "LOR E NÃO DEVE SER LISTADO" not in screen.text
     buttons = _buttons(screen)
-    assert buttons[0].text == "1"
+    assert buttons[0].text == "Capacete de Cinzas +2"
     assert buttons[0].callback_data == (
         f"eq:e:{candidate.item_instance_id.hex}:9999999999999999999:s"
     )
@@ -365,7 +365,7 @@ def test_inventory_equipment_rows_are_clickable_localized_and_show_equipped_stat
             ),
         )
     )
-    assert "1 🗡️ Lâmina de Teste · +4" in screen.text
+    assert "🗡️ Lâmina de Teste · +4" in screen.text
     assert "⚪ Comum · Arma Principal" in screen.text
     assert "✅ Equipado" in screen.text
     assert "ATQ" not in screen.text
@@ -408,6 +408,6 @@ async def test_stale_slot_read_replies_and_rebuilds_authoritative_equipment_root
     answer = next(method for method in methods if isinstance(method, AnswerCallbackQuery))
     screen = next(method for method in reversed(methods) if isinstance(method, EditMessageText))
     assert answer.text == "Configuração atualizada."
-    assert "3 🪖 Cabeça · Elmo de Teste · +0" in screen.text
+    assert "🪖 Cabeça · Elmo de Teste · +0" in screen.text
     assert equipment_service.equip_item.await_count == 0
     assert equipment_service.unequip_slot.await_count == 0

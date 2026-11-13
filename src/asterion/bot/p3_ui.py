@@ -13,6 +13,9 @@ def _button(label: str, callback: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=label, callback_data=callback)
 
 
+_FRAGMENT_NAMES = ("Viga Calcinada", "Tábua Rachada", "Pedra Enegrecida")
+
+
 def _keyboard(*rows: list[InlineKeyboardButton]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=list(rows))
 
@@ -180,16 +183,18 @@ def render_p3(view: P3View) -> Screen:
             "",
         ]
         pending = []
-        for index, fragment_id in enumerate(P3_FRAGMENTS, start=1):
+        for index, (name, fragment_id) in enumerate(
+            zip(_FRAGMENT_NAMES, P3_FRAGMENTS, strict=True), start=1
+        ):
             if fragment_id in found:
-                lines.append(f"{index} ✅ Fragmento de Construção {index}")
+                lines.append(f"✅ {name}")
             else:
-                lines.append(f"{index} ⚪ Fragmento de Construção {index}")
-                pending.append(_button(str(index), f"p3:{version}:fragment:{index}"))
+                lines.append(f"⚪ {name}")
+                pending.append([_button(name, f"p3:{version}:fragment:{index}")])
         return Screen(
             "\n".join(lines),
             "p3",
-            _keyboard(pending, [_button("← Missões", "world:missions")]),
+            _keyboard(*pending, [_button("← Missões", "world:missions")]),
         )
     if view.kind == "recovery":
         brazier = progress.get("recovery_brazier") or "Braseiro do Refúgio"
