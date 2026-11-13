@@ -116,9 +116,27 @@ def test_material_region_follows_the_character_level(level, region):
 
 def test_catalogs_are_empty_until_the_author_defines_content():
     assert oaths.OATH_TRIAL_CATALOG == ()
-    assert exp.EXPEDITION_ROUTE_CATALOG == ()
     assert oaths.definition_for_opening((), FRIDAY_OPENING) is None
     assert exp.route_for_start((), MONDAY_START) is None
+
+
+def test_approved_expedition_routes():
+    catalog = exp.EXPEDITION_ROUTE_CATALOG
+    assert [route.route_id for route in catalog] == [
+        "expedition.rotas_sob_a_cinza",
+        "expedition.o_que_se_enreda",
+        "expedition.medida_do_meridiano",
+        "expedition.linhas_de_transferencia",
+        "expedition.carga_sem_fim",
+    ]
+    for route in catalog:
+        assert len(route.route_id) <= 64
+        assert route.name and route.return_flavor
+        for stage in route.stages:
+            assert stage.flavor
+            assert [option.option_id for option in stage.options] == ["a", "b", "c"]
+            assert all(option.label for option in stage.options)
+    assert exp.route_for_start(catalog, MONDAY_START) in catalog
 
 
 def test_expedition_clock():
