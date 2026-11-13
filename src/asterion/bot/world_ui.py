@@ -5,6 +5,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.legacy import LegacyView
 from asterion.application.world import WorldView
 from asterion.bot.creation_ui import Screen
+from asterion.bot.flavor_ui import with_flavor
 
 LORE = (
     "Sob céus cobertos de fuligem, as estradas de Asterion seguem marcadas por ruínas, "
@@ -217,4 +218,4 @@ def render_legacy(
             [InlineKeyboardButton(text="← Personagem", callback_data="character:root")]
         )
         keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
-    return Screen(text, "menu", keyboard)
+    return with_flavor(Screen(text, "menu", keyboard), "legado")

@@ -24,6 +24,7 @@ from asterion.application.market import (
 )
 from asterion.application.trades import TradeItemView, TradeView
 from asterion.bot.creation_ui import Screen
+from asterion.bot.flavor_ui import with_flavor
 from asterion.bot.guilds_ui import pack
 from asterion.domain.market import (
     MARKET_FEE_PERCENT,
@@ -147,7 +148,7 @@ def _offer_price(row: ListingView) -> str:
 
 def render_root(trade: TradeView | None) -> Screen:
     label = "Troca Direta" if trade is None else "Troca Direta · em andamento"
-    return Screen(
+    screen = Screen(
         "🛒 Mercado\n\nEncontre uma Loja pelo Código, cuide da sua ou troque itens direto "
         "com outro jogador.",
         IMAGE_KEY,
@@ -158,6 +159,7 @@ def render_root(trade: TradeView | None) -> Screen:
             [_button("← Menu", "menu:back")],
         ),
     )
+    return with_flavor(screen, "mercado")
 
 
 def render_my_shop(shop: ShopView, notice: str | None = None) -> Screen:

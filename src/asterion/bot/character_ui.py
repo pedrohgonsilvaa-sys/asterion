@@ -3,6 +3,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.bot.creation_ui import Screen
+from asterion.bot.flavor_ui import with_flavor
 
 CHARACTER_COPY = (
     "🪪 Personagem\n\n"
@@ -49,4 +50,4 @@ def render_character() -> Screen:
             [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
         ]
     )
-    return Screen(CHARACTER_COPY, "character", keyboard)
+    return with_flavor(Screen(CHARACTER_COPY, "character", keyboard), "personagem")

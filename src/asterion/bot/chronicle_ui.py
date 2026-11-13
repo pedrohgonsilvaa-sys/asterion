@@ -20,6 +20,7 @@ from asterion.application.prologue import CombatView
 from asterion.bot.benefits_ui import granted_lines
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
+from asterion.bot.flavor_ui import with_flavor
 from asterion.domain.calendar_cycles import next_daily_reset, next_new_vigil
 from asterion.domain.chronicle import (
     CHAPTER_COUNT,
@@ -139,7 +140,11 @@ def render_calendar(view: ChronicleView, now: datetime) -> Screen:
         lines.append("Arquivada.")
     lines.extend(["", "Horários de Brasília (America/Sao_Paulo)."])
     rows = [[_button("Crônica", "cr:root")], [_button("← Menu", "menu:back")]]
-    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+    return with_flavor(
+        Screen("\n".join(lines), _IMAGE, _keyboard(rows)),
+        "calendario",
+        now_epoch=int(now.timestamp()),
+    )
 
 
 def render_chronicle(view: ChronicleView) -> Screen:

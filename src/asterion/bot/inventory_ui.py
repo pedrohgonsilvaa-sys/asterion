@@ -7,6 +7,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.inventory import InventoryEntry, InventoryView, origin_label
 from asterion.bot.creation_ui import Screen
+from asterion.bot.flavor_ui import with_flavor
 from asterion.domain.consumables import grade_label
 
 # Keeps a page of the longest possible entries under Telegram's 4096-character limit.
@@ -321,7 +322,7 @@ def render_inventory(view: InventoryView, page: int = 0) -> Screen:
                 [InlineKeyboardButton(text="← Personagem", callback_data="character:root")],
             ]
         )
-        return Screen(text, "inventory", keyboard)
+        return with_flavor(Screen(text, "inventory", keyboard), "inventario")
 
     if view.kind == "inventory_category":
         headings = {
