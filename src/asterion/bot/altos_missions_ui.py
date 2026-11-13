@@ -41,6 +41,7 @@ from asterion.application.road import (
     CONFINS_CAMARA_REGENCIA_LABEL,
     CONFINS_NO_CENTRAL_LABEL,
 )
+from asterion.bot.asset_catalog import with_mission_art
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 
@@ -49,7 +50,7 @@ def _button(text: str, callback: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=callback)
 
 
-def render_altos_mission(view: AltosMissionView) -> Screen:
+def _render_altos_mission(view: AltosMissionView) -> Screen:
     fallback_title = (
         P36_TITLE if view.quest_id == "P36"
         else P35_TITLE if view.quest_id == "P35"
@@ -1104,3 +1105,8 @@ def _render_p32(view: AltosMissionView, title: str, rows) -> Screen:
         rows.append([_button("Registrar no Códice e concluir", f"altos:action:{view.state_version}:record_fracture_codex_and_conclude")])
     rows.append([_button("← Missões", "world:missions")])
     return Screen("\n".join(lines), "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def render_altos_mission(view: AltosMissionView) -> Screen:
+    """Mission screen with the art of its quest (see asset_catalog)."""
+    return with_mission_art(_render_altos_mission(view), view.quest_id)

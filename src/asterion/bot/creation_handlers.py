@@ -22,6 +22,7 @@ from asterion.application.s4 import S4Service
 from asterion.application.s5 import S5Service
 from asterion.application.s6 import S6Service
 from asterion.application.world import WorldService
+from asterion.bot.asset_catalog import npc_key_from_text
 from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import CreationCallback, Screen, render
@@ -53,7 +54,8 @@ def unavailable_media(exc: TelegramBadRequest) -> bool:
 
 
 async def present(message: Message, screen: Screen, images: dict[str, str], *, edit=False):
-    image = images.get(screen.image_key)
+    npc = npc_key_from_text(screen.text)
+    image = (npc and images.get(npc)) or images.get(screen.image_key)
     if image and image.startswith("file:"):
         path = resolve_asset_file(image)
         media = FSInputFile(path) if path else None
