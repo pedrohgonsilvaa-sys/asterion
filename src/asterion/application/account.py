@@ -813,15 +813,29 @@ class AccountService:
         view = await self.account(actor, now=now)
         if view is None:
             raise AccountRejected("missing_character")
-        if view.deletion_pending:
-            raise AccountRejected("deletion_pending")
-        if view.deletion_preview_id is None:
+        if not view.deletion_pending and view.deletion_preview_id is None:
             raise AccountRejected("stale_confirmation")
         if typed_name.strip().casefold() != view.name.casefold():
             raise AccountRejected("name_mismatch")
-        await self.request_deletion(
-            actor, view.name, view.deletion_preview_id, now=now, period=timedelta(seconds=1)
-        )
+        if view.deletion_pending:
+            # Old 7-day request: shorten it to now.
+            async with self.sessions.begin() as session:
+                request = await session.scalar(
+                    select(CharacterDeletionRequest)
+                    .where(
+                        CharacterDeletionRequest.character_id == view.character_id,
+                        CharacterDeletionRequest.status == "pending",
+                    )
+                    .with_for_update()
+                )
+                if request is not None:
+                    request.due_at = max(request.requested_at + timedelta(seconds=1), now)
+                    request.due_at = min(request.due_at, now + timedelta(seconds=1))
+                    request.revision += 1
+        else:
+            await self.request_deletion(
+                actor, view.name, view.deletion_preview_id, now=now, period=timedelta(seconds=1)
+            )
         # DB check needs due_at > requested_at, so finalize one second later.
         finalized = await finalize_due_character_deletions(
             self.sessions,

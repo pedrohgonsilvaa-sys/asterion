@@ -309,6 +309,7 @@ def render_deletion_pending(view: AccountView) -> Screen:
                         f"account:d:cancel:{_base36(view.deletion_revision or 0)}",
                     )
                 ],
+                [_button("Excluir agora (digitar o nome)", "account:d:input")],
                 [_button("← Conta", "account:root")],
             ]
         ),
