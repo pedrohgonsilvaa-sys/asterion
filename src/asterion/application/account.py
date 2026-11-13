@@ -723,6 +723,8 @@ class AccountService:
             )
             for stale in stale_previews:
                 await session.delete(stale)
+            # Unit of work runs INSERT before DELETE: flush so uq_open_character_deletion holds.
+            await session.flush()
             request = CharacterDeletionRequest(
                 id=uuid4(),
                 character_id=character.id,
