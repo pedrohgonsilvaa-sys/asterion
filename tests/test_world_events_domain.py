@@ -13,7 +13,6 @@ from asterion.domain.equipment_stats import (
 )
 from asterion.domain.road import Creature
 from asterion.domain.world_events import (
-    WORLD_EVENT_CATALOG,
     WorldEventDefinition,
     WorldEventPhase,
     attuned_equipment,
