@@ -1581,6 +1581,10 @@ class HuntContext(Base):
     result_acknowledged: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # Contratos Regionais §30: the action's start, not its resolution, decides expiry.
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class GroupHuntEncounter(Base):
@@ -4466,3 +4470,51 @@ class NpcRapport(Base):
     npc_id: Mapped[str] = mapped_column(String(32), nullable=False)
     rapport_state: Mapped[str] = mapped_column(String(16), nullable=False, default="neutral")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ContractInstance(Base):
+    """Contratos Regionais (Documento B §28/§29): one concrete offer owned by a character."""
+
+    __tablename__ = "contract_instances"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('DISPONIVEL','ACEITO','EM_ANDAMENTO','CONCLUIDO','RESGATADO',"
+            "'EXPIRADO','ABANDONADO')",
+            name="ck_contract_instance_state",
+        ),
+        CheckConstraint("progress >= 0 AND target >= 1", name="ck_contract_instance_progress"),
+        CheckConstraint("version >= 0", name="ck_contract_instance_version"),
+        UniqueConstraint(
+            "character_id",
+            "contract_definition_id",
+            "source_refresh_id",
+            name="uq_contract_instance_offer",
+        ),
+        Index("ix_contract_instance_character_state", "character_id", "state"),
+    )
+
+    contract_instance_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    character_id: Mapped[UUID] = mapped_column(ForeignKey("characters.id"), nullable=False)
+    contract_definition_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    region_id: Mapped[str] = mapped_column(String(4), nullable=False)
+    contract_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    abandoned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    target: Mapped[int] = mapped_column(Integer, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    claimed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reward_profile: Mapped[str] = mapped_column(String(40), nullable=False)
+    source_refresh_id: Mapped[str] = mapped_column(String(48), nullable=False)
+    eligibility_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    last_validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

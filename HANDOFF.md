@@ -1803,6 +1803,17 @@ Todo capítulo tem um Encontro obrigatório. Com a parte 3, os 8 capítulos pode
 - **Dúvida 8 (Aparências):** a skin da Crônica é **especial e única**, com **fundo próprio da Crônica**; não segue o padrão regional nem o céu neutro.
 - **PROPOSTAS DE REGRA:** `pr_cr01_encontro_grupo` e `pr_cr01_feito_resposta` aprovadas; `pr_cr01_eco_residual` adiada (o desfecho fica só narrativo).
 
+## 8.x Contratos Regionais (Documento B)
+
+**Pronto (desativado por flag `ASTERION_CONTRACTS_ENABLED`, padrão `false`):**
+- Migration `20261113_0052`: tabela `contract_instances` e coluna `hunt_contexts.started_at` (§30).
+- Números do §38 só em `domain/contracts_config.py` ("proposta a aprovar"); 36 contratos em `domain/contracts_catalog.py`.
+- Serviço `application/contracts.py` (estados §7/§8, quadro 24 h, aceite, abandono, expiração, resgate idempotente, `version` revalidada); telas e callbacks `ctr:*` em `bot/contracts_ui.py` e `bot/contracts_handlers.py`; botão "Quadro de Contratos" na Aventura só com a flag ligada.
+- Ganchos: vitória manual solo em Caçada (`RoadService`, após `_settle_hunt`) e Material recebido (`_deliver_material`).
+- `tests/test_contracts.py`: AC-01 a AC-24 mais guardas estáticas.
+
+**Depende do autor** (lista completa em `docs/CONTRATOS_REGIONAIS_CONFLITOS.md`): alvos de cada contrato (criatura, quantidade, destino, ponto); mecânica de Entrega e Investigação; qual Material paga Caça, Entrega e Investigação; nomes do §36 sem Material exato; Caça só manual e Solo; Coleta aceitando qualquer fonte; materiais vinculados; balanceamento das Coroas por Região. Só ligar a flag depois disso.
+
 ## 9. Próximos passos recomendados
 
 A fonte do plano é `docs/PLANO_DE_ACAO.md` (trilhas A, B e C). Estado em 2026-11-12:

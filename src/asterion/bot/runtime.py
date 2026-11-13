@@ -12,6 +12,8 @@ from asterion.application.chronicle_activities import ChronicleActivityService
 from asterion.application.chronicle_encounters import ChronicleEncounterService
 from asterion.application.class_trials import ClassTrialService
 from asterion.application.consumables import ConsumableService
+from asterion.application.contracts import ContractService
+from asterion.application.contracts import set_enabled as set_contracts_enabled
 from asterion.application.cosmetics import CosmeticService
 from asterion.application.craft_services import CraftServiceService
 from asterion.application.crafting import CraftingService
@@ -83,6 +85,7 @@ from asterion.bot.character_surfaces_handlers import character_surfaces_router
 from asterion.bot.chronicle_handlers import chronicle_router
 from asterion.bot.class_trial_handlers import class_trial_router
 from asterion.bot.combat_handlers import combat_router
+from asterion.bot.contracts_handlers import contracts_router
 from asterion.bot.cosmetics_handlers import cosmetics_router
 from asterion.bot.craft_service_handlers import craft_service_router
 from asterion.bot.creation_handlers import creation_router
@@ -307,6 +310,14 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(
         craft_service_router(
             CraftServiceService(SessionFactory, settings.server_id), settings.creation_images
+        )
+    )
+    # Contratos Regionais: dormant unless ASTERION_CONTRACTS_ENABLED
+    # (see docs/CONTRATOS_REGIONAIS_CONFLITOS.md).
+    set_contracts_enabled(settings.contracts_enabled)
+    dispatcher.include_router(
+        contracts_router(
+            ContractService(SessionFactory, settings.server_id, road), settings.creation_images
         )
     )
     # Also before creation_router, for the same deep-link reason.

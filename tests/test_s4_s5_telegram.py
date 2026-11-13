@@ -239,6 +239,7 @@ async def test_s4_s5_routers_are_registered_by_runtime(monkeypatch):
         community_url=None,
         rate_limit_burst=12,
         rate_limit_per_second=4.0,
+        contracts_enabled=False,
     )
     monkeypatch.setattr(runtime, "get_settings", lambda: settings)
     runtime.get_bot_runtime.cache_clear()

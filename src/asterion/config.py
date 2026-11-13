@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     creation_images: dict[str, str] = {}
 
     telegram_bot_enabled: bool = False
+    # Contratos Regionais: off until the author resolves docs/CONTRATOS_REGIONAIS_CONFLITOS.md.
+    contracts_enabled: bool = False
     telegram_bot_token: str | None = None
     telegram_mode: Literal["polling", "webhook"] = "polling"
     telegram_webhook_secret: str | None = None
