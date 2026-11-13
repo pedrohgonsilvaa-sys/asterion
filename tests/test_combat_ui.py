@@ -458,10 +458,17 @@ async def test_terminal_prologue_defeat_dispatches_to_existing_brazier(
     await dispatcher.feed_raw_update(telegram, callback_update(callback, actor=1))
 
     sent = telegram.session.make_request.call_args.args[1]
-    assert "🔥 Braseiro · Descoberto" in sent.text
-    assert [button.text for row in sent.reply_markup.inline_keyboard for button in row] == [
-        "Descansar"
+    assert "Depois da Cinza" in sent.text
+    rows = sent.reply_markup.inline_keyboard
+    assert [button.callback_data for row in rows for button in row] == [
+        "pro:a:o1",
+        "pro:a:o2",
+        "pro:a:o3",
     ]
+    world = WorldService(database[1], "ocaso")
+    await world.choose_prologue(1, "PRO_choice_aftermath", "o1")
+    view = await world.choose_prologue(1, "PRO_choice_first_fire", "o1")
+    assert view.kind == "brazier" and view.prologue_choice is None
 
 
 async def test_start_mid_combat_reconstructs_combat_instead_of_intro(database, telegram):
