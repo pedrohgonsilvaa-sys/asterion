@@ -61,6 +61,14 @@ Arquivos: `docs/specs/ASTERION_SISTEMA_ACAO_CONSEQUENCIA_NARRATIVA_v1_0_0.md` (c
 - `rapport_state` fica `neutral` até o autor definir as transições.
 - Falas de reação: `docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_1.md` (v1.0.0 substituída), subordinado ao contrato (decisão do autor, 2026-11-12). Fala com `choice_id` fora do contrato, ou dita por NPC sem a memória da opção, não é exibida. Pendências de 2026-11-12 resolvidas na v1.0.1 (histórico em `docs/audits/TEXTOS_REACAO_PENDENCIAS_2026-11-12.md`).
 
+## Fechamento de sistema — Contratos Regionais
+
+**ASTERION — Contratos Regionais: Decisões de Design e Balanceamento v1.0.0**
+
+Arquivo: `docs/specs/ASTERION_CONTRATOS_REGIONAIS_DECISOES_FECHADAS_v1_0_0.md`.
+
+Fecha, por decisão do autor (2026-11-13), as lacunas do Documento B de Contratos Regionais: alvo individual por contrato, regra de contagem de Caça (só vitória Manual Solo) e Coleta (só ganho pós-ativação, exclui estoque prévio/prêmio próprio/transferência), regra de Material de recompensa (primeiro Material Básico regional; Coleta paga o próprio Material-alvo), os dois mapeamentos de Material (Ferro da Estrada → Ferro de Fuligem; Coleta das Planícies → Bronze de Marco), recalibração de XP/Coroas para ~25% (faixa 20–30%) do ganho de referência da região, e ausência de teto diário adicional (mantém 3 contratos simultâneos + renovação 24h). Não altera sistemas fora do escopo de Contratos Regionais.
+
 ## Fontes regionais vigentes
 
 As Fontes Regionais FINAL possuem o mesmo nível hierárquico entre si dentro de seus respectivos escopos. Todas permanecem subordinadas à Fonte Mestra v1.6.0 para sistemas globais e não podem sobrescrever conteúdo de outra Região.
