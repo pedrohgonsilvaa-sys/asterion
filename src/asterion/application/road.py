@@ -18,6 +18,7 @@ from asterion.application.combat_configuration_guard import (
     CombatConfigurationLocked,
     lock_for_combat_configuration_mutation,
 )
+from asterion.application.contracts import record_hunt_victory, record_material_gain
 from asterion.application.equipment import equipment_instance_payload
 from asterion.application.equipment_configuration import (
     load_equipment_configuration,
@@ -2093,6 +2094,11 @@ class RoadService:
                 activity.status = "completed"
                 if activity.content_id == HUNT_CONTENT:
                     await self._settle_hunt(s, c, activity, encounter.id, bestiary_evidence_ids)
+                    if context is not None:
+                        # Contratos Regionais §6.1: only a solo manual hunt victory counts.
+                        await record_hunt_victory(
+                            s, c, local_id=context.local_id, action_started_at=context.started_at
+                        )
                     return await self._hunt_victory_view(s, c, activity)
                 else:
                     attempt = await s.scalar(
@@ -7126,6 +7132,7 @@ class RoadService:
             is not None
         ):
             return
+        await record_material_gain(s, c, material_id, quantity, source_key)
         remaining = await self._deliver_material_to_inventory(s, c, material_id, quantity, bound)
         if remaining:
             await self._pending(

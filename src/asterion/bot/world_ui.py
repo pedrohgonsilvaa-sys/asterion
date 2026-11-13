@@ -2,6 +2,7 @@ from html import escape
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from asterion.application.contracts import is_enabled as contracts_enabled
 from asterion.application.legacy import LegacyView
 from asterion.application.world import WorldView
 from asterion.bot.creation_ui import Screen
@@ -65,6 +66,10 @@ def render_adventure(
         ],
         [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
     ]
+    if contracts_enabled():
+        keyboard.insert(
+            -1, [InlineKeyboardButton(text="Quadro de Contratos", callback_data="ctr:root")]
+        )
     return Screen(text, "adventure", InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 
