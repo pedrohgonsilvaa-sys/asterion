@@ -237,7 +237,7 @@ def settings_router(
         if view is None:
             await query.answer("Personagem indisponível.", show_alert=True)
             return
-        if view.deletion_preview_id is None:
+        if view.deletion_preview_id is None and not view.deletion_pending:
             await query.answer("Esta ação expirou.", show_alert=True)
             if isinstance(query.message, Message):
                 await present(query.message, render_expired_action(), images, edit=True)

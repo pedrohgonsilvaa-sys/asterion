@@ -534,3 +534,70 @@ async def test_start_and_menu_show_pending_deletion_until_cancelled(database):
     screen = _last_screen(bot)
     assert "Conta" in screen.text and "Exclusão Pendente" not in screen.text
     await bot.session.close()
+
+
+@pytest.mark.asyncio
+async def test_delete_flow_through_dispatcher_deletes_after_typed_name(database):
+    actor = 893030
+    await _seed_road(database, actor=actor)
+    sessions = database[1]
+    service = _service(sessions)
+    surfaces = CharacterSurfacesService(sessions, "ocaso")
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(settings_router(service, surfaces, {}))
+    bot = Bot("123456:local-test-token")
+    responses = iter(range(2000, 2040))
+
+    async def telegram_response(_bot, method, **_kwargs):
+        if isinstance(method, SendMessage):
+            return TelegramMessage(
+                message_id=next(responses),
+                date=1,
+                chat=Chat(id=actor, type="private"),
+                from_user=User(id=123456, is_bot=True, first_name="Asterion"),
+                text=method.text,
+            )
+        return True
+
+    bot.session.make_request = AsyncMock(side_effect=telegram_response)
+    await dispatcher.feed_raw_update(
+        bot, callback_update("account:delete", actor=actor, update_id=1)
+    )
+    screen = _last_screen(bot)
+    assert "Tem certeza" in screen.text
+    await dispatcher.feed_raw_update(
+        bot, callback_update("account:d:input", actor=actor, update_id=2)
+    )
+    prompt = _last_screen(bot)
+    assert prompt.text.startswith("⚠️ Para EXCLUIR")
+    name = prompt.text.rsplit(":", 1)[1].strip()
+    reply_to = {
+        "message_id": 2001,
+        "date": 1,
+        "chat": {"id": actor, "type": "private"},
+        "from": {"id": 123456, "is_bot": True, "first_name": "Asterion"},
+        "text": prompt.text,
+    }
+    await dispatcher.feed_raw_update(
+        bot, _message_update(name, actor=actor, update_id=3, reply_to=reply_to)
+    )
+    assert "excluído" in _last_screen(bot).text
+    assert await service.account(actor) is None
+    await bot.session.close()
+
+
+@pytest.mark.asyncio
+async def test_delete_now_shortens_legacy_pending_deletion(database):
+    actor = 893031
+    await _seed_road(database, actor=actor)
+    service = _service(database[1])
+    now = datetime.now(UTC)
+    confirmation = await service.start_deletion_confirmation(actor, now=now)
+    await service.request_deletion(
+        actor, confirmation.name, confirmation.deletion_preview_id, now=now
+    )
+    assert (await service.account(actor, now=now)).deletion_pending
+    with pytest.raises(AccountRejected, match="name_mismatch"):
+        await service.delete_now(actor, "errado", now=now)
+    assert await service.delete_now(actor, confirmation.name, now=now) == confirmation.name
+    assert await service.account(actor, now=now) is None
