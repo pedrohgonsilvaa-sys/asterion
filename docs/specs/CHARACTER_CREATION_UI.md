@@ -6,7 +6,9 @@
 
 A Criação de Personagem segue o fluxo autoritativo da Fonte Mestra:
 
-**Nome → Raça → Classe → Confirmação Final → Prólogo jogável “Cinzas na Estrada”.**
+**Nome → Gênero → Raça → Classe → Confirmação Final → Prólogo jogável “Cinzas na Estrada”.**
+
+> Gênero foi acrescentado por decisão do autor em 2026-11-13; a Fonte Mestra não o define. Valores: Masculino e Feminino (as duas apresentações do lote visual inicial, ver Matriz de Produção Visual v2.0 §1).
 
 Regras gerais:
 
@@ -56,6 +58,24 @@ Nome que o sistema não aceita por unicidade, reserva, moderação ou regra equi
 ⚠️ Esse nome não pode ser utilizado. Escolha outro nome para continuar. Envie outro nome no chat.
 ```
 
+### 45.1b Seleção de Gênero
+
+```text
+🎭 Gênero
+
+Escolha como seu personagem se apresenta ao mundo.
+
+1 Masculino
+2 Feminino
+
+[Masculino] [Feminino]
+
+[← Nome]
+```
+
+- A escolha é feita em um toque, sem tela de detalhe.
+- `[← Nome]` volta ao Nome sem apagar as demais escolhas.
+
 ### 45.2 Seleção de Raça
 
 Lista:
@@ -75,7 +95,7 @@ Povos distintos sobreviveram às marcas deixadas sobre Asterion. Sua origem acom
 
 [1] [2] [3] [4] [5]
 
-[← Nome]
+[← Gênero]
 ```
 
 A lista resume identidade. O detalhe de cada Raça precisa mostrar **o efeito racial completo**, porque a escolha é permanente.
@@ -471,6 +491,7 @@ A confirmação final é a única confirmação obrigatória do fluxo, porque to
 Seu nome foi escolhido, sua origem foi definida e sua vocação começa a tomar forma. Ao confirmar, sua jornada por Asterion terá início.
 
 🏷️ Nome · Luiken
+🎭 Gênero · Masculino
 🕯️ Raça · Remanescente
 🧩 Adaptabilidade · Passiva Racial
 🗡️ Classe · Errante
@@ -479,12 +500,14 @@ Seu nome foi escolhido, sua origem foi definida e sua vocação começa a tomar 
 
 [Confirmar Personagem]
 
-[Nome] [Raça] [Classe]
+[Nome] [Gênero]
+
+[Raça] [Classe]
 
 [← Classes]
 ```
 
 - Não mostrar tag de Guilda.
 - Não repetir Caminhos Futuros nesta tela; eles já foram apresentados no detalhe da Classe.
-- `[Nome]`, `[Raça]` e `[Classe]` permitem revisar o respectivo passo e retornar à confirmação sem apagar as demais escolhas válidas.
+- `[Nome]`, `[Gênero]`, `[Raça]` e `[Classe]` permitem revisar o respectivo passo e retornar à confirmação sem apagar as demais escolhas válidas.
 - Após confirmar, entrar diretamente no prólogo; não criar tela de sucesso.
