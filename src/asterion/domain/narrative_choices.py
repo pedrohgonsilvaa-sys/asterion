@@ -92,6 +92,7 @@ class ChoiceOption:
     character_memory_tags: tuple[str, ...]
     npc_memory_targets: tuple[NpcMemoryTarget, ...]
     requires: tuple[IdentityCondition, ...] = ()
+    memory_type: str = ""
 
     def available_to(self, race: str, character_class: str) -> bool:
         return all(condition.matches(race, character_class) for condition in self.requires)
@@ -160,6 +161,7 @@ def build_node(data: Mapping) -> ChoiceNode:
                 for target in item["npc_memory_targets"]
             ),
             requires=tuple(_condition(cond) for cond in item.get("requires", ())),
+            memory_type=item.get("memory_type", ""),
         )
         for item in data["options"]
     )
@@ -180,7 +182,7 @@ def build_node(data: Mapping) -> ChoiceNode:
                 knowledge_holders=tuple(hook["knowledge_holders"]),
                 summary=hook["summary"],
             )
-            for hook in data["future_hooks"]
+            for hook in data.get("future_hooks", ())
         ),
         identity_conditions=tuple(_condition(cond) for cond in data["identity_conditions"]),
     )
@@ -188,7 +190,32 @@ def build_node(data: Mapping) -> ChoiceNode:
     return node
 
 
+PROLOGUE_MISSION_ID = "PRO"
+PROLOGUE_KIND = "prologo"
+
+
+def _validate_prologue_node(node: ChoiceNode) -> None:
+    """The Prologue has no Quest and no NPC witness: character memory only (Documento A)."""
+    if node.mission_id != PROLOGUE_MISSION_ID or len(node.options) != 3:
+        raise ValueError(f"{node.choice_id}: prologue node needs mission PRO and 3 options.")
+    if node.future_hooks:
+        raise ValueError(f"{node.choice_id}: prologue hooks are pending the author.")
+    for item in node.options:
+        if item.npc_memory_targets or item.requires:
+            raise ValueError(f"{node.choice_id}/{item.option_id}: no NPC memory or gate.")
+        tags = item.character_memory_tags
+        if len(tags) != 2 or not set(tags) <= TENDENCIES:
+            raise ValueError(f"{node.choice_id}/{item.option_id}: two known tags required.")
+        if item.memory_type not in MEMORY_KINDS:
+            raise ValueError(f"{node.choice_id}/{item.option_id}: unknown memory type.")
+
+
 def validate_node(node: ChoiceNode) -> None:
+    if node.mission_kind == PROLOGUE_KIND:
+        _validate_prologue_node(node)
+        if BACKFILL_OPTION in {item.option_id for item in node.options}:
+            raise ValueError(f"{node.choice_id}: option id is reserved.")
+        return
     if node.mission_kind not in {"principal", "secundaria"}:
         raise ValueError(f"{node.choice_id}: contracts never carry narrative nodes.")
     if len(node.options) < 2 or len({item.option_id for item in node.options}) != len(
@@ -255,6 +282,26 @@ def narrative_catalog() -> ChoiceCatalog:
     if data.get("version") != CATALOG_VERSION:
         raise ValueError("Narrative catalog version mismatch.")
     return build_catalog(data["nodes"])
+
+
+def build_prologue_catalog(nodes: Iterable[Mapping]) -> ChoiceCatalog:
+    built: dict[str, ChoiceNode] = {}
+    for data in nodes:
+        node = build_node(data)
+        if node.mission_kind != PROLOGUE_KIND or node.choice_id in built:
+            raise ValueError(f"{node.choice_id}: not a unique prologue node.")
+        built[node.choice_id] = node
+    return ChoiceCatalog(built)
+
+
+@cache
+def prologue_catalog() -> ChoiceCatalog:
+    """The two Prologue nodes (Documento A), kept apart from the 72 mission nodes."""
+    raw = resources.files("asterion.domain").joinpath("narrative_choices_prologue_catalog.json")
+    data = json.loads(raw.read_text(encoding="utf-8"))
+    if data.get("version") != CATALOG_VERSION:
+        raise ValueError("Prologue catalog version mismatch.")
+    return build_prologue_catalog(data["nodes"])
 
 
 NARRATIVE_MISSION_IDS = frozenset(
