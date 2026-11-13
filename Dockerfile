@@ -13,4 +13,8 @@ RUN pip install .
 COPY alembic.ini ./
 COPY alembic ./alembic
 
+# As imagens (assets/, ~1 GB) nao entram na imagem: ficam fora do Git e sao
+# montadas como volume somente leitura em /app/assets (veja os arquivos compose).
+RUN mkdir -p /app/assets
+
 CMD ["asterion-api"]

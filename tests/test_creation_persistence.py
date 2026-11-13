@@ -19,7 +19,7 @@ async def click(service, actor, state, action):
 async def ready(service, actor=1, name="Luiken"):
     state = await service.start(actor)
     state = await service.name(actor, name, 1)
-    for action in ("r0", "choose", "c1", "choose"):
+    for action in ("g0", "r0", "choose", "c1", "choose"):
         state = await click(service, actor, state, action)
     assert state.step == "confirm"
     return state
@@ -47,7 +47,7 @@ async def test_restart_every_step_including_detail_and_errors(service, database)
     await reconnect(state)
     state = await service.name(1, "Luiken", 2)
     await reconnect(state)
-    for action in ("r0", "choose", "c1", "choose"):
+    for action in ("g0", "r0", "choose", "c1", "choose"):
         state = await click(service, 1, state, action)
         await reconnect(state)
     state = await click(service, 1, state, "confirm")
@@ -68,6 +68,9 @@ async def test_navigation_and_back_buttons(service):
         assert state.step == expected
     state = await service.name(1, "LUIKEN", 2)
     for action, expected in [
+        ("g0", "race"),
+        ("backgender", "gender"),
+        ("g1", "race"),
         ("r0", "race:remanescente"),
         ("races", "race"),
         ("r1", "race:velado"),
@@ -85,7 +88,12 @@ async def test_navigation_and_back_buttons(service):
     ]:
         state = await click(service, 1, state, action)
         assert state.step == expected
-    assert (state.name, state.race, state.character_class) == ("Luiken", "alvorano", "errante")
+    assert (state.name, state.gender, state.race, state.character_class) == (
+        "Luiken",
+        "feminino",
+        "alvorano",
+        "errante",
+    )
 
 
 async def test_confirmation_edits_preserve_other_choices(service):
@@ -98,6 +106,9 @@ async def test_confirmation_edits_preserve_other_choices(service):
         "remanescente",
         "errante",
     )
+    for action in ("gender", "g1"):
+        state = await click(service, 1, state, action)
+    assert (state.step, state.name, state.gender) == ("confirm", "Aster", "feminino")
     for action in ("race", "r4", "choose"):
         state = await click(service, 1, state, action)
     assert (state.step, state.name, state.race, state.character_class) == (
@@ -121,8 +132,8 @@ async def test_stale_duplicate_foreign_and_incompatible_callbacks(service, datab
     state = await service.name(1, "Luiken", 1)
     device_two = CreationService(database[1], "ocaso")
     states = await asyncio.gather(
-        click(service, 1, state, "r0"),
-        click(device_two, 1, state, "r0"),
+        click(service, 1, state, "g0"),
+        click(device_two, 1, state, "g0"),
     )
     current = await service.start(1)
     assert states == [current, current]
@@ -157,8 +168,14 @@ async def test_concurrent_confirmation_is_idempotent_across_devices(service, dat
         assert await session.scalar(select(func.count()).select_from(Character)) == 1
         character = await session.scalar(select(Character))
         draft = await session.scalar(select(CreationDraft))
-        assert (character.name, character.race, character.character_class) == (
+        assert (
+            character.name,
+            character.gender,
+            character.race,
+            character.character_class,
+        ) == (
             "Luiken",
+            "masculino",
             "remanescente",
             "errante",
         )
@@ -281,5 +298,36 @@ async def test_callback_without_draft_cannot_create_state(service, database):
 async def test_forged_actions_are_safe_and_do_not_change_version(service):
     await service.start(1)
     state = await service.name(1, "Luiken", 1)
-    for action in ("r²", "r-1", "r9", "r00", "r999999999999", "c0", "confirm", "choose"):
+    assert state.step == "gender"
+    for action in (
+        "r0", "r²", "r-1", "r9", "r00", "r999999999999", "g2", "g-1", "g00",
+        "c0", "confirm", "choose",
+    ):
         assert await click(service, 1, state, action) == state
+
+
+async def test_confirm_without_gender_asks_gender_then_returns_to_confirm(service, database):
+    state = await ready(service)
+    async with database[1].begin() as session:
+        draft = await session.scalar(select(CreationDraft))
+        draft.gender = None
+    asked = await click(service, 1, state, "confirm")
+    assert (asked.step, asked.editing, asked.name, asked.race) == (
+        "gender",
+        True,
+        "Luiken",
+        "remanescente",
+    )
+    back = await click(service, 1, asked, "g1")
+    assert (back.step, back.gender) == ("confirm", "feminino")
+    done = await click(service, 1, back, "confirm")
+    assert (done.step, done.gender) == (PROLOGUE, "feminino")
+
+
+async def test_character_gender_constraint(service, database):
+    state = await ready(service)
+    await click(service, 1, state, "confirm")
+    with pytest.raises(IntegrityError):
+        async with database[1].begin() as session:
+            character = await session.scalar(select(Character))
+            character.gender = "invented"

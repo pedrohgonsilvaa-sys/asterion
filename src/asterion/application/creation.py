@@ -81,6 +81,7 @@ class CreationService:
                 id=row.id,
                 step=row.stage,
                 name=row.name,
+                gender=row.gender,
                 race=row.race,
                 character_class=row.character_class,
             )
@@ -141,8 +142,10 @@ class CreationService:
                     error=None,
                     rejected_name=None,
                     step="confirm"
-                    if state.editing and state.race and state.character_class
-                    else "race",
+                    if state.editing and state.gender and state.race and state.character_class
+                    else "race"
+                    if state.gender
+                    else "gender",
                     editing=False,
                 )
             self._save(row, updated)
@@ -180,6 +183,10 @@ class CreationService:
     ) -> Creation:
         if not (state.name and state.race and state.character_class):
             return state
+        if not state.gender:
+            # Draft started before the gender step existed: ask, then come back here.
+            self._save(row, replace(state, step="gender", editing=True))
+            return self.snapshot(row)
         allowed = await self._name_allowed(session, state.name)
         character_id = None
         if allowed:
@@ -192,6 +199,7 @@ class CreationService:
                     telegram_id=row.telegram_id,
                     server_id=row.server_id,
                     name=state.name,
+                    gender=state.gender,
                     race=state.race,
                     character_class=state.character_class,
                     stage=PROLOGUE,
@@ -222,6 +230,7 @@ class CreationService:
             id=character_id,
             step=PROLOGUE,
             name=state.name,
+            gender=state.gender,
             race=state.race,
             character_class=state.character_class,
         )

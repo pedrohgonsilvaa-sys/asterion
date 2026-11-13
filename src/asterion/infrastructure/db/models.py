@@ -49,6 +49,7 @@ class CreationDraft(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     step: Mapped[str] = mapped_column(String(48), nullable=False, default="name")
     name: Mapped[str | None] = mapped_column(String(16))
+    gender: Mapped[str | None] = mapped_column(String(16))
     race: Mapped[str | None] = mapped_column(String(24))
     character_class: Mapped[str | None] = mapped_column(String(24))
     editing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -65,6 +66,10 @@ class Character(Base):
         CheckConstraint(
             "race IN ('remanescente','velado','cinereo','hemario','alvorano')",
             name="ck_character_race",
+        ),
+        CheckConstraint(
+            "gender IS NULL OR gender IN ('masculino','feminino')",
+            name="ck_character_gender",
         ),
         CheckConstraint(
             "character_class IN ('sentinela','errante','vigia','tecelao','oraculo','luminar')",
@@ -93,6 +98,8 @@ class Character(Base):
     telegram_id: Mapped[int] = mapped_column(ForeignKey("accounts.telegram_id"), nullable=False)
     server_id: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(16), nullable=False)
+    # NULL only for characters created before the gender step existed.
+    gender: Mapped[str | None] = mapped_column(String(16))
     race: Mapped[str] = mapped_column(String(24), nullable=False)
     character_class: Mapped[str] = mapped_column(String(24), nullable=False)
     selected_path: Mapped[str | None] = mapped_column(String(24))

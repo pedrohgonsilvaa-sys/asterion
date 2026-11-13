@@ -113,9 +113,9 @@ async def test_public_start_creation_tutorial_and_p1_survive_reconnect(database)
     )
     update_id += 1
     state = await creation.resume(actor)
-    assert state is not None and state.step == "race"
+    assert state is not None and state.step == "gender"
 
-    for action in ("r0", "choose", "c0", "choose", "confirm"):
+    for action in ("g0", "r0", "choose", "c0", "choose", "confirm"):
         callback = CreationCallback(
             draft=state.id.hex,
             version=state.version,

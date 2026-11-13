@@ -1,0 +1,16 @@
+# Fora do contexto de build (ficam no disco e sao montados por volume).
+assets/
+balanceamento/
+.worktrees/
+.venv/
+.git/
+*.zip
+build/
+**/__pycache__/
+.pytest_cache/
+.e1_pytest_*/
+.env
+.env.*
+!.env.example
+*.md
+!README.md

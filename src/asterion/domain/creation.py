@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass, replace
 from uuid import UUID
 
+GENDERS = ("masculino", "feminino")
 RACES = ("remanescente", "velado", "cinereo", "hemario", "alvorano")
 CLASSES = ("sentinela", "errante", "vigia", "tecelao", "oraculo", "luminar")
 PROLOGUE = "cinzas_na_estrada:intro"
@@ -32,6 +33,7 @@ class Creation:
     version: int = 0
     step: str = "name"
     name: str | None = None
+    gender: str | None = None
     race: str | None = None
     character_class: str | None = None
     editing: bool = False
@@ -42,10 +44,19 @@ class Creation:
 def navigate(state: Creation, action: str) -> Creation | None:
     """Allow only buttons actually offered by the current authoritative page."""
     step = state.step
-    if action in ("name", "race", "class") and step == "confirm":
+    if action in ("name", "gender", "race", "class") and step == "confirm":
         return replace(state, step=action, editing=True, error=None, rejected_name=None)
-    if action == "backname" and step == "race":
+    if action == "backname" and step == "gender":
         return replace(state, step="name", error=None, rejected_name=None)
+    if action == "backgender" and step == "race":
+        return replace(state, step="gender")
+    if step == "gender" and action in {f"g{i}" for i in range(len(GENDERS))}:
+        return replace(
+            state,
+            gender=GENDERS[int(action[1:])],
+            step="confirm" if state.editing and state.race and state.character_class else "race",
+            editing=False,
+        )
     if action == "races" and (step.startswith("race:") or step == "class"):
         return replace(state, step="race")
     if action == "classes" and (step.startswith("class:") or step == "confirm"):
