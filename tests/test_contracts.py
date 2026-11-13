@@ -195,6 +195,33 @@ def test_screens_respect_the_button_limit_and_callback_size():
     assert len([b for row in screens[0].keyboard.inline_keyboard for b in row]) == 8
 
 
+def test_xp_and_crowns_sit_in_the_25_percent_band_of_the_region_reference():
+    """Fechamento §8: XP/Coroas ficam entre 20% e 30% do ganho de referencia da regiao."""
+    from asterion.application.progression import level_xp
+    from asterion.domain.economy import crowns_per_level
+
+    for region, (minimum, _) in cfg.LEVEL_BAND.items():
+        xp_ref = level_xp(minimum)
+        crowns_ref = crowns_per_level(minimum)
+        for contract_type in cfg.ACTIVE_TYPES:
+            reward = cfg.reward_profile(f"REWARD_{region}_{contract_type}")
+            assert 0.20 <= reward.xp / xp_ref <= 0.30, f"{region}_{contract_type} xp fora da faixa"
+            assert 0.20 <= reward.crowns / crowns_ref <= 0.30, (
+                f"{region}_{contract_type} coroas fora da faixa"
+            )
+
+
+def test_material_gain_hook_is_never_reachable_from_trade_or_market():
+    """Fechamento §4.4: transferencia/comercio entre jogadores nunca conta para Coleta."""
+    forbidden = ("market.py", "trades.py")
+    for path in SRC.rglob("*.py"):
+        if path.name not in forbidden:
+            continue
+        text = path.read_text(encoding="utf-8")
+        assert "record_material_gain" not in text, path.name
+        assert "deliver_material" not in text, path.name
+
+
 # ------------------------------------------------------------------- AC-01 a AC-24
 
 

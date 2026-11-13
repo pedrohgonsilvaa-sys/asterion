@@ -1,12 +1,12 @@
 """Valores de jogo dos Contratos Regionais (Documento B §38).
 
-PROPOSTA A APROVAR PELO AUTOR. Este e o UNICO arquivo com numeros do sistema:
-nenhum outro modulo pode repetir recompensa, faixa de nivel, duracao, limite ou
-multiplicador. O sistema nasce DESATIVADO (`ASTERION_CONTRACTS_ENABLED=false`) ate
-o autor resolver `docs/CONTRATOS_REGIONAIS_CONFLITOS.md`.
+Fechamento canonico: ASTERION_CONTRATOS_REGIONAIS_DECISOES_FECHADAS_v1_0_0.md.
+Este e o UNICO arquivo com numeros do sistema: nenhum outro modulo pode repetir
+recompensa, faixa de nivel, duracao, limite ou multiplicador.
 
-Linhas marcadas `PENDENTE_AUTOR` nao existem no Documento B: sao valores minimos
-para o sistema funcionar e precisam de decisao explicita.
+XP e Coroas foram recalibrados para ~25% (faixa 20-30%) do ganho de referencia
+da regiao (`level_xp`/`crowns_per_level` no nivel minimo da faixa), conforme o
+fechamento §8. Os demais valores (§2/§7) seguem o mesmo fechamento.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 
-STATUS = "PROPOSTA_A_APROVAR"
+STATUS = "APROVADO"
 
 # --- §38: limites -----------------------------------------------------------
 SIMULTANEOUS_CONTRACTS = 3
@@ -57,32 +57,34 @@ LEVEL_BAND = {
 }
 GATE_QUEST = {"R1": "P1", "R2": "P6", "R3": "P12", "R4": "P18", "R5": "P24", "R6": "P30"}
 
-# --- §38: perfis de recompensa (xp, coroas, materiais) ----------------------
+# --- §38/fechamento §8: perfis de recompensa (xp, coroas, materiais) --------
+# xp e coroas recalibrados para ~25% (faixa 20-30%) do ganho de referencia da
+# regiao; materiais seguem a contagem original (1 UM = 2 Materiais, §49.7).
 REWARD_PROFILES: dict[str, tuple[int, int, int]] = {
-    "REWARD_R1_CACA": (120, 20, 2),
-    "REWARD_R1_COLETA": (100, 15, 3),
-    "REWARD_R1_ENTREGA": (110, 25, 2),
-    "REWARD_R1_INVESTIGACAO": (105, 20, 2),
-    "REWARD_R2_CACA": (260, 45, 2),
-    "REWARD_R2_COLETA": (220, 35, 3),
-    "REWARD_R2_ENTREGA": (240, 50, 2),
-    "REWARD_R2_INVESTIGACAO": (230, 45, 2),
-    "REWARD_R3_CACA": (480, 80, 3),
-    "REWARD_R3_COLETA": (410, 65, 4),
-    "REWARD_R3_ENTREGA": (440, 90, 3),
-    "REWARD_R3_INVESTIGACAO": (425, 80, 3),
-    "REWARD_R4_CACA": (850, 140, 3),
-    "REWARD_R4_COLETA": (720, 115, 4),
-    "REWARD_R4_ENTREGA": (780, 155, 3),
-    "REWARD_R4_INVESTIGACAO": (750, 140, 3),
-    "REWARD_R5_CACA": (1450, 240, 4),
-    "REWARD_R5_COLETA": (1230, 195, 5),
-    "REWARD_R5_ENTREGA": (1330, 265, 4),
-    "REWARD_R5_INVESTIGACAO": (1280, 240, 4),
-    "REWARD_R6_CACA": (2300, 380, 5),
-    "REWARD_R6_COLETA": (1950, 310, 6),
-    "REWARD_R6_ENTREGA": (2100, 420, 5),
-    "REWARD_R6_INVESTIGACAO": (2050, 380, 5),
+    "REWARD_R1_CACA": (1200, 30, 2),
+    "REWARD_R1_COLETA": (1080, 27, 3),
+    "REWARD_R1_ENTREGA": (1140, 29, 2),
+    "REWARD_R1_INVESTIGACAO": (1080, 27, 2),
+    "REWARD_R2_CACA": (4375, 65, 2),
+    "REWARD_R2_COLETA": (3938, 59, 3),
+    "REWARD_R2_ENTREGA": (4156, 62, 2),
+    "REWARD_R2_INVESTIGACAO": (3938, 59, 2),
+    "REWARD_R3_CACA": (9675, 105, 3),
+    "REWARD_R3_COLETA": (8708, 95, 4),
+    "REWARD_R3_ENTREGA": (9191, 100, 3),
+    "REWARD_R3_INVESTIGACAO": (8708, 95, 3),
+    "REWARD_R4_CACA": (17150, 140, 3),
+    "REWARD_R4_COLETA": (15435, 126, 4),
+    "REWARD_R4_ENTREGA": (16293, 133, 3),
+    "REWARD_R4_INVESTIGACAO": (15435, 126, 3),
+    "REWARD_R5_CACA": (26750, 180, 4),
+    "REWARD_R5_COLETA": (24075, 162, 5),
+    "REWARD_R5_ENTREGA": (25413, 171, 4),
+    "REWARD_R5_INVESTIGACAO": (24075, 162, 4),
+    "REWARD_R6_CACA": (38525, 215, 5),
+    "REWARD_R6_COLETA": (34673, 194, 6),
+    "REWARD_R6_ENTREGA": (36599, 204, 5),
+    "REWARD_R6_INVESTIGACAO": (34673, 194, 5),
 }
 
 
@@ -98,7 +100,7 @@ def reward_profile(key: str) -> Reward:
     return Reward(xp, crowns, materials)
 
 
-# --- PENDENTE_AUTOR: o §36 nao define alvos nem materiais de recompensa -----
+# --- Fechamento §2.2/§7.1: alvos e materiais de recompensa ------------------
 # Quantos objetivos cada tipo exige (Coleta = quantidade do Material exigido).
 TARGET_BY_TYPE = {"CACA": 1, "COLETA": 3, "ENTREGA": 1, "INVESTIGACAO": 1}
 # Material de recompensa dos tipos sem Material proprio (Caca/Entrega/Investigacao):
