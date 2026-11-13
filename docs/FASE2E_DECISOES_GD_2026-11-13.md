@@ -19,12 +19,22 @@ Conferência feita contra o código do `main`, não contra um snapshot de releas
 - Das 198 receitas, 0 existem no código; os 66 `output_id` distintos também não.
 - Dos 46 itens "existentes", 20 aparecem no código; os 26 restantes não puderam ser confirmados aqui.
 
+## O que foi publicado (autorizado pelo autor em 2026-11-13)
+
+Só as **regras de sistema**, que não dependem de ID de release:
+
+- `ASTERION_GDD_Estrutural_v1.7.0_Fonte_Mestra.md` (substitui a v1.6.0): Proficiências e Treinamento, categorias de proteção, Escudo, kits de Origem, núcleos corporais por categoria e núcleo de Escudo, pesos de Saque v0.4, permanência no Legado.
+- `ASTERION_CONTRATO_GLOBAL_WEAPON_METADATA_v1.1.0_FINAL.md` (substitui a v1.0.0): Proficiência como eixo separado, Escudo, lista vazia explícita, Confins do Véu (27 armas).
+- `SOURCE_AUTHORITY.md` (raiz e `docs/`) aponta para as duas versões novas.
+
+As versões v1.6.0 e v1.0.0 ficam no repositório como registro histórico. A publicação não altera código: a implementação da Fase 2E continua pendente.
+
 ## O que continua NO-GO
 
 As aprovações acima fecham as decisões de Game Design, mas estes gates são técnicos e seguem abertos:
 
 1. **Snapshot de release.** Não existe export assinado e com hash do release (contrato v1.7.0). Sem ele, os 226 IDs, os 160 vínculos existentes, os 24 vínculos de Campanha e os materiais das receitas não foram validados no release.
-2. **Publicação canônica** do GDD, do contrato v1.1.0 e dos adendos regionais, com a atualização de `SOURCE_AUTHORITY.md` e o baseline TDO v1.0.17.
+2. **Publicação dos IDs e adendos regionais.** Ainda não publicados: IDs de template, receitas, vínculos, elegibilidade individual de Saque (os 696 pares) e os adendos das Fontes Regionais. Dependem do snapshot (item 1).
 3. **Importação, migration, flag, merge e deploy** da Fase 2E.
 4. **Regra de guarda do kit** (proteção contra perder o último loadout funcional): fora da minuta, depende de validação transacional.
 
