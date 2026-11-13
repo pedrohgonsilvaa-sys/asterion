@@ -1821,9 +1821,10 @@ A fonte do plano é `docs/PLANO_DE_ACAO.md` (trilhas A, B e C). Estado em 2026-1
 1. **Trilha A (jogo): concluída.** A1 Obras (PR 130), A2 Marcas de Legado (PR 134), A3 Serviços de Ofícios (PR 132), A4 Calendário (PR 131), A5 Flavor Text (PRs 139 e 146), A6 visuais e skins (PR 142).
 2. **Trilha B (operação): concluída.** B1 agendador (PR 125), B2 backup (PR 128), B3 deploy (PR 127), B4 rate limiting (PR 129), B5 RBAC (PRs 129 e 135), B6 métricas (PR 137), B7 E2E (PR 144). Falta só o smoke test no Telegram real, feito pelo autor.
 3. **Trilha C (fechamento):** as escolhas das partes 5 e 6 já estavam aprovadas (2026-11-11); balanceamento C6 feito (PR 147, ver §8, item 4); TDO v1.0.17 adotada (PR 145); suíte completa rodada em 2026-11-12 no `main` (0f5d07f): 3587 aprovados, 5 pulados (todos playthroughs longos opcionais, ligados por variável de ambiente), 0 falhas, em 3h16 com `-n 3`. Ela revelou que `test_db_backup_cli.py` usava nomes de banco fixos e falhava em paralelo; corrigido com nomes únicos por teste.
-4. **Conteúdo pendente:** catálogos de Eventos, Provações e Rotas vazios, revisão do Flavor Text rascunho e Dia 1 da Crônica. O que escrever e em que formato está em `docs/BRIEFING_CONTEUDO.md`.
-5. **Fase 2E:** fechar as três decisões de Game Design (IDs/release snapshot, receitas e saídas, elegibilidade de Saque) antes de qualquer integração. Publicação, importação, migration, flag, merge e deploy continuam NO-GO.
-6. **Depois:** Beta fechado no ar; por último, a Monetização (§35). A venda pela InfinitePay existe (PR 133); faltam domínio, CPF e preço.
+4. **Conteúdo:** 5 Rotas (PR 152), 11 Provações e 6 Eventos Públicos (PR 153) já estão no catálogo. O banco de Flavor Text existe (PRs 139 e 146); a revisão do rascunho não está registrada. Dia 1 da Crônica fica para depois, por decisão do autor.
+5. **Fase 2E:** as três decisões de Game Design foram aprovadas em 2026-11-13. Publicação, importação, migration, flag, merge e deploy continuam NO-GO.
+6. **Monetização (§35):** código no PR 133. Domínio `pagamentos.asterion.net.br`, preços Patrono R$ 14,90 e Passe R$ 24,90 aprovados; VPS no ar com o bot e a API. Falta o Pix real de teste (≥ R$ 1,00) e confirmar o pagamento do domínio no Registro.br.
+7. **Em andamento (2026-11-13):** Proficiências de arma v1 (branch `feat/proficiencias-armas-v1`, migration `0053`, sem commit), gênero na criação (`feat/criacao-genero`) e catálogo de imagens (`feat/imagens-assets`). Smoke test no Telegram real fica com o autor.
 
 Antes de qualquer regra de jogo, consulte `SOURCE_AUTHORITY.md`. Número que a fonte não define vai para o autor.
 
