@@ -219,7 +219,7 @@ def render_p5(view: P5View) -> Screen:
         )
     if view.kind == "elements":
         found = set(progress.get("door_elements", ()))
-        labels = ("Elemento da Estrutura 1", "Elemento da Estrutura 2", "Elemento da Estrutura 3")
+        labels = ("Batente da Porta", "Verga Entalhada", "Soleira Gasta")
         lines = [
             "🚪 Porta do Poente",
             f"📜 {P5_TITLE} · Em Andamento",
@@ -229,14 +229,14 @@ def render_p5(view: P5View) -> Screen:
         buttons = []
         for index, (key, label) in enumerate(zip(P5_ELEMENTS, labels, strict=True), 1):
             if key in found:
-                lines.append(f"{index} ✅ {label}")
+                lines.append(f"✅ {label}")
             else:
-                lines.append(f"{index} ⚪ {label}")
-                buttons.append(_button(str(index), f"p5:{version}:element:{index}"))
+                lines.append(f"⚪ {label}")
+                buttons.append([_button(label, f"p5:{version}:element:{index}")])
         return Screen(
             "\n".join(lines),
             "p5",
-            _keyboard([buttons, [_button("← Missões", "world:missions")]]),
+            _keyboard([*buttons, [_button("← Missões", "world:missions")]]),
         )
     if view.kind == "record_symbol":
         return Screen(

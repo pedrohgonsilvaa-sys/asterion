@@ -3546,7 +3546,7 @@ async def test_p24_varzeas_heal_uses_public_menu_dispatcher_and_postgres(
         button
         for row in menu.reply_markup.inline_keyboard
         for button in row
-        if button.text == "1"
+        if button.callback_data.startswith("cf:")
     )
     item_callback = CombatConsumableFlowCallback.unpack(item_button.callback_data)
     assert item_callback.item_id == item_id

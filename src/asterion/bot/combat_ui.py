@@ -572,7 +572,7 @@ def _consumable_summary(item_id: str) -> str:
 
 
 def _numeric_rows(buttons: list[InlineKeyboardButton]) -> list[list[InlineKeyboardButton]]:
-    return [buttons[index : index + 5] for index in range(0, len(buttons), 5)]
+    return [[button] for button in buttons]
 
 
 def _choice_name_and_state(
@@ -642,19 +642,19 @@ def _render_consumable_selection(view: CombatView) -> Screen:
         item_ids = _consumable_item_ids(view)
         quantities = dict(view.consumable_quantities)
         item_buttons = []
-        for index, item_id in enumerate(item_ids, start=1):
+        for item_id in item_ids:
             item = definition(item_id)
             assert item is not None
             lines.extend(
                 [
-                    f"{index} 🧪 {escape(item.name)} · {quantities.get(item_id, 0)}",
+                    f"🧪 {escape(item.name)} · {quantities.get(item_id, 0)}",
                     _consumable_summary(item_id),
                     "",
                 ]
             )
             item_buttons.append(
                 InlineKeyboardButton(
-                    text=str(index),
+                    text=item.name,
                     callback_data=CombatConsumableFlowCallback.for_step(
                         view.activity_id,
                         state.version,
@@ -684,20 +684,20 @@ def _render_consumable_selection(view: CombatView) -> Screen:
             if option.item_id == item_id:
                 target_counts[option.target_id] = target_counts.get(option.target_id, 0) + 1
         target_buttons = []
-        for index, (target_id, count) in enumerate(target_counts.items(), start=1):
+        for target_id, count in target_counts.items():
             target = state.fighters.get(target_id)
             if target is None:
                 continue
             lines.extend(
                 [
-                    f"{index} 🐺 {escape(target.name)}",
+                    f"🐺 {escape(target.name)}",
                     f"Efeitos Removíveis · {count}",
                     "",
                 ]
             )
             target_buttons.append(
                 InlineKeyboardButton(
-                    text=str(index),
+                    text=target.name,
                     callback_data=CombatConsumableFlowCallback.for_step(
                         view.activity_id,
                         state.version,
@@ -748,16 +748,16 @@ def _render_consumable_selection(view: CombatView) -> Screen:
                 if all(existing.effect_id != option.effect_id for existing in choices):
                     choices.append(option)
         effect_buttons = []
-        for index, option in enumerate(choices, start=1):
+        for option in choices:
             effect_name, state_label = _choice_name_and_state(
                 state, item_id, target_id, option.effect_id or ""
             )
             icon = "🟢" if family == ConsumableFamily.DISPELLER else "🔻"
             detail = f" · {state_label}" if state_label else ""
-            lines.extend([f"{index} {icon} {effect_name}{detail}", ""])
+            lines.extend([f"{icon} {effect_name}{detail}", ""])
             effect_buttons.append(
                 InlineKeyboardButton(
-                    text=str(index),
+                    text=effect_name,
                     callback_data=CombatConsumableFlowCallback.for_step(
                         view.activity_id,
                         state.version,

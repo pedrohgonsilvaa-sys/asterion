@@ -21,6 +21,7 @@ _REWARD_LINES = (
     "📦 Erva Cinzenta · 2 · Vinculado",
     "📦 Resíduo do Ocaso · 1 · Vinculado",
 )
+_ASH_POINT_NAMES = ("Montículo de Cinza", "Terra Revirada", "Marca na Fuligem")
 _ASH_POINTS = (
     "p2.ash_point.1",
     "p2.ash_point.2",
@@ -197,14 +198,13 @@ def render_p2(view: P2View) -> Screen:
             f"🎯 Examinar Pontos de Fuligem · {len(points)}/3",
             "",
         ]
-        buttons = []
-        for index, point_id in enumerate(_ASH_POINTS, start=1):
+        rows = []
+        for name, point_id in zip(_ASH_POINT_NAMES, _ASH_POINTS, strict=True):
             if point_id in points:
-                lines.append(f"{index} ✅ Ponto de Fuligem · {index}")
+                lines.append(f"✅ {name}")
             else:
-                lines.append(f"{index} ⚪ Ponto de Fuligem · {index}")
-                buttons.append(_button(str(index), f"p2:{version}:ash:{point_id}"))
-        rows = [buttons[index : index + 3] for index in range(0, len(buttons), 3)]
+                lines.append(f"⚪ {name}")
+                rows.append([_button(name, f"p2:{version}:ash:{point_id}")])
         rows.append([_button("← Missões", "world:missions")])
         return Screen("\n".join(lines), "p2", InlineKeyboardMarkup(inline_keyboard=rows))
 

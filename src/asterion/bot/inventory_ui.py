@@ -165,7 +165,7 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
     if entry.kind == "equipment":
         enhancement = int((entry.payload or {}).get("enhancement", 0))
         icon = SLOT_ICON.get(entry.slot or "", "🛡️")
-        lines = [f"{index} {icon} {escape(entry.title)} · +{enhancement}"]
+        lines = [f"{icon} {escape(entry.title)} · +{enhancement}"]
         meta = " · ".join(
             part
             for part in (
@@ -193,17 +193,17 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
     if entry.kind == "consumable":
         grade = f"Grau {grade_label(entry.grade)}" if entry.grade is not None else None
         metadata = f"Consumível · {grade}" if grade else "Consumível"
-        return [f"{index} 🧪 {escape(entry.title)} · {entry.quantity}", escape(metadata)]
+        return [f"🧪 {escape(entry.title)} · {entry.quantity}", escape(metadata)]
 
     if entry.kind == "material":
         icon, meta = MATERIAL_META.get(entry.key, ("🧱", "Material"))
-        lines = [f"{index} {icon} {escape(entry.title)} · {entry.quantity}", meta]
+        lines = [f"{icon} {escape(entry.title)} · {entry.quantity}", meta]
         if entry.bound:
             lines.append("🔗 Vinculado")
         return lines
 
     if entry.kind == "rune":
-        lines = [f"{index} 🔷 {escape(entry.title)} · {entry.quantity}"]
+        lines = [f"🔷 {escape(entry.title)} · {entry.quantity}"]
         meta = " · ".join(
             part
             for part in (
@@ -223,7 +223,7 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
         item_kind = payload.get("delivery_kind")
         if item_kind == "equipment":
             enhancement = int(payload.get("enhancement", 0))
-            lines = [f"{index} ⚠️ {escape(entry.title)} · +{enhancement}"]
+            lines = [f"⚠️ {escape(entry.title)} · +{enhancement}"]
             details = " · ".join(
                 part
                 for part in (
@@ -243,12 +243,12 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
                 lines.append("🔒 Protegido")
             return lines
         if item_kind == "material":
-            lines = [f"{index} ⚠️ {escape(entry.title)} · {entry.quantity}"]
+            lines = [f"⚠️ {escape(entry.title)} · {entry.quantity}"]
             if entry.bound:
                 lines.append("🔗 Vinculado")
             return lines
         if item_kind == "rune":
-            lines = [f"{index} ⚠️ 🔷 {escape(entry.title)} · {entry.quantity}"]
+            lines = [f"⚠️ 🔷 {escape(entry.title)} · {entry.quantity}"]
             if entry.rarity or entry.grade is not None:
                 details = " · ".join(
                     part
@@ -263,9 +263,9 @@ def _entry_lines(index: int, entry: InventoryEntry) -> list[str]:
                 lines.append("🔗 Vinculado")
             return lines
         if item_kind == "consumable":
-            return [f"{index} ⚠️ {escape(entry.title)} · {entry.quantity}"]
+            return [f"⚠️ {escape(entry.title)} · {entry.quantity}"]
 
-    return [f"{index} 📦 {escape(entry.title)} · {entry.quantity}"]
+    return [f"📦 {escape(entry.title)} · {entry.quantity}"]
 
 
 def page_slice(entries: tuple, page: int) -> tuple[int, int, int, tuple]:
@@ -295,10 +295,10 @@ def render_inventory(view: InventoryView, page: int = 0) -> Screen:
         text = (
             "🎒 Inventário\n\n"
             f"📦 Espaço · {view.used_slots}/{view.capacity}\n\n"
-            f"1 🛡️ Equipamentos · {view.equipment_slots}\n"
-            f"2 🧪 Consumíveis · {view.consumable_slots}\n"
-            f"3 🧱 Materiais · {view.material_slots}\n"
-            f"4 🔷 Runas · {view.rune_slots}\n"
+            f"🛡️ Equipamentos · {view.equipment_slots}\n"
+            f"🧪 Consumíveis · {view.consumable_slots}\n"
+            f"🧱 Materiais · {view.material_slots}\n"
+            f"🔷 Runas · {view.rune_slots}\n"
             f"📦 Pendentes · {view.pending_count}/{view.pending_capacity}"
             + (
                 f" · {view.blocked_delivery_count} aguardando espaço"
@@ -309,10 +309,15 @@ def render_inventory(view: InventoryView, page: int = 0) -> Screen:
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="1", callback_data="inventory:category:equipment"),
-                    InlineKeyboardButton(text="2", callback_data="inventory:category:consumables"),
-                    InlineKeyboardButton(text="3", callback_data="inventory:category:materials"),
-                    InlineKeyboardButton(text="4", callback_data="inventory:category:runes"),
+                    InlineKeyboardButton(text=label, callback_data=f"inventory:category:{key}")
+                    for label, key in (
+                        ("Equipamentos", "equipment"),
+                        ("Consumíveis", "consumables"),
+                    )
+                ],
+                [
+                    InlineKeyboardButton(text=label, callback_data=f"inventory:category:{key}")
+                    for label, key in (("Materiais", "materials"), ("Runas", "runes"))
                 ],
                 [
                     InlineKeyboardButton(text="Armazém", callback_data="warehouse:root"),
@@ -348,7 +353,7 @@ def render_inventory(view: InventoryView, page: int = 0) -> Screen:
         equipment_buttons = []
         warehouse_equipment_buttons = []
         if view.category == "equipment":
-            for index, entry in enumerate(entries, start=start + 1):
+            for entry in entries:
                 if entry.kind != "equipment":
                     continue
                 try:
@@ -357,36 +362,33 @@ def render_inventory(view: InventoryView, page: int = 0) -> Screen:
                     continue
                 equipment_buttons.append(
                     InlineKeyboardButton(
-                        text=str(index), callback_data=f"eq:v:{item_id.hex}"
+                        text=f"{entry.title} +{int((entry.payload or {}).get('enhancement', 0))}",
+                        callback_data=f"eq:v:{item_id.hex}",
                     )
                 )
                 if not entry.equipped:
                     warehouse_equipment_buttons.append(
                         InlineKeyboardButton(
-                            text=f"Guardar {index}",
+                            text=f"Guardar {entry.title}",
                             callback_data=f"warehouse:deposit:equipment:{item_id.hex}",
                         )
                     )
         consumable_buttons = [
             InlineKeyboardButton(
-                text=str(index),
+                text=entry.title,
                 callback_data=f"inventory:consumable:{entry.key}",
             )
             for index, entry in enumerate(entries, start=start + 1)
             if entry.kind == "consumable" and entry.payload is not None
         ]
-        rows = [
-            equipment_buttons[offset : offset + 5]
-            for offset in range(0, len(equipment_buttons), 5)
-        ]
+        rows = [[button] for button in equipment_buttons]
         rows.extend(
-            warehouse_equipment_buttons[offset : offset + 2]
-            for offset in range(0, len(warehouse_equipment_buttons), 2)
+            [button] for button in warehouse_equipment_buttons
         )
         if view.category in {"materials", "consumables", "runes"}:
             stack_buttons = [
                 InlineKeyboardButton(
-                    text=f"Guardar {index}",
+                    text=f"Guardar {entry.title}",
                     callback_data=(
                         f"warehouse:deposit:{entry.kind}:"
                         f"{entry.payload['warehouse_source_id'].replace('-', '')}"
@@ -396,12 +398,10 @@ def render_inventory(view: InventoryView, page: int = 0) -> Screen:
                 if entry.payload and entry.payload.get("warehouse_source_id")
             ]
             rows.extend(
-                stack_buttons[offset : offset + 2]
-                for offset in range(0, len(stack_buttons), 2)
+                [button] for button in stack_buttons
             )
         rows.extend(
-            consumable_buttons[index : index + 5]
-            for index in range(0, len(consumable_buttons), 5)
+            [button] for button in consumable_buttons
         )
         rows.extend(page_buttons(page, pages, f"inventory:category:{view.category}"))
         rows.append([InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")])
@@ -465,13 +465,13 @@ def render_inventory(view: InventoryView, page: int = 0) -> Screen:
                 lines.append(f"Origem · {origin_label(str(entry.payload['origin']))}")
     claim_buttons = [
         InlineKeyboardButton(
-            text=f"Resgatar {index}",
+            text=f"Resgatar {entry.title}",
             callback_data=f"pending:claim:{entry.key.replace('-', '')}",
         )
         for index, entry in enumerate(view.entries, start=1)
         if entry.kind in {"equipment", "material", "rune", "consumable"}
     ]
-    rows = [claim_buttons[offset : offset + 3] for offset in range(0, len(claim_buttons), 3)]
+    rows = [[button] for button in claim_buttons]
     if view.blocked_delivery_count:
         rows.append(
             [

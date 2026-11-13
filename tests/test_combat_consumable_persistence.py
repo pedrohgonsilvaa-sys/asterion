@@ -904,7 +904,7 @@ async def test_multi_effect_selections_use_stable_ids_without_consuming_on_navig
         CombatConsumableFlowCallback.unpack(button.callback_data).effect_id
         for row in purification_screen.keyboard.inline_keyboard
         for button in row
-        if button.text.isdigit()
+        if button.callback_data.startswith("cf:") and not button.text.startswith("←")
     ]
     assert purification_choices == ["d1", "d2", "e1", "e2"]
 
@@ -921,7 +921,7 @@ async def test_multi_effect_selections_use_stable_ids_without_consuming_on_navig
         CombatConsumableFlowCallback.unpack(button.callback_data).effect_id
         for row in antidote_screen.keyboard.inline_keyboard
         for button in row
-        if button.text.isdigit()
+        if button.callback_data.startswith("cf:") and not button.text.startswith("←")
     ]
     assert antidote_choices == ["d1", "d2"]
     assert await _stack_quantities(database, actor, item_ids) == dict.fromkeys(item_ids, 1)

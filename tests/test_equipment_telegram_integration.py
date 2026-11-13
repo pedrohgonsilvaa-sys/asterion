@@ -150,7 +150,7 @@ async def test_telegram_inventory_equip_unequip_and_duplicate_callback_are_persi
         actor=actor,
         update_id=9103,
     )
-    assert "1 🪖 Elmo de Cinzas · +1" in screen.text
+    assert "🪖 Elmo de Cinzas · +1" in screen.text
     detail_callback = _buttons(screen)[0].callback_data
     assert detail_callback == f"eq:v:{item_id.hex}"
 
@@ -264,7 +264,7 @@ async def test_telegram_slot_swap_and_two_handed_equipment_use_authoritative_ser
     dispatcher, telegram = _dispatcher(database), _telegram()
 
     screen = await _click(dispatcher, telegram, "eq:r", actor=actor, update_id=9201)
-    assert "3 🪖 Cabeça · Elmo Antigo · +0" in screen.text
+    assert "🪖 Cabeça · Elmo Antigo · +0" in screen.text
     screen = await _click(dispatcher, telegram, "eq:s:h:2", actor=actor, update_id=9202)
     assert "Elmo Antigo" in screen.text
     assert [button.text for button in _buttons(screen)][:2] == ["Trocar", "Desequipar"]
@@ -279,7 +279,7 @@ async def test_telegram_slot_swap_and_two_handed_equipment_use_authoritative_ser
         actor=actor,
         update_id=9204,
     )
-    assert "3 🪖 Cabeça · Elmo Novo · +0" in screen.text
+    assert "🪖 Cabeça · Elmo Novo · +0" in screen.text
     character, equipped = await _equipped_state(database, actor)
     assert equipped[EquipmentSlot.CABECA.value] == second_head
     assert character.combat_configuration_version == 3
@@ -300,8 +300,8 @@ async def test_telegram_slot_swap_and_two_handed_equipment_use_authoritative_ser
         actor=actor,
         update_id=9206,
     )
-    assert "1 🗡️ Arma Principal · Lança Longa · +0" in screen.text
-    assert "2 ⚔️ Arma Secundária · Bloqueada" in screen.text
+    assert "🗡️ Arma Principal · Lança Longa · +0" in screen.text
+    assert "⚔️ Arma Secundária · Bloqueada" in screen.text
     character, equipped = await _equipped_state(database, actor)
     assert equipped == {
         EquipmentSlot.CABECA.value: second_head,

@@ -599,10 +599,10 @@ def test_consumable_button_opens_numbered_list_even_for_one_option():
         )
     )
     assert "🧪 Consumíveis" in menu.text
-    assert "1 🧪 Poção de Cura · 2" in menu.text
+    assert "🧪 Poção de Cura · 2" in menu.text
     assert "❤️ Cura · 22% HP Máximo" in menu.text
     assert [button.text for row in menu.keyboard.inline_keyboard for button in row] == [
-        "1",
+        "Poção de Cura",
         "← Combate",
     ]
     item_callback = CombatConsumableFlowCallback.unpack(
@@ -674,18 +674,16 @@ def test_effect_selection_callbacks_carry_stable_identity_not_list_position():
         button.callback_data
         for row in screen.keyboard.inline_keyboard
         for button in row
-        if button.text.isdigit()
+        if button.callback_data.startswith("cf:") and not button.text.startswith("←")
     ]
     restored = [CombatConsumableFlowCallback.unpack(value) for value in callbacks]
     assert [callback.effect_id for callback in restored] == ["e9", "ea"]
     assert all(callback.item_id == "consumable.purification" for callback in restored)
     assert all(callback.target_id == "player" for callback in restored)
     assert all(len(value.encode()) <= 64 for value in callbacks)
-    assert [button.text for row in screen.keyboard.inline_keyboard for button in row] == [
-        "1",
-        "2",
-        "← Consumíveis",
-    ]
+    labels = [button.text for row in screen.keyboard.inline_keyboard for button in row]
+    assert len(labels) == 3 and labels[-1] == "← Consumíveis"
+    assert not any(label.isdigit() for label in labels)
 
 
 def test_combat_button_is_absent_without_any_eligible_option():
@@ -737,7 +735,7 @@ def test_dispeller_target_and_effect_screens_use_numeric_stable_choices():
         CombatConsumableFlowCallback.unpack(button.callback_data)
         for row in target_screen.keyboard.inline_keyboard
         for button in row
-        if button.text.isdigit()
+        if button.callback_data.startswith("cf:") and not button.text.startswith("←")
     ]
     assert [callback.target_id for callback in target_callbacks] == ["enemy", "enemy2"]
 
@@ -759,11 +757,11 @@ def test_dispeller_target_and_effect_screens_use_numeric_stable_choices():
     )
     assert "✨ Dissipador · Escolha o Efeito" in effect_screen.text
     assert "🐺 Cão Cinéreo" in effect_screen.text
-    assert [button.text for row in effect_screen.keyboard.inline_keyboard for button in row] == [
-        "1",
-        "2",
-        "← Alvos",
+    effect_labels = [
+        button.text for row in effect_screen.keyboard.inline_keyboard for button in row
     ]
+    assert not any(label.isdigit() for label in effect_labels)
+    assert len(effect_labels) == 3 and effect_labels[-1] == "← Alvos"
 
 
 def test_consumable_and_ward_combat_log_lines_follow_the_ui_source():

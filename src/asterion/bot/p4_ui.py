@@ -14,6 +14,9 @@ def _button(label: str, data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=label, callback_data=data)
 
 
+_STRUCTURE_NAMES = ("Pilar de Guarda", "Marco de Guarda")
+
+
 def _keyboard(rows):
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -170,13 +173,13 @@ def render_p4(view: P4View) -> Screen:
         found = set(progress.get("structures", ()))
         lines = ["🛡️ Ruínas do Vigia · Contexto de Missão", "📜 Pedras que Ainda Vigiam", f"🎯 Examinar estruturas de guarda · {len(found)}/2", ""]
         buttons = []
-        for index, key in enumerate(P4_STRUCTURES, 1):
+        for index, (name, key) in enumerate(zip(_STRUCTURE_NAMES, P4_STRUCTURES, strict=True), 1):
             if key in found:
-                lines.append(f"{index} ✅ Estrutura de Guarda {index}")
+                lines.append(f"✅ {name}")
             else:
-                lines.append(f"{index} ⚪ Estrutura de Guarda {index}")
-                buttons.append(_button(str(index), f"p4:{version}:structure:{index}"))
-        return Screen("\n".join(lines), "p4", _keyboard([buttons, [_button("← Missões", "world:missions")]]))
+                lines.append(f"⚪ {name}")
+                buttons.append([_button(name, f"p4:{version}:structure:{index}")])
+        return Screen("\n".join(lines), "p4", _keyboard([*buttons, [_button("← Missões", "world:missions")]]))
     if view.kind == "safe_route":
         return Screen(
             "📜 Pedras que Ainda Vigiam · Em Andamento\n🛡️ Ruínas do Vigia\n\n"

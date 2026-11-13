@@ -31,10 +31,10 @@ def test_inventory_root_uses_official_categories_and_real_callbacks():
     )
     assert "🎒 Inventário" in screen.text
     assert "📦 Espaço · 12/60" in screen.text
-    assert "1 🛡️ Equipamentos · 3" in screen.text
-    assert "2 🧪 Consumíveis · 2" in screen.text
-    assert "3 🧱 Materiais · 5" in screen.text
-    assert "4 🔷 Runas · 2" in screen.text
+    assert "🛡️ Equipamentos · 3" in screen.text
+    assert "🧪 Consumíveis · 2" in screen.text
+    assert "🧱 Materiais · 5" in screen.text
+    assert "🔷 Runas · 2" in screen.text
     callbacks = _callbacks(screen)
     assert "inventory:category:equipment" in callbacks
     assert "inventory:category:consumables" in callbacks
@@ -63,7 +63,7 @@ def test_inventory_category_renders_source_supported_item_metadata():
         )
     )
     assert "🧱 Materiais" in screen.text
-    assert "1 ⛏️ Ferro de Fuligem · 23" in screen.text
+    assert "⛏️ Ferro de Fuligem · 23" in screen.text
     assert "Metal · Grau I" in screen.text
     assert "🔗 Vinculado" in screen.text
     assert _callbacks(screen) == ["inventory:root"]
@@ -168,7 +168,7 @@ def test_consumable_inventory_is_catalog_driven_and_callbacks_keep_stable_ids():
         entries=entries,
     )
     screen = render_inventory(view)
-    assert "1 🧪 Poção de Cura · 1" in screen.text
+    assert "🧪 Poção de Cura · 1" in screen.text
     assert "Consumível · Grau I" in screen.text
     assert "Preparado de Proteção Enredada · 9" in screen.text
     assert "Consumível · Grau II" in screen.text
@@ -296,7 +296,7 @@ def test_unknown_legacy_consumable_does_not_break_inventory_renderer():
             ),
         )
     )
-    assert "1 🧪 legacy.unknown · 2" in screen.text
+    assert "🧪 legacy.unknown · 2" in screen.text
     assert "Consumível" in screen.text
     assert _callbacks(screen) == ["inventory:root"]
 
@@ -645,10 +645,9 @@ def test_full_inventory_pages_fit_telegram_and_reach_every_item():
 def test_inventory_page_numbers_continue_across_pages():
     view = _category_view("equipment", _longest_equipment(16))
     screen = render_inventory(view, 1)
-    assert "16 " in screen.text
     labels = [button.text for row in screen.keyboard.inline_keyboard for button in row]
-    assert "16" in labels and "Guardar 16" in labels
-    assert "1" not in labels
+    assert any(label.startswith("Guardar ") for label in labels)
+    assert not any(label.isdigit() for label in labels)
 
 
 def test_short_inventory_list_has_no_page_controls():
@@ -670,7 +669,7 @@ def test_every_inventory_category_pages_its_stack_buttons():
         for _ in range(16)
     )
     screen = render_inventory(_category_view("materials", entries), 1)
-    assert "Guardar 16" in [
+    assert "Guardar Ferro" in [
         button.text for row in screen.keyboard.inline_keyboard for button in row
     ]
     assert "inventory:category:materials:0" in _callbacks(screen)

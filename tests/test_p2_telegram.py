@@ -312,7 +312,7 @@ async def test_p2_defeat_retry_ui_keeps_consumable_stock_and_resets_only_encount
         button.callback_data
         for row in _last_method(bot).reply_markup.inline_keyboard
         for button in row
-        if button.text.isdigit()
+        if button.callback_data.startswith("cf:")
     )
     await dispatcher.feed_raw_update(
         bot, callback_update(item_callback, update_id=984032, actor=actor)
@@ -417,7 +417,7 @@ async def test_p2_consumable_flow_is_shared_idempotent_and_reconnectable(databas
         button.callback_data
         for row in item_method.reply_markup.inline_keyboard
         for button in row
-        if button.text.isdigit()
+        if button.callback_data.startswith("cf:")
     )
     item_choice = CombatConsumableFlowCallback.unpack(item_callback)
     assert item_choice.step == "i" and item_choice.item_id == "consumable.heal"
