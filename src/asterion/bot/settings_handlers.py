@@ -27,6 +27,7 @@ from asterion.bot.character_surfaces_ui import render_profile
 from asterion.bot.creation_handlers import present
 
 RENAME_PROMPT = "Responda a esta mensagem com o novo nome do personagem."
+DELETE_PROMPT = "⚠️ Para EXCLUIR o personagem, responda a esta mensagem digitando exatamente o nome:"
 
 
 def _parse_base36(value: str) -> int:
@@ -230,6 +231,27 @@ def settings_router(
         if isinstance(query.message, Message):
             await present(query.message, render_delete_confirmation(view), images, edit=True)
 
+    @router.callback_query(F.data == "account:d:input")
+    async def delete_input(query: CallbackQuery) -> None:
+        view = await service.account(query.from_user.id)
+        if view is None:
+            await query.answer("Personagem indisponível.", show_alert=True)
+            return
+        if view.deletion_preview_id is None:
+            await query.answer("Esta ação expirou.", show_alert=True)
+            if isinstance(query.message, Message):
+                await present(query.message, render_expired_action(), images, edit=True)
+            return
+        if not isinstance(query.message, Message):
+            await query.answer()
+            return
+        await query.message.answer(
+            f"{DELETE_PROMPT} {view.name}",
+            reply_markup=ForceReply(selective=True, input_field_placeholder="Nome do personagem"),
+            parse_mode=None,
+        )
+        await query.answer("Responda à mensagem com o nome.")
+
     @router.callback_query(F.data == "account:d:pending")
     async def pending_deletion(query: CallbackQuery) -> None:
         view = await service.account(query.from_user.id)
@@ -298,6 +320,22 @@ def settings_router(
             raise SkipHandler()
         prompt = message.reply_to_message
         if (
+            prompt is not None
+            and prompt.from_user is not None
+            and prompt.from_user.is_bot
+            and (prompt.text or "").startswith(DELETE_PROMPT)
+            and not message.text.startswith("/")
+        ):
+            try:
+                deleted = await service.delete_now(message.from_user.id, message.text)
+            except AccountRejected as exc:
+                await message.answer(_account_error(exc.code))
+                return
+            await message.answer(
+                f"🗑️ Personagem {deleted} excluído. Use /start para criar um novo."
+            )
+            return
+        if (
             message.text.startswith("/")
             or prompt is None
             or prompt.from_user is None
@@ -347,6 +385,7 @@ def _account_error(code: str) -> str:
         "name_unavailable": "Este nome está em uso ou reservado.",
         "deletion_pending": "Há uma Exclusão Pendente para este personagem.",
         "deletion_due": "O prazo terminou; a exclusão está sendo finalizada.",
+        "name_mismatch": "O nome digitado não confere. Nada foi excluído.",
         "stale_preview": "Esta prévia expirou. Abra Conta para atualizar.",
         "stale_confirmation": "Esta confirmação expirou. Abra Conta para atualizar.",
         "stale_deletion": "A tela de Exclusão foi atualizada.",

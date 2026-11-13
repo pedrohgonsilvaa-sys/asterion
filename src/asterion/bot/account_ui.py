@@ -277,18 +277,14 @@ def render_delete_confirmation(view: AccountView) -> Screen:
     return Screen(
         "🗑️ Excluir Personagem\n\n"
         f"{escape(view.name)} · Nv. {view.level}\n\n"
-        "⏳ Período de Exclusão · 7 dias\n"
-        "🔄 Recuperação · Durante o Prazo\n"
-        "🔒 Exclusão Definitiva · Após o Prazo",
+        "⚠️ Tem certeza? A exclusão é imediata e definitiva.\n"
+        "Todo o progresso deste personagem será apagado e não há recuperação.\n"
+        "Depois você poderá criar um novo personagem.\n\n"
+        "Para confirmar, você vai digitar o nome do personagem.",
         "character",
         _keyboard(
             [
-                [
-                    _button(
-                        "Confirmar Exclusão",
-                        f"account:d:confirm:{view.deletion_preview_id.hex}",
-                    )
-                ],
+                [_button("Digitar o nome para excluir", "account:d:input")],
                 [_button("← Conta", "account:root")],
             ]
         ),

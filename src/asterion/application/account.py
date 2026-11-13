@@ -747,6 +747,7 @@ class AccountService:
         preview_id: UUID,
         *,
         now=None,
+        period: timedelta = DELETION_PERIOD,
     ) -> DeletionResult:
         now = now or utc_now()
         async with self.sessions.begin() as session:
@@ -783,7 +784,7 @@ class AccountService:
             if await _has_foreground(session, character.id):
                 raise AccountRejected("foreground")
             request.requested_at = now
-            request.due_at = now + DELETION_PERIOD
+            request.due_at = now + period
             request.status = "pending"
             request.revision += 1
             account_input = await session.get(CharacterAccountInput, character.id)
@@ -801,6 +802,51 @@ class AccountService:
                         await session.delete(doctrine_input)
                 await session.delete(pending_input)
             return DeletionResult(True, request.due_at, request.revision, True)
+
+    async def delete_now(self, actor: int, typed_name: str, *, now=None) -> str:
+        """Immediate deletion, confirmed by typing the character name.
+
+        Needs a live preview (opened by start_deletion_confirmation). Returns the
+        deleted name. The name stays reserved (NAME_RESERVATION_PERIOD) as before.
+        """
+        now = now or utc_now()
+        view = await self.account(actor, now=now)
+        if view is None:
+            raise AccountRejected("missing_character")
+        if view.deletion_pending:
+            raise AccountRejected("deletion_pending")
+        if view.deletion_preview_id is None:
+            raise AccountRejected("stale_confirmation")
+        if typed_name.strip().casefold() != view.name.casefold():
+            raise AccountRejected("name_mismatch")
+        await self.request_deletion(
+            actor, view.name, view.deletion_preview_id, now=now, period=timedelta(seconds=1)
+        )
+        # DB check needs due_at > requested_at, so finalize one second later.
+        finalized = await finalize_due_character_deletions(
+            self.sessions,
+            self.server_id,
+            now=now + timedelta(seconds=1),
+            character_id=view.character_id,
+            limit=1,
+        )
+        if finalized == 0:
+            # Could not delete now (group/guild/foreground busy): back out, keep the character.
+            async with self.sessions.begin() as session:
+                request = await session.scalar(
+                    select(CharacterDeletionRequest)
+                    .where(
+                        CharacterDeletionRequest.character_id == view.character_id,
+                        CharacterDeletionRequest.status == "pending",
+                    )
+                    .with_for_update()
+                )
+                if request is not None:
+                    request.status = "cancelled"
+                    request.cancelled_at = now
+                    request.revision += 1
+            raise AccountRejected("foreground")
+        return view.name
 
     async def cancel_deletion(
         self, actor: int, expected_revision: int | None = None, *, now=None

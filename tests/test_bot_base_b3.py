@@ -190,6 +190,28 @@ async def test_pending_deletion_cancel_and_stale_preview_are_safe(database):
 
 
 @pytest.mark.asyncio
+async def test_delete_now_requires_typed_name_and_deletes_immediately(database):
+    actor = 893020
+    await _seed_road(database, actor=actor)
+    sessions = database[1]
+    service = _service(sessions)
+    now = datetime.now(UTC)
+    with pytest.raises(AccountRejected, match="stale_confirmation"):
+        await service.delete_now(actor, "qualquer", now=now)
+
+    confirmation = await service.start_deletion_confirmation(actor, now=now)
+    with pytest.raises(AccountRejected, match="name_mismatch"):
+        await service.delete_now(actor, "nome errado", now=now)
+    assert await service.account(actor, now=now) is not None
+
+    deleted = await service.delete_now(actor, f"  {confirmation.name.upper()} ", now=now)
+    assert deleted == confirmation.name
+    async with sessions() as session:
+        assert await session.get(Character, confirmation.character_id) is None
+    assert await service.account(actor, now=now) is None
+
+
+@pytest.mark.asyncio
 async def test_due_deletion_cleans_character_graph_and_reserves_final_name(database):
     actor = 893005
     await _seed_road(database, actor=actor)
