@@ -601,3 +601,16 @@ async def test_delete_now_shortens_legacy_pending_deletion(database):
         await service.delete_now(actor, "errado", now=now)
     assert await service.delete_now(actor, confirmation.name, now=now) == confirmation.name
     assert await service.account(actor, now=now) is None
+
+
+@pytest.mark.asyncio
+async def test_start_deletion_confirmation_twice_replaces_stale_preview(database):
+    actor = 893099
+    await _seed_road(database, actor=actor)
+    service = _service(database[1])
+    now = datetime.now(UTC)
+
+    first = await service.start_deletion_confirmation(actor, now=now)
+    second = await service.start_deletion_confirmation(actor, now=now)
+    assert second.deletion_preview_id is not None
+    assert second.deletion_preview_id != first.deletion_preview_id

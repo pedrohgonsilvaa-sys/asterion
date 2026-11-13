@@ -723,6 +723,10 @@ class AccountService:
             )
             for stale in stale_previews:
                 await session.delete(stale)
+            if stale_previews:
+                # O SQLAlchemy grava INSERT antes de DELETE; sem este flush o
+                # índice único uq_open_character_deletion estoura.
+                await session.flush()
             request = CharacterDeletionRequest(
                 id=uuid4(),
                 character_id=character.id,
