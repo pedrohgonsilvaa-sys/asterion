@@ -1844,6 +1844,8 @@ EQUIPMENT_CATALOG = (
     ("Selo Enegrecido", "Acessório", None),
     ("Relicário de Cinzas", "Artefato", None),
 )
+# Explicit per-template Nv.60 cores. GDD v1.7.1 §49.8: Escudo HP25 DEF10 (Bloqueio 0).
+TEMPLATE_CORE60 = {"weapon.type.base.escudo": {"HP": 25, "DEF": 10}}
 RARITY_SECONDARIES = {"Comum": 0, "Raro": 1, "Épico": 2, "Lendário": 3, "Mítico": 4}
 RUNE_FAMILIES = (("Brasa", "ATQ"), ("Pedra", "DEF"), ("Caminhante", "AGI"), ("Fresta", "PER"), ("Presságio", "CRIT"), ("Persistência", "HP"), ("Desvio", "Esquiva"), ("Guarda", "Bloqueio"))
 CORE60 = {"Principal": {"ATQ": 25}, "Secundária": {"ATQ": 7, "DEF": 5}, "2H": {"ATQ": 35}, "Cabeça": {"HP": 45, "DEF": 6}, "Torso": {"HP": 95, "DEF": 12}, "Mãos": {"ATQ": 10, "DEF": 5}, "Pés": {"HP": 60, "AGI": 8}, "Acessório": {"HP": 50, "ATQ": 7, "AGI": 4}, "Artefato": {"HP": 55, "ATQ": 7, "DEF": 5, "AGI": 4}}
@@ -1921,7 +1923,8 @@ def materialize_equipment(
     pool = list(pools[slot])
     secondaries = []
     g = growth(level)
-    core = {attribute: int((D(value) * g).quantize(D(1), rounding="ROUND_HALF_UP")) for attribute, value in CORE60[slot].items()}
+    core60 = TEMPLATE_CORE60.get(selected_weapon_type_id or "", CORE60[slot])
+    core = {attribute: int((D(value) * g).quantize(D(1), rounding="ROUND_HALF_UP")) for attribute, value in core60.items()}
     for index in range(min(count, len(pool))):
         pick = _stable_draw(seed, f"equipment.secondary.{index}", len(pool))
         attribute = pool.pop(pick)

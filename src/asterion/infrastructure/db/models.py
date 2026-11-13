@@ -224,6 +224,39 @@ class CharacterLegacyMark(Base):
     )
 
 
+class CharacterWeaponProficiency(Base):
+    """One permanent Proficiência de Arma; never reset or traded (spec v1.0.0)."""
+
+    __tablename__ = "character_weapon_proficiencies"
+    __table_args__ = (
+        CheckConstraint(
+            "family IN ('proficiency.swords','proficiency.blades','proficiency.blunt',"
+            "'proficiency.axes','proficiency.polearms','proficiency.bows',"
+            "'proficiency.crossbows','proficiency.arcane_foci','proficiency.shield')",
+            name="ck_character_weapon_proficiency_family",
+        ),
+        CheckConstraint("ordinal >= 1", name="ck_character_weapon_proficiency_ordinal"),
+        CheckConstraint("cost_crowns >= 0", name="ck_character_weapon_proficiency_cost"),
+        CheckConstraint(
+            "source IN ('initial','trainer')", name="ck_character_weapon_proficiency_source"
+        ),
+        UniqueConstraint(
+            "character_id", "ordinal", name="uq_character_weapon_proficiency_ordinal"
+        ),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    family: Mapped[str] = mapped_column(String(32), primary_key=True)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    cost_crowns: Mapped[int] = mapped_column(Integer, nullable=False)
+    acquired_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class SocialGroup(Base):
     """Persistent social group; activity rosters are stored separately."""
 

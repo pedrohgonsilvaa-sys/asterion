@@ -19,7 +19,82 @@ from asterion.domain.creation import (
     navigate,
     normalize_name,
 )
-from asterion.infrastructure.db.models import Account, Character, CreationDraft, CreationInput
+from asterion.domain.equipment import assign_equipment_instance_id, assignment_for_item_slot
+from asterion.domain.road import materialize_equipment
+from asterion.domain.weapon_proficiency import (
+    INITIAL_PROFICIENCY,
+    STARTING_WEAPON_LEVEL,
+    STARTING_WEAPON_RARITY,
+    STARTING_WEAPON_TYPE_IDS,
+)
+from asterion.infrastructure.db.models import (
+    Account,
+    Character,
+    CharacterEquipmentSlot,
+    CharacterWeaponProficiency,
+    CreationDraft,
+    CreationInput,
+    EquipmentItem,
+)
+
+
+async def seed_starting_loadout(
+    session: AsyncSession, character_id: UUID, character_class: str
+) -> None:
+    """Free initial Proficiência and the Classe's starting weapon, equipped.
+
+    Only the weapon starts equipped (spec v1.0.0 §11-12): no Escudo, Acessório,
+    Artefato or Consumível. The weapon is +0, Grau I, Comum, from the global
+    materialization formula; its source_key makes the seed idempotent.
+    """
+    family = INITIAL_PROFICIENCY[character_class]
+    await session.execute(
+        insert(CharacterWeaponProficiency)
+        .values(
+            character_id=character_id,
+            family=family.value,
+            ordinal=1,
+            source="initial",
+            cost_crowns=0,
+        )
+        .on_conflict_do_nothing()
+    )
+    source_key = f"creation:{character_id}:starting_weapon"
+    payload = materialize_equipment(
+        source_key,
+        STARTING_WEAPON_RARITY,
+        STARTING_WEAPON_LEVEL,
+        bound=True,
+        weapon_type_id=STARTING_WEAPON_TYPE_IDS[character_class],
+    )
+    instance_id, payload = assign_equipment_instance_id(payload)
+    item_id = await session.scalar(
+        insert(EquipmentItem)
+        .values(
+            id=instance_id,
+            character_id=character_id,
+            source_key=source_key,
+            item_name=payload["item_name"],
+            rarity=payload["rarity"],
+            slot=payload["slot"],
+            item_level=payload["item_level"],
+            bound=payload["bound"],
+            payload=payload,
+        )
+        .on_conflict_do_nothing()
+        .returning(EquipmentItem.id)
+    )
+    if item_id is None:
+        return
+    assignment = assignment_for_item_slot(payload["slot"])
+    session.add(
+        CharacterEquipmentSlot(
+            character_id=character_id,
+            slot=assignment.slot.value,
+            equipment_item_id=item_id,
+        )
+    )
+    await session.flush()
 
 
 class CreationService:
@@ -222,6 +297,7 @@ class CreationService:
                 ),
             )
             return self.snapshot(row)
+        await seed_starting_loadout(session, character_id, state.character_class)
         self._save(row, replace(state, step="completed", editing=False))
         await link_pending_invite(
             session, row.telegram_id, row.server_id, character_id, datetime.now(UTC)

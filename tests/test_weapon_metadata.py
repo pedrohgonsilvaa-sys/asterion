@@ -211,20 +211,47 @@ EXPECTED_CONFINS_DUNGEON_WEAPONS = (
 )
 
 
+EXPECTED_CONFINS_CRAFT_WEAPONS = (
+    (
+        "craft.confins.ferreiro.principal.lamina_baliza",
+        "weapon.form.sword",
+        "weapon.hands.one",
+        "weapon.slot.main_only",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "craft.confins.ferreiro.secundaria.guarda_marcha",
+        "weapon.form.dagger",
+        "weapon.hands.one",
+        "weapon.slot.secondary_only",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "craft.confins.ferreiro.2h.arco_retorno",
+        "weapon.form.bow",
+        "weapon.hands.two",
+        "weapon.slot.main_two_handed",
+        ("weapon.compat.bow",),
+    ),
+)
+
+
 def test_canonical_registry_matches_all_22_contract_rows():
     assert len(EXPECTED_CANONICAL_WEAPONS) == 22
     expected_rows = (
         *EXPECTED_CANONICAL_WEAPONS,
         *EXPECTED_CONFINS_P36_WEAPONS,
         *EXPECTED_CONFINS_DUNGEON_WEAPONS,
+        *EXPECTED_CONFINS_CRAFT_WEAPONS,
     )
-    assert len(expected_rows) == 24
+    assert len(expected_rows) == 27
     expected_ids = tuple(row[0] for row in expected_rows)
     canonical_row_ids = tuple(row[0] for row in _CANONICAL_WEAPON_ROWS)
     assert len(canonical_row_ids) == len(set(canonical_row_ids))
-    assert len(canonical_row_ids) == len(WEAPON_DEFINITIONS)
+    # The 24 contract rows come first; the v1.0.0 base catalog (20 rows) follows.
+    assert len(WEAPON_DEFINITIONS) == len(canonical_row_ids) + 20
     assert canonical_row_ids == expected_ids
-    assert tuple(WEAPON_DEFINITIONS) == expected_ids
+    assert tuple(WEAPON_DEFINITIONS)[: len(expected_ids)] == expected_ids
     assert {
         (
             definition.weapon_type_id,
@@ -234,6 +261,7 @@ def test_canonical_registry_matches_all_22_contract_rows():
             tuple(sorted(definition.compatibility_tags)),
         )
         for definition in WEAPON_DEFINITIONS.values()
+        if definition.weapon_type_id in expected_ids
     } == {
         (weapon_id, form, hands, slot, tuple(sorted(tags)))
         for weapon_id, form, hands, slot, tags in expected_rows
@@ -252,8 +280,15 @@ def test_weapon_form_vocabulary_is_closed_and_invalid_values_are_rejected():
         "weapon.form.bow",
         "weapon.form.crossbow",
         "weapon.form.staff",
-        "weapon.form.rod",
+        "weapon.form.chakram",
+        "weapon.form.double_blade",
+        "weapon.form.halberd",
+        "weapon.form.javelin",
+        "weapon.form.scepter",
+        "weapon.form.orb",
+        "weapon.form.shield",
     }
+    assert "weapon.form.rod" not in WEAPON_FORM_LABELS
     assert set(HANDEDNESS_LABELS) == {"weapon.hands.one", "weapon.hands.two"}
     assert set(COMPATIBILITY_LABELS) == {
         "weapon.compat.melee",

@@ -24,6 +24,7 @@ from asterion.domain.equipment_stats import (
     equipment_stat_contribution,
     item_snapshot_from_persisted,
 )
+from asterion.domain.weapon_proficiency import weapon_proficiency_label
 from asterion.infrastructure.db.models import (
     Character,
     CharacterEquipmentSlot,
@@ -73,6 +74,7 @@ class EquipmentItemView:
     weapon_handedness_label: str | None = None
     weapon_slot_label: str | None = None
     weapon_compatibility_label: str | None = None
+    weapon_proficiency_label: str | None = None
 
     @property
     def equipped(self) -> bool:
@@ -374,6 +376,7 @@ class EquipmentViewService:
             weapon_handedness_label=weapon.handedness_label if weapon else None,
             weapon_slot_label=weapon.slot_label if weapon else None,
             weapon_compatibility_label=weapon.compatibility_label if weapon else None,
+            weapon_proficiency_label=weapon_proficiency_label(weapon),
         )
 
     def _validate_configuration(self, items: dict[EquipmentSlot, EquipmentItemView]) -> None:

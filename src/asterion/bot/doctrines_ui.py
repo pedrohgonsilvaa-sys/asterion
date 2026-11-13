@@ -28,6 +28,9 @@ REASON_LABELS = {
     "safe_location_required": "Requer Refúgio do Ocaso",
     "insufficient_crowns": "Coroas insuficientes",
     "path_cannot_be_cleared": "Caminho não pode ser removido",
+    "weapon_unmapped": "Arma sem identidade registrada",
+    "weapon_not_trained": "Requer Proficiência de uma arma",
+    "weapon_class_forbidden": "Arma não permitida para a Classe",
 }
 
 
