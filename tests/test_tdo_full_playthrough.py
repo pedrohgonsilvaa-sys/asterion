@@ -268,7 +268,7 @@ async def _create_remanescente_sentinela(driver: TDOPlaythrough) -> None:
     creation = CreationService(driver.sessions, "ocaso")
     state = await creation.start(driver.actor)
     state = await creation.name(driver.actor, "Bravaro", update_id=1)
-    for action in ("r0", "choose", "c0", "choose"):
+    for action in ("g0", "r0", "choose", "c0", "choose"):
         state = await creation.callback(driver.actor, state.id, state.version, action)
     assert state.step == "confirm"
     state = await creation.callback(driver.actor, state.id, state.version, "confirm")

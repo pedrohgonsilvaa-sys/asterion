@@ -110,6 +110,7 @@ from asterion.application.vde_missions import (
 from asterion.application.warehouse import WarehouseRejected, WarehouseService
 from asterion.application.world import WorldService
 from asterion.bot.altos_missions_ui import render_altos_mission
+from asterion.bot.asset_catalog import location_key
 from asterion.bot.benefits_ui import community_invite_text, community_keyboard
 from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
@@ -2689,11 +2690,11 @@ def world_router(
                     secondary_lines.append(line)
                     continue
                 choice_number += 1
-                secondary_lines.append(f"{choice_number} {line}")
+                secondary_lines.append(line)
                 secondary_buttons.append(
                     [
                         InlineKeyboardButton(
-                            text=str(choice_number), callback_data=action_callback
+                            text=line.removeprefix("📜 ").split(" · ")[0], callback_data=action_callback
                         )
                     ]
                 )
@@ -3921,7 +3922,7 @@ def world_router(
         region_key = "confins" if key.startswith("confins_") else "altos" if key.startswith("altos_") else "varzeas" if key.startswith("varzeas_") else "nareth" if key.startswith("nareth_") else "vde" if key.startswith("vde_") else "tdo"
         region_callback = f"world:map:region:{region_key}" + (":fromlocal" if from_local else "")
         keyboard.append([InlineKeyboardButton(text=f"← {region}", callback_data=region_callback)])
-        return Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard))
+        return Screen("\n".join(lines), location_key(name), InlineKeyboardMarkup(inline_keyboard=keyboard))
 
     @router.callback_query(F.data.in_({"world:map", "world:map:fromlocal"}))
     async def map_screen(query: CallbackQuery):
@@ -3980,12 +3981,12 @@ def world_router(
                 f"{current_line}\n\n"
                 "🗺️ Regiões Conhecidas\n\n"
                 + "\n".join(
-                    f"{index} {'🌑' if name == 'Terras do Ocaso' else '🪢' if name == 'Vales dos Enforcados' else '🌾' if name == NARETH_REGION else '🌋' if name == ALTOS_REGION_LABEL else '🌫️' if name == CONFINS_REGION_LABEL else '🥀'} {name}"
+                    f"{'🌑' if name == 'Terras do Ocaso' else '🪢' if name == 'Vales dos Enforcados' else '🌾' if name == NARETH_REGION else '🌋' if name == ALTOS_REGION_LABEL else '🌫️' if name == CONFINS_REGION_LABEL else '🥀'} {name}"
                     for index, name in enumerate(known_regions, start=1)
                 )
             )
             region_buttons = [
-                [InlineKeyboardButton(text=str(index), callback_data=f"world:map:region:{'tdo' if name == 'Terras do Ocaso' else 'vde' if name == 'Vales dos Enforcados' else 'nareth' if name == NARETH_REGION else 'altos' if name == ALTOS_REGION_LABEL else 'confins' if name == CONFINS_REGION_LABEL else 'varzeas'}{':fromlocal' if from_local else ''}")]
+                [InlineKeyboardButton(text=name, callback_data=f"world:map:region:{'tdo' if name == 'Terras do Ocaso' else 'vde' if name == 'Vales dos Enforcados' else 'nareth' if name == NARETH_REGION else 'altos' if name == ALTOS_REGION_LABEL else 'confins' if name == CONFINS_REGION_LABEL else 'varzeas'}{':fromlocal' if from_local else ''}")]
                 for index, name in enumerate(known_regions, start=1)
             ]
             keyboard = region_buttons + [[InlineKeyboardButton(text=f"← {'Local Atual' if from_local else 'Aventura'}", callback_data=parent_callback)]]
@@ -4019,7 +4020,7 @@ def world_router(
         visible = [(name, key) for name, key in ordered if name in known]
         lines = ["🌑 Terras do Ocaso · Nv. 1–10", ""]
         buttons = []
-        for index, (name, key) in enumerate(visible, start=1):
+        for name, key in visible:
             reachable_by_route = bool(road_view is not None and name in road_view.route_destinations)
             reachable_by_brazier = bool(
                 road_view is not None
@@ -4042,22 +4043,21 @@ def world_router(
                 "🔥" if name == current else
                 "🏚️" if key == "refuge" else "📍"
             )
-            lines.append(f"{index} {icon} {name} · {state}")
+            lines.append(f"{icon} {name} · {state}")
             buttons.append(
                 InlineKeyboardButton(
-                    text=str(index),
+                    text=name,
                     callback_data=f"world:map:local:{key}{':fromlocal' if from_local else ''}",
                 )
             )
         keyboard = []
-        if buttons:
-            keyboard.append(buttons)
+        keyboard.extend([button] for button in buttons)
         keyboard.append([InlineKeyboardButton(text="← Mapa", callback_data=map_callback)])
         await present(
             query.message,
             Screen(
                 "\n".join(lines),
-                "map",
+                "region.tdo",
                 InlineKeyboardMarkup(inline_keyboard=keyboard),
             ),
             images,
@@ -4091,7 +4091,7 @@ def world_router(
         visible = [(name, key) for name, key in ordered if name in known]
         lines = ["🪢 Vales dos Enforcados", ""]
         buttons = []
-        for index, (name, key) in enumerate(visible, start=1):
+        for name, key in visible:
             reachable = bool(road_view is not None and name in road_view.route_destinations)
             state = "Local Atual" if name == current else "Acessível" if reachable else "Conhecido"
             icon = (
@@ -4100,12 +4100,12 @@ def world_router(
                 "🪨" if name == VDE_CLAUSTRO else
                 "🌿" if name == VDE_BERCO else "🌲"
             )
-            lines.append(f"{index} {icon} {name} · {state}")
-            buttons.append(InlineKeyboardButton(text=str(index), callback_data=f"world:map:local:{key}{':fromlocal' if from_local else ''}"))
-        keyboard = ([buttons] if buttons else []) + [[InlineKeyboardButton(text="← Mapa", callback_data=map_callback)]]
+            lines.append(f"{icon} {name} · {state}")
+            buttons.append(InlineKeyboardButton(text=name, callback_data=f"world:map:local:{key}{':fromlocal' if from_local else ''}"))
+        keyboard = [[button] for button in buttons] + [[InlineKeyboardButton(text="← Mapa", callback_data=map_callback)]]
         await present(
             query.message,
-            Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+            Screen("\n".join(lines), "region.vde", InlineKeyboardMarkup(inline_keyboard=keyboard)),
             images,
             edit=True,
         )
@@ -4139,7 +4139,7 @@ def world_router(
         visible = [(name, key) for name, key in ordered if name in known]
         lines = ["🌾 Planícies de Nareth · Nv. 21–30", ""]
         buttons = []
-        for index, (name, key) in enumerate(visible, start=1):
+        for name, key in visible:
             route_open = bool(road_view is not None and name in road_view.route_destinations)
             brazier_open = bool(
                 road_view is not None
@@ -4154,19 +4154,19 @@ def world_router(
                 NARETH_OBSERVATORIO: "🧭",
                 NARETH_CAMARA: "🏛️",
             }[name]
-            lines.append(f"{index} {icon} {name} · {state}")
+            lines.append(f"{icon} {name} · {state}")
             buttons.append(
                 InlineKeyboardButton(
-                    text=str(index),
+                    text=name,
                     callback_data=f"world:map:local:{key}{':fromlocal' if from_local else ''}",
                 )
             )
-        keyboard = ([buttons] if buttons else []) + [
+        keyboard = [[button] for button in buttons] + [
             [InlineKeyboardButton(text="← Mapa", callback_data=map_callback)]
         ]
         await present(
             query.message,
-            Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+            Screen("\n".join(lines), "region.nareth", InlineKeyboardMarkup(inline_keyboard=keyboard)),
             images,
             edit=True,
         )
@@ -4200,7 +4200,7 @@ def world_router(
         visible = [(name, key) for name, key in ordered if name in known]
         lines = ["🥀 Várzeas Carmesins · Nv. 31–40", ""]
         buttons = []
-        for index, (name, key) in enumerate(visible, start=1):
+        for name, key in visible:
             route_open = bool(road_view is not None and name in road_view.route_destinations)
             brazier_open = bool(
                 road_view is not None
@@ -4208,19 +4208,19 @@ def world_router(
             )
             state = "Local Atual" if name == current else "Acessível" if route_open or brazier_open else "Conhecido"
             icon = "🏛️" if name == VARZEAS_CAMARA else "🧱" if name in {VARZEAS_DIQUES, VARZEAS_GALERIAS} else "⚓" if name == VARZEAS_PORTO else "🌱" if name == VARZEAS_HORTOS else "🌫️"
-            lines.append(f"{index} {icon} {name} · {state}")
+            lines.append(f"{icon} {name} · {state}")
             buttons.append(
                 InlineKeyboardButton(
-                    text=str(index),
+                    text=name,
                     callback_data=f"world:map:local:{key}{':fromlocal' if from_local else ''}",
                 )
             )
-        keyboard = ([buttons] if buttons else []) + [
+        keyboard = [[button] for button in buttons] + [
             [InlineKeyboardButton(text="← Mapa", callback_data=map_callback)]
         ]
         await present(
             query.message,
-            Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+            Screen("\n".join(lines), "region.varzeas", InlineKeyboardMarkup(inline_keyboard=keyboard)),
             images,
             edit=True,
         )
@@ -4254,7 +4254,7 @@ def world_router(
             return
         lines = [f"🌋 {ALTOS_REGION_LABEL} · Nv. 41–50", ""]
         buttons = []
-        for index, (name, key) in enumerate(visible, start=1):
+        for name, key in visible:
             route_open = bool(road_view is not None and name in road_view.route_destinations)
             brazier_open = bool(
                 road_view is not None
@@ -4271,19 +4271,19 @@ def world_router(
                 else "Conhecido"
             )
             icon = "🌋" if name == ALTOS_ESCARPA_LABEL else "🌉" if name == ALTOS_PONTES_LABEL else "⛏️" if name == ALTOS_PEDREIRAS_LABEL else "🏰" if name == ALTOS_BASTILHA_LABEL else "🏘️"
-            lines.append(f"{index} {icon} {name} · {state}")
+            lines.append(f"{icon} {name} · {state}")
             buttons.append(
                 InlineKeyboardButton(
-                    text=str(index),
+                    text=name,
                     callback_data=f"world:map:local:{key}{':fromlocal' if from_local else ''}",
                 )
             )
-        keyboard = ([buttons] if buttons else []) + [
+        keyboard = [[button] for button in buttons] + [
             [InlineKeyboardButton(text="← Mapa", callback_data=map_callback)]
         ]
         await present(
             query.message,
-            Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+            Screen("\n".join(lines), "region.altos", InlineKeyboardMarkup(inline_keyboard=keyboard)),
             images,
             edit=True,
         )
@@ -4318,7 +4318,7 @@ def world_router(
             return
         lines = [f"🌫️ {CONFINS_REGION_LABEL} · Nv. 51–60", ""]
         buttons = []
-        for index, (name, key) in enumerate(ordered, start=1):
+        for name, key in ordered:
             route_open = bool(road_view is not None and name in road_view.route_destinations)
             brazier_open = bool(
                 road_view is not None
@@ -4338,20 +4338,20 @@ def world_router(
                 "🏚️" if name == CONFINS_ULTIMO_REFUGIO_LABEL else
                 "🧭" if name == CONFINS_ESTRADAS_AUSENTES_LABEL else "🌫️"
             )
-            lines.append(f"{index} {icon} {name} · {state}")
+            lines.append(f"{icon} {name} · {state}")
             if key is not None and (known_here or route_open or brazier_open):
                 buttons.append(
                     InlineKeyboardButton(
-                        text=str(index),
+                        text=name,
                         callback_data=f"world:map:local:{key}{':fromlocal' if from_local else ''}",
                     )
                 )
-        keyboard = ([buttons] if buttons else []) + [
+        keyboard = [[button] for button in buttons] + [
             [InlineKeyboardButton(text="← Mapa", callback_data=map_callback)]
         ]
         await present(
             query.message,
-            Screen("\n".join(lines), "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+            Screen("\n".join(lines), "region.confins", InlineKeyboardMarkup(inline_keyboard=keyboard)),
             images,
             edit=True,
         )
@@ -4503,14 +4503,14 @@ def world_router(
         keyboard = []
         if road_view.brazier_destinations:
             lines.extend(["", "🗺️ Destinos"])
-            for index, (brazier_id, label, location) in enumerate(road_view.brazier_destinations, start=1):
-                lines.extend(["", f"{index} 🔥 {label} · {location}"])
+            for brazier_id, label, location in road_view.brazier_destinations:
+                lines.extend(["", f"🔥 {label} · {location}"])
                 brazier_key = brazier_id
                 for prefix in ("bonfire.altos.", "varzeas.brazier.", "nareth.brazier.", "vde.brazier.", "tdo.brazier."):
                     if brazier_key.startswith(prefix):
                         brazier_key = brazier_key.removeprefix(prefix)
                         break
-                keyboard.append([InlineKeyboardButton(text=str(index), callback_data=f"road:travel:brazier:{brazier_key}")])
+                keyboard.append([InlineKeyboardButton(text=label, callback_data=f"road:travel:brazier:{brazier_key}")])
         current_key = {
             ROAD: "road", REFUGE: "refuge", CHARNECA: "charneca", BOSQUE: "bosque", RUINS: "ruinas",
             VARZEAS_DIQUES: "varzeas_diques", VARZEAS_PORTO: "varzeas_porto",

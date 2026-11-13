@@ -240,7 +240,7 @@ async def test_telegram_adventure_local_hunt_and_map_callbacks_use_real_services
         button.callback_data
         for row in map_screen.reply_markup.inline_keyboard
         for button in row
-        if button.text == "1"
+        if button.text == "Terras do Ocaso"
     )
     region = await click(map_region_callback, 883406)
     assert "Terras do Ocaso" in region.text
@@ -248,7 +248,7 @@ async def test_telegram_adventure_local_hunt_and_map_callbacks_use_real_services
         button.callback_data
         for row in region.reply_markup.inline_keyboard
         for button in row
-        if button.text == "1"
+        if button.callback_data.startswith("world:map:local:")
     )
     place = await click(current_place_callback, 883407)
     assert "Local Atual" in place.text

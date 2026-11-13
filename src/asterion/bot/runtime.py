@@ -46,6 +46,7 @@ from asterion.application.prologue import PrologueService
 from asterion.application.promo_codes import PromoCodeService
 from asterion.application.pvp import PvpService
 from asterion.application.recruitment import RecruitmentService
+from asterion.application.road import BRAZIER_DETAILS
 from asterion.application.round import RoundService
 from asterion.application.s1 import S1Service
 from asterion.application.s2 import S2Service
@@ -75,6 +76,7 @@ from asterion.application.warehouse import WarehouseService
 from asterion.application.world import WorldService
 from asterion.application.world_events import WorldEventService
 from asterion.bot.altos_missions_handlers import altos_missions_router
+from asterion.bot.asset_catalog import build_asset_images
 from asterion.bot.benefits_handlers import benefits_router
 from asterion.bot.character_progression_handlers import character_progression_router
 from asterion.bot.character_surfaces_handlers import character_surfaces_router
@@ -151,6 +153,11 @@ def get_bot_runtime() -> BotRuntime:
     settings = get_settings()
     if not settings.telegram_bot_enabled or not settings.telegram_bot_token:
         raise RuntimeError("Telegram bot is disabled or has no token configured")
+    # Art found in assets/ is the default; ASTERION_CREATION_IMAGES overrides per key.
+    settings.creation_images = {
+        **build_asset_images(tuple(BRAZIER_DETAILS)),
+        **settings.creation_images,
+    }
 
     dispatcher = Dispatcher(disable_fsm=True)
     # Registered first, so they run before every other update middleware and handler.

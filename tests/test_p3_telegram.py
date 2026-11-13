@@ -316,7 +316,7 @@ async def test_bosque_map_does_not_auto_open_p3_and_mission_remains_reachable(da
         for button in row
         if button.callback_data == "world:map:local:bosque"
     )
-    assert bosque_button.text.isdigit()
+    assert bosque_button.text == "Bosque Calcinado"
     await dispatcher.feed_raw_update(
         bot, callback_update(bosque_button.callback_data, update_id=998331, actor=actor)
     )

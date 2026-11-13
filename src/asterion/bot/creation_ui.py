@@ -8,7 +8,9 @@ from uuid import UUID
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from asterion.domain.creation import CLASSES, PROLOGUE, RACES, Creation
+from asterion.domain.creation import CLASSES, GENDERS, PROLOGUE, RACES, Creation
+
+GENDER_LABELS = tuple(gender.capitalize() for gender in GENDERS)
 
 COPY = json.loads(files("asterion.bot").joinpath("creation_copy.json").read_text(encoding="utf-8"))
 PROLOGUE_TEXT = (
@@ -18,6 +20,15 @@ PROLOGUE_TEXT = (
     "um caminho seguro. À frente, entre a névoa e o silêncio, formas quebradas marcam "
     "a direção de sua primeira jornada."
 )
+
+
+def _label(kind: str, key: str) -> str:
+    """Button name taken from the detail page title, without the emoji."""
+    return COPY[f"{kind}:{key}"].splitlines()[0].split(" ", 1)[1]
+
+
+def _pairs(buttons: list) -> list[list]:
+    return [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
 
 
 class CreationCallback(CallbackData, prefix="cc"):
@@ -69,17 +80,17 @@ def render(state: Creation) -> Screen:
     if step == "name":
         if state.error:
             text = COPY[state.error].replace("Luiken", state.rejected_name or "")
-    elif step == "race":
+    elif step == "gender":
         rows = [
-            [button(str(i + 1), f"r{i}") for i in range(len(RACES))],
+            [button(label, f"g{i}") for i, label in enumerate(GENDER_LABELS)],
             [button("← Nome", "backname")],
         ]
+    elif step == "race":
+        rows = _pairs([button(_label("race", race), f"r{i}") for i, race in enumerate(RACES)])
+        rows.append([button("← Gênero", "backgender")])
     elif step == "class":
-        rows = [
-            [button(str(i + 1), f"c{i}") for i in range(3)],
-            [button(str(i + 1), f"c{i}") for i in range(3, len(CLASSES))],
-            [button("← Raças", "races")],
-        ]
+        rows = _pairs([button(_label("class", cls), f"c{i}") for i, cls in enumerate(CLASSES)])
+        rows.append([button("← Raças", "races")])
     elif step.startswith(("race:", "class:")):
         title = text.splitlines()[0].split(" ", 1)[1]
         race_page = step.startswith("race:")
@@ -97,13 +108,20 @@ def render(state: Creation) -> Screen:
         class_icon, class_name = class_title.split(" ", 1)
         text = (
             text.replace("Luiken", state.name or "")
+            .replace("🎭 Gênero · Masculino", f"🎭 Gênero · {(state.gender or '').capitalize()}")
             .replace("🕯️ Raça · Remanescente", f"{race_icon} Raça · {race_name}")
             .replace("🧩 Adaptabilidade · Passiva Racial", passive)
             .replace("🗡️ Classe · Errante", f"{class_icon} Classe · {class_name}")
         )
         rows = [
             [button("Confirmar Personagem", "confirm")],
-            [button("Nome", "name"), button("Raça", "race"), button("Classe", "class")],
+            [button("Nome", "name"), button("Gênero", "gender")],
+            [button("Raça", "race"), button("Classe", "class")],
             [button("← Classes", "classes")],
         ]
-    return Screen(text, step, InlineKeyboardMarkup(inline_keyboard=rows) if rows else None)
+    image_key = step
+    if state.gender and step.startswith("race:"):
+        image_key = f"char.{step.split(':')[1]}.{state.gender}"
+    elif state.gender and state.race and step.startswith("class:"):
+        image_key = f"char.{state.race}.{state.gender}.{step.split(':')[1]}"
+    return Screen(text, image_key, InlineKeyboardMarkup(inline_keyboard=rows) if rows else None)

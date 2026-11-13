@@ -186,8 +186,8 @@ async def _create(sessions, actor: int, name: str, race_index: int, class_index:
     state = await creation.start(actor)
     assert state.step == "name"
     state = await creation.name(actor, name, update_id=1)
-    assert state.step == "race", state
-    for action in (f"r{race_index}", "choose", f"c{class_index}", "choose", "confirm"):
+    assert state.step == "gender", state
+    for action in ("g0", f"r{race_index}", "choose", f"c{class_index}", "choose", "confirm"):
         state = await creation.callback(actor, state.id, state.version, action)
         assert state is not None
     assert state.step == "cinzas_na_estrada:intro", state

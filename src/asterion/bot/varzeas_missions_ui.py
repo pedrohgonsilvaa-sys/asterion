@@ -22,6 +22,7 @@ from asterion.application.varzeas_missions import (
     S24_ID,
     VarzeasMissionView,
 )
+from asterion.bot.asset_catalog import with_mission_art
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 from asterion.domain.road import (
@@ -66,7 +67,7 @@ def _button(text: str, callback: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=callback)
 
 
-def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
+def _render_varzeas_mission(view: VarzeasMissionView) -> Screen:
     title = escape(view.title)
     rows: list[list[InlineKeyboardButton]] = []
     if view.kind == "combat" and view.combat is not None and view.activity_id is not None:
@@ -499,3 +500,8 @@ def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
         text = f"📜 {title} · Várzeas Carmesins\n\n{description}\n\n📍 {escape(view.location)}"
         rows.extend(([_button("📍 Local Atual", "world:local")], [_button("← Missões", "world:missions")]))
     return Screen(text, "missions", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def render_varzeas_mission(view: VarzeasMissionView) -> Screen:
+    """Mission screen with the art of its quest (see asset_catalog)."""
+    return with_mission_art(_render_varzeas_mission(view), view.quest_id)

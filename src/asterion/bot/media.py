@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import random
 from pathlib import Path
 
 from asterion.domain.visuals import VISUAL_BY_COSMETIC, image_key
@@ -27,6 +28,12 @@ def resolve_asset_file(ref: str, root: Path | None = None) -> Path | None:
         return None
     options = [Path.cwd() / candidate, base / candidate]
     for option in options:
+        if "*" in option.name:
+            # Wildcard in the file name: draw one of the matching variants.
+            safe = _inside(option.parent, base, option.name)
+            if safe:
+                return random.choice(safe)
+            continue
         try:
             resolved = option.resolve()
             resolved.relative_to(base)
@@ -35,6 +42,22 @@ def resolve_asset_file(ref: str, root: Path | None = None) -> Path | None:
         if resolved.is_file():
             return resolved
     return None
+
+
+def _inside(folder: Path, base: Path, pattern: str) -> list[Path]:
+    """Files of ``folder`` matching ``pattern`` that stay inside ``base``."""
+    found: list[Path] = []
+    try:
+        if "*" in str(folder) or "?" in str(folder):
+            return found
+        for item in folder.glob(pattern):
+            resolved = item.resolve()
+            resolved.relative_to(base)
+            if resolved.is_file():
+                found.append(resolved)
+    except (OSError, ValueError):
+        return []
+    return found
 
 
 def visual_image_key(images: dict[str, str], *, cosmetic_id: str) -> str | None:

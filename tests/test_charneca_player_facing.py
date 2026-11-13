@@ -485,9 +485,10 @@ async def test_map_region_lists_all_known_locations_and_brazier_detail_travels_d
         button
         for row in region.reply_markup.inline_keyboard
         for button in row
-        if button.text.isdigit()
+        if button.callback_data.startswith("world:map:local:")
     ]
-    assert [button.text for button in numeric_buttons] == ["1", "2", "3"]
+    assert len(numeric_buttons) == 3
+    assert all(not button.text.isdigit() for button in numeric_buttons)
     assert len({button.callback_data for button in numeric_buttons}) == 3
 
     detail = await click("world:map:local:refuge:fromlocal", 880427)

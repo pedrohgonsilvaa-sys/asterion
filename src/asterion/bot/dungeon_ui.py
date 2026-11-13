@@ -5,6 +5,7 @@ from html import escape
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.dungeons import DungeonView
+from asterion.bot.asset_catalog import with_dungeon_art
 from asterion.bot.combat_ui import (
     DungeonCombatCallback,
     class_trial_action_ids,
@@ -18,7 +19,7 @@ def _button(label: str, callback: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=label, callback_data=callback)
 
 
-def render_dungeons(view: DungeonView) -> Screen:
+def _render_dungeons(view: DungeonView) -> Screen:
     if view.kind == "known":
         rows = []
         details = []
@@ -444,3 +445,8 @@ def render_dungeon_targets(view: DungeonView, action_index: int) -> Screen:
         "dungeon",
         InlineKeyboardMarkup(inline_keyboard=rows),
     )
+
+
+def render_dungeons(view: DungeonView) -> Screen:
+    """Dungeon screen with the art of its family (see asset_catalog)."""
+    return with_dungeon_art(_render_dungeons(view), view.family_id)

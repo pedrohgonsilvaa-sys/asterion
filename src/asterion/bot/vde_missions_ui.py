@@ -25,6 +25,7 @@ from asterion.application.vde_missions import (
     VIGILIA,
     VDEMissionView,
 )
+from asterion.bot.asset_catalog import with_mission_art
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 from asterion.domain.mission_coop import mission_coop_allowed
@@ -71,7 +72,7 @@ def _route_toward(current: str, target: str) -> str | None:
     return None
 
 
-def render_vde_mission(view: VDEMissionView) -> Screen:
+def _render_vde_mission(view: VDEMissionView) -> Screen:
     quest = view.quest_id
     version = view.state_version
     title = escape(view.title)
@@ -885,3 +886,8 @@ def render_vde_board(s7: VDEMissionView | None, p8: VDEMissionView | None) -> Sc
             rows.append([_button(label, action)])
     rows.append([_button("← Aventura", "world:adventure")])
     return _screen("\n".join(lines), rows)
+
+
+def render_vde_mission(view: VDEMissionView) -> Screen:
+    """Mission screen with the art of its quest (see asset_catalog)."""
+    return with_mission_art(_render_vde_mission(view), view.quest_id)

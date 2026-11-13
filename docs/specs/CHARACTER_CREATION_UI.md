@@ -6,7 +6,9 @@
 
 A Criação de Personagem segue o fluxo autoritativo da Fonte Mestra:
 
-**Nome → Raça → Classe → Confirmação Final → Prólogo jogável “Cinzas na Estrada”.**
+**Nome → Gênero → Raça → Classe → Confirmação Final → Prólogo jogável “Cinzas na Estrada”.**
+
+> Gênero foi acrescentado por decisão do autor em 2026-11-13; a Fonte Mestra não o define. Valores: Masculino e Feminino (as duas apresentações do lote visual inicial, ver Matriz de Produção Visual v2.0 §1).
 
 Regras gerais:
 
@@ -56,6 +58,21 @@ Nome que o sistema não aceita por unicidade, reserva, moderação ou regra equi
 ⚠️ Esse nome não pode ser utilizado. Escolha outro nome para continuar. Envie outro nome no chat.
 ```
 
+### 45.1b Seleção de Gênero
+
+```text
+🎭 Gênero
+
+Antes do nome, existe o rosto que o mundo vai reconhecer. Escolha como seu personagem se apresenta em Asterion.
+
+[Masculino] [Feminino]
+
+[← Nome]
+```
+
+- A escolha é feita em um toque, sem tela de detalhe.
+- `[← Nome]` volta ao Nome sem apagar as demais escolhas.
+
 ### 45.2 Seleção de Raça
 
 Lista:
@@ -65,17 +82,19 @@ Lista:
 
 🕯️ Raça
 
-Povos distintos sobreviveram às marcas deixadas sobre Asterion. Sua origem acompanhará permanentemente este personagem e influenciará, de forma sutil, a maneira como ele enfrenta os perigos do mundo.
+Sob o céu sem cor, povos distintos sobreviveram às marcas deixadas sobre Asterion. Cada um carrega um legado no sangue. Sua origem acompanhará permanentemente este personagem e influenciará, de forma sutil, a maneira como ele enfrenta os perigos do mundo.
 
-1 🕯️ Remanescente · Identidade Flexível
-2 🌘 Velado · Efeitos e Resistência
-3 🌪️ Cinéreo · Defesa
-4 🩸 Hemário · Recuperação
-5 🔆 Alvorano · Iniciativa
+🕯️ Remanescente · Identidade Flexível
+🌘 Velado · Efeitos e Resistência
+🌪️ Cinéreo · Defesa
+🩸 Hemário · Recuperação
+🔆 Alvorano · Iniciativa
 
-[1] [2] [3] [4] [5]
+[Remanescente] [Velado]
+[Cinéreo] [Hemário]
+[Alvorano]
 
-[← Nome]
+[← Gênero]
 ```
 
 A lista resume identidade. O detalhe de cada Raça precisa mostrar **o efeito racial completo**, porque a escolha é permanente.
@@ -88,6 +107,8 @@ A lista resume identidade. O detalhe de cada Raça precisa mostrar **o efeito ra
 🕯️ Remanescente
 
 Entre os povos que persistiram após as grandes rupturas de Asterion, os Remanescentes aprenderam a sobreviver menos pela especialização e mais pela capacidade de se adaptar ao que o mundo exige.
+
+🧭 Para quem é · Quem não quer se prender a um estilo e prefere ganhos pequenos em todos os atributos.
 
 🧩 Adaptabilidade · Passiva Racial
 
@@ -112,6 +133,8 @@ Entre os povos que persistiram após as grandes rupturas de Asterion, os Remanes
 
 Os Velados vivem próximos demais de forças que poucos conseguem perceber por inteiro. Aquilo que os fortalece tende a permanecer por mais tempo, enquanto efeitos hostis encontram dificuldade maior para se fixar.
 
+🧭 Para quem é · Quem aposta em Buffs que duram mais e em Debuffs que se desfazem mais cedo.
+
 🌫️ Eco do Véu · Passiva Racial
 
 🟢 Buffs com 2T+ · 25% chance +1T
@@ -132,6 +155,8 @@ Os Velados vivem próximos demais de forças que poucos conseguem perceber por i
 🌪️ Cinéreo
 
 Forjados em regiões onde cinza, pedra e vento castigam sem descanso, os Cinéreos aprenderam que resistir ao impacto certo pode ser tão decisivo quanto desferi-lo.
+
+🧭 Para quem é · Quem escolhe resistir ao impacto: Defender protege ainda mais.
 
 🛡️ Tenacidade Cinérea · Passiva Racial
 
@@ -154,6 +179,8 @@ Forjados em regiões onde cinza, pedra e vento castigam sem descanso, os Cinére
 
 Há algo antigo na vitalidade dos Hemários. Quando o corpo se aproxima do limite, essa herança desperta e transforma violência em sobrevivência.
 
+🧭 Para quem é · Quem luta no limite: com HP baixo, cada golpe devolve vida.
+
 🦇 Fome Hemária · Passiva Racial
 
 ❤️ Ativação · HP ≤ 40%
@@ -175,6 +202,8 @@ Há algo antigo na vitalidade dos Hemários. Quando o corpo se aproxima do limit
 🔆 Alvorano
 
 Nos Alvoranos, movimento e clareza parecem anteceder o perigo. Sua presença se revela na rapidez com que tomam a iniciativa e na dificuldade de enfraquecê-los por meios convencionais.
+
+🧭 Para quem é · Quem quer agir primeiro e sofrer menos com Debuffs numéricos.
 
 🌟 Primeiro Clarão · Passiva Racial
 
@@ -199,32 +228,33 @@ Lista:
 
 Sua Classe define as bases do seu estilo de combate, suas Artes e os Caminhos que poderão ser despertados mais adiante. Escolha com cuidado: esta decisão acompanhará permanentemente o personagem.
 
-1 🛡️ Sentinela
+🛡️ Sentinela
 🏰 Bastião · Caminho
 💥 Devastador · Caminho
 
-2 🗡️ Errante
+🗡️ Errante
 ☠️ Carrasco · Caminho
 🕷️ Sabotador · Caminho
 
-3 🏹 Vigia
+🏹 Vigia
 🎯 Atirador · Caminho
 👣 Rastreador · Caminho
 
-4 🪄 Tecelão
+🪄 Tecelão
 🌀 Conjurador · Caminho
 🔷 Rúnico · Caminho
 
-5 🔮 Oráculo
+🔮 Oráculo
 🦉 Agoureiro · Caminho
 🐺 Invocador · Caminho
 
-6 ☀️ Luminar
+☀️ Luminar
 🪬 Guardião · Caminho
 ⚖️ Inquisidor · Caminho
 
-[1] [2] [3]
-[4] [5] [6]
+[Sentinela] [Errante]
+[Vigia] [Tecelão]
+[Oráculo] [Luminar]
 
 [← Raças]
 ```
@@ -246,6 +276,8 @@ Sentinelas avançam onde outros hesitam. Resistência, proteção e contra-ataqu
 🛡️ DEF · Muito Alta
 ⚔️ ATQ · Baixo
 💨 AGI · Baixa
+
+🧭 Para quem é · Quem quer ficar de pé na linha de frente, proteger o grupo e devolver o golpe recebido.
 
 🎴 Artes de Classe
 
@@ -285,6 +317,8 @@ Errantes sobrevivem pela velocidade, pela leitura de brechas e pela capacidade d
 ⚔️ ATQ · Alto
 💨 AGI · Muito Alta
 
+🧭 Para quem é · Quem prefere agir rápido, atacar primeiro e explorar a brecha de inimigos feridos.
+
 🎴 Artes de Classe
 
 🗡️ Corte Veloz · Dano
@@ -322,6 +356,8 @@ Vigias observam antes de agir. Precisão, leitura do alvo e ataques calculados d
 🛡️ DEF · Média
 ⚔️ ATQ · Alto
 💨 AGI · Alta
+
+🧭 Para quem é · Quem gosta de mirar com calma e punir pontos fracos à distância.
 
 🎴 Artes de Classe
 
@@ -361,6 +397,8 @@ Tecelões manipulam as tramas que atravessam o Véu, encadeando Artes para alter
 ⚔️ ATQ · Muito Alto
 💨 AGI · Média
 
+🧭 Para quem é · Quem busca dano alto e Artes variadas, aceitando ser frágil em troca de poder.
+
 🎴 Artes de Classe
 
 🪄 Fio Cortante · Dano
@@ -398,6 +436,8 @@ Oráculos leem sinais onde outros enxergam apenas acaso. Presságios, antecipaç
 🛡️ DEF · Média
 ⚔️ ATQ · Médio
 💨 AGI · Alta
+
+🧭 Para quem é · Quem prefere enfraquecer inimigos e fortalecer aliados antes do desfecho.
 
 🎴 Artes de Classe
 
@@ -437,6 +477,8 @@ Luminars canalizam luz como força de proteção, restauração e julgamento. Se
 ⚔️ ATQ · Baixo
 💨 AGI · Baixa
 
+🧭 Para quem é · Quem quer sustentar aliados com cura e Barreiras, sem deixar de punir inimigos.
+
 🎴 Artes de Classe
 
 ☀️ Fulgor · Dano
@@ -468,9 +510,10 @@ A confirmação final é a única confirmação obrigatória do fluxo, porque to
 
 🪪 Confirmar Personagem
 
-Seu nome foi escolhido, sua origem foi definida e sua vocação começa a tomar forma. Ao confirmar, sua jornada por Asterion terá início.
+Seu nome foi escolhido, sua origem foi definida e sua vocação começa a tomar forma. Antes de seguir pela estrada, revise o que o mundo saberá sobre você. Ao confirmar, sua jornada por Asterion terá início.
 
 🏷️ Nome · Luiken
+🎭 Gênero · Masculino
 🕯️ Raça · Remanescente
 🧩 Adaptabilidade · Passiva Racial
 🗡️ Classe · Errante
@@ -479,12 +522,14 @@ Seu nome foi escolhido, sua origem foi definida e sua vocação começa a tomar 
 
 [Confirmar Personagem]
 
-[Nome] [Raça] [Classe]
+[Nome] [Gênero]
+
+[Raça] [Classe]
 
 [← Classes]
 ```
 
 - Não mostrar tag de Guilda.
 - Não repetir Caminhos Futuros nesta tela; eles já foram apresentados no detalhe da Classe.
-- `[Nome]`, `[Raça]` e `[Classe]` permitem revisar o respectivo passo e retornar à confirmação sem apagar as demais escolhas válidas.
+- `[Nome]`, `[Gênero]`, `[Raça]` e `[Classe]` permitem revisar o respectivo passo e retornar à confirmação sem apagar as demais escolhas válidas.
 - Após confirmar, entrar diretamente no prólogo; não criar tela de sucesso.

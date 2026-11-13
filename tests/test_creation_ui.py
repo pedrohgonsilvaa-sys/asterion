@@ -24,12 +24,12 @@ def test_all_copy_matches_authoritative_spec_verbatim():
         for block in blocks
     ]
     assert list(COPY.values()) == expected
-    assert len(COPY) == 17
+    assert len(COPY) == 18
 
 
 @pytest.mark.parametrize(
     "step",
-    ["name", "race", "class", "confirm", PROLOGUE]
+    ["name", "gender", "race", "class", "confirm", PROLOGUE]
     + [f"race:{race}" for race in RACES]
     + [f"class:{cls}" for cls in CLASSES],
 )
@@ -40,6 +40,7 @@ def test_render_all_pages_with_telegram_limits_and_no_image_placeholders(step):
             version=2_147_483_647,
             step=step,
             name="Luiken",
+            gender="masculino",
             race="remanescente",
             character_class="errante",
         )
@@ -57,7 +58,13 @@ def test_render_all_pages_with_telegram_limits_and_no_image_placeholders(step):
 
 
 def test_name_errors_and_confirmation_exact_copy():
-    base = Creation(uuid4(), name="Luiken", race="remanescente", character_class="errante")
+    base = Creation(
+        uuid4(),
+        name="Luiken",
+        gender="masculino",
+        race="remanescente",
+        character_class="errante",
+    )
     assert render(base).text == COPY["name"]
     assert render(replace(base, error="format")).text == COPY["format"]
     assert (
@@ -68,7 +75,8 @@ def test_name_errors_and_confirmation_exact_copy():
     assert confirm.text == COPY["confirm"]
     assert [[button.text for button in row] for row in confirm.keyboard.inline_keyboard] == [
         ["Confirmar Personagem"],
-        ["Nome", "Raça", "Classe"],
+        ["Nome", "Gênero"],
+        ["Raça", "Classe"],
         ["← Classes"],
     ]
     assert "Caminhos" not in confirm.text
@@ -82,6 +90,7 @@ def test_confirmation_uses_selected_race_passive_and_class(race, cls):
             uuid4(),
             step="confirm",
             name="Aster",
+            gender="feminino",
             race=race,
             character_class=cls,
         )
@@ -90,6 +99,7 @@ def test_confirmation_uses_selected_race_passive_and_class(race, cls):
     assert passive in screen.text
     assert COPY[f"class:{cls}"].splitlines()[0].split(" ", 1)[1] in screen.text
     assert "🏷️ Nome · Aster" in screen.text
+    assert "🎭 Gênero · Feminino" in screen.text
 
 
 async def test_present_optional_media_text_only_and_message_edits():
@@ -247,7 +257,7 @@ async def test_dispatcher_start_restores_each_persistent_screen(service, telegra
     dispatcher = Dispatcher(disable_fsm=True)
     dispatcher.include_router(creation_router(service, {}))
     state = await service.start(10)
-    for action in (None, "name-input", "r2", "choose", "c3", "choose", "confirm"):
+    for action in (None, "name-input", "g1", "r2", "choose", "c3", "choose", "confirm"):
         if action == "name-input":
             state = await service.name(10, "Luiken", 1)
         elif action:

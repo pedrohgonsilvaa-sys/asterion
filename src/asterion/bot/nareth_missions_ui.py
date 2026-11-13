@@ -23,6 +23,7 @@ from asterion.application.nareth_missions import (
     NarethMissionView,
 )
 from asterion.application.prologue import CombatView
+from asterion.bot.asset_catalog import with_mission_art
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 from asterion.domain.mission_coop import mission_coop_allowed
@@ -44,7 +45,7 @@ def _route_to_expected_location(location: str, expected_location: str) -> str:
     return "world:map"
 
 
-def render_nareth_mission(view: NarethMissionView) -> Screen:
+def _render_nareth_mission(view: NarethMissionView) -> Screen:
     quest_id = view.quest_id
     if quest_id in {
         P14_ID, S14_ID, P15_ID, S15_ID, P16_ID, S16_ID,
@@ -491,3 +492,8 @@ def _render_midgame_mission(view: NarethMissionView) -> Screen:
         [[_button("📍 Local Atual", "world:local")], [_button("← Missões", "world:missions")]]
     )
     return _screen(text, rows)
+
+
+def render_nareth_mission(view: NarethMissionView) -> Screen:
+    """Mission screen with the art of its quest (see asset_catalog)."""
+    return with_mission_art(_render_nareth_mission(view), view.quest_id)
