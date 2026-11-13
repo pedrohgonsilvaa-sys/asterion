@@ -126,7 +126,6 @@ class WorldService:
                     q is not None
                     and q.status == "completed"
                     and achievement is not None
-                    and world.location == "Refúgio do Ocaso"
                 )
                 if not (valid_active or valid_completed):
                     return None
