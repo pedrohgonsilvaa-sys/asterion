@@ -3,8 +3,8 @@
 Every number below comes from §49.15, except the ones marked as author decisions
 (2026-11-08): the source does not define them.
 
-``WORLD_EVENT_CATALOG`` is empty on purpose: the source names no Event yet. With an
-empty catalog no occurrence is ever created.
+``WORLD_EVENT_CATALOG`` holds the six Events of the author's catalog (one per Região,
+2026-11-13). With an empty catalog no occurrence is ever created.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from asterion.domain.combat_math import (
     enemy_stats,
     growth,
 )
+from asterion.domain.creature_kits import build_creature
 from asterion.domain.economy import crowns_per_level, round_10
 from asterion.domain.engagement import Bundle
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
@@ -95,7 +96,191 @@ class WorldEventDefinition:
         return self.phases[number - 1]
 
 
-WORLD_EVENT_CATALOG: tuple[WorldEventDefinition, ...] = ()
+def _phase(
+    creature_id: str,
+    name: str,
+    profile: str,
+    level: int,
+    labels: tuple[str, str, str],
+    flavor: str,
+) -> WorldEventPhase:
+    creature = build_creature(creature_id, name, "boss", profile, level, labels)
+    return WorldEventPhase(creature, flavor)
+
+
+WORLD_EVENT_CATALOG: tuple[WorldEventDefinition, ...] = (
+    WorldEventDefinition(
+        "evt_tdo_cerco_das_cinzas",
+        "O Cerco das Cinzas",
+        "Terras do Ocaso",
+        10,
+        (
+            _phase(
+                "evt_tdo_escavador_de_cinza", "Escavador de Cinza", "Bruto", 10,
+                ("Mandíbula Rente ao Chão", "Fuligem Cegante", "Investida Curta"),
+                "A fuligem se move antes da criatura.\n"
+                "Algo cava sob a estrada como se já conhecesse o caminho.",
+            ),
+            _phase(
+                "evt_tdo_condutor_de_brasa_morta", "Condutor de Brasa Morta", "Equilibrado", 10,
+                ("Golpe de Cinza Endurecida", "Brasas Apagadas", "Avanço Protegido"),
+                "Não há fogo dentro dele. Só o rastro do que queimou.\n"
+                "A estrada parece estreitar quando ele se aproxima.",
+            ),
+            _phase(
+                "evt_tdo_cerco_de_cinzas", "Cerco de Cinzas", "Blindado", 10,
+                ("Varredura Larga", "Placas de Crosta", "Muralha Viva"),
+                "A criatura não caça. Ela fecha portas.\n"
+                "Quando o último espaço desaparece, só resta atravessar.",
+            ),
+        ),
+        "O caminho permanece aberto.\n"
+        "No silêncio depois da luta, a fuligem volta a cair sobre a estrada. "
+        "O Refúgio continua de pé.",
+    ),
+    WorldEventDefinition(
+        "evt_vde_os_que_ainda_pendem",
+        "Os Que Ainda Pendem",
+        "Vales dos Enforcados",
+        20,
+        (
+            _phase(
+                "evt_vde_rastejante_de_no", "Rastejante de Nó", "Ágil", 20,
+                ("Ataque Lateral", "Raízes Expostas", "Salto e Recuo"),
+                "Os galhos balançam sem vento.\nDepois, alguma coisa desce.",
+            ),
+            _phase(
+                "evt_vde_carregador_enredado", "Carregador Enredado", "Bruto", 20,
+                ("Esmagar o Solo", "Raízes Arremessadas", "Golpe Pesado"),
+                "A madeira range como se sustentasse peso demais.\n"
+                "A criatura parece ter aprendido a mesma linguagem.",
+            ),
+            _phase(
+                "evt_vde_pendular_do_fosso", "Pendular do Fosso", "Controlador", 20,
+                ("Ataque de Cima", "Partes Soltas", "Descida Abrupta"),
+                "Há coisas que caem.\nEsta não.\n"
+                "Ela apenas espera que alguém chegue perto o bastante.",
+            ),
+        ),
+        "A passagem volta a respirar.\n"
+        "As raízes continuam fechadas sobre o vazio, indiferentes ao que acabou de acontecer.",
+    ),
+    WorldEventDefinition(
+        "evt_pdn_a_linha_que_nao_termina",
+        "A Linha que Não Termina",
+        "Planícies de Nareth",
+        30,
+        (
+            _phase(
+                "evt_pdn_marcador_sem_rumo", "Marcador Sem Rumo", "Equilibrado", 30,
+                ("Golpe na Marca", "Marca no Terreno", "Linha Reta"),
+                "Uma marca aparece na terra.\nNinguém a fez.",
+            ),
+            _phase(
+                "evt_pdn_medidor_invertido", "Medidor Invertido", "Ágil", 30,
+                ("Investida Alternada", "Corrida entre Extremos", "Golpe ao Mais Distante"),
+                "A distância parece mudar sem que ninguém se mova.\n"
+                "O horizonte continua no mesmo lugar. É isso que assusta.",
+            ),
+            _phase(
+                "evt_pdn_linha_sem_fim", "Linha sem Fim", "Controlador", 30,
+                ("Ataque Repetido", "Percurso Traçado", "Rota Fechada"),
+                "A linha termina no mesmo lugar onde começou.\n"
+                "Não há explicação escrita para isso.\nHá apenas a próxima marca.",
+            ),
+        ),
+        "A rota volta a ser uma rota.\n"
+        "As marcas permanecem na terra, mas ninguém consegue dizer qual delas "
+        "deveria ter sido a última.",
+    ),
+    WorldEventDefinition(
+        "evt_vc_a_agua_que_se_ergue",
+        "A Água que se Ergue",
+        "Várzeas Carmesins",
+        40,
+        (
+            _phase(
+                "evt_vc_lodo_de_sangria", "Lodo de Sangria", "Bruto", 40,
+                ("Massa de Lodo", "Detritos Sacudidos", "Arrasto Pesado"),
+                "Primeiro, a água deixa de refletir o céu.\nDepois, alguma coisa se levanta.",
+            ),
+            _phase(
+                "evt_vc_enraizado_rubro", "Enraizado Rubro", "Controlador", 40,
+                ("Extensão do Corpo", "Raízes Curtas", "Avanço Lento"),
+                "A margem parece crescer.\nNão é vegetação nova.\n"
+                "É a criatura tomando espaço.",
+            ),
+            _phase(
+                "evt_vc_colosso_da_varzea_rubra", "Colosso da Várzea Rubra", "Blindado", 40,
+                ("Golpe Frontal", "Couraça de Detritos", "Investida Pesada"),
+                "A água sobe até os joelhos.\nDepois, até a cintura.\n"
+                "O monstro não parece perceber a diferença.",
+            ),
+        ),
+        "A água baixa devagar.\n"
+        "O terreno continua vermelho, úmido e irreconhecível por alguns minutos. "
+        "Ninguém encontra uma causa que explique o que aconteceu.",
+        attuned=True,
+    ),
+    WorldEventDefinition(
+        "evt_ac_o_ultimo_contrapeso",
+        "O Último Contrapeso",
+        "Altos Cinéreos",
+        50,
+        (
+            _phase(
+                "evt_ac_arrastador_de_basalto", "Arrastador de Basalto", "Bruto", 50,
+                ("Golpe no Solo", "Placas Arrastadas", "Avanço Pesado"),
+                "A montanha já range antes de a criatura aparecer.\n"
+                "Então uma pedra começa a andar.",
+            ),
+            _phase(
+                "evt_ac_operador_de_contrapeso", "Operador de Contrapeso", "Equilibrado", 50,
+                ("Golpe Curto", "Posição de Sustentação", "Empurrão para Fora"),
+                "Cabos estalam acima do combate.\nAlguma coisa ainda distribui peso.\n"
+                "Ninguém sabe se é a estrutura ou o monstro.",
+            ),
+            _phase(
+                "evt_ac_tita_de_escarpa", "Titã de Escarpa", "Blindado", 50,
+                ("Sequência Lenta", "Placas como Escudo", "Peso do Corpo"),
+                "Quando ele se move, os cabos respondem.\nQuando ele para, tudo parece esperar.\n"
+                "O peso da montanha não escolhe lado.",
+            ),
+        ),
+        "O contrapeso permanece.\n"
+        "Por enquanto, as pontes continuam sustentadas e a passagem não fecha.",
+        attuned=True,
+    ),
+    WorldEventDefinition(
+        "evt_cdv_o_silencio_entre_as_camadas",
+        "O Silêncio entre as Camadas",
+        "Confins do Véu",
+        60,
+        (
+            _phase(
+                "evt_cdv_reflexo_desalinhado", "Reflexo Desalinhado", "Ágil", 60,
+                ("Movimento Repetido", "Ângulo Brusco", "Ataque e Recuo"),
+                "O som chega um instante tarde.\nO movimento, não.",
+            ),
+            _phase(
+                "evt_cdv_dobra_sem_testemunha", "Dobra sem Testemunha", "Controlador", 60,
+                ("Golpe e Recuo", "Posição Imitada", "Deslocamento Inesperado"),
+                "Há duas silhuetas.\nSó uma deixa marcas no chão.\n"
+                "Ninguém consegue provar qual chegou primeiro.",
+            ),
+            _phase(
+                "evt_cdv_intervalo_sem_nome", "Intervalo Sem Nome", "Equilibrado", 60,
+                ("Ataque Próximo", "Ação Repetida", "Investida Repentina"),
+                "O combate continua, mas o lugar parece ter parado.\n"
+                "Não há voz. Não há aviso.\nApenas o intervalo entre uma coisa e outra.",
+            ),
+        ),
+        "O silêncio termina sem resposta.\n"
+        "A área volta a apresentar seus sons habituais. "
+        "O que ocorreu permanece registrado como ocorrência, não como explicação.",
+        attuned=True,
+    ),
+)
 
 
 def latest_slot(now: datetime) -> datetime | None:
