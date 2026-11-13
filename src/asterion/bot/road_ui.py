@@ -51,6 +51,7 @@ from asterion.application.road import (
     VDE_VIGILIA,
     RoadView,
 )
+from asterion.bot.asset_catalog import location_key
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 from asterion.domain.road import LOCATION_LEVEL_BANDS
@@ -1134,7 +1135,10 @@ def render_current_local(
     )
     return Screen(
         "\n".join(lines),
-        "local_current",
+        # Standing at a Brazier shows that Brazier's art (see asset_catalog).
+        view.brazier_id
+        if view.brazier_id and view.brazier_label
+        else location_key(view.location),
         InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode="HTML",
     )

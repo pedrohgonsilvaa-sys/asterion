@@ -74,6 +74,9 @@ services:
       ASTERION_TELEGRAM_BOT_TOKEN: ${ASTERION_TELEGRAM_BOT_TOKEN:?set ASTERION_TELEGRAM_BOT_TOKEN}
       ASTERION_TELEGRAM_MODE: polling
     command: asterion-bot
+    volumes:
+      # Imagens do jogo (somente leitura). Se a pasta assets/ nao existir, o bot roda so com texto.
+      - ./assets:/app/assets:ro
     depends_on:
       migrate:
         condition: service_completed_successfully

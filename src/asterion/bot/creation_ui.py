@@ -115,4 +115,9 @@ def render(state: Creation) -> Screen:
             [button("Raça", "race"), button("Classe", "class")],
             [button("← Classes", "classes")],
         ]
-    return Screen(text, step, InlineKeyboardMarkup(inline_keyboard=rows) if rows else None)
+    image_key = step
+    if state.gender and step.startswith("race:"):
+        image_key = f"char.{step.split(':')[1]}.{state.gender}"
+    elif state.gender and state.race and step.startswith("class:"):
+        image_key = f"char.{state.race}.{state.gender}.{step.split(':')[1]}"
+    return Screen(text, image_key, InlineKeyboardMarkup(inline_keyboard=rows) if rows else None)
