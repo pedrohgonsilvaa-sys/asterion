@@ -14,17 +14,20 @@
 
 > **Sincronização 2026-11-13:** a Fonte Mestra passa a ser o **GDD Estrutural v1.7.0** (`ASTERION_GDD_Estrutural_v1.7.0_Fonte_Mestra.md`) e o Contrato Global de Weapon Metadata passa a ser a **v1.1.0 FINAL** (`ASTERION_CONTRATO_GLOBAL_WEAPON_METADATA_v1.1.0_FINAL.md`), por decisão do autor. Entram: Proficiências de Equipamento e Treinamento, categorias de proteção corporal (Vestes, Leve, Média, Pesada), Escudo não-arma, kits de Equipamentos de Origem, núcleos corporais por categoria e núcleo de Escudo (revogando o total fixo HP305/ATQ56/DEF33/AGI16), pesos de Saque v0.4 e a cobertura de Confins do Véu no mapeamento de armas (27 armas). **Não entram** IDs de template, receitas, vínculos nem elegibilidade individual de Saque da Fase 2E: continuam candidatos e não canônicos até a conciliação com o snapshot de release. Importação, migration, flag, merge e deploy da Fase 2E continuam NO-GO. A divergência de Coop de Missão de 2026-11-12 continua registrada neste índice e ainda não foi incorporada ao texto do GDD. As versões v1.6.0 e v1.0.0 permanecem no repositório como registro histórico.
 
+> **Sincronização 2026-11-13 (Proficiências de Armas):** por decisão do autor, a **Especificação Final de Proficiências de Armas, Catálogo de Armas e Regras de Equipamento v1.0.0** (`docs/specs/ASTERION_ESPECIFICACAO_FINAL_PROFICIENCIAS_EQUIPAMENTO_v1_0_0.md`) substitui o sistema de Proficiências da v1.7.0. A Fonte Mestra passa a ser o **GDD Estrutural v1.7.1** (`ASTERION_GDD_Estrutural_v1.7.1_Fonte_Mestra.md`) e o Contrato Global de Weapon Metadata passa a ser a **v1.1.1 FINAL** (`ASTERION_CONTRATO_GLOBAL_WEAPON_METADATA_v1.1.1_FINAL.md`). Ficam **revogados**: categorias de proteção corporal (Vestes, Leve, Média, Pesada) e seus núcleos, Proficiências naturais múltiplas, Treinamento em etapas I–IV e kits de Origem de 34 templates; volta o núcleo corporal por slot (Conjunto HP305/ATQ56/DEF33/AGI16). Entram: 8 famílias + Escudo, catálogo final de 19 armas + Escudo, matriz por Classe, 1 Proficiência inicial, Treinador de Armas no Refúgio do Ocaso (1.000 a 20.000 Coroas, Nível 10 a 50, sem teto) e arma inicial Comum +0 Grau I. O núcleo de Escudo e os pesos de Saque v0.4 não mudam. As versões v1.7.0 e v1.1.0 permanecem no repositório como registro histórico.
+
 ## Fonte Mestra vigente
 
 A implementação do Asterion deve usar como autoridade principal:
 
-**ASTERION — GDD Estrutural v1.7.0 — Fonte Mestra Consolidada**
+**ASTERION — GDD Estrutural v1.7.1 — Fonte Mestra Consolidada**
 
-Arquivo vigente: `ASTERION_GDD_Estrutural_v1.7.0_Fonte_Mestra.md`.
+Arquivo vigente: `ASTERION_GDD_Estrutural_v1.7.1_Fonte_Mestra.md`.
+SHA-256 verificado: `2d4ffe0f3310d0f64d54b06fc3038a616dae746f6f8bb61b59666c91645a7db9` (arquivo com quebras de linha Windows CRLF).
 
 Estado oficial:
 
-- a v1.7.0 substitui integralmente a v1.6.0 e versões anteriores; a v1.7.0 acrescenta Proficiências de Equipamento, categorias de proteção corporal, núcleos corporais, Escudo, kits de Origem e pesos de Saque v0.4 (registro no próprio GDD, sem alterar a Baseline Numérica v1.0 fora desses pontos);
+- a v1.7.1 substitui integralmente a v1.7.0 e versões anteriores; a v1.7.1 troca o sistema de Proficiências pela Especificação de Proficiências de Armas v1.0.0 (§24.2, §24.5, §24.7, §49.8, §55.3); a v1.7.0 substituiu a v1.6.0 e a v1.7.0 acrescenta Proficiências de Equipamento, categorias de proteção corporal, núcleos corporais, Escudo, kits de Origem e pesos de Saque v0.4 (registro no próprio GDD, sem alterar a Baseline Numérica v1.0 fora desses pontos);
 - a Baseline Numérica v1.0 está fechada para implementação e testes;
 - a v1.4.9 formaliza o fechamento único de `HP Máximo`, `ATQ`, `DEF` e `AGI` estáticos finais em pontos inteiros com `round_half_up`, além de HP atual inteiro; não altera percentuais, curvas, custos, recompensas ou parâmetros de balanceamento;
 - a reabertura anterior da conversão absoluta da unidade de XP de inimigo foi encerrada na v1.4.3;
@@ -34,19 +37,32 @@ Estado oficial:
 
 ## Contrato Global Complementar — Weapon Metadata
 
-**ASTERION — Contrato Global de Weapon Metadata v1.1.0 FINAL**
+**ASTERION — Contrato Global de Weapon Metadata v1.1.1 FINAL**
 
-Arquivo vigente: `ASTERION_CONTRATO_GLOBAL_WEAPON_METADATA_v1.1.0_FINAL.md`.
-SHA-256 verificado: `6eddac6da8a7f6a76bd55e92a5fb4381e14eda64973a666c2a4982d510d10dd7` (arquivo com quebras de linha Windows CRLF, mesma convenção da v1.0.0; com quebras LF: `3707843b2be3acf8f017f5234596b6ba32abaa6aee588b600278d5cd486ffcc1`).
+Arquivo vigente: `ASTERION_CONTRATO_GLOBAL_WEAPON_METADATA_v1.1.1_FINAL.md`.
+SHA-256 verificado: `85cc57fdb168bd81cf5366af530bde22aa68d348da98f3b0ca5766757f44feb5` (arquivo com quebras de linha Windows CRLF, mesma convenção da v1.0.0).
 
-Este contrato global complementa o GDD Estrutural v1.7.0 e fecha, exclusivamente para armas player-equippable, `weapon_form` descritiva, `handedness`, elegibilidade de slot, tags explícitas de compatibilidade, mapeamento canônico das armas publicadas na tabela §9 e política de legado `EXACT_CANONICAL_MAPPING_OR_UNMAPPED`. `weapon_family` não é conceito canônico e não deve ser armazenado nem inferido.
+A v1.1.1 acrescenta sete formas descritivas (Chakram, Lâmina Dupla, Alabarda, Azagaia, Cetro, Orbe, Escudo), remove `weapon.form.rod`, publica o catálogo-base de 20 templates (§9.9), a identidade de Proficiência de cada arma publicada (§9.10) e a migração dos três drops legados de Terras do Ocaso (§10.5). A família de Proficiência é um registro separado; `weapon_family` continua fora do modelo de metadata.
 
-O contrato não redefine economia regional nem conteúdo regional fora desse escopo, e não substitui nem rebaixa versões regionais vigentes. O GDD Estrutural v1.7.0 permanece a autoridade estrutural superior. Este contrato não é autoridade visual: assets e apresentação visual não determinam metadata mecânica.
+Este contrato global complementa o GDD Estrutural v1.7.1 e fecha, exclusivamente para armas player-equippable, `weapon_form` descritiva, `handedness`, elegibilidade de slot, tags explícitas de compatibilidade, mapeamento canônico das armas publicadas na tabela §9 e política de legado `EXACT_CANONICAL_MAPPING_OR_UNMAPPED`. `weapon_family` não é conceito canônico e não deve ser armazenado nem inferido.
+
+O contrato não redefine economia regional nem conteúdo regional fora desse escopo, e não substitui nem rebaixa versões regionais vigentes. O GDD Estrutural v1.7.1 permanece a autoridade estrutural superior. Este contrato não é autoridade visual: assets e apresentação visual não determinam metadata mecânica.
 
 A presença de entradas de Altos Cinéreos na tabela de metadata limita-se aos itens nela mapeados. Ela não registra nem substitui a Fonte Regional de Altos Cinéreos nem define seus gates; essa autoridade está registrada como Altos Cinéreos v1.0.1 FINAL na Região 5 abaixo.
 
 A §19.2 de Confins do Véu v1.0.0 FINAL declara metadata explícita para as cinco armas regionais Grau VI usando os vocabulários de forma, handedness, slot e tags funcionais deste contrato. A compatibilidade foi conferida; `weapon_family` permanece não armazenado e não inferível. O conteúdo regional está registrado separadamente na Região 6.
 
+
+## Proficiências de Armas
+
+**ASTERION — Especificação Final de Proficiências de Armas, Catálogo de Armas e Regras de Equipamento v1.0.0**
+
+Arquivo: `docs/specs/ASTERION_ESPECIFICACAO_FINAL_PROFICIENCIAS_EQUIPAMENTO_v1_0_0.md`.
+SHA-256 verificado: `babba9f4c0db746fa0fcfbc31165131de2764a03d5535ac0f6de3b4b35a4dc03`.
+
+- Rege famílias de Proficiência, catálogo final de armas, matriz por Classe, Proficiência inicial, Treinador de Armas e equipamento inicial. O GDD v1.7.1 §24.2/§24.7 e o contrato v1.1.1 §9.9/§9.10 estão sincronizados com ela.
+- Decisões do autor na implementação (2026-11-13): arma inicial Comum, só a arma (sem armaduras); Treinador no Refúgio do Ocaso; Arma do Contrapeso (martelo 1 mão) = Maça; drops legados de Terras do Ocaso migrados e demais armas sem identidade recusadas no equipar.
+- Registro em código: `src/asterion/domain/weapon_proficiency.py`.
 
 ## Camada narrativa — Ação × Consequência
 

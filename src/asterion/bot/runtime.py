@@ -75,6 +75,7 @@ from asterion.application.trades import TradeService
 from asterion.application.varzeas_missions import VarzeasMissionService
 from asterion.application.vde_missions import VDEMissionService
 from asterion.application.warehouse import WarehouseService
+from asterion.application.weapon_proficiency import WeaponTrainerService
 from asterion.application.world import WorldService
 from asterion.application.world_events import WorldEventService
 from asterion.bot.altos_missions_handlers import altos_missions_router
@@ -137,6 +138,7 @@ from asterion.bot.shop_handlers import shop_router
 from asterion.bot.social_handlers import social_router
 from asterion.bot.varzeas_missions_handlers import varzeas_missions_router
 from asterion.bot.vde_missions_handlers import vde_missions_router
+from asterion.bot.weapon_trainer_handlers import weapon_trainer_router
 from asterion.bot.world_event_handlers import world_event_router
 from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
@@ -176,6 +178,7 @@ def get_bot_runtime() -> BotRuntime:
     world = WorldService(SessionFactory, settings.server_id)
     legacy = LegacyService(SessionFactory, settings.server_id)
     legacy_marks = LegacyMarksService(SessionFactory, settings.server_id)
+    weapon_trainer = WeaponTrainerService(SessionFactory, settings.server_id)
     groups = GroupService(SessionFactory, settings.server_id)
     p1 = P1Service(SessionFactory, settings.server_id, groups=groups)
     p2 = P2Service(SessionFactory, settings.server_id, groups=groups)
@@ -279,6 +282,9 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(cosmetics_router(cosmetics, settings.creation_images))
     dispatcher.include_router(doctrines_router(doctrines, settings.creation_images))
     dispatcher.include_router(legacy_marks_router(legacy_marks, settings.creation_images))
+    dispatcher.include_router(
+        weapon_trainer_router(weapon_trainer, settings.creation_images)
+    )
     # P7 is deliberately placed before the shared Group/Combat/World routers so
     # its self-contained regional callbacks can fall through safely when they
     # do not belong to P7.

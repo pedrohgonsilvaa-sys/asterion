@@ -1121,6 +1121,11 @@ def render_current_local(
                 [
                     [InlineKeyboardButton(text="Alda Veyr", callback_data="p2:alda")],
                     [InlineKeyboardButton(text="Oren Cal", callback_data="world:oren")],
+                    [
+                        InlineKeyboardButton(
+                            text="Treinador de Armas", callback_data="wpt:root"
+                        )
+                    ],
                 ]
             )
         elif mission_available:

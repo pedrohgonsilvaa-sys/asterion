@@ -23,6 +23,10 @@ from asterion.application.weapon_metadata import (
     WeaponMetadataPersistenceError,
     resolve_equipment_weapon,
 )
+from asterion.application.weapon_proficiency import (
+    WeaponEligibility,
+    weapon_eligibility,
+)
 from asterion.domain.equipment import (
     EquipmentSlot,
     assign_equipment_instance_id,
@@ -51,6 +55,9 @@ class EquipmentMutationCode(StrEnum):
     SECONDARY_BLOCKED_BY_TWO_HANDED = "secondary_blocked_by_two_handed"
     ITEM_EQUIPPED_IN_OTHER_SLOT = "item_equipped_in_other_slot"
     MYTHIC_LIMIT = "mythic_limit"
+    WEAPON_UNMAPPED = "weapon_unmapped"
+    WEAPON_PROFICIENCY_REQUIRED = "weapon_proficiency_required"
+    WEAPON_CLASS_FORBIDDEN = "weapon_class_forbidden"
     STALE_CONFIGURATION = "stale_configuration"
     INVALID_CURRENT_CONFIGURATION = "invalid_current_configuration"
 
@@ -150,6 +157,11 @@ class EquipmentService:
                 raise EquipmentMutationRejected(
                     EquipmentMutationCode.ITEM_EQUIPPED_IN_OTHER_SLOT
                 )
+
+            # Proficiência (family) first, then the concrete Classe whitelist.
+            eligibility = await weapon_eligibility(session, character, item)
+            if eligibility != WeaponEligibility.ALLOWED:
+                raise EquipmentMutationRejected(WEAPON_ELIGIBILITY_CODES[eligibility])
 
             if (
                 assignment.slot == EquipmentSlot.SECUNDARIA
@@ -381,6 +393,13 @@ class EquipmentService:
                         equipment_item_id=item_id,
                     )
                 )
+
+
+WEAPON_ELIGIBILITY_CODES = {
+    WeaponEligibility.UNMAPPED: EquipmentMutationCode.WEAPON_UNMAPPED,
+    WeaponEligibility.NOT_TRAINED: EquipmentMutationCode.WEAPON_PROFICIENCY_REQUIRED,
+    WeaponEligibility.CLASS_FORBIDDEN: EquipmentMutationCode.WEAPON_CLASS_FORBIDDEN,
+}
 
 
 def _is_mythic(item: EquipmentItem) -> bool:

@@ -78,3 +78,30 @@ async def add_compatible_weapon_for_arts(
         )
     )
     return weapon.weapon_type_id
+
+
+# Proficiências v1.0.0: weapons equipped through the authoritative services need a
+# canonical identity. Defaults below are all inside the Sentinela whitelist.
+DEFAULT_TEST_WEAPON_TYPE_IDS = {
+    "Principal": "weapon.type.base.espada",
+    "Arma Principal": "weapon.type.base.espada",
+    "Secundária": "weapon.type.tdo.guarda_caminhante",
+    "2H": "weapon.type.base.espada_de_guerra",
+}
+
+
+def all_proficiency_rows(character_id):
+    """Every family, so pre-Proficiência tests are gated only by the Classe whitelist."""
+    from asterion.domain.weapon_proficiency import ProficiencyFamily
+    from asterion.infrastructure.db.models import CharacterWeaponProficiency
+
+    return [
+        CharacterWeaponProficiency(
+            character_id=character_id,
+            family=family.value,
+            ordinal=ordinal,
+            source="initial" if ordinal == 1 else "trainer",
+            cost_crowns=0,
+        )
+        for ordinal, family in enumerate(ProficiencyFamily, start=1)
+    ]

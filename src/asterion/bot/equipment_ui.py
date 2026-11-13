@@ -104,9 +104,10 @@ def render_equipment_detail(view: EquipmentDetailView, *, context: str) -> Scree
         lines.extend(
             [
                 f"🗡️ Forma · {escape(item.weapon_form_label)}",
+                f"⚔️ Proficiência · {escape(item.weapon_proficiency_label or 'Não registrada')}",
                 f"🤲 Mãos · {escape(item.weapon_handedness_label or '')}",
                 "🎴 Compatibilidade de Artes · "
-                + escape(item.weapon_compatibility_label or ""),
+                + escape(item.weapon_compatibility_label or "Nenhuma"),
             ]
         )
     if context == "i" and item.equipped:

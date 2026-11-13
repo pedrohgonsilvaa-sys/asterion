@@ -75,6 +75,10 @@ async def _equip_owned_weapon_for_requirement(sessions, server_id, actor, requir
         equipped_weapon_compatibility_tags,
         resolve_equipment_weapon,
     )
+    from asterion.application.weapon_proficiency import (
+        WeaponEligibility,
+        weapon_eligibility,
+    )
     from asterion.domain.equipment import EquipmentSlot
     from asterion.infrastructure.db.models import Character, EquipmentItem
 
@@ -106,6 +110,8 @@ async def _equip_owned_weapon_for_requirement(sessions, server_id, actor, requir
                 continue
             weapon = await resolve_equipment_weapon(session, item)
             if weapon is None or not (required & weapon.compatibility_tags):
+                continue
+            if await weapon_eligibility(session, character, item) != WeaponEligibility.ALLOWED:
                 continue
             candidates.append(
                 (
@@ -193,6 +199,7 @@ async def test_capture_weapon_recovery_uses_owned_secondary_weapon(database):
     from asterion.domain.arts import DEVASTADOR_ART_IDS
     from asterion.domain.road import materialize_equipment
     from asterion.infrastructure.db.models import EquipmentItem
+    from tests.helpers.weapon_metadata import all_proficiency_rows
     from tests.test_active_arts import _seed_character
 
     actor = 88412001
@@ -224,6 +231,7 @@ async def test_capture_weapon_recovery_uses_owned_secondary_weapon(database):
                 payload=payload,
             )
         )
+        session.add_all(all_proficiency_rows(character_id))
 
     repair = await _equip_owned_weapon_for_requirement(
         sessions, "ocaso", actor, {"weapon.compat.melee"}

@@ -18,6 +18,7 @@ from asterion.infrastructure.db.models import (
     EquipmentItem,
     GameActivity,
 )
+from tests.helpers.weapon_metadata import DEFAULT_TEST_WEAPON_TYPE_IDS
 from tests.test_creation_ui import callback_update
 from tests.test_road_integration import _seed_road
 
@@ -100,6 +101,11 @@ async def _add_item(
                 item_level=item_level,
                 bound=True,
                 payload={
+                    **(
+                        {"weapon_type_id": DEFAULT_TEST_WEAPON_TYPE_IDS[slot]}
+                        if slot in DEFAULT_TEST_WEAPON_TYPE_IDS
+                        else {}
+                    ),
                     "slot": slot,
                     "core": core,
                     "secondaries": secondaries or [],

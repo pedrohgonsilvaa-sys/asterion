@@ -39,6 +39,11 @@ ERROR_COPY = {
     ),
     EquipmentMutationCode.ITEM_EQUIPPED_IN_OTHER_SLOT: "Equipamento já está em uso.",
     EquipmentMutationCode.MYTHIC_LIMIT: "Limite de Mítico equipado atingido.",
+    EquipmentMutationCode.WEAPON_UNMAPPED: "Arma sem identidade registrada.",
+    EquipmentMutationCode.WEAPON_PROFICIENCY_REQUIRED: (
+        "Requer a Proficiência desta arma (Treinador de Armas, no Refúgio)."
+    ),
+    EquipmentMutationCode.WEAPON_CLASS_FORBIDDEN: "Sua Classe não pode usar esta arma.",
     EquipmentMutationCode.STALE_CONFIGURATION: "Configuração atualizada.",
     EquipmentMutationCode.INVALID_CURRENT_CONFIGURATION: (
         "Não foi possível atualizar os Equipamentos."

@@ -18,7 +18,15 @@ WEAPON_FORM_LABELS = {
     "weapon.form.bow": "Arco",
     "weapon.form.crossbow": "Besta",
     "weapon.form.staff": "Cajado",
-    "weapon.form.rod": "Bastão",
+    # v1.0.0 Proficiências catalog: identities the previous forms could not describe.
+    # "weapon.form.rod" (Bastão) was consolidated into Cajado; no template used it.
+    "weapon.form.chakram": "Chakram",
+    "weapon.form.double_blade": "Lâmina Dupla",
+    "weapon.form.halberd": "Alabarda",
+    "weapon.form.javelin": "Azagaia",
+    "weapon.form.scepter": "Cetro",
+    "weapon.form.orb": "Orbe",
+    "weapon.form.shield": "Escudo",
 }
 HANDEDNESS_LABELS = {
     "weapon.hands.one": "1 mão",
@@ -62,7 +70,11 @@ class WeaponDefinition:
             raise ValueError("Canonical weapons require a known form and item name.")
         if self.handedness not in _VALID_HANDS or self.slot_eligibility not in _VALID_SLOTS:
             raise ValueError("Canonical weapons require explicit hands and slot eligibility.")
-        if not self.compatibility_tags or not self.compatibility_tags <= _VALID_TAGS:
+        # An empty set is an explicit declaration: the item satisfies no Art
+        # weapon requirement (Focos Arcanos and Escudo in the v1.0.0 catalog).
+        if not isinstance(self.compatibility_tags, frozenset) or not (
+            self.compatibility_tags <= _VALID_TAGS
+        ):
             raise ValueError("Canonical weapons require explicit compatibility tags.")
         expected_item_slot = SLOT_ELIGIBILITY_TO_ITEM_SLOT[self.slot_eligibility]
         if self.handedness == "weapon.hands.two" and expected_item_slot != "2H":
@@ -288,8 +300,199 @@ _CANONICAL_WEAPON_ROWS = (
         "weapon.slot.secondary_only",
         ("weapon.compat.melee",),
     ),
+    # Confins do Véu §19.2 blacksmith weapons (contract v1.1.0 §9.7); no recipe yet.
+    (
+        "craft.confins.ferreiro.principal.lamina_baliza",
+        "Lâmina de Baliza",
+        "weapon.form.sword",
+        "weapon.hands.one",
+        "weapon.slot.main_only",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "craft.confins.ferreiro.secundaria.guarda_marcha",
+        "Guarda da Marcha",
+        "weapon.form.dagger",
+        "weapon.hands.one",
+        "weapon.slot.secondary_only",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "craft.confins.ferreiro.2h.arco_retorno",
+        "Arco do Retorno",
+        "weapon.form.bow",
+        "weapon.hands.two",
+        "weapon.slot.main_two_handed",
+        ("weapon.compat.bow",),
+    ),
 )
-_CANONICAL_WEAPON_IDS = frozenset(row[0] for row in _CANONICAL_WEAPON_ROWS)
+# v1.0.0 base catalog (Proficiências): one template per concrete identity. Starting
+# equipment uses six of them; none is in a drop pool. Focos Arcanos and Escudo
+# declare no Art compatibility tag.
+_BASE_WEAPON_ROWS = (
+    (
+        "weapon.type.base.espada",
+        "Espada",
+        "weapon.form.sword",
+        "weapon.hands.one",
+        "weapon.slot.main_only",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "weapon.type.base.espada_de_guerra",
+        "Espada de Guerra",
+        "weapon.form.sword",
+        "weapon.hands.two",
+        "weapon.slot.main_two_handed",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "weapon.type.base.adaga",
+        "Adaga",
+        "weapon.form.dagger",
+        "weapon.hands.one",
+        "weapon.slot.main_only",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "weapon.type.base.adaga_de_arremesso",
+        "Adaga de Arremesso",
+        "weapon.form.dagger",
+        "weapon.hands.one",
+        "weapon.slot.main_only",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "weapon.type.base.chakram",
+        "Chakram",
+        "weapon.form.chakram",
+        "weapon.hands.one",
+        "weapon.slot.main_only",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "weapon.type.base.lamina_dupla",
+        "Lâmina Dupla",
+        "weapon.form.double_blade",
+        "weapon.hands.two",
+        "weapon.slot.main_two_handed",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "weapon.type.base.maca",
+        "Maça",
+        "weapon.form.mace",
+        "weapon.hands.one",
+        "weapon.slot.main_only",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "weapon.type.base.martelo_de_guerra",
+        "Martelo de Guerra",
+        "weapon.form.hammer",
+        "weapon.hands.two",
+        "weapon.slot.main_two_handed",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "weapon.type.base.machado",
+        "Machado",
+        "weapon.form.axe",
+        "weapon.hands.one",
+        "weapon.slot.main_only",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "weapon.type.base.machado_de_guerra",
+        "Machado de Guerra",
+        "weapon.form.axe",
+        "weapon.hands.two",
+        "weapon.slot.main_two_handed",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "weapon.type.base.lanca",
+        "Lança",
+        "weapon.form.spear",
+        "weapon.hands.one",
+        "weapon.slot.main_only",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "weapon.type.base.alabarda",
+        "Alabarda",
+        "weapon.form.halberd",
+        "weapon.hands.two",
+        "weapon.slot.main_two_handed",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "weapon.type.base.azagaia",
+        "Azagaia",
+        "weapon.form.javelin",
+        "weapon.hands.one",
+        "weapon.slot.main_only",
+        ("weapon.compat.melee",),
+    ),
+    (
+        "weapon.type.base.arco",
+        "Arco",
+        "weapon.form.bow",
+        "weapon.hands.two",
+        "weapon.slot.main_two_handed",
+        ("weapon.compat.bow",),
+    ),
+    (
+        "weapon.type.base.besta_de_mao",
+        "Besta de Mão",
+        "weapon.form.crossbow",
+        "weapon.hands.one",
+        "weapon.slot.main_only",
+        ("weapon.compat.crossbow",),
+    ),
+    (
+        "weapon.type.base.besta_pesada",
+        "Besta Pesada",
+        "weapon.form.crossbow",
+        "weapon.hands.two",
+        "weapon.slot.main_two_handed",
+        ("weapon.compat.crossbow",),
+    ),
+    (
+        "weapon.type.base.cetro",
+        "Cetro",
+        "weapon.form.scepter",
+        "weapon.hands.one",
+        "weapon.slot.main_only",
+        (),
+    ),
+    (
+        "weapon.type.base.orbe",
+        "Orbe",
+        "weapon.form.orb",
+        "weapon.hands.one",
+        "weapon.slot.main_only",
+        (),
+    ),
+    (
+        "weapon.type.base.cajado",
+        "Cajado",
+        "weapon.form.staff",
+        "weapon.hands.two",
+        "weapon.slot.main_two_handed",
+        (),
+    ),
+    (
+        "weapon.type.base.escudo",
+        "Escudo",
+        "weapon.form.shield",
+        "weapon.hands.one",
+        "weapon.slot.secondary_only",
+        (),
+    ),
+)
+_ALL_WEAPON_ROWS = (*_CANONICAL_WEAPON_ROWS, *_BASE_WEAPON_ROWS)
+_CANONICAL_WEAPON_IDS = frozenset(row[0] for row in _ALL_WEAPON_ROWS)
 WEAPON_DEFINITIONS = MappingProxyType(
     {
         weapon_id: WeaponDefinition(
@@ -307,7 +510,7 @@ WEAPON_DEFINITIONS = MappingProxyType(
             handedness,
             slot_eligibility,
             compatibility_tags,
-        ) in _CANONICAL_WEAPON_ROWS
+        ) in _ALL_WEAPON_ROWS
     }
 )
 
@@ -360,6 +563,9 @@ _EXACT_RECIPE_TO_WEAPON_ID = {
     "recipe.tdo.galerias.guarda_primeiro_selo": "weapon.type.tdo.guarda_primeiro_selo",
     "recipe.vde.santuario.guarda_no_antigo": "weapon.type.vde.guarda_no_antigo",
     "recipe.nareth.observatorio.guarda_referencia": "weapon.type.nareth.guarda_referencia",
+    "recipe.altos.bastilha.guarda_ordem_profunda": (
+        "equipment.altos.special.guarda_ordem_profunda"
+    ),
     "recipe.confins.contradicoes.guarda_duas_versoes": (
         "equipment.confins.special.guarda_duas_versoes"
     ),

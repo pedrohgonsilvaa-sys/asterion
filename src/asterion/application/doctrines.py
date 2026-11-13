@@ -24,6 +24,11 @@ from asterion.application.equipment_configuration import (
 )
 from asterion.application.legacy_mark_effects import BASE_DOCTRINES, doctrine_limit
 from asterion.application.weapon_metadata import resolve_equipment_weapon
+from asterion.application.weapon_proficiency import (
+    WeaponEligibility,
+    owned_families,
+    weapon_eligibility,
+)
 from asterion.domain.arts import active_art_definition, weapon_requirement_satisfied
 from asterion.domain.economy import crowns_per_level, path_switch_cost
 from asterion.domain.equipment import EquipmentSlot, parse_equipment_slot
@@ -614,6 +619,11 @@ class DoctrineService:
             item_by_id = {item.id: item for item in item_rows}
             if len(item_by_id) != len(item_ids):
                 raise DoctrineRejected("item_unavailable")
+            owned = await owned_families(session, character.id)
+            for item in item_rows:
+                eligibility = await weapon_eligibility(session, character, item, owned)
+                if eligibility != WeaponEligibility.ALLOWED:
+                    raise DoctrineRejected(f"weapon_{eligibility.value}")
             art_map = {int(slot): art_id for slot, art_id in target["arts"].items()}
             if len(set(art_map.values())) != len(art_map):
                 raise DoctrineRejected("duplicate_art")

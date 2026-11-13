@@ -29,6 +29,7 @@ from asterion.infrastructure.db.models import (
     CraftingReceipt,
     EquipmentItem,
 )
+from tests.helpers.weapon_metadata import all_proficiency_rows
 
 
 async def _seed_character(database, actor: int, character_class: str = "vigia"):
@@ -59,6 +60,8 @@ async def _seed_character(database, actor: int, character_class: str = "vigia"):
                 crowns=0,
             )
         )
+        await session.flush()
+        session.add_all(all_proficiency_rows(character_id))
     return character_id, sessions
 
 

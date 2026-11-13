@@ -63,7 +63,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
     WorldState,
 )
-from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
+from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts, all_proficiency_rows
 
 
 async def _seed_road(
@@ -118,6 +118,7 @@ async def _seed_road(
             Brazier(character_id=cid, brazier_id="tdo.brazier.estrada"),
             Brazier(character_id=cid, brazier_id="tdo.brazier.refugio_do_ocaso"),
             WorldState(character_id=cid, region="Terras do Ocaso", location="Refúgio do Ocaso"),
+            *all_proficiency_rows(cid),
             Unlock(character_id=cid, unlock_id="hunt_manual.estrada_das_cinzas"),
             Unlock(character_id=cid, unlock_id="explore.estrada_das_cinzas"),
             BestiaryEntry(

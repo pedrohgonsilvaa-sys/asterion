@@ -48,6 +48,9 @@ CORE_POOLS = {
     EquipmentSlot.ACESSORIO: frozenset({"HP", "ATQ", "AGI"}),
     EquipmentSlot.ARTEFATO: frozenset({"HP", "ATQ", "DEF", "AGI"}),
 }
+# GDD v1.7.1 §49.8: Shield core is HP/DEF (not the Secondary weapon core).
+SHIELD_CORE_POOL = frozenset({"HP", "DEF"})
+SHIELD_WEAPON_FORM = "weapon.form.shield"
 SECONDARY_POOLS = {
     EquipmentSlot.PRINCIPAL: frozenset({"ATQ", "AGI", "PER", "CRIT"}),
     EquipmentSlot.SECUNDARIA: frozenset({"ATQ", "DEF", "PER", "CRIT", "Bloqueio"}),
@@ -298,7 +301,12 @@ def item_snapshot_from_persisted(
         # identity still occupies its rarity slot and is valid for rerolling.
         secondaries.append((name, _decimal_value(secondary.get("value"), allow_zero=True)))
     pool_slot = assignment.slot
-    if any(name not in CORE_POOLS[pool_slot] for name, _ in core):
+    core_pool = (
+        SHIELD_CORE_POOL
+        if definition is not None and definition.weapon_form == SHIELD_WEAPON_FORM
+        else CORE_POOLS[pool_slot]
+    )
+    if any(name not in core_pool for name, _ in core):
         raise EquipmentConfigurationError("Core attribute is not eligible for this equipment slot.")
     if any(name not in SECONDARY_POOLS[pool_slot] for name, _ in secondaries):
         raise EquipmentConfigurationError("Secondary is not eligible for this equipment slot.")
