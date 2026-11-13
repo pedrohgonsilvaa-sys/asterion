@@ -5,6 +5,11 @@ Uso:
         docs/specs/ASTERION_SISTEMA_ACAO_CONSEQUENCIA_NARRATIVA_v1_0_0.md \
         src/asterion/domain/narrative_choices_catalog.json
 
+Prólogo (Documento A, 2 nós, arquivo separado):
+    python scripts/build_narrative_choice_catalog.py --prologue \
+        docs/specs/ASTERION_DECISOES_PROLOGO_E_CONTRATOS_v1_0_0.md \
+        src/asterion/domain/narrative_choices_prologue_catalog.json
+
 O documento é a fonte; o JSON é derivado e nunca deve ser editado à mão.
 Só nomes de tags são normalizados (ASCII, minúsculas), como permite a §8.2.
 """
@@ -211,7 +216,67 @@ def build(source: str) -> list[dict]:
     return nodes
 
 
+def build_prologue(source: str) -> list[dict]:
+    """Documento A §3: as escolhas do Prólogo (sem Quest, só memória de personagem)."""
+    nodes: list[dict] = []
+    section = source.split("## 3. Catálogo de escolhas", 1)[1].split("\n## 4.", 1)[0]
+    for block in re.split(r"^### 3\.\d+ ", section, flags=re.M)[1:]:
+
+        def field(name: str, block: str = block) -> str:
+            return re.search(rf"\| `{name}` \| (.+?) \|", block).group(1).strip("` ")
+
+        options = []
+        for number, label, kind, tags in re.findall(
+            r"#### Opção `o(\d)`\s+\*\*Label:\*\* (.+?)\s+\*\*Memória\*\*\s+"
+            r"- `memory_type`: `(\w+)`\s+- `character_memory_tags`:\s+((?:\s*- `\w+`\n?)+)",
+            block,
+        ):
+            options.append(
+                {
+                    "option_id": f"o{number}",
+                    "label": label.strip(),
+                    "memory_type": kind,
+                    "character_memory_tags": re.findall(r"`(\w+)`", tags),
+                    "npc_memory_targets": [],
+                }
+            )
+        if len(options) != 3:
+            raise ValueError(f"{field('choice_id')}: esperadas 3 opções")
+        nodes.append(
+            {
+                "choice_id": field("choice_id"),
+                "mission_id": field("mission_id"),
+                "mission_kind": field("mission_kind"),
+                "title": field("title"),
+                "region": field("region"),
+                "step": None,
+                "step_context": re.search(r"\*\*Contexto:\*\* (.+)", block).group(1).strip(),
+                "question": re.search(r"\*\*Pergunta:\*\* \*\*(.+?)\*\*", block).group(1),
+                "moment": field("step"),
+                "options": options,
+                "future_hooks": [],
+                "identity_conditions": [],
+            }
+        )
+    return nodes
+
+
+def main_prologue(source_path: Path, target_path: Path) -> None:
+    nodes = build_prologue(source_path.read_text(encoding="utf-8"))
+    ids = [node["choice_id"] for node in nodes]
+    if ids != ["PRO_choice_aftermath", "PRO_choice_first_fire"]:
+        raise SystemExit(f"catálogo do Prólogo incompleto: {ids}")
+    target_path.write_text(
+        json.dumps({"version": "1.0.0", "nodes": nodes}, ensure_ascii=False, indent=1) + "\n",
+        encoding="utf-8",
+    )
+    print(f"{len(nodes)} nós do Prólogo gravados em {target_path}")
+
+
 def main() -> None:
+    if sys.argv[1] == "--prologue":
+        main_prologue(Path(sys.argv[2]), Path(sys.argv[3]))
+        return
     source_path, target_path = Path(sys.argv[1]), Path(sys.argv[2])
     nodes = build(source_path.read_text(encoding="utf-8"))
     missions = {node["mission_id"] for node in nodes}

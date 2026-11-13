@@ -24,12 +24,15 @@ from asterion.domain.narrative_choices import (
     PLAYER_SOURCE,
     ChoiceCatalog,
     ChoiceNode,
+    ChoiceOption,
     CommittedChoice,
     ReactionLine,
     legitimate_reaction,
     narrative_catalog,
+    prologue_catalog,
     resolve_hook,
 )
+from asterion.domain.prologue import POST_COMBAT_STAGE
 from asterion.infrastructure.db.models import (
     Character,
     CharacterNarrativeMemory,
@@ -69,37 +72,16 @@ def _node(catalog: ChoiceCatalog, choice_id: str) -> ChoiceNode:
     return node
 
 
-async def commit_narrative_choice(
+async def _write_choice(
     session: AsyncSession,
     character: Character,
-    quest: Quest,
-    choice_id: str,
-    option_id: str,
+    node: ChoiceNode,
+    option: ChoiceOption,
     *,
-    catalog: ChoiceCatalog | None = None,
-    now: datetime | None = None,
+    now: datetime | None,
 ) -> CommitResult:
-    """Commit once. A retry, reconnect or duplicated callback returns the first choice.
-
-    The caller has already locked the quest row and checked the step. The
-    quest must belong to this character: the guest of a Boss fight never
-    commits the host's node.
-    """
-    catalog = catalog or narrative_catalog()
-    node = _node(catalog, choice_id)
-    if quest.character_id != character.id or quest.quest_id != node.mission_id:
-        raise NarrativeChoiceError("quest_mismatch")
-    existing = await _record(session, character.id, choice_id)
-    if existing is not None:
-        return CommitResult(choice_id, existing.selected_option, created=False)
-    if quest.status != "active":
-        raise NarrativeChoiceError("quest_not_active")
-    option = node.option(option_id)
-    if option is None:
-        raise NarrativeChoiceError("option_unknown")
-    if not option.available_to(character.race, character.character_class):
-        raise NarrativeChoiceError("option_unavailable")
-
+    """Insert record and memories once; a conflicting insert returns the first choice."""
+    choice_id = node.choice_id
     now = now or datetime.now(UTC)
     inserted = await session.scalar(
         insert(NarrativeChoiceRecord)
@@ -168,6 +150,40 @@ async def commit_narrative_choice(
             .on_conflict_do_nothing(constraint="pk_npc_rapport_states")
         )
     return CommitResult(choice_id, option.option_id, created=True)
+
+
+async def commit_narrative_choice(
+    session: AsyncSession,
+    character: Character,
+    quest: Quest,
+    choice_id: str,
+    option_id: str,
+    *,
+    catalog: ChoiceCatalog | None = None,
+    now: datetime | None = None,
+) -> CommitResult:
+    """Commit once. A retry, reconnect or duplicated callback returns the first choice.
+
+    The caller has already locked the quest row and checked the step. The
+    quest must belong to this character: the guest of a Boss fight never
+    commits the host's node.
+    """
+    catalog = catalog or narrative_catalog()
+    node = _node(catalog, choice_id)
+    if quest.character_id != character.id or quest.quest_id != node.mission_id:
+        raise NarrativeChoiceError("quest_mismatch")
+    existing = await _record(session, character.id, choice_id)
+    if existing is not None:
+        return CommitResult(choice_id, existing.selected_option, created=False)
+    if quest.status != "active":
+        raise NarrativeChoiceError("quest_not_active")
+    option = node.option(option_id)
+    if option is None:
+        raise NarrativeChoiceError("option_unknown")
+    if not option.available_to(character.race, character.character_class):
+        raise NarrativeChoiceError("option_unavailable")
+
+    return await _write_choice(session, character, node, option, now=now)
 
 
 async def backfill_neutral_choice(
@@ -384,3 +400,82 @@ async def commit_mission_choice(
         )
     except NarrativeChoiceError:
         return None
+
+
+# --- Prologue (Documento A): no Quest, character memory only ---------------------------
+
+PROLOGUE_CHOICE_ORDER = ("PRO_choice_aftermath", "PRO_choice_first_fire")
+
+
+@dataclass(frozen=True, slots=True)
+class PrologueChoiceView:
+    """One pending Prologue node as a screen needs it. Tags never leave the server."""
+
+    choice_id: str
+    title: str
+    context: str
+    question: str
+    options: tuple[tuple[str, str], ...]
+
+
+async def prologue_choice_view(
+    session: AsyncSession, character: Character
+) -> PrologueChoiceView | None:
+    """The next unanswered Prologue node, only while the character stands at the first Braseiro."""
+    if character.stage != POST_COMBAT_STAGE:
+        return None
+    catalog = prologue_catalog()
+    for choice_id in PROLOGUE_CHOICE_ORDER:
+        if await selected_option(session, character.id, choice_id) is None:
+            node = catalog.nodes[choice_id]
+            return PrologueChoiceView(
+                choice_id=choice_id,
+                title=node.title,
+                context=node.step_context,
+                question=node.question,
+                options=tuple(
+                    (item.option_id, item.label)
+                    for item in node.available_options(character.race, character.character_class)
+                ),
+            )
+    return None
+
+
+async def commit_prologue_choice(
+    session: AsyncSession,
+    character: Character,
+    choice_id: str,
+    option_id: str,
+    *,
+    now: datetime | None = None,
+) -> CommitResult | None:
+    """Commit one Prologue node once; None when the callback no longer matches the state.
+
+    Only character memory is written. Callers hold the character row lock.
+    """
+    catalog = prologue_catalog()
+    node = catalog.nodes.get(choice_id)
+    if node is None:
+        return None
+    existing = await _record(session, character.id, choice_id)
+    if existing is not None:
+        return CommitResult(choice_id, existing.selected_option, created=False)
+    if character.stage != POST_COMBAT_STAGE:
+        return None
+    index = PROLOGUE_CHOICE_ORDER.index(choice_id)
+    if index and await selected_option(session, character.id, PROLOGUE_CHOICE_ORDER[0]) is None:
+        return None
+    option = node.option(option_id)
+    if option is None or not option.available_to(character.race, character.character_class):
+        return None
+    return await _write_choice(session, character, node, option, now=now)
+
+
+async def backfill_prologue_choices(
+    session: AsyncSession, character: Character, *, now: datetime | None = None
+) -> None:
+    """Characters past the Prologue before this system existed carry no preference (§8)."""
+    for choice_id in PROLOGUE_CHOICE_ORDER:
+        await backfill_neutral_choice(
+            session, character.id, choice_id, catalog=prologue_catalog(), now=now
+        )

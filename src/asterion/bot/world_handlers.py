@@ -825,13 +825,30 @@ def world_router(
     async def menu(message: Message):
         await show(message)
 
+    @router.callback_query(F.data.regexp(r"^pro:[af]:o[123]$"))
+    async def prologue_choice(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        _, short, option_id = (query.data or "").split(":")
+        choice_id = "PRO_choice_aftermath" if short == "a" else "PRO_choice_first_fire"
+        view = await service.choose_prologue(query.from_user.id, choice_id, option_id)
+        if view is None or not isinstance(query.message, Message):
+            await query.answer(
+                "Esta escolha não corresponde mais ao estado atual.", show_alert=True
+            )
+            await restore_context(query)
+            return
+        await query.answer()
+        await present(query.message, render_world(view), images, edit=True)
+
     @router.callback_query(F.data == "world:rest")
     async def rest(query: CallbackQuery):
         if await foreground(query):
             await query.answer()
             return
         current = await service.resume(query.from_user.id)
-        if current is None or current.kind != "brazier":
+        if current is None or current.kind != "brazier" or current.prologue_choice is not None:
             await query.answer(
                 "Este botão de descanso não corresponde mais ao estado atual.",
                 show_alert=True,

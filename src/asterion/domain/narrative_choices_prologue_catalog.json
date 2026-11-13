@@ -1,0 +1,95 @@
+{
+ "version": "1.0.0",
+ "nodes": [
+  {
+   "choice_id": "PRO_choice_aftermath",
+   "mission_id": "PRO",
+   "mission_kind": "prologo",
+   "title": "Depois da Cinza",
+   "region": "terras_do_ocaso",
+   "step": null,
+   "step_context": "O primeiro confronto terminou. O personagem tem pouco tempo para interpretar o que acabou de acontecer antes de seguir pela estrada.",
+   "question": "O que você faz com o que acabou de aprender?",
+   "moment": "após o primeiro combate",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Examinar primeiro",
+     "memory_type": "EVIDENCE",
+     "character_memory_tags": [
+      "evidence_first",
+      "preserves_records"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o2",
+     "label": "Aceitar que ainda não sabe",
+     "memory_type": "METHOD",
+     "character_memory_tags": [
+      "hypothesis_marked",
+      "preserves_contradiction"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o3",
+     "label": "Seguir enquanto é possível",
+     "memory_type": "ETHICAL",
+     "character_memory_tags": [
+      "pragmatic",
+      "risk_accepting"
+     ],
+     "npc_memory_targets": []
+    }
+   ],
+   "future_hooks": [],
+   "identity_conditions": []
+  },
+  {
+   "choice_id": "PRO_choice_first_fire",
+   "mission_id": "PRO",
+   "mission_kind": "prologo",
+   "title": "Diante do Braseiro",
+   "region": "terras_do_ocaso",
+   "step": null,
+   "step_context": "O personagem alcança o primeiro ponto seguro e tem um breve momento para decidir qual princípio pretende carregar consigo pela estrada.",
+   "question": "O que merece ser preservado antes de seguir?",
+   "moment": "primeiro Braseiro",
+   "options": [
+    {
+     "option_id": "o1",
+     "label": "Guardar o que foi visto",
+     "memory_type": "EVIDENCE",
+     "character_memory_tags": [
+      "preserves_records",
+      "evidence_first"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o2",
+     "label": "Pensar em quem depende da estrada",
+     "memory_type": "ETHICAL",
+     "character_memory_tags": [
+      "community_first",
+      "protective"
+     ],
+     "npc_memory_targets": []
+    },
+    {
+     "option_id": "o3",
+     "label": "Não deixar o medo decidir",
+     "memory_type": "IDENTITY",
+     "character_memory_tags": [
+      "risk_accepting",
+      "questions_authority"
+     ],
+     "npc_memory_targets": []
+    }
+   ],
+   "future_hooks": [],
+   "identity_conditions": []
+  }
+ ]
+}

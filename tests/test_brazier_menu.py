@@ -257,10 +257,20 @@ async def test_dispatcher_start_and_menu_recover_brazier_then_menu(database):
     )
     await dispatcher.feed_raw_update(bot, message_update("/start", actor=1))
     sent = bot.session.make_request.call_args.args[1]
-    assert "🔥 Braseiro · Descoberto" in sent.text
+    assert "Depois da Cinza" in sent.text and "Descansar" not in str(sent.reply_markup)
+    await dispatcher.feed_raw_update(bot, callback_update("pro:a:o1", actor=1, update_id=7))
+    await dispatcher.feed_raw_update(bot, callback_update("pro:a:o2", actor=1, update_id=8))
+    sent = bot.session.make_request.call_args.args[1]
+    assert "Diante do Braseiro" in sent.text
     await dispatcher.feed_raw_update(bot, message_update("/menu", actor=1, update_id=2))
     sent = bot.session.make_request.call_args.args[1]
-    assert "🔥 Braseiro · Descoberto" in sent.text
+    assert "Diante do Braseiro" in sent.text
+    await dispatcher.feed_raw_update(bot, callback_update("world:rest", actor=1, update_id=9))
+    sent = bot.session.make_request.call_args.args[1]
+    assert "não corresponde" in str(sent) or "Diante do Braseiro" in str(sent)
+    await dispatcher.feed_raw_update(bot, callback_update("pro:f:o2", actor=1, update_id=10))
+    sent = bot.session.make_request.call_args.args[1]
+    assert "🔥 Braseiro · Descoberto" in sent.text and "Descansar" in str(sent.reply_markup)
     await world.rest(1)
     await dispatcher.feed_raw_update(bot, message_update("/start", actor=1, update_id=3))
     sent = bot.session.make_request.call_args.args[1]
@@ -286,8 +296,10 @@ async def test_start_and_menu_reconcile_legacy_prologue_defeat(database):
 
     await dispatcher.feed_raw_update(bot, message_update("/start", actor=1))
     sent = bot.session.make_request.call_args.args[1]
-    assert "🔥 Braseiro · Descoberto" in sent.text
+    assert "Depois da Cinza" in sent.text
     assert "320 XP" not in sent.text
+    await world.choose_prologue(1, "PRO_choice_aftermath", "o1")
+    await world.choose_prologue(1, "PRO_choice_first_fire", "o1")
     await dispatcher.feed_raw_update(bot, message_update("/menu", actor=1, update_id=2))
     sent = bot.session.make_request.call_args.args[1]
     assert "🔥 Braseiro · Descoberto" in sent.text
@@ -319,6 +331,8 @@ async def test_telegram_failure_after_rest_commit_recovers_menu(database):
     dispatcher.include_router(
         creation_router(CreationService(database[1], "ocaso"), {}, world=world)
     )
+    await world.choose_prologue(1, "PRO_choice_aftermath", "o1")
+    await world.choose_prologue(1, "PRO_choice_first_fire", "o1")
     with pytest.raises(TelegramForbiddenError):
         await dispatcher.feed_raw_update(bot, callback_update("world:rest", actor=1))
     async with database[1]() as session:
