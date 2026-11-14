@@ -68,7 +68,7 @@ def _callbacks(screen) -> set[str]:
 def test_empty_catalog_screen():
     screen = render_world_event(WorldEventHubView(None, None))
     assert "Nenhum Evento Mundial programado." in screen.text
-    assert _callbacks(screen) == {"world:adventure"}
+    assert _callbacks(screen) == {"adv:hub"}
 
 
 def test_next_opening_uses_sao_paulo_time():

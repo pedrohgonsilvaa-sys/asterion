@@ -1135,7 +1135,7 @@ def render_current_local(
     keyboard.extend(
         [
             [InlineKeyboardButton(text="Viajar", callback_data="world:map:fromlocal")],
-            [InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")],
+            [InlineKeyboardButton(text="← Campanha", callback_data="world:adventure")],
         ]
     )
     return Screen(
@@ -1164,7 +1164,7 @@ def render_invalid_location_menu() -> Screen:
                     InlineKeyboardButton(text="Vínculos", callback_data="links:root"),
                     InlineKeyboardButton(text="Configurações", callback_data="settings:root"),
                 ],
-                [InlineKeyboardButton(text="Aventura", callback_data="world:adventure")],
+                [InlineKeyboardButton(text="Campanha", callback_data="world:adventure")],
             ]
         ),
     )

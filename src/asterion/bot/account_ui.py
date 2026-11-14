@@ -18,7 +18,7 @@ HELP_TOPICS = (
     (
         "start",
         "Primeiros Passos",
-        "Use o Menu para abrir Aventura, Personagem, Códice e Configurações. "
+        "Use o Menu para abrir Campanha, Aventura, Personagem, Códice e Configurações. "
         "O jogo salva seu progresso no servidor.",
     ),
     (
@@ -29,9 +29,9 @@ HELP_TOPICS = (
     ),
     (
         "adventure",
-        "Aventura",
-        "Mapa e Missões mostram caminhos e objetivos conhecidos. Caçadas, Desbravar e "
-        "Masmorras seguem as regras de cada atividade.",
+        "Campanha e Aventura",
+        "Campanha: Mapa e Missões mostram caminhos e objetivos conhecidos; Caçadas e "
+        "Desbravar seguem as regras de cada atividade. Aventura: Masmorras, Eventos e PvP.",
     ),
     (
         "character",

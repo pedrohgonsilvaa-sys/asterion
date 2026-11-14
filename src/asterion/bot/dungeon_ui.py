@@ -41,14 +41,14 @@ def _render_dungeons(view: DungeonView) -> Screen:
             rows.append([_button(f"{name} · {level_range}", callback)])
             details.append(f"{name} · {level_range}\n{region} · {location}")
         text = "⛓️ Masmorras Conhecidas\n\n" + "\n\n".join(details)
-        rows.append([_button("← Aventura", "world:adventure")])
+        rows.append([_button("← Aventura", "adv:hub")])
         keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
         return Screen(text, "dungeon_crypt", keyboard)
     if view.kind in {"empty", "hidden"}:
         return Screen(
             "⛓️ Masmorras Conhecidas\n\nNenhuma Masmorra conhecida.",
             "dungeon_crypt",
-            InlineKeyboardMarkup(inline_keyboard=[[_button("← Aventura", "world:adventure")]]),
+            InlineKeyboardMarkup(inline_keyboard=[[_button("← Aventura", "adv:hub")]]),
         )
     if view.kind == "detail":
         text = (
@@ -375,7 +375,7 @@ def _render_dungeons(view: DungeonView) -> Screen:
     return Screen(
         text,
         "dungeon_crypt",
-        InlineKeyboardMarkup(inline_keyboard=[[_button("← Aventura", "world:adventure")]]),
+        InlineKeyboardMarkup(inline_keyboard=[[_button("← Aventura", "adv:hub")]]),
     )
 
 

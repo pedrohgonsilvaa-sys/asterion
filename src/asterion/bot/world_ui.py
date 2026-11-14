@@ -25,7 +25,7 @@ def number(value: int) -> str:
     return f"{value:,}".replace(",", ".")
 
 
-def render_adventure(
+def render_campaign(
     location: str | None = None, principal_quest_title: str | None = None
 ) -> Screen:
     location_icon = {
@@ -46,30 +46,41 @@ def render_adventure(
         else ""
     )
     text = (
-        "🗺️ Aventura\n\n"
+        "📖 Campanha\n\n"
         f"{current}"
         f"{principal_quest}"
-        "Escolha uma atividade ou abra o Mapa."
+        "Siga a história: veja o Local Atual, abra o Mapa ou as Missões."
     )
     keyboard = [
         [
             InlineKeyboardButton(text="Local Atual", callback_data="world:local"),
             InlineKeyboardButton(text="Mapa", callback_data="world:map"),
         ],
-        [
-            InlineKeyboardButton(text="Missões", callback_data="world:missions"),
-            InlineKeyboardButton(text="Masmorras", callback_data="dungeon:known"),
-        ],
-        [
-            InlineKeyboardButton(text="Eventos", callback_data="wev:hub"),
-            InlineKeyboardButton(text="PvP", callback_data="pvp:hub"),
-        ],
+        [InlineKeyboardButton(text="Missões", callback_data="world:missions")],
         [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
     ]
     if contracts_enabled():
         keyboard.insert(
             -1, [InlineKeyboardButton(text="Quadro de Contratos", callback_data="ctr:root")]
         )
+    return Screen(text, "adventure", InlineKeyboardMarkup(inline_keyboard=keyboard))
+
+
+def render_adventure() -> Screen:
+    """Aventura hub: activities played with or against other players."""
+    text = (
+        "⚔️ Aventura\n\n"
+        "Masmorras, Eventos e confrontos contra outros jogadores. "
+        "Para a história e o mapa, use a Campanha."
+    )
+    keyboard = [
+        [
+            InlineKeyboardButton(text="Masmorras", callback_data="dungeon:known"),
+            InlineKeyboardButton(text="Eventos", callback_data="wev:hub"),
+        ],
+        [InlineKeyboardButton(text="PvP", callback_data="pvp:hub")],
+        [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
+    ]
     return Screen(text, "adventure", InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 
@@ -155,7 +166,9 @@ def render_world(view: WorldView) -> Screen:
         f"{quest_line}"
     )
     labels = [
-        ("Aventura", "world:adventure"),
+        # "world:adventure" is the Campanha hub (legacy callback name kept on purpose).
+        ("Campanha", "world:adventure"),
+        ("Aventura", "adv:hub"),
         ("Personagem", "character:root"),
         ("Códice", "knowledge:codex"),
         ("Calendário", "calendar:root"),

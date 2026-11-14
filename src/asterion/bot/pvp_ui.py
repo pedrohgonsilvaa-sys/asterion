@@ -117,7 +117,7 @@ def _render_hub(view: PvpHubView) -> Screen:
         [
             [_button("Arena da Vigília", "pvp:q"), _button("Duelo", "pvp:duel")],
             [_button("Classificação da Vigília", "pvp:rank")],
-            [_button("← Aventura", "world:adventure")],
+            [_button("← Aventura", "adv:hub")],
         ]
     )
     return Screen("\n".join(lines), _IMAGE, _keyboard(*rows), "HTML")
