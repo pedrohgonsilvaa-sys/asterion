@@ -43,6 +43,15 @@ ERROR_COPY = {
     EquipmentMutationCode.WEAPON_PROFICIENCY_REQUIRED: (
         "Requer a Proficiência desta arma (Treinador de Armas, no Refúgio)."
     ),
+    EquipmentMutationCode.ARMOR_PROFICIENCY_LEVE: (
+        "Proficiência de Armadura Leve não aprendida (Treinador, aba Armaduras)."
+    ),
+    EquipmentMutationCode.ARMOR_PROFICIENCY_MEDIA: (
+        "Proficiência de Armadura Média não aprendida (Treinador, aba Armaduras)."
+    ),
+    EquipmentMutationCode.ARMOR_PROFICIENCY_PESADA: (
+        "Proficiência de Armadura Pesada não aprendida (Treinador, aba Armaduras)."
+    ),
     EquipmentMutationCode.WEAPON_CLASS_FORBIDDEN: "Sua Classe não pode usar esta arma.",
     EquipmentMutationCode.STALE_CONFIGURATION: "Configuração atualizada.",
     EquipmentMutationCode.INVALID_CURRENT_CONFIGURATION: (

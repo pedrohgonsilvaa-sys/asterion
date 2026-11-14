@@ -7,6 +7,7 @@ from sqlalchemy import select
 from asterion.application.account import AccountService
 from asterion.application.active_arts import ActiveArtService
 from asterion.application.altos_missions import AltosMissionService
+from asterion.application.armor_proficiency import ArmorTrainerService
 from asterion.application.character_surfaces import CharacterSurfacesService
 from asterion.application.chronicle import ChronicleService
 from asterion.application.chronicle_activities import ChronicleActivityService
@@ -80,6 +81,7 @@ from asterion.application.weapon_proficiency import WeaponTrainerService
 from asterion.application.world import WorldService
 from asterion.application.world_events import WorldEventService
 from asterion.bot.altos_missions_handlers import altos_missions_router
+from asterion.bot.armor_trainer_handlers import armor_trainer_router
 from asterion.bot.asset_catalog import build_asset_images
 from asterion.bot.benefits_handlers import benefits_router
 from asterion.bot.character_progression_handlers import character_progression_router
@@ -195,6 +197,7 @@ def get_bot_runtime() -> BotRuntime:
     legacy = LegacyService(SessionFactory, settings.server_id)
     legacy_marks = LegacyMarksService(SessionFactory, settings.server_id)
     weapon_trainer = WeaponTrainerService(SessionFactory, settings.server_id)
+    armor_trainer = ArmorTrainerService(SessionFactory, settings.server_id)
     groups = GroupService(SessionFactory, settings.server_id)
     p1 = P1Service(SessionFactory, settings.server_id, groups=groups)
     p2 = P2Service(SessionFactory, settings.server_id, groups=groups)
@@ -301,6 +304,7 @@ def get_bot_runtime() -> BotRuntime:
     dispatcher.include_router(
         weapon_trainer_router(weapon_trainer, settings.creation_images)
     )
+    dispatcher.include_router(armor_trainer_router(armor_trainer, settings.creation_images))
     # P7 is deliberately placed before the shared Group/Combat/World routers so
     # its self-contained regional callbacks can fall through safely when they
     # do not belong to P7.
