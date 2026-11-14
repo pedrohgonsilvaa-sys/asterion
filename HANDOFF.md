@@ -147,7 +147,7 @@ Estrutura funcional (arquivos de conteúdo e testes longos omitidos da árvore c
 - `domain/combat.py`, `combat_math.py`, `campaign_combat.py`: máquina de combate, resolução e aritmética.
 - `domain/creation.py`, `paths.py`, `path_arts.py`, `arts.py`, `talents.py`, `class_trials.py`: catálogos e regras de criação/progressão.
 - `domain/road.py`, `economy.py`, `consumables.py`, `professions.py`, `legacy.py`: conteúdo de atividade, economia, itens consumíveis, receitas e fatores de Legado.
-- `domain/equipment.py`, `equipment_stats.py`, `equipment_modifications.py`, `weapon_metadata.py`: regras de equipamento e composição de atributos.
+- `domain/equipment.py`, `equipment_stats.py`, `equipment_modifications.py`, `weapon_metadata.py`, `regional_equipment.py`: regras de equipamento e composição de atributos.
 - `domain/dungeons.py` e `*_dungeon.py`, `tdo_*.py`, `vde_*.py`, `nareth_*.py`, `varzeas_*.py`, `altos_*.py`, `confins_*.py`: perfil global e encontros/dungeons específicos.
 
 **Persistência e qualidade**
@@ -1824,7 +1824,9 @@ A fonte do plano é `docs/PLANO_DE_ACAO.md` (trilhas A, B e C). Estado em 2026-1
 4. **Conteúdo:** 5 Rotas (PR 152), 11 Provações e 6 Eventos Públicos (PR 153) já estão no catálogo. O banco de Flavor Text existe (PRs 139 e 146); a revisão do rascunho não está registrada. Dia 1 da Crônica fica para depois, por decisão do autor.
 5. **Fase 2E:** as três decisões de Game Design foram aprovadas em 2026-11-13. Publicação, importação, migration, flag, merge e deploy continuam NO-GO.
 6. **Monetização (§35):** código no PR 133. Domínio `pagamentos.asterion.net.br`, preços Patrono R$ 14,90 e Passe R$ 24,90 aprovados; VPS no ar com o bot e a API. Falta o Pix real de teste (≥ R$ 1,00) e confirmar o pagamento do domínio no Registro.br.
-7. **Em andamento (2026-11-13):** Proficiências de arma v1 (branch `feat/proficiencias-armas-v1`, migration `0053`, sem commit), gênero na criação (`feat/criacao-genero`) e catálogo de imagens (`feat/imagens-assets`). Smoke test no Telegram real fica com o autor.
+7. **Proficiências de arma v1: na `main`** (PR 167, migration `0053`). Ainda em andamento: gênero na criação (`feat/criacao-genero`) e catálogo de imagens (`feat/imagens-assets`). Smoke test no Telegram real fica com o autor.
+8. **Equipamentos dropáveis por região (2026-11-14, Etapas A e B do plano `ASTERION_PLANO_EQUIPAMENTOS_DROPAVEIS_POR_REGIAO_v1_0_0`):** `domain/regional_equipment.py` tem 120 templates de arma/Escudo (19 tipos + Escudo × 6 regiões, mesmo `weapon_type_id` base), 36 Acessórios/Artefatos (3+3 por região; Receitas Especiais ficam fora do drop) e 96 armaduras só com nome. `materialize_equipment(..., region_key=)` sorteia no pool da região; o payload ganha `template_id` e `region_id`. Caçada usa a região do local (`_travel_region`) e Masmorra a da família. Sem `region_key` nada muda, e itens antigos não foram tocados. Chefe na Caçada: 70% de equipamento e raridade 25/45/25/4,7/0,3 (sem pity; Runa de chefe 0%), mas nenhum chefe passa hoje por esse caminho. Evento Mundial segue sem drop de equipamento.
+   **Decisão do autor (adiado):** Veste/Leve/Média/Pesada são só nomes, sem `armor_class`, Proficiência de Armadura nem efeito. Para virar regra faltam efeitos e valores (D2), Treinador/custo/nível (D5) e tabela dos templates antigos (D11). O `SOURCE_AUTHORITY.md` continua dizendo que essas categorias foram revogadas em 13/11; o plano (§27) manda emendar isso só quando a regra for aprovada.
 
 Antes de qualquer regra de jogo, consulte `SOURCE_AUTHORITY.md`. Número que a fonte não define vai para o autor.
 

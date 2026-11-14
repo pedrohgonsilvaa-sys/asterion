@@ -2994,8 +2994,8 @@ class RoadService:
         return xp
 
     async def _materialize_optional_loot(self, s, c, context, components):
-        equipment_chance = {"common": 8, "uncommon": 14, "elite": 35}[context.category]
-        rune_chance = {"common": 5, "uncommon": 15, "elite": 50}[context.category]
+        equipment_chance = {"common": 8, "uncommon": 14, "elite": 35, "boss": 70}[context.category]
+        rune_chance = {"common": 5, "uncommon": 15, "elite": 50}.get(context.category, 0)
         if _draw_int(context.seed, "equipment", 100) < equipment_chance:
             rarity = equipment_rarity(
                 context.seed,
@@ -3010,7 +3010,12 @@ class RoadService:
                 c.elite_legendary_pity += 1
                 if rarity in {"Lendário", "Mítico"}:
                     c.elite_legendary_pity = 0
-            item = materialize_equipment(context.seed, rarity, context.enemy_level)
+            item = materialize_equipment(
+                context.seed,
+                rarity,
+                context.enemy_level,
+                region_key=self._travel_region(_location_label(context.local_id)),
+            )
             item_instance_id, item = equipment_instance_payload(item)
             if await self._inventory_slots(s, c.id) < await inventory_capacity(s, c.id):
                 s.add(

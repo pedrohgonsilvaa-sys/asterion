@@ -24,6 +24,11 @@ from asterion.domain.equipment_modifications import (
 )
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.prologue import first_art
+from asterion.domain.regional_equipment import (
+    regional_armor_templates,
+    regional_jewel_templates,
+    regional_weapon_templates,
+)
 from asterion.domain.weapon_metadata import weapon_definition
 
 D = Decimal
@@ -1862,7 +1867,10 @@ def materialize_equipment(
     forced_slot: str | None = None,
     bound: bool = False,
     weapon_type_id: str | None = None,
+    region_key: str | None = None,
 ) -> dict:
+    if region_key is not None and (weapon_type_id is not None or forced_name is not None):
+        raise ValueError("A regional drop pool cannot be combined with a forced weapon identity.")
     if weapon_type_id is not None:
         definition = weapon_definition(weapon_type_id)
         if definition is None:
@@ -1875,9 +1883,26 @@ def materialize_equipment(
         forced_name = definition.item_name
         forced_slot = expected_slot
 
+    catalog = EQUIPMENT_CATALOG
+    regional_by_key = {}
+    jewels_by_name = {}
+    if region_key is not None:
+        # Region is resolved by the encounter, never by the player (no smart loot).
+        regional_by_key = {
+            (t.display_name, t.weapon_type_id): t for t in regional_weapon_templates(region_key)
+        }
+        jewels = regional_jewel_templates(region_key) + regional_armor_templates(region_key)
+        jewels_by_name = {(t.display_name, None): t for t in jewels}
+        catalog = (
+            tuple(
+                (t.display_name, weapon_definition(t.weapon_type_id).persisted_item_slot, t.weapon_type_id)
+                for t in regional_by_key.values()
+            )
+            + tuple((t.display_name, t.slot, None) for t in jewels)
+        )
     eligible = tuple(
         template
-        for template in EQUIPMENT_CATALOG
+        for template in catalog
         if not (rarity == "Mítico" and template[1] == "Torso")
     )
     selected_weapon_type_id = weapon_type_id
@@ -1912,7 +1937,10 @@ def materialize_equipment(
         definition = weapon_definition(selected_weapon_type_id)
         if definition is None or definition.persisted_item_slot != slot:
             raise ValueError("Equipment template has invalid canonical weapon metadata.")
-        if name is None:
+        regional_template = regional_by_key.get((name, selected_weapon_type_id))
+        if regional_template is not None:
+            pass  # Regional display name; mechanics come from weapon_type_id only.
+        elif name is None:
             name = definition.item_name
         elif name != definition.item_name:
             raise ValueError("Equipment template name does not match its canonical identity.")
@@ -1954,8 +1982,15 @@ def materialize_equipment(
         "enchantment": None,
         "bound": bound,
     }
+    jewel_template = jewels_by_name.get((name, None))
+    if jewel_template is not None:
+        payload["template_id"] = jewel_template.template_id
+        payload["region_id"] = jewel_template.region_id
     if selected_weapon_type_id is not None:
         payload["weapon_type_id"] = selected_weapon_type_id
+        if regional_template is not None:
+            payload["template_id"] = regional_template.template_id
+            payload["region_id"] = regional_template.region_id
     return payload
 
 
@@ -1974,6 +2009,9 @@ def equipment_rarity(seed: str, category: str, elite_pity: int = 0, legendary_pi
         bands = ((78, "Comum"), (97, "Raro"), (99.8, "Épico"), (100, "Lendário"))
     elif category == "uncommon":
         bands = ((65, "Comum"), (94, "Raro"), (99.5, "Épico"), (100, "Lendário"))
+    elif category == "boss":
+        # Hunt boss table: 25 / 45 / 25 / 4.7 / 0.3 (no pity defined by the author).
+        bands = ((25, "Comum"), (70, "Raro"), (95, "Épico"), (99.7, "Lendário"), (100, "Mítico"))
     else:
         raise ValueError(f"equipment rarity is not configured for category {category!r}")
     for limit, rarity in bands:
