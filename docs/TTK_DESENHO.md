@@ -56,7 +56,7 @@ Não há `difficulty`: use `creature_category`, `player_level` e `enemy_level` (
 
 ## Versionamento
 
-- `ruleset_version`: o `Combat.ruleset` que o motor já grava. Ele muda só quando o conjunto de regras muda de versão.
+- `ruleset_version`: o `Combat.ruleset` que o motor já grava. Ele muda só quando o conjunto de regras muda de versão. Ele identifica a versão do conjunto de regras do motor (por isso cada combate guarda o seu e combates antigos continuam reprodutíveis, conforme `SOURCE_AUTHORITY.md`), não o número da versão do GDD; qual GDD vale é decidido pelo `SOURCE_AUTHORITY.md`.
 - `build_version`: identificador do deploy, vindo de `ASTERION_BUILD_VERSION` (por exemplo `git rev-parse --short HEAD` no `.env.prod`). **O projeto não tem hoje um identificador de build embutido** (sem SHA no Dockerfile ou no CI), então, sem a variável, grava `unknown`. Uma mudança de balanceamento que não troque o `ruleset` só aparece separada nos relatórios se o `build_version` mudar no deploy. O `pyproject.toml` não foi alterado.
 
 ## Ligar, desligar e reverter

@@ -49,8 +49,10 @@ Agende um backup por dia (exemplo: 04:00 UTC) com `crontab -e`:
 
 1. Faça um backup (seção 3).
 2. `git pull origin main`.
-3. `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build`.
-4. Confira os logs do bot.
+3. Atualize `ASTERION_BUILD_VERSION` no `.env.prod` para o commit que acabou de baixar (seção 7.1).
+4. `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build`.
+5. Confira os logs do bot.
+6. Se a telemetria estiver ligada, confira o `build_version` gravado (seção 7.1).
 
 ## 5. Voltar uma versão (rollback)
 
@@ -135,8 +137,94 @@ groups:
         for: 10m
 ```
 
+## 7. Telemetria de TTK do Beta
+
+Desenho completo em [TTK_DESENHO.md](TTK_DESENHO.md). A tabela é `combat_ttk_records`; consultas prontas em `scripts/ttk_reports.sql`. Ligue com `ASTERION_TTK_TELEMETRY=true` (padrão: desligada) depois de `alembic upgrade head`.
+
+Os comandos `psql` abaixo supõem o container do banco chamado `asterion-postgres-1` (o mesmo da seção 3; confira com `docker ps`) e usuário/banco `asterion`.
+
+### 7.1 `ASTERION_BUILD_VERSION` no deploy
+
+Esta variável é o que separa "antes" e "depois" de um deploy nos relatórios (consulta 5 do `ttk_reports.sql`). Sem ela, a telemetria grava `unknown` (esse comportamento continua igual). Um valor antigo faz o deploy novo parecer o anterior.
+
+**Regra:** o valor deve ser exatamente o commit que está de fato rodando. Nunca invente nem reaproveite o valor do deploy anterior.
+
+No deploy, depois do `git pull` e **antes** do `up -d --build`:
+
+1. Confirme que a pasta não tem alteração local, senão o commit não descreve o que será implantado. O comando abaixo deve imprimir nada:
+
+   ```bash
+   git status --porcelain
+   ```
+
+2. Pegue o commit:
+
+   ```bash
+   git rev-parse --short HEAD
+   ```
+
+3. Edite `.env.prod` e deixe a linha com esse valor (exemplo com um commit fictício): `ASTERION_BUILD_VERSION=2a4ee36`. Mantenha uma única linha dessa variável. O limite é 64 caracteres.
+4. Suba com `up -d --build` (seção 4). Atenção: `docker compose restart` **não** relê o `.env.prod`; para o valor novo valer, o container precisa ser recriado com `up -d`.
+
+**Depois de reiniciar o bot, confira o valor gravado.** A linha só é gravada quando um combate de Caçada Manual ou Ronda termina, então termine um combate (ou espere um jogador terminar) e rode:
+
+```bash
+docker exec -i asterion-postgres-1 psql -U asterion -d asterion -c \
+"SELECT build_version, count(*) AS n, max(finished_at) AS ultimo
+   FROM combat_ttk_records GROUP BY build_version ORDER BY ultimo DESC LIMIT 5;"
+```
+
+A primeira linha deve mostrar o commit do passo 2. Se aparecer `unknown` ou o commit antigo: a variável não foi lida (nome errado, linha duplicada, container não recriado) ou a telemetria está desligada. Corrija e suba de novo; as linhas já gravadas não são alteradas.
+
+**Recomendação (não implementada):** um aviso no log quando `ASTERION_TTK_TELEMETRY=true` e `build_version == "unknown"` seria útil, mas exige mexer em código (`runtime.py` ou `ttk_telemetry.py`) e em testes. Fica para decisão do autor; por ora a conferência acima cobre o risco.
+
+### 7.2 Retenção (remoção manual)
+
+- Os registros são **mantidos durante todo o Beta**.
+- Permanecem por **mais 90 dias após o encerramento da análise**.
+- Depois disso, a remoção é **manual**. Não existe job automático e nenhum deve ser criado sem decisão do autor.
+- **Pendente (autor):** a data de encerramento da análise ainda não foi definida. Enquanto não houver essa data registrada abaixo, **não apague nada**.
+
+Data de encerramento da análise (D): `____-__-__` (preencher quando o autor decidir).
+Instante de corte (D, com fuso, por exemplo `YYYY-MM-DD 00:00:00+00`): `__________` (o autor define se o dia D entra ou não).
+
+**Conferência (somente leitura, pode rodar a qualquer momento).** Troque `<CORTE>` pelo instante de corte acima:
+
+```bash
+docker exec -i asterion-postgres-1 psql -U asterion -d asterion -c \
+"SELECT count(*) AS total,
+        count(*) FILTER (WHERE finished_at < '<CORTE>') AS seriam_removidas,
+        count(*) FILTER (WHERE finished_at >= '<CORTE>') AS seriam_mantidas,
+        min(finished_at) AS mais_antiga, max(finished_at) AS mais_recente,
+        now() >= timestamptz '<CORTE>' + interval '90 days' AS prazo_de_90_dias_cumprido
+   FROM combat_ttk_records;"
+```
+
+**Remoção.** Só execute quando **todas** as condições forem verdadeiras:
+
+1. D e o instante de corte estão preenchidos acima, definidos pelo autor.
+2. `prazo_de_90_dias_cumprido` da conferência é `t` (verdadeiro).
+3. A análise do Beta foi dada como encerrada pelo autor e as consultas finais já foram guardadas.
+4. Há um backup recente (seção 3). Se quiser guardar os dados, exporte antes: `\copy (SELECT * FROM combat_ttk_records WHERE finished_at < '<CORTE>') TO 'ttk_beta.csv' CSV HEADER`.
+
+Passos (a transação permite desfazer antes de confirmar):
+
+```bash
+docker exec -it asterion-postgres-1 psql -U asterion -d asterion
+```
+
+```sql
+BEGIN;
+DELETE FROM combat_ttk_records WHERE finished_at < '<CORTE>';
+-- Confira o número de linhas informado ("DELETE n") com "seriam_removidas" da conferência.
+-- Se o número bater: COMMIT;   Se não bater: ROLLBACK;
+```
+
+Depois, repita a conferência: `seriam_removidas` deve ser 0. Anote a data da remoção no HANDOFF.md.
+
 ## O que ainda não está pronto
 
 - Cópia automática dos backups para fora da VPS.
 - Monitor externo que avise se a VPS ou o bot inteiro cair.
 - Webhook do Telegram com domínio e TLS (necessário para o pagamento Pix).
+- Data de encerramento da análise do Beta (define quando a retenção da seção 7.2 pode ser executada): decisão do autor, ainda em aberto.
