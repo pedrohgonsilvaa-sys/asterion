@@ -107,6 +107,18 @@ Decisões do autor para a implementação:
 6. `SOURCE_AUTHORITY.md` registra só a aprovação do Documento A; a Crônica v0.2 continua sem promoção.
 7. A Etapa 3b (mostrar as reações nas cenas P1, S1 e S5) **não** foi implementada e depende de nova autorização.
 
+### Etapa 4b — Telemetria de TTK (2026-11-14)
+
+Decisões do autor para a implementação (detalhes em `docs/TTK_DESENHO.md`):
+
+1. Fontes: Caçada Manual (`hunt_manual`), Ronda de Caça (`round_auto`, todos os encontros) e expiração/abandono. Eventos Públicos, Provações, Missões, Masmorras, PvP e PvPvE ficam fora; Eventos e Provações podem entrar numa segunda entrega. Os dois `source` nunca se misturam.
+2. Sem campo `difficulty`: usar `creature_category`, `player_level` e `enemy_level` (desnível calculado na consulta).
+3. `player_actions` (ações válidas do jogador, consumíveis incluídos) é o proxy observável do Beta. **Não** é automaticamente as "ações equivalentes" do GDD; a referência de 12–18 do Chefe é só referência, sem aprovado/reprovado automático.
+4. Duração é auxiliar; ações e rodadas são a métrica principal.
+5. Retenção: durante todo o Beta; depois de encerrada a análise, mais 90 dias e então remover.
+6. Versionamento sem mexer no `pyproject.toml`: `build_version` (`ASTERION_BUILD_VERSION`) e `ruleset_version` (o `Combat.ruleset` já existente).
+7. Chave `ASTERION_TTK_TELEMETRY` (padrão desligada).
+
 ### Pendências abertas (nada disto foi inventado; precisa do autor)
 
 1. ~~Ajustes do Documento A.~~ Resolvido em 2026-11-14: a definição oficial está em D-BETA-02. Falta só conferir, na Etapa 3, que o texto do documento bate com ela (por exemplo, os `choice_id` hoje são `PRO_choice_aftermath` e `PRO_choice_first_fire`; o contrato e o catálogo ainda não os conhecem).

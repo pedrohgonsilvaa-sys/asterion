@@ -1,6 +1,7 @@
 """Application services for the post-P1 Road hunt and exploration loop."""
 # ruff: noqa: E501
 
+import logging
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal
@@ -31,6 +32,11 @@ from asterion.application.inventory_capacity import (
     pending_capacity,
 )
 from asterion.application.progression import consolidate_character_level, level_xp
+from asterion.application.ttk_telemetry import (
+    SOURCE_HUNT_MANUAL,
+    record_abandoned_hunt,
+    record_hunt,
+)
 from asterion.application.vigor import reconcile_character_vigor
 from asterion.domain.chronicle_content import REGIONS_BY_NAME, is_chronicle_result
 from asterion.domain.combat import (
@@ -2093,6 +2099,7 @@ class RoadService:
             if updated.result == "victory":
                 activity.status = "completed"
                 if activity.content_id == HUNT_CONTENT:
+                    await self._record_ttk(s, c, context, updated, source=SOURCE_HUNT_MANUAL)
                     await self._settle_hunt(s, c, activity, encounter.id, bestiary_evidence_ids)
                     if context is not None:
                         # Contratos Regionais §6.1: only a solo manual hunt victory counts.
@@ -5608,6 +5615,34 @@ class RoadService:
             world.location = recovery_location
         return BRAZIER_DETAILS[brazier_id][1], recovery_location
 
+    async def _record_ttk(
+        self, s, c, context, combat, *, source, abandoned_activity=None
+    ) -> None:
+        """Beta TTK telemetry (docs/TTK_DESENHO.md): observation only, never raises.
+
+        PvPvE prey hunts are out of scope, so a context bound to a collision is skipped.
+        """
+        if context is None or context.pvpve_collision_id is not None:
+            return
+        try:
+            region_id = self._travel_region(_location_label(context.local_id))
+            if abandoned_activity is not None:
+                await record_abandoned_hunt(
+                    s, c, abandoned_activity, context, region_id=region_id
+                )
+                return
+            await record_hunt(
+                s,
+                c,
+                context,
+                combat,
+                source=source,
+                region_id=region_id,
+                started_at=context.started_at if source == SOURCE_HUNT_MANUAL else None,
+            )
+        except Exception:
+            logging.getLogger(__name__).warning("TTK telemetry skipped", exc_info=True)
+
     async def _settle_road_defeat(
         self, s, c, activity, combat, world, *, context=None, record=None
     ):
@@ -5634,6 +5669,8 @@ class RoadService:
             )
         if context is not None:
             await self._record_bestiary_combat_events(s, c.id, context, combat)
+            if activity.content_id == HUNT_CONTENT:
+                await self._record_ttk(s, c, context, combat, source=SOURCE_HUNT_MANUAL)
         recovery_brazier, recovery_location = await self._recover_normal_pve_defeat(
             s,
             c,
@@ -5839,6 +5876,10 @@ class RoadService:
         context = await s.scalar(
             select(HuntContext).where(HuntContext.game_activity_id == activity.id)
         )
+        if activity.content_id == HUNT_CONTENT:
+            await self._record_ttk(
+                s, c, context, None, source=SOURCE_HUNT_MANUAL, abandoned_activity=activity
+            )
         if context is not None and context.pvpve_collision_id is not None:
             await self.pvpve.finish_prey_member(
                 s, context.pvpve_collision_id, c.id, victory=False

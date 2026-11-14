@@ -31,6 +31,7 @@ from asterion.application.road import (
     RoadService,
     RoadView,
 )
+from asterion.application.ttk_telemetry import SOURCE_ROUND_AUTO
 from asterion.application.vigor import reconcile_character_vigor
 from asterion.domain.combat import (
     act,
@@ -1238,6 +1239,7 @@ class RoundService(RoadService):
         encounter.activity_id = child.id
         await s.flush()
         evidence = await self._record_bestiary_combat_events(s, c.id, context, combat)
+        await self._record_ttk(s, c, context, combat, source=SOURCE_ROUND_AUTO)
 
         if combat.result == "defeat":
             encounter.status = "defeated"

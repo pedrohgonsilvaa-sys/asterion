@@ -4551,3 +4551,46 @@ class ContractInstance(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class CombatTtkRecord(Base):
+    """One finished Caçada Manual / Ronda combat, for Beta balance analysis only.
+
+    Written once per ``combat_id`` (docs/TTK_DESENHO.md). Never read by game rules.
+    ``character_id`` is a reference: deleting the character keeps the row, unlinked.
+    """
+
+    __tablename__ = "combat_ttk_records"
+    __table_args__ = (
+        CheckConstraint("source IN ('hunt_manual','round_auto')", name="ck_ttk_source"),
+        CheckConstraint("result IN ('victory','defeat','abandoned')", name="ck_ttk_result"),
+        CheckConstraint(
+            "player_actions >= 0 AND rounds >= 0 AND consumable_uses >= 0",
+            name="ck_ttk_counts",
+        ),
+        CheckConstraint("enemy_level >= 1 AND player_level >= 1", name="ck_ttk_levels"),
+        Index("ix_ttk_creature_finished", "creature_id", "finished_at"),
+        Index("ix_ttk_finished", "finished_at"),
+    )
+
+    combat_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, autoincrement=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    character_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL")
+    )
+    character_class: Mapped[str] = mapped_column(String(24), nullable=False)
+    player_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    creature_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    creature_category: Mapped[str] = mapped_column(String(16), nullable=False)
+    enemy_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    region_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    party_size: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    result: Mapped[str] = mapped_column(String(12), nullable=False)
+    player_actions: Mapped[int] = mapped_column(Integer, nullable=False)
+    rounds: Mapped[int] = mapped_column(Integer, nullable=False)
+    consumable_uses: Mapped[int] = mapped_column(Integer, nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    duration_seconds: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
+    ruleset_version: Mapped[str] = mapped_column(String(48), nullable=False)
+    build_version: Mapped[str] = mapped_column(String(64), nullable=False)

@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     telegram_bot_enabled: bool = False
     # Contratos Regionais: off until the author resolves docs/CONTRATOS_REGIONAIS_CONFLITOS.md.
     contracts_enabled: bool = False
+    # Telemetria de TTK do Beta (docs/TTK_DESENHO.md): desligada até ser habilitada. Só grava
+    # uma linha por combate de Caçada Manual/Ronda; nunca muda regra de jogo.
+    ttk_telemetry: bool = False
+    # Identificador imutável do deploy (ex.: git rev-parse --short HEAD), definido no .env de
+    # produção. Sem ele a telemetria grava "unknown".
+    build_version: str = Field(default="unknown", min_length=1, max_length=64)
     telegram_bot_token: str | None = None
     telegram_mode: Literal["polling", "webhook"] = "polling"
     telegram_webhook_secret: str | None = None

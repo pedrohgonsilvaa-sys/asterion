@@ -73,6 +73,7 @@ from asterion.application.sanctions import SanctionService
 from asterion.application.social import SocialService
 from asterion.application.talents import TalentService
 from asterion.application.trades import TradeService
+from asterion.application.ttk_telemetry import configure as configure_ttk_telemetry
 from asterion.application.varzeas_missions import VarzeasMissionService
 from asterion.application.vde_missions import VDEMissionService
 from asterion.application.warehouse import WarehouseService
@@ -337,6 +338,9 @@ def get_bot_runtime() -> BotRuntime:
     # Contratos Regionais: dormant unless ASTERION_CONTRACTS_ENABLED
     # (see docs/CONTRATOS_REGIONAIS_CONFLITOS.md).
     set_contracts_enabled(settings.contracts_enabled)
+    configure_ttk_telemetry(
+        enabled=settings.ttk_telemetry, build_version=settings.build_version
+    )
     dispatcher.include_router(
         contracts_router(
             ContractService(SessionFactory, settings.server_id, road), settings.creation_images
