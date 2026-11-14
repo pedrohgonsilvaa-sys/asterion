@@ -21,6 +21,12 @@ from asterion.domain.equipment_modifications import (
     rune_compatible,
     rune_potency_for,
 )
+from asterion.domain.regional_equipment import (
+    ARMOR_CLASS_BONUS,
+    ARMOR_CLASSES,
+    ARMOR_SLOTS,
+    armor_class_of,
+)
 from asterion.domain.weapon_metadata import weapon_definition
 
 D = Decimal
@@ -160,6 +166,7 @@ class EquippedItemSnapshot:
     rune: InstalledComponent | None = None
     enchantment: InstalledComponent | None = None
     runes: tuple[tuple[str, InstalledComponent], ...] = ()
+    armor_class: str | None = None
 
     def to_data(self) -> dict[str, Any]:
         data = {
@@ -178,6 +185,7 @@ class EquippedItemSnapshot:
                 self.enchantment.to_data(enchantment=True)
                 if self.enchantment is not None else None
             ),
+            "armor_class": self.armor_class,
         }
         if self.item_slot == "2H":
             data["runes"] = {key: value.to_data() for key, value in self.runes}
@@ -335,6 +343,14 @@ def item_snapshot_from_persisted(
         enchantment = _installed_component(
             payload["enchantment"], item_slot, item_level, kind="enchantment"
         )
+    armor_class = armor_class_of(
+        slot=item_slot, template_id=payload.get("template_id"), item_name=payload.get("item_name")
+    )
+    if payload.get("armor_class") is not None:
+        # Frozen snapshots carry the class already resolved from the template.
+        if payload["armor_class"] not in ARMOR_CLASSES or item_slot not in ARMOR_SLOTS:
+            raise EquipmentConfigurationError("Invalid armor class.")
+        armor_class = payload["armor_class"]
     return EquippedItemSnapshot(
         item_instance_id=item_instance_id,
         slot=parsed_slot.value,
@@ -347,6 +363,7 @@ def item_snapshot_from_persisted(
         rune=rune,
         enchantment=enchantment,
         runes=runes,
+        armor_class=armor_class,
     )
 
 
@@ -374,8 +391,14 @@ def equipment_stat_contribution(item: EquippedItemSnapshot) -> EquipmentStatCont
             enchant_points,
             multiplier=enchantment_multiplier(item.item_slot, item.enchantment.effect),
         )
+    totals = {name: values[name] * multiplier for name in ATTRIBUTE_NAMES}
+    if item.armor_class is not None:
+        # Separate layer (spec Classes de Armadura §2): not multiplied by enhancement.
+        evasion, block = ARMOR_CLASS_BONUS[item.armor_class]
+        totals["Esquiva"] += D(evasion)
+        totals["Bloqueio"] += D(block)
     return EquipmentStatContribution(
-        *(values[name] * multiplier for name in ATTRIBUTE_NAMES),
+        *(totals[name] for name in ATTRIBUTE_NAMES),
         rune_percent=tuple(rune_percent),
         rune_points=tuple(rune_points),
         enchantment_percent=tuple(enchant_percent),
@@ -404,6 +427,7 @@ def equipment_configuration_from_data(data: Mapping[str, Any]) -> EquipmentConfi
             "runes": raw.get("runes"),
             "enchantment": raw.get("enchantment"),
             "item_instance_id": raw.get("item_instance_id"),
+            "armor_class": raw.get("armor_class"),
         }
         items.append(
             item_snapshot_from_persisted(

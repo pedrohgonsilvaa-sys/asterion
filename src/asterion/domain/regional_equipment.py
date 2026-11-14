@@ -285,6 +285,13 @@ def regional_jewel_templates(region_key: str) -> tuple[RegionalJewelTemplate, ..
 # Armadura v1.0.0 §1, §8) and is derived from that grouping, never stored per item.
 ARMOR_CLASSES = ("veste", "leve", "media", "pesada")
 ARMOR_SLOTS = ("Cabeça", "Torso", "Mãos", "Pés")
+# Spec §2: percentage points of (Esquiva, Bloqueio) added per equipped piece.
+ARMOR_CLASS_BONUS = {
+    "veste": ("1.00", "0"),
+    "leve": ("0.75", "0.25"),
+    "media": ("0.50", "0.50"),
+    "pesada": ("0", "1.00"),
+}
 _ARMOR_NAMES = {
     "tdo": (
         ("Cabeça", "Capuz das Cinzas"),
