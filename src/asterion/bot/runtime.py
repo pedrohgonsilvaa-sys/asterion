@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from aiogram import Bot, Dispatcher
+from sqlalchemy import select
 
 from asterion.application.account import AccountService
 from asterion.application.active_arts import ActiveArtService
@@ -89,7 +90,7 @@ from asterion.bot.combat_handlers import combat_router
 from asterion.bot.contracts_handlers import contracts_router
 from asterion.bot.cosmetics_handlers import cosmetics_router
 from asterion.bot.craft_service_handlers import craft_service_router
-from asterion.bot.creation_handlers import creation_router
+from asterion.bot.creation_handlers import creation_router, set_character_art_lookup
 from asterion.bot.doctrines_handlers import doctrines_router
 from asterion.bot.dungeon_handlers import dungeon_router
 from asterion.bot.equipment_handlers import equipment_router
@@ -144,6 +145,7 @@ from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
 from asterion.domain.creation import NamePolicy
 from asterion.domain.prologue import PROFILE
+from asterion.infrastructure.db.models import Character
 from asterion.infrastructure.db.session import SessionFactory
 
 
@@ -163,6 +165,20 @@ def get_bot_runtime() -> BotRuntime:
         **build_asset_images(tuple(BRAZIER_DETAILS)),
         **settings.creation_images,
     }
+
+    async def _character_art(telegram_id: int) -> tuple[str, str | None, str] | None:
+        async with SessionFactory() as session:
+            row = (
+                await session.execute(
+                    select(Character.race, Character.gender, Character.character_class).where(
+                        Character.telegram_id == telegram_id,
+                        Character.server_id == settings.server_id,
+                    )
+                )
+            ).first()
+        return (row[0], row[1], row[2]) if row else None
+
+    set_character_art_lookup(_character_art)
 
     dispatcher = Dispatcher(disable_fsm=True)
     # Registered first, so they run before every other update middleware and handler.

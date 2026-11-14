@@ -99,3 +99,27 @@ def test_npc_dungeon_region_and_character_keys():
     assert "char.velado.feminino.errante" in images
     for ref in images.values():
         assert resolve_asset_file(ref) is not None, ref
+
+
+async def test_character_screens_use_the_players_own_art(tmp_path):
+    from asterion.bot import creation_handlers
+
+    _touch(tmp_path, "characters/default races/rem-m.png")
+    _touch(tmp_path, "characters/default classes/rem-m-sentinela.png")
+    images = build_asset_images(tuple(BRAZIER_DETAILS), tmp_path)
+
+    async def lookup(telegram_id):
+        players = {
+            1: ("remanescente", "masculino", "sentinela"),
+            2: ("remanescente", "masculino", "vigia"),
+        }
+        return players.get(telegram_id)
+
+    creation_handlers.set_character_art_lookup(lookup)
+    try:
+        pick = creation_handlers._player_character_image
+        assert await pick(images, 1) == "file:characters/default classes/rem-m-sentinela.png"
+        assert await pick(images, 2) == "file:characters/default races/rem-m.png"
+        assert await pick(images, 3) is None
+    finally:
+        creation_handlers.set_character_art_lookup(None)

@@ -1,5 +1,7 @@
 """aiogram adapters. Identity is always from Telegram's authenticated sender."""
 
+from collections.abc import Awaitable, Callable
+
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
@@ -22,7 +24,7 @@ from asterion.application.s4 import S4Service
 from asterion.application.s5 import S5Service
 from asterion.application.s6 import S6Service
 from asterion.application.world import WorldService
-from asterion.bot.asset_catalog import npc_key_from_text
+from asterion.bot.asset_catalog import character_key, npc_key_from_text
 from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import CreationCallback, Screen, render
@@ -53,9 +55,40 @@ def unavailable_media(exc: TelegramBadRequest) -> bool:
     )
 
 
+# Looks up (race, gender, class) of the player's character; set once at startup.
+CharacterArtLookup = Callable[[int], Awaitable[tuple[str, str | None, str] | None]]
+_character_art_lookup: CharacterArtLookup | None = None
+
+
+def set_character_art_lookup(lookup: CharacterArtLookup | None) -> None:
+    global _character_art_lookup
+    _character_art_lookup = lookup
+
+
+async def _player_character_image(images: dict[str, str], telegram_id: int) -> str | None:
+    """Art of the player's own character: race+gender+class, then race+gender."""
+    if _character_art_lookup is None:
+        return None
+    try:
+        found = await _character_art_lookup(telegram_id)
+    except Exception:  # art is decoration; never block a screen on it
+        return None
+    if found is None:
+        return None
+    race, gender, character_class = found
+    if gender is None:
+        return None
+    return images.get(character_key(race, gender, character_class)) or images.get(
+        character_key(race, gender)
+    )
+
+
 async def present(message: Message, screen: Screen, images: dict[str, str], *, edit=False):
     npc = npc_key_from_text(screen.text)
     image = (npc and images.get(npc)) or images.get(screen.image_key)
+    if not image and screen.image_key == "character" and message.chat.type == "private":
+        # In a private chat the chat id is the player's Telegram id.
+        image = await _player_character_image(images, message.chat.id)
     if image and image.startswith("file:"):
         path = resolve_asset_file(image)
         media = FSInputFile(path) if path else None
