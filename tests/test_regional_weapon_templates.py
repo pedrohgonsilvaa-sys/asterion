@@ -83,3 +83,26 @@ def test_boss_rarity_table_matches_author_bands():
     for rarity, expected in (("Comum", 25), ("Raro", 45), ("Épico", 25)):
         assert abs(counts[rarity] / 200 - expected) < 2
     assert 0 < counts["Mítico"] < 200
+
+
+def test_armor_catalog_is_editorial_only_and_stays_in_region():
+    from asterion.domain.regional_equipment import REGIONAL_ARMOR_TEMPLATES
+
+    assert len(REGIONAL_ARMOR_TEMPLATES) == 96
+    assert len({t.template_id for t in REGIONAL_ARMOR_TEMPLATES}) == 96
+    plain = materialize_equipment("armor-seed", "Raro", 35)
+    seen = set()
+    for i in range(4000):
+        item = materialize_equipment(f"a{i}", "Comum", 35, region_key="varzeas")
+        assert "armor_class" not in item
+        if item["slot"] in {"Cabeça", "Torso", "Mãos", "Pés"}:
+            assert item["template_id"].startswith("equipment.varzeas.armor.")
+            seen.add(item["item_name"])
+    assert len(seen) == 16
+    assert "armor_class" not in plain
+
+
+def test_regional_core_stats_match_the_unchanged_slot_budget():
+    base = materialize_equipment("same", "Comum", 35, forced_slot="Torso")
+    regional = materialize_equipment("same", "Comum", 35, forced_slot="Torso", region_key="altos")
+    assert regional["core"] == base["core"]

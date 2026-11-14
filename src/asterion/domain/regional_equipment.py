@@ -278,3 +278,136 @@ def regional_jewel_templates(region_key: str) -> tuple[RegionalJewelTemplate, ..
     if region_key not in REGION_IDS:
         raise ValueError(f"unknown equipment region {region_key!r}")
     return tuple(t for t in REGIONAL_JEWEL_TEMPLATES if t.region_key == region_key)
+
+
+# Armor: editorial regional names only.  The Veste/Leve/Média/Pesada grouping of the
+# source catalog is NOT a mechanical class (no armor_class, no proficiency, no new
+# stats) until the author approves one; every piece keeps the slot's current core.
+_ARMOR_NAMES = {
+    "tdo": (
+        ("Cabeça", "Capuz das Cinzas"),
+        ("Torso", "Veste do Caminhante"),
+        ("Mãos", "Luvas de Fuligem"),
+        ("Pés", "Botas da Estrada"),
+        ("Cabeça", "Elmo Leve da Fuligem"),
+        ("Torso", "Couraça Leve do Caminho"),
+        ("Mãos", "Manoplas Leves do Caminhante"),
+        ("Pés", "Passos Leves da Cinza"),
+        ("Cabeça", "Elmo Médio do Último Posto"),
+        ("Torso", "Couraça Média da Estrada"),
+        ("Mãos", "Manoplas Médias do Poente"),
+        ("Pés", "Grevas Médias da Fuligem"),
+        ("Cabeça", "Elmo Pesado do Contraforte"),
+        ("Torso", "Couraça Pesada das Cinzas"),
+        ("Mãos", "Manoplas Pesadas do Último Posto"),
+        ("Pés", "Grevas Pesadas do Caminho"),
+    ),
+    "vde": (
+        ("Cabeça", "Capuz Musgoso"),
+        ("Torso", "Veste da Mata Suspensa"),
+        ("Mãos", "Luvas de Turfa"),
+        ("Pés", "Botas dos Laços"),
+        ("Cabeça", "Capuz Leve das Copas"),
+        ("Torso", "Veste Leve dos Enforcados"),
+        ("Mãos", "Luvas Leves do Musgo"),
+        ("Pés", "Botas Leves da Turfa"),
+        ("Cabeça", "Elmo Médio do Nó"),
+        ("Torso", "Couraça Média do Vale"),
+        ("Mãos", "Manoplas Médias Enredadas"),
+        ("Pés", "Grevas Médias dos Laços"),
+        ("Cabeça", "Elmo Pesado dos Enforcados"),
+        ("Torso", "Couraça Pesada das Raízes"),
+        ("Mãos", "Manoplas Pesadas do Nó Antigo"),
+        ("Pés", "Grevas Pesadas da Mata Suspensa"),
+    ),
+    "nareth": (
+        ("Cabeça", "Capuz do Horizonte"),
+        ("Torso", "Veste do Meridiano"),
+        ("Mãos", "Luvas do Marco"),
+        ("Pés", "Botas da Linha"),
+        ("Cabeça", "Elmo Leve do Meridiano"),
+        ("Torso", "Couraça Leve do Horizonte"),
+        ("Mãos", "Manoplas Leves do Marco"),
+        ("Pés", "Grevas Leves da Referência"),
+        ("Cabeça", "Elmo Médio da Câmara"),
+        ("Torso", "Couraça Média do Meridiano"),
+        ("Mãos", "Manoplas Médias do Horizonte"),
+        ("Pés", "Grevas Médias do Marco"),
+        ("Cabeça", "Elmo Pesado da Câmara Invertida"),
+        ("Torso", "Couraça Pesada do Horizonte"),
+        ("Mãos", "Manoplas Pesadas do Meridiano"),
+        ("Pés", "Grevas Pesadas da Linha"),
+    ),
+    "varzeas": (
+        ("Cabeça", "Capuz de Junco"),
+        ("Torso", "Veste Encerada"),
+        ("Mãos", "Luvas de Várzea"),
+        ("Pés", "Botas da Salmoura"),
+        ("Cabeça", "Capuz Leve do Junco"),
+        ("Torso", "Veste Leve Encerada"),
+        ("Mãos", "Luvas Leves da Várzea"),
+        ("Pés", "Botas Leves da Salmoura"),
+        ("Cabeça", "Elmo Médio das Válvulas"),
+        ("Torso", "Couraça Média das Várzeas"),
+        ("Mãos", "Manoplas Médias Ferruginosas"),
+        ("Pés", "Grevas Médias do Porto"),
+        ("Cabeça", "Elmo Pesado da Transferência"),
+        ("Torso", "Couraça Pesada do Dique"),
+        ("Mãos", "Manoplas Pesadas da Ferrugem"),
+        ("Pés", "Grevas Pesadas da Salmoura"),
+    ),
+    "altos": (
+        ("Cabeça", "Capuz Cinéreo"),
+        ("Torso", "Veste da Pedreira"),
+        ("Mãos", "Luvas de Escora"),
+        ("Pés", "Botas do Contraforte"),
+        ("Cabeça", "Elmo Leve dos Altos"),
+        ("Torso", "Couraça Leve da Pedreira"),
+        ("Mãos", "Manoplas Leves de Escora"),
+        ("Pés", "Grevas Leves do Contrapeso"),
+        ("Cabeça", "Elmo Médio do Contraforte"),
+        ("Torso", "Couraça Média dos Altos"),
+        ("Mãos", "Manoplas Médias da Pedreira"),
+        ("Pés", "Grevas Médias de Escora"),
+        ("Cabeça", "Elmo Pesado do Contrapeso"),
+        ("Torso", "Couraça Pesada do Contraforte"),
+        ("Mãos", "Manoplas Pesadas dos Altos"),
+        ("Pés", "Grevas Pesadas da Pedreira"),
+    ),
+    "confins": (
+        ("Cabeça", "Capuz do Véu"),
+        ("Torso", "Veste da Travessia"),
+        ("Mãos", "Luvas da Marcha"),
+        ("Pés", "Botas do Retorno"),
+        ("Cabeça", "Capuz Leve da Baliza"),
+        ("Torso", "Veste Leve do Véu"),
+        ("Mãos", "Luvas Leves da Marcha"),
+        ("Pés", "Botas Leves da Travessia"),
+        ("Cabeça", "Elmo Médio da Baliza"),
+        ("Torso", "Couraça Média do Retorno"),
+        ("Mãos", "Manoplas Médias do Véu"),
+        ("Pés", "Grevas Médias da Marcha"),
+        ("Cabeça", "Elmo Pesado da Última Vigília"),
+        ("Torso", "Couraça Pesada das Duas Versões"),
+        ("Mãos", "Manoplas Pesadas da Baliza"),
+        ("Pés", "Grevas Pesadas do Retorno"),
+    ),
+}
+
+REGIONAL_ARMOR_TEMPLATES = tuple(
+    RegionalJewelTemplate(
+        template_id=f"equipment.{region_key}.armor.{_slug(slot)}.{_slug(name)}",
+        region_key=region_key,
+        region_id=REGION_IDS[region_key],
+        slot=slot,
+        display_name=name,
+    )
+    for region_key, entries in _ARMOR_NAMES.items()
+    for slot, name in entries
+)
+
+
+def regional_armor_templates(region_key: str) -> tuple[RegionalJewelTemplate, ...]:
+    if region_key not in REGION_IDS:
+        raise ValueError(f"unknown equipment region {region_key!r}")
+    return tuple(t for t in REGIONAL_ARMOR_TEMPLATES if t.region_key == region_key)

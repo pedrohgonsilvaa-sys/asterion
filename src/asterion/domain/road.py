@@ -24,7 +24,11 @@ from asterion.domain.equipment_modifications import (
 )
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.prologue import first_art
-from asterion.domain.regional_equipment import regional_jewel_templates, regional_weapon_templates
+from asterion.domain.regional_equipment import (
+    regional_armor_templates,
+    regional_jewel_templates,
+    regional_weapon_templates,
+)
 from asterion.domain.weapon_metadata import weapon_definition
 
 D = Decimal
@@ -1887,15 +1891,10 @@ def materialize_equipment(
         regional_by_key = {
             (t.display_name, t.weapon_type_id): t for t in regional_weapon_templates(region_key)
         }
-        jewels = regional_jewel_templates(region_key)
+        jewels = regional_jewel_templates(region_key) + regional_armor_templates(region_key)
         jewels_by_name = {(t.display_name, None): t for t in jewels}
         catalog = (
             tuple(
-                t
-                for t in EQUIPMENT_CATALOG
-                if t[2] is None and t[1] not in {"Acessório", "Artefato"}
-            )
-            + tuple(
                 (t.display_name, weapon_definition(t.weapon_type_id).persisted_item_slot, t.weapon_type_id)
                 for t in regional_by_key.values()
             )
