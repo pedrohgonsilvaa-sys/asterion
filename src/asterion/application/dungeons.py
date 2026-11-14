@@ -187,6 +187,7 @@ from asterion.domain.nareth_dungeons import (
     nareth_dungeon_encounter_specs,
     nareth_dungeon_enemy_rewards,
 )
+from asterion.domain.regional_equipment import REGION_KEY_BY_DISPLAY
 from asterion.domain.road import (
     CONFINS_ESTRADAS_AUSENTES,
     RULESET,
@@ -2940,6 +2941,7 @@ class DungeonService:
                 rarity,
                 run.reference_level,
                 bound=False,
+                region_key=REGION_KEY_BY_DISPLAY[_family(run.dungeon_family_id).region_display],
             )
             components.append(
                 RewardComponent(

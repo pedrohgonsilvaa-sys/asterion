@@ -3010,7 +3010,12 @@ class RoadService:
                 c.elite_legendary_pity += 1
                 if rarity in {"Lendário", "Mítico"}:
                     c.elite_legendary_pity = 0
-            item = materialize_equipment(context.seed, rarity, context.enemy_level)
+            item = materialize_equipment(
+                context.seed,
+                rarity,
+                context.enemy_level,
+                region_key=self._travel_region(_location_label(context.local_id)),
+            )
             item_instance_id, item = equipment_instance_payload(item)
             if await self._inventory_slots(s, c.id) < await inventory_capacity(s, c.id):
                 s.add(
