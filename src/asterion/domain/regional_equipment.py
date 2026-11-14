@@ -8,6 +8,7 @@ Names come from ASTERION_CATALOGO_REGIONAL_ARMAS_E_ARMADURAS.md (proposal names)
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
 
 REGION_IDS = {
@@ -198,3 +199,82 @@ def regional_weapon_templates(region_key: str) -> tuple[RegionalWeaponTemplate, 
 
 def regional_weapon_template(template_id: str) -> RegionalWeaponTemplate | None:
     return _BY_ID.get(template_id)
+
+
+# Accessories and Artifacts: 3 + 3 per region (drop pool).  Special-recipe
+# Artifacts are crafted/campaign-only and deliberately NOT in the drop pool.
+_JEWEL_NAMES = {
+    "tdo": (
+        ("Selo Enegrecido", "Selo do Galho Morto", "Selo do Poente"),
+        ("Relicário de Cinzas", "Relicário da Cinza Verde", "Relicário da Âncora Velada"),
+    ),
+    "vde": (
+        ("Selo dos Laços", "Selo do Caminho Enredado", "Selo da Rede Antiga"),
+        ("Relicário Enredado", "Relicário do Nó Velado", "Relicário da Pedra Pulsante"),
+    ),
+    "nareth": (
+        ("Selo do Eixo", "Selo do Meridiano", "Selo do Eixo Estável"),
+        (
+            "Relicário de Referência",
+            "Relicário da Distância Certa",
+            "Relicário da Referência Perdida",
+        ),
+    ),
+    "varzeas": (
+        ("Selo de Transferência", "Selo dos Diques", "Selo da Matriz Estável"),
+        ("Relicário de Restituição", "Relicário do Horto Estéril", "Relicário da Persistência"),
+    ),
+    "altos": (
+        ("Selo da Prioridade", "Selo da Carga Compartilhada", "Selo da Rede Sustentada"),
+        (
+            "Relicário da Continuidade",
+            "Relicário do Peso Distribuído",
+            "Relicário da Ordem Interrompida",
+        ),
+    ),
+    "confins": (
+        ("Selo de Referência", "Selo do Marco Válido", "Selo da Referência Presente"),
+        (
+            "Relicário de Duas Leituras",
+            "Relicário do Registro Incompleto",
+            "Relicário da Ordem Findada",
+        ),
+    ),
+}
+
+
+def _slug(name: str) -> str:
+    plain = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    return "_".join(plain.lower().split())
+
+
+@dataclass(frozen=True, slots=True)
+class RegionalJewelTemplate:
+    template_id: str
+    region_key: str
+    region_id: str
+    slot: str
+    display_name: str
+
+
+REGIONAL_JEWEL_TEMPLATES = tuple(
+    RegionalJewelTemplate(
+        template_id=f"equipment.{region_key}.{kind}.{_slug(name)}",
+        region_key=region_key,
+        region_id=REGION_IDS[region_key],
+        slot=slot,
+        display_name=name,
+    )
+    for region_key, (accessories, artifacts) in _JEWEL_NAMES.items()
+    for kind, slot, names in (
+        ("accessory", "Acessório", accessories),
+        ("artifact", "Artefato", artifacts),
+    )
+    for name in names
+)
+
+
+def regional_jewel_templates(region_key: str) -> tuple[RegionalJewelTemplate, ...]:
+    if region_key not in REGION_IDS:
+        raise ValueError(f"unknown equipment region {region_key!r}")
+    return tuple(t for t in REGIONAL_JEWEL_TEMPLATES if t.region_key == region_key)

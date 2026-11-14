@@ -27,7 +27,7 @@ def test_regional_drop_is_deterministic_and_stays_in_region():
     for i in range(1500):
         a = materialize_equipment(f"seed{i}", "Raro", 25, region_key="nareth")
         assert a == materialize_equipment(f"seed{i}", "Raro", 25, region_key="nareth")
-        if "template_id" in a:
+        if "weapon_type_id" in a:
             assert a["template_id"].startswith("equipment.nareth.")
             assert a["region_id"] == REGION_IDS["nareth"]
             definition = weapon_definition(a["weapon_type_id"])
@@ -48,3 +48,38 @@ def test_region_cannot_combine_with_forced_weapon():
         materialize_equipment(
             "s", "Raro", 5, region_key="tdo", weapon_type_id="weapon.type.base.espada"
         )
+
+
+def test_jewelry_pool_has_three_accessories_and_three_artifacts_per_region():
+    from asterion.domain.regional_equipment import (
+        REGIONAL_JEWEL_TEMPLATES,
+        regional_jewel_templates,
+    )
+
+    assert len(REGIONAL_JEWEL_TEMPLATES) == 36
+    assert len({t.template_id for t in REGIONAL_JEWEL_TEMPLATES}) == 36
+    for region in REGION_IDS:
+        slots = [t.slot for t in regional_jewel_templates(region)]
+        assert slots.count("Acessório") == 3 and slots.count("Artefato") == 3
+
+
+def test_regional_jewelry_drops_stay_in_region():
+    seen = set()
+    for i in range(3000):
+        item = materialize_equipment(f"j{i}", "Raro", 45, region_key="altos")
+        if item["slot"] in {"Acessório", "Artefato"}:
+            assert item["template_id"].startswith("equipment.altos.")
+            seen.add(item["item_name"])
+        assert item["item_name"] != "Relicário de Cinzas"
+    assert len(seen) == 6
+
+
+def test_boss_rarity_table_matches_author_bands():
+    from collections import Counter
+
+    from asterion.domain.road import equipment_rarity
+
+    counts = Counter(equipment_rarity(f"b{i}", "boss") for i in range(20000))
+    for rarity, expected in (("Comum", 25), ("Raro", 45), ("Épico", 25)):
+        assert abs(counts[rarity] / 200 - expected) < 2
+    assert 0 < counts["Mítico"] < 200

@@ -24,7 +24,7 @@ from asterion.domain.equipment_modifications import (
 )
 from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
 from asterion.domain.prologue import first_art
-from asterion.domain.regional_equipment import regional_weapon_templates
+from asterion.domain.regional_equipment import regional_jewel_templates, regional_weapon_templates
 from asterion.domain.weapon_metadata import weapon_definition
 
 D = Decimal
@@ -1881,14 +1881,25 @@ def materialize_equipment(
 
     catalog = EQUIPMENT_CATALOG
     regional_by_key = {}
+    jewels_by_name = {}
     if region_key is not None:
         # Region is resolved by the encounter, never by the player (no smart loot).
         regional_by_key = {
             (t.display_name, t.weapon_type_id): t for t in regional_weapon_templates(region_key)
         }
-        catalog = tuple(t for t in EQUIPMENT_CATALOG if t[2] is None) + tuple(
-            (t.display_name, weapon_definition(t.weapon_type_id).persisted_item_slot, t.weapon_type_id)
-            for t in regional_by_key.values()
+        jewels = regional_jewel_templates(region_key)
+        jewels_by_name = {(t.display_name, None): t for t in jewels}
+        catalog = (
+            tuple(
+                t
+                for t in EQUIPMENT_CATALOG
+                if t[2] is None and t[1] not in {"Acessório", "Artefato"}
+            )
+            + tuple(
+                (t.display_name, weapon_definition(t.weapon_type_id).persisted_item_slot, t.weapon_type_id)
+                for t in regional_by_key.values()
+            )
+            + tuple((t.display_name, t.slot, None) for t in jewels)
         )
     eligible = tuple(
         template
@@ -1972,6 +1983,10 @@ def materialize_equipment(
         "enchantment": None,
         "bound": bound,
     }
+    jewel_template = jewels_by_name.get((name, None))
+    if jewel_template is not None:
+        payload["template_id"] = jewel_template.template_id
+        payload["region_id"] = jewel_template.region_id
     if selected_weapon_type_id is not None:
         payload["weapon_type_id"] = selected_weapon_type_id
         if regional_template is not None:
@@ -1995,6 +2010,9 @@ def equipment_rarity(seed: str, category: str, elite_pity: int = 0, legendary_pi
         bands = ((78, "Comum"), (97, "Raro"), (99.8, "Épico"), (100, "Lendário"))
     elif category == "uncommon":
         bands = ((65, "Comum"), (94, "Raro"), (99.5, "Épico"), (100, "Lendário"))
+    elif category == "boss":
+        # Hunt boss table: 25 / 45 / 25 / 4.7 / 0.3 (no pity defined by the author).
+        bands = ((25, "Comum"), (70, "Raro"), (95, "Épico"), (99.7, "Lendário"), (100, "Mítico"))
     else:
         raise ValueError(f"equipment rarity is not configured for category {category!r}")
     for limit, rarity in bands:
