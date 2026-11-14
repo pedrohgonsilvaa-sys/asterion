@@ -43,7 +43,32 @@
      "npc_memory_targets": []
     }
    ],
-   "future_hooks": [],
+   "future_hooks": [
+    {
+     "hook_id": "PRO_choice_aftermath->P1",
+     "target": "P1",
+     "knowledge_holders": [],
+     "summary": "personagem possui `evidence_first` ou `preserves_records`.",
+     "when_option": "o1",
+     "basis": "character_memory"
+    },
+    {
+     "hook_id": "PRO_choice_aftermath->S1",
+     "target": "S1",
+     "knowledge_holders": [],
+     "summary": "personagem possui `hypothesis_marked` ou `preserves_contradiction`.",
+     "when_option": "o2",
+     "basis": "character_memory"
+    },
+    {
+     "hook_id": "PRO_choice_aftermath->S5",
+     "target": "S5",
+     "knowledge_holders": [],
+     "summary": "personagem possui `pragmatic` ou `risk_accepting`.",
+     "when_option": "o3",
+     "basis": "character_memory"
+    }
+   ],
    "identity_conditions": []
   },
   {
@@ -88,7 +113,32 @@
      "npc_memory_targets": []
     }
    ],
-   "future_hooks": [],
+   "future_hooks": [
+    {
+     "hook_id": "PRO_choice_first_fire->P1",
+     "target": "P1",
+     "knowledge_holders": [],
+     "summary": "personagem possui `preserves_records`.",
+     "when_option": "o1",
+     "basis": "character_memory"
+    },
+    {
+     "hook_id": "PRO_choice_first_fire->S1",
+     "target": "S1",
+     "knowledge_holders": [],
+     "summary": "personagem possui `community_first` ou `protective`.",
+     "when_option": "o2",
+     "basis": "character_memory"
+    },
+    {
+     "hook_id": "PRO_choice_first_fire->S5",
+     "target": "S5",
+     "knowledge_holders": [],
+     "summary": "personagem possui `risk_accepting` ou `questions_authority`.",
+     "when_option": "o3",
+     "basis": "character_memory"
+    }
+   ],
    "identity_conditions": []
   }
  ]

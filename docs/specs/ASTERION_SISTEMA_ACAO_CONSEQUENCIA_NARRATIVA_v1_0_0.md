@@ -938,6 +938,36 @@ Cada linha abaixo define o **mínimo obrigatório**. Copy final pode enriquecer 
 **Retorno futuro:** Pós-P36: não muda o mundo global; muda a memória pessoal sobre continuidade.
 **Identidade contextual:** Classe: Sentinela/Tecelão pode ter reação sobre protocolo.
 
+## 7A. Apêndice — Nós do Prólogo (PRO)
+
+> **Adendo de 2026-11-14 (decisão do autor).** Aprova o Documento A (`ASTERION_DECISOES_PROLOGO_E_CONTRATOS_v1_0_0.md`, parte A) e o incorpora a este contrato. **Fora da contagem de 72**: as 36 Principais e as 36 Secundárias seguem exatamente como em §7. Este adendo não altera nenhum nó de §7.
+
+O Prólogo (`mission_id` `PRO`, `mission_kind` `prologo`, Terras do Ocaso) tem **2 nós**, com **3 opções** cada. Não há Quest, e as escolhas **não concedem XP nem Coroas e não iniciam combate**. Elas não alteram Materiais, Equipamento, dificuldade, gates, ordem de missões nem `world_state`. Só gravam **memória do personagem** (2 tags por opção). Nenhuma memória de NPC é gravada: Alda e Oren não presenciaram a escolha. `rapport_state` permanece `neutral` no Beta. Personagens antigos recebem `neutral_backfill`, sem escolha retroativa.
+
+| `choice_id` | Momento | Opção `o1` | Opção `o2` | Opção `o3` |
+|---|---|---|---|---|
+| `PRO_choice_aftermath` | após o primeiro combate | Examinar primeiro | Aceitar que ainda não sabe | Seguir enquanto é possível |
+| `PRO_choice_first_fire` | primeiro Braseiro | Guardar o que foi visto | Pensar em quem depende da estrada | Não deixar o medo decidir |
+
+As tags de cada opção, o contexto e a pergunta estão no Documento A §3 e no catálogo gerado `narrative_choices_prologue_catalog.json`.
+
+### 7A.1 `future_hook` do Prólogo
+
+Cada opção tem **exatamente um** gancho, e cada gancho responde a **uma só opção** (`when_option`). Os ganchos são do tipo `character_memory`: o NPC reage ao comportamento que o personagem mostra na cena do próprio NPC, lido da memória do personagem. `knowledge_holders` fica vazio e nada é gravado em Alda ou Oren. Um personagem sem escolha registrada (inclusive `neutral_backfill`) não gera reação.
+
+| `hook_id` | Destino | NPC | `when_option` | Condição (Documento A §6) |
+|---|---|---|---|---|
+| `PRO_choice_aftermath->P1` | P1 | Alda | `o1` | `evidence_first` ou `preserves_records` |
+| `PRO_choice_aftermath->S1` | S1 | Oren | `o2` | `hypothesis_marked` ou `preserves_contradiction` |
+| `PRO_choice_aftermath->S5` | S5 | Oren | `o3` | `pragmatic` ou `risk_accepting` |
+| `PRO_choice_first_fire->P1` | P1 | Alda | `o1` | `preserves_records` |
+| `PRO_choice_first_fire->S1` | S1 | Oren | `o2` | `community_first` ou `protective` |
+| `PRO_choice_first_fire->S5` | S5 | Oren | `o3` | `risk_accepting` ou `questions_authority` |
+
+A opção de cada gancho é a única do nó cujas tags satisfazem a condição; o gerador do catálogo recusa condições que casem com zero ou mais de uma opção. As tags `risk_accepting`, `preserves_records` e `evidence_first` aparecem nos dois nós, mas cada gancho vale só para o seu `choice_id`.
+
+Os 6 textos de reação são **rascunho sujeito à aprovação final do autor** e estão em `ASTERION_TEXTOS_REACAO_NPCS_v1_0_2.md`, seção 6A (cópia literal do Documento A §6, em terceira pessoa). Os ganchos não podem revelar origem de fenômenos, Âncoras, Primeiro Selo, Convergência, Avesso, Desvelados nem Projeto Hemaris (Documento A §7). A exibição dessas reações nas cenas P1, S1 e S5 ainda não está implementada.
+
 ## 8. Fechamento de Design
 
 ### 8.1 O que este documento fecha

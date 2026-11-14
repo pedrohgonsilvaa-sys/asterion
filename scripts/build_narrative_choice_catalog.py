@@ -261,8 +261,49 @@ def build_prologue(source: str) -> list[dict]:
     return nodes
 
 
+def parse_prologue_hooks(source: str, nodes: list[dict]) -> None:
+    """Documento A §6: um gancho por destino, preso à opção cujas tags satisfazem a condição.
+
+    O gancho lê só a memória do personagem (nenhuma memória grava em Alda ou Oren).
+    Cada condição precisa casar com exatamente uma opção do nó; senão o script para.
+    """
+    section = source.split("## 6. Ganchos futuros", 1)[1].split("\n## 7.", 1)[0]
+    by_id = {node["choice_id"]: node for node in nodes}
+    for block in re.split(r"^### ", section, flags=re.M)[1:]:
+        head = re.match(r"`(\w+)` → (\w+)", block)
+        condition = re.search(r"\*\*Condição narrativa:\*\* (.+)", block)
+        npc = re.search(r"\*\*NPC:\*\* (\w+)", block)
+        if not (head and condition and npc):
+            raise ValueError(f"gancho do Prólogo ilegível: {block[:60]!r}")
+        choice_id, target = head.groups()
+        wanted = set(re.findall(r"`(\w+)`", condition.group(1)))
+        matches = [
+            option["option_id"]
+            for option in by_id[choice_id]["options"]
+            if wanted & set(option["character_memory_tags"])
+        ]
+        if len(matches) != 1:
+            raise ValueError(f"{choice_id}->{target}: condição casa com {matches}, esperada 1")
+        by_id[choice_id]["future_hooks"].append(
+            {
+                "hook_id": f"{choice_id}->{target}",
+                "target": target,
+                "knowledge_holders": [],
+                "summary": condition.group(1).strip(),
+                "when_option": matches[0],
+                "basis": "character_memory",
+            }
+        )
+    for node in nodes:
+        mapped = sorted(hook["when_option"] for hook in node["future_hooks"])
+        if mapped != ["o1", "o2", "o3"]:
+            raise ValueError(f"{node['choice_id']}: ganchos cobrem {mapped}, esperadas 3 opções")
+
+
 def main_prologue(source_path: Path, target_path: Path) -> None:
-    nodes = build_prologue(source_path.read_text(encoding="utf-8"))
+    source = source_path.read_text(encoding="utf-8")
+    nodes = build_prologue(source)
+    parse_prologue_hooks(source, nodes)
     ids = [node["choice_id"] for node in nodes]
     if ids != ["PRO_choice_aftermath", "PRO_choice_first_fire"]:
         raise SystemExit(f"catálogo do Prólogo incompleto: {ids}")

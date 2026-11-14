@@ -52,6 +52,9 @@ TENDENCIES = frozenset(
 KNOWLEDGE_SOURCES = frozenset(("witnessed", "report", "record"))
 
 PLAYER_SOURCE = "player"
+HOOK_BASIS_NPC = "npc_memory"
+HOOK_BASIS_CHARACTER = "character_memory"
+HOOK_BASES = frozenset((HOOK_BASIS_NPC, HOOK_BASIS_CHARACTER))
 BACKFILL_SOURCE = "neutral_backfill"
 BACKFILL_OPTION = "neutral_backfill"
 
@@ -100,10 +103,21 @@ class ChoiceOption:
 
 @dataclass(frozen=True, slots=True)
 class FutureHook:
+    """A later scene that may react to a choice.
+
+    ``when_option`` limits the hook to one option of the node (the Prologue's 1:1
+    option-to-reaction mapping). ``basis`` says what the NPC reacts to: the memory
+    it holds (``npc_memory``, the 72 mission nodes) or only the demeanor the
+    character shows in the NPC's own scene (``character_memory``, the Prologue):
+    nothing is ever written to the NPC.
+    """
+
     hook_id: str
     target: str
     knowledge_holders: tuple[str, ...]
     summary: str
+    when_option: str | None = None
+    basis: str = HOOK_BASIS_NPC
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,6 +195,8 @@ def build_node(data: Mapping) -> ChoiceNode:
                 target=hook["target"],
                 knowledge_holders=tuple(hook["knowledge_holders"]),
                 summary=hook["summary"],
+                when_option=hook.get("when_option"),
+                basis=hook.get("basis", HOOK_BASIS_NPC),
             )
             for hook in data.get("future_hooks", ())
         ),
@@ -198,8 +214,16 @@ def _validate_prologue_node(node: ChoiceNode) -> None:
     """The Prologue has no Quest and no NPC witness: character memory only (Documento A)."""
     if node.mission_id != PROLOGUE_MISSION_ID or len(node.options) != 3:
         raise ValueError(f"{node.choice_id}: prologue node needs mission PRO and 3 options.")
-    if node.future_hooks:
-        raise ValueError(f"{node.choice_id}: prologue hooks are pending the author.")
+    option_ids = {item.option_id for item in node.options}
+    hooked: set[str | None] = set()
+    for hook in node.future_hooks:
+        if hook.basis != HOOK_BASIS_CHARACTER or hook.knowledge_holders:
+            raise ValueError(f"{hook.hook_id}: prologue hooks read character memory only.")
+        if hook.when_option not in option_ids or hook.when_option in hooked:
+            raise ValueError(f"{hook.hook_id}: one hook per option, on a real option.")
+        if not hook.hook_id.startswith(f"{node.choice_id}->"):
+            raise ValueError(f"{hook.hook_id}: hook id must start with the choice id.")
+        hooked.add(hook.when_option)
     for item in node.options:
         if item.npc_memory_targets or item.requires:
             raise ValueError(f"{node.choice_id}/{item.option_id}: no NPC memory or gate.")
@@ -235,6 +259,8 @@ def validate_node(node: ChoiceNode) -> None:
         target.npc_id for item in node.options for target in item.npc_memory_targets
     }
     for hook in node.future_hooks:
+        if hook.basis != HOOK_BASIS_NPC or hook.when_option is not None:
+            raise ValueError(f"{hook.hook_id}: mission hooks read NPC memory for any option.")
         if not set(hook.knowledge_holders) <= receivers:
             raise ValueError(f"{hook.hook_id}: holder never receives this memory.")
 
@@ -336,6 +362,10 @@ def resolve_hook(
     option = node.option(committed.selected_option)
     if option is None:
         return None
+    if hook.when_option is not None and option.option_id != hook.when_option:
+        return None
+    if hook.basis == HOOK_BASIS_CHARACTER:
+        return option.option_id
     if hook.knowledge_holders:
         known = {npc for npc, _tag in committed.npc_memories}
         if not known.intersection(hook.knowledge_holders):
@@ -348,6 +378,7 @@ class ReactionLine:
     speaker: str
     speaker_name: str
     text: str
+    draft: bool = False  # copy still waiting for the author's final approval
 
 
 @cache
@@ -370,6 +401,10 @@ def legitimate_reaction(
     if option_id is None:
         return None
     line = reaction_lines().get((node.choice_id, option_id))
-    if line is None or line.speaker not in {npc for npc, _tag in committed.npc_memories}:
+    if line is None:
+        return None
+    if hook.basis == HOOK_BASIS_NPC and line.speaker not in {
+        npc for npc, _tag in committed.npc_memories
+    }:
         return None
     return line

@@ -95,6 +95,18 @@ O autor fechou as decisões abaixo para o Beta. Nenhuma delas altera código por
 - O `flavor_catalog.py` entra nessa revisão.
 - A proposta **v0.2 da Crônica NÃO** é promovida agora ao `SOURCE_AUTHORITY.md`. Só se promove uma versão **revisada e aprovada**.
 
+### Etapa 3a — Documento A no contrato (2026-11-14)
+
+Decisões do autor para a implementação:
+
+1. Os 6 textos de reação entram **literalmente** como estão no Documento A, em terceira pessoa, marcados como **rascunho sujeito à aprovação final do autor**.
+2. Gancho **baseado na memória do personagem** (`basis = character_memory`): nada é gravado em Alda ou Oren.
+3. `FutureHook` ganha `when_option`: cada opção tem exatamente 1 reação (1:1).
+4. IDs mantidos: `PRO_choice_aftermath` e `PRO_choice_first_fire`. `rapport_state` segue `neutral`.
+5. Os 72 nós oficiais não mudam (catálogo regerado byte a byte igual).
+6. `SOURCE_AUTHORITY.md` registra só a aprovação do Documento A; a Crônica v0.2 continua sem promoção.
+7. A Etapa 3b (mostrar as reações nas cenas P1, S1 e S5) **não** foi implementada e depende de nova autorização.
+
 ### Pendências abertas (nada disto foi inventado; precisa do autor)
 
 1. ~~Ajustes do Documento A.~~ Resolvido em 2026-11-14: a definição oficial está em D-BETA-02. Falta só conferir, na Etapa 3, que o texto do documento bate com ela (por exemplo, os `choice_id` hoje são `PRO_choice_aftermath` e `PRO_choice_first_fire`; o contrato e o catálogo ainda não os conhecem).
@@ -112,4 +124,4 @@ Registradas em 2026-11-14. As de `HANDOFF.md`, `PLANO_DE_ACAO.md` e `BRIEFING_CO
 
 ### Próximos passos
 
-Etapa 1 (só documentação) autorizada e feita em 2026-11-14: `DECISIONS.md`, `HANDOFF.md` (§9 itens 4 e 7), `docs/PLANO_DE_ACAO.md` e `docs/BRIEFING_CONTEUDO.md`. As Etapas 2 a 7 aguardam autorização. Nenhum código, migration ou teste foi alterado.
+Etapa 1 (só documentação) autorizada e feita em 2026-11-14: `DECISIONS.md`, `HANDOFF.md` (§9 itens 4 e 7), `docs/PLANO_DE_ACAO.md` e `docs/BRIEFING_CONTEUDO.md`. A Etapa 3a (Documento A no contrato) foi feita em 2026-11-14; as Etapas 3b, 4, 5, 6 e 7 aguardam autorização (a Etapa 2 foi absorvida pela 3a no que toca ao Documento A). Nenhum código, migration ou teste foi alterado.

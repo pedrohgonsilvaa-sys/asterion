@@ -75,7 +75,8 @@ Arquivos: `docs/specs/ASTERION_SISTEMA_ACAO_CONSEQUENCIA_NARRATIVA_v1_0_0.md` (c
 - As Fontes Regionais continuam autoridade de missões, gates, recompensas e encontros. A camada narrativa não altera XP, Coroas, Materiais, Equipamentos, combate, economia nem `world_state`.
 - O catálogo `src/asterion/domain/narrative_choices_catalog.json` é derivado do contrato por `scripts/build_narrative_choice_catalog.py`; não editar à mão.
 - `rapport_state` fica `neutral` até o autor definir as transições.
-- Falas de reação: `docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_1.md` (v1.0.0 substituída), subordinado ao contrato (decisão do autor, 2026-11-12). Fala com `choice_id` fora do contrato, ou dita por NPC sem a memória da opção, não é exibida. Pendências de 2026-11-12 resolvidas na v1.0.1 (histórico em `docs/audits/TEXTOS_REACAO_PENDENCIAS_2026-11-12.md`).
+- **Prólogo (Documento A), aprovado pelo autor em 2026-11-14:** `docs/specs/ASTERION_DECISOES_PROLOGO_E_CONTRATOS_v1_0_0.md` (parte A) rege as 2 escolhas do Prólogo (`PRO_choice_aftermath`, `PRO_choice_first_fire`), com 3 opções, 6 reações de Alda/Oren (rascunho sujeito à aprovação final do autor), sem XP, Coroas nem combate. Incorporado ao contrato como apêndice §7A, fora da contagem de 72. O Documento B (Contratos Regionais) fica para depois do Beta.
+- Falas de reação: `docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_2.md` (v1.0.0 e v1.0.1 substituídas, mantidas como histórico), subordinado ao contrato (decisão do autor, 2026-11-12). Fala com `choice_id` fora do contrato, ou dita por NPC sem a memória da opção, não é exibida. Pendências de 2026-11-12 resolvidas na v1.0.1 (histórico em `docs/audits/TEXTOS_REACAO_PENDENCIAS_2026-11-12.md`).
 
 ## Fechamento de sistema — Contratos Regionais
 

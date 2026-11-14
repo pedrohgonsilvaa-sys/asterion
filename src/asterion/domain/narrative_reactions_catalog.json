@@ -1,5 +1,5 @@
 {
- "version": "1.0.1",
+ "version": "1.0.2",
  "reactions": {
   "P1_choice_posture": {
    "o1": {
@@ -1121,6 +1121,46 @@
     "speaker": "sera_nol",
     "speaker_name": "Sera Nol",
     "text": "Você escolheu mudar sem fingir que o passado nunca existiu. Vamos registrar a nova rotina como decisão de agora, não como verdade eterna."
+   }
+  },
+  "PRO_choice_aftermath": {
+   "o1": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Alda percebe que o viajante presta atenção aos sinais antes de seguir. Ela trata isso como uma qualidade útil para alguém que pretende atravessar uma estrada onde informações incompletas podem custar caro.",
+    "draft": true
+   },
+   "o2": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Oren percebe que o personagem não transforma imediatamente uma observação em certeza. Para ele, essa cautela torna o relato mais útil, porque uma pergunta preservada pode valer mais do que uma resposta inventada.",
+    "draft": true
+   },
+   "o3": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Oren percebe que o personagem prefere continuar avançando mesmo quando ainda não existe explicação suficiente. Ele não trata isso como prova de que a interpretação está correta; apenas reconhece que aquela pessoa não costuma esperar certeza absoluta para agir.",
+    "draft": true
+   }
+  },
+  "PRO_choice_first_fire": {
+   "o1": {
+    "speaker": "alda",
+    "speaker_name": "Alda Veyr",
+    "text": "Alda nota que o personagem dá importância ao que pode ser registrado e lembrado. Para quem vive de manter uma comunidade funcionando, isso parece uma atitude prática, não uma teoria.",
+    "draft": true
+   },
+   "o2": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Oren percebe que o personagem tende a pensar primeiro nas pessoas afetadas pelo que acontece na estrada. Isso muda a forma como ele apresenta um relato: não apenas como uma curiosidade, mas como algo que pode importar para quem precisa continuar viajando.",
+    "draft": true
+   },
+   "o3": {
+    "speaker": "oren",
+    "speaker_name": "Oren Cal",
+    "text": "Oren entende que o personagem não gosta de aceitar uma explicação simplesmente porque alguém a apresentou como certa. Ele pode discordar da conclusão, mas reconhece que a disposição de questionar precisa ser distinguida de uma prova.",
+    "draft": true
    }
   }
  }

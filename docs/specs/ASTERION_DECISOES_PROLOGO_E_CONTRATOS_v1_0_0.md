@@ -1,7 +1,8 @@
 # ASTERION — DOCUMENTO A
 # Escolhas Narrativas do Prólogo
 
-**Status:** PROPOSTA (aprovar)  
+**Status:** APROVADO COM AJUSTES pelo autor em 2026-11-14 (Documento A). Os textos de reação continuam sujeitos à aprovação final do autor. O Documento B (Contratos Regionais, mais abaixo neste arquivo) fica para depois do Beta.  
+**Incorporação:** `choice_id` e `future_hook` registrados no apêndice §7A da especificação Ação × Consequência. Decisão do autor: 2 escolhas, 3 opções, 6 reações, `rapport_state` `neutral`, sem XP, Coroas nem combate.  
 **Escopo:** Prólogo  
 **Missão:** `PRO`  
 **Tipo:** `prologo`  

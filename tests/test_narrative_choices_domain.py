@@ -193,8 +193,9 @@ def test_ui_shows_labels_only_and_no_unapproved_copy():
     assert "neutral" in RAPPORT_STATES
 
 
-COPY = ROOT / "docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_1.md"
+COPY = ROOT / "docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_2.md"
 REACTIONS = ROOT / "src/asterion/domain/narrative_reactions_catalog.json"
+PROLOGUE_CATALOG = ROOT / "src/asterion/domain/narrative_choices_prologue_catalog.json"
 
 
 def test_reaction_json_is_exactly_what_the_copy_generates(tmp_path):
@@ -206,6 +207,7 @@ def test_reaction_json_is_exactly_what_the_copy_generates(tmp_path):
             str(COPY),
             str(CATALOG),
             str(target),
+            str(PROLOGUE_CATALOG),
         ],
         check=True,
         capture_output=True,
@@ -215,7 +217,13 @@ def test_reaction_json_is_exactly_what_the_copy_generates(tmp_path):
     )
     lines = reaction_lines()
     catalog = narrative_catalog()
-    assert {choice for choice, _ in lines} <= set(catalog.nodes)
+    # The 6 Prologue lines (Documento A, draft) belong to their own catalog.
+    mission_lines = {key for key, line in lines.items() if not line.draft}
+    assert {choice for choice, _ in mission_lines} <= set(catalog.nodes)
+    assert {choice for choice, _ in lines if (choice, _) not in mission_lines} == {
+        "PRO_choice_aftermath",
+        "PRO_choice_first_fire",
+    }
     # The 9 Nareth/Várzeas nodes now use the contract's choice_ids: their copy is loaded.
     assert ("P15_anomaly_method", "o1") in lines
     assert ("P19_priority", "o3") in lines
@@ -226,6 +234,8 @@ def test_reaction_json_is_exactly_what_the_copy_generates(tmp_path):
 def test_every_loaded_line_is_spoken_by_an_npc_that_holds_the_memory():
     catalog = narrative_catalog()
     for (choice_id, option_id), line in reaction_lines().items():
+        if line.draft:  # Prologue lines read character memory; no NPC holds anything
+            continue
         holders = {t.npc_id for t in catalog.nodes[choice_id].option(option_id).npc_memory_targets}
         assert line.speaker in holders, (choice_id, option_id, line.speaker)
 

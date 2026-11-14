@@ -2,9 +2,13 @@
 
 Uso:
     python scripts/build_narrative_reaction_copy.py \
-        docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_1.md \
+        docs/specs/ASTERION_TEXTOS_REACAO_NPCS_v1_0_2.md \
         src/asterion/domain/narrative_choices_catalog.json \
-        src/asterion/domain/narrative_reactions_catalog.json
+        src/asterion/domain/narrative_reactions_catalog.json \
+        src/asterion/domain/narrative_choices_prologue_catalog.json
+
+O quarto argumento (catálogo do Prólogo) é opcional. Com ele, a seção 6A do pacote
+(6 reações do Documento A, rascunho) entra no catálogo, ligada ao gancho e à opção.
 
 Só entra uma fala quando o ``choice_id`` do texto é o mesmo do contrato. O
 script imprime os conflitos: ``choice_id`` diferente e fala de um NPC que não
@@ -64,6 +68,42 @@ def parse(source: str) -> list[dict]:
     return sections
 
 
+def parse_prologue(source: str) -> list[dict]:
+    """Seção 6A: ``**choice_id:**``, ``**future_hook:**`` e a linha ``**Nome (rascunho):**``."""
+    section = source.split("# 6A. ", 1)[1].split("\n# 7.", 1)[0]
+    found = re.findall(
+        r"\*\*choice_id:\*\* `([^`]+)`\s+\*\*future_hook:\*\* `([^`]+)`\s+"
+        r"\*\*Condição narrativa:\*\* .+\s+\*\*(.+?) \(rascunho\):\*\* (.+)",
+        section,
+    )
+    return [
+        {"choice_id": cid, "hook_id": hook, "speaker_name": name, "text": text.strip()}
+        for cid, hook, name, text in found
+    ]
+
+
+def add_prologue(reactions: dict, copy: str, prologue_path: Path) -> None:
+    nodes = json.loads(prologue_path.read_text(encoding="utf-8"))["nodes"]
+    hooks = {
+        hook["hook_id"]: (node["choice_id"], hook["when_option"])
+        for node in nodes
+        for hook in node["future_hooks"]
+    }
+    lines = parse_prologue(copy)
+    if sorted(item["hook_id"] for item in lines) != sorted(hooks):
+        raise SystemExit(f"reações do Prólogo não casam com os ganchos: {sorted(hooks)}")
+    for item in lines:
+        choice_id, option_id = hooks[item["hook_id"]]
+        if item["choice_id"] != choice_id:
+            raise SystemExit(f"{item['hook_id']}: choice_id diferente do catálogo")
+        reactions.setdefault(choice_id, {})[option_id] = {
+            "speaker": SPEAKERS[item["speaker_name"]],
+            "speaker_name": item["speaker_name"],
+            "text": item["text"],
+            "draft": True,
+        }
+
+
 def main() -> None:
     copy_path, catalog_path, target_path = map(Path, sys.argv[1:4])
     nodes = {
@@ -98,8 +138,10 @@ def main() -> None:
             }
         if entry:
             reactions[node["choice_id"]] = entry
+    if len(sys.argv) > 4:
+        add_prologue(reactions, copy_path.read_text(encoding="utf-8"), Path(sys.argv[4]))
     target_path.write_text(
-        json.dumps({"version": "1.0.1", "reactions": reactions}, ensure_ascii=False, indent=1)
+        json.dumps({"version": "1.0.2", "reactions": reactions}, ensure_ascii=False, indent=1)
         + "\n",
         encoding="utf-8",
     )
