@@ -12,6 +12,7 @@ from asterion.application.weapon_metadata import (
     WeaponMetadataPersistenceError,
     resolve_equipment_weapon,
 )
+from asterion.domain.armor_proficiency import ARMOR_CLASS_LABELS
 from asterion.domain.equipment import (
     EquipmentSlot,
     assignment_for_item_slot,
@@ -24,6 +25,7 @@ from asterion.domain.equipment_stats import (
     equipment_stat_contribution,
     item_snapshot_from_persisted,
 )
+from asterion.domain.regional_equipment import region_label
 from asterion.domain.weapon_proficiency import weapon_proficiency_label
 from asterion.infrastructure.db.models import (
     Character,
@@ -75,6 +77,8 @@ class EquipmentItemView:
     weapon_slot_label: str | None = None
     weapon_compatibility_label: str | None = None
     weapon_proficiency_label: str | None = None
+    armor_class_label: str | None = None
+    region_label: str | None = None
 
     @property
     def equipped(self) -> bool:
@@ -377,6 +381,8 @@ class EquipmentViewService:
             weapon_slot_label=weapon.slot_label if weapon else None,
             weapon_compatibility_label=weapon.compatibility_label if weapon else None,
             weapon_proficiency_label=weapon_proficiency_label(weapon),
+            armor_class_label=ARMOR_CLASS_LABELS.get(snapshot.armor_class or ""),
+            region_label=region_label(payload.get("region_id")),
         )
 
     def _validate_configuration(self, items: dict[EquipmentSlot, EquipmentItemView]) -> None:

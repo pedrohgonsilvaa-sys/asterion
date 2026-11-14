@@ -452,6 +452,16 @@ LEGACY_ARMOR_CLASS_BY_NAME = {
 }
 
 
+_REGION_LABEL_BY_ID = {
+    REGION_IDS[key]: display for display, key in REGION_KEY_BY_DISPLAY.items()
+}
+
+
+def region_label(region_id: str | None) -> str | None:
+    """Display name of a region id, or None when the item carries no known Region."""
+    return _REGION_LABEL_BY_ID.get(region_id or "")
+
+
 def armor_class_of(
     *, slot: str | None, template_id: str | None = None, item_name: str | None = None
 ) -> str | None:
