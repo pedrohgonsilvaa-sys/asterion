@@ -30,6 +30,8 @@ Para cada Evento, entregar:
 
 Quantidade sugerida para o Beta: 1 Evento por Região (6). A agenda semanal já existe; o catálogo é rodado pelos horários.
 
+Decisão do autor (2026-11-14): nos Eventos, criar **criaturas novas** quando isso melhorar o conteúdo; não limitar a criaturas existentes. Fluxo: Narrative Designer (identidade e lore), Game Designer (perfil e ações), Systems Designer (regras e balanceamento), autor aprova o conteúdo narrativo/conceitual, QA valida a implementação. Valores de jogo só entram depois de aprovados.
+
 ## 2. Provações do Juramento (§22)
 
 Arquivo de destino: `src/asterion/domain/oaths.py`, lista `OATH_TRIAL_CATALOG`.
@@ -47,7 +49,7 @@ Para cada Provação, entregar:
 | Combate 3 (Chefe) | Idem |
 | Texto de conclusão | Ao vencer o Chefe |
 
-A criatura pode ser nova ou reaproveitar uma já existente no Bestiário (dizer qual). Quantidade sugerida: 4 a 6 Provações, em rodízio semanal.
+A criatura pode ser nova ou reaproveitar uma já existente no Bestiário (dizer qual). Quantidade sugerida: 4 a 6 Provações, em rodízio semanal. Mínimo do Beta (2026-11-14): 4. Sempre que possível, reaproveitar criaturas existentes para reduzir escopo.
 
 ## 3. Rotas da Expedição (§22)
 
@@ -64,15 +66,19 @@ Para cada Rota, entregar:
 | Estágio 1, 2 e 3 | Flavor com a pista (2 a 4 frases) e as 3 opções, cada uma com rótulo curto (botão) e a qualidade: favorável, neutra ou ruim |
 | Texto de retorno | Ao fim do estágio 3 |
 
-Quantidade sugerida: 4 a 6 Rotas, em rodízio semanal.
+Quantidade sugerida: 4 a 6 Rotas, em rodízio semanal. Mínimo do Beta (2026-11-14): 4. Sempre que possível, reaproveitar criaturas existentes para reduzir escopo.
 
 ## 4. Revisão do Flavor Text
 
 O banco de Flavor Text (telas de Sistema e das seis Regiões) entrou no PR 146 como **rascunho**. Arquivo: `src/asterion/domain/flavor_catalog.py`. Tarefa: ler, corrigir tom e Lore pela Bíblia v4.0.7 e marcar como aprovado. Não mudar as chaves (identificadores), só os textos.
 
+Decisão do autor (2026-11-14): o `flavor_catalog.py` entra na auditoria completa da Crônica contra a Bíblia v4.0.7, feita antes do Beta fechado. O Narrative Designer audita primeiro, apontando arquivo, linha, trecho, regra da Bíblia, problema e correção. O autor aprova os textos canônicos e o tom, o Programmer aplica as correções e o QA valida.
+
 ## 5. Crônica I: Dia 1
 
 Falta só a data em que a Crônica I abre no servidor (o Dia 1). O plano é abrir depois de algumas semanas do Beta. Decisão do autor, sem texto a escrever.
+
+Esclarecimento (2026-11-14): "Dia 1 do lançamento" é o lançamento público, não o início do Beta fechado (alvo de desenvolvimento 05/12/2026). O Beta pode rodar sem iniciar a temporada competitiva da Crônica. A proposta v0.2 da Crônica não é promovida ao `SOURCE_AUTHORITY.md` até ser revisada e aprovada.
 
 ## Formato de entrega
 

@@ -45,8 +45,8 @@ Meta: fechar o código de jogo, com 3 trilhas em paralelo. A Crônica abre depoi
 
 ## Depois
 
-1. Beta fechado no ar, com A e B prontas.
-2. Autor define o Dia 1 da Crônica, envia a Bíblia v4.0.7 e revisa os textos rascunho.
+1. Beta fechado no ar, com A e B prontas. Alvo de desenvolvimento: 05/12/2026 (não é promessa pública). Antes dele: telemetria mínima de TTK, auditoria da Crônica contra a Bíblia v4.0.7 e smoke test interno no bot de staging (decisões de 2026-11-14 em `docs/DECISIONS.md`). O Beta pode rodar sem iniciar a temporada competitiva da Crônica.
+2. Autor define o Dia 1 da Crônica (o "Dia 1 do lançamento" é o lançamento público, não o início do Beta fechado), envia a Bíblia v4.0.7 e revisa os textos rascunho. A proposta v0.2 da Crônica só é promovida ao `SOURCE_AUTHORITY.md` depois de revisada e aprovada.
 3. Monetização §35: provedor de pagamento, Patrono, pagamentos e Passe.
 
 ## Briefings (colar na conversa nova)

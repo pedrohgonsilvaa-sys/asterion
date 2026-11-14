@@ -45,11 +45,15 @@ O autor fechou as decisões abaixo para o Beta. Nenhuma delas altera código por
 
 ### D-BETA-02 — Prólogo e Contratos
 
-- **Documento A (Prólogo): APROVADO COM AJUSTES** (`docs/specs/ASTERION_DECISOES_PROLOGO_E_CONTRATOS_v1_0_0.md`).
-  - Entram as **2 escolhas** do Prólogo.
-  - Entram os **6 textos de reação** de Alda/Oren.
-  - `choice_id` e `future_hook` devem ser incorporados corretamente ao **contrato oficial** da spec Ação × Consequência (regra já escrita no contrato: nenhuma camada nova cria memória sem registrar `choice_id` ou `future_hook` nele).
+- **Documento A (Prólogo): APROVADO COM AJUSTES** (`docs/specs/ASTERION_DECISOES_PROLOGO_E_CONTRATOS_v1_0_0.md`, parte A do arquivo; a parte B é o Documento B). Definição oficial, dada pelo autor em 2026-11-14:
+  - **2 escolhas** no Prólogo, com **3 opções** cada.
+  - **6 reações** de Alda/Oren (os 6 ganchos do documento: cada escolha tem uma reação em P1, S1 e S5).
+  - O `choice_id` de cada escolha deve ser compatível com o contrato oficial da spec Ação × Consequência.
+  - Cada escolha deve ter `future_hook`.
+  - O Prólogo **não concede XP nem Coroas e não inicia combate**.
   - `rapport_state` permanece `neutral` no Beta.
+  - Os textos finais continuam **sujeitos à aprovação do autor**.
+  - Regra já escrita no contrato: nenhuma camada nova cria memória sem registrar o `choice_id` ou `future_hook` nele. Integração ao contrato: Etapa 3 do plano, ainda não feita.
 - **Documento B (Contratos Regionais): fica para depois do Beta.**
 
 ### D-BETA-03 — Beta fechado e "Dia 1"
@@ -93,15 +97,14 @@ O autor fechou as decisões abaixo para o Beta. Nenhuma delas altera código por
 
 ### Pendências abertas (nada disto foi inventado; precisa do autor)
 
-1. **Ajustes do Documento A.** A decisão diz "aprovado com ajustes", mas a lista dos ajustes não foi enviada. Os 2 `choice_id` hoje no documento são `PRO_choice_aftermath` e `PRO_choice_first_fire`. Falta o autor dizer quais ajustes valem.
-2. **Quantidade de textos de reação.** O Documento A fala em 6 textos de Alda/Oren; falta conferir que são os mesmos 6 do arquivo, antes de integrar.
-3. **Criaturas novas dos Eventos.** Nomes, perfil, ações e números não existem ainda. Nada será inventado: seguem o fluxo da D-BETA-05.
-4. **Staging.** Não achei no repositório um bot de staging descrito (a auditoria GLOBAL-AUD-028 diz que não existia). Falta o autor confirmar se o bot de staging já existe e como se chama o ambiente.
-5. **Data do Dia 1.** A data do Dia 1 da Crônica continua configurável e **indefinida**. Esta decisão só fixa o significado da expressão.
+1. ~~Ajustes do Documento A.~~ Resolvido em 2026-11-14: a definição oficial está em D-BETA-02. Falta só conferir, na Etapa 3, que o texto do documento bate com ela (por exemplo, os `choice_id` hoje são `PRO_choice_aftermath` e `PRO_choice_first_fire`; o contrato e o catálogo ainda não os conhecem).
+2. **Criaturas novas dos Eventos.** Nomes, perfil, ações e números não existem ainda. Nada será inventado: seguem o fluxo da D-BETA-05.
+3. **Staging (busca feita em 2026-11-14).** Procurei no código, docs, CI (`.github/workflows`), `docker-compose*.yml`, `Caddyfile`, `.env.example`, `scripts/` e no histórico do Git. **Não existe bot nem ambiente de staging definido.** A única menção é a auditoria `GLOBAL-AUD-028` (docs/audits), que recomenda criar um bot de teste separado e diz que não havia staging. Nada foi criado nem alterado. O autor precisa dizer se o bot de staging existe fora do repositório ou se será criado depois; isso bloqueia o smoke test (D-BETA-06).
+4. **Data do Dia 1.** A data do Dia 1 da Crônica continua configurável e **indefinida**. A D-BETA-03 só fixa o significado da expressão.
 
 ### Divergências encontradas entre estas decisões e o estado do repositório
 
-Registradas para correção na etapa de documentação; nenhuma foi corrigida ainda.
+Registradas em 2026-11-14. As de `HANDOFF.md`, `PLANO_DE_ACAO.md` e `BRIEFING_CONTEUDO.md` foram corrigidas na Etapa 1; as demais seguem abertas.
 
 - **Gênero já está na `main`.** A migration `20261113_0051_character_gender.py` (commit `ee11812`) e o `src/asterion/bot/asset_catalog.py` (commit `cad7167`) já estão em `origin/main`, e as migrations `0052` e `0053` já foram empilhadas sobre a `0051`. Já a decisão pede os três arquivos "juntos no mesmo PR". Por isso, a decisão vira **gate de validação do QA sobre o que já está na `main`** (e correção por novo PR se algo falhar), e não um PR novo de implementação. O `HANDOFF.md` §9 item 7 ainda diz que gênero e imagens estão "em andamento"; está desatualizado.
 - **Catálogos já têm mais que o mínimo.** O `HANDOFF.md` §9 item 4 diz que o catálogo já tem 5 Rotas, 11 Provações e 6 Eventos Públicos. O mínimo do Beta (6/4/4) já é atingido em quantidade; o que muda é a decisão de **criar criaturas novas para os Eventos** e a validação do QA. Falta confirmar no código quais criaturas os 6 Eventos usam hoje.
@@ -109,4 +112,4 @@ Registradas para correção na etapa de documentação; nenhuma foi corrigida ai
 
 ### Próximos passos
 
-O plano por etapas, com os arquivos a alterar, foi apresentado na conversa e **aguarda autorização do autor**. Nenhum código foi alterado.
+Etapa 1 (só documentação) autorizada e feita em 2026-11-14: `DECISIONS.md`, `HANDOFF.md` (§9 itens 4 e 7), `docs/PLANO_DE_ACAO.md` e `docs/BRIEFING_CONTEUDO.md`. As Etapas 2 a 7 aguardam autorização. Nenhum código, migration ou teste foi alterado.
