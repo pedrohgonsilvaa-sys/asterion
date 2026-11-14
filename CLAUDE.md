@@ -17,6 +17,10 @@ RPG dark fantasy para Telegram. Python 3.12, aiogram 3, FastAPI, PostgreSQL 16, 
 - Fase 2E (v1.9.x) é candidata e não canônica: não integre nem publique.
 - Confirme com o autor antes de `git push`.
 
+## Equipe de agentes
+
+Seis subagents em `.claude/agents/`: `game-director`, `game-designer`, `narrative-designer`, `systems-designer`, `programmer`, `qa`. Fluxo e regras em `docs/EQUIPE_AGENTES.md`. Só o `programmer` altera `src/` e `alembic/`.
+
 ## Onde fica cada coisa
 
 - `src/asterion/domain/`: regras puras e catálogos. `application/`: casos de uso. `bot/`: handlers e telas (`*_handlers.py`, `*_ui.py`). `infrastructure/db/`: ORM e codecs.
