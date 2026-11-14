@@ -513,7 +513,8 @@ Armas continuam participando do combate por suas propriedades já existentes no 
 Preservar integralmente a baseline existente:
 
 - 8 slots oficiais;
-- sem armadura leve/média/pesada;
+- ordem de validação ao equipar: item/estado, slot, nível, 2H/Secundária, Proficiência de Arma, Proficiência de Armadura (Classes de Armadura §6), máximo de 1 Mítico, bind/estado, commit atômico;
+- classes de armadura (Veste/Leve/Média/Pesada) regidas só pela `ASTERION_ESPECIFICACAO_CLASSES_DE_ARMADURA_v1_0_0.md` (emenda de 2026-11-14): camada separada de Esquiva/Bloqueio por peça e Proficiência de Armadura própria, sem alterar a Proficiência de Armas, o núcleo por slot, `SlotWeight` nem os pools de secundários;
 - sem peso físico/equip load;
 - `SlotWeight` continua sendo orçamento/custo de slot;
 - `item_level` é imutável;

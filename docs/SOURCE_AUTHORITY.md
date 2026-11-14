@@ -1,6 +1,6 @@
 # Autoridade das Fontes
 
-**Índice atualizado:** 2026-11-13.
+**Índice atualizado:** 2026-11-14.
 
 > **Índice geral único:** `SOURCE_AUTHORITY.md` é o registro de governança que seleciona as versões autoritativas por escopo. Patches de sincronização são artefatos operacionais e não constituem uma segunda autoridade. Em conflito com índices/patches anteriores, este arquivo prevalece quanto à seleção de versões, sem alterar o conteúdo interno das Fontes.
 
@@ -55,6 +55,8 @@ A §19.2 de Confins do Véu v1.0.0 FINAL declara metadata explícita para as cin
 
 ## Proficiências de Armas
 
+> **Sincronização 2026-11-14 (Classes de Armadura):** por decisão do autor, a **Especificação de Classes de Armadura e Proficiência de Armadura v1.0.0** (`docs/specs/ASTERION_ESPECIFICACAO_CLASSES_DE_ARMADURA_v1_0_0.md`) é a autoridade vigente para classes de armadura. Ela **revoga a revogação de 13/11 só para esta parte**: Veste, Leve, Média e Pesada voltam como classe do *template* de Cabeça, Torso, Mãos e Pés, com camada separada de Esquiva/Bloqueio por peça equipada e quatro Proficiências de Armadura (Veste inicial; Leve Nv. 10 / 1.000; Média Nv. 20 / 4.000; Pesada Nv. 30 / 10.000 Coroas) numa aba "Armaduras" do Treinador do Refúgio do Ocaso. Continuam revogados os núcleos corporais por categoria e os kits de Origem; o núcleo por slot, `SlotWeight`, `EconomySW` e os pools de secundários não mudam, e não há peso físico. Os valores foram aprovados como ponto de partida e exigem teste de balanceamento. Registro em código: `src/asterion/domain/regional_equipment.py` e `src/asterion/domain/armor_proficiency.py`.
+
 **ASTERION — Especificação Final de Proficiências de Armas, Catálogo de Armas e Regras de Equipamento v1.0.0**
 
 Arquivo: `docs/specs/ASTERION_ESPECIFICACAO_FINAL_PROFICIENCIAS_EQUIPAMENTO_v1_0_0.md`.
@@ -63,6 +65,7 @@ SHA-256 verificado: `babba9f4c0db746fa0fcfbc31165131de2764a03d5535ac0f6de3b4b35a
 - Rege famílias de Proficiência, catálogo final de armas, matriz por Classe, Proficiência inicial, Treinador de Armas e equipamento inicial. O GDD v1.7.1 §24.2/§24.7 e o contrato v1.1.1 §9.9/§9.10 estão sincronizados com ela.
 - Decisões do autor na implementação (2026-11-13): arma inicial Comum, só a arma (sem armaduras); Treinador no Refúgio do Ocaso; Arma do Contrapeso (martelo 1 mão) = Maça; drops legados de Terras do Ocaso migrados e demais armas sem identidade recusadas no equipar.
 - Registro em código: `src/asterion/domain/weapon_proficiency.py`.
+- Classes de Armadura (emenda 2026-11-14): a Proficiência de Armas não muda; a Proficiência de Armadura é independente e fica na aba "Armaduras" do mesmo Treinador. Ver a sincronização de 2026-11-14 acima.
 
 ## Camada narrativa — Ação × Consequência
 

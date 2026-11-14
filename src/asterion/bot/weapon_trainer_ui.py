@@ -69,6 +69,7 @@ def render_weapon_trainer(view: TrainerView, notice: str | None = None) -> Scree
             for entry in view.entries
             if not entry.owned
         )
+    rows.append([_button("🛡️ Armaduras", "apt:root")])
     rows.append([_button("← Refúgio do Ocaso", "road:local")])
     return Screen("\n".join(lines), "menu", InlineKeyboardMarkup(inline_keyboard=rows))
 

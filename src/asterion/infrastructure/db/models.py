@@ -257,6 +257,28 @@ class CharacterWeaponProficiency(Base):
     )
 
 
+class CharacterArmorProficiency(Base):
+    """One permanent Proficiência de Armadura bought at the Treinador (Veste has no row)."""
+
+    __tablename__ = "character_armor_proficiencies"
+    __table_args__ = (
+        CheckConstraint(
+            "armor_class IN ('veste','leve','media','pesada')",
+            name="ck_character_armor_proficiency_class",
+        ),
+        CheckConstraint("cost_crowns >= 0", name="ck_character_armor_proficiency_cost"),
+    )
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    armor_class: Mapped[str] = mapped_column(String(16), primary_key=True)
+    cost_crowns: Mapped[int] = mapped_column(Integer, nullable=False)
+    acquired_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class SocialGroup(Base):
     """Persistent social group; activity rosters are stored separately."""
 

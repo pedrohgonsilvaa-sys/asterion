@@ -110,6 +110,7 @@ def render_equipment_detail(view: EquipmentDetailView, *, context: str) -> Scree
                 + escape(item.weapon_compatibility_label or "Nenhuma"),
             ]
         )
+    lines.extend(_origin_lines(item))
     if context == "i" and item.equipped:
         lines.append("✅ Equipado")
     if item.bound:
@@ -244,6 +245,7 @@ def render_equipment_candidates(view: EquipmentCandidatesView) -> Screen:
                 f"{RARITY_ICON.get(_rarity_label(item.rarity), '⚪')} "
                 f"{escape(_rarity_label(item.rarity))} · {SLOT_LABELS[item.slot]}"
             )
+            lines.extend(_origin_lines(item))
             lines.append(f"📈 Nível do Item · {item.item_level}")
             lines.extend(_attribute_lines(item))
     buttons = [
@@ -263,6 +265,15 @@ def render_equipment_candidates(view: EquipmentCandidatesView) -> Screen:
         InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode="HTML",
     )
+
+
+def _origin_lines(item: EquipmentItemView) -> list[str]:
+    lines = []
+    if item.armor_class_label is not None:
+        lines.append(f"🛡️ Classe de Armadura · {escape(item.armor_class_label)}")
+    if item.region_label is not None:
+        lines.append(f"🗺️ Região · {escape(item.region_label)}")
+    return lines
 
 
 def _attribute_lines(item: EquipmentItemView) -> list[str]:

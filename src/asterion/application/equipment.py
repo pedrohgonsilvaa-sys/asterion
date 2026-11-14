@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.armor_proficiency import armor_proficiency_missing
 from asterion.application.combat_configuration_guard import (
     lock_for_combat_configuration_mutation,
 )
@@ -57,6 +58,9 @@ class EquipmentMutationCode(StrEnum):
     MYTHIC_LIMIT = "mythic_limit"
     WEAPON_UNMAPPED = "weapon_unmapped"
     WEAPON_PROFICIENCY_REQUIRED = "weapon_proficiency_required"
+    ARMOR_PROFICIENCY_LEVE = "armor_proficiency_leve"
+    ARMOR_PROFICIENCY_MEDIA = "armor_proficiency_media"
+    ARMOR_PROFICIENCY_PESADA = "armor_proficiency_pesada"
     WEAPON_CLASS_FORBIDDEN = "weapon_class_forbidden"
     STALE_CONFIGURATION = "stale_configuration"
     INVALID_CURRENT_CONFIGURATION = "invalid_current_configuration"
@@ -162,6 +166,11 @@ class EquipmentService:
             eligibility = await weapon_eligibility(session, character, item)
             if eligibility != WeaponEligibility.ALLOWED:
                 raise EquipmentMutationRejected(WEAPON_ELIGIBILITY_CODES[eligibility])
+
+            # Proficiência de Armadura (spec Classes de Armadura §6, step 6).
+            missing_armor = await armor_proficiency_missing(session, character, item)
+            if missing_armor is not None:
+                raise EquipmentMutationRejected(ARMOR_PROFICIENCY_CODES[missing_armor])
 
             if (
                 assignment.slot == EquipmentSlot.SECUNDARIA
@@ -395,6 +404,11 @@ class EquipmentService:
                 )
 
 
+ARMOR_PROFICIENCY_CODES = {
+    "leve": EquipmentMutationCode.ARMOR_PROFICIENCY_LEVE,
+    "media": EquipmentMutationCode.ARMOR_PROFICIENCY_MEDIA,
+    "pesada": EquipmentMutationCode.ARMOR_PROFICIENCY_PESADA,
+}
 WEAPON_ELIGIBILITY_CODES = {
     WeaponEligibility.UNMAPPED: EquipmentMutationCode.WEAPON_UNMAPPED,
     WeaponEligibility.NOT_TRAINED: EquipmentMutationCode.WEAPON_PROFICIENCY_REQUIRED,

@@ -411,3 +411,21 @@ async def test_stale_slot_read_replies_and_rebuilds_authoritative_equipment_root
     assert "🪖 Cabeça · Elmo de Teste · +0" in screen.text
     assert equipment_service.equip_item.await_count == 0
     assert equipment_service.unequip_slot.await_count == 0
+
+
+def test_detail_and_candidates_show_armor_class_and_region():
+    from dataclasses import replace
+
+    item = replace(
+        _item(name="Elmo Pesado"), armor_class_label="Pesada", region_label="Confins do Véu"
+    )
+    detail = render_equipment_detail(EquipmentDetailView(uuid4(), 10, 9, item), context="i")
+    assert "Classe de Armadura · Pesada" in detail.text
+    assert "Região · Confins do Véu" in detail.text
+    candidates = render_equipment_candidates(
+        EquipmentCandidatesView(uuid4(), 10, 1, EquipmentSlot.CABECA, (item,))
+    )
+    assert "Classe de Armadura · Pesada" in candidates.text
+    assert "Região · Confins do Véu" in candidates.text
+    plain = render_equipment_detail(EquipmentDetailView(uuid4(), 10, 9, _item()), context="i")
+    assert "Classe de Armadura" not in plain.text and "Região" not in plain.text

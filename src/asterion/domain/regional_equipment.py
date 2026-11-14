@@ -280,9 +280,18 @@ def regional_jewel_templates(region_key: str) -> tuple[RegionalJewelTemplate, ..
     return tuple(t for t in REGIONAL_JEWEL_TEMPLATES if t.region_key == region_key)
 
 
-# Armor: editorial regional names only.  The Veste/Leve/Média/Pesada grouping of the
-# source catalog is NOT a mechanical class (no armor_class, no proficiency, no new
-# stats) until the author approves one; every piece keeps the slot's current core.
+# Armor: each region lists 16 pieces in four groups of four slots (Cabeça, Torso, Mãos,
+# Pés): Veste, Leve, Média, Pesada.  The class belongs to the template (spec Classes de
+# Armadura v1.0.0 §1, §8) and is derived from that grouping, never stored per item.
+ARMOR_CLASSES = ("veste", "leve", "media", "pesada")
+ARMOR_SLOTS = ("Cabeça", "Torso", "Mãos", "Pés")
+# Spec §2: percentage points of (Esquiva, Bloqueio) added per equipped piece.
+ARMOR_CLASS_BONUS = {
+    "veste": ("1.00", "0"),
+    "leve": ("0.75", "0.25"),
+    "media": ("0.50", "0.50"),
+    "pesada": ("0", "1.00"),
+}
 _ARMOR_NAMES = {
     "tdo": (
         ("Cabeça", "Capuz das Cinzas"),
@@ -394,20 +403,77 @@ _ARMOR_NAMES = {
     ),
 }
 
-REGIONAL_ARMOR_TEMPLATES = tuple(
-    RegionalJewelTemplate(
-        template_id=f"equipment.{region_key}.armor.{_slug(slot)}.{_slug(name)}",
-        region_key=region_key,
-        region_id=REGION_IDS[region_key],
-        slot=slot,
-        display_name=name,
-    )
-    for region_key, entries in _ARMOR_NAMES.items()
-    for slot, name in entries
-)
 
 
-def regional_armor_templates(region_key: str) -> tuple[RegionalJewelTemplate, ...]:
+@dataclass(frozen=True, slots=True)
+class RegionalArmorTemplate:
+    template_id: str
+    region_key: str
+    region_id: str
+    slot: str
+    display_name: str
+    armor_class: str
+
+
+def _build_armor_templates() -> tuple[RegionalArmorTemplate, ...]:
+    templates = []
+    for region_key, entries in _ARMOR_NAMES.items():
+        if len(entries) != 16:
+            raise ValueError(f"region {region_key!r} must list 16 armor pieces")
+        for index, (slot, name) in enumerate(entries):
+            if slot != ARMOR_SLOTS[index % 4]:
+                raise ValueError(f"armor {name!r} is out of slot order")
+            templates.append(
+                RegionalArmorTemplate(
+                    template_id=f"equipment.{region_key}.armor.{_slug(slot)}.{_slug(name)}",
+                    region_key=region_key,
+                    region_id=REGION_IDS[region_key],
+                    slot=slot,
+                    display_name=name,
+                    armor_class=ARMOR_CLASSES[index // 4],
+                )
+            )
+    return tuple(templates)
+
+
+REGIONAL_ARMOR_TEMPLATES = _build_armor_templates()
+_ARMOR_CLASS_BY_TEMPLATE_ID = {t.template_id: t.armor_class for t in REGIONAL_ARMOR_TEMPLATES}
+
+# Legacy Terras do Ocaso armor (no template_id on the stored item), spec §7.
+LEGACY_ARMOR_CLASS_BY_NAME = {
+    "Capuz das Cinzas": "veste",
+    "Veste do Caminhante": "veste",
+    "Luvas de Fuligem": "veste",
+    "Botas da Estrada": "veste",
+    "Elmo de Fuligem": "leve",
+    "Couraça de Fuligem": "leve",
+    "Manoplas de Fuligem": "leve",
+    "Passos de Fuligem": "leve",
+}
+
+
+_REGION_LABEL_BY_ID = {
+    REGION_IDS[key]: display for display, key in REGION_KEY_BY_DISPLAY.items()
+}
+
+
+def region_label(region_id: str | None) -> str | None:
+    """Display name of a region id, or None when the item carries no known Region."""
+    return _REGION_LABEL_BY_ID.get(region_id or "")
+
+
+def armor_class_of(
+    *, slot: str | None, template_id: str | None = None, item_name: str | None = None
+) -> str | None:
+    """Armor class of an item, or None (weapons, accessories, artifacts, unknown)."""
+    if slot not in ARMOR_SLOTS:
+        return None
+    if template_id is not None:
+        return _ARMOR_CLASS_BY_TEMPLATE_ID.get(template_id)
+    return LEGACY_ARMOR_CLASS_BY_NAME.get(item_name or "")
+
+
+def regional_armor_templates(region_key: str) -> tuple[RegionalArmorTemplate, ...]:
     if region_key not in REGION_IDS:
         raise ValueError(f"unknown equipment region {region_key!r}")
     return tuple(t for t in REGIONAL_ARMOR_TEMPLATES if t.region_key == region_key)
