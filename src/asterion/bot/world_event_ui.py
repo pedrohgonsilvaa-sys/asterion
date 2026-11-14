@@ -27,7 +27,7 @@ from asterion.domain.world_events import (
 
 _WEEKDAYS = ("Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo")
 _BACK_TO_EVENTS = [InlineKeyboardButton(text="← Eventos", callback_data="wev:hub")]
-_BACK_TO_ADVENTURE = [InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")]
+_BACK_TO_ADVENTURE = [InlineKeyboardButton(text="← Aventura", callback_data="adv:hub")]
 
 _ERRORS = {
     "no_character": "Crie um personagem antes de entrar em um Evento.",

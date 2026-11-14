@@ -884,7 +884,7 @@ def render_vde_board(s7: VDEMissionView | None, p8: VDEMissionView | None) -> Sc
         lines.append(f"{icon} {label} · {state}")
         if action:
             rows.append([_button(label, action)])
-    rows.append([_button("← Aventura", "world:adventure")])
+    rows.append([_button("← Campanha", "world:adventure")])
     return _screen("\n".join(lines), rows)
 
 

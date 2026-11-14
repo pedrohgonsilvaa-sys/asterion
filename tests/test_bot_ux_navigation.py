@@ -17,7 +17,7 @@ from asterion.bot.road_ui import (
     render_round_selection,
 )
 from asterion.bot.world_handlers import world_router
-from asterion.bot.world_ui import render_adventure, render_world
+from asterion.bot.world_ui import render_adventure, render_campaign, render_world
 from asterion.infrastructure.db.models import Character, LocationDiscovery, WorldState
 from tests.test_creation_ui import callback_update
 from tests.test_road_integration import _seed_road
@@ -48,16 +48,18 @@ def _button(screen, label):
     )
 
 
-def test_adventure_root_only_exposes_navigation_and_contextual_activities():
-    screen = render_adventure(CHARNECA)
+def test_adventure_hub_exposes_only_shared_activities():
+    screen = render_adventure()
+    assert set(_callbacks(screen)) == {"dungeon:known", "wev:hub", "pvp:hub", "menu:back"}
+
+
+def test_campaign_root_only_exposes_navigation_and_contextual_activities():
+    screen = render_campaign(CHARNECA)
     assert "📍 Local Atual\n🌑 Charneca da Fuligem\nTerras do Ocaso" in screen.text
     assert set(_callbacks(screen)) == {
         "world:local",
         "world:map",
         "world:missions",
-        "dungeon:known",
-        "wev:hub",
-        "pvp:hub",
         "menu:back",
     }
     assert not any(
@@ -67,7 +69,7 @@ def test_adventure_root_only_exposes_navigation_and_contextual_activities():
 
 
 def test_adventure_root_displays_only_supplied_current_principal_quest():
-    screen = render_adventure(CHARNECA, "Fuligem sem Fogo")
+    screen = render_campaign(CHARNECA, "Fuligem sem Fogo")
     assert "📜 Missão Principal\nFuligem sem Fogo · Em Andamento" in screen.text
     assert "P2" not in screen.text
 
@@ -90,7 +92,8 @@ def test_primary_telegram_screens_have_live_compact_callbacks_and_exits():
     )
     screens = [
         render_world(world),
-        render_adventure(CHARNECA, "Fuligem sem Fogo"),
+        render_campaign(CHARNECA, "Fuligem sem Fogo"),
+        render_adventure(),
         render_character(),
         render_current_local(
             RoadView(
@@ -228,7 +231,7 @@ async def test_telegram_adventure_local_hunt_and_map_callbacks_use_real_services
         return bot.session.make_request.call_args.args[1]
 
     adventure = await click("world:adventure", 883402)
-    assert "Aventura" in adventure.text
+    assert "Campanha" in adventure.text
     assert "world:local" in {
         button.callback_data
         for row in adventure.reply_markup.inline_keyboard

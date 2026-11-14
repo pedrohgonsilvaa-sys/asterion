@@ -250,6 +250,6 @@ def render_missions_after_s1_abandon() -> Screen:
         text,
         "missions",
         InlineKeyboardMarkup(
-            inline_keyboard=[[_button("← Aventura", "world:adventure")]]
+            inline_keyboard=[[_button("← Campanha", "world:adventure")]]
         ),
     )

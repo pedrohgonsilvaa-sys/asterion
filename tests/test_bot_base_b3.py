@@ -346,6 +346,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     )
     screen = _last_screen(bot)
     assert {button.text for row in screen.reply_markup.inline_keyboard for button in row} == {
+        "Campanha",
         "Aventura",
         "Personagem",
         "Códice",
@@ -378,11 +379,18 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
         "world:local",
         "world:map",
         "world:missions",
-        "dungeon:known",
-        "wev:hub",
-        "pvp:hub",
         "menu:back",
     }
+    update_id += 1
+    await dispatcher.feed_raw_update(
+        bot, callback_update("adv:hub", actor=actor, update_id=update_id)
+    )
+    screen = _last_screen(bot)
+    assert {
+        button.callback_data
+        for row in screen.reply_markup.inline_keyboard
+        for button in row
+    } == {"dungeon:known", "wev:hub", "pvp:hub", "menu:back"}
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, callback_update("settings:root", actor=actor, update_id=update_id)

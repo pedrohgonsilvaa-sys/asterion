@@ -149,7 +149,7 @@ from asterion.bot.s35_ui import render_s35
 from asterion.bot.s36_ui import render_s36
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
 from asterion.bot.vde_missions_ui import render_vde_mission
-from asterion.bot.world_ui import render_adventure, render_legacy, render_world
+from asterion.bot.world_ui import render_adventure, render_campaign, render_legacy, render_world
 
 
 def _warehouse_error(code: str) -> str:
@@ -1797,10 +1797,19 @@ def world_router(
             principal_quest_title = await service.principal_quest_title(query.from_user.id)
             await present(
                 query.message,
-                render_adventure(current, principal_quest_title),
+                render_campaign(current, principal_quest_title),
                 images,
                 edit=True,
             )
+
+    @router.callback_query(F.data == "adv:hub")
+    async def adventure_hub(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        await query.answer()
+        if isinstance(query.message, Message):
+            await present(query.message, render_adventure(), images, edit=True)
 
     @router.callback_query(F.data == "legacy:root")
     async def legacy_root(query: CallbackQuery):
@@ -2776,7 +2785,7 @@ def world_router(
             else:
                 text += "\n\n🔒 Onde Tudo se Enreda · Requer P10 concluída, Nv.19 e Claustro das Raízes"
         keyboard.append(
-            [InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")]
+            [InlineKeyboardButton(text="← Campanha", callback_data="world:adventure")]
         )
         await present(
             query.message,
@@ -3055,7 +3064,7 @@ def world_router(
                         inline_keyboard=[
                             [
                                 InlineKeyboardButton(
-                                    text="← Aventura", callback_data="world:adventure"
+                                    text="← Campanha", callback_data="world:adventure"
                                 )
                             ]
                         ]
@@ -3515,7 +3524,7 @@ def world_router(
                     inline_keyboard=[
                         [InlineKeyboardButton(text="Missões", callback_data="world:missions")],
                         [InlineKeyboardButton(text="Viajar", callback_data="world:map:fromlocal")],
-                        [InlineKeyboardButton(text="← Aventura", callback_data="world:adventure")],
+                        [InlineKeyboardButton(text="← Campanha", callback_data="world:adventure")],
                     ]
                 ),
             ),
@@ -3955,7 +3964,7 @@ def world_router(
         parent_callback = "world:local" if from_local else "world:adventure"
         if not known:
             text = "🗺️ Mapa\n\nNenhuma Região conhecida."
-            keyboard = [[InlineKeyboardButton(text=f"← {'Local Atual' if from_local else 'Aventura'}", callback_data=parent_callback)]]
+            keyboard = [[InlineKeyboardButton(text=f"← {'Local Atual' if from_local else 'Campanha'}", callback_data=parent_callback)]]
         else:
             current_icon = (
                 "🌑" if current in {CHARNECA, VDE_GARGANTA} else
@@ -4007,7 +4016,7 @@ def world_router(
                 [InlineKeyboardButton(text=str(index), callback_data=f"world:map:region:{'tdo' if name == 'Terras do Ocaso' else 'vde' if name == 'Vales dos Enforcados' else 'nareth' if name == NARETH_REGION else 'altos' if name == ALTOS_REGION_LABEL else 'confins' if name == CONFINS_REGION_LABEL else 'varzeas'}{':fromlocal' if from_local else ''}")]
                 for index, name in enumerate(known_regions, start=1)
             ]
-            keyboard = region_buttons + [[InlineKeyboardButton(text=f"← {'Local Atual' if from_local else 'Aventura'}", callback_data=parent_callback)]]
+            keyboard = region_buttons + [[InlineKeyboardButton(text=f"← {'Local Atual' if from_local else 'Campanha'}", callback_data=parent_callback)]]
         await present(
             query.message,
             Screen(text, "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
