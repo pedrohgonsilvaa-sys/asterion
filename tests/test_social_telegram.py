@@ -215,7 +215,6 @@ async def test_benefits_menu_lists_only_what_exists_before_monetization(database
     screen = await client.click(ANA, "bn:root")
     assert _labels(screen) == {
         "Dádiva Diária",
-        "Trilha da Crônica",
         "Chamado de Asterion",
         "Códigos de Asterion",
         "← Menu",
