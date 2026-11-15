@@ -6,6 +6,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.groups import ActivityProposalView, GroupView, IncomingInviteView
 from asterion.bot.creation_ui import Screen
+from asterion.domain.tdo_combat import hunt_unlock_blocked_message
 
 
 def revision36(value: int) -> str:
@@ -223,6 +224,17 @@ def render_hunt_roster(
         )
     rows.append([InlineKeyboardButton(text="← Grupo", callback_data="group:root")])
     return Screen("\n".join(lines), "links", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def render_hunt_unlock_blocked(names) -> Screen:
+    """UI 66.4 (decisão 11): Caçada em Grupo não abre; cita todos os membros."""
+    return Screen(
+        hunt_unlock_blocked_message(tuple(names)),
+        "links",
+        InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="Voltar", callback_data="group:hunt:open")]]
+        ),
+    )
 
 
 def render_invites(invites: tuple[IncomingInviteView, ...]) -> Screen:

@@ -1131,11 +1131,17 @@ def world_router(
         if await foreground(query):
             await query.answer()
             return
+        if road is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        view = await road.explore(query.from_user.id)
+        if view is not None and view.kind == "explore_throttle":
+            # 33.2 item 1 / UI 66.2: anti-spam de 3 s, recusado sem efeito.
+            await query.answer("Aguarde um instante.")
+            return
         await query.answer()
-        if road is not None and isinstance(query.message, Message):
-            view = await road.explore(query.from_user.id)
-            if view is not None:
-                await present(query.message, render_road(view), images, edit=True)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
 
     @router.callback_query(F.data.startswith("road:round:new:"))
     async def round_prepare(query: CallbackQuery):

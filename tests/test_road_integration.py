@@ -1607,7 +1607,8 @@ async def test_exploration_retry_is_server_authoritative_after_cooldown(database
         lambda *args: ("great_discovery", "explore.tdo.estrada.marco_viajantes", "Marco."),
     )
     first = await service.explore(actor)
-    assert first.retry_available is False
+    # v1.0.18 (33.7): sem recarga de 5 min; repetir e sempre possivel.
+    assert first.retry_available is True
     async with database[1]() as session:
         attempt = await session.scalar(select(ExplorationAttempt))
         attempt.created_at = datetime.now(UTC) - timedelta(minutes=6)
@@ -1618,7 +1619,7 @@ async def test_exploration_retry_is_server_authoritative_after_cooldown(database
 
 
 @pytest.mark.asyncio
-async def test_exploration_retry_is_hidden_at_six_per_hour(database, monkeypatch):
+async def test_exploration_retry_stays_available_past_six_per_hour(database, monkeypatch):
     import asterion.application.road as road_module
 
     actor, service = await _seed_road(database, 771125)
@@ -1654,7 +1655,8 @@ async def test_exploration_retry_is_hidden_at_six_per_hour(database, monkeypatch
         await session.commit()
     resumed = await service.resume(actor)
     assert resumed.kind == "exploration"
-    assert resumed.retry_available is False
+    # v1.0.18 (33.7): sem limite de 6 por Local por 60 min.
+    assert resumed.retry_available is True
 
 
 @pytest.mark.asyncio

@@ -50,18 +50,19 @@ def test_bosque_explore_gates_great_discovery_and_moth_at_level_five():
         "explore.tdo.bosque.braseiro",
         "explore.tdo.bosque.estrutura_enterrada",
     }
+    # v1.0.18 (FINAL 11.2): sem trava "Nv.6+"; nivel de referencia e so XP.
     assert all(
-        result.min_level == 6
+        result.min_level == 1
         for result in BOSQUE_EXPLORATION_PROFILE.results
         if result.category == "great_discovery"
     )
-    for ordinal in range(120):
-        key = select_exploration_result(
-            f"bosque-level-five-{ordinal}",
-            5,
-            profile=BOSQUE_EXPLORATION_PROFILE,
+    drawn_at_level_five = {
+        select_exploration_result(
+            f"bosque-level-five-{ordinal}", 5, profile=BOSQUE_EXPLORATION_PROFILE
         )
-        assert key not in {"braseiro", "estrutura_enterrada", "mariposa_brasa"}
+        for ordinal in range(600)
+    }
+    assert {"braseiro", "estrutura_enterrada"} <= drawn_at_level_five
     combat_creatures = {
         result.creature_id
         for result in BOSQUE_EXPLORATION_PROFILE.results

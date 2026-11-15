@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.action_throttle import ACTION_DESBRAVAR, acquire_action_slot
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.bestiary import BESTIARY_STAGE_LABELS, BestiaryRecorder
 from asterion.application.chronicle_activities import desbravar_offer, settle_desbravar
@@ -760,11 +761,25 @@ class RoadView:
     pvpve_queue_id: UUID | None = None
     # v1.0.18 (33.3): a tela da Câmara lê a P6 de quem vê (progresso individual).
     camara_p6_completed: bool = False
+    # v1.0.18 (UI 66.1 item 6): durante P1 em andamento, Caçada e Desbravar da
+    # Estrada ficam escondidos (nem linha de "indisponível" aparece).
+    activities_hidden: bool = False
 
 
 def _exploration_local_id(profile) -> str:
     # Keep historical Road ExplorationAttempt.local_id rows query-compatible.
     return ROAD if profile.local_id == ROAD_LOCATION else profile.local_id
+
+
+# v1.0.18 (33.7): Desbravar nas Terras do Ocaso não tem recarga de 5 min nem
+# limite de 6 por Local por 60 min; só o anti-spam técnico de 3 s.
+_TDO_DESBRAVAR_LOCAL_IDS = frozenset(
+    {ROAD, CHARNECA_LOCATION, BOSQUE_LOCATION, RUINS_LOCATION}
+)
+
+
+def _tdo_desbravar_unrestricted(attempt_local_id: str) -> bool:
+    return attempt_local_id in _TDO_DESBRAVAR_LOCAL_IDS
 
 
 def _location_label(local_id: str | None) -> str:
@@ -2485,40 +2500,50 @@ class RoadService:
                     else await self._attempt_view(s, c, attempt)
                 )
             now = datetime.now(UTC)
-            recent = (
-                await s.scalar(
-                    select(func.count(ExplorationAttempt.id)).where(
-                        ExplorationAttempt.character_id == c.id,
-                        ExplorationAttempt.local_id == attempt_local_id,
-                        ExplorationAttempt.created_at >= now - timedelta(minutes=60),
+            if _tdo_desbravar_unrestricted(attempt_local_id):
+                # v1.0.18 (33.7): só anti-spam técnico de 3 s. Não segura a flag
+                # "em resolução" após o commit: a trava de linha do personagem já
+                # serializa cliques concorrentes dentro desta transação.
+                decision = await acquire_action_slot(
+                    s, c.id, ACTION_DESBRAVAR, now, hold=False
+                )
+                if not decision.allowed:
+                    return self._explore_throttle_view(c, hunt_profile.label, decision)
+            else:
+                recent = (
+                    await s.scalar(
+                        select(func.count(ExplorationAttempt.id)).where(
+                            ExplorationAttempt.character_id == c.id,
+                            ExplorationAttempt.local_id == attempt_local_id,
+                            ExplorationAttempt.created_at >= now - timedelta(minutes=60),
+                        )
                     )
+                    or 0
                 )
-                or 0
-            )
-            last = await s.scalar(
-                select(ExplorationAttempt)
-                .where(
-                    ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == attempt_local_id,
-                )
-                .order_by(ExplorationAttempt.created_at.desc())
-                .limit(1)
-            )
-            if recent >= 6:
-                sixth = await s.scalar(
+                last = await s.scalar(
                     select(ExplorationAttempt)
                     .where(
                         ExplorationAttempt.character_id == c.id,
                         ExplorationAttempt.local_id == attempt_local_id,
-                        ExplorationAttempt.created_at >= now - timedelta(minutes=60),
                     )
                     .order_by(ExplorationAttempt.created_at.desc())
-                    .offset(5)
                     .limit(1)
                 )
-                return self._explore_limit_view(c, recent, last, now, sixth, hunt_profile.label)
-            if last and last.created_at and last.created_at > now - timedelta(minutes=5):
-                return self._explore_limit_view(c, recent, last, now, location=hunt_profile.label)
+                if recent >= 6:
+                    sixth = await s.scalar(
+                        select(ExplorationAttempt)
+                        .where(
+                            ExplorationAttempt.character_id == c.id,
+                            ExplorationAttempt.local_id == attempt_local_id,
+                            ExplorationAttempt.created_at >= now - timedelta(minutes=60),
+                        )
+                        .order_by(ExplorationAttempt.created_at.desc())
+                        .offset(5)
+                        .limit(1)
+                    )
+                    return self._explore_limit_view(c, recent, last, now, sixth, hunt_profile.label)
+                if last and last.created_at and last.created_at > now - timedelta(minutes=5):
+                    return self._explore_limit_view(c, recent, last, now, location=hunt_profile.label)
             seed = uuid4().hex
             recent_rows = (
                 await s.scalars(
@@ -2800,40 +2825,41 @@ class RoadService:
                     )
                 return None
             now = datetime.now(UTC)
-            recent = (
-                await s.scalar(
-                    select(func.count(ExplorationAttempt.id)).where(
-                        ExplorationAttempt.character_id == c.id,
-                        ExplorationAttempt.local_id == attempt_local_id,
-                        ExplorationAttempt.created_at >= now - timedelta(minutes=60),
+            if not _tdo_desbravar_unrestricted(attempt_local_id):
+                recent = (
+                    await s.scalar(
+                        select(func.count(ExplorationAttempt.id)).where(
+                            ExplorationAttempt.character_id == c.id,
+                            ExplorationAttempt.local_id == attempt_local_id,
+                            ExplorationAttempt.created_at >= now - timedelta(minutes=60),
+                        )
                     )
+                    or 0
                 )
-                or 0
-            )
-            last = await s.scalar(
-                select(ExplorationAttempt)
-                .where(
-                    ExplorationAttempt.character_id == c.id,
-                    ExplorationAttempt.local_id == attempt_local_id,
-                )
-                .order_by(ExplorationAttempt.created_at.desc())
-                .limit(1)
-            )
-            if recent >= 6:
-                sixth = await s.scalar(
+                last = await s.scalar(
                     select(ExplorationAttempt)
                     .where(
                         ExplorationAttempt.character_id == c.id,
                         ExplorationAttempt.local_id == attempt_local_id,
-                        ExplorationAttempt.created_at >= now - timedelta(minutes=60),
                     )
                     .order_by(ExplorationAttempt.created_at.desc())
-                    .offset(5)
                     .limit(1)
                 )
-                return self._explore_limit_view(c, recent, last, now, sixth, hunt_profile.label)
-            if last and last.created_at and last.created_at > now - timedelta(minutes=5):
-                return self._explore_limit_view(c, recent, last, now, location=hunt_profile.label)
+                if recent >= 6:
+                    sixth = await s.scalar(
+                        select(ExplorationAttempt)
+                        .where(
+                            ExplorationAttempt.character_id == c.id,
+                            ExplorationAttempt.local_id == attempt_local_id,
+                            ExplorationAttempt.created_at >= now - timedelta(minutes=60),
+                        )
+                        .order_by(ExplorationAttempt.created_at.desc())
+                        .offset(5)
+                        .limit(1)
+                    )
+                    return self._explore_limit_view(c, recent, last, now, sixth, hunt_profile.label)
+                if last and last.created_at and last.created_at > now - timedelta(minutes=5):
+                    return self._explore_limit_view(c, recent, last, now, location=hunt_profile.label)
             return RoadView(
                 "explore_prepare",
                 c.id,
@@ -6090,7 +6116,9 @@ class RoadService:
             )
         )
         explore_available = True
-        if hunt_profile is not None:
+        if hunt_profile is not None and not _tdo_desbravar_unrestricted(
+            _exploration_local_id(hunt_profile)
+        ):
             now = datetime.now(UTC)
             attempt_local_id = _exploration_local_id(hunt_profile)
             recent = (
@@ -6636,6 +6664,7 @@ class RoadService:
                         world.location, await self._tdo_discovered_ids(s, c.id)
                     )
                 )
+        activities_hidden = False
         route_available = bool(route_destinations)
         material_table_ready = bool(
             hunt_profile
@@ -6731,6 +6760,11 @@ class RoadService:
         elif world.location in {ROAD, REFUGE, CHARNECA, BOSQUE, RUINS}:
             hunt_enabled = True
             explore_enabled = True
+            if world.location == ROAD and not await self._p1_completed(s, c.id):
+                # UI 66.1 item 6 (L3): escondidos durante P1 em andamento.
+                hunt_enabled = False
+                explore_enabled = False
+                activities_hidden = True
         elif world.location == CAMARA:
             # 33.3: sem Caçada, Desbravar, Ronda, pool próprio nem Braseiro.
             hunt_enabled = False
@@ -7168,6 +7202,7 @@ class RoadService:
             camara_p6_completed=(
                 await self._p6_completed(s, c.id) if world.location == CAMARA else False
             ),
+            activities_hidden=activities_hidden,
         )
 
     async def _locked_world(self, s, actor):
@@ -7684,11 +7719,26 @@ class RoadService:
             result_text=_remaining(available_at, now),
         )
 
+    def _explore_throttle_view(self, c, location, decision):
+        """Anti-spam técnico (3 s / 1 em resolução): sem efeito sobre recompensa."""
+        return RoadView(
+            "explore_throttle",
+            c.id,
+            location,
+            vigor=c.vigor,
+            max_vigor=c.max_vigor,
+            name=c.name,
+            hp=c.hp,
+            max_hp=c.max_hp,
+        )
+
     async def _explore_retry_available(self, s, c, attempt) -> bool:
         if attempt is None or attempt.status == "active":
             return False
-        now = datetime.now(UTC)
         local_id = attempt.local_id
+        if _tdo_desbravar_unrestricted(local_id):
+            return True
+        now = datetime.now(UTC)
         recent = (
             await s.scalar(
                 select(func.count(ExplorationAttempt.id)).where(

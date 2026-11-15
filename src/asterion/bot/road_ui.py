@@ -716,6 +716,12 @@ def render_road(view: RoadView) -> Screen:
             InlineKeyboardMarkup(inline_keyboard=[[_local_return(view.location)]]),
             parse_mode="HTML",
         )
+    if view.kind == "explore_throttle":
+        return Screen(
+            "Aguarde um instante.",
+            "explore_cooldown",
+            InlineKeyboardMarkup(inline_keyboard=[[_local_return(view.location)]]),
+        )
     if view.kind == "explore_limit":
         location_line = f"{_location_copy(view.location)[0]}\n\n" if view.location != ROAD else ""
         text = (
@@ -797,7 +803,7 @@ def render_current_local(
                 )
             ]
         )
-    if view.location in {
+    if not view.activities_hidden and view.location in {
         ROAD, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_MATA, VDE_BAIXIOS,
         VDE_CLAUSTRO, NARETH_CAMPINAS, NARETH_CANAIS, NARETH_CAMPOS,
         NARETH_OBSERVATORIO, VARZEAS_DIQUES, VARZEAS_BREJOS, VARZEAS_HORTOS, VARZEAS_GALERIAS,

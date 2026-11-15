@@ -19,6 +19,11 @@ from asterion.infrastructure.db.models import CharacterActionThrottle
 ACTION_EXPLORE = "explore_location"
 ACTION_DESBRAVAR = "desbravar"
 
+# Limpeza técnica (não é regra de jogo): a flag "em resolução" nunca fica presa.
+# Passado este prazo desde o último clique, uma flag órfã (processo morto entre
+# acquire e release) é ignorada e o próximo clique a sobrescreve.
+RESOLVING_TIMEOUT = timedelta(seconds=30)
+
 
 @dataclass(frozen=True)
 class ThrottleDecision:
@@ -28,9 +33,19 @@ class ThrottleDecision:
 
 
 async def acquire_action_slot(
-    session: AsyncSession, character_id: UUID, action: str, now: datetime
+    session: AsyncSession,
+    character_id: UUID,
+    action: str,
+    now: datetime,
+    *,
+    hold: bool = True,
 ) -> ThrottleDecision:
-    """Registra o clique e marca "em resolução"; recusa sem alterar o horário gravado."""
+    """Registra o clique e marca "em resolução"; recusa sem alterar o horário gravado.
+
+    ``hold=False``: não grava ``resolving`` (a trava ``FOR UPDATE`` da linha já
+    serializa cliques concorrentes enquanto a transação do chamador estiver
+    aberta, e nada persiste "em resolução" depois do commit).
+    """
     await session.execute(
         pg_insert(CharacterActionThrottle)
         .values(
@@ -47,14 +62,14 @@ async def acquire_action_slot(
         .with_for_update()
         .execution_options(populate_existing=True)
     )
-    if row.resolving:
+    if row.resolving and now - row.last_click_at < RESOLVING_TIMEOUT:
         return ThrottleDecision(False, "resolving")
     remaining = explore_cooldown_remaining(row.last_click_at, now)
     if remaining > timedelta(0):
         return ThrottleDecision(False, "cooldown", remaining)
     row.last_action = action
     row.last_click_at = now
-    row.resolving = True
+    row.resolving = hold
     return ThrottleDecision(True)
 
 

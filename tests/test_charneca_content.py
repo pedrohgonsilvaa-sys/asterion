@@ -44,6 +44,7 @@ from asterion.infrastructure.db.models import (
     Account,
     Brazier,
     Character,
+    CharacterActionThrottle,
     CodexEntry,
     ConsumableStack,
     EquipmentItem,
@@ -227,18 +228,12 @@ def test_charneca_explore_profile_gates_and_shared_category_weights():
         ("aranha_cinza", 35),
         ("cervo_escoriado", 30),
     }
-    # v1.0.18: combate nao filtra por nivel em Solo; Grandes Descobertas seguem em Nv.4 (bloco C).
-    forbidden_at_3 = {
-        "explore.tdo.charneca.braseiro",
-        "explore.tdo.charneca.cripta",
-    }
+    # v1.0.18 (bloco C, FINAL 11.2): sem "elegivel em Nv.4+"; Nv.3 tambem sorteia.
     results_at_3 = {
         select_exploration_result(str(seed), 3, profile=CHARNECA_EXPLORATION_PROFILE)
         for seed in range(3000)
     }
-    assert not forbidden_at_3.intersection(
-        CHARNECA_EXPLORATION_PROFILE.result(key).result_id for key in results_at_3
-    )
+    assert {"braseiro", "cripta"}.issubset(results_at_3)
     results_at_4 = {
         select_exploration_result(str(seed), 4, profile=CHARNECA_EXPLORATION_PROFILE)
         for seed in range(3000)
@@ -1255,6 +1250,9 @@ async def test_p2_codex_entry_does_not_consume_explore_stone_unique(database, mo
         )
         assert character.xp == 193
         attempt.created_at = datetime.now(UTC) - timedelta(minutes=6)
+        # Bloco C: so resta o anti-spam tecnico de 3 s.
+        throttle = await session.scalar(select(CharacterActionThrottle))
+        throttle.last_click_at = datetime.now(UTC) - timedelta(seconds=10)
         await session.commit()
 
     second = await service.explore(actor)

@@ -179,9 +179,13 @@ async def test_one_in_resolution_blocks_even_after_cooldown(database):
     async with database[1].begin() as session:
         row = await session.get(CharacterActionThrottle, cid)
         row.resolving = True
-    clock.advance(60)
+    clock.advance(10)
     assert (await service.explore(actor)).status == "busy"
     assert len(await _discovered(database, cid)) == 1
+    # Bloco C: flag orfa expira (RESOLVING_TIMEOUT), o jogador nao fica travado.
+    clock.advance(31)
+    assert (await service.explore(actor)).status == "discovered"
+    assert len(await _discovered(database, cid)) == 2
 
 
 @pytest.mark.asyncio

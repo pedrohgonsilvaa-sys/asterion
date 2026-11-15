@@ -5,10 +5,11 @@ from hashlib import sha256
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 import asterion.application.vigor as vigor_module
 from asterion.application.active_arts import ActiveArtService, load_active_art_configuration
+from asterion.application.armor_proficiency import armor_proficiency_missing
 from asterion.application.class_trials import ClassTrialService
 from asterion.application.crafting import CraftingService
 from asterion.application.creation import CreationService
@@ -38,6 +39,7 @@ from asterion.application.s4 import S4_WATCH_POINTS, S4Service
 from asterion.application.s5 import S5_LIGHT_POINTS, S5Service
 from asterion.application.s6 import S6_MARKS, S6Service
 from asterion.application.talents import TalentService
+from asterion.application.weapon_proficiency import WeaponEligibility, weapon_eligibility
 from asterion.application.world import WorldService
 from asterion.domain.arts import FIRST_CLASS_ART_IDS, SENTINEL_ART_IDS
 from asterion.domain.class_trials import SENTINEL_CONDITION_IDS
@@ -59,6 +61,7 @@ from asterion.domain.road import (
 from asterion.domain.tdo_galleries import GALLERIES_FAMILY_ID
 from asterion.infrastructure.db.models import (
     Character,
+    CharacterActionThrottle,
     CharacterEquipmentSlot,
     ConsumableStack,
     DungeonRun,
@@ -719,6 +722,13 @@ async def run_tdo_full_playthrough(database, monkeypatch):
                 f"{label}: preparação de Desbravar indisponível: {prepared!r}; "
                 f"{driver.diagnostic()}"
             )
+            # Anti-spam de 3 s (v1.0.18): o driver não espera relógio real.
+            async with sessions.begin() as throttle_session:
+                await throttle_session.execute(
+                    update(CharacterActionThrottle).values(
+                        last_click_at=ExploreClock.now(UTC) - timedelta(seconds=10)
+                    )
+                )
             view = await service.explore(actor)
 
         assert view is not None and view.kind == "exploration", (
@@ -953,6 +963,13 @@ async def run_tdo_full_playthrough(database, monkeypatch):
                 candidates = []
                 for item in owned:
                     if item.id in currently_equipped or item.item_level > level:
+                        continue
+                    # Spec de Proficiencias: so equipa o que a proficiencia de
+                    # armadura da conta permite (o servico recusa o resto).
+                    if await armor_proficiency_missing(session, character, item) is not None:
+                        continue
+                    eligibility = await weapon_eligibility(session, character, item)
+                    if eligibility != WeaponEligibility.ALLOWED:
                         continue
                     assignment = assignment_for_item_slot(item.slot)
                     if assignment is None:

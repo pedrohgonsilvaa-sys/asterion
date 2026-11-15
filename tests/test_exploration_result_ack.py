@@ -17,6 +17,7 @@ from asterion.bot.world_handlers import world_router
 from asterion.infrastructure.db.models import (
     Account,
     Character,
+    CharacterActionThrottle,
     ExplorationAttempt,
     GameActivity,
     LocationDiscovery,
@@ -261,6 +262,10 @@ async def test_explore_result_return_acknowledges_once_in_each_local(
     async with database[1]() as session:
         attempt = await session.get(ExplorationAttempt, attempt_id)
         attempt.created_at = datetime.now(UTC) - timedelta(minutes=6)
+        # Bloco C: so resta o anti-spam tecnico de 3 s.
+        throttle = await session.scalar(select(CharacterActionThrottle))
+        if throttle is not None:
+            throttle.last_click_at = datetime.now(UTC) - timedelta(seconds=10)
         await session.commit()
     await dispatcher.feed_raw_update(
         bot,

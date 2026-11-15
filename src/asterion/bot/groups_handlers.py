@@ -9,6 +9,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from asterion.application.group_hunts import GroupHuntUnlockBlocked
 from asterion.application.groups import GroupError, GroupService
 from asterion.application.oaths import OATH_ACTIVITY_TYPE, OathError
 from asterion.bot.creation_handlers import present
@@ -16,6 +17,7 @@ from asterion.bot.groups_ui import (
     render_expired_group_action,
     render_group,
     render_hunt_roster,
+    render_hunt_unlock_blocked,
     render_invites,
     render_links,
     revision36,
@@ -355,6 +357,13 @@ def groups_router(
                 eligibility_resolver=road.group_hunts.eligibility,
                 context_payload=context_payload,
             )
+        except GroupHuntUnlockBlocked as exc:
+            await query.answer()
+            if isinstance(query.message, Message):
+                await present(
+                    query.message, render_hunt_unlock_blocked(exc.names), images, edit=True
+                )
+            return
         except (ValueError, GroupError) as exc:
             if isinstance(exc, GroupError) and exc.code not in {"stale", "hunt_context_changed"}:
                 await query.answer(
@@ -549,6 +558,13 @@ def groups_router(
 
                     screen = render_s6(view)
                 await present(query.message, screen, images, edit=True)
+        except GroupHuntUnlockBlocked as exc:
+            await query.answer()
+            if isinstance(query.message, Message):
+                await present(
+                    query.message, render_hunt_unlock_blocked(exc.names), images, edit=True
+                )
+            return
         except (ValueError, GroupError) as exc:
             if isinstance(exc, GroupError) and exc.code not in {"stale", "proposal_expired"}:
                 await query.answer(_error_text(exc.code), show_alert=True)

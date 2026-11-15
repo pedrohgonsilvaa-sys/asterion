@@ -2381,8 +2381,8 @@ CHARNECA_EXPLORATION_PROFILE = ExplorationLocationProfile(
     local_id=CHARNECA_LOCATION,
     category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
     results=(
-        ExplorationResultDefinition("braseiro", "great_discovery", "explore.tdo.charneca.braseiro", 50, "Braseiro do Vento Morto encontrado.", min_level=4, unique=True),
-        ExplorationResultDefinition("cripta", "great_discovery", "explore.tdo.charneca.cripta", 50, "Entrada da Cripta do Ocaso encontrada.", min_level=4, unique=True),
+        ExplorationResultDefinition("braseiro", "great_discovery", "explore.tdo.charneca.braseiro", 50, "Braseiro do Vento Morto encontrado.", unique=True),
+        ExplorationResultDefinition("cripta", "great_discovery", "explore.tdo.charneca.cripta", 50, "Entrada da Cripta do Ocaso encontrada.", unique=True),
         ExplorationResultDefinition("pedra_marcada", "knowledge", "explore.tdo.charneca.pedra_marcada", 60, "A Pedra Marcada foi examinada.", unique=True),
         ExplorationResultDefinition("vestigios_fuligem", "knowledge", "explore.tdo.charneca.vestigios_fuligem", 40, "Vestígios de criaturas foram observados na fuligem."),
         ExplorationResultDefinition("vento_morto", "narrative", "explore.tdo.charneca.vento_morto", 65, "Uma área identificada como Vento Morto foi observada." , unique=True),
@@ -2403,8 +2403,8 @@ BOSQUE_EXPLORATION_PROFILE = ExplorationLocationProfile(
     local_id=BOSQUE_LOCATION,
     category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
     results=(
-        ExplorationResultDefinition("braseiro", "great_discovery", "explore.tdo.bosque.braseiro", 50, "Braseiro dos Galhos Mortos encontrado.", min_level=6, unique=True),
-        ExplorationResultDefinition("estrutura_enterrada", "great_discovery", "explore.tdo.bosque.estrutura_enterrada", 50, "Uma estrutura enterrada foi encontrada sob as raízes.", min_level=6, unique=True),
+        ExplorationResultDefinition("braseiro", "great_discovery", "explore.tdo.bosque.braseiro", 50, "Braseiro dos Galhos Mortos encontrado.", unique=True),
+        ExplorationResultDefinition("estrutura_enterrada", "great_discovery", "explore.tdo.bosque.estrutura_enterrada", 50, "Uma estrutura enterrada foi encontrada sob as raízes.", unique=True),
         ExplorationResultDefinition("caminho_ocidental", "knowledge", "explore.tdo.bosque.caminho_ocidental", 60, "O Caminho Ocidental foi reconhecido entre as árvores.", unique=True),
         ExplorationResultDefinition("rastros_galhos", "knowledge", "explore.tdo.bosque.rastros_galhos", 40, "Rastros entre os galhos indicam a passagem de criaturas conhecidas."),
         ExplorationResultDefinition("arvores_fumegam", "narrative", "explore.tdo.bosque.arvores_fumegam", 55, "Árvores que Ainda Fumegam."),
@@ -2427,7 +2427,7 @@ RUINS_EXPLORATION_PROFILE = ExplorationLocationProfile(
     category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
     results=(
         ExplorationResultDefinition("braseiro_poente", "great_discovery", "explore.tdo.ruinas.braseiro", 50, "Braseiro do Poente encontrado.", unique=True),
-        ExplorationResultDefinition("galerias_vigia", "great_discovery", "explore.tdo.ruinas.galerias", 50, "A entrada das Galerias do Vigia foi descoberta.", min_level=8, unique=True),
+        ExplorationResultDefinition("galerias_vigia", "great_discovery", "explore.tdo.ruinas.galerias", 50, "A entrada das Galerias do Vigia foi descoberta.", unique=True),
         ExplorationResultDefinition("estruturas_guarda", "knowledge", "explore.tdo.ruinas.estruturas_guarda", 40, "Estruturas de guarda foram registradas.", unique=True),
         ExplorationResultDefinition("ocupacao_posterior", "knowledge", "explore.tdo.ruinas.ocupacao_posterior", 40, "Sinais de ocupação posterior foram encontrados.", unique=True),
         ExplorationResultDefinition("marcas_patrulha", "knowledge", "explore.tdo.ruinas.marcas_patrulha", 20, "Marcas de patrulha foram observadas."),
