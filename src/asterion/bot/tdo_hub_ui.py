@@ -98,7 +98,7 @@ def render_camara(p6_completed: bool) -> Screen:
 def render_hunt_choice(route_destinations: tuple[str, ...]) -> Screen:
     """Caçar no Refúgio: só Locais descobertos com Caçada (66.1 item 2)."""
     choices = [label for label in route_destinations if label in HUNT_LABELS]
-    lines = ["🦌 Caçar", "", "Escolha o Local da caçada."]
+    lines = ["🦌 Caçar", "", "Escolha onde caçar."]
     rows: list[list[InlineKeyboardButton]] = []
     for label in choices:
         rows.append(
@@ -137,6 +137,6 @@ def render_explore_result(result: ExploreResult) -> Screen:
         "cooldown": TEXT_WAIT,
         "busy": TEXT_WAIT,
         "not_in_refuge": "Explorar só está disponível no Refúgio do Ocaso.",
-        "foreground": "Termine a atividade em andamento antes de explorar.",
+        "foreground": "Termine o que está fazendo antes de explorar.",
     }.get(result.status, TEXT_WAIT)
     return Screen(f"🧭 Explorar\n\n{text}", location_key(REFUGE_LABEL), back)
