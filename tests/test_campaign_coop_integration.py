@@ -634,3 +634,50 @@ async def test_single_member_social_group_uses_compatible_solo_combat_actor(data
     await _complete_shared_boss_fight(
         p5, (actor,), database, combat_view.encounter_id
     )
+
+
+@pytest.mark.asyncio
+async def test_coop_level_gap_ignores_non_eligible_high_level_member(database):
+    actors = (992131, 992132)
+    names = await _seed_party(database, actors)
+    sessions = database[1]
+    async with sessions.begin() as session:
+        for character in (
+            await session.scalars(
+                select(Character).where(Character.telegram_id.in_(actors))
+            )
+        ).all():
+            is_helper = character.telegram_id == actors[1]
+            character.level = 40 if is_helper else 10
+            world = await session.get(WorldState, character.id)
+            world.region = "Terras do Ocaso"
+            world.location = RUINS
+            session.add(
+                Quest(
+                    character_id=character.id,
+                    quest_id=P5_ID,
+                    title="A Porta do Poente",
+                    status="completed" if is_helper else "active",
+                    step=6 if is_helper else 3,
+                    content_version=P5_VERSION,
+                    progress=(
+                        {"completed": True, "door_known": True}
+                        if is_helper
+                        else {"door_known": True}
+                    ),
+                )
+            )
+    groups = GroupService(sessions, "ocaso")
+    await _create_group(groups, actors[0], (actors[1],), names)
+    p5 = P5Service(sessions, "ocaso", groups)
+    view = await _start_group_boss(groups, p5, actors[0], actors[1], "campaign_p5", version=0)
+    await _seed_enemy_at_one_hp(database, view.encounter_id)
+    await _complete_shared_boss_fight(p5, actors, database, view.encounter_id)
+    async with sessions() as session:
+        quest = await session.scalar(
+            select(Quest)
+            .join(Character, Character.id == Quest.character_id)
+            .where(Character.telegram_id == actors[0], Quest.quest_id == P5_ID)
+        )
+        assert quest.step == 4
+        assert quest.progress["coop_level_gap"] == 0

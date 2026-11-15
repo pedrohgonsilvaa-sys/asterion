@@ -32,7 +32,7 @@ def p6_router(service: P6Service, images: dict[str, str]) -> Router:
                     view = await service.choose_reward(actor, version, parts[3])
                 elif len(parts) == 3 and operation in {
                     "cross_door", "inspect_before", "start_boss", "enter_chamber",
-                    "retry", "inspect_after", "record_anchor", "return_ruins",
+                    "retry", "inspect_after", "record_anchor", "return_refuge",
                     "report_alda", "report_oren",
                 }:
                     view = await service.action(actor, version, operation)

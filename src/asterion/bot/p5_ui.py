@@ -5,9 +5,10 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.p5 import P5_ELEMENTS, P5_TITLE, P5View
 from asterion.application.prologue import CombatView
-from asterion.application.road import BOSQUE, CHARNECA, REFUGE, RUINS
+from asterion.application.road import REFUGE, RUINS
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
+from asterion.bot.tdo_hub_ui import mission_hub_button
 
 
 def _button(label: str, data: str) -> InlineKeyboardButton:
@@ -74,23 +75,14 @@ def _objective(view: P5View) -> str:
 
 
 def _route_back_to_ruins(view: P5View):
-    if view.location == REFUGE:
-        return _button("Seguir para a Charneca", "road:route:charneca")
-    if view.location == CHARNECA:
-        return _button("Seguir para o Bosque", "road:route:bosque")
-    if view.location == BOSQUE:
-        return _button("Seguir para as Ruínas", "road:route:ruinas")
-    return _button("Abrir Mapa", "world:map")
+    """Hub (v1.0.18): do Refúgio às Ruínas; de outro Local, a volta ao Refúgio."""
+    button = mission_hub_button(view.location, "Ruínas do Vigia")
+    return button if button is not None else _button("Abrir Mapa", "world:map")
 
 
 def _route_back_to_refuge(view: P5View):
-    if view.location == RUINS:
-        return _button("Retornar ao Bosque", "road:route:bosque")
-    if view.location == BOSQUE:
-        return _button("Seguir para a Charneca", "road:route:charneca")
-    if view.location == CHARNECA:
-        return _button("Retornar ao Refúgio", "road:route:refuge")
-    return _button("Abrir Mapa", "world:map")
+    button = mission_hub_button(view.location, "Refúgio do Ocaso")
+    return button if button is not None else _button("Abrir Mapa", "world:map")
 
 
 def render_p5_detail(view: P5View) -> Screen:
@@ -121,7 +113,7 @@ def render_p5(view: P5View) -> Screen:
     if view.kind == "unavailable":
         return Screen(
             f"📜 {P5_TITLE} · Indisponível no momento\nMissão Principal · Terras do Ocaso\n"
-            "Requer P4 concluída, Nv.9+ e conversa com Alda no Refúgio.",
+            "Requer P4 concluída e conversa com Alda no Refúgio.",
             "p5",
             _keyboard([[_button("← Missões", "world:missions")]]),
         )

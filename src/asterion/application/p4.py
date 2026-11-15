@@ -36,7 +36,6 @@ from asterion.application.progression import consolidate_character_level
 from asterion.application.road import (
     BOSQUE,
     CHARNECA,
-    CHARNECA_ROUTE_UNLOCK,
     P3_QUEST_ID,
     REFUGE,
     REGION,
@@ -129,6 +128,8 @@ class P4View:
     group_size: int = 1
     proposal_id: UUID | None = None
     proposal_status: str | None = None
+    # v1.0.18: etapa de chegada aguardando as Ruínas serem descobertas por Explorar.
+    awaiting_exploration: bool = False
 
 
 class P4Service:
@@ -213,13 +214,17 @@ class P4Service:
                 return None
             if not self._valid(quest, version) or await self._foreground(session, character.id):
                 return await self._view(session, character, quest, world)
-            if operation == "path" and quest.step == 1 and self._at(world, BOSQUE):
+            if (
+                operation == "path" and quest.step == 1
+                and (self._at(world, BOSQUE) or self._at(world, REFUGE))
+            ):
                 await self._share_path(session, character, quest, world)
                 return await self._view(session, character, quest, world)
             elif (
                 operation == "enter" and quest.step == 2
                 and (quest.progress or {}).get("western_path_followed")
-                and self._at(world, BOSQUE)
+                and self._at(world, REFUGE)
+                and await self._discovered(session, character.id, RUINS_LOCATION)
             ):
                 await self._share_ruins_entry(session, character, quest, world)
                 if await self._social_group_size(session, character.id) == 1:
@@ -228,10 +233,19 @@ class P4Service:
             elif (
                 operation == "enter" and quest.step == 3
                 and (quest.progress or {}).get("awaiting_retry")
-                and self._at(world, BOSQUE)
+                and self._at(world, REFUGE)
                 and await self._has_unlock(session, character.id, P4_ROUTE_UNLOCK)
+                and await self._discovered(session, character.id, RUINS_LOCATION)
             ):
                 await self._share_retry_route(session, character, quest, world)
+                return await self._view(session, character, quest, world)
+            elif (
+                operation == "enter" and quest.step in {3, 4, 5}
+                and not (quest.progress or {}).get("awaiting_retry")
+                and self._at(world, REFUGE)
+                and await self._discovered(session, character.id, RUINS_LOCATION)
+            ):
+                await self._share_resume_ruins(session, character, quest, world)
                 return await self._view(session, character, quest, world)
             elif (
                 operation == "retry"
@@ -285,7 +299,7 @@ class P4Service:
 
     async def _share_path(self, session, character, quest, world):
         for member in await self._present(
-            session, character, quest, world, step=1, location=BOSQUE
+            session, character, quest, world, step=1, location=world.location
         ):
             progress = dict(member.quest.progress or {})
             if progress.get("western_path_followed"):
@@ -305,17 +319,15 @@ class P4Service:
 
     async def _share_ruins_entry(self, session, character, quest, world):
         for member in await self._present(
-            session, character, quest, world, step=2, location=BOSQUE
+            session, character, quest, world, step=2, location=REFUGE
         ):
             progress = dict(member.quest.progress or {})
             if not progress.get("western_path_followed"):
                 continue
-            await self._ensure(
-                session,
-                LocationDiscovery,
-                character_id=member.character.id,
-                location_id=RUINS_LOCATION,
-            )
+            # v1.0.18 (5.9): a Missão não revela as Ruínas; conclui na chegada de quem
+            # já as descobriu por Explorar.
+            if not await self._discovered(session, member.character.id, RUINS_LOCATION):
+                continue
             await self._ensure(
                 session,
                 Unlock,
@@ -339,11 +351,13 @@ class P4Service:
 
     async def _share_retry_route(self, session, character, quest, world):
         for member in await self._present(
-            session, character, quest, world, step=3, location=BOSQUE
+            session, character, quest, world, step=3, location=REFUGE
         ):
             progress = dict(member.quest.progress or {})
-            if not progress.get("awaiting_retry") or not await self._has_unlock(
-                session, member.character.id, P4_ROUTE_UNLOCK
+            if (
+                not progress.get("awaiting_retry")
+                or not await self._has_unlock(session, member.character.id, P4_ROUTE_UNLOCK)
+                or not await self._discovered(session, member.character.id, RUINS_LOCATION)
             ):
                 continue
             member.world.region = REGION
@@ -357,7 +371,7 @@ class P4Service:
                 quest_id=P4_ID,
                 objective_id="p4.retry_route",
                 source_key=f"p4.retry_route:{member.quest.state_version - 1}",
-                evidence={"from": BOSQUE, "to": RUINS},
+                evidence={"from": REFUGE, "to": RUINS},
             )
 
     async def _share_retry(self, session, character, quest, world):
@@ -424,6 +438,19 @@ class P4Service:
                 evidence={"location": RUINS},
             )
 
+    async def _share_resume_ruins(self, session, character, quest, world):
+        """Retoma a Missão: do Refúgio às Ruínas já descobertas (etapas 3 a 5)."""
+        for member in await self._present(
+            session, character, quest, world, step=quest.step, location=REFUGE
+        ):
+            if (member.quest.progress or {}).get("awaiting_retry") or not await self._discovered(
+                session, member.character.id, RUINS_LOCATION
+            ):
+                continue
+            member.world.region = REGION
+            member.world.location = RUINS
+            member.quest.state_version += 1
+
     async def _share_return_to_bosque(self, session, character, quest, world):
         for member in await self._present(
             session, character, quest, world, step=6, location=RUINS
@@ -431,7 +458,7 @@ class P4Service:
             if not await self._has_unlock(session, member.character.id, P4_ROUTE_UNLOCK):
                 continue
             member.world.region = REGION
-            member.world.location = BOSQUE
+            member.world.location = REFUGE
             progress = dict(member.quest.progress or {})
             progress["returned_to_bosque"] = True
             member.quest.progress = progress
@@ -442,39 +469,28 @@ class P4Service:
                 quest_id=P4_ID,
                 objective_id="p4.return_to_bosque",
                 source_key=f"p4.return_to_bosque:{member.quest.state_version - 1}",
-                evidence={"from": RUINS, "to": BOSQUE},
+                evidence={"from": RUINS, "to": REFUGE},
             )
 
     async def mission_route(self, actor: int, version: int, destination: str) -> P4View | None:
-        """Share the P4 return route with eligible members at the same checkpoint."""
+        """Volta ao Refúgio (hub, v1.0.18) com os membros presentes no mesmo Local."""
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor)
             if character is None or quest is None or world is None:
                 return None
-            if (
-                not self._valid(quest, version, step=6)
-                or await self._foreground(session, character.id)
-            ):
-                return await self._view(session, character, quest, world)
             current = world.location
-            allowed = {current, destination} in (
-                {BOSQUE, CHARNECA},
-                {CHARNECA, REFUGE},
-            )
-            if not allowed:
-                return await self._view(session, character, quest, world)
-            route_unlock = CHARNECA_ROUTE_UNLOCK
-            if not await self._has_unlock(session, character.id, route_unlock):
+            if (
+                not self._valid(quest, version)
+                or await self._foreground(session, character.id)
+                or destination != REFUGE
+                or current not in {CHARNECA, BOSQUE, RUINS}
+            ):
                 return await self._view(session, character, quest, world)
             for member in await self._present(
-                session, character, quest, world, step=6, location=current
+                session, character, quest, world, step=quest.step, location=current
             ):
-                if not await self._has_unlock(
-                    session, member.character.id, route_unlock
-                ):
-                    continue
                 member.world.region = REGION
-                member.world.location = destination
+                member.world.location = REFUGE
                 member.quest.state_version += 1
                 await record_campaign_objective_credit(
                     session,
@@ -1165,7 +1181,7 @@ class P4Service:
         elif quest.step == 1:
             kind = "path"
         elif quest.step == 2:
-            kind = "enter_ruins" if self._at(world, BOSQUE) else "path"
+            kind = "enter_ruins"
         elif quest.step == 3:
             kind = "recovery" if progress.get("awaiting_retry") else "combat_pending"
         elif quest.step == 4:
@@ -1226,11 +1242,17 @@ class P4Service:
             group_size=group_size,
             proposal_id=proposal_pair[1].id if proposal_pair else None,
             proposal_status=proposal_pair[1].status if proposal_pair else None,
+            awaiting_exploration=bool(
+                quest is not None
+                and status == "active"
+                and kind == "enter_ruins"
+                and not await self._discovered(session, character.id, RUINS_LOCATION)
+            ),
         )
 
     async def _eligible(self, session, character):
         return bool(
-            character.level >= 7 and await session.scalar(select(Quest.id).where(
+            await session.scalar(select(Quest.id).where(
                 Quest.character_id == character.id, Quest.quest_id == P3_QUEST_ID,
                 Quest.status == "completed",
             ))
@@ -1243,6 +1265,16 @@ class P4Service:
             session.add(row)
             await session.flush()
         return row
+
+    async def _discovered(self, session, character_id, location_id) -> bool:
+        return bool(
+            await session.scalar(
+                select(LocationDiscovery.id).where(
+                    LocationDiscovery.character_id == character_id,
+                    LocationDiscovery.location_id == location_id,
+                )
+            )
+        )
 
     async def _has_unlock(self, session, character_id, unlock_id):
         return bool(await session.scalar(select(Unlock.id).where(

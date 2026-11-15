@@ -1124,7 +1124,7 @@ class S3Service:
                 LocationDiscovery.character_id == character.id, LocationDiscovery.location_id == BOSQUE_LOCATION
             )
         )
-        return bool(p3 and known and character.level >= 5)
+        return bool(p3 and known)
 
     async def _locked_state(self, session, actor):
         character = await session.scalar(

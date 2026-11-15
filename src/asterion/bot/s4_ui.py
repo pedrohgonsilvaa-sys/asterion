@@ -4,10 +4,11 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
-from asterion.application.road import BOSQUE, CHARNECA, REFUGE, RUINS
+from asterion.application.road import REFUGE, RUINS
 from asterion.application.s4 import S4_TITLE, S4_WATCH_POINTS, S4View
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
+from asterion.bot.tdo_hub_ui import mission_hub_button
 
 
 def _button(label: str, data: str) -> InlineKeyboardButton:
@@ -45,17 +46,11 @@ def _combat(view: S4View) -> Screen:
 
 
 def _routes(view: S4View):
-    if view.location == REFUGE:
-        return [[_button("Seguir para a Charneca", "road:route:charneca")]]
-    if view.location == CHARNECA:
-        return [[_button("Seguir para o Bosque", "road:route:bosque")]]
-    if view.location == BOSQUE:
-        if view.level >= 7:
-            return [[_button("Seguir para as Ruínas", "road:route:ruinas")]]
-        return []
-    if view.location == RUINS:
-        return []
-    return []
+    """Hub (v1.0.18): do Refúgio às Ruínas descobertas; de outro Local, só a volta."""
+    button = mission_hub_button(view.location, "Ruínas do Vigia")
+    return [[button]] if button is not None else []
+
+
 
 
 def _objective(view: S4View) -> str:
@@ -109,7 +104,7 @@ def render_s4(view: S4View) -> Screen:
         rows.append([_button("← Refúgio do Ocaso", "road:local")])
         return Screen(
             f"✒️ Oren Cal\n\n📜 {S4_TITLE} · Indisponível no momento\n"
-            "Requer Pedras que Ainda Vigiam concluída e Nv.7.",
+            "Requer Pedras que Ainda Vigiam concluída.",
             "s4", _keyboard(rows),
         )
     if view.kind == "completed" or view.status == "completed":
@@ -132,8 +127,6 @@ def render_s4(view: S4View) -> Screen:
         rows = _routes(view)
         rows.append([_button("← Missões", "world:missions")])
         text = f"📜 {S4_TITLE} · Em Andamento\n🎯 {_objective(view)}\n📍 {view.location}"
-        if view.location == BOSQUE and view.level < 8:
-            text += "\n\n🔒 Ruínas do Vigia · Acesso normal a partir do Nv.8"
         return Screen(text, "s4", _keyboard(rows))
     if view.kind == "watch_points":
         found = set(progress.get("watch_points", ()))
@@ -195,8 +188,6 @@ def render_s4(view: S4View) -> Screen:
             "❤️ HP · Restaurado\nVigor e Consumíveis usados permanecem.\n\n"
             f"📜 {S4_TITLE} · Etapa 3 · Progresso anterior preservado"
         )
-        if view.location == BOSQUE and view.level < 8:
-            text += "\n🔒 Ruínas do Vigia · Acesso normal a partir do Nv.8"
         return Screen(text, "s4_recovery", _keyboard(rows))
     if view.kind == "turn_point":
         return Screen(
@@ -216,12 +207,9 @@ def render_s4(view: S4View) -> Screen:
         )
     if view.kind == "return":
         rows = []
-        if view.location == RUINS:
-            rows.append([_button("Retornar ao Bosque", "road:route:bosque")])
-        elif view.location == BOSQUE:
-            rows.append([_button("Seguir para a Charneca", "road:route:charneca")])
-        elif view.location == CHARNECA:
-            rows.append([_button("Retornar ao Refúgio", "road:route:refuge")])
+        back = mission_hub_button(view.location, "Refúgio do Ocaso")
+        if back is not None and view.location != REFUGE:
+            rows.append([back])
         rows.append([_button("← Missões", "world:missions")])
         return Screen(
             f"📜 {S4_TITLE} · Em Andamento\n🎯 Retornar a Oren Cal\n📍 {view.location}",

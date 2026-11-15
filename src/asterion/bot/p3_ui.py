@@ -85,6 +85,16 @@ def render_p3_detail(view: P3View) -> Screen:
     )
 
 
+def _mission_nav(view: P3View) -> list[list[InlineKeyboardButton]]:
+    """Hub (v1.0.18): do Bosque só se volta ao Refúgio; do Refúgio retoma-se a Missão."""
+    version = view.state_version
+    if view.location in {BOSQUE, CHARNECA}:
+        return [[_button("Voltar ao Refúgio", f"p3:{version}:route:refuge")]]
+    if view.location == REFUGE:
+        return [[_button("Seguir para o Bosque", f"p3:{version}:enter")]]
+    return []
+
+
 def render_p3(view: P3View) -> Screen:
     version = view.state_version
     progress = view.progress or {}
@@ -155,16 +165,26 @@ def render_p3(view: P3View) -> Screen:
             text = "✒️ Oren Cal\nRefúgio do Ocaso · Terras do Ocaso"
         rows.append([_button("← Refúgio do Ocaso", "road:local")])
         return Screen(text, "oren_cal", InlineKeyboardMarkup(inline_keyboard=rows))
+    if view.kind == "travel" and view.awaiting_exploration:
+        return Screen(
+            "🌿 Sob Galhos Calcinados · Em Andamento\n"
+            "🎯 Objetivo · Entrar no Bosque Calcinado\n"
+            "⏳ Aguardando · o Bosque ainda não foi descoberto. "
+            "Use Explorar no Refúgio do Ocaso para revelar um Local.",
+            "p3",
+            _keyboard(
+                [_button("Explorar", "tdo:explore")],
+                [_button("← Missões", "world:missions")],
+            ),
+        )
     if view.kind == "travel":
+        objective = "Entrar no Bosque Calcinado"
         if view.location == REFUGE:
-            label, callback = "Seguir para a Charneca", f"p3:{version}:route:charneca"
-            objective = "Viajar até a Charneca da Fuligem"
-        elif view.location == CHARNECA:
             label, callback = "Seguir para o Bosque", f"p3:{version}:enter"
-            objective = "Entrar no Bosque Calcinado"
+        elif view.location == CHARNECA:
+            label, callback = "Voltar ao Refúgio", f"p3:{version}:route:refuge"
         else:
             label, callback = "Atualizar", "p3:resume"
-            objective = "Entrar no Bosque Calcinado"
         return Screen(
             "🌿 Sob Galhos Calcinados · Em Andamento\n"
             f"🎯 Objetivo · {objective}\n📍 {view.location} · Terras do Ocaso",
@@ -194,16 +214,20 @@ def render_p3(view: P3View) -> Screen:
         return Screen(
             "\n".join(lines),
             "p3",
-            _keyboard(*pending, [_button("← Missões", "world:missions")]),
+            _keyboard(
+                *(pending if view.location == BOSQUE else []),
+                *_mission_nav(view),
+                [_button("← Missões", "world:missions")],
+            ),
         )
     if view.kind == "recovery":
         brazier = progress.get("recovery_brazier") or "Braseiro do Refúgio"
         location = progress.get("recovery_location") or view.location
         rows = []
         if view.location == REFUGE:
-            rows.append([_button("Seguir para a Charneca", f"p3:{version}:route:charneca")])
-        elif view.location == CHARNECA:
             rows.append([_button("Retornar ao Bosque", f"p3:{version}:enter")])
+        elif view.location == CHARNECA:
+            rows.append([_button("Voltar ao Refúgio", f"p3:{version}:route:refuge")])
         elif view.location == BOSQUE:
             rows.append([_button("Nova tentativa", f"p3:{version}:retry")])
         rows.append([_button("← Missões", "world:missions")])
@@ -229,9 +253,11 @@ def render_p3(view: P3View) -> Screen:
                 ),
             )
         rows = []
-        if view.group_size > 1:
-            rows.append([_button("Propor combate em Grupo", f"p3:{version}:group")])
-        rows.append([_button("Enfrentar Solo", f"p3:{version}:solo")])
+        if view.location == BOSQUE:
+            if view.group_size > 1:
+                rows.append([_button("Propor combate em Grupo", f"p3:{version}:group")])
+            rows.append([_button("Enfrentar Solo", f"p3:{version}:solo")])
+        rows.extend(_mission_nav(view))
         rows.append([_button("← Missões", "world:missions")])
         return Screen(
             "🌿 Sob Galhos Calcinados · Em Andamento\n"
@@ -247,14 +273,17 @@ def render_p3(view: P3View) -> Screen:
             "🎯 Examinar o Fragmento Entalhado",
             "p3",
             _keyboard(
-                [_button("Examinar Fragmento Entalhado", f"p3:{version}:carved")],
+                *(
+                    [[_button("Examinar Fragmento Entalhado", f"p3:{version}:carved")]]
+                    if view.location == BOSQUE
+                    else []
+                ),
+                *_mission_nav(view),
                 [_button("← Missões", "world:missions")],
             ),
         )
     if view.kind == "return":
-        if view.location == BOSQUE:
-            label, callback = "Retornar à Charneca", f"p3:{version}:route:charneca"
-        elif view.location == CHARNECA:
+        if view.location in {BOSQUE, CHARNECA}:
             label, callback = "Retornar ao Refúgio", f"p3:{version}:route:refuge"
         else:
             label, callback = "Falar com Oren Cal", "p3:oren"

@@ -59,13 +59,15 @@ async def _seed_campaign(database, actor: int, *, level: int):
         )
         session.add_all(
             [
-                LocationDiscovery(
-                    character_id=character_id,
-                    location_id="tdo.location.bosque_calcinado",
-                ),
+                # O Bosque já vem de _seed_p3 (descoberto por Explorar).
                 LocationDiscovery(
                     character_id=character_id,
                     location_id="tdo.location.charneca_da_fuligem",
+                ),
+                # v1.0.18: P4 não revela as Ruínas; Explorar já as revelou.
+                LocationDiscovery(
+                    character_id=character_id,
+                    location_id="tdo.location.ruinas_do_vigia",
                 ),
                 Unlock(
                     character_id=character_id,
@@ -318,7 +320,6 @@ async def test_p4_defeat_recovery_retry_uses_new_fixed_vigia(database, monkeypat
     character_id, sessions = await _seed_campaign(database, actor, level=7)
     service = P4Service(sessions, "ocaso")
     accepted = await service.accept(actor)
-    await _reach_bosque(sessions, actor)
     path = await service.action(actor, accepted.state_version, "path")
     combat = await service.action(actor, path.state_version, "enter")
     monkeypatch.setattr(scripted_combat, "act", _terminal("defeat"))
@@ -344,8 +345,6 @@ async def test_p4_defeat_recovery_retry_uses_new_fixed_vigia(database, monkeypat
                 LocationDiscovery.location_id == "tdo.location.ruinas_do_vigia",
             )
         ) is not None
-    road = RoadService(sessions, "ocaso")
-    await road.travel_route(actor, BOSQUE)
     returned = await service.action(actor, defeated.state_version, "enter")
     assert returned is not None and returned.location == "Ruínas do Vigia"
     monkeypatch.setattr(scripted_combat, "act", lambda combat, action: combat)
@@ -407,7 +406,6 @@ async def test_p4_fixed_vigia_barrier_and_reward_unlocks(database, monkeypatch):
     assert offer is not None and offer.available
     accepted = await service.accept(actor, offer.state_version)
     assert accepted is not None and accepted.status == "active" and accepted.step == 1
-    await _reach_bosque(sessions, actor)
     path = await service.action(actor, accepted.state_version, "path")
     combat = await service.action(actor, path.state_version, "enter")
     assert combat is not None and combat.kind == "combat" and combat.combat is not None
@@ -436,9 +434,7 @@ async def test_p4_fixed_vigia_barrier_and_reward_unlocks(database, monkeypatch):
     two = await service.action(actor, one.state_version, "structure", "p4.guard_structure.1")
     safe = await service.action(actor, two.state_version, "safe_route")
     returned = await service.action(actor, safe.state_version, "return")
-    road = RoadService(sessions, "ocaso")
-    await road.travel_route(actor, CHARNECA)
-    await road.travel_route(actor, REFUGE)
+    assert returned is not None and returned.location == REFUGE
     oren = await service.action(actor, returned.state_version, "report_oren")
     assert oren is not None and oren.status == "active"
     completed = await service.action(actor, oren.state_version, "report_alda")
@@ -507,7 +503,6 @@ async def test_p4_group_member_enters_ruins_alone_and_group_encounter_is_refused
     for actor in actors:
         accepted = await service.accept(actor)
         assert accepted is not None and accepted.status == "active"
-        await _reach_bosque(sessions, actor)
 
     async with sessions() as session:
         invitee = await session.scalar(

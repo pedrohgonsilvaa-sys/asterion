@@ -34,7 +34,7 @@ from asterion.application.scripted_combat import (
 )
 from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
 from asterion.domain.legacy import legacy_xp_factor
-from asterion.domain.road import LAST_TRACE_GUARDIAN, RUINS_LOCATION, enemy_xp
+from asterion.domain.road import LAST_TRACE_GUARDIAN, RUINS_LOCATION, enemy_xp, fixed_quest_xp
 from asterion.infrastructure.db.combat_codec import decode
 from asterion.infrastructure.db.models import (
     BestiaryEntry,
@@ -551,6 +551,7 @@ class S6Service:
             progress = dict(quest.progress or {})
             if updated.result == "victory":
                 activity.status = "completed"
+                progress["coop_level_gap"] = 0
                 await self._grant_enemy_xp(session, character, activity)
                 await normalize_character_hp(session, character)
                 await self.bestiary.record(
@@ -686,6 +687,17 @@ class S6Service:
             if stack is not None:
                 stack.quantity -= 1
             members = {row.character_id: row for row in locked.members}
+            # PowerlevelFactor (33.14 item 8): diferença para o membro elegível
+            # de maior nível (quem não ganha a Missão não entra na conta).
+            top_level = max(
+                (
+                    row.level
+                    for cid, row in locked.characters.items()
+                    if members[cid].role == "eligible"
+                ),
+                default=0,
+            )
+            level_before = {cid: row.level for cid, row in locked.characters.items()}
             for character_id, participant in locked.characters.items():
                 roster_member = members[character_id]
                 existing = await session.scalar(
@@ -733,7 +745,11 @@ class S6Service:
                 ):
                     progress = dict(participant_quest.progress or {})
                     if updated.result == "victory":
-                        progress.update(combat_result="victory", awaiting_retry=False)
+                        progress.update(
+                            combat_result="victory",
+                            awaiting_retry=False,
+                            coop_level_gap=top_level - level_before[character_id],
+                        )
                         participant_quest.step = 5
                     else:
                         progress.update(
@@ -845,12 +861,13 @@ class S6Service:
             event = RewardEvent(character_id=character.id, source_id=S6_REWARD_SOURCE)
             session.add(event)
             await session.flush()
-            character.xp += 7900
+            xp_fixed = fixed_quest_xp(7900, int((quest.progress or {}).get("coop_level_gap", 0)))
+            character.xp += xp_fixed
             character.crowns += 310
             session.add_all(
                 [
                     RewardComponent(
-                        reward_event_id=event.id, kind="xp", item_id=None, quantity=7900
+                        reward_event_id=event.id, kind="xp", item_id=None, quantity=xp_fixed
                     ),
                     RewardComponent(
                         reward_event_id=event.id, kind="crowns", item_id=None, quantity=310
@@ -1013,8 +1030,6 @@ class S6Service:
         )
 
     async def _eligible(self, session, character):
-        if character.level < 10:
-            return False
         completed = await session.scalar(
             select(Quest.id).where(
                 Quest.character_id == character.id,

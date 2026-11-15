@@ -129,20 +129,28 @@ async def test_p4_campaign_navigation_and_s3_return_report_buttons(database, mon
     accepted = await p4.accept(actor)
     assert accepted is not None
 
+    # v1.0.18: o Caminho Ocidental é contexto narrativo e parte do Refúgio.
     refuge = render_p4(accepted)
-    assert _button(refuge, "Seguir para a Charneca").callback_data == "road:route:charneca"
+    assert (
+        _button(refuge, "Seguir o Caminho Ocidental").callback_data
+        == f"p4:{accepted.state_version}:path"
+    )
 
+    # Nunca Local-Local: de outro Local só a volta ao Refúgio.
     await road.travel_route(actor, CHARNECA)
     charneca = await p4.resume(actor)
     assert charneca is not None
-    assert _button(render_p4(charneca), "Seguir para o Bosque").callback_data == "road:route:bosque"
-    # v1.0.18: nunca Local-Local; do Bosque descoberto se chega pelo Refúgio.
-    await road.travel_route(actor, REFUGE)
-    await road.travel_route(actor, BOSQUE)
-    bosque = await p4.resume(actor)
-    assert bosque is not None
-    path = await p4.action(actor, bosque.state_version, "path")
+    back = _button(render_p4(charneca), "Voltar ao Refúgio")
+    assert back.callback_data == f"p4:{charneca.state_version}:route:refuge"
+    assert await p4.mission_route(actor, charneca.state_version, REFUGE) is not None
+    refuge_view = await p4.resume(actor)
+    assert refuge_view is not None and refuge_view.location == REFUGE
+    path = await p4.action(actor, refuge_view.state_version, "path")
     assert path is not None and path.kind == "enter_ruins"
+    assert (
+        _button(render_p4(path), "Seguir para as Ruínas").callback_data
+        == f"p4:{path.state_version}:enter"
+    )
 
     # Rebuild the S3 report view away from its giver; it must route home first.
     actor2 = 998425
@@ -170,7 +178,7 @@ async def test_p4_campaign_navigation_and_s3_return_report_buttons(database, mon
     cargo = await s3_other.interact(actor2, cargo.state_version, "cargo")
     assert cargo is not None and cargo.location == BOSQUE
     report = render_s3(cargo)
-    assert _button(report, "Seguir para a Charneca").callback_data == "road:route:charneca"
+    assert _button(report, "Retornar ao Refúgio").callback_data == "road:route:refuge"
     assert not any(
         button.callback_data.endswith(":report")
         for row in report.keyboard.inline_keyboard
@@ -186,7 +194,6 @@ async def test_p4_combat_callback_menu_and_start_reconnect_same_activity(databas
     road = RoadService(sessions, "ocaso")
     world = WorldService(sessions, "ocaso")
     await p4.accept(actor)
-    await _reach_bosque(sessions, actor)
     view = await p4.resume(actor)
     path = await p4.action(actor, view.state_version, "path")
     combat = await p4.action(actor, path.state_version, "enter")

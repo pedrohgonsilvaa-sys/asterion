@@ -57,7 +57,7 @@ def _command_update(text: str, update_id: int, actor: int):
 @pytest.mark.asyncio
 async def test_map_hides_charneca_before_discovery(database):
     actor = 880401
-    character_id, _ = await _seed(database, actor)
+    character_id, _ = await _seed(database, actor, discovered=False)
     async with database[1]() as session:
         session.add_all(
             [

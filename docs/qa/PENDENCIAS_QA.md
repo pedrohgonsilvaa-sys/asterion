@@ -74,8 +74,9 @@ XP por vitória Comum: 420 (Carniçal Nv.8) ou 470 (Vigia Rachado Nv.10); média
 ## QA-002. Bloco A da TdO v1.0.18: Caçada em Local descoberto só por Explorar
 
 - **Registrada em:** 2026-11-14
-- **Estado:** CORRIGIDA e revalidada em 2026-11-15 (sonda sem xfail, lote 265 passed, 1 skipped, ruff limpo). Restam os itens do bloco D abaixo.
+- **Estado:** CORRIGIDA. Bloco A revalidado em 2026-11-15 (sonda sem xfail, lote 265 passed, 1 skipped, ruff limpo). Os itens do bloco D foram corrigidos em 2026-11-15 (ver "Bloco D" abaixo) e aguardam revalidação do QA.
 - **Critério:** §33.16 item 12 e §33.16 item 5 (Local descoberto tem Caçada sem Missão).
 - **Evidência:** `tests/test_tdo_hub_qa_probe.py` (xfail strict). Charneca, Bosque e Ruínas descobertos por `LocationDiscovery` sem P2/P3/P4: `RoadService.start_hunt` devolve `None`. Causa: `_available_local_profile` em `src/asterion/application/road.py` (~linha 5437) ainda exige P2/P3/P4 concluídas e Nv.8 nas Ruínas.
 - **Bloqueia:** fechar o bloco A. Tirar o `xfail` ao corrigir.
-- **Também aberto (bloco D):** botões de Missão (P4, P5, P6, S2) com `road:route:*` Local–Local ficam mortos; P6 legada ainda grava `LocationDiscovery` da Câmara (`application/p6.py` linhas 173 e 183), contra §33.16 item 18.
+- **Bloco D (corrigido, aguarda revalidação do QA):** botões de Missão (P4, P5, P6, S2) com `road:route:*` Local–Local ficam mortos; P6 legada ainda grava `LocationDiscovery` da Câmara (`application/p6.py` linhas 173 e 183), contra §33.16 item 18.
+  Correções: botões de Missão agora seguem o hub (P4, P5, P6, S2, S3, S4, S5, S6 só oferecem Refúgio → Local descoberto ou Voltar ao Refúgio, nunca Local–Local); P6 legada não grava mais `LocationDiscovery` da Câmara; P2 e P3 ativas ganharam "Voltar ao Refúgio" (e "Seguir para" para retomar). Evidência: `tests/test_tdo_block_d.py`.

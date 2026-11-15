@@ -4,10 +4,11 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
-from asterion.application.road import BOSQUE, CHARNECA, REFUGE, RUINS
+from asterion.application.road import RUINS
 from asterion.application.s6 import S6_MARKS, S6_TITLE, S6View
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
+from asterion.bot.tdo_hub_ui import mission_hub_button
 
 
 def _b(text, data):
@@ -56,19 +57,14 @@ def _objective(view):
 
 
 def _to_ruins(view):
-    destination = {REFUGE: ("Seguir para a Charneca", "road:route:charneca"),
-                   CHARNECA: ("Seguir para o Bosque", "road:route:bosque"),
-                   BOSQUE: ("Seguir para as Ruínas", "road:route:ruinas")}
-    label, callback = destination.get(view.location, ("Abrir Mapa", "world:map"))
-    return _b(label, callback)
+    """Hub (v1.0.18): do Refúgio às Ruínas; de outro Local, a volta ao Refúgio."""
+    button = mission_hub_button(view.location, "Ruínas do Vigia")
+    return button if button is not None else _b("Abrir Mapa", "world:map")
 
 
 def _to_refuge(view):
-    destination = {RUINS: ("Retornar ao Bosque", "road:route:bosque"),
-                   BOSQUE: ("Seguir para a Charneca", "road:route:charneca"),
-                   CHARNECA: ("Retornar ao Refúgio", "road:route:refuge")}
-    label, callback = destination.get(view.location, ("Abrir Mapa", "world:map"))
-    return _b(label, callback)
+    button = mission_hub_button(view.location, "Refúgio do Ocaso")
+    return button if button is not None else _b("Abrir Mapa", "world:map")
 
 
 def _render_s6_screen(view: S6View) -> Screen:
@@ -141,7 +137,7 @@ def _render_s6_screen(view: S6View) -> Screen:
                       "<i>“Não encontrei o nome de cada um. Talvez nunca encontremos. Mas sabemos onde a trilha deles deixou de ser uma estrada e virou apenas vestígio.”</i>",
                       "s6", _kb([[_b("Reportar a Oren Cal", f"s6:{v}:report")], [_b("← Missões", "world:missions")]]), parse_mode="HTML")
     if view.kind == "unavailable":
-        return Screen(f"📜 {S6_TITLE} · Indisponível no momento\nRequer S2 e P5 concluídas, Nv.10 e conversa com Oren no Refúgio.",
+        return Screen(f"📜 {S6_TITLE} · Indisponível no momento\nRequer S2 e P5 concluídas e conversa com Oren no Refúgio.",
                       "s6", _kb([[_b("← Missões", "world:missions")]]))
     return Screen(f"📜 {S6_TITLE} · Em Andamento\n🎯 {_objective(view)}", "s6",
                   _kb([[_b("Ver objetivo", "s6:resume")], [_b("← Missões", "world:missions")]]))

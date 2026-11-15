@@ -59,8 +59,9 @@ async def test_p5_gate_offer_acceptance_and_no_secondary_requirements(database):
     actor = 998701
     _, sessions = await _seed_p4(database, actor, level=8)
     p5 = P5Service(sessions, "ocaso")
-    blocked_level = await p5.offer(actor)
-    assert blocked_level is not None and not blocked_level.available
+    # v1.0.18: sem nível mínimo; P4 concluída basta, inclusive abaixo de Nv.9.
+    low_level = await p5.offer(actor)
+    assert low_level is not None and low_level.available
 
     actor += 1
     character_id, sessions = await _seed_campaign(database, actor, level=9)

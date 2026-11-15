@@ -279,6 +279,8 @@ class TDOPlaythrough:
             return "Atividade de combate"
         if source_id.startswith("explore:"):
             return "Desbravar"
+        if source_id.startswith("tdo.explore.discovery."):
+            return "Explorar"
         if source_id.startswith("dungeon.tdo.cripta_ocaso.run."):
             return "Cripta"
         if source_id.startswith("dungeon.tdo.galerias_vigia.run."):

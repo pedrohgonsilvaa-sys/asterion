@@ -18,6 +18,7 @@ from asterion.domain.tdo_hub import (
     REFUGE_LABEL,
     TEXTO_CAMARA_DESCOBERTA,
     camara_entry_text,
+    is_hub_location,
 )
 
 CAMARA_ICON = "🕯"
@@ -50,6 +51,34 @@ def hub_route_key(label: str) -> str | None:
 
 def hub_icon(label: str) -> str:
     return _ICONS.get(label, "📍")
+
+
+_MISSION_TARGET_LABELS = {
+    "Charneca da Fuligem": "Seguir para a Charneca",
+    "Bosque Calcinado": "Seguir para o Bosque",
+    "Ruínas do Vigia": "Seguir para as Ruínas",
+    CAMARA_LABEL: "Seguir para a Câmara do Poente",
+}
+
+
+def mission_hub_button(location: str, target: str) -> InlineKeyboardButton | None:
+    """Passo de Missão no hub (33.1): do Refúgio ao Local alvo, de outro Local só a volta.
+
+    Nunca há botão Local-Local. No Local alvo não há botão de viagem.
+    """
+    if location == target:
+        return None
+    if location == REFUGE_LABEL:
+        key = hub_route_key(target)
+        if key is None:
+            return None
+        return InlineKeyboardButton(
+            text=_MISSION_TARGET_LABELS.get(target, f"Seguir para {target}"),
+            callback_data=f"road:route:{key}",
+        )
+    if is_hub_location(location):
+        return InlineKeyboardButton(text=BACK_TO_REFUGE, callback_data=BACK_TO_REFUGE_CALLBACK)
+    return None
 
 
 def back_to_refuge_row() -> list[InlineKeyboardButton]:

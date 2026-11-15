@@ -88,10 +88,8 @@ from asterion.domain.road import (
     ALTOS_REGION,
     BOSQUE_BRAZIER,
     BOSQUE_LOCATION,
-    BOSQUE_ROUTE_UNLOCK,
     CHARNECA_BRAZIER,
     CHARNECA_LOCATION,
-    CHARNECA_ROUTE_UNLOCK,
     CONFINS_ANDARILHO_REPETIDO,
     CONFINS_ARANHA_LIMIAR,
     CONFINS_ARQUIVO_RETORNO_DUNGEON_UNLOCK,
@@ -173,7 +171,6 @@ from asterion.domain.road import (
     ROAD_LOCATION,
     RUINS_BRAZIER,
     RUINS_LOCATION,
-    RUINS_ROUTE_UNLOCK,
     RULESET,
     VARZEAS_BASIC_MATERIAL_CREATURE_IDS,
     VARZEAS_BREJOS,
@@ -1087,10 +1084,11 @@ class RoadService:
             "altos": 41,
             "confins": 51,
         }[region]
-        local_band = LOCATION_LEVEL_BANDS.get(location)
-        current_level_minimum = local_band[0] if local_band is not None else regional_minimum
-        if character.level < max(regional_minimum, current_level_minimum):
-            return False
+        if region != "tdo":
+            local_band = LOCATION_LEVEL_BANDS.get(location)
+            current_level_minimum = local_band[0] if local_band is not None else regional_minimum
+            if character.level < max(regional_minimum, current_level_minimum):
+                return False
 
         async def has_unlock(unlock_id: str) -> bool:
             return bool(
@@ -1105,23 +1103,14 @@ class RoadService:
         if region == "tdo":
             if not await self._p1_completed(s, character.id):
                 return False
-            if location == CHARNECA and not (
-                await self._p2_completed(s, character.id)
-                and await has_unlock(CHARNECA_ROUTE_UNLOCK)
-            ):
-                return False
-            if location == BOSQUE and not (
-                await self._p3_completed(s, character.id)
-                and await has_unlock(BOSQUE_ROUTE_UNLOCK)
-            ):
-                return False
-            if location == RUINS and not (
-                character.level >= 8
-                and await self._p4_completed(s, character.id)
-                and await self._has_location(s, character.id, RUINS_LOCATION)
-                and await has_unlock(RUINS_ROUTE_UNLOCK)
-            ):
-                return False
+            # FINAL v1.0.18: acesso normal = Local descoberto por Explorar,
+            # sem P4 nem Nv.8+ (so a descoberta vale).
+            if location in {CHARNECA, BOSQUE, RUINS}:
+                location_id = location_id_for_label(location)
+                if location_id is None or not await self._has_location(
+                    s, character.id, location_id
+                ):
+                    return False
         elif region == "vde":
             if not await self._p7_completed(s, character.id):
                 return False
@@ -1346,10 +1335,7 @@ class RoadService:
                 )
                 if pair is None:
                     return None
-                if pair == CHARNECA_ROUTE_ENDPOINTS:
-                    gate_ok = await self._p2_completed(s, c.id)
-                    route_unlock = CHARNECA_ROUTE_UNLOCK
-                elif pair == VDE_GARGANTA_VIGILIA_ROUTE_ENDPOINTS:
+                if pair == VDE_GARGANTA_VIGILIA_ROUTE_ENDPOINTS:
                     gate_ok = await self._p7_completed(s, c.id)
                     route_unlock = VDE_GARGANTA_VIGILIA_ROUTE
                 elif pair == VDE_VIGILIA_MATA_ROUTE_ENDPOINTS:
@@ -1677,16 +1663,8 @@ class RoadService:
                         )
                     )
                     route_unlock = CONFINS_CAMARA_REGENCIA_ACCESS_UNLOCK
-                elif pair == BOSQUE_RUINS_ROUTE_ENDPOINTS:
-                    gate_ok = (
-                        await self._p4_completed(s, c.id)
-                        and await self._ruins_route_level_gate(s, c)
-                        and await self._has_location(s, c.id, RUINS_LOCATION)
-                    )
-                    route_unlock = RUINS_ROUTE_UNLOCK
                 else:
-                    gate_ok = await self._p3_completed(s, c.id)
-                    route_unlock = BOSQUE_ROUTE_UNLOCK
+                    return None
                 if not gate_ok or (
                     not grant_route_unlock_on_arrival
                     and not await s.scalar(
@@ -1703,24 +1681,15 @@ class RoadService:
                 source_brazier = BRAZIER_FOR_LOCATION.get(world.location)
                 if source_brazier is None or source_brazier == brazier_id:
                     return None
-                if world.location in {CHARNECA, BOSQUE} or destination in {CHARNECA, BOSQUE}:
-                    if not await self._p2_completed(s, c.id) or not await s.scalar(
-                        select(Unlock).where(
-                            Unlock.character_id == c.id,
-                            Unlock.unlock_id == CHARNECA_ROUTE_UNLOCK,
-                        )
-                    ):
-                        return None
-                if world.location == BOSQUE or destination == BOSQUE:
-                    if not await self._p3_completed(s, c.id):
-                        return None
-                if world.location == RUINS or destination == RUINS:
-                    if (
-                        c.level < 8
-                        or not await self._p4_completed(s, c.id)
-                        or not await self._has_location(s, c.id, RUINS_LOCATION)
-                    ):
-                        return None
+                # FINAL v1.0.18: Braseiro de Local TdO exige o Local descoberto
+                # (Explorar), sem P2/P3/P4, rota ou Nv.8+.
+                for tdo_local in (world.location, destination):
+                    if tdo_local in {CHARNECA, BOSQUE, RUINS}:
+                        tdo_local_id = location_id_for_label(tdo_local)
+                        if tdo_local_id is None or not await self._has_location(
+                            s, c.id, tdo_local_id
+                        ):
+                            return None
                 if world.location in {VDE_GARGANTA, VDE_VIGILIA} or destination in {
                     VDE_GARGANTA, VDE_VIGILIA,
                 }:
@@ -5345,21 +5314,6 @@ class RoadService:
             return "nareth"
         return "tdo"
 
-    async def _ruins_route_level_gate(self, s, character) -> bool:
-        if character.level >= 8:
-            return True
-        if character.level < 7:
-            return False
-        return bool(
-            await s.scalar(
-                select(Quest.id).where(
-                    Quest.character_id == character.id,
-                    Quest.quest_id == S4_QUEST_ID,
-                    Quest.status == "active",
-                )
-            )
-        )
-
     async def _tdo_local_open(self, s, c, location: str) -> bool:
         """Charneca/Bosque/Ruínas abertas: legado por Missão concluída ou descoberta.
 
@@ -6420,62 +6374,13 @@ class RoadService:
                 Quest.status == "active",
             )
         )
-        active_s4 = await s.scalar(
-            select(Quest.id).where(
-                Quest.character_id == c.id,
-                Quest.quest_id == S4_QUEST_ID,
-                Quest.status == "active",
-            )
-        )
         if active_p3 or active_p4:
             brazier_id = None
             brazier_label = None
             brazier_destinations = ()
         route_destinations: list[str] = []
-        charneca_route_known = bool(
-            await self._p2_completed(s, c.id)
-            and await s.scalar(
-                select(Unlock.id).where(
-                    Unlock.character_id == c.id,
-                    Unlock.unlock_id == CHARNECA_ROUTE_UNLOCK,
-                )
-            )
-        )
-        bosque_route_known = bool(
-            await self._p3_completed(s, c.id)
-            and await s.scalar(
-                select(Unlock.id).where(
-                    Unlock.character_id == c.id,
-                    Unlock.unlock_id == BOSQUE_ROUTE_UNLOCK,
-                )
-            )
-        )
-        ruins_route_known = bool(
-            (c.level >= 8 or (c.level >= 7 and active_s4 is not None))
-            and await self._p4_completed(s, c.id)
-            and await self._has_location(s, c.id, RUINS_LOCATION)
-            and await s.scalar(
-                select(Unlock.id).where(
-                    Unlock.character_id == c.id,
-                    Unlock.unlock_id == RUINS_ROUTE_UNLOCK,
-                )
-            )
-        )
         if not active_p3:
-            if world.location == REFUGE and charneca_route_known:
-                route_destinations.append(CHARNECA)
-            elif world.location == CHARNECA:
-                if charneca_route_known:
-                    route_destinations.append(REFUGE)
-                if bosque_route_known:
-                    route_destinations.append(BOSQUE)
-            elif world.location == BOSQUE and bosque_route_known:
-                route_destinations.append(CHARNECA)
-                if ruins_route_known and not active_p4:
-                    route_destinations.append(RUINS)
-            elif world.location == RUINS and ruins_route_known and not active_p4:
-                route_destinations.append(BOSQUE)
-            elif world.location == VDE_GARGANTA and p7_complete:
+            if world.location == VDE_GARGANTA and p7_complete:
                 route_destinations.append(VDE_VIGILIA)
             elif world.location == VDE_VIGILIA and p7_complete:
                 route_destinations.append(VDE_GARGANTA)

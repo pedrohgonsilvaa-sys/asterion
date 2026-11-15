@@ -2223,7 +2223,7 @@ def world_router(
         elif p2_view is not None and p2_view.status == "active":
             text += (
                 "\n\n🔥 Missão Principal\n\n"
-                "📜 Fuligem sem Fogo · Em Andamento\nTerras do Ocaso · Nv. 3+"
+                "📜 Fuligem sem Fogo · Em Andamento\nTerras do Ocaso · Nv. recomendado 3"
             )
             keyboard.append(
                 [InlineKeyboardButton(text="Principal", callback_data="world:principal")]
@@ -2310,19 +2310,19 @@ def world_router(
         elif p4_view is not None and p4_view.status == "active":
             text += (
                 "\n\n🔥 Missão Principal\n\n"
-                "📜 Pedras que Ainda Vigiam · Em Andamento\nTerras do Ocaso · Nv. 7+"
+                "📜 Pedras que Ainda Vigiam · Em Andamento\nTerras do Ocaso · Nv. recomendado 7"
             )
             keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
         elif p5_view is not None and p5_view.status == "active":
             text += (
                 "\n\n🔥 Missão Principal\n\n"
-                "📜 A Porta do Poente · Em Andamento\nTerras do Ocaso · Nv. 9+"
+                "📜 A Porta do Poente · Em Andamento\nTerras do Ocaso · Nv. recomendado 9"
             )
             keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
         elif p3_view is not None and p3_view.status == "active":
             text += (
                 "\n\n🔥 Missão Principal\n\n"
-                "🌿 Sob Galhos Calcinados · Em Andamento\nTerras do Ocaso · Nv. 5+"
+                "🌿 Sob Galhos Calcinados · Em Andamento\nTerras do Ocaso · Nv. recomendado 5"
             )
             keyboard.append(
                 [InlineKeyboardButton(text="Principal", callback_data="world:principal")]
@@ -2330,13 +2330,13 @@ def world_router(
         elif p4_view is not None and p4_view.available:
             text += (
                 "\n\n🔥 Missão Principal\n\n"
-                "📜 Pedras que Ainda Vigiam · Disponível\nTerras do Ocaso · Nv. 7+"
+                "📜 Pedras que Ainda Vigiam · Disponível\nTerras do Ocaso · Nv. recomendado 7"
             )
             keyboard.append([InlineKeyboardButton(text="Principal", callback_data="p4:offer")])
         elif p5_view is not None and p5_view.available:
             text += (
                 "\n\n🔥 Missão Principal\n\n"
-                "📜 A Porta do Poente · Disponível\nTerras do Ocaso · Nv. 9+"
+                "📜 A Porta do Poente · Disponível\nTerras do Ocaso · Nv. recomendado 9"
             )
             keyboard.append([InlineKeyboardButton(text="Principal", callback_data="p5:offer")])
         secondary_entries: list[tuple[str, str | None]] = []
@@ -2361,8 +2361,8 @@ def world_router(
             elif s3_view.available:
                 secondary_entries.append(("📜 Rastros sob os Galhos · Disponível", "s3:offer"))
         for mission_view, title, callback, requirement in (
-            (s4_view, "Vigília sem Voz", "s4", "Pedras que Ainda Vigiam concluída · Nv.7"),
-            (s5_view, "A Luz que Não Aquece", "s5", "Pedras que Ainda Vigiam concluída · Nv.8"),
+            (s4_view, "Vigília sem Voz", "s4", "Pedras que Ainda Vigiam concluída"),
+            (s5_view, "A Luz que Não Aquece", "s5", "Pedras que Ainda Vigiam concluída"),
         ):
             if mission_view is None:
                 continue
@@ -2389,7 +2389,7 @@ def world_router(
             elif s6_view.available:
                 state, action = "Disponível", "offer"
             else:
-                state, action = "Bloqueada · Requer S2 + P5 concluídas e Nv.10", None
+                state, action = "Bloqueada · Requer S2 + P5 concluídas", None
             secondary_entries.append(
                 (f"📜 Onde os Nomes Terminaram · {state}", f"s6:{action}" if action else None)
             )

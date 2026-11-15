@@ -1096,7 +1096,7 @@ class S4Service:
         )
 
     async def _eligible(self, session, character):
-        return bool(character.level >= 7 and await session.scalar(select(Quest.id).where(
+        return bool(await session.scalar(select(Quest.id).where(
             Quest.character_id == character.id, Quest.quest_id == "P4", Quest.status == "completed",
         )))
 

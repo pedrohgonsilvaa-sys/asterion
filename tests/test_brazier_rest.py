@@ -11,8 +11,10 @@ from asterion.application import road as road_module
 from asterion.application.road import (
     ALTOS_ESCARPA_ACCESS_UNLOCK,
     ALTOS_REGION_LABEL,
+    BOSQUE_LOCATION,
     BRAZIER_DETAILS,
     BRAZIER_FOR_LOCATION,
+    CHARNECA_LOCATION,
     CONFINS_ESTRADAS_AUSENTES_LABEL,
     CONFINS_REGION_LABEL,
     CONFINS_REGION_UNLOCK,
@@ -155,8 +157,14 @@ async def _seed_brazier_character(database, actor, location, brazier_id):
             session.add(Unlock(character_id=c.id, unlock_id=unlock_id))
         if location == ROAD:
             c.stage = "menu:ready"
-        if location == "Ruínas do Vigia":
-            session.add(LocationDiscovery(character_id=c.id, location_id=RUINS_LOCATION))
+        # v1.0.18: Braseiro de Charneca/Bosque/Ruinas exige o Local descoberto.
+        tdo_discovery = {
+            "Charneca da Fuligem": CHARNECA_LOCATION,
+            "Bosque Calcinado": BOSQUE_LOCATION,
+            "Ruínas do Vigia": RUINS_LOCATION,
+        }.get(location)
+        if tdo_discovery is not None:
+            session.add(LocationDiscovery(character_id=c.id, location_id=tdo_discovery))
     return c.id
 
 

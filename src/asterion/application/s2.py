@@ -1549,7 +1549,7 @@ class S2Service:
                 Quest.status == "completed",
             )
         )
-        return bool(p2_completed and character.level >= 4)
+        return bool(p2_completed)
 
     async def _locked_state(self, session, actor):
         character = await session.scalar(

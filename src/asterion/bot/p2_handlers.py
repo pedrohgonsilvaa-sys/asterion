@@ -127,6 +127,10 @@ def p2_router(
                     view = await service.ask_alda(actor, parts[3])
                 elif action == "travel" and len(parts) == 3:
                     view = await service.travel_to_charneca(actor, version)
+                elif action == "leave" and len(parts) == 3:
+                    view = await service.leave_to_refuge(actor, version)
+                elif action == "back" and len(parts) == 3:
+                    view = await service.back_to_charneca(actor, version)
                 elif action == "ash" and len(parts) == 4:
                     point_id = parts[3]
                     if point_id in ASH_POINT_IDS:

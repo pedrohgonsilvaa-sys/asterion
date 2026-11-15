@@ -101,8 +101,8 @@ class S1Service:
             ):
                 return None
             q = await self._quest(session, c.id)
-            available = c.level >= 2 and q is None
-            reacceptable = bool(q and q.status == "abandoned" and c.level >= 2)
+            available = q is None
+            reacceptable = bool(q and q.status == "abandoned")
             if not (available or reacceptable):
                 return await self._view(session, c, q, world, "oren")
             return await self._view(session, c, q, world, "offer")
@@ -116,7 +116,6 @@ class S1Service:
             if (
                 world is None
                 or world.location != REFUGE
-                or c.level < 2
                 or not await self._p1_completed(session, c.id)
             ):
                 q = await self._quest(session, c.id)
@@ -397,8 +396,8 @@ class S1Service:
         kind: str,
     ) -> S1View:
         p1_completed = await self._p1_completed(session, c.id)
-        available = bool(p1_completed and c.level >= 2 and q is None)
-        reacceptable = bool(p1_completed and c.level >= 2 and q and q.status == "abandoned")
+        available = bool(p1_completed and q is None)
+        reacceptable = bool(p1_completed and q and q.status == "abandoned")
         fragment_owned = bool(
             await session.scalar(
                 select(CodexFragment.id).where(

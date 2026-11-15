@@ -34,7 +34,12 @@ from asterion.application.scripted_combat import (
     normalize_character_hp,
 )
 from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
-from asterion.domain.road import RUINS_LOCATION, VIGIA_PARTIDO, materialize_equipment
+from asterion.domain.road import (
+    RUINS_LOCATION,
+    VIGIA_PARTIDO,
+    fixed_quest_xp,
+    materialize_equipment,
+)
 from asterion.infrastructure.db.combat_codec import decode
 from asterion.infrastructure.db.models import (
     Achievement,
@@ -119,6 +124,8 @@ class P6View:
     xp: int = 0
     combat_actor_key: str | None = None
     group_size: int = 1
+    # v1.0.18: etapa 2 aguardando a Câmara ser descoberta por Explorar.
+    awaiting_exploration: bool = False
 
 
 class P6Service:
@@ -158,7 +165,11 @@ class P6Service:
             if not self._valid(quest, version) or await self._foreground(session, character.id):
                 return await self._view(session, character, quest, world)
             progress = dict(quest.progress or {})
-            if operation == "cross_door" and quest.step == 1 and self._at(world, RUINS):
+            if (
+                operation == "cross_door"
+                and quest.step == 1
+                and (self._at(world, RUINS) or self._at(world, REFUGE))
+            ):
                 if not progress.get("door_known"):
                     return await self._view(session, character, quest, world)
                 progress["door_crossed"] = True
@@ -167,20 +178,26 @@ class P6Service:
                 operation == "enter_chamber"
                 and quest.step == 2
                 and progress.get("door_crossed")
-                and self._at(world, RUINS)
+                and self._at(world, REFUGE)
             ):
+                # v1.0.18 (5.13): a Missão não revela a Câmara; conclui a etapa na chegada
+                # de quem já a descobriu por Explorar (senão fica aguardando).
+                if not await self._discovered(session, character.id, P6_CHAMBER_LOCATION_ID):
+                    return await self._view(session, character, quest, world)
                 world.region, world.location = REGION, P6_CHAMBER
-                await self._ensure_location(session, character.id, P6_CHAMBER_LOCATION_ID)
                 progress["chamber_discovered"] = True
                 quest.step = 3
             elif (
                 operation == "enter_chamber"
-                and quest.step == 5
-                and progress.get("awaiting_retry")
-                and self._at(world, RUINS)
+                and (
+                    (quest.step == 5 and progress.get("awaiting_retry"))
+                    or (quest.step in {3, 4, 6, 7} and not progress.get("awaiting_retry"))
+                )
+                and self._at(world, REFUGE)
             ):
+                if not await self._discovered(session, character.id, P6_CHAMBER_LOCATION_ID):
+                    return await self._view(session, character, quest, world)
                 world.region, world.location = REGION, P6_CHAMBER
-                await self._ensure_location(session, character.id, P6_CHAMBER_LOCATION_ID)
             elif operation == "inspect_before" and quest.step == 3 and self._at(world, P6_CHAMBER):
                 progress["central_structure_examined_before"] = True
                 quest.step = 4
@@ -234,8 +251,13 @@ class P6Service:
                     P6_CHAMBER_CODEX,
                     "codex.fragment.camara_do_poente.estrutura_chamada_ancora",
                 )
-            elif operation == "return_ruins" and quest.step == 8 and self._at(world, P6_CHAMBER):
-                world.region, world.location = REGION, RUINS
+            elif (
+                operation == "return_refuge"
+                and quest.step in {3, 4, 6, 7, 8}
+                and self._at(world, P6_CHAMBER)
+            ):
+                # A Câmara só tem a saída para o Refúgio (hub, 0 custo).
+                world.region, world.location = REGION, REFUGE
             elif (
                 operation in {"report_alda", "report_oren"}
                 and quest.step == 8
@@ -545,7 +567,12 @@ class P6Service:
                     observation_category="boss",
                 )
                 await self._ensure_achievement(session, character.id, "feat.tdo.a_ultima_guarda")
-                progress.update(boss_defeated=True, awaiting_retry=False, boss_result="victory")
+                progress.update(
+                    boss_defeated=True,
+                    awaiting_retry=False,
+                    boss_result="victory",
+                    coop_level_gap=0,
+                )
                 quest.step = 6
             elif updated.result == "defeat":
                 activity.status = "failed"
@@ -672,6 +699,17 @@ class P6Service:
                 stack.quantity -= 1
             member_by_character = {row.character_id: row for row in locked.members}
             enemy = updated.fighters.get("enemy")
+            # PowerlevelFactor (33.14 item 8): diferença para o membro elegível
+            # de maior nível (quem não ganha a Missão não entra na conta).
+            top_level = max(
+                (
+                    row.level
+                    for cid, row in locked.characters.items()
+                    if member_by_character[cid].role == "eligible"
+                ),
+                default=0,
+            )
+            level_before = {cid: row.level for cid, row in locked.characters.items()}
             for character_id, participant in locked.characters.items():
                 roster_member = member_by_character[character_id]
                 entry = await self._ensure_bestiary_entry(session, character_id)
@@ -709,6 +747,7 @@ class P6Service:
                                 boss_defeated=True,
                                 awaiting_retry=False,
                                 boss_result="victory",
+                                coop_level_gap=top_level - level_before[character_id],
                             )
                             participant_quest.progress = progress
                             participant_quest.step = 6
@@ -768,7 +807,7 @@ class P6Service:
             return derive_consumable_selection(current, **kwargs)
 
     async def _ensure_started(self, session, character, quest):
-        if quest is not None or character.level < 10:
+        if quest is not None:
             return quest
         p5 = await session.scalar(
             select(Quest.id).where(
@@ -872,10 +911,11 @@ class P6Service:
             event = RewardEvent(character_id=character.id, source_id=P6_REWARD_SOURCE)
             session.add(event)
             await session.flush()
-            character.xp += 14220
+            xp_fixed = fixed_quest_xp(14220, int((quest.progress or {}).get("coop_level_gap", 0)))
+            character.xp += xp_fixed
             character.crowns += 500
             components = [
-                RewardComponent(reward_event_id=event.id, kind="xp", item_id=None, quantity=14220),
+                RewardComponent(reward_event_id=event.id, kind="xp", item_id=None, quantity=xp_fixed),
                 RewardComponent(
                     reward_event_id=event.id, kind="crowns", item_id=None, quantity=500
                 ),
@@ -1046,13 +1086,17 @@ class P6Service:
                 "retry"
                 if self._at(world, P6_CHAMBER)
                 else "retry_chamber"
-                if self._at(world, RUINS)
+                if self._at(world, REFUGE)
                 else "retry_travel"
             )
         elif quest.step == 1:
-            kind = "cross_door" if self._at(world, RUINS) else "travel_ruins"
+            kind = (
+                "cross_door"
+                if self._at(world, RUINS) or self._at(world, REFUGE)
+                else "travel_ruins"
+            )
         elif quest.step == 2:
-            kind = "enter_chamber" if self._at(world, RUINS) else "travel_chamber"
+            kind = "enter_chamber" if self._at(world, REFUGE) else "travel_chamber"
         elif quest.step in {3, 4}:
             kind = (
                 "inspect_before"
@@ -1062,15 +1106,15 @@ class P6Service:
                 else "travel_chamber"
             )
         elif quest.step in {6, 7}:
-            kind = "inspect_after" if quest.step == 6 else "record_anchor"
-        elif quest.step == 8:
             kind = (
-                "reports"
-                if self._at(world, REFUGE)
-                else "return_refuge"
-                if self._at(world, RUINS)
-                else "return_ruins"
+                "travel_chamber"
+                if not self._at(world, P6_CHAMBER)
+                else "inspect_after"
+                if quest.step == 6
+                else "record_anchor"
             )
+        elif quest.step == 8:
+            kind = "reports" if self._at(world, REFUGE) else "return_refuge"
         elif quest.step == 9:
             kind = "choose_reward"
         else:
@@ -1105,6 +1149,10 @@ class P6Service:
             xp=character.xp,
             combat_actor_key=actor_key,
             group_size=group_size,
+            awaiting_exploration=bool(
+                kind == "enter_chamber"
+                and not await self._discovered(session, character.id, P6_CHAMBER_LOCATION_ID)
+            ),
         )
 
     async def _journey_guidance(self, session, character):
@@ -1157,17 +1205,15 @@ class P6Service:
             )
         return entry
 
-    async def _ensure_location(self, session, character_id, location_id):
-        found = await session.scalar(
-            select(LocationDiscovery)
-            .where(
-                LocationDiscovery.character_id == character_id,
-                LocationDiscovery.location_id == location_id,
+    async def _discovered(self, session, character_id, location_id) -> bool:
+        return bool(
+            await session.scalar(
+                select(LocationDiscovery.id).where(
+                    LocationDiscovery.character_id == character_id,
+                    LocationDiscovery.location_id == location_id,
+                )
             )
-            .with_for_update()
         )
-        if found is None:
-            session.add(LocationDiscovery(character_id=character_id, location_id=location_id))
 
     async def _ensure_codex(self, session, character_id, entry_id):
         found = await session.scalar(

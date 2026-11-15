@@ -3699,6 +3699,32 @@ def enemy_xp(
         return int((value / 10).quantize(D(1), rounding="ROUND_HALF_EVEN") * 10)
 
 
+def powerlevel_factor(level_gap: int) -> Decimal:
+    """PowerlevelFactor individual (GDD 1.7.1, linhas 3349 e 3795).
+
+    ``level_gap`` é a diferença entre o membro de maior nível do Grupo e o próprio
+    nível: ``0-10=100%``, ``11-15=70%``, ``16-20=45%``, ``21-30=20%``, ``>=31=5%``.
+    """
+    gap = max(0, level_gap)
+    if gap <= 10:
+        return D("1.00")
+    if gap <= 15:
+        return D("0.70")
+    if gap <= 20:
+        return D("0.45")
+    if gap <= 30:
+        return D("0.20")
+    return D("0.05")
+
+
+def fixed_quest_xp(base_xp: int, level_gap: int = 0) -> int:
+    """XP fixa de Missão em Coop de Chefe com PowerlevelFactor (TdO v1.0.18, 33.14 item 8).
+
+    Arredonda para o inteiro mais próximo, meio para cima (decisão do autor em 2026-11-15).
+    """
+    return int((D(base_xp) * powerlevel_factor(level_gap)).quantize(D(1), rounding=ROUND_HALF_UP))
+
+
 def crowns(level: int, category: str) -> int:
     value = D(100) + D(15) * level
     factor = {

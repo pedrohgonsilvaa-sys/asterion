@@ -9,7 +9,7 @@ from sqlalchemy import select
 from asterion.application.creation import CreationService
 from asterion.application.p3 import P3_ID, P3View
 from asterion.application.prologue import PrologueService
-from asterion.application.road import BOSQUE, CHARNECA, RoadService
+from asterion.application.road import BOSQUE, RoadService
 from asterion.application.s2 import S2Service
 from asterion.application.world import WorldService
 from asterion.bot.combat_handlers import combat_router
@@ -22,7 +22,6 @@ from asterion.domain.prologue import PROFILE
 from asterion.infrastructure.db.models import (
     Character,
     ConsumableStack,
-    LocationDiscovery,
     Quest,
     Unlock,
     WorldState,
@@ -123,7 +122,7 @@ async def test_p3_oren_offer_is_read_only_until_explicit_accept(database):
     await dispatcher.feed_raw_update(
         bot, callback_update(accept, update_id=998324, actor=actor)
     )
-    assert "Viajar até a Charneca da Fuligem" in _last_method(bot).text
+    assert "Entrar no Bosque Calcinado" in _last_method(bot).text
     async with database[1]() as session:
         quest = await session.scalar(
             select(Quest).where(Quest.character_id == character_id, Quest.quest_id == P3_ID)
@@ -297,8 +296,7 @@ async def test_bosque_map_does_not_auto_open_p3_and_mission_remains_reachable(da
     actor = 998329
     _, p3 = await _seed_p3(database, actor)
     accepted = await p3.accept(actor)
-    to_charneca = await p3.mission_route(actor, accepted.state_version, CHARNECA)
-    entered = await p3.enter_bosque(actor, to_charneca.state_version)
+    entered = await p3.enter_bosque(actor, accepted.state_version)
     assert entered.location == BOSQUE
 
     dispatcher = Dispatcher(disable_fsm=True)
@@ -366,10 +364,6 @@ async def test_completed_p3_map_exposes_bosque_and_route(database):
                     step=6,
                     content_version="tdo-1.0.10",
                     progress={"bosque_entered": True, "selected_reward": "veil"},
-                ),
-                LocationDiscovery(
-                    character_id=character_id,
-                    location_id="tdo.location.bosque_calcinado",
                 ),
                 *[
                     Unlock(character_id=character_id, unlock_id=unlock_id)

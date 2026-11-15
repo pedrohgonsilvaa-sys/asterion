@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher
 
 from asterion.application.p6 import P6Service
 from asterion.application.prologue import PrologueService
-from asterion.application.road import RUINS, RoadService
+from asterion.application.road import REFUGE, RUINS, RoadService
 from asterion.application.s6 import S6_MARKS, S6Service
 from asterion.bot.combat_handlers import combat_router
 from asterion.bot.p6_ui import render_p6
@@ -115,7 +115,7 @@ async def test_p6fight_callback_executes_shared_combat_and_renders_again(databas
     service = P6Service(sessions, "ocaso")
     initial = await service.resume(actor)
     assert initial is not None and initial.guidance is None
-    await _set_location(sessions, character_id, RUINS)
+    await _set_location(sessions, character_id, REFUGE)
     crossed = await service.action(actor, initial.state_version, "cross_door")
     chamber = await service.action(actor, crossed.state_version, "enter_chamber")
     structure = await service.action(actor, chamber.state_version, "inspect_before")
