@@ -16,6 +16,7 @@ from asterion.application.road import (
     ALTOS_PONTES_LABEL,
     ALTOS_REGION_LABEL,
     BOSQUE,
+    CAMARA,
     CHARNECA,
     CONFINS_CAMARA_REGENCIA_LABEL,
     CONFINS_ESTRADAS_AUSENTES_LABEL,
@@ -24,6 +25,7 @@ from asterion.application.road import (
     CONFINS_NO_CENTRAL_LABEL,
     CONFINS_REGION_LABEL,
     CONFINS_ULTIMO_REFUGIO_LABEL,
+    HUB_DESTINATION_LABELS,
     NARETH_CAMARA_LABEL,
     NARETH_CAMPINAS,
     NARETH_CAMPOS,
@@ -54,6 +56,7 @@ from asterion.application.road import (
 from asterion.bot.asset_catalog import location_key
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
+from asterion.bot.tdo_hub_ui import back_to_refuge_row, refuge_hub_rows, render_camara
 from asterion.domain.road import LOCATION_LEVEL_BANDS
 
 
@@ -149,30 +152,17 @@ def _recovery_route(view) -> InlineKeyboardButton | None:
     )
     if not view.route_available:
         return None
-    if view.location == CHARNECA and view.recovery_location == REFUGE:
-        return InlineKeyboardButton(
-            text="Retornar à Charneca",
-            callback_data=f"road:route:charneca{attempt_suffix}",
-        )
-    if view.location == BOSQUE and view.recovery_location == CHARNECA:
-        return InlineKeyboardButton(
-            text="Retornar ao Bosque",
-            callback_data=f"road:route:bosque{attempt_suffix}",
-        )
-    if view.location == RUINS and view.recovery_location in {BOSQUE, CHARNECA, REFUGE}:
-        next_location = {
-            BOSQUE: RUINS,
-            CHARNECA: BOSQUE,
-            REFUGE: CHARNECA,
-        }[view.recovery_location]
-        label = {
-            RUINS: "Retornar às Ruínas",
-            BOSQUE: "Retornar ao Bosque",
-            CHARNECA: "Seguir para a Charneca",
-        }[next_location]
+    # v1.0.18 (33.1): só o Refúgio liga a um Local; recuperado em outro Local, o
+    # caminho de volta passa pelo hub (Voltar ao Refúgio).
+    label = {
+        CHARNECA: "Retornar à Charneca",
+        BOSQUE: "Retornar ao Bosque",
+        RUINS: "Retornar às Ruínas",
+    }.get(view.location)
+    if label is not None and view.recovery_location == REFUGE:
         return InlineKeyboardButton(
             text=label,
-            callback_data=f"road:route:{_route_key(next_location)}{attempt_suffix}",
+            callback_data=f"road:route:{_route_key(view.location)}{attempt_suffix}",
         )
     return None
 
@@ -180,6 +170,8 @@ def _recovery_route(view) -> InlineKeyboardButton | None:
 def _route_key(location: str) -> str:
     return {
         REFUGE: "refuge",
+        ROAD: "road",
+        CAMARA: "camara",
         CHARNECA: "charneca",
         BOSQUE: "bosque",
         RUINS: "ruinas",
@@ -761,6 +753,7 @@ def render_current_local(
     explore_message: str | None = None,
     dungeon: tuple[str, str] | None = None,
     mission_available: bool = False,
+    explore_remaining: int | None = None,
 ) -> Screen:
     """Render the current Local as the sole entry point for local activities."""
     if view.kind == "invalid_location":
@@ -774,6 +767,9 @@ def render_current_local(
                 ]
             ),
         )
+    if view.location == CAMARA:
+        # v1.0.18 (66.3): tela própria, texto pré/pós P6 de quem vê.
+        return render_camara(view.camara_p6_completed)
     title, subtitle = _location_copy(view.location)
     def bar(current, maximum, fill: str) -> str:
         value = min(10, max(0, int(current * 10 / maximum))) if maximum else 0
@@ -1113,6 +1109,11 @@ def render_current_local(
         if view.brazier_label:
             lines.append(f"🔥 {escape(view.brazier_label)} · Descoberto")
         if view.location == REFUGE:
+            hub_lines, hub_rows = refuge_hub_rows(
+                view.route_destinations, explore_remaining=explore_remaining
+            )
+            lines.extend(["", *hub_lines])
+            keyboard.extend(hub_rows)
             if mission_available:
                 keyboard.append(
                     [InlineKeyboardButton(text="Missões", callback_data="world:missions")]
@@ -1132,12 +1133,11 @@ def render_current_local(
             keyboard.append(
                 [InlineKeyboardButton(text="Missão Atual", callback_data="world:missions")]
             )
-    keyboard.extend(
-        [
-            [InlineKeyboardButton(text="Viajar", callback_data="world:map:fromlocal")],
-            [InlineKeyboardButton(text="← Campanha", callback_data="world:adventure")],
-        ]
-    )
+    if view.location in {ROAD, CHARNECA, BOSQUE, RUINS} and REFUGE in view.route_destinations:
+        keyboard.append(back_to_refuge_row())
+    if view.location not in HUB_DESTINATION_LABELS:
+        keyboard.append([InlineKeyboardButton(text="Viajar", callback_data="world:map:fromlocal")])
+    keyboard.append([InlineKeyboardButton(text="← Campanha", callback_data="world:adventure")])
     return Screen(
         "\n".join(lines),
         # Standing at a Brazier shows that Brazier's art (see asset_catalog).

@@ -23,6 +23,7 @@ from asterion.infrastructure.db.models import (
     ConsumableStack,
     GameActivity,
     HuntContext,
+    LocationDiscovery,
     MaterialStack,
     Quest,
     RewardComponent,
@@ -58,6 +59,14 @@ async def _seed_s2(database, actor: int, *, level: int = 4, p2_status: str = "co
                 unlock_id="route.tdo.refugio_charneca",
             )
         )
+        if p2_status == "completed":
+            # v1.0.18: o hub do Refúgio só leva a Local descoberto (P2 legada já descobriu).
+            session.add(
+                LocationDiscovery(
+                    character_id=character_id,
+                    location_id="tdo.location.charneca_da_fuligem",
+                )
+            )
     return character_id, S2Service(sessions, "ocaso")
 
 

@@ -420,23 +420,20 @@ async def test_overland_and_brazier_travel_are_distinct_and_free(database):
     charneca = await service.travel_route(actor, CHARNECA)
     assert charneca is not None and charneca.location == CHARNECA
     assert charneca.brazier_id == "tdo.brazier.vento_morto"
-    assert {destination[1] for destination in charneca.brazier_destinations} == {
-        "Braseiro da Estrada",
-        "Braseiro do Refúgio",
-    }
+    # v1.0.18 (33.4): sem Travessia dos Braseiros nas Terras do Ocaso; o hub leva ao Refúgio.
+    assert charneca.brazier_destinations == ()
+    assert charneca.route_destinations == (REFUGE,)
+    assert await service.travel_brazier(actor, "tdo.brazier.refugio_do_ocaso") is None
 
-    refuge = await service.travel_brazier(actor, "tdo.brazier.refugio_do_ocaso")
+    refuge = await service.travel_route(actor, REFUGE)
     assert refuge is not None and refuge.location == REFUGE
     assert refuge.brazier_id == "tdo.brazier.refugio_do_ocaso"
-    assert {
-        destination[0] for destination in refuge.brazier_destinations
-    } == {"tdo.brazier.estrada", "tdo.brazier.vento_morto"}
+    assert refuge.brazier_destinations == ()
 
-    back_by_route = await service.travel_route(actor, CHARNECA)
-    assert back_by_route is not None and back_by_route.location == CHARNECA
-    refuge_again = await service.travel_route(actor, REFUGE)
-    assert refuge_again is not None and refuge_again.location == REFUGE
-    assert await service.travel_route(actor, ROAD) is None
+    road_view = await service.travel_route(actor, ROAD)
+    assert road_view is not None and road_view.location == ROAD
+    assert await service.travel_route(actor, CHARNECA) is None  # nunca Local-Local
+    assert (await service.travel_route(actor, REFUGE)).location == REFUGE
     assert await service.travel_brazier(actor, "tdo.brazier.not_discovered") is None
 
     async with database[1]() as session:

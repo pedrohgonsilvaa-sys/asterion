@@ -73,6 +73,7 @@ from asterion.application.s36 import S36Service
 from asterion.application.sanctions import SanctionService
 from asterion.application.social import SocialService
 from asterion.application.talents import TalentService
+from asterion.application.tdo_explore import TdoExploreService
 from asterion.application.trades import TradeService
 from asterion.application.varzeas_missions import VarzeasMissionService
 from asterion.application.vde_missions import VDEMissionService
@@ -202,6 +203,7 @@ def get_bot_runtime() -> BotRuntime:
     p1 = P1Service(SessionFactory, settings.server_id, groups=groups)
     p2 = P2Service(SessionFactory, settings.server_id, groups=groups)
     road = RoundService(SessionFactory, settings.server_id)
+    tdo_explore = TdoExploreService(SessionFactory, settings.server_id)
     inventory = InventoryService(SessionFactory, settings.server_id)
     warehouse = WarehouseService(SessionFactory, settings.server_id)
     equipment = EquipmentService(SessionFactory, settings.server_id)
@@ -522,6 +524,7 @@ def get_bot_runtime() -> BotRuntime:
             warehouse=warehouse,
             chronicle_activities=chronicle_activities,
             chronicle_encounters=chronicle_encounters,
+            tdo_explore=tdo_explore,
         )
     )
     dispatcher.include_router(

@@ -36,6 +36,7 @@ from asterion.application.road import (
     ALTOS_PONTES_LABEL,
     ALTOS_REGION_LABEL,
     BOSQUE,
+    CAMARA,
     CONFINS_CAMARA_REGENCIA_LABEL,
     CONFINS_ESTRADAS_AUSENTES_LABEL,
     CONFINS_FRATURAS_LIMIAR_LABEL,
@@ -44,6 +45,7 @@ from asterion.application.road import (
     CONFINS_NO_CENTRAL_LABEL,
     CONFINS_REGION_LABEL,
     CONFINS_ULTIMO_REFUGIO_LABEL,
+    HUB_DESTINATION_LABELS,
     NARETH_CAMARA,
     NARETH_CAMPINAS,
     NARETH_CAMPOS,
@@ -87,6 +89,7 @@ from asterion.application.s33 import S33Service
 from asterion.application.s34 import S34Service
 from asterion.application.s35 import S35Service
 from asterion.application.s36 import S36Service
+from asterion.application.tdo_explore import TdoExploreService
 from asterion.application.varzeas_missions import (
     S19_ID,
     S20_ID,
@@ -147,6 +150,7 @@ from asterion.bot.s33_ui import render_s33
 from asterion.bot.s34_ui import render_s34
 from asterion.bot.s35_ui import render_s35
 from asterion.bot.s36_ui import render_s36
+from asterion.bot.tdo_hub_ui import render_explore_result, render_hunt_choice
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
 from asterion.bot.vde_missions_ui import render_vde_mission
 from asterion.bot.world_ui import render_adventure, render_campaign, render_legacy, render_world
@@ -219,6 +223,7 @@ def world_router(
     community_url: str | None = None,
     chronicle_activities: ChronicleActivityService | None = None,
     chronicle_encounters: ChronicleEncounterService | None = None,
+    tdo_explore: TdoExploreService | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -628,20 +633,11 @@ def world_router(
         destination = data.rsplit(":", 2)[1] if data.count(":") == 3 else ""
         return bool(
             view.route_available
-            and (
-                (view.location == CHARNECA
-                 and view.recovery_location == REFUGE
-                 and destination == "charneca")
-                or (view.location == BOSQUE
-                    and view.recovery_location == CHARNECA
-                    and destination == "bosque")
-                or (view.location == RUINS
-                    and destination == {
-                        BOSQUE: "ruinas",
-                        CHARNECA: "bosque",
-                        REFUGE: "charneca",
-                    }.get(view.recovery_location))
-            )
+            and view.location in {CHARNECA, BOSQUE, RUINS}
+            and view.recovery_location == REFUGE
+            and destination == {CHARNECA: "charneca", BOSQUE: "bosque", RUINS: "ruinas"}[
+                view.location
+            ]
         )
 
     async def foreground(query: CallbackQuery) -> bool:
@@ -898,6 +894,38 @@ def world_router(
             show_alert=True,
         )
         await restore_context(query)
+
+    @router.callback_query(F.data == "tdo:explore")
+    async def tdo_explore_action(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        if tdo_explore is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        result = await tdo_explore.explore(query.from_user.id)
+        if result.status in {"cooldown", "busy"}:
+            # 66.2: clique antes de 3 s é recusado sem efeito, com aviso curto.
+            await query.answer("Aguarde um instante.")
+            return
+        await query.answer()
+        await present(query.message, render_explore_result(result), images, edit=True)
+
+    @router.callback_query(F.data == "tdo:hunt")
+    async def tdo_hunt_choice(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        view = await road.resume(query.from_user.id)
+        if view is None or view.location != REFUGE:
+            await restore_context(query)
+            return
+        await present(
+            query.message, render_hunt_choice(view.route_destinations), images, edit=True
+        )
 
     @router.callback_query(F.data == "road:hunt")
     async def hunt(query: CallbackQuery):
@@ -1529,6 +1557,8 @@ def world_router(
         route_parts = (query.data or "").split(":")
         route_key = ":".join(route_parts[:3])
         destination = {
+            "road:route:road": ROAD,
+            "road:route:camara": CAMARA,
             "road:route:charneca": CHARNECA,
             "road:route:refuge": REFUGE,
             "road:route:bosque": BOSQUE,
@@ -1584,84 +1614,21 @@ def world_router(
             await restore_context(query)
             return
         if current is not None:
+            # v1.0.18 (33.1/33.4): recuperado no Refúgio, a volta ao Local é a aresta do hub.
             if (
-                current.kind == "hunt_defeat"
-                and current.location == CHARNECA
+                current.location in {CHARNECA, BOSQUE, RUINS}
                 and current.recovery_location == REFUGE
-                and destination == CHARNECA
+                and destination == current.location
             ):
-                await road.acknowledge_defeat(query.from_user.id)
-            elif (
-                current.kind == "exploration"
-                and current.location == CHARNECA
-                and current.recovery_location == REFUGE
-                and destination == CHARNECA
-                and current.attempt_id == route_attempt_id
-            ):
-                await road.acknowledge_result(query.from_user.id, route_attempt_id)
-            elif (
-                current.kind == "round_defeated"
-                and current.location == CHARNECA
-                and current.recovery_location == REFUGE
-                and destination == CHARNECA
-                and current.round_id is not None
-            ):
-                await road.round_back(query.from_user.id, current.round_id)
-            elif (
-                current.kind == "hunt_defeat"
-                and current.location == BOSQUE
-                and current.recovery_location == CHARNECA
-                and destination == BOSQUE
-            ):
-                await road.acknowledge_defeat(query.from_user.id)
-            elif (
-                current.kind == "exploration"
-                and current.location == BOSQUE
-                and current.recovery_location == CHARNECA
-                and destination == BOSQUE
-                and current.attempt_id == route_attempt_id
-            ):
-                await road.acknowledge_result(query.from_user.id, route_attempt_id)
-            elif (
-                current.kind == "round_defeated"
-                and current.location == BOSQUE
-                and current.recovery_location == CHARNECA
-                and destination == BOSQUE
-                and current.round_id is not None
-            ):
-                await road.round_back(query.from_user.id, current.round_id)
-            elif (
-                current.kind == "hunt_defeat"
-                and current.location == RUINS
-                and destination == {
-                    BOSQUE: RUINS,
-                    CHARNECA: BOSQUE,
-                    REFUGE: CHARNECA,
-                }.get(current.recovery_location)
-            ):
-                await road.acknowledge_defeat(query.from_user.id)
-            elif (
-                current.kind == "exploration"
-                and current.location == RUINS
-                and current.attempt_id == route_attempt_id
-                and destination == {
-                    BOSQUE: RUINS,
-                    CHARNECA: BOSQUE,
-                    REFUGE: CHARNECA,
-                }.get(current.recovery_location)
-            ):
-                await road.acknowledge_result(query.from_user.id, route_attempt_id)
-            elif (
-                current.kind == "round_defeated"
-                and current.location == RUINS
-                and destination == {
-                    BOSQUE: RUINS,
-                    CHARNECA: BOSQUE,
-                    REFUGE: CHARNECA,
-                }.get(current.recovery_location)
-                and current.round_id is not None
-            ):
-                await road.round_back(query.from_user.id, current.round_id)
+                if current.kind == "hunt_defeat":
+                    await road.acknowledge_defeat(query.from_user.id)
+                elif (
+                    current.kind == "exploration"
+                    and current.attempt_id == route_attempt_id
+                ):
+                    await road.acknowledge_result(query.from_user.id, route_attempt_id)
+                elif current.kind == "round_defeated" and current.round_id is not None:
+                    await road.round_back(query.from_user.id, current.round_id)
         view = await road.travel_route(query.from_user.id, destination)
         if view is not None:
             if destination in {
@@ -3177,6 +3144,11 @@ def world_router(
             or (p4_view.status == "active" and (p4_view.progress or {}).get("ruins_discovered"))
         ):
             known.add(RUINS)
+        if road is not None:
+            # v1.0.18: Locais descobertos por Explorar (LocationDiscovery) aparecem no mapa.
+            known.update(
+                label for label in await road.tdo_known_locations(actor) if label != ROAD
+            )
         if vde_missions is not None and await vde_missions.region_access(actor):
             known.update((VDE_GARGANTA, VDE_VIGILIA))
             vde_p8_view = await vde_missions.resume(actor, P8_ID)
@@ -3220,7 +3192,7 @@ def world_router(
 
     async def current_local_screen(actor: int, view=None) -> Screen | None:
         local_kinds = {
-            "road", "refuge", "charneca", "bosque", "ruinas",
+            "road", "refuge", "charneca", "bosque", "ruinas", "camara",
             "vde_garganta", "vde_vigilia", "vde_mata", "vde_baixios", "vde_claustro", "vde_berco",
             "nareth_campinas", "nareth_posto",
             "varzeas_diques", "varzeas_porto", "varzeas_brejos",
@@ -3271,12 +3243,17 @@ def world_router(
             detail = await dungeons.detail(actor, family[0])
             if detail is not None and detail.kind != "hidden":
                 dungeon = (detail.dungeon_name, family[1])
+        explore_remaining = None
+        if view.location == REFUGE and tdo_explore is not None:
+            remaining = await tdo_explore.remaining(actor)
+            explore_remaining = len(remaining) if remaining is not None else None
         local_screen = render_current_local(
             view,
             explore_state=explore_state,
             explore_message=explore_message,
             dungeon=dungeon,
             mission_available=True,
+            explore_remaining=explore_remaining,
         )
         if s31 is not None and view.location == CONFINS_MARCHA_LABEL:
             contact = await s31.giver(actor)
@@ -3564,7 +3541,7 @@ def world_router(
     async def map_local_detail(actor: int, key: str, *, from_local: bool) -> Screen | None:
         names = {
             "road": ROAD, "refuge": REFUGE, "charneca": CHARNECA,
-            "bosque": BOSQUE, "ruinas": RUINS,
+            "bosque": BOSQUE, "ruinas": RUINS, "camara": CAMARA,
             "vde_garganta": VDE_GARGANTA, "vde_vigilia": VDE_VIGILIA,
             "vde_mata": VDE_MATA, "vde_baixios": VDE_BAIXIOS,
             "vde_claustro": VDE_CLAUSTRO, "vde_berco": VDE_BERCO,
@@ -3599,6 +3576,7 @@ def world_router(
         is_current = name == current
         icon = {
             "road": "🔥", "refuge": "🏚️", "charneca": "🌑", "bosque": "🌲", "ruinas": "🪨",
+            "camara": "🕯",
             "vde_garganta": "🪢", "vde_vigilia": "🌫️", "vde_mata": "🌲",
             "vde_baixios": "🌫️", "vde_claustro": "🪨",
             "vde_berco": "🌿",
@@ -3620,6 +3598,7 @@ def world_router(
             "charneca": "Nv. 3–5",
             "bosque": "Nv. 5–8",
             "ruinas": "Nv. 8–10",
+            "camara": "Local narrativo",
             "vde_garganta": "Nv. 11–14",
             "vde_vigilia": "Hub seguro",
             "vde_mata": "Nv. 13–17",
@@ -3677,6 +3656,8 @@ def world_router(
             lines.extend(["", f"🔥 {known_brazier} · Descoberto" if known_brazier else "🔥 Braseiro · Não descoberto"])
         elif key == "refuge":
             lines.extend(["", "🔥 Braseiro do Refúgio · Descoberto"])
+        elif key == "camara":
+            lines.extend(["", "Sem Caçada, Desbravar, Ronda ou Braseiro. Volta ao Refúgio."])
         elif key == "nareth_camara":
             lines.extend(["", "Local de clímax · Acesso aberto pela Campanha."])
         elif key == "varzeas_camara":
@@ -3692,6 +3673,8 @@ def world_router(
             if road_view is not None and road_view.location == current:
                 route_callbacks = {
                     REFUGE: "road:route:refuge",
+                    ROAD: "road:route:road",
+                    CAMARA: "road:route:camara",
                     CHARNECA: "road:route:charneca",
                     BOSQUE: "road:route:bosque",
                     RUINS: "road:route:ruinas",
@@ -3729,18 +3712,16 @@ def world_router(
                 for destination in road_view.route_destinations:
                     if destination == current:
                         continue
-                    if current == REFUGE and destination == CHARNECA:
-                        label = "Seguir para a Charneca"
-                    elif current == CHARNECA and destination == REFUGE:
+                    if destination == REFUGE and current in HUB_DESTINATION_LABELS:
                         label = "Retornar ao Refúgio"
-                    elif current == CHARNECA and destination == BOSQUE:
-                        label = "Seguir para o Bosque"
-                    elif current == BOSQUE and destination == CHARNECA:
-                        label = "Retornar à Charneca"
-                    elif current == BOSQUE and destination == RUINS:
-                        label = "Seguir para as Ruínas"
-                    elif current == RUINS and destination == BOSQUE:
-                        label = "Retornar ao Bosque"
+                    elif current == REFUGE and destination in HUB_DESTINATION_LABELS:
+                        label = {
+                            ROAD: "Seguir para a Estrada das Cinzas",
+                            CHARNECA: "Seguir para a Charneca",
+                            BOSQUE: "Seguir para o Bosque",
+                            RUINS: "Seguir para as Ruínas",
+                            CAMARA: "Seguir para a Câmara do Poente",
+                        }[destination]
                     elif current == VDE_GARGANTA and destination == VDE_VIGILIA:
                         label = "Seguir para a Vigília do Vale"
                     elif current == VDE_VIGILIA and destination == VDE_GARGANTA:
@@ -3841,6 +3822,8 @@ def world_router(
         else:
             route_callback = {
                     REFUGE: "road:route:refuge",
+                    ROAD: "road:route:road",
+                    CAMARA: "road:route:camara",
                     CHARNECA: "road:route:charneca",
                     BOSQUE: "road:route:bosque",
                     RUINS: "road:route:ruinas",
@@ -3877,6 +3860,8 @@ def world_router(
             if road_view is not None and route_callback and name in road_view.route_destinations:
                 route_label = {
                     REFUGE: "Retornar ao Refúgio",
+                    ROAD: "Seguir para a Estrada das Cinzas",
+                    CAMARA: "Seguir para a Câmara do Poente",
                     CHARNECA: "Seguir para a Charneca",
                     BOSQUE: "Seguir para o Bosque",
                     RUINS: "Seguir para as Ruínas",
@@ -4043,6 +4028,7 @@ def world_router(
             (CHARNECA, "charneca"),
             (BOSQUE, "bosque"),
             (RUINS, "ruinas"),
+            (CAMARA, "camara"),
         ]
         visible = [(name, key) for name, key in ordered if name in known]
         lines = ["🌑 Terras do Ocaso · Nv. 1–10", ""]
@@ -4067,6 +4053,7 @@ def world_router(
                 "🌑" if key == "charneca" else
                 "🌲" if key == "bosque" else
                 "🪨" if key == "ruinas" else
+                "🕯" if key == "camara" else
                 "🔥" if name == current else
                 "🏚️" if key == "refuge" else "📍"
             )

@@ -240,6 +240,14 @@ from asterion.domain.road import (
     weighted_choice,
 )
 from asterion.domain.road import CONFINS_LOCATION_CATALOG as CONFINS_LOCATION_ENTRIES
+from asterion.domain.tdo_explore import CAMARA_LOCATION_ID
+from asterion.domain.tdo_hub import (
+    CAMARA_LABEL,
+    HUB_LOCALS,
+    hub_destinations,
+    is_hub_step,
+    location_id_for_label,
+)
 from asterion.domain.vde_fosso import (
     FOSSO_DISCOVERY_UNLOCK,
 )
@@ -282,6 +290,8 @@ REFUGE = "Refúgio do Ocaso"
 CHARNECA = "Charneca da Fuligem"
 BOSQUE = "Bosque Calcinado"
 RUINS = "Ruínas do Vigia"
+CAMARA = CAMARA_LABEL
+CAMARA_LOCATION = CAMARA_LOCATION_ID
 VDE_GARGANTA = "Garganta dos Laços"
 VDE_VIGILIA = "Vigília do Vale"
 VDE_MATA = "Mata Suspensa"
@@ -357,10 +367,9 @@ VDE_VIGILIA_MATA_ROUTE_ENDPOINTS = frozenset((VDE_VIGILIA, VDE_MATA))
 VDE_MATA_BAIXIOS_ROUTE_ENDPOINTS = frozenset((VDE_MATA, VDE_BAIXIOS))
 VDE_BAIXIOS_CLAUSTRO_ROUTE_ENDPOINTS = frozenset((VDE_BAIXIOS, VDE_CLAUSTRO))
 VDE_CLAUSTRO_BERCO_ROUTE_ENDPOINTS = frozenset((VDE_CLAUSTRO, VDE_BERCO))
+# v1.0.18 (33.1): as rotas antigas Refúgio-Charneca, Charneca-Bosque e Bosque-Ruínas
+# deixaram de ser caminhos; a navegação das Terras do Ocaso é o hub do Refúgio.
 OVERLAND_ROUTE_PAIRS = (
-    CHARNECA_ROUTE_ENDPOINTS,
-    BOSQUE_ROUTE_ENDPOINTS,
-    BOSQUE_RUINS_ROUTE_ENDPOINTS,
     VDE_GARGANTA_VIGILIA_ROUTE_ENDPOINTS,
     VDE_VIGILIA_MATA_ROUTE_ENDPOINTS,
     VDE_MATA_BAIXIOS_ROUTE_ENDPOINTS,
@@ -391,7 +400,9 @@ OVERLAND_ROUTE_PAIRS = (
     CONFINS_FRATURAS_NO_ROUTE_ENDPOINTS,
     CONFINS_NO_CAMARA_ROUTE_ENDPOINTS,
 )
-TRAVEL_LOCATIONS = frozenset((ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL, VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL, VARZEAS_GALERIAS_LABEL, VARZEAS_CAMARA_LABEL, ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL, CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL, CONFINS_ESTRADAS_AUSENTES_LABEL, CONFINS_FRATURAS_LIMIAR_LABEL, CONFINS_NO_CENTRAL_LABEL, CONFINS_CAMARA_REGENCIA_LABEL))
+TDO_HUB_PROFILE_IDS = frozenset((ROAD_LOCATION, CHARNECA_LOCATION, BOSQUE_LOCATION, RUINS_LOCATION))
+HUB_DESTINATION_LABELS = frozenset((REFUGE, *(label for label, _ in HUB_LOCALS)))
+TRAVEL_LOCATIONS = frozenset((CAMARA, ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, VDE_GARGANTA, VDE_VIGILIA, VDE_MATA, VDE_BAIXIOS, VDE_CLAUSTRO, VDE_BERCO, NARETH_CAMPINAS_LABEL, NARETH_POSTO_LABEL, NARETH_CANAIS, NARETH_CAMPOS, NARETH_OBSERVATORIO, NARETH_CAMARA_LABEL, VARZEAS_DIQUES_LABEL, VARZEAS_PORTO_LABEL, VARZEAS_BREJOS_LABEL, VARZEAS_HORTOS_LABEL, VARZEAS_GALERIAS_LABEL, VARZEAS_CAMARA_LABEL, ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL, ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL, CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL, CONFINS_ESTRADAS_AUSENTES_LABEL, CONFINS_FRATURAS_LIMIAR_LABEL, CONFINS_NO_CENTRAL_LABEL, CONFINS_CAMARA_REGENCIA_LABEL))
 BRAZIER_FOR_LOCATION = {
     ROAD: "tdo.brazier.estrada",
     REFUGE: "tdo.brazier.refugio_do_ocaso",
@@ -746,6 +757,8 @@ class RoadView:
     pvpve_round_ai: bool = False
     pvpve_round_takeover: bool = False
     pvpve_queue_id: UUID | None = None
+    # v1.0.18 (33.3): a tela da Câmara lê a P6 de quem vê (progresso individual).
+    camara_p6_completed: bool = False
 
 
 def _exploration_local_id(profile) -> str:
@@ -835,17 +848,13 @@ class RoadService:
             )
             if active is not None:
                 return None
-            if world.location == CHARNECA:
-                if not await self._p2_completed(s, c.id):
+            if world.location in {CHARNECA, BOSQUE, RUINS}:
+                if not await self._tdo_local_open(s, c, world.location):
                     return None
-            elif world.location == BOSQUE:
-                if not await self._p3_completed(s, c.id):
-                    return None
-            elif world.location == RUINS:
-                if c.level < 8 or not await self._p4_completed(s, c.id):
-                    return None
-                if not await self._has_location(s, c.id, RUINS_LOCATION):
-                    return None
+            elif world.location == CAMARA:
+                # A Câmara só é alcançada pelo hub (descoberta) ou pela P6; quem já
+                # está nela vê a tela do Local (v1.0.18, 33.3).
+                pass
             elif world.location in VDE_LOCATIONS:
                 if not await self._p7_completed(s, c.id):
                     return None
@@ -917,7 +926,9 @@ class RoadService:
             current = world.location if world is not None else None
         if current is None:
             return None
-        if any({current, destination} == pair for pair in OVERLAND_ROUTE_PAIRS):
+        if is_hub_step(current, destination) or any(
+            {current, destination} == pair for pair in OVERLAND_ROUTE_PAIRS
+        ):
             return await self.travel_route(actor, destination)
         brazier_id = BRAZIER_FOR_LOCATION.get(destination)
         if brazier_id is None:
@@ -926,7 +937,9 @@ class RoadService:
 
     async def travel_route(self, actor: int, destination: str) -> RoadView | None:
         """Use the free, post-P2 Refuge/Charneca overland connection."""
-        if not any(destination in pair for pair in OVERLAND_ROUTE_PAIRS):
+        if destination not in HUB_DESTINATION_LABELS and not any(
+            destination in pair for pair in OVERLAND_ROUTE_PAIRS
+        ):
             return None
         return await self._travel(actor, destination, mode="route")
 
@@ -1266,7 +1279,11 @@ class RoadService:
                 or destination == world.location
             ):
                 return None
-            if mode == "brazier" and self._travel_region(world.location) != self._travel_region(destination):
+            if mode == "brazier" and (
+                self._travel_region(world.location) != self._travel_region(destination)
+                # v1.0.18 (33.4): a Travessia dos Braseiros fica oculta nas Terras do Ocaso.
+                or self._travel_region(world.location) == "tdo"
+            ):
                 return None
             active_p2 = await s.scalar(
                 select(Quest).where(
@@ -1295,7 +1312,13 @@ class RoadService:
             )
             if active_p4 is not None and mode == "brazier":
                 return None
-            if mode == "route":
+            hub_route = mode == "route" and is_hub_step(world.location, destination)
+            if hub_route:
+                # v1.0.18 (33.1): hub do Refúgio; descoberta é o único requisito de acesso.
+                if not await self._tdo_hub_gate(s, c, world.location, destination):
+                    return None
+                grant_route_unlock_on_arrival = False
+            elif mode == "route":
                 grant_route_unlock_on_arrival = False
                 pair = next(
                     (
@@ -5310,6 +5333,81 @@ class RoadService:
             )
         )
 
+    async def _tdo_local_open(self, s, c, location: str) -> bool:
+        """Charneca/Bosque/Ruínas abertas: legado por Missão concluída ou descoberta.
+
+        Descoberto por Explorar abre o Local, salvo enquanto a Missão que o usa
+        (P2/P3/P4) está em andamento: ela tem a própria tela (bloco D reescreve).
+        """
+        legacy_ok = {
+            CHARNECA: lambda: self._p2_completed(s, c.id),
+            BOSQUE: lambda: self._p3_completed(s, c.id),
+        }.get(location)
+        if legacy_ok is not None and await legacy_ok():
+            return True
+        if location == RUINS and (
+            await self._p4_completed(s, c.id) and await self._has_location(s, c.id, RUINS_LOCATION)
+        ):
+            return True
+        location_id = location_id_for_label(location)
+        if location_id is None or not await self._has_location(s, c.id, location_id):
+            return False
+        active_mission = await s.scalar(
+            select(Quest.id).where(
+                Quest.character_id == c.id,
+                Quest.quest_id.in_((P2_QUEST_ID, P3_QUEST_ID, P4_QUEST_ID)),
+                Quest.status == "active",
+            )
+        )
+        return active_mission is None
+
+    async def _tdo_discovered_ids(self, s, character_id) -> set[str]:
+        return set(
+            (
+                await s.scalars(
+                    select(LocationDiscovery.location_id).where(
+                        LocationDiscovery.character_id == character_id
+                    )
+                )
+            ).all()
+        )
+
+    async def tdo_known_locations(self, actor: int) -> tuple[str, ...]:
+        """Rótulos dos Locais das Terras do Ocaso que o personagem já descobriu."""
+        async with self.sessions() as s:
+            c = await self._character(s, actor)
+            if c is None:
+                return ()
+            ids = await self._tdo_discovered_ids(s, c.id)
+            return tuple(
+                label for label, location_id in HUB_LOCALS
+                if label == ROAD or location_id in ids
+            )
+
+    async def _tdo_hub_gate(self, s, c, origin: str, destination: str) -> bool:
+        """Aresta do hub liberada: P1 concluída e, para entrar, Local descoberto.
+
+        Voltar ao Refúgio vale de qualquer Local. Custo zero e sem combate (o
+        chamador já recusa atividade em primeiro plano).
+        """
+        if not await self._p1_completed(s, c.id):
+            return False
+        if destination == REFUGE:
+            return True
+        ids = await self._tdo_discovered_ids(s, c.id)
+        return destination in hub_destinations(origin, ids)
+
+    async def _p6_completed(self, s, character_id) -> bool:
+        return bool(
+            await s.scalar(
+                select(Quest.id).where(
+                    Quest.character_id == character_id,
+                    Quest.quest_id == "P6",
+                    Quest.status == "completed",
+                )
+            )
+        )
+
     async def _has_location(self, s, character_id, location_id) -> bool:
         return bool(
             await s.scalar(
@@ -5337,14 +5435,10 @@ class RoadService:
         if profile.local_id == ROAD_LOCATION:
             if not await self._p1_completed(s, c.id):
                 return None
-        elif profile.local_id == CHARNECA_LOCATION and not await self._p2_completed(s, c.id):
-            return None
-        elif profile.local_id == BOSQUE_LOCATION and not await self._p3_completed(s, c.id):
-            return None
-        elif profile.local_id == RUINS_LOCATION:
-            if c.level < 8 or not await self._p4_completed(s, c.id):
-                return None
-            if not await self._has_location(s, c.id, RUINS_LOCATION):
+        elif profile.local_id in {CHARNECA_LOCATION, BOSQUE_LOCATION, RUINS_LOCATION}:
+            # v1.0.18 (33.16 crit. 5): Local descoberto tem Caçada e Desbravar sem Missão
+            # nem nível mínimo; o portão é só a descoberta.
+            if not await self._has_location(s, c.id, profile.local_id):
                 return None
         elif profile.local_id == VDE_GARGANTA_LOCATION:
             if not await self._p7_completed(s, c.id):
@@ -5494,6 +5588,8 @@ class RoadService:
                 or not await self._has_location(s, c.id, CONFINS_NO_CENTRAL_LOCATION)
             ):
                 return None
+        if profile.local_id in TDO_HUB_PROFILE_IDS:
+            return profile
         unlock_id = profile.hunt_unlock if activity_kind == "hunt" else profile.explore_unlock
         if not await s.scalar(
             select(Unlock).where(
@@ -5538,6 +5634,16 @@ class RoadService:
     async def _recover_normal_pve_defeat(self, s, c, local_id, world=None):
         """Apply the regional destination rule for normal open-world PvE defeats."""
         c.hp = c.max_hp
+        if local_id == CAMARA_LOCATION:
+            # 33.4: a Câmara não tem Braseiro; a recuperação é no Refúgio do Ocaso.
+            if world is None:
+                world = await s.scalar(
+                    select(WorldState).where(WorldState.character_id == c.id).with_for_update()
+                )
+            if world is not None:
+                world.region = REGION
+                world.location = REFUGE
+            return BRAZIER_DETAILS[BRAZIER_FOR_LOCATION[REFUGE]][1], REFUGE
         if local_id not in {CHARNECA_LOCATION, BOSQUE_LOCATION, RUINS_LOCATION}:
             return None, None
         if world is None:
@@ -6512,6 +6618,23 @@ class RoadService:
                 and confins_camara_discovered
             ):
                 route_destinations.append(CONFINS_NO_CENTRAL_LABEL)
+        if world.location in HUB_DESTINATION_LABELS:
+            # v1.0.18 (33.1/33.4): hub do Refúgio; sem Travessia dos Braseiros.
+            brazier_destinations = ()
+            route_destinations = []
+            active_p2 = await s.scalar(
+                select(Quest.id).where(
+                    Quest.character_id == c.id,
+                    Quest.quest_id == P2_QUEST_ID,
+                    Quest.status == "active",
+                )
+            )
+            if not active_p2 and not active_p3 and await self._p1_completed(s, c.id):
+                route_destinations = list(
+                    hub_destinations(
+                        world.location, await self._tdo_discovered_ids(s, c.id)
+                    )
+                )
         route_available = bool(route_destinations)
         material_table_ready = bool(
             hunt_profile
@@ -6607,6 +6730,10 @@ class RoadService:
         elif world.location in {ROAD, REFUGE, CHARNECA, BOSQUE, RUINS}:
             hunt_enabled = True
             explore_enabled = True
+        elif world.location == CAMARA:
+            # 33.3: sem Caçada, Desbravar, Ronda, pool próprio nem Braseiro.
+            hunt_enabled = False
+            explore_enabled = False
         elif world.location == NARETH_CAMPINAS_LABEL:
             hunt_enabled = bool(
                 nareth_access
@@ -6987,6 +7114,7 @@ class RoadService:
             CHARNECA: "charneca",
             BOSQUE: "bosque",
             RUINS: "ruinas",
+            CAMARA: "camara",
             VDE_GARGANTA: "vde_garganta",
             VDE_VIGILIA: "vde_vigilia",
             VDE_MATA: "vde_mata",
@@ -7036,6 +7164,9 @@ class RoadService:
             brazier_id=brazier_id,
             brazier_label=brazier_label,
             brazier_destinations=brazier_destinations,
+            camara_p6_completed=(
+                await self._p6_completed(s, c.id) if world.location == CAMARA else False
+            ),
         )
 
     async def _locked_world(self, s, actor):

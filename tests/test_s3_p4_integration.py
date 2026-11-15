@@ -63,6 +63,10 @@ async def _seed_campaign(database, actor: int, *, level: int):
                     character_id=character_id,
                     location_id="tdo.location.bosque_calcinado",
                 ),
+                LocationDiscovery(
+                    character_id=character_id,
+                    location_id="tdo.location.charneca_da_fuligem",
+                ),
                 Unlock(
                     character_id=character_id,
                     unlock_id="route.tdo.charneca_bosque",
@@ -74,8 +78,7 @@ async def _seed_campaign(database, actor: int, *, level: int):
 
 async def _reach_bosque(sessions, actor: int):
     road = RoadService(sessions, "ocaso")
-    charneca = await road.travel_route(actor, CHARNECA)
-    assert charneca is not None and charneca.location == CHARNECA
+    # v1.0.18: hub do Refúgio; o Bosque descoberto é alcançado direto, sem passar pela Charneca.
     bosque = await road.travel_route(actor, BOSQUE)
     assert bosque is not None and bosque.location == BOSQUE
     return road
@@ -297,7 +300,6 @@ async def test_s3_defeat_keeps_tracks_and_retry_materializes_new_cervo(database,
             )
         ) is None
     road = RoadService(sessions, "ocaso")
-    await road.travel_route(actor, CHARNECA)
     await road.travel_route(actor, BOSQUE)
     monkeypatch.setattr(scripted_combat, "act", lambda combat, action: combat)
     retry = await service.retry(actor, defeated.state_version)
@@ -343,7 +345,6 @@ async def test_p4_defeat_recovery_retry_uses_new_fixed_vigia(database, monkeypat
             )
         ) is not None
     road = RoadService(sessions, "ocaso")
-    await road.travel_route(actor, CHARNECA)
     await road.travel_route(actor, BOSQUE)
     returned = await service.action(actor, defeated.state_version, "enter")
     assert returned is not None and returned.location == "Ruínas do Vigia"

@@ -288,7 +288,7 @@ async def test_brazier_travel_lists_only_known_destinations_and_keeps_route_dist
     )
     for stale_callback, update_id in (
         ("road:travel:brazier:vento_morto", 880416),
-        ("road:route:road", 880417),
+        ("road:travel:brazier:estrada", 880417),
     ):
         await dispatcher.feed_raw_update(
             bot,
@@ -296,7 +296,7 @@ async def test_brazier_travel_lists_only_known_destinations_and_keeps_route_dist
         )
         restored = _last_method(bot)
         assert "Refúgio do Ocaso" in _text(restored)
-        assert "world:map:fromlocal" in _callbacks(restored)
+        assert "tdo:explore" in _callbacks(restored)
 
     actor = 880412
     road = await _seed_charneca(
@@ -320,49 +320,28 @@ async def test_brazier_travel_lists_only_known_destinations_and_keeps_route_dist
             p2=P2Service(database[1], "ocaso"),
         )
     )
+    # v1.0.18 (33.4): a Travessia dos Braseiros não aparece nas Terras do Ocaso.
     await known_dispatcher.feed_raw_update(
         bot, callback_update("world:travel", update_id=880413, actor=actor)
     )
     travel_screen = _last_method(bot)
-    assert "Braseiro do Vento Morto · Charneca da Fuligem" in travel_screen.text
-    assert "Braseiro do Refúgio · Refúgio do Ocaso" not in travel_screen.text
-    vento_callback = next(
-        callback
-        for callback in _callbacks(travel_screen)
-        if callback == "road:travel:brazier:vento_morto"
+    assert "Braseiro do Vento Morto" not in travel_screen.text
+    assert not any(
+        callback.startswith("road:travel:") for callback in _callbacks(travel_screen)
     )
     await known_dispatcher.feed_raw_update(
-        bot, callback_update(vento_callback, update_id=880414, actor=actor)
+        bot, callback_update("road:travel:brazier:vento_morto", update_id=880414, actor=actor)
+    )
+    assert "Refúgio do Ocaso" in _text(_last_method(bot))
+    # O hub leva ao Local descoberto e a volta é só pelo Refúgio.
+    await known_dispatcher.feed_raw_update(
+        bot, callback_update("road:route:charneca", update_id=880415, actor=actor)
     )
     arrived = _last_method(bot)
     assert "📍 Local Atual\n🌑 Charneca da Fuligem" in arrived.text
-    assert "world:map:fromlocal" in _callbacks(arrived)
-    await known_dispatcher.feed_raw_update(
-        bot,
-        callback_update("world:map:fromlocal", update_id=880415, actor=actor),
-    )
-    map_screen = _last_method(bot)
-    region_callback = next(
-        callback
-        for callback in _callbacks(map_screen)
-        if callback == "world:map:region:tdo:fromlocal"
-    )
-    await known_dispatcher.feed_raw_update(
-        bot,
-        callback_update(region_callback, update_id=880418, actor=actor),
-    )
-    region = _last_method(bot)
-    charneca_callback = next(
-        callback
-        for callback in _callbacks(region)
-        if callback == "world:map:local:charneca:fromlocal"
-    )
-    await known_dispatcher.feed_raw_update(
-        bot,
-        callback_update(charneca_callback, update_id=880419, actor=actor),
-    )
-    detail = _last_method(bot)
-    assert "road:route:refuge" in _callbacks(detail)
+    assert "world:map:fromlocal" not in _callbacks(arrived)
+    assert "road:route:refuge" in _callbacks(arrived)
+    assert "road:route:bosque" not in _callbacks(arrived)
     await known_dispatcher.feed_raw_update(
         bot,
         callback_update("road:route:refuge", update_id=880420, actor=actor),
@@ -416,9 +395,10 @@ async def test_remote_known_local_offers_travel_only_when_authoritatively_availa
     )
     remote = _last_method(bot)
     assert "Local Atual" not in remote.text
-    travel_callback = "world:travel:to:road"
+    # v1.0.18: a Estrada é um Local do hub; sem "Viajar pelo Braseiro".
+    travel_callback = "road:route:road"
     assert travel_callback in _callbacks(remote)
-    assert "world:travel" not in _callbacks(remote)
+    assert not any("world:travel" in callback for callback in _callbacks(remote))
 
     await dispatcher.feed_raw_update(
         bot,
@@ -491,20 +471,20 @@ async def test_map_region_lists_all_known_locations_and_brazier_detail_travels_d
     assert len({button.callback_data for button in numeric_buttons}) == 3
 
     detail = await click("world:map:local:refuge:fromlocal", 880427)
-    assert "Viajar pelo Braseiro" in [
+    assert "Viajar pelo Braseiro" not in [
         button.text
         for row in detail.reply_markup.inline_keyboard
         for button in row
     ]
-    direct = "world:travel:to:refuge:fromlocal"
-    assert direct in _callbacks(detail)
-    arrived = await click(direct, 880428)
+    back = "road:route:refuge"
+    assert back in _callbacks(detail)
+    arrived = await click(back, 880428)
     assert "Refúgio do Ocaso" in _text(arrived)
-    assert travel_calls == ["tdo.brazier.refugio_do_ocaso"]
+    assert travel_calls == []
 
-    stale = await click(direct, 880429)
+    stale = await click(back, 880429)
     assert "Refúgio do Ocaso" in _text(stale)
-    assert travel_calls == ["tdo.brazier.refugio_do_ocaso"]
+    assert travel_calls == []
 
 
 @pytest.mark.asyncio

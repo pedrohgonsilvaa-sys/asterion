@@ -14,6 +14,7 @@ from asterion.infrastructure.db.models import (
     HuntContext,
     HuntRound,
     HuntRoundEncounter,
+    LocationDiscovery,
     Quest,
     RewardEvent,
     Unlock,
@@ -64,6 +65,9 @@ async def _seed_bosque(
                     step=6,
                     content_version="tdo-1.0.10",
                     progress={"bosque_entered": True, "selected_reward": "veil"},
+                ),
+                LocationDiscovery(
+                    character_id=character.id, location_id="tdo.location.bosque_calcinado"
                 ),
                 Unlock(character_id=character.id, unlock_id="hunt_manual.bosque_calcinado"),
                 Unlock(character_id=character.id, unlock_id="explore.bosque_calcinado"),
@@ -183,7 +187,11 @@ async def test_bosque_exploration_braseiro_is_unique_and_enters_brazier_network(
         ) == 1
         assert character.vigor == 77
     await service.acknowledge_result(actor)
-    travel = await service.travel_brazier(actor, "tdo.brazier.estrada")
+    # v1.0.18: sem Travessia dos Braseiros nas Terras do Ocaso; volta pelo hub do Refúgio.
+    assert await service.travel_brazier(actor, "tdo.brazier.estrada") is None
+    refuge = await service.travel_route(actor, REFUGE)
+    assert refuge is not None and refuge.location == REFUGE
+    travel = await service.travel_route(actor, ROAD)
     assert travel.kind == "road" and travel.location == ROAD
 
 

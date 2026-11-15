@@ -30,3 +30,12 @@ A tabela `r` da auditoria (R2.4) é só indicativa: golpe básico, inimigo neutr
 - Caso (b): Solo, Nv.1, inimigos Comum e Elite do Local Nv.9–10; registrar também o XP pago em vitória.
 - Número de amostras: **LACUNA**, a fonte não define. Propor um tamanho ao autor antes de rodar e fixar semente/crítico para o resultado ser reproduzível.
 - Reportar: taxa de vitória por classe e por caso, XP por vitória, e a comparação com as `r` indicativas.
+
+## QA-002. Bloco A da TdO v1.0.18: Caçada em Local descoberto só por Explorar
+
+- **Registrada em:** 2026-11-14
+- **Estado:** CORRIGIDA e revalidada em 2026-11-15 (sonda sem xfail, lote 265 passed, 1 skipped, ruff limpo). Restam os itens do bloco D abaixo.
+- **Critério:** §33.16 item 12 e §33.16 item 5 (Local descoberto tem Caçada sem Missão).
+- **Evidência:** `tests/test_tdo_hub_qa_probe.py` (xfail strict). Charneca, Bosque e Ruínas descobertos por `LocationDiscovery` sem P2/P3/P4: `RoadService.start_hunt` devolve `None`. Causa: `_available_local_profile` em `src/asterion/application/road.py` (~linha 5437) ainda exige P2/P3/P4 concluídas e Nv.8 nas Ruínas.
+- **Bloqueia:** fechar o bloco A. Tirar o `xfail` ao corrigir.
+- **Também aberto (bloco D):** botões de Missão (P4, P5, P6, S2) com `road:route:*` Local–Local ficam mortos; P6 legada ainda grava `LocationDiscovery` da Câmara (`application/p6.py` linhas 173 e 183), contra §33.16 item 18.

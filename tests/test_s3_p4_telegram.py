@@ -9,7 +9,7 @@ from asterion.application.creation import CreationService
 from asterion.application.p2 import P2Service
 from asterion.application.p4 import P4Service, P4View
 from asterion.application.prologue import PrologueService
-from asterion.application.road import BOSQUE, CHARNECA, RoadService
+from asterion.application.road import BOSQUE, CHARNECA, REFUGE, RoadService
 from asterion.application.s3 import S3Service
 from asterion.application.world import WorldService
 from asterion.bot.combat_handlers import combat_router
@@ -136,6 +136,8 @@ async def test_p4_campaign_navigation_and_s3_return_report_buttons(database, mon
     charneca = await p4.resume(actor)
     assert charneca is not None
     assert _button(render_p4(charneca), "Seguir para o Bosque").callback_data == "road:route:bosque"
+    # v1.0.18: nunca Local-Local; do Bosque descoberto se chega pelo Refúgio.
+    await road.travel_route(actor, REFUGE)
     await road.travel_route(actor, BOSQUE)
     bosque = await p4.resume(actor)
     assert bosque is not None

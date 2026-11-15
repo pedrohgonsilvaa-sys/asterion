@@ -355,7 +355,7 @@ async def test_completed_p3_map_exposes_bosque_and_route(database):
         world_state = await session.scalar(
             select(WorldState).where(WorldState.character_id == character_id)
         )
-        world_state.location = CHARNECA
+        world_state.location = "Refúgio do Ocaso"
         session.add_all(
             [
                 Quest(
@@ -425,7 +425,8 @@ async def test_completed_p3_map_exposes_bosque_and_route(database):
     assert "world:local" in callbacks
     assert "road:prepare" not in callbacks
     assert "road:explore" not in callbacks
-    assert "road:route:charneca" in callbacks
+    assert "road:route:refuge" in callbacks
+    assert "road:route:charneca" not in callbacks
     assert "Caçar" not in [
         button.text for row in bosque.reply_markup.inline_keyboard for button in row
     ]

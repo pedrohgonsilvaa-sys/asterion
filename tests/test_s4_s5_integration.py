@@ -146,21 +146,22 @@ async def test_level_7_s4_uses_existing_ruins_route_without_unlocking_normal_gam
 
     s4 = S4Service(sessions, "ocaso")
     road = RoadService(sessions, "ocaso")
+    # v1.0.18 (33.1/33.6): hub do Refúgio, sem trava de nível nem rota Local-Local.
     assert await road.travel_route(actor, CHARNECA) is not None
-    assert await road.travel_route(actor, BOSQUE) is not None
-    assert await road.travel_route(actor, RUINS) is None
-    assert await road.travel_route(actor, CHARNECA) is not None
+    assert await road.travel_route(actor, BOSQUE) is None
     assert await road.travel_route(actor, REFUGE) is not None
 
     offer = await s4.offer(actor)
     accepted = await s4.accept(actor, offer.state_version)
     assert accepted is not None and accepted.status == "active"
-    assert await road.travel_route(actor, CHARNECA) is not None
-    bosque = await road.travel_route(actor, BOSQUE)
-    assert bosque is not None and RUINS in bosque.route_destinations
+    refuge = await road.resume(actor)
+    assert RUINS in refuge.route_destinations
     ruins = await road.travel_route(actor, RUINS)
     assert ruins is not None and ruins.location == RUINS
-    assert await road.start_hunt(actor) is None
+    assert ruins.route_destinations == (REFUGE,)
+    # v1.0.18 (33.16 crit. 5): Local descoberto tem Caçada, sem Missão nem nível mínimo.
+    hunt = await road.start_hunt(actor)
+    assert hunt is not None and hunt.location == RUINS
 
 
 @pytest.mark.asyncio

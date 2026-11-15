@@ -154,7 +154,8 @@ def test_local_is_the_entry_for_manual_hunt_round_and_explore():
     assert _buttons(local)["road:explore:start"] == "Desbravar"
     assert "road:round:new:5" not in _callbacks(local)
     assert "road:route:refuge" not in _callbacks(local)
-    assert "world:map:fromlocal" in _callbacks(local)
+    # v1.0.18: nas Terras do Ocaso o hub do Refúgio substitui "Viajar".
+    assert "world:map:fromlocal" not in _callbacks(local)
     assert "❤️ HP · 120 / 200" in local.text
     assert "⚡ Vigor · 75 / 100" in local.text
 
