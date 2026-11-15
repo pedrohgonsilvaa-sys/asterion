@@ -132,8 +132,8 @@ def test_hall_screen():
     assert "1. Cinzas · 22 pts · 11 batalhas · 🎁 Elegível" in screen.text
 
 
-def test_benefits_links_the_trilha_and_errors_are_translated():
-    assert "cr:trail" in _buttons(render_benefits())
+def test_benefits_hides_the_trilha_and_errors_are_translated():
+    assert "cr:trail" not in _buttons(render_benefits())
     assert "P1" in error_text("chronicle_gate")
     assert error_text("whatever") == "Esta ação não está mais disponível."
     assert CAL.end_at - CAL.starts_at < timedelta(days=56)
