@@ -4015,6 +4015,10 @@ Texto completo e rascunho em `docs/specs/RASCUNHO_OVERRIDE_FONTE_MESTRA_TDO_v1.0
 | L7 | Nome técnico da ação Explorar e identificadores novos. | programmer |
 | L8 | Sincronizar a Fonte Visual/UI (rascunho do delta pronto). | autor |
 | L9 | **Resolvida em 2026-11-14:** entrada de Códice "Câmara do Poente" escrita em §16 (Regiões e Locais), com gatilho na descoberta por Explorar e dois textos (pré e pós P6 de quem vê). Gatilho proposto pelo narrative-designer e confirmado pelo autor em 2026-11-14. | narrative-designer + autor |
+| L10 | **Resolvida em 2026-11-14 (autor):** personagens existentes mantêm os Locais já descobertos pelo fluxo antigo (Missão ou rota), sem XP de Explorar; Explorar sorteia só os que faltam. | autor |
+| L11 | **Resolvida em 2026-11-14 (autor):** personagem que está num Local não descoberto pelo novo fluxo fica onde está, e esse Local conta como descoberto (sem XP de Explorar). | autor |
+| L12 | **Resolvida em 2026-11-14 (autor):** Explorar é individual também em Grupo; cada personagem tem as próprias descobertas. | autor |
+| L13 | **Resolvida em 2026-11-14 (autor):** o horário do último clique do anti-spam de 3 s (Explorar e Desbravar) é persistido no banco, por personagem. | autor + programmer |
 
 ## 33.16 Critérios de aceite (usados pelo QA)
 
