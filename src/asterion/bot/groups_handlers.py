@@ -345,7 +345,9 @@ def groups_router(
             if not 2 <= len(participant_ids) <= 4:
                 await query.answer("Selecione de dois a quatro integrantes.", show_alert=True)
                 return
-            context_payload = await road.group_hunts.context_payload(query.from_user.id)
+            context_payload = await road.group_hunts.context_payload(
+                query.from_user.id, participant_ids
+            )
             await service.propose_activity(
                 query.from_user.id,
                 activity_type="hunt_group",
@@ -355,7 +357,10 @@ def groups_router(
             )
         except (ValueError, GroupError) as exc:
             if isinstance(exc, GroupError) and exc.code not in {"stale", "hunt_context_changed"}:
-                await query.answer(_error_text(exc.code), show_alert=True)
+                await query.answer(
+                    getattr(exc, "user_message", None) or _error_text(exc.code),
+                    show_alert=True,
+                )
                 return
             await stale(query)
             return

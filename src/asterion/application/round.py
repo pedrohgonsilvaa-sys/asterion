@@ -70,6 +70,7 @@ from asterion.domain.road import (
     VDE_MATA_LOCATION,
     create_road_combat,
     creature_for,
+    hunt_enemy_level,
     hunt_profile_for_local_id,
     hunt_profile_for_location,
     select_creature,
@@ -174,14 +175,10 @@ class RoundService(RoadService):
         if profile.local_id == ROAD_LOCATION:
             if not await self._p1_completed(s, c.id):
                 return None
-        elif profile.local_id == CHARNECA_LOCATION and not await self._p2_completed(s, c.id):
-            return None
-        elif profile.local_id == BOSQUE_LOCATION and not await self._p3_completed(s, c.id):
-            return None
-        elif profile.local_id == RUINS_LOCATION:
-            if c.level < 8 or not await self._p4_completed(s, c.id):
-                return None
-            if not await self._has_location(s, c.id, RUINS_LOCATION):
+        elif profile.local_id in {CHARNECA_LOCATION, BOSQUE_LOCATION, RUINS_LOCATION}:
+            # v1.0.18 (33.16 crit. 5): so a descoberta abre o Local; a Ronda depende da
+            # primeira vitória manual (Unlock round_familiarity), checada por quem chama.
+            if not await self._has_location(s, c.id, profile.local_id):
                 return None
         elif profile.local_id == VDE_GARGANTA_LOCATION:
             if not await self._p7_completed(s, c.id):
@@ -1024,7 +1021,7 @@ class RoundService(RoadService):
         local_id = round_configuration.get("local_id")
         profile = hunt_profile_for_local_id(local_id)
         creature = select_creature(seed, c.level, profile=profile)
-        enemy_level = min(c.level, creature.max_level)
+        enemy_level = hunt_enemy_level(profile, creature, c.level)
         variant = select_variant(seed, creature, profile=profile)
         combat_id = uuid4()
         encounter_id = uuid4()

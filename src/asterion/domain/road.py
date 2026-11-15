@@ -1,6 +1,7 @@
 """Pure, deterministic rules for the Estrada das Cinzas repeatable content."""
 # ruff: noqa: E501
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal, localcontext
 from hashlib import sha256
@@ -3515,14 +3516,83 @@ def weighted_choice(seed: str, entries: tuple[tuple[str, int], ...]) -> str:
     return entries[-1][0]
 
 
-def select_creature(
-    seed: str, player_level: int, profile: HuntLocationProfile = ROAD_PROFILE
-) -> Creature:
-    eligible = tuple(
+# v1.0.18 (33.5, 33.16 crit. 14/15): nas Terras do Ocaso o inimigo tem o nivel do
+# Local (``max_enemy_level`` da criatura), em Solo e em Grupo. ``unlock_level`` nao
+# vale em Solo; em Grupo e requisito individual de cada membro.
+TDO_HUNT_LOCAL_IDS = frozenset(
+    {ROAD_LOCATION, CHARNECA_LOCATION, BOSQUE_LOCATION, RUINS_LOCATION}
+)
+
+
+def is_tdo_hunt_local(local_id: str | None) -> bool:
+    return local_id in TDO_HUNT_LOCAL_IDS
+
+
+def hunt_enemy_level(
+    profile: HuntLocationProfile, creature: Creature, reference_level: int
+) -> int:
+    """Nivel do inimigo de Cacada/Combate de Desbravar.
+
+    Terras do Ocaso: ``creature.max_level`` (sem ``min`` com o jogador).
+    Demais regioes: comportamento anterior.
+    """
+    if is_tdo_hunt_local(profile.local_id):
+        return creature.max_level
+    return min(reference_level, creature.max_level)
+
+
+def eligible_creature_weights(
+    profile: HuntLocationProfile,
+    player_level: int,
+    group_levels: Sequence[int] | None = None,
+) -> tuple[tuple[str, int], ...]:
+    """Pool de criaturas.
+
+    Terras do Ocaso, Solo (``group_levels`` None): pool completo, sem
+    ``unlock_level``. Terras do Ocaso, Grupo: so criaturas cujo ``unlock_level``
+    todos os membros cumprem. Demais regioes: filtro por ``player_level``.
+    """
+    if is_tdo_hunt_local(profile.local_id):
+        if group_levels is None:
+            return tuple(profile.creature_weights)
+        floor = min(group_levels)
+        return tuple(
+            (creature_id, weight)
+            for creature_id, weight in profile.creature_weights
+            if floor >= creature_for(creature_id).unlock_level
+        )
+    return tuple(
         (creature_id, weight)
         for creature_id, weight in profile.creature_weights
         if player_level >= creature_for(creature_id).unlock_level
     )
+
+
+def unlock_level_blockers(
+    profile: HuntLocationProfile, members: Sequence[tuple[str, int]]
+) -> tuple[str, ...]:
+    """Decisao 11: nomes de todos os membros que nao cumprem o ``unlock_level``.
+
+    Vazio se alguma criatura do Local e elegivel para todos (ou se o Local nao e
+    das Terras do Ocaso). Um membro bloqueia quando seu nivel e menor que o
+    ``unlock_level`` da criatura mais acessivel do Local.
+    """
+    if not is_tdo_hunt_local(profile.local_id) or not members:
+        return ()
+    if eligible_creature_weights(profile, 0, [level for _, level in members]):
+        return ()
+    lowest = min(creature_for(cid).unlock_level for cid, _ in profile.creature_weights)
+    return tuple(name for name, level in members if level < lowest)
+
+
+def select_creature(
+    seed: str,
+    player_level: int,
+    profile: HuntLocationProfile = ROAD_PROFILE,
+    *,
+    group_levels: Sequence[int] | None = None,
+) -> Creature:
+    eligible = eligible_creature_weights(profile, player_level, group_levels)
     if not eligible:
         raise ValueError(f"no eligible creatures for {profile.local_id} at level {player_level}")
     return creature_for(weighted_choice(seed, eligible))
@@ -3544,8 +3614,17 @@ def select_exploration_result(
             result
             for result in profile.results
             if result.category == category
-            and player_level >= result.min_level
-            and (result.creature_id is None or player_level >= creature_for(result.creature_id).unlock_level)
+            and (
+                # v1.0.18 (33.5, 33.6): Solo nas Terras do Ocaso nao filtra combate por nivel.
+                (result.category == "combat" and is_tdo_hunt_local(profile.local_id))
+                or player_level >= result.min_level
+            )
+            and (
+                result.creature_id is None
+                # v1.0.18: Solo nas Terras do Ocaso nao exclui por unlock_level.
+                or is_tdo_hunt_local(profile.local_id)
+                or player_level >= creature_for(result.creature_id).unlock_level
+            )
             and result.key not in excluded_set
             and result.result_id not in excluded_set
         )

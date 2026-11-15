@@ -227,10 +227,10 @@ def test_charneca_explore_profile_gates_and_shared_category_weights():
         ("aranha_cinza", 35),
         ("cervo_escoriado", 30),
     }
+    # v1.0.18: combate nao filtra por nivel em Solo; Grandes Descobertas seguem em Nv.4 (bloco C).
     forbidden_at_3 = {
         "explore.tdo.charneca.braseiro",
         "explore.tdo.charneca.cripta",
-        "explore.tdo.charneca.combat.cervo_escoriado",
     }
     results_at_3 = {
         select_exploration_result(str(seed), 3, profile=CHARNECA_EXPLORATION_PROFILE)
@@ -393,7 +393,7 @@ async def test_charneca_overland_route_and_hunt_freeze_local(database, monkeypat
         assert (context.local_id, context.category, context.enemy_level) == (
             CHARNECA_LOCATION,
             "uncommon",
-            3,
+            6,  # v1.0.18 crit. 14: nível do Local
         )
         assert await session.scalar(
             select(func.count(HuntContext.id)).where(

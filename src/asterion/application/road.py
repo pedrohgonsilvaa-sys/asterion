@@ -229,6 +229,7 @@ from asterion.domain.road import (
     crowns,
     enemy_xp,
     equipment_rarity,
+    hunt_enemy_level,
     hunt_profile_for_local_id,
     hunt_profile_for_location,
     material_for,
@@ -1886,7 +1887,7 @@ class RoadService:
     ) -> RoadView:
         seed = seed or uuid4().hex
         creature = select_creature(seed, reference_level or c.level, profile=profile)
-        level = min(reference_level or c.level, creature.max_level)
+        level = hunt_enemy_level(profile, creature, reference_level or c.level)
         variant = select_variant(seed, creature, profile=profile)
         combat_id = uuid4()
         equipment_configuration = await load_equipment_configuration(s, c)
@@ -2702,7 +2703,7 @@ class RoadService:
                 if creature_id is None:
                     raise RuntimeError(f"combat exploration result {result_id!r} has no creature")
                 creature = creature_for(creature_id)
-                level = min(c.level, creature.max_level)
+                level = hunt_enemy_level(hunt_profile, creature, c.level)
                 variant = select_variant(seed, creature, profile=hunt_profile)
                 equipment_configuration = await load_equipment_configuration(s, c)
                 active_art_configuration = await load_active_art_configuration(s, c)
