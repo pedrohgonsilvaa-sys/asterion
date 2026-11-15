@@ -68,7 +68,6 @@ def render_benefits(*, shop_open: bool = False) -> Screen:
         _keyboard(
             [
                 [_button("Dádiva Diária", "bn:gift")],
-                [_button("Trilha da Crônica", "cr:trail")],
                 [_button("Chamado de Asterion", "bn:call")],
                 [_button("Códigos de Asterion", "bn:code")],
                 *shop,
