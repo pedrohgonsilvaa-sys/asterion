@@ -59,10 +59,35 @@ def unavailable_media(exc: TelegramBadRequest) -> bool:
 CharacterArtLookup = Callable[[int], Awaitable[tuple[str, str | None, str] | None]]
 _character_art_lookup: CharacterArtLookup | None = None
 
+# Telegram file_ids are reusable by the same bot. Cache them so repeated screens
+# do not upload the same local image again.
+_photo_file_ids: dict[str, str] = {}
+
 
 def set_character_art_lookup(lookup: CharacterArtLookup | None) -> None:
     global _character_art_lookup
     _character_art_lookup = lookup
+
+
+def _local_media(image: str):
+    path = resolve_asset_file(image)
+    return FSInputFile(path) if path else None
+
+
+def _media_for_image(image: str | None):
+    if not image:
+        return None
+    if image.startswith("file:"):
+        cached = _photo_file_ids.get(image)
+        if cached:
+            return cached
+        return _local_media(image)
+    return image
+
+
+def _remember_photo_file_id(image: str | None, result: Message) -> None:
+    if image and image.startswith("file:") and result.photo:
+        _photo_file_ids[image] = result.photo[-1].file_id
 
 
 async def _player_character_image(images: dict[str, str], telegram_id: int) -> str | None:
@@ -89,18 +114,15 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
     if not image and screen.image_key == "character" and message.chat.type == "private":
         # In a private chat the chat id is the player's Telegram id.
         image = await _player_character_image(images, message.chat.id)
-    if image and image.startswith("file:"):
-        path = resolve_asset_file(image)
-        media = FSInputFile(path) if path else None
-    else:
-        media = image
+    media = _media_for_image(image)
     if edit:
         try:
             if media:
-                await message.edit_media(
+                result = await message.edit_media(
                     InputMediaPhoto(media=media, caption=screen.text, parse_mode=screen.parse_mode),
                     reply_markup=screen.keyboard,
                 )
+                _remember_photo_file_id(image, result)
                 return
             if not message.photo:
                 await message.edit_text(
@@ -113,8 +135,25 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
             reason = exc.message.lower()
             if "message is not modified" in reason:
                 return
-            if media and unavailable_media(exc):
-                media = None
+            if image and image.startswith("file:") and unavailable_media(exc):
+                # A cached Telegram file_id can expire/become invalid. Drop it and
+                # retry once with the original local file.
+                _photo_file_ids.pop(image, None)
+                media = _local_media(image)
+                if media:
+                    try:
+                        result = await message.edit_media(
+                            InputMediaPhoto(
+                                media=media,
+                                caption=screen.text,
+                                parse_mode=screen.parse_mode,
+                            ),
+                            reply_markup=screen.keyboard,
+                        )
+                        _remember_photo_file_id(image, result)
+                        return
+                    except TelegramBadRequest:
+                        pass
             elif not any(
                 fragment in reason
                 for fragment in (
@@ -127,15 +166,31 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
     # A missing/deleted/uneditable message cannot invalidate committed game state.
     if media:
         try:
-            await message.answer_photo(
+            result = await message.answer_photo(
                 media,
                 caption=screen.text,
                 reply_markup=screen.keyboard,
                 parse_mode=screen.parse_mode,
             )
+            _remember_photo_file_id(image, result)
             return
         except TelegramBadRequest as exc:
-            if not unavailable_media(exc):
+            if image and image.startswith("file:") and unavailable_media(exc):
+                _photo_file_ids.pop(image, None)
+                media = _local_media(image)
+                if media:
+                    try:
+                        result = await message.answer_photo(
+                            media,
+                            caption=screen.text,
+                            reply_markup=screen.keyboard,
+                            parse_mode=screen.parse_mode,
+                        )
+                        _remember_photo_file_id(image, result)
+                        return
+                    except TelegramBadRequest:
+                        pass
+            else:
                 raise
     await message.answer(screen.text, reply_markup=screen.keyboard, parse_mode=screen.parse_mode)
 
