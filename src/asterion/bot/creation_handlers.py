@@ -152,8 +152,9 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
                         )
                         _remember_photo_file_id(image, result)
                         return
-                    except TelegramBadRequest:
-                        pass
+                    except TelegramBadRequest as retry_exc:
+                        if not unavailable_media(retry_exc):
+                            raise
             elif not any(
                 fragment in reason
                 for fragment in (
@@ -188,8 +189,9 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
                         )
                         _remember_photo_file_id(image, result)
                         return
-                    except TelegramBadRequest:
-                        pass
+                    except TelegramBadRequest as retry_exc:
+                        if not unavailable_media(retry_exc):
+                            raise
             else:
                 raise
     await message.answer(screen.text, reply_markup=screen.keyboard, parse_mode=screen.parse_mode)
