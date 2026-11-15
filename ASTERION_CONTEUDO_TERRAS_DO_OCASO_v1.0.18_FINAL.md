@@ -4019,6 +4019,7 @@ Texto completo e rascunho em `docs/specs/RASCUNHO_OVERRIDE_FONTE_MESTRA_TDO_v1.0
 | L11 | **Resolvida em 2026-11-14 (autor):** personagem que está num Local não descoberto pelo novo fluxo fica onde está, e esse Local conta como descoberto (sem XP de Explorar). | autor |
 | L12 | **Resolvida em 2026-11-14 (autor):** Explorar é individual também em Grupo; cada personagem tem as próprias descobertas. | autor |
 | L13 | **Resolvida em 2026-11-14 (autor):** o horário do último clique do anti-spam de 3 s (Explorar e Desbravar) é persistido no banco, por personagem. | autor + programmer |
+| L14 | **Resolvida em 2026-11-14 (autor):** na reconciliação da L11, se o Local reconciliado for a Câmara do Poente, cria-se também a entrada de Códice `codex.location.camara_do_poente` (idempotente), sem XP. | autor |
 
 ## 33.16 Critérios de aceite (usados pelo QA)
 

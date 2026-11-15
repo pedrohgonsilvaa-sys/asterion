@@ -279,6 +279,21 @@ class CharacterArmorProficiency(Base):
     )
 
 
+class CharacterActionThrottle(Base):
+    """TdO v1.0.18 33.2/L13: last Explorar/Desbravar click, per character (anti-spam 3 s)."""
+
+    __tablename__ = "character_action_throttles"
+
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    last_action: Mapped[str] = mapped_column(String(32), nullable=False)
+    last_click_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolving: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+
+
 class SocialGroup(Base):
     """Persistent social group; activity rosters are stored separately."""
 
