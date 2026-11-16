@@ -60,10 +60,21 @@ async def test_legacy_callbacks_from_active_p1_road_return_to_refuge(database, c
         quest = await session.scalar(select(Quest).where(Quest.character_id == character.id))
         quest.status = "active"
         quest.step = 1
+        session.add(
+            Achievement(
+                character_id=character.id,
+                achievement_id="feat.tdo.cinzas_na_estrada",
+            )
+        )
         world = await session.scalar(
             select(WorldState).where(WorldState.character_id == character.id)
         )
         world.location = ROAD
+
+    starting_world = await WorldService(sessions, "ocaso").resume(actor)
+    assert starting_world is not None
+    assert starting_world.region == "Terras do Ocaso"
+    assert starting_world.location == ROAD
 
     dispatcher = Dispatcher(disable_fsm=True)
     dispatcher.include_router(
@@ -90,12 +101,12 @@ async def test_legacy_callbacks_from_active_p1_road_return_to_refuge(database, c
     bot.session.make_request = AsyncMock(side_effect=telegram_response)
     await dispatcher.feed_raw_update(bot, callback_update(callback_data, actor=actor))
 
+    await bot.session.close()
     screen = _last_screen(bot)
     assert "Refúgio do Ocaso" in screen.text
     async with sessions() as session:
         world = await session.scalar(select(WorldState))
         assert world.location == REFUGE
-    await bot.session.close()
 
 
 @pytest.mark.asyncio

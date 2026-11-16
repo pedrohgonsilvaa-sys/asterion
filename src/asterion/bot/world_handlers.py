@@ -261,7 +261,8 @@ def world_router(
         if view is None or view.region != "Terras do Ocaso":
             return False
         if view.location != REFUGE:
-            if road is None or await road.travel_route(query.from_user.id, REFUGE) is None:
+            moved = await road.travel_route(query.from_user.id, REFUGE) if road is not None else None
+            if moved is None:
                 return False
         await query.answer()
         updated = await service.resume(query.from_user.id)
@@ -1824,10 +1825,10 @@ def world_router(
 
     @router.callback_query(F.data == "world:adventure")
     async def adventure(query: CallbackQuery):
+        if await open_region_home(query):
+            return
         if await foreground(query):
             await query.answer()
-            return
-        if await open_region_home(query):
             return
         await query.answer()
         if isinstance(query.message, Message):
@@ -1842,10 +1843,10 @@ def world_router(
 
     @router.callback_query(F.data == "adv:hub")
     async def adventure_hub(query: CallbackQuery):
+        if await open_region_home(query):
+            return
         if await foreground(query):
             await query.answer()
-            return
-        if await open_region_home(query):
             return
         await query.answer()
         if isinstance(query.message, Message):
@@ -4669,10 +4670,10 @@ def world_router(
                     edit=True,
                 )
                 return
+        if await open_region_home(query):
+            return
         if await foreground(query):
             await query.answer()
-            return
-        if await open_region_home(query):
             return
         await query.answer()
         await show_menu(query)

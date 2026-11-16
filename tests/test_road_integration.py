@@ -1358,6 +1358,21 @@ async def test_refuge_exposes_road_route_during_first_p1_step(database):
 
 
 @pytest.mark.asyncio
+async def test_active_p1_on_road_can_return_to_refuge(database):
+    actor, road = await _seed_road(database, actor=771102)
+    async with database[1].begin() as session:
+        world = await session.scalar(select(WorldState))
+        quest = await session.scalar(select(Quest).where(Quest.quest_id == "P1"))
+        world.location = ROAD
+        quest.status = "active"
+        quest.step = 1
+
+    returned = await road.travel_route(actor, REFUGE)
+    assert returned is not None and returned.kind == "refuge"
+    assert returned.location == REFUGE
+
+
+@pytest.mark.asyncio
 async def test_travel_rejects_stale_callback_from_invalid_origin(database):
     actor, service = await _seed_road(database, 771111)
     async with database[1]() as session:
