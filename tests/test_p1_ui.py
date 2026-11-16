@@ -28,7 +28,7 @@ def test_p1_defeat_is_italic_and_recovery_action():
     assert "<i>Recuperado no Braseiro" in screen.text
     labels = [button.text for row in screen.keyboard.inline_keyboard for button in row]
     assert "Retornar à Estrada" in labels
-    assert "← Menu" in labels
+    assert "Voltar ao Refúgio" in labels
 
 
 def test_p1_completed_screen_has_rest_and_never_activate():
@@ -37,7 +37,7 @@ def test_p1_completed_screen_has_rest_and_never_activate():
     assert "❤️ Descansar · Restaura HP" in screen.text
     assert "✅ Vozes na Estrada · Concluída" in screen.text
     assert "Descansar" in [b.text for row in screen.keyboard.inline_keyboard for b in row]
-    assert "← Menu" in [b.text for row in screen.keyboard.inline_keyboard for b in row]
+    assert "Voltar ao Refúgio" in [b.text for row in screen.keyboard.inline_keyboard for b in row]
     assert "Ativar Braseiro" not in screen.text
 
 

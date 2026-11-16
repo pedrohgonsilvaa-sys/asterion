@@ -7,6 +7,7 @@ from asterion.application.legacy import LegacyView
 from asterion.application.world import WorldView
 from asterion.bot.creation_ui import Screen
 from asterion.bot.flavor_ui import with_flavor
+from asterion.bot.tdo_hub_ui import refuge_global_rows, refuge_hub_rows
 
 LORE = (
     "Sob céus cobertos de fuligem, as estradas de Asterion seguem marcadas por ruínas, "
@@ -184,6 +185,38 @@ def render_world(view: WorldView) -> Screen:
         for i in range(0, len(labels), 2)
     ]
     return Screen(text, "menu", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def render_refuge_dashboard(
+    view: WorldView,
+    *,
+    route_destinations: tuple[str, ...],
+    explore_remaining: int | None,
+    can_hunt: bool,
+    known_dungeons: bool,
+) -> Screen:
+    """The Terras do Ocaso main screen: character HUD plus Refúgio actions."""
+    dashboard = render_world(view)
+    hub_lines, hub_rows = refuge_hub_rows(
+        route_destinations,
+        explore_remaining=explore_remaining,
+        can_hunt=can_hunt,
+        known_dungeons=known_dungeons,
+    )
+    rows = list(hub_rows)
+    if "Refúgio do Ocaso" in route_destinations or view.location == "Refúgio do Ocaso":
+        rows.extend(
+            [
+                [InlineKeyboardButton(text="Alda Veyr", callback_data="p2:alda")],
+                [InlineKeyboardButton(text="Oren Cal", callback_data="world:oren")],
+                [InlineKeyboardButton(text="Treinador de Armas", callback_data="wpt:root")],
+            ]
+        )
+    rows.extend(refuge_global_rows())
+    text = dashboard.text
+    if hub_lines:
+        text = f"{text}\n\n" + "\n".join(hub_lines)
+    return Screen(text, "refuge", InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 def render_legacy(

@@ -56,7 +56,7 @@ from asterion.application.road import (
 from asterion.bot.asset_catalog import location_key
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
-from asterion.bot.tdo_hub_ui import back_to_refuge_row, refuge_hub_rows, render_camara
+from asterion.bot.tdo_hub_ui import BACK_TO_REFUGE, refuge_hub_rows, render_camara
 from asterion.domain.road import LOCATION_LEVEL_BANDS
 
 
@@ -1139,11 +1139,15 @@ def render_current_local(
             keyboard.append(
                 [InlineKeyboardButton(text="Missão Atual", callback_data="world:missions")]
             )
-    if view.location in {ROAD, CHARNECA, BOSQUE, RUINS} and REFUGE in view.route_destinations:
-        keyboard.append(back_to_refuge_row())
+    is_tdo_location = view.location in {ROAD, REFUGE, CHARNECA, BOSQUE, RUINS, CAMARA}
     if view.location not in HUB_DESTINATION_LABELS:
         keyboard.append([InlineKeyboardButton(text="Viajar", callback_data="world:map:fromlocal")])
-    keyboard.append([InlineKeyboardButton(text="← Campanha", callback_data="world:adventure")])
+    if is_tdo_location:
+        keyboard.append(
+            [InlineKeyboardButton(text=BACK_TO_REFUGE, callback_data="road:route:refuge")]
+        )
+    else:
+        keyboard.append([InlineKeyboardButton(text="← Campanha", callback_data="world:adventure")])
     return Screen(
         "\n".join(lines),
         # Standing at a Brazier shows that Brazier's art (see asset_catalog).

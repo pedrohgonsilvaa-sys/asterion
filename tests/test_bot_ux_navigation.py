@@ -74,6 +74,30 @@ def test_adventure_root_displays_only_supplied_current_principal_quest():
     assert "P2" not in screen.text
 
 
+def test_other_regions_keep_campaign_and_adventure_menu_entries():
+    world = WorldView(
+        kind="menu",
+        character_id=uuid4(),
+        name="Aster",
+        race="remanescente",
+        character_class="sentinela",
+        hp=Decimal("100"),
+        max_hp=Decimal("100"),
+        vigor=80,
+        max_vigor=100,
+        xp=200,
+        region="Vales dos Enforcados",
+        location="Garganta dos Laços",
+        quest_title=None,
+    )
+    labels = {
+        button.text
+        for row in render_world(world).keyboard.inline_keyboard
+        for button in row
+    }
+    assert {"Campanha", "Aventura"} <= labels
+
+
 def test_primary_telegram_screens_have_live_compact_callbacks_and_exits():
     world = WorldView(
         kind="menu",
@@ -153,7 +177,7 @@ def test_local_is_the_entry_for_manual_hunt_round_and_explore():
     assert _buttons(local)["world:round"] == "Ronda"
     assert _buttons(local)["road:explore:start"] == "Desbravar"
     assert "road:round:new:5" not in _callbacks(local)
-    assert "road:route:refuge" not in _callbacks(local)
+    assert _buttons(local)["road:route:refuge"] == "Voltar ao Refúgio"
     # v1.0.18: nas Terras do Ocaso o hub do Refúgio substitui "Viajar".
     assert "world:map:fromlocal" not in _callbacks(local)
     assert "❤️ HP · 120 / 200" in local.text

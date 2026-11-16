@@ -117,7 +117,7 @@ def render_s1(view: S1View) -> Screen:
             "\n".join(lines),
             "s1_completed",
             InlineKeyboardMarkup(
-                inline_keyboard=[[_button("← Refúgio do Ocaso", "road:local")]]
+                inline_keyboard=[[_button("Voltar ao Refúgio", "menu:back")]]
             ),
         )
 
@@ -250,6 +250,6 @@ def render_missions_after_s1_abandon() -> Screen:
         text,
         "missions",
         InlineKeyboardMarkup(
-            inline_keyboard=[[_button("← Campanha", "world:adventure")]]
+            inline_keyboard=[[_button("Voltar ao Refúgio", "menu:back")]]
         ),
     )

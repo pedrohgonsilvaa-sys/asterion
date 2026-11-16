@@ -20,6 +20,7 @@ from asterion.infrastructure.db.models import (
     Brazier,
     Character,
     GameActivity,
+    LocationDiscovery,
     Quest,
     WorldState,
 )
@@ -222,6 +223,14 @@ class WorldService:
                         content_version="tdo-1.0.2",
                     )
                 )
+                world.region = "Terras do Ocaso"
+                world.location = "Refúgio do Ocaso"
+                await self._ensure(
+                    session,
+                    LocationDiscovery,
+                    character_id=c.id,
+                    location_id="tdo.location.refugio_do_ocaso",
+                )
                 c.stage = "menu:ready"
                 first_menu = True
             elif c.stage != "menu:ready":
@@ -230,3 +239,9 @@ class WorldService:
             # ready character. Permanent rest is authorized by RoadService.
         view = await self.resume(actor)
         return replace(view, first_menu=True) if view and first_menu else view
+
+    @staticmethod
+    async def _ensure(session, model, **values):
+        found = await session.scalar(select(model).filter_by(**values).with_for_update())
+        if found is None:
+            session.add(model(**values))

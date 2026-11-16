@@ -1330,7 +1330,7 @@ async def test_bestiary_variant_repetition_and_alpha_requirements(database):
 
 
 @pytest.mark.asyncio
-async def test_road_navigation_waits_for_p1_completed(database):
+async def test_refuge_exposes_road_route_during_first_p1_step(database):
     actor, service = await _seed_road(database, 771110, include_p1=False)
     assert await service.resume(actor) is None
     assert await service.travel(actor, ROAD) is None
@@ -1347,7 +1347,9 @@ async def test_road_navigation_waits_for_p1_completed(database):
             )
         )
         await session.commit()
-    assert await service.resume(actor) is None
+    refuge = await service.resume(actor)
+    assert refuge is not None and refuge.kind == "refuge"
+    assert refuge.route_destinations == (ROAD,)
     async with database[1]() as session:
         quest = await session.scalar(select(Quest).where(Quest.quest_id == "P1"))
         quest.status = "completed"

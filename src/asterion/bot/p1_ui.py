@@ -33,7 +33,7 @@ def render_p1(view: P1View) -> Screen:
             "🔥 Braseiro · Descoberto\n❤️ Descansar · Restaura HP\n\n"
             "✅ Vozes na Estrada · Concluída"
         )
-        keyboard = [[_button("Descansar", "world:rest")], [_button("← Menu", "menu:back")]]
+        keyboard = [[_button("Descansar", "world:rest")], [_button("Voltar ao Refúgio", "menu:back")]]
         return Screen(text, "p1_completed", InlineKeyboardMarkup(inline_keyboard=keyboard))
     if view.step == 1:
         text = (
@@ -85,7 +85,7 @@ def render_p1(view: P1View) -> Screen:
                 if view.proposal_id is not None
                 else []
             ),
-            [_button("← Menu", "menu:back")],
+            [_button("Voltar ao Refúgio", "menu:back")],
         ]
     elif view.step == 3:
         text = (

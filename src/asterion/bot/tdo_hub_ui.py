@@ -86,20 +86,31 @@ def back_to_refuge_row() -> list[InlineKeyboardButton]:
 
 
 def refuge_hub_rows(
-    route_destinations: tuple[str, ...], *, explore_remaining: int | None
+    route_destinations: tuple[str, ...],
+    *,
+    explore_remaining: int | None,
+    can_hunt: bool = True,
+    known_dungeons: bool = True,
 ) -> tuple[list[str], list[list[InlineKeyboardButton]]]:
     """Linhas de texto e botões do hub na tela do Refúgio (66.1 item 2)."""
     lines: list[str] = []
     rows: list[list[InlineKeyboardButton]] = []
+    first_row: list[InlineKeyboardButton] = []
     if explore_remaining == 0:
         lines.append(f"🧭 Explorar · {TEXT_NOTHING_TO_EXPLORE}")
     else:
         lines.append("🧭 Explorar · Revela um Local")
-        rows.append([InlineKeyboardButton(text="Explorar", callback_data="tdo:explore")])
-    if any(label in HUNT_LABELS for label in route_destinations):
-        rows.append([InlineKeyboardButton(text="Caçar", callback_data="tdo:hunt")])
-    rows.append([InlineKeyboardButton(text="Masmorra (Covil)", callback_data="dungeon:known")])
-    rows.append([InlineKeyboardButton(text="Personagem", callback_data="character:root")])
+        first_row.append(InlineKeyboardButton(text="Explorar", callback_data="tdo:explore"))
+    first_row.append(InlineKeyboardButton(text="Mapa", callback_data="world:map"))
+    rows.append(first_row)
+    activities_row: list[InlineKeyboardButton] = []
+    if can_hunt and any(label in HUNT_LABELS for label in route_destinations):
+        activities_row.append(InlineKeyboardButton(text="Caçar", callback_data="tdo:hunt"))
+    if known_dungeons:
+        activities_row.append(InlineKeyboardButton(text="Masmorra", callback_data="dungeon:known"))
+    if activities_row:
+        rows.append(activities_row)
+    rows.append([InlineKeyboardButton(text="Missões", callback_data="world:missions")])
     if route_destinations:
         lines.extend(["", "📍 Locais descobertos"])
     for label in route_destinations:
@@ -115,6 +126,22 @@ def refuge_hub_rows(
             ]
         )
     return lines, rows
+
+
+def refuge_global_rows() -> list[list[InlineKeyboardButton]]:
+    """Entradas do Menu Principal mantidas como atalhos no Refúgio."""
+    pairs = (
+        (("Personagem", "character:root"), ("Guilda", "guild:root")),
+        (("Mercado", "mkt:root"), ("Arena", "pvp:hub")),
+        (("Códice", "knowledge:codex"), ("Calendário", "calendar:root")),
+        (("Vínculos", "links:root"), ("Classificação", "pvp:rank")),
+        (("Benefícios", "bn:root"), ("Comunidade", "community:open")),
+        (("Configurações", "settings:root"),),
+    )
+    return [
+        [InlineKeyboardButton(text=label, callback_data=callback) for label, callback in pair]
+        for pair in pairs
+    ]
 
 
 def render_camara(p6_completed: bool) -> Screen:
@@ -138,14 +165,14 @@ def render_hunt_choice(route_destinations: tuple[str, ...]) -> Screen:
                 )
             ]
         )
-    rows.append([InlineKeyboardButton(text=f"← {REFUGE_LABEL}", callback_data="world:local")])
+    rows.append([InlineKeyboardButton(text=BACK_TO_REFUGE, callback_data="world:local")])
     keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
     return Screen("\n".join(lines), location_key(REFUGE_LABEL), keyboard)
 
 
 def render_explore_result(result: ExploreResult) -> Screen:
     """Resultado de Explorar (66.2): Local revelado, XP e aparece no Refúgio; sem Vigor."""
-    back_button = InlineKeyboardButton(text=f"← {REFUGE_LABEL}", callback_data="world:local")
+    back_button = InlineKeyboardButton(text=BACK_TO_REFUGE, callback_data="world:local")
     back = InlineKeyboardMarkup(inline_keyboard=[[back_button]])
     if result.status == "discovered":
         label = result.label or ""
@@ -157,7 +184,7 @@ def render_explore_result(result: ExploreResult) -> Screen:
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text="Explorar", callback_data="tdo:explore")],
-                [InlineKeyboardButton(text=f"← {REFUGE_LABEL}", callback_data="world:local")],
+                [InlineKeyboardButton(text=BACK_TO_REFUGE, callback_data="world:local")],
             ]
         )
         return Screen("\n".join(lines), location_key(REFUGE_LABEL), keyboard)

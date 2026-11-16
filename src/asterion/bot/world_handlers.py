@@ -153,7 +153,13 @@ from asterion.bot.s36_ui import render_s36
 from asterion.bot.tdo_hub_ui import render_explore_result, render_hunt_choice
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
 from asterion.bot.vde_missions_ui import render_vde_mission
-from asterion.bot.world_ui import render_adventure, render_campaign, render_legacy, render_world
+from asterion.bot.world_ui import (
+    render_adventure,
+    render_campaign,
+    render_legacy,
+    render_refuge_dashboard,
+    render_world,
+)
 
 
 def _warehouse_error(code: str) -> str:
@@ -229,16 +235,58 @@ def world_router(
     router.message.filter(F.chat.type == "private")
     router.callback_query.filter(F.message.chat.type == "private")
 
+    async def refuge_home(actor: int, view=None) -> Screen | None:
+        view = view or await service.resume(actor)
+        if view is None or view.region != "Terras do Ocaso" or view.location != REFUGE:
+            return None
+        road_view = await road.resume(actor) if road is not None else None
+        routes = road_view.route_destinations if road_view is not None else ()
+        p1_view = await p1.resume(actor) if p1 is not None else None
+        if p1_view is not None and p1_view.status == "active" and p1_view.step == 1:
+            routes = (ROAD,)
+        remaining = await tdo_explore.remaining(actor) if tdo_explore is not None else None
+        dungeon_view = await dungeons.known(actor) if dungeons is not None else None
+        return render_refuge_dashboard(
+            view,
+            route_destinations=routes,
+            explore_remaining=len(remaining) if remaining is not None else None,
+            can_hunt=bool(routes) and not (p1_view is not None and p1_view.status == "active"),
+            known_dungeons=bool(dungeon_view and dungeon_view.known_dungeons),
+        )
+
+    async def open_region_home(query: CallbackQuery) -> bool:
+        if not isinstance(query.message, Message):
+            return False
+        view = await service.resume(query.from_user.id)
+        if view is None or view.region != "Terras do Ocaso":
+            return False
+        if view.location != REFUGE:
+            if road is None or await road.travel_route(query.from_user.id, REFUGE) is None:
+                return False
+        await query.answer()
+        updated = await service.resume(query.from_user.id)
+        screen = await refuge_home(query.from_user.id, updated)
+        if screen is not None:
+            await present(query.message, screen, images, edit=True)
+            return True
+        return False
+
+    async def region_return_button(actor: int, legacy_label: str) -> InlineKeyboardButton:
+        view = await service.resume(actor)
+        if view is not None and view.region == "Terras do Ocaso":
+            return InlineKeyboardButton(text="Voltar ao Refúgio", callback_data="menu:back")
+        return InlineKeyboardButton(text=legacy_label, callback_data="world:adventure")
+
     async def resume_world_or_prologue(actor: int) -> Screen | None:
         view = await service.resume(actor)
         if view is not None:
-            return render_world(view)
+            return await refuge_home(actor, view) or render_world(view)
         if prologue is None:
             return None
         combat_view = await prologue.resume(actor)
         view = await service.resume(actor)
         if view is not None:
-            return render_world(view)
+            return await refuge_home(actor, view) or render_world(view)
         return render_combat(combat_view) if combat_view is not None else None
 
     async def resume_altos(message: Message, actor: int, *, edit: bool = False) -> bool:
@@ -402,6 +450,10 @@ def world_router(
             await present(message, render_p6(p6_view), images)
             return
         if road_view is not None:
+            refuge_screen = await refuge_home(message.from_user.id)
+            if refuge_screen is not None:
+                await present(message, refuge_screen, images)
+                return
             local_screen = await current_local_screen(message.from_user.id, road_view)
             await present(message, local_screen or render_road(road_view), images)
             return
@@ -811,6 +863,10 @@ def world_router(
             await present(query.message, render_p3(p3_view), images, edit=True)
             return
         if road_view is not None:
+            refuge_screen = await refuge_home(query.from_user.id)
+            if refuge_screen is not None:
+                await present(query.message, refuge_screen, images, edit=True)
+                return
             local_screen = await current_local_screen(query.from_user.id, road_view)
             await present(query.message, local_screen or render_road(road_view), images, edit=True)
             return
@@ -855,7 +911,8 @@ def world_router(
         view = await service.rest(query.from_user.id)
         if view and isinstance(query.message, Message):
             await query.answer()
-            await present(query.message, render_world(view), images, edit=True)
+            screen = await refuge_home(query.from_user.id, view) or render_world(view)
+            await present(query.message, screen, images, edit=True)
             if view.first_menu and community_url:
                 await query.message.answer(
                     community_invite_text(),
@@ -1637,6 +1694,12 @@ def world_router(
                     await road.round_back(query.from_user.id, current.round_id)
         view = await road.travel_route(query.from_user.id, destination)
         if view is not None:
+            if destination == REFUGE:
+                world_view = await service.resume(query.from_user.id)
+                screen = await refuge_home(query.from_user.id, world_view)
+                if screen is not None:
+                    await present(query.message, screen, images, edit=True)
+                    return
             if destination in {
                 ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL,
                 ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL,
@@ -1764,6 +1827,8 @@ def world_router(
         if await foreground(query):
             await query.answer()
             return
+        if await open_region_home(query):
+            return
         await query.answer()
         if isinstance(query.message, Message):
             _, current, _, _, _, _ = await map_state(query.from_user.id)
@@ -1779,6 +1844,8 @@ def world_router(
     async def adventure_hub(query: CallbackQuery):
         if await foreground(query):
             await query.answer()
+            return
+        if await open_region_home(query):
             return
         await query.answer()
         if isinstance(query.message, Message):
@@ -2757,9 +2824,7 @@ def world_router(
                 keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
             else:
                 text += "\n\n🔒 Onde Tudo se Enreda · Requer P10 concluída, Nv.19 e Claustro das Raízes"
-        keyboard.append(
-            [InlineKeyboardButton(text="← Campanha", callback_data="world:adventure")]
-        )
+        keyboard.append([await region_return_button(query.from_user.id, "← Campanha")])
         await present(
             query.message,
             Screen(text, "missions", InlineKeyboardMarkup(inline_keyboard=keyboard)),
@@ -3036,9 +3101,7 @@ def world_router(
                     InlineKeyboardMarkup(
                         inline_keyboard=[
                             [
-                                InlineKeyboardButton(
-                                    text="← Campanha", callback_data="world:adventure"
-                                )
+                                await region_return_button(query.from_user.id, "← Campanha")
                             ]
                         ]
                     ),
@@ -3489,6 +3552,10 @@ def world_router(
         if not isinstance(query.message, Message):
             return
         _, current, road_view, _, _, _ = await map_state(query.from_user.id)
+        refuge_screen = await refuge_home(query.from_user.id)
+        if current == REFUGE and refuge_screen is not None:
+            await present(query.message, refuge_screen, images, edit=True)
+            return
         local_screen = await current_local_screen(query.from_user.id, road_view)
         if local_screen is not None:
             await present(query.message, local_screen, images, edit=True)
@@ -3507,7 +3574,7 @@ def world_router(
                     inline_keyboard=[
                         [InlineKeyboardButton(text="Missões", callback_data="world:missions")],
                         [InlineKeyboardButton(text="Viajar", callback_data="world:map:fromlocal")],
-                        [InlineKeyboardButton(text="← Campanha", callback_data="world:adventure")],
+                        [await region_return_button(query.from_user.id, "← Campanha")],
                     ]
                 ),
             ),
@@ -3952,10 +4019,13 @@ def world_router(
             return
         from_local = (query.data or "") == "world:map:fromlocal"
         known, current, _road_view, _p2_view, _p3_view, _p4_view = await map_state(query.from_user.id)
-        parent_callback = "world:local" if from_local else "world:adventure"
+        world_view = await service.resume(query.from_user.id)
+        in_tdo = world_view is not None and world_view.region == "Terras do Ocaso"
+        parent_callback = "world:local" if from_local or in_tdo else "world:adventure"
+        parent_label = "Voltar ao Refúgio" if in_tdo else "← Local Atual" if from_local else "← Campanha"
         if not known:
             text = "🗺️ Mapa\n\nNenhuma Região conhecida."
-            keyboard = [[InlineKeyboardButton(text=f"← {'Local Atual' if from_local else 'Campanha'}", callback_data=parent_callback)]]
+            keyboard = [[InlineKeyboardButton(text=parent_label, callback_data=parent_callback)]]
         else:
             current_icon = (
                 "🌑" if current in {CHARNECA, VDE_GARGANTA} else
@@ -4007,7 +4077,7 @@ def world_router(
                 [InlineKeyboardButton(text=str(index), callback_data=f"world:map:region:{'tdo' if name == 'Terras do Ocaso' else 'vde' if name == 'Vales dos Enforcados' else 'nareth' if name == NARETH_REGION else 'altos' if name == ALTOS_REGION_LABEL else 'confins' if name == CONFINS_REGION_LABEL else 'varzeas'}{':fromlocal' if from_local else ''}")]
                 for index, name in enumerate(known_regions, start=1)
             ]
-            keyboard = region_buttons + [[InlineKeyboardButton(text=f"← {'Local Atual' if from_local else 'Campanha'}", callback_data=parent_callback)]]
+            keyboard = region_buttons + [[InlineKeyboardButton(text=parent_label, callback_data=parent_callback)]]
         await present(
             query.message,
             Screen(text, "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
@@ -4601,6 +4671,8 @@ def world_router(
                 return
         if await foreground(query):
             await query.answer()
+            return
+        if await open_region_home(query):
             return
         await query.answer()
         await show_menu(query)

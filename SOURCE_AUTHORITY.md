@@ -1,6 +1,6 @@
 # Autoridade das Fontes
 
-**Índice atualizado:** 2026-11-14.
+**Índice atualizado:** 2026-11-16.
 
 > **Índice geral único:** `SOURCE_AUTHORITY.md` é o registro de governança que seleciona as versões autoritativas por escopo. Patches de sincronização são artefatos operacionais e não constituem uma segunda autoridade. Em conflito com índices/patches anteriores, este arquivo prevalece quanto à seleção de versões, sem alterar o conteúdo interno das Fontes.
 
@@ -16,6 +16,8 @@
 
 > **Sincronização 2026-11-13 (Proficiências de Armas):** por decisão do autor, a **Especificação Final de Proficiências de Armas, Catálogo de Armas e Regras de Equipamento v1.0.0** (`docs/specs/ASTERION_ESPECIFICACAO_FINAL_PROFICIENCIAS_EQUIPAMENTO_v1_0_0.md`) substitui o sistema de Proficiências da v1.7.0. A Fonte Mestra passa a ser o **GDD Estrutural v1.7.1** (`ASTERION_GDD_Estrutural_v1.7.1_Fonte_Mestra.md`) e o Contrato Global de Weapon Metadata passa a ser a **v1.1.1 FINAL** (`ASTERION_CONTRATO_GLOBAL_WEAPON_METADATA_v1.1.1_FINAL.md`). Ficam **revogados**: categorias de proteção corporal (Vestes, Leve, Média, Pesada) e seus núcleos, Proficiências naturais múltiplas, Treinamento em etapas I–IV e kits de Origem de 34 templates; volta o núcleo corporal por slot (Conjunto HP305/ATQ56/DEF33/AGI16). Entram: 8 famílias + Escudo, catálogo final de 19 armas + Escudo, matriz por Classe, 1 Proficiência inicial, Treinador de Armas no Refúgio do Ocaso (1.000 a 20.000 Coroas, Nível 10 a 50, sem teto) e arma inicial Comum +0 Grau I. O núcleo de Escudo e os pesos de Saque v0.4 não mudam. As versões v1.7.0 e v1.1.0 permanecem no repositório como registro histórico.
 > **Sincronização 2026-11-14:** o autor adotou **Terras do Ocaso v1.0.18 FINAL** como Fonte Regional vigente da Região 1 (a v1.0.17 FINAL passa a histórica) e registrou o **Override regional** da Fonte Mestra descrito na seção "Override regional — Terras do Ocaso v1.0.18", logo após a Região 1. A Fonte Visual/UI recebeu a seção 66 (mapa, Explorar e Câmara do Poente). A `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.18_PROPOSTA.md` está superada pela FINAL e não tem autoridade. O GDD v1.6.0 continua superior fora dos 9 itens do override; ele deve incorporá-los na próxima revisão.
+
+> **Sincronização 2026-11-16:** por decisão do autor, a **Consolidação de Visual & UI v1.6.2** (`ASTERION_UI_DECISOES_2026-11-16_FINAL_SYNC_v1.6.2_TDO_v1.0.18_VALES_v1.0.6.md`) passa a ser a Fonte Visual/UI vigente, substituindo a v1.6.1. A seção 66.1 define o Refúgio do Ocaso como tela principal nas Terras do Ocaso, incorpora os atalhos globais aprovados, preserva a abertura no Local atual e direciona os retornos regionais ao Refúgio. Campanha/Aventura permanecem nas demais regiões. Esta revisão não altera regras mecânicas nem conteúdo regional.
 
 > **Nota 2026-11-14:** A Crônica I anterior foi pausada em 2026-11-14 para reprojeto futuro. A proposta v0.2 e suas decisões não constituem canon nem compromisso da futura implementação.
 
@@ -172,13 +174,11 @@ A aprovação de conteúdo regional C foi confirmada em 2026-10-18. Para sistema
 
 A apresentação player-facing deve seguir:
 
-**ASTERION — Consolidação de Visual & UI v1.6.1 — sincronizada com Fonte Mestra v1.6.0 + Terras do Ocaso v1.0.18 + Vales dos Enforcados v1.0.6**
+**ASTERION — Consolidação de Visual & UI v1.6.2 — sincronizada com Fonte Mestra v1.7.1 + Terras do Ocaso v1.0.18 + Vales dos Enforcados v1.0.6**
 
-Arquivo vigente: `ASTERION_UI_DECISOES_2026-11-14_FINAL_SYNC_v1.6.1_TDO_v1.0.18_VALES_v1.0.6.md`.
+Arquivo vigente: `ASTERION_UI_DECISOES_2026-11-16_FINAL_SYNC_v1.6.2_TDO_v1.0.18_VALES_v1.0.6.md`.
 
-> **Atualização 2026-11-14:** a v1.6.1 é cópia versionada da v1.6.0 com a **seção 66** acrescentada (Terras do Ocaso v1.0.18: Refúgio como hub, Explorar, Câmara do Poente com texto pré/pós P6 por personagem, bloqueio da Caçada em Grupo citando todos os membros sem mostrar o número do nível mínimo, Caçada e Desbravar da Estrada escondidos durante P1). Nas Terras do Ocaso, a seção 66 prevalece sobre as seções 35 e 37.1 do mesmo arquivo. A v1.6.0 (`ASTERION_UI_DECISOES_2026-10-13_FINAL_SYNC_v1.6.0_TDO_v1.0.15_VALES_v1.0.6.md`) passa a **histórica**. Texto de trabalho: `docs/specs/RASCUNHO_DELTA_FONTE_VISUAL_UI_TDO_v1.0.18.md`.
-
-A Fonte Visual/UI permanece o arquivo sincronizado em 2026-10-13 com Fonte Mestra v1.6.0, TDO v1.0.15 e Vales v1.0.6. As revisões regionais **TDO v1.0.16** e **Nareth v1.0.2**, bem como as revisões mecânicas de **Várzeas v1.0.2** (durações de Barreira) e **v1.0.3** (estado contextual de encontro, sem novo contrato universal de UI), não criam novo componente universal nem alteram o contrato geral de navegação, layout ou nomenclatura sistêmica; por isso este mesmo documento Visual/UI continua vigente.
+> **Atualização 2026-11-16:** a v1.6.2 é cópia versionada da v1.6.1 com a seção 66.1 reescrita por decisão do autor. Nas Terras do Ocaso, o Refúgio passa a tela principal e recebe as ações regionais e atalhos globais aprovados; retornos regionais e fim de Missão levam ao Refúgio. O personagem continua reabrindo no Local atual. Após o Prólogo, fica fisicamente no Refúgio; a etapa 1 de P1 conduz à Estrada. A seção 66.1 prevalece sobre indicações conflitantes das seções 45.9 e 46.2. Campanha/Aventura não aparecem nas Terras do Ocaso e permanecem nas demais regiões. A v1.6.1 e a v1.6.0 passam a históricas.
 
 Ela define nomenclatura, texto, estrutura de telas, navegação, estados visuais e UX do Bot do Telegram. É subordinada à Fonte Mestra para regras mecânicas/números e à Fonte Regional para conteúdo regional oficial.
 
