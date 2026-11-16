@@ -1,0 +1,33 @@
+# Deploy manual na VPS. Roda só quando você clica em "Run workflow" no GitHub.
+# Segue docs/OPERACAO.md, seção 4. Não roda sozinho ao mesclar PR.
+name: deploy-vps
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: producao
+    steps:
+      - name: Preparar chave SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Conferir backup recente (exigido antes do deploy)
+        run: |
+          ssh -i ~/.ssh/id_deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "cd ${{ secrets.VPS_PATH }} && find backups -maxdepth 1 -type f -name '*.dump' -mmin -1440 -print -quit | grep -q . || { echo 'Sem backup .dump das últimas 24h. Pare.'; exit 1; }"
+
+      - name: Atualizar código e subir containers
+        run: |
+          ssh -i ~/.ssh/id_deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "cd ${{ secrets.VPS_PATH }} && git pull origin main && docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build"
+
+      - name: Conferir logs do bot
+        run: |
+          ssh -i ~/.ssh/id_deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "cd ${{ secrets.VPS_PATH }} && docker compose --env-file .env.prod -f docker-compose.prod.yml logs --tail 100 bot"
