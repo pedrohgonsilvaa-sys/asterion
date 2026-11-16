@@ -18,6 +18,8 @@ from asterion.application.character_names import name_available
 from asterion.application.character_surfaces import CharacterSurfacesService
 from asterion.application.chronicle import ChronicleService
 from asterion.application.creation import CreationService
+from asterion.application.p1 import P1Service
+from asterion.application.road import REFUGE, ROAD, RoadService
 from asterion.application.world import WorldService
 from asterion.bot.character_surfaces_handlers import character_surfaces_router
 from asterion.bot.chronicle_handlers import chronicle_router
@@ -35,6 +37,8 @@ from asterion.infrastructure.db.models import (
     CharacterProfile,
     CharacterRenameHistory,
     GameActivity,
+    Quest,
+    WorldState,
 )
 from tests.test_character_surfaces_telegram import _button, _last_screen, _message_update
 from tests.test_creation_ui import callback_update
@@ -43,6 +47,66 @@ from tests.test_road_integration import _seed_road
 
 def _service(sessions):
     return AccountService(sessions, "ocaso", NamePolicy())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("callback_data", ["world:adventure", "adv:hub", "menu:back"])
+async def test_legacy_callbacks_from_active_p1_road_return_to_refuge(database, callback_data):
+    actor = 893099
+    await _seed_road(database, actor=actor)
+    sessions = database[1]
+    async with sessions.begin() as session:
+        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
+        quest = await session.scalar(select(Quest).where(Quest.character_id == character.id))
+        quest.status = "active"
+        quest.step = 1
+        session.add(
+            Achievement(
+                character_id=character.id,
+                achievement_id="feat.tdo.cinzas_na_estrada",
+            )
+        )
+        world = await session.scalar(
+            select(WorldState).where(WorldState.character_id == character.id)
+        )
+        world.location = ROAD
+
+    starting_world = await WorldService(sessions, "ocaso").resume(actor)
+    assert starting_world is not None
+    assert starting_world.region == "Terras do Ocaso"
+    assert starting_world.location == ROAD
+
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        world_router(
+            WorldService(sessions, "ocaso"),
+            {},
+            p1=P1Service(sessions, "ocaso"),
+            road=RoadService(sessions, "ocaso"),
+        )
+    )
+    bot = Bot("123456:local-test-token")
+
+    async def telegram_response(_bot, method, **_kwargs):
+        if isinstance(method, EditMessageText):
+            return TelegramMessage(
+                message_id=method.message_id,
+                date=1,
+                chat=Chat(id=actor, type="private"),
+                from_user=User(id=123456, is_bot=True, first_name="Asterion"),
+                text=method.text,
+            )
+        return True
+
+    bot.session.make_request = AsyncMock(side_effect=telegram_response)
+    await dispatcher.feed_raw_update(bot, callback_update(callback_data, actor=actor))
+
+    await bot.session.close()
+    screen = _last_screen(bot)
+    assert "Refúgio do Ocaso" in screen.text
+    async with sessions() as session:
+        world = await session.scalar(select(WorldState))
+        assert world.location == REFUGE
 
 
 @pytest.mark.asyncio
@@ -346,17 +410,23 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     )
     screen = _last_screen(bot)
     assert {button.text for row in screen.reply_markup.inline_keyboard for button in row} == {
-        "Campanha",
-        "Aventura",
+        "Explorar",
+        "Mapa",
+        "Missões",
+        "Alda Veyr",
+        "Oren Cal",
+        "Treinador de Armas",
         "Personagem",
+        "Guilda",
+        "Mercado",
+        "Arena",
         "Códice",
         "Calendário",
-        "Configurações",
         "Vínculos",
-        "Mercado",
-        "Classificação da Vigília",
+        "Classificação",
         "Benefícios",
         "Comunidade",
+        "Configurações",
     }
     update_id += 1
     await dispatcher.feed_raw_update(
@@ -369,28 +439,21 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
         bot, callback_update("world:adventure", actor=actor, update_id=update_id)
     )
     screen = _last_screen(bot)
-    assert "Eventos" not in screen.text and "PvP" not in screen.text
-    assert "Caçadas" not in screen.text and "Desbravar" not in screen.text
-    assert {
-        button.callback_data
-        for row in screen.reply_markup.inline_keyboard
-        for button in row
-    } == {
-        "world:local",
-        "world:map",
-        "world:missions",
-        "menu:back",
+    assert "Refúgio do Ocaso" in screen.text
+    labels = {
+        button.text for row in screen.reply_markup.inline_keyboard for button in row
     }
+    assert "Campanha" not in labels and "Aventura" not in labels
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, callback_update("adv:hub", actor=actor, update_id=update_id)
     )
     screen = _last_screen(bot)
-    assert {
-        button.callback_data
-        for row in screen.reply_markup.inline_keyboard
-        for button in row
-    } == {"dungeon:known", "wev:hub", "pvp:hub", "menu:back"}
+    assert "Refúgio do Ocaso" in screen.text
+    labels = {
+        button.text for row in screen.reply_markup.inline_keyboard for button in row
+    }
+    assert "Guilda" in labels
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, callback_update("settings:root", actor=actor, update_id=update_id)

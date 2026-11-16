@@ -1330,7 +1330,7 @@ async def test_bestiary_variant_repetition_and_alpha_requirements(database):
 
 
 @pytest.mark.asyncio
-async def test_road_navigation_waits_for_p1_completed(database):
+async def test_refuge_exposes_road_route_during_first_p1_step(database):
     actor, service = await _seed_road(database, 771110, include_p1=False)
     assert await service.resume(actor) is None
     assert await service.travel(actor, ROAD) is None
@@ -1347,12 +1347,29 @@ async def test_road_navigation_waits_for_p1_completed(database):
             )
         )
         await session.commit()
-    assert await service.resume(actor) is None
+    refuge = await service.resume(actor)
+    assert refuge is not None and refuge.kind == "refuge"
+    assert refuge.route_destinations == (ROAD,)
     async with database[1]() as session:
         quest = await session.scalar(select(Quest).where(Quest.quest_id == "P1"))
         quest.status = "completed"
         await session.commit()
     assert (await service.resume(actor)).kind == "refuge"
+
+
+@pytest.mark.asyncio
+async def test_active_p1_on_road_can_return_to_refuge(database):
+    actor, road = await _seed_road(database, actor=771102)
+    async with database[1].begin() as session:
+        world = await session.scalar(select(WorldState))
+        quest = await session.scalar(select(Quest).where(Quest.quest_id == "P1"))
+        world.location = ROAD
+        quest.status = "active"
+        quest.step = 1
+
+    returned = await road.travel_route(actor, REFUGE)
+    assert returned is not None and returned.kind == "refuge"
+    assert returned.location == REFUGE
 
 
 @pytest.mark.asyncio

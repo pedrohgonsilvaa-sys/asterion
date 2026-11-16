@@ -551,6 +551,7 @@ def get_bot_runtime() -> BotRuntime:
             s6=s6,
             p6=p6,
             dungeons=dungeons,
+            tdo_explore=tdo_explore,
         )
     )
     return BotRuntime(

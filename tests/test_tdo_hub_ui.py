@@ -14,6 +14,7 @@ from asterion.application.road import (
 from asterion.application.tdo_explore import ExploreResult
 from asterion.bot.road_ui import render_current_local
 from asterion.bot.tdo_hub_ui import render_explore_result, render_hunt_choice
+from asterion.bot.world_ui import render_refuge_dashboard
 from asterion.domain.tdo_explore import (
     BOSQUE_LOCATION_ID,
     CAMARA_LOCATION_ID,
@@ -90,7 +91,7 @@ def test_refuge_screen_shows_hub_actions_and_discovered_locals_only():
     screen = render_current_local(view, explore_remaining=3, mission_available=True)
     callbacks = _callbacks(screen)
     assert "tdo:explore" in callbacks and "tdo:hunt" in callbacks
-    assert "dungeon:known" in callbacks and "character:root" in callbacks
+    assert "dungeon:known" in callbacks
     assert "world:missions" in callbacks
     assert "road:route:road" in callbacks and "road:route:charneca" in callbacks
     assert "road:route:bosque" not in callbacks
@@ -100,6 +101,52 @@ def test_refuge_screen_shows_hub_actions_and_discovered_locals_only():
     assert not any("world:travel" in value for value in callbacks)
     assert "world:map:fromlocal" not in callbacks
     assert "Travessia" not in screen.text
+
+
+def test_refuge_dashboard_has_regional_and_global_actions_without_campaign_adventure():
+    from asterion.application.world import WorldView
+
+    view = WorldView(
+        kind="menu",
+        character_id=uuid4(),
+        name="Heroa",
+        race="remanescente",
+        character_class="sentinela",
+        hp=100,
+        max_hp=100,
+        vigor=100,
+        max_vigor=100,
+        xp=0,
+        region="Terras do Ocaso",
+        location=REFUGE,
+        quest_title=None,
+    )
+    screen = render_refuge_dashboard(
+        view,
+        route_destinations=(ROAD, CHARNECA),
+        explore_remaining=2,
+        can_hunt=True,
+        known_dungeons=True,
+    )
+    callbacks = _callbacks(screen)
+    labels = _texts(screen)
+    assert {
+        "tdo:explore",
+        "world:map",
+        "tdo:hunt",
+        "dungeon:known",
+        "world:missions",
+    } <= set(callbacks)
+    assert {
+        "character:root",
+        "guild:root",
+        "mkt:root",
+        "pvp:hub",
+        "bn:root",
+        "community:open",
+    } <= set(callbacks)
+    assert "Masmorra" in labels and "(Covil)" not in labels
+    assert "Campanha" not in labels and "Aventura" not in labels
 
 
 def test_refuge_explore_unavailable_when_nothing_left():

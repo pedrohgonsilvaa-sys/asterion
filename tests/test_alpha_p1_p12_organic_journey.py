@@ -89,7 +89,7 @@ async def test_public_start_creation_tutorial_and_p1_survive_reconnect(database)
     dispatcher.include_router(
         creation_router(creation, {}, prologue=prologue, world=world, p1=p1, road=road)
     )
-    dispatcher.include_router(p1_router(p1, {}))
+    dispatcher.include_router(p1_router(p1, {}, road=road))
     dispatcher.include_router(combat_router(prologue, {}, world=world, road=road))
 
     update_id = 1

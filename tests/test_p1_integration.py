@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import delete, select
 
 from asterion.application.p1 import P1Service
+from asterion.application.road import REFUGE, ROAD, RoadService
 from asterion.application.world import WorldService
 from asterion.infrastructure.db.models import (
     Account,
@@ -94,6 +95,27 @@ async def test_p1_signs_are_ordered_idempotent_and_create_one_foreground(databas
         combat.encounter_id,
         combat.combat_id,
     )
+
+
+@pytest.mark.asyncio
+async def test_p1_first_step_routes_from_refuge_to_road(database):
+    actor, p1 = await _seed(database, actor=991101)
+    async with database[1].begin() as session:
+        world = await session.scalar(select(WorldState))
+        world.location = REFUGE
+    async with database[1]() as session:
+        saved_world = await session.scalar(select(WorldState))
+        saved_quest = await session.scalar(select(Quest).where(Quest.quest_id == "P1"))
+        assert saved_world.location == REFUGE and saved_quest.step == 1
+    road = RoadService(database[1], "ocaso")
+
+    view = await road.resume(actor)
+    assert view is not None and view.location == REFUGE
+    assert view.route_destinations == (ROAD,)
+    arrived = await road.travel_route(actor, ROAD)
+    assert arrived is not None and arrived.location == ROAD
+    progressed = await p1.follow_road(actor, 0)
+    assert progressed.step == 2
 
 
 @pytest.mark.asyncio

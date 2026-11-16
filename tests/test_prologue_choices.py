@@ -22,6 +22,7 @@ from asterion.domain.prologue import PROFILE
 from asterion.infrastructure.db.models import (
     Character,
     CharacterNarrativeMemory,
+    LocationDiscovery,
     NarrativeChoiceRecord,
     NpcNarrativeMemory,
     NpcRapport,
@@ -151,6 +152,13 @@ async def test_flow_screens_and_memory_only(database):
     assert menu.kind == "menu"
     async with database[1]() as session:
         assert (await session.scalar(select(Quest))).quest_id == "P1"
+        location = await session.scalar(select(WorldState))
+        assert location.location == "Refúgio do Ocaso"
+        assert await session.scalar(
+            select(LocationDiscovery).where(
+                LocationDiscovery.location_id == "tdo.location.refugio_do_ocaso"
+            )
+        ) is not None
 
 
 async def test_duplicate_concurrent_and_changed_callbacks_keep_the_first_choice(database):

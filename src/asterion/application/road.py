@@ -861,6 +861,16 @@ class RoadService:
             )
             if active is not None:
                 return None
+            if world.location == REFUGE:
+                p1_step = await s.scalar(
+                    select(Quest.step).where(
+                        Quest.character_id == c.id,
+                        Quest.quest_id == "P1",
+                        Quest.status == "active",
+                    )
+                )
+                if p1_step == 1:
+                    return await self._view_for_world(s, c, world)
             if world.location in {CHARNECA, BOSQUE, RUINS}:
                 if not await self._tdo_local_open(s, c, world.location):
                     return None
@@ -922,7 +932,15 @@ class RoadService:
                 ):
                     return None
             elif not await self._p1_completed(s, c.id):
-                return None
+                p1_step = await s.scalar(
+                    select(Quest.step).where(
+                        Quest.character_id == c.id,
+                        Quest.quest_id == "P1",
+                        Quest.status == "active",
+                    )
+                )
+                if world.location != REFUGE or p1_step != 1:
+                    return None
             return await self._view_for_world(s, c, world)
 
     async def travel(self, actor: int, destination: str) -> RoadView | None:
@@ -5366,15 +5384,25 @@ class RoadService:
             )
 
     async def _tdo_hub_gate(self, s, c, origin: str, destination: str) -> bool:
-        """Aresta do hub liberada: P1 concluída e, para entrar, Local descoberto.
+        """Aresta Refúgio/Local; P1 step 1 can route from the starting hub to Road.
 
         Voltar ao Refúgio vale de qualquer Local. Custo zero e sem combate (o
         chamador já recusa atividade em primeiro plano).
         """
+        if destination == REFUGE:
+            return origin in HUB_DESTINATION_LABELS and origin != REFUGE
+        if origin == REFUGE and destination == ROAD:
+            p1_step = await s.scalar(
+                select(Quest.step).where(
+                    Quest.character_id == c.id,
+                    Quest.quest_id == "P1",
+                    Quest.status == "active",
+                )
+            )
+            if p1_step == 1:
+                return True
         if not await self._p1_completed(s, c.id):
             return False
-        if destination == REFUGE:
-            return True
         ids = await self._tdo_discovered_ids(s, c.id)
         return destination in hub_destinations(origin, ids)
 
@@ -6556,6 +6584,13 @@ class RoadService:
             # v1.0.18 (33.1/33.4): hub do Refúgio; sem Travessia dos Braseiros.
             brazier_destinations = ()
             route_destinations = []
+            active_p1 = await s.scalar(
+                select(Quest).where(
+                    Quest.character_id == c.id,
+                    Quest.quest_id == "P1",
+                    Quest.status == "active",
+                )
+            )
             active_p2 = await s.scalar(
                 select(Quest.id).where(
                     Quest.character_id == c.id,
@@ -6563,7 +6598,15 @@ class RoadService:
                     Quest.status == "active",
                 )
             )
-            if not active_p2 and not active_p3 and await self._p1_completed(s, c.id):
+            if (
+                world.location == REFUGE
+                and active_p1 is not None
+                and active_p1.step == 1
+                and not active_p2
+                and not active_p3
+            ):
+                route_destinations = [ROAD]
+            elif not active_p2 and not active_p3 and await self._p1_completed(s, c.id):
                 route_destinations = list(
                     hub_destinations(
                         world.location, await self._tdo_discovered_ids(s, c.id)

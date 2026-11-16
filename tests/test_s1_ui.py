@@ -173,7 +173,7 @@ def test_s1_completion_only_announces_new_fragment_when_new_in_attempt():
     )
     assert "📖 Códice · Estrada das Cinzas atualizada" in new.text
     assert "📖 Trecho · Luzes na Estrada" in new.text
-    assert labels(new) == ["← Refúgio do Ocaso"]
+    assert labels(new) == ["Voltar ao Refúgio"]
 
     existing = render_s1(
         view(

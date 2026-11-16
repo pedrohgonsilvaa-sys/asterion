@@ -4,6 +4,7 @@ from aiogram.types import CallbackQuery, Message
 
 from asterion.application.groups import GroupError
 from asterion.application.p1 import P1Service
+from asterion.application.road import REFUGE, ROAD
 from asterion.bot.combat_ui import CampaignCombatCallback, CombatCallback, P1CombatCallback
 from asterion.bot.creation_handlers import present
 from asterion.bot.p1_ui import render_p1
@@ -135,7 +136,16 @@ def p1_router(
         action = parts[2]
         actor = query.from_user.id
         if action == "follow":
-            view = await service.follow_road(actor, version)
+            road_view = await road.resume(actor) if road is not None else None
+            if road_view is not None and road_view.location == REFUGE:
+                moved = await road.travel_route(actor, ROAD)
+                view = (
+                    await service.follow_road(actor, version)
+                    if moved is not None
+                    else await service.resume(actor)
+                )
+            else:
+                view = await service.follow_road(actor, version)
         elif action == "solo":
             view = await service.start_solo_combat(actor, version)
         elif action == "group":
