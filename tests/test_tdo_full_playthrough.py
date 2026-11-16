@@ -5,10 +5,14 @@ from hashlib import sha256
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 import asterion.application.vigor as vigor_module
 from asterion.application.active_arts import ActiveArtService, load_active_art_configuration
+from asterion.application.armor_proficiency import (
+    ArmorTrainerService,
+    armor_proficiency_missing,
+)
 from asterion.application.class_trials import ClassTrialService
 from asterion.application.crafting import CraftingService
 from asterion.application.creation import CreationService
@@ -29,7 +33,15 @@ from asterion.application.p6 import P6Service
 from asterion.application.path_selection import PathSelectionService
 from asterion.application.professions import ProfessionService
 from asterion.application.prologue import PrologueService
-from asterion.application.road import BOSQUE, CHARNECA, REFUGE, ROAD, RUINS, RoadService
+from asterion.application.road import (
+    BOSQUE,
+    CAMARA,
+    CHARNECA,
+    REFUGE,
+    ROAD,
+    RUINS,
+    RoadService,
+)
 from asterion.application.round import RoundService
 from asterion.application.s1 import S1Service
 from asterion.application.s2 import S2_VESTIGE_IDS, S2Service
@@ -38,6 +50,8 @@ from asterion.application.s4 import S4_WATCH_POINTS, S4Service
 from asterion.application.s5 import S5_LIGHT_POINTS, S5Service
 from asterion.application.s6 import S6_MARKS, S6Service
 from asterion.application.talents import TalentService
+from asterion.application.tdo_explore import TdoExploreService
+from asterion.application.weapon_proficiency import WeaponEligibility, weapon_eligibility
 from asterion.application.world import WorldService
 from asterion.domain.arts import FIRST_CLASS_ART_IDS, SENTINEL_ART_IDS
 from asterion.domain.class_trials import SENTINEL_CONDITION_IDS
@@ -56,15 +70,24 @@ from asterion.domain.road import (
 from asterion.domain.road import (
     RULESET as ROAD_RULESET,
 )
+from asterion.domain.tdo_explore import (
+    BOSQUE_LOCATION_ID,
+    CAMARA_LOCATION_ID,
+    CHARNECA_LOCATION_ID,
+    RUINS_LOCATION_ID,
+    pick_explore_target,
+)
 from asterion.domain.tdo_galleries import GALLERIES_FAMILY_ID
 from asterion.infrastructure.db.models import (
     Character,
+    CharacterActionThrottle,
     CharacterEquipmentSlot,
     ConsumableStack,
     DungeonRun,
     EquipmentItem,
     ExplorationAttempt,
     GameActivity,
+    LocationDiscovery,
     Quest,
     RewardEvent,
     WorldState,
@@ -324,6 +347,34 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     monkeypatch.setattr(pvpve_module, "_utcnow", lambda: driver.clock.now(UTC))
     monkeypatch.setattr(consumables_module, "add_vigor_state", tracked_add_vigor)
     monkeypatch.setattr(dungeons_module, "add_vigor_state", tracked_add_vigor)
+
+    # Os combates sorteiam crítico/esquiva por SHA-256 do id do combate, que e
+    # um uuid4 novo a cada execucao. Troca cada id real por um id estavel (na
+    # ordem em que os combates aparecem) para o playthrough ser reproduzivel,
+    # sem mexer em balanceamento nem em codigo de producao.
+    import asterion.domain.combat as combat_domain_module
+    from asterion.domain.combat_math import CombatRng as RealCombatRng
+    from asterion.domain.combat_math import stable_priority as real_stable_priority
+
+    stable_combat_ids: dict = {}
+
+    def stable_combat_id(combat_id):
+        if combat_id not in stable_combat_ids:
+            stable_combat_ids[combat_id] = UUID(int=len(stable_combat_ids) + 1)
+        return stable_combat_ids[combat_id]
+
+    monkeypatch.setattr(
+        combat_domain_module,
+        "CombatRng",
+        lambda combat_id, cursor=0: RealCombatRng(stable_combat_id(combat_id), cursor),
+    )
+    monkeypatch.setattr(
+        combat_domain_module,
+        "stable_priority",
+        lambda combat_id, fighter_id: real_stable_priority(
+            stable_combat_id(combat_id), fighter_id
+        ),
+    )
     await driver.snapshot("personagem criado pelo fluxo público")
 
     prologue = PrologueService(sessions, "ocaso", PROLOGUE_PROFILE)
@@ -402,6 +453,32 @@ async def run_tdo_full_playthrough(database, monkeypatch):
         assert equipped is not None and equipped.changed
 
     road = RoadService(sessions, "ocaso")
+    road_module_charneca_id = CHARNECA_LOCATION_ID
+    road_module_bosque_id = BOSQUE_LOCATION_ID
+    road_module_ruins_id = RUINS_LOCATION_ID
+    road_module_camara_id = CAMARA_LOCATION_ID
+
+    # v1.0.18 (33.1): a navegação das Terras do Ocaso é o hub do Refúgio; nunca há ida
+    # direta Local-Local. Os trechos antigos deste roteiro encadeavam Charneca -> Bosque
+    # -> Ruínas. Este adaptador faz cada passo público pelo Refúgio, sem atalhos.
+    _hub_travel_route = road.travel_route
+
+    async def hub_route(actor_id, destination):
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor_id)
+            )
+            world = await session.get(WorldState, character.id) if character else None
+            here = world.location if world is not None else None
+        if here == destination:
+            return await road.resume(actor_id)
+        if destination != REFUGE and here not in {REFUGE, None}:
+            stepped = await _hub_travel_route(actor_id, REFUGE)
+            if stepped is None:
+                return None
+        return await _hub_travel_route(actor_id, destination)
+
+    road.travel_route = hub_route
     location = await road.travel(actor, ROAD)
     assert location is not None and location.location == ROAD
     async def start_manual_hunt(service, label):
@@ -600,6 +677,61 @@ async def run_tdo_full_playthrough(database, monkeypatch):
             assert character is not None
             return driver.total_xp(character.level, character.xp)
 
+    explore_calls = 0
+
+    def explore_clock():
+        # Anti-spam de 3 s (v1.0.18): usa o relógio simulado da jornada e deixa
+        # 10 s entre cliques, sem esperar relógio real.
+        return driver.clock.instant + timedelta(seconds=10 * (explore_calls + 1))
+
+    async def discover_by_explore(location_id, label):
+        """Explorar (Refúgio) revela exatamente o Local pedido; Missão nunca revela Local.
+
+        O sorteio é uniforme; o roteiro escolhe uma semente pública que o leva ao Local
+        da etapa, como o explore_result faz para Desbravar.
+        """
+        nonlocal explore_calls
+        await travel_to_refuge()
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            known = set(
+                (
+                    await session.scalars(
+                        select(LocationDiscovery.location_id).where(
+                            LocationDiscovery.character_id == character.id
+                        )
+                    )
+                ).all()
+            )
+            character_id = character.id
+        if location_id in known:
+            return
+        seed_value = None
+        for index in range(500):
+            candidate = f"playthrough:{label}:{index}"
+            picked = pick_explore_target(f"{character_id}:{candidate}", known)
+            if picked is not None and picked.location_id == location_id:
+                seed_value = candidate
+                break
+        assert seed_value is not None, (label, driver.diagnostic())
+        service = TdoExploreService(
+            sessions, "ocaso", clock=explore_clock, seed_factory=lambda: seed_value
+        )
+        before = await driver.capture_xp_totals()
+        explore_calls += 1
+        result = await service.explore(actor)
+        assert result.status == "discovered" and result.location_id == location_id, (
+            result,
+            driver.diagnostic(),
+        )
+        after = await driver.capture_xp_totals()
+        driver.record_public_xp_delta(
+            f"tdo.explore.discovery.{result.location_id}", "Explorar", before, after
+        )
+        await driver.snapshot(f"Explorar · {label} descoberto")
+
     async def explore_result(target_result_id, label):
         """Use real Explore service with a selected seed and its actual selector."""
         import asterion.application.road as road_module
@@ -719,6 +851,13 @@ async def run_tdo_full_playthrough(database, monkeypatch):
                 f"{label}: preparação de Desbravar indisponível: {prepared!r}; "
                 f"{driver.diagnostic()}"
             )
+            # Anti-spam de 3 s (v1.0.18): o driver não espera relógio real.
+            async with sessions.begin() as throttle_session:
+                await throttle_session.execute(
+                    update(CharacterActionThrottle).values(
+                        last_click_at=ExploreClock.now(UTC) - timedelta(seconds=10)
+                    )
+                )
             view = await service.explore(actor)
 
         assert view is not None and view.kind == "exploration", (
@@ -954,6 +1093,13 @@ async def run_tdo_full_playthrough(database, monkeypatch):
                 for item in owned:
                     if item.id in currently_equipped or item.item_level > level:
                         continue
+                    # Spec de Proficiencias: so equipa o que a proficiencia de
+                    # armadura da conta permite (o servico recusa o resto).
+                    if await armor_proficiency_missing(session, character, item) is not None:
+                        continue
+                    eligibility = await weapon_eligibility(session, character, item)
+                    if eligibility != WeaponEligibility.ALLOWED:
+                        continue
                     assignment = assignment_for_item_slot(item.slot)
                     if assignment is None:
                         continue
@@ -1019,17 +1165,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
             location = world.location
         if location == ROAD:
             arrived = await road.travel(actor, REFUGE)
-        elif location == CHARNECA:
-            arrived = await road.travel_route(actor, REFUGE)
-        elif location == BOSQUE:
-            arrived = await road.travel_route(actor, CHARNECA)
-            assert arrived is not None
-            arrived = await road.travel_route(actor, REFUGE)
-        elif location == RUINS:
-            arrived = await road.travel_route(actor, BOSQUE)
-            assert arrived is not None
-            arrived = await road.travel_route(actor, CHARNECA)
-            assert arrived is not None
+        elif location in {CHARNECA, BOSQUE, RUINS, CAMARA}:
             arrived = await road.travel_route(actor, REFUGE)
         else:
             assert location == REFUGE
@@ -1037,32 +1173,11 @@ async def run_tdo_full_playthrough(database, monkeypatch):
         assert arrived is not None and arrived.location == REFUGE, (arrived, driver.diagnostic())
 
     async def travel_from_refuge_to(destination):
-        async with sessions() as session:
-            character = await session.scalar(
-                select(Character).where(Character.telegram_id == actor)
-            )
-            assert character is not None
-            world = await session.get(WorldState, character.id)
-            assert world is not None
-            location = world.location
-        if location == ROAD:
-            await road.travel(actor, REFUGE)
-            location = REFUGE
-        if location != REFUGE:
-            await travel_to_refuge()
+        await travel_to_refuge()
         if destination == REFUGE:
             return
-        arrived = await road.travel_route(actor, CHARNECA)
-        assert arrived is not None and arrived.location == CHARNECA
-        if destination == CHARNECA:
-            return
-        arrived = await road.travel_route(actor, BOSQUE)
-        assert arrived is not None and arrived.location == BOSQUE
-        if destination == BOSQUE:
-            return
-        assert destination == RUINS
-        arrived = await road.travel_route(actor, RUINS)
-        assert arrived is not None and arrived.location == RUINS, (
+        arrived = await road.travel_route(actor, destination)
+        assert arrived is not None and arrived.location == destination, (
             arrived,
             driver.diagnostic(),
         )
@@ -1077,15 +1192,16 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     await road.travel(actor, ROAD)
     await explore_result("explore.tdo.estrada.marco_viajantes", "Estrada das Cinzas")
     await road.travel(actor, REFUGE)
+    # v1.0.18: o nível das Missões é recomendação, não trava. O roteiro continua
+    # subindo ao nível recomendado (S1 Nv.2) para que os combates sejam viáveis.
     for attempt in range(40):
-        offer = await S1Service(sessions, "ocaso").offer(actor)
-        if offer is not None and offer.kind == "offer":
+        if await current_level() >= 2:
             break
-        assert await current_level() < 2 or offer is not None, driver.diagnostic()
-        if await current_level() < 2:
-            await road.travel(actor, ROAD)
-            await manual_hunt(f"Nv.2 · Caçada {attempt + 1}")
-            await road.travel(actor, REFUGE)
+        await road.travel(actor, ROAD)
+        await manual_hunt(f"Nv.2 · Caçada {attempt + 1}")
+        await road.travel(actor, REFUGE)
+    offer = await S1Service(sessions, "ocaso").offer(actor)
+    assert offer is not None and offer.kind == "offer", driver.diagnostic()
     s1 = S1Service(sessions, "ocaso")
     accepted_s1 = await s1.accept(actor)
     assert accepted_s1 is not None and accepted_s1.status == "active", accepted_s1
@@ -1102,18 +1218,24 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     await driver.snapshot("S1 concluída por Oren")
 
     p2 = P2Service(sessions, "ocaso")
+    # P2 recomendada para Nv.3 (v1.0.18: recomendação, sem trava).
     for attempt in range(50):
-        offer = await p2.alda(actor)
-        if offer is not None and offer.available:
+        if await current_level() >= 3:
             break
-        assert await current_level() < 3, (offer, driver.diagnostic())
         await road.travel(actor, ROAD)
         await manual_hunt(f"Nv.3 · Caçada {attempt + 1}")
         await road.travel(actor, REFUGE)
         rested = await road.rest(actor)
         assert rested is not None and rested.hp == rested.max_hp
+    offer = await p2.alda(actor)
+    assert offer is not None and offer.available, (offer, driver.diagnostic())
     active_p2 = await p2.accept(actor, offer.state_version)
     assert active_p2 is not None and active_p2.status == "active", active_p2
+    # Etapa 1 aguarda a Charneca: P2 não a revela (v1.0.18, 5.5).
+    waiting_p2 = await p2.travel_to_charneca(actor, active_p2.state_version)
+    assert waiting_p2.step == 1 and waiting_p2.awaiting_exploration, waiting_p2
+    await discover_by_explore(road_module_charneca_id, "Charneca da Fuligem")
+    active_p2 = await p2.resume(actor)
     rested_before_p2 = await road.rest(actor)
     assert rested_before_p2 is not None and rested_before_p2.hp == rested_before_p2.max_hp
     active_p2 = await p2.travel_to_charneca(actor, active_p2.state_version)
@@ -1313,7 +1435,10 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     p3_offer = await p3.oren(actor)
     assert p3_offer is not None and p3_offer.available, (p3_offer, driver.diagnostic())
     p3_view = await p3.accept(actor, p3_offer.state_version)
-    p3_view = await p3.mission_route(actor, p3_view.state_version, CHARNECA)
+    waiting_p3 = await p3.enter_bosque(actor, p3_view.state_version)
+    assert waiting_p3.step == 1 and waiting_p3.awaiting_exploration, waiting_p3
+    await discover_by_explore(road_module_bosque_id, "Bosque Calcinado")
+    p3_view = await p3.resume(actor)
     p3_view = await p3.enter_bosque(actor, p3_view.state_version)
     assert p3_view.step == 2 and p3_view.location == BOSQUE
     for fragment in ("p3.fragment.3", "p3.fragment.1", "p3.fragment.2"):
@@ -1339,14 +1464,13 @@ async def run_tdo_full_playthrough(database, monkeypatch):
         assert p3_view.progress.get("combat_result") == "defeat", driver.diagnostic()
         await driver.snapshot(f"P3 · derrota legítima · tentativa {attempt + 1}")
         if attempt < 4:
-            to_charneca = await p3.mission_route(actor, p3_view.state_version, CHARNECA)
-            to_bosque = await p3.enter_bosque(actor, to_charneca.state_version)
-            p3_view = await p3.retry(actor, to_bosque.state_version)
+            if p3_view.location == REFUGE:
+                p3_view = await p3.enter_bosque(actor, p3_view.state_version)
+            p3_view = await p3.retry(actor, p3_view.state_version)
             assert p3_view.kind == "combat" and p3_view.combat is not None
     assert p3_view.progress.get("combat_result") == "victory", driver.diagnostic()
     carved = await p3.examine_carved_fragment(actor, p3_view.state_version)
-    to_charneca = await p3.mission_route(actor, carved.state_version, CHARNECA)
-    to_refuge = await p3.mission_route(actor, to_charneca.state_version, REFUGE)
+    to_refuge = await p3.mission_route(actor, carved.state_version, REFUGE)
     oren = await p3.talk_to_oren(actor, to_refuge.state_version)
     p3_complete = await p3.choose_reward(actor, oren.state_version, "reliquary")
     assert p3_complete is not None and p3_complete.status == "completed"
@@ -1357,7 +1481,6 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     s3_offer = await s3.alda(actor)
     assert s3_offer is not None and s3_offer.available, (s3_offer, driver.diagnostic())
     s3_view = await s3.accept(actor, s3_offer.state_version)
-    await road.travel_route(actor, CHARNECA)
     await road.travel_route(actor, BOSQUE)
     s3_view = await s3.interact(actor, s3_view.state_version, "route")
     for track in S3_TRACKS:
@@ -1397,7 +1520,6 @@ async def run_tdo_full_playthrough(database, monkeypatch):
             assert s3_view.kind == "combat" and s3_view.combat is not None
     assert s3_view.progress.get("combat_result") == "victory", driver.diagnostic()
     s3_view = await s3.interact(actor, s3_view.state_version, "cargo")
-    await road.travel_route(actor, CHARNECA)
     await road.travel_route(actor, REFUGE)
     s3_view = await s3.interact(actor, s3_view.state_version, "report")
     assert s3_view.status == "completed"
@@ -1512,9 +1634,11 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     p4_offer = await p4.offer(actor)
     assert p4_offer is not None and p4_offer.available, (p4_offer, driver.diagnostic())
     p4_view = await p4.accept(actor, p4_offer.state_version)
-    await road.travel_route(actor, CHARNECA)
-    await road.travel_route(actor, BOSQUE)
     p4_view = await p4.action(actor, p4_view.state_version, "path")
+    waiting_p4 = await p4.action(actor, p4_view.state_version, "enter")
+    assert waiting_p4.step == 2 and waiting_p4.awaiting_exploration, waiting_p4
+    await discover_by_explore(road_module_ruins_id, "Ruínas do Vigia")
+    p4_view = await p4.resume(actor)
     p4_view = await p4.action(actor, p4_view.state_version, "enter")
     assert p4_view.kind == "combat" and p4_view.combat is not None
     if p4_view.combat.result == "defeat" and p4_view.activity_status == "active":
@@ -1547,9 +1671,9 @@ async def run_tdo_full_playthrough(database, monkeypatch):
         assert p4_view.progress.get("combat_result") == "defeat", driver.diagnostic()
         await driver.snapshot(f"P4 · derrota legítima · tentativa {attempt + 1}")
         if attempt < 4:
-            await road.travel_route(actor, CHARNECA)
-            await road.travel_route(actor, BOSQUE)
-            returned = await p4.action(actor, p4_view.state_version, "enter")
+            returned = p4_view
+            if p4_view.location == REFUGE:
+                returned = await p4.action(actor, p4_view.state_version, "enter")
             p4_view = await p4.action(actor, returned.state_version, "retry")
             assert p4_view.kind == "combat" and p4_view.combat is not None
     assert p4_view.progress.get("combat_result") == "victory", driver.diagnostic()
@@ -1561,8 +1685,7 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     )
     p4_view = await p4.action(actor, p4_view.state_version, "safe_route")
     p4_view = await p4.action(actor, p4_view.state_version, "return")
-    await road.travel_route(actor, CHARNECA)
-    await road.travel_route(actor, REFUGE)
+    assert p4_view.location == REFUGE, (p4_view, driver.diagnostic())
     p4_view = await p4.action(actor, p4_view.state_version, "report_oren")
     p4_complete = await p4.action(actor, p4_view.state_version, "report_alda")
     assert p4_complete.status == "completed"
@@ -1571,47 +1694,10 @@ async def run_tdo_full_playthrough(database, monkeypatch):
 
 
     async def travel_to_ruins():
-        async with sessions() as session:
-            character = await session.scalar(
-                select(Character).where(Character.telegram_id == actor)
-            )
-            world = await session.get(WorldState, character.id)
-            location = world.location
-        if location == ROAD:
-            await road.travel(actor, REFUGE)
-            location = REFUGE
-        if location == REFUGE:
-            await road.travel_route(actor, CHARNECA)
-            location = CHARNECA
-        if location == CHARNECA:
-            await road.travel_route(actor, BOSQUE)
-            location = BOSQUE
-        if location == BOSQUE:
-            arrival = await road.travel_route(actor, RUINS)
-            assert arrival is not None and arrival.location == RUINS, (
-                arrival,
-                driver.diagnostic(),
-            )
-        else:
-            assert location == RUINS, (location, driver.diagnostic())
+        await travel_from_refuge_to(RUINS)
 
     async def travel_to_refuge_from_ruins():
-        async with sessions() as session:
-            character = await session.scalar(
-                select(Character).where(Character.telegram_id == actor)
-            )
-            world = await session.get(WorldState, character.id)
-            location = world.location
-        if location == RUINS:
-            await road.travel_route(actor, BOSQUE)
-            location = BOSQUE
-        if location == BOSQUE:
-            await road.travel_route(actor, CHARNECA)
-            location = CHARNECA
-        if location == CHARNECA:
-            await road.travel_route(actor, REFUGE)
-            location = REFUGE
-        assert location == REFUGE, (location, driver.diagnostic())
+        await travel_to_refuge()
 
     s4 = S4Service(sessions, "ocaso")
     s4_offer = await s4.oren(actor)
@@ -1858,6 +1944,22 @@ async def run_tdo_full_playthrough(database, monkeypatch):
             item = await session.get(EquipmentItem, UUID(item_id))
             assert item is not None and item.character_id == character.id
             configuration_version = character.combat_configuration_version
+            # Regra global de Proficiência de Armadura (spec v1.0.0): a Couraça pode
+            # ser criada, mas só é equipada se a Classe tiver a Proficiência.
+            missing_proficiency = await armor_proficiency_missing(session, character, item)
+        if missing_proficiency is not None:
+            # Fluxo público do Treinador de Armadura no Refúgio (Leve: Nv.10, 1.000 Coroas).
+            await travel_to_refuge()
+            learned = await ArmorTrainerService(sessions, "ocaso").learn(
+                actor, missing_proficiency
+            )
+            if learned is None or not (learned.learned or learned.already_owned):
+                await driver.snapshot(
+                    f"{label} · Couraça de Fuligem criada, sem Proficiência de Armadura "
+                    f"({learned.reason if learned else None})"
+                )
+                return None
+            await driver.snapshot(f"{label} · Proficiência de Armadura {missing_proficiency}")
         equipped = await EquipmentService(sessions, "ocaso").equip_item(
             actor, item.id, expected_configuration_version=configuration_version
         )
@@ -2448,9 +2550,12 @@ async def run_tdo_full_playthrough(database, monkeypatch):
     p6_view = await p6.resume(actor)
     assert p6_view is not None and p6_view.status == "active"
     assert p6_view.guidance is None, (p6_view.guidance, driver.diagnostic())
-    await travel_to_ruins()
     p6_view = await p6.action(actor, p6_view.state_version, "cross_door")
     assert p6_view is not None and p6_view.step == 2
+    waiting_p6 = await p6.action(actor, p6_view.state_version, "enter_chamber")
+    assert waiting_p6.step == 2 and waiting_p6.awaiting_exploration, waiting_p6
+    await discover_by_explore(road_module_camara_id, "Câmara do Poente")
+    p6_view = await p6.resume(actor)
     p6_view = await p6.action(actor, p6_view.state_version, "enter_chamber")
     assert p6_view is not None and p6_view.step == 3 and p6_view.location == "Câmara do Poente"
     p6_view = await p6.action(actor, p6_view.state_version, "inspect_before")
@@ -2726,7 +2831,6 @@ async def run_tdo_full_playthrough(database, monkeypatch):
                     assert rested is not None and rested.hp == rested.max_hp
                     await refill_p5_healing_stock()
             if p6_view.location != "Câmara do Poente":
-                await travel_to_ruins()
                 p6_view = await p6.resume(actor)
                 assert p6_view is not None and p6_view.kind == "retry_chamber"
                 p6_view = await p6.action(actor, p6_view.state_version, "enter_chamber")
@@ -2746,8 +2850,8 @@ async def run_tdo_full_playthrough(database, monkeypatch):
         )
     p6_view = await p6.action(actor, p6_view.state_version, "inspect_after")
     p6_view = await p6.action(actor, p6_view.state_version, "record_anchor")
-    p6_view = await p6.action(actor, p6_view.state_version, "return_ruins")
-    await travel_to_refuge_from_ruins()
+    p6_view = await p6.action(actor, p6_view.state_version, "return_refuge")
+    assert p6_view.location == REFUGE, (p6_view, driver.diagnostic())
     p6_view = await p6.action(actor, p6_view.state_version, "report_alda")
     p6_view = await p6.action(actor, p6_view.state_version, "report_oren")
     assert p6_view.step == 9 and p6_view.status == "active"

@@ -1,6 +1,7 @@
 """Pure, deterministic rules for the Estrada das Cinzas repeatable content."""
 # ruff: noqa: E501
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal, localcontext
 from hashlib import sha256
@@ -2380,8 +2381,8 @@ CHARNECA_EXPLORATION_PROFILE = ExplorationLocationProfile(
     local_id=CHARNECA_LOCATION,
     category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
     results=(
-        ExplorationResultDefinition("braseiro", "great_discovery", "explore.tdo.charneca.braseiro", 50, "Braseiro do Vento Morto encontrado.", min_level=4, unique=True),
-        ExplorationResultDefinition("cripta", "great_discovery", "explore.tdo.charneca.cripta", 50, "Entrada da Cripta do Ocaso encontrada.", min_level=4, unique=True),
+        ExplorationResultDefinition("braseiro", "great_discovery", "explore.tdo.charneca.braseiro", 50, "Braseiro do Vento Morto encontrado.", unique=True),
+        ExplorationResultDefinition("cripta", "great_discovery", "explore.tdo.charneca.cripta", 50, "Entrada da Cripta do Ocaso encontrada.", unique=True),
         ExplorationResultDefinition("pedra_marcada", "knowledge", "explore.tdo.charneca.pedra_marcada", 60, "A Pedra Marcada foi examinada.", unique=True),
         ExplorationResultDefinition("vestigios_fuligem", "knowledge", "explore.tdo.charneca.vestigios_fuligem", 40, "Vestígios de criaturas foram observados na fuligem."),
         ExplorationResultDefinition("vento_morto", "narrative", "explore.tdo.charneca.vento_morto", 65, "Uma área identificada como Vento Morto foi observada." , unique=True),
@@ -2402,8 +2403,8 @@ BOSQUE_EXPLORATION_PROFILE = ExplorationLocationProfile(
     local_id=BOSQUE_LOCATION,
     category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
     results=(
-        ExplorationResultDefinition("braseiro", "great_discovery", "explore.tdo.bosque.braseiro", 50, "Braseiro dos Galhos Mortos encontrado.", min_level=6, unique=True),
-        ExplorationResultDefinition("estrutura_enterrada", "great_discovery", "explore.tdo.bosque.estrutura_enterrada", 50, "Uma estrutura enterrada foi encontrada sob as raízes.", min_level=6, unique=True),
+        ExplorationResultDefinition("braseiro", "great_discovery", "explore.tdo.bosque.braseiro", 50, "Braseiro dos Galhos Mortos encontrado.", unique=True),
+        ExplorationResultDefinition("estrutura_enterrada", "great_discovery", "explore.tdo.bosque.estrutura_enterrada", 50, "Uma estrutura enterrada foi encontrada sob as raízes.", unique=True),
         ExplorationResultDefinition("caminho_ocidental", "knowledge", "explore.tdo.bosque.caminho_ocidental", 60, "O Caminho Ocidental foi reconhecido entre as árvores.", unique=True),
         ExplorationResultDefinition("rastros_galhos", "knowledge", "explore.tdo.bosque.rastros_galhos", 40, "Rastros entre os galhos indicam a passagem de criaturas conhecidas."),
         ExplorationResultDefinition("arvores_fumegam", "narrative", "explore.tdo.bosque.arvores_fumegam", 55, "Árvores que Ainda Fumegam."),
@@ -2426,7 +2427,7 @@ RUINS_EXPLORATION_PROFILE = ExplorationLocationProfile(
     category_weights=tuple(EXPLORATION_CATEGORY_WEIGHTS.items()),
     results=(
         ExplorationResultDefinition("braseiro_poente", "great_discovery", "explore.tdo.ruinas.braseiro", 50, "Braseiro do Poente encontrado.", unique=True),
-        ExplorationResultDefinition("galerias_vigia", "great_discovery", "explore.tdo.ruinas.galerias", 50, "A entrada das Galerias do Vigia foi descoberta.", min_level=8, unique=True),
+        ExplorationResultDefinition("galerias_vigia", "great_discovery", "explore.tdo.ruinas.galerias", 50, "A entrada das Galerias do Vigia foi descoberta.", unique=True),
         ExplorationResultDefinition("estruturas_guarda", "knowledge", "explore.tdo.ruinas.estruturas_guarda", 40, "Estruturas de guarda foram registradas.", unique=True),
         ExplorationResultDefinition("ocupacao_posterior", "knowledge", "explore.tdo.ruinas.ocupacao_posterior", 40, "Sinais de ocupação posterior foram encontrados.", unique=True),
         ExplorationResultDefinition("marcas_patrulha", "knowledge", "explore.tdo.ruinas.marcas_patrulha", 20, "Marcas de patrulha foram observadas."),
@@ -3515,14 +3516,83 @@ def weighted_choice(seed: str, entries: tuple[tuple[str, int], ...]) -> str:
     return entries[-1][0]
 
 
-def select_creature(
-    seed: str, player_level: int, profile: HuntLocationProfile = ROAD_PROFILE
-) -> Creature:
-    eligible = tuple(
+# v1.0.18 (33.5, 33.16 crit. 14/15): nas Terras do Ocaso o inimigo tem o nivel do
+# Local (``max_enemy_level`` da criatura), em Solo e em Grupo. ``unlock_level`` nao
+# vale em Solo; em Grupo e requisito individual de cada membro.
+TDO_HUNT_LOCAL_IDS = frozenset(
+    {ROAD_LOCATION, CHARNECA_LOCATION, BOSQUE_LOCATION, RUINS_LOCATION}
+)
+
+
+def is_tdo_hunt_local(local_id: str | None) -> bool:
+    return local_id in TDO_HUNT_LOCAL_IDS
+
+
+def hunt_enemy_level(
+    profile: HuntLocationProfile, creature: Creature, reference_level: int
+) -> int:
+    """Nivel do inimigo de Cacada/Combate de Desbravar.
+
+    Terras do Ocaso: ``creature.max_level`` (sem ``min`` com o jogador).
+    Demais regioes: comportamento anterior.
+    """
+    if is_tdo_hunt_local(profile.local_id):
+        return creature.max_level
+    return min(reference_level, creature.max_level)
+
+
+def eligible_creature_weights(
+    profile: HuntLocationProfile,
+    player_level: int,
+    group_levels: Sequence[int] | None = None,
+) -> tuple[tuple[str, int], ...]:
+    """Pool de criaturas.
+
+    Terras do Ocaso, Solo (``group_levels`` None): pool completo, sem
+    ``unlock_level``. Terras do Ocaso, Grupo: so criaturas cujo ``unlock_level``
+    todos os membros cumprem. Demais regioes: filtro por ``player_level``.
+    """
+    if is_tdo_hunt_local(profile.local_id):
+        if group_levels is None:
+            return tuple(profile.creature_weights)
+        floor = min(group_levels)
+        return tuple(
+            (creature_id, weight)
+            for creature_id, weight in profile.creature_weights
+            if floor >= creature_for(creature_id).unlock_level
+        )
+    return tuple(
         (creature_id, weight)
         for creature_id, weight in profile.creature_weights
         if player_level >= creature_for(creature_id).unlock_level
     )
+
+
+def unlock_level_blockers(
+    profile: HuntLocationProfile, members: Sequence[tuple[str, int]]
+) -> tuple[str, ...]:
+    """Decisao 11: nomes de todos os membros que nao cumprem o ``unlock_level``.
+
+    Vazio se alguma criatura do Local e elegivel para todos (ou se o Local nao e
+    das Terras do Ocaso). Um membro bloqueia quando seu nivel e menor que o
+    ``unlock_level`` da criatura mais acessivel do Local.
+    """
+    if not is_tdo_hunt_local(profile.local_id) or not members:
+        return ()
+    if eligible_creature_weights(profile, 0, [level for _, level in members]):
+        return ()
+    lowest = min(creature_for(cid).unlock_level for cid, _ in profile.creature_weights)
+    return tuple(name for name, level in members if level < lowest)
+
+
+def select_creature(
+    seed: str,
+    player_level: int,
+    profile: HuntLocationProfile = ROAD_PROFILE,
+    *,
+    group_levels: Sequence[int] | None = None,
+) -> Creature:
+    eligible = eligible_creature_weights(profile, player_level, group_levels)
     if not eligible:
         raise ValueError(f"no eligible creatures for {profile.local_id} at level {player_level}")
     return creature_for(weighted_choice(seed, eligible))
@@ -3544,8 +3614,17 @@ def select_exploration_result(
             result
             for result in profile.results
             if result.category == category
-            and player_level >= result.min_level
-            and (result.creature_id is None or player_level >= creature_for(result.creature_id).unlock_level)
+            and (
+                # v1.0.18 (33.5, 33.6): Solo nas Terras do Ocaso nao filtra combate por nivel.
+                (result.category == "combat" and is_tdo_hunt_local(profile.local_id))
+                or player_level >= result.min_level
+            )
+            and (
+                result.creature_id is None
+                # v1.0.18: Solo nas Terras do Ocaso nao exclui por unlock_level.
+                or is_tdo_hunt_local(profile.local_id)
+                or player_level >= creature_for(result.creature_id).unlock_level
+            )
             and result.key not in excluded_set
             and result.result_id not in excluded_set
         )
@@ -3618,6 +3697,32 @@ def enemy_xp(
             * (participation_factor or D(1)) * (vigor_factor or D(1)) * (legacy_factor or D(1))
         )
         return int((value / 10).quantize(D(1), rounding="ROUND_HALF_EVEN") * 10)
+
+
+def powerlevel_factor(level_gap: int) -> Decimal:
+    """PowerlevelFactor individual (GDD 1.7.1, linhas 3349 e 3795).
+
+    ``level_gap`` é a diferença entre o membro de maior nível do Grupo e o próprio
+    nível: ``0-10=100%``, ``11-15=70%``, ``16-20=45%``, ``21-30=20%``, ``>=31=5%``.
+    """
+    gap = max(0, level_gap)
+    if gap <= 10:
+        return D("1.00")
+    if gap <= 15:
+        return D("0.70")
+    if gap <= 20:
+        return D("0.45")
+    if gap <= 30:
+        return D("0.20")
+    return D("0.05")
+
+
+def fixed_quest_xp(base_xp: int, level_gap: int = 0) -> int:
+    """XP fixa de Missão em Coop de Chefe com PowerlevelFactor (TdO v1.0.18, 33.14 item 8).
+
+    Arredonda para o inteiro mais próximo, meio para cima (decisão do autor em 2026-11-15).
+    """
+    return int((D(base_xp) * powerlevel_factor(level_gap)).quantize(D(1), rounding=ROUND_HALF_UP))
 
 
 def crowns(level: int, category: str) -> int:

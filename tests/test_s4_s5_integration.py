@@ -26,7 +26,6 @@ from asterion.infrastructure.db.models import (
     Encounter,
     GameActivity,
     HuntContext,
-    LocationDiscovery,
     Quest,
     RewardComponent,
     RewardEvent,
@@ -115,8 +114,9 @@ async def test_s4_s5_eligibility_is_independent_and_offers_do_not_create_quests(
     _, sessions = await _seed_p4(database, actor, level=6)
     s4 = S4Service(sessions, "ocaso")
     s5 = S5Service(sessions, "ocaso")
-    assert not (await s4.offer(actor)).available
-    assert not (await s5.offer(actor)).available
+    # v1.0.18: sem nível mínimo (Nv.7 e Nv.8 viram recomendação).
+    assert (await s4.offer(actor)).available
+    assert (await s5.offer(actor)).available
 
     actor += 1
     character_id, sessions = await _seed_p4(database, actor, level=7)
@@ -124,7 +124,7 @@ async def test_s4_s5_eligibility_is_independent_and_offers_do_not_create_quests(
     s5 = S5Service(sessions, "ocaso")
     offer4 = await s4.offer(actor)
     offer5 = await s5.offer(actor)
-    assert offer4.available and offer5 is not None and not offer5.available
+    assert offer4.available and offer5 is not None and offer5.available
     async with sessions() as session:
         assert await session.scalar(
             select(Quest.id).where(Quest.character_id == character_id, Quest.quest_id == S4_ID)
@@ -139,28 +139,26 @@ async def test_level_7_s4_uses_existing_ruins_route_without_unlocking_normal_gam
     actor = 998609
     character_id, sessions = await _seed_p4(database, actor, level=7)
     async with sessions.begin() as session:
-        session.add(LocationDiscovery(
-            character_id=character_id, location_id="tdo.location.ruinas_do_vigia"
-        ))
         session.add(Unlock(character_id=character_id, unlock_id=RUINS_ROUTE_UNLOCK))
 
     s4 = S4Service(sessions, "ocaso")
     road = RoadService(sessions, "ocaso")
+    # v1.0.18 (33.1/33.6): hub do Refúgio, sem trava de nível nem rota Local-Local.
     assert await road.travel_route(actor, CHARNECA) is not None
-    assert await road.travel_route(actor, BOSQUE) is not None
-    assert await road.travel_route(actor, RUINS) is None
-    assert await road.travel_route(actor, CHARNECA) is not None
+    assert await road.travel_route(actor, BOSQUE) is None
     assert await road.travel_route(actor, REFUGE) is not None
 
     offer = await s4.offer(actor)
     accepted = await s4.accept(actor, offer.state_version)
     assert accepted is not None and accepted.status == "active"
-    assert await road.travel_route(actor, CHARNECA) is not None
-    bosque = await road.travel_route(actor, BOSQUE)
-    assert bosque is not None and RUINS in bosque.route_destinations
+    refuge = await road.resume(actor)
+    assert RUINS in refuge.route_destinations
     ruins = await road.travel_route(actor, RUINS)
     assert ruins is not None and ruins.location == RUINS
-    assert await road.start_hunt(actor) is None
+    assert ruins.route_destinations == (REFUGE,)
+    # v1.0.18 (33.16 crit. 5): Local descoberto tem Caçada, sem Missão nem nível mínimo.
+    hunt = await road.start_hunt(actor)
+    assert hunt is not None and hunt.location == RUINS
 
 
 @pytest.mark.asyncio

@@ -143,7 +143,15 @@ def test_refuge_keeps_oren_and_adds_local_alda_interaction():
     ],
 )
 def test_ash_points_show_progress_and_only_unexamined_callbacks(progress, expected_count):
-    screen = render_p2(_view("ash_points", step=2, version=14, progress=progress))
+    screen = render_p2(
+        _view(
+            "ash_points",
+            step=2,
+            version=14,
+            progress=progress,
+            location="Charneca da Fuligem",
+        )
+    )
 
     assert expected_count in screen.text
     buttons = _buttons(screen)
@@ -172,9 +180,15 @@ def test_recovery_is_contextual_and_does_not_offer_road_brazier_rest():
 
 
 def test_stone_oren_alda_and_completion_use_versioned_actions():
-    stone = render_p2(_view("stone", step=4, version=21))
+    stone = render_p2(_view("stone", step=4, version=21, location="Charneca da Fuligem"))
     examined = render_p2(
-        _view("stone", step=4, version=22, progress={"stone_examined": True})
+        _view(
+            "stone",
+            step=4,
+            version=22,
+            progress={"stone_examined": True},
+            location="Charneca da Fuligem",
+        )
     )
     oren = render_p2(_view("oren", step=5, version=23))
     alda = render_p2(_view("alda", step=6, version=24))

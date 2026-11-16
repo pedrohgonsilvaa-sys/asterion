@@ -90,6 +90,11 @@ async def _seed_p3(database, actor: int, *, level: int = 5, p2_status: str = "co
                     character_id=character_id,
                     unlock_id="route.tdo.refugio_charneca",
                 ),
+                # v1.0.18: o Bosque já foi revelado por Explorar; P3 não o revela.
+                LocationDiscovery(
+                    character_id=character_id,
+                    location_id="tdo.location.bosque_calcinado",
+                ),
             )
         )
     return character_id, P3Service(sessions, "ocaso")
@@ -98,8 +103,6 @@ async def _seed_p3(database, actor: int, *, level: int = 5, p2_status: str = "co
 async def _start_scripted_combat(service: P3Service, actor: int):
     view = await service.accept(actor)
     assert view is not None and view.status == "active" and view.step == 1
-    view = await service.mission_route(actor, view.state_version, CHARNECA)
-    assert view is not None and view.location == CHARNECA
     view = await service.enter_bosque(actor, view.state_version)
     assert view is not None and view.step == 2 and view.location == BOSQUE
     for fragment_id in ("p3.fragment.3", "p3.fragment.1", "p3.fragment.2"):
@@ -164,8 +167,6 @@ async def test_p3_group_members_play_alone_and_group_fight_is_refused(
     async def play_to_fight(actor):
         view = await service.resume(actor)
         assert view is not None
-        view = await service.mission_route(actor, view.state_version, CHARNECA)
-        assert view is not None and view.location == CHARNECA
         view = await service.enter_bosque(actor, view.state_version)
         assert view is not None and view.step == 2 and view.location == BOSQUE
         for fragment in P3_FRAGMENTS:
@@ -179,7 +180,6 @@ async def test_p3_group_members_play_alone_and_group_fight_is_refused(
         )
         assert victory is not None and victory.step == 4
         view = await service.examine_carved_fragment(actor, victory.state_version)
-        view = await service.mission_route(actor, view.state_version, CHARNECA)
         view = await service.mission_route(actor, view.state_version, REFUGE)
         view = await service.talk_to_oren(actor, view.state_version)
         assert view is not None and view.step == 6
@@ -263,12 +263,13 @@ def _terminal(result: str):
 
 
 @pytest.mark.asyncio
-async def test_p3_offer_requires_p2_and_level_five_without_s2(database):
-    low_id, low = await _seed_p3(database, 998301, level=4)
+async def test_p3_offer_requires_p2_and_no_level_without_s2(database):
+    low_id, low = await _seed_p3(database, 998301, level=1)
     active_id, active = await _seed_p3(database, 998302, p2_status="active")
     eligible_id, eligible = await _seed_p3(database, 998303)
 
-    assert not (await low.oren(998301)).available
+    # v1.0.18: sem nível mínimo; Nv.1 com P2 concluída recebe a oferta.
+    assert (await low.oren(998301)).available
     assert not (await active.oren(998302)).available
     offer = await eligible.oren(998303)
     assert offer is not None and offer.available and offer.status == "unaccepted"
@@ -295,8 +296,7 @@ async def test_p3_bosque_entry_fragments_and_scripted_cervo_are_persistent(datab
     character_id, service = await _seed_p3(database, 998304)
     accepted = await service.accept(998304)
     assert accepted is not None
-    moved = await service.mission_route(998304, accepted.state_version, CHARNECA)
-    entered = await service.enter_bosque(998304, moved.state_version)
+    entered = await service.enter_bosque(998304, accepted.state_version)
     assert entered is not None and entered.location == BOSQUE and entered.step == 2
     async with database[1]() as session:
         assert (
@@ -379,8 +379,7 @@ async def test_p3_defeat_uses_bosque_recovery_and_explicit_new_attempt(database,
             )
             is None
         )
-    to_charneca = await service.mission_route(998305, defeated.state_version, CHARNECA)
-    to_bosque = await service.enter_bosque(998305, to_charneca.state_version)
+    to_bosque = await service.enter_bosque(998305, defeated.state_version)
     retry = await service.retry(998305, to_bosque.state_version)
     assert retry is not None and retry.kind == "combat"
     assert retry.activity_id != combat.activity_id
@@ -403,8 +402,7 @@ async def test_p3_victory_returns_to_oren_and_grants_one_selected_item(database,
         "attack",
     )
     carved = await service.examine_carved_fragment(998306, victory.state_version)
-    to_charneca = await service.mission_route(998306, carved.state_version, CHARNECA)
-    to_refuge = await service.mission_route(998306, to_charneca.state_version, REFUGE)
+    to_refuge = await service.mission_route(998306, carved.state_version, REFUGE)
     choice = await service.talk_to_oren(998306, to_refuge.state_version)
     completed = await service.choose_reward(998306, choice.state_version, "veil")
     assert completed is not None and completed.status == "completed"
@@ -518,9 +516,9 @@ async def test_p3_defeat_after_vento_morto_recovers_to_charneca_and_retries(data
         character = await session.get(Character, character_id)
         assert world.location == CHARNECA
         assert character.vigor == 61
-    to_bosque = await service.mission_route(
-        998307, defeated.state_version, BOSQUE
-    )
+    to_refuge = await service.mission_route(998307, defeated.state_version, REFUGE)
+    assert to_refuge.location == REFUGE
+    to_bosque = await service.enter_bosque(998307, to_refuge.state_version)
     retry = await service.retry(998307, to_bosque.state_version)
     assert retry.kind == "combat"
     assert retry.activity_id != combat.activity_id

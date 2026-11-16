@@ -35,7 +35,6 @@ from asterion.application.groups import ActivityEligibility, GroupError, GroupSe
 from asterion.application.progression import consolidate_character_level
 from asterion.application.road import (
     BOSQUE,
-    BOSQUE_ROUTE_UNLOCK,
     CHARNECA,
     P2_QUEST_ID,
     REFUGE,
@@ -57,6 +56,7 @@ from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.legacy import legacy_xp_factor
 from asterion.domain.road import (
     BOSQUE_LOCATION,
+    BOSQUE_ROUTE_UNLOCK,
     CERVO,
     RULESET,
     CreatureCombatantSpec,
@@ -143,6 +143,8 @@ class P3View:
     group_size: int = 1
     proposal_id: UUID | None = None
     proposal_status: str | None = None
+    # v1.0.18: etapa de chegada aguardando o Bosque ser descoberto por Explorar.
+    awaiting_exploration: bool = False
 
 
 class P3Service:
@@ -290,10 +292,10 @@ class P3Service:
             ):
                 return False
             allowed = False
-            if {world.location, destination} == {REFUGE, CHARNECA}:
-                allowed = await self._has_unlock(session, character.id, CHARNECA_ROUTE_UNLOCK)
-            elif {world.location, destination} == {CHARNECA, BOSQUE}:
-                allowed = await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK)
+            if destination == REFUGE and world.location in {CHARNECA, BOSQUE}:
+                allowed = True
+            elif world.location == REFUGE and destination == BOSQUE:
+                allowed = await self._discovered(session, character.id, P3_LOCATION_ID)
             if not allowed:
                 return False
             world.region = REGION
@@ -302,6 +304,7 @@ class P3Service:
             return True
 
     async def enter_bosque(self, actor: int, version: int) -> P3View | None:
+        """Refúgio -> Bosque já descoberto (hub, v1.0.18); a Missão não grava descoberta."""
         async with self.sessions.begin() as session:
             character, quest, world = await self._locked_state(session, actor)
             if character is None or quest is None or world is None:
@@ -309,34 +312,32 @@ class P3Service:
             progress = dict(quest.progress or {})
             first_entry = quest.step == 1 and not progress.get("bosque_entered")
             retry_return = quest.step == 3 and progress.get("awaiting_retry")
+            resume_entry = quest.step in {2, 3, 4} and not retry_return
             if (
                 not self._valid(quest, version)
-                or not self._at(world, CHARNECA)
-                or not (first_entry or retry_return)
+                or not self._at(world, REFUGE)
+                or not (first_entry or retry_return or resume_entry)
                 or await self._foreground(session, character.id)
+                or not await self._discovered(session, character.id, P3_LOCATION_ID)
             ):
                 return await self._view(session, character, quest, world)
-            if first_entry:
-                roster_ids = await campaign_roster_ids(session, character.id)
-                present = await present_campaign_members(
-                    session,
-                    character_ids=roster_ids,
-                    quest_id=P3_ID,
-                    content_version=P3_VERSION,
-                    step=1,
-                    region=REGION,
-                    location=CHARNECA,
-                )
-                for member in present:
-                    member_progress = dict(member.quest.progress or {})
+            roster_ids = await campaign_roster_ids(session, character.id)
+            present = await present_campaign_members(
+                session,
+                character_ids=roster_ids,
+                quest_id=P3_ID,
+                content_version=P3_VERSION,
+                step=quest.step,
+                region=REGION,
+                location=REFUGE,
+            )
+            for member in present:
+                if not await self._discovered(session, member.character.id, P3_LOCATION_ID):
+                    continue
+                member_progress = dict(member.quest.progress or {})
+                if first_entry:
                     if member_progress.get("bosque_entered"):
                         continue
-                    await self._ensure(
-                        session,
-                        LocationDiscovery,
-                        character_id=member.character.id,
-                        location_id=P3_LOCATION_ID,
-                    )
                     await self._ensure(
                         session,
                         Unlock,
@@ -357,24 +358,8 @@ class P3Service:
                         source_key="p3.enter_bosque:first-entry",
                         evidence={"location_id": P3_LOCATION_ID},
                     )
-            else:
-                if not await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK):
-                    return await self._view(session, character, quest, world)
-                roster_ids = await campaign_roster_ids(session, character.id)
-                present = await present_campaign_members(
-                    session,
-                    character_ids=roster_ids,
-                    quest_id=P3_ID,
-                    content_version=P3_VERSION,
-                    step=3,
-                    region=REGION,
-                    location=CHARNECA,
-                )
-                for member in present:
-                    member_progress = dict(member.quest.progress or {})
-                    if not member_progress.get("awaiting_retry") or not await self._has_unlock(
-                        session, member.character.id, P3_ROUTE_UNLOCK
-                    ):
+                elif retry_return:
+                    if not member_progress.get("awaiting_retry"):
                         continue
                     member.world.region = REGION
                     member.world.location = BOSQUE
@@ -385,8 +370,14 @@ class P3Service:
                         quest_id=P3_ID,
                         objective_id="p3.retry_route",
                         source_key=f"p3.retry_route:{member.quest.state_version - 1}",
-                        evidence={"from": CHARNECA, "to": BOSQUE},
+                        evidence={"from": REFUGE, "to": BOSQUE},
                     )
+                else:
+                    if member_progress.get("awaiting_retry"):
+                        continue
+                    member.world.region = REGION
+                    member.world.location = BOSQUE
+                    member.quest.state_version += 1
             return await self._view(session, character, quest, world)
 
     async def examine_fragment(self, actor: int, fragment_id: str, version: int) -> P3View | None:
@@ -1202,9 +1193,6 @@ class P3Service:
                 fragment_id=P3_MARKS_FRAGMENT,
             )
             await self._ensure(
-                session, LocationDiscovery, character_id=character.id, location_id=P3_LOCATION_ID
-            )
-            await self._ensure(
                 session, Unlock, character_id=character.id, unlock_id=P3_ROUTE_UNLOCK
             )
             await self._ensure(
@@ -1545,6 +1533,10 @@ class P3Service:
             kind = "return"
         else:
             kind = "choice"
+        awaiting_exploration = bool(
+            kind == "travel"
+            and not await self._discovered(session, character.id, P3_LOCATION_ID)
+        )
         options: tuple[CombatConsumableOption, ...] = ()
         quantities: tuple[tuple[str, int], ...] = ()
         budget = 0
@@ -1608,6 +1600,7 @@ class P3Service:
             group_size=group_size,
             proposal_id=proposal_pair[1].id if proposal_pair else None,
             proposal_status=proposal_pair[1].status if proposal_pair else None,
+            awaiting_exploration=awaiting_exploration,
         )
 
     async def _eligible(self, session, character):
@@ -1618,25 +1611,18 @@ class P3Service:
                 Quest.status == "completed",
             )
         )
-        return bool(completed and character.level >= 5)
+        return bool(completed)
 
     async def _destination_allowed(self, session, character, quest, world, destination):
+        """Hub (v1.0.18): a Missão só tem a volta ao Refúgio; a ida é enter_bosque."""
         if quest is None or world is None or world.region != REGION:
             return False
-        progress = dict(quest.progress or {})
-        if quest.step == 1 and world.location == REFUGE and destination == CHARNECA:
-            return await self._has_unlock(session, character.id, CHARNECA_ROUTE_UNLOCK)
-        if quest.step == 3 and progress.get("awaiting_retry"):
-            if world.location == REFUGE and destination == CHARNECA:
-                return await self._has_unlock(session, character.id, CHARNECA_ROUTE_UNLOCK)
-            if {world.location, destination} == {CHARNECA, BOSQUE}:
-                return await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK)
-        if quest.step == 5:
-            if {world.location, destination} == {BOSQUE, CHARNECA}:
-                return await self._has_unlock(session, character.id, P3_ROUTE_UNLOCK)
-            if {world.location, destination} == {CHARNECA, REFUGE}:
-                return await self._has_unlock(session, character.id, CHARNECA_ROUTE_UNLOCK)
-        return False
+        return bool(
+            destination == REFUGE
+            and world.location in {CHARNECA, BOSQUE}
+            and quest.step in {1, 2, 3, 4, 5}
+            and quest.status == "active"
+        )
 
     async def _social_group_size(self, session, character_id: UUID) -> int:
         """This encounter is not a Boss: missions stay Solo (Ação × Consequência §5)."""
@@ -1685,6 +1671,16 @@ class P3Service:
         return await session.scalar(
             select(GameActivity).where(
                 GameActivity.character_id == character_id, GameActivity.status == "active"
+            )
+        )
+
+    async def _discovered(self, session, character_id, location_id) -> bool:
+        return bool(
+            await session.scalar(
+                select(LocationDiscovery.id).where(
+                    LocationDiscovery.character_id == character_id,
+                    LocationDiscovery.location_id == location_id,
+                )
             )
         )
 

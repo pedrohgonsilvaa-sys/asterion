@@ -117,7 +117,8 @@ def test_charneca_local_exposes_only_unlocked_round_and_regional_route():
     assert "📍 Local Atual\n🌑 Charneca da Fuligem" in locked.text
     assert "Terras do Ocaso · Nv. 3–5" in locked.text
     assert "Ronda de Caça · Vença uma Caçada neste Local" in locked.text
-    assert "world:map:fromlocal" in _callbacks(locked)
+    # v1.0.18: nas Terras do Ocaso o hub substitui "Viajar"; sem rota, sem volta ao Refúgio.
+    assert "world:map:fromlocal" not in _callbacks(locked)
     assert "road:route:refuge" not in _callbacks(locked)
     assert not any(value.startswith("road:round:new:") for value in _callbacks(locked))
     assert not any("Cripta" in value for value in _callbacks(locked))
@@ -140,7 +141,7 @@ def test_charneca_local_exposes_only_unlocked_round_and_regional_route():
     assert "Braseiro do Vento Morto · Descoberto" in familiar.text
     assert "world:round" in _callbacks(familiar)
     assert "road:round:new:5" not in _callbacks(familiar)
-    assert "world:map:fromlocal" in _callbacks(familiar)
+    assert "world:map:fromlocal" not in _callbacks(familiar)
 
 
 def test_charneca_hunt_and_explore_recovery_never_offer_retry():

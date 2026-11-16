@@ -32,7 +32,7 @@ from asterion.application.scripted_combat import (
 )
 from asterion.domain.consumables import ENCOUNTER_CONSUMABLE_LIMITS
 from asterion.domain.legacy import legacy_xp_factor
-from asterion.domain.road import RUINS_LOCATION, SUNSET_CUSTODIAN, enemy_xp
+from asterion.domain.road import RUINS_LOCATION, SUNSET_CUSTODIAN, enemy_xp, fixed_quest_xp
 from asterion.infrastructure.db.combat_codec import decode
 from asterion.infrastructure.db.models import (
     BestiaryEntry,
@@ -543,6 +543,7 @@ class P5Service:
             progress = dict(quest.progress or {})
             if updated.result == "victory":
                 activity.status = "completed"
+                progress["coop_level_gap"] = 0
                 await self._grant_enemy_xp(session, character, activity)
                 await normalize_character_hp(session, character)
                 await self.bestiary.record(
@@ -683,6 +684,17 @@ class P5Service:
             if stack is not None:
                 stack.quantity -= 1
             member_by_character = {row.character_id: row for row in locked.members}
+            # PowerlevelFactor (33.14 item 8): diferença para o membro elegível
+            # de maior nível (quem não ganha a Missão não entra na conta).
+            top_level = max(
+                (
+                    row.level
+                    for cid, row in locked.characters.items()
+                    if member_by_character[cid].role == "eligible"
+                ),
+                default=0,
+            )
+            level_before = {cid: row.level for cid, row in locked.characters.items()}
             for character_id, participant in locked.characters.items():
                 roster_member = member_by_character[character_id]
                 participant_quest = quests.get(character_id)
@@ -720,7 +732,11 @@ class P5Service:
                     progress = dict(participant_quest.progress or {})
                     if updated.result == "victory":
                         participant_quest.step = 4
-                        progress.update(combat_result="victory", awaiting_retry=False)
+                        progress.update(
+                            combat_result="victory",
+                            awaiting_retry=False,
+                            coop_level_gap=top_level - level_before[character_id],
+                        )
                     elif updated.result == "defeat":
                         participant_world = await self._world(session, character_id)
                         brazier, location = await self.road.recover_normal_pve_defeat(
@@ -861,12 +877,13 @@ class P5Service:
             event = RewardEvent(character_id=character.id, source_id=P5_REWARD_SOURCE)
             session.add(event)
             await session.flush()
-            character.xp += 7100
+            xp_fixed = fixed_quest_xp(7100, int((quest.progress or {}).get("coop_level_gap", 0)))
+            character.xp += xp_fixed
             character.crowns += 300
             session.add_all(
                 [
                     RewardComponent(
-                        reward_event_id=event.id, kind="xp", item_id=None, quantity=7100
+                        reward_event_id=event.id, kind="xp", item_id=None, quantity=xp_fixed
                     ),
                     RewardComponent(
                         reward_event_id=event.id, kind="crowns", item_id=None, quantity=300
@@ -1029,8 +1046,7 @@ class P5Service:
 
     async def _eligible(self, session, character):
         return bool(
-            character.level >= 9
-            and await session.scalar(
+            await session.scalar(
                 select(Quest.id).where(
                     Quest.character_id == character.id,
                     Quest.quest_id == "P4",

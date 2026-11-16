@@ -37,6 +37,16 @@ def _keyboard(*rows: list[InlineKeyboardButton]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=list(rows))
 
 
+def _nav_row(view: P2View) -> list[list[InlineKeyboardButton]]:
+    """Hub (v1.0.18): da Charneca só se volta ao Refúgio; do Refúgio retoma-se a Missão."""
+    version = view.state_version
+    if view.location == "Charneca da Fuligem":
+        return [[_button("Voltar ao Refúgio", f"p2:{version}:leave")]]
+    if view.location == "Refúgio do Ocaso":
+        return [[_button("Seguir para a Charneca", f"p2:{version}:back")]]
+    return []
+
+
 def _reward_block() -> str:
     return "🎁 Recompensas\n\n" + "\n".join(_REWARD_LINES)
 
@@ -177,6 +187,19 @@ def render_p2(view: P2View) -> Screen:
             _keyboard([_button("← Refúgio do Ocaso", "road:local")]),
         )
 
+    if view.kind == "travel" and view.awaiting_exploration:
+        return Screen(
+            "📜 Fuligem sem Fogo · Em Andamento\n\n"
+            "🎯 Objetivo · Viajar até a Charneca da Fuligem\n"
+            "⏳ Aguardando · a Charneca ainda não foi descoberta. "
+            "Use Explorar no Refúgio do Ocaso para revelar um Local.",
+            "p2",
+            _keyboard(
+                [_button("Explorar", "tdo:explore")],
+                [_button("← Missões", "world:missions")],
+            ),
+        )
+
     if view.kind == "travel":
         return Screen(
             "📜 Fuligem sem Fogo · Em Andamento\n\n"
@@ -205,6 +228,9 @@ def render_p2(view: P2View) -> Screen:
             else:
                 lines.append(f"⚪ {name}")
                 rows.append([_button(name, f"p2:{version}:ash:{point_id}")])
+        if view.location == "Refúgio do Ocaso":
+            rows = []
+        rows.extend(_nav_row(view))
         rows.append([_button("← Missões", "world:missions")])
         return Screen("\n".join(lines), "p2", InlineKeyboardMarkup(inline_keyboard=rows))
 
@@ -242,9 +268,13 @@ def render_p2(view: P2View) -> Screen:
                 [_button("← Missões", "world:missions")],
             )
         else:
-            rows = [[_button("Enfrentar Solo", f"p2:{version}:solo")]]
-            if view.group_size > 1:
-                rows.append([_button("Formar Grupo", f"p2:{version}:group")])
+            if view.location == "Refúgio do Ocaso":
+                rows = []
+            else:
+                rows = [[_button("Enfrentar Solo", f"p2:{version}:solo")]]
+                if view.group_size > 1:
+                    rows.append([_button("Formar Grupo", f"p2:{version}:group")])
+            rows.extend(_nav_row(view))
             rows.append([_button("← Missões", "world:missions")])
             keyboard = _keyboard(*rows)
         return Screen("\n".join(lines), "p2", keyboard)
@@ -263,11 +293,16 @@ def render_p2(view: P2View) -> Screen:
         else:
             lines.append("🎯 Objetivo · Examinar a Pedra Marcada")
             label, action = "Examinar Pedra Marcada", "stone"
+        stone_rows = [[_button(label, f"p2:{version}:{action}")]]
+        if view.location == "Refúgio do Ocaso":
+            stone_rows = []
+        if not progress.get("stone_examined"):
+            stone_rows.extend(_nav_row(view))
         return Screen(
             "\n".join(lines),
             "p2",
             _keyboard(
-                [_button(label, f"p2:{version}:{action}")],
+                *stone_rows,
                 [_button("← Missões", "world:missions")],
             ),
         )

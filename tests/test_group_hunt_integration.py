@@ -208,7 +208,7 @@ async def test_group_hunt_ready_check_freezes_roster_and_reconnects(
     assert callbacks and all(len(callback.encode()) < 64 for callback in callbacks)
     monkeypatch.setattr(
         "asterion.application.group_hunts.select_creature",
-        lambda _seed, _level, profile=None: creature_for("dog_cinereo"),
+        lambda _seed, _level, profile=None, **_kw: creature_for("dog_cinereo"),
     )
     monkeypatch.setattr(
         "asterion.application.group_hunts.select_variant",
@@ -313,7 +313,7 @@ async def test_group_hunt_victory_uses_individual_settlement_and_duplicate_callb
     group = await _join_group(groups, actors, count=2)
     monkeypatch.setattr(
         "asterion.application.group_hunts.select_creature",
-        lambda _seed, _level, profile=None: creature_for("dog_cinereo"),
+        lambda _seed, _level, profile=None, **_kw: creature_for("dog_cinereo"),
     )
     monkeypatch.setattr(
         "asterion.application.group_hunts.select_variant",
@@ -466,7 +466,7 @@ async def test_vde_group_hunt_uses_the_same_material_table_for_each_participant(
     group = await _join_group(groups, actors, count=2)
     monkeypatch.setattr(
         "asterion.application.group_hunts.select_creature",
-        lambda _seed, _level, profile=None: creature_for("peregrino_enredado"),
+        lambda _seed, _level, profile=None, **_kw: creature_for("peregrino_enredado"),
     )
     monkeypatch.setattr(
         "asterion.application.group_hunts.select_variant",

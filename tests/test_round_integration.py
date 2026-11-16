@@ -594,7 +594,7 @@ async def test_cancel_during_materialized_encounter_waits_for_boundary(database,
     import asterion.application.round as round_module
 
     actor, service = await _seed_round(database, 772003)
-    monkeypatch.setattr(round_module, "select_creature", lambda seed, level, **kwargs: CREATURES[0])
+    _force_safe_common(monkeypatch, round_module)
     prepared = await service.prepare_round(actor, 10)
     started = await service.start_round(actor, prepared.round_id, prepared.state_version)
 

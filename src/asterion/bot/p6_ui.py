@@ -58,20 +58,21 @@ def _guidance(view):
 
 
 def _route_refuge(view):
-    destination = {P6_CHAMBER: ("Retornar às Ruínas", f"p6:{view.state_version}:return_ruins"),
-                   RUINS: ("Retornar ao Bosque", "road:route:bosque"),
-                   BOSQUE: ("Seguir para a Charneca", "road:route:charneca"),
-                   CHARNECA: ("Retornar ao Refúgio", "road:route:refuge")}
-    label, callback = destination.get(view.location, ("Abrir Mapa", "world:map"))
-    return _b(label, callback)
+    """Hub (v1.0.18): de qualquer Local só se volta ao Refúgio."""
+    if view.location == P6_CHAMBER:
+        return _b("Voltar ao Refúgio", f"p6:{view.state_version}:return_refuge")
+    if view.location in {RUINS, BOSQUE, CHARNECA}:
+        return _b("Voltar ao Refúgio", "road:route:refuge")
+    return _b("Abrir Mapa", "world:map")
 
 
 def _route_ruins(view):
-    destination = {REFUGE: ("Seguir para a Charneca", "road:route:charneca"),
-                   CHARNECA: ("Seguir para o Bosque", "road:route:bosque"),
-                   BOSQUE: ("Seguir para as Ruínas", "road:route:ruinas")}
-    label, callback = destination.get(view.location, ("Abrir Mapa", "world:map"))
-    return _b(label, callback)
+    """Do Refúgio, a Câmara descoberta; de outro Local, a volta ao Refúgio."""
+    if view.location == REFUGE:
+        if view.awaiting_exploration:
+            return _b("Explorar", "tdo:explore")
+        return _b("Seguir para a Câmara do Poente", f"p6:{view.state_version}:enter_chamber")
+    return _route_refuge(view)
 
 
 def _guidance_screen(view):
@@ -119,20 +120,25 @@ def render_p6(view: P6View) -> Screen:
                       f"{requirement}",
                       "p6", _kb(rows))
     if view.kind == "unavailable":
-        return Screen(f"📜 {P6_TITLE} · Indisponível\nA Campanha final requer P5 concluída e Nv.10.",
+        return Screen(f"📜 {P6_TITLE} · Indisponível\nA Campanha final requer P5 concluída.",
                       "p6", _kb([[_b("← Missões", "world:missions")]]))
     if view.kind == "travel_ruins":
-        return Screen(f"📜 {P6_TITLE} · Em Andamento\n\n🎯 Cruzar a Porta do Poente nas Ruínas do Vigia.\n📍 {view.location}",
-                      "p6", _kb([[_route_ruins(view)], [_b("← Missões", "world:missions")]]))
+        return Screen(f"📜 {P6_TITLE} · Em Andamento\n\n🎯 Cruzar a Porta do Poente.\n📍 {view.location}",
+                      "p6", _kb([[_route_refuge(view)], [_b("← Missões", "world:missions")]]))
     if view.kind == "cross_door":
         return Screen(f"📜 {P6_TITLE} · Câmara do Poente\n\n🎯 Cruzar a Porta do Poente.\n\nA estrutura permanece protegida; ainda não há passagem de retorno por ela.",
                       "p6", _kb([[_b("Cruzar a Porta", f"p6:{v}:cross_door")], [_b("← Missões", "world:missions")]]))
     if view.kind == "enter_chamber":
+        if view.awaiting_exploration:
+            return Screen(f"🚪 Porta do Poente\n📜 {P6_TITLE}\n\n🎯 Entrar na Câmara do Poente.\n"
+                          "⏳ Aguardando · a Câmara do Poente ainda não foi descoberta. "
+                          "Use Explorar no Refúgio do Ocaso para revelar um Local.",
+                          "p6", _kb([[_b("Explorar", "tdo:explore")], [_b("← Missões", "world:missions")]]))
         return Screen(f"🚪 Porta do Poente\n📜 {P6_TITLE}\n\n🎯 Entrar na Câmara do Poente.",
                       "p6", _kb([[_b("Entrar na Câmara", f"p6:{v}:enter_chamber")], [_b("← Missões", "world:missions")]]))
     if view.kind == "travel_chamber":
-        return Screen(f"📜 {P6_TITLE} · Em Andamento\n\n🎯 Retornar à Câmara do Poente pelas rotas conhecidas.\n📍 {view.location}",
-                      "p6", _kb([[_b("Abrir Mapa", "world:map")], [_b("← Missões", "world:missions")]]))
+        return Screen(f"📜 {P6_TITLE} · Em Andamento\n\n🎯 Retornar à Câmara do Poente partindo do Refúgio.\n📍 {view.location}",
+                      "p6", _kb([[_route_ruins(view)], [_b("← Missões", "world:missions")]]))
     if view.kind == "inspect_before":
         return Screen(f"📜 {P6_TITLE} · Câmara do Poente\n\n🎯 Examinar a estrutura central.\n\nOren Cal\n<i>“Se a leitura estiver correta, o nome é ‘Âncora’. Não sabemos o que ancorava. Não transforme um nome em resposta.”</i>{_guidance(view)}",
                       "p6", _kb([[_b("Examinar estrutura", f"p6:{v}:inspect_before")], [_b("← Missões", "world:missions")]]), parse_mode="HTML")
@@ -143,7 +149,7 @@ def render_p6(view: P6View) -> Screen:
                                   [_b("Grupo", "group:root")], [_b("← Missões", "world:missions")]]))
     if view.kind in {"retry", "retry_chamber", "retry_travel"}:
         rows = [[_b("Tentar novamente", f"p6:{v}:retry")],
-                [_b("Formar Grupo", f"p6:{v}:group")]] if view.kind == "retry" else [[_b("Retornar à Câmara", f"p6:{v}:enter_chamber")]] if view.kind == "retry_chamber" else [[_route_ruins(view)]]
+                [_b("Formar Grupo", f"p6:{v}:group")]] if view.kind == "retry" else [[_b("Retornar à Câmara", f"p6:{v}:enter_chamber")]] if view.kind == "retry_chamber" else [[_route_refuge(view)]]
         rows.append([_b("← Missões", "world:missions")])
         return Screen(f"❌ Vigia Partido · Tentativa encerrada\n✅ Etapas anteriores preservadas\n📍 Recuperação · {p.get('recovery_brazier') or 'Braseiro do Refúgio'}\n❤️ HP restaurado · Vigor preservado\n\nA nova tentativa mantém o mesmo chefe, Nv.10 e configuração regional.{_guidance(view)}",
                       "p6_recovery", _kb(rows))
@@ -153,7 +159,7 @@ def render_p6(view: P6View) -> Screen:
     if view.kind == "record_anchor":
         return Screen(f"📜 {P6_TITLE} · Câmara do Poente\n\n🎯 Registrar o nome Âncora do Poente e os fatos confirmados.\n\nO Vigia a protegia; outras estruturas chamadas Âncoras existiram. Sua função permanece desconhecida.{_guidance(view)}",
                       "p6", _kb([[_b("Registrar no Códice", f"p6:{v}:record_anchor")], [_b("← Missões", "world:missions")]]))
-    if view.kind in {"return_ruins", "return_refuge"}:
+    if view.kind == "return_refuge":
         return Screen(f"📜 {P6_TITLE} · Em Andamento\n🎯 Retornar ao Refúgio do Ocaso para relatar à Alda Veyr e a Oren Cal.\n📍 {view.location}{_guidance(view)}",
                       "p6", _kb([[_route_refuge(view)], [_b("← Missões", "world:missions")]]))
     if view.kind == "reports":

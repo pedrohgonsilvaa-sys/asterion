@@ -65,7 +65,7 @@ from asterion.application.road import (
 )
 from asterion.application.talents import TalentService
 from asterion.application.world import WorldService
-from asterion.domain.combat_math import CombatRng
+from asterion.domain.combat_math import CombatRng, Stats
 from asterion.domain.creation import CLASSES, RACES
 from asterion.domain.legacy import legacy_xp_factor
 from asterion.domain.paths import PATHS_BY_CLASS
@@ -301,7 +301,25 @@ async def _seed_campaign_checkpoint(sessions, actor: int) -> None:
         character.xp += XP_FOR_LEVEL_60
 
 
+def _harmless_road_enemy(monkeypatch) -> None:
+    """TdO v1.0.18: o inimigo usa o nível do Local, e estas caçadas rodam no Nv.1
+    (a XP do Nv.60 só consolida depois). A taxa de vitória do Nv.1 é a QA-001,
+    não o alvo deste E2E, então o inimigo não causa dano relevante aqui."""
+    import asterion.application.road as road_module
+
+    original = road_module.create_road_combat
+
+    def safe_combat(*args, **kwargs):
+        state = original(*args, **kwargs)
+        enemy = state.fighters["enemy"]
+        enemy.stats = Stats(enemy.stats.hp, 1, enemy.stats.defense, enemy.stats.agility)
+        return state
+
+    monkeypatch.setattr(road_module, "create_road_combat", safe_combat)
+
+
 async def _hunt_on_road(sessions, actor: int, monkeypatch, label: str):
+    _harmless_road_enemy(monkeypatch)
     road = RoadService(sessions, "ocaso")
     here = await road.resume(actor)
     assert here is not None, label

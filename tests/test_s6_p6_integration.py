@@ -56,6 +56,11 @@ async def _seed_final_campaign(database, actor: int, *, level: int = 10, door_kn
         assert character is not None
         session.add_all(
             [
+                # v1.0.18: a Câmara foi revelada por Explorar; P6 não a revela.
+                LocationDiscovery(
+                    character_id=character_id,
+                    location_id="tdo.location.camara_do_poente",
+                ),
                 Quest(
                     character_id=character_id,
                     quest_id="S2",
@@ -277,12 +282,14 @@ async def test_p6_auto_start_gate_and_requires_p5_door_knowledge(database):
         database, actor, level=9, door_known=True
     )
     service = P6Service(sessions, "ocaso")
-    level_blocked = await service.resume(actor)
-    assert level_blocked is not None and level_blocked.kind == "unavailable"
+    # v1.0.18: P6 inicia sem exigência de Nv.10 quando P5 está concluída.
+    without_level = await service.resume(actor)
+    assert without_level is not None and without_level.status == "active"
+    assert without_level.step == 1 and without_level.kind != "unavailable"
     async with sessions() as session:
         assert await session.scalar(
             select(Quest.id).where(Quest.character_id == character_id, Quest.quest_id == P6_ID)
-        ) is None
+        ) is not None
 
     actor += 1
     character_id, sessions = await _seed_final_campaign(
@@ -306,7 +313,7 @@ async def test_p6_chamber_boss_retry_codex_and_campaign_reward(database, monkeyp
     service = P6Service(sessions, "ocaso")
     initial = await service.resume(actor)
     assert initial is not None and initial.status == "active" and initial.step == 1
-    assert initial.guidance is None and initial.kind == "travel_ruins"
+    assert initial.guidance is None and initial.kind == "cross_door"
     assert (await service.resume(actor)).step == initial.step
     async with sessions() as session:
         assert await session.scalar(
@@ -315,7 +322,7 @@ async def test_p6_chamber_boss_retry_codex_and_campaign_reward(database, monkeyp
             )
         ) == 1
 
-    await _set_location(sessions, character_id, RUINS)
+    await _set_location(sessions, character_id, REFUGE)
     crossed = await service.action(actor, initial.state_version, "cross_door")
     assert crossed is not None and crossed.step == 2 and crossed.kind == "enter_chamber"
     chamber = await service.action(actor, crossed.state_version, "enter_chamber")
@@ -392,7 +399,7 @@ async def test_p6_chamber_boss_retry_codex_and_campaign_reward(database, monkeyp
     defeat = await service.action_combat(
         actor, fight.activity_id, fight.activity_state_version, "attack"
     )
-    assert defeat is not None and defeat.kind == "retry_travel" and defeat.step == 5
+    assert defeat is not None and defeat.kind == "retry_chamber" and defeat.step == 5
     assert defeat.progress["awaiting_retry"] is True
     async with sessions() as session:
         character = await session.get(Character, character_id)
@@ -401,7 +408,7 @@ async def test_p6_chamber_boss_retry_codex_and_campaign_reward(database, monkeyp
         assert character.hp == character.max_hp and character.vigor == vigor_before_boss
         assert failed is not None and failed.status == "failed"
 
-    await _set_location(sessions, character_id, RUINS)
+    await _set_location(sessions, character_id, REFUGE)
     returned = await service.action(actor, defeat.state_version, "enter_chamber")
     assert returned is not None and returned.location == "Câmara do Poente"
     retry = await service.action(actor, returned.state_version, "retry")
@@ -458,10 +465,9 @@ async def test_p6_chamber_boss_retry_codex_and_campaign_reward(database, monkeyp
     after = await service.action(actor, victory.state_version, "inspect_after")
     assert after is not None and after.step == 7 and after.kind == "record_anchor"
     recorded = await service.action(actor, after.state_version, "record_anchor")
-    assert recorded is not None and recorded.step == 8 and recorded.kind == "return_ruins"
-    return_to_refuge = await service.action(actor, recorded.state_version, "return_ruins")
-    assert return_to_refuge is not None and return_to_refuge.location == RUINS
-    await _set_location(sessions, character_id, REFUGE)
+    assert recorded is not None and recorded.step == 8 and recorded.kind == "return_refuge"
+    return_to_refuge = await service.action(actor, recorded.state_version, "return_refuge")
+    assert return_to_refuge is not None and return_to_refuge.location == REFUGE
     reports = await service.resume(actor)
     assert reports is not None and reports.kind == "reports"
     one_report = await service.action(actor, reports.state_version, "report_oren")

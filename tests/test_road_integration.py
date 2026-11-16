@@ -836,7 +836,7 @@ async def test_exploration_combat_pays_xp_crowns_material_and_vigor(database, mo
     assert view.kind == "exploration"
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
-        assert character.xp == 2960
+        assert character.xp == 3000  # v1.0.18 crit. 14: Cão Nv.3
         assert character.crowns == 20
         assert character.vigor == 96
         assert (
@@ -885,7 +885,7 @@ async def test_exploration_combat_with_low_vigor_only_pays_quarter_xp(database, 
         view = await service.action(actor, view.activity_id, view.combat.version, action)
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
-        assert character.xp == 2780
+        assert character.xp == 2790  # v1.0.18 crit. 14: Cão Nv.3
         assert character.crowns == 0
         assert character.vigor == 3
         assert (
@@ -1419,7 +1419,7 @@ async def test_first_observation_grants_fixed_xp_once_and_survives_reconnect(dat
     assert view.kind == "combat"
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
-        assert character.xp == 2720 + 48
+        assert character.xp == 2720 + 77  # v1.0.18 crit. 14: Corvo Nv.4
         assert (
             await session.scalar(
                 select(func.count(RewardEvent.id)).where(
@@ -1433,7 +1433,7 @@ async def test_first_observation_grants_fixed_xp_once_and_survives_reconnect(dat
     assert resumed.kind == "combat"
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
-        assert character.xp == 2720 + 48
+        assert character.xp == 2720 + 77
 
 
 @pytest.mark.asyncio
@@ -1607,7 +1607,8 @@ async def test_exploration_retry_is_server_authoritative_after_cooldown(database
         lambda *args: ("great_discovery", "explore.tdo.estrada.marco_viajantes", "Marco."),
     )
     first = await service.explore(actor)
-    assert first.retry_available is False
+    # v1.0.18 (33.7): sem recarga de 5 min; repetir e sempre possivel.
+    assert first.retry_available is True
     async with database[1]() as session:
         attempt = await session.scalar(select(ExplorationAttempt))
         attempt.created_at = datetime.now(UTC) - timedelta(minutes=6)
@@ -1618,7 +1619,7 @@ async def test_exploration_retry_is_server_authoritative_after_cooldown(database
 
 
 @pytest.mark.asyncio
-async def test_exploration_retry_is_hidden_at_six_per_hour(database, monkeypatch):
+async def test_exploration_retry_stays_available_past_six_per_hour(database, monkeypatch):
     import asterion.application.road as road_module
 
     actor, service = await _seed_road(database, 771125)
@@ -1654,7 +1655,8 @@ async def test_exploration_retry_is_hidden_at_six_per_hour(database, monkeypatch
         await session.commit()
     resumed = await service.resume(actor)
     assert resumed.kind == "exploration"
-    assert resumed.retry_available is False
+    # v1.0.18 (33.7): sem limite de 6 por Local por 60 min.
+    assert resumed.retry_available is True
 
 
 @pytest.mark.asyncio

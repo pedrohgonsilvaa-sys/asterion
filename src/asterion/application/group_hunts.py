@@ -32,9 +32,12 @@ from asterion.domain.road import (
     CreatureCombatantSpec,
     PlayerCombatantSpec,
     create_creature_party_combat,
+    hunt_enemy_level,
     select_creature,
     select_variant,
+    unlock_level_blockers,
 )
+from asterion.domain.tdo_combat import hunt_unlock_blocked_message
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
     Character,
@@ -72,6 +75,15 @@ def group_hunt_scaling(roster_size: int) -> StatMultipliers:
     )
 
 
+class GroupHuntUnlockBlocked(GroupError):
+    """Decisão 11 (TdO v1.0.18): nenhuma criatura do Local serve a todos os membros."""
+
+    def __init__(self, names: Sequence[str]):
+        super().__init__("hunt_unlock_level_blocked")
+        self.names = tuple(names)
+        self.user_message = hunt_unlock_blocked_message(self.names)
+
+
 class GroupHuntService:
     """Owns the shared snapshot; each member keeps an individual activity and receipt."""
 
@@ -85,7 +97,9 @@ class GroupHuntService:
         self.server_id = server_id
         self.road = road
 
-    async def context_payload(self, actor: int) -> dict:
+    async def context_payload(
+        self, actor: int, participant_ids: Sequence[UUID] | None = None
+    ) -> dict:
         async with self.sessions() as session:
             character = await self._character(session, actor)
             if character is None:
@@ -100,6 +114,21 @@ class GroupHuntService:
             )
             if profile is None:
                 raise GroupError("hunt_unavailable")
+            if participant_ids:
+                rows = {
+                    item.id: item
+                    for item in (
+                        await session.scalars(
+                            select(Character).where(Character.id.in_(list(participant_ids)))
+                        )
+                    ).all()
+                }
+                roster = [rows[item] for item in participant_ids if item in rows]
+                blocked = unlock_level_blockers(
+                    profile, [(item.name, item.level) for item in roster]
+                )
+                if blocked:
+                    raise GroupHuntUnlockBlocked(blocked)
             return {
                 "local_id": profile.local_id,
                 "location": world.location,
@@ -258,8 +287,18 @@ class GroupHuntService:
 
         seed = seed or sha256(f"group-hunt:{proposal.id.hex}".encode()).hexdigest()
         reference_level = reference_level or max(character.level for character in characters)
-        creature = select_creature(seed, reference_level, profile=profile)
-        enemy_level = min(reference_level, creature.max_level)
+        blocked = unlock_level_blockers(
+            profile, [(item.name, item.level) for item in characters]
+        )
+        if blocked:
+            raise GroupHuntUnlockBlocked(blocked)
+        creature = select_creature(
+            seed,
+            reference_level,
+            profile=profile,
+            group_levels=[item.level for item in characters],
+        )
+        enemy_level = hunt_enemy_level(profile, creature, reference_level)
         variant = select_variant(seed, creature, profile=profile)
         roster_size = len(characters)
         scale = group_hunt_scaling(roster_size)

@@ -133,6 +133,8 @@ class P2View:
     result_state: str | None = None
     rewarded: bool = False
     blocked_by_foreground: bool = False
+    # v1.0.18: etapa de chegada aguardando o Local ser descoberto por Explorar.
+    awaiting_exploration: bool = False
     consumable_options: tuple[CombatConsumableOption, ...] = ()
     consumable_quantities: tuple[tuple[str, int], ...] = ()
     consumable_budget_limit: int = 0
@@ -244,13 +246,13 @@ class P2Service:
                 region=REGION,
                 location=REFUGE,
             )
+            # v1.0.18 (5.5): a Missão não revela a Charneca; só conclui a etapa na
+            # chegada de quem já a descobriu por Explorar.
             for member in present:
-                await self._ensure(
-                    session,
-                    LocationDiscovery,
-                    character_id=member.character.id,
-                    location_id=CHARNECA_LOCATION_ID,
-                )
+                if not await self._discovered(
+                    session, member.character.id, CHARNECA_LOCATION_ID
+                ):
+                    continue
                 await self._ensure(
                     session,
                     Unlock,
@@ -272,6 +274,43 @@ class P2Service:
                     source_key=f"p2.travel.charneca:{member.quest.state_version - 1}",
                     evidence={"from": REFUGE, "to": CHARNECA},
                 )
+            return await self._view(session, character, quest, world)
+
+    async def leave_to_refuge(self, actor: int, version: int) -> P2View | None:
+        """Volta livre ao Refúgio no meio da Missão (hub, 0 custo; sem mudar de etapa)."""
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None or quest is None:
+                return None
+            if (
+                not self._valid(quest, version)
+                or quest.step not in {2, 3, 4}
+                or (quest.progress or {}).get("awaiting_retry")
+                or not self._at(world, CHARNECA)
+                or await self._foreground(session, character.id) is not None
+            ):
+                return await self._view(session, character, quest, world)
+            world.region, world.location = REGION, REFUGE
+            quest.state_version += 1
+            return await self._view(session, character, quest, world)
+
+    async def back_to_charneca(self, actor: int, version: int) -> P2View | None:
+        """Retoma a Missão: do Refúgio à Charneca já descoberta (etapas 2 a 4)."""
+        async with self.sessions.begin() as session:
+            character, quest, world = await self._locked_state(session, actor)
+            if character is None or quest is None:
+                return None
+            if (
+                not self._valid(quest, version)
+                or quest.step not in {2, 3, 4}
+                or (quest.progress or {}).get("awaiting_retry")
+                or not self._at(world, REFUGE)
+                or await self._foreground(session, character.id) is not None
+                or not await self._discovered(session, character.id, CHARNECA_LOCATION_ID)
+            ):
+                return await self._view(session, character, quest, world)
+            world.region, world.location = REGION, CHARNECA
+            quest.state_version += 1
             return await self._view(session, character, quest, world)
 
     async def examine_ash_point(
@@ -1552,7 +1591,6 @@ class P2Service:
     async def _eligible(self, session, character, world, quest):
         if (
             quest is not None
-            or character.level < 3
             or world is None
             or world.region != REGION
             or world.location != REFUGE
@@ -1701,6 +1739,10 @@ class P2Service:
             else:
                 kind = "alda"
 
+        awaiting_exploration = bool(
+            kind == "travel"
+            and not await self._discovered(session, character.id, CHARNECA_LOCATION_ID)
+        )
         rewarded = bool(
             await session.scalar(
                 select(RewardEvent.id).where(
@@ -1772,6 +1814,7 @@ class P2Service:
             result_state=result_state,
             rewarded=rewarded,
             blocked_by_foreground=blocked_by_foreground,
+            awaiting_exploration=awaiting_exploration,
             consumable_options=consumable_options,
             consumable_quantities=consumable_quantities,
             consumable_budget_limit=consumable_budget_limit,
@@ -1817,6 +1860,16 @@ narrative=narrative,
             world is not None
             and world.region == REGION
             and world.location == location
+        )
+
+    async def _discovered(self, session, character_id, location_id) -> bool:
+        return bool(
+            await session.scalar(
+                select(LocationDiscovery.id).where(
+                    LocationDiscovery.character_id == character_id,
+                    LocationDiscovery.location_id == location_id,
+                )
+            )
         )
 
     async def _ensure(self, session, model, **values):

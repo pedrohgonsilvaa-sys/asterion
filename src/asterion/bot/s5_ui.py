@@ -4,7 +4,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
-from asterion.application.road import BOSQUE, CHARNECA, REFUGE, RUINS
+from asterion.application.road import REFUGE, RUINS
 from asterion.application.s5 import S5_LIGHT_POINTS, S5_TITLE, S5View
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
@@ -13,6 +13,7 @@ from asterion.bot.narrative_choice_ui import (
     immediate_reaction,
     narrative_option_rows,
 )
+from asterion.bot.tdo_hub_ui import mission_hub_button
 
 
 def _button(label: str, data: str) -> InlineKeyboardButton:
@@ -50,15 +51,9 @@ def _combat(view: S5View) -> Screen:
 
 
 def _routes(view: S5View):
-    if view.location == REFUGE:
-        return [[_button("Seguir para a Charneca", "road:route:charneca")]]
-    if view.location == CHARNECA:
-        return [[_button("Seguir para o Bosque", "road:route:bosque")]]
-    if view.location == BOSQUE:
-        return [[_button("Seguir para as Ruínas", "road:route:ruinas")]]
-    if view.location == RUINS:
-        return []
-    return []
+    """Hub (v1.0.18): do Refúgio às Ruínas descobertas; de outro Local, só a volta."""
+    button = mission_hub_button(view.location, "Ruínas do Vigia")
+    return [[button]] if button is not None else []
 
 
 def _objective(view: S5View) -> str:
@@ -110,7 +105,7 @@ def render_s5(view: S5View) -> Screen:
         rows.append([_button("← Refúgio do Ocaso", "road:local")])
         return Screen(
             f"✒️ Oren Cal\n\n📜 {S5_TITLE} · Indisponível no momento\n"
-            "Requer Pedras que Ainda Vigiam concluída e Nv.8.",
+            "Requer Pedras que Ainda Vigiam concluída.",
             "s5", _keyboard(rows),
         )
     if view.kind == "completed" or view.status == "completed":
@@ -208,12 +203,9 @@ def render_s5(view: S5View) -> Screen:
         )
     if view.kind == "return":
         rows = narrative_option_rows(view.narrative, f"s5:{version}")
-        if view.location == RUINS:
-            rows.append([_button("Retornar ao Bosque", "road:route:bosque")])
-        elif view.location == BOSQUE:
-            rows.append([_button("Seguir para a Charneca", "road:route:charneca")])
-        elif view.location == CHARNECA:
-            rows.append([_button("Retornar ao Refúgio", "road:route:refuge")])
+        back = mission_hub_button(view.location, "Refúgio do Ocaso")
+        if back is not None and view.location != REFUGE:
+            rows.append([back])
         rows.append([_button("← Missões", "world:missions")])
         return Screen(
             f"📜 {S5_TITLE} · Em Andamento\n🎯 Retornar a Oren Cal\n📍 {view.location}",

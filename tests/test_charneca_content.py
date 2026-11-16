@@ -44,6 +44,7 @@ from asterion.infrastructure.db.models import (
     Account,
     Brazier,
     Character,
+    CharacterActionThrottle,
     CodexEntry,
     ConsumableStack,
     EquipmentItem,
@@ -227,18 +228,12 @@ def test_charneca_explore_profile_gates_and_shared_category_weights():
         ("aranha_cinza", 35),
         ("cervo_escoriado", 30),
     }
-    forbidden_at_3 = {
-        "explore.tdo.charneca.braseiro",
-        "explore.tdo.charneca.cripta",
-        "explore.tdo.charneca.combat.cervo_escoriado",
-    }
+    # v1.0.18 (bloco C, FINAL 11.2): sem "elegivel em Nv.4+"; Nv.3 tambem sorteia.
     results_at_3 = {
         select_exploration_result(str(seed), 3, profile=CHARNECA_EXPLORATION_PROFILE)
         for seed in range(3000)
     }
-    assert not forbidden_at_3.intersection(
-        CHARNECA_EXPLORATION_PROFILE.result(key).result_id for key in results_at_3
-    )
+    assert {"braseiro", "cripta"}.issubset(results_at_3)
     results_at_4 = {
         select_exploration_result(str(seed), 4, profile=CHARNECA_EXPLORATION_PROFILE)
         for seed in range(3000)
@@ -393,7 +388,7 @@ async def test_charneca_overland_route_and_hunt_freeze_local(database, monkeypat
         assert (context.local_id, context.category, context.enemy_level) == (
             CHARNECA_LOCATION,
             "uncommon",
-            3,
+            6,  # v1.0.18 crit. 14: nível do Local
         )
         assert await session.scalar(
             select(func.count(HuntContext.id)).where(
@@ -420,23 +415,20 @@ async def test_overland_and_brazier_travel_are_distinct_and_free(database):
     charneca = await service.travel_route(actor, CHARNECA)
     assert charneca is not None and charneca.location == CHARNECA
     assert charneca.brazier_id == "tdo.brazier.vento_morto"
-    assert {destination[1] for destination in charneca.brazier_destinations} == {
-        "Braseiro da Estrada",
-        "Braseiro do Refúgio",
-    }
+    # v1.0.18 (33.4): sem Travessia dos Braseiros nas Terras do Ocaso; o hub leva ao Refúgio.
+    assert charneca.brazier_destinations == ()
+    assert charneca.route_destinations == (REFUGE,)
+    assert await service.travel_brazier(actor, "tdo.brazier.refugio_do_ocaso") is None
 
-    refuge = await service.travel_brazier(actor, "tdo.brazier.refugio_do_ocaso")
+    refuge = await service.travel_route(actor, REFUGE)
     assert refuge is not None and refuge.location == REFUGE
     assert refuge.brazier_id == "tdo.brazier.refugio_do_ocaso"
-    assert {
-        destination[0] for destination in refuge.brazier_destinations
-    } == {"tdo.brazier.estrada", "tdo.brazier.vento_morto"}
+    assert refuge.brazier_destinations == ()
 
-    back_by_route = await service.travel_route(actor, CHARNECA)
-    assert back_by_route is not None and back_by_route.location == CHARNECA
-    refuge_again = await service.travel_route(actor, REFUGE)
-    assert refuge_again is not None and refuge_again.location == REFUGE
-    assert await service.travel_route(actor, ROAD) is None
+    road_view = await service.travel_route(actor, ROAD)
+    assert road_view is not None and road_view.location == ROAD
+    assert await service.travel_route(actor, CHARNECA) is None  # nunca Local-Local
+    assert (await service.travel_route(actor, REFUGE)).location == REFUGE
     assert await service.travel_brazier(actor, "tdo.brazier.not_discovered") is None
 
     async with database[1]() as session:
@@ -1258,6 +1250,9 @@ async def test_p2_codex_entry_does_not_consume_explore_stone_unique(database, mo
         )
         assert character.xp == 193
         attempt.created_at = datetime.now(UTC) - timedelta(minutes=6)
+        # Bloco C: so resta o anti-spam tecnico de 3 s.
+        throttle = await session.scalar(select(CharacterActionThrottle))
+        throttle.last_click_at = datetime.now(UTC) - timedelta(seconds=10)
         await session.commit()
 
     second = await service.explore(actor)

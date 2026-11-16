@@ -40,7 +40,7 @@ def test_ruins_exploration_keeps_reference_level_distinct_from_minimum_level():
         "explore.tdo.ruinas.galerias",
     }
     assert next(item for item in great if item.key == "braseiro_poente").min_level == 1
-    assert next(item for item in great if item.key == "galerias_vigia").min_level == 8
+    assert next(item for item in great if item.key == "galerias_vigia").min_level == 1
     assert all(
         select_exploration_result(f"ruins-eight-{index}", 8, profile=RUINS_EXPLORATION_PROFILE)
         in {"braseiro_poente", "galerias_vigia", "estruturas_guarda", "ocupacao_posterior",

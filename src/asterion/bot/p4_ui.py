@@ -21,6 +21,15 @@ def _keyboard(rows):
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def _mission_nav(view: P4View) -> list[list[InlineKeyboardButton]]:
+    """Hub (v1.0.18): de um Local só se volta ao Refúgio; do Refúgio retoma-se a Missão."""
+    if view.location in {BOSQUE, CHARNECA, RUINS}:
+        return [[_button("Voltar ao Refúgio", f"p4:{view.state_version}:route:refuge")]]
+    if view.location == REFUGE and view.step in {3, 4, 5} and not (view.progress or {}).get("awaiting_retry"):
+        return [[_button("Seguir para as Ruínas", f"p4:{view.state_version}:enter")]]
+    return []
+
+
 def _combat(view: P4View) -> Screen:
     if view.combat is None or view.activity_id is None or view.encounter_id is None:
         return Screen("📜 Pedras que Ainda Vigiam · O encontro está sendo reconstruído.", "p4", _keyboard([[_button("Atualizar", "p4:resume")]]))
@@ -103,14 +112,10 @@ def render_p4(view: P4View) -> Screen:
         return Screen("🪖 Alda Veyr\nRefúgio do Ocaso · Terras do Ocaso", "p4", _keyboard(rows))
     if view.kind == "path":
         rows = []
-        if view.location == BOSQUE:
+        if view.location in {BOSQUE, REFUGE}:
             rows.append([_button("Seguir o Caminho Ocidental", f"p4:{version}:path")])
-        elif view.location == REFUGE:
-            rows.append([_button("Seguir para a Charneca", "road:route:charneca")])
-        elif view.location == CHARNECA:
-            rows.append([_button("Seguir para o Bosque", "road:route:bosque")])
         else:
-            rows.append([_button("← Mapa", "world:map")])
+            rows.extend(_mission_nav(view))
         rows.append([_button("← Missões", "world:missions")])
         return Screen(
             "📜 Pedras que Ainda Vigiam · Em Andamento\n🎯 Seguir o Caminho Ocidental\n"
@@ -119,22 +124,33 @@ def render_p4(view: P4View) -> Screen:
             _keyboard(rows),
         )
     if view.kind == "enter_ruins":
+        if view.awaiting_exploration:
+            return Screen(
+                "📜 Pedras que Ainda Vigiam · Em Andamento\n\n"
+                "🎯 Alcançar os limites das Ruínas do Vigia.\n"
+                "⏳ Aguardando · as Ruínas ainda não foram descobertas. "
+                "Use Explorar no Refúgio do Ocaso para revelar um Local.",
+                "p4",
+                _keyboard([
+                    *([[_button("Explorar", "tdo:explore")]] if view.location == REFUGE else _mission_nav(view)),
+                    [_button("← Missões", "world:missions")],
+                ]),
+            )
+        rows = [[_button("Seguir para as Ruínas", f"p4:{version}:enter")]] if view.location == REFUGE else _mission_nav(view)
         return Screen(
-            "📜 Pedras que Ainda Vigiam · Em Andamento\n🌲 Bosque Calcinado\n\n"
-            "🎯 Alcançar os limites das Ruínas do Vigia.\nA passagem é contextual à missão.",
+            "📜 Pedras que Ainda Vigiam · Em Andamento\n\n"
+            "🎯 Alcançar os limites das Ruínas do Vigia.\nA chegada parte do Refúgio do Ocaso.",
             "p4",
-            _keyboard([[_button("Seguir para as Ruínas", f"p4:{version}:enter")], [_button("← Missões", "world:missions")]]),
+            _keyboard([*rows, [_button("← Missões", "world:missions")]]),
         )
     if view.kind == "recovery":
         rows = []
         if view.location == RUINS:
             rows.append([_button("Nova tentativa", f"p4:{version}:retry")])
-        elif view.location == BOSQUE:
-            rows.append([_button("Retornar às Ruínas", f"p4:{version}:enter")])
-        elif view.location == "Charneca da Fuligem":
-            rows.append([_button("Seguir para o Bosque", "road:route:bosque")])
         elif view.location == REFUGE:
-            rows.append([_button("Seguir para a Charneca", "road:route:charneca")])
+            rows.append([_button("Retornar às Ruínas", f"p4:{version}:enter")])
+        else:
+            rows.extend(_mission_nav(view))
         rows.append([_button("← Missões", "world:missions")])
         return Screen(
             "💀 Derrota · Vigia Rachado\n"
@@ -159,9 +175,11 @@ def render_p4(view: P4View) -> Screen:
                 ),
             )
         rows = []
-        if view.group_size > 1:
-            rows.append([_button("Propor combate em Grupo", f"p4:{version}:group")])
-        rows.append([_button("Enfrentar Solo", f"p4:{version}:solo")])
+        if view.location == RUINS:
+            if view.group_size > 1:
+                rows.append([_button("Propor combate em Grupo", f"p4:{version}:group")])
+            rows.append([_button("Enfrentar Solo", f"p4:{version}:solo")])
+        rows.extend(_mission_nav(view))
         rows.append([_button("← Missões", "world:missions")])
         return Screen(
             "📜 Pedras que Ainda Vigiam · Em Andamento\n"
@@ -179,21 +197,19 @@ def render_p4(view: P4View) -> Screen:
             else:
                 lines.append(f"⚪ {name}")
                 buttons.append([_button(name, f"p4:{version}:structure:{index}")])
-        return Screen("\n".join(lines), "p4", _keyboard([*buttons, [_button("← Missões", "world:missions")]]))
+        return Screen("\n".join(lines), "p4", _keyboard([*(buttons if view.location == RUINS else []), *_mission_nav(view), [_button("← Missões", "world:missions")]]))
     if view.kind == "safe_route":
         return Screen(
             "📜 Pedras que Ainda Vigiam · Em Andamento\n🛡️ Ruínas do Vigia\n\n"
             "🎯 Identificar uma rota segura de retorno.",
             "p4",
-            _keyboard([[_button("Identificar rota segura", f"p4:{version}:safe")], [_button("← Missões", "world:missions")]]),
+            _keyboard([*([[_button("Identificar rota segura", f"p4:{version}:safe")]] if view.location == RUINS else []), *_mission_nav(view), [_button("← Missões", "world:missions")]]),
         )
     if view.kind == "return":
         rows = []
         if view.location == RUINS:
-            rows.append([_button("Retornar ao Bosque", f"p4:{version}:return")])
-        elif view.location == BOSQUE:
-            rows.append([_button("Seguir para a Charneca", f"p4:{version}:route:charneca")])
-        elif view.location == "Charneca da Fuligem":
+            rows.append([_button("Retornar ao Refúgio", f"p4:{version}:return")])
+        elif view.location in {BOSQUE, CHARNECA}:
             rows.append([_button("Retornar ao Refúgio", f"p4:{version}:route:refuge")])
         else:
             rows.append([_button("Falar com Alda Veyr", f"p4:{version}:report_alda")])

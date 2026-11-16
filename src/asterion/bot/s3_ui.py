@@ -137,13 +137,13 @@ def render_s3(view: S3View) -> Screen:
         if view.location == BOSQUE:
             rows = [[_button("Examinar rota de suprimentos", f"s3:{version}:route")]]
         elif view.campaign_active and view.location == "Refúgio do Ocaso":
-            rows = [[_button("Seguir para a Charneca", f"p3:s3route:{version}:charneca")]]
-        elif view.campaign_active and view.location == "Charneca da Fuligem":
             rows = [[_button("Seguir para o Bosque", f"p3:s3route:{version}:bosque")]]
         elif view.location == "Refúgio do Ocaso":
-            rows = [[_button("Seguir para a Charneca", "road:route:charneca")]]
-        elif view.location == "Charneca da Fuligem":
             rows = [[_button("Seguir para o Bosque", "road:route:bosque")]]
+        elif view.campaign_active and view.location == "Charneca da Fuligem":
+            rows = [[_button("Voltar ao Refúgio", f"p3:s3route:{version}:refuge")]]
+        elif view.location == "Charneca da Fuligem":
+            rows = [[_button("Voltar ao Refúgio", "road:route:refuge")]]
         else:
             rows = [[_button("Ver campanha ativa", "p3:resume")]]
         rows.append([_button("← Missões", "world:missions")])
@@ -174,14 +174,14 @@ def render_s3(view: S3View) -> Screen:
                 )
         elif view.location == REFUGE:
             rows.append([_button(
-                "Seguir para a Charneca",
-                f"p3:s3route:{version}:charneca" if view.campaign_active else "road:route:charneca",
+                "Seguir para o Bosque",
+                f"p3:s3route:{version}:bosque" if view.campaign_active else "road:route:bosque",
             )])
         elif view.location == "Charneca da Fuligem":
             rows.append([
                 _button(
-                    "Seguir para o Bosque",
-                    f"p3:s3route:{version}:bosque" if view.campaign_active else "road:route:bosque",
+                    "Voltar ao Refúgio",
+                    f"p3:s3route:{version}:refuge" if view.campaign_active else "road:route:refuge",
                 )
             ])
         rows.append([_button("← Missões", "world:missions")])
@@ -228,12 +228,7 @@ def render_s3(view: S3View) -> Screen:
         )
     if view.kind == "report":
         rows = []
-        if view.location == BOSQUE:
-            rows.append([_button(
-                "Seguir para a Charneca",
-                f"p3:s3route:{version}:charneca" if view.campaign_active else "road:route:charneca",
-            )])
-        elif view.location == "Charneca da Fuligem":
+        if view.location in {BOSQUE, "Charneca da Fuligem"}:
             rows.append([_button(
                 "Retornar ao Refúgio",
                 f"p3:s3route:{version}:refuge" if view.campaign_active else "road:route:refuge",

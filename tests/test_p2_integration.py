@@ -57,6 +57,7 @@ async def _seed(
     xp=0,
     p1_status="completed",
     location="Refúgio do Ocaso",
+    discovered=True,
 ):
     _, sessions = database
     character_id = uuid4()
@@ -100,6 +101,13 @@ async def _seed(
                 location=location,
             )
         )
+        if discovered:
+            # v1.0.18: a Charneca já foi revelada por Explorar; a Missão não a revela.
+            session.add(
+                LocationDiscovery(
+                    character_id=character_id, location_id=CHARNECA_LOCATION_ID
+                )
+            )
     return character_id, P2Service(sessions, "ocaso")
 
 
@@ -148,18 +156,20 @@ async def test_p2_offer_gate_is_explicit_and_acceptance_creates_one_quest(databa
     incomplete_id, incomplete = await _seed(
         database, 881001, p1_status="active"
     )
-    low_level_id, low_level = await _seed(database, 881002, level=2)
+    low_level_id, low_level = await _seed(database, 881002, level=1)
     wrong_location_id, wrong_location = await _seed(
         database, 881003, location="Estrada das Cinzas"
     )
 
     for actor, service in (
         (881001, incomplete),
-        (881002, low_level),
         (881003, wrong_location),
     ):
         offer = await service.alda(actor)
         assert offer is not None and not offer.available
+    # v1.0.18: Missão sem nível mínimo; Nv.1 recebe a oferta.
+    low_offer = await low_level.alda(881002)
+    assert low_offer is not None and low_offer.available
 
     character_id, service = await _seed(database, 881004)
     s1_character_id, s1_service = await _seed(database, 881011)
@@ -329,7 +339,7 @@ async def test_p2_group_member_advances_alone_and_spider_fight_is_solo(
 
 @pytest.mark.asyncio
 async def test_p2_offer_and_travel_are_blocked_by_incompatible_foreground(database):
-    character_id, service = await _seed(database, 881010)
+    character_id, service = await _seed(database, 881010, discovered=False)
     async with database[1]() as session:
         session.add(
             GameActivity(
