@@ -1,6 +1,8 @@
 # Briefing de conteúdo (2026-11-12)
 
-O código destes sistemas está pronto e testado. Os catálogos estão vazios de propósito: nada aparece no jogo até o conteúdo ser definido. Este documento diz o que escrever e em que formato, para que a engenharia só precise copiar para o catálogo.
+O código destes sistemas está pronto e testado. Atualização 2026-11-16: as 5 Rotas (PR 152), as 11 Provações e os 6 Eventos Públicos (PR 153) já estão no catálogo; o que resta aqui é a revisão do Flavor Text (§4) e o Dia 1 da Crônica (§5). As seções 1 a 3 ficam como referência do formato.
+
+Os catálogos estavam vazios de propósito: nada aparece no jogo até o conteúdo ser definido. Este documento diz o que escrever e em que formato, para que a engenharia só precise copiar para o catálogo.
 
 Regras para quem escrever:
 
