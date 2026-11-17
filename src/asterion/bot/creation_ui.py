@@ -24,9 +24,9 @@ GENDER_LABELS = ("🚹 Masculino", "🚺 Feminino")
 # player-facing copy without knowing the catalog shape.
 COPY = dict(SCREENS)
 for _key, _data in RACE_CONTENT.items():
-    COPY[f"race:{_key}"] = f"{_data['name']}\\n\\n{_data['description']}\\n\\n{_data['passive']['name']}"
+    COPY[f"race:{_key}"] = (\n        f"{_data['name']}\\n\\n{_data['description']}\\n\\n"\n        f"{_data['passive']['name']}"\n    )
 for _key, _data in CLASS_CONTENT.items():
-    COPY[f"class:{_key}"] = f"{_data['name']}\\n\\n{_data['description']}\\n\\n🔀 Caminhos"
+    COPY[f"class:{_key}"] = (\n        f"{_data['name']}\\n\\n{_data['description']}\\n\\n🔀 Caminhos"\n    )
 PROLOGUE_TEXT = (
     "🔥 Cinzas na Estrada\nPrólogo · Terras do Ocaso\n\n"
     "O mundo desperta sob um céu sem cor. Cinzas atravessam a estrada como neve morta, "
