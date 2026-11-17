@@ -14,7 +14,7 @@ from asterion.application.legacy import LegacyView
 from asterion.application.professions import ProfessionHomeView
 from asterion.application.road import ALTOS_ESCARPA_LABEL, CONFINS_MARCHA_LABEL
 from asterion.application.talents import TalentView
-from asterion.bot import flavor_ui
+from asterion.bot import flavor_ui, world_handlers
 from asterion.bot.character_progression_ui import render_art_root, render_talent_root
 from asterion.bot.character_ui import render_character
 from asterion.bot.chronicle_ui import render_calendar
@@ -161,8 +161,21 @@ class _Missions:
 
 
 class _World:
+    sessions = None  # never used: the foreground probe is stubbed below
+    server_id = "test"
+
     async def resume(self, actor):
         return None
+
+
+@pytest.fixture(autouse=True)
+def _no_foreground_activity(monkeypatch):
+    # world_router probes the database for active foreground work; this file
+    # uses in-memory fakes with no database, so report "no foreground".
+    async def _none(*args, **kwargs):
+        return False
+
+    monkeypatch.setattr(world_handlers, "has_foreground_for_actor", _none)
 
 
 def _region_dispatcher() -> Dispatcher:
