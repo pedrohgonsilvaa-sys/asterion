@@ -1,9 +1,11 @@
-# Deploy manual na VPS. Roda só quando você clica em "Run workflow" no GitHub.
-# Segue docs/OPERACAO.md, seção 4. Não roda sozinho ao mesclar PR.
+# Deploy automático na VPS após cada push na branch principal.
+# O ambiente de produção continua protegendo os secrets e o backup obrigatório.
 name: deploy-vps
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   deploy:
