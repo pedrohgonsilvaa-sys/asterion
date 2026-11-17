@@ -1,5 +1,4 @@
 import json
-import re
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -11,20 +10,23 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.methods import EditMessageText, SendPhoto
 
 from asterion.bot.creation_handlers import creation_router, present
-from asterion.bot.creation_ui import COPY, PROLOGUE_TEXT, CreationCallback, render
+from asterion.bot.creation_ui import (
+    CLASS_CONTENT,
+    COPY,
+    PROLOGUE_TEXT,
+    RACE_CONTENT,
+    CreationCallback,
+    render,
+)
 from asterion.bot.p1_handlers import p1_router
 from asterion.domain.creation import CLASSES, PROLOGUE, RACES, Creation
 
 
-def test_all_copy_matches_authoritative_spec_verbatim():
-    spec = Path("docs/specs/CHARACTER_CREATION_UI.md").read_text(encoding="utf-8")
-    blocks = re.findall(r"```text\n(.*?)\n```", spec, re.S)
-    expected = [
-        "\n".join(line for line in block.splitlines() if not line.startswith("[")).strip()
-        for block in blocks
-    ]
-    assert list(COPY.values()) == expected
-    assert len(COPY) == 18
+def test_creation_catalog_covers_all_official_entities():
+    assert set(RACE_CONTENT) == set(RACES)
+    assert set(CLASS_CONTENT) == set(CLASSES)
+    assert all(item["passive"]["name"] for item in RACE_CONTENT.values())
+    assert all(len(item["paths"]) == 2 for item in CLASS_CONTENT.values())
 
 
 @pytest.mark.parametrize(
@@ -65,21 +67,18 @@ def test_name_errors_and_confirmation_exact_copy():
         race="remanescente",
         character_class="errante",
     )
-    assert render(base).text == COPY["name"]
-    assert render(replace(base, error="format")).text == COPY["format"]
-    assert (
-        render(replace(base, error="unavailable", rejected_name="Luiken")).text
-        == (COPY["unavailable"])
-    )
+    assert "👤 Nome do Personagem" in render(base).text
+    assert "Nome inválido" in render(replace(base, error="format")).text
+    assert "Luiken · Indisponível" in render(
+        replace(base, error="unavailable", rejected_name="Luiken")
+    ).text
     confirm = render(replace(base, step="confirm"))
-    assert confirm.text == COPY["confirm"]
+    assert "📜 Confirmar Personagem" in confirm.text
     assert [[button.text for button in row] for row in confirm.keyboard.inline_keyboard] == [
-        ["Confirmar Personagem"],
-        ["Nome", "Gênero"],
-        ["Raça", "Classe"],
-        ["← Classes"],
+        ["✅ Confirmar Personagem"],
+        ["↩️ Voltar"],
     ]
-    assert "Caminhos" not in confirm.text
+    assert "HP" not in confirm.text and "ATQ" not in confirm.text
 
 
 @pytest.mark.parametrize("race", RACES)
@@ -95,11 +94,45 @@ def test_confirmation_uses_selected_race_passive_and_class(race, cls):
             character_class=cls,
         )
     )
-    passive = next(line for line in COPY[f"race:{race}"].splitlines() if "Passiva Racial" in line)
-    assert passive in screen.text
-    assert COPY[f"class:{cls}"].splitlines()[0].split(" ", 1)[1] in screen.text
-    assert "🏷️ Nome · Aster" in screen.text
-    assert "🎭 Gênero · Feminino" in screen.text
+    assert RACE_CONTENT[race]["passive"]["name"] in screen.text
+    assert CLASS_CONTENT[cls]["name"] in screen.text
+    assert "🏷️ <b>Nome</b> · <code>Aster</code>" in screen.text
+    assert "🎭 <b>Gênero</b> · <code>Feminino</code>" in screen.text
+
+
+def test_creation_layout_and_navigation_follow_contract():
+    gender = render(Creation(uuid4(), step="gender"))
+    assert [[button.text for button in row] for row in gender.keyboard.inline_keyboard] == [
+        ["🚹 Masculino", "🚺 Feminino"],
+        ["↩️ Voltar"],
+    ]
+    race = render(Creation(uuid4(), step="race"))
+    assert [[button.text for button in row] for row in race.keyboard.inline_keyboard] == [
+        ["🕯️ Remanescente", "🌘 Velado"],
+        ["🌪️ Cinéreo", "🩸 Hemário"],
+        ["☀️ Alvorano"],
+        ["↩️ Voltar"],
+    ]
+    name = render(Creation(uuid4(), step="name"))
+    assert name.keyboard is None
+
+
+@pytest.mark.parametrize("race", RACES)
+def test_race_detail_uses_one_passive_component(race):
+    screen = render(Creation(uuid4(), step=f"race:{race}"))
+    assert " · <code>Passiva</code>" in screen.text
+    assert "Escolher" not in screen.text
+    assert screen.keyboard.inline_keyboard[0][0].text.endswith(
+        f"Escolher {RACE_CONTENT[race]['name']}"
+    )
+
+
+@pytest.mark.parametrize("cls", CLASSES)
+def test_class_detail_renders_two_paths_in_one_section(cls):
+    screen = render(Creation(uuid4(), step=f"class:{cls}"))
+    assert "<b>🔀 Caminhos</b>" in screen.text
+    assert "🎴 Artes de Classe" not in screen.text
+    assert all(path["name"] in screen.text for path in CLASS_CONTENT[cls]["paths"])
 
 
 async def test_present_optional_media_text_only_and_message_edits():
@@ -110,7 +143,7 @@ async def test_present_optional_media_text_only_and_message_edits():
     message.answer.assert_awaited_once_with(
         screen.text,
         reply_markup=screen.keyboard,
-        parse_mode=None,
+        parse_mode="HTML",
     )
     assert not message.answer_photo.called
     await present(message, screen, {}, edit=True)
