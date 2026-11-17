@@ -19,10 +19,10 @@ jobs:
           chmod 600 ~/.ssh/id_deploy
           ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Conferir backup recente (exigido antes do deploy)
+      - name: Criar e conferir backup antes do deploy
         run: |
           ssh -i ~/.ssh/id_deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "cd ${{ secrets.VPS_PATH }} && find backups -maxdepth 1 -type f -name '*.dump' -mmin -1440 -print -quit | grep -q . || { echo 'Sem backup .dump das últimas 24h. Pare.'; exit 1; }"
+            "cd ${{ secrets.VPS_PATH }} && mkdir -p backups && stamp=\$(date -u +%Y%m%d%H%M%S) && dump=backups/pre-deploy-\${stamp}.dump && docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T postgres pg_dump -U asterion -d asterion -Fc > \"\${dump}\" && test -s \"\${dump}\" || { echo 'Falha ao criar backup .dump. Pare.'; exit 1; }"
 
       - name: Atualizar código e subir containers
         run: |
