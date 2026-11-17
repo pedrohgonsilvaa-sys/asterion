@@ -51,16 +51,17 @@ def world_view(**changes):
 
 def test_menu_is_authoritative_and_preserves_fractional_hp():
     text = render_world(world_view()).text
-    assert "Terras do Ocaso · Estrada das Cinzas" in text
+    assert "🌘 Refúgio do Ocaso" in text
+    assert "👤 Heroa · Sentinela · Caminho" in text
     assert "❤️ HP · 712.530 / 712.530" in text
     assert "⚡ Vigor · 100 / 100" in text
     assert "✨ XP · 320 / 4.800" in text
-    assert "📜 Missão Principal · Vozes na Estrada" in text
+    assert "Vozes na Estrada" not in text
 
 
 def test_vigor_bar_is_derived_not_hardcoded():
     text = render_world(world_view(vigor=72)).text
-    assert "⚡ Vigor · 72 / 100\n🟨🟨🟨🟨🟨🟨🟨⬜⬜⬜" in text
+    assert "⚡ Vigor · 72 / 100\n🟨🟨🟨🟨🟨🟨⬜⬜⬜" in text
 
 
 def test_brazier_screen_has_discovered_state_and_rest_only():
@@ -71,10 +72,9 @@ def test_brazier_screen_has_discovered_state_and_rest_only():
 
 
 def test_menu_does_not_invent_missing_quest():
-    # Application refuses to construct this state from PostgreSQL without P1;
-    # the renderer also requires the authoritative title explicitly.
+    # The compact home HUD routes to Missões instead of rendering a quest block.
     text = render_world(world_view(quest_title="Vozes na Estrada")).text
-    assert "Vozes na Estrada" in text
+    assert "Vozes na Estrada" not in text
 
 
 async def test_victory_creates_only_brazier_and_world_state(database):

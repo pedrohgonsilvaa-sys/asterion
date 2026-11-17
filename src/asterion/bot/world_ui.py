@@ -8,6 +8,7 @@ from asterion.application.world import WorldView
 from asterion.bot.creation_ui import Screen
 from asterion.bot.flavor_ui import with_flavor
 from asterion.bot.tdo_hub_ui import refuge_global_rows, refuge_hub_rows
+from asterion.domain.paths import PATH_DEFINITIONS
 
 LORE = (
     "Sob céus cobertos de fuligem, as estradas de Asterion seguem marcadas por ruínas, "
@@ -18,12 +19,34 @@ LORE = (
 
 
 def bar(current, maximum, fill: str) -> str:
-    n = min(10, max(0, int(current * 10 / maximum))) if maximum else 0
-    return fill * n + "⬜" * (10 - n)
+    segments = 9
+    n = min(segments, max(0, int(current * segments / maximum))) if maximum else 0
+    if current > 0 and maximum:
+        n = max(1, n)
+    return fill * n + "⬜" * (segments - n)
 
 
 def number(value: int) -> str:
     return f"{value:,}".replace(",", ".")
+
+
+CLASS_LABELS = {
+    "sentinela": "Sentinela",
+    "errante": "Errante",
+    "vigia": "Vigia",
+    "tecelao": "Tecelão",
+    "oraculo": "Oráculo",
+    "luminar": "Luminar",
+}
+PATH_LABELS = {path_id: definition.name for path_id, definition in PATH_DEFINITIONS.items()}
+LEGACY_LABELS = {
+    0: "Legado",
+    1: "Legado I",
+    2: "Legado II",
+    3: "Legado III",
+    4: "Legado IV",
+    5: "Legado V",
+}
 
 
 def render_campaign(
@@ -133,57 +156,55 @@ def render_world(view: WorldView) -> Screen:
             inline_keyboard=[[InlineKeyboardButton(text="Descansar", callback_data="world:rest")]]
         )
         return Screen(text, "brazier_estrada", kb)
-    emoji = {
-        "sentinela": "🛡️",
-        "errante": "🗡️",
-        "vigia": "🏹",
-        "tecelao": "🪄",
-        "oraculo": "🔮",
-        "luminar": "☀️",
-    }[view.character_class]
-    title = {
-        "sentinela": "Sentinela",
-        "errante": "Errante",
-        "vigia": "Vigia",
-        "tecelao": "Tecelão",
-        "oraculo": "Oráculo",
-        "luminar": "Luminar",
-    }[view.character_class]
-    quest_lines = []
-    if view.quest_title:
-        quest_lines.append(f"📜 Missão Principal · {escape(view.quest_title)}")
-    if view.tracked_secondary_quest_title:
-        quest_lines.append(
-            f"📖 Missão Secundária · {escape(view.tracked_secondary_quest_title)}"
-        )
-    quest_line = "\n".join(quest_lines)
-    text = (
-        f"🌑 Asterion\n{view.region} · {view.location}\n\n{LORE}\n\n"
-        f"{emoji} {escape(view.name)} · Nv. {view.level}\n{title}\n\n"
-        f"❤️ HP · {view.hp} / {view.max_hp}\n{bar(view.hp, view.max_hp, '🟩')}\n\n"
-        f"⚡ Vigor · {view.vigor} / {view.max_vigor}\n{bar(view.vigor, view.max_vigor, '🟨')}\n\n"
-        f"✨ XP · {number(view.xp)} / {number(view.xp_required)}\n"
-        f"{bar(view.xp, view.xp_required, '🟦')}\n\n"
-        f"{quest_line}"
+    class_label = CLASS_LABELS.get(view.character_class, view.character_class)
+    path_label = PATH_LABELS.get(view.selected_path or "", "Caminho")
+    legacy_label = LEGACY_LABELS.get(view.legacy_level, "Legado")
+    title_label = view.selected_title or "Título"
+    identity = (
+        f"👤 {escape(view.name)} · {class_label} · {path_label}\n"
+        f"🏛️ Nv. {view.level} · {legacy_label}\n"
+        f"🔰 {title_label}"
     )
-    labels = [
-        # "world:adventure" is the Campanha hub (legacy callback name kept on purpose).
-        ("Campanha", "world:adventure"),
-        ("Aventura", "adv:hub"),
-        ("Personagem", "character:root"),
-        ("Códice", "knowledge:codex"),
-        ("Calendário", "calendar:root"),
-        ("Vínculos", "links:root"),
-        ("Mercado", "mkt:root"),
-        ("Classificação da Vigília", "pvp:rank"),
-        ("Benefícios", "bn:root"),
-        ("Comunidade", "community:open"),
-        ("Configurações", "settings:root"),
+    stats = "\n".join(
+        (
+            f"❤️ HP · {view.hp} / {view.max_hp}\n{bar(view.hp, view.max_hp, '🟥')}",
+            f"⚡ Vigor · {view.vigor} / {view.max_vigor}\n"
+            f"{bar(view.vigor, view.max_vigor, '🟨')}",
+            f"✨ XP · {number(view.xp)} / {number(view.xp_required)}\n"
+            f"{bar(view.xp, view.xp_required, '🟦')}",
+        )
+    )
+    text = "\n\n".join(
+        (
+            "🌘 Refúgio do Ocaso",
+            identity,
+            stats,
+            "━━━━━━━━━━━━━━━━━━",
+        )
+    )
+    action_labels = [
+        ("🧭 Desbravar", "road:explore:start"),
+        ("🗡️ Caçada", "road:hunt"),
+        ("🗝️ Masmorra", "dungeon:known"),
+        ("🗺️ Mapa", "world:map"),
+        ("📜 Missões", "world:missions"),
+        ("👤 Personagem", "character:root"),
+        ("🏰 Guilda", "guild:root"),
+        ("🏟️ Arena", "pvp:hub"),
+        ("🏪 Mercado", "mkt:root"),
+        ("🤝 Vínculos", "links:root"),
+        ("🏆 Classificação", "pvp:rank"),
+        ("📖 Códice", "knowledge:codex"),
+        ("📅 Calendário", "calendar:root"),
+        ("🎁 Benefícios", "bn:root"),
+        ("🌐 Comunidade", "community:open"),
+        ("⚙️ Configurações", "settings:root"),
     ]
-    rows = [
-        [InlineKeyboardButton(text=a, callback_data=b) for a, b in labels[i : i + 2]]
-        for i in range(0, len(labels), 2)
-    ]
+    rows = [[InlineKeyboardButton(text="🎁 Resgatar Recompensa Diária", callback_data="bn:gift")]]
+    rows.extend(
+        [InlineKeyboardButton(text=a, callback_data=b) for a, b in action_labels[i : i + 2]]
+        for i in range(0, len(action_labels), 2)
+    )
     return Screen(text, "menu", InlineKeyboardMarkup(inline_keyboard=rows))
 
 

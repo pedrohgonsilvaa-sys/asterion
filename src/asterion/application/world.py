@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.cosmetic_catalog import COSMETICS_BY_ID
 from asterion.application.narrative_choices import (
     PrologueChoiceView,
     backfill_prologue_choices,
@@ -19,6 +20,7 @@ from asterion.infrastructure.db.models import (
     Achievement,
     Brazier,
     Character,
+    CharacterCosmeticSelection,
     GameActivity,
     LocationDiscovery,
     Quest,
@@ -47,6 +49,9 @@ class WorldView:
     level: int = 1
     xp_required: int = 4800
     tracked_secondary_quest_title: str | None = None
+    selected_path: str | None = None
+    legacy_level: int = 0
+    selected_title: str | None = None
     # True only on the rest that opens the Menu, for the §32.3 onboarding invite.
     first_menu: bool = False
     prologue_choice: PrologueChoiceView | None = None
@@ -150,6 +155,12 @@ class WorldService:
                         Quest.status == "active",
                     )
                 )
+            selected_title_id = await session.scalar(
+                select(CharacterCosmeticSelection.cosmetic_id).where(
+                    CharacterCosmeticSelection.character_id == c.id,
+                    CharacterCosmeticSelection.cosmetic_type == "title",
+                )
+            )
             return WorldView(
                 "menu" if c.stage == "menu:ready" else "brazier",
                 c.id,
@@ -168,6 +179,13 @@ class WorldService:
                 xp_required=level_xp(c.level) if c.level < 60 else 0,
                 tracked_secondary_quest_title=(
                     tracked_secondary.title if tracked_secondary is not None else None
+                ),
+                selected_path=c.selected_path,
+                legacy_level=c.legacy_level,
+                selected_title=(
+                    COSMETICS_BY_ID[selected_title_id].name
+                    if selected_title_id in COSMETICS_BY_ID
+                    else None
                 ),
                 prologue_choice=pending_choice,
             )

@@ -136,7 +136,7 @@ def test_main_menu_personagem_button_has_real_character_destination():
         button
         for row in screen.keyboard.inline_keyboard
         for button in row
-        if button.text == "Personagem"
+        if button.text == "👤 Personagem"
     )
     assert button.callback_data == "character:root"
 
