@@ -68,9 +68,10 @@ def test_name_errors_and_confirmation_exact_copy():
     )
     assert "👤 Nome do Personagem" in render(base).text
     assert "Nome inválido" in render(replace(base, error="format")).text
-    assert "Luiken · Indisponível" in render(
-        replace(base, error="unavailable", rejected_name="Luiken")
-    ).text
+    assert (
+        "Luiken · Indisponível"
+        in render(replace(base, error="unavailable", rejected_name="Luiken")).text
+    )
     confirm = render(replace(base, step="confirm"))
     assert "📜 Confirmar Personagem" in confirm.text
     assert [[button.text for button in row] for row in confirm.keyboard.inline_keyboard] == [
@@ -203,7 +204,7 @@ async def test_unavailable_telegram_asset_uses_text_fallback(edit):
     message.answer.assert_awaited_once_with(
         screen.text,
         reply_markup=screen.keyboard,
-        parse_mode=None,
+        parse_mode=screen.parse_mode,
     )
 
 
@@ -268,7 +269,6 @@ async def test_real_dispatcher_uses_sender_and_backend_state(telegram):
     assert not service.callback.called
 
 
-
 async def test_creation_buttons_pass_through_campaign_router_registered_first(telegram):
     """Production includes p1 before creation; both use the "cc:" prefix."""
     service = AsyncMock()
@@ -282,6 +282,7 @@ async def test_creation_buttons_pass_through_campaign_router_registered_first(te
     data = CreationCallback(draft=state.id.hex, version=1, action="r0").pack()
     await dispatcher.feed_raw_update(telegram, callback_update(data))
     service.callback.assert_awaited_once_with(10, state.id, 1, "r0")
+
 
 async def test_dispatcher_start_restores_each_persistent_screen(service, telegram):
     from tests.test_creation_persistence import click
@@ -321,8 +322,6 @@ async def test_telegram_failure_after_commit_is_recoverable(service, telegram):
 
 
 def test_packaged_copy_is_valid_json():
-    catalog = json.loads(
-        Path("src/asterion/bot/creation_catalog.json").read_text(encoding="utf-8")
-    )
+    catalog = json.loads(Path("src/asterion/bot/creation_catalog.json").read_text(encoding="utf-8"))
     assert set(catalog["races"]) == set(RACES)
     assert set(catalog["classes"]) == set(CLASSES)

@@ -25,13 +25,10 @@ GENDER_LABELS = ("🚹 Masculino", "🚺 Feminino")
 COPY = dict(SCREENS)
 for _key, _data in RACE_CONTENT.items():
     COPY[f"race:{_key}"] = (
-        f"{_data['name']}\n\n{_data['description']}\n\n"
-        f"{_data['passive']['name']}"
+        f"{_data['name']}\n\n{_data['description']}\n\n{_data['passive']['name']}"
     )
 for _key, _data in CLASS_CONTENT.items():
-    COPY[f"class:{_key}"] = (
-        f"{_data['name']}\n\n{_data['description']}\n\n🔀 Caminhos"
-    )
+    COPY[f"class:{_key}"] = f"{_data['name']}\n\n{_data['description']}\n\n🔀 Caminhos"
 PROLOGUE_TEXT = (
     "🔥 Cinzas na Estrada\nPrólogo · Terras do Ocaso\n\n"
     "O mundo desperta sob um céu sem cor. Cinzas atravessam a estrada como neve morta, "
@@ -136,7 +133,9 @@ def render(state: Creation) -> Screen:
                 ]
             ),
         )
-    text = SCREENS[step]
+    # Race/class detail steps ("race:<key>", "class:<key>") are built below
+    # from the catalog, so they have no entry in SCREENS.
+    text = SCREENS.get(step, "")
     if step == "name":
         if state.error:
             text = SCREENS[state.error].replace(
