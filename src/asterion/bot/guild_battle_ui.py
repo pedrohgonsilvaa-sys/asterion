@@ -73,7 +73,7 @@ _ERRORS = {
     "no_permission": "Só o Líder pode inscrever a Guilda e trocar combatentes.",
     "registration_closed": "A Inscrição está fechada. Ela abre 24h antes e fecha às 20:30.",
     "cycle_closed": (
-        "Esta Batalha começaria depois do fim da Crônica. A Inscrição volta a abrir "
+        "Esta Batalha começaria depois do fim do ciclo competitivo. A Inscrição volta a abrir "
         "depois da finalização do ciclo."
     ),
     "invalid_roster": (
@@ -533,6 +533,7 @@ def _render_fight(view: GuildBattleFightView) -> Screen:
         screen.image_key,
         _keyboard(*rows),
         screen.parse_mode,
+        screen.media_seed,
     )
 
 

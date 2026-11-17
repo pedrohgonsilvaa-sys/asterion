@@ -36,6 +36,19 @@ class Account(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
 
 
+class TelegramMediaCache(Base):
+    """Telegram file ids for immutable local artwork."""
+
+    __tablename__ = "telegram_media_cache"
+
+    asset_key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(96), nullable=False)
+    file_id: Mapped[str] = mapped_column(String(512), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class CreationDraft(Base):
     __tablename__ = "creation_drafts"
     __table_args__ = (

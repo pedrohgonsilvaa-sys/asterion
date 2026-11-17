@@ -38,6 +38,9 @@ class Screen:
     image_key: str
     keyboard: InlineKeyboardMarkup | None
     parse_mode: str | None = None
+    # Stable seed for art that belongs to one encounter/activity. Screens
+    # without a seed keep the normal random variant behavior.
+    media_seed: str | None = None
 
 
 def render(state: Creation) -> Screen:

@@ -1,6 +1,7 @@
 """Combat HUD reconstructed exclusively from a persisted backend view."""
 
 import base64
+from dataclasses import replace
 from decimal import Decimal, localcontext
 from html import escape
 from uuid import UUID
@@ -9,6 +10,7 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
+from asterion.bot.asset_catalog import with_boss_transformation_art
 from asterion.bot.creation_ui import COPY, Screen
 from asterion.domain.combat import (
     Combat,
@@ -1575,7 +1577,7 @@ def _trial_fighter_card(
     return lines
 
 
-def render_combat(view: CombatView) -> Screen:
+def _render_combat(view: CombatView) -> Screen:
     state = view.combat
     is_trial = view.context == "class_trial"
     is_dungeon = view.context == "dungeon"
@@ -1606,10 +1608,6 @@ def render_combat(view: CombatView) -> Screen:
         and state.party_mode
         and not is_trial
         and not is_dungeon
-    )
-    is_chronicle_intent = view.context == "chronicle" and (
-        state.party_mode
-        or sum(1 for fighter in state.fighters.values() if fighter.side == "enemy") > 1
     )
     actor_bound_party = (
         is_campaign_party or view.context == "group_hunt" or is_oath or is_guild_battle
@@ -1874,8 +1872,7 @@ def render_combat(view: CombatView) -> Screen:
                 view.run_id, view.activity_id, state.version, action_index, target_code
             ).pack()
         elif (
-            is_chronicle_intent
-            or is_campaign_party
+            is_campaign_party
             or is_varzeas_solo_campaign
             or is_altos_solo_campaign
             or is_world_event
@@ -1883,9 +1880,7 @@ def render_combat(view: CombatView) -> Screen:
             or is_guild_battle
         ):
             intent_callback = (
-                ChronicleIntentCallback
-                if is_chronicle_intent
-                else GuildBattleCombatCallback
+                GuildBattleCombatCallback
                 if is_guild_battle
                 else WorldEventCombatCallback
                 if is_world_event
@@ -1976,8 +1971,6 @@ def render_combat(view: CombatView) -> Screen:
                 if view.context == "s4"
                 else S5CombatCallback
                 if view.context == "s5"
-                else ChronicleCombatCallback
-                if view.context == "chronicle"
                 else CombatCallback
             )(
                 activity=view.activity_id.hex,
@@ -2009,3 +2002,11 @@ def render_combat(view: CombatView) -> Screen:
         )
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows) if keyboard_rows else None
     return Screen("\n".join(lines).rstrip(), view.context, keyboard, parse_mode="HTML")
+
+
+def render_combat(view: CombatView) -> Screen:
+    """Render combat and replace its image when a boss changes phase."""
+    screen = with_boss_transformation_art(_render_combat(view), view.combat)
+    if view.encounter_id is not None:
+        screen = replace(screen, media_seed=f"encounter:{view.encounter_id}")
+    return screen

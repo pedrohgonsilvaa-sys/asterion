@@ -46,7 +46,13 @@ def _combat(view: S3View) -> Screen:
             combat_actor_key=view.combat_actor_key,
         )
     )
-    return Screen("📜 Rastros sob os Galhos · Encontro de Missão\n" + hud.text, "s3", hud.keyboard, parse_mode=hud.parse_mode)
+    return Screen(
+        "📜 Rastros sob os Galhos · Encontro de Missão\n" + hud.text,
+        hud.image_key,
+        hud.keyboard,
+        parse_mode=hud.parse_mode,
+        media_seed=hud.media_seed,
+    )
 
 
 def _objective(view: S3View) -> str:

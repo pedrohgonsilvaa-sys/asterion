@@ -31,9 +31,10 @@ def render_s2(view: S2View) -> Screen:
         hud = render_combat(view)
         return Screen(
             "📖 Os Nomes Esquecidos · Combate\n\n" + hud.text,
-            "s2",
+            hud.image_key,
             hud.keyboard,
             parse_mode=hud.parse_mode,
+            media_seed=hud.media_seed,
         )
 
     version = view.state_version

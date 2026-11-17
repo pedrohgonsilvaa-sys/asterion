@@ -47,7 +47,13 @@ def _combat(view: P4View) -> Screen:
             combat_actor_key=view.combat_actor_key,
         )
     )
-    return Screen("📜 Pedras que Ainda Vigiam · Encontro de Missão\n" + hud.text, "p4", hud.keyboard, parse_mode=hud.parse_mode)
+    return Screen(
+        "📜 Pedras que Ainda Vigiam · Encontro de Missão\n" + hud.text,
+        hud.image_key,
+        hud.keyboard,
+        parse_mode=hud.parse_mode,
+        media_seed=hud.media_seed,
+    )
 
 
 def _objective(view: P4View) -> str:

@@ -41,7 +41,8 @@ def _combat(view: S4View) -> Screen:
     )
     return Screen(
         f"📜 {S4_TITLE} · Encontro de Missão\n" + hud.text,
-        "s4", hud.keyboard, parse_mode=hud.parse_mode,
+        hud.image_key, hud.keyboard, parse_mode=hud.parse_mode,
+        media_seed=hud.media_seed,
     )
 
 

@@ -36,8 +36,13 @@ def _combat(view):
         combat_actor_key=view.combat_actor_key,
     ))
     enemy_name = view.combat.fighters.get("enemy").name if view.combat and view.combat.fighters.get("enemy") else "Guardião do Último Rastro"
-    return Screen(f"📜 {S6_TITLE} · Encontro de Missão\n🛡️ {enemy_name} · Nv.10\n" + hud.text,
-                  "s6", hud.keyboard, parse_mode=hud.parse_mode)
+    return Screen(
+        f"📜 {S6_TITLE} · Encontro de Missão\n🛡️ {enemy_name} · Nv.10\n" + hud.text,
+        hud.image_key,
+        hud.keyboard,
+        parse_mode=hud.parse_mode,
+        media_seed=hud.media_seed,
+    )
 
 
 def _objective(view):
@@ -151,4 +156,10 @@ def render_s6(view: S6View) -> Screen:
     tracking_label = "Parar acompanhamento" if view.tracked else "Acompanhar missão"
     rows.append([_b(tracking_label, f"s6:{view.state_version}:track")])
     rows.append([_b("Abandonar missão", f"s6:{view.state_version}:abandon")])
-    return Screen(screen.text, screen.image_key, _kb(rows), parse_mode=screen.parse_mode)
+    return Screen(
+        screen.text,
+        screen.image_key,
+        _kb(rows),
+        parse_mode=screen.parse_mode,
+        media_seed=screen.media_seed,
+    )
