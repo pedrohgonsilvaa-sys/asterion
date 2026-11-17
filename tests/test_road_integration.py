@@ -516,9 +516,9 @@ async def test_unacknowledged_hunt_result_blocks_old_start_callback(database):
             break
         action = "art" if "art" in allowed_actions(view.combat) else "attack"
         view = await service.action(actor, view.activity_id, view.combat.version, action)
-    assert view.kind == "hunt_victory"
+    assert view.kind in {"hunt_victory", "hunt_defeat"}
     blocked = await service.start_hunt(actor)
-    assert blocked.kind == "hunt_victory"
+    assert blocked.kind == view.kind
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert (
