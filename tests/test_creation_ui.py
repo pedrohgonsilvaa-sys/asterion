@@ -12,7 +12,6 @@ from aiogram.methods import EditMessageText, SendPhoto
 from asterion.bot.creation_handlers import creation_router, present
 from asterion.bot.creation_ui import (
     CLASS_CONTENT,
-    COPY,
     PROLOGUE_TEXT,
     RACE_CONTENT,
     CreationCallback,
