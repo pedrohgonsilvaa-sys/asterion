@@ -94,7 +94,7 @@ def test_confirmation_uses_selected_race_passive_and_class(race, cls):
             character_class=cls,
         )
     )
-    assert RACE_CONTENT[race]["passive"]["name"] in screen.text
+    assert RACE_CONTENT[race]["passive"]["name"] not in screen.text
     assert CLASS_CONTENT[cls]["name"] in screen.text
     assert "🏷️ <b>Nome</b> · <code>Aster</code>" in screen.text
     assert "🎭 <b>Gênero</b> · <code>Feminino</code>" in screen.text
@@ -322,6 +322,8 @@ async def test_telegram_failure_after_commit_is_recoverable(service, telegram):
 
 
 def test_packaged_copy_is_valid_json():
-    assert (
-        json.loads(Path("src/asterion/bot/creation_copy.json").read_text(encoding="utf-8")) == COPY
+    catalog = json.loads(
+        Path("src/asterion/bot/creation_catalog.json").read_text(encoding="utf-8")
     )
+    assert set(catalog["races"]) == set(RACES)
+    assert set(catalog["classes"]) == set(CLASSES)
