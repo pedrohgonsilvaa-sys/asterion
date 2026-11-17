@@ -47,6 +47,7 @@ services:
       ASTERION_SERVER_ID: ${ASTERION_SERVER_ID:-asterion}
       ASTERION_BLOCKED_CHARACTER_NAMES: ${ASTERION_BLOCKED_CHARACTER_NAMES:-[]}
       ASTERION_CREATION_IMAGES: ${ASTERION_CREATION_IMAGES:-{}}
+      ASTERION_MAX_IMAGE_VARIANTS: ${ASTERION_MAX_IMAGE_VARIANTS:-4}
       ASTERION_TELEGRAM_BOT_ENABLED: "false"
       ASTERION_TELEGRAM_MODE: polling
     command: asterion-api
@@ -70,12 +71,13 @@ services:
       ASTERION_SERVER_ID: ${ASTERION_SERVER_ID:-asterion}
       ASTERION_BLOCKED_CHARACTER_NAMES: ${ASTERION_BLOCKED_CHARACTER_NAMES:-[]}
       ASTERION_CREATION_IMAGES: ${ASTERION_CREATION_IMAGES:-{}}
+      ASTERION_MAX_IMAGE_VARIANTS: ${ASTERION_MAX_IMAGE_VARIANTS:-4}
       ASTERION_TELEGRAM_BOT_ENABLED: "true"
       ASTERION_TELEGRAM_BOT_TOKEN: ${ASTERION_TELEGRAM_BOT_TOKEN:?set ASTERION_TELEGRAM_BOT_TOKEN}
       ASTERION_TELEGRAM_MODE: polling
+      ASTERION_ASSETS_DIR: /app/assets
     command: asterion-bot
     volumes:
-      # Imagens do jogo (somente leitura). Se a pasta assets/ nao existir, o bot roda so com texto.
       - ./assets:/app/assets:ro
     depends_on:
       migrate:

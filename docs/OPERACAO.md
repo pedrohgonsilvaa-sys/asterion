@@ -79,6 +79,7 @@ Se você definir `ASTERION_METRICS_TOKEN`, a consulta precisa do cabeçalho `Aut
 |---|---|
 | `asterion_telegram_updates_total{type,outcome}` | Mensagens e botões do Telegram tratados (`ok` ou `error`) |
 | `asterion_telegram_update_duration_seconds` | Tempo para tratar cada update (histograma) |
+| `asterion_telegram_handler_duration_seconds{type,handler}` | Tempo por handler, para calcular p95/p99 |
 | `asterion_job_runs_total{job,outcome}` | Execuções de cada job do agendador (`ok` ou `error`) |
 | `asterion_job_duration_seconds{job}` | Tempo de cada execução de job (histograma) |
 | `asterion_job_consecutive_failures{job}` | Falhas seguidas de um job (volta a 0 quando dá certo) |
@@ -88,6 +89,17 @@ Se você definir `ASTERION_METRICS_TOKEN`, a consulta precisa do cabeçalho `Aut
 | `asterion_outbox_dispatch_total{outcome}` | Entregas feitas por este processo (`delivered`, `retried`, `dead`) |
 | `asterion_db_up` | 1 se o banco respondeu, 0 se não |
 | `asterion_db_pool_connections{state}` | Conexões do jogo com o banco: em uso, livres, extras e tamanho do pool |
+
+Para acompanhar o p95 dos handlers no Prometheus:
+
+```promql
+histogram_quantile(
+  0.95,
+  sum by (le, handler) (
+    rate(asterion_telegram_handler_duration_seconds_bucket[5m])
+  )
+)
+```
 
 Os contadores começam do zero quando o bot reinicia. Isso é normal no Prometheus.
 

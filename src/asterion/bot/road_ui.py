@@ -53,7 +53,7 @@ from asterion.application.road import (
     VDE_VIGILIA,
     RoadView,
 )
-from asterion.bot.asset_catalog import location_key
+from asterion.bot.asset_catalog import location_key, with_creature_art
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 from asterion.bot.tdo_hub_ui import BACK_TO_REFUGE, refuge_hub_rows, render_camara
@@ -571,6 +571,7 @@ def render_road(view: RoadView) -> Screen:
                 ready_consumable_option=view.ready_consumable_option,
             )
         )
+        screen = with_creature_art(screen, view.combat, view.location, view.variant)
         if view.pvpve_round_ai:
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -587,6 +588,7 @@ def render_road(view: RoadView) -> Screen:
                 screen.image_key,
                 keyboard,
                 screen.parse_mode,
+                screen.media_seed,
             )
         if view.pvpve_round_takeover:
             return Screen(
@@ -594,6 +596,7 @@ def render_road(view: RoadView) -> Screen:
                 screen.image_key,
                 screen.keyboard,
                 screen.parse_mode,
+                screen.media_seed,
             )
         return screen
     if view.kind == "hunt_defeat":

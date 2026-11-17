@@ -182,6 +182,13 @@ TELEGRAM_UPDATE_SECONDS = REGISTRY.register(
         ("type",),
     )
 )
+TELEGRAM_HANDLER_SECONDS = REGISTRY.register(
+    Histogram(
+        "asterion_telegram_handler_duration_seconds",
+        "Time spent handling one Telegram update, by resolved handler.",
+        ("type", "handler"),
+    )
+)
 JOB_RUNS = REGISTRY.register(
     Counter(
         "asterion_job_runs_total",

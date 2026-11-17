@@ -1,5 +1,6 @@
 import asyncio
 
+from asterion.bot.creation_handlers import warm_photo_file_ids
 from asterion.bot.metrics_server import start_metrics_server
 from asterion.bot.round_scheduler import build_round_scheduler
 from asterion.bot.runtime import get_bot_runtime
@@ -15,6 +16,7 @@ async def _run() -> None:
         raise RuntimeError("Polling process can only run when ASTERION_TELEGRAM_MODE=polling")
 
     runtime = get_bot_runtime()
+    await warm_photo_file_ids()
     metrics_runner = None
     if settings.metrics_port is not None:
         metrics_runner = await start_metrics_server(

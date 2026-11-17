@@ -8,6 +8,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.p6 import P6_CHAMBER, P6_CHOICES, P6_TITLE, P6View
 from asterion.application.prologue import CombatView
 from asterion.application.road import BOSQUE, CHARNECA, REFUGE, RUINS
+from asterion.bot.asset_catalog import location_key, with_boss_transformation_art
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
 
@@ -37,15 +38,25 @@ def _combat(view):
         combat_actor_key=view.combat_actor_key,
     ))
     enemy = view.combat.fighters.get("enemy")
-    phase = (
-        "III · O Último Posto"
-        if enemy and enemy.hp <= enemy.stats.hp * Decimal("0.35")
-        else "II · A Fratura"
-        if enemy and enemy.hp < enemy.stats.hp * Decimal("0.70")
-        else "I · A Sentinela"
+    if enemy and enemy.hp <= enemy.stats.hp * Decimal("0.35"):
+        phase_key, phase = "III", "III · O Último Posto"
+    elif enemy and enemy.hp < enemy.stats.hp * Decimal("0.70"):
+        phase_key, phase = "II", "II · A Fratura"
+    else:
+        phase_key, phase = "I", "I · A Sentinela"
+    hud = with_boss_transformation_art(hud, view.combat, phase_key)
+    image_key = (
+        hud.image_key
+        if hud.image_key.startswith("boss-transform:")
+        else location_key(P6_CHAMBER)
     )
-    return Screen(f"📜 {P6_TITLE} · Câmara do Poente\n⚔️ Fase {phase}\n🛡️ Vigia Partido · Nv.10\n" + hud.text,
-                  "p6", hud.keyboard, parse_mode=hud.parse_mode)
+    return Screen(
+        f"📜 {P6_TITLE} · Câmara do Poente\n⚔️ Fase {phase}\n🛡️ Vigia Partido · Nv.10\n" + hud.text,
+        image_key,
+        hud.keyboard,
+        parse_mode=hud.parse_mode,
+        media_seed=hud.media_seed,
+    )
 
 
 def _guidance(view):

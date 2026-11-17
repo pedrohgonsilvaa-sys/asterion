@@ -53,7 +53,7 @@ _ERRORS = {
     "opponent_level": f"O oponente precisa estar no Nv. {DUEL_MIN_LEVEL} ou acima.",
     "window_closed": "A Arena da Vigília está fechada agora.",
     "cycle_closed": (
-        "A Crônica terminou e a Classificação da Vigília está sendo fechada. "
+        "O ciclo competitivo terminou e a Classificação da Vigília está sendo fechada. "
         "A fila volta a abrir depois da finalização."
     ),
     "queue_blocked": "Sua entrada na fila está em Recarga.",
@@ -208,6 +208,7 @@ def _render_combat(view: PvpCombatView) -> Screen:
         screen.image_key,
         _keyboard(*rows),
         screen.parse_mode,
+        screen.media_seed,
     )
 
 
@@ -298,5 +299,5 @@ def render_ranking(view: RankingView) -> Screen:
             lines.extend([f"{row.position} {escape(row.name)}", f"{row.elo} · {row.renome} Renome"])
     else:
         lines.append("Nenhum nome registrado ainda.")
-    rows = [[_button("🏛️ Salão da Vigília", "cr:hall")], _BACK]
+    rows = [_BACK]
     return Screen("\n".join(lines), _IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")

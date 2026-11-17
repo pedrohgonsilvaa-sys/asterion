@@ -49,9 +49,10 @@ def _combat(view: P5View) -> Screen:
     )
     return Screen(
         f"📜 {P5_TITLE} · Encontro de Missão\n🛡️ Custódio do Poente · Nv.9\n" + hud.text,
-        "p5",
+        hud.image_key,
         hud.keyboard,
         parse_mode=hud.parse_mode,
+        media_seed=hud.media_seed,
     )
 
 

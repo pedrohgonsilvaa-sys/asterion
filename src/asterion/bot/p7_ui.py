@@ -48,9 +48,10 @@ def _combat(view: P7View) -> Screen:
         f"📜 {P7_TITLE} · Garganta dos Laços\n"
         "⚔️ Encontro Roteirizado · Fauna Regional · Nv.11\n\n"
         + hud.text,
-        "p7",
+        hud.image_key,
         hud.keyboard,
         parse_mode=hud.parse_mode,
+        media_seed=hud.media_seed,
     )
 
 

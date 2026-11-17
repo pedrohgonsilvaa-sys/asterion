@@ -50,9 +50,10 @@ def _combat(view: P3View) -> Screen:
     hud = render_combat(combat_view)
     return Screen(
         "🌿 Sob Galhos Calcinados · Combate de Missão\n\n" + hud.text,
-        "p3",
+        hud.image_key,
         hud.keyboard,
         parse_mode=hud.parse_mode,
+        media_seed=hud.media_seed,
     )
 
 

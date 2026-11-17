@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.character_deletion import delete_character_owned_data
 from asterion.application.character_names import lock_character_name, name_available, utc_now
+from asterion.application.foreground import has_foreground
 from asterion.application.groups import prepare_character_deletion
 from asterion.application.guild_upkeep import prepare_guild_departure
 from asterion.domain.creation import NamePolicy, normalize_name
@@ -25,18 +26,10 @@ from asterion.infrastructure.db.models import (
     CharacterPendingInput,
     CharacterProfile,
     CharacterRenameHistory,
-    ClassTrialState,
     CreationDraft,
     CreationInput,
-    DungeonLobby,
-    DungeonLobbyMember,
-    DungeonMatchQueue,
-    DungeonRun,
-    DungeonRunMember,
-    GameActivity,
     Guild,
     GuildMember,
-    HuntRound,
     SocialGroup,
     SocialGroupMember,
 )
@@ -48,7 +41,6 @@ RENAME_COST = 2500
 RENAME_COOLDOWN = timedelta(days=30)
 NAME_RESERVATION_PERIOD = timedelta(days=30)
 DELETION_PERIOD = timedelta(days=7)
-ACTIVE_LOBBY_MEMBER_STATES = ("invited", "joined", "queued", "matched", "confirmed")
 
 
 async def notification_enabled(
@@ -297,55 +289,7 @@ async def _reserve_name(
 
 
 async def _has_foreground(session: AsyncSession, character_id: UUID) -> bool:
-    if await session.scalar(
-        select(GameActivity.id).where(
-            GameActivity.character_id == character_id,
-            GameActivity.status == "active",
-        )
-    ):
-        return True
-    if await session.scalar(
-        select(HuntRound.id).where(
-            HuntRound.character_id == character_id,
-            HuntRound.status.in_(("preparing", "active", "interrupted")),
-        )
-    ):
-        return True
-    if await session.scalar(
-        select(DungeonRunMember.run_id)
-        .join(DungeonRun, DungeonRun.id == DungeonRunMember.run_id)
-        .where(
-            DungeonRunMember.character_id == character_id,
-            DungeonRunMember.status.in_(("active", "defeated")),
-            DungeonRun.status == "active",
-        )
-    ):
-        return True
-    if await session.scalar(
-        select(DungeonLobbyMember.lobby_id)
-        .join(DungeonLobby, DungeonLobby.id == DungeonLobbyMember.lobby_id)
-        .where(
-            DungeonLobbyMember.character_id == character_id,
-            DungeonLobbyMember.status.in_(ACTIVE_LOBBY_MEMBER_STATES),
-            DungeonLobby.status.in_(("forming", "confirming")),
-        )
-    ):
-        return True
-    if await session.scalar(
-        select(DungeonMatchQueue.character_id).where(
-            DungeonMatchQueue.character_id == character_id,
-            DungeonMatchQueue.status.in_(("queued", "matched")),
-        )
-    ):
-        return True
-    return bool(
-        await session.scalar(
-            select(ClassTrialState.character_id).where(
-                ClassTrialState.character_id == character_id,
-                ClassTrialState.status == "active",
-            )
-        )
-    )
+    return await has_foreground(session, character_id)
 
 
 class AccountService:

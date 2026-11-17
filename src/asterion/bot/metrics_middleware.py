@@ -9,7 +9,11 @@ from typing import Any
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Update
 
-from asterion.infrastructure.metrics import TELEGRAM_UPDATE_SECONDS, TELEGRAM_UPDATES
+from asterion.infrastructure.metrics import (
+    TELEGRAM_HANDLER_SECONDS,
+    TELEGRAM_UPDATE_SECONDS,
+    TELEGRAM_UPDATES,
+)
 
 
 class MetricsMiddleware(BaseMiddleware):
@@ -25,6 +29,7 @@ class MetricsMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         kind = _update_type(event)
+        handler_name = _handler_name(data, handler)
         started = self.clock()
         try:
             result = await handler(event, data)
@@ -35,7 +40,9 @@ class MetricsMiddleware(BaseMiddleware):
             TELEGRAM_UPDATES.inc(type=kind, outcome="ok")
             return result
         finally:
-            TELEGRAM_UPDATE_SECONDS.observe(max(self.clock() - started, 0.0), type=kind)
+            elapsed = max(self.clock() - started, 0.0)
+            TELEGRAM_UPDATE_SECONDS.observe(elapsed, type=kind)
+            TELEGRAM_HANDLER_SECONDS.observe(elapsed, type=kind, handler=handler_name)
 
 
 def _update_type(event: TelegramObject) -> str:
@@ -45,3 +52,13 @@ def _update_type(event: TelegramObject) -> str:
         except Exception:
             return "unknown"
     return type(event).__name__.lower()
+
+
+def _handler_name(data: dict[str, Any], fallback: Callable[..., Any]) -> str:
+    """Use the aiogram handler callback name without high-cardinality labels."""
+    handler = data.get("handler")
+    callback = getattr(handler, "callback", None)
+    name = getattr(callback, "__qualname__", None) or getattr(
+        fallback, "__qualname__", None
+    )
+    return str(name or "unknown")[:160]
