@@ -27,7 +27,7 @@ jobs:
       - name: Atualizar código e subir containers
         run: |
           ssh -i ~/.ssh/id_deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "cd ${{ secrets.VPS_PATH }} && git pull origin main && docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build"
+            "cd ${{ secrets.VPS_PATH }} && git fetch origin main && stash=backups/deploy-untracked-\$(date -u +%Y%m%d%H%M%S) && while IFS= read -r -d '' file; do if git cat-file -e \"origin/main:\${file}\" 2>/dev/null; then mkdir -p \"\${stash}/\$(dirname \"\${file}\")\" && mv -- \"\${file}\" \"\${stash}/\${file}\"; fi; done < <(git ls-files --others --exclude-standard -z) && git pull --ff-only origin main && docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build"
 
       - name: Conferir logs do bot
         run: |
