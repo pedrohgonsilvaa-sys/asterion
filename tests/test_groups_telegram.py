@@ -48,7 +48,8 @@ def test_vinculos_menu_exposes_group_without_root_group_button():
         quest_title=None,
     )
     screen = render_world(view)
-    assert "Vínculos" in {button.text for row in screen.keyboard.inline_keyboard for button in row}
+    labels = {button.text for row in screen.keyboard.inline_keyboard for button in row}
+    assert "🤝 Vínculos" in labels
     assert "Grupo" not in {button.text for row in screen.keyboard.inline_keyboard for button in row}
     assert "links:root" in _callbacks(screen)
 

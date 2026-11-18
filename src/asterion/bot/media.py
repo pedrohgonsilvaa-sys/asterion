@@ -13,11 +13,15 @@ def assets_root() -> Path:
     return Path(os.environ.get("ASTERION_ASSETS_DIR", "assets")).resolve()
 
 
-def resolve_asset_file(ref: str, root: Path | None = None) -> Path | None:
+def resolve_asset_file(
+    ref: str, root: Path | None = None, *, selection_key: str | None = None
+) -> Path | None:
     """Return the file for a ``file:`` ref only if it stays inside the assets root.
 
     Absolute paths, ``..`` escapes and symlinks leaving the root are refused.
     Both ``file:assets/x.png`` and ``file:x.png`` (relative to the root) work.
+    With a wildcard, ``selection_key`` picks the same variant every time for
+    that key; without it the variant is random.
     """
     base = (root or assets_root()).resolve()
     raw = ref.removeprefix("file:").strip()
@@ -32,6 +36,9 @@ def resolve_asset_file(ref: str, root: Path | None = None) -> Path | None:
             # Wildcard in the file name: draw one of the matching variants.
             safe = _inside(option.parent, base, option.name)
             if safe:
+                if selection_key:
+                    ordered = sorted(safe)
+                    return random.Random(selection_key).choice(ordered)
                 return random.choice(safe)
             continue
         try:

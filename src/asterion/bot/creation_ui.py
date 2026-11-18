@@ -1,18 +1,37 @@
-"""Presentation-only copy and keyboards, sourced from CHARACTER_CREATION_UI.md."""
+"""Reusable, data-driven presentation for the initial character creation flow."""
 
 import json
+import re
 from dataclasses import dataclass
+from html import escape
 from importlib.resources import files
 from uuid import UUID
 
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from asterion.domain.creation import CLASSES, GENDERS, PROLOGUE, RACES, Creation
+from asterion.domain.creation import CLASSES, PROLOGUE, RACES, Creation
 
-GENDER_LABELS = tuple(gender.capitalize() for gender in GENDERS)
+CATALOG = json.loads(
+    files("asterion.bot").joinpath("creation_catalog.json").read_text(encoding="utf-8")
+)
+SCREENS = CATALOG["screens"]
+RACE_CONTENT = CATALOG["races"]
+CLASS_CONTENT = CATALOG["classes"]
+GENDER_LABELS = ("🚹 Masculino", "🚺 Feminino")
 
-COPY = json.loads(files("asterion.bot").joinpath("creation_copy.json").read_text(encoding="utf-8"))
+# Kept as a small compatibility surface for callers/tests that need the
+# player-facing copy without knowing the catalog shape.
+COPY = dict(SCREENS)
+for _key, _data in RACE_CONTENT.items():
+    COPY[f"race:{_key}"] = (
+        f"{_data['emoji']} {_data['name']}\n\n{_data['description']}\n\n{_data['passive']['name']}"
+    )
+for _key, _data in CLASS_CONTENT.items():
+    COPY[f"class:{_key}"] = (
+        f"{_data['emoji']} {_data['name']}\n\n{_data['description']}\n\n"
+        "🔀 Caminhos"
+    )
 PROLOGUE_TEXT = (
     "🔥 Cinzas na Estrada\nPrólogo · Terras do Ocaso\n\n"
     "O mundo desperta sob um céu sem cor. Cinzas atravessam a estrada como neve morta, "
@@ -20,6 +39,53 @@ PROLOGUE_TEXT = (
     "um caminho seguro. À frente, entre a névoa e o silêncio, formas quebradas marcam "
     "a direção de sua primeira jornada."
 )
+
+
+def _entity(kind: str, key: str) -> dict:
+    return (RACE_CONTENT if kind == "race" else CLASS_CONTENT)[key]
+
+
+def _label(kind: str, key: str) -> str:
+    entity = _entity(kind, key)
+    return f"{entity['emoji']} {entity['name']}"
+
+
+def _pairs(buttons: list) -> list[list]:
+    return [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
+
+
+def _race_detail(data: dict) -> str:
+    passive = data["passive"]
+    return (
+        f"{data['emoji']} {data['name']}\n\n"
+        f"{data['description']}\n\n"
+        f"**{passive['emoji']} {passive['name']}** · `Passiva`\n\n"
+        f"{passive['description']}"
+    )
+
+
+def _class_detail(data: dict) -> str:
+    paths = data["paths"]
+    path_text = (
+        f"{paths[0]['name']} e {paths[1]['name']} representam os caminhos que o "
+        f"{data['name']} poderá seguir mais adiante. O **{paths[0]['name']} "
+        f"{paths[0]['description']}**, enquanto o **{paths[1]['name']} "
+        f"{paths[1]['description']}**."
+    )
+    return (
+        f"{data['emoji']} {data['name']}\n\n"
+        f"{data['description']}\n\n"
+        "**🔀 Caminhos**\n\n"
+        f"_{path_text}_"
+    )
+
+
+def _format_markup(text: str) -> str:
+    """Convert the catalog's readable Markdown into Telegram-safe HTML."""
+    text = escape(text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+    text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+    return re.sub(r"_(.+?)_", r"<i>\1</i>", text)
 
 
 class CreationCallback(CallbackData, prefix="cc"):
@@ -70,57 +136,57 @@ def render(state: Creation) -> Screen:
                 ]
             ),
         )
-    text = COPY[step]
+    # Race/class detail steps ("race:<key>", "class:<key>") are built below
+    # from the catalog, so they have no entry in SCREENS.
+    text = SCREENS.get(step, "")
     if step == "name":
         if state.error:
-            text = COPY[state.error].replace("Luiken", state.rejected_name or "")
+            text = SCREENS[state.error].replace(
+                "Nome indisponível", f"{state.rejected_name or 'Nome'} · Indisponível"
+            )
     elif step == "gender":
         rows = [
             [button(label, f"g{i}") for i, label in enumerate(GENDER_LABELS)],
-            [button("← Nome", "backname")],
+            [button("↩️ Voltar", "backname")],
         ]
     elif step == "race":
-        rows = [
-            [button(str(i + 1), f"r{i}") for i in range(len(RACES))],
-            [button("← Gênero", "backgender")],
-        ]
+        rows = _pairs([button(_label("race", race), f"r{i}") for i, race in enumerate(RACES)])
+        rows.append([button("↩️ Voltar", "backgender")])
     elif step == "class":
-        rows = [
-            [button(str(i + 1), f"c{i}") for i in range(3)],
-            [button(str(i + 1), f"c{i}") for i in range(3, len(CLASSES))],
-            [button("← Raças", "races")],
-        ]
+        rows = _pairs([button(_label("class", cls), f"c{i}") for i, cls in enumerate(CLASSES)])
+        rows.append([button("↩️ Voltar", "races")])
     elif step.startswith(("race:", "class:")):
-        title = text.splitlines()[0].split(" ", 1)[1]
         race_page = step.startswith("race:")
+        kind = "race" if race_page else "class"
+        key = step.split(":", 1)[1]
+        data = _entity(kind, key)
+        text = _race_detail(data) if race_page else _class_detail(data)
         rows = [
-            [button(f"Escolher {title}", "choose")],
-            [button("← Raças" if race_page else "← Classes", "races" if race_page else "classes")],
+            [button(f"{data['emoji']} Escolher {data['name']}", "choose")],
+            [button("↩️ Voltar", "races" if race_page else "classes")],
         ]
     elif step == "confirm":
-        race_title = COPY[f"race:{state.race}"].splitlines()[0]
-        class_title = COPY[f"class:{state.character_class}"].splitlines()[0]
-        passive = next(
-            line for line in COPY[f"race:{state.race}"].splitlines() if " · Passiva Racial" in line
-        )
-        race_icon, race_name = race_title.split(" ", 1)
-        class_icon, class_name = class_title.split(" ", 1)
+        race = _entity("race", state.race or RACES[0])
+        klass = _entity("class", state.character_class or CLASSES[0])
         text = (
-            text.replace("Luiken", state.name or "")
-            .replace("🎭 Gênero · Masculino", f"🎭 Gênero · {(state.gender or '').capitalize()}")
-            .replace("🕯️ Raça · Remanescente", f"{race_icon} Raça · {race_name}")
-            .replace("🧩 Adaptabilidade · Passiva Racial", passive)
-            .replace("🗡️ Classe · Errante", f"{class_icon} Classe · {class_name}")
+            f"{text}\n\n"
+            f"🏷️ **Nome** · `{state.name or ''}`\n"
+            f"🎭 **Gênero** · `{(state.gender or '').capitalize()}`\n"
+            f"{race['emoji']} **Raça** · `{race['name']}`\n"
+            f"{klass['emoji']} **Classe** · `{klass['name']}`"
         )
         rows = [
-            [button("Confirmar Personagem", "confirm")],
-            [button("Nome", "name"), button("Gênero", "gender")],
-            [button("Raça", "race"), button("Classe", "class")],
-            [button("← Classes", "classes")],
+            [button("✅ Confirmar Personagem", "confirm")],
+            [button("↩️ Voltar", "classes")],
         ]
     image_key = step
     if state.gender and step.startswith("race:"):
         image_key = f"char.{step.split(':')[1]}.{state.gender}"
     elif state.gender and state.race and step.startswith("class:"):
         image_key = f"char.{state.race}.{state.gender}.{step.split(':')[1]}"
-    return Screen(text, image_key, InlineKeyboardMarkup(inline_keyboard=rows) if rows else None)
+    return Screen(
+        _format_markup(text),
+        image_key,
+        InlineKeyboardMarkup(inline_keyboard=rows) if rows else None,
+        "HTML",
+    )

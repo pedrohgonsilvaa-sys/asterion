@@ -1609,6 +1609,10 @@ def _render_combat(view: CombatView) -> Screen:
         and not is_trial
         and not is_dungeon
     )
+    is_chronicle_intent = view.context == "chronicle" and (
+        state.party_mode
+        or sum(1 for fighter in state.fighters.values() if fighter.side == "enemy") > 1
+    )
     actor_bound_party = (
         is_campaign_party or view.context == "group_hunt" or is_oath or is_guild_battle
     )
@@ -1872,7 +1876,8 @@ def _render_combat(view: CombatView) -> Screen:
                 view.run_id, view.activity_id, state.version, action_index, target_code
             ).pack()
         elif (
-            is_campaign_party
+            is_chronicle_intent
+            or is_campaign_party
             or is_varzeas_solo_campaign
             or is_altos_solo_campaign
             or is_world_event
@@ -1880,7 +1885,9 @@ def _render_combat(view: CombatView) -> Screen:
             or is_guild_battle
         ):
             intent_callback = (
-                GuildBattleCombatCallback
+                ChronicleIntentCallback
+                if is_chronicle_intent
+                else GuildBattleCombatCallback
                 if is_guild_battle
                 else WorldEventCombatCallback
                 if is_world_event
@@ -1971,6 +1978,8 @@ def _render_combat(view: CombatView) -> Screen:
                 if view.context == "s4"
                 else S5CombatCallback
                 if view.context == "s5"
+                else ChronicleCombatCallback
+                if view.context == "chronicle"
                 else CombatCallback
             )(
                 activity=view.activity_id.hex,

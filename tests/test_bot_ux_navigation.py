@@ -74,7 +74,7 @@ def test_adventure_root_displays_only_supplied_current_principal_quest():
     assert "P2" not in screen.text
 
 
-def test_other_regions_keep_campaign_and_adventure_menu_entries():
+def test_other_regions_keep_main_menu_entries():
     world = WorldView(
         kind="menu",
         character_id=uuid4(),
@@ -95,7 +95,8 @@ def test_other_regions_keep_campaign_and_adventure_menu_entries():
         for row in render_world(world).keyboard.inline_keyboard
         for button in row
     }
-    assert {"Campanha", "Aventura"} <= labels
+    # HUD layout (ff58e7b): Campanha/Aventura hubs no longer have menu buttons.
+    assert {"🧭 Desbravar", "🗺️ Mapa", "📜 Missões"} <= labels
 
 
 def test_primary_telegram_screens_have_live_compact_callbacks_and_exits():

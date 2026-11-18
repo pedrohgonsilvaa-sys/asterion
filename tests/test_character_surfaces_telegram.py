@@ -113,7 +113,7 @@ async def test_character_knowledge_telegram_navigation_and_history_reply(databas
         bot, _message_update("/menu", actor=actor, update_id=update_id)
     )
     screen = _last_screen(bot)
-    assert "Asterion" in screen.text
+    assert "🌘 Refúgio do Ocaso" in screen.text
     update_id += 1
     await dispatcher.feed_raw_update(
         bot,

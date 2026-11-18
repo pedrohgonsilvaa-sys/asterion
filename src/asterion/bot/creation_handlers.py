@@ -26,6 +26,7 @@ from asterion.application.s3 import S3Service
 from asterion.application.s4 import S4Service
 from asterion.application.s5 import S5Service
 from asterion.application.s6 import S6Service
+from asterion.application.tdo_explore import TdoExploreService
 from asterion.application.world import WorldService
 from asterion.bot.asset_catalog import character_key, npc_key_from_text
 from asterion.bot.class_trial_ui import render_class_trial_view
@@ -44,7 +45,7 @@ from asterion.bot.s3_ui import render_s3
 from asterion.bot.s4_ui import render_s4
 from asterion.bot.s5_ui import render_s5
 from asterion.bot.s6_ui import render_s6
-from asterion.bot.world_ui import render_world
+from asterion.bot.world_ui import render_refuge_dashboard, render_world
 from asterion.infrastructure.db.models import TelegramMediaCache
 from asterion.infrastructure.db.session import SessionFactory
 
@@ -337,10 +338,31 @@ def creation_router(
     s6: S6Service | None = None,
     p6: P6Service | None = None,
     dungeons: DungeonService | None = None,
+    tdo_explore: TdoExploreService | None = None,
 ) -> Router:
     router = Router(name="character_creation")
     router.message.filter(F.chat.type == "private")
     router.callback_query.filter(F.message.chat.type == "private")
+
+    async def tdo_refuge_screen(actor, world_view):
+        if (
+            world_view is None
+            or world_view.region != "Terras do Ocaso"
+            or world_view.location != "Refúgio do Ocaso"
+        ):
+            return None
+        road_view = await road.resume(actor) if road is not None else None
+        p1_view = await p1.resume(actor) if p1 is not None else None
+        dungeon_view = await dungeons.known(actor) if dungeons is not None else None
+        remaining = await tdo_explore.remaining(actor) if tdo_explore is not None else None
+        routes = road_view.route_destinations if road_view is not None else ()
+        return render_refuge_dashboard(
+            world_view,
+            route_destinations=routes,
+            explore_remaining=len(remaining) if remaining is not None else None,
+            can_hunt=bool(routes) and not (p1_view is not None and p1_view.status == "active"),
+            known_dungeons=bool(dungeon_view and dungeon_view.known_dungeons),
+        )
 
     async def current_screen(actor, state):
         dungeon_view = await dungeons.resume(actor) if dungeons is not None else None
@@ -384,12 +406,23 @@ def creation_router(
         if p1 is not None:
             p1_view = await p1.resume(actor)
             if p1_view is not None and (p1_view.status == "active" or p1_view.combat is not None):
+                if p1_view.combat is not None:
+                    return render_p1(p1_view)
+                world_view = await world.resume(actor) if world is not None else None
+                refuge_screen = await tdo_refuge_screen(actor, world_view)
+                if refuge_screen is not None:
+                    return refuge_screen
                 return render_p1(p1_view)
         if p2_view is not None and p2_view.status == "active":
             return render_p2(p2_view)
         road_view = None
         if road is not None:
             road_view = await road.resume(actor)
+            if road_view is not None and road_view.location == "Refúgio do Ocaso":
+                world_view = await world.resume(actor) if world is not None else None
+                refuge_screen = await tdo_refuge_screen(actor, world_view)
+                if refuge_screen is not None:
+                    return refuge_screen
             if road_view is not None and (
                 road_view.kind in {"combat", "exploration", "hunt_victory", "hunt_defeat"}
                 or road_view.kind.startswith("round_")
@@ -418,7 +451,7 @@ def creation_router(
         if world is not None:
             world_view = await world.resume(actor)
             if world_view is not None:
-                return render_world(world_view)
+                return await tdo_refuge_screen(actor, world_view) or render_world(world_view)
         if prologue is not None:
             view = await prologue.resume(actor)
             if view is not None:
