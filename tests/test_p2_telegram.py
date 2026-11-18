@@ -499,6 +499,8 @@ async def test_menu_start_and_missions_reconstruct_p2_without_exposing_normal_ch
     p1_service = AsyncMock(spec=P1Service)
     p1_service.resume.return_value = None
     world_service = AsyncMock(spec=WorldService)
+    world_service.sessions = database[1]  # foreground probe reads it
+    world_service.server_id = "ocaso"
     world_service.resume.return_value = None
     dispatcher = Dispatcher(disable_fsm=True)
     dispatcher.include_router(
@@ -592,6 +594,8 @@ async def test_refuge_map_does_not_offer_remote_npc_interaction(database):
         combat=None,
     )
     world_service = AsyncMock(spec=WorldService)
+    world_service.sessions = database[1]  # foreground probe reads it
+    world_service.server_id = "ocaso"
     world_service.resume.return_value = None
     dispatcher = Dispatcher(disable_fsm=True)
     dispatcher.include_router(
@@ -637,6 +641,8 @@ async def test_generic_refuge_oren_route_preserves_s1_when_p2_is_not_at_oren(dat
         level=3,
     )
     world_service = AsyncMock(spec=WorldService)
+    world_service.sessions = database[1]  # foreground probe reads it
+    world_service.server_id = "ocaso"
     dispatcher = Dispatcher(disable_fsm=True)
     dispatcher.include_router(
         world_router(world_service, {}, p1=p1, s1=s1, p2=p2)
