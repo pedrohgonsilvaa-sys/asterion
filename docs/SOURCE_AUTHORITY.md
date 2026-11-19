@@ -21,6 +21,16 @@
 
 > **Sincronização 2026-11-19 (autoridade vigente):** a Fonte Mestra vigente é o **GDD Estrutural v1.7.1**; a Fonte Visual/UI vigente é a **Consolidação de Visual & UI v1.6.2**; a Fonte Regional vigente da Região 1 é **Terras do Ocaso v1.0.18 FINAL**. A **Especificação de Classes de Armadura v1.0.0** (`docs/specs/ASTERION_ESPECIFICACAO_CLASSES_DE_ARMADURA_v1_0_0.md`) é **exceção canônica, por decisão autoral**, ao GDD v1.7.1: mantém as categorias de proteção corporal Vestes, Leve, Média e Pesada, com Proficiências de Armadura e camada de Esquiva/Bloqueio. Essa exceção revoga, só nesse ponto, a revogação de 2026-11-13 descrita acima; o restante do GDD v1.7.1 permanece como está.
 
+> **Decisões do autor registradas em 2026-11-19 (somente documentação; nenhuma mudança em `src/`, `tests/` ou `alembic/` nesta etapa):**
+>
+> 1. **Criação de Personagem.** O fluxo canônico é **Nome → Raça → Classe → Confirmação Final → Prólogo** (UI §45). **Não existe etapa Gênero na criação.** O passo "Gênero" hoje presente no código (`bot/creation_ui.py`, `bot/creation_catalog.json`) não é autorizado pelas Fontes vigentes. Retirá-lo do código fica para etapa própria.
+> 2. **Cosméticos.** As categorias canônicas são **Aparência, Título e Moldura** (GDD §33.4 e §37.2). **Emblema é mapeado para Título e Banner é mapeado para Moldura.** Qualquer migração de dados, de constraint do banco ou de código (hoje há `emblem` e `banner` em `COSMETIC_TYPES` e no CHECK de `cosmetic_type`) será feita em etapa própria.
+> 3. **Terras do Ocaso — retornos.** Dentro das Terras do Ocaso, `← Menu`, `← Campanha` e `← Aventura` abrem/retornam à **tela do Refúgio do Ocaso** com o rótulo `[Voltar ao Refúgio]` (UI §66.1 item 6). Isso é **navegação de interface, não teletransporte**: o `location` persistido do personagem **não muda** por esse botão. O personagem continua podendo abrir o jogo no Local em que estava (UI §66.1 item 8). Esclarece a ambiguidade da §66.1 item 6; ajustar o código (hoje `open_region_home` chama `road.travel_route(..., REFUGE)`) fica para etapa própria.
+> 4. **Menu regional.** A UI §66.1 é **override regional do Menu Principal**: dentro das Terras do Ocaso, o **Refúgio do Ocaso substitui o Menu Principal**; fora das Terras do Ocaso permanece o **Menu Principal geral** (entradas Campanha e Aventura). Os mockups de Menu Principal das UI §45.9 e §46.15 valem fora desse override.
+> 5. **Coroas.** **Não há teto numérico de carteira de Coroas** atualmente. A decisão do autor de 2026-11-08 (venda sempre credita o valor integral ao vendedor) **permanece válida** sob o GDD v1.7.1. O **Crédito Financeiro Pendente por atingir teto** (GDD §28.14) fica **adiado** até o autor definir o teto. Nenhum valor foi inventado.
+>
+> Estas decisões não alteram decisões históricas anteriores registradas neste índice.
+
 > **Nota 2026-11-14:** A Crônica I anterior foi pausada em 2026-11-14 para reprojeto futuro. A proposta v0.2 e suas decisões não constituem canon nem compromisso da futura implementação.
 
 ## Fonte Mestra vigente
