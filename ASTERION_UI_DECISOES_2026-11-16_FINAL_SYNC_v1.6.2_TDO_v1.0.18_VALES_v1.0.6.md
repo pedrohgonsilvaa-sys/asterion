@@ -3,11 +3,11 @@
 
 Data de consolidação: 2026-10-11
 Sincronização editorial: 2026-10-13 — compatibilidade confirmada com Vales dos Enforcados v1.0.6 FINAL; a v1.0.6 altera apenas o perfil numérico do encontro roteirizado de S12 e não modifica contrato Visual/UI.
-Atualização consolidada: 2026-10-11 — sincronizada com a Fonte Mestra v1.6.0, Terras do Ocaso v1.0.15 FINAL e Vales dos Enforcados v1.0.6 FINAL; mantém as decisões anteriores, corrige referências cruzadas regionais e acrescenta feedback compacto das seis identidades de Classe e de requisitos de armamento nas superfícies existentes.
+Atualização consolidada: 2026-10-11 — autoridade estrutural vigente: GDD v1.7.1; sincronizada com Terras do Ocaso v1.0.15 FINAL e Vales dos Enforcados v1.0.6 FINAL; mantém as decisões anteriores, corrige referências cruzadas regionais e acrescenta feedback compacto das seis identidades de Classe e de requisitos de armamento nas superfícies existentes.
 Versão 2026-11-16 (v1.6.2) — cópia versionada da v1.6.1 com a seção 66.1 reescrita por decisão do autor: Refúgio como tela principal nas Terras do Ocaso, entradas do Menu Principal integradas ao Refúgio e retorno ao Refúgio nos fluxos regionais. Mantém a regra de reabrir o jogo no Local atual e preserva o Menu Campanha/Aventura nas demais regiões. A v1.6.1 permanece como registro histórico.
 Sincronização anterior: 2026-10-04 — fechamento da hierarquia Visual/UI de Cosméticos e consolidação regional com Terras do Ocaso v1.0.13 FINAL e Vales dos Enforcados v1.0.3 FINAL.
 Auditoria anterior: 2026-09-24 — preservadas as correções anteriores e integrada a padronização Visual/UI global de Consumíveis, incluindo Proteção, Dissipação e Resguardo, então sincronizada com a Fonte Mestra v1.4.6 e Vales dos Enforcados v1.0.2 FINAL.
-Autoridade estrutural: `ASTERION_GDD_Estrutural_v1.6.0_Fonte_Mestra.md`
+Autoridade estrutural: `ASTERION_GDD_Estrutural_v1.7.1_Fonte_Mestra.md`
 Autoridades regionais: `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.18_FINAL.md` e `ASTERION_CONTEUDO_VALES_DOS_ENFORCADOS_v1.0.6_FINAL.md`
 Escopo: Telegram Bot, sem Mini App.
 Esta revisão preserva as decisões visuais anteriores, a iconografia/UI regional dos Vales dos Enforcados e a padronização global. Mantém a apresentação regional e os parâmetros das Provações conforme as fontes regionais vigentes. O fechamento visual de 2026-10-04 e a sincronização de 2026-10-08 permanecem íntegros; esta revisão alinha as autoridades atuais e adiciona somente os indicadores de combate e o aviso de configuração inválida por armamento compatível definidos abaixo.
@@ -574,7 +574,7 @@ Uma nova identidade está pronta para ser assumida.
 [← Conta]
 ```
 
-Custo e recarga desta tela são autoritativos pela Fonte Mestra v1.6.0: **2.500 Coroas + Recarga de 30 dias**.
+Custo e recarga desta tela são autoritativos pela Fonte Mestra v1.7.1: **2.500 Coroas + Recarga de 30 dias**.
 
 Nome indisponível usa `🔒`; nome inválido usa `⚠️`. Não abrir página de erro separada.
 
@@ -1311,9 +1311,9 @@ As seguintes áreas já possuem direção Visual/UI consolidada e devem preserva
 
 ## 25. Pontos ainda não fechados
 
-A **Baseline Numérica v1.0 da Fonte Mestra v1.6.0 é autoritativa para implementação e testes** e permanece fechada fora dos multiplicadores estruturais de Chefe de Campanha já formalizados. Números, custos, limites, slots e fórmulas já consolidados na Fonte Mestra não permanecem `SIMULAR` nesta Fonte Visual/UI.
+A **Baseline Numérica v1.0 da Fonte Mestra v1.7.1 é autoritativa para implementação e testes** e permanece fechada fora dos multiplicadores estruturais de Chefe de Campanha já formalizados. Números, custos, limites, slots e fórmulas já consolidados na Fonte Mestra não permanecem `SIMULAR` nesta Fonte Visual/UI.
 
-Para apresentação player-facing, `HP Máximo`, `ATQ`, `DEF` e `AGI` estáticos finais, bem como o `HP atual`, são exibidos em pontos inteiros, acompanhando o fechamento único definido pela Fonte Mestra v1.6.0. `PER`, `CRIT`, `Esquiva`, `Bloqueio` e percentuais mantêm seus formatos próprios e podem permanecer fracionários quando a regra autoritativa assim definir. Esta sincronização não altera barras, ordem de campos, iconografia, navegação ou layout já consolidados.
+Para apresentação player-facing, `HP Máximo`, `ATQ`, `DEF` e `AGI` estáticos finais, bem como o `HP atual`, são exibidos em pontos inteiros, acompanhando o fechamento único definido pela Fonte Mestra v1.7.1. `PER`, `CRIT`, `Esquiva`, `Bloqueio` e percentuais mantêm seus formatos próprios e podem permanecer fracionários quando a regra autoritativa assim definir. Esta sincronização não altera barras, ordem de campos, iconografia, navegação ou layout já consolidados.
 
 Continuam não finais apenas:
 
@@ -1322,7 +1322,7 @@ Continuam não finais apenas:
 - mecânicas futuras ou explicitamente reabertas por Balanceamento e marcadas novamente como `SIMULAR`;
 - quaisquer mecânicas não explicitamente definidas pela Fonte Mestra ou por decisões estruturais posteriores.
 
-Em caso de conflito, a Fonte Mestra v1.6.0 prevalece. Exemplos de UI nunca substituem a Baseline Numérica vigente.
+Em caso de conflito, a Fonte Mestra v1.7.1 prevalece. Exemplos de UI nunca substituem a Baseline Numérica vigente.
 
 ---
 
@@ -1514,7 +1514,7 @@ Disponíveis · 2
 ### 30.1 Árvore/lista
 
 - Não usar árvore ASCII.
-- A Fonte Mestra v1.6.0 consolida **18 Talentos por Classe**, organizados em **6 tiers** (`Nv.5/15/25/35/45/55`), com 1 rank por Talento e escolha de 12/18 no Nv.60. A UI não deve tratar esses números como `SIMULAR`.
+- A Fonte Mestra v1.7.1 consolida **18 Talentos por Classe**, organizados em **6 tiers** (`Nv.5/15/25/35/45/55`), com 1 rank por Talento e escolha de 12/18 no Nv.60. A UI não deve tratar esses números como `SIMULAR`.
 - Estados visuais principais: `✅ Adquirido`, `✨ Disponível`, `🔒 Requer X`.
 - Detalhe de Talento mostra lore, benefício mecânico e estado.
 - Talento disponível pode usar `[Adquirir Talento]` sem confirmação individual quando o custo for apenas o ponto normal e a ação fizer parte do fluxo esperado.
@@ -1523,7 +1523,7 @@ Disponíveis · 2
 
 - Mostrar pontos recuperados, custo, Local e Recarga quando aplicáveis.
 - Se indisponível por Local, Recarga ou Coroas, mostrar o motivo e remover a ação.
-- Redistribuição segue a Fonte Mestra v1.6.0: local seguro apropriado, custo de `2 × C(nível atual)` e **sem Recarga temporal** na Baseline v1.0. No Nv.60, o custo é **2.000 Coroas**.
+- Redistribuição segue a Fonte Mestra v1.7.1: local seguro apropriado, custo de `2 × C(nível atual)` e **sem Recarga temporal** na Baseline v1.0. No Nv.60, o custo é **2.000 Coroas**.
 
 ---
 
@@ -1583,7 +1583,7 @@ Esses descritores são auxiliares de UI; nomes finais de especialidades de conte
 - Receitas conhecidas permanecem conhecidas, mas exigem novamente os requisitos do Ofício.
 - Ao rebaixar Principal para Secundário acima do teto secundário, mostrar que o progresso excedente será perdido.
 - Ao promover Secundário para Principal, o nível atual é preservado.
-- A Fonte Mestra v1.6.0 fixa os caps em **Principal Nv.30** e **Secundário Nv.15**. Inverter os dois Ofícios ativos custa `0,50 × C(nível)`; substituir um Ofício custa `1,00 × C(nível)`, sem Recarga temporal na Baseline v1.0.
+- A Fonte Mestra v1.7.1 fixa os caps em **Principal Nv.30** e **Secundário Nv.15**. Inverter os dois Ofícios ativos custa `0,50 × C(nível)`; substituir um Ofício custa `1,00 × C(nível)`, sem Recarga temporal na Baseline v1.0.
 
 ---
 
@@ -4849,7 +4849,7 @@ Correções consolidadas:
 - Mission rewards mantêm ordem `XP → Coroas → Materiais → Equipamento/outros`;
 - telas de resultado podem usar Flavor Text contextual, mas Flavor não pode antecipar conhecimento nem substituir informação mecânica essencial.
 
-Em conflito de apresentação entre trechos antigos deste mesmo arquivo e suas seções consolidadas mais recentes, as seções mais recentes prevalecem. Em conflito mecânico/global, prevalece a Fonte Mestra v1.6.0. Em conflito de conteúdo regional, prevalece a Fonte regional vigente correspondente.
+Em conflito de apresentação entre trechos antigos deste mesmo arquivo e suas seções consolidadas mais recentes, as seções mais recentes prevalecem. Em conflito mecânico/global, prevalece a Fonte Mestra v1.7.1. Em conflito de conteúdo regional, prevalece a Fonte regional vigente correspondente.
 
 ---
 
@@ -4886,7 +4886,7 @@ Com esta atualização, passam a ser considerados visualmente fechados ou consol
 
 Com isso, a arquitetura e o Visual/UI player-facing de alto nível, **incluindo Terras do Ocaso e Vales dos Enforcados**, ficam considerados **fechados para esta fase de design**, salvo conflito estrutural futuro explicitamente aprovado.
 
-A Baseline Numérica v1.0 da Fonte Mestra v1.6.0 é autoritativa para implementação e testes e permanece vigente fora dos multiplicadores de Chefe de Campanha explicitamente formalizados. Permanecem fora desta consolidação nomes/conteúdo usados exclusivamente como exemplos de UI quando ainda não definidos, além de mecânicas futuras ou explicitamente reabertas pela Fonte Mestra como `SIMULAR`. Em qualquer divergência numérica, a Fonte Mestra v1.6.0 prevalece.
+A Baseline Numérica v1.0 da Fonte Mestra v1.7.1 é autoritativa para implementação e testes e permanece vigente fora dos multiplicadores de Chefe de Campanha explicitamente formalizados. Permanecem fora desta consolidação nomes/conteúdo usados exclusivamente como exemplos de UI quando ainda não definidos, além de mecânicas futuras ou explicitamente reabertas pela Fonte Mestra como `SIMULAR`. Em qualquer divergência numérica, a Fonte Mestra v1.7.1 prevalece.
 
 
 
@@ -6456,7 +6456,7 @@ Consolidar recibo XP → Coroas → Materiais segundo o padrão global. Material
 
 Na raiz de Missões, S2 pode aparecer como Disponível, Em Andamento ou Concluída, sem ser movida para Principal. O detalhe/Ver Objetivo é read-only e reconstrói estágio, vestígios, encounter/retry e Local a partir da Quest/atividade persistidas. `/start` e `/menu` durante combate retomam a mesma atividade foreground; fora do combate, o Menu normal permanece acessível. Versão stale restaura View atual. Não usar texto da mensagem, botão anterior, FSM ou estado de sessão como autoridade.
 
-**Sincronização vigente à época da seção 61:** Fonte Mestra v1.5.0 + Terras do Ocaso v1.0.15 FINAL + Vales dos Enforcados v1.0.3 FINAL. A atualização vigente é a sincronização v1.6.0 indicada no cabeçalho e complementada nas seções 64–65; ela preserva esta apresentação regional e atualiza somente os pontos explicitamente indicados.
+**Sincronização vigente à época da seção 61:** Fonte Mestra v1.5.0 + Terras do Ocaso v1.0.15 FINAL + Vales dos Enforcados v1.0.3 FINAL. A atualização vigente é a sincronização v1.7.1 indicada no cabeçalho e complementada nas seções 64–65; ela preserva esta apresentação regional e atualiza somente os pontos explicitamente indicados.
 
 ---
 
@@ -6532,7 +6532,7 @@ Callbacks revalidam estado, versão, gates e Foreground. /start, /menu, Mapa e t
 
 ## 64. Grupo e Campanha cooperativa — Visual/UI consolidada
 
-Esta seção formaliza somente a apresentação dos fluxos aprovados na Fonte Mestra v1.6.0. Grupo é acessado em **Vínculos → Grupo**; não criar botão raiz permanente de Grupo no Menu Principal. Quando pertinente, telas de Missão, Caçada, Masmorra e Local podem apresentar `[Grupo]`. O dashboard pode exibir de forma compacta `👥 Grupo · X/4`.
+Esta seção formaliza somente a apresentação dos fluxos aprovados na Fonte Mestra v1.7.1. Grupo é acessado em **Vínculos → Grupo**; não criar botão raiz permanente de Grupo no Menu Principal. Quando pertinente, telas de Missão, Caçada, Masmorra e Local podem apresentar `[Grupo]`. O dashboard pode exibir de forma compacta `👥 Grupo · X/4`.
 
 ### 64.1 Contexto de Missão
 

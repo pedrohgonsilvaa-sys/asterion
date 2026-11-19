@@ -5,11 +5,11 @@
 **Base:** `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.17_FINAL.md`<br>
 **Escopo:** vertical slice / primeira jornada / Nv.1–10, com saída para Nv.11<br>
 **Autoridade estrutural:** `ASTERION_GDD_Estrutural_v1.7.1_Fonte_Mestra.md`<br>
-**Autoridade Visual/UI:** `ASTERION_UI_DECISOES_2026-11-14_FINAL_SYNC_v1.6.1_TDO_v1.0.18_VALES_v1.0.6.md`<br>
+**Autoridade Visual/UI:** `ASTERION_UI_DECISOES_2026-11-16_FINAL_SYNC_v1.6.2_TDO_v1.0.18_VALES_v1.0.6.md`<br>
 
 > Esta Fonte contém **conteúdo regional**, não redefine sistemas globais. Em conflito estrutural, prevalece a Fonte Mestra vigente. Em conflito de apresentação, prevalece a Fonte Visual/UI vigente.
 
-> **Status FINAL (v1.0.18, 2026-11-14):** conteúdo regional fechado, aprovado pelo autor em 2026-11-14. Consolida a v1.0.17 FINAL com a navegação de mapa único (Refúgio do Ocaso como hub, descoberta de Locais só por Explorar), a remoção de travas de nível, o nível do inimigo igual ao do Local, a nova regra de XP de descoberta e as decisões do autor listadas em "Correções v1.0.18". **Precedência interna:** a **seção 33 (Fechamento v1.0.18)** e as notas marcadas "v1.0.18" prevalecem sobre qualquer trecho das seções 1 a 32 que as contrarie; trechos antigos que contrariam a v1.0.18 permanecem só como histórico de conteúdo e não valem como regra. Onde a v1.0.18 contraria a Fonte Mestra, vale o override registrado na seção 33.14 e em `docs/specs/RASCUNHO_OVERRIDE_FONTE_MESTRA_TDO_v1.0.18.md` (**depende de registro do autor no `SOURCE_AUTHORITY.md`**; até lá, não vai para código). Esta revisão não altera recompensas de Missão, kits de criaturas, Masmorras (exceto o nível mínimo de entrada), Chefe, Provações de Classe, Ofícios, Feitos nem Códice.
+> **Status FINAL (v1.0.18, 2026-11-14):** conteúdo regional fechado, aprovado pelo autor em 2026-11-14. Consolida a v1.0.17 FINAL com a navegação de mapa único (Refúgio do Ocaso como hub, descoberta de Locais só por Explorar), a remoção de travas de nível, o nível do inimigo igual ao do Local, a nova regra de XP de descoberta e as decisões do autor listadas em "Correções v1.0.18". **Precedência interna:** a **seção 33 (Fechamento v1.0.18)** e as notas marcadas "v1.0.18" prevalecem sobre qualquer trecho das seções 1 a 32 que as contrarie; trechos antigos que contrariam a v1.0.18 permanecem só como histórico de conteúdo e não valem como regra. Onde a v1.0.18 contraria a Fonte Mestra, vale o override registrado na seção 33.14 e em `docs/specs/RASCUNHO_OVERRIDE_FONTE_MESTRA_TDO_v1.0.18.md` (**registrado no `SOURCE_AUTHORITY.md`**, Sincronização 2026-11-14, Região 1). Esta revisão não altera recompensas de Missão, kits de criaturas, Masmorras (exceto o nível mínimo de entrada), Chefe, Provações de Classe, Ofícios, Feitos nem Códice.
 
 > **Histórico v1.0.17:** substituiu integralmente a v1.0.16 FINAL e registrou exclusivamente que a Égide do Selo aplica Barreira de 8% do HP Máximo por 2T, CD4, máximo 2 usos.
 > **Sincronização editorial 2026-10-13:** referência Visual/UI atualizada para o documento compatível com Vales v1.0.6; nenhuma regra ou conteúdo regional foi alterado.
@@ -2075,7 +2075,7 @@ Desbravar está disponível em Estrada, Charneca, Bosque e Ruínas, **a partir d
 
 **"Local novo" não é resultado de Desbravar.** A revelação de Locais é a ação **Explorar**, no Refúgio (seção 33.2). Não existem identificadores `explore.tdo.local.*` no pool de Desbravar.
 
-Aplicar a Fonte Mestra, **exceto o que a v1.0.18 altera por override do autor** (seção 33.14; depende de registro no índice):
+Aplicar a Fonte Mestra, **exceto o que a v1.0.18 altera por override do autor** (seção 33.14; registrado no `SOURCE_AUTHORITY.md`):
 
 - ~~recarga `5 min`~~ — **removida**;
 - ~~máximo `6 tentativas / Local / 60 min`~~ — **removido**;
@@ -3554,7 +3554,7 @@ Terras do Ocaso não exige para saída:
 
 # 26. Sincronização com a Fonte Visual/UI
 
-A Fonte `ASTERION_UI_DECISOES_2026-11-14_FINAL_SYNC_v1.6.1_TDO_v1.0.18_VALES_v1.0.6.md` é a autoridade player-facing vigente. Esta revisão aplica a regra global de Grupo e atualiza a compatibilidade de P1 e o formato cooperativo de S6; as demais decisões de apresentação permanecem na Fonte Visual/UI. A Fonte Mestra vigente é v1.6.0.
+A Fonte `ASTERION_UI_DECISOES_2026-11-16_FINAL_SYNC_v1.6.2_TDO_v1.0.18_VALES_v1.0.6.md` é a autoridade player-facing vigente. Esta revisão aplica a regra global de Grupo e atualiza a compatibilidade de P1 e o formato cooperativo de S6; as demais decisões de apresentação permanecem na Fonte Visual/UI. A Fonte Mestra vigente é v1.7.1.
 
 As decisões gerais de interface já consolidadas — padrão de Missões, HUD de combate, Menu Principal, Braseiros, Códice, navegação, P1 e apresentação de Equipamentos/Runas — continuam válidas.
 
@@ -3601,13 +3601,13 @@ Pode seguir para implementação utilizando conjuntamente as três fontes oficia
 
 Não existe bloco regional conhecido aguardando migração textual.
 
-**v1.0.18:** a lista acima descreve o conteúdo regional fechado; a implementação das mudanças de navegação, acesso, XP e nível da v1.0.18 (seção 33) é trabalho novo do `programmer`, depende do registro do override da Fonte Mestra pelo autor (33.14) e da sincronização da Fonte Visual/UI (seção 26). Nenhum código foi alterado por esta consolidação.
+**v1.0.18:** a lista acima descreve o conteúdo regional fechado; a implementação das mudanças de navegação, acesso, XP e nível da v1.0.18 (seção 33) é trabalho novo do `programmer`, usa o override da Fonte Mestra já registrado no `SOURCE_AUTHORITY.md` (33.14) e da sincronização da Fonte Visual/UI (seção 26). Nenhum código foi alterado por esta consolidação.
 
 ---
 
 # 28. Autoridade e manutenção
 
-Este arquivo é a **Fonte oficial de Conteúdo das Terras do Ocaso v1.0.18 FINAL** (base v1.0.17 FINAL). **Ela só passa a ser a vigente depois que o autor atualizar o `SOURCE_AUTHORITY.md`**; até lá a vigente continua a v1.0.17. Esta consolidação não alterou o `SOURCE_AUTHORITY.md`.
+Este arquivo é a **Fonte oficial de Conteúdo das Terras do Ocaso v1.0.18 FINAL** (base v1.0.17 FINAL). **Vigente desde a Sincronização 2026-11-14 do `SOURCE_AUTHORITY.md`**, que substituiu a v1.0.17 FINAL.
 
 Hierarquia:
 
