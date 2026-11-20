@@ -80,28 +80,10 @@ COSMETICS = (
         "feat.tdo.andarilho_das_cinzas",
     ),
     CosmeticDefinition(
-        "cosmetic.banner.tdo.profundezas_do_ocaso",
-        "banner",
-        "Profundezas do Ocaso",
-        "feat.tdo.sob_a_superficie",
-    ),
-    CosmeticDefinition(
         "cosmetic.title.tdo.vigia_das_cinzas",
         "title",
         "Vigia das Cinzas",
         "feat.tdo.a_ultima_guarda",
-    ),
-    CosmeticDefinition(
-        "cosmetic.emblem.tdo.lapide_raspada",
-        "emblem",
-        "Lápide Raspada",
-        "feat.tdo.silencio_entre_os_nomes",
-    ),
-    CosmeticDefinition(
-        "cosmetic.emblem.tdo.selo_fraturado",
-        "emblem",
-        "Selo Fraturado",
-        "feat.tdo.a_ordem_interrompida",
     ),
     CosmeticDefinition(
         "cosmetic.frame.tdo.pedra_fraturada",
@@ -122,14 +104,8 @@ COSMETICS = (
         "feat.tdo.entre_aquilo_que_caca",
     ),
     CosmeticDefinition(
-        "cosmetic.banner.tdo.ultima_vigilia",
-        "banner",
-        "Última Vigília",
-        "feat.tdo.testemunha_dos_guardioes",
-    ),
-    CosmeticDefinition(
-        "cosmetic.emblem.tdo.nome_apagado",
-        "emblem",
+        "cosmetic.title.tdo.nome_apagado",
+        "title",
         "Nome Apagado",
         "feat.tdo.nomes_sob_a_cinza",
     ),
@@ -140,8 +116,8 @@ COSMETICS = (
         "feat.tdo.a_ordem_ainda_permanece",
     ),
     CosmeticDefinition(
-        "cosmetic.banner.tdo.ocaso",
-        "banner",
+        "cosmetic.frame.tdo.ocaso",
+        "frame",
         "Ocaso",
         "feat.tdo.terras_do_ocaso",
     ),
@@ -312,25 +288,36 @@ COSMETICS_BY_ID = {item.cosmetic_id: item for item in COSMETICS}
 COSMETIC_BY_ACHIEVEMENT = {
     item.achievement_id: item for item in COSMETICS if item.achievement_id is not None
 }
-COSMETIC_TYPES = ("appearance", "title", "emblem", "frame", "banner")
+# Only three player-facing categories exist (GDD 33.4). ``emblem`` and ``banner``
+# survive solely as legacy values in the database and are never listed.
+COSMETIC_TYPES = ("appearance", "title", "frame")
 COSMETIC_TYPE_LABELS = {
     "appearance": "🧍 Aparência · Visual",
     "title": "🎖️ Título · Identidade",
-    "emblem": "🔰 Emblema · Distinção",
     "frame": "🖼️ Moldura · Perfil",
-    "banner": "🏳️ Banner · Exibição",
 }
 COSMETIC_TYPE_NOUNS = {
     "appearance": "Aparência",
     "title": "Título",
-    "emblem": "Emblema",
     "frame": "Moldura",
-    "banner": "Banner",
 }
 COSMETIC_USE_BUTTONS = {
-    "appearance": "Usar Aparência",
+    "appearance": "Equipar",
     "title": "Usar Título",
-    "emblem": "Usar Emblema",
     "frame": "Usar Moldura",
-    "banner": "Usar Banner",
 }
+# Player-facing name of the starting appearance (UI 7). It is not a catalog entry:
+# it is what the character shows when no Appearance is selected.
+DEFAULT_APPEARANCE_NAME = "Viajante de Asterion · Padrão"
+# Legacy TDO cosmetics converted to their canonical equivalent (GDD 33.4, TDO 17).
+LEGACY_COSMETIC_CONVERSIONS = {
+    "cosmetic.emblem.tdo.nome_apagado": "cosmetic.title.tdo.nome_apagado",
+    "cosmetic.banner.tdo.ocaso": "cosmetic.frame.tdo.ocaso",
+}
+# Legacy TDO cosmetics with no canonical equivalent: rows are kept, never listed or granted.
+RETIRED_LEGACY_COSMETICS = (
+    "cosmetic.emblem.tdo.lapide_raspada",
+    "cosmetic.emblem.tdo.selo_fraturado",
+    "cosmetic.banner.tdo.profundezas_do_ocaso",
+    "cosmetic.banner.tdo.ultima_vigilia",
+)

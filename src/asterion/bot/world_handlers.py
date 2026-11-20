@@ -1121,6 +1121,38 @@ def world_router(
         if view is not None:
             await present(query.message, render_road(view), images, edit=True)
 
+    @router.callback_query(F.data.regexp(r"^road:hunt_screen:[0-9a-fA-F]{32}$"))
+    async def hunt_screen_from_victory(query: CallbackQuery):
+        """[← Caçada] da tela de Vitória: confirma o resultado e abre a tela de Caçada."""
+        if await foreground(query):
+            await query.answer()
+            return
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        try:
+            expected_activity = UUID(hex=(query.data or "").rsplit(":", 1)[1])
+        except (TypeError, ValueError):
+            await restore_context(query)
+            return
+        current = await road.resume(query.from_user.id)
+        if (
+            current is None
+            or current.kind != "hunt_victory"
+            or current.activity_id != expected_activity
+        ):
+            if current is not None:
+                await present(query.message, render_road(current), images, edit=True)
+            else:
+                await restore_context(query)
+            return
+        await road.acknowledge_result(query.from_user.id)
+        view = await road.prepare_hunt(query.from_user.id)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+        else:
+            await restore_context(query)
+
     @router.callback_query(F.data == "road:local")
     async def road_local(query: CallbackQuery):
         if await foreground(query):
@@ -3980,8 +4012,6 @@ def world_router(
                 }[name]
                 lines.extend(["", "🧭 Rota terrestre · Disponível"])
                 keyboard.append([InlineKeyboardButton(text=route_label, callback_data=route_callback)])
-            elif key == "ruinas" and current == BOSQUE:
-                lines.extend(["", "🔒 Acesso normal · P4 concluída e Nv. 8+"])
             destination_brazier = next(
                 (
                     brazier_id
@@ -4130,8 +4160,6 @@ def world_router(
                 state = "Acessível"
             elif key == "ruinas" and p4_view is not None and p4_view.status == "active":
                 state = "🔒 P4 em andamento"
-            elif key == "ruinas":
-                state = "🔒 P4 concluída + Nv. 8+"
             else:
                 state = "Conhecido"
             icon = (

@@ -18,6 +18,7 @@ from asterion.application.payments import (
     register_outbox_handler,
 )
 from asterion.application.pvp import PvpService
+from asterion.application.road import RoadService
 from asterion.application.round import RoundService
 from asterion.application.trades import TradeService
 from asterion.application.world_events import WorldEventService
@@ -46,6 +47,18 @@ def build_round_scheduler() -> AsyncIOScheduler:
         "interval",
         seconds=15,
         id="hunt-round-advance",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    # Group Hunt turns have their own 180s timer: the shared turn is passed ("hold")
+    # when the active player does not act. Not the Road activity grace.
+    group_hunts = RoadService(SessionFactory, settings.server_id).group_hunts
+    scheduler.add_job(
+        group_hunts.run_maintenance,
+        "interval",
+        seconds=5,
+        id="group-hunt-upkeep",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

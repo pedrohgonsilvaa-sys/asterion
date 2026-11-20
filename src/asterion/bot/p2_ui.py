@@ -13,6 +13,7 @@ from asterion.bot.narrative_choice_ui import (
     immediate_reaction,
     narrative_option_rows,
 )
+from asterion.bot.tdo_hub_ui import TEXT_EXPLORE_FOR_PLACE
 
 _REWARD_LINES = (
     "✨ XP · 3.300",
@@ -190,9 +191,7 @@ def render_p2(view: P2View) -> Screen:
     if view.kind == "travel" and view.awaiting_exploration:
         return Screen(
             "📜 Fuligem sem Fogo · Em Andamento\n\n"
-            "🎯 Objetivo · Viajar até a Charneca da Fuligem\n"
-            "⏳ Aguardando · a Charneca ainda não foi descoberta. "
-            "Use Explorar no Refúgio do Ocaso para revelar um Local.",
+            "🎯 Objetivo · Viajar até a Charneca da Fuligem\n" + TEXT_EXPLORE_FOR_PLACE,
             "p2",
             _keyboard(
                 [_button("Explorar", "tdo:explore")],

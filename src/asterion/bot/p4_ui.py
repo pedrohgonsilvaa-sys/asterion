@@ -8,6 +8,7 @@ from asterion.application.prologue import CombatView
 from asterion.application.road import BOSQUE, CHARNECA, REFUGE, RUINS
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
+from asterion.bot.tdo_hub_ui import TEXT_EXPLORE_FOR_PLACE
 
 
 def _button(label: str, data: str) -> InlineKeyboardButton:
@@ -133,9 +134,7 @@ def render_p4(view: P4View) -> Screen:
         if view.awaiting_exploration:
             return Screen(
                 "📜 Pedras que Ainda Vigiam · Em Andamento\n\n"
-                "🎯 Alcançar os limites das Ruínas do Vigia.\n"
-                "⏳ Aguardando · as Ruínas ainda não foram descobertas. "
-                "Use Explorar no Refúgio do Ocaso para revelar um Local.",
+                "🎯 Alcançar os limites das Ruínas do Vigia.\n" + TEXT_EXPLORE_FOR_PLACE,
                 "p4",
                 _keyboard([
                     *([[_button("Explorar", "tdo:explore")]] if view.location == REFUGE else _mission_nav(view)),

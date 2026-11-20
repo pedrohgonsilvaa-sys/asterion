@@ -232,6 +232,7 @@ from asterion.domain.road import (
     hunt_profile_for_location,
     material_for,
     materialize_equipment,
+    powerlevel_factor,
     rune_potency,
     select_creature,
     select_exploration_result,
@@ -2868,7 +2869,9 @@ class RoadService:
         *,
         equipment_configuration: EquipmentConfigurationSnapshot | None = None,
         now: datetime | None = None,
+        level_gap: int = 0,
     ):
+        """``level_gap``: nível do maior membro do Grupo menos o nível próprio (GDD 3795)."""
         await reconcile_character_vigor(s, c, now=now)
         context = await s.scalar(
             select(HuntContext).where(HuntContext.game_activity_id == activity.id).with_for_update()
@@ -2896,6 +2899,7 @@ class RoadService:
             context.category,
             factor,
             player_level=c.level,
+            powerlevel_factor=powerlevel_factor(level_gap),
             legacy_factor=legacy_xp_factor(c.legacy_level),
         )
         c.xp += xp

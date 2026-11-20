@@ -641,22 +641,27 @@ def render_road(view: RoadView) -> Screen:
         ]
         return Screen(text, "hunt_prepare", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
     if view.kind == "hunt_victory":
-        text = "🏆 Vitória\n\n🦌 Caçada concluída"
-        if view.location in {CHARNECA, BOSQUE, RUINS}:
-            text += f"\n\n{_location_copy(view.location)[0]}"
-        if view.creature:
-            text += f"\n🐾 {escape(view.creature)}"
-        if view.variant:
-            text += f"\n🧬 Variante · {escape(view.variant)}"
+        # UI v1.6.2, 47.3: Vitória · Criatura, Local · Região, Recompensas e [← Caçada].
+        # Sem Flavor Text canônico para a Caçada, a linha não é criada.
+        region = _location_copy(view.location)[1].split(" · ")[0]
+        heading = "🏆 Vitória" + (f" · {escape(view.creature)}" if view.creature else "")
+        text = f"{heading}\n{escape(view.location)} · {region}"
         if view.reward_lines:
-            text += "\n\n" + "\n".join(view.reward_lines)
+            text += "\n\n🎁 Recompensas\n\n" + "\n".join(view.reward_lines)
+        back_to_hunt = (
+            InlineKeyboardButton(
+                text="← Caçada", callback_data=f"road:hunt_screen:{view.activity_id.hex}"
+            )
+            if view.activity_id is not None
+            else _local_return(view.location)
+        )
         keyboard = [
             *(
                 [[InlineKeyboardButton(text="Caçar Novamente", callback_data=f"road:repeat:{view.activity_id.hex}")]]
                 if view.activity_id is not None and view.combat_context != "group_hunt"
                 else []
             ),
-            [_local_return(view.location)],
+            [back_to_hunt],
         ]
         return Screen(text, "road_victory", InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode="HTML")
     if view.kind == "exploration":

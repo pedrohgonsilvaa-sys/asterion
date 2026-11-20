@@ -7,13 +7,22 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 
+from asterion.application import group_hunts as group_hunts_module
 from asterion.application.group_hunts import group_hunt_scaling
 from asterion.application.groups import GroupError, GroupService
 from asterion.application.p7 import GARGANTA, GARGANTA_HUNT_UNLOCK, P7_ID, REGION
 from asterion.application.road import ROAD, RoadService
 from asterion.bot.groups_ui import render_hunt_roster
 from asterion.domain.combat import active_player_key
-from asterion.domain.road import creature_for
+from asterion.domain.combat_math import StatMultipliers
+from asterion.domain.equipment_stats import EquipmentConfigurationSnapshot
+from asterion.domain.road import (
+    CreatureCombatantSpec,
+    PlayerCombatantSpec,
+    create_creature_party_combat,
+    creature_for,
+)
+from asterion.infrastructure.db.combat_codec import decode
 from asterion.infrastructure.db.models import (
     Account,
     Character,
@@ -587,3 +596,323 @@ async def test_pending_road_receipt_cannot_leave_a_one_person_group_hunt(databas
             is None
         )
         assert group.group_id is not None
+
+
+def _party_specs(count: int = 2):
+    return tuple(
+        PlayerCombatantSpec(
+            fighter_key=f"p{index}",
+            character_id=f"character-{index}",
+            name=f"Hunter{index}",
+            character_class="sentinela",
+            race="remanescente",
+            level=10,
+            hp=Decimal("1000"),
+            equipment_configuration=EquipmentConfigurationSnapshot(0),
+            active_art_ids=(),
+        )
+        for index in range(1, count + 1)
+    )
+
+
+def test_start_combat_with_faster_enemy_hands_first_manual_turn_to_a_player():
+    party = _party_specs()
+    combat = create_creature_party_combat(
+        uuid4(),
+        party[0].name,
+        party[0].character_class,
+        party[0].race,
+        party[0].hp,
+        (
+            CreatureCombatantSpec(
+                creature_for("dog_cinereo"),
+                10,
+                "enemy",
+                None,
+                stat_multipliers=StatMultipliers(
+                    Decimal(1), Decimal(1), Decimal(1), Decimal(100)
+                ),
+            ),
+        ),
+        player_level=10,
+        party=party,
+    )
+
+    assert combat.order[0] == "enemy"
+    assert combat.result is None
+    assert active_player_key(combat) in {"p1", "p2"}
+
+
+@pytest.mark.asyncio
+async def test_new_active_group_hunt_gets_180_second_deadline(database):
+    actors, ids = await _seed_hunters(database, count=2)
+    groups = GroupService(database[1], "ocaso")
+    road = RoadService(database[1], "ocaso")
+    group = await _join_group(groups, actors, count=2)
+
+    before = datetime.now(UTC)
+    started = await _ready_group_hunt(groups, road, actors, ids, group)
+    after = datetime.now(UTC)
+
+    async with database[1]() as session:
+        encounter = await session.scalar(
+            select(GroupHuntEncounter).where(
+                GroupHuntEncounter.proposal_id == started.proposal.proposal_id
+            )
+        )
+        members = list(
+            (
+                await session.scalars(
+                    select(GroupHuntMember).where(
+                        GroupHuntMember.group_hunt_encounter_id == encounter.id
+                    )
+                )
+            ).all()
+        )
+    assert encounter.status == "active"
+    assert before + timedelta(seconds=180) <= encounter.deadline_at
+    assert encounter.deadline_at <= after + timedelta(seconds=180)
+    assert all(
+        (m.consecutive_timeouts, m.total_timeouts, m.inactive_for_contribution)
+        == (0, 0, False)
+        for m in members
+    )
+
+
+@pytest.mark.asyncio
+async def test_new_group_hunt_with_terminal_combat_gets_no_deadline(database, monkeypatch):
+    actors, ids = await _seed_hunters(database, count=2)
+    groups = GroupService(database[1], "ocaso")
+    road = RoadService(database[1], "ocaso")
+    group = await _join_group(groups, actors, count=2)
+
+    original = group_hunts_module.create_creature_party_combat
+
+    def terminal_combat(*args, **kwargs):
+        combat = original(*args, **kwargs)
+        combat.result = "victory"
+        return combat
+
+    monkeypatch.setattr(
+        "asterion.application.group_hunts.create_creature_party_combat", terminal_combat
+    )
+    started = await _ready_group_hunt(groups, road, actors, ids, group)
+
+    async with database[1]() as session:
+        encounter = await session.scalar(
+            select(GroupHuntEncounter).where(
+                GroupHuntEncounter.proposal_id == started.proposal.proposal_id
+            )
+        )
+    assert encounter is not None
+    assert encounter.deadline_at is None
+
+
+async def _start_weak_pve_hunt(database, monkeypatch, *, count: int = 2):
+    actors, ids = await _seed_hunters(database, count=max(count, 2))
+    groups = GroupService(database[1], "ocaso")
+    road = RoadService(database[1], "ocaso")
+    group = await _join_group(groups, actors, count=2)
+    monkeypatch.setattr(
+        "asterion.application.group_hunts.select_creature",
+        lambda _seed, _level, profile=None, **_kw: creature_for("dog_cinereo"),
+    )
+    monkeypatch.setattr(
+        "asterion.application.group_hunts.select_variant",
+        lambda _seed, _creature, profile=None: None,
+    )
+    started = await _ready_group_hunt(groups, road, actors, ids, group)
+    assert started.started
+    view = await road.resume(actors[NAMES[0]])
+    assert view is not None and view.kind == "combat"
+    return road, actors, ids, view.encounter_id
+
+
+async def _load_hunt(database, encounter_id):
+    async with database[1]() as session:
+        encounter = await session.get(GroupHuntEncounter, encounter_id)
+        members = list(
+            (
+                await session.scalars(
+                    select(GroupHuntMember).where(
+                        GroupHuntMember.group_hunt_encounter_id == encounter_id
+                    )
+                )
+            ).all()
+        )
+        combat = decode(
+            encounter.combat_snapshot,
+            encounter.combat_id,
+            encounter.ruleset_version,
+            encounter.state_version,
+        )
+    active = next(
+        (row for row in members if row.actor_key == active_player_key(combat)), None
+    )
+    return encounter, members, combat, active
+
+
+def _telegram_of(actors, ids, character_id):
+    return next(actors[name] for name in actors if ids[name] == character_id)
+
+
+@pytest.mark.asyncio
+async def test_group_hunt_timeout_passes_turn_counts_and_renews_deadline(
+    database, monkeypatch
+):
+    road, _actors, _ids, encounter_id = await _start_weak_pve_hunt(database, monkeypatch)
+    encounter, _members, combat, active = await _load_hunt(database, encounter_id)
+    assert active is not None
+    enemy_hp = combat.fighters["enemy"].hp
+    old_deadline = encounter.deadline_at
+    version = encounter.state_version
+
+    # Before the 180s deadline nothing happens.
+    early = old_deadline - timedelta(seconds=1)
+    assert await road.group_hunts.run_maintenance(now=early) == 0
+    assert (await _load_hunt(database, encounter_id))[0].state_version == version
+
+    due = old_deadline + timedelta(seconds=1)
+    assert await road.group_hunts.run_maintenance(now=due) == 1
+
+    encounter, members, combat, next_active = await _load_hunt(database, encounter_id)
+    timed_out = next(row for row in members if row.actor_key == active.actor_key)
+    assert encounter.state_version == version + 1
+    assert next_active is not None and next_active.actor_key != active.actor_key
+    assert combat.fighters["enemy"].hp == enemy_hp  # a hold deals no damage
+    assert (timed_out.total_timeouts, timed_out.consecutive_timeouts) == (1, 1)
+    assert timed_out.inactive_for_contribution is False
+    other = next(row for row in members if row.actor_key != active.actor_key)
+    assert (other.total_timeouts, other.consecutive_timeouts) == (0, 0)
+    # New deadline is a fresh 180s window for the next player.
+    assert encounter.deadline_at > old_deadline
+    assert encounter.deadline_at >= datetime.now(UTC) + timedelta(seconds=170)
+
+    # A tick before the renewed deadline is a no-op.
+    before_new = encounter.deadline_at - timedelta(seconds=1)
+    assert await road.group_hunts.run_maintenance(now=before_new) == 0
+    assert (await _load_hunt(database, encounter_id))[0].state_version == version + 1
+
+
+@pytest.mark.asyncio
+async def test_three_consecutive_timeouts_mark_inactive_without_other_effects(
+    database, monkeypatch
+):
+    road, _actors, _ids, encounter_id = await _start_weak_pve_hunt(database, monkeypatch)
+    encounter, _members, _combat, active = await _load_hunt(database, encounter_id)
+    async with database[1].begin() as session:
+        row = await session.get(GroupHuntMember, (encounter_id, active.character_id))
+        row.consecutive_timeouts = 2
+        row.total_timeouts = 2
+
+    due = encounter.deadline_at + timedelta(seconds=1)
+    assert await road.group_hunts.run_maintenance(now=due) == 1
+
+    encounter, members, _combat, _next = await _load_hunt(database, encounter_id)
+    row = next(item for item in members if item.actor_key == active.actor_key)
+    assert (row.consecutive_timeouts, row.total_timeouts) == (3, 3)
+    assert row.inactive_for_contribution is True
+    # No expulsion, settlement or status change comes with the mark.
+    assert encounter.status == "active"
+    assert row.settlement_state == "pending" and row.result is None
+
+
+@pytest.mark.asyncio
+async def test_valid_action_resets_consecutive_timeouts_and_inactive_mark(
+    database, monkeypatch
+):
+    road, actors, ids, encounter_id = await _start_weak_pve_hunt(database, monkeypatch)
+    _encounter, _members, _combat, active = await _load_hunt(database, encounter_id)
+    async with database[1].begin() as session:
+        row = await session.get(GroupHuntMember, (encounter_id, active.character_id))
+        row.consecutive_timeouts = 3
+        row.total_timeouts = 3
+        row.inactive_for_contribution = True
+    actor = _telegram_of(actors, ids, active.character_id)
+    activity = await road.resume(actor)
+    assert activity is not None and activity.kind == "combat"
+    view = await road.action(actor, active.game_activity_id, activity.state_version, "attack")
+    assert view is not None
+
+    encounter, members, _combat, _next = await _load_hunt(database, encounter_id)
+    row = next(item for item in members if item.actor_key == active.actor_key)
+    assert row.consecutive_timeouts == 0
+    assert row.inactive_for_contribution is False
+    assert row.total_timeouts == 3  # the lifetime total is kept
+    assert encounter.deadline_at is not None
+    assert encounter.deadline_at >= datetime.now(UTC) + timedelta(seconds=170)
+
+
+@pytest.mark.asyncio
+async def test_terminal_group_hunt_clears_deadline(database, monkeypatch):
+    road, actors, ids, encounter_id = await _start_weak_pve_hunt(database, monkeypatch)
+    for _ in range(120):
+        encounter, _members, _combat, active = await _load_hunt(database, encounter_id)
+        if encounter.status != "active":
+            break
+        actor = _telegram_of(actors, ids, active.character_id)
+        activity = await road.resume(actor)
+        await road.action(actor, active.game_activity_id, activity.state_version, "attack")
+    encounter = (await _load_hunt(database, encounter_id))[0]
+    assert encounter.status == "completed"
+    assert encounter.deadline_at is None
+    # A terminal encounter is never picked up by the timeout job again.
+    far = datetime.now(UTC) + timedelta(days=1)
+    assert await road.group_hunts.run_maintenance(now=far) == 0
+
+
+@pytest.mark.asyncio
+async def test_group_hunt_job_ignores_solo_activities(database, monkeypatch):
+    road, _actors, ids, encounter_id = await _start_weak_pve_hunt(
+        database, monkeypatch, count=3
+    )
+    old = datetime.now(UTC) - timedelta(days=1)
+    solo_id = uuid4()
+    async with database[1].begin() as session:
+        session.add(
+            GameActivity(
+                id=solo_id,
+                character_id=ids["Cedar"],
+                content_id="road_hunt",
+                status="active",
+                state_version=0,
+                ruleset_version="tdo-1.0.15",
+                last_valid_action_at=old,
+            )
+        )
+    due = (await _load_hunt(database, encounter_id))[0].deadline_at + timedelta(seconds=1)
+    assert await road.group_hunts.run_maintenance(now=due) == 1
+    async with database[1]() as session:
+        solo = await session.get(GameActivity, solo_id)
+    assert solo.status == "active"
+    assert solo.state_version == 0
+    assert solo.last_valid_action_at == old
+
+
+@pytest.mark.asyncio
+async def test_group_hunt_job_never_reads_pvp_guild_battle_or_dungeon_tables(
+    database, monkeypatch
+):
+    from sqlalchemy import event
+
+    road, _actors, _ids, encounter_id = await _start_weak_pve_hunt(database, monkeypatch)
+    due = (await _load_hunt(database, encounter_id))[0].deadline_at + timedelta(seconds=1)
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, statement, *_rest):
+        statements.append(statement.lower())
+
+    sync_engine = database[0].sync_engine
+    event.listen(sync_engine, "before_cursor_execute", capture)
+    try:
+        assert await road.group_hunts.run_maintenance(now=due) == 1
+    finally:
+        event.remove(sync_engine, "before_cursor_execute", capture)
+
+    assert statements
+    other_modes = ("pvp_", "arena_", "guild_battle", "dungeon_")
+    assert not [
+        sql for sql in statements if any(f"from {name}" in sql or f"join {name}" in sql
+                                         or f"update {name}" in sql or f"into {name}" in sql
+                                         for name in other_modes)
+    ]
