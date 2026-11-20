@@ -236,9 +236,12 @@ def world_router(
     router.message.filter(F.chat.type == "private")
     router.callback_query.filter(F.message.chat.type == "private")
 
-    async def refuge_home(actor: int, view=None) -> Screen | None:
+    async def refuge_home(actor: int, view=None, *, navigation_only: bool = False) -> Screen | None:
         view = view or await service.resume(actor)
-        if view is None or view.region != "Terras do Ocaso" or view.location != REFUGE:
+        if view is None or view.region != "Terras do Ocaso":
+            return None
+        # navigation_only: mostra a tela do Refúgio sem exigir nem alterar o Local.
+        if view.location != REFUGE and not navigation_only:
             return None
         road_view = await road.resume(actor) if road is not None else None
         routes = road_view.route_destinations if road_view is not None else ()
@@ -258,20 +261,23 @@ def world_router(
     async def open_region_home(query: CallbackQuery) -> bool:
         if not isinstance(query.message, Message):
             return False
-        view = await service.resume(query.from_user.id)
+        actor = query.from_user.id
+        view = await service.resume(actor)
         if view is None or view.region != "Terras do Ocaso":
             return False
-        if view.location != REFUGE:
-            moved = await road.travel_route(query.from_user.id, REFUGE) if road is not None else None
-            if moved is None:
-                return False
+        # Voltar ao Refúgio é só navegação de UI: não move o personagem nem altera
+        # Local, exploração ou progresso (docs/SOURCE_AUTHORITY.md, 2026-11-19, item 3).
+        # Fora do Refúgio, com atividade em primeiro plano, a atividade responde.
+        if view.location != REFUGE and await has_foreground_for_actor(
+            service.sessions, actor, service.server_id
+        ):
+            return False
+        screen = await refuge_home(actor, view, navigation_only=True)
+        if screen is None:
+            return False
         await query.answer()
-        updated = await service.resume(query.from_user.id)
-        screen = await refuge_home(query.from_user.id, updated)
-        if screen is not None:
-            await present(query.message, screen, images, edit=True)
-            return True
-        return False
+        await present(query.message, screen, images, edit=True)
+        return True
 
     async def region_return_button(actor: int, legacy_label: str) -> InlineKeyboardButton:
         view = await service.resume(actor)

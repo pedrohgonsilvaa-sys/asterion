@@ -19,7 +19,7 @@ from asterion.application.character_surfaces import CharacterSurfacesService
 from asterion.application.chronicle import ChronicleService
 from asterion.application.creation import CreationService
 from asterion.application.p1 import P1Service
-from asterion.application.road import REFUGE, ROAD, RoadService
+from asterion.application.road import ROAD, RoadService
 from asterion.application.world import WorldService
 from asterion.bot.character_surfaces_handlers import character_surfaces_router
 from asterion.bot.chronicle_handlers import chronicle_router
@@ -51,7 +51,9 @@ def _service(sessions):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("callback_data", ["world:adventure", "adv:hub", "menu:back"])
-async def test_legacy_callbacks_from_active_p1_road_return_to_refuge(database, callback_data):
+async def test_legacy_callbacks_from_active_p1_road_show_refuge_without_moving(
+    database, callback_data
+):
     actor = 893099
     await _seed_road(database, actor=actor)
     sessions = database[1]
@@ -106,7 +108,7 @@ async def test_legacy_callbacks_from_active_p1_road_return_to_refuge(database, c
     assert "Refúgio do Ocaso" in screen.text
     async with sessions() as session:
         world = await session.scalar(select(WorldState))
-        assert world.location == REFUGE
+        assert world.location == ROAD
 
 
 @pytest.mark.asyncio
