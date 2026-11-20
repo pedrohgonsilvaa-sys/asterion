@@ -7,6 +7,7 @@ from asterion.application.prologue import CombatView
 from asterion.application.road import BOSQUE, CHARNECA, REFUGE
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
+from asterion.bot.tdo_hub_ui import TEXT_EXPLORE_FOR_PLACE
 
 
 def _button(label: str, callback: str) -> InlineKeyboardButton:
@@ -169,9 +170,7 @@ def render_p3(view: P3View) -> Screen:
     if view.kind == "travel" and view.awaiting_exploration:
         return Screen(
             "🌿 Sob Galhos Calcinados · Em Andamento\n"
-            "🎯 Objetivo · Entrar no Bosque Calcinado\n"
-            "⏳ Aguardando · o Bosque ainda não foi descoberto. "
-            "Use Explorar no Refúgio do Ocaso para revelar um Local.",
+            "🎯 Objetivo · Entrar no Bosque Calcinado\n" + TEXT_EXPLORE_FOR_PLACE,
             "p3",
             _keyboard(
                 [_button("Explorar", "tdo:explore")],

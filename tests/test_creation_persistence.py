@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from alembic import command
 from asterion.application.creation import CreationService
+from asterion.bot.creation_ui import render
 from asterion.domain.creation import CLASSES, PROLOGUE, RACES, RULESET, NamePolicy
 from asterion.infrastructure.db.models import Account, Character, CreationDraft
 
@@ -106,6 +107,9 @@ async def test_confirmation_edits_preserve_other_choices(service):
         "remanescente",
         "errante",
     )
+    assert state.gender == "masculino"
+    assert "🏷️ <b>Nome</b> · <code>Aster</code>" in render(state).text
+    assert "🎭 <b>Gênero</b> · <code>Masculino</code>" in render(state).text
     for action in ("gender", "g1"):
         state = await click(service, 1, state, action)
     assert (state.step, state.name, state.gender) == ("confirm", "Aster", "feminino")

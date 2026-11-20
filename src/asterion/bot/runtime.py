@@ -140,6 +140,7 @@ from asterion.bot.s36_handlers import s36_router
 from asterion.bot.settings_handlers import settings_router
 from asterion.bot.shop_handlers import shop_router
 from asterion.bot.social_handlers import social_router
+from asterion.bot.tdo_navigation_labels import TdoReturnLabelMiddleware
 from asterion.bot.varzeas_missions_handlers import varzeas_missions_router
 from asterion.bot.vde_missions_handlers import vde_missions_router
 from asterion.bot.weapon_trainer_handlers import weapon_trainer_router
@@ -148,7 +149,7 @@ from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
 from asterion.domain.creation import NamePolicy
 from asterion.domain.prologue import PROFILE
-from asterion.infrastructure.db.models import Character
+from asterion.infrastructure.db.models import Character, WorldState
 from asterion.infrastructure.db.session import SessionFactory
 
 
@@ -182,6 +183,17 @@ def get_bot_runtime() -> BotRuntime:
         return (row[0], row[1], row[2]) if row else None
 
     set_character_art_lookup(_character_art)
+
+    async def _character_region(telegram_id: int) -> str | None:
+        async with SessionFactory() as session:
+            return await session.scalar(
+                select(WorldState.region)
+                .join(Character, Character.id == WorldState.character_id)
+                .where(
+                    Character.telegram_id == telegram_id,
+                    Character.server_id == settings.server_id,
+                )
+            )
 
     dispatcher = Dispatcher(disable_fsm=True)
     # Registered first, so they run before every other update middleware and handler.
@@ -554,7 +566,7 @@ def get_bot_runtime() -> BotRuntime:
             tdo_explore=tdo_explore,
         )
     )
-    return BotRuntime(
-        bot=Bot(token=settings.telegram_bot_token),
-        dispatcher=dispatcher,
-    )
+    bot = Bot(token=settings.telegram_bot_token)
+    # UI v1.6.2, 66.1 item 6: nas Terras do Ocaso o retorno se chama Voltar ao Refúgio.
+    bot.session.middleware(TdoReturnLabelMiddleware(_character_region))
+    return BotRuntime(bot=bot, dispatcher=dispatcher)

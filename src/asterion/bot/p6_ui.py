@@ -11,6 +11,7 @@ from asterion.application.road import BOSQUE, CHARNECA, REFUGE, RUINS
 from asterion.bot.asset_catalog import location_key, with_boss_transformation_art
 from asterion.bot.combat_ui import render_combat
 from asterion.bot.creation_ui import Screen
+from asterion.bot.tdo_hub_ui import TEXT_EXPLORE_FOR_PLACE
 
 
 def _b(text, data):
@@ -141,9 +142,7 @@ def render_p6(view: P6View) -> Screen:
                       "p6", _kb([[_b("Cruzar a Porta", f"p6:{v}:cross_door")], [_b("← Missões", "world:missions")]]))
     if view.kind == "enter_chamber":
         if view.awaiting_exploration:
-            return Screen(f"🚪 Porta do Poente\n📜 {P6_TITLE}\n\n🎯 Entrar na Câmara do Poente.\n"
-                          "⏳ Aguardando · a Câmara do Poente ainda não foi descoberta. "
-                          "Use Explorar no Refúgio do Ocaso para revelar um Local.",
+            return Screen(f"🚪 Porta do Poente\n📜 {P6_TITLE}\n\n🎯 Entrar na Câmara do Poente.\n" + TEXT_EXPLORE_FOR_PLACE,
                           "p6", _kb([[_b("Explorar", "tdo:explore")], [_b("← Missões", "world:missions")]]))
         return Screen(f"🚪 Porta do Poente\n📜 {P6_TITLE}\n\n🎯 Entrar na Câmara do Poente.",
                       "p6", _kb([[_b("Entrar na Câmara", f"p6:{v}:enter_chamber")], [_b("← Missões", "world:missions")]]))

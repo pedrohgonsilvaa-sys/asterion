@@ -1719,6 +1719,7 @@ class GroupHuntEncounter(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class GroupHuntMember(Base):
@@ -1731,6 +1732,10 @@ class GroupHuntMember(Base):
         UniqueConstraint("group_hunt_encounter_id", "actor_key", name="uq_group_hunt_member_actor"),
         CheckConstraint("ordinal BETWEEN 1 AND 4", name="ck_group_hunt_member_ordinal"),
         CheckConstraint("consumable_uses >= 0", name="ck_group_hunt_member_consumables"),
+        CheckConstraint(
+            "consecutive_timeouts >= 0", name="ck_group_hunt_member_consec_timeouts"
+        ),
+        CheckConstraint("total_timeouts >= 0", name="ck_group_hunt_member_total_timeouts"),
         CheckConstraint(
             "settlement_state IN ('pending','settled')",
             name="ck_group_hunt_member_settlement",
@@ -1755,6 +1760,15 @@ class GroupHuntMember(Base):
         String(16), nullable=False, default="pending", server_default="pending"
     )
     result: Mapped[str | None] = mapped_column(String(16))
+    consecutive_timeouts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    total_timeouts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    inactive_for_contribution: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -194,6 +194,7 @@ from asterion.domain.road import (
     PlayerCombatantSpec,
     enemy_xp,
     materialize_equipment,
+    powerlevel_factor,
     rune_potency,
 )
 from asterion.domain.road import (
@@ -2766,6 +2767,8 @@ class DungeonService:
         consumed_vigor = {str(row.character_id): row.vigor_reserved for row in members}
         raw_internal_rewards = tuple(progress.get("internal_rewards", ()))
         profile = DIFFICULTIES[run.difficulty]
+        # PowerlevelFactor individual (GDD 3795): gap para o maior nível do Grupo.
+        top_level = max(character_by_id[row.character_id].level for row in members)
         for member in members:
             character = character_by_id[member.character_id]
             participation = self._participation_factor(member, members)
@@ -2839,7 +2842,8 @@ class DungeonService:
                     int(row[0]),
                     str(row[1]),
                     player_level=character.level,
-                    powerlevel_factor=D("0.25"),
+                    # 25% da XP de Caçada (GDD 3846) x PowerlevelFactor individual.
+                    powerlevel_factor=D("0.25") * powerlevel_factor(top_level - character.level),
                     participation_factor=participation,
                     legacy_factor=legacy_factor,
                 )
