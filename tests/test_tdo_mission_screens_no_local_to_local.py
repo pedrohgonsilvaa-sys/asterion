@@ -15,7 +15,7 @@ from uuid import uuid4
 
 import pytest
 
-from asterion.application.road import BOSQUE, CAMARA, CHARNECA, ROAD, RUINS
+from asterion.application.road import BOSQUE, CAMARA, CHARNECA, REFUGE, ROAD, RUINS
 
 _COMMON = ("offer", "unavailable", "completed", "combat_pending", "recovery")
 # módulo -> (classe da view, função de render, tipos de tela que carregam navegação)
@@ -153,7 +153,9 @@ def _render_all(module: str, location: str):
 def test_mission_screens_from_a_local_never_offer_another_local(module, location):
     for kind, step, awaiting, screen in _render_all(module, location):
         if (module, kind) == ("p2", "travel"):
-            continue  # lacuna conhecida, ver test_p2_travel_screen_*
+            # Estado inalcançável fora do Refúgio: accept exige REFUGE e _travel é bloqueado com
+            # P2 ativa. Em REFUGE é coberto por test_p2_travel_screen_from_refuge_*.
+            continue
         if (module, kind) == ("p2", "recovery"):
             continue  # tela fixa no Refúgio (texto e botão); a derrota sempre recupera lá
         bad = _local_to_local_buttons(_buttons(screen))
@@ -173,17 +175,9 @@ def test_guard_detects_local_to_local_button():
         assert _local_to_local_buttons([InlineKeyboardButton(text=text, callback_data=data)])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Lacuna: render_p2 (kind='travel') mostra 'Seguir para a Charneca' (p2:{v}:travel) "
-        "sem checar o Local, mas P2Service.travel_to_charneca só aceita partida do Refúgio. "
-        "Alcance em jogo não confirmado (P2Service.accept não checa Local). "
-        "Decisão pendente; ao corrigir em produção, remover este xfail."
-    ),
-)
-@pytest.mark.parametrize("location", _HUB_LOCALS)
-def test_p2_travel_screen_from_a_local_has_no_local_to_local_button(location):
+def test_p2_travel_screen_from_refuge_offers_the_hub_edge():
+    """P2 etapa 1 só nasce no Refúgio (accept exige REFUGE): existe a aresta para a Charneca."""
     render = import_module("asterion.bot.p2_ui").render_p2
-    view = _view("p2", "travel", location, 1)
-    assert not _local_to_local_buttons(_buttons(render(view)))
+    view = _view("p2", "travel", REFUGE, 1)
+    buttons = _buttons(render(view))
+    assert ("Seguir para a Charneca", "p2:7:travel") in [(b.text, b.callback_data) for b in buttons]
