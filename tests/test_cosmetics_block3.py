@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 
 from asterion.application.cosmetic_catalog import (
     COSMETIC_TYPES,
@@ -275,6 +276,114 @@ async def test_migration_keeps_existing_selection_of_target_category(database):
         await session.execute(text(migration.OWNERSHIP_SQL), params)
         await session.execute(text(migration.SELECTION_SQL), params)
     assert (await _selection(sessions, character_id))["title"] == TITLE
+
+
+async def _run_conversions(sessions):
+    spec = importlib.util.spec_from_file_location("legacy_migration", MIGRATION)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    async with sessions.begin() as session:
+        for old_id, old_type, new_id, new_type in migration.CONVERSIONS:
+            params = {
+                "old_id": old_id,
+                "old_type": old_type,
+                "new_id": new_id,
+                "new_type": new_type,
+            }
+            await session.execute(text(migration.OWNERSHIP_SQL), params)
+            await session.execute(text(migration.SELECTION_SQL), params)
+
+
+async def _raw_snapshot(sessions, character_id):
+    async with sessions() as session:
+        owned = (
+            await session.execute(
+                text(
+                    "SELECT cosmetic_id, cosmetic_type, source_achievement_id, acquired_at "
+                    "FROM character_cosmetics WHERE character_id = :c ORDER BY cosmetic_id"
+                ),
+                {"c": character_id},
+            )
+        ).all()
+        selected = (
+            await session.execute(
+                text(
+                    "SELECT cosmetic_type, cosmetic_id FROM character_cosmetic_selections "
+                    "WHERE character_id = :c ORDER BY cosmetic_type"
+                ),
+                {"c": character_id},
+            )
+        ).all()
+    return [tuple(row) for row in owned], [tuple(row) for row in selected]
+
+
+@pytest.mark.asyncio
+async def test_migration_rerun_does_not_duplicate_or_change_rows(database):
+    actor = 893004
+    character_id = await _character(database, actor)
+    sessions = database[1]
+    retired = [
+        (cid, "emblem" if ".emblem." in cid else "banner") for cid in RETIRED_LEGACY_COSMETICS
+    ]
+    await _own(sessions, character_id, (OLD_NOME, "emblem"), (OLD_OCASO, "banner"), *retired)
+    async with sessions.begin() as session:
+        session.add(
+            CharacterCosmeticSelection(
+                character_id=character_id, cosmetic_type="emblem", cosmetic_id=OLD_NOME
+            )
+        )
+        session.add(
+            CharacterCosmeticSelection(
+                character_id=character_id, cosmetic_type="banner", cosmetic_id=OLD_OCASO
+            )
+        )
+
+    await _run_conversions(sessions)
+    first_owned, first_selected = await _raw_snapshot(sessions, character_id)
+    await _run_conversions(sessions)  # segunda execução
+    second_owned, second_selected = await _raw_snapshot(sessions, character_id)
+
+    assert second_owned == first_owned
+    assert second_selected == first_selected
+    owned_ids = [row[0] for row in second_owned]
+    assert len(owned_ids) == len(set(owned_ids)) == 2 + 2 + len(RETIRED_LEGACY_COSMETICS)
+    assert owned_ids.count(NOME_APAGADO) == 1 and owned_ids.count(OCASO) == 1
+    assert dict(second_selected)["title"] == NOME_APAGADO
+    assert dict(second_selected)["frame"] == OCASO
+    assert dict(second_selected)["emblem"] == OLD_NOME
+    assert dict(second_selected)["banner"] == OLD_OCASO
+
+
+@pytest.mark.asyncio
+async def test_check_constraints_accept_legacy_emblem_banner_and_reject_unknown(database):
+    actor = 893005
+    character_id = await _character(database, actor)
+    sessions = database[1]
+    await _own(sessions, character_id, (OLD_NOME, "emblem"), (OLD_OCASO, "banner"))
+    async with sessions.begin() as session:
+        session.add(
+            CharacterCosmeticSelection(
+                character_id=character_id, cosmetic_type="emblem", cosmetic_id=OLD_NOME
+            )
+        )
+        session.add(
+            CharacterCosmeticSelection(
+                character_id=character_id, cosmetic_type="banner", cosmetic_id=OLD_OCASO
+            )
+        )
+    selection = await _selection(sessions, character_id)
+    assert selection["emblem"] == OLD_NOME and selection["banner"] == OLD_OCASO
+
+    # Tipos fora do conjunto legado + canônico continuam bloqueados pelo CHECK.
+    with pytest.raises(IntegrityError):
+        await _own(sessions, character_id, ("cosmetic.bogus.tdo.teste", "bogus"))
+    with pytest.raises(IntegrityError):
+        async with sessions.begin() as session:
+            session.add(
+                CharacterCosmeticSelection(
+                    character_id=character_id, cosmetic_type="bogus", cosmetic_id=OLD_NOME
+                )
+            )
 
 
 @pytest.mark.asyncio
