@@ -285,16 +285,26 @@ def world_router(
             return InlineKeyboardButton(text="Voltar ao Refúgio", callback_data="menu:back")
         return InlineKeyboardButton(text=legacy_label, callback_data="world:adventure")
 
+    async def region_main_screen(actor: int, view) -> Screen:
+        # Visual/UI v1.6.2, seção 66.1 item 1: em Terras do Ocaso, o Refúgio substitui o
+        # Menu Principal. É só navegação (navigation_only): não move o personagem. Com atividade
+        # em primeiro plano fora do Refúgio, mantém a regra existente (como em menu:back).
+        if view.location != REFUGE and await has_foreground_for_actor(
+            service.sessions, actor, service.server_id
+        ):
+            return render_world(view)
+        return await refuge_home(actor, view, navigation_only=True) or render_world(view)
+
     async def resume_world_or_prologue(actor: int) -> Screen | None:
         view = await service.resume(actor)
         if view is not None:
-            return await refuge_home(actor, view) or render_world(view)
+            return await region_main_screen(actor, view)
         if prologue is None:
             return None
         combat_view = await prologue.resume(actor)
         view = await service.resume(actor)
         if view is not None:
-            return await refuge_home(actor, view) or render_world(view)
+            return await region_main_screen(actor, view)
         return render_combat(combat_view) if combat_view is not None else None
 
     async def resume_altos(message: Message, actor: int, *, edit: bool = False) -> bool:
@@ -926,7 +936,7 @@ def world_router(
         view = await service.rest(query.from_user.id)
         if view and isinstance(query.message, Message):
             await query.answer()
-            screen = await refuge_home(query.from_user.id, view) or render_world(view)
+            screen = await region_main_screen(query.from_user.id, view)
             await present(query.message, screen, images, edit=True)
             if view.first_menu and community_url:
                 await query.message.answer(
