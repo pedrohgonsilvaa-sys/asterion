@@ -20,20 +20,6 @@ RACE_CONTENT = CATALOG["races"]
 CLASS_CONTENT = CATALOG["classes"]
 GENDER_LABELS = ("Masculino", "Feminino")
 
-PATH_ICONS = {
-    "Bastião": "🏰",
-    "Devastador": "💥",
-    "Carrasco": "☠️",
-    "Sabotador": "🕷️",
-    "Atirador": "🎯",
-    "Rastreador": "👣",
-    "Conjurador": "🌀",
-    "Rúnico": "🔷",
-    "Agoureiro": "🦉",
-    "Invocador": "🐺",
-    "Guardião": "🪬",
-    "Inquisidor": "⚖️",
-}
 
 # Kept as a small compatibility surface for callers/tests that need the
 # player-facing copy without knowing the catalog shape.
@@ -63,10 +49,6 @@ def _label(kind: str, key: str) -> str:
 def _pairs(buttons: list) -> list[list]:
     return [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
 
-
-def _format_class_path(path: dict) -> str:
-    icon = PATH_ICONS.get(path["name"], "")
-    return f"{icon} **{path['name']}**\n{path['description']}"
 
 def _format_markup(text: str) -> str:
     """Convert the catalog's readable Markdown into Telegram-safe HTML."""
