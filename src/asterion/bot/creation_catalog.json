@@ -1,8 +1,8 @@
 {
   "screens": {
     "name": "👤 **Nome**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n⚠️ Envie no chat o nome desejado.",
-    "format": "👤 **Nome do Personagem**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n⚠️ Nome inválido. Envie outro nome no chat.\n\nEnvie no chat o nome desejado.",
-    "unavailable": "👤 **Nome do Personagem**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n🚫 Luiken · Indisponível\n\n⚠️ Esse nome não pode ser utilizado. Escolha outro nome para continuar.\n\nEnvie outro nome no chat.",
+    "format": "👤 **Nome**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n⚠️ Nome inválido. Envie outro nome no chat.\n\n⚠️ Envie no chat o nome desejado.",
+    "unavailable": "👤 **Nome**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n🚫 Luiken · Indisponível\n\n⚠️ Esse nome não pode ser utilizado. Escolha outro nome para continuar.\n\n⚠️ Envie outro nome no chat.",
     "gender": "🎭 **Gênero**\n\n_Existe o rosto que o mundo vai reconhecer. Escolha como seu personagem se apresenta em Asterion._",
     "race": "🧿 **Raça**\n\n_Povos distintos sobreviveram às marcas deixadas sobre Asterion. Sua origem acompanhará permanentemente este personagem e influenciará, de forma sutil, a maneira como ele enfrenta os perigos do mundo._",
     "class": "⚔️ **Classe**\n\n_Sua Classe define as bases do seu estilo de combate e os Caminhos que poderão ser despertados mais adiante. Escolha com cuidado: esta decisão acompanhará permanentemente o personagem._",
@@ -19,7 +19,7 @@
         "emoji": "🧩",
         "description": "_Os valores finais estáticos recebem **+1,5% de HP Máximo, ATQ, DEF e AGI**. A passiva não afeta PER, Crítico, Esquiva ou Bloqueio._"
       },
-      "detail": "🕯️ **Remanescente**\n\n_Entre os povos que persistiram após as grandes rupturas de Asterion, os Remanescentes aprenderam a sobreviver menos pela especialização e mais pela capacidade de **se adaptar ao que o mundo exige**._\n\n**🧩 Adaptabilidade · Passiva Racial**\n\nOs valores finais estáticos recebem **+1,5% de HP Máximo, ATQ, DEF e AGI**. A passiva não afeta PER, Crítico, Esquiva ou Bloqueio."
+      "detail": "🕯️ **Remanescente**\n\n_Entre os povos que persistiram após as grandes rupturas de Asterion, os Remanescentes aprenderam a sobreviver menos pela especialização e mais pela capacidade de **se adaptar ao que o mundo exige**._\n\n🧩 **Adaptabilidade** · `Passiva Racial`\n\nOs valores finais estáticos recebem **+1,5% de HP Máximo, ATQ, DEF e AGI**. A passiva não afeta PER, Crítico, Esquiva ou Bloqueio."
     },
     "velado": {
       "name": "Velado",
@@ -30,7 +30,7 @@
         "emoji": "🌫️",
         "description": "_Efeitos benéficos **tendem a permanecer por mais tempo**, enquanto certas influências hostis **encontram maior dificuldade para se fixar**. A mecânica afeta Buffs e Debuffs elegíveis com duração base de 2 turnos ou mais, sem alterar Barreira, Cura, DoT, Controle Rígido, marcas ou efeitos fixos._"
       },
-      "detail": "🌘 **Velado**\n\n_Os Velados vivem próximos de forças que poucos conseguem perceber. Essa proximidade **aguça sua percepção, amplia seu controle e os torna mais sensíveis às correntes do Véu**._\n\n**🌫️ Eco do Véu · Passiva Racial**\n\nEfeitos benéficos **tendem a permanecer por mais tempo**, enquanto certas influências hostis **encontram maior dificuldade para se fixar**. A mecânica afeta Buffs e Debuffs elegíveis com duração base de 2 turnos ou mais, sem alterar Barreira, Cura, DoT, Controle Rígido, marcas ou efeitos fixos."
+      "detail": "🌘 **Velado**\n\n_Os Velados vivem próximos de forças que poucos conseguem perceber. Essa proximidade **aguça sua percepção, amplia seu controle e os torna mais sensíveis às correntes do Véu**._\n\n🌫️ **Eco do Véu** · `Passiva Racial`\n\nEfeitos benéficos **tendem a permanecer por mais tempo**, enquanto certas influências hostis **encontram maior dificuldade para se fixar**. A mecânica afeta Buffs e Debuffs elegíveis com duração base de 2 turnos ou mais, sem alterar Barreira, Cura, DoT, Controle Rígido, marcas ou efeitos fixos."
     },
     "cinereo": {
       "name": "Cinéreo",
@@ -41,7 +41,7 @@
         "emoji": "🛡️",
         "description": "_A redução de dano concedida por Defender passa de **45% para 52%**. Durante a Ruptura Final, a redução passa de **30% para 37%**; outras fontes de DEF, Bloqueio ou redução de dano não são alteradas._"
       },
-      "detail": "🌪️ **Cinéreo**\n\n_Forjados em regiões onde cinza, pedra e vento castigam sem descanso, os Cinéreos aprenderam que **resistir ao impacto certo pode ser tão decisivo quanto desferi-lo**._\n\n**🛡️ Tenacidade Cinérea · Passiva Racial**\n\nA redução de dano concedida por Defender passa de **45% para 52%**. Durante a Ruptura Final, a redução passa de **30% para 37%**; outras fontes de DEF, Bloqueio ou redução de dano não são alteradas."
+      "detail": "🌪️ **Cinéreo**\n\n_Forjados em regiões onde cinza, pedra e vento castigam sem descanso, os Cinéreos aprenderam que **resistir ao impacto certo pode ser tão decisivo quanto desferi-lo**._\n\n🛡️ **Tenacidade Cinérea** · `Passiva Racial`\n\nA redução de dano concedida por Defender passa de **45% para 52%**. Durante a Ruptura Final, a redução passa de **30% para 37%**; outras fontes de DEF, Bloqueio ou redução de dano não são alteradas."
     },
     "hemario": {
       "name": "Hemário",
@@ -52,7 +52,7 @@
         "emoji": "🦇",
         "description": "_Com **40% de HP ou menos**, o Vampirismo recebe **+12%**, limitado a **3% do HP Máximo por ação**. Só dano direto elegível ativa a recuperação; DoT, Reflexão, dano ambiental, Barreira e excesso de dano ficam fora da mecânica._"
       },
-      "detail": "🩸 **Hemário**\n\n_Há algo antigo na vitalidade dos Hemários. Quando o corpo se aproxima do limite, essa herança desperta e **transforma violência em sobrevivência**._\n\n**🦇 Fome Hemária · Passiva Racial**\n\nCom **40% de HP ou menos**, o Vampirismo recebe **+12%**, limitado a **3% do HP Máximo por ação**. Só dano direto elegível ativa a recuperação; DoT, Reflexão, dano ambiental, Barreira e excesso de dano ficam fora da mecânica."
+      "detail": "🩸 **Hemário**\n\n_Há algo antigo na vitalidade dos Hemários. Quando o corpo se aproxima do limite, essa herança desperta e **transforma violência em sobrevivência**._\n\n🦇 **Fome Hemária** · `Passiva Racial`\n\nCom **40% de HP ou menos**, o Vampirismo recebe **+12%**, limitado a **3% do HP Máximo por ação**. Só dano direto elegível ativa a recuperação; DoT, Reflexão, dano ambiental, Barreira e excesso de dano ficam fora da mecânica."
     },
     "alvorano": {
       "name": "Alvorano",
@@ -63,7 +63,7 @@
         "emoji": "🌟",
         "description": "_A AGI recebe **+5%** e Debuffs Numéricos removíveis sofrem **−12% de magnitude**. A passiva não reduz duração nem afeta DoT, Controle Rígido, Dano Direto, marcas ou efeitos fixos._"
       },
-      "detail": "☀️ **Alvorano**\n\n_Nos Alvoranos, movimento e clareza parecem anteceder o perigo. Sua presença se revela na rapidez com que **tomam a iniciativa** e na dificuldade de enfraquecê-los por meios convencionais._\n\n**🌟 Primeiro Clarão · Passiva Racial**\n\nA AGI recebe **+5%** e Debuffs Numéricos removíveis sofrem **−12% de magnitude**. A passiva não reduz duração nem afeta DoT, Controle Rígido, Dano Direto, marcas ou efeitos fixos."
+      "detail": "☀️ **Alvorano**\n\n_Nos Alvoranos, movimento e clareza parecem anteceder o perigo. Sua presença se revela na rapidez com que **tomam a iniciativa** e na dificuldade de enfraquecê-los por meios convencionais._\n\n🌟 **Primeiro Clarão** · `Passiva Racial`\n\nA AGI recebe **+5%** e Debuffs Numéricos removíveis sofrem **−12% de magnitude**. A passiva não reduz duração nem afeta DoT, Controle Rígido, Dano Direto, marcas ou efeitos fixos."
     }
   },
   "classes": {
