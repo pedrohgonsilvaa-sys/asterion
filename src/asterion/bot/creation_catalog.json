@@ -1,12 +1,12 @@
 {
   "screens": {
-    "name": "👤 Nome do Personagem\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\nEnvie no chat o nome desejado.",
-    "format": "👤 Nome do Personagem\n\n_Nome inválido. Envie outro nome no chat._\n\nEnvie no chat o nome desejado.",
-    "unavailable": "👤 Nome do Personagem\n\n_Nome indisponível. Escolha outro nome para continuar._\n\nEnvie no chat o nome desejado.",
-    "gender": "🎭 Gênero\n\nExiste o rosto que o mundo vai reconhecer. Escolha como seu personagem se apresenta em Asterion.",
-    "race": "🕯️ Raça\n\nSob o céu sem cor, povos distintos sobreviveram às marcas deixadas sobre Asterion. Cada um carrega um legado no sangue. Sua origem acompanhará permanentemente este personagem e influenciará, de forma sutil, a maneira como ele enfrenta os perigos do mundo.\n\n🕯️ Remanescente · Identidade Flexível\n🌘 Velado · Efeitos e Resistência\n🌪️ Cinéreo · Defesa\n🩸 Hemário · Recuperação\n🔆 Alvorano · Iniciativa",
-    "class": "⚔️ Classe\n\nSua Classe define as bases do seu estilo de combate, suas Artes e os Caminhos que poderão ser despertados mais adiante. Escolha com cuidado: esta decisão acompanhará permanentemente o personagem.\n\n🛡️ Sentinela\n🏰 Bastião · Caminho\n💥 Devastador · Caminho\n\n🗡️ Errante\n☠️ Carrasco · Caminho\n🕷️ Sabotador · Caminho\n\n🏹 Vigia\n🎯 Atirador · Caminho\n👣 Rastreador · Caminho\n\n🪄 Tecelão\n🌀 Conjurador · Caminho\n🔷 Rúnico · Caminho\n\n🔮 Oráculo\n🦉 Agoureiro · Caminho\n🐺 Invocador · Caminho\n\n☀️ Luminar\n🪬 Guardião · Caminho\n⚖️ Inquisidor · Caminho",
-    "confirm": "📜 Confirmar Personagem\n\n_Seu nome foi escolhido. Sua origem foi definida. Sua vocação começa a tomar forma._",
+    "name": "👤 **Nome**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n⚠️ Envie no chat o nome desejado.",
+    "format": "👤 **Nome**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n⚠️ Nome inválido. Envie outro nome no chat.\n\n⚠️ Envie no chat o nome desejado.",
+    "unavailable": "👤 **Nome**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n🚫 Luiken · Indisponível\n\n⚠️ Esse nome não pode ser utilizado. Escolha outro nome para continuar.\n\n⚠️ Envie outro nome no chat.",
+    "gender": "🎭 **Gênero**\n\n_Existe o rosto que o mundo vai reconhecer. Escolha como seu personagem se apresenta em Asterion._",
+    "race": "🧿 **Raça**\n\n_Povos distintos sobreviveram às marcas deixadas sobre Asterion. Sua origem acompanhará permanentemente este personagem e influenciará, de forma sutil, a maneira como ele enfrenta os perigos do mundo._",
+    "class": "⚔️ **Classe**\n\n_Sua Classe define as bases do seu estilo de combate e os Caminhos que poderão ser despertados mais adiante. Escolha com cuidado: esta decisão acompanhará permanentemente o personagem._",
+    "confirm": "📜 **Confirmar Personagem**\n\n_Seu nome foi escolhido. Sua origem foi definida. Sua vocação começa a tomar forma._",
     "confirm_warning": "⚠️ Raça e Classe não poderão ser alteradas após a criação do personagem."
   },
   "races": {
@@ -19,7 +19,7 @@
         "emoji": "🧩",
         "description": "_Os valores finais estáticos recebem **+1,5% de HP Máximo, ATQ, DEF e AGI**. A passiva não afeta PER, Crítico, Esquiva ou Bloqueio._"
       },
-      "detail": "🕯️ Remanescente\n\nEntre os povos que persistiram após as grandes rupturas de Asterion, os Remanescentes aprenderam a sobreviver menos pela especialização e mais pela capacidade de se adaptar ao que o mundo exige.\n\n🧭 Para quem é · Quem não quer se prender a um estilo e prefere ganhos pequenos em todos os atributos.\n\n🧩 Adaptabilidade · Passiva Racial\n\n❤️ HP Máximo · +1,5%\n⚔️ ATQ · +1,5%\n🛡️ DEF · +1,5%\n💨 AGI · +1,5%\n\nℹ️ Os bônus são permanentes e se aplicam aos valores finais estáticos do personagem. Não afetam PER, Crítico, Esquiva ou Bloqueio."
+      "detail": "🕯️ **Remanescente**\n\n_Entre os povos que persistiram após as grandes rupturas de Asterion, os Remanescentes aprenderam a sobreviver menos pela especialização e mais pela capacidade de **se adaptar ao que o mundo exige**._\n\n🧩 **Adaptabilidade** · `Passiva Racial`\n\nOs valores finais estáticos recebem **+1,5% de HP Máximo, ATQ, DEF e AGI**. A passiva não afeta PER, Crítico, Esquiva ou Bloqueio."
     },
     "velado": {
       "name": "Velado",
@@ -30,7 +30,7 @@
         "emoji": "🌫️",
         "description": "_Efeitos benéficos **tendem a permanecer por mais tempo**, enquanto certas influências hostis **encontram maior dificuldade para se fixar**. A mecânica afeta Buffs e Debuffs elegíveis com duração base de 2 turnos ou mais, sem alterar Barreira, Cura, DoT, Controle Rígido, marcas ou efeitos fixos._"
       },
-      "detail": "🌘 Velado\n\nOs Velados vivem próximos demais de forças que poucos conseguem perceber por inteiro. Aquilo que os fortalece tende a permanecer por mais tempo, enquanto efeitos hostis encontram dificuldade maior para se fixar.\n\n🧭 Para quem é · Quem aposta em Buffs que duram mais e em Debuffs que se desfazem mais cedo.\n\n🌫️ Eco do Véu · Passiva Racial\n\n🟢 Buffs com 2T+ · 25% chance +1T\n🔻 Debuffs com 2T+ · 25% chance −1T\n\nℹ️ A passiva só afeta Buffs e Debuffs elegíveis com duração base de 2 Turnos ou mais. Quando a redução de um Debuff é ativada, sua duração nunca pode cair abaixo de 1 Turno. Não afeta Barreira, Cura, DoT, Controle Rígido, marcas, recursos internos, efeitos imutáveis ou mecânicas fixas de Chefes e Masmorras."
+      "detail": "🌘 **Velado**\n\n_Os Velados vivem próximos de forças que poucos conseguem perceber. Essa proximidade **aguça sua percepção, amplia seu controle e os torna mais sensíveis às correntes do Véu**._\n\n🌫️ **Eco do Véu** · `Passiva Racial`\n\nEfeitos benéficos **tendem a permanecer por mais tempo**, enquanto certas influências hostis **encontram maior dificuldade para se fixar**. A mecânica afeta Buffs e Debuffs elegíveis com duração base de 2 turnos ou mais, sem alterar Barreira, Cura, DoT, Controle Rígido, marcas ou efeitos fixos."
     },
     "cinereo": {
       "name": "Cinéreo",
@@ -41,7 +41,7 @@
         "emoji": "🛡️",
         "description": "_A redução de dano concedida por Defender passa de **45% para 52%**. Durante a Ruptura Final, a redução passa de **30% para 37%**; outras fontes de DEF, Bloqueio ou redução de dano não são alteradas._"
       },
-      "detail": "🌪️ Cinéreo\n\nForjados em regiões onde cinza, pedra e vento castigam sem descanso, os Cinéreos aprenderam que resistir ao impacto certo pode ser tão decisivo quanto desferi-lo.\n\n🧭 Para quem é · Quem escolhe resistir ao impacto: Defender protege ainda mais.\n\n🛡️ Tenacidade Cinérea · Passiva Racial\n\n🛡️ Defender · 45% → 52%\n🌌 Ruptura Final · 30% → 37%\n\nℹ️ A passiva aumenta em 7 pontos percentuais a redução de dano concedida por Defender. Durante a Ruptura Final, quando Defender normalmente cai para 30%, o Cinéreo ainda mantém 37%. O efeito não aumenta outras fontes de DEF, Bloqueio ou redução de dano."
+      "detail": "🌪️ **Cinéreo**\n\n_Forjados em regiões onde cinza, pedra e vento castigam sem descanso, os Cinéreos aprenderam que **resistir ao impacto certo pode ser tão decisivo quanto desferi-lo**._\n\n🛡️ **Tenacidade Cinérea** · `Passiva Racial`\n\nA redução de dano concedida por Defender passa de **45% para 52%**. Durante a Ruptura Final, a redução passa de **30% para 37%**; outras fontes de DEF, Bloqueio ou redução de dano não são alteradas."
     },
     "hemario": {
       "name": "Hemário",
@@ -52,7 +52,7 @@
         "emoji": "🦇",
         "description": "_Com **40% de HP ou menos**, o Vampirismo recebe **+12%**, limitado a **3% do HP Máximo por ação**. Só dano direto elegível ativa a recuperação; DoT, Reflexão, dano ambiental, Barreira e excesso de dano ficam fora da mecânica._"
       },
-      "detail": "🩸 Hemário\n\nHá algo antigo na vitalidade dos Hemários. Quando o corpo se aproxima do limite, essa herança desperta e transforma violência em sobrevivência.\n\n🧭 Para quem é · Quem luta no limite: com HP baixo, cada golpe devolve vida.\n\n🦇 Fome Hemária · Passiva Racial\n\n❤️ Ativação · HP ≤ 40%\n🩸 Vampirismo · +12%\n❤️ Cura Máxima por Ação · 3% do HP Máximo\n\nℹ️ A passiva fica ativa enquanto o personagem estiver com 40% de HP ou menos e termina quando ele ultrapassa esse limite. O Vampirismo recupera HP apenas a partir de dano direto elegível e nunca pode curar mais de 3% do HP Máximo em uma única ação. Não é ativado por DoT, Reflexão, dano ambiental, dano causado apenas contra Barreira ou excesso de dano."
+      "detail": "🩸 **Hemário**\n\n_Há algo antigo na vitalidade dos Hemários. Quando o corpo se aproxima do limite, essa herança desperta e **transforma violência em sobrevivência**._\n\n🦇 **Fome Hemária** · `Passiva Racial`\n\nCom **40% de HP ou menos**, o Vampirismo recebe **+12%**, limitado a **3% do HP Máximo por ação**. Só dano direto elegível ativa a recuperação; DoT, Reflexão, dano ambiental, Barreira e excesso de dano ficam fora da mecânica."
     },
     "alvorano": {
       "name": "Alvorano",
@@ -63,7 +63,7 @@
         "emoji": "🌟",
         "description": "_A AGI recebe **+5%** e Debuffs Numéricos removíveis sofrem **−12% de magnitude**. A passiva não reduz duração nem afeta DoT, Controle Rígido, Dano Direto, marcas ou efeitos fixos._"
       },
-      "detail": "🔆 Alvorano\n\nNos Alvoranos, movimento e clareza parecem anteceder o perigo. Sua presença se revela na rapidez com que tomam a iniciativa e na dificuldade de enfraquecê-los por meios convencionais.\n\n🧭 Para quem é · Quem quer agir primeiro e sofrer menos com Debuffs numéricos.\n\n🌟 Primeiro Clarão · Passiva Racial\n\n💨 AGI · +5%\n🛡️ Debuffs Numéricos · −12% de Magnitude\n\nℹ️ A passiva aumenta permanentemente a AGI do personagem e reduz em 12% a intensidade de Debuffs numéricos removíveis que o afetem. Não reduz a duração dos efeitos e não afeta DoT, Controle Rígido, Dano Direto, marcas, recursos internos ou mecânicas fixas."
+      "detail": "☀️ **Alvorano**\n\n_Nos Alvoranos, movimento e clareza parecem anteceder o perigo. Sua presença se revela na rapidez com que **tomam a iniciativa** e na dificuldade de enfraquecê-los por meios convencionais._\n\n🌟 **Primeiro Clarão** · `Passiva Racial`\n\nA AGI recebe **+5%** e Debuffs Numéricos removíveis sofrem **−12% de magnitude**. A passiva não reduz duração nem afeta DoT, Controle Rígido, Dano Direto, marcas ou efeitos fixos."
     }
   },
   "classes": {
@@ -81,7 +81,7 @@
           "description": "transformará essa força em pressão e retaliação"
         }
       ],
-      "detail": "🛡️ Sentinela\n\nSentinelas avançam onde outros hesitam. Resistência, proteção e contra-ataques sustentam seu estilo de combate, permitindo suportar pressão enquanto criam oportunidades para devolver o impacto recebido.\n\n⚔️ Estilo de Luta · Resistência e Retaliação\n\n❤️ HP · Muito Alto\n🛡️ DEF · Muito Alta\n⚔️ ATQ · Baixo\n💨 AGI · Baixa\n\n🧭 Para quem é · Quem quer ficar de pé na linha de frente, proteger o grupo e devolver o golpe recebido.\n\n🎴 Artes de Classe\n\n🗡️ Golpe de Guarda · Dano\n🛡️ Quebra-Postura · Reduz DEF\n🔰 Muralha Breve · Barreira\n💥 Impacto Resoluto · Dano\n🛡️ Firmeza · Aumenta DEF\n⚔️ Golpe de Rechaço · Retaliação\n\n🎭 Caminhos Futuros\n\n🏰 Bastião · Proteção\nEspecializa o Sentinela em HP, DEF, Barreiras e proteção do grupo.\n\n💥 Devastador · Pressão\nTroca parte da resistência por ATQ e transforma dano recebido em oportunidades de contra-ataque mais fortes."
+      "detail": "🛡️ **Sentinela**\n\n_Sentinelas avançam onde outros hesitam. São treinados para **suportar pressão, proteger quem está ao redor e transformar aquilo que recebem em força para responder**, combinando **resistência, proteção e retaliação**. Bastião aprofundará sua capacidade de proteção e resistência. Devastador transformará essa força em pressão e retaliação._"
     },
     "errante": {
       "name": "Errante",
@@ -97,7 +97,7 @@
           "description": "ampliará a interferência e o controle de ritmo"
         }
       ],
-      "detail": "🗡️ Errante\n\nErrantes sobrevivem pela velocidade, pela leitura de brechas e pela capacidade de transformar um instante de vantagem em pressão constante. Seu estilo favorece ataques rápidos, mobilidade e exploração de inimigos já enfraquecidos.\n\n⚔️ Estilo de Luta · Mobilidade e Oportunismo\n\n❤️ HP · Médio\n🛡️ DEF · Baixa\n⚔️ ATQ · Alto\n💨 AGI · Muito Alta\n\n🧭 Para quem é · Quem prefere agir rápido, atacar primeiro e explorar a brecha de inimigos feridos.\n\n🎴 Artes de Classe\n\n🗡️ Corte Veloz · Dano\n🩸 Ferida Profunda · Sangramento\n💨 Passo Velado · Esquiva e Crítico\n⚔️ Golpe Oportuno · Crítico\n🗡️ Corte Duplo · Ataque Múltiplo\n🎯 Brecha Mortal · Perfuração\n\n🎭 Caminhos Futuros\n\n☠️ Carrasco · Execução\nEspecializa o Errante em finalizar inimigos feridos, aumentando sua pressão contra alvos com HP baixo.\n\n🕷️ Sabotador · Interferência\nEspecializa o Errante em efeitos negativos, controle de ritmo e exploração de alvos já debilitados."
+      "detail": "🗡️ **Errante**\n\n_Errantes sobrevivem pela velocidade, pela leitura de brechas e pela capacidade de **transformar um instante de vantagem em pressão constante**, explorando inimigos já enfraquecidos. Carrasco aprofundará a execução de inimigos feridos. Sabotador ampliará a interferência e o controle de ritmo._"
     },
     "vigia": {
       "name": "Vigia",
@@ -113,7 +113,7 @@
           "description": "manterá pressão sobre múltiplos inimigos e seus rastros"
         }
       ],
-      "detail": "🏹 Vigia\n\nVigias observam antes de agir. Precisão, leitura do alvo e ataques calculados definem seu estilo de luta, permitindo explorar pontos fracos e transformar preparação em disparos cada vez mais perigosos.\n\n⚔️ Estilo de Luta · Precisão e Mira\n\n❤️ HP · Médio\n🛡️ DEF · Média\n⚔️ ATQ · Alto\n💨 AGI · Alta\n\n🧭 Para quem é · Quem gosta de mirar com calma e punir pontos fracos à distância.\n\n🎴 Artes de Classe\n\n🏹 Disparo Preciso · Dano\n🎯 Marca da Presa · Reduz DEF\n🏹 Saraivada · Ataque Múltiplo\n👁️ Olho da Vigília · PER e Crítico\n🎯 Tiro Calculado · Mira e Crítico\n🌧️ Voleio · Dano em Área\n\n🎭 Caminhos Futuros\n\n🎯 Atirador · Precisão\nConcentra Mira sobre um único inimigo, acumulando Perfuração e Crítico para preparar disparos de alto impacto.\n\n👣 Rastreador · Rastreamento\nDistribui sua atenção entre vários inimigos, usando Sangramento, redução de AGI e rastros para manter pressão sobre múltiplos alvos."
+      "detail": "🏹 **Vigia**\n\n_Vigias observam antes de agir. Precisão, leitura do alvo e ataques calculados permitem **explorar pontos fracos e transformar preparação em disparos perigosos**. Atirador concentrará Mira, Perfuração e Crítico em um alvo. Rastreador manterá pressão sobre múltiplos inimigos e seus rastros._"
     },
     "tecelao": {
       "name": "Tecelão",
@@ -129,7 +129,7 @@
           "description": "direcionará a Trama para Runas, Barreiras e recuperação"
         }
       ],
-      "detail": "🪄 Tecelão\n\nTecelões manipulam as tramas que atravessam o Véu, encadeando Artes para alterar o fluxo do combate. Seu poder recompensa variedade e sequência, transformando diferentes manifestações da trama em ataques, Barreiras e efeitos cada vez mais intensos.\n\n⚔️ Estilo de Luta · Trama e Poder Arcano\n\n❤️ HP · Baixo\n🛡️ DEF · Baixa\n⚔️ ATQ · Muito Alto\n💨 AGI · Média\n\n🧭 Para quem é · Quem busca dano alto e Artes variadas, aceitando ser frágil em troca de poder.\n\n🎴 Artes de Classe\n\n🪄 Fio Cortante · Dano\n🔥 Chama Tecida · Queimadura\n💥 Ruptura da Trama · Dano em Área\n🔰 Véu Entrelaçado · Barreira\n❄️ Geada Tecida · Reduz AGI\n🌌 Surto do Véu · Dano\n\n🎭 Caminhos Futuros\n\n🌀 Conjurador · Ofensiva\nAmplifica o potencial destrutivo da Trama, favorecendo dano elevado, ataques múltiplos e efeitos em área.\n\n🔷 Rúnico · Proteção\nDireciona a Trama para Runas, Barreiras e recuperação, oferecendo maior controle defensivo e suporte ao grupo."
+      "detail": "🪄 **Tecelão**\n\n_Tecelões manipulam as tramas que atravessam o Véu, encadeando Artes para **alterar o fluxo do combate** com ataques, Barreiras e efeitos cada vez mais intensos. Conjurador amplificará o potencial ofensivo da Trama. Rúnico direcionará a Trama para Runas, Barreiras e recuperação._"
     },
     "oraculo": {
       "name": "Oráculo",
@@ -145,7 +145,7 @@
           "description": "canalizará manifestações para dano, enfraquecimento e proteção"
         }
       ],
-      "detail": "🔮 Oráculo\n\nOráculos leem sinais onde outros enxergam apenas acaso. Presságios, antecipação e manipulação do destino permitem enfraquecer inimigos, fortalecer aliados e preparar o combate antes que suas consequências se revelem por completo.\n\n⚔️ Estilo de Luta · Presságios e Controle\n\n❤️ HP · Médio\n🛡️ DEF · Média\n⚔️ ATQ · Médio\n💨 AGI · Alta\n\n🧭 Para quem é · Quem prefere enfraquecer inimigos e fortalecer aliados antes do desfecho.\n\n🎴 Artes de Classe\n\n🔮 Sinal Funesto · Dano e Reduz ATQ\n👁️ Vislumbre · Aumenta AGI\n🌑 Ruína Predita · Dano\n🛡️ Véu Premonitório · Barreira e Resistência\n✨ Augúrio Favorável · Aumenta ATQ\n📜 Selo da Queda · Dano e Reduz DEF\n\n🎭 Caminhos Futuros\n\n🦉 Agoureiro · Presságio\nEspecializa o Oráculo em previsões ofensivas, enfraquecimento e exploração de Presságios para tornar suas Artes mais perigosas.\n\n🐺 Invocador · Manifestações\nCanaliza as manifestações de Lobo, Coruja e Urso para alternar entre dano, enfraquecimento e proteção."
+      "detail": "🔮 **Oráculo**\n\n_Oráculos leem sinais onde outros enxergam acaso. Presságios e antecipação permitem **enfraquecer inimigos, fortalecer aliados e preparar o combate** antes de suas consequências. Agoureiro aprofundará previsões ofensivas e enfraquecimento. Invocador canalizará manifestações para dano, enfraquecimento e proteção._"
     },
     "luminar": {
       "name": "Luminar",
@@ -161,7 +161,7 @@
           "description": "converterá parte da vocação protetora em pressão e julgamento"
         }
       ],
-      "detail": "☀️ Luminar\n\nLuminars canalizam luz como força de proteção, restauração e julgamento. Seu estilo alterna entre sustentar aliados, erguer Barreiras e punir inimigos com poder concentrado.\n\n⚔️ Estilo de Luta · Suporte e Julgamento\n\n❤️ HP · Alto\n🛡️ DEF · Alta\n⚔️ ATQ · Baixo\n💨 AGI · Baixa\n\n🧭 Para quem é · Quem quer sustentar aliados com cura e Barreiras, sem deixar de punir inimigos.\n\n🎴 Artes de Classe\n\n☀️ Fulgor · Dano\n❤️ Renovação · Cura\n🛡️ Égide Solar · Barreira\n⚖️ Julgamento · Dano e Reduz Cura\n✨ Luz Restauradora · Cura e Barreira\n💥 Explosão Solar · Dano em Área\n\n🎭 Caminhos Futuros\n\n🪬 Guardião · Proteção\nEspecializa o Luminar em Cura, Barreiras, Purificação e sustentação do grupo.\n\n⚖️ Inquisidor · Julgamento\nConverte parte de sua vocação protetora em pressão ofensiva, redução de Cura e remoção de efeitos positivos dos inimigos."
+      "detail": "☀️ **Luminar**\n\n_Luminars canalizam luz como força de proteção, restauração e julgamento, alternando entre **sustentar aliados, erguer Barreiras e punir inimigos**. Guardião aprofundará Cura, Barreiras, Purificação e sustentação. Inquisidor converterá parte da vocação protetora em pressão e julgamento._"
     }
   }
 }
