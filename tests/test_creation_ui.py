@@ -109,48 +109,56 @@ def test_creation_layout_and_navigation_follow_contract():
     gender = render(Creation(uuid4(), step="gender"))
     assert [[button.text for button in row] for row in gender.keyboard.inline_keyboard] == [
         ["Masculino", "Feminino"],
-        ["← Nome"],
+        ["↩️ Voltar"],
     ]
+    assert "🎭 <b>Gênero do Personagem</b>" in gender.text
+    assert "<i>Existe o rosto que o mundo vai reconhecer." in gender.text
     race = render(Creation(uuid4(), step="race"))
     assert [[button.text for button in row] for row in race.keyboard.inline_keyboard] == [
         ["🕯️ Remanescente", "🌘 Velado"],
         ["🌪️ Cinéreo", "🩸 Hemário"],
         ["☀️ Alvorano"],
-        ["← Gênero"],
+        ["↩️ Voltar"],
     ]
+    assert "🕯️ <b>Raça do Personagem</b>" in race.text
+    assert "Identidade Flexível" not in race.text
     name = render(Creation(uuid4(), step="name"))
     assert name.keyboard is None
 
 
 @pytest.mark.parametrize("race", RACES)
-def test_race_detail_shows_full_racial_effect(race):
+def test_race_detail_shows_title_flavor_and_passive_paragraph(race):
     data = RACE_CONTENT[race]
     screen = render(Creation(uuid4(), step=f"race:{race}"))
-    assert f"{data['passive']['emoji']} {data['passive']['name']} · Passiva Racial" in screen.text
-    assert "🧭 Para quem é" in screen.text
-    assert "ℹ️" in screen.text
-    assert [[b.text for b in row] for row in screen.keyboard.inline_keyboard] == [
+    assert f"{data['emoji']} <b>{data['name']}</b>" in screen.text
+    assert "<i>" in screen.text
+    assert f"{data['passive']['emoji']} <b>{data['passive']['name']} · Passiva Racial</b>" in screen.text
+    assert "🧭 Para quem é" not in screen.text
+    assert [[b.text for b in row] for b in screen.keyboard.inline_keyboard] == [
         [f"{data['emoji']} Escolher {data['name']}"],
-        ["← Raças"],
+        ["↩️ Voltar"],
     ]
 
 
 @pytest.mark.parametrize("cls", CLASSES)
-def test_class_detail_follows_spec_structure(cls):
+def test_class_detail_uses_future_paths_without_class_arts(cls):
     screen = render(Creation(uuid4(), step=f"class:{cls}"))
-    for header in ("⚔️ Estilo de Luta", "🎴 Artes de Classe", "🎭 Caminhos Futuros"):
-        assert header in screen.text
+    assert f"{CLASS_CONTENT[cls]['emoji']} <b>{CLASS_CONTENT[cls]['name']}</b>" in screen.text
+    assert "<i>" in screen.text
+    assert "🎭 <b>Caminhos Futuros</b>" in screen.text
+    assert "🎴 Artes de Classe" not in screen.text
+    assert "🧭 Para quem é" not in screen.text
     assert all(path["name"] in screen.text for path in CLASS_CONTENT[cls]["paths"])
     assert [[b.text for b in row] for row in screen.keyboard.inline_keyboard] == [
         [f"{CLASS_CONTENT[cls]['emoji']} Escolher {CLASS_CONTENT[cls]['name']}"],
-        ["← Classes"],
+        ["↩️ Voltar"],
     ]
 
 
 def test_class_list_back_goes_to_races_and_confirm_edit_buttons_return_to_confirm():
     from asterion.domain.creation import navigate
 
-    assert render(Creation(uuid4(), step="class")).keyboard.inline_keyboard[-1][0].text == "← Raças"
+    assert render(Creation(uuid4(), step="class")).keyboard.inline_keyboard[-1][0].text == "↩️ Voltar"
     base = Creation(
         uuid4(), step="confirm", name="Aster", gender="feminino",
         race="velado", character_class="errante",
