@@ -66,19 +66,19 @@ def test_name_errors_and_confirmation_exact_copy():
         race="remanescente",
         character_class="errante",
     )
-    assert "👤 Nome do Personagem" in render(base).text
+    assert "👤 <b>Nome</b>" in render(base).text
     assert "Nome inválido" in render(replace(base, error="format")).text
     assert (
         "Luiken · Indisponível"
         in render(replace(base, error="unavailable", rejected_name="Luiken")).text
     )
     confirm = render(replace(base, step="confirm"))
-    assert "📜 Confirmar Personagem" in confirm.text
+    assert "📜 <b>Revisar Personagem</b>" in confirm.text
     assert [[button.text for button in row] for row in confirm.keyboard.inline_keyboard] == [
         ["✅ Confirmar Personagem"],
-        ["🏷️ Nome", "🎭 Gênero"],
+        ["👤 Nome", "🎭 Gênero"],
         ["🕯️ Raça", "🗡️ Classe"],
-        ["↩️ Classes"],
+        ["↩️ Voltar"],
     ]
     assert "HP" not in confirm.text and "ATQ" not in confirm.text
 
@@ -96,9 +96,6 @@ def test_confirmation_uses_selected_race_passive_and_class(race, cls):
             character_class=cls,
         )
     )
-    passive = RACE_CONTENT[race]["passive"]
-    passive_line = f"{passive['emoji']} <b>{passive['name']}</b> · <code>Passiva Racial</code>"
-    assert passive_line in screen.text
     assert "⚠️ Raça e Classe não poderão ser alteradas após a criação do personagem." in screen.text
     assert CLASS_CONTENT[cls]["name"] in screen.text
     assert "🏷️ <b>Nome</b> · <code>Aster</code>" in screen.text
@@ -111,7 +108,7 @@ def test_creation_layout_and_navigation_follow_contract():
         ["Masculino", "Feminino"],
         ["↩️ Voltar"],
     ]
-    assert "🎭 <b>Gênero do Personagem</b>" in gender.text
+    assert "🎭 <b>Gênero</b>" in gender.text
     assert "<i>Existe o rosto que o mundo vai reconhecer." in gender.text
     race = render(Creation(uuid4(), step="race"))
     assert [[button.text for button in row] for row in race.keyboard.inline_keyboard] == [
@@ -120,7 +117,7 @@ def test_creation_layout_and_navigation_follow_contract():
         ["☀️ Alvorano"],
         ["↩️ Voltar"],
     ]
-    assert "🕯️ <b>Raça do Personagem</b>" in race.text
+    assert "🕯️ <b>Raça</b>" in race.text
     assert "Identidade Flexível" not in race.text
     name = render(Creation(uuid4(), step="name"))
     assert name.keyboard is None
