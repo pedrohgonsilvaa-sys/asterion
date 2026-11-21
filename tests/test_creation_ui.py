@@ -66,19 +66,26 @@ def test_name_errors_and_confirmation_exact_copy():
         race="remanescente",
         character_class="errante",
     )
-    assert "👤 Nome do Personagem" in render(base).text
-    assert "Nome inválido" in render(replace(base, error="format")).text
+    assert "👤 <b>Nome</b>" in render(base).text
+    format_screen = render(replace(base, error="format"))
+    assert "👤 <b>Nome</b>" in format_screen.text
+    assert "⚠️ Nome inválido. Envie outro nome no chat." in format_screen.text
+    assert "⚠️ Envie no chat o nome desejado." in format_screen.text
+    unavailable_screen = render(replace(base, error="unavailable", rejected_name="Luiken"))
+    assert "👤 <b>Nome</b>" in unavailable_screen.text
+    assert "⚠️ Envie outro nome no chat." in unavailable_screen.text
     assert (
         "Luiken · Indisponível"
-        in render(replace(base, error="unavailable", rejected_name="Luiken")).text
+        in unavailable_screen.text
     )
     confirm = render(replace(base, step="confirm"))
-    assert "📜 Confirmar Personagem" in confirm.text
+    assert "📜 <b>Confirmar Personagem</b>" in confirm.text
+    assert "Revisar Personagem" not in confirm.text
     assert [[button.text for button in row] for row in confirm.keyboard.inline_keyboard] == [
         ["✅ Confirmar Personagem"],
-        ["Nome", "Gênero"],
-        ["Raça", "Classe"],
-        ["← Classes"],
+        ["👤 Nome", "🎭 Gênero"],
+        ["🧿 Raça", "🗡️ Classe"],
+        ["↩️ Voltar"],
     ]
     assert "HP" not in confirm.text and "ATQ" not in confirm.text
 
@@ -96,61 +103,72 @@ def test_confirmation_uses_selected_race_passive_and_class(race, cls):
             character_class=cls,
         )
     )
-    passive = RACE_CONTENT[race]["passive"]
-    passive_line = f"{passive['emoji']} <b>{passive['name']}</b> · <code>Passiva Racial</code>"
-    assert passive_line in screen.text
     assert "⚠️ Raça e Classe não poderão ser alteradas após a criação do personagem." in screen.text
     assert CLASS_CONTENT[cls]["name"] in screen.text
     assert "🏷️ <b>Nome</b> · <code>Aster</code>" in screen.text
     assert "🎭 <b>Gênero</b> · <code>Feminino</code>" in screen.text
+    passive = RACE_CONTENT[race]["passive"]
+    assert f"{passive['emoji']} <b>{passive['name']}</b> · <code>Passiva Racial</code>" in screen.text
+    assert f"{RACE_CONTENT[race]['emoji']} <b>Raça</b> · <code>{RACE_CONTENT[race]['name']}</code>" in screen.text
+    assert f"🗡️ <b>Classe</b> · <code>{CLASS_CONTENT[cls]['name']}</code>" in screen.text
+    assert "Revisar" not in screen.text and "🧿" not in screen.text
 
 
 def test_creation_layout_and_navigation_follow_contract():
     gender = render(Creation(uuid4(), step="gender"))
     assert [[button.text for button in row] for row in gender.keyboard.inline_keyboard] == [
         ["Masculino", "Feminino"],
-        ["← Nome"],
+        ["↩️ Voltar"],
     ]
+    assert "🎭 <b>Gênero</b>" in gender.text
+    assert "<i>Existe o rosto que o mundo vai reconhecer." in gender.text
     race = render(Creation(uuid4(), step="race"))
     assert [[button.text for button in row] for row in race.keyboard.inline_keyboard] == [
         ["🕯️ Remanescente", "🌘 Velado"],
         ["🌪️ Cinéreo", "🩸 Hemário"],
         ["☀️ Alvorano"],
-        ["← Gênero"],
+        ["↩️ Voltar"],
     ]
+    assert "🧿 <b>Raça</b>" in race.text
+    assert "Identidade Flexível" not in race.text
     name = render(Creation(uuid4(), step="name"))
     assert name.keyboard is None
 
 
 @pytest.mark.parametrize("race", RACES)
-def test_race_detail_shows_full_racial_effect(race):
+def test_race_detail_shows_title_flavor_and_passive_paragraph(race):
     data = RACE_CONTENT[race]
     screen = render(Creation(uuid4(), step=f"race:{race}"))
-    assert f"{data['passive']['emoji']} {data['passive']['name']} · Passiva Racial" in screen.text
-    assert "🧭 Para quem é" in screen.text
-    assert "ℹ️" in screen.text
+    assert f"{data['emoji']} <b>{data['name']}</b>" in screen.text
+    assert "<i>" in screen.text
+    assert f"{data['passive']['emoji']} <b>{data['passive']['name']}</b> · <code>Passiva Racial</code>" in screen.text
+    assert "🧭 Para quem é" not in screen.text
     assert [[b.text for b in row] for row in screen.keyboard.inline_keyboard] == [
         [f"{data['emoji']} Escolher {data['name']}"],
-        ["← Raças"],
+        ["↩️ Voltar"],
     ]
 
 
 @pytest.mark.parametrize("cls", CLASSES)
-def test_class_detail_follows_spec_structure(cls):
+def test_class_detail_uses_future_paths_without_class_arts(cls):
     screen = render(Creation(uuid4(), step=f"class:{cls}"))
-    for header in ("⚔️ Estilo de Luta", "🎴 Artes de Classe", "🎭 Caminhos Futuros"):
-        assert header in screen.text
+    assert f"{CLASS_CONTENT[cls]['emoji']} <b>{CLASS_CONTENT[cls]['name']}</b>" in screen.text
+    assert "<i>" in screen.text
+    assert "🎭 <b>Caminhos Futuros</b>" not in screen.text
+    assert "🎴 Artes de Classe" not in screen.text
+    assert "🧭 Para quem é" not in screen.text
     assert all(path["name"] in screen.text for path in CLASS_CONTENT[cls]["paths"])
+    assert all(path["description"] in screen.text for path in CLASS_CONTENT[cls]["paths"])
     assert [[b.text for b in row] for row in screen.keyboard.inline_keyboard] == [
         [f"{CLASS_CONTENT[cls]['emoji']} Escolher {CLASS_CONTENT[cls]['name']}"],
-        ["← Classes"],
+        ["↩️ Voltar"],
     ]
 
 
 def test_class_list_back_goes_to_races_and_confirm_edit_buttons_return_to_confirm():
     from asterion.domain.creation import navigate
 
-    assert render(Creation(uuid4(), step="class")).keyboard.inline_keyboard[-1][0].text == "← Raças"
+    assert render(Creation(uuid4(), step="class")).keyboard.inline_keyboard[-1][0].text == "↩️ Voltar"
     base = Creation(
         uuid4(), step="confirm", name="Aster", gender="feminino",
         race="velado", character_class="errante",
