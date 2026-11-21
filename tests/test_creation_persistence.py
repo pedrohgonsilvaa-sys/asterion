@@ -108,7 +108,7 @@ async def test_confirmation_edits_preserve_other_choices(service):
         "errante",
     )
     assert state.gender == "masculino"
-    assert "🏷️ <b>Nome</b> · <code>Aster</code>" in render(state).text
+    assert "👤 <b>Nome</b> · <code>Aster</code>" in render(state).text
     assert "🎭 <b>Gênero</b> · <code>Masculino</code>" in render(state).text
     for action in ("gender", "g1"):
         state = await click(service, 1, state, action)
