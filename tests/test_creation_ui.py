@@ -123,7 +123,7 @@ def test_creation_layout_and_navigation_follow_contract():
         ["☀️ Alvorano"],
         ["↩️ Voltar"],
     ]
-    assert "🕯️ <b>Raça</b>" in race.text
+    assert "🧿 <b>Raça</b>" in race.text
     assert "Identidade Flexível" not in race.text
     name = render(Creation(uuid4(), step="name"))
     assert name.keyboard is None
@@ -137,7 +137,7 @@ def test_race_detail_shows_title_flavor_and_passive_paragraph(race):
     assert "<i>" in screen.text
     assert f"{data['passive']['emoji']} <b>{data['passive']['name']}</b> · <code>Passiva Racial</code>" in screen.text
     assert "🧭 Para quem é" not in screen.text
-    assert [[b.text for b in row] for b in screen.keyboard.inline_keyboard] == [
+    assert [[b.text for b in row] for row in screen.keyboard.inline_keyboard] == [
         [f"{data['emoji']} Escolher {data['name']}"],
         ["↩️ Voltar"],
     ]

@@ -150,7 +150,7 @@ def render(state: Creation) -> Screen:
         rows = [
             [button("✅ Confirmar Personagem", "confirm")],
             [button("👤 Nome", "name"), button("🎭 Gênero", "gender")],
-            [button(f"{race['emoji']} Raça", "race"), button(f"{klass['emoji']} Classe", "class")],
+            [button("🧿 Raça", "race"), button(f"{klass['emoji']} Classe", "class")],
             [button("↩️ Voltar", "classes")],
         ]
     image_key = step
