@@ -108,8 +108,14 @@ def test_confirmation_uses_selected_race_passive_and_class(race, cls):
     assert "🏷️ <b>Nome</b> · <code>Aster</code>" in screen.text
     assert "🎭 <b>Gênero</b> · <code>Feminino</code>" in screen.text
     passive = RACE_CONTENT[race]["passive"]
-    assert f"{passive['emoji']} <b>{passive['name']}</b> · <code>Passiva Racial</code>" in screen.text
-    assert f"{RACE_CONTENT[race]['emoji']} <b>Raça</b> · <code>{RACE_CONTENT[race]['name']}</code>" in screen.text
+    assert (
+        f"{passive['emoji']} <b>{passive['name']}</b> · <code>Passiva Racial</code>"
+        in screen.text
+    )
+    assert (
+        f"{RACE_CONTENT[race]['emoji']} <b>Raça</b> · <code>{RACE_CONTENT[race]['name']}</code>"
+        in screen.text
+    )
     assert f"🗡️ <b>Classe</b> · <code>{CLASS_CONTENT[cls]['name']}</code>" in screen.text
     assert "Revisar" not in screen.text and "🧿" not in screen.text
 
@@ -141,7 +147,10 @@ def test_race_detail_shows_title_flavor_and_passive_paragraph(race):
     screen = render(Creation(uuid4(), step=f"race:{race}"))
     assert f"{data['emoji']} <b>{data['name']}</b>" in screen.text
     assert "<i>" in screen.text
-    assert f"{data['passive']['emoji']} <b>{data['passive']['name']}</b> · <code>Passiva Racial</code>" in screen.text
+    assert (
+        f"{data['passive']['emoji']} <b>{data['passive']['name']}</b> · <code>Passiva Racial</code>"
+        in screen.text
+    )
     assert "🧭 Para quem é" not in screen.text
     assert [[b.text for b in row] for row in screen.keyboard.inline_keyboard] == [
         [f"{data['emoji']} Escolher {data['name']}"],
@@ -168,7 +177,8 @@ def test_class_detail_uses_future_paths_without_class_arts(cls):
 def test_class_list_back_goes_to_races_and_confirm_edit_buttons_return_to_confirm():
     from asterion.domain.creation import navigate
 
-    assert render(Creation(uuid4(), step="class")).keyboard.inline_keyboard[-1][0].text == "↩️ Voltar"
+    class_list = render(Creation(uuid4(), step="class"))
+    assert class_list.keyboard.inline_keyboard[-1][0].text == "↩️ Voltar"
     base = Creation(
         uuid4(), step="confirm", name="Aster", gender="feminino",
         race="velado", character_class="errante",
