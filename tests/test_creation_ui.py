@@ -79,8 +79,7 @@ def test_name_errors_and_confirmation_exact_copy():
         in unavailable_screen.text
     )
     confirm = render(replace(base, step="confirm"))
-    assert "📜 <b>Confirmar Personagem</b>" in confirm.text
-    assert "Revisar Personagem" not in confirm.text
+    assert "📜 <b>Revisar Personagem</b>" in confirm.text
     assert [[button.text for button in row] for row in confirm.keyboard.inline_keyboard] == [
         ["✅ Confirmar Personagem"],
         ["👤 Nome", "🎭 Gênero"],
@@ -105,25 +104,21 @@ def test_confirmation_uses_selected_race_passive_and_class(race, cls):
     )
     assert "⚠️ Raça e Classe não poderão ser alteradas após a criação do personagem." in screen.text
     assert CLASS_CONTENT[cls]["name"] in screen.text
-    assert "🏷️ <b>Nome</b> · <code>Aster</code>" in screen.text
+    assert "👤 <b>Nome</b> · <code>Aster</code>" in screen.text
     assert "🎭 <b>Gênero</b> · <code>Feminino</code>" in screen.text
-    passive = RACE_CONTENT[race]["passive"]
-    assert (
-        f"{passive['emoji']} <b>{passive['name']}</b> · <code>Passiva Racial</code>"
-        in screen.text
-    )
+    assert "Passiva" not in screen.text
     assert (
         f"{RACE_CONTENT[race]['emoji']} <b>Raça</b> · <code>{RACE_CONTENT[race]['name']}</code>"
         in screen.text
     )
     assert f"🗡️ <b>Classe</b> · <code>{CLASS_CONTENT[cls]['name']}</code>" in screen.text
-    assert "Revisar" not in screen.text and "🧿" not in screen.text
+    assert "🧿" not in screen.text
 
 
 def test_creation_layout_and_navigation_follow_contract():
     gender = render(Creation(uuid4(), step="gender"))
     assert [[button.text for button in row] for row in gender.keyboard.inline_keyboard] == [
-        ["Masculino", "Feminino"],
+        ["🚹 Masculino", "🚺 Feminino"],
         ["↩️ Voltar"],
     ]
     assert "🎭 <b>Gênero</b>" in gender.text
@@ -148,7 +143,7 @@ def test_race_detail_shows_title_flavor_and_passive_paragraph(race):
     assert f"{data['emoji']} <b>{data['name']}</b>" in screen.text
     assert "<i>" in screen.text
     assert (
-        f"{data['passive']['emoji']} <b>{data['passive']['name']}</b> · <code>Passiva Racial</code>"
+        f"{data['passive']['emoji']} <b>{data['passive']['name']}</b> · <code>Passiva</code>"
         in screen.text
     )
     assert "🧭 Para quem é" not in screen.text

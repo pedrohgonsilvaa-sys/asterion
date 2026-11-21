@@ -18,7 +18,7 @@ CATALOG = json.loads(
 SCREENS = CATALOG["screens"]
 RACE_CONTENT = CATALOG["races"]
 CLASS_CONTENT = CATALOG["classes"]
-GENDER_LABELS = ("Masculino", "Feminino")
+GENDER_LABELS = ("🚹 Masculino", "🚺 Feminino")
 
 
 # Kept as a small compatibility surface for callers/tests that need the
@@ -140,10 +140,9 @@ def render(state: Creation) -> Screen:
         klass = _entity("class", state.character_class or CLASSES[0])
         text = (
             f"{text}\n\n"
-            f"🏷️ **Nome** · `{state.name or ''}`\n"
+            f"👤 **Nome** · `{state.name or ''}`\n"
             f"🎭 **Gênero** · `{(state.gender or '').capitalize()}`\n"
             f"{race['emoji']} **Raça** · `{race['name']}`\n"
-            f"{race['passive']['emoji']} **{race['passive']['name']}** · `Passiva Racial`\n"
             f"🗡️ **Classe** · `{klass['name']}`\n\n"
             f"{SCREENS['confirm_warning']}"
         )
