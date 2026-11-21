@@ -67,17 +67,23 @@ def test_name_errors_and_confirmation_exact_copy():
         character_class="errante",
     )
     assert "👤 <b>Nome</b>" in render(base).text
-    assert "Nome inválido" in render(replace(base, error="format")).text
+    format_screen = render(replace(base, error="format"))
+    assert "👤 <b>Nome</b>" in format_screen.text
+    assert "⚠️ Nome inválido. Envie outro nome no chat." in format_screen.text
+    assert "⚠️ Envie no chat o nome desejado." in format_screen.text
+    unavailable_screen = render(replace(base, error="unavailable", rejected_name="Luiken"))
+    assert "👤 <b>Nome</b>" in unavailable_screen.text
+    assert "⚠️ Envie outro nome no chat." in unavailable_screen.text
     assert (
         "Luiken · Indisponível"
-        in render(replace(base, error="unavailable", rejected_name="Luiken")).text
+        in unavailable_screen.text
     )
     confirm = render(replace(base, step="confirm"))
     assert "📜 <b>Revisar Personagem</b>" in confirm.text
     assert [[button.text for button in row] for row in confirm.keyboard.inline_keyboard] == [
         ["✅ Confirmar Personagem"],
         ["👤 Nome", "🎭 Gênero"],
-        ["🕯️ Raça", "🗡️ Classe"],
+        ["🧿 Raça", "🗡️ Classe"],
         ["↩️ Voltar"],
     ]
     assert "HP" not in confirm.text and "ATQ" not in confirm.text
@@ -129,7 +135,7 @@ def test_race_detail_shows_title_flavor_and_passive_paragraph(race):
     screen = render(Creation(uuid4(), step=f"race:{race}"))
     assert f"{data['emoji']} <b>{data['name']}</b>" in screen.text
     assert "<i>" in screen.text
-    assert f"{data['passive']['emoji']} <b>{data['passive']['name']} · Passiva Racial</b>" in screen.text
+    assert f"{data['passive']['emoji']} <b>{data['passive']['name']}</b> · <code>Passiva Racial</code>" in screen.text
     assert "🧭 Para quem é" not in screen.text
     assert [[b.text for b in row] for b in screen.keyboard.inline_keyboard] == [
         [f"{data['emoji']} Escolher {data['name']}"],
