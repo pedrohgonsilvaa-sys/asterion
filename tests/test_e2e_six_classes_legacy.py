@@ -42,13 +42,13 @@ from asterion.application.altos_missions import (
     P34_CONTENT_VERSION,
     P34_ID,
     P35_ID,
+    P36_CAMPAIGN_UNLOCK,
     P36_ID,
     P36_REWARD_SOURCE,
     AltosMissionService,
 )
 from asterion.application.creation import CreationService
 from asterion.application.legacy import (
-    P36_CAMPAIGN_UNLOCK,
     REFUGE_BRAZIER,
     LegacyService,
 )

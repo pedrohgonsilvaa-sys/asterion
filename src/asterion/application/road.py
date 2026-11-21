@@ -1334,6 +1334,9 @@ class RoadService:
                     Quest.status == "active",
                 )
             )
+            opened_routes = set(
+                (await s.scalars(select(Unlock.unlock_id).where(Unlock.character_id == c.id))).all()
+            )
             if active_p4 is not None and mode == "brazier":
                 return None
             hub_route = mode == "route" and is_hub_step(world.location, destination)
@@ -1359,7 +1362,7 @@ class RoadService:
                     route_unlock = VDE_GARGANTA_VIGILIA_ROUTE
                 elif pair == VDE_VIGILIA_MATA_ROUTE_ENDPOINTS:
                     gate_ok = (
-                        c.level >= 13
+                        (c.level >= 13 or VDE_VIGILIA_MATA_ROUTE in opened_routes)
                         and await self._p7_completed(s, c.id)
                         and await self._p8_started_or_completed(s, c.id)
                     )
@@ -1421,26 +1424,26 @@ class RoadService:
                     route_unlock = VARZEAS_DIQUES_PORTO_ROUTE
                 elif pair == VARZEAS_PORTO_BREJOS_ROUTE_ENDPOINTS:
                     gate_ok = bool(
-                        c.level >= 33
+                        (c.level >= 33 or VARZEAS_PORTO_BREJOS_ROUTE in opened_routes)
                         and await self._nareth_mission_started_or_completed(s, c.id, "P20")
                     )
                     route_unlock = VARZEAS_PORTO_BREJOS_ROUTE
                 elif pair == VARZEAS_BREJOS_HORTOS_ROUTE_ENDPOINTS:
                     gate_ok = bool(
-                        c.level >= 35
+                        (c.level >= 35 or VARZEAS_BREJOS_HORTOS_ROUTE in opened_routes)
                         and await self._nareth_mission_completed(s, c.id, "P20")
                         and await self._nareth_mission_started_or_completed(s, c.id, "P21")
                     )
                     route_unlock = VARZEAS_BREJOS_HORTOS_ROUTE
                 elif pair == VARZEAS_HORTOS_GALERIAS_ROUTE_ENDPOINTS:
                     gate_ok = bool(
-                        c.level >= 37
+                        (c.level >= 37 or VARZEAS_HORTOS_GALERIAS_ROUTE in opened_routes)
                         and await self._nareth_mission_started_or_completed(s, c.id, "P22")
                     )
                     route_unlock = VARZEAS_HORTOS_GALERIAS_ROUTE
                 elif pair == VARZEAS_GALERIAS_CAMARA_ROUTE_ENDPOINTS:
                     gate_ok = bool(
-                        c.level >= 39
+                        (c.level >= 39 or VARZEAS_GALERIAS_CAMARA_ROUTE in opened_routes)
                         and await s.scalar(
                             select(Unlock.id).where(
                                 Unlock.character_id == c.id,
@@ -1500,7 +1503,7 @@ class RoadService:
                         route_unlock = ALTOS_ESCARPA_ACCESS_UNLOCK
                 elif pair == ALTOS_ABRIGO_PONTES_ROUTE_ENDPOINTS:
                     gate_ok = bool(
-                        c.level >= 43
+                        (c.level >= 43 or ALTOS_PONTES_ACCESS_UNLOCK in opened_routes)
                         and await self._nareth_mission_completed(s, c.id, "P25")
                         and await s.scalar(
                             select(Unlock.id).where(
@@ -1512,7 +1515,7 @@ class RoadService:
                     route_unlock = ALTOS_PONTES_ACCESS_UNLOCK
                 elif pair == ALTOS_PONTES_PEDREIRAS_ROUTE_ENDPOINTS:
                     gate_ok = bool(
-                        c.level >= 45
+                        (c.level >= 45 or ALTOS_PEDREIRAS_ACCESS_UNLOCK in opened_routes)
                         and await self._nareth_mission_completed(s, c.id, "P26")
                         and await s.scalar(
                             select(Unlock.id).where(
@@ -1524,7 +1527,7 @@ class RoadService:
                     route_unlock = ALTOS_PEDREIRAS_ACCESS_UNLOCK
                 elif pair == ALTOS_PEDREIRAS_BASTILHA_ROUTE_ENDPOINTS:
                     gate_ok = bool(
-                        c.level >= 47
+                        (c.level >= 47 or ALTOS_BASTILHA_ACCESS_UNLOCK in opened_routes)
                         and await self._nareth_mission_completed(s, c.id, "P27")
                         and await s.scalar(
                             select(Unlock.id).where(
@@ -1570,7 +1573,7 @@ class RoadService:
                         )
                         gate_ok = bool(
                             world.region == CONFINS_REGION
-                            and c.level >= 51
+                            and (c.level >= 51 or CONFINS_ULTIMO_REFUGIO_ACCESS_UNLOCK in opened_routes)
                             and (p31 is not None or already_open)
                         )
                         route_unlock = CONFINS_ULTIMO_REFUGIO_ACCESS_UNLOCK
@@ -1578,7 +1581,7 @@ class RoadService:
                     else:
                         gate_ok = bool(
                             world.region == CONFINS_REGION
-                            and c.level >= 51
+                            and (c.level >= 51 or CONFINS_MARCHA_ACCESS_UNLOCK in opened_routes)
                             and await self._has_location(
                                 s, c.id, CONFINS_ULTIMO_REFUGIO_LOCATION
                             )
@@ -1595,7 +1598,7 @@ class RoadService:
                     if destination == CONFINS_ESTRADAS_AUSENTES_LABEL:
                         gate_ok = bool(
                             world.region == CONFINS_REGION
-                            and c.level >= 53
+                            and (c.level >= 53 or CONFINS_ESTRADAS_ACCESS_UNLOCK in opened_routes)
                             and await self._nareth_mission_completed(s, c.id, "P31")
                             and p32 is not None
                             and await s.scalar(
@@ -1625,7 +1628,7 @@ class RoadService:
                     if destination == CONFINS_FRATURAS_LIMIAR_LABEL:
                         gate_ok = bool(
                             world.region == CONFINS_REGION
-                            and c.level >= 55
+                            and (c.level >= 55 or CONFINS_FRATURAS_ACCESS_UNLOCK in opened_routes)
                             and await self._nareth_mission_completed(s, c.id, "P32")
                             and p33 is not None
                             and await s.scalar(
@@ -1660,7 +1663,7 @@ class RoadService:
                     )
                     gate_ok = bool(
                         world.region == CONFINS_REGION
-                        and c.level >= 57
+                        and (c.level >= 57 or CONFINS_NO_CENTRAL_ACCESS_UNLOCK in opened_routes)
                         and await self._nareth_mission_completed(s, c.id, "P33")
                         and p34 is not None
                         and await s.scalar(

@@ -16,16 +16,11 @@ from asterion.application.active_arts import (
 from asterion.application.doctrines import DoctrineRejected, DoctrineService
 from asterion.application.equipment_configuration import load_equipment_configuration
 from asterion.application.legacy import (
-    P36_CAMPAIGN_UNLOCK,
-    P36_COMPLETION_OBJECTIVE,
-    P36_COMPLETION_SOURCE_PREFIX,
-    P36_CONTENT_VERSION,
-    P36_QUEST_ID,
-    P36_REWARD_SOURCE,
     REFUGE,
     REFUGE_BRAZIER,
     REFUGE_REGION,
     LegacyActionRejected,
+    LegacyReason,
     LegacyService,
 )
 from asterion.application.road import CONFINS_MARCO_DUPLO_BRAZIER, RoadService
@@ -35,7 +30,12 @@ from asterion.bot.world_handlers import world_router
 from asterion.bot.world_ui import render_legacy
 from asterion.domain.combat_math import resolve_combat_stats
 from asterion.domain.dungeons import dungeon_completion_xp
-from asterion.domain.legacy import LEGACY_XP_FACTORS, legacy_xp_factor
+from asterion.domain.legacy import (
+    LEGACY_ASCENSION_COSTS,
+    LEGACY_XP_FACTORS,
+    legacy_ascension_cost,
+    legacy_xp_factor,
+)
 from asterion.domain.road import enemy_xp
 from asterion.domain.talents import TALENTS_BY_CLASS
 from asterion.infrastructure.db.models import (
@@ -43,7 +43,6 @@ from asterion.infrastructure.db.models import (
     Brazier,
     CampaignJourney,
     CampaignJourneyMember,
-    CampaignObjectiveCredit,
     Character,
     CharacterActiveArtSlot,
     CharacterDoctrine,
@@ -52,7 +51,6 @@ from asterion.infrastructure.db.models import (
     EquipmentItem,
     GameActivity,
     LegacyAscensionRecord,
-    Quest,
     RewardEvent,
     SocialGroup,
     Unlock,
@@ -60,8 +58,13 @@ from asterion.infrastructure.db.models import (
 )
 from tests.test_creation_ui import callback_update
 
+# Campaign journey ids used only to seed an activity lock (not a Legado requirement).
+P36_QUEST_ID = "P36"
 
-async def _seed_character(database, actor: int, *, level: int = 60, p36: bool = True):
+
+async def _seed_character(
+    database, actor: int, *, level: int = 60, legacy_level: int = 0, crowns: int = 12345
+):
     _, sessions = database
     character_id = uuid4()
     suffix = "".join(chr(ord("a") + int(char)) for char in str(actor)[-5:])
@@ -83,12 +86,12 @@ async def _seed_character(database, actor: int, *, level: int = 60, p36: bool = 
             ruleset_version="gdd-1.6.0",
             level=level,
             xp=817,
-            legacy_level=0,
+            legacy_level=legacy_level,
             hp=stats.hp,
             max_hp=stats.hp,
             vigor=37,
             max_vigor=100,
-            crowns=12345,
+            crowns=crowns,
             combat_configuration_version=4,
         )
         session.add(character)
@@ -100,47 +103,6 @@ async def _seed_character(database, actor: int, *, level: int = 60, p36: bool = 
         session.add(
             Unlock(character_id=character_id, unlock_id="class_trial_completed")
         )
-        if p36:
-            session.add(
-                Quest(
-                    character_id=character_id,
-                    quest_id=P36_QUEST_ID,
-                    title="Conclusão da campanha principal",
-                    status="completed",
-                    step=8,
-                    content_version=P36_CONTENT_VERSION,
-                    state_version=8,
-                    progress={
-                        "completed": True,
-                        "campaign_completed": True,
-                        "legacy_eligible": True,
-                        "completed_steps": list(range(1, 9)),
-                    },
-                )
-            )
-            session.add(
-                Unlock(character_id=character_id, unlock_id=P36_CAMPAIGN_UNLOCK)
-            )
-            session.add(
-                RewardEvent(
-                    character_id=character_id,
-                    source_id=P36_REWARD_SOURCE,
-                )
-            )
-            session.add(
-                CampaignObjectiveCredit(
-                    character_id=character_id,
-                    quest_id=P36_QUEST_ID,
-                    objective_id=P36_COMPLETION_OBJECTIVE,
-                    source_key=f"{P36_COMPLETION_SOURCE_PREFIX}{character_id}",
-                    evidence={
-                        "mission_id": P36_REWARD_SOURCE,
-                        "first_journey_complete": True,
-                        "legacy_eligible": True,
-                        "world_state_mutated": False,
-                    },
-                )
-            )
     return character_id, sessions
 
 
@@ -245,13 +207,6 @@ async def test_first_ascension_preserves_campaign_and_items_but_dormants_high_le
             12345,
             5,
         )
-        assert await session.scalar(
-            select(Quest.id).where(
-                Quest.character_id == character_id,
-                Quest.quest_id == P36_QUEST_ID,
-                Quest.status == "completed",
-            )
-        )
         assert await session.get(EquipmentItem, high_item.id) is not None
         assert await session.scalar(
             select(CharacterEquipmentSlot.equipment_item_id).where(
@@ -304,60 +259,94 @@ async def test_first_ascension_preserves_campaign_and_items_but_dormants_high_le
 
 
 @pytest.mark.asyncio
-async def test_first_ascension_requires_p36_safe_place_and_level(database):
-    cases = ((671_202, 59, True), (671_203, 60, False))
+async def test_legado_i_requires_nv60_not_p36_and_nv59_is_rejected(database):
     service = LegacyService(database[1], "ocaso")
-    for actor, level, has_p36 in cases:
-        await _seed_character(database, actor, level=level, p36=has_p36)
-        view = await service.view(actor)
-        assert view is not None and not view.can_ascend
-        prepared = await _prepare(service, actor)
-        assert prepared is not None and prepared.confirmation_key is None
+    # Nv.59 without campaign: blocked by level.
+    await _seed_character(database, 671_202, level=59)
+    view = await service.view(671_202)
+    assert view is not None and not view.can_ascend
+    assert LegacyReason.LEVEL_REQUIRED in view.reasons
+    prepared = await _prepare(service, 671_202)
+    assert prepared is not None and prepared.confirmation_key is None
+    # Nv.60 without any P36 or campaign row: Legado I is allowed.
+    await _seed_character(database, 671_203, level=60)
+    view = await service.view(671_203)
+    assert view is not None and view.can_ascend
+    assert view.reasons == ()
+    assert view.ascension_cost == 0
 
 
 @pytest.mark.asyncio
-async def test_campaign_completion_requires_the_actual_p36_reward_and_credit(database):
-    actor = 671_206
-    character_id, sessions = await _seed_character(database, actor, p36=False)
-    async with sessions.begin() as session:
-        session.add(
-            Quest(
-                character_id=character_id,
-                quest_id=P36_QUEST_ID,
-                title="Conclusão da campanha principal",
-                status="completed",
-                step=8,
-                content_version=P36_CONTENT_VERSION,
-                state_version=8,
-                progress={
-                    "completed": True,
-                    "campaign_completed": True,
-                    "legacy_eligible": True,
-                    "completed_steps": list(range(1, 9)),
-                },
-            )
-        )
-        session.add(Unlock(character_id=character_id, unlock_id=P36_CAMPAIGN_UNLOCK))
-        session.add(RewardEvent(character_id=character_id, source_id=P36_REWARD_SOURCE))
-        session.add(
-            Quest(
-                character_id=character_id,
-                quest_id="S36",
-                title="Prova opcional",
-                status="completed",
-                step=1,
-                content_version=P36_CONTENT_VERSION,
-                state_version=1,
-                progress={"completed": True},
-            )
-        )
-        session.add(
-            RewardEvent(character_id=character_id, source_id="mission.confins.s36")
-        )
+async def test_legado_ladder_costs_and_requirements_i_to_v(database):
+    actor = 671_220
+    character_id, sessions = await _seed_character(database, actor, crowns=200_000)
+    service = LegacyService(sessions, "ocaso")
+    # Canonical costs to ascend into I..V (author decision).
+    assert LEGACY_ASCENSION_COSTS == {1: 0, 2: 10_000, 3: 20_000, 4: 40_000, 5: 80_000}
+    assert [legacy_ascension_cost(rank) for rank in range(5)] == [0, 10_000, 20_000, 40_000, 80_000]
+    assert [legacy_xp_factor(rank) for rank in range(6)] == [
+        LEGACY_XP_FACTORS[rank] for rank in range(6)
+    ]
 
-    view = await LegacyService(sessions, "ocaso").view(actor)
-    assert view is not None and not view.can_ascend
-    assert not view.campaign_complete
+    expected_crowns = 200_000
+    for rank in range(5):
+        # Each step: Nv.60 again (Ascension resets to Nv.1), safe place, enough Coroas.
+        async with sessions.begin() as session:
+            character = await session.get(Character, character_id)
+            assert character is not None
+            character.level = 60
+        view = await service.view(actor)
+        assert view is not None and view.legacy_level == rank
+        assert view.ascension_cost == legacy_ascension_cost(rank)
+        assert view.can_ascend, view.reasons
+        prepared = await _prepare(service, actor)
+        assert prepared is not None and prepared.confirmation_key is not None
+        result = await service.confirm(actor, prepared.confirmation_key)
+        assert result is not None and result.succeeded, result
+        assert (result.legacy_level, result.level, result.xp) == (rank + 1, 1, 0)
+        expected_crowns -= legacy_ascension_cost(rank)
+        async with sessions() as session:
+            character = await session.get(Character, character_id)
+            assert character is not None
+            assert character.legacy_level == rank + 1
+            assert character.crowns == expected_crowns
+            assert await session.scalar(
+                select(RewardEvent.id).where(
+                    RewardEvent.character_id == character_id,
+                    RewardEvent.source_id == f"legacy.ascension:{character_id}:{rank + 1}",
+                )
+            )
+
+    # Legado V is the maximum: no further ascension at Nv.60.
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        assert character is not None
+        character.level = 60
+        character.crowns = 10**9
+    maxed = await service.view(actor)
+    assert maxed is not None and maxed.legacy_level == 5 and not maxed.can_ascend
+    assert LegacyReason.LEGACY_MAX_REACHED in maxed.reasons
+
+
+@pytest.mark.asyncio
+async def test_legado_ii_to_v_require_enough_crowns(database):
+    actor = 671_221
+    await _seed_character(database, actor, legacy_level=1, crowns=9_999)
+    service = LegacyService(database[1], "ocaso")
+    view = await service.view(actor)
+    assert view is not None and view.ascension_cost == 10_000
+    assert not view.can_ascend
+    assert LegacyReason.CROWNS_REQUIRED in view.reasons
+    assert (await _prepare(service, actor)).confirmation_key is None
+
+
+@pytest.mark.asyncio
+async def test_legado_i_is_not_gated_by_campaign_roster_free_of_p36(database):
+    actor = 671_222
+    await _seed_character(database, actor, level=60)
+    view = await LegacyService(database[1], "ocaso").view(actor)
+    assert view is not None and view.can_ascend
+    assert not any(reason.value.startswith("campaign") for reason in view.reasons)
 
 
 @pytest.mark.asyncio

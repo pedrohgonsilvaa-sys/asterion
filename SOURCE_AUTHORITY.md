@@ -33,6 +33,24 @@
 
 > **Nota 2026-11-14:** A Crônica I anterior foi pausada em 2026-11-14 para reprojeto futuro. A proposta v0.2 e suas decisões não constituem canon nem compromisso da futura implementação.
 
+## Legado I–V — decisões do autor (2026-11-20)
+
+Registro de autoridade do bloco de Legado. Estas decisões prevalecem sobre a redação histórica do GDD Estrutural v1.6.0 §16 onde houver conflito. Constituem **override autoral** das regras históricas conflitantes do GDD §16; nenhuma outra regra do GDD v1.7.1 ou das Fontes vigentes é alterada.
+
+- **Legado I:** exige somente **Nv.60**. P36, campanha principal e missões principais ou secundárias **não** são requisito.
+- **Legados II–V:** exigem o Legado imediatamente anterior concluído + **Nv.60**. Nenhum requisito de P36, campanha, missão principal ou missão secundária.
+- **Custos (Coroas):** I = 0; II = 10.000; III = 20.000; IV = 40.000; V = 80.000.
+- **Multiplicadores de XP:** I = 1,75×; II = 2,00×; III = 2,25×; IV = 2,50×; V = 2,75×.
+- **Ascensão:** retorna o personagem para **Nv.1**.
+- **Preservado após o Legado:** mapa, Locais descobertos e Braseiros permanentes.
+- **Destino pós-ascensão:** Refúgio do Ocaso (Braseiro permanente já existente em Terras do Ocaso). Não é local novo.
+- **Viagem para Local já descoberto:** não há gate de nível. O personagem pode viajar para qualquer Local já descoberto, independentemente do próprio nível ou do nível regional do Local. Vale também após o Legado e o retorno a Nv.1.
+- **Gates de entrada de Região:** permanecem inalterados.
+- **`_permanent_brazier_rest_gate`:** permanece inalterado.
+- **Regra específica das Ruínas do Braseiro:** permanece inalterada.
+- **Gates de nível de conteúdo:** continuam válidos quando definidos pelo próprio conteúdo (Missões, Masmorras, atividades, encontros). Não se transformam em gate geográfico do Local.
+- **Override do GDD v1.6.0 §16 (decisão do autor, 2026-11-20):** "Primeiro Legado exige Nv.60 + campanha principal concluída" fica substituído por "Legado I exige somente Nv.60". Regras históricas que exigem nível para viajar a Regiões ou Locais já conhecidos após o Legado ficam substituídas por esta seção.
+
 ## Fonte Mestra vigente
 
 A implementação do Asterion deve usar como autoridade principal:
