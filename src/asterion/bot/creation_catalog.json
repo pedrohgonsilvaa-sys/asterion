@@ -81,7 +81,7 @@
           "description": "transformará essa força em pressão e retaliação"
         }
       ],
-      "detail": "🛡️ **Sentinela**\n\n_Sentinelas avançam onde outros hesitam. São treinados para **suportar pressão, proteger quem está ao redor e transformar aquilo que recebem em força para responder**, combinando **resistência, proteção e retaliação**._\n\n🎭 **Caminhos Futuros**\n\n**Bastião**\naprofundará sua capacidade de proteção e resistência\n\n**Devastador**\ntransformará essa força em pressão e retaliação"
+      "detail": "🛡️ **Sentinela**\n\n_Sentinelas avançam onde outros hesitam. São treinados para **suportar pressão, proteger quem está ao redor e transformar aquilo que recebem em força para responder**, combinando **resistência, proteção e retaliação**._\n\n🎭 **Caminhos Futuros**\n\n🏰 **Bastião**\naprofundará sua capacidade de proteção e resistência\n\n💥 **Devastador**\ntransformará essa força em pressão e retaliação"
     },
     "errante": {
       "name": "Errante",
@@ -97,7 +97,7 @@
           "description": "ampliará a interferência e o controle de ritmo"
         }
       ],
-      "detail": "🗡️ **Errante**\n\n_Errantes sobrevivem pela velocidade, pela leitura de brechas e pela capacidade de **transformar um instante de vantagem em pressão constante**, explorando inimigos já enfraquecidos._\n\n🎭 **Caminhos Futuros**\n\n**Carrasco**\naprofundará a execução de inimigos feridos\n\n**Sabotador**\nampliará a interferência e o controle de ritmo"
+      "detail": "🗡️ **Errante**\n\n_Errantes sobrevivem pela velocidade, pela leitura de brechas e pela capacidade de **transformar um instante de vantagem em pressão constante**, explorando inimigos já enfraquecidos._\n\n🎭 **Caminhos Futuros**\n\n☠️ **Carrasco**\naprofundará a execução de inimigos feridos\n\n🕷️ **Sabotador**\nampliará a interferência e o controle de ritmo"
     },
     "vigia": {
       "name": "Vigia",
@@ -113,7 +113,7 @@
           "description": "manterá pressão sobre múltiplos inimigos e seus rastros"
         }
       ],
-      "detail": "🏹 **Vigia**\n\n_Vigias observam antes de agir. Precisão, leitura do alvo e ataques calculados permitem **explorar pontos fracos e transformar preparação em disparos perigosos**._\n\n🎭 **Caminhos Futuros**\n\n**Atirador**\nconcentrará Mira, Perfuração e Crítico em um alvo\n\n**Rastreador**\nmanterá pressão sobre múltiplos inimigos e seus rastros"
+      "detail": "🏹 **Vigia**\n\n_Vigias observam antes de agir. Precisão, leitura do alvo e ataques calculados permitem **explorar pontos fracos e transformar preparação em disparos perigosos**._\n\n🎭 **Caminhos Futuros**\n\n🎯 **Atirador**\nconcentrará Mira, Perfuração e Crítico em um alvo\n\n👣 **Rastreador**\nmanterá pressão sobre múltiplos inimigos e seus rastros"
     },
     "tecelao": {
       "name": "Tecelão",
@@ -129,7 +129,7 @@
           "description": "direcionará a Trama para Runas, Barreiras e recuperação"
         }
       ],
-      "detail": "🪄 **Tecelão**\n\n_Tecelões manipulam as tramas que atravessam o Véu, encadeando Artes para **alterar o fluxo do combate** com ataques, Barreiras e efeitos cada vez mais intensos._\n\n🎭 **Caminhos Futuros**\n\n**Conjurador**\namplificará o potencial ofensivo da Trama\n\n**Rúnico**\ndirecionará a Trama para Runas, Barreiras e recuperação"
+      "detail": "🪄 **Tecelão**\n\n_Tecelões manipulam as tramas que atravessam o Véu, encadeando Artes para **alterar o fluxo do combate** com ataques, Barreiras e efeitos cada vez mais intensos._\n\n🎭 **Caminhos Futuros**\n\n🌀 **Conjurador**\namplificará o potencial ofensivo da Trama\n\n🔷 **Rúnico**\ndirecionará a Trama para Runas, Barreiras e recuperação"
     },
     "oraculo": {
       "name": "Oráculo",
@@ -145,7 +145,7 @@
           "description": "canalizará manifestações para dano, enfraquecimento e proteção"
         }
       ],
-      "detail": "🔮 **Oráculo**\n\n_Oráculos leem sinais onde outros enxergam acaso. Presságios e antecipação permitem **enfraquecer inimigos, fortalecer aliados e preparar o combate** antes de suas consequências._\n\n🎭 **Caminhos Futuros**\n\n**Agoureiro**\naprofundará previsões ofensivas e enfraquecimento\n\n**Invocador**\ncanalizará manifestações para dano, enfraquecimento e proteção"
+      "detail": "🔮 **Oráculo**\n\n_Oráculos leem sinais onde outros enxergam acaso. Presságios e antecipação permitem **enfraquecer inimigos, fortalecer aliados e preparar o combate** antes de suas consequências._\n\n🎭 **Caminhos Futuros**\n\n🦉 **Agoureiro**\naprofundará previsões ofensivas e enfraquecimento\n\n🐺 **Invocador**\ncanalizará manifestações para dano, enfraquecimento e proteção"
     },
     "luminar": {
       "name": "Luminar",
@@ -161,7 +161,7 @@
           "description": "converterá parte da vocação protetora em pressão e julgamento"
         }
       ],
-      "detail": "☀️ **Luminar**\n\n_Luminars canalizam luz como força de proteção, restauração e julgamento, alternando entre **sustentar aliados, erguer Barreiras e punir inimigos**._\n\n🎭 **Caminhos Futuros**\n\n**Guardião**\naprofundará Cura, Barreiras, Purificação e sustentação\n\n**Inquisidor**\nconverterá parte da vocação protetora em pressão e julgamento"
+      "detail": "☀️ **Luminar**\n\n_Luminars canalizam luz como força de proteção, restauração e julgamento, alternando entre **sustentar aliados, erguer Barreiras e punir inimigos**._\n\n🎭 **Caminhos Futuros**\n\n🪬 **Guardião**\naprofundará Cura, Barreiras, Purificação e sustentação\n\n⚖️ **Inquisidor**\nconverterá parte da vocação protetora em pressão e julgamento"
     }
   }
 }
