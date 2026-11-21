@@ -149,9 +149,9 @@ def render(state: Creation) -> Screen:
         )
         rows = [
             [button("✅ Confirmar Personagem", "confirm")],
-            [button("Nome", "name"), button("Gênero", "gender")],
-            [button("Raça", "race"), button("Classe", "class")],
-            [button("← Classes", "classes")],
+            [button("🏷️ Nome", "name"), button("🎭 Gênero", "gender")],
+            [button(f"{race['emoji']} Raça", "race"), button(f"{klass['emoji']} Classe", "class")],
+            [button("↩️ Classes", "classes")],
         ]
     image_key = step
     if state.gender and step.startswith("race:"):
