@@ -76,9 +76,9 @@ def test_name_errors_and_confirmation_exact_copy():
     assert "📜 Confirmar Personagem" in confirm.text
     assert [[button.text for button in row] for row in confirm.keyboard.inline_keyboard] == [
         ["✅ Confirmar Personagem"],
-        ["Nome", "Gênero"],
-        ["Raça", "Classe"],
-        ["← Classes"],
+        ["🏷️ Nome", "🎭 Gênero"],
+        ["🕯️ Raça", "🗡️ Classe"],
+        ["↩️ Classes"],
     ]
     assert "HP" not in confirm.text and "ATQ" not in confirm.text
 
@@ -145,10 +145,11 @@ def test_class_detail_uses_future_paths_without_class_arts(cls):
     screen = render(Creation(uuid4(), step=f"class:{cls}"))
     assert f"{CLASS_CONTENT[cls]['emoji']} <b>{CLASS_CONTENT[cls]['name']}</b>" in screen.text
     assert "<i>" in screen.text
-    assert "🎭 <b>Caminhos Futuros</b>" in screen.text
+    assert "🎭 <b>Caminhos Futuros</b>" not in screen.text
     assert "🎴 Artes de Classe" not in screen.text
     assert "🧭 Para quem é" not in screen.text
     assert all(path["name"] in screen.text for path in CLASS_CONTENT[cls]["paths"])
+    assert all(path["description"] in screen.text for path in CLASS_CONTENT[cls]["paths"])
     assert [[b.text for b in row] for row in screen.keyboard.inline_keyboard] == [
         [f"{CLASS_CONTENT[cls]['emoji']} Escolher {CLASS_CONTENT[cls]['name']}"],
         ["↩️ Voltar"],
