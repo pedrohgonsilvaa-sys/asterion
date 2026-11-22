@@ -863,7 +863,7 @@ async def test_required_ally_falling_to_zero_fails_attempt_and_discards_conditio
     ],
 )
 async def test_final_checkpoint_unlocks_both_paths_once_without_selection_or_reward(
-    database, character_class, expected_paths, art_ids, actor
+    database, monkeypatch, character_class, expected_paths, art_ids, actor
 ):
     character_id, sessions, service = await _seed_trial(
         database,
@@ -871,10 +871,17 @@ async def test_final_checkpoint_unlocks_both_paths_once_without_selection_or_rew
         character_class=character_class,
         active_art_ids=art_ids,
     )
-    await service.begin(actor)
-    first = await _complete_stage(service, actor, 1)
-    second = await _complete_stage(service, actor, 2)
-    final = await _complete_stage(service, actor, 3)
+    with monkeypatch.context() as deterministic_ids:
+        if character_class == "luminar":
+            # Fixed Combat.id values keep the Luminar combat rolls reproducible.
+            next_uuid = count(1)
+            deterministic_ids.setattr(
+                class_trials_domain, "uuid4", lambda: UUID(int=next(next_uuid))
+            )
+        await service.begin(actor)
+        first = await _complete_stage(service, actor, 1)
+        second = await _complete_stage(service, actor, 2)
+        final = await _complete_stage(service, actor, 3)
     async with sessions() as session:
         final_activity = await session.scalar(
             select(GameActivity)
