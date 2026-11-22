@@ -69,9 +69,13 @@ def render(state: Creation) -> Screen:
         )
     text = COPY[step]
     if step == "name":
-        # Name errors are sent as a separate bot message so the name prompt
-        # remains the stable screen the player can answer again.
-        text = COPY["name"]
+        # Unavailable-name feedback is sent separately so the prompt remains
+        # the stable screen the player can answer again. Format errors keep
+        # their existing inline feedback.
+        if state.error == "format":
+            text = COPY["format"]
+        else:
+            text = COPY["name"]
     elif step == "gender":
         rows = [
             [button(label, f"g{i}") for i, label in enumerate(GENDER_LABELS)],
