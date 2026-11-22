@@ -31,7 +31,7 @@ from asterion.application.world import WorldService
 from asterion.bot.asset_catalog import character_key, npc_key_from_text
 from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
-from asterion.bot.creation_ui import CreationCallback, Screen, render
+from asterion.bot.creation_ui import UNAVAILABLE_NAME_WARNING, CreationCallback, Screen, render
 from asterion.bot.dungeon_ui import render_dungeons
 from asterion.bot.media import assets_root, resolve_asset_file
 from asterion.bot.p1_ui import render_p1
@@ -495,5 +495,7 @@ def creation_router(
                 event_update.update_id,
             )
             await present(message, await current_screen(message.from_user.id, state), images)
+            if state.step == "name" and state.error == "unavailable":
+                await message.answer(UNAVAILABLE_NAME_WARNING)
 
     return router
