@@ -1,4 +1,4 @@
-"""Public, transactional first Legacy Ascension flow."""
+"""Public, transactional Legacy Ascension flow (Legado I through V)."""
 
 from __future__ import annotations
 
@@ -18,11 +18,15 @@ from asterion.application.equipment_configuration import (
 )
 from asterion.application.guild_battle_locks import character_roster_locked
 from asterion.application.safe_location import current_permanent_brazier
-from asterion.domain.legacy import legacy_xp_factor
+from asterion.domain.legacy import (
+    LEGACY_ASCENSION_LEVEL,
+    MAX_LEGACY_LEVEL,
+    legacy_ascension_cost,
+    legacy_xp_factor,
+)
 from asterion.infrastructure.db.models import (
     CampaignJourney,
     CampaignJourneyMember,
-    CampaignObjectiveCredit,
     Character,
     CharacterEquipmentSlot,
     EquipmentItem,
@@ -32,18 +36,10 @@ from asterion.infrastructure.db.models import (
     LegacyAscensionRecord,
     PvpveQueue,
     PvpveQueueMember,
-    Quest,
     RewardEvent,
-    Unlock,
     WorldState,
 )
 
-P36_QUEST_ID = "P36"
-P36_CAMPAIGN_UNLOCK = "unlock.campaign.first_journey_complete"
-P36_CONTENT_VERSION = "confins-1.0.0"
-P36_REWARD_SOURCE = "mission.confins.p36"
-P36_COMPLETION_OBJECTIVE = "p36.completed"
-P36_COMPLETION_SOURCE_PREFIX = "p36.completed:"
 REFUGE = "Refúgio do Ocaso"
 REFUGE_REGION = "Terras do Ocaso"
 REFUGE_BRAZIER = "tdo.brazier.refugio_do_ocaso"
@@ -52,10 +48,10 @@ CONFIRMATION_LIFETIME = timedelta(minutes=10)
 
 class LegacyReason(StrEnum):
     LEVEL_REQUIRED = "level_required"
-    CAMPAIGN_REQUIRED = "campaign_required"
+    CROWNS_REQUIRED = "crowns_required"
     SAFE_LOCATION_REQUIRED = "safe_location_required"
     ACTIVITY_LOCKED = "activity_locked"
-    LEGACY_TRANSITION_UNDEFINED = "legacy_transition_undefined"
+    LEGACY_MAX_REACHED = "legacy_max_reached"
 
 
 class LegacyActionRejected(RuntimeError):
@@ -73,7 +69,8 @@ class LegacyView:
     xp_factor: str
     configuration_version: int
     location: str | None
-    campaign_complete: bool
+    crowns: int
+    ascension_cost: int
     can_ascend: bool
     reasons: tuple[LegacyReason, ...]
 
@@ -96,12 +93,15 @@ class LegacyResult:
 
 
 class LegacyService:
-    """Own the only public path for the first Ascension.
+    """Own the only public path for Legado ascension (I through V).
+
+    Each rank requires the previous one (the stored rank itself) and Nv.60, plus a
+    permanent Braseiro and no incompatible activity. The rank cost is paid in
+    Coroas inside the same transaction. Campaign progress is not required.
 
     Every mutation locks Character first, matching activity/configuration writers.
     The confirmation key is single-use, short-lived, and tied to the current
-    combat-configuration version. Campaign completion is proven by the P36 Quest,
-    canonical campaign unlock, and the idempotent P36 completion reward event.
+    combat-configuration version.
     """
 
     def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
@@ -211,10 +211,13 @@ class LegacyService:
                 )
             )
 
+            next_legacy_level = character.legacy_level + 1
+            cost = legacy_ascension_cost(character.legacy_level)
             previous_level = character.level
             previous_xp = character.xp
             previous_version = character.combat_configuration_version
-            character.legacy_level = 1
+            character.crowns -= cost
+            character.legacy_level = next_legacy_level
             character.level = 1
             character.xp = 0
             character.combat_configuration_version += 1
@@ -235,10 +238,10 @@ class LegacyService:
             session.add(
                 LegacyAscensionRecord(
                     character_id=character.id,
-                    legacy_level_after=1,
+                    legacy_level_after=next_legacy_level,
                     character_level_before=previous_level,
                     xp_before=previous_xp,
-                    campaign_quest_id=P36_QUEST_ID,
+                    campaign_quest_id=None,
                     operation_key=confirmation.confirmation_key,
                     configuration_version_before=previous_version,
                 )
@@ -246,7 +249,7 @@ class LegacyService:
             session.add(
                 RewardEvent(
                     character_id=character.id,
-                    source_id=f"legacy.ascension:{character.id}:1",
+                    source_id=f"legacy.ascension:{character.id}:{next_legacy_level}",
                 )
             )
             await session.delete(confirmation)
@@ -255,53 +258,9 @@ class LegacyService:
             # The persisted Art slots remain remembered. The active-art loader
             # omits level-ineligible Arts from subsequent combat snapshots.
             await load_active_art_configuration(session, character)
-            return LegacyResult(True, None, 1, 1, 0, REFUGE)
+            return LegacyResult(True, None, next_legacy_level, 1, 0, REFUGE)
 
     async def _view(self, session: AsyncSession, character: Character) -> LegacyView:
-        quest = await session.scalar(
-            select(Quest).where(
-                Quest.character_id == character.id,
-                Quest.quest_id == P36_QUEST_ID,
-            )
-        )
-        unlock_exists = await session.scalar(
-            select(Unlock.id).where(
-                Unlock.character_id == character.id,
-                Unlock.unlock_id == P36_CAMPAIGN_UNLOCK,
-            )
-        )
-        completion_credit = await session.scalar(
-            select(CampaignObjectiveCredit).where(
-                CampaignObjectiveCredit.character_id == character.id,
-                CampaignObjectiveCredit.quest_id == P36_QUEST_ID,
-                CampaignObjectiveCredit.objective_id == P36_COMPLETION_OBJECTIVE,
-                CampaignObjectiveCredit.source_key
-                == f"{P36_COMPLETION_SOURCE_PREFIX}{character.id}",
-            )
-        )
-        completion_reward = await session.scalar(
-            select(RewardEvent.id).where(
-                RewardEvent.character_id == character.id,
-                RewardEvent.source_id == P36_REWARD_SOURCE,
-            )
-        )
-        evidence = completion_credit.evidence if completion_credit is not None else {}
-        progress = quest.progress if quest is not None else {}
-        campaign_complete = bool(
-            quest is not None
-            and quest.status == "completed"
-            and quest.step == 8
-            and quest.content_version == P36_CONTENT_VERSION
-            and progress.get("completed") is True
-            and progress.get("campaign_completed") is True
-            and progress.get("legacy_eligible") is True
-            and progress.get("completed_steps") == list(range(1, 9))
-            and evidence.get("mission_id") == P36_REWARD_SOURCE
-            and evidence.get("first_journey_complete") is True
-            and evidence.get("legacy_eligible") is True
-            and unlock_exists is not None
-            and completion_reward is not None
-        )
         world = await session.scalar(
             select(WorldState).where(WorldState.character_id == character.id)
         )
@@ -311,18 +270,19 @@ class LegacyService:
         safe_location = (
             await current_permanent_brazier(session, character.id) is not None
         )
+        cost = legacy_ascension_cost(character.legacy_level)
         reasons: list[LegacyReason] = []
-        if character.legacy_level != 0:
-            reasons.append(LegacyReason.LEGACY_TRANSITION_UNDEFINED)
-        if character.level != 60:
+        if character.legacy_level >= MAX_LEGACY_LEVEL:
+            reasons.append(LegacyReason.LEGACY_MAX_REACHED)
+        if character.level != LEGACY_ASCENSION_LEVEL:
             reasons.append(LegacyReason.LEVEL_REQUIRED)
-        if not campaign_complete:
-            reasons.append(LegacyReason.CAMPAIGN_REQUIRED)
+        if character.crowns < cost:
+            reasons.append(LegacyReason.CROWNS_REQUIRED)
         if not safe_location:
             reasons.append(LegacyReason.SAFE_LOCATION_REQUIRED)
         if await self._has_incompatible_activity(session, character.id):
             reasons.append(LegacyReason.ACTIVITY_LOCKED)
-        can_ascend = character.legacy_level == 0 and not reasons
+        can_ascend = not reasons
         return LegacyView(
             character.name,
             character.level,
@@ -331,7 +291,8 @@ class LegacyService:
             str(legacy_xp_factor(character.legacy_level)),
             character.combat_configuration_version,
             world.location if world is not None else None,
-            campaign_complete,
+            character.crowns,
+            cost,
             can_ascend,
             tuple(reasons),
         )

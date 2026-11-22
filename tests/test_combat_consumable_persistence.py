@@ -936,6 +936,7 @@ async def test_single_effect_selection_skips_screen_and_stale_callback_is_reject
 
     def add_single_choices(combat):
         combat.fighters["player"].effects.clear()
+        combat.dot_states["player"] = []
         combat.fighters["player"].effects.append(
             Effect("weak", "attack", Decimal("0.1"), 2, 0, instance_id="e1")
         )

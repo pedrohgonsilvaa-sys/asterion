@@ -254,12 +254,18 @@ def render_legacy(
         4: "Legado IV",
         5: "Legado V",
     }
+    next_rank = ranks.get(view.legacy_level + 1, "")
+    cost_text = (
+        "gratuito"
+        if view.ascension_cost == 0
+        else f"{view.ascension_cost:,} Coroas".replace(",", ".")
+    )
     reasons = {
         "level_required": "Alcance o Nv.60.",
-        "campaign_required": "Conclua a campanha principal.",
+        "crowns_required": f"Reúna {cost_text} para este Legado.",
         "safe_location_required": "Descanse num Braseiro permanente.",
         "activity_locked": "Encerre atividades e vínculos incompatíveis antes de ascender.",
-        "legacy_transition_undefined": "A próxima transição ainda não está disponível.",
+        "legacy_max_reached": "Você já alcançou o Legado V, o máximo.",
     }
     text = (
         "🔱 Legado\n\n"
@@ -274,14 +280,17 @@ def render_legacy(
         )
     elif confirmation_key is not None:
         text += (
-            "\nConfirme a Ascensão para Legado I. O personagem voltará ao Nv.1 e perderá "
-            "qualquer XP restante no Nv.60. A campanha e os itens serão preservados; itens "
-            "incompatíveis serão desequipados. Esta ação não pode ser desfeita."
+            f"\nConfirme a Ascensão para {next_rank} ({cost_text}). O personagem voltará ao "
+            "Nv.1 e perderá qualquer XP restante no Nv.60. A campanha e os itens serão "
+            "preservados; itens incompatíveis serão desequipados. Esta ação não pode ser "
+            "desfeita."
         )
     elif view.can_ascend:
-        text += "\nVocê atende aos requisitos da primeira Ascensão em um local seguro."
+        text += (
+            f"\nVocê atende aos requisitos para {next_rank} ({cost_text}) em um local seguro."
+        )
     else:
-        text += "\nPara a primeira Ascensão:"
+        text += f"\nPara {next_rank or 'a próxima Ascensão'}:"
         text += "\n" + "\n".join(
             f"• {reasons.get(reason.value, 'Requisito ainda não atendido.')}"
             for reason in view.reasons

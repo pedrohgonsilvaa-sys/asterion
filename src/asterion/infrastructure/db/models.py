@@ -183,7 +183,8 @@ class LegacyAscensionRecord(Base):
     legacy_level_after: Mapped[int] = mapped_column(Integer, nullable=False)
     character_level_before: Mapped[int] = mapped_column(Integer, nullable=False)
     xp_before: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    campaign_quest_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    # Legado I–V no longer depends on P36/campaign; kept NULL for new rows.
+    campaign_quest_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     operation_key: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     configuration_version_before: Mapped[int] = mapped_column(Integer, nullable=False)
     ascended_at: Mapped[datetime] = mapped_column(
