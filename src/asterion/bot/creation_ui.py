@@ -143,13 +143,13 @@ def render(state: Creation) -> Screen:
             f"👤 **Nome** · `{state.name or ''}`\n"
             f"🎭 **Gênero** · `{(state.gender or '').capitalize()}`\n"
             f"{race['emoji']} **Raça** · `{race['name']}`\n"
-            f"🗡️ **Classe** · `{klass['name']}`\n\n"
+            f"⚜️ **Classe** · `{klass['name']}`\n\n"
             f"{SCREENS['confirm_warning']}"
         )
         rows = [
             [button("✅ Confirmar Personagem", "confirm")],
             [button("👤 Nome", "name"), button("🎭 Gênero", "gender")],
-            [button("🧿 Raça", "race"), button("🗡️ Classe", "class")],
+            [button("🧿 Raça", "race"), button("⚜️ Classe", "class")],
             [button("↩️ Voltar", "classes")],
         ]
     image_key = step

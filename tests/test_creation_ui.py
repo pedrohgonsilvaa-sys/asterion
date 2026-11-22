@@ -83,7 +83,7 @@ def test_name_errors_and_confirmation_exact_copy():
     assert [[button.text for button in row] for row in confirm.keyboard.inline_keyboard] == [
         ["✅ Confirmar Personagem"],
         ["👤 Nome", "🎭 Gênero"],
-        ["🧿 Raça", "🗡️ Classe"],
+        ["🧿 Raça", "⚜️ Classe"],
         ["↩️ Voltar"],
     ]
     assert "HP" not in confirm.text and "ATQ" not in confirm.text
@@ -111,7 +111,7 @@ def test_confirmation_uses_selected_race_passive_and_class(race, cls):
         f"{RACE_CONTENT[race]['emoji']} <b>Raça</b> · <code>{RACE_CONTENT[race]['name']}</code>"
         in screen.text
     )
-    assert f"🗡️ <b>Classe</b> · <code>{CLASS_CONTENT[cls]['name']}</code>" in screen.text
+    assert f"⚜️ <b>Classe</b> · <code>{CLASS_CONTENT[cls]['name']}</code>" in screen.text
     assert "🧿" not in screen.text
 
 
