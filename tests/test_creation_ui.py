@@ -66,7 +66,7 @@ def test_name_errors_and_confirmation_exact_copy():
         character_class="errante",
     )
     assert render(base).text == COPY["name"]
-    assert render(replace(base, error="format")).text == COPY["name"]
+    assert render(replace(base, error="format")).text == COPY["format"]
     assert render(replace(base, error="unavailable", rejected_name="Pedro")).text == COPY["name"]
     confirm = render(replace(base, step="confirm"))
     assert confirm.text == COPY["confirm"]
