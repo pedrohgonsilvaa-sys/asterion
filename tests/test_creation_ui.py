@@ -2,7 +2,7 @@ import json
 import re
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, call
 from uuid import uuid4
 
 import pytest
@@ -66,11 +66,8 @@ def test_name_errors_and_confirmation_exact_copy():
         character_class="errante",
     )
     assert render(base).text == COPY["name"]
-    assert render(replace(base, error="format")).text == COPY["format"]
-    assert (
-        render(replace(base, error="unavailable", rejected_name="Luiken")).text
-        == (COPY["unavailable"])
-    )
+    assert render(replace(base, error="format")).text == COPY["name"]
+    assert render(replace(base, error="unavailable", rejected_name="Pedro")).text == COPY["name"]
     confirm = render(replace(base, step="confirm"))
     assert confirm.text == COPY["confirm"]
     assert [[button.text for button in row] for row in confirm.keyboard.inline_keyboard] == [
@@ -235,6 +232,28 @@ async def test_real_dispatcher_uses_sender_and_backend_state(telegram):
         await dispatcher.feed_raw_update(telegram, callback_update(malformed))
     assert not service.callback.called
 
+
+
+async def test_unavailable_name_sends_generic_warning_as_separate_message(telegram):
+    service = AsyncMock()
+    state = Creation(uuid4(), step="name", error="unavailable", rejected_name="Pedro")
+    service.start.return_value = state
+    service.name.return_value = state
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(creation_router(service, {}))
+
+    await dispatcher.feed_raw_update(telegram, message_update("Pedro", 2))
+
+    requests = [
+        call.args[1]
+        for call in telegram.session.make_request.call_args_list
+        if len(call.args) > 1
+    ]
+    texts = [request.text for request in requests if hasattr(request, "text")]
+    assert any(text == COPY["name"] for text in texts)
+    assert any(text == "⚠️ Nome indisponível. Tente outro nome novamente." for text in texts)
+    assert not any("Luiken" in text for text in texts)
+    assert not any("Pedro ·" in text for text in texts)
 
 
 async def test_creation_buttons_pass_through_campaign_router_registered_first(telegram):
