@@ -50,9 +50,9 @@
       "passive": {
         "name": "Fome Hemária",
         "emoji": "🦇",
-        "description": "_Com 40% de HP ou menos, o Vampirismo é fortalecido em 12%, limitado a 3% do HP Máximo recuperado por ação. Só dano direto elegível ativa a recuperação; DoT, Reflexão, dano ambiental, Barreira e excesso de dano ficam fora da mecânica._"
+        "description": "_Com **40% de HP ou menos**, o **Vampirismo** é fortalecido em **12%**, limitado a **3% do HP Máximo recuperado por ação**. Só **dano direto elegível** ativa a recuperação; **DoT, Reflexão, dano ambiental, Barreira e excesso de dano** ficam fora da mecânica._"
       },
-      "detail": "🩸 **Hemário**\n\n_Há algo antigo na vitalidade dos Hemários. Quando o corpo se aproxima do limite, essa herança desperta e **transforma violência em sobrevivência**._\n\n🦇 **Fome Hemária** · `Passiva`\n\nCom 40% de HP ou menos, o Vampirismo é fortalecido em 12%, limitado a 3% do HP Máximo recuperado por ação. Só dano direto elegível ativa a recuperação; DoT, Reflexão, dano ambiental, Barreira e excesso de dano ficam fora da mecânica."
+      "detail": "🩸 **Hemário**\n\n_Há algo antigo na vitalidade dos Hemários. Quando o corpo se aproxima do limite, essa herança desperta e **transforma violência em sobrevivência**._\n\n🦇 **Fome Hemária** · `Passiva`\n\nCom **40% de HP ou menos**, o **Vampirismo** é fortalecido em **12%**, limitado a **3% do HP Máximo recuperado por ação**. Só **dano direto elegível** ativa a recuperação; **DoT, Reflexão, dano ambiental, Barreira e excesso de dano** ficam fora da mecânica."
     },
     "alvorano": {
       "name": "Alvorano",
