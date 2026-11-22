@@ -7,7 +7,7 @@
     "race": "🧿 **Raça**\n\n_Povos distintos sobreviveram às marcas deixadas sobre Asterion. Sua origem acompanhará permanentemente este personagem e influenciará, de forma sutil, a maneira como ele enfrenta os perigos do mundo._",
     "class": "⚜️ **Classe**\n\n_Sua Classe define as bases do seu estilo de combate e os Caminhos que poderão ser despertados mais adiante. Escolha com cuidado: esta decisão acompanhará permanentemente o personagem._",
     "confirm": "📜 **Revisar Personagem**\n\n_Seu nome foi escolhido. Sua origem foi definida. Sua vocação começa a tomar forma._",
-    "confirm_warning": "⚠️ Raça e Classe não poderão ser alteradas após a criação do personagem."
+    "confirm_warning": "⚠️ Gênero, Raça e Classe não poderão ser alterados após a criação do personagem."
   },
   "races": {
     "remanescente": {

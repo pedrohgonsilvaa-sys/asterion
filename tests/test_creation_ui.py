@@ -102,7 +102,10 @@ def test_confirmation_uses_selected_race_passive_and_class(race, cls):
             character_class=cls,
         )
     )
-    assert "⚠️ Raça e Classe não poderão ser alteradas após a criação do personagem." in screen.text
+    assert (
+        "⚠️ Gênero, Raça e Classe não poderão ser alterados após a criação do personagem."
+        in screen.text
+    )
     assert CLASS_CONTENT[cls]["name"] in screen.text
     assert "👤 <b>Nome</b> · <code>Aster</code>" in screen.text
     assert "🎭 <b>Gênero</b> · <code>Feminino</code>" in screen.text
