@@ -20,18 +20,14 @@ RACE_CONTENT = CATALOG["races"]
 CLASS_CONTENT = CATALOG["classes"]
 GENDER_LABELS = ("🚹 Masculino", "🚺 Feminino")
 
+
 # Kept as a small compatibility surface for callers/tests that need the
 # player-facing copy without knowing the catalog shape.
 COPY = dict(SCREENS)
 for _key, _data in RACE_CONTENT.items():
-    COPY[f"race:{_key}"] = (
-        f"{_data['emoji']} {_data['name']}\n\n{_data['description']}\n\n{_data['passive']['name']}"
-    )
+    COPY[f"race:{_key}"] = _data["detail"]
 for _key, _data in CLASS_CONTENT.items():
-    COPY[f"class:{_key}"] = (
-        f"{_data['emoji']} {_data['name']}\n\n{_data['description']}\n\n"
-        "🔀 Caminhos"
-    )
+    COPY[f"class:{_key}"] = _data["detail"]
 PROLOGUE_TEXT = (
     "🔥 Cinzas na Estrada\nPrólogo · Terras do Ocaso\n\n"
     "O mundo desperta sob um céu sem cor. Cinzas atravessam a estrada como neve morta, "
@@ -52,32 +48,6 @@ def _label(kind: str, key: str) -> str:
 
 def _pairs(buttons: list) -> list[list]:
     return [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
-
-
-def _race_detail(data: dict) -> str:
-    passive = data["passive"]
-    return (
-        f"{data['emoji']} {data['name']}\n\n"
-        f"{data['description']}\n\n"
-        f"**{passive['emoji']} {passive['name']}** · `Passiva`\n\n"
-        f"{passive['description']}"
-    )
-
-
-def _class_detail(data: dict) -> str:
-    paths = data["paths"]
-    path_text = (
-        f"{paths[0]['name']} e {paths[1]['name']} representam os caminhos que o "
-        f"{data['name']} poderá seguir mais adiante. O **{paths[0]['name']} "
-        f"{paths[0]['description']}**, enquanto o **{paths[1]['name']} "
-        f"{paths[1]['description']}**."
-    )
-    return (
-        f"{data['emoji']} {data['name']}\n\n"
-        f"{data['description']}\n\n"
-        "**🔀 Caminhos**\n\n"
-        f"_{path_text}_"
-    )
 
 
 def _format_markup(text: str) -> str:
@@ -160,7 +130,7 @@ def render(state: Creation) -> Screen:
         kind = "race" if race_page else "class"
         key = step.split(":", 1)[1]
         data = _entity(kind, key)
-        text = _race_detail(data) if race_page else _class_detail(data)
+        text = data["detail"]
         rows = [
             [button(f"{data['emoji']} Escolher {data['name']}", "choose")],
             [button("↩️ Voltar", "races" if race_page else "classes")],
@@ -170,13 +140,16 @@ def render(state: Creation) -> Screen:
         klass = _entity("class", state.character_class or CLASSES[0])
         text = (
             f"{text}\n\n"
-            f"🏷️ **Nome** · `{state.name or ''}`\n"
+            f"👤 **Nome** · `{state.name or ''}`\n"
             f"🎭 **Gênero** · `{(state.gender or '').capitalize()}`\n"
             f"{race['emoji']} **Raça** · `{race['name']}`\n"
-            f"{klass['emoji']} **Classe** · `{klass['name']}`"
+            f"⚜️ **Classe** · `{klass['name']}`\n\n"
+            f"{SCREENS['confirm_warning']}"
         )
         rows = [
             [button("✅ Confirmar Personagem", "confirm")],
+            [button("👤 Nome", "name"), button("🎭 Gênero", "gender")],
+            [button("🧿 Raça", "race"), button("⚜️ Classe", "class")],
             [button("↩️ Voltar", "classes")],
         ]
     image_key = step

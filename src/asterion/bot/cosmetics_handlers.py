@@ -8,8 +8,10 @@ from aiogram.types import CallbackQuery, Message
 from asterion.application.cosmetic_catalog import COSMETIC_TYPES, COSMETICS
 from asterion.application.cosmetics import CosmeticMutationRejected, CosmeticService
 from asterion.bot.cosmetics_ui import (
+    DEFAULT_CODE,
     TYPE_BY_CODE,
     render_cosmetic_category,
+    render_cosmetic_default_appearance,
     render_cosmetic_detail,
     render_cosmetics_root,
 )
@@ -34,6 +36,8 @@ def cosmetics_router(service: CosmeticService, images: dict[str, str]) -> Router
             rendered = (
                 render_cosmetic_category(category) if category else render_cosmetics_root(view)
             )
+        elif screen == "detail" and key == DEFAULT_CODE:
+            rendered = render_cosmetic_default_appearance(view)
         elif screen == "detail":
             try:
                 index = int(key or "")
@@ -70,6 +74,10 @@ def cosmetics_router(service: CosmeticService, images: dict[str, str]) -> Router
             await query.answer()
             await show(query, "category", parts[2])
             return
+        if len(parts) == 3 and parts[1] == "d" and parts[2] == DEFAULT_CODE:
+            await query.answer()
+            await show(query, "detail", DEFAULT_CODE)
+            return
         if len(parts) == 3 and parts[1] == "d":
             try:
                 index = int(parts[2])
@@ -81,6 +89,20 @@ def cosmetics_router(service: CosmeticService, images: dict[str, str]) -> Router
                 return
             await query.answer()
             await show(query, "detail", parts[2])
+            return
+        if len(parts) == 4 and parts[1] == "u" and parts[2] == DEFAULT_CODE:
+            try:
+                token = parts[3]
+                expected_id = None if token == "0" else COSMETICS[int(token) - 1].cosmetic_id
+                if token != "0" and not 0 < int(token) <= len(COSMETICS):
+                    raise ValueError
+                await service.select_default_appearance(query.from_user.id, expected_id)
+            except (ValueError, IndexError, CosmeticMutationRejected):
+                await query.answer("A seleção foi atualizada.", show_alert=True)
+                await show(query, "root")
+                return
+            await query.answer()
+            await show(query, "category", "0")
             return
         if len(parts) == 4 and parts[1] == "u":
             try:
@@ -94,16 +116,12 @@ def cosmetics_router(service: CosmeticService, images: dict[str, str]) -> Router
                 )
                 if expected_token != "0" and not 0 < int(expected_token) <= len(COSMETICS):
                     raise ValueError
-                result = await service.select(
-                    query.from_user.id, COSMETICS[index].cosmetic_id, expected_id
-                )
+                await service.select(query.from_user.id, COSMETICS[index].cosmetic_id, expected_id)
             except (ValueError, IndexError, CosmeticMutationRejected):
                 await query.answer("A seleção foi atualizada.", show_alert=True)
                 await show(query, "root")
                 return
-            await query.answer(
-                "Cosmético selecionado." if result and result.changed else "Já selecionado."
-            )
+            await query.answer()
             await show(query, "category", str(COSMETIC_TYPES.index(COSMETICS[index].cosmetic_type)))
             return
         await query.answer("A tela foi atualizada.", show_alert=True)

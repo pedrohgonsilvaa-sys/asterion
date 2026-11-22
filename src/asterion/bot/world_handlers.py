@@ -236,9 +236,12 @@ def world_router(
     router.message.filter(F.chat.type == "private")
     router.callback_query.filter(F.message.chat.type == "private")
 
-    async def refuge_home(actor: int, view=None) -> Screen | None:
+    async def refuge_home(actor: int, view=None, *, navigation_only: bool = False) -> Screen | None:
         view = view or await service.resume(actor)
-        if view is None or view.region != "Terras do Ocaso" or view.location != REFUGE:
+        if view is None or view.region != "Terras do Ocaso":
+            return None
+        # navigation_only: mostra a tela do Refúgio sem exigir nem alterar o Local.
+        if view.location != REFUGE and not navigation_only:
             return None
         road_view = await road.resume(actor) if road is not None else None
         routes = road_view.route_destinations if road_view is not None else ()
@@ -258,20 +261,23 @@ def world_router(
     async def open_region_home(query: CallbackQuery) -> bool:
         if not isinstance(query.message, Message):
             return False
-        view = await service.resume(query.from_user.id)
+        actor = query.from_user.id
+        view = await service.resume(actor)
         if view is None or view.region != "Terras do Ocaso":
             return False
-        if view.location != REFUGE:
-            moved = await road.travel_route(query.from_user.id, REFUGE) if road is not None else None
-            if moved is None:
-                return False
+        # Voltar ao Refúgio é só navegação de UI: não move o personagem nem altera
+        # Local, exploração ou progresso (docs/SOURCE_AUTHORITY.md, 2026-11-19, item 3).
+        # Fora do Refúgio, com atividade em primeiro plano, a atividade responde.
+        if view.location != REFUGE and await has_foreground_for_actor(
+            service.sessions, actor, service.server_id
+        ):
+            return False
+        screen = await refuge_home(actor, view, navigation_only=True)
+        if screen is None:
+            return False
         await query.answer()
-        updated = await service.resume(query.from_user.id)
-        screen = await refuge_home(query.from_user.id, updated)
-        if screen is not None:
-            await present(query.message, screen, images, edit=True)
-            return True
-        return False
+        await present(query.message, screen, images, edit=True)
+        return True
 
     async def region_return_button(actor: int, legacy_label: str) -> InlineKeyboardButton:
         view = await service.resume(actor)
@@ -279,16 +285,26 @@ def world_router(
             return InlineKeyboardButton(text="Voltar ao Refúgio", callback_data="menu:back")
         return InlineKeyboardButton(text=legacy_label, callback_data="world:adventure")
 
+    async def region_main_screen(actor: int, view) -> Screen:
+        # Visual/UI v1.6.2, seção 66.1 item 1: em Terras do Ocaso, o Refúgio substitui o
+        # Menu Principal. É só navegação (navigation_only): não move o personagem. Com atividade
+        # em primeiro plano fora do Refúgio, mantém a regra existente (como em menu:back).
+        if view.location != REFUGE and await has_foreground_for_actor(
+            service.sessions, actor, service.server_id
+        ):
+            return render_world(view)
+        return await refuge_home(actor, view, navigation_only=True) or render_world(view)
+
     async def resume_world_or_prologue(actor: int) -> Screen | None:
         view = await service.resume(actor)
         if view is not None:
-            return await refuge_home(actor, view) or render_world(view)
+            return await region_main_screen(actor, view)
         if prologue is None:
             return None
         combat_view = await prologue.resume(actor)
         view = await service.resume(actor)
         if view is not None:
-            return await refuge_home(actor, view) or render_world(view)
+            return await region_main_screen(actor, view)
         return render_combat(combat_view) if combat_view is not None else None
 
     async def resume_altos(message: Message, actor: int, *, edit: bool = False) -> bool:
@@ -920,7 +936,7 @@ def world_router(
         view = await service.rest(query.from_user.id)
         if view and isinstance(query.message, Message):
             await query.answer()
-            screen = await refuge_home(query.from_user.id, view) or render_world(view)
+            screen = await region_main_screen(query.from_user.id, view)
             await present(query.message, screen, images, edit=True)
             if view.first_menu and community_url:
                 await query.message.answer(
@@ -1120,6 +1136,38 @@ def world_router(
         view = await road.start_hunt(query.from_user.id)
         if view is not None:
             await present(query.message, render_road(view), images, edit=True)
+
+    @router.callback_query(F.data.regexp(r"^road:hunt_screen:[0-9a-fA-F]{32}$"))
+    async def hunt_screen_from_victory(query: CallbackQuery):
+        """[← Caçada] da tela de Vitória: confirma o resultado e abre a tela de Caçada."""
+        if await foreground(query):
+            await query.answer()
+            return
+        await query.answer()
+        if road is None or not isinstance(query.message, Message):
+            return
+        try:
+            expected_activity = UUID(hex=(query.data or "").rsplit(":", 1)[1])
+        except (TypeError, ValueError):
+            await restore_context(query)
+            return
+        current = await road.resume(query.from_user.id)
+        if (
+            current is None
+            or current.kind != "hunt_victory"
+            or current.activity_id != expected_activity
+        ):
+            if current is not None:
+                await present(query.message, render_road(current), images, edit=True)
+            else:
+                await restore_context(query)
+            return
+        await road.acknowledge_result(query.from_user.id)
+        view = await road.prepare_hunt(query.from_user.id)
+        if view is not None:
+            await present(query.message, render_road(view), images, edit=True)
+        else:
+            await restore_context(query)
 
     @router.callback_query(F.data == "road:local")
     async def road_local(query: CallbackQuery):
@@ -3980,8 +4028,6 @@ def world_router(
                 }[name]
                 lines.extend(["", "🧭 Rota terrestre · Disponível"])
                 keyboard.append([InlineKeyboardButton(text=route_label, callback_data=route_callback)])
-            elif key == "ruinas" and current == BOSQUE:
-                lines.extend(["", "🔒 Acesso normal · P4 concluída e Nv. 8+"])
             destination_brazier = next(
                 (
                     brazier_id
@@ -4130,8 +4176,6 @@ def world_router(
                 state = "Acessível"
             elif key == "ruinas" and p4_view is not None and p4_view.status == "active":
                 state = "🔒 P4 em andamento"
-            elif key == "ruinas":
-                state = "🔒 P4 concluída + Nv. 8+"
             else:
                 state = "Conhecido"
             icon = (
