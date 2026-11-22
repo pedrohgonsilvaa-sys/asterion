@@ -1,7 +1,7 @@
 {
   "name": "🏷️ Nome do Personagem\n\nTodo caminho começa com um nome. Escolha como seu personagem será conhecido entre aqueles que ainda percorrem as terras de Asterion.\n\nℹ️ 3–16 letras, A–Z, sem acentos, números, espaços ou símbolos. Envie no chat o nome desejado.",
   "format": "🏷️ Nome do Personagem\n\n⚠️ Nome inválido. Envie outro nome no chat. 3–16 letras, A–Z, sem acentos, números, espaços ou símbolos.",
-  "unavailable": "🏷️ Nome do Personagem\n\n🚫 Luiken · Inválido\n\n⚠️ Esse nome não pode ser utilizado. Escolha outro nome para continuar. Envie outro nome no chat.",
+  "unavailable": "⚠️ Nome indisponível. Tente outro nome novamente.",
   "gender": "🎭 Gênero\n\nEscolha como seu personagem se apresenta ao mundo.\n\n1 Masculino\n2 Feminino",
   "race": "🕯️ Raça\n\nPovos distintos sobreviveram às marcas deixadas sobre Asterion. Sua origem acompanhará permanentemente este personagem e influenciará, de forma sutil, a maneira como ele enfrenta os perigos do mundo.\n\n1 🕯️ Remanescente · Identidade Flexível\n2 🌘 Velado · Efeitos e Resistência\n3 🌪️ Cinéreo · Defesa\n4 🩸 Hemário · Recuperação\n5 🔆 Alvorano · Iniciativa",
   "race:remanescente": "🕯️ Remanescente\n\nEntre os povos que persistiram após as grandes rupturas de Asterion, os Remanescentes aprenderam a sobreviver menos pela especialização e mais pela capacidade de se adaptar ao que o mundo exige.\n\n🧩 Adaptabilidade · Passiva Racial\n\n❤️ HP Máximo · +1,5%\n⚔️ ATQ · +1,5%\n🛡️ DEF · +1,5%\n💨 AGI · +1,5%\n\nℹ️ Os bônus são permanentes e se aplicam aos valores finais estáticos do personagem. Não afetam PER, Crítico, Esquiva ou Bloqueio.",
