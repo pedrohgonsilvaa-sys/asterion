@@ -69,8 +69,9 @@ def render(state: Creation) -> Screen:
         )
     text = COPY[step]
     if step == "name":
-        if state.error:
-            text = COPY[state.error].replace("Luiken", state.rejected_name or "")
+        # Name errors are sent as a separate bot message so the name prompt
+        # remains the stable screen the player can answer again.
+        text = COPY["name"]
     elif step == "gender":
         rows = [
             [button(label, f"g{i}") for i, label in enumerate(GENDER_LABELS)],
