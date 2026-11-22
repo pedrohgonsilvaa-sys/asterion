@@ -1,11 +1,23 @@
 import asyncio
 
+from aiogram.types import BotCommand
+
 from asterion.bot.creation_handlers import warm_photo_file_ids
 from asterion.bot.metrics_server import start_metrics_server
 from asterion.bot.round_scheduler import build_round_scheduler
 from asterion.bot.runtime import get_bot_runtime
 from asterion.config import get_settings
 from asterion.infrastructure.db.session import SessionFactory, engine
+
+# Commands shown in Telegram's native Menu button. /start resumes the player's current
+# persistent state (menu, combat, PvP, dungeon...); it never forces the main menu.
+BOT_COMMANDS = [
+    BotCommand(command="start", description="Abrir o Asterion"),
+]
+
+
+async def register_bot_commands(bot) -> None:
+    await bot.set_my_commands(BOT_COMMANDS)
 
 
 async def _run() -> None:
@@ -25,6 +37,7 @@ async def _run() -> None:
     scheduler = build_round_scheduler()
     scheduler.start()
     try:
+        await register_bot_commands(runtime.bot)
         await runtime.dispatcher.start_polling(runtime.bot)
     finally:
         scheduler.shutdown(wait=False)
