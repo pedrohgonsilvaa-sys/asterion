@@ -102,13 +102,14 @@ def test_targets_are_listed_only_for_living_enemies():
 
 
 def test_participants_page_has_hp_bar_and_pagination_without_effects():
-    rows = tuple(ParticipantRow(f"Nome{i}", "sentinela", 390, 980) for i in range(5))
+    rows = tuple(ParticipantRow(f"Nome{i}", "tecelao", 390, 980) for i in range(5))
     first = ui.render_participants(ParticipantsPage("A", 0, 2, rows))
     assert first.text.count("❤️") == 5 and "🟥🟥🟥⬜⬜⬜⬜⬜⬜⬜" in first.text
     assert _callbacks(first) == ["veu:p:A:1", "veu:n:A"]
     last = ui.render_participants(ParticipantsPage("A", 1, 2, rows[:2]))
     assert _callbacks(last) == ["veu:p:A:0", "veu:n:A"]
     assert "debuff" not in first.text.lower()
+    assert "· Tecelão" in first.text  # nome canônico da Classe, com acento
 
 
 def test_pre_event_notices_use_the_closed_texts():
@@ -137,4 +138,4 @@ def test_router_registers_every_callback_family_used_by_the_screens():
     from asterion.bot.world_event_veu_handlers import veu_event_router
 
     router = veu_event_router(object(), object(), {})
-    assert len(router.callback_query.handlers) == 6  # hub (e alias wev:hub), back, n, a, t, p
+    assert len(router.callback_query.handlers) == 7  # hub (e alias wev:hub), back, n, a, ta, t, p

@@ -98,7 +98,10 @@ async def test_start_is_automatic_at_the_slot_and_creates_phase_one(svc, databas
     view = await svc.get_occurrence(occurrence)
     assert view.state == "EM_ANDAMENTO" and view.phase == 1
     assert sorted(view.nuclei) == ["A", "B", "C"]
-    assert view.snapshots == {1: 0}
+    # Ninguém entrou num Núcleo ainda: o N da Fase I não foi congelado (não é 0).
+    assert view.snapshots == {}
+    await svc.enter_nucleus(occurrence, _[0], "A", now=SLOT + timedelta(seconds=2))
+    assert (await svc.get_occurrence(occurrence)).snapshots == {1: 1}
     async with database[1]() as session:
         nucleus = await session.scalar(
             select(VeuEventNucleus).where(VeuEventNucleus.nucleus_key == "A")
@@ -129,7 +132,7 @@ async def test_two_of_three_advance_the_phase_with_a_new_snapshot(svc, database)
     view = await svc.get_occurrence(occurrence)
     assert view.phase == 2
     assert sorted(view.nuclei) == ["A", "B", "C", "D", "E", "F"]
-    assert view.snapshots == {1: 0, 2: 1}
+    assert view.snapshots == {1: 1, 2: 1}
     assert view.nuclei["C"] == "ATIVA"  # sem destino definido pela fonte: fica como está
 
 
@@ -239,3 +242,59 @@ async def test_engine_simulator_uses_the_real_combat_engine_for_attack_and_defen
     by_id = {row.character_id: row for row in rows}
     assert by_id[attacker].significant_actions == 1  # dano efetivo
     assert by_id[defender].significant_actions == 0  # Defender sem impacto não conta
+
+
+@pytest.mark.asyncio
+async def test_phase_one_snapshot_counts_earlier_joiners_and_ignores_later_ones(svc, database):
+    from asterion.domain.veu_bestiary import creature, creature_stats
+
+    occurrence, heroes = await _start(svc, database, players=3, base=783000)
+    assert (await svc.get_occurrence(occurrence)).snapshots == {}
+    now = SLOT + timedelta(seconds=2)
+    # Dois entram antes do snapshot; o terceiro só entra depois dele.
+    await svc.leave_event(occurrence, heroes[2], now=now)
+    await svc.enter_nucleus(occurrence, heroes[0], "A", now=now)
+    view = await svc.get_occurrence(occurrence)
+    assert view.snapshots == {1: 2}
+    stats = await svc.enemy_stats(occurrence, "A")
+    assert stats["VEU-01"].hp == creature_stats(creature("VEU-01"), 2).hp
+    assert stats["VEU-01"].hp > creature_stats(creature("VEU-01"), 1).hp
+    # Quem entra ou sai depois não altera nada já congelado (§8.4).
+    late = (await _characters(database, 1, base=783500))[0]
+    await svc.join(occurrence, late, now=now + timedelta(seconds=5))
+    await svc.enter_nucleus(occurrence, late, "B", now=now + timedelta(seconds=5))
+    await svc.enter_nucleus(occurrence, heroes[1], "A", now=now + timedelta(seconds=5))
+    assert (await svc.get_occurrence(occurrence)).snapshots == {1: 2}
+    state = await svc.nucleus_enemy_state(occurrence, "B")
+    expected = creature_stats(creature("VEU-04"), 2).hp.to_integral_value()
+    assert Decimal(state["VEU-04"]["max_hp"]) == expected
+
+
+@pytest.mark.asyncio
+async def test_valid_participation_records_the_nucleus_creatures_once(svc, database):
+    from asterion.infrastructure.db.models import BestiaryEntry, BestiaryEvidence
+
+    occurrence, (hero,) = await _start(svc, database, base=784000)
+    now = SLOT + timedelta(seconds=2)
+    await svc.enter_nucleus(occurrence, hero, "A", now=now)
+    round_ = await svc.open_round(occurrence, "A", now=now)
+    # Sem ação válida a criatura não "participou" do encontro.
+    await svc.resolve_round(round_.id, now=round_.decision_deadline)
+    async with database[1]() as session:
+        assert (await session.scalars(select(BestiaryEntry))).all() == []
+    for _ in range(2):
+        round_ = await svc.open_round(occurrence, "A", now=now)
+        await svc.register_action(round_.id, hero, "defend", now=now)
+        await svc.resolve_round(round_.id, now=round_.decision_deadline)
+        now = round_.decision_deadline
+    async with database[1]() as session:
+        entries = (await session.scalars(select(BestiaryEntry))).all()
+        evidence = (await session.scalars(select(BestiaryEvidence))).all()
+    assert sorted(e.creature_id for e in entries) == [
+        "bestiary.veu.01_mandibula_vigilia",
+        "bestiary.veu.02_oito_pulsos",
+        "bestiary.veu.03_costela_andante",
+    ]
+    # Registrado uma vez só, mesmo após duas rodadas válidas.
+    first = [e for e in evidence if e.evidence_id == "first_observation"]
+    assert len(first) == 3

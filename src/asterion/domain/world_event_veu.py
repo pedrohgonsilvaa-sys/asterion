@@ -425,7 +425,10 @@ def due_notice_marks(
 # ------------------------------------------------------------------- bloqueios
 
 BLOCKED_RULES: dict[str, str] = {
-    "contextual_actions": "Estabilizar/Romper/Interromper: a fonte só dá exemplos (§16.3).",
+    "contextual_actions": (
+        "Estabilizar/Romper/Interromper: a fonte só dá exemplos (§16.3) e não liga nenhuma "
+        "Núcleo (§9-§11) a uma ação contextual; nenhuma é implementada."
+    ),
     "nucleus_a_objective": "Núcleo A: 'manter a manifestação abaixo do limite' sem regra.",
     "nucleus_b_structural_objective": "Núcleo B: objetivo estrutural opcional sem regra.",
     "recent_contribution_priority": "Tecelão de Ossos: 'maior contribuição recente' indefinida.",

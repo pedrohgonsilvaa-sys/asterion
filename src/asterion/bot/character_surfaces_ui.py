@@ -33,6 +33,8 @@ from asterion.application.knowledge_catalog import (
     VARZEAS_REGION_LABEL,
     VDE_REGION_ID,
     VDE_REGION_LABEL,
+    VEU_BESTIARY_GROUP,
+    VEU_BESTIARY_LABEL,
 )
 from asterion.bot.creation_ui import Screen
 from asterion.domain.paths import PATH_DEFINITIONS
@@ -386,6 +388,7 @@ def _known_bestiary_regions(view: KnowledgeView) -> list[tuple[str, str, int]]:
         region_id: label.split(" · ", 1)[0] for region_id, label in _region_labels().items()
     }
     labels[CR01_BESTIARY_GROUP] = CR01_BESTIARY_LABEL
+    labels[VEU_BESTIARY_GROUP] = VEU_BESTIARY_LABEL
     return [
         (region_id, label, counts[region_id])
         for region_id, label in labels.items()
@@ -394,7 +397,10 @@ def _known_bestiary_regions(view: KnowledgeView) -> list[tuple[str, str, int]]:
 
 
 def _bestiary_labels() -> dict[str, str]:
-    return _region_labels() | {CR01_BESTIARY_GROUP: CR01_BESTIARY_LABEL}
+    return _region_labels() | {
+        CR01_BESTIARY_GROUP: CR01_BESTIARY_LABEL,
+        VEU_BESTIARY_GROUP: VEU_BESTIARY_LABEL,
+    }
 
 
 def _region_labels() -> dict[str, str]:

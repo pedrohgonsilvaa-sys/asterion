@@ -33,6 +33,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.bestiary import BestiaryRecorder
 from asterion.application.engagement import grant_bundle
 from asterion.application.progression import consolidate_character_level, level_xp
 from asterion.application.vigor import reconcile_character_vigor
@@ -41,6 +42,7 @@ from asterion.domain import world_event_veu as ev
 from asterion.domain.combat_math import CombatStats
 from asterion.domain.veu_bestiary import ActionKind, creature, creature_stats
 from asterion.infrastructure.db.models import (
+    BestiaryEntry,
     Character,
     CodexEntry,
     VeuEventAction,
@@ -259,7 +261,7 @@ class VeuEventService:
                 occurrence.started_at = now
                 occurrence.phase = 1
                 occurrence.state_version += 1
-                await self._begin_phase(session, occurrence, 1, now)
+                await self._begin_phase(session, occurrence, 1, now, freeze_now=False)
             return await self._occurrence_view(session, occurrence)
 
     async def reevaluate_progress(
@@ -376,6 +378,7 @@ class VeuEventService:
             participant = await self._participant(session, occurrence.id, character_id)
             if participant.voluntary_exit:
                 raise VeuEventError("participant_left")
+            await self._ensure_phase_frozen(session, occurrence, now)
             if participant.current_nucleus_id == nucleus.id:
                 return await self._participant_view(session, participant)
             if (
@@ -433,6 +436,7 @@ class VeuEventService:
                 raise VeuEventError("nucleus_not_available")
             if not ev.nucleus_accepts_rounds(ev.NucleusState(nucleus.state)):
                 raise VeuEventError("nucleus_not_active")
+            await self._ensure_phase_frozen(session, occurrence, now)
             unresolved = await session.scalar(
                 select(VeuEventRound).where(
                     VeuEventRound.nucleus_id == nucleus.id,
@@ -637,6 +641,7 @@ class VeuEventService:
                 action.valid = True
                 action.validated_at = now
             acted = {action.character_id for action in actions}
+            await self._record_observations(session, nucleus, acted)
             present = (
                 await session.scalars(
                     select(VeuEventParticipant)
@@ -693,6 +698,34 @@ class VeuEventService:
             await session.flush()
             return ResolutionView(round_.id, True, streaks, tuple(removed))
 
+    async def _record_observations(
+        self, session: AsyncSession, nucleus: VeuEventNucleus, character_ids: set[UUID]
+    ) -> None:
+        """§25.2: a primeira observação vale quando a criatura participa validamente do
+        encontro. Usa o ``BestiaryRecorder`` normal, sem tabela própria."""
+        if not character_ids:
+            return
+        keys = [
+            creature(code).bestiary_key
+            for code in ev.NUCLEI_BY_KEY[nucleus.nucleus_key].creature_codes
+        ]
+        known = {
+            (row.character_id, row.creature_id)
+            for row in (
+                await session.scalars(
+                    select(BestiaryEntry).where(
+                        BestiaryEntry.character_id.in_(character_ids),
+                        BestiaryEntry.creature_id.in_(keys),
+                    )
+                )
+            ).all()
+        }
+        recorder = BestiaryRecorder()
+        for character_id in sorted(character_ids, key=str):
+            for key in keys:
+                if (character_id, key) not in known:
+                    await recorder.record(session, character_id, key)
+
     async def _resolve_combat(
         self,
         session: AsyncSession,
@@ -730,24 +763,39 @@ class VeuEventService:
         outcome = vc.resolve_batch(enemies, inputs.players, inputs.intents, decisions)
         nucleus.enemy_state = {code: unit.to_data() for code, unit in enemies.items()}
         by_id = {participant.character_id: participant for participant in present}
+        counted: set[UUID] = set()
         for action in actions:
             participant = by_id.get(action.character_id)
             damage = outcome.damage_by_character.get(action.character_id, 0)
             absorbed = outcome.absorbed_by_character.get(action.character_id, 0)
+            healed = outcome.heal_by_character.get(action.character_id, 0)
             objective = bool(outcome.kills_by_character.get(action.character_id))
             action.significant = ev.significant_action(
-                effective_damage=damage, absorbed=absorbed, objective=objective
+                effective_damage=damage,
+                effective_heal=healed,
+                absorbed=absorbed,
+                objective=objective,
             )
             action.major_contribution = objective
             if participant is not None and action.significant:
                 participant.significant_actions += 1
+                counted.add(action.character_id)
                 if action.major_contribution:
                     participant.major_contributions += 1
+        # Barreira efetivamente absorvida e proteção que reduziu dano real (§23.3) contam
+        # para quem apoiou, uma vez por rodada, mesmo que a ação desta rodada tenha sido outra.
+        for supporter in sorted(
+            (set(outcome.barrier_absorbed_for) | outcome.protection_credit) - counted, key=str
+        ):
+            participant = by_id.get(supporter)
+            if participant is not None:
+                participant.significant_actions += 1
         for character_id, unit in inputs.players.items():
             participant = by_id.get(character_id)
             if participant is None:
                 continue
             participant.hp = unit.hp
+            participant.combat_state = unit.state_data()
             if unit.hp <= 0:
                 participant.defeated_at = now
                 participant.reentry_available_at = now + ev.REENTRY_DELAY
@@ -1054,8 +1102,43 @@ class VeuEventService:
         return participant
 
     async def _begin_phase(
+        self,
+        session: AsyncSession,
+        occurrence: VeuEventOccurrence,
+        phase: int,
+        now: datetime,
+        *,
+        freeze_now: bool = True,
+    ) -> None:
+        """Cria os 3 Núcleos da fase. O snapshot de N congela já (fases II e III) ou só quando a
+        Fase I realmente começa a ter participação (``_ensure_phase_frozen``): na abertura
+        ninguém entrou ainda e N seria 0."""
+        for definition in ev.nuclei_of_phase(phase):
+            session.add(
+                VeuEventNucleus(
+                    occurrence_id=occurrence.id,
+                    nucleus_key=definition.key,
+                    phase=phase,
+                    state=ev.NucleusState.ATIVA.value,
+                    enemy_state={},
+                    state_version=0,
+                )
+            )
+        await session.flush()
+        if freeze_now:
+            await self._freeze_phase(session, occurrence, phase, now)
+
+    async def _ensure_phase_frozen(
+        self, session: AsyncSession, occurrence: VeuEventOccurrence, now: datetime
+    ) -> None:
+        frozen = await session.get(VeuEventPhaseSnapshot, (occurrence.id, occurrence.phase))
+        if frozen is None:
+            await self._freeze_phase(session, occurrence, occurrence.phase, now)
+
+    async def _freeze_phase(
         self, session: AsyncSession, occurrence: VeuEventOccurrence, phase: int, now: datetime
     ) -> None:
+        """§12.2: lista os válidos, calcula o único N da fase e congela o scaling."""
         records = [
             ev.ParticipantRecord(row.character_id, row.voluntary_exit, row.reentry_available_at)
             for row in (
@@ -1072,6 +1155,7 @@ class VeuEventService:
                 occurrence_id=occurrence.id, phase=phase, n=snapshot.n, frozen_at=now
             )
         )
+        nuclei = await self._nuclei(session, occurrence.id)
         for definition in ev.nuclei_of_phase(phase):
             enemy_state = {}
             for code in definition.creature_codes:
@@ -1080,16 +1164,7 @@ class VeuEventService:
                 enemy_state[code] = vc.EnemyUnit(
                     code, hp, hp, stats.attack, stats.defense, agility=stats.agility
                 ).to_data()
-            session.add(
-                VeuEventNucleus(
-                    occurrence_id=occurrence.id,
-                    nucleus_key=definition.key,
-                    phase=phase,
-                    state=ev.NucleusState.ATIVA.value,
-                    enemy_state=enemy_state,
-                    state_version=0,
-                )
-            )
+            nuclei[definition.key].enemy_state = enemy_state
         await session.flush()
 
     async def _remove_from_nucleus(

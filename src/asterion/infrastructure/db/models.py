@@ -3875,6 +3875,10 @@ class VeuEventParticipant(Base):
     reward: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
+    # Barrier and effects carried between rounds (migration 0059).
+    combat_state: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
 
 
 class VeuEventRound(Base):

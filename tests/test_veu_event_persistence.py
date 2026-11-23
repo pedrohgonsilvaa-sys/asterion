@@ -639,7 +639,8 @@ def _config(connection=None) -> Config:
 
 def test_alembic_has_a_single_head_and_it_chains_the_veu_migrations():
     script = ScriptDirectory.from_config(_config())
-    assert script.get_heads() == ["20261123_0058"]
+    assert script.get_heads() == ["20261123_0059"]
+    assert script.get_revision("20261123_0059").down_revision == "20261123_0058"
     assert script.get_revision("20261123_0058").down_revision == "20261123_0057"
     assert script.get_revision("20261122_0056").down_revision == "20261120_0055"
 

@@ -10,8 +10,11 @@ from uuid import UUID
 from sqlalchemy import func, select
 
 from asterion.application.active_arts import load_active_art_configuration
+from asterion.application.equipment_configuration import load_equipment_configuration
 from asterion.application.world_event_veu import VeuEventError, VeuEventService
+from asterion.domain import veu_combat as vc
 from asterion.domain import world_event_veu as ev
+from asterion.domain.class_trials import class_player_actions
 from asterion.domain.veu_bestiary import creature
 from asterion.infrastructure.db.models import (
     Character,
@@ -70,6 +73,15 @@ class HistoryLine:
 
 
 @dataclass(frozen=True, slots=True)
+class SupportLine:
+    """Suporte direto registrado na rodada atual (sem números, antes da resolução)."""
+
+    source: str
+    kind: str  # heal | barrier | protection
+    target: str  # nome do aliado ou "" para todos os aliados
+
+
+@dataclass(frozen=True, slots=True)
 class NucleusScreen:
     key: str
     name: str
@@ -86,6 +98,7 @@ class NucleusScreen:
     removed: bool
     telegraphs: tuple[str, ...]
     history: tuple[HistoryLine, ...]
+    support: tuple[SupportLine, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +107,7 @@ class ParticipantRow:
     character_class: str
     hp: int
     max_hp: int
+    character_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -322,7 +336,8 @@ class VeuEventViews:
                     )
                 )
             history = await self._history(session, nucleus, character, occurrence)
-            arts = await load_active_art_configuration(session, character)
+            support = await self._support(session, open_round)
+            arts = await load_active_art_configuration(session, character, lock_rows=False)
             slots = tuple(
                 int(entry["slot"])
                 for entry in arts.to_data().get("active_arts", ())
@@ -347,7 +362,70 @@ class VeuEventViews:
                 participant is not None and participant.nucleus_removed_at is not None,
                 telegraphs,
                 history,
+                support,
             )
+
+    async def _support(self, session, open_round) -> tuple[SupportLine, ...]:
+        """Seção 🤝 Suporte: só ações de suporte direto a aliados registradas nesta rodada."""
+        if open_round is None:
+            return ()
+        rows = (
+            await session.scalars(
+                select(VeuEventAction)
+                .where(
+                    VeuEventAction.round_id == open_round.id,
+                    VeuEventAction.action_type == "art",
+                )
+                .order_by(VeuEventAction.registered_at, VeuEventAction.character_id)
+            )
+        ).all()
+        lines: list[SupportLine] = []
+        for action in rows:
+            source = await session.get(Character, action.character_id)
+            if source is None:
+                continue
+            info = await self._art_info(session, source, action.art_slot or 0)
+            if info is None or info[0] not in {"ally", "all_allies"}:
+                continue
+            target_name = ""
+            if info[0] == "ally":
+                ref = action.target_ref or ""
+                target = await self._character_by_hex(session, ref)
+                if target is None or target.id == source.id:
+                    continue
+                target_name = target.name
+            for kind in info[1]:
+                lines.append(SupportLine(source.name, kind, target_name))
+        return tuple(lines)
+
+    async def _character_by_hex(self, session, ref: str):
+        if not ref.startswith("c:") or len(ref) != 34:
+            return None
+        try:
+            character_id = UUID(ref[2:])
+        except ValueError:
+            return None
+        return await session.get(Character, character_id)
+
+    async def _art_info(self, session, character, slot: int):
+        """(modo de alvo, categorias de suporte) da Arte no slot, pelo motor existente."""
+        arts = await load_active_art_configuration(session, character, lock_rows=False)
+        ids = list(arts.art_ids)
+        if not 0 < slot <= len(ids):
+            return None
+        equipment = await load_equipment_configuration(session, character)
+        actions = class_player_actions(
+            character.character_class, tuple(ids), selected_path=equipment.selected_path
+        )
+        action = actions.get(ids[slot - 1])
+        if action is None:
+            return None
+        return action.target_mode, vc.support_kinds(action)
+
+    async def art_info(self, actor: int, slot: int):
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            return await self._art_info(session, character, slot)
 
     async def _history(self, session, nucleus, character, occurrence) -> tuple[HistoryLine, ...]:
         last = await session.scalar(
@@ -390,10 +468,10 @@ class VeuEventViews:
         return tuple(lines)
 
     async def participants_page(
-        self, actor: int, nucleus_key: str, page: int
+        self, actor: int, nucleus_key: str, page: int, *, exclude_self: bool = False
     ) -> ParticipantsPage:
         async with self.sessions() as session:
-            await self._character(session, actor)
+            me = await self._character(session, actor)
             occurrence = await session.scalar(
                 select(VeuEventOccurrence).where(
                     VeuEventOccurrence.server_id == self.service.server_id,
@@ -424,6 +502,8 @@ class VeuEventViews:
                     .order_by(Character.name)
                 )
             ).all()
+            if exclude_self:
+                rows = [row for row in rows if row[0].id != me.id]
             pages = max(1, -(-len(rows) // PAGE_SIZE))
             page = min(max(page, 0), pages - 1)
             chunk = rows[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
@@ -437,6 +517,7 @@ class VeuEventViews:
                         character.character_class,
                         int(participant.hp if participant.hp is not None else character.max_hp),
                         int(character.max_hp),
+                        character.id,
                     )
                     for character, participant in chunk
                 ),

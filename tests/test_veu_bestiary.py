@@ -194,3 +194,20 @@ def test_no_automatic_summon_and_notes_of_the_source():
     assert "Sem Hard CC recorrente." in creature("VEU-18").notes
     assert creature("VEU-01").function == "ameaça corpo a corpo"
     assert creature("VEU-02").function == "pressão contra vários alvos"
+
+
+def test_bestiary_keys_are_the_eighteen_event_ids_and_stay_out_of_the_regional_groups():
+    from asterion.application.knowledge_catalog import (
+        CREATURE_PRESENTATION,
+        VEU_BESTIARY_GROUP,
+    )
+
+    keys = [c.bestiary_key for c in VEU_CREATURES]
+    assert len(keys) == len(set(keys)) == 18
+    assert keys[0] == "bestiary.veu.01_mandibula_vigilia"
+    assert keys[-1] == "bestiary.veu.18_rei_que_nao_existe"
+    assert all(len(key) <= 64 for key in keys)
+    for key in keys:
+        assert CREATURE_PRESENTATION[key].region_id == VEU_BESTIARY_GROUP
+    regional = {v.region_id for k, v in CREATURE_PRESENTATION.items() if k not in keys}
+    assert VEU_BESTIARY_GROUP not in regional

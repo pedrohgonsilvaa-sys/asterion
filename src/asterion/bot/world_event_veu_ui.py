@@ -13,6 +13,7 @@ from asterion.application.world_event_veu_views import (
     PanelView,
     ParticipantsPage,
 )
+from asterion.bot.character_surfaces_ui import CLASS_NAMES
 from asterion.bot.combat_ui import hp_bar
 from asterion.bot.creation_ui import Screen
 from asterion.domain import world_event_veu as ev
@@ -36,6 +37,7 @@ _ERRORS = {
     "waiting_next_round": "Você poderá agir na próxima rodada.",
     "not_in_nucleus": "Você não está neste Núcleo.",
     "action_already_registered": "Sua ação desta rodada já foi registrada.",
+    "no_ally_target": "Não há aliado disponível para essa Arte.",
 }
 
 
@@ -57,6 +59,10 @@ def _bar(hp: int, max_hp: int) -> str:
 
 def _button(text: str, callback: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=callback)
+
+
+def _class_name(character_class: str) -> str:
+    return CLASS_NAMES.get(character_class, character_class)
 
 
 def _icon(key: str) -> str:
@@ -178,6 +184,10 @@ def render_nucleus(view: NucleusScreen) -> Screen:
     if view.telegraphs:
         names = ", ".join(escape(_enemy_name(view, code)) for code in view.telegraphs)
         lines.extend(["", f"⚠️ <i>{names} prepara um ataque.</i>"])
+    if view.support:
+        lines.extend(["", "🤝 <b>Suporte:</b>"])
+        for entry in view.support:
+            lines.append(_support_line(entry))
     if view.history:
         lines.extend(["", "📜 <b>Histórico:</b>"])
         for entry in view.history:
@@ -193,6 +203,20 @@ def render_nucleus(view: NucleusScreen) -> Screen:
         rows.append([_button("👥 Participantes", f"veu:p:{key}:0")])
     rows.append([_button("↩️ Núcleos", "veu:back")])
     return Screen("\n".join(lines), IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")
+
+
+_SUPPORT_TEXT = {
+    "heal": ("✨", "cura", ""),
+    "barrier": ("🕸️", "ergue barreira", "em "),
+    "protection": ("🛡️", "protege", ""),
+}
+
+
+def _support_line(entry) -> str:
+    """Só o que foi registrado; sem valores (adendo C: o resultado vai ao Histórico)."""
+    icon, verb, preposition = _SUPPORT_TEXT[entry.kind]
+    target = escape(entry.target) if entry.target else "todos os aliados"
+    return f"{icon} {escape(entry.source)} <b>{verb}</b> {preposition}{target}."
 
 
 def _enemy_name(view: NucleusScreen, code: str) -> str:
@@ -218,13 +242,39 @@ def render_targets(view: NucleusScreen, action: str) -> Screen:
     )
 
 
+def render_ally_targets(page: ParticipantsPage, kind: str, round_number: int) -> Screen:
+    """Alvo aliado de uma Arte de suporte: participantes do Núcleo, 5 por página (§20, §21)."""
+    key = page.key
+    rows = [
+        [
+            _button(
+                f"{row.name} · {_fmt(row.hp)}/{_fmt(row.max_hp)}",
+                f"veu:t:{kind}:{key}:{round_number}:c{row.character_id.hex}",
+            )
+        ]
+        for row in page.rows
+        if row.character_id is not None
+    ]
+    nav = []
+    if page.page > 0:
+        nav.append(_button("⬅️ Anterior", f"veu:ta:{kind}:{key}:{round_number}:{page.page - 1}"))
+    if page.page < page.pages - 1:
+        nav.append(_button("➡️ Próxima", f"veu:ta:{kind}:{key}:{round_number}:{page.page + 1}"))
+    if nav:
+        rows.append(nav)
+    rows.append([_button("↩️ Voltar", f"veu:n:{key}")])
+    return Screen(
+        "🎯 <b>Escolha o alvo</b>", IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML"
+    )
+
+
 def render_participants(page: ParticipantsPage) -> Screen:
     lines = ["👥 <b>Participantes</b>"]
     for row in page.rows:
         lines.extend(
             [
                 "",
-                f"🌫️ {escape(row.name)} · {escape(row.character_class.title())}",
+                f"🌫️ {escape(row.name)} · {escape(_class_name(row.character_class))}",
                 f"❤️ {_fmt(row.hp)}/{_fmt(row.max_hp)}",
                 _bar(row.hp, row.max_hp),
             ]

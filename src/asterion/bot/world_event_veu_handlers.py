@@ -15,6 +15,7 @@ from asterion.bot.telegram_outbox import TelegramOutbox, notice_message
 from asterion.bot.world_event_veu_ui import (
     ACTION_REGISTERED,
     error_text,
+    render_ally_targets,
     render_notice,
     render_nucleus,
     render_panel,
@@ -135,20 +136,56 @@ def veu_event_router(
             if kind not in _ACTIONS and kind not in _ART_SLOTS:
                 raise ValueError
             screen = await views.nucleus_screen(query.from_user.id, key)
+            mode = "opponent"
+            if kind in _ART_SLOTS:
+                info = await views.art_info(query.from_user.id, _ART_SLOTS[kind])
+                mode = info[0] if info else "opponent"
+            if kind != "def" and mode == "ally":
+                page = await views.participants_page(
+                    query.from_user.id, key, 0, exclude_self=True
+                )
+                if not page.rows:
+                    await query.answer(error_text("no_ally_target"), show_alert=True)
+                    return
+                await query.answer()
+                if isinstance(query.message, Message):
+                    await present(
+                        query.message,
+                        render_ally_targets(page, kind, int(number)),
+                        images,
+                        edit=True,
+                    )
+                return
             alive = [enemy for enemy in screen.enemies if not enemy.defeated]
-            if kind != "def" and len(alive) > 1:
+            needs_enemy = kind != "def" and mode not in {"all_allies", "self"}
+            if needs_enemy and len(alive) > 1:
                 await query.answer()
                 if isinstance(query.message, Message):
                     await present(
                         query.message, render_targets(screen, kind), images, edit=True
                     )
                 return
-            target = alive[0].code if alive and kind != "def" else None
+            target = alive[0].code if alive and needs_enemy else None
             await register(query, kind, key, int(number), target)
         except VeuEventError as error:
             await fail(query, error)
         except ValueError:
             await query.answer(error_text("unknown"), show_alert=True)
+
+    @router.callback_query(F.data.startswith("veu:ta:"))
+    async def ally_page(query: CallbackQuery) -> None:
+        try:
+            _, _, kind, key, number, page = (query.data or "").split(":")
+            result = await views.participants_page(
+                query.from_user.id, key, int(page), exclude_self=True
+            )
+        except VeuEventError as error:
+            await fail(query, error)
+            return
+        except ValueError:
+            await query.answer(error_text("unknown"), show_alert=True)
+            return
+        await show(query, render_ally_targets(result, kind, int(number)))
 
     @router.callback_query(F.data.startswith("veu:t:"))
     async def target(query: CallbackQuery) -> None:
@@ -156,7 +193,8 @@ def veu_event_router(
             _, _, kind, key, number, code = (query.data or "").split(":")
             if kind not in _ACTIONS and kind not in _ART_SLOTS:
                 raise ValueError
-            if await register(query, kind, key, int(number), code):
+            ref = f"c:{code[1:]}" if code.startswith("c") and len(code) == 33 else code
+            if await register(query, kind, key, int(number), ref):
                 screen = await views.nucleus_screen(query.from_user.id, key)
                 if isinstance(query.message, Message):
                     await present(query.message, render_nucleus(screen), images, edit=True)
