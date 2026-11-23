@@ -1,7 +1,7 @@
 """remember the Telegram message of the creation screen
 
-Revision ID: 20261122_0056
-Revises: 20261120_0055
+Revision ID: 20261123_0057
+Revises: 20261122_0056
 Create Date: 2026-11-22 00:00:00
 """
 
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "20261122_0056"
-down_revision: str | None = "20261120_0055"
+revision: str = "20261123_0057"
+down_revision: str | None = "20261122_0056"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
