@@ -39,6 +39,9 @@ class Creation:
     editing: bool = False
     error: str | None = None
     rejected_name: str | None = None
+    # Telegram message that shows the current creation screen. Persisted so an
+    # unavailable name edits that message instead of sending a new one.
+    screen_message_id: int | None = None
 
 
 def navigate(state: Creation, action: str) -> Creation | None:

@@ -19,9 +19,6 @@ SCREENS = CATALOG["screens"]
 RACE_CONTENT = CATALOG["races"]
 CLASS_CONTENT = CATALOG["classes"]
 GENDER_LABELS = ("🚹 Masculino", "🚺 Feminino")
-# Sent as a separate message after a rejected name. Generic on purpose: it
-# never repeats the rejected name nor exposes the internal reason.
-UNAVAILABLE_NAME_WARNING = "⚠️ Nome indisponível. Tente outro nome novamente."
 
 
 # Kept as a small compatibility surface for callers/tests that need the
@@ -96,10 +93,12 @@ def render(state: Creation) -> Screen:
     # from the catalog, so they have no entry in SCREENS.
     text = SCREENS.get(step, "")
     if step == "name":
-        # Unavailable names keep the name prompt; the warning is a separate
-        # message sent by the handler. Format errors keep inline feedback.
+        # Same Nome screen in every case; only the instruction line changes.
+        # Rejected names and internal reasons are never shown.
         if state.error == "format":
             text = SCREENS["format"]
+        elif state.error == "unavailable":
+            text = SCREENS["name_unavailable"]
         else:
             text = SCREENS["name"]
     elif step == "gender":
