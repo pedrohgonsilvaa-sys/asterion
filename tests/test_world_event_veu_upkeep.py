@@ -132,3 +132,70 @@ async def test_deadline_fails_the_running_event_once(svc, database):
     assert row.state == "FRACASSADO"
     assert row.deadline_at == SLOT.astimezone(UTC) + ev.DEADLINE
     assert isinstance(NAIVE_OK, datetime)
+
+
+@pytest.mark.asyncio
+async def test_stale_running_event_still_fails_after_scheduler_downtime(svc, database):
+    upkeep = VeuEventUpkeep(svc, start_after=timedelta(minutes=1))
+    await upkeep.tick(SLOT)
+    await upkeep.tick(SLOT + timedelta(minutes=1))
+    late = SLOT + ev.DEADLINE + timedelta(hours=3)
+    report = await upkeep.tick(late)
+    assert len(report.failed) == 1
+    async with database[1]() as session:
+        row = await session.scalar(select(VeuEventOccurrence))
+    assert row.state == "FRACASSADO"
+
+
+@pytest.mark.asyncio
+async def test_tick_without_previous_emits_no_notices(svc):
+    upkeep = VeuEventUpkeep(svc)
+    assert (await upkeep.tick(SLOT - timedelta(minutes=10))).notices == ()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_ticks_are_idempotent(svc, database):
+    import asyncio
+
+    upkeep = VeuEventUpkeep(svc, start_after=timedelta(minutes=1))
+    await upkeep.tick(SLOT)
+    (character,) = await _characters(database, 1, base=773000)
+    occurrence = (await svc.get_or_create_occurrence(SLOT)).id
+    await svc.join(occurrence, character, now=SLOT)
+    start = SLOT + timedelta(minutes=1)
+    await upkeep.tick(start)
+    await svc.enter_nucleus(occurrence, character, "A", now=start)
+    await upkeep.tick(start + timedelta(seconds=1))
+    reports = await asyncio.gather(
+        *(upkeep.tick(start + timedelta(seconds=12)) for _ in range(4))
+    )
+    assert sum(r.rounds_resolved for r in reports) == 1
+    async with database[1]() as session:
+        from asterion.infrastructure.db.models import VeuEventRound
+
+        rounds = (await session.scalars(select(VeuEventRound))).all()
+    assert sorted(r.round_number for r in rounds) == [1, 2]
+    assert [r.state for r in sorted(rounds, key=lambda r: r.round_number)] == [
+        "RESOLVED",
+        "OPEN",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_enemy_stats_use_frozen_n_and_refuse_unmapped_archetypes(svc, database):
+    from asterion.application.world_event_veu import VeuEventError
+    from asterion.domain.veu_bestiary import UnresolvedArchetypeError, creature
+
+    characters = await _characters(database, 3, base=774000)
+    occurrence = (await svc.get_or_create_occurrence(SLOT)).id
+    await svc.open_occurrence(occurrence, now=SLOT)
+    for character in characters:
+        await svc.join(occurrence, character, now=SLOT)
+    with pytest.raises(VeuEventError):
+        await svc.enemy_stats(occurrence, "A")  # fase ainda não começou
+    await svc.start_occurrence(occurrence, now=SLOT + timedelta(minutes=1))
+    with pytest.raises(UnresolvedArchetypeError):
+        await svc.enemy_stats(occurrence, "A")  # VEU-03 Resistente: sem perfil
+    stats = await svc.enemy_stats(occurrence, "C")
+    assert set(stats) == {"VEU-07", "VEU-08"}
+    assert creature("VEU-07").engine_archetype == "controller"

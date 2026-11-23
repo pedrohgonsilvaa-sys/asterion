@@ -31,7 +31,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.domain import world_event_veu as ev
-from asterion.domain.veu_bestiary import ActionKind, creature
+from asterion.domain.combat_math import CombatStats
+from asterion.domain.veu_bestiary import ActionKind, creature, creature_stats
 from asterion.infrastructure.db.models import (
     Character,
     VeuEventAction,
@@ -68,6 +69,8 @@ class OccurrenceView:
     state_version: int
     nuclei: dict[str, str]  # chave -> estado
     snapshots: dict[int, int]  # fase -> N congelado
+    scheduled_at: datetime | None = None
+    deadline_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -602,6 +605,46 @@ class VeuEventService:
             occurrence.state_version += 1
             return True
 
+    async def unfinished_occurrences(self, now: datetime) -> list[OccurrenceView]:
+        """EM_ANDAMENTO (qualquer idade) e AGENDADO/ABERTO ainda dentro do prazo."""
+        now = _utc(now)
+        async with self.sessions() as session:
+            rows = (
+                await session.scalars(
+                    select(VeuEventOccurrence)
+                    .where(
+                        VeuEventOccurrence.server_id == self.server_id,
+                        (VeuEventOccurrence.state == ev.EventState.EM_ANDAMENTO.value)
+                        | (
+                            VeuEventOccurrence.state.in_(
+                                (ev.EventState.AGENDADO.value, ev.EventState.ABERTO.value)
+                            )
+                            & (VeuEventOccurrence.deadline_at > now)
+                        ),
+                    )
+                    .order_by(VeuEventOccurrence.scheduled_at)
+                )
+            ).all()
+            return [await self._occurrence_view(session, row) for row in rows]
+
+    async def enemy_stats(self, occurrence_id: UUID, nucleus_key: str) -> dict[str, CombatStats]:
+        """Atributos das criaturas do Núcleo com o N congelado da fase (§8.1–§8.4).
+
+        Criatura sem perfil de motor na fonte levanta ``UnresolvedArchetypeError``
+        (``archetype_engine_profile``); nenhum perfil é inventado.
+        """
+        definition = ev.NUCLEI_BY_KEY.get(nucleus_key)
+        if definition is None:
+            raise VeuEventError("nucleus_not_available")
+        async with self.sessions() as session:
+            snapshot = await session.get(VeuEventPhaseSnapshot, (occurrence_id, definition.phase))
+        if snapshot is None:
+            raise VeuEventError("phase_not_started")
+        return {
+            code: creature_stats(creature(code), snapshot.n)
+            for code in definition.creature_codes
+        }
+
     async def due_round_ids(self, occurrence_id: UUID, now: datetime) -> list[UUID]:
         """Rodadas abertas cujos 10 s de decisão já passaram."""
         async with self.sessions() as session:
@@ -742,6 +785,8 @@ class VeuEventService:
             state_version=occurrence.state_version,
             nuclei={key: row.state for key, row in sorted(nuclei.items())},
             snapshots={row.phase: row.n for row in snapshots},
+            scheduled_at=occurrence.scheduled_at,
+            deadline_at=occurrence.deadline_at,
         )
 
     async def _participant_view(
@@ -839,20 +884,29 @@ class VeuEventUpkeep:
     async def tick(
         self, now: datetime | None = None, *, previous: datetime | None = None
     ) -> UpkeepReport:
+        """``previous`` = instante da última verificação; sem ele não há avisos (evita repetir)."""
         now = _utc(now)
-        previous = _utc(previous) if previous is not None else now - timedelta(seconds=1)
+        previous = _utc(previous) if previous is not None else None
         service = self.service
         notices: list[VeuNotice] = []
         slots = ev.slots_in_range(now - ev.DEADLINE, now + self.horizon)
-        occurrences = [await service.get_or_create_occurrence(slot) for slot in slots]
+        views = {}
+        for slot in slots:
+            view = await service.get_or_create_occurrence(slot)
+            views[view.id] = view
+        # EM_ANDAMENTO velho (queda do scheduler) ainda precisa do prazo.
+        for view in await service.unfinished_occurrences(now):
+            views.setdefault(view.id, view)
         opened: list[UUID] = []
         failed: list[UUID] = []
         resolved = opened_rounds = 0
-        for view, slot in zip(occurrences, slots, strict=True):
-            for mark in ev.due_notice_marks(slot, previous, now):
-                notices.append(
-                    VeuNotice("opens_in", view.id, int(mark.total_seconds() // 60))
-                )
+        for view in sorted(views.values(), key=lambda item: item.scheduled_at):
+            slot = view.scheduled_at
+            if previous is not None:
+                for mark in ev.due_notice_marks(slot, previous, now):
+                    notices.append(
+                        VeuNotice("opens_in", view.id, int(mark.total_seconds() // 60))
+                    )
             state = view.state
             if state == ev.EventState.AGENDADO.value and now >= slot:
                 state = (await service.open_occurrence(view.id, now=now)).state
@@ -869,7 +923,7 @@ class VeuEventUpkeep:
             current = await service.reevaluate_progress(view.id, now=now)
             if current.state != ev.EventState.EM_ANDAMENTO.value:
                 continue
-            if now >= slot + ev.DEADLINE:
+            if now >= view.deadline_at:
                 if await service.fail_at_deadline(view.id, now=now):
                     failed.append(view.id)
                 continue
