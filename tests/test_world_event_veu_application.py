@@ -141,7 +141,9 @@ async def test_start_requires_open_and_creates_phase_one(svc, database):
     view = await svc.get_occurrence(occurrence_id)
     assert view.state == "EM_ANDAMENTO" and view.phase == 1
     assert view.nuclei == {"A": "ATIVA", "B": "ATIVA", "C": "ATIVA"}
-    assert view.snapshots == {1: 3}
+    assert view.snapshots == {}  # o N da Fase I congela na primeira entrada em um Núcleo
+    await svc.enter_nucleus(occurrence_id, characters[0], "A", now=SLOT)
+    assert (await svc.get_occurrence(occurrence_id)).snapshots == {1: 3}
     again = await svc.start_occurrence(occurrence_id, now=SLOT + timedelta(minutes=2))
     assert again.state_version == view.state_version and again.snapshots == {1: 3}
 
@@ -420,7 +422,7 @@ async def test_concurrent_reevaluation_advances_the_phase_once(svc, database):
     )
     assert {view.phase for view in views} == {2}
     final = await svc.get_occurrence(occurrence_id)
-    assert final.phase == 2 and final.snapshots.keys() == {1, 2}
+    assert final.phase == 2 and final.snapshots.keys() == {2}  # ninguém entrou na Fase I
     assert set(final.nuclei) == set("ABCDEF") and final.state_version == 3
 
 
@@ -432,7 +434,7 @@ async def test_final_nucleus_completes_the_event_without_the_other_eight(svc, da
     await _set_nuclei(database, occurrence_id, "DE", ev.NucleusState.RESOLVIDA)
     third = await svc.reevaluate_progress(occurrence_id, now=SLOT)
     assert third.phase == 3 and set(third.nuclei) == set("ABCDEFGHI")
-    assert third.snapshots.keys() == {1, 2, 3}
+    assert third.snapshots.keys() == {2, 3}
     await _set_nuclei(database, occurrence_id, "GH", ev.NucleusState.RESOLVIDA)
     still = await svc.reevaluate_progress(occurrence_id, now=SLOT)
     assert still.state == "EM_ANDAMENTO" and still.phase == 3

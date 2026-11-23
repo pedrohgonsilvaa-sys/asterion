@@ -244,6 +244,22 @@ async def test_engine_simulator_uses_the_real_combat_engine_for_attack_and_defen
     assert by_id[defender].significant_actions == 0  # Defender sem impacto não conta
 
 
+async def _late_character(database):
+    """Quarto personagem, com nome próprio (os de ``_characters`` repetem nomes)."""
+    from asterion.infrastructure.db.models import Account
+
+    async with database[1].begin() as session:
+        session.add(Account(telegram_id=783500))
+        character = Character(
+            telegram_id=783500, server_id=SERVER, name="Veutardio", race="remanescente",
+            character_class="sentinela", stage="menu", ruleset_version="tdo-1.0.15",
+            level=30, hp=Decimal("50"), max_hp=Decimal("500"), vigor=100, max_vigor=100,
+        )
+        session.add(character)
+        await session.flush()
+        return character.id
+
+
 @pytest.mark.asyncio
 async def test_phase_one_snapshot_counts_earlier_joiners_and_ignores_later_ones(svc, database):
     from asterion.domain.veu_bestiary import creature, creature_stats
@@ -260,7 +276,7 @@ async def test_phase_one_snapshot_counts_earlier_joiners_and_ignores_later_ones(
     assert stats["VEU-01"].hp == creature_stats(creature("VEU-01"), 2).hp
     assert stats["VEU-01"].hp > creature_stats(creature("VEU-01"), 1).hp
     # Quem entra ou sai depois não altera nada já congelado (§8.4).
-    late = (await _characters(database, 1, base=783500))[0]
+    late = await _late_character(database)
     await svc.join(occurrence, late, now=now + timedelta(seconds=5))
     await svc.enter_nucleus(occurrence, late, "B", now=now + timedelta(seconds=5))
     await svc.enter_nucleus(occurrence, heroes[1], "A", now=now + timedelta(seconds=5))

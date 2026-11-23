@@ -184,7 +184,7 @@ async def test_concurrent_ticks_are_idempotent(svc, database):
 
 
 @pytest.mark.asyncio
-async def test_enemy_stats_use_frozen_n_and_refuse_unmapped_archetypes(svc, database):
+async def test_enemy_stats_use_the_n_frozen_on_the_first_entry(svc, database):
     from asterion.application.world_event_veu import VeuEventError
     from asterion.domain.veu_bestiary import creature
 
@@ -196,6 +196,9 @@ async def test_enemy_stats_use_frozen_n_and_refuse_unmapped_archetypes(svc, data
     with pytest.raises(VeuEventError):
         await svc.enemy_stats(occurrence, "A")  # fase ainda não começou
     await svc.start_occurrence(occurrence, now=SLOT + timedelta(minutes=1))
+    with pytest.raises(VeuEventError):
+        await svc.enemy_stats(occurrence, "A")  # N da Fase I ainda não congelou
+    await svc.enter_nucleus(occurrence, characters[0], "A", now=SLOT + timedelta(minutes=1))
     stats = await svc.enemy_stats(occurrence, "A")  # VEU-03 Resistente -> armored
     assert set(stats) == {"VEU-01", "VEU-02", "VEU-03"}
     assert creature("VEU-03").engine_archetype == "armored"
