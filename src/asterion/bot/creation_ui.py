@@ -31,13 +31,6 @@ for _key, _data in RACE_CONTENT.items():
     COPY[f"race:{_key}"] = _data["detail"]
 for _key, _data in CLASS_CONTENT.items():
     COPY[f"class:{_key}"] = _data["detail"]
-PROLOGUE_TEXT = (
-    "🔥 Cinzas na Estrada\nPrólogo · Terras do Ocaso\n\n"
-    "O mundo desperta sob um céu sem cor. Cinzas atravessam a estrada como neve morta, "
-    "cobrindo pedras, árvores retorcidas e os restos de algo que um dia talvez tenha sido "
-    "um caminho seguro. À frente, entre a névoa e o silêncio, formas quebradas marcam "
-    "a direção de sua primeira jornada."
-)
 
 
 def _entity(kind: str, key: str) -> dict:
@@ -96,19 +89,9 @@ def render(state: Creation) -> Screen:
     rows = []
     step = state.step
     if step == PROLOGUE:
-        return Screen(
-            PROLOGUE_TEXT,
-            PROLOGUE,
-            InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="Seguir pela Estrada", callback_data="prologue:continue"
-                        ),
-                    ]
-                ]
-            ),
-        )
+        from asterion.bot.prologue_ui import render_scene
+
+        return render_scene("cinzas")
     # Race/class detail steps ("race:<key>", "class:<key>") are built below
     # from the catalog, so they have no entry in SCREENS.
     text = SCREENS.get(step, "")

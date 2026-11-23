@@ -12,13 +12,13 @@ from aiogram.methods import EditMessageText, SendPhoto
 from asterion.bot.creation_handlers import creation_router, present
 from asterion.bot.creation_ui import (
     CLASS_CONTENT,
-    PROLOGUE_TEXT,
     RACE_CONTENT,
     UNAVAILABLE_NAME_WARNING,
     CreationCallback,
     render,
 )
 from asterion.bot.p1_handlers import p1_router
+from asterion.bot.prologue_ui import render_scene
 from asterion.domain.creation import CLASSES, PROLOGUE, RACES, Creation
 
 
@@ -402,7 +402,7 @@ async def test_telegram_failure_after_commit_is_recoverable(service, telegram):
     assert (await service.start(10)).step == PROLOGUE
     telegram.session.make_request.side_effect = None
     await dispatcher.feed_raw_update(telegram, message_update("/start"))
-    assert telegram.session.make_request.call_args.args[1].text == PROLOGUE_TEXT
+    assert telegram.session.make_request.call_args.args[1].text == render_scene("cinzas").text
 
 
 def test_packaged_copy_is_valid_json():

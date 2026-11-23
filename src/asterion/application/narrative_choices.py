@@ -32,7 +32,6 @@ from asterion.domain.narrative_choices import (
     prologue_catalog,
     resolve_hook,
 )
-from asterion.domain.prologue import POST_COMBAT_STAGE
 from asterion.infrastructure.db.models import (
     Character,
     CharacterNarrativeMemory,
@@ -405,70 +404,6 @@ async def commit_mission_choice(
 # --- Prologue (Documento A): no Quest, character memory only ---------------------------
 
 PROLOGUE_CHOICE_ORDER = ("PRO_choice_aftermath", "PRO_choice_first_fire")
-
-
-@dataclass(frozen=True, slots=True)
-class PrologueChoiceView:
-    """One pending Prologue node as a screen needs it. Tags never leave the server."""
-
-    choice_id: str
-    title: str
-    context: str
-    question: str
-    options: tuple[tuple[str, str], ...]
-
-
-async def prologue_choice_view(
-    session: AsyncSession, character: Character
-) -> PrologueChoiceView | None:
-    """The next unanswered Prologue node, only while the character stands at the first Braseiro."""
-    if character.stage != POST_COMBAT_STAGE:
-        return None
-    catalog = prologue_catalog()
-    for choice_id in PROLOGUE_CHOICE_ORDER:
-        if await selected_option(session, character.id, choice_id) is None:
-            node = catalog.nodes[choice_id]
-            return PrologueChoiceView(
-                choice_id=choice_id,
-                title=node.title,
-                context=node.step_context,
-                question=node.question,
-                options=tuple(
-                    (item.option_id, item.label)
-                    for item in node.available_options(character.race, character.character_class)
-                ),
-            )
-    return None
-
-
-async def commit_prologue_choice(
-    session: AsyncSession,
-    character: Character,
-    choice_id: str,
-    option_id: str,
-    *,
-    now: datetime | None = None,
-) -> CommitResult | None:
-    """Commit one Prologue node once; None when the callback no longer matches the state.
-
-    Only character memory is written. Callers hold the character row lock.
-    """
-    catalog = prologue_catalog()
-    node = catalog.nodes.get(choice_id)
-    if node is None:
-        return None
-    existing = await _record(session, character.id, choice_id)
-    if existing is not None:
-        return CommitResult(choice_id, existing.selected_option, created=False)
-    if character.stage != POST_COMBAT_STAGE:
-        return None
-    index = PROLOGUE_CHOICE_ORDER.index(choice_id)
-    if index and await selected_option(session, character.id, PROLOGUE_CHOICE_ORDER[0]) is None:
-        return None
-    option = node.option(option_id)
-    if option is None or not option.available_to(character.race, character.character_class):
-        return None
-    return await _write_choice(session, character, node, option, now=now)
 
 
 async def backfill_prologue_choices(

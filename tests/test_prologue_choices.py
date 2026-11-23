@@ -1,13 +1,11 @@
 """Documento A: as duas escolhas do Prólogo gravam só memória do personagem."""
 
-import asyncio
 
 import pytest
 from sqlalchemy import func, select
 
 from asterion.application.narrative_choices import (
     PROLOGUE_CHOICE_ORDER,
-    commit_prologue_choice,
 )
 from asterion.application.prologue import PrologueService
 from asterion.application.world import WorldService
@@ -22,11 +20,8 @@ from asterion.domain.prologue import PROFILE
 from asterion.infrastructure.db.models import (
     Character,
     CharacterNarrativeMemory,
-    LocationDiscovery,
     NarrativeChoiceRecord,
     NpcNarrativeMemory,
-    NpcRapport,
-    Quest,
     WorldState,
 )
 from tests.test_prologue_persistence import character, win
@@ -122,94 +117,21 @@ def _callbacks(view):
     return [b.callback_data for row in render_world(view).keyboard.inline_keyboard for b in row]
 
 
-async def test_flow_screens_and_memory_only(database):
+async def test_old_step_is_retired_and_the_first_brazier_shows_straight_away(database):
     world = await _at_first_brazier(database)
-    before = await _economy(database)
     view = await world.resume(1)
-    assert view.prologue_choice.choice_id == "PRO_choice_aftermath"
-    assert _callbacks(view) == ["pro:a:o1", "pro:a:o2", "pro:a:o3"]
-
-    view = await world.choose_prologue(1, "PRO_choice_aftermath", "o2")
-    assert view.prologue_choice.choice_id == "PRO_choice_first_fire"
-    assert _callbacks(view) == ["pro:f:o1", "pro:f:o2", "pro:f:o3"]
-
-    view = await world.choose_prologue(1, "PRO_choice_first_fire", "o3")
-    assert view.prologue_choice is None and view.kind == "brazier"
-    assert "world:rest" in _callbacks(view)
-    async with database[1]() as session:
-        tags = set(await session.scalars(select(CharacterNarrativeMemory.tag)))
-        assert tags == {
-            "hypothesis_marked",
-            "preserves_contradiction",
-            "risk_accepting",
-            "questions_authority",
-        }
-        assert await session.scalar(select(func.count()).select_from(NpcNarrativeMemory)) == 0
-        assert await session.scalar(select(func.count()).select_from(NpcRapport)) == 0
-    assert await _economy(database) == before
-
-    menu = await world.rest(1)
-    assert menu.kind == "menu"
-    async with database[1]() as session:
-        assert (await session.scalar(select(Quest))).quest_id == "P1"
-        location = await session.scalar(select(WorldState))
-        assert location.location == "Refúgio do Ocaso"
-        assert await session.scalar(
-            select(LocationDiscovery).where(
-                LocationDiscovery.location_id == "tdo.location.refugio_do_ocaso"
-            )
-        ) is not None
-
-
-async def test_duplicate_concurrent_and_changed_callbacks_keep_the_first_choice(database):
-    world = await _at_first_brazier(database)
-    await asyncio.gather(
-        *(world.choose_prologue(1, "PRO_choice_aftermath", "o1") for _ in range(6))
-    )
-    await world.choose_prologue(1, "PRO_choice_aftermath", "o3")
-    async with database[1]() as session:
-        records = (await session.scalars(select(NarrativeChoiceRecord))).all()
-        assert [(r.choice_id, r.selected_option, r.source) for r in records] == [
-            ("PRO_choice_aftermath", "o1", "player")
-        ]
-        count = await session.scalar(select(func.count()).select_from(CharacterNarrativeMemory))
-        assert count == 2
-
-
-async def test_out_of_order_unknown_and_wrong_stage_are_rejected(database):
-    world = await _at_first_brazier(database)
-    view = await world.choose_prologue(1, "PRO_choice_first_fire", "o1")
-    assert view.prologue_choice.choice_id == "PRO_choice_aftermath"
-    await world.choose_prologue(1, "PRO_choice_aftermath", "o9")
-    await world.choose_prologue(1, "P1_choice_nope", "o1")
+    assert view.kind == "brazier"
+    assert _callbacks(view) == ["world:rest"]
+    assert "Depois da Cinza" not in render_world(view).text
     async with database[1]() as session:
         assert await session.scalar(select(func.count()).select_from(NarrativeChoiceRecord)) == 0
-    await world.choose_prologue(1, "PRO_choice_aftermath", "o1")
-    await world.choose_prologue(1, "PRO_choice_first_fire", "o1")
-    await world.rest(1)
-    async with database[1].begin() as session:
-        row = await session.scalar(select(Character))
-        assert row.stage == "menu:ready"
-        again = await commit_prologue_choice(session, row, "PRO_choice_aftermath", "o2")
-        assert again is not None and not again.created and again.selected_option == "o1"
-        assert await session.scalar(select(func.count()).select_from(NarrativeChoiceRecord)) == 2
-
-
-@pytest.mark.parametrize("race,klass", [("alvorano", "luminar"), ("velado", "tecelao")])
-async def test_race_and_class_never_change_options(database, race, klass):
-    world = await _at_first_brazier(database, cls=klass, race=race)
-    view = await world.resume(1)
-    assert [o for o, _ in view.prologue_choice.options] == ["o1", "o2", "o3"]
-    assert [label for _, label in view.prologue_choice.options] == [
-        label for _, label, _ in EXPECTED["PRO_choice_aftermath"]
-    ]
 
 
 async def test_old_characters_get_neutral_backfill_without_preference(database):
     world = await _at_first_brazier(database)
     await world.rest(1)  # passed the Prologue before the choices existed
     view = await world.resume(1)
-    assert view.kind == "menu" and view.prologue_choice is None
+    assert view.kind == "menu"
     await world.resume(1)
     async with database[1]() as session:
         records = (await session.scalars(select(NarrativeChoiceRecord))).all()

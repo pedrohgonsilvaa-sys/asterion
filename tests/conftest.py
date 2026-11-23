@@ -51,3 +51,20 @@ async def database():
 @pytest.fixture
 def service(database):
     return CreationService(database[1], "ocaso")
+
+
+@pytest.fixture(autouse=True)
+def _deterministic_prologue_enemy(monkeypatch):
+    """The prologue draws Cão or Corvo; tests pin the Cão unless they override this."""
+    monkeypatch.setattr("asterion.application.prologue.choose_enemy_id", lambda: "dog_cinereo")
+
+
+@pytest.fixture(autouse=True)
+def _frozen_turn_clock():
+    """Combat turn deadlines follow a controllable clock; tests do not race 10 seconds."""
+    from asterion.domain import turn_clock
+
+    state = {"t": 1_000_000.0}
+    turn_clock.set_clock(lambda: state["t"])
+    yield state
+    turn_clock.set_clock(None)

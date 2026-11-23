@@ -80,9 +80,18 @@ async def _player_character_image(images: dict[str, str], telegram_id: int) -> s
     race, gender, character_class = found
     if gender is None:
         return None
-    return images.get(character_key(race, gender, character_class)) or images.get(
-        character_key(race, gender)
+    exact = images.get(character_key(race, gender, character_class))
+    if exact:
+        return exact
+    # Audited fallback: only the class-neutral race+gender portrait. Never another
+    # class's art; with no portrait at all the screen goes out without a picture.
+    logger.warning(
+        "no exact art for %s/%s/%s; using the class-neutral race portrait",
+        race,
+        gender,
+        character_class,
     )
+    return images.get(character_key(race, gender))
 
 
 def _asset_cache_key(path) -> str:
