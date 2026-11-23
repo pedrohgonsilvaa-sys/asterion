@@ -11,7 +11,6 @@ import pytest
 from sqlalchemy import select, update
 
 from asterion.application.world_event_veu import (
-    BlockedRuleError,
     VeuEventError,
     VeuEventService,
 )
@@ -200,14 +199,16 @@ async def test_voluntary_exit_blocks_rejoin_and_leaves_the_nucleus(svc, database
 
 
 @pytest.mark.asyncio
-async def test_enter_nucleus_first_entry_only_and_switch_is_blocked(svc, database):
+async def test_enter_nucleus_and_switch_follow_the_closed_rules(svc, database):
     occurrence_id, (alfa, beta) = await _running(svc, database)
     entered = await svc.enter_nucleus(occurrence_id, alfa, "A", now=SLOT)
     assert entered.current_nucleus == "A"
     assert (await svc.enter_nucleus(occurrence_id, alfa, "A", now=SLOT)).current_nucleus == "A"
-    with pytest.raises(BlockedRuleError) as error:
-        await svc.enter_nucleus(occurrence_id, alfa, "B", now=SLOT)
-    assert error.value.code == "switch_blocked_round_instant"
+    switched = await svc.enter_nucleus(occurrence_id, alfa, "B", now=SLOT)
+    assert switched.current_nucleus == "B"
+    async with database[1]() as session:
+        row = await session.get(VeuEventParticipant, (occurrence_id, alfa))
+    assert row.acts_from_round == 2  # trocar: 1 rodada sem agir no destino
     with pytest.raises(VeuEventError) as error:
         await svc.enter_nucleus(occurrence_id, beta, "D", now=SLOT)
     assert error.value.code == "nucleus_not_available"
@@ -312,12 +313,13 @@ async def test_enemy_decision_is_seeded_idempotent_and_validated(svc, database):
                 round_.id, enemy, action, target_ids=targets, now=SLOT
             )
         assert error.value.code == code
-    with pytest.raises(BlockedRuleError) as error:
-        await svc.register_enemy_decision(round_.id, "VEU-03", "fechamento_toracico", now=SLOT)
-    assert error.value.code == "barrier_duration"
+    barrier = await svc.register_enemy_decision(
+        round_.id, "VEU-03", "fechamento_toracico", now=SLOT
+    )
+    assert barrier.created and barrier.action_key == "fechamento_toracico"
     async with database[1]() as session:
         rows = (await session.scalars(select(VeuEventEnemyDecision))).all()
-    assert [row.enemy_key for row in rows] == ["VEU-02"]
+    assert sorted(row.enemy_key for row in rows) == ["VEU-02", "VEU-03"]
 
 
 @pytest.mark.asyncio
@@ -364,9 +366,8 @@ async def test_three_idle_rounds_remove_from_nucleus_but_not_from_the_event(svc,
     assert participants[beta].nucleus_removed and not participants[beta].voluntary_exit
     assert participants[beta].afk_label == "AFK 3/3"
     assert participants[alfa].current_nucleus == "A" and participants[alfa].afk_label is None
-    with pytest.raises(BlockedRuleError) as error:
-        await svc.enter_nucleus(occurrence_id, beta, "A", now=now)
-    assert error.value.code == "afk_reentry_undefined"
+    back = await svc.enter_nucleus(occurrence_id, beta, "A", now=now)
+    assert back.current_nucleus == "A" and not back.nucleus_removed and back.afk_streak == 0
 
 
 @pytest.mark.asyncio

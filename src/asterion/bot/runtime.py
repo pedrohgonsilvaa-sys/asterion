@@ -80,6 +80,8 @@ from asterion.application.vde_missions import VDEMissionService
 from asterion.application.warehouse import WarehouseService
 from asterion.application.weapon_proficiency import WeaponTrainerService
 from asterion.application.world import WorldService
+from asterion.application.world_event_veu import VeuEventService
+from asterion.application.world_event_veu_views import VeuEventViews
 from asterion.application.world_events import WorldEventService
 from asterion.bot.altos_missions_handlers import altos_missions_router
 from asterion.bot.armor_trainer_handlers import armor_trainer_router
@@ -144,7 +146,7 @@ from asterion.bot.tdo_navigation_labels import TdoReturnLabelMiddleware
 from asterion.bot.varzeas_missions_handlers import varzeas_missions_router
 from asterion.bot.vde_missions_handlers import vde_missions_router
 from asterion.bot.weapon_trainer_handlers import weapon_trainer_router
-from asterion.bot.world_event_handlers import world_event_router
+from asterion.bot.world_event_veu_handlers import veu_event_router
 from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
 from asterion.domain.creation import NamePolicy
@@ -296,8 +298,10 @@ def get_bot_runtime() -> BotRuntime:
     world_events = WorldEventService(
         SessionFactory, settings.server_id, latest_local=road.latest_explorable_local
     )
-    # Also before the world routers: /start must resume an Event combat.
-    dispatcher.include_router(world_event_router(world_events, settings.creation_images))
+    # A Ruptura do Véu replaces the regional World Event flow (Eventos Mundiais).
+    veu_service = VeuEventService(SessionFactory, settings.server_id)
+    veu_views = VeuEventViews(veu_service)
+    dispatcher.include_router(veu_event_router(veu_service, veu_views, settings.creation_images))
     oaths = OathService(SessionFactory, settings.server_id, notifier=runtime_oath_notifier)
     # Also before the world routers: /start must resume a Provação.
     dispatcher.include_router(oath_router(oaths, settings.creation_images))

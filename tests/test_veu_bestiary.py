@@ -153,7 +153,7 @@ def test_self_buffs_are_plus_ten_percent_for_two_turns():
         assert (action.stat, action.magnitude, action.turns) == (stat, D("0.10"), 2)
 
 
-def test_barriers_use_the_declared_basis_and_never_invent_a_duration():
+def test_barriers_use_the_declared_basis_and_the_kit_duration_is_a_documented_constant():
     attack_basis = {"VEU-03": "0.60", "VEU-06": "0.80", "VEU-09": "0.70"}
     hp_basis = {"VEU-07": "0.06", "VEU-10": "0.07", "VEU-15": "0.06", "VEU-18": "0.08"}
     for code, value in attack_basis.items():

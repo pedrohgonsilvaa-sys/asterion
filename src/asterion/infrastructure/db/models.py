@@ -3751,6 +3751,7 @@ class VeuEventOccurrence(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     phase_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     state_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     ruleset_version: Mapped[str] = mapped_column(String(64), nullable=False)
 
@@ -3859,6 +3860,16 @@ class VeuEventParticipant(Base):
     phases: Mapped[list[int]] = mapped_column(
         JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
     )
+    # Combat state (migration 0057).
+    hp: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    acts_from_round: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    eligible: Mapped[bool | None] = mapped_column(Boolean)
+    reward: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
 
 
 class VeuEventRound(Base):
@@ -3908,6 +3919,9 @@ class VeuEventRound(Base):
     decision_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     resolution_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
 
 
 class VeuEventAction(Base):

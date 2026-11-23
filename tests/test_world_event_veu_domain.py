@@ -12,8 +12,8 @@ from asterion.domain import world_event_veu as ev
 from asterion.domain.veu_bestiary import (
     CREATURES_BY_CODE,
     EVENT_REFERENCE_LEVEL,
+    VEU_CREATURES,
     Category,
-    UnresolvedArchetypeError,
     boss_in_final_form,
     creature_stats,
     stats_for,
@@ -81,10 +81,24 @@ def test_nucleus_states_follow_the_source_and_first_occurrence_never_collapses()
         assert ev.nucleus_state_used_in_first_occurrence(state)
 
 
-def test_nucleus_state_transitions_are_not_modeled_because_the_source_has_none():
-    assert not hasattr(ev, "NUCLEUS_TRANSITIONS")
-    assert not hasattr(ev, "transition_nucleus")
-    assert "nucleus_state_transitions" in ev.BLOCKED_RULES
+def test_nucleus_state_transitions_follow_the_documented_edges():
+    S = ev.NucleusState
+    assert ev.transition_nucleus(S.ATIVA, S.RESOLVENDO) is S.RESOLVENDO
+    assert ev.transition_nucleus(S.RESOLVENDO, S.RESOLVIDA) is S.RESOLVIDA
+    assert ev.transition_nucleus(S.RESOLVENDO, S.ATIVA) is S.ATIVA
+    for current, target in ((S.RESOLVIDA, S.ATIVA), (S.ATIVA, S.RESOLVIDA), (S.COLAPSADA, S.ATIVA)):
+        with pytest.raises(ev.InvalidTransition):
+            ev.transition_nucleus(current, target)
+
+
+def test_nucleus_resolution_rule():
+    assert not ev.nucleus_resolved("A", {"VEU-01", "VEU-02"})
+    assert ev.nucleus_resolved("A", {"VEU-01", "VEU-02", "VEU-03"})
+    assert ev.nucleus_resolved("D", {"VEU-09"})  # criatura principal
+    assert not ev.nucleus_resolved("D", {"VEU-13"})
+    assert not ev.nucleus_resolved("F", {"VEU-12"})  # alvos independentes
+    assert ev.nucleus_resolved("F", {"VEU-12", "VEU-14"})
+    assert ev.nucleus_resolved("I", {"VEU-18"})
 
 
 def test_only_active_nucleus_takes_players_and_rounds():
@@ -240,10 +254,13 @@ def test_creature_hp_follows_the_global_n_without_sintonization():
     assert ten.defense == one.defense
 
 
-def test_archetypes_without_engine_profile_fail_loudly():
-    for code in ("VEU-03", "VEU-09", "VEU-14", "VEU-15", "VEU-16", "VEU-18"):
-        with pytest.raises(UnresolvedArchetypeError):
-            creature_stats(CREATURES_BY_CODE[code], 10)
+def test_every_creature_has_an_engine_profile_after_the_documented_mapping():
+    assert [c.code for c in VEU_CREATURES if c.engine_archetype is None] == []
+    assert CREATURES_BY_CODE["VEU-03"].engine_archetype == "armored"  # Resistente
+    assert CREATURES_BY_CODE["VEU-09"].engine_archetype == "controller"  # Técnico
+    assert CREATURES_BY_CODE["VEU-18"].engine_archetype == "balanced"  # Equilibrado/Controlador
+    for creature in VEU_CREATURES:
+        assert creature_stats(creature, 10).hp > 0
 
 
 def test_boss_final_form_is_only_defined_at_or_below_35_percent():
@@ -273,12 +290,21 @@ def test_a_valid_action_resets_afk():
         ev.afk_after_round(-1, acted=False)
 
 
-def test_nucleus_switch_forbids_immediate_action_without_fixing_the_instant():
-    assert ev.SWITCH_BLOCKED_ROUNDS == 1
-    assert ev.SWITCH_ALLOWS_IMMEDIATE_ACTION is False
-    assert not hasattr(ev, "blocked_through_round")
-    assert not hasattr(ev, "can_act")
-    assert "switch_blocked_round_instant" in ev.BLOCKED_RULES
+def test_first_action_round_for_entry_and_switch():
+    # Sem rodada aberta, a primeira entrada age já na próxima; com rodada aberta espera.
+    assert ev.first_action_round(None, 1, switching=False) == 1
+    assert ev.first_action_round(4, 5, switching=False) == 5
+    # Trocar de Núcleo: mais uma rodada observando (§14.2).
+    assert ev.first_action_round(None, 6, switching=True) == 7
+    assert ev.first_action_round(6, 7, switching=True) == 8
+
+
+def test_significant_action_counts_only_real_impact():
+    assert ev.significant_action(effective_damage=1)
+    assert ev.significant_action(absorbed=5)
+    assert ev.significant_action(objective=True)
+    assert not ev.significant_action()
+    assert not ev.significant_action(effective_damage=50, valid=False)
 
 
 def test_action_id_and_enemy_seed_are_deterministic():
@@ -309,16 +335,8 @@ def test_unresolved_rules_stay_blocked_and_documented():
         "nucleus_a_objective",
         "nucleus_b_structural_objective",
         "recent_contribution_priority",
-        "barrier_duration",
         "remaining_nucleus_on_phase_change",
-        "archetype_engine_profile",
-        "nucleus_state_transitions",
         "boss_form_70_boundary",
-        "switch_blocked_round_instant",
-        "start_trigger",
-        "notice_texts",
-        "significant_action",
-        "event_closure",
     }
     assert ev.EVENT_ID == "a_ruptura_do_veu"
     assert ev.CODEX_KEY == "codex.world_event.a_ruptura_do_veu"

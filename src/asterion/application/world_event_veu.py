@@ -21,20 +21,28 @@ O que este módulo NÃO decide (``BLOCKED_RULES`` do domínio e lacunas da fonte
 
 from __future__ import annotations
 
+import zlib
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from typing import Protocol
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.engagement import grant_bundle
+from asterion.application.progression import consolidate_character_level, level_xp
+from asterion.application.vigor import reconcile_character_vigor
+from asterion.domain import veu_combat as vc
 from asterion.domain import world_event_veu as ev
 from asterion.domain.combat_math import CombatStats
 from asterion.domain.veu_bestiary import ActionKind, creature, creature_stats
 from asterion.infrastructure.db.models import (
     Character,
+    CodexEntry,
     VeuEventAction,
     VeuEventEnemyDecision,
     VeuEventNucleus,
@@ -119,6 +127,14 @@ class DecisionView:
 
 
 @dataclass(frozen=True, slots=True)
+class SettlementView:
+    occurrence_id: UUID
+    state: str
+    participants: int
+    rewarded: int
+
+
+@dataclass(frozen=True, slots=True)
 class ResolutionView:
     round_id: UUID
     resolved_now: bool  # False: já estava resolvida; nada foi refeito
@@ -140,12 +156,38 @@ def _event_move(current: str, target: ev.EventState) -> str:
         raise VeuEventError("invalid_transition") from error
 
 
+@dataclass(frozen=True, slots=True)
+class RoundInputs:
+    """O que o motor mediu sobre o estado inicial da rodada."""
+
+    intents: list[vc.PlayerIntent]
+    players: dict[UUID, vc.PlayerUnit]
+
+
+class RoundSimulator(Protocol):
+    async def prepare(
+        self,
+        session: AsyncSession,
+        participants: Sequence[VeuEventParticipant],
+        actions: Sequence[VeuEventAction],
+        enemies: dict[str, vc.EnemyUnit],
+        combat_key: str,
+    ) -> RoundInputs: ...
+
+
 class VeuEventService:
-    def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
+    def __init__(
+        self,
+        sessions: async_sessionmaker[AsyncSession],
+        server_id: str,
+        simulator: RoundSimulator | None = None,
+    ):
         if not server_id or len(server_id) > 64:
             raise ValueError("server_id must contain 1..64 characters")
         self.sessions = sessions
         self.server_id = server_id
+        # Sem simulador só o AFK é aplicado; com ele a rodada vira combate de verdade.
+        self.simulator = simulator
 
     # ------------------------------------------------------------------ ocorrência
 
@@ -320,7 +362,7 @@ class VeuEventService:
         *,
         now: datetime | None = None,
     ) -> ParticipantView:
-        """Primeira entrada em um Núcleo ATIVA. Trocar de Núcleo é regra bloqueada."""
+        """Entra ou troca de Núcleo ATIVA (§14.1, §14.2). Idempotente no mesmo Núcleo."""
         now = _utc(now)
         async with self.sessions.begin() as session:
             occurrence = await self._load_occurrence(session, occurrence_id)
@@ -336,13 +378,43 @@ class VeuEventService:
                 raise VeuEventError("participant_left")
             if participant.current_nucleus_id == nucleus.id:
                 return await self._participant_view(session, participant)
-            if participant.nucleus_removed_at is not None:
-                raise BlockedRuleError("afk_reentry_undefined")
-            if participant.current_nucleus_id is not None:
-                raise BlockedRuleError("switch_blocked_round_instant")
+            if (
+                participant.reentry_available_at is not None
+                and participant.reentry_available_at > now
+            ):
+                raise VeuEventError("reentry_pending")
+            switching = participant.current_nucleus_id is not None
+            unresolved = await session.scalar(
+                select(VeuEventRound.round_number).where(
+                    VeuEventRound.nucleus_id == nucleus.id,
+                    VeuEventRound.state != ev.RoundState.RESOLVED.value,
+                )
+            )
+            last = await session.scalar(
+                select(func.max(VeuEventRound.round_number)).where(
+                    VeuEventRound.nucleus_id == nucleus.id
+                )
+            )
+            participant.acts_from_round = ev.first_action_round(
+                unresolved, (last or 0) + 1, switching=switching
+            )
             participant.current_nucleus_id = nucleus.id
             participant.nucleus_entered_at = now
+            participant.nucleus_removed_at = None
+            participant.afk_streak = 0
             await session.flush()
+            return await self._participant_view(session, participant)
+
+    async def leave_nucleus(
+        self, occurrence_id: UUID, character_id: UUID, *, now: datetime | None = None
+    ) -> ParticipantView:
+        """Volta ao painel de Núcleos sem punição e sem sair do Evento (§14.6)."""
+        _utc(now)
+        async with self.sessions.begin() as session:
+            occurrence = await self._load_occurrence(session, occurrence_id)
+            participant = await self._participant(session, occurrence.id, character_id)
+            participant.current_nucleus_id = None
+            participant.afk_streak = 0
             return await self._participant_view(session, participant)
 
     # --------------------------------------------------------------------- rodadas
@@ -423,6 +495,8 @@ class VeuEventService:
             participant = await self._participant(session, occurrence.id, character_id)
             if participant.voluntary_exit or participant.current_nucleus_id != nucleus.id:
                 raise VeuEventError("not_in_nucleus")
+            if round_.round_number < participant.acts_from_round:
+                raise VeuEventError("waiting_next_round")
             action_id = ev.action_id(
                 occurrence.occurrence_key, nucleus.nucleus_key, round_.round_number, character_id
             )
@@ -478,8 +552,6 @@ class VeuEventService:
             action = next((a for a in creature(enemy_key).actions if a.key == action_key), None)
             if action is None:
                 raise VeuEventError("enemy_action_unknown")
-            if action.kind is ActionKind.BARRIER:
-                raise BlockedRuleError("barrier_duration")
             if (action.prepared or action.always_telegraphed) and not telegraph_key:
                 raise VeuEventError("telegraph_required")
             if action.kind is ActionKind.MULTI_TARGET and len(target_ids) > (action.targets or 1):
@@ -538,7 +610,7 @@ class VeuEventService:
     ) -> ResolutionView:
         """OPEN -> RESOLVING -> RESOLVED uma única vez, depois dos 10 s de decisão.
 
-        Valida as ações registradas e aplica o AFK (1/3, 2/3, remoção do Núcleo na 3ª).
+        Aplica o AFK (1/3, 2/3, remoção do Núcleo na 3ª) e, com simulador, o combate em lote.
         Idempotente: a segunda chamada só devolve ``resolved_now=False``.
         """
         now = _utc(now)
@@ -551,6 +623,11 @@ class VeuEventService:
                 return ResolutionView(round_.id, False, {}, ())
             round_.state = state.value
             round_.resolution_started_at = now
+            nucleus_state = ev.NucleusState(nucleus.state)
+            if nucleus_state is ev.NucleusState.ATIVA:
+                nucleus.state = ev.transition_nucleus(
+                    nucleus_state, ev.NucleusState.RESOLVENDO
+                ).value
             actions = (
                 await session.scalars(
                     select(VeuEventAction).where(VeuEventAction.round_id == round_.id)
@@ -574,11 +651,8 @@ class VeuEventService:
             streaks: dict[UUID, int] = {}
             removed: list[UUID] = []
             for participant in present:
-                # Quem entrou depois da abertura da rodada não estava lá para agir.
-                if (
-                    participant.nucleus_entered_at is not None
-                    and participant.nucleus_entered_at > round_.opened_at
-                ):
+                # Quem ainda espera o próximo ciclo (entrada/troca) não estava lá para agir.
+                if round_.round_number < participant.acts_from_round:
                     continue
                 afk = ev.afk_after_round(
                     participant.afk_streak, participant.character_id in acted
@@ -586,13 +660,254 @@ class VeuEventService:
                 participant.afk_streak = afk.streak
                 streaks[participant.character_id] = afk.streak
                 if afk.removed:
+                    removed.append(participant.character_id)
+            history: list[dict] = []
+            if self.simulator is not None:
+                history = await self._resolve_combat(
+                    session, occurrence, round_, nucleus, list(present), list(actions), now
+                )
+            # A remoção por AFK vale depois do lote: o jogador ainda estava no Núcleo.
+            for participant in present:
+                if participant.character_id in removed and participant.current_nucleus_id:
                     participant.current_nucleus_id = None
                     participant.nucleus_removed_at = now
-                    removed.append(participant.character_id)
+            round_.result = {"history": history}
+            if nucleus.state == ev.NucleusState.RESOLVENDO.value:
+                resolved = ev.nucleus_resolved(
+                    nucleus.nucleus_key,
+                    [
+                        code
+                        for code, data in nucleus.enemy_state.items()
+                        if Decimal(data["hp"]) <= 0
+                    ],
+                )
+                nucleus.state = ev.transition_nucleus(
+                    ev.NucleusState.RESOLVENDO,
+                    ev.NucleusState.RESOLVIDA if resolved else ev.NucleusState.ATIVA,
+                ).value
+                nucleus.state_version += 1
+                if resolved:
+                    nucleus.resolved_at = now
             round_.state = ev.transition_round(state, ev.RoundState.RESOLVED).value
             round_.resolved_at = now
             await session.flush()
             return ResolutionView(round_.id, True, streaks, tuple(removed))
+
+    async def _resolve_combat(
+        self,
+        session: AsyncSession,
+        occurrence: VeuEventOccurrence,
+        round_: VeuEventRound,
+        nucleus: VeuEventNucleus,
+        present: list[VeuEventParticipant],
+        actions: list[VeuEventAction],
+        now: datetime,
+    ) -> list[dict]:
+        enemies = {
+            code: vc.EnemyUnit.from_data(code, data) for code, data in nucleus.enemy_state.items()
+        }
+        inputs = await self.simulator.prepare(
+            session,
+            present,
+            [action for action in actions if action.valid],
+            enemies,
+            f"{occurrence.occurrence_key}|{nucleus.nucleus_key}|{round_.round_number}",
+        )
+        rows = (
+            await session.scalars(
+                select(VeuEventEnemyDecision).where(VeuEventEnemyDecision.round_id == round_.id)
+            )
+        ).all()
+        decisions = [
+            vc.EnemyDecisionData(
+                row.enemy_key,
+                row.action_key,
+                tuple(UUID(value) for value in row.target_ids),
+                row.telegraph_key is not None,
+            )
+            for row in sorted(rows, key=lambda row: row.enemy_key)
+        ]
+        outcome = vc.resolve_batch(enemies, inputs.players, inputs.intents, decisions)
+        nucleus.enemy_state = {code: unit.to_data() for code, unit in enemies.items()}
+        by_id = {participant.character_id: participant for participant in present}
+        for action in actions:
+            participant = by_id.get(action.character_id)
+            damage = outcome.damage_by_character.get(action.character_id, 0)
+            absorbed = outcome.absorbed_by_character.get(action.character_id, 0)
+            objective = bool(outcome.kills_by_character.get(action.character_id))
+            action.significant = ev.significant_action(
+                effective_damage=damage, absorbed=absorbed, objective=objective
+            )
+            action.major_contribution = objective
+            if participant is not None and action.significant:
+                participant.significant_actions += 1
+                if action.major_contribution:
+                    participant.major_contributions += 1
+        for character_id, unit in inputs.players.items():
+            participant = by_id.get(character_id)
+            if participant is None:
+                continue
+            participant.hp = unit.hp
+            if unit.hp <= 0:
+                participant.defeated_at = now
+                participant.reentry_available_at = now + ev.REENTRY_DELAY
+                participant.current_nucleus_id = None
+                participant.afk_streak = 0
+        return outcome.history
+
+    async def commit_enemy_decisions(
+        self, round_id: UUID, *, now: datetime | None = None
+    ) -> list[DecisionView]:
+        """IA determinística: escolhe e grava ação/alvo de cada inimigo ao abrir a rodada (§17)."""
+        now = _utc(now)
+        async with self.sessions() as session:
+            round_ = await session.get(VeuEventRound, round_id)
+            if round_ is None:
+                raise VeuEventError("round_not_found")
+            nucleus = await session.get(VeuEventNucleus, round_.nucleus_id)
+            occurrence = await session.get(VeuEventOccurrence, round_.occurrence_id)
+            present = list(
+                (
+                    await session.scalars(
+                        select(VeuEventParticipant.character_id).where(
+                            VeuEventParticipant.occurrence_id == occurrence.id,
+                            VeuEventParticipant.current_nucleus_id == nucleus.id,
+                            VeuEventParticipant.voluntary_exit.is_(False),
+                        )
+                    )
+                ).all()
+            )
+            enemies = {
+                code: vc.EnemyUnit.from_data(code, data)
+                for code, data in nucleus.enemy_state.items()
+            }
+            base = ev.enemy_seed(
+                occurrence.occurrence_key, nucleus.nucleus_key, round_.round_number
+            )
+            number = round_.round_number
+        views: list[DecisionView] = []
+        for code in sorted(enemies):
+            decision = vc.decide_enemy(
+                enemies[code], present, number, base ^ zlib.crc32(code.encode())
+            )
+            if decision is None:
+                continue
+            views.append(
+                await self.register_enemy_decision(
+                    round_id,
+                    code,
+                    decision.action_key,
+                    target_ids=decision.target_ids,
+                    telegraph_key=(
+                        f"telegraph.{decision.action_key}" if decision.telegraph else None
+                    ),
+                    now=now,
+                )
+            )
+        return views
+
+    async def settle_occurrence(
+        self, occurrence_id: UUID, *, now: datetime | None = None
+    ) -> SettlementView:
+        """CONCLUIDO/FRACASSADO -> ENCERRADO, pagando cada participante uma única vez (§24).
+
+        Elegível: ocorrência concluída + 2 fases + 8 pontos de contribuição. O Vigor (10) é
+        cobrado só aqui, até o que o personagem tiver. Derrota global não paga conclusão.
+        """
+        now = _utc(now)
+        async with self.sessions() as session:
+            occurrence = await self._load_occurrence(session, occurrence_id, lock=False)
+            if occurrence.state == ev.EventState.ENCERRADO.value:
+                return SettlementView(occurrence.id, occurrence.state, 0, 0)
+            if occurrence.state not in (
+                ev.EventState.CONCLUIDO.value,
+                ev.EventState.FRACASSADO.value,
+            ):
+                raise VeuEventError("occurrence_not_final")
+            ids = list(
+                (
+                    await session.scalars(
+                        select(VeuEventParticipant.character_id).where(
+                            VeuEventParticipant.occurrence_id == occurrence_id,
+                            VeuEventParticipant.settled_at.is_(None),
+                        )
+                    )
+                ).all()
+            )
+        paid = 0
+        for character_id in sorted(ids, key=str):
+            paid += await self._settle_participant(occurrence_id, character_id, now)
+        async with self.sessions.begin() as session:
+            occurrence = await self._load_occurrence(session, occurrence_id)
+            if occurrence.state != ev.EventState.ENCERRADO.value:
+                occurrence.state = _event_move(occurrence.state, ev.EventState.ENCERRADO)
+                occurrence.closed_at = now
+                occurrence.settled_at = now
+                occurrence.state_version += 1
+            return SettlementView(occurrence.id, occurrence.state, len(ids), paid)
+
+    async def _settle_participant(
+        self, occurrence_id: UUID, character_id: UUID, now: datetime
+    ) -> int:
+        async with self.sessions.begin() as session:
+            occurrence = await self._load_occurrence(session, occurrence_id)
+            participant = await session.scalar(
+                select(VeuEventParticipant)
+                .where(
+                    VeuEventParticipant.occurrence_id == occurrence_id,
+                    VeuEventParticipant.character_id == character_id,
+                )
+                .with_for_update()
+            )
+            if participant is None or participant.settled_at is not None:
+                return 0
+            character = await session.scalar(
+                select(Character).where(Character.id == character_id).with_for_update()
+            )
+            eligible = (
+                occurrence.state == ev.EventState.CONCLUIDO.value
+                and character is not None
+                and ev.is_eligible(
+                    len(participant.phases),
+                    participant.significant_actions,
+                    participant.major_contributions,
+                )
+            )
+            reward: dict = {}
+            if eligible:
+                granted = await grant_bundle(
+                    session,
+                    character,
+                    ev.reward_bundle(ev.EVENT_REFERENCE_LEVEL),
+                    f"veu_event:{occurrence.id.hex}:{character.id.hex}",
+                )
+                xp = ev.reward_xp(level_xp(ev.EVENT_REFERENCE_LEVEL))
+                character.xp += xp
+                await consolidate_character_level(session, character)
+                await reconcile_character_vigor(session, character, now=now)
+                spent = min(character.vigor, ev.VIGOR_COST)
+                character.vigor -= spent
+                # §24.3/§25.1: a primeira conclusão só abre a entrada do Códice, sem bônus.
+                known = await session.scalar(
+                    select(CodexEntry.id).where(
+                        CodexEntry.character_id == character.id,
+                        CodexEntry.entry_id == ev.CODEX_KEY,
+                    )
+                )
+                if known is None:
+                    session.add(CodexEntry(character_id=character.id, entry_id=ev.CODEX_KEY))
+                reward = {
+                    "crowns": granted.crowns,
+                    "xp": xp,
+                    "vigor": spent,
+                    "items": [
+                        {"name": item.name, "quantity": item.quantity} for item in granted.items
+                    ],
+                }
+            participant.eligible = eligible
+            participant.reward = reward
+            participant.settled_at = now
+            return 1 if eligible else 0
 
     async def fail_at_deadline(self, occurrence_id: UUID, *, now: datetime | None = None) -> bool:
         """EM_ANDAMENTO -> FRACASSADO quando o prazo (``DEADLINE``) esgota. Idempotente."""
@@ -626,6 +941,25 @@ class VeuEventService:
                 )
             ).all()
             return [await self._occurrence_view(session, row) for row in rows]
+
+    async def nucleus_enemy_state(self, occurrence_id: UUID, nucleus_key: str) -> dict:
+        async with self.sessions() as session:
+            nucleus = (await self._nuclei(session, occurrence_id)).get(nucleus_key)
+            if nucleus is None:
+                raise VeuEventError("nucleus_not_available")
+            return dict(nucleus.enemy_state)
+
+    async def unsettled_final_occurrences(self) -> list[UUID]:
+        async with self.sessions() as session:
+            rows = await session.scalars(
+                select(VeuEventOccurrence.id).where(
+                    VeuEventOccurrence.server_id == self.server_id,
+                    VeuEventOccurrence.state.in_(
+                        (ev.EventState.CONCLUIDO.value, ev.EventState.FRACASSADO.value)
+                    ),
+                )
+            )
+            return list(rows.all())
 
     async def enemy_stats(self, occurrence_id: UUID, nucleus_key: str) -> dict[str, CombatStats]:
         """Atributos das criaturas do Núcleo com o N congelado da fase (§8.1–§8.4).
@@ -739,12 +1073,20 @@ class VeuEventService:
             )
         )
         for definition in ev.nuclei_of_phase(phase):
+            enemy_state = {}
+            for code in definition.creature_codes:
+                stats = creature_stats(creature(code), max(1, snapshot.n))
+                hp = stats.hp.to_integral_value()
+                enemy_state[code] = vc.EnemyUnit(
+                    code, hp, hp, stats.attack, stats.defense, agility=stats.agility
+                ).to_data()
             session.add(
                 VeuEventNucleus(
                     occurrence_id=occurrence.id,
                     nucleus_key=definition.key,
                     phase=phase,
                     state=ev.NucleusState.ATIVA.value,
+                    enemy_state=enemy_state,
                     state_version=0,
                 )
             )
@@ -866,15 +1208,16 @@ class UpkeepReport:
 class VeuEventUpkeep:
     """Ciclo automático: ocorrências, abertura, rodadas e prazo.
 
-    Não decide o gatilho do início (``start_trigger``): só inicia se ``start_after`` vier
-    configurado. Não encerra nem acerta recompensas (``event_closure``).
+    Início: o evento começa no horário da agenda (§3.3: os 15 min iniciais não são lobby), isto
+    é, ``start_after`` = 0 depois da abertura. Fim: ao ficar CONCLUIDO/FRACASSADO a ocorrência
+    é acertada e vira ENCERRADO.
     """
 
     def __init__(
         self,
         service: VeuEventService,
         *,
-        start_after: timedelta | None = None,
+        start_after: timedelta | None = timedelta(0),
         horizon: timedelta = timedelta(minutes=10),
     ):
         self.service = service
@@ -928,6 +1271,8 @@ class VeuEventUpkeep:
                     failed.append(view.id)
                 continue
             opened_rounds += await self._open_rounds(current, now)
+        for occurrence_id in await service.unsettled_final_occurrences():
+            await service.settle_occurrence(occurrence_id, now=now)
         return UpkeepReport(
             tuple(opened), tuple(failed), resolved, opened_rounds, tuple(notices)
         )
@@ -942,7 +1287,8 @@ class VeuEventUpkeep:
     async def _open_rounds(self, occurrence: OccurrenceView, now: datetime) -> int:
         count = 0
         for key in await self.service.nuclei_with_players(occurrence.id):
-            before = await self.service.open_round(occurrence.id, key, now=now)
-            if before.opened_at == now:
+            opened = await self.service.open_round(occurrence.id, key, now=now)
+            if opened.opened_at == now:
+                await self.service.commit_enemy_decisions(opened.id, now=now)
                 count += 1
         return count

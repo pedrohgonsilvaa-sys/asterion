@@ -29,6 +29,7 @@ class CodexPresentation:
 
 
 CODEX_ENTRIES = (
+    CodexPresentation("codex.world_event.a_ruptura_do_veu", "A Ruptura do Véu", "history", 90),
     CodexPresentation(
         "codex.location.estrada_das_cinzas",
         "Estrada das Cinzas",

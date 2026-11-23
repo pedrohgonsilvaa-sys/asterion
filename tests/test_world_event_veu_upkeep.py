@@ -60,7 +60,7 @@ async def test_tick_creates_occurrence_and_emits_notices(svc):
 
 @pytest.mark.asyncio
 async def test_tick_opens_at_the_slot_and_is_idempotent(svc, database):
-    upkeep = VeuEventUpkeep(svc)
+    upkeep = VeuEventUpkeep(svc, start_after=None)
     await upkeep.tick(SLOT - timedelta(minutes=1))
     report = await upkeep.tick(SLOT)
     assert len(report.opened) == 1
@@ -71,13 +71,15 @@ async def test_tick_opens_at_the_slot_and_is_idempotent(svc, database):
 
 
 @pytest.mark.asyncio
-async def test_without_start_rule_the_event_never_starts(svc, database):
+async def test_event_starts_automatically_at_the_slot_by_default(svc, database):
     upkeep = VeuEventUpkeep(svc)
+    await upkeep.tick(SLOT - timedelta(seconds=1))
     await upkeep.tick(SLOT)
-    await upkeep.tick(SLOT + timedelta(minutes=30))
     async with database[1]() as session:
         row = await session.scalar(select(VeuEventOccurrence))
-    assert row.state == "ABERTO"
+    assert row.state == "EM_ANDAMENTO" and row.started_at is not None
+    held = VeuEventUpkeep(svc, start_after=None)
+    assert held.start_after is None
 
 
 @pytest.mark.asyncio
@@ -129,7 +131,7 @@ async def test_deadline_fails_the_running_event_once(svc, database):
     assert (await upkeep.tick(SLOT + ev.DEADLINE + timedelta(seconds=1))).failed == ()
     async with database[1]() as session:
         row = await session.scalar(select(VeuEventOccurrence))
-    assert row.state == "FRACASSADO"
+    assert row.state == "ENCERRADO"  # acertada e encerrada no mesmo tick
     assert row.deadline_at == SLOT.astimezone(UTC) + ev.DEADLINE
     assert isinstance(NAIVE_OK, datetime)
 
@@ -144,7 +146,7 @@ async def test_stale_running_event_still_fails_after_scheduler_downtime(svc, dat
     assert len(report.failed) == 1
     async with database[1]() as session:
         row = await session.scalar(select(VeuEventOccurrence))
-    assert row.state == "FRACASSADO"
+    assert row.state == "ENCERRADO"  # acertada e encerrada no mesmo tick
 
 
 @pytest.mark.asyncio
@@ -184,7 +186,7 @@ async def test_concurrent_ticks_are_idempotent(svc, database):
 @pytest.mark.asyncio
 async def test_enemy_stats_use_frozen_n_and_refuse_unmapped_archetypes(svc, database):
     from asterion.application.world_event_veu import VeuEventError
-    from asterion.domain.veu_bestiary import UnresolvedArchetypeError, creature
+    from asterion.domain.veu_bestiary import creature
 
     characters = await _characters(database, 3, base=774000)
     occurrence = (await svc.get_or_create_occurrence(SLOT)).id
@@ -194,8 +196,7 @@ async def test_enemy_stats_use_frozen_n_and_refuse_unmapped_archetypes(svc, data
     with pytest.raises(VeuEventError):
         await svc.enemy_stats(occurrence, "A")  # fase ainda não começou
     await svc.start_occurrence(occurrence, now=SLOT + timedelta(minutes=1))
-    with pytest.raises(UnresolvedArchetypeError):
-        await svc.enemy_stats(occurrence, "A")  # VEU-03 Resistente: sem perfil
-    stats = await svc.enemy_stats(occurrence, "C")
-    assert set(stats) == {"VEU-07", "VEU-08"}
-    assert creature("VEU-07").engine_archetype == "controller"
+    stats = await svc.enemy_stats(occurrence, "A")  # VEU-03 Resistente -> armored
+    assert set(stats) == {"VEU-01", "VEU-02", "VEU-03"}
+    assert creature("VEU-03").engine_archetype == "armored"
+    assert set(await svc.enemy_stats(occurrence, "C")) == {"VEU-07", "VEU-08"}
