@@ -8,6 +8,8 @@ Keys that have no art here are simply absent, so those screens stay text-only.
 
 from __future__ import annotations
 
+import hashlib
+import logging
 import re
 import unicodedata
 from dataclasses import replace
@@ -97,6 +99,7 @@ _QUEST_SUFFIXES = ("", "_detail", "_giver", "_objective", "_completed", "_recove
 _QUEST_FILE = re.compile(r"^([ps]\d+)_.+\.v\d\d\.(?:png|jpe?g)$", re.IGNORECASE)
 _IMAGE_EXTENSIONS = ("jpg", "jpeg", "png")
 
+logger = logging.getLogger(__name__)
 
 # Race -> file prefix in assets/characters.
 _RACE_CODE = {
@@ -535,11 +538,26 @@ def build_asset_images(brazier_ids: tuple[str, ...], root: Path | None = None) -
                 images[character_key(race, gender)] = (
                     f"file:characters/default races/{default_race.name}"
                 )
+            seen_class_art: dict[str, str] = {}
             for klass in CLASSES:
                 default_class = _preferred_file(chars / "default classes", f"{prefix}-{klass}")
-                if default_class is not None:
-                    key = character_key(race, gender, klass)
-                    images[key] = f"file:characters/default classes/{default_class.name}"
+                if default_class is None:
+                    continue
+                # Two classes of one race+gender must never share the same picture:
+                # a byte-identical copy means one file holds another class's art, and
+                # showing it would present the wrong class. Skip the later copy.
+                digest = hashlib.md5(default_class.read_bytes()).hexdigest()
+                if digest in seen_class_art:
+                    logger.warning(
+                        "class art %s duplicates %s; not served for class %s",
+                        default_class.name,
+                        seen_class_art[digest],
+                        klass,
+                    )
+                    continue
+                seen_class_art[digest] = default_class.name
+                key = character_key(race, gender, klass)
+                images[key] = f"file:characters/default classes/{default_class.name}"
     monsters = base / "monsters"
     if monsters.is_dir():
         creature_ids = set(_CREATURES_BY_ID) | set(CREATURE_PRESENTATION)

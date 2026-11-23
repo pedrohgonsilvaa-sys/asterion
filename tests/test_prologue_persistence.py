@@ -552,3 +552,91 @@ def test_telegram_ids_remain_bigint_and_foreign_keys_are_explicit():
     assert GameActivity.__table__.c.character_id.foreign_keys
     assert Encounter.__table__.c.game_activity_id.foreign_keys
     assert CombatRecord.__table__.c.encounter_id.foreign_keys
+
+
+async def test_corvo_draw_is_persisted_resumed_and_recorded(prologue, database, monkeypatch):
+    monkeypatch.setattr("asterion.application.prologue.choose_enemy_id", lambda: "corvo_fuligem")
+    await character(database)
+    view = await prologue.enter(1)
+    enemy = view.combat.fighters["enemy"]
+    assert enemy.name == "Corvo de Fuligem"
+    # Same encounter rules as the Cão: only the creature identity changes.
+    assert enemy.stats.values() == (244, 50, 45, 56)
+    resumed = await prologue.resume(1)
+    assert resumed.combat.fighters["enemy"].name == "Corvo de Fuligem"
+    async with database[1]() as session:
+        entry = await session.scalar(
+            select(BestiaryEntry).where(BestiaryEntry.creature_id == "corvo_fuligem")
+        )
+        assert entry is not None and entry.stage == "observed"
+        assert (
+            await session.scalar(
+                select(BestiaryEntry).where(BestiaryEntry.creature_id == "dog_cinereo")
+            )
+            is None
+        )
+
+
+async def test_late_action_is_dropped_and_timeout_resolves_once(
+    prologue, database, _frozen_turn_clock
+):
+    await character(database)
+    view = await prologue.enter(1)
+    enemy_hp = view.combat.fighters["enemy"].hp
+    _frozen_turn_clock["t"] += 10.5  # the 10 second window has passed
+    late = await prologue.action(1, view.activity_id, view.combat.version, "attack")
+    assert late.combat.version == view.combat.version + 1
+    assert late.combat.fighters["enemy"].hp == enemy_hp  # the late attack never landed
+    assert late.combat.turn_deadline == _frozen_turn_clock["t"] + 10  # fresh window
+    # Replaying the stale intention, or resuming, resolves nothing a second time.
+    again = await prologue.action(1, view.activity_id, view.combat.version, "attack")
+    assert again.combat.version == late.combat.version
+    assert (await prologue.resume(1)).combat.version == late.combat.version
+
+
+async def test_concurrent_timeout_and_action_produce_one_resolution(
+    prologue, database, _frozen_turn_clock
+):
+    await character(database)
+    view = await prologue.enter(1)
+    _frozen_turn_clock["t"] += 11
+    results = await asyncio.gather(
+        prologue.resume(1),
+        prologue.action(1, view.activity_id, view.combat.version, "attack"),
+        prologue.resume(1),
+    )
+    assert {r.combat.version for r in results} == {view.combat.version + 1}
+    assert (await prologue.resume(1)).combat.version == view.combat.version + 1
+
+
+async def test_action_inside_the_window_still_lands(prologue, database, _frozen_turn_clock):
+    await character(database)
+    view = await prologue.enter(1)
+    _frozen_turn_clock["t"] += 9
+    done = await prologue.action(1, view.activity_id, view.combat.version, "attack")
+    assert done.combat.fighters["enemy"].hp < view.combat.fighters["enemy"].hp
+
+
+async def test_wreck_purse_credits_18_crowns_exactly_once(prologue, database):
+    from asterion.infrastructure.db.models import RewardComponent, RewardEvent
+
+    await character(database)
+    assert await prologue.collect_wreck_purse(1) is True
+    assert await prologue.collect_wreck_purse(1) is False
+    results = await asyncio.gather(*(prologue.collect_wreck_purse(1) for _ in range(4)))
+    assert results == [False] * 4
+    async with database[1]() as session:
+        row = await session.scalar(select(Character))
+        assert row.crowns == 18
+        assert await session.scalar(select(func.count()).select_from(RewardEvent)) == 1
+        component = await session.scalar(select(RewardComponent))
+        assert (component.kind, component.quantity) == ("crowns", 18)
+
+
+async def test_wreck_purse_is_refused_once_the_combat_started(prologue, database):
+    await character(database)
+    await prologue.enter(1)
+    assert await prologue.collect_wreck_purse(1) is False
+    async with database[1]() as session:
+        assert (await session.scalar(select(Character))).crowns == 0
+

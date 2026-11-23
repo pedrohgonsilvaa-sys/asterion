@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
-from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message, Update
+from aiogram.types import CallbackQuery, Chat, FSInputFile, InputMediaPhoto, Message, Update
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -31,7 +31,7 @@ from asterion.application.world import WorldService
 from asterion.bot.asset_catalog import character_key, npc_key_from_text
 from asterion.bot.class_trial_ui import render_class_trial_view
 from asterion.bot.combat_ui import render_combat
-from asterion.bot.creation_ui import UNAVAILABLE_NAME_WARNING, CreationCallback, Screen, render
+from asterion.bot.creation_ui import CreationCallback, Screen, render
 from asterion.bot.dungeon_ui import render_dungeons
 from asterion.bot.media import assets_root, resolve_asset_file
 from asterion.bot.p1_ui import render_p1
@@ -80,9 +80,18 @@ async def _player_character_image(images: dict[str, str], telegram_id: int) -> s
     race, gender, character_class = found
     if gender is None:
         return None
-    return images.get(character_key(race, gender, character_class)) or images.get(
-        character_key(race, gender)
+    exact = images.get(character_key(race, gender, character_class))
+    if exact:
+        return exact
+    # Audited fallback: only the class-neutral race+gender portrait. Never another
+    # class's art; with no portrait at all the screen goes out without a picture.
+    logger.warning(
+        "no exact art for %s/%s/%s; using the class-neutral race portrait",
+        race,
+        gender,
+        character_class,
     )
+    return images.get(character_key(race, gender))
 
 
 def _asset_cache_key(path) -> str:
@@ -193,11 +202,16 @@ def unavailable_media(exc: TelegramBadRequest) -> bool:
     )
 
 
-async def present(message: Message, screen: Screen, images: dict[str, str], *, edit=False):
+def _sent_message_id(sent) -> int | None:
+    # aiogram returns the sent Message; test doubles may return True instead.
+    return getattr(sent, "message_id", None)
+
+
+async def _screen_media(screen: Screen, images: dict[str, str], chat: Chat):
     npc = npc_key_from_text(screen.text)
     image = (npc and images.get(npc)) or images.get(screen.image_key)
-    if not image and screen.image_key == "character" and message.chat.type == "private":
-        image = await _player_character_image(images, message.chat.id)
+    if not image and screen.image_key == "character" and chat.type == "private":
+        image = await _player_character_image(images, chat.id)
     cache_key: str | None = None
     path = None
     if image and image.startswith("file:"):
@@ -217,6 +231,14 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
             media = FSInputFile(path)
     else:
         media = image
+    return media, cache_key, path
+
+
+async def present(
+    message: Message, screen: Screen, images: dict[str, str], *, edit=False
+) -> int | None:
+    """Show ``screen`` and return the id of the Telegram message that now shows it."""
+    media, cache_key, path = await _screen_media(screen, images, message.chat)
     if edit:
         try:
             if media:
@@ -230,7 +252,7 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
                         reply_markup=screen.keyboard,
                         parse_mode=screen.parse_mode,
                     )
-                    return
+                    return message.message_id
                 edited = await message.edit_media(
                     InputMediaPhoto(media=media, caption=screen.text, parse_mode=screen.parse_mode),
                     reply_markup=screen.keyboard,
@@ -239,18 +261,18 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
                     file_id = edited.photo[-1].file_id
                     _PHOTO_FILE_IDS[cache_key] = file_id
                     await _persist_file_id(path, file_id)
-                return
+                return message.message_id
             if not message.photo:
                 await message.edit_text(
                     screen.text,
                     reply_markup=screen.keyboard,
                     parse_mode=screen.parse_mode,
                 )
-                return
+                return message.message_id
         except TelegramBadRequest as exc:
             reason = exc.message.lower()
             if "message is not modified" in reason:
-                return
+                return message.message_id
             if media and unavailable_media(exc):
                 if cache_key and path and isinstance(media, str):
                     await _forget_file_id(path)
@@ -268,7 +290,7 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
                             file_id = edited.photo[-1].file_id
                             _PHOTO_FILE_IDS[cache_key] = file_id
                             await _persist_file_id(path, file_id)
-                        return
+                        return message.message_id
                     except TelegramBadRequest as retry_exc:
                         if not unavailable_media(retry_exc):
                             raise
@@ -295,7 +317,7 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
                 file_id = sent.photo[-1].file_id
                 _PHOTO_FILE_IDS[cache_key] = file_id
                 await _persist_file_id(path, file_id)
-            return
+            return _sent_message_id(sent)
         except TelegramBadRequest as exc:
             if not unavailable_media(exc):
                 raise
@@ -312,11 +334,80 @@ async def present(message: Message, screen: Screen, images: dict[str, str], *, e
                         file_id = sent.photo[-1].file_id
                         _PHOTO_FILE_IDS[cache_key] = file_id
                         await _persist_file_id(path, file_id)
-                    return
+                    return _sent_message_id(sent)
                 except TelegramBadRequest as retry_exc:
                     if not unavailable_media(retry_exc):
                         raise
-    await message.answer(screen.text, reply_markup=screen.keyboard, parse_mode=screen.parse_mode)
+    sent = await message.answer(
+        screen.text, reply_markup=screen.keyboard, parse_mode=screen.parse_mode
+    )
+    return _sent_message_id(sent)
+
+
+async def edit_screen(
+    message: Message, message_id: int, screen: Screen, images: dict[str, str]
+) -> bool:
+    """Edit an existing creation screen in place (photo caption included).
+
+    Returns False when that message can no longer be edited; the caller then
+    sends the screen as a new message, as ``present`` does.
+    """
+    media, cache_key, path = await _screen_media(screen, images, message.chat)
+    chat_id = message.chat.id
+    bot = message.bot
+    try:
+        if media is None:
+            await bot.edit_message_text(
+                screen.text,
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=screen.keyboard,
+                parse_mode=screen.parse_mode,
+            )
+            return True
+        try:
+            edited = await bot.edit_message_media(
+                media=InputMediaPhoto(
+                    media=media, caption=screen.text, parse_mode=screen.parse_mode
+                ),
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=screen.keyboard,
+            )
+        except TelegramBadRequest as exc:
+            if not (unavailable_media(exc) and cache_key and path and isinstance(media, str)):
+                raise
+            await _forget_file_id(path)
+            edited = await bot.edit_message_media(
+                media=InputMediaPhoto(
+                    media=FSInputFile(path), caption=screen.text, parse_mode=screen.parse_mode
+                ),
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=screen.keyboard,
+            )
+        if cache_key and isinstance(media, FSInputFile) and getattr(edited, "photo", None):
+            file_id = edited.photo[-1].file_id
+            _PHOTO_FILE_IDS[cache_key] = file_id
+            await _persist_file_id(path, file_id)
+        return True
+    except TelegramBadRequest as exc:
+        reason = exc.message.lower()
+        if "message is not modified" in reason:
+            return True
+        if any(
+            fragment in reason
+            for fragment in (
+                "message to edit not found",
+                "message can't be edited",
+                "message_id_invalid",
+                "there is no text in the message",
+            )
+        ):
+            return False
+        raise
+
+
 
 
 def creation_router(
@@ -462,11 +553,18 @@ def creation_router(
                 return render_combat(view)
         return render(state)
 
+    async def remember(actor: int, state, message_id: int | None) -> None:
+        # Persist which message shows the draft's screen, but only when it changed.
+        if message_id is not None and message_id != state.screen_message_id:
+            await service.remember_screen(actor, state.id, message_id)
+
     @router.message(CommandStart())
     async def start(message: Message):
         if message.from_user:
-            state = await service.start(message.from_user.id)
-            await present(message, await current_screen(message.from_user.id, state), images)
+            actor = message.from_user.id
+            state = await service.start(actor)
+            message_id = await present(message, await current_screen(actor, state), images)
+            await remember(actor, state, message_id)
 
     @router.callback_query(F.data.startswith("cc:"))
     async def callback(query: CallbackQuery):
@@ -479,23 +577,31 @@ def creation_router(
         except (ValueError, TypeError):
             await query.answer()
             return
-        state = await service.callback(query.from_user.id, draft_id, data.version, data.action)
+        actor = query.from_user.id
+        state = await service.callback(actor, draft_id, data.version, data.action)
         await query.answer()
         if state is not None:
-            await present(
-                query.message, await current_screen(query.from_user.id, state), images, edit=True
+            message_id = await present(
+                query.message, await current_screen(actor, state), images, edit=True
             )
+            await remember(actor, state, message_id)
 
     @router.message(F.text, ~F.text.startswith("/"))
     async def name(message: Message, event_update: Update):
         if message.from_user:
-            state = await service.name(
-                message.from_user.id,
-                message.text or "",
-                event_update.update_id,
-            )
-            await present(message, await current_screen(message.from_user.id, state), images)
-            if state.step == "name" and state.error == "unavailable":
-                await message.answer(UNAVAILABLE_NAME_WARNING)
+            actor = message.from_user.id
+            state = await service.name(actor, message.text or "", event_update.update_id)
+            screen = await current_screen(actor, state)
+            # Unavailable name: edit the Nome screen already in the chat. If that
+            # message is gone, fall through and show the screen as a new message.
+            if (
+                state.step == "name"
+                and state.error == "unavailable"
+                and state.screen_message_id is not None
+                and await edit_screen(message, state.screen_message_id, screen, images)
+            ):
+                return
+            message_id = await present(message, screen, images)
+            await remember(actor, state, message_id)
 
     return router

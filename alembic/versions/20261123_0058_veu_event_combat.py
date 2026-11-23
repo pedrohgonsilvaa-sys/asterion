@@ -5,8 +5,8 @@ current Núcleo (entry/switch rule, §14.1-§14.2), the per-participant settleme
 the resolved-round result (history/support lines) and the occurrence settlement mark.
 Enemy HP lives in ``veu_event_nuclei.enemy_state``, which 0056 already created.
 
-Revision ID: 20261123_0057
-Revises: 20261122_0056
+Revision ID: 20261123_0058
+Revises: 20261123_0057
 Create Date: 2026-11-23 00:00:00
 """
 
@@ -17,8 +17,8 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "20261123_0057"
-down_revision: str | None = "20261122_0056"
+revision: str = "20261123_0058"
+down_revision: str | None = "20261123_0057"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

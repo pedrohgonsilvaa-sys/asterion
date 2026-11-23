@@ -6,6 +6,7 @@ from decimal import ROUND_FLOOR, Decimal, localcontext
 from typing import Any
 from uuid import UUID
 
+from asterion.domain import turn_clock
 from asterion.domain.combat_math import (
     CURRENT_COMBAT_RULESET,
     PRECISION,
@@ -1002,6 +1003,8 @@ class Combat:
     phase_triggers: tuple[CombatPhaseTrigger, ...] = ()
     phase_triggered_ids: set[str] = field(default_factory=set)
     phase_id: str = "default"
+    # Epoch seconds at which the open player turn expires (server clock); None = no timer.
+    turn_deadline: float | None = None
     manual_sides: tuple[str, ...] = ()
     pvp_mode: bool = False
 
@@ -2394,6 +2397,11 @@ def _begin_turn(state: Combat) -> None:
     actor = state.fighters[actor_key]
     actor.opportunity += 1
     actor.defending = False
+    state.turn_deadline = (
+        turn_clock.now() + turn_clock.TURN_SECONDS
+        if _is_player_turn_actor(state, actor_key)
+        else None
+    )
     guard_integrity = actor.path_state.get("guard_integrity_debuff")
     if (
         isinstance(guard_integrity, dict)
@@ -7143,6 +7151,8 @@ def use_combat_consumable(
 ) -> Combat:
     """Apply a valid PvE Consumable as one normal, versioned combat action."""
     actor_key = actor_key or active_player_key(state) or "player"
+    if actor_key == active_player_key(state) and turn_expired(state):
+        return pass_turn(state, actor_key)
     if not combat_consumable_usable(
         state,
         item_id,
@@ -7453,6 +7463,30 @@ def _resolve_action_effect_removal(
         )
 
 
+def turn_seconds_left(state: Combat, at: float | None = None) -> float | None:
+    """Seconds left in the open player turn, or None when the turn has no timer."""
+    if state.result or state.turn_deadline is None:
+        return None
+    return max(0.0, state.turn_deadline - (turn_clock.now() if at is None else at))
+
+
+def turn_expired(state: Combat, at: float | None = None) -> bool:
+    return (
+        not state.result
+        and state.turn_deadline is not None
+        and (turn_clock.now() if at is None else at) > state.turn_deadline
+    )
+
+
+def expire_turn(state: Combat, actor_key: str | None = None) -> Combat:
+    """Resolve an overdue turn as a spent opportunity. Idempotent: the version bump
+    opens a fresh turn with a fresh deadline, so a second call finds nothing overdue."""
+    actor_key = actor_key or active_player_key(state)
+    if actor_key is None or not turn_expired(state):
+        return state
+    return pass_turn(state, actor_key)
+
+
 def pass_turn(state: Combat, actor_key: str) -> Combat:
     """Spend the current opportunity without acting, as a PvP turn timeout does."""
     if state.result or active_player_key(state) != actor_key:
@@ -7502,10 +7536,16 @@ def act(
     effect_id: str | None = None,
     effect_selections: tuple[tuple[str, str], ...] = (),
 ) -> Combat:
-    """Resolve one player action; invalid action/target intentions are a no-op."""
+    """Resolve one player action; invalid action/target intentions are a no-op.
+
+    An action that arrives after the turn deadline is not accepted: the overdue
+    turn is resolved as a timeout instead and the late intention is discarded.
+    """
     actor_key = actor_key or active_player_key(state)
     if actor_key is None:
         return state
+    if actor_key == active_player_key(state) and turn_expired(state):
+        return pass_turn(state, actor_key)
     if (
         not state.party_mode
         and len(action) == 2

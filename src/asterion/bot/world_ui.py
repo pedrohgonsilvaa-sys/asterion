@@ -118,44 +118,11 @@ CLASS_LABEL = {
 }
 
 
-def render_prologue_choice(view: WorldView) -> Screen:
-    """Prologue choice. Race and Class only add a text line; options are the same for all."""
-    choice = view.prologue_choice
-    short = "a" if choice.choice_id == "PRO_choice_aftermath" else "f"
-    identity = (
-        f"{escape(view.name)} · {RACE_LABEL.get(view.race, view.race)} · "
-        f"{CLASS_LABEL.get(view.character_class, view.character_class)}"
-    )
-    text = (
-        f"{escape(choice.title)}\nEstrada das Cinzas · Terras do Ocaso\n\n"
-        f"{identity}\n\n<i>{escape(choice.context)}</i>\n\n<b>{escape(choice.question)}</b>"
-    )
-    rows = [
-        [InlineKeyboardButton(text=label, callback_data=f"pro:{short}:{option_id}")]
-        for option_id, label in choice.options
-    ]
-    keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
-    return Screen(text, "brazier_estrada", keyboard, parse_mode="HTML")
-
-
 def render_world(view: WorldView) -> Screen:
-    if view.prologue_choice is not None:
-        return render_prologue_choice(view)
     if view.kind == "brazier":
-        text = (
-            "🔥 Braseiro\nEstrada das Cinzas · Terras do Ocaso\n\n"
-            "Entre pedras escurecidas pela fuligem, uma chama permanece acesa onde tudo ao redor "
-            "parece ter sido abandonado. Seu calor atravessa o silêncio da estrada e oferece, "
-            "pela primeira vez, um lugar seguro para recuperar as forças.\n\n"
-            "🔥 Braseiro · Descoberto\n❤️ Descansar · Restaura HP\n\n"
-            "ℹ️ Braseiros permanentes podem servir para descanso e, quando outros forem "
-            "descobertos, "
-            "conectar diferentes pontos de Asterion através da Travessia dos Braseiros."
-        )
-        kb = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="Descansar", callback_data="world:rest")]]
-        )
-        return Screen(text, "brazier_estrada", kb)
+        from asterion.bot.prologue_ui import render_brazier
+
+        return render_brazier(view.name, view.max_hp)
     class_label = CLASS_LABELS.get(view.character_class, view.character_class)
     path_label = PATH_LABELS.get(view.selected_path or "", "Caminho")
     legacy_label = LEGACY_LABELS.get(view.legacy_level, "Legado")

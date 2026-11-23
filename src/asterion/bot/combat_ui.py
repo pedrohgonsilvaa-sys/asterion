@@ -10,7 +10,7 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.prologue import CombatView
-from asterion.bot.asset_catalog import with_boss_transformation_art
+from asterion.bot.asset_catalog import with_boss_transformation_art, with_creature_art
 from asterion.bot.creation_ui import COPY, Screen
 from asterion.domain.combat import (
     Combat,
@@ -21,6 +21,7 @@ from asterion.domain.combat import (
     allowed_actions,
     consumable_effect_options,
     player_actions_for,
+    turn_seconds_left,
 )
 from asterion.domain.consumables import (
     CONSUMABLE_CATALOG,
@@ -1577,6 +1578,12 @@ def _trial_fighter_card(
     return lines
 
 
+def _turn_line(state: Combat, turn: int) -> str:
+    from asterion.bot.prologue_ui import turn_line
+
+    return turn_line(turn, turn_seconds_left(state))
+
+
 def _render_combat(view: CombatView) -> Screen:
     state = view.combat
     is_trial = view.context == "class_trial"
@@ -1663,7 +1670,8 @@ def _render_combat(view: CombatView) -> Screen:
                 )
         lines.extend(
             [
-                f"Turno {player.opportunity} · <b>{escape(player.name)}</b>",
+                _turn_line(state, player.opportunity),
+                f"<b>{escape(player.name)}</b>",
                 "",
             ]
         )
@@ -1726,7 +1734,7 @@ def _render_combat(view: CombatView) -> Screen:
     else:
         enemy = state.fighters["enemy"]
         lines = [
-            f"Turno {player.opportunity} · <b>{escape(player.name)}</b>",
+            _turn_line(state, player.opportunity),
             "",
             f"<b>🐺 {escape(enemy.name)}</b>",
             f"❤️ <code>{number(enemy.hp)} / {number(enemy.stats.hp)}</code>",
@@ -2015,7 +2023,21 @@ def _render_combat(view: CombatView) -> Screen:
 
 def render_combat(view: CombatView) -> Screen:
     """Render combat and replace its image when a boss changes phase."""
-    screen = with_boss_transformation_art(_render_combat(view), view.combat)
+    base = _render_combat(view)
+    if view.context == "prologue" and view.consumable_screen is None:
+        from asterion.bot.prologue_ui import (
+            ENCOUNTER_LOCATION,
+            render_prologue_combat,
+            render_prologue_outcome,
+        )
+
+        if view.combat.result in {"victory", "defeat"}:
+            return render_prologue_outcome(view)
+        # Cão and Corvo resolve their picture through the same creature-art lookup.
+        base = with_creature_art(
+            render_prologue_combat(view, base.keyboard), view.combat, ENCOUNTER_LOCATION
+        )
+    screen = with_boss_transformation_art(base, view.combat)
     if view.encounter_id is not None:
         screen = replace(screen, media_seed=f"encounter:{view.encounter_id}")
     return screen

@@ -60,6 +60,10 @@ class CreationDraft(Base):
     __table_args__ = (
         UniqueConstraint("telegram_id", "server_id", name="uq_draft_actor_server"),
         CheckConstraint("version >= 0", name="ck_draft_version"),
+        CheckConstraint(
+            "screen_message_id IS NULL OR screen_message_id > 0",
+            name="ck_draft_screen_message",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -74,6 +78,7 @@ class CreationDraft(Base):
     editing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     error: Mapped[str | None] = mapped_column(String(24))
     rejected_name: Mapped[str | None] = mapped_column(String(16))
+    screen_message_id: Mapped[int | None] = mapped_column(BigInteger)
 
 
 class Character(Base):
