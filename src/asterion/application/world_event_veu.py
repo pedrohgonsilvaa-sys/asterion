@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -591,6 +591,47 @@ class VeuEventService:
             await session.flush()
             return ResolutionView(round_.id, True, streaks, tuple(removed))
 
+    async def fail_at_deadline(self, occurrence_id: UUID, *, now: datetime | None = None) -> bool:
+        """EM_ANDAMENTO -> FRACASSADO quando o prazo (``DEADLINE``) esgota. Idempotente."""
+        now = _utc(now)
+        async with self.sessions.begin() as session:
+            occurrence = await self._load_occurrence(session, occurrence_id)
+            if occurrence.state != ev.EventState.EM_ANDAMENTO.value or now < occurrence.deadline_at:
+                return False
+            occurrence.state = _event_move(occurrence.state, ev.EventState.FRACASSADO)
+            occurrence.state_version += 1
+            return True
+
+    async def due_round_ids(self, occurrence_id: UUID, now: datetime) -> list[UUID]:
+        """Rodadas abertas cujos 10 s de decisão já passaram."""
+        async with self.sessions() as session:
+            rows = await session.scalars(
+                select(VeuEventRound.id).where(
+                    VeuEventRound.occurrence_id == occurrence_id,
+                    VeuEventRound.state == ev.RoundState.OPEN.value,
+                    VeuEventRound.decision_deadline <= now,
+                )
+            )
+            return list(rows.all())
+
+    async def nuclei_with_players(self, occurrence_id: UUID) -> list[str]:
+        """Núcleos ATIVA com ao menos um participante presente."""
+        async with self.sessions() as session:
+            rows = await session.scalars(
+                select(VeuEventNucleus.nucleus_key)
+                .join(
+                    VeuEventParticipant,
+                    VeuEventParticipant.current_nucleus_id == VeuEventNucleus.id,
+                )
+                .where(
+                    VeuEventNucleus.occurrence_id == occurrence_id,
+                    VeuEventNucleus.state == ev.NucleusState.ATIVA.value,
+                )
+                .distinct()
+                .order_by(VeuEventNucleus.nucleus_key)
+            )
+            return list(rows.all())
+
     # ------------------------------------------------------------------ internals
 
     async def _load_occurrence(
@@ -757,3 +798,97 @@ class VeuEventService:
             seed=int(decision.seed),
             created=created,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class VeuNotice:
+    """Aviso estruturado. O texto não existe no repositório (``notice_texts``)."""
+
+    kind: str  # "opens_in"
+    occurrence_id: UUID
+    minutes: int
+
+
+@dataclass(frozen=True, slots=True)
+class UpkeepReport:
+    opened: tuple[UUID, ...]
+    failed: tuple[UUID, ...]
+    rounds_resolved: int
+    rounds_opened: int
+    notices: tuple[VeuNotice, ...]
+
+
+class VeuEventUpkeep:
+    """Ciclo automático: ocorrências, abertura, rodadas e prazo.
+
+    Não decide o gatilho do início (``start_trigger``): só inicia se ``start_after`` vier
+    configurado. Não encerra nem acerta recompensas (``event_closure``).
+    """
+
+    def __init__(
+        self,
+        service: VeuEventService,
+        *,
+        start_after: timedelta | None = None,
+        horizon: timedelta = timedelta(minutes=10),
+    ):
+        self.service = service
+        self.start_after = start_after
+        self.horizon = horizon
+
+    async def tick(
+        self, now: datetime | None = None, *, previous: datetime | None = None
+    ) -> UpkeepReport:
+        now = _utc(now)
+        previous = _utc(previous) if previous is not None else now - timedelta(seconds=1)
+        service = self.service
+        notices: list[VeuNotice] = []
+        slots = ev.slots_in_range(now - ev.DEADLINE, now + self.horizon)
+        occurrences = [await service.get_or_create_occurrence(slot) for slot in slots]
+        opened: list[UUID] = []
+        failed: list[UUID] = []
+        resolved = opened_rounds = 0
+        for view, slot in zip(occurrences, slots, strict=True):
+            for mark in ev.due_notice_marks(slot, previous, now):
+                notices.append(
+                    VeuNotice("opens_in", view.id, int(mark.total_seconds() // 60))
+                )
+            state = view.state
+            if state == ev.EventState.AGENDADO.value and now >= slot:
+                state = (await service.open_occurrence(view.id, now=now)).state
+                opened.append(view.id)
+            if (
+                state == ev.EventState.ABERTO.value
+                and self.start_after is not None
+                and now >= slot + self.start_after
+            ):
+                state = (await service.start_occurrence(view.id, now=now)).state
+            if state != ev.EventState.EM_ANDAMENTO.value:
+                continue
+            resolved += await self._resolve_due_rounds(view.id, now)
+            current = await service.reevaluate_progress(view.id, now=now)
+            if current.state != ev.EventState.EM_ANDAMENTO.value:
+                continue
+            if now >= slot + ev.DEADLINE:
+                if await service.fail_at_deadline(view.id, now=now):
+                    failed.append(view.id)
+                continue
+            opened_rounds += await self._open_rounds(current, now)
+        return UpkeepReport(
+            tuple(opened), tuple(failed), resolved, opened_rounds, tuple(notices)
+        )
+
+    async def _resolve_due_rounds(self, occurrence_id: UUID, now: datetime) -> int:
+        count = 0
+        for round_id in await self.service.due_round_ids(occurrence_id, now):
+            if (await self.service.resolve_round(round_id, now=now)).resolved_now:
+                count += 1
+        return count
+
+    async def _open_rounds(self, occurrence: OccurrenceView, now: datetime) -> int:
+        count = 0
+        for key in await self.service.nuclei_with_players(occurrence.id):
+            before = await self.service.open_round(occurrence.id, key, now=now)
+            if before.opened_at == now:
+                count += 1
+        return count

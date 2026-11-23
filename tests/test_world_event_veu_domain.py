@@ -315,6 +315,10 @@ def test_unresolved_rules_stay_blocked_and_documented():
         "nucleus_state_transitions",
         "boss_form_70_boundary",
         "switch_blocked_round_instant",
+        "start_trigger",
+        "notice_texts",
+        "significant_action",
+        "event_closure",
     }
     assert ev.EVENT_ID == "a_ruptura_do_veu"
     assert ev.CODEX_KEY == "codex.world_event.a_ruptura_do_veu"

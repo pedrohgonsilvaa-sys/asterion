@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Collection, Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -337,9 +337,47 @@ def is_scheduled_slot(slot: datetime) -> bool:
     )
 
 
+# ------------------------------------------------------------------ agenda / avisos
+
+NOTICE_MARKS = (timedelta(minutes=10), timedelta(minutes=5))
+
+
+def slots_in_range(start: datetime, end: datetime) -> list[datetime]:
+    """Horários da agenda em ``[start, end]``, em ordem, em UTC."""
+    if start.tzinfo is None or end.tzinfo is None:
+        raise ValueError("start and end must be timezone-aware")
+    found: list[datetime] = []
+    day = start.astimezone(EVENT_TIMEZONE).date() - timedelta(days=1)
+    last = end.astimezone(EVENT_TIMEZONE).date() + timedelta(days=1)
+    while day <= last:
+        if day.weekday() in SCHEDULE_WEEKDAYS:
+            for moment in SCHEDULE_TIMES:
+                slot = datetime.combine(day, moment, EVENT_TIMEZONE)
+                if start <= slot <= end:
+                    found.append(slot.astimezone(UTC))
+        day += timedelta(days=1)
+    return found
+
+
+def due_notice_marks(
+    scheduled_at: datetime, previous: datetime, now: datetime
+) -> tuple[timedelta, ...]:
+    """Marcos (10 e 5 min antes do horário) cruzados em ``(previous, now]``.
+
+    Sem estado em banco: o chamador guarda o instante da última verificação.
+    """
+    return tuple(
+        mark for mark in NOTICE_MARKS if previous < scheduled_at - mark <= now
+    )
+
+
 # ------------------------------------------------------------------- bloqueios
 
 BLOCKED_RULES: dict[str, str] = {
+    "start_trigger": "Gatilho do início (ABERTO -> EM_ANDAMENTO) não definido pela fonte.",
+    "notice_texts": "Textos dos avisos (10 e 5 min) não estão no repositório.",
+    "significant_action": "O que conta como ação significativa/contribuição maior.",
+    "event_closure": "Quando CONCLUIDO/FRACASSADO viram ENCERRADO e o acerto de recompensas.",
     "contextual_actions": "Estabilizar/Romper/Interromper: a fonte só dá exemplos (§16.3).",
     "nucleus_a_objective": "Núcleo A: 'manter a manifestação abaixo do limite' sem regra.",
     "nucleus_b_structural_objective": "Núcleo B: objetivo estrutural opcional sem regra.",
