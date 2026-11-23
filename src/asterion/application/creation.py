@@ -180,6 +180,19 @@ class CreationService:
             row = await self._load(session, actor, create=False)
             return self.snapshot(row) if row is not None else None
 
+    async def remember_screen(self, actor: int, draft_id: UUID, message_id: int) -> None:
+        """Store which Telegram message shows the draft's current screen.
+
+        Does not bump ``version``: this is presentation bookkeeping, not a player
+        action, so pending buttons on the same screen stay valid.
+        """
+        async with self.sessions.begin() as session:
+            row = await self._load(session, actor, create=False)
+            if not isinstance(row, CreationDraft) or row.id != draft_id:
+                return
+            if row.screen_message_id != message_id:
+                row.screen_message_id = message_id
+
     async def _name_allowed(self, session: AsyncSession, name: str) -> bool:
         if not self.policy.accepts(name):
             return False

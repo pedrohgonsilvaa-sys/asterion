@@ -1,5 +1,6 @@
 import json
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -7,13 +8,19 @@ from uuid import uuid4
 import pytest
 from aiogram import Bot, Dispatcher
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
-from aiogram.methods import EditMessageText, SendPhoto
+from aiogram.methods import (
+    EditMessageCaption,
+    EditMessageMedia,
+    EditMessageText,
+    SendMessage,
+    SendPhoto,
+)
+from aiogram.types import Chat, Message
 
 from asterion.bot.creation_handlers import creation_router, present
 from asterion.bot.creation_ui import (
     CLASS_CONTENT,
     RACE_CONTENT,
-    UNAVAILABLE_NAME_WARNING,
     CreationCallback,
     render,
 )
@@ -73,9 +80,13 @@ def test_name_errors_and_confirmation_exact_copy():
     assert "⚠️ Nome inválido. Envie outro nome no chat." in format_screen.text
     assert "⚠️ Envie no chat o nome desejado." in format_screen.text
     unavailable_screen = render(replace(base, error="unavailable", rejected_name="Luiken"))
-    assert unavailable_screen.text == render(replace(base, error=None)).text
     assert "👤 <b>Nome</b>" in unavailable_screen.text
+    assert "⚠️ Nome indisponível. Digite outro nome no chat." in unavailable_screen.text
+    assert "⚠️ Envie no chat o nome desejado." not in unavailable_screen.text
     assert "Luiken" not in unavailable_screen.text
+    assert "· Indisponível" not in unavailable_screen.text
+    assert "Tente outro nome novamente" not in unavailable_screen.text
+    assert unavailable_screen.keyboard is None
     assert "· Indisponível" not in unavailable_screen.text
     confirm = render(replace(base, step="confirm"))
     assert "📜 <b>Revisar Personagem</b>" in confirm.text
@@ -301,11 +312,48 @@ def callback_update(data, update_id=2, actor=10):
     }
 
 
+SENT_MESSAGE_ID = 555
+
+
+def _message(chat_id: int, message_id: int) -> Message:
+    return Message(
+        message_id=message_id,
+        date=datetime(2026, 11, 22, tzinfo=UTC),
+        chat=Chat(id=chat_id, type="private"),
+    )
+
+
+def _fake_telegram(bot, method, timeout=None):
+    """Telegram replies: sends and edits return a Message, other methods True."""
+    if isinstance(method, (SendMessage, SendPhoto)):
+        return _message(method.chat_id, SENT_MESSAGE_ID)
+    if isinstance(method, (EditMessageText, EditMessageCaption, EditMessageMedia)):
+        return _message(method.chat_id, method.message_id)
+    return True
+
+
 @pytest.fixture
 def telegram():
     bot = Bot("123456:local-test-token")
-    bot.session.make_request = AsyncMock(return_value=True)
+    bot.session.make_request = AsyncMock(side_effect=_fake_telegram)
     return bot
+
+
+def _methods(telegram):
+    return [c.args[1] for c in telegram.session.make_request.call_args_list if len(c.args) > 1]
+
+
+def _sends(telegram):
+    return [m for m in _methods(telegram) if isinstance(m, (SendMessage, SendPhoto))]
+
+
+def _texts(telegram):
+    return [
+        text
+        for m in _methods(telegram)
+        for text in (getattr(m, "text", None), getattr(m, "caption", None))
+        if text
+    ]
 
 
 async def test_real_dispatcher_uses_sender_and_backend_state(telegram):
@@ -331,27 +379,107 @@ async def test_real_dispatcher_uses_sender_and_backend_state(telegram):
     assert not service.callback.called
 
 
-async def test_unavailable_name_keeps_prompt_and_sends_generic_warning(telegram):
+UNAVAILABLE_INSTRUCTION = "⚠️ Nome indisponível. Digite outro nome no chat."
+IMAGES = {"name": "official-telegram-file-id"}
+
+
+async def test_unavailable_name_edits_existing_screen_in_place(telegram):
     service = AsyncMock()
-    state = Creation(uuid4(), step="name", error="unavailable", rejected_name="Pedro")
-    service.start.return_value = state
+    state = Creation(
+        uuid4(), step="name", error="unavailable", rejected_name="Pedro", screen_message_id=321
+    )
     service.name.return_value = state
     dispatcher = Dispatcher(disable_fsm=True)
-    dispatcher.include_router(creation_router(service, {}))
+    dispatcher.include_router(creation_router(service, IMAGES))
 
     await dispatcher.feed_raw_update(telegram, message_update("Pedro", 2))
 
-    texts = [
-        request.text
-        for request in (
-            c.args[1] for c in telegram.session.make_request.call_args_list if len(c.args) > 1
-        )
-        if hasattr(request, "text")
-    ]
-    assert render(state).text in texts
-    assert UNAVAILABLE_NAME_WARNING in texts
-    assert not any("Luiken" in text for text in texts)
-    assert not any("· Indisponível" in text for text in texts)
+    edits = [m for m in _methods(telegram) if isinstance(m, EditMessageMedia)]
+    assert len(edits) == 1
+    # Same message, same photo; only the caption changes.
+    assert edits[0].message_id == 321 and edits[0].chat_id == 10
+    assert edits[0].media.media == "official-telegram-file-id"
+    caption = edits[0].media.caption
+    assert caption == render(state).text
+    assert caption.splitlines()[-1] == UNAVAILABLE_INSTRUCTION
+    # No second message, and nothing from the rejected name or internal reason.
+    assert _sends(telegram) == []
+    assert not any(isinstance(m, EditMessageText) for m in _methods(telegram))
+    assert not any("Pedro" in t or "Luiken" in t for t in _texts(telegram))
+    assert not any("· Indisponível" in t for t in _texts(telegram))
+    assert not any("Tente outro nome" in t for t in _texts(telegram))
+    # Still on the name step, so the player can send another name.
+    assert state.step == "name"
+    service.remember_screen.assert_not_called()
+
+
+async def test_valid_name_after_unavailable_continues_without_old_error(telegram):
+    service = AsyncMock()
+    draft = uuid4()
+    rejected = Creation(
+        draft, step="name", error="unavailable", rejected_name="Pedro", screen_message_id=321
+    )
+    accepted = Creation(draft, step="gender", name="Aster", screen_message_id=321)
+    service.name.side_effect = [rejected, accepted]
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(creation_router(service, IMAGES))
+
+    await dispatcher.feed_raw_update(telegram, message_update("Pedro", 2))
+    assert len([m for m in _methods(telegram) if isinstance(m, EditMessageMedia)]) == 1
+    assert _sends(telegram) == []
+
+    await dispatcher.feed_raw_update(telegram, message_update("Aster", 3))
+
+    # Normal flow: the gender screen is sent as a new message, without the error.
+    sent = _sends(telegram)
+    assert len(sent) == 1
+    assert sent[0].text == render(accepted).text  # gender has no image in IMAGES
+    assert UNAVAILABLE_INSTRUCTION not in sent[0].text
+    assert len([m for m in _methods(telegram) if isinstance(m, EditMessageMedia)]) == 1
+    # The new screen becomes the one the bot edits from now on.
+    service.remember_screen.assert_awaited_once_with(10, draft, SENT_MESSAGE_ID)
+
+
+async def test_format_error_still_sends_new_screen_unchanged(telegram):
+    service = AsyncMock()
+    draft = uuid4()
+    state = Creation(draft, step="name", error="format", screen_message_id=321)
+    service.name.return_value = state
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(creation_router(service, IMAGES))
+
+    await dispatcher.feed_raw_update(telegram, message_update("a!", 2))
+
+    assert not any(isinstance(m, EditMessageMedia) for m in _methods(telegram))
+    assert len(_sends(telegram)) == 1
+    assert _sends(telegram)[0].caption == render(state).text
+    assert "⚠️ Nome inválido. Envie outro nome no chat." in _sends(telegram)[0].caption
+    service.remember_screen.assert_awaited_once_with(10, draft, SENT_MESSAGE_ID)
+
+
+async def test_unavailable_name_falls_back_to_new_screen_when_old_message_is_gone(telegram):
+    def gone(bot, method, timeout=None):
+        if isinstance(method, EditMessageMedia):
+            raise TelegramBadRequest(method=method, message="message to edit not found")
+        return _fake_telegram(bot, method, timeout)
+
+    telegram.session.make_request.side_effect = gone
+    service = AsyncMock()
+    draft = uuid4()
+    state = Creation(
+        draft, step="name", error="unavailable", rejected_name="Pedro", screen_message_id=321
+    )
+    service.name.return_value = state
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(creation_router(service, IMAGES))
+
+    await dispatcher.feed_raw_update(telegram, message_update("Pedro", 2))
+
+    sent = _sends(telegram)
+    assert len(sent) == 1
+    assert isinstance(sent[0], SendPhoto)
+    assert sent[0].caption.splitlines()[-1] == UNAVAILABLE_INSTRUCTION
+    service.remember_screen.assert_awaited_once_with(10, draft, SENT_MESSAGE_ID)
 
 
 async def test_creation_buttons_pass_through_campaign_router_registered_first(telegram):
