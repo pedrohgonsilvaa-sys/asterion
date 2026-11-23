@@ -2,7 +2,6 @@
   "screens": {
     "name": "👤 **Nome**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n⚠️ Envie no chat o nome desejado.",
     "format": "👤 **Nome**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n⚠️ Nome inválido. Envie outro nome no chat.\n\n⚠️ Envie no chat o nome desejado.",
-    "unavailable": "👤 **Nome**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n🚫 Luiken · Indisponível\n\n⚠️ Esse nome não pode ser utilizado. Escolha outro nome para continuar.\n\n⚠️ Envie outro nome no chat.",
     "gender": "🎭 **Gênero**\n\n_Existe o rosto que o mundo vai reconhecer. Escolha como seu personagem se apresenta em Asterion._",
     "race": "🧿 **Raça**\n\n_Povos distintos sobreviveram às marcas deixadas sobre Asterion. Sua origem acompanhará permanentemente este personagem e influenciará, de forma sutil, a maneira como ele enfrenta os perigos do mundo._",
     "class": "⚜️ **Classe**\n\n_Sua Classe define as bases do seu estilo de combate e os Caminhos que poderão ser despertados mais adiante. Escolha com cuidado: esta decisão acompanhará permanentemente o personagem._",

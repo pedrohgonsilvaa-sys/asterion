@@ -14,6 +14,7 @@ from asterion.bot.creation_ui import (
     CLASS_CONTENT,
     PROLOGUE_TEXT,
     RACE_CONTENT,
+    UNAVAILABLE_NAME_WARNING,
     CreationCallback,
     render,
 )
@@ -72,12 +73,10 @@ def test_name_errors_and_confirmation_exact_copy():
     assert "⚠️ Nome inválido. Envie outro nome no chat." in format_screen.text
     assert "⚠️ Envie no chat o nome desejado." in format_screen.text
     unavailable_screen = render(replace(base, error="unavailable", rejected_name="Luiken"))
+    assert unavailable_screen.text == render(replace(base, error=None)).text
     assert "👤 <b>Nome</b>" in unavailable_screen.text
-    assert "⚠️ Envie outro nome no chat." in unavailable_screen.text
-    assert (
-        "Luiken · Indisponível"
-        in unavailable_screen.text
-    )
+    assert "Luiken" not in unavailable_screen.text
+    assert "· Indisponível" not in unavailable_screen.text
     confirm = render(replace(base, step="confirm"))
     assert "📜 <b>Revisar Personagem</b>" in confirm.text
     assert [[button.text for button in row] for row in confirm.keyboard.inline_keyboard] == [
@@ -331,6 +330,28 @@ async def test_real_dispatcher_uses_sender_and_backend_state(telegram):
         await dispatcher.feed_raw_update(telegram, callback_update(malformed))
     assert not service.callback.called
 
+
+async def test_unavailable_name_keeps_prompt_and_sends_generic_warning(telegram):
+    service = AsyncMock()
+    state = Creation(uuid4(), step="name", error="unavailable", rejected_name="Pedro")
+    service.start.return_value = state
+    service.name.return_value = state
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(creation_router(service, {}))
+
+    await dispatcher.feed_raw_update(telegram, message_update("Pedro", 2))
+
+    texts = [
+        request.text
+        for request in (
+            c.args[1] for c in telegram.session.make_request.call_args_list if len(c.args) > 1
+        )
+        if hasattr(request, "text")
+    ]
+    assert render(state).text in texts
+    assert UNAVAILABLE_NAME_WARNING in texts
+    assert not any("Luiken" in text for text in texts)
+    assert not any("· Indisponível" in text for text in texts)
 
 
 async def test_creation_buttons_pass_through_campaign_router_registered_first(telegram):

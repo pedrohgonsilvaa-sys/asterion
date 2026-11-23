@@ -50,13 +50,15 @@ Erro de formato:
 
 Nome que o sistema não aceita por unicidade, reserva, moderação ou regra equivalente:
 
+- manter a tela **Nome do Personagem** inalterada;
+- enviar uma mensagem separada do Bot, abaixo da tentativa do jogador:
+
 ```text
-👤 Nome do Personagem
-
-🚫 Luiken · Indisponível
-
-⚠️ Esse nome não pode ser utilizado. Escolha outro nome para continuar. Envie outro nome no chat.
+⚠️ Nome indisponível. Tente outro nome novamente.
 ```
+
+- a mensagem não deve repetir o nome rejeitado nem um nome de exemplo;
+- a mensagem é genérica para não expor a razão interna da indisponibilidade (unicidade, reserva ou moderação).
 
 ### 45.1b Seleção de Gênero
 
