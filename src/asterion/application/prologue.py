@@ -1,5 +1,6 @@
 """Transactional entry, recovery, actions and fixed one-off prologue reward."""
 
+import secrets
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
@@ -11,7 +12,13 @@ from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     reconcile_character_hp,
 )
-from asterion.domain.combat import Combat, CombatConsumableOption, act
+from asterion.domain.combat import (
+    Combat,
+    CombatConsumableOption,
+    act,
+    expire_turn,
+    turn_expired,
+)
 from asterion.domain.creation import PROLOGUE
 from asterion.domain.creation import RULESET as CHARACTER_RULESET
 from asterion.domain.prologue import (
@@ -19,6 +26,7 @@ from asterion.domain.prologue import (
     CONTENT_ID,
     FAILED_STAGE,
     POST_COMBAT_STAGE,
+    PROLOGUE_ENEMY_IDS,
     REWARD_XP,
     SUPPORTED_COMBAT_RULESETS,
     PrologueProfile,
@@ -59,6 +67,11 @@ class CombatView:
     trial_stage_caption: str | None = None
     combat_actor_key: str | None = None
     campaign_shared: bool | None = None
+
+
+def choose_enemy_id() -> str:
+    """Draw the first-combat creature; both possibilities belong to the same encounter."""
+    return secrets.choice(PROLOGUE_ENEMY_IDS)
 
 
 def view(character: Character, activity: GameActivity, encounter: Encounter, record: CombatRecord):
@@ -125,6 +138,7 @@ class PrologueService:
                     session, character
                 )
                 reconcile_character_hp(character, equipment_configuration)
+                enemy_id = choose_enemy_id()
                 state = self.profile.create(
                     uuid4(),
                     character.name,
@@ -132,9 +146,10 @@ class PrologueService:
                     character.race,
                     character.hp,
                     equipment_configuration,
+                    enemy_id,
                 )
                 activity, encounter, record = await repo.create(character, CONTENT_ID, state)
-                await self._ensure_tutorial_bestiary(session, character)
+                await self._ensure_tutorial_bestiary(session, character, enemy_id)
                 character.stage = COMBAT_STAGE
                 return view(character, activity, encounter, record)
             if activity.content_id != CONTENT_ID:
@@ -152,6 +167,17 @@ class PrologueService:
                 # Reconcile only the provable pre-v1.4.7 tutorial softlock.
                 await self._complete_prologue_after_combat(session, character, activity)
                 return view(character, activity, encounter, record)
+            if activity.status == "active" and turn_expired(current.combat):
+                # Server-side timeout: the overdue turn is spent exactly once, whether
+                # it is found by a late action or by a plain resume.
+                expired = expire_turn(current.combat)
+                if expired.version != current.combat.version:
+                    activity.state_version = expired.version
+                    record.snapshot = encode(expired)
+                    character.hp = expired.fighters["player"].hp
+                    if expired.result == "defeat":
+                        await self._complete_prologue_after_combat(session, character, activity)
+                    return view(character, activity, encounter, record)
             if (
                 intent is None
                 or intent[:2] != (activity.id, activity.state_version)
@@ -212,20 +238,22 @@ class PrologueService:
 
         await reconcile_tdo_feats(session, character)
 
-    async def _ensure_tutorial_bestiary(self, session, character) -> None:
-        """Record the tutorial Cão observation without granting observation XP."""
+    async def _ensure_tutorial_bestiary(
+        self, session, character, creature_id: str = "dog_cinereo"
+    ) -> None:
+        """Record the tutorial creature observation without granting observation XP."""
         entry = await session.scalar(
             select(BestiaryEntry)
             .where(
                 BestiaryEntry.character_id == character.id,
-                BestiaryEntry.creature_id == "dog_cinereo",
+                BestiaryEntry.creature_id == creature_id,
             )
             .with_for_update()
         )
         if entry is None:
             entry = BestiaryEntry(
                 character_id=character.id,
-                creature_id="dog_cinereo",
+                creature_id=creature_id,
                 bkp=7,
                 stage="observed",
             )
@@ -237,7 +265,7 @@ class PrologueService:
             exists = await session.scalar(
                 select(BestiaryEvidence).where(
                     BestiaryEvidence.character_id == character.id,
-                    BestiaryEvidence.creature_id == "dog_cinereo",
+                    BestiaryEvidence.creature_id == creature_id,
                     BestiaryEvidence.evidence_id == evidence_id,
                 )
             )
@@ -245,7 +273,7 @@ class PrologueService:
                 session.add(
                     BestiaryEvidence(
                         character_id=character.id,
-                        creature_id="dog_cinereo",
+                        creature_id=creature_id,
                         evidence_id=evidence_id,
                         category=category,
                     )

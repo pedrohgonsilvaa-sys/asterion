@@ -936,7 +936,12 @@ def world_router(
         view = await service.rest(query.from_user.id)
         if view and isinstance(query.message, Message):
             await query.answer()
-            screen = await region_main_screen(query.from_user.id, view)
+            if view.first_menu:
+                from asterion.bot.prologue_ui import render_prologue_ending
+
+                screen = render_prologue_ending(view.name)
+            else:
+                screen = await region_main_screen(query.from_user.id, view)
             await present(query.message, screen, images, edit=True)
             if view.first_menu and community_url:
                 await query.message.answer(

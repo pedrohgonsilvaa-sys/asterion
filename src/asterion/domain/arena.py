@@ -21,6 +21,8 @@ from datetime import datetime, time, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal
 from zoneinfo import ZoneInfo
 
+from asterion.domain.turn_clock import TURN_SECONDS
+
 ARENA_TIMEZONE = ZoneInfo("America/Sao_Paulo")
 
 DUEL_MIN_LEVEL = 10
@@ -32,7 +34,7 @@ ARENA_WINDOWS: tuple[tuple[time, time], ...] = (
 
 CONFIRMATION_TTL = timedelta(seconds=45)
 DUEL_INVITE_TTL = timedelta(seconds=45)
-TURN_TTL = timedelta(seconds=90)
+TURN_TTL = timedelta(seconds=TURN_SECONDS)  # global combat turn clock
 AFK_CONSECUTIVE_TIMEOUTS = 2
 AFK_TOTAL_TIMEOUTS = 3
 SURRENDER_MIN_ROUND = 5

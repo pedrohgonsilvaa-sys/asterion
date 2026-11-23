@@ -644,7 +644,7 @@ def test_start_combat_with_faster_enemy_hands_first_manual_turn_to_a_player():
 
 
 @pytest.mark.asyncio
-async def test_new_active_group_hunt_gets_180_second_deadline(database):
+async def test_new_active_group_hunt_gets_10_second_deadline(database):
     actors, ids = await _seed_hunters(database, count=2)
     groups = GroupService(database[1], "ocaso")
     road = RoadService(database[1], "ocaso")
@@ -670,8 +670,8 @@ async def test_new_active_group_hunt_gets_180_second_deadline(database):
             ).all()
         )
     assert encounter.status == "active"
-    assert before + timedelta(seconds=180) <= encounter.deadline_at
-    assert encounter.deadline_at <= after + timedelta(seconds=180)
+    assert before + timedelta(seconds=10) <= encounter.deadline_at
+    assert encounter.deadline_at <= after + timedelta(seconds=10)
     assert all(
         (m.consecutive_timeouts, m.total_timeouts, m.inactive_for_contribution)
         == (0, 0, False)
@@ -767,7 +767,7 @@ async def test_group_hunt_timeout_passes_turn_counts_and_renews_deadline(
     old_deadline = encounter.deadline_at
     version = encounter.state_version
 
-    # Before the 180s deadline nothing happens.
+    # Before the 10s deadline nothing happens.
     early = old_deadline - timedelta(seconds=1)
     assert await road.group_hunts.run_maintenance(now=early) == 0
     assert (await _load_hunt(database, encounter_id))[0].state_version == version
@@ -784,9 +784,9 @@ async def test_group_hunt_timeout_passes_turn_counts_and_renews_deadline(
     assert timed_out.inactive_for_contribution is False
     other = next(row for row in members if row.actor_key != active.actor_key)
     assert (other.total_timeouts, other.consecutive_timeouts) == (0, 0)
-    # New deadline is a fresh 180s window for the next player.
+    # New deadline is a fresh 10s window for the next player.
     assert encounter.deadline_at > old_deadline
-    assert encounter.deadline_at >= datetime.now(UTC) + timedelta(seconds=170)
+    assert encounter.deadline_at >= datetime.now(UTC) + timedelta(seconds=8)
 
     # A tick before the renewed deadline is a no-op.
     before_new = encounter.deadline_at - timedelta(seconds=1)
@@ -840,7 +840,7 @@ async def test_valid_action_resets_consecutive_timeouts_and_inactive_mark(
     assert row.inactive_for_contribution is False
     assert row.total_timeouts == 3  # the lifetime total is kept
     assert encounter.deadline_at is not None
-    assert encounter.deadline_at >= datetime.now(UTC) + timedelta(seconds=170)
+    assert encounter.deadline_at >= datetime.now(UTC) + timedelta(seconds=8)
 
 
 @pytest.mark.asyncio

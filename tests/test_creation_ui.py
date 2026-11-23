@@ -12,12 +12,12 @@ from aiogram.methods import EditMessageText, SendPhoto
 from asterion.bot.creation_handlers import creation_router, present
 from asterion.bot.creation_ui import (
     CLASS_CONTENT,
-    PROLOGUE_TEXT,
     RACE_CONTENT,
     CreationCallback,
     render,
 )
 from asterion.bot.p1_handlers import p1_router
+from asterion.bot.prologue_ui import render_scene
 from asterion.domain.creation import CLASSES, PROLOGUE, RACES, Creation
 
 
@@ -102,7 +102,10 @@ def test_confirmation_uses_selected_race_passive_and_class(race, cls):
             character_class=cls,
         )
     )
-    assert "⚠️ Raça e Classe não poderão ser alteradas após a criação do personagem." in screen.text
+    assert (
+        "⚠️ Gênero, Raça e Classe não poderão ser alterados após a criação do personagem."
+        in screen.text
+    )
     assert CLASS_CONTENT[cls]["name"] in screen.text
     assert "👤 <b>Nome</b> · <code>Aster</code>" in screen.text
     assert "🎭 <b>Gênero</b> · <code>Feminino</code>" in screen.text
@@ -378,7 +381,7 @@ async def test_telegram_failure_after_commit_is_recoverable(service, telegram):
     assert (await service.start(10)).step == PROLOGUE
     telegram.session.make_request.side_effect = None
     await dispatcher.feed_raw_update(telegram, message_update("/start"))
-    assert telegram.session.make_request.call_args.args[1].text == PROLOGUE_TEXT
+    assert telegram.session.make_request.call_args.args[1].text == render_scene("cinzas").text
 
 
 def test_packaged_copy_is_valid_json():

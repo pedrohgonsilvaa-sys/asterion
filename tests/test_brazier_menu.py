@@ -66,9 +66,9 @@ def test_vigor_bar_is_derived_not_hardcoded():
 
 def test_brazier_screen_has_discovered_state_and_rest_only():
     screen = render_world(world_view(kind="brazier"))
-    assert "🔥 Braseiro · Descoberto" in screen.text
+    assert "🔥 Braseiro da Estrada" in screen.text
     assert "Ativar Braseiro" not in screen.text
-    assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["Descansar"]
+    assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["🔥 Descansar"]
 
 
 def test_menu_does_not_invent_missing_quest():
@@ -270,7 +270,7 @@ async def test_dispatcher_start_and_menu_recover_brazier_then_menu(database):
     assert "não corresponde" in str(sent) or "Diante do Braseiro" in str(sent)
     await dispatcher.feed_raw_update(bot, callback_update("pro:f:o2", actor=1, update_id=10))
     sent = bot.session.make_request.call_args.args[1]
-    assert "🔥 Braseiro · Descoberto" in sent.text and "Descansar" in str(sent.reply_markup)
+    assert "🔥 Braseiro da Estrada" in sent.text and "Descansar" in str(sent.reply_markup)
     await world.rest(1)
     await dispatcher.feed_raw_update(bot, message_update("/start", actor=1, update_id=3))
     sent = bot.session.make_request.call_args.args[1]
@@ -302,7 +302,7 @@ async def test_start_and_menu_reconcile_legacy_prologue_defeat(database):
     await world.choose_prologue(1, "PRO_choice_first_fire", "o1")
     await dispatcher.feed_raw_update(bot, message_update("/menu", actor=1, update_id=2))
     sent = bot.session.make_request.call_args.args[1]
-    assert "🔥 Braseiro · Descoberto" in sent.text
+    assert "🔥 Braseiro da Estrada" in sent.text
 
     async with database[1]() as session:
         assert (await session.scalar(select(GameActivity))).status == "completed"

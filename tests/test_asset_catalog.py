@@ -95,7 +95,9 @@ def test_npc_dungeon_region_and_character_keys():
     assert len(npcs) == 30
     assert len([k for k in images if k.startswith("region.")]) == 6
     assert len([k for k in images if k.startswith("dungeon.")]) == 12
-    assert len([k for k in images if k.startswith("char.")]) == 70
+    # 70 files minus hem-m-vigia.jpg, a byte copy of hem-m-errante.jpg (wrong class art).
+    assert len([k for k in images if k.startswith("char.")]) == 69
+    assert "char.hemario.masculino.vigia" not in images
     assert "char.velado.feminino.errante" in images
     for ref in images.values():
         assert resolve_asset_file(ref) is not None, ref

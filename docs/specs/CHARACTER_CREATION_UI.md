@@ -518,7 +518,7 @@ Seu nome foi escolhido, sua origem foi definida e sua vocação começa a tomar 
 🧩 Adaptabilidade · Passiva Racial
 🗡️ Classe · Errante
 
-⚠️ Raça e Classe não poderão ser alteradas após a criação do personagem.
+⚠️ Gênero, Raça e Classe não poderão ser alterados após a criação do personagem.
 
 [✅ Confirmar Personagem]
 
