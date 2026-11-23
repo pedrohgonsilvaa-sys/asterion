@@ -464,17 +464,13 @@ async def test_terminal_prologue_defeat_dispatches_to_existing_brazier(
     assert "Derrota" in (getattr(sent, "text", None) or getattr(sent, "caption", ""))
     await dispatcher.feed_raw_update(telegram, callback_update("pl:chama", actor=1))
     sent = telegram.session.make_request.call_args.args[1]
-    assert "Depois da Cinza" in sent.text
+    assert "Depois da Cinza" not in sent.text
+    assert "<b>🔥 Braseiro da Estrada</b>" in sent.text
     rows = sent.reply_markup.inline_keyboard
-    assert [button.callback_data for row in rows for button in row] == [
-        "pro:a:o1",
-        "pro:a:o2",
-        "pro:a:o3",
-    ]
+    assert [button.callback_data for row in rows for button in row] == ["world:rest"]
     world = WorldService(database[1], "ocaso")
-    await world.choose_prologue(1, "PRO_choice_aftermath", "o1")
-    view = await world.choose_prologue(1, "PRO_choice_first_fire", "o1")
-    assert view.kind == "brazier" and view.prologue_choice is None
+    view = await world.resume(1)
+    assert view.kind == "brazier"
 
 
 async def test_start_mid_combat_reconstructs_combat_instead_of_intro(database, telegram):
@@ -858,3 +854,27 @@ def test_consumable_and_ward_combat_log_lines_follow_the_ui_source():
     )
     assert blocked == "🛡️ Resguardo bloqueia <b>Fraqueza</b> em <b>Luiken</b>."
     assert "weak" not in blocked
+
+
+async def test_purse_callback_credits_and_shows_the_line_once(database, telegram):
+    from sqlalchemy import select
+
+    from asterion.infrastructure.db.models import Character
+
+    await character(database)
+    service = PrologueService(database[1], "ocaso", PROFILE)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(combat_router(service, {}))
+
+    def shown():
+        sent = telegram.session.make_request.call_args.args[1]
+        return getattr(sent, "text", None) or getattr(sent, "caption", "")
+
+    await dispatcher.feed_raw_update(telegram, callback_update("pl:destrocos", actor=1))
+    assert "🪙 18 Coroas" in shown()
+    await dispatcher.feed_raw_update(
+        telegram, callback_update("pl:destrocos", actor=1, update_id=3)
+    )
+    assert "🪙 18 Coroas" not in shown()
+    async with database[1]() as session:
+        assert (await session.scalar(select(Character))).crowns == 18

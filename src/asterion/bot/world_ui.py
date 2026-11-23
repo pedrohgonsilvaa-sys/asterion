@@ -118,29 +118,7 @@ CLASS_LABEL = {
 }
 
 
-def render_prologue_choice(view: WorldView) -> Screen:
-    """Prologue choice. Race and Class only add a text line; options are the same for all."""
-    choice = view.prologue_choice
-    short = "a" if choice.choice_id == "PRO_choice_aftermath" else "f"
-    identity = (
-        f"{escape(view.name)} · {RACE_LABEL.get(view.race, view.race)} · "
-        f"{CLASS_LABEL.get(view.character_class, view.character_class)}"
-    )
-    text = (
-        f"{escape(choice.title)}\nEstrada das Cinzas · Terras do Ocaso\n\n"
-        f"{identity}\n\n<i>{escape(choice.context)}</i>\n\n<b>{escape(choice.question)}</b>"
-    )
-    rows = [
-        [InlineKeyboardButton(text=label, callback_data=f"pro:{short}:{option_id}")]
-        for option_id, label in choice.options
-    ]
-    keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
-    return Screen(text, "brazier_estrada", keyboard, parse_mode="HTML")
-
-
 def render_world(view: WorldView) -> Screen:
-    if view.prologue_choice is not None:
-        return render_prologue_choice(view)
     if view.kind == "brazier":
         from asterion.bot.prologue_ui import render_brazier
 

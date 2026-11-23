@@ -42,8 +42,13 @@ from asterion.infrastructure.db.models import (
     Encounter,
     GameActivity,
     LocationDiscovery,
+    RewardComponent,
+    RewardEvent,
     WorldState,
 )
+
+PURSE_SOURCE = "prologue.destrocos.bolsa"
+PURSE_CROWNS = 18
 
 
 @dataclass(frozen=True)
@@ -113,6 +118,30 @@ class PrologueService:
         action: str,
     ) -> CombatView | None:
         return await self._command(actor, intent=(activity_id, version, action))
+
+    async def collect_wreck_purse(self, actor: int) -> bool:
+        """Credit the wreck's purse once per character; True only on the crediting call."""
+        async with self.sessions.begin() as session:
+            character = await session.scalar(
+                select(Character)
+                .where(Character.telegram_id == actor, Character.server_id == self.server_id)
+                .with_for_update()
+            )
+            if character is None or character.stage != PROLOGUE:
+                return False
+            claimed = await session.scalar(
+                pg_insert(RewardEvent)
+                .values(character_id=character.id, source_id=PURSE_SOURCE)
+                .on_conflict_do_nothing(index_elements=["character_id", "source_id"])
+                .returning(RewardEvent.id)
+            )
+            if claimed is None:
+                return False
+            session.add(
+                RewardComponent(reward_event_id=claimed, kind="crowns", quantity=PURSE_CROWNS)
+            )
+            character.crowns += PURSE_CROWNS
+            return True
 
     async def _command(
         self,

@@ -71,9 +71,11 @@ def test_scene_flow_targets_exist_and_combat_starts_directly():
     assert "⚔️" not in "".join(texts_of(render_scene(node)) for node in SCENES)
 
 
-def test_objects_are_part_of_the_wreckage_scene():
-    text = render_scene("destrocos").text
-    assert "🎒 Bandagem" in text and "🪙 18 Coroas" in text
+def test_purse_line_only_shows_when_really_credited():
+    assert "🪙 18 Coroas" not in render_scene("destrocos").text
+    shown = render_scene("destrocos", show_objects=True).text
+    assert "🪙 18 Coroas" in shown and "Bandagem" not in shown
+    assert "Bandagem" not in "".join(render_scene(n, show_objects=True).text for n in SCENES)
 
 
 def test_creation_prologue_step_is_the_first_scene():
@@ -312,17 +314,20 @@ def test_clock_applies_to_boss_and_party_combats_too(clock):
     assert turn_expired(view.combat)
 
 
-def test_pvp_and_group_hunt_deadlines_follow_the_global_turn_clock():
-    from asterion.application.group_hunts import GROUP_HUNT_TURN_TIMEOUT_SECONDS
-    from asterion.domain.arena import TURN_TTL
-    from asterion.domain.turn_clock import TURN_SECONDS
-
-    assert TURN_TTL.total_seconds() == TURN_SECONDS == GROUP_HUNT_TURN_TIMEOUT_SECONDS == 10
-
-
 def test_snapshot_round_trip_keeps_the_deadline():
     from asterion.infrastructure.db.combat_codec import decode, encode
 
     view = combat_view("dog_cinereo")
     back = decode(encode(view.combat), view.combat.id, view.combat.ruleset, view.combat.version)
     assert back.turn_deadline == view.combat.turn_deadline
+
+
+def test_hemario_masculino_vigia_has_its_own_real_art():
+    images = build_asset_images(())
+    key = "char.hemario.masculino.vigia"
+    assert key in images and images[key].endswith("hem-m-vigia.jpg")
+    root = asset_catalog.assets_root()
+    errante = images["char.hemario.masculino.errante"]
+    assert (root / images[key].removeprefix("file:")).read_bytes() != (
+        root / errante.removeprefix("file:")
+    ).read_bytes()

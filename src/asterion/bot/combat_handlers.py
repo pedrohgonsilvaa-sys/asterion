@@ -54,6 +54,7 @@ from asterion.bot.p5_ui import render_p5
 from asterion.bot.p6_ui import render_p6
 from asterion.bot.prologue_ui import (
     FLAME_CALLBACK,
+    PURSE_NODE,
     render_scene,
     scene_id_from_callback,
 )
@@ -311,7 +312,12 @@ def combat_router(
             return
         node = scene_id_from_callback(data)
         if node is not None:
-            await present(query.message, render_scene(node), images, edit=True)
+            granted = node == PURSE_NODE and await service.collect_wreck_purse(
+                query.from_user.id
+            )
+            await present(
+                query.message, render_scene(node, show_objects=granted), images, edit=True
+            )
 
     @router.callback_query(F.data == "prologue:continue")
     async def enter(query: CallbackQuery):

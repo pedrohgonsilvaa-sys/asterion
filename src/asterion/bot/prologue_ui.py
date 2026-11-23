@@ -22,6 +22,8 @@ ENDING_CALLBACK = "menu:back"
 BAR_SEGMENTS = 9
 ENCOUNTER_LOCATION = "tdo.location.estrada_das_cinzas"
 _CONTINUE = "🛤️ Continuar a caminhada"
+PURSE_LINE = "🪙 18 Coroas"
+PURSE_NODE = "destrocos"
 
 # node -> (title, narration, objects shown inside the scene, buttons[(label, target)]).
 # A target of COMBAT_ENTRY starts the first combat directly.
@@ -51,7 +53,7 @@ SCENES: dict[str, tuple[str, str, tuple[str, ...], tuple[tuple[str, str], ...]]]
         "🔎 Entre os Destroços",
         "Uma carroça tombada permanece parcialmente coberta pela cinza. Entre a madeira "
         "quebrada, uma pequena bolsa ainda está presa sob uma das tábuas.",
-        ("🎒 Bandagem", "🪙 18 Coroas"),
+        (PURSE_LINE,),
         ((_CONTINUE, COMBAT_ENTRY), ("🔎 Examinar os destroços", "queimada")),
     ),
     "silencio": (
@@ -100,10 +102,11 @@ def _column(buttons: list[tuple[str, str]]) -> InlineKeyboardMarkup:
     )
 
 
-def render_scene(node_id: str) -> Screen:
+def render_scene(node_id: str, *, show_objects: bool = False) -> Screen:
+    """Objects are shown only when they were really credited by this very visit."""
     title, narration, objects, buttons = SCENES[node_id]
     parts = [f"<b>{title}</b>", f"<i>{narration}</i>"]
-    if objects:
+    if objects and show_objects:
         parts.insert(2, "\n".join(objects))
     keyboard = _column(
         [

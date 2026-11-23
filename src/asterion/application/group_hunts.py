@@ -39,7 +39,6 @@ from asterion.domain.road import (
     unlock_level_blockers,
 )
 from asterion.domain.tdo_combat import hunt_unlock_blocked_message
-from asterion.domain.turn_clock import TURN_SECONDS
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import (
     Character,
@@ -59,7 +58,7 @@ if TYPE_CHECKING:
     from asterion.application.road import RoadService, RoadView
 
 GROUP_HUNT_CONTENT = "road_group_hunt"
-GROUP_HUNT_TURN_TIMEOUT_SECONDS = TURN_SECONDS
+GROUP_HUNT_TURN_TIMEOUT_SECONDS = 180
 GROUP_HUNT_INACTIVE_TIMEOUTS = 3
 GROUP_HUNT_HP_FACTORS = (Decimal("1.00"), Decimal("1.72"), Decimal("2.44"), Decimal("3.16"))
 GROUP_HUNT_ATTACK_FACTORS = (
@@ -625,7 +624,7 @@ class GroupHuntService:
     def _persist_combat(
         encounter, members, characters, activities, updated, *, valid_action: bool
     ) -> None:
-        """Store the new shared snapshot and set the next 10s turn deadline.
+        """Store the new shared snapshot and set the next 180s turn deadline.
 
         ``valid_action`` is False for a timeout pass, which must not refresh the
         activity's last valid action time.
@@ -655,7 +654,7 @@ class GroupHuntService:
     async def run_maintenance(
         self, *, now: datetime | None = None, limit: int = 100
     ) -> int:
-        """Pass the turn of every Group Hunt whose 10s deadline has elapsed."""
+        """Pass the turn of every Group Hunt whose 180s deadline has elapsed."""
         now = now or datetime.now(UTC)
         async with self.sessions() as session:
             due = (

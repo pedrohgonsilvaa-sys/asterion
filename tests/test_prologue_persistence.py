@@ -615,3 +615,28 @@ async def test_action_inside_the_window_still_lands(prologue, database, _frozen_
     _frozen_turn_clock["t"] += 9
     done = await prologue.action(1, view.activity_id, view.combat.version, "attack")
     assert done.combat.fighters["enemy"].hp < view.combat.fighters["enemy"].hp
+
+
+async def test_wreck_purse_credits_18_crowns_exactly_once(prologue, database):
+    from asterion.infrastructure.db.models import RewardComponent, RewardEvent
+
+    await character(database)
+    assert await prologue.collect_wreck_purse(1) is True
+    assert await prologue.collect_wreck_purse(1) is False
+    results = await asyncio.gather(*(prologue.collect_wreck_purse(1) for _ in range(4)))
+    assert results == [False] * 4
+    async with database[1]() as session:
+        row = await session.scalar(select(Character))
+        assert row.crowns == 18
+        assert await session.scalar(select(func.count()).select_from(RewardEvent)) == 1
+        component = await session.scalar(select(RewardComponent))
+        assert (component.kind, component.quantity) == ("crowns", 18)
+
+
+async def test_wreck_purse_is_refused_once_the_combat_started(prologue, database):
+    await character(database)
+    await prologue.enter(1)
+    assert await prologue.collect_wreck_purse(1) is False
+    async with database[1]() as session:
+        assert (await session.scalar(select(Character))).crowns == 0
+
