@@ -27,6 +27,12 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from asterion.domain.equipment import EQUIPMENT_SLOT_VALUES
+from asterion.domain.world_event_veu import AFK_LIMIT as VEU_AFK_LIMIT
+from asterion.domain.world_event_veu import DECISION_WINDOW as VEU_DECISION_WINDOW
+from asterion.domain.world_event_veu import PARTICIPANT_CAP as VEU_PARTICIPANT_CAP
+from asterion.domain.world_event_veu import EventState as VeuEventState
+from asterion.domain.world_event_veu import NucleusState as VeuNucleusState
+from asterion.domain.world_event_veu import RoundState as VeuRoundState
 from asterion.infrastructure.db.base import Base
 
 
@@ -54,6 +60,10 @@ class CreationDraft(Base):
     __table_args__ = (
         UniqueConstraint("telegram_id", "server_id", name="uq_draft_actor_server"),
         CheckConstraint("version >= 0", name="ck_draft_version"),
+        CheckConstraint(
+            "screen_message_id IS NULL OR screen_message_id > 0",
+            name="ck_draft_screen_message",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -68,6 +78,7 @@ class CreationDraft(Base):
     editing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     error: Mapped[str | None] = mapped_column(String(24))
     rejected_name: Mapped[str | None] = mapped_column(String(16))
+    screen_message_id: Mapped[int | None] = mapped_column(BigInteger)
 
 
 class Character(Base):
@@ -183,7 +194,8 @@ class LegacyAscensionRecord(Base):
     legacy_level_after: Mapped[int] = mapped_column(Integer, nullable=False)
     character_level_before: Mapped[int] = mapped_column(Integer, nullable=False)
     xp_before: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    campaign_quest_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    # Legado I–V no longer depends on P36/campaign; kept NULL for new rows.
+    campaign_quest_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     operation_key: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     configuration_version_before: Mapped[int] = mapped_column(Integer, nullable=False)
     ascended_at: Mapped[datetime] = mapped_column(
@@ -1719,6 +1731,7 @@ class GroupHuntEncounter(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class GroupHuntMember(Base):
@@ -1731,6 +1744,10 @@ class GroupHuntMember(Base):
         UniqueConstraint("group_hunt_encounter_id", "actor_key", name="uq_group_hunt_member_actor"),
         CheckConstraint("ordinal BETWEEN 1 AND 4", name="ck_group_hunt_member_ordinal"),
         CheckConstraint("consumable_uses >= 0", name="ck_group_hunt_member_consumables"),
+        CheckConstraint(
+            "consecutive_timeouts >= 0", name="ck_group_hunt_member_consec_timeouts"
+        ),
+        CheckConstraint("total_timeouts >= 0", name="ck_group_hunt_member_total_timeouts"),
         CheckConstraint(
             "settlement_state IN ('pending','settled')",
             name="ck_group_hunt_member_settlement",
@@ -1755,6 +1772,15 @@ class GroupHuntMember(Base):
         String(16), nullable=False, default="pending", server_default="pending"
     )
     result: Mapped[str | None] = mapped_column(String(16))
+    consecutive_timeouts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    total_timeouts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    inactive_for_contribution: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -3697,6 +3723,275 @@ class WorldEventParticipation(Base):
     eligible: Mapped[bool | None] = mapped_column(Boolean)
     reward: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+def _in_list(column: str, values) -> str:
+    return f"{column} IN (" + ",".join(f"'{value}'" for value in values) + ")"
+
+
+class VeuEventOccurrence(Base):
+    """One independent opening of A Ruptura do Véu per schedule slot (Evento Mundial)."""
+
+    __tablename__ = "veu_event_occurrences"
+    __table_args__ = (
+        CheckConstraint(_in_list("state", VeuEventState), name="ck_veu_occurrence_state"),
+        CheckConstraint("phase BETWEEN 1 AND 3", name="ck_veu_occurrence_phase"),
+        CheckConstraint("deadline_at > scheduled_at", name="ck_veu_occurrence_deadline"),
+        CheckConstraint("entry_closes_at > scheduled_at", name="ck_veu_occurrence_entry"),
+        CheckConstraint("state_version >= 0", name="ck_veu_occurrence_version"),
+        UniqueConstraint("server_id", "occurrence_key", name="uq_veu_occurrence"),
+        Index("ix_veu_occurrence_state", "server_id", "state"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    event_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    occurrence_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    phase: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    entry_closes_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    phase_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ruleset_version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class VeuEventPhaseSnapshot(Base):
+    """The single global N of a phase, shared by every Núcleo and frozen (§8.4)."""
+
+    __tablename__ = "veu_event_phase_snapshots"
+    __table_args__ = (
+        CheckConstraint("phase BETWEEN 1 AND 3", name="ck_veu_snapshot_phase"),
+        CheckConstraint(f"n BETWEEN 0 AND {VEU_PARTICIPANT_CAP}", name="ck_veu_snapshot_n"),
+    )
+
+    occurrence_id: Mapped[UUID] = mapped_column(
+        ForeignKey("veu_event_occurrences.id", ondelete="CASCADE"), primary_key=True
+    )
+    phase: Mapped[int] = mapped_column(Integer, primary_key=True)
+    n: Mapped[int] = mapped_column(Integer, nullable=False)
+    frozen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class VeuEventNucleus(Base):
+    """Núcleo A–I of one occurrence (§9–§11, §15)."""
+
+    __tablename__ = "veu_event_nuclei"
+    __table_args__ = (
+        CheckConstraint(
+            "nucleus_key IN ('A','B','C','D','E','F','G','H','I')", name="ck_veu_nucleus_key"
+        ),
+        CheckConstraint(_in_list("state", VeuNucleusState), name="ck_veu_nucleus_state"),
+        CheckConstraint(
+            "(nucleus_key IN ('A','B','C') AND phase = 1) "
+            "OR (nucleus_key IN ('D','E','F') AND phase = 2) "
+            "OR (nucleus_key IN ('G','H','I') AND phase = 3)",
+            name="ck_veu_nucleus_phase",
+        ),
+        CheckConstraint("state_version >= 0", name="ck_veu_nucleus_version"),
+        UniqueConstraint("occurrence_id", "nucleus_key", name="uq_veu_nucleus_key"),
+        # Target of the composite FKs that keep children inside the same occurrence.
+        UniqueConstraint("id", "occurrence_id", name="uq_veu_nucleus_occurrence"),
+        Index("ix_veu_nucleus_phase", "occurrence_id", "phase"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    occurrence_id: Mapped[UUID] = mapped_column(
+        ForeignKey("veu_event_occurrences.id", ondelete="CASCADE"), nullable=False
+    )
+    nucleus_key: Mapped[str] = mapped_column(String(1), nullable=False)
+    phase: Mapped[int] = mapped_column(Integer, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Opaque until combat integration: the source does not define its shape yet.
+    enemy_state: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class VeuEventParticipant(Base):
+    """A character in one occurrence. Leaving a Núcleo is not leaving the Evento."""
+
+    __tablename__ = "veu_event_participants"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["current_nucleus_id", "occurrence_id"],
+            ["veu_event_nuclei.id", "veu_event_nuclei.occurrence_id"],
+            name="fk_veu_participant_nucleus",
+        ),
+        CheckConstraint(
+            f"afk_streak BETWEEN 0 AND {VEU_AFK_LIMIT}", name="ck_veu_participant_afk"
+        ),
+        # Removed from a Núcleo (AFK) means no current Núcleo.
+        CheckConstraint(
+            "current_nucleus_id IS NULL OR nucleus_removed_at IS NULL",
+            name="ck_veu_participant_removal",
+        ),
+        CheckConstraint("voluntary_exit = (left_at IS NOT NULL)", name="ck_veu_participant_exit"),
+        CheckConstraint(
+            "significant_actions >= 0 AND major_contributions >= 0",
+            name="ck_veu_participant_contribution",
+        ),
+        Index("ix_veu_participant_character", "character_id"),
+        Index("ix_veu_participant_nucleus", "current_nucleus_id"),
+    )
+
+    occurrence_id: Mapped[UUID] = mapped_column(
+        ForeignKey("veu_event_occurrences.id", ondelete="CASCADE"), primary_key=True
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Event-level state (Etapa 2 ``ParticipantRecord``).
+    voluntary_exit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    defeated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reentry_available_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Núcleo-level state.
+    current_nucleus_id: Mapped[UUID | None] = mapped_column(Uuid)
+    nucleus_entered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    nucleus_removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    afk_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Contribution inputs of ``is_eligible`` (§23).
+    significant_actions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    major_contributions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    phases: Mapped[list[int]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
+    # Combat state (migration 0057).
+    hp: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    acts_from_round: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    eligible: Mapped[bool | None] = mapped_column(Boolean)
+    reward: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    # Barrier and effects carried between rounds (migration 0059).
+    combat_state: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+
+
+class VeuEventRound(Base):
+    """A round of one Núcleo: OPEN -> RESOLVING -> RESOLVED, once (§13, §30.3)."""
+
+    __tablename__ = "veu_event_rounds"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["nucleus_id", "occurrence_id"],
+            ["veu_event_nuclei.id", "veu_event_nuclei.occurrence_id"],
+            name="fk_veu_round_nucleus",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(_in_list("state", VeuRoundState), name="ck_veu_round_state"),
+        CheckConstraint("round_number >= 1", name="ck_veu_round_number"),
+        CheckConstraint(
+            "decision_deadline = opened_at + interval "
+            f"'{int(VEU_DECISION_WINDOW.total_seconds())} seconds'",
+            name="ck_veu_round_window",
+        ),
+        CheckConstraint(
+            "(state = 'OPEN' AND resolution_started_at IS NULL AND resolved_at IS NULL) "
+            "OR (state = 'RESOLVING' AND resolution_started_at IS NOT NULL "
+            "AND resolved_at IS NULL) "
+            "OR (state = 'RESOLVED' AND resolution_started_at IS NOT NULL "
+            "AND resolved_at IS NOT NULL)",
+            name="ck_veu_round_resolution",
+        ),
+        UniqueConstraint("nucleus_id", "round_number", name="uq_veu_round_number"),
+        UniqueConstraint("id", "occurrence_id", name="uq_veu_round_occurrence"),
+        # At most one unresolved round per Núcleo.
+        Index(
+            "uq_veu_round_unresolved",
+            "nucleus_id",
+            unique=True,
+            postgresql_where=text("state <> 'RESOLVED'"),
+        ),
+        Index("ix_veu_round_due", "state", "decision_deadline"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    occurrence_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    nucleus_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    round_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    decision_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolution_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+
+
+class VeuEventAction(Base):
+    """One registered action; ``id`` is the deterministic ``action_id`` (§30.2)."""
+
+    __tablename__ = "veu_event_actions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["round_id", "occurrence_id"],
+            ["veu_event_rounds.id", "veu_event_rounds.occurrence_id"],
+            name="fk_veu_action_round",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["occurrence_id", "character_id"],
+            ["veu_event_participants.occurrence_id", "veu_event_participants.character_id"],
+            name="fk_veu_action_participant",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("action_type IN ('attack','defend','art')", name="ck_veu_action_type"),
+        CheckConstraint(
+            "(action_type = 'art' AND art_slot IS NOT NULL AND art_slot BETWEEN 1 AND 3) "
+            "OR (action_type <> 'art' AND art_slot IS NULL)",
+            name="ck_veu_action_art_slot",
+        ),
+        UniqueConstraint("round_id", "character_id", name="uq_veu_action_round_character"),
+        Index("ix_veu_action_character", "character_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    occurrence_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    round_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    character_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    action_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    art_slot: Mapped[int | None] = mapped_column(Integer)
+    target_ref: Mapped[str | None] = mapped_column(String(64))
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    valid: Mapped[bool | None] = mapped_column(Boolean)
+    significant: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    major_contribution: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class VeuEventEnemyDecision(Base):
+    """What the enemy committed to in a round, reproducible from ``seed`` (§17)."""
+
+    __tablename__ = "veu_event_enemy_decisions"
+    __table_args__ = (CheckConstraint("seed >= 0", name="ck_veu_enemy_seed"),)
+
+    round_id: Mapped[UUID] = mapped_column(
+        ForeignKey("veu_event_rounds.id", ondelete="CASCADE"), primary_key=True
+    )
+    enemy_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    action_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_ids: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
+    telegraph_key: Mapped[str | None] = mapped_column(String(64))
+    # ``world_event_veu.enemy_seed`` is an unsigned 64-bit integer.
+    seed: Mapped[int] = mapped_column(Numeric(20, 0), nullable=False)
+    committed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class OathCycle(Base):

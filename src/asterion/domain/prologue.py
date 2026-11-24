@@ -39,6 +39,50 @@ FIRST_ARTS = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class PrologueEnemy:
+    """One possible first-combat creature; both share the same encounter rules."""
+
+    creature_id: str
+    name: str
+    emoji: str
+    opening: str
+    bite: str
+    charge: str
+
+
+# Possible draws of the same first encounter (P1 is a different content and keeps its Cão).
+PROLOGUE_ENEMIES = {
+    "dog_cinereo": PrologueEnemy(
+        "dog_cinereo",
+        "Cão Cinéreo",
+        "🐺",
+        "O som se aproxima pela fuligem. Quando a criatura surge entre as pedras, "
+        "o combate começa.",
+        "Mordida Cinérea",
+        "Investida Cinérea",
+    ),
+    "corvo_fuligem": PrologueEnemy(
+        "corvo_fuligem",
+        "Corvo de Fuligem",
+        "🐦",
+        "O som das asas corta a fuligem. Quando o Corvo de Fuligem desce entre as "
+        "pedras, o combate começa.",
+        "Bicada de Fuligem",
+        "Mergulho de Fuligem",
+    ),
+}
+PROLOGUE_ENEMY_IDS = tuple(PROLOGUE_ENEMIES)
+
+
+def prologue_enemy_for_name(name: str) -> PrologueEnemy:
+    """Resolve the persisted fighter name back to its creature (defaults to the Cão)."""
+    return next(
+        (enemy for enemy in PROLOGUE_ENEMIES.values() if enemy.name == name),
+        PROLOGUE_ENEMIES["dog_cinereo"],
+    )
+
+
 def first_art(character_class: str, blocked_opportunities: int) -> Action:
     name, coefficient = FIRST_ARTS[character_class]
     return Action(
@@ -64,7 +108,9 @@ class PrologueProfile:
         race: str,
         hp: Decimal,
         equipment_configuration: EquipmentConfigurationSnapshot | None = None,
+        enemy_id: str = "dog_cinereo",
     ) -> Combat:
+        creature = PROLOGUE_ENEMIES[enemy_id]
         stats = resolve_combat_stats(
             character_class,
             1,
@@ -88,23 +134,20 @@ class PrologueProfile:
                         else None
                     ),
                 ),
-                "enemy": Fighter("enemy", "Cão Cinéreo", 1, self.enemy, self.enemy.hp),
+                "enemy": Fighter("enemy", creature.name, 1, self.enemy, self.enemy.hp),
             },
             player_actions={
                 "attack": Action("attack", "⚔️ Atacar", D(1)),
                 "art": first_art(character_class, self.art_blocked_opportunities),
             },
             enemy_actions={
-                "bite": Action("bite", "Mordida Cinérea", D(1)),
-                "charge": Action("charge", "Investida Cinérea", D("1.20")),
+                "bite": Action("bite", creature.bite, D(1)),
+                "charge": Action("charge", creature.charge, D("1.20")),
             },
             ai_cycle=("bite", "bite", "charge"),
             tutorial=Tutorial({"attack": "bite", "defend": "charge"}),
-            flavor=(
-                "Um rosnado rompe o silêncio da estrada. Entre as cinzas, uma criatura "
-                "faminta avança para impedir sua passagem."
-            ),
-            opening_log="🐺 Cão Cinéreo bloqueia o caminho.",
+            flavor=creature.opening,
+            opening_log=f"{creature.emoji} {creature.name} bloqueia o caminho.",
             configuration_snapshot=(
                 equipment_configuration.to_data(RULESET)
                 if equipment_configuration is not None

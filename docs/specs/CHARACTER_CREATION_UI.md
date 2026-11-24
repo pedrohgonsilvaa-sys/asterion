@@ -8,7 +8,7 @@ A Criação de Personagem segue o fluxo autoritativo da Fonte Mestra:
 
 **Nome → Gênero → Raça → Classe → Confirmação Final → Prólogo jogável “Cinzas na Estrada”.**
 
-> Gênero foi acrescentado por decisão do autor em 2026-11-13; a Fonte Mestra não o define. Valores: Masculino e Feminino (as duas apresentações do lote visual inicial, ver Matriz de Produção Visual v2.0 §1).
+> Gênero foi acrescentado por decisão do autor em 2026-11-13 e reconfirmada em 2026-11-19 como escolha **obrigatória** da criação; a Fonte Mestra não o define (ver `SOURCE_AUTHORITY.md`, "Gênero na criação de personagem"). Valores: Masculino e Feminino (as duas apresentações do lote visual inicial, ver Matriz de Produção Visual v2.0 §1).
 
 Regras gerais:
 
@@ -27,7 +27,7 @@ Tela inicial:
 ```text
 [Imagem contextual de Asterion]
 
-🏷️ Nome do Personagem
+👤 Nome do Personagem
 
 Todo caminho começa com um nome. Escolha como seu personagem será conhecido entre aqueles que ainda percorrem as terras de Asterion.
 
@@ -37,36 +37,35 @@ Todo caminho começa com um nome. Escolha como seu personagem será conhecido en
 Regras visuais:
 
 - O jogador envia o nome diretamente no chat; não criar `[Confirmar Nome]`.
-- Nome válido e disponível avança diretamente para **Raça**.
+- Nome válido e disponível avança diretamente para **Gênero**.
 - Ao editar o Nome a partir da Confirmação Final, um novo nome válido retorna à Confirmação Final sem apagar Raça ou Classe já escolhidas.
 
 Erro de formato:
 
 ```text
-🏷️ Nome do Personagem
+👤 Nome do Personagem
 
 ⚠️ Nome inválido. Envie outro nome no chat. 3–16 letras, A–Z, sem acentos, números, espaços ou símbolos.
 ```
 
 Nome que o sistema não aceita por unicidade, reserva, moderação ou regra equivalente:
 
+- manter a tela **Nome do Personagem** inalterada;
+- enviar uma mensagem separada do Bot, abaixo da tentativa do jogador:
+
 ```text
-🏷️ Nome do Personagem
-
-🚫 Luiken · Inválido
-
-⚠️ Esse nome não pode ser utilizado. Escolha outro nome para continuar. Envie outro nome no chat.
+⚠️ Nome indisponível. Tente outro nome novamente.
 ```
+
+- a mensagem não deve repetir o nome rejeitado nem um nome de exemplo;
+- a mensagem é genérica para não expor a razão interna da indisponibilidade (unicidade, reserva ou moderação).
 
 ### 45.1b Seleção de Gênero
 
 ```text
 🎭 Gênero
 
-Escolha como seu personagem se apresenta ao mundo.
-
-1 Masculino
-2 Feminino
+Existe o rosto que o mundo vai reconhecer. Escolha como seu personagem se apresenta em Asterion.
 
 [Masculino] [Feminino]
 
@@ -85,15 +84,17 @@ Lista:
 
 🕯️ Raça
 
-Povos distintos sobreviveram às marcas deixadas sobre Asterion. Sua origem acompanhará permanentemente este personagem e influenciará, de forma sutil, a maneira como ele enfrenta os perigos do mundo.
+Sob o céu sem cor, povos distintos sobreviveram às marcas deixadas sobre Asterion. Cada um carrega um legado no sangue. Sua origem acompanhará permanentemente este personagem e influenciará, de forma sutil, a maneira como ele enfrenta os perigos do mundo.
 
-1 🕯️ Remanescente · Identidade Flexível
-2 🌘 Velado · Efeitos e Resistência
-3 🌪️ Cinéreo · Defesa
-4 🩸 Hemário · Recuperação
-5 🔆 Alvorano · Iniciativa
+🕯️ Remanescente · Identidade Flexível
+🌘 Velado · Efeitos e Resistência
+🌪️ Cinéreo · Defesa
+🩸 Hemário · Recuperação
+🔆 Alvorano · Iniciativa
 
-[1] [2] [3] [4] [5]
+[Remanescente] [Velado]
+[Cinéreo] [Hemário]
+[Alvorano]
 
 [← Gênero]
 ```
@@ -109,6 +110,8 @@ A lista resume identidade. O detalhe de cada Raça precisa mostrar **o efeito ra
 
 Entre os povos que persistiram após as grandes rupturas de Asterion, os Remanescentes aprenderam a sobreviver menos pela especialização e mais pela capacidade de se adaptar ao que o mundo exige.
 
+🧭 Para quem é · Quem não quer se prender a um estilo e prefere ganhos pequenos em todos os atributos.
+
 🧩 Adaptabilidade · Passiva Racial
 
 ❤️ HP Máximo · +1,5%
@@ -118,7 +121,7 @@ Entre os povos que persistiram após as grandes rupturas de Asterion, os Remanes
 
 ℹ️ Os bônus são permanentes e se aplicam aos valores finais estáticos do personagem. Não afetam PER, Crítico, Esquiva ou Bloqueio.
 
-[Escolher Remanescente]
+[🕯️ Escolher Remanescente]
 
 [← Raças]
 ```
@@ -132,6 +135,8 @@ Entre os povos que persistiram após as grandes rupturas de Asterion, os Remanes
 
 Os Velados vivem próximos demais de forças que poucos conseguem perceber por inteiro. Aquilo que os fortalece tende a permanecer por mais tempo, enquanto efeitos hostis encontram dificuldade maior para se fixar.
 
+🧭 Para quem é · Quem aposta em Buffs que duram mais e em Debuffs que se desfazem mais cedo.
+
 🌫️ Eco do Véu · Passiva Racial
 
 🟢 Buffs com 2T+ · 25% chance +1T
@@ -139,7 +144,7 @@ Os Velados vivem próximos demais de forças que poucos conseguem perceber por i
 
 ℹ️ A passiva só afeta Buffs e Debuffs elegíveis com duração base de 2 Turnos ou mais. Quando a redução de um Debuff é ativada, sua duração nunca pode cair abaixo de 1 Turno. Não afeta Barreira, Cura, DoT, Controle Rígido, marcas, recursos internos, efeitos imutáveis ou mecânicas fixas de Chefes e Masmorras.
 
-[Escolher Velado]
+[🌘 Escolher Velado]
 
 [← Raças]
 ```
@@ -153,6 +158,8 @@ Os Velados vivem próximos demais de forças que poucos conseguem perceber por i
 
 Forjados em regiões onde cinza, pedra e vento castigam sem descanso, os Cinéreos aprenderam que resistir ao impacto certo pode ser tão decisivo quanto desferi-lo.
 
+🧭 Para quem é · Quem escolhe resistir ao impacto: Defender protege ainda mais.
+
 🛡️ Tenacidade Cinérea · Passiva Racial
 
 🛡️ Defender · 45% → 52%
@@ -160,7 +167,7 @@ Forjados em regiões onde cinza, pedra e vento castigam sem descanso, os Cinére
 
 ℹ️ A passiva aumenta em 7 pontos percentuais a redução de dano concedida por Defender. Durante a Ruptura Final, quando Defender normalmente cai para 30%, o Cinéreo ainda mantém 37%. O efeito não aumenta outras fontes de DEF, Bloqueio ou redução de dano.
 
-[Escolher Cinéreo]
+[🌪️ Escolher Cinéreo]
 
 [← Raças]
 ```
@@ -174,6 +181,8 @@ Forjados em regiões onde cinza, pedra e vento castigam sem descanso, os Cinére
 
 Há algo antigo na vitalidade dos Hemários. Quando o corpo se aproxima do limite, essa herança desperta e transforma violência em sobrevivência.
 
+🧭 Para quem é · Quem luta no limite: com HP baixo, cada golpe devolve vida.
+
 🦇 Fome Hemária · Passiva Racial
 
 ❤️ Ativação · HP ≤ 40%
@@ -182,7 +191,7 @@ Há algo antigo na vitalidade dos Hemários. Quando o corpo se aproxima do limit
 
 ℹ️ A passiva fica ativa enquanto o personagem estiver com 40% de HP ou menos e termina quando ele ultrapassa esse limite. O Vampirismo recupera HP apenas a partir de dano direto elegível e nunca pode curar mais de 3% do HP Máximo em uma única ação. Não é ativado por DoT, Reflexão, dano ambiental, dano causado apenas contra Barreira ou excesso de dano.
 
-[Escolher Hemário]
+[🩸 Escolher Hemário]
 
 [← Raças]
 ```
@@ -196,6 +205,8 @@ Há algo antigo na vitalidade dos Hemários. Quando o corpo se aproxima do limit
 
 Nos Alvoranos, movimento e clareza parecem anteceder o perigo. Sua presença se revela na rapidez com que tomam a iniciativa e na dificuldade de enfraquecê-los por meios convencionais.
 
+🧭 Para quem é · Quem quer agir primeiro e sofrer menos com Debuffs numéricos.
+
 🌟 Primeiro Clarão · Passiva Racial
 
 💨 AGI · +5%
@@ -203,7 +214,7 @@ Nos Alvoranos, movimento e clareza parecem anteceder o perigo. Sua presença se 
 
 ℹ️ A passiva aumenta permanentemente a AGI do personagem e reduz em 12% a intensidade de Debuffs numéricos removíveis que o afetem. Não reduz a duração dos efeitos e não afeta DoT, Controle Rígido, Dano Direto, marcas, recursos internos ou mecânicas fixas.
 
-[Escolher Alvorano]
+[☀️ Escolher Alvorano]
 
 [← Raças]
 ```
@@ -219,32 +230,33 @@ Lista:
 
 Sua Classe define as bases do seu estilo de combate, suas Artes e os Caminhos que poderão ser despertados mais adiante. Escolha com cuidado: esta decisão acompanhará permanentemente o personagem.
 
-1 🛡️ Sentinela
+🛡️ Sentinela
 🏰 Bastião · Caminho
 💥 Devastador · Caminho
 
-2 🗡️ Errante
+🗡️ Errante
 ☠️ Carrasco · Caminho
 🕷️ Sabotador · Caminho
 
-3 🏹 Vigia
+🏹 Vigia
 🎯 Atirador · Caminho
 👣 Rastreador · Caminho
 
-4 🪄 Tecelão
+🪄 Tecelão
 🌀 Conjurador · Caminho
 🔷 Rúnico · Caminho
 
-5 🔮 Oráculo
+🔮 Oráculo
 🦉 Agoureiro · Caminho
 🐺 Invocador · Caminho
 
-6 ☀️ Luminar
+☀️ Luminar
 🪬 Guardião · Caminho
 ⚖️ Inquisidor · Caminho
 
-[1] [2] [3]
-[4] [5] [6]
+[Sentinela] [Errante]
+[Vigia] [Tecelão]
+[Oráculo] [Luminar]
 
 [← Raças]
 ```
@@ -267,6 +279,8 @@ Sentinelas avançam onde outros hesitam. Resistência, proteção e contra-ataqu
 ⚔️ ATQ · Baixo
 💨 AGI · Baixa
 
+🧭 Para quem é · Quem quer ficar de pé na linha de frente, proteger o grupo e devolver o golpe recebido.
+
 🎴 Artes de Classe
 
 🗡️ Golpe de Guarda · Dano
@@ -284,7 +298,7 @@ Especializa o Sentinela em HP, DEF, Barreiras e proteção do grupo.
 💥 Devastador · Pressão
 Troca parte da resistência por ATQ e transforma dano recebido em oportunidades de contra-ataque mais fortes.
 
-[Escolher Sentinela]
+[🛡️ Escolher Sentinela]
 
 [← Classes]
 ```
@@ -305,6 +319,8 @@ Errantes sobrevivem pela velocidade, pela leitura de brechas e pela capacidade d
 ⚔️ ATQ · Alto
 💨 AGI · Muito Alta
 
+🧭 Para quem é · Quem prefere agir rápido, atacar primeiro e explorar a brecha de inimigos feridos.
+
 🎴 Artes de Classe
 
 🗡️ Corte Veloz · Dano
@@ -322,7 +338,7 @@ Especializa o Errante em finalizar inimigos feridos, aumentando sua pressão con
 🕷️ Sabotador · Interferência
 Especializa o Errante em efeitos negativos, controle de ritmo e exploração de alvos já debilitados.
 
-[Escolher Errante]
+[🗡️ Escolher Errante]
 
 [← Classes]
 ```
@@ -343,6 +359,8 @@ Vigias observam antes de agir. Precisão, leitura do alvo e ataques calculados d
 ⚔️ ATQ · Alto
 💨 AGI · Alta
 
+🧭 Para quem é · Quem gosta de mirar com calma e punir pontos fracos à distância.
+
 🎴 Artes de Classe
 
 🏹 Disparo Preciso · Dano
@@ -360,7 +378,7 @@ Concentra Mira sobre um único inimigo, acumulando Perfuração e Crítico para 
 👣 Rastreador · Rastreamento
 Distribui sua atenção entre vários inimigos, usando Sangramento, redução de AGI e rastros para manter pressão sobre múltiplos alvos.
 
-[Escolher Vigia]
+[🏹 Escolher Vigia]
 
 [← Classes]
 ```
@@ -381,6 +399,8 @@ Tecelões manipulam as tramas que atravessam o Véu, encadeando Artes para alter
 ⚔️ ATQ · Muito Alto
 💨 AGI · Média
 
+🧭 Para quem é · Quem busca dano alto e Artes variadas, aceitando ser frágil em troca de poder.
+
 🎴 Artes de Classe
 
 🪄 Fio Cortante · Dano
@@ -398,7 +418,7 @@ Amplifica o potencial destrutivo da Trama, favorecendo dano elevado, ataques mú
 🔷 Rúnico · Proteção
 Direciona a Trama para Runas, Barreiras e recuperação, oferecendo maior controle defensivo e suporte ao grupo.
 
-[Escolher Tecelão]
+[🪄 Escolher Tecelão]
 
 [← Classes]
 ```
@@ -419,6 +439,8 @@ Oráculos leem sinais onde outros enxergam apenas acaso. Presságios, antecipaç
 ⚔️ ATQ · Médio
 💨 AGI · Alta
 
+🧭 Para quem é · Quem prefere enfraquecer inimigos e fortalecer aliados antes do desfecho.
+
 🎴 Artes de Classe
 
 🔮 Sinal Funesto · Dano e Reduz ATQ
@@ -436,7 +458,7 @@ Especializa o Oráculo em previsões ofensivas, enfraquecimento e exploração d
 🐺 Invocador · Manifestações
 Canaliza as manifestações de Lobo, Coruja e Urso para alternar entre dano, enfraquecimento e proteção.
 
-[Escolher Oráculo]
+[🔮 Escolher Oráculo]
 
 [← Classes]
 ```
@@ -457,6 +479,8 @@ Luminars canalizam luz como força de proteção, restauração e julgamento. Se
 ⚔️ ATQ · Baixo
 💨 AGI · Baixa
 
+🧭 Para quem é · Quem quer sustentar aliados com cura e Barreiras, sem deixar de punir inimigos.
+
 🎴 Artes de Classe
 
 ☀️ Fulgor · Dano
@@ -474,7 +498,7 @@ Especializa o Luminar em Cura, Barreiras, Purificação e sustentação do grupo
 ⚖️ Inquisidor · Julgamento
 Converte parte de sua vocação protetora em pressão ofensiva, redução de Cura e remoção de efeitos positivos dos inimigos.
 
-[Escolher Luminar]
+[☀️ Escolher Luminar]
 
 [← Classes]
 ```
@@ -486,9 +510,9 @@ A confirmação final é a única confirmação obrigatória do fluxo, porque to
 ```text
 [Imagem contextual do personagem]
 
-🪪 Confirmar Personagem
+📜 Confirmar Personagem
 
-Seu nome foi escolhido, sua origem foi definida e sua vocação começa a tomar forma. Ao confirmar, sua jornada por Asterion terá início.
+Seu nome foi escolhido, sua origem foi definida e sua vocação começa a tomar forma. Antes de seguir pela estrada, revise o que o mundo saberá sobre você. Ao confirmar, sua jornada por Asterion terá início.
 
 🏷️ Nome · Luiken
 🎭 Gênero · Masculino
@@ -496,9 +520,9 @@ Seu nome foi escolhido, sua origem foi definida e sua vocação começa a tomar 
 🧩 Adaptabilidade · Passiva Racial
 🗡️ Classe · Errante
 
-⚠️ Raça e Classe não poderão ser alteradas após a criação do personagem.
+⚠️ Gênero, Raça e Classe não poderão ser alterados após a criação do personagem.
 
-[Confirmar Personagem]
+[✅ Confirmar Personagem]
 
 [Nome] [Gênero]
 

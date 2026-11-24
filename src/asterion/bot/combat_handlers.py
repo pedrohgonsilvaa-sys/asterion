@@ -52,6 +52,12 @@ from asterion.bot.p3_ui import render_p3
 from asterion.bot.p4_ui import render_p4
 from asterion.bot.p5_ui import render_p5
 from asterion.bot.p6_ui import render_p6
+from asterion.bot.prologue_ui import (
+    FLAME_CALLBACK,
+    PURSE_NODE,
+    render_scene,
+    scene_id_from_callback,
+)
 from asterion.bot.road_ui import render_road
 from asterion.bot.s2_ui import render_s2
 from asterion.bot.s3_ui import render_s3
@@ -288,11 +294,39 @@ def combat_router(
             return render_road(view)
         return render_combat(view)
 
+    def prologue_outcome(view) -> bool:
+        return getattr(view, "context", None) == "prologue" and getattr(
+            getattr(view, "combat", None), "result", None
+        ) in {"victory", "defeat"}
+
+    @router.callback_query(F.data.regexp(r"^pl:[a-z]{3,12}$"))
+    async def prologue_scene(query: CallbackQuery):
+        data = query.data or ""
+        await query.answer()
+        if not isinstance(query.message, Message):
+            return
+        if data == FLAME_CALLBACK:
+            world_view = await world.resume(query.from_user.id) if world else None
+            if world_view is not None:
+                await present(query.message, render_world(world_view), images, edit=True)
+            return
+        node = scene_id_from_callback(data)
+        if node is not None:
+            granted = node == PURSE_NODE and await service.collect_wreck_purse(
+                query.from_user.id
+            )
+            await present(
+                query.message, render_scene(node, show_objects=granted), images, edit=True
+            )
+
     @router.callback_query(F.data == "prologue:continue")
     async def enter(query: CallbackQuery):
         view = await service.enter(query.from_user.id)
         await query.answer()
         if view is not None and isinstance(query.message, Message):
+            if prologue_outcome(view):
+                await present(query.message, render_combat(view), images, edit=True)
+                return
             if road and hasattr(view, "kind"):
                 await present(query.message, render_road(view), images, edit=True)
                 return
@@ -325,6 +359,9 @@ def combat_router(
         if view is not None and isinstance(query.message, Message):
             if road is not None and hasattr(view, "kind"):
                 await present(query.message, render_road(view), images, edit=True)
+                return
+            if prologue_outcome(view):
+                await present(query.message, render_combat(view), images, edit=True)
                 return
             world_view = await world.resume(query.from_user.id) if world else None
             await present(

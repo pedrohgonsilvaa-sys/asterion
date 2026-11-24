@@ -54,7 +54,7 @@ def _profession_view() -> ProfessionHomeView:
 
 
 def _legacy_view() -> LegacyView:
-    return LegacyView("Hero", 10, 0, 0, "1", 3, None, False, False, ())
+    return LegacyView("Hero", 10, 0, 0, "1", 3, None, 0, 0, False, ())
 
 
 def _inventory_view() -> InventoryView:

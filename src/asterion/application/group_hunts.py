@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
 from typing import TYPE_CHECKING
@@ -23,6 +23,7 @@ from asterion.domain.combat import (
     act,
     active_player_key,
     combat_consumable_options,
+    pass_turn,
     use_combat_consumable,
 )
 from asterion.domain.combat_math import StatMultipliers
@@ -57,6 +58,8 @@ if TYPE_CHECKING:
     from asterion.application.road import RoadService, RoadView
 
 GROUP_HUNT_CONTENT = "road_group_hunt"
+GROUP_HUNT_TURN_TIMEOUT_SECONDS = 180
+GROUP_HUNT_INACTIVE_TIMEOUTS = 3
 GROUP_HUNT_HP_FACTORS = (Decimal("1.00"), Decimal("1.72"), Decimal("2.44"), Decimal("3.16"))
 GROUP_HUNT_ATTACK_FACTORS = (
     Decimal("1.00"), Decimal("1.08"), Decimal("1.16"), Decimal("1.24")
@@ -357,6 +360,11 @@ class GroupHuntService:
         )
         if group_id is None:
             raise GroupError("not_in_group")
+        deadline_at = (
+            None
+            if combat.result or active_player_key(combat) is None
+            else datetime.now(UTC) + timedelta(seconds=GROUP_HUNT_TURN_TIMEOUT_SECONDS)
+        )
         encounter = GroupHuntEncounter(
             id=encounter_id,
             group_id=proposal.group_id,
@@ -381,6 +389,7 @@ class GroupHuntService:
             state_version=combat.version,
             combat_snapshot=encode(combat),
             status="active",
+            deadline_at=deadline_at,
         )
         session.add(encounter)
         await session.flush()
@@ -596,21 +605,11 @@ class GroupHuntService:
                     session, character_seed, activity, encounter, members, combat
                 )
 
-            now = datetime.now(UTC)
-            encounter.combat_snapshot = encode(updated)
-            encounter.state_version = updated.version
-            for row in members:
-                roster_activity = activity_by_id[row.game_activity_id]
-                fighter = updated.fighters.get(row.actor_key)
-                if fighter is not None:
-                    character_by_id[row.character_id].hp = fighter.hp
-                roster_activity.state_version = updated.version
-                roster_activity.last_valid_action_at = now
-                if updated.result:
-                    roster_activity.status = (
-                        "completed" if updated.result == "victory" else "failed"
-                    )
-                    row.result = updated.result
+            member.consecutive_timeouts = 0
+            member.inactive_for_contribution = False
+            self._persist_combat(
+                encounter, members, character_by_id, activity_by_id, updated, valid_action=True
+            )
             if updated.result:
                 await self._settle_terminal(
                     session, encounter, members, character_by_id, activity_by_id, updated
@@ -620,6 +619,134 @@ class GroupHuntService:
             return True, await self._combat_view(
                 session, character_seed, activity, encounter, members, updated
             )
+
+    @staticmethod
+    def _persist_combat(
+        encounter, members, characters, activities, updated, *, valid_action: bool
+    ) -> None:
+        """Store the new shared snapshot and set the next 180s turn deadline.
+
+        ``valid_action`` is False for a timeout pass, which must not refresh the
+        activity's last valid action time.
+        """
+        now = datetime.now(UTC)
+        encounter.combat_snapshot = encode(updated)
+        encounter.state_version = updated.version
+        encounter.deadline_at = (
+            None
+            if updated.result
+            else now + timedelta(seconds=GROUP_HUNT_TURN_TIMEOUT_SECONDS)
+        )
+        for row in members:
+            roster_activity = activities[row.game_activity_id]
+            fighter = updated.fighters.get(row.actor_key)
+            if fighter is not None:
+                characters[row.character_id].hp = fighter.hp
+            roster_activity.state_version = updated.version
+            if valid_action:
+                roster_activity.last_valid_action_at = now
+            if updated.result:
+                roster_activity.status = (
+                    "completed" if updated.result == "victory" else "failed"
+                )
+                row.result = updated.result
+
+    async def run_maintenance(
+        self, *, now: datetime | None = None, limit: int = 100
+    ) -> int:
+        """Pass the turn of every Group Hunt whose 180s deadline has elapsed."""
+        now = now or datetime.now(UTC)
+        async with self.sessions() as session:
+            due = (
+                await session.scalars(
+                    select(GroupHuntEncounter.id)
+                    .join(SocialGroup, SocialGroup.id == GroupHuntEncounter.group_id)
+                    .where(
+                        SocialGroup.server_id == self.server_id,
+                        GroupHuntEncounter.status == "active",
+                        GroupHuntEncounter.deadline_at <= now,
+                    )
+                    .order_by(GroupHuntEncounter.deadline_at)
+                    .limit(limit)
+                )
+            ).all()
+        resolved = 0
+        for encounter_id in due:
+            if await self._resolve_turn_timeout(encounter_id, now):
+                resolved += 1
+        return resolved
+
+    async def _resolve_turn_timeout(self, encounter_id: UUID, now: datetime) -> bool:
+        async with self.sessions.begin() as session:
+            encounter = await session.scalar(
+                select(GroupHuntEncounter)
+                .where(GroupHuntEncounter.id == encounter_id)
+                .with_for_update()
+            )
+            if (
+                encounter is None
+                or encounter.status != "active"
+                or encounter.deadline_at is None
+                or encounter.deadline_at > now
+            ):
+                return False
+            members = list(
+                (
+                    await session.scalars(
+                        select(GroupHuntMember)
+                        .where(GroupHuntMember.group_hunt_encounter_id == encounter.id)
+                        .order_by(GroupHuntMember.character_id)
+                        .with_for_update()
+                    )
+                ).all()
+            )
+            characters = {
+                row.id: row
+                for row in (
+                    await session.scalars(
+                        select(Character)
+                        .where(Character.id.in_([row.character_id for row in members]))
+                        .order_by(Character.id)
+                        .with_for_update()
+                    )
+                ).all()
+            }
+            activities = {
+                row.id: row
+                for row in (
+                    await session.scalars(
+                        select(GameActivity)
+                        .where(GameActivity.id.in_([row.game_activity_id for row in members]))
+                        .order_by(GameActivity.id)
+                        .with_for_update()
+                    )
+                ).all()
+            }
+            combat = decode(
+                encounter.combat_snapshot,
+                encounter.combat_id,
+                encounter.ruleset_version,
+                encounter.state_version,
+            )
+            actor_key = active_player_key(combat)
+            member = next((row for row in members if row.actor_key == actor_key), None)
+            if combat.result or member is None:
+                encounter.deadline_at = None
+                return False
+            member.total_timeouts += 1
+            member.consecutive_timeouts += 1
+            if member.consecutive_timeouts >= GROUP_HUNT_INACTIVE_TIMEOUTS:
+                member.inactive_for_contribution = True
+            updated = pass_turn(combat, member.actor_key)
+            self._persist_combat(
+                encounter, members, characters, activities, updated, valid_action=False
+            )
+            if updated.result:
+                await self._settle_terminal(
+                    session, encounter, members, characters, activities, updated
+                )
+            await session.flush()
+            return True
 
     async def view_for_activity(self, session, character, activity):
         member = await session.scalar(
@@ -875,6 +1002,7 @@ class GroupHuntService:
         now = datetime.now(UTC)
         encounter.status = "completed" if combat.result == "victory" else "failed"
         encounter.resolved_at = now
+        encounter.deadline_at = None
         for member in members:
             character = characters[member.character_id]
             activity = activities[member.game_activity_id]
@@ -891,6 +1019,10 @@ class GroupHuntService:
             fighter = combat.fighters[member.actor_key]
             if combat.result == "victory":
                 config = await load_equipment_configuration(session, character)
+                # PowerlevelFactor individual (GDD 3795): gap para o maior nível do Grupo.
+                level_gap = (
+                    max(characters[row.character_id].level for row in members) - character.level
+                )
                 await self.road._settle_hunt(
                     session,
                     character,
@@ -898,6 +1030,7 @@ class GroupHuntService:
                     encounter.id,
                     evidence_ids,
                     equipment_configuration=config,
+                    level_gap=level_gap,
                 )
                 if fighter.hp <= 0:
                     world = await session.scalar(
@@ -963,6 +1096,7 @@ class GroupHuntService:
         now = datetime.now(UTC)
         encounter.status = "failed"
         encounter.resolved_at = now
+        encounter.deadline_at = None
         viewer_activity = None
         for member in members:
             character = characters[member.character_id]

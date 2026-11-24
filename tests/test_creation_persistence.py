@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from alembic import command
 from asterion.application.creation import CreationService
+from asterion.bot.creation_ui import render
 from asterion.domain.creation import CLASSES, PROLOGUE, RACES, RULESET, NamePolicy
 from asterion.infrastructure.db.models import Account, Character, CreationDraft
 
@@ -106,6 +107,9 @@ async def test_confirmation_edits_preserve_other_choices(service):
         "remanescente",
         "errante",
     )
+    assert state.gender == "masculino"
+    assert "👤 <b>Nome</b> · <code>Aster</code>" in render(state).text
+    assert "🎭 <b>Gênero</b> · <code>Masculino</code>" in render(state).text
     for action in ("gender", "g1"):
         state = await click(service, 1, state, action)
     assert (state.step, state.name, state.gender) == ("confirm", "Aster", "feminino")
@@ -331,3 +335,39 @@ async def test_character_gender_constraint(service, database):
         async with database[1].begin() as session:
             character = await session.scalar(select(Character))
             character.gender = "invented"
+
+
+async def test_screen_message_id_persists_without_bumping_version(service, database):
+    state = await service.start(1)
+    await service.remember_screen(1, state.id, 321)
+    await service.remember_screen(1, state.id, 321)  # same id: no-op
+    reloaded = await CreationService(database[1], "ocaso").start(1)
+    assert reloaded.screen_message_id == 321
+    assert reloaded.version == state.version
+    assert reloaded.step == state.step
+    async with database[1]() as session:
+        draft = await session.scalar(select(CreationDraft))
+        assert draft.screen_message_id == 321
+
+
+async def test_unavailable_name_keeps_screen_message_across_reconnect(service, database):
+    owner = await click(service, 1, await ready(service, 1), "confirm")
+    assert owner.step == PROLOGUE
+    state = await service.start(2)
+    await service.remember_screen(2, state.id, 321)
+    state = await service.name(2, "luiken", 1)  # same name, other case: taken
+    assert state.step == "name"
+    assert state.error == "unavailable"
+    assert state.screen_message_id == 321
+
+    await database[0].dispose()
+    restored = await CreationService(database[1], "ocaso").start(2)
+    assert restored == state
+    assert restored.step == "name" and restored.error == "unavailable"
+    assert restored.screen_message_id == 321
+
+    # Another attempt keeps the same screen message and can still succeed.
+    state = await CreationService(database[1], "ocaso").name(2, "Aster", 2)
+    assert state.step == "gender"
+    assert state.error is None
+    assert state.screen_message_id == 321

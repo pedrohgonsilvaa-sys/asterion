@@ -80,6 +80,8 @@ from asterion.application.vde_missions import VDEMissionService
 from asterion.application.warehouse import WarehouseService
 from asterion.application.weapon_proficiency import WeaponTrainerService
 from asterion.application.world import WorldService
+from asterion.application.world_event_veu import VeuEventService
+from asterion.application.world_event_veu_views import VeuEventViews
 from asterion.application.world_events import WorldEventService
 from asterion.bot.altos_missions_handlers import altos_missions_router
 from asterion.bot.armor_trainer_handlers import armor_trainer_router
@@ -119,6 +121,7 @@ from asterion.bot.p7_handlers import p7_router
 from asterion.bot.path_handlers import path_router
 from asterion.bot.profession_handlers import profession_router
 from asterion.bot.pvp_handlers import pvp_router
+from asterion.bot.refuge_hud import RefugeHudLoader
 from asterion.bot.s1_handlers import s1_router
 from asterion.bot.s2_handlers import s2_router
 from asterion.bot.s3_handlers import s3_router
@@ -140,15 +143,16 @@ from asterion.bot.s36_handlers import s36_router
 from asterion.bot.settings_handlers import settings_router
 from asterion.bot.shop_handlers import shop_router
 from asterion.bot.social_handlers import social_router
+from asterion.bot.tdo_navigation_labels import TdoReturnLabelMiddleware
 from asterion.bot.varzeas_missions_handlers import varzeas_missions_router
 from asterion.bot.vde_missions_handlers import vde_missions_router
 from asterion.bot.weapon_trainer_handlers import weapon_trainer_router
-from asterion.bot.world_event_handlers import world_event_router
+from asterion.bot.world_event_veu_handlers import veu_event_router
 from asterion.bot.world_handlers import world_router
 from asterion.config import get_settings
 from asterion.domain.creation import NamePolicy
 from asterion.domain.prologue import PROFILE
-from asterion.infrastructure.db.models import Character
+from asterion.infrastructure.db.models import Character, WorldState
 from asterion.infrastructure.db.session import SessionFactory
 
 
@@ -183,6 +187,17 @@ def get_bot_runtime() -> BotRuntime:
 
     set_character_art_lookup(_character_art)
 
+    async def _character_region(telegram_id: int) -> str | None:
+        async with SessionFactory() as session:
+            return await session.scalar(
+                select(WorldState.region)
+                .join(Character, Character.id == WorldState.character_id)
+                .where(
+                    Character.telegram_id == telegram_id,
+                    Character.server_id == settings.server_id,
+                )
+            )
+
     dispatcher = Dispatcher(disable_fsm=True)
     # Registered first, so they run before every other update middleware and handler.
     # Metrics come first of all, so dropped and failed updates are counted too.
@@ -204,6 +219,10 @@ def get_bot_runtime() -> BotRuntime:
     p2 = P2Service(SessionFactory, settings.server_id, groups=groups)
     road = RoundService(SessionFactory, settings.server_id)
     tdo_explore = TdoExploreService(SessionFactory, settings.server_id)
+    refuge_hud = RefugeHudLoader(
+        DailyGiftService(SessionFactory, settings.server_id),
+        ChronicleService(SessionFactory, settings.server_id),
+    )
     inventory = InventoryService(SessionFactory, settings.server_id)
     warehouse = WarehouseService(SessionFactory, settings.server_id)
     equipment = EquipmentService(SessionFactory, settings.server_id)
@@ -284,8 +303,10 @@ def get_bot_runtime() -> BotRuntime:
     world_events = WorldEventService(
         SessionFactory, settings.server_id, latest_local=road.latest_explorable_local
     )
-    # Also before the world routers: /start must resume an Event combat.
-    dispatcher.include_router(world_event_router(world_events, settings.creation_images))
+    # A Ruptura do Véu replaces the regional World Event flow (Eventos Mundiais).
+    veu_service = VeuEventService(SessionFactory, settings.server_id)
+    veu_views = VeuEventViews(veu_service)
+    dispatcher.include_router(veu_event_router(veu_service, veu_views, settings.creation_images))
     oaths = OathService(SessionFactory, settings.server_id, notifier=runtime_oath_notifier)
     # Also before the world routers: /start must resume a Provação.
     dispatcher.include_router(oath_router(oaths, settings.creation_images))
@@ -525,6 +546,7 @@ def get_bot_runtime() -> BotRuntime:
             chronicle_activities=chronicle_activities,
             chronicle_encounters=chronicle_encounters,
             tdo_explore=tdo_explore,
+            refuge_hud=refuge_hud,
         )
     )
     dispatcher.include_router(
@@ -552,9 +574,10 @@ def get_bot_runtime() -> BotRuntime:
             p6=p6,
             dungeons=dungeons,
             tdo_explore=tdo_explore,
+            refuge_hud=refuge_hud,
         )
     )
-    return BotRuntime(
-        bot=Bot(token=settings.telegram_bot_token),
-        dispatcher=dispatcher,
-    )
+    bot = Bot(token=settings.telegram_bot_token)
+    # UI v1.6.2, 66.1 item 6: nas Terras do Ocaso o retorno se chama Voltar ao Refúgio.
+    bot.session.middleware(TdoReturnLabelMiddleware(_character_region))
+    return BotRuntime(bot=bot, dispatcher=dispatcher)

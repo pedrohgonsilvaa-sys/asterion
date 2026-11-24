@@ -9,10 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.cosmetic_catalog import COSMETICS_BY_ID
 from asterion.application.narrative_choices import (
-    PrologueChoiceView,
     backfill_prologue_choices,
-    commit_prologue_choice,
-    prologue_choice_view,
 )
 from asterion.application.progression import level_xp
 from asterion.application.vigor import reconcile_character_vigor
@@ -54,7 +51,7 @@ class WorldView:
     selected_title: str | None = None
     # True only on the rest that opens the Menu, for the §32.3 onboarding invite.
     first_menu: bool = False
-    prologue_choice: PrologueChoiceView | None = None
+    crowns: int = 0
 
 
 class WorldService:
@@ -145,7 +142,6 @@ class WorldService:
             if c.stage == "menu:ready":
                 # Idempotent: a character past the Prologue carries no retroactive preference.
                 await backfill_prologue_choices(session, c)
-            pending_choice = await prologue_choice_view(session, c)
             tracked_secondary = None
             if c.tracked_secondary_quest_id:
                 tracked_secondary = await session.scalar(
@@ -182,28 +178,13 @@ class WorldService:
                 ),
                 selected_path=c.selected_path,
                 legacy_level=c.legacy_level,
+                crowns=c.crowns,
                 selected_title=(
                     COSMETICS_BY_ID[selected_title_id].name
                     if selected_title_id in COSMETICS_BY_ID
                     else None
                 ),
-                prologue_choice=pending_choice,
             )
-
-    async def choose_prologue(
-        self, actor: int, choice_id: str, option_id: str
-    ) -> WorldView | None:
-        """Record a Prologue choice (once) and rebuild the screen from persisted state."""
-        async with self.sessions.begin() as session:
-            c = await session.scalar(
-                select(Character)
-                .where(Character.telegram_id == actor, Character.server_id == self.server_id)
-                .with_for_update()
-            )
-            if c is None:
-                return None
-            await commit_prologue_choice(session, c, choice_id, option_id)
-        return await self.resume(actor)
 
     async def rest(self, actor: int) -> WorldView | None:
         first_menu = False

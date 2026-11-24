@@ -32,6 +32,7 @@ from asterion.application.tdo_feats import reconcile_tdo_feats
 from asterion.application.vigor import reconcile_character_vigor
 from asterion.domain.road import creature_for
 from asterion.domain.social import MAX_STORY_CHARACTERS, story_is_allowed
+from asterion.domain.veu_bestiary import VEU_CREATURES
 from asterion.infrastructure.db.models import (
     Achievement,
     BestiaryEntry,
@@ -93,6 +94,21 @@ class CodexEntryView:
     order: int
     location_id: str | None
     fragments: tuple[CodexFragmentView, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _EventCreature:
+    """Criatura do Bestiário do Véu com o mesmo contorno que a UI lê de ``road.Creature``."""
+
+    name: str
+    actions: tuple[tuple[str, str], ...]
+
+
+def _creature_for(creature_id: str):
+    if creature_id.startswith("bestiary.veu."):
+        found = next(c for c in VEU_CREATURES if c.bestiary_key == creature_id)
+        return _EventCreature(found.name, tuple((a.key, a.label) for a in found.actions))
+    return creature_for(creature_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -414,8 +430,8 @@ class CharacterSurfacesService:
                 if presentation is None:
                     continue
                 try:
-                    creature = creature_for(row.creature_id)
-                except StopIteration:
+                    creature = _creature_for(row.creature_id)
+                except (StopIteration, KeyError):
                     continue
                 creature_evidence = evidence_by_creature.get(row.creature_id, [])
                 evidence_ids = {item.evidence_id for item in creature_evidence}

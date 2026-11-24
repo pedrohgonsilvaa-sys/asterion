@@ -10,6 +10,7 @@ from asterion.application.knowledge_catalog import (
     CONFINS_REGION_ID,
     CR01_BESTIARY_GROUP,
     CREATURE_PRESENTATION,
+    VEU_BESTIARY_GROUP,
 )
 from asterion.bot.character_surfaces_ui import (
     CODEX_ENTRY_BY_KEY,
@@ -35,7 +36,10 @@ def test_every_local_and_creature_has_a_region_screen():
         if entry.location_id:
             assert _codex_region_id(entry.location_id) in labels, entry.entry_id
     for presentation in CREATURE_PRESENTATION.values():
-        assert presentation.region_id in labels or presentation.region_id == CR01_BESTIARY_GROUP
+        assert presentation.region_id in labels or presentation.region_id in {
+            CR01_BESTIARY_GROUP,
+            VEU_BESTIARY_GROUP,
+        }
 
 
 def _record(creature_id: str, name: str) -> BestiaryRecordView:

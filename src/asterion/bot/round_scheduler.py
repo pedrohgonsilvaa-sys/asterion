@@ -1,5 +1,7 @@
 """Background jobs: timed Ronda de Caça encounters, Guild and Market upkeep, PvP."""
 
+from datetime import UTC, datetime
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
@@ -18,16 +20,19 @@ from asterion.application.payments import (
     register_outbox_handler,
 )
 from asterion.application.pvp import PvpService
+from asterion.application.road import RoadService
 from asterion.application.round import RoundService
 from asterion.application.trades import TradeService
-from asterion.application.world_events import WorldEventService
+from asterion.application.world_event_veu import VeuEventService, VeuEventUpkeep
+from asterion.application.world_event_veu_combat import EngineRoundSimulator
+from asterion.application.world_event_veu_views import VeuEventViews
 from asterion.bot.expedition_handlers import deliver_expedition_notices
 from asterion.bot.guild_battle_ui import render_guild_battle
 from asterion.bot.oath_ui import render_oath
 from asterion.bot.ops_alerts import AlertThresholds, OpsAlerter, check_and_alert
 from asterion.bot.pvp_ui import render_pvp
 from asterion.bot.telegram_outbox import TelegramOutbox, enqueue_notices
-from asterion.bot.world_event_handlers import deliver_world_event_notices
+from asterion.bot.world_event_veu_handlers import deliver_veu_notices
 from asterion.config import get_settings
 from asterion.infrastructure.db.job_lock import run_exclusive
 from asterion.infrastructure.db.session import SessionFactory, engine
@@ -46,6 +51,18 @@ def build_round_scheduler() -> AsyncIOScheduler:
         "interval",
         seconds=15,
         id="hunt-round-advance",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    # Group Hunt turns have their own 180s timer: the shared turn is passed ("hold")
+    # when the active player does not act. Not the Road activity grace.
+    group_hunts = RoadService(SessionFactory, settings.server_id).group_hunts
+    scheduler.add_job(
+        group_hunts.run_maintenance,
+        "interval",
+        seconds=5,
+        id="group-hunt-upkeep",
         max_instances=1,
         coalesce=True,
         replace_existing=True,
@@ -117,19 +134,25 @@ def build_round_scheduler() -> AsyncIOScheduler:
         coalesce=True,
         replace_existing=True,
     )
-    world_events = WorldEventService(SessionFactory, settings.server_id)
+    veu_service = VeuEventService(SessionFactory, settings.server_id, EngineRoundSimulator())
+    veu_upkeep = VeuEventUpkeep(veu_service)
+    veu_views = VeuEventViews(veu_service)
+    veu_last_tick: list[datetime | None] = [None]
 
-    async def run_world_event_maintenance() -> None:
-        notices = await world_events.run_maintenance()
-        if notices and settings.telegram_bot_enabled and settings.telegram_bot_token:
-            await deliver_world_event_notices(outbox, notices)
+    async def run_veu_event_upkeep() -> None:
+        now = datetime.now(UTC)
+        report = await veu_upkeep.tick(now, previous=veu_last_tick[0])
+        veu_last_tick[0] = now
+        if report.notices and settings.telegram_bot_enabled and settings.telegram_bot_token:
+            await deliver_veu_notices(outbox, veu_views, report.notices, now=now)
 
-    # Openings, phase timers, the deadline and paying finished occurrences.
+    # Openings, 10 s rounds, the deadline and paying finished occurrences. The interval is
+    # short because the global decision window is 10 s.
     scheduler.add_job(
-        run_world_event_maintenance,
+        run_veu_event_upkeep,
         "interval",
-        seconds=15,
-        id="world-event-upkeep",
+        seconds=2,
+        id="veu-event-upkeep",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

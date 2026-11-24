@@ -118,6 +118,19 @@ ARCHIVED_TEXT = (
 )
 
 
+def chronicle_hud_status(view: ChronicleView) -> str:
+    """Estado atual da Crônica para o HUD do Refúgio (mesmos textos do Calendário)."""
+    if view.phase is Phase.UNSCHEDULED or view.calendar is None:
+        return "Sem data ainda"
+    if view.phase is Phase.SCHEDULED:
+        return f"Começa em {_when(view.calendar.starts_at)}"
+    if view.phase is Phase.ACTIVE:
+        return f"Em andamento · termina em {_when(view.calendar.end_at)}"
+    if view.phase in (Phase.CLOSING, Phase.RESCUE):
+        return f"Encerrada · resgate da Trilha até {_when(view.calendar.rescue_ends_at)}"
+    return "Arquivada"
+
+
 def render_calendar(view: ChronicleView, now: datetime) -> Screen:
     """Menu → Calendário: cycles, times, Nova Vigília and the Crônica (GDD §34, §37.2)."""
     lines = [
