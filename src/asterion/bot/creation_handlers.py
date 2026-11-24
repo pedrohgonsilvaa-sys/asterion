@@ -40,6 +40,7 @@ from asterion.bot.p3_ui import render_p3
 from asterion.bot.p4_ui import render_p4
 from asterion.bot.p5_ui import render_p5
 from asterion.bot.p6_ui import render_p6
+from asterion.bot.refuge_hud import RefugeHudLoader
 from asterion.bot.s2_ui import render_s2
 from asterion.bot.s3_ui import render_s3
 from asterion.bot.s4_ui import render_s4
@@ -430,6 +431,7 @@ def creation_router(
     p6: P6Service | None = None,
     dungeons: DungeonService | None = None,
     tdo_explore: TdoExploreService | None = None,
+    refuge_hud: RefugeHudLoader | None = None,
 ) -> Router:
     router = Router(name="character_creation")
     router.message.filter(F.chat.type == "private")
@@ -453,6 +455,7 @@ def creation_router(
             explore_remaining=len(remaining) if remaining is not None else None,
             can_hunt=bool(routes) and not (p1_view is not None and p1_view.status == "active"),
             known_dungeons=bool(dungeon_view and dungeon_view.known_dungeons),
+            hud=await refuge_hud(actor) if refuge_hud is not None else None,
         )
 
     async def current_screen(actor, state):

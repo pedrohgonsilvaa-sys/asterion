@@ -5,10 +5,12 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.contracts import is_enabled as contracts_enabled
 from asterion.application.legacy import LegacyView
 from asterion.application.world import WorldView
+from asterion.bot.asset_catalog import location_key
 from asterion.bot.creation_ui import Screen
 from asterion.bot.flavor_ui import with_flavor
-from asterion.bot.tdo_hub_ui import refuge_global_rows, refuge_hub_rows
+from asterion.bot.refuge_hud import RefugeHud
 from asterion.domain.paths import PATH_DEFINITIONS
+from asterion.domain.tdo_hub import REFUGE_LABEL
 
 LORE = (
     "Sob céus cobertos de fuligem, as estradas de Asterion seguem marcadas por ruínas, "
@@ -175,36 +177,112 @@ def render_world(view: WorldView) -> Screen:
     return Screen(text, "menu", InlineKeyboardMarkup(inline_keyboard=rows))
 
 
+CLASS_EMOJI = {
+    "sentinela": "🛡️",
+    "errante": "🗡️",
+    "vigia": "🏹",
+    "tecelao": "🪄",
+    "oraculo": "🔮",
+    "luminar": "☀️",
+}
+_ROMAN = ((10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"))
+REFUGE_TITLE = "🌘 Refúgio do Ocaso"
+REFUGE_IMAGE_KEY = location_key(REFUGE_LABEL)
+DAILY_GIFT_BUTTON = "🎁 Resgatar Dádiva Diária"
+# Menu Principal do Refúgio: duas colunas, cada botão mantém o callback do fluxo existente.
+REFUGE_MENU = (
+    (("🧭 Explorar", "tdo:explore"), ("🌘 Refúgio", "menu:back")),
+    (("🐺 Caçadas", "tdo:hunt"), ("🗝️ Masmorras", "dungeon:known")),
+    (("📜 Missões", "world:missions"), ("🌌 Eventos", "wev:hub")),
+    (("👤 Personagem", "character:root"), ("🗺️ Mapa", "world:map")),
+    (("🏰 Guilda", "guild:root"), ("🏪 Mercado", "mkt:root")),
+    (("🏟️ Arena", "pvp:hub"), ("📖 Códice", "knowledge:codex")),
+    (("🏆 Classificação", "pvp:rank"), ("🌐 Comunidade", "community:open")),
+    (("🎁 Benefícios", "bn:root"), ("⚙️ Configurações", "settings:root")),
+)
+
+
+def roman(value: int) -> str:
+    result = ""
+    for size, symbol in _ROMAN:
+        while value >= size:
+            result += symbol
+            value -= size
+    return result
+
+
+def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
+    """HUD do Refúgio em HTML do Telegram, no padrão do Prólogo (negrito + <code>)."""
+    from asterion.bot.combat_ui import number as fmt
+
+    hud = hud or RefugeHud()
+    emoji = CLASS_EMOJI.get(view.character_class, "👤")
+    # Sem Caminho escolhido, a linha mostra a Classe; o Caminho nunca vira rótulo.
+    detail = PATH_LABELS.get(view.selected_path or "") or CLASS_LABELS.get(
+        view.character_class, view.character_class
+    )
+    level = f"🏛️ Nv. {view.level}"
+    if view.legacy_level > 0:
+        level += f" · Legado {roman(view.legacy_level)}"
+    identity = [f"<b>{emoji} {escape(view.name)}</b> · {escape(detail)}", level]
+    if view.selected_title:
+        identity.append(f"🎖️ <i>{escape(view.selected_title)}</i>")
+    stats = [
+        f"<b>❤️ HP</b> · <code>{fmt(view.hp)} / {fmt(view.max_hp)}</code>\n"
+        f"{bar(view.hp, view.max_hp, '🟥')}",
+        f"<b>⚡ Vigor</b> · <code>{view.vigor} / {view.max_vigor}</code>\n"
+        f"{bar(view.vigor, view.max_vigor, '🟨')}",
+        f"<b>✨ XP</b> · <code>{number(view.xp)} / {number(view.xp_required)}</code>\n"
+        f"{bar(view.xp, view.xp_required, '🟦')}",
+    ]
+    state = [f"<b>💰 Coroas</b> · <code>{number(view.crowns)}</code>"]
+    if hud.supporter:
+        state.append(f"<b>⭐ Apoiador de Asterion</b> · {escape(hud.supporter)}")
+    if hud.chronicle:
+        state.append(f"<b>📖 Crônica</b> · {escape(hud.chronicle)}")
+    # O Boss Regional não tem dado de progressão real no sistema: fica ausente.
+    return "\n\n".join(
+        (f"<b>{REFUGE_TITLE}</b>", "\n".join(identity), *stats, *state)
+    )
+
+
+def refuge_menu_keyboard(*, gift_available: bool) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if gift_available:
+        rows.append([InlineKeyboardButton(text=DAILY_GIFT_BUTTON, callback_data="bn:gift")])
+    rows.extend(
+        [InlineKeyboardButton(text=label, callback_data=data) for label, data in pair]
+        for pair in REFUGE_MENU
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def render_refuge_dashboard(
     view: WorldView,
     *,
-    route_destinations: tuple[str, ...],
-    explore_remaining: int | None,
-    can_hunt: bool,
-    known_dungeons: bool,
+    route_destinations: tuple[str, ...] = (),
+    explore_remaining: int | None = None,
+    can_hunt: bool = True,
+    known_dungeons: bool = True,
+    hud: RefugeHud | None = None,
 ) -> Screen:
-    """The Terras do Ocaso main screen: character HUD plus Refúgio actions."""
-    dashboard = render_world(view)
-    hub_lines, hub_rows = refuge_hub_rows(
-        route_destinations,
-        explore_remaining=explore_remaining,
-        can_hunt=can_hunt,
-        known_dungeons=known_dungeons,
+    """Tela principal do Refúgio do Ocaso: HUD do personagem e Menu Principal.
+
+    Os parâmetros de rotas, exploração, caçada e masmorra ficam por compatibilidade com
+    os chamadores; o menu fixo não depende deles (cada destino trata a própria
+    indisponibilidade). Alda Veyr, Oren Cal e o Treinador de Armas saíram desta tela, mas
+    seus callbacks (``p2:alda``, ``world:oren``, ``wpt:root``) seguem nos handlers.
+    """
+    if view.kind == "brazier":
+        # O primeiro Braseiro mantém a tela própria do Prólogo.
+        return render_world(view)
+    hud = hud or RefugeHud()
+    return Screen(
+        refuge_hud_text(view, hud),
+        REFUGE_IMAGE_KEY,
+        refuge_menu_keyboard(gift_available=hud.gift_available),
+        "HTML",
     )
-    rows = list(hub_rows)
-    if "Refúgio do Ocaso" in route_destinations or view.location == "Refúgio do Ocaso":
-        rows.extend(
-            [
-                [InlineKeyboardButton(text="Alda Veyr", callback_data="p2:alda")],
-                [InlineKeyboardButton(text="Oren Cal", callback_data="world:oren")],
-                [InlineKeyboardButton(text="Treinador de Armas", callback_data="wpt:root")],
-            ]
-        )
-    rows.extend(refuge_global_rows())
-    text = dashboard.text
-    if hub_lines:
-        text = f"{text}\n\n" + "\n".join(hub_lines)
-    return Screen(text, "refuge", InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 def render_legacy(
