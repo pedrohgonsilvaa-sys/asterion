@@ -55,7 +55,7 @@ async def test_first_hud_matches_authoritative_shape(prologue, database):
     view = await prologue.enter(1)
     screen = render_combat(view)
     assert screen.text.startswith(
-        "<b>⚔️ O Primeiro Confronto</b>\n\n🌐 <code>Turno 1</code> · ⏱️ <code>00:10</code>\n\n"
+        "<b>⚔️ O Primeiro Confronto</b>\n\n<code>🌐 Turno 1 · ⏱️ 00:10</code>\n\n"
         "🐺 <b>Cão Cinéreo</b>\n❤️ <code>244 / 244</code>\n" + "🟩" * 9
     )
     assert "👤 <b>Heroa</b>\n❤️ <code>" in screen.text
@@ -379,14 +379,14 @@ async def test_hud_reconstructs_persisted_events_and_tutorial_buttons(prologue, 
     view = await prologue.action(1, view.activity_id, view.combat.version, "attack")
     screen = render_combat(view)
     assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["Defender"]
-    assert "<code>Turno 2</code>" in screen.text
+    assert "<code>🌐 Turno 2 · ⏱️ 00:10</code>" in screen.text
     assert "⚔️ Heroa causou" in screen.text
     assert "🐺 Cão Cinéreo causou" in screen.text or "💨 Heroa esquivou" in screen.text
     assert "O som se aproxima" not in screen.text
     view = await prologue.action(1, view.activity_id, view.combat.version, "defend")
     screen = render_combat(view)
     assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["Golpe de Guarda"]
-    assert "<code>Turno 3</code>" in screen.text
+    assert "<code>🌐 Turno 3 · ⏱️ 00:10</code>" in screen.text
     assert "🛡️ Heroa usou Defender." in screen.text
     assert "Arte de Classe" not in screen.text
     # Reconnect uses the same persisted log and controls.
@@ -436,7 +436,7 @@ async def test_prologue_defeat_render_has_no_xp_receipt_or_retry(prologue, datab
     screen = render_combat(defeated)
     assert defeated.combat.result == "defeat"
     assert "320 XP" not in screen.text
-    assert "<b>🩸 Derrota</b>" in screen.text and "Heroa" in screen.text
+    assert "<b>🩸 O Caminho Interrompido</b>" in screen.text and "Heroa" in screen.text
     assert [b.callback_data for row in screen.keyboard.inline_keyboard for b in row] == [
         "pl:chama"
     ]
@@ -461,7 +461,7 @@ async def test_terminal_prologue_defeat_dispatches_to_existing_brazier(
     await dispatcher.feed_raw_update(telegram, callback_update(callback, actor=1))
 
     sent = telegram.session.make_request.call_args.args[1]
-    assert "Derrota" in (getattr(sent, "text", None) or getattr(sent, "caption", ""))
+    assert "O Caminho Interrompido" in (getattr(sent, "text", None) or getattr(sent, "caption", ""))
     await dispatcher.feed_raw_update(telegram, callback_update("pl:chama", actor=1))
     sent = telegram.session.make_request.call_args.args[1]
     assert "Depois da Cinza" not in sent.text
