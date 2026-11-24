@@ -411,25 +411,11 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
         bot, _message_update("/menu", actor=actor, update_id=update_id)
     )
     screen = _last_screen(bot)
-    # Painel HUD do Refúgio (ff58e7b): sem Caçada/Masmorra no /menu.
+    # HUD do Refúgio: Menu Principal em duas colunas.
     assert {button.text for row in screen.reply_markup.inline_keyboard for button in row} == {
-        "Alda Veyr",
-        "Arena",
-        "Benefícios",
-        "Calendário",
-        "Classificação",
-        "Comunidade",
-        "Configurações",
-        "Códice",
-        "Explorar",
-        "Guilda",
-        "Mapa",
-        "Mercado",
-        "Missões",
-        "Oren Cal",
-        "Personagem",
-        "Treinador de Armas",
-        "Vínculos",
+        "🧭 Explorar", "🌘 Refúgio", "🐺 Caçadas", "🗝️ Masmorras", "📜 Missões", "🌌 Eventos",
+        "👤 Personagem", "🗺️ Mapa", "🏰 Guilda", "🏪 Mercado", "🏟️ Arena", "📖 Códice",
+        "🏆 Classificação", "🌐 Comunidade", "🎁 Benefícios", "⚙️ Configurações",
     }
     update_id += 1
     await dispatcher.feed_raw_update(
@@ -456,7 +442,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     labels = {
         button.text for row in screen.reply_markup.inline_keyboard for button in row
     }
-    assert "Guilda" in labels
+    assert "🏰 Guilda" in labels
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, callback_update("settings:root", actor=actor, update_id=update_id)
