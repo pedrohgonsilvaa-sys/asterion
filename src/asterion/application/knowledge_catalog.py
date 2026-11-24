@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from asterion.domain import chronicle_codex
+from asterion.domain.veu_bestiary import VEU_CREATURES
 
 CODEX_CATEGORY_ORDER = (
     ("world", "🪐 Mundo e Cosmologia"),
@@ -29,6 +30,7 @@ class CodexPresentation:
 
 
 CODEX_ENTRIES = (
+    CodexPresentation("codex.world_event.a_ruptura_do_veu", "A Ruptura do Véu", "history", 90),
     CodexPresentation(
         "codex.location.estrada_das_cinzas",
         "Estrada das Cinzas",
@@ -1636,6 +1638,9 @@ VDE_REGION_ID = "vde"
 # Crônica I creatures have no Region (proposal §11): the Bestiário lists them apart.
 CR01_BESTIARY_GROUP = "cr01"
 CR01_BESTIARY_LABEL = "🌌 Crônica I · Ecos da Convergência"
+# Bestiário do Véu (v1.3.0 §25.2): coleção de origem/evento, fora das seis Regiões.
+VEU_BESTIARY_GROUP = "veu"
+VEU_BESTIARY_LABEL = "🌫️ Bestiário do Véu · A Ruptura do Véu"
 VDE_REGION_LABEL = "🪢 Vales dos Enforcados · Nv. 11–20"
 NARETH_REGION_ID = "nareth"
 NARETH_REGION_LABEL = "🌾 Planícies de Nareth · Nv. 21–30"
@@ -2073,6 +2078,12 @@ CREATURE_PRESENTATION.update(
             "boss.cr01.o_que_aguarda_resposta",
             "boss_evento.cr01.o_compasso",
         )
+    }
+)
+CREATURE_PRESENTATION.update(
+    {
+        creature.bestiary_key: CreaturePresentation(VEU_BESTIARY_GROUP, ())
+        for creature in VEU_CREATURES
     }
 )
 CREATURE_NOTES = {

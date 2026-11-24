@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Collection, Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -136,6 +136,21 @@ def begin_round_resolution(state: RoundState) -> tuple[RoundState, bool]:
     return state, False
 
 
+# Decisão técnica (a fonte lista estados, não arestas): RESOLVENDO é o estado curto da
+# resolução e volta a ATIVA se o objetivo não foi concluído. COLAPSADA não é usada (§61).
+NUCLEUS_TRANSITIONS: dict[NucleusState, frozenset[NucleusState]] = {
+    NucleusState.ATIVA: frozenset({NucleusState.RESOLVENDO, NucleusState.SUBSTITUIDA}),
+    NucleusState.RESOLVENDO: frozenset({NucleusState.ATIVA, NucleusState.RESOLVIDA}),
+    NucleusState.RESOLVIDA: frozenset(),
+    NucleusState.COLAPSADA: frozenset(),
+    NucleusState.SUBSTITUIDA: frozenset(),
+}
+
+
+def transition_nucleus(current: NucleusState, target: NucleusState) -> NucleusState:
+    return _move(NUCLEUS_TRANSITIONS, current, target, "nucleus")
+
+
 def nucleus_accepts_players(state: NucleusState) -> bool:
     return state is NucleusState.ATIVA
 
@@ -210,6 +225,20 @@ def nuclei_of_phase(phase: int) -> tuple[NucleusDefinition, ...]:
     if not 1 <= phase <= PHASE_COUNT:
         raise ValueError("phase must be between 1 and 3")
     return tuple(nucleus for nucleus in NUCLEI if nucleus.phase == phase)
+
+
+def nucleus_resolved(nucleus_key: str, defeated_codes: Collection[str]) -> bool:
+    """Objetivo do Núcleo concluído (decisão técnica sobre os §9–§11).
+
+    D e E têm criatura principal: derrubá-la basta (o apoio não é o objetivo). Nos demais,
+    todas as criaturas do Núcleo precisam cair; no F os dois alvos são independentes, então
+    ambos precisam cair.
+    """
+    definition = NUCLEI_BY_KEY[nucleus_key]
+    defeated = set(defeated_codes)
+    if definition.principal is not None:
+        return definition.principal in defeated
+    return set(definition.creature_codes) <= defeated
 
 
 def phase_should_advance(phase: int, resolved_keys: Collection[str]) -> bool:
@@ -308,6 +337,28 @@ SWITCH_BLOCKED_ROUNDS = 1
 SWITCH_ALLOWS_IMMEDIATE_ACTION = False
 
 
+def first_action_round(
+    open_round_number: int | None, next_round_number: int, *, switching: bool
+) -> int:
+    """Primeira rodada em que o participante pode agir no Núcleo (§14.1, §14.2).
+
+    Entrar com rodada aberta: espera o próximo ciclo. Trocar de Núcleo: mais 1 rodada sem
+    agir, observando.
+    """
+    base = (open_round_number + 1) if open_round_number is not None else next_round_number
+    return base + (SWITCH_BLOCKED_ROUNDS if switching else 0)
+
+
+def significant_action(
+    *, effective_damage: int = 0, effective_heal: int = 0, absorbed: int = 0,
+    objective: bool = False, valid: bool = True,
+) -> bool:
+    """§23.3: impacto real. Overkill, cura excedente, ação inválida e AFK não contam."""
+    if not valid:
+        return False
+    return effective_damage > 0 or effective_heal > 0 or absorbed > 0 or objective
+
+
 # ------------------------------------------------------ determinismo / idempotência
 
 
@@ -337,25 +388,53 @@ def is_scheduled_slot(slot: datetime) -> bool:
     )
 
 
+# ------------------------------------------------------------------ agenda / avisos
+
+NOTICE_MARKS = (timedelta(minutes=10), timedelta(minutes=5))
+
+
+def slots_in_range(start: datetime, end: datetime) -> list[datetime]:
+    """Horários da agenda em ``[start, end]``, em ordem, em UTC."""
+    if start.tzinfo is None or end.tzinfo is None:
+        raise ValueError("start and end must be timezone-aware")
+    found: list[datetime] = []
+    day = start.astimezone(EVENT_TIMEZONE).date() - timedelta(days=1)
+    last = end.astimezone(EVENT_TIMEZONE).date() + timedelta(days=1)
+    while day <= last:
+        if day.weekday() in SCHEDULE_WEEKDAYS:
+            for moment in SCHEDULE_TIMES:
+                slot = datetime.combine(day, moment, EVENT_TIMEZONE)
+                if start <= slot <= end:
+                    found.append(slot.astimezone(UTC))
+        day += timedelta(days=1)
+    return found
+
+
+def due_notice_marks(
+    scheduled_at: datetime, previous: datetime, now: datetime
+) -> tuple[timedelta, ...]:
+    """Marcos (10 e 5 min antes do horário) cruzados em ``(previous, now]``.
+
+    Sem estado em banco: o chamador guarda o instante da última verificação.
+    """
+    return tuple(
+        mark for mark in NOTICE_MARKS if previous < scheduled_at - mark <= now
+    )
+
+
 # ------------------------------------------------------------------- bloqueios
 
 BLOCKED_RULES: dict[str, str] = {
-    "contextual_actions": "Estabilizar/Romper/Interromper: a fonte só dá exemplos (§16.3).",
+    "contextual_actions": (
+        "Estabilizar/Romper/Interromper: a fonte só dá exemplos (§16.3) e não liga nenhuma "
+        "Núcleo (§9-§11) a uma ação contextual; nenhuma é implementada."
+    ),
     "nucleus_a_objective": "Núcleo A: 'manter a manifestação abaixo do limite' sem regra.",
     "nucleus_b_structural_objective": "Núcleo B: objetivo estrutural opcional sem regra.",
     "recent_contribution_priority": "Tecelão de Ossos: 'maior contribuição recente' indefinida.",
-    "barrier_duration": "Barreiras dos kits não têm duração; sem duração o motor não concede.",
     "remaining_nucleus_on_phase_change": "Destino do Núcleo não resolvido na troca de fase.",
-    "archetype_engine_profile": "Resistente, Técnico, Suporte e Eq./Controlador sem perfil.",
-    "nucleus_state_transitions": (
-        "Arestas entre ATIVA/RESOLVENDO/RESOLVIDA/SUBSTITUIDA não definidas pela fonte; "
-        "inclui se RESOLVENDO volta a ATIVA e se RESOLVENDO já remove participantes (§14.6)."
-    ),
     "boss_form_70_boundary": (
         "VEU-18: a fonte dá '100%→70%' e '70%→35%' sem dizer a que forma pertence 70%."
-    ),
-    "switch_blocked_round_instant": (
-        "Troca de Núcleo: não definido se a rodada sem agir é a aberta no destino ou a próxima."
     ),
 }
 

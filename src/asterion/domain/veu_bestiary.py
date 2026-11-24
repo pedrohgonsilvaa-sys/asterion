@@ -38,7 +38,18 @@ ENGINE_ARCHETYPE = {
     "Blindado": "armored",
     "Controlador": "controller",
     "Predador": "predator",
+    # Decisão técnica (v1.3.0 §8.1 manda usar o motor mas não mapeia estes rótulos): o perfil
+    # existente mais próximo. Resistente = defesa alta; Técnico = controle; Suporte e o
+    # "Equilibrado/Controlador" do Chefe = perfil neutro.
+    "Resistente": "armored",
+    "Técnico": "controller",
+    "Suporte": "balanced",
+    "Equilibrado/Controlador": "balanced",
 }
+
+# Decisão técnica: a fonte dá Barreira sem duração; usa-se a de ``creature_kits`` ("guard":
+# Barreira por 2 turnos), o comportamento existente mais próximo.
+BARRIER_DURATION_TURNS = 2
 
 
 class UnresolvedArchetypeError(ValueError):
