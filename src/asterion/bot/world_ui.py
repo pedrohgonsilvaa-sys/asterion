@@ -217,14 +217,16 @@ def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
 
     hud = hud or RefugeHud()
     emoji = CLASS_EMOJI.get(view.character_class, "👤")
-    # Sem Caminho escolhido, a linha mostra a Classe; o Caminho nunca vira rótulo.
-    detail = PATH_LABELS.get(view.selected_path or "") or CLASS_LABELS.get(
-        view.character_class, view.character_class
-    )
+    # Sempre Classe; o Caminho só acompanha quando já foi escolhido.
+    class_label = CLASS_LABELS.get(view.character_class, view.character_class)
+    identity_line = f"<b>{emoji} {escape(view.name)}</b> · {class_label}"
+    path = PATH_LABELS.get(view.selected_path or "")
+    if path:
+        identity_line += f" · {escape(path)}"
     level = f"🏛️ Nv. {view.level}"
     if view.legacy_level > 0:
         level += f" · Legado {roman(view.legacy_level)}"
-    identity = [f"<b>{emoji} {escape(view.name)}</b> · {escape(detail)}", level]
+    identity = [identity_line, level]
     if view.selected_title:
         identity.append(f"🎖️ <i>{escape(view.selected_title)}</i>")
     stats = [
@@ -236,8 +238,6 @@ def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
         f"{bar(view.xp, view.xp_required, '🟦')}",
     ]
     state = [f"<b>💰 Coroas</b> · <code>{number(view.crowns)}</code>"]
-    if hud.supporter:
-        state.append(f"<b>⭐ Apoiador de Asterion</b> · {escape(hud.supporter)}")
     if hud.chronicle:
         state.append(f"<b>📖 Crônica</b> · {escape(hud.chronicle)}")
     # O Boss Regional não tem dado de progressão real no sistema: fica ausente.

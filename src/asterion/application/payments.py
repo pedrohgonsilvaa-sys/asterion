@@ -257,18 +257,6 @@ async def sync_patron_cosmetics(session: AsyncSession, row: PatronAccount, now: 
     row.updated_at = now
 
 
-async def patron_until_readonly(
-    sessions: async_sessionmaker[AsyncSession], actor: int, *, now: datetime | None = None
-) -> datetime | None:
-    """Fim do apoio Patrono ativo da conta, ou None. Só leitura (usado pelo HUD do Refúgio)."""
-    moment = _now(now)
-    async with sessions() as session:
-        row = await session.get(PatronAccount, actor)
-    if row is None or not patron_active(moment, row.active_until):
-        return None
-    return row.active_until
-
-
 class PaymentService:
     def __init__(
         self,

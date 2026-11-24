@@ -59,7 +59,7 @@ def test_header_with_path_legacy_and_title():
     lines = text.split("\n\n")
     assert lines[0] == "<b>🌘 Refúgio do Ocaso</b>"
     assert lines[1].split("\n") == [
-        "<b>🏹 Tess</b> · Atirador",
+        "<b>🏹 Tess</b> · Vigia · Atirador",
         "🏛️ Nv. 12 · Legado II",
         "🎖️ <i>Aliado do Refúgio</i>",
     ]
@@ -68,7 +68,7 @@ def test_header_with_path_legacy_and_title():
 
 def test_path_absent_hides_path_and_never_writes_caminho():
     text = _screen(selected_path=None).text
-    assert "<b>🏹 Tess</b> · Vigia" in text
+    assert "<b>🏹 Tess</b> · Vigia\n" in text
     assert "Atirador" not in text and "Caminho" not in text
 
 
@@ -106,8 +106,8 @@ def test_status_block_is_compact_bold_and_monospaced():
 
 
 def test_state_lines_use_real_data_and_boss_is_absent():
-    text = _screen(RefugeHud(supporter="Ativo até 08/12", chronicle="Sem data ainda")).text
-    assert "<b>⭐ Apoiador de Asterion</b> · Ativo até 08/12" in text
+    text = _screen(RefugeHud(chronicle="Sem data ainda")).text
+    assert "Apoiador" not in text and "Patrono" not in text and "⭐" not in text
     assert "<b>📖 Crônica</b> · Sem data ainda" in text
     assert "👹" not in text
 
@@ -199,7 +199,7 @@ async def test_daily_gift_cycle_hides_after_claim_and_returns_next_day(database)
             )
         )
     gifts = DailyGiftService(database[1], "ocaso")
-    loader = RefugeHudLoader(gifts, ChronicleService(database[1], "ocaso"), database[1])
+    loader = RefugeHudLoader(gifts, ChronicleService(database[1], "ocaso"))
 
     assert (await loader(ACTOR, now=NOW)).gift_available is True
     await gifts.claim(ACTOR, now=NOW)
@@ -212,6 +212,83 @@ async def test_daily_gift_cycle_hides_after_claim_and_returns_next_day(database)
     nxt = await loader(ACTOR, now=NOW + timedelta(days=1))
     assert nxt.gift_available is True
     assert any("Dádiva" in b.text for b in _buttons(_screen(nxt)))
-    # Sem conta de Patrono nem Crônica agendada: textos reais, sem inventar estado.
-    assert nxt.supporter == "Inativo"
+    # Sem Crônica agendada: texto já usado pelo Calendário.
     assert nxt.chronicle == "Sem data ainda"
+
+
+@pytest.mark.asyncio
+async def test_real_flow_open_gift_claim_and_return_to_refuge(database):
+    """/menu → bn:gift → bn:gift:claim → menu:back: o botão some na hora."""
+    from unittest.mock import AsyncMock
+
+    from aiogram import Bot, Dispatcher
+    from aiogram.methods import EditMessageText
+    from aiogram.types import Chat, User
+    from aiogram.types import Message as TelegramMessage
+
+    from asterion.application.p1 import P1Service
+    from asterion.application.promo_codes import PromoCodeService
+    from asterion.application.recruitment import RecruitmentService
+    from asterion.application.world import WorldService
+    from asterion.bot.benefits_handlers import benefits_router
+    from asterion.bot.world_handlers import world_router
+    from tests.test_character_surfaces_telegram import _last_screen
+    from tests.test_creation_ui import callback_update, message_update
+    from tests.test_road_integration import _seed_road
+    from tests.test_tdo_refuge_menu_principal import _set_state
+
+    actor, road = await _seed_road(database, actor=920777)
+    sessions = database[1]
+    await _set_state(sessions, actor, region="Terras do Ocaso", location=REFUGE)
+    loader = RefugeHudLoader(
+        DailyGiftService(sessions, "ocaso"), ChronicleService(sessions, "ocaso")
+    )
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        benefits_router(
+            DailyGiftService(sessions, "ocaso"),
+            RecruitmentService(sessions, "ocaso"),
+            PromoCodeService(sessions, "ocaso"),
+            {},
+        )
+    )
+    dispatcher.include_router(
+        world_router(
+            WorldService(sessions, "ocaso"),
+            {},
+            p1=P1Service(sessions, "ocaso"),
+            road=road,
+            refuge_hud=loader,
+        )
+    )
+    bot = Bot("123456:local-test-token")
+
+    async def respond(_bot, method, **_kwargs):
+        if isinstance(method, EditMessageText):
+            return TelegramMessage(
+                message_id=method.message_id,
+                date=1,
+                chat=Chat(id=actor, type="private"),
+                from_user=User(id=123456, is_bot=True, first_name="Asterion"),
+                text=method.text,
+            )
+        return True
+
+    bot.session.make_request = AsyncMock(side_effect=respond)
+
+    def labels():
+        return [b.text for row in _last_screen(bot).reply_markup.inline_keyboard for b in row]
+
+    await dispatcher.feed_raw_update(bot, message_update("/menu", actor=actor))
+    assert labels()[0] == "🎁 Resgatar Dádiva Diária"
+    await dispatcher.feed_raw_update(bot, callback_update("bn:gift", update_id=3, actor=actor))
+    assert "Resgatar" in labels()
+    await dispatcher.feed_raw_update(
+        bot, callback_update("bn:gift:claim", update_id=4, actor=actor)
+    )
+    assert "Resgatar" not in labels()
+    await dispatcher.feed_raw_update(bot, callback_update("menu:back", update_id=5, actor=actor))
+    assert "🌘 Refúgio do Ocaso" in _last_screen(bot).text
+    assert "🎁 Resgatar Dádiva Diária" not in labels()
+    assert labels()[0] == "🧭 Explorar"
+    await bot.session.close()
