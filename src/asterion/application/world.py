@@ -51,6 +51,7 @@ class WorldView:
     selected_title: str | None = None
     # True only on the rest that opens the Menu, for the §32.3 onboarding invite.
     first_menu: bool = False
+    crowns: int = 0
 
 
 class WorldService:
@@ -177,6 +178,7 @@ class WorldService:
                 ),
                 selected_path=c.selected_path,
                 legacy_level=c.legacy_level,
+                crowns=c.crowns,
                 selected_title=(
                     COSMETICS_BY_ID[selected_title_id].name
                     if selected_title_id in COSMETICS_BY_ID

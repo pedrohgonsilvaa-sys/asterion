@@ -136,6 +136,7 @@ def test_refuge_dashboard_has_regional_and_global_actions_without_campaign_adven
         "tdo:hunt",
         "dungeon:known",
         "world:missions",
+        "wev:hub",
     } <= set(callbacks)
     assert {
         "character:root",
@@ -145,7 +146,7 @@ def test_refuge_dashboard_has_regional_and_global_actions_without_campaign_adven
         "bn:root",
         "community:open",
     } <= set(callbacks)
-    assert "Masmorra" in labels and "(Covil)" not in labels
+    assert "🗝️ Masmorras" in labels and "(Covil)" not in labels
     assert "Campanha" not in labels and "Aventura" not in labels
 
 

@@ -130,6 +130,7 @@ from asterion.bot.p3_ui import render_p3, render_p3_detail
 from asterion.bot.p4_ui import render_p4, render_p4_detail
 from asterion.bot.p5_ui import render_p5, render_p5_detail
 from asterion.bot.p6_ui import render_p6
+from asterion.bot.refuge_hud import RefugeHudLoader
 from asterion.bot.road_ui import (
     render_current_local,
     render_invalid_location_menu,
@@ -231,6 +232,7 @@ def world_router(
     chronicle_activities: ChronicleActivityService | None = None,
     chronicle_encounters: ChronicleEncounterService | None = None,
     tdo_explore: TdoExploreService | None = None,
+    refuge_hud: RefugeHudLoader | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -256,6 +258,7 @@ def world_router(
             explore_remaining=len(remaining) if remaining is not None else None,
             can_hunt=bool(routes) and not (p1_view is not None and p1_view.status == "active"),
             known_dungeons=bool(dungeon_view and dungeon_view.known_dungeons),
+            hud=await refuge_hud(actor) if refuge_hud is not None else None,
         )
 
     async def open_region_home(query: CallbackQuery) -> bool:

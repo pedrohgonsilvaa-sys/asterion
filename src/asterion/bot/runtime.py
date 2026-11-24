@@ -121,6 +121,7 @@ from asterion.bot.p7_handlers import p7_router
 from asterion.bot.path_handlers import path_router
 from asterion.bot.profession_handlers import profession_router
 from asterion.bot.pvp_handlers import pvp_router
+from asterion.bot.refuge_hud import RefugeHudLoader
 from asterion.bot.s1_handlers import s1_router
 from asterion.bot.s2_handlers import s2_router
 from asterion.bot.s3_handlers import s3_router
@@ -218,6 +219,10 @@ def get_bot_runtime() -> BotRuntime:
     p2 = P2Service(SessionFactory, settings.server_id, groups=groups)
     road = RoundService(SessionFactory, settings.server_id)
     tdo_explore = TdoExploreService(SessionFactory, settings.server_id)
+    refuge_hud = RefugeHudLoader(
+        DailyGiftService(SessionFactory, settings.server_id),
+        ChronicleService(SessionFactory, settings.server_id),
+    )
     inventory = InventoryService(SessionFactory, settings.server_id)
     warehouse = WarehouseService(SessionFactory, settings.server_id)
     equipment = EquipmentService(SessionFactory, settings.server_id)
@@ -541,6 +546,7 @@ def get_bot_runtime() -> BotRuntime:
             chronicle_activities=chronicle_activities,
             chronicle_encounters=chronicle_encounters,
             tdo_explore=tdo_explore,
+            refuge_hud=refuge_hud,
         )
     )
     dispatcher.include_router(
@@ -568,6 +574,7 @@ def get_bot_runtime() -> BotRuntime:
             p6=p6,
             dungeons=dungeons,
             tdo_explore=tdo_explore,
+            refuge_hud=refuge_hud,
         )
     )
     bot = Bot(token=settings.telegram_bot_token)

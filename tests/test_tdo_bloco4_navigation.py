@@ -164,23 +164,12 @@ def test_refuge_keyboard_follows_source_order_and_grouping():
         known_dungeons=True,
     )
     rows = [[b.text for b in row] for row in screen.keyboard.inline_keyboard]
-    # ações regionais, depois Locais descobertos, depois atalhos globais
-    assert rows[0] == ["Explorar", "Mapa"]
-    assert rows[1] == ["Caçar", "Masmorra"]
-    assert rows[2] == ["Missões"]
-    assert rows[3] == ["🔥 Estrada das Cinzas"]
-    assert rows[4] == ["🌑 Charneca da Fuligem"]
-    assert rows[5] == ["🕯 Câmara do Poente"]
-    assert rows[-6:] == [
-        ["Personagem", "Guilda"],
-        ["Mercado", "Arena"],
-        ["Códice", "Calendário"],
-        ["Vínculos", "Classificação"],
-        ["Benefícios", "Comunidade"],
-        ["Configurações"],
-    ]
+    # HUD congelado: Menu Principal em duas colunas, sem Locais avulsos nem NPCs.
+    assert rows[0] == ["🧭 Explorar", "🌘 Refúgio"]
+    assert rows[1] == ["🐺 Caçadas", "🗝️ Masmorras"]
+    assert rows[-1] == ["🎁 Benefícios", "⚙️ Configurações"]
     flat = [text for row in rows for text in row]
-    for absent in ("Campanha", "Aventura", "← Menu", "Local Atual"):
+    for absent in ("Campanha", "Aventura", "← Menu", "Local Atual", "Alda Veyr"):
         assert absent not in flat
     assert "Travessia" not in screen.text
 
@@ -197,7 +186,7 @@ def test_menu_principal_rendering_is_not_used_inside_tdo_refuge_screen():
     # entradas Campanha e Aventura do Menu Principal geral não existem no Refúgio
     assert "world:adventure" not in callbacks
     assert "adv:hub" not in callbacks
-    assert screen.image_key == "refuge"
+    assert screen.image_key == "local:Refúgio do Ocaso"
 
 
 def test_outside_tdo_local_screen_keeps_campanha_return():
