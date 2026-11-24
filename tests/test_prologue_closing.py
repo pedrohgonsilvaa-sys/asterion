@@ -98,7 +98,7 @@ def test_first_turn_hud_has_no_level_and_one_narrative_line(enemy_id, emoji, ene
     assert f"❤️ <code>{max_hp:.0f} / {max_hp:.0f}</code>" in screen.text
     assert "🟩" * 9 in screen.text and "🟩" * 10 not in screen.text
     assert "Nv." not in screen.text and "Nível" not in screen.text
-    assert "🌐 <code>Turno 1</code> · ⏱️ <code>00:10</code>" in screen.text
+    assert "<code>🌐 Turno 1 · ⏱️ 00:10</code>" in screen.text
     assert "<b>📜 Histórico:</b>\n<i>" in screen.text
     narrative = re.findall(r"<i>(.+?)</i>", screen.text)
     assert len(narrative) == 1 and narrative[0].startswith(emoji)
@@ -113,7 +113,7 @@ def test_later_turns_show_mechanical_history_without_the_appearance_line(
     combat = act(view.combat, "attack")
     screen = render_combat(CombatView(*(view.activity_id, view.encounter_id, view.character_id,
                                         combat, view.stage, 0)))
-    assert "🌐 <code>Turno 2</code> · ⏱️ <code>00:10</code>" in screen.text
+    assert "<code>🌐 Turno 2 · ⏱️ 00:10</code>" in screen.text
     assert "<b>📜 Histórico:</b>\n⚔️" in screen.text
     assert "<i>" not in screen.text
     assert re.search(rf"⚔️ {NAME} causou \d+ de dano\.", screen.text)
@@ -153,7 +153,8 @@ def finish(enemy_id: str, result: str) -> CombatView:
 @pytest.mark.parametrize("name", [NAME, "Luiken"])
 def test_outcome_brazier_and_ending_use_the_persisted_name(name):
     hp = Decimal(100)
-    for result, title in (("victory", "🏆 Vitória"), ("defeat", "🩸 Derrota")):
+    outcomes = (("victory", "🔥 O Caminho Está Livre"), ("defeat", "🩸 O Caminho Interrompido"))
+    for result, title in outcomes:
         view = combat_view("dog_cinereo", name=name)
         from dataclasses import replace
 
@@ -165,12 +166,12 @@ def test_outcome_brazier_and_ending_use_the_persisted_name(name):
             "🔥 Seguir até a chama"
         ]
         assert "Eltharin" not in screen.text
-    brazier = render_brazier(name, hp)
+    brazier = render_brazier(name, hp, hp)
     assert "<b>🔥 Braseiro da Estrada</b>" in brazier.text and name in brazier.text
     assert [b.text for row in brazier.keyboard.inline_keyboard for b in row] == ["🔥 Descansar"]
     assert "🟩" * 9 in brazier.text
     ending = render_prologue_ending(name)
-    assert "<b>🔥 Fim do Prólogo</b>" in ending.text and name in ending.text
+    assert "<b>🏠 O Refúgio do Ocaso</b>" in ending.text and name in ending.text
     assert [b.text for row in ending.keyboard.inline_keyboard for b in row] == ["🛤️ Continuar"]
 
 
@@ -293,9 +294,9 @@ def test_timer_shows_in_hud_monospaced_and_counts_down(clock):
     view = combat_view("corvo_fuligem")
     clock.advance(3)
     text = render_combat(view).text
-    assert "🌐 <code>Turno 1</code> · ⏱️ <code>00:07</code>" in text
+    assert "<code>🌐 Turno 1 · ⏱️ 00:07</code>" in text
     clock.advance(20)
-    assert "⏱️ <code>00:00</code>" in render_combat(view).text
+    assert "<code>🌐 Turno 1 · ⏱️ 00:00</code>" in render_combat(view).text
 
 
 def test_history_sits_right_under_its_heading_without_blank_line():

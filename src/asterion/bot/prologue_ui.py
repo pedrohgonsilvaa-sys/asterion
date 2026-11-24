@@ -23,6 +23,8 @@ BAR_SEGMENTS = 9
 ENCOUNTER_LOCATION = "tdo.location.estrada_das_cinzas"
 _CONTINUE = "🛤️ Continuar a caminhada"
 PURSE_LINE = "🪙 18 Coroas"
+RESIDUE_LINE = "💧 1 Resíduo do Ocaso"
+VICTORY_REWARD_LINES = ("✨ +320 XP", "🪙 +3 Coroas")
 PURSE_NODE = "destrocos"
 
 # node -> (title, narration, objects shown inside the scene, buttons[(label, target)]).
@@ -47,13 +49,13 @@ SCENES: dict[str, tuple[str, str, tuple[str, ...], tuple[tuple[str, str], ...]]]
         "As marcas ainda estão parcialmente visíveis na fuligem, indicando que alguma coisa "
         "passou por ali há pouco tempo.",
         (),
-        (("🛞 Examinar os sulcos", "sulcos"), (_CONTINUE, COMBAT_ENTRY)),
+        ((_CONTINUE, COMBAT_ENTRY),),
     ),
     "destrocos": (
         "🔎 Entre os Destroços",
         "Uma carroça tombada permanece parcialmente coberta pela cinza. Entre a madeira "
         "quebrada, uma pequena bolsa ainda está presa sob uma das tábuas.",
-        (PURSE_LINE,),
+        (PURSE_LINE, RESIDUE_LINE),
         ((_CONTINUE, COMBAT_ENTRY), ("🔎 Examinar os destroços", "queimada")),
     ),
     "silencio": (
@@ -64,15 +66,6 @@ SCENES: dict[str, tuple[str, str, tuple[str, ...], tuple[tuple[str, str], ...]]]
         "de localizar.",
         (),
         (("🐾 Seguir o som", "pedras"), (_CONTINUE, COMBAT_ENTRY)),
-    ),
-    "sulcos": (
-        "🛞 Sulcos Recentes",
-        "Duas marcas estreitas cortam a camada mais recente de cinza. Alguma carroça passou "
-        "por ali há pouco tempo e seguiu na mesma direção, deixando os sulcos visíveis até "
-        "onde a estrada se estreita entre pedras partidas. Depois dali, as marcas "
-        "desaparecem sob o terreno irregular.",
-        (),
-        ((_CONTINUE, COMBAT_ENTRY),),
     ),
     "queimada": (
         "🔎 A Estrada Queimada",
@@ -142,6 +135,12 @@ def turn_line(turn: int, seconds_left: float | None) -> str:
     """Global turn/timer line: both values monospaced."""
     shown = TURN_SECONDS if seconds_left is None else seconds_left
     return f"🌐 <code>Turno {turn}</code> · ⏱️ <code>{format_remaining(shown)}</code>"
+
+
+def prologue_turn_line(turn: int, seconds_left: float | None) -> str:
+    """Prólogo turn/timer line: the whole line monospaced."""
+    shown = TURN_SECONDS if seconds_left is None else seconds_left
+    return f"<code>🌐 Turno {turn} · ⏱️ {format_remaining(shown)}</code>"
 
 
 def _art_name(name: str) -> str:
@@ -219,7 +218,7 @@ def render_standard_hud(
 
     The history sits directly under its heading, with no blank line between them.
     """
-    lines = [f"<b>{title}</b>", "", turn_line(turn, seconds_left), ""]
+    lines = [f"<b>{title}</b>", "", prologue_turn_line(turn, seconds_left), ""]
     lines += _hud(enemy_emoji, enemy.name, enemy.hp, enemy.stats.hp)
     lines += _hud("👤", player.name, player.hp, player.stats.hp)
     lines.append("<b>📜 Histórico:</b>")
@@ -231,15 +230,16 @@ def render_prologue_outcome(view) -> Screen:
     name = escape(view.combat.fighters["player"].name)
     if view.combat.result == "victory":
         text = (
-            "<b>🏆 Vitória</b>\n\n"
+            "<b>🔥 O Caminho Está Livre</b>\n\n"
             "<i>O último golpe derruba a criatura. Por alguns instantes, só o vento volta a "
             "ocupar a estrada.\n\n"
             f"A experiência adquirida no confronto fortalece {name}, enquanto mais adiante "
-            "uma pequena chama permanece acesa entre as ruínas.</i>"
+            "uma pequena chama permanece acesa entre as ruínas.</i>\n\n"
+            + "\n".join(VICTORY_REWARD_LINES)
         )
     else:
         text = (
-            "<b>🩸 Derrota</b>\n\n"
+            "<b>🩸 O Caminho Interrompido</b>\n\n"
             f"<i>As forças abandonam {name}, e a estrada desaparece por alguns instantes "
             "atrás da fuligem.\n\n"
             "Quando a visão retorna, uma pequena chama permanece acesa entre as ruínas, "
@@ -248,17 +248,16 @@ def render_prologue_outcome(view) -> Screen:
     return Screen(text, "prologue", _column([("🔥 Seguir até a chama", FLAME_CALLBACK)]), "HTML")
 
 
-def render_brazier(name: str, max_hp: Decimal) -> Screen:
-    """First brazier. HP is shown restored: the rest on this screen is what refills it."""
+def render_brazier(name: str, hp: Decimal, max_hp: Decimal) -> Screen:
+    """First brazier. Shows the HP the character arrives with; resting is what refills it."""
     safe = escape(name)
     lines = [
         "<b>🔥 Braseiro da Estrada</b>",
         "",
         "<i>O fogo permanece aceso entre as pedras. O calor atravessa o corpo de "
-        f"{safe} e devolve as forças, deixando-o novamente pronto para seguir pela "
-        "estrada.</i>",
+        f"{safe}, enquanto a estrada permanece à frente, pronta para ser seguida.</i>",
         "",
-        *_hud("👤", name, max_hp, max_hp),
+        *_hud("👤", name, hp, max_hp),
     ]
     return Screen(
         "\n".join(lines).rstrip(),
@@ -270,7 +269,7 @@ def render_brazier(name: str, max_hp: Decimal) -> Screen:
 
 def render_prologue_ending(name: str) -> Screen:
     text = (
-        "<b>🔥 Fim do Prólogo</b>\n\n"
+        "<b>🏠 O Refúgio do Ocaso</b>\n\n"
         "<i>As chamas diminuem lentamente enquanto a estrada continua entre ruínas e campos "
         "de cinza. O primeiro trecho da jornada ficou para trás, mas o caminho adiante "
         "permanece aberto, levando para além da estrada que "

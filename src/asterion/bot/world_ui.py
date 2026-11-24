@@ -122,7 +122,7 @@ def render_world(view: WorldView) -> Screen:
     if view.kind == "brazier":
         from asterion.bot.prologue_ui import render_brazier
 
-        return render_brazier(view.name, view.max_hp)
+        return render_brazier(view.name, view.hp, view.max_hp)
     class_label = CLASS_LABELS.get(view.character_class, view.character_class)
     path_label = PATH_LABELS.get(view.selected_path or "", "Caminho")
     legacy_label = LEGACY_LABELS.get(view.legacy_level, "Legado")

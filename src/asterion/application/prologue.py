@@ -49,6 +49,10 @@ from asterion.infrastructure.db.models import (
 
 PURSE_SOURCE = "prologue.destrocos.bolsa"
 PURSE_CROWNS = 18
+PURSE_MATERIAL = "material.tdo.residuo_ocaso"
+PURSE_MATERIAL_QUANTITY = 1
+VICTORY_SOURCE = "prologue.primeiro_confronto.vitoria"
+VICTORY_CROWNS = 3
 
 
 @dataclass(frozen=True)
@@ -97,9 +101,17 @@ class PrologueService:
         sessions: async_sessionmaker[AsyncSession],
         server_id: str,
         profile: PrologueProfile,
+        road=None,
     ):
         if not server_id or len(server_id) > 64:
             raise ValueError("A trusted server id is required")
+        if road is None:
+            # Local import: RoadService pulls in the whole road/group stack.
+            from asterion.application.road import RoadService
+
+            road = RoadService(sessions, server_id)
+        # Materials go through the shared Inventory/Pending policy of RoadService.
+        self.road = road
         self.sessions = sessions
         self.server_id = server_id
         self.profile = profile
@@ -129,19 +141,69 @@ class PrologueService:
             )
             if character is None or character.stage != PROLOGUE:
                 return False
-            claimed = await session.scalar(
-                pg_insert(RewardEvent)
-                .values(character_id=character.id, source_id=PURSE_SOURCE)
-                .on_conflict_do_nothing(index_elements=["character_id", "source_id"])
-                .returning(RewardEvent.id)
-            )
+            claimed = await self._claim_reward_event(session, character, PURSE_SOURCE)
             if claimed is None:
                 return False
             session.add(
                 RewardComponent(reward_event_id=claimed, kind="crowns", quantity=PURSE_CROWNS)
             )
             character.crowns += PURSE_CROWNS
+            await self._add_material_reward(
+                session,
+                character,
+                claimed,
+                PURSE_SOURCE,
+                PURSE_MATERIAL,
+                PURSE_MATERIAL_QUANTITY,
+            )
             return True
+
+    @staticmethod
+    async def _claim_reward_event(session: AsyncSession, character: Character, source_id: str):
+        """One RewardEvent per (character, source): None when this source was already paid."""
+        return await session.scalar(
+            pg_insert(RewardEvent)
+            .values(character_id=character.id, source_id=source_id)
+            .on_conflict_do_nothing(index_elements=["character_id", "source_id"])
+            .returning(RewardEvent.id)
+        )
+
+    async def _add_material_reward(
+        self,
+        session: AsyncSession,
+        character: Character,
+        reward_event_id,
+        source_id: str,
+        material_id: str,
+        quantity: int,
+    ) -> None:
+        session.add(
+            RewardComponent(
+                reward_event_id=reward_event_id,
+                kind="material",
+                item_id=material_id,
+                quantity=quantity,
+                payload={"material_id": material_id, "bound": True},
+            )
+        )
+        await self.road.deliver_material(
+            session,
+            character,
+            material_id,
+            quantity,
+            f"{source_id}:material:{material_id}",
+            bound=True,
+        )
+
+    async def _grant_victory_crowns(self, session: AsyncSession, character: Character) -> None:
+        """Victory Coroas, once per character (same RewardEvent guard as the purse)."""
+        claimed = await self._claim_reward_event(session, character, VICTORY_SOURCE)
+        if claimed is None:
+            return
+        session.add(
+            RewardComponent(reward_event_id=claimed, kind="crowns", quantity=VICTORY_CROWNS)
+        )
+        character.crowns += VICTORY_CROWNS
 
     async def _command(
         self,
@@ -225,6 +287,7 @@ class PrologueService:
             character.hp = updated.fighters["player"].hp
             if updated.result == "victory":
                 await repo.grant(character, activity, REWARD_XP)
+                await self._grant_victory_crowns(session, character)
                 await self._complete_prologue_after_combat(session, character, activity)
             elif updated.result == "defeat":
                 await self._complete_prologue_after_combat(session, character, activity)
