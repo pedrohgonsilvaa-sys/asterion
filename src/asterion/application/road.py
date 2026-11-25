@@ -25,6 +25,7 @@ from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     reconcile_character_hp,
 )
+from asterion.application.flagelo_contributions import record_contribution
 from asterion.application.guild_works import character_work_levels
 from asterion.application.inventory_capacity import (
     inventory_capacity,
@@ -2895,6 +2896,14 @@ class RoadService:
         event = RewardEvent(character_id=c.id, source_id=f"activity:{activity.id}")
         s.add(event)
         await s.flush()
+        # O Despertar dos Flagelos §4.2: Caçada +1; em Grupo, +1 por participante (cada
+        # membro liquida a própria atividade). Uma vez por atividade, na Região atual.
+        await record_contribution(
+            s,
+            c,
+            "group_hunt" if activity.content_id == GROUP_HUNT_CONTENT else "hunt",
+            f"activity:{activity.id}",
+        )
         enough = c.vigor >= 2
         factor = Decimal(1) if enough else Decimal("0.25")
         xp = enemy_xp(
@@ -3157,6 +3166,8 @@ class RoadService:
     async def _settle_exploration(self, s, c, attempt):
         if (attempt.progress or {}).get("settled"):
             return
+        # O Despertar dos Flagelos §4.2: Desbravar concluído +1, uma vez por tentativa.
+        await record_contribution(s, c, "desbravar", f"desbravar:{attempt.id}")
         await reconcile_character_vigor(s, c)
         if is_chronicle_result(attempt.result_id):
             await settle_desbravar(s, c, attempt, datetime.now(UTC))

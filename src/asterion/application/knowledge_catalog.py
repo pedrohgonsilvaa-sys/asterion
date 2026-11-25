@@ -7,6 +7,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from asterion.domain import chronicle_codex
+from asterion.domain.flagelos import FRAGMENT_NAMES as FLAGELO_FRAGMENT_NAMES
+from asterion.domain.flagelos import REGIONS as FLAGELO_REGIONS
 from asterion.domain.veu_bestiary import VEU_CREATURES
 
 CODEX_CATEGORY_ORDER = (
@@ -1791,6 +1793,8 @@ MATERIAL_LABELS = {
     "material.special.confins.core.arquivo_retorno": "Núcleo do Arquivo do Retorno",
     "material.special.confins.core.camara_contradicoes": "Núcleo da Câmara das Contradições",
 }
+# O Despertar dos Flagelos: material associado no Bestiário (nome da especificação).
+MATERIAL_LABELS.update(FLAGELO_FRAGMENT_NAMES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -2084,6 +2088,14 @@ CREATURE_PRESENTATION.update(
     {
         creature.bestiary_key: CreaturePresentation(VEU_BESTIARY_GROUP, ())
         for creature in VEU_CREATURES
+    }
+)
+# O Despertar dos Flagelos: cada Flagelo fica no Bestiário da própria Região. Sem habitat
+# (aparece pelo evento, não por Local) e sem texto narrativo até o autor fornecê-lo.
+CREATURE_PRESENTATION.update(
+    {
+        region.flagelo.bestiary_key: CreaturePresentation(region.region_id, ())
+        for region in FLAGELO_REGIONS
     }
 )
 CREATURE_NOTES = {
