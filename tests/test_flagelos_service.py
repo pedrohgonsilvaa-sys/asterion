@@ -454,10 +454,10 @@ async def test_death_resets_bar_settles_once_and_spawns_the_next_region(database
         )
 
 
-async def _eligible_kill(database, damage=60_000):
+async def _eligible_kill(database, damage=60_000, *, service=None, players=None):
     """Elegível = dano (ataque) + cura (Arte de cura) + prevenção (Defender atingido)."""
-    service = FlageloService(database[1], SERVER, FakeSimulator(damage=1))
-    players = await _characters(database, 3)
+    service = service or FlageloService(database[1], SERVER, FakeSimulator(damage=1))
+    players = players or await _characters(database, 3)
     event = await _spawn(database, service)
     for actor, _ in players:
         await service.enter(actor, now=T0)
