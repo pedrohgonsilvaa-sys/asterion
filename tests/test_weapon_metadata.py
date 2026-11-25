@@ -248,8 +248,9 @@ def test_canonical_registry_matches_all_22_contract_rows():
     expected_ids = tuple(row[0] for row in expected_rows)
     canonical_row_ids = tuple(row[0] for row in _CANONICAL_WEAPON_ROWS)
     assert len(canonical_row_ids) == len(set(canonical_row_ids))
-    # The 24 contract rows come first; the v1.0.0 base catalog (20 rows) follows.
-    assert len(WEAPON_DEFINITIONS) == len(canonical_row_ids) + 20
+    # The 24 contract rows come first; the v1.0.0 base catalog (20 rows) follows, then the
+    # 18 weapons of O Despertar dos Flagelos (espec. final §10).
+    assert len(WEAPON_DEFINITIONS) == len(canonical_row_ids) + 20 + 18
     assert canonical_row_ids == expected_ids
     assert tuple(WEAPON_DEFINITIONS)[: len(expected_ids)] == expected_ids
     assert {
