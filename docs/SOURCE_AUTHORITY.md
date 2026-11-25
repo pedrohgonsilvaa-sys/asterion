@@ -144,6 +144,8 @@ Também por decisão do autor (2026-11-25): IA simples e determinística (Prepar
 
 **Núcleo das Receitas lendárias (decisão do autor, 2026-11-25):** o §14 da especificação final foi corrigido em `c163d05` para refletir esta decisão (a versão anterior, com Núcleo próprio do Flagelo, está superada). Não existe "Núcleo do Flagelo". As Receitas lendárias usam o Núcleo de Masmorra já existente da 2ª Masmorra da Região (Galerias do Vigia, Nó Antigo, Observatório Afundado, Cisterna de Transferência, Bastilha Profunda, Câmara das Contradições), na quantidade 1 × SW; Núcleos de Chefe de Campanha não entram. Detalhe na decisão #48 de `docs/specs/ASTERION_DESPERTAR_DOS_FLAGELOS_DECISOES_TECNICAS.md`.
 
+**Fechamentos da V1 (decisão do autor, 2026-11-25):** (1) **Bind:** os 54 equipamentos regionais do Flagelo são **Vinculados ao Adquirir**, pelo mecanismo global de Bind (sem sistema paralelo); (2) **Outros PvE equivalentes:** na V1 não existem; a contribuição é exatamente Caçada +1, Caçada em Grupo +1 por participante elegível, Desbravar +1, Contrato Regional +2, Missão Regional +4 e Masmorra +6, e nenhuma outra atividade concede pontos; (3) **Balanceamento:** kits e atributos baseline dos seis Flagelos permanecem como estão; a medição determinística sobre o motor real está em `docs/balance/FLAGELOS_BALANCEAMENTO_V1.md` (sem buff/nerf automático). Detalhe nas decisões #39, #50 e #51 de `docs/specs/ASTERION_DESPERTAR_DOS_FLAGELOS_DECISOES_TECNICAS.md`. A especificação final não foi editada (o SHA-256 acima continua válido).
+
 **Pendente:** imagens dos seis Flagelos (a cargo do autor).
 
 ## Fontes regionais vigentes

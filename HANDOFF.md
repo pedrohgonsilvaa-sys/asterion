@@ -1822,7 +1822,8 @@ Exceção autoral ao GDD §21/§49.15 (`SOURCE_AUTHORITY.md`); decisões A/B/C e
 - Regras puras em `domain/flagelos.py` (6 Regiões/Flagelos, kits, escalonamento, IA, participação, ranking, prêmio, `PENDING`). Serviço em `application/flagelos.py`; combate em `application/flagelo_combat.py` sobre o simulador/lote do Véu; contribuições em `application/flagelo_contributions.py` (ganchos em Caçada/Grupo, Desbravar, Contrato, Masmorra; Missão por ouvinte `after_flush` em `Quest`).
 - Job `flagelo-upkeep` (2 s) em `bot/round_scheduler.py`; telas `flg:*` em `bot/flagelo_ui.py`/`bot/flagelo_handlers.py`; entrada pela tela de Eventos; aviso na comunidade pelo Outbox (`flagelo.community_notice`, `ASTERION_COMMUNITY_EVENTS_TOPIC_ID` opcional).
 - Especificação final (`docs/specs/ASTERION_O_DESPERTAR_DOS_FLAGELOS_ESPEC_FINAL.md`): catálogo dos 54 equipamentos/Receitas em `domain/flagelo_catalog.py` (Receitas no Crafting global; Lendárias usam o Núcleo da 2ª Masmorra da Região × SW, decisão #48; armas no registro de Weapon Metadata); textos de Bestiário/Códice em `domain/flagelo_lore.py`; lock da Configuração no guarda global (`in_combat`); esquiva global opcional no lote (`resolve_batch(evasion_seed=...)`); barra da Região no HUD do Refúgio.
-- Pendente do autor: imagens e balanceamento.
+- Fechamentos da V1 (2026-11-25): Bind **Vinculado ao Adquirir** nos 54 equipamentos (`CraftingService._result_bound`; `tests/test_flagelos_bind.py`); sem "outro PvE equivalente" (`tests/test_flagelos_scope.py`: só Caçada, Grupo, Desbravar, Contrato, Missão e Masmorra pontuam); suíte de balanceamento determinística em `tests/flagelo_balance.py` + `tests/test_flagelos_balance.py`, relatório em `docs/balance/FLAGELOS_BALANCEAMENTO_V1.md` (`ASTERION_BALANCE_REPORT=<arquivo>` regrava). Kits e baseline intactos.
+- Pendente do autor: imagens e decisão sobre os números de balanceamento (a medição existe; nenhum buff/nerf aplicado).
 
 ## 9. Próximos passos recomendados
 
