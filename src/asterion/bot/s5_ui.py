@@ -75,7 +75,7 @@ def render_s5_detail(view: S5View) -> Screen:
         f"🎯 Objetivo · {_objective(view)}\n📍 {view.location or 'Terras do Ocaso'}",
         "s5",
         _keyboard([
-            [_button("Deixar de Acompanhar" if view.tracked else "Acompanhar", f"s5:{view.state_version}:track")],
+            [_button("🚫 Deixar de acompanhar" if view.tracked else "👁️ Acompanhar missão", f"s5:{view.state_version}:track")],
             [_button("Ver Objetivo", "s5:resume")],
             [_button("Abandonar Missão", "s5:abandon")],
             [_button("← Missões", "world:missions")],

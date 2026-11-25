@@ -62,7 +62,7 @@ def test_scene_flow_targets_exist_and_combat_starts_directly():
     targets = {t for *_rest, buttons in SCENES.values() for _l, t in buttons}
     assert targets - {COMBAT_ENTRY} <= set(SCENES)
     cinzas = [b.text for row in render_scene("cinzas").keyboard.inline_keyboard for b in row]
-    assert cinzas == ["🦶 Seguir os rastros", "🔎 Examinar a estrada", "👂 Ouvir o silêncio"]
+    assert cinzas == ["🦶 Seguir", "🔎 Examinar", "👂 Ouvir"]
     callbacks = {
         b.callback_data for row in render_scene("pedras").keyboard.inline_keyboard for b in row
     }
@@ -72,9 +72,9 @@ def test_scene_flow_targets_exist_and_combat_starts_directly():
 
 
 def test_purse_line_only_shows_when_really_credited():
-    assert "🪙 18 Coroas" not in render_scene("destrocos").text
+    assert "18 Coroas" not in render_scene("destrocos").text
     shown = render_scene("destrocos", show_objects=True).text
-    assert "🪙 18 Coroas" in shown and "Bandagem" not in shown
+    assert "🪙 <code>18 Coroas</code>" in shown and "Bandagem" not in shown
     assert "Bandagem" not in "".join(render_scene(n, show_objects=True).text for n in SCENES)
 
 
@@ -94,15 +94,15 @@ def test_first_turn_hud_has_no_level_and_one_narrative_line(enemy_id, emoji, ene
     max_hp = view.combat.fighters["player"].stats.hp
     assert screen.text.startswith("<b>⚔️ O Primeiro Confronto</b>")
     assert f"{emoji} <b>{enemy_name}</b>" in screen.text
-    assert f"👤 <b>{NAME}</b>" in screen.text
+    assert f"🏹 <b>{NAME}</b>" in screen.text
     assert f"❤️ <code>{max_hp:.0f} / {max_hp:.0f}</code>" in screen.text
-    assert "🟩" * 9 in screen.text and "🟩" * 10 not in screen.text
+    assert "🟩" * 10 in screen.text
     assert "Nv." not in screen.text and "Nível" not in screen.text
-    assert "<code>🌐 Turno 1 · ⏱️ 00:10</code>" in screen.text
-    assert "<b>📜 Histórico:</b>\n<i>" in screen.text
-    narrative = re.findall(r"<i>(.+?)</i>", screen.text)
-    assert len(narrative) == 1 and narrative[0].startswith(emoji)
-    assert re.fullmatch(r"(Atacar|Defender)", screen.keyboard.inline_keyboard[0][0].text)
+    assert "🌐 <b>Turno 1</b> · ⏱️ <code>10s</code>" in screen.text
+    # Bloco UI 1 §7: the history is plain text, never italic.
+    assert f"<b>📜 Histórico:</b>\n{emoji} " in screen.text
+    assert "<i>" not in screen.text
+    assert re.fullmatch(r"(⚔️ Atacar|🛡️ Defender)", screen.keyboard.inline_keyboard[0][0].text)
 
 
 @pytest.mark.parametrize(("enemy_id", "emoji", "enemy_name"), ENEMIES)
@@ -113,13 +113,14 @@ def test_later_turns_show_mechanical_history_without_the_appearance_line(
     combat = act(view.combat, "attack")
     screen = render_combat(CombatView(*(view.activity_id, view.encounter_id, view.character_id,
                                         combat, view.stage, 0)))
-    assert "<code>🌐 Turno 2 · ⏱️ 00:10</code>" in screen.text
+    assert "🌐 <b>Turno 2</b> · ⏱️ <code>10s</code>" in screen.text
     assert "<b>📜 Histórico:</b>\n⚔️" in screen.text
     assert "<i>" not in screen.text
-    assert re.search(rf"⚔️ {NAME} causou \d+ de dano\.", screen.text)
-    assert re.search(rf"{emoji} {enemy_name} causou \d+ de dano\.", screen.text) or (
-        f"💨 {NAME} esquivou" in screen.text
-    )
+    hit = rf"⚔️ O golpe atinge o {enemy_name} e causa <b>\d+ de dano</b>\."
+    assert re.search(hit, screen.text)
+    bite = rf"{emoji} O {enemy_name} ataca e causa <b>\d+ de dano</b>\."
+    assert re.search(bite, screen.text) or "💨 O ataque do" in screen.text
+    assert f"{NAME} causou" not in screen.text
     assert "O som" not in screen.text and "Eltharin" not in screen.text
 
 
@@ -128,8 +129,9 @@ def test_art_use_is_named_in_history():
     combat = act(act(act(view.combat, "attack"), "defend"), "art")
     screen = render_combat(CombatView(view.activity_id, view.encounter_id, view.character_id,
                                       combat, view.stage, 0))
-    assert re.search(rf"✨ {NAME} usou Disparo Preciso e causou \d+ de dano\.", screen.text)
-    assert f"🛡️ {NAME} usou Defender." in screen.text or "Histórico" in screen.text
+    art = r"🏹 Disparo Preciso atinge o Cão Cinéreo e causa <b>\d+ de dano</b>\."
+    assert re.search(art, screen.text)
+    assert "🛡️ Defender foi usado." in screen.text or "Histórico" in screen.text
 
 
 @pytest.mark.parametrize(("enemy_id", "_emoji", "_name"), ENEMIES)
@@ -153,7 +155,7 @@ def finish(enemy_id: str, result: str) -> CombatView:
 @pytest.mark.parametrize("name", [NAME, "Luiken"])
 def test_outcome_brazier_and_ending_use_the_persisted_name(name):
     hp = Decimal(100)
-    outcomes = (("victory", "🔥 O Caminho Está Livre"), ("defeat", "🩸 O Caminho Interrompido"))
+    outcomes = (("victory", "🏆 O Caminho Está Livre"), ("defeat", "🩸 O Caminho Interrompido"))
     for result, title in outcomes:
         view = combat_view("dog_cinereo", name=name)
         from dataclasses import replace
@@ -161,13 +163,15 @@ def test_outcome_brazier_and_ending_use_the_persisted_name(name):
         done = CombatView(view.activity_id, view.encounter_id, view.character_id,
                           replace(view.combat, result=result), view.stage, 0)
         screen = render_combat(done)
-        assert f"<b>{title}</b>" in screen.text and name in screen.text
+        # Bloco UI 1 §8 item 2: the outcome narrative does not name the character.
+        assert f"<b>{title}</b>" in screen.text and name not in screen.text
         assert [b.text for row in screen.keyboard.inline_keyboard for b in row] == [
             "🔥 Seguir até a chama"
         ]
         assert "Eltharin" not in screen.text
     brazier = render_brazier(name, hp, hp)
     assert "<b>🔥 Braseiro da Estrada</b>" in brazier.text and name in brazier.text
+    assert name not in brazier.text.split("\n\n")[1]
     assert [b.text for row in brazier.keyboard.inline_keyboard for b in row] == ["🔥 Descansar"]
     assert "🟩" * 9 in brazier.text
     ending = render_prologue_ending(name)
@@ -294,14 +298,14 @@ def test_timer_shows_in_hud_monospaced_and_counts_down(clock):
     view = combat_view("corvo_fuligem")
     clock.advance(3)
     text = render_combat(view).text
-    assert "<code>🌐 Turno 1 · ⏱️ 00:07</code>" in text
+    assert "🌐 <b>Turno 1</b> · ⏱️ <code>7s</code>" in text
     clock.advance(20)
-    assert "<code>🌐 Turno 1 · ⏱️ 00:00</code>" in render_combat(view).text
+    assert "🌐 <b>Turno 1</b> · ⏱️ <code>0s</code>" in render_combat(view).text
 
 
 def test_history_sits_right_under_its_heading_without_blank_line():
     text = render_combat(combat_view("corvo_fuligem")).text
-    assert "<b>📜 Histórico:</b>\n<i>🐦 O som das asas corta a fuligem." in text
+    assert "<b>📜 Histórico:</b>\n🐦 O som das asas corta a fuligem." in text
     assert "<b>📜 Histórico:</b>\n\n" not in text
     assert "❤️ <code>" in text and "<b>Corvo de Fuligem</b>" in text and f"<b>{NAME}</b>" in text
 

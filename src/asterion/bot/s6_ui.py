@@ -153,7 +153,7 @@ def render_s6(view: S6View) -> Screen:
     if view.status != "active" or view.kind == "combat":
         return screen
     rows = list(screen.keyboard.inline_keyboard) if screen.keyboard else []
-    tracking_label = "Parar acompanhamento" if view.tracked else "Acompanhar missão"
+    tracking_label = "🚫 Deixar de acompanhar" if view.tracked else "👁️ Acompanhar missão"
     rows.append([_b(tracking_label, f"s6:{view.state_version}:track")])
     rows.append([_b("Abandonar missão", f"s6:{view.state_version}:abandon")])
     return Screen(

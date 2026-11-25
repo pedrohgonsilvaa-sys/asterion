@@ -88,18 +88,17 @@ async def test_oren_and_missions_expose_s4_and_s5_together_without_accepting(dat
         ) is None
 
     await dispatcher.feed_raw_update(
-        bot, callback_update("world:missions", update_id=998623, actor=actor)
+        bot, callback_update("world:missions:side", update_id=998623, actor=actor)
     )
     missions = _last_method(bot)
-    assert "Vigília sem Voz · Disponível" in missions.text
-    assert "A Luz que Não Aquece · Disponível" in missions.text
+    assert "Missões Secundárias" in missions.text
     mission_buttons = {
         button.callback_data: button.text
         for row in missions.reply_markup.inline_keyboard
         for button in row
     }
-    assert mission_buttons["s4:offer"] == "1"
-    assert mission_buttons["s5:offer"] == "2"
+    assert mission_buttons["s4:offer"] == "📜 Vigília sem Voz"
+    assert mission_buttons["s5:offer"] == "📜 A Luz que Não Aquece"
 
     for mission, update_id in (("s4", 998627), ("s5", 998629)):
         await dispatcher.feed_raw_update(

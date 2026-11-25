@@ -420,7 +420,7 @@ async def test_dispatch_start_menu_stale_callback_and_reconnect_keep_same_attemp
     attack = next(
         button
         for button in _buttons(initial_screen)
-        if button.text == "Atacar"
+        if button.text == "⚔️ Atacar"
     )
     stale = ClassTrialActionCallback.unpack(attack.callback_data)
     assert stale.attempt_id == attempt_id

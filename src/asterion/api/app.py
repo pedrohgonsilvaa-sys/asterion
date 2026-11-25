@@ -94,6 +94,9 @@ async def telegram_webhook(
     if x_telegram_bot_api_secret_token != settings.telegram_webhook_secret:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
+    from asterion.bot import combat_timer
+
+    combat_timer.enable()
     runtime = get_bot_runtime()
     update = await request.json()
     await runtime.dispatcher.feed_raw_update(runtime.bot, update)

@@ -124,14 +124,14 @@ async def test_p2_callbacks_run_mission_and_route_combat_hud(database, monkeypat
     assert stale_ash.encounter_id == current.encounter_id
     assert stale_ash.combat_id == current.combat_id
     hud = render_p2(current)
-    assert "📜 Registro de Combate · Recentes" in hud.text
+    assert "<b>📜 Histórico:</b>" in hud.text
     assert "Aranha de Cinza" in hud.text
     assert "Enfrentar" not in hud.text
     defense = next(
         button
         for row in hud.keyboard.inline_keyboard
         for button in row
-        if button.text == "Defender"
+        if button.text == "🛡️ Defender"
     )
     combat_callback = P2CombatCallback.unpack(defense.callback_data)
     assert combat_callback.activity_id == current.activity_id
@@ -165,7 +165,7 @@ async def test_p2_callbacks_run_mission_and_route_combat_hud(database, monkeypat
         button
         for row in render_p2(latest).keyboard.inline_keyboard
         for button in row
-        if button.text == "Atacar"
+        if button.text == "⚔️ Atacar"
     )
     await dispatcher.feed_raw_update(
         bot, callback_update(attack.callback_data, update_id=984011, actor=actor)
@@ -329,7 +329,7 @@ async def test_p2_defeat_retry_ui_keeps_consumable_stock_and_resets_only_encount
         button.callback_data
         for row in render_p2(used).keyboard.inline_keyboard
         for button in row
-        if button.text == "Atacar"
+        if button.text == "⚔️ Atacar"
     )
     await dispatcher.feed_raw_update(
         bot, callback_update(attack, update_id=984033, actor=actor)
@@ -523,9 +523,10 @@ async def test_menu_start_and_missions_reconstruct_p2_without_exposing_normal_ch
 
     await dispatcher.feed_raw_update(
         bot,
-        callback_update("world:missions", update_id=984042, actor=actor),
+        callback_update("world:missions:main", update_id=984042, actor=actor),
     )
-    assert "Fuligem sem Fogo · Em Andamento" in _last_method(bot).text
+    principal = _last_method(bot).reply_markup.inline_keyboard
+    assert "📖 Fuligem sem Fogo" in [b.text for row in principal for b in row]
     await dispatcher.feed_raw_update(
         bot,
         callback_update("world:principal", update_id=984043, actor=actor),
@@ -555,11 +556,11 @@ async def test_menu_during_active_p2_combat_reconstructs_same_foreground(databas
     )
 
     menu_method = _last_method(bot)
-    assert "📜 Registro de Combate · Recentes" in menu_method.text
+    assert "<b>📜 Histórico:</b>" in menu_method.text
     assert "Aranha de Cinza" in menu_method.text
     assert "Examinar Pontos de Fuligem" not in menu_method.text
     assert any(
-        button.text == "Atacar"
+        button.text == "⚔️ Atacar"
         for row in menu_method.reply_markup.inline_keyboard
         for button in row
     )
@@ -687,7 +688,7 @@ async def test_start_restores_same_p2_combat_and_does_not_reopen_completed_p2(
         bot, message_update("/start", update_id=984061, actor=actor)
     )
     restored = _last_method(bot)
-    assert "Registro de Combate · Recentes" in restored.text
+    assert "📜 Histórico:" in restored.text
     current = await p2_service.resume(actor)
     assert current is not None and current.activity_id == active.activity_id
     assert current.encounter_id == active.encounter_id
@@ -734,7 +735,7 @@ async def test_start_reconstructs_every_active_p2_narrative_state(database, monk
     states = (
         ("travel", "Viajar até a Charneca da Fuligem"),
         ("ash", "Examinar Pontos de Fuligem · 1/3"),
-        ("combat", "Registro de Combate · Recentes"),
+        ("combat", "📜 Histórico:"),
         ("recovery", "💀 Derrota"),
         ("stone", "Examinar a Pedra Marcada"),
         ("oren", "Entregar o registro da Pedra Marcada"),

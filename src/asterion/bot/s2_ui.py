@@ -277,7 +277,7 @@ def render_s2(view: S2View) -> Screen:
         [
             [
                 _button(
-                    "Deixar de Acompanhar" if view.tracked else "Acompanhar",
+                    "🚫 Deixar de acompanhar" if view.tracked else "👁️ Acompanhar missão",
                     f"s2:{version}:track",
                 )
             ],

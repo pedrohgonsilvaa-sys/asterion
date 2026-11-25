@@ -152,7 +152,7 @@ async def test_p3_combat_callback_start_and_menu_reconnect_same_activity(databas
         button
         for row in screen.keyboard.inline_keyboard
         for button in row
-        if button.text == "Atacar"
+        if button.text == "⚔️ Atacar"
     )
     assert attack.callback_data.startswith("p3fight:")
     callback = P3CombatCallback.unpack(attack.callback_data)
@@ -335,10 +335,12 @@ async def test_bosque_map_does_not_auto_open_p3_and_mission_remains_reachable(da
         for button in row
     ]
     await dispatcher.feed_raw_update(
-        bot, callback_update("world:missions", update_id=998338, actor=actor)
+        bot, callback_update("world:missions:main", update_id=998338, actor=actor)
     )
     missions = _last_method(bot)
-    assert "Sob Galhos Calcinados · Em Andamento" in missions.text
+    assert "📖 Sob Galhos Calcinados" in [
+        b.text for row in missions.reply_markup.inline_keyboard for b in row
+    ]
     await dispatcher.feed_raw_update(
         bot, callback_update("world:principal", update_id=998339, actor=actor)
     )

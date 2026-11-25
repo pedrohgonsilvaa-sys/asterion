@@ -69,7 +69,7 @@ def _objective(view: S3View) -> str:
 
 def render_s3_detail(view: S3View) -> Screen:
     track = _button(
-        "Deixar de Acompanhar" if view.tracked else "Acompanhar",
+        "🚫 Deixar de acompanhar" if view.tracked else "👁️ Acompanhar missão",
         f"s3:{view.state_version}:track",
     )
     return Screen(

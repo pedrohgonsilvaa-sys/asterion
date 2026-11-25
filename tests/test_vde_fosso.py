@@ -433,7 +433,7 @@ def test_known_dungeon_list_displays_the_vde_fosso_and_family_callback():
         known_dungeons=((FOSSO_FAMILY_ID, "Fosso das Raízes", "Nv.14–17", MATA, VDE_REGION),),
     )
     screen = render_dungeons(view)
-    assert "Vales dos Enforcados · Mata Suspensa" in screen.text
+    assert "Fosso das Raízes" in screen.keyboard.inline_keyboard[0][0].text
     assert screen.keyboard.inline_keyboard[0][0].callback_data == "dungeon:fosso"
 
 

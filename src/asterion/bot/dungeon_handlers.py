@@ -6,9 +6,15 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
 from asterion.application.dungeons import DungeonService
+from asterion.bot.asset_catalog import with_dungeon_art
 from asterion.bot.combat_ui import DungeonCombatCallback, class_trial_action_ids
 from asterion.bot.creation_handlers import present
-from asterion.bot.dungeon_ui import render_dungeon_targets, render_dungeons
+from asterion.bot.dungeon_ui import (
+    FAMILY_BY_KEY,
+    render_dungeon_difficulty,
+    render_dungeon_targets,
+    render_dungeons,
+)
 from asterion.domain.combat import action_target_ids
 
 
@@ -109,6 +115,21 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
                 query.from_user.id, "dungeon.confins.camara_contradicoes"
             ),
         )
+
+    @router.callback_query(F.data.regexp(r"^dungeon:d:[a-z]:[sfr]$"))
+    async def difficulty_detail(query: CallbackQuery):
+        """Detalhes de uma dificuldade (Bloco UI 1 §5) antes de Iniciar Masmorra."""
+        _, _, key, suffix = (query.data or "").split(":")
+        family = FAMILY_BY_KEY.get(key)
+        view = await service.detail(query.from_user.id, family) if family else None
+        await query.answer()
+        if view is not None and isinstance(query.message, Message):
+            await present(
+                query.message,
+                with_dungeon_art(render_dungeon_difficulty(view, suffix), view.family_id),
+                images,
+                edit=True,
+            )
 
     @router.callback_query(F.data.startswith("dungeon:group:"))
     async def prepare_group(query: CallbackQuery):

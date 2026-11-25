@@ -59,7 +59,7 @@ def test_s1_initial_detail_and_tracking_labels_are_official():
     assert "🕯️ Luzes sob as Cinzas · Em Andamento" in screen.text
     assert "🎯 Pontos Marcados · 0/3" in screen.text
     assert labels(screen) == [
-        "Acompanhar",
+        "👁️ Acompanhar missão",
         "Ver Objetivo",
         "Ver no Mapa",
         "Abandonar Missão",
@@ -67,7 +67,7 @@ def test_s1_initial_detail_and_tracking_labels_are_official():
     ]
     tracked = render_s1(view(progress={"points": [1]}, tracked=True))
     assert "🎯 Pontos Marcados · 1/3" in tracked.text
-    assert "Deixar de Acompanhar" in labels(tracked)
+    assert "🚫 Deixar de acompanhar" in labels(tracked)
 
 
 def test_s1_point_shell_uses_numeric_buttons_only_for_pending_points():

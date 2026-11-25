@@ -299,7 +299,7 @@ async def test_telegram_adventure_local_hunt_and_map_callbacks_use_real_services
     assert "⚔️" in combat.text, start_hunt_results
     assert start_hunt_results == ["combat"]
     assert any(
-        button.text in {"Ataque Básico", "Defender"}
+        button.text in {"Ataque Básico", "🛡️ Defender", "⚔️ Atacar"}
         for row in combat.reply_markup.inline_keyboard
         for button in row
     )
