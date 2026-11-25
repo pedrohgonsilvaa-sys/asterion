@@ -12,127 +12,186 @@ from asterion.bot.combat_ui import (
     render_combat,
 )
 from asterion.bot.creation_ui import Screen
+from asterion.bot.ui_format import (
+    back,
+    blocks,
+    button,
+    column,
+    field,
+    narrative,
+    reward_html,
+    rewards,
+)
+from asterion.bot.ui_format import (
+    keyboard as _kb,
+)
 from asterion.domain.combat import action_target_ids
+from asterion.domain.dungeons import DIFFICULTIES
 
 
 def _button(label: str, callback: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=label, callback_data=callback)
 
 
+FAMILY_CALLBACKS = {
+    "dungeon.tdo.cripta_ocaso": "dungeon:crypt",
+    "dungeon.tdo.galerias_vigia": "dungeon:galleries",
+    "dungeon.vde.fosso_raizes": "dungeon:fosso",
+    "dungeon.vde.santuario_no_antigo": "dungeon:sanctuary",
+    "dungeon.nareth.galerias_meridiano": "dungeon:nareth-galleries",
+    "dungeon.nareth.observatorio_afundado": "dungeon:nareth-observatory",
+    "dungeon.varzeas.enfermaria_afundada": "dungeon:varzeas-infirmary",
+    "dungeon.varzeas.cisterna_transferencia": "dungeon:varzeas-cistern",
+    "dungeon.altos.pedreira_contrapeso": "dungeon:altos-pedreira",
+    "dungeon.altos.bastilha_profunda": "dungeon:altos-bastilha",
+    "dungeon.confins.arquivo_retorno": "dungeon:confins-arquivo",
+    "dungeon.confins.camara_contradicoes": "dungeon:confins-contradicoes",
+}
+FAMILY_KEYS = {
+    "dungeon.tdo.cripta_ocaso": "c",
+    "dungeon.tdo.galerias_vigia": "g",
+    "dungeon.vde.fosso_raizes": "f",
+    "dungeon.vde.santuario_no_antigo": "s",
+    "dungeon.nareth.galerias_meridiano": "n",
+    "dungeon.nareth.observatorio_afundado": "o",
+    "dungeon.varzeas.enfermaria_afundada": "i",
+    "dungeon.varzeas.cisterna_transferencia": "t",
+    "dungeon.altos.pedreira_contrapeso": "p",
+    "dungeon.altos.bastilha_profunda": "b",
+    "dungeon.confins.arquivo_retorno": "a",
+    "dungeon.confins.camara_contradicoes": "v",
+}
+FAMILY_BY_KEY = {key: family for family, key in FAMILY_KEYS.items()}
+FAMILY_EMOJI = {"dungeon.tdo.cripta_ocaso": "🏚️", "dungeon.tdo.galerias_vigia": "🏛️"}
+DIFFICULTY_BUTTONS = {
+    "s": ("stable", "🟢 Estável"),
+    "f": ("fractured", "🟠 Fraturada"),
+    "r": ("rupture", "🔴 Ruptura"),
+}
+# Toda Masmorra tem cinco encontros, o quinto é o Chefe (DungeonService, ordinal 5).
+DUNGEON_ENCOUNTERS = 5
+RUPTURE_LEVEL = 60
+ORDINAL_NAMES = {1: "Primeiro", 2: "Segundo", 3: "Terceiro", 4: "Quarto"}
+DUNGEONS_TEXT = (
+    "As masmorras conduzem a incursões estruturadas por diferentes encontros até um "
+    "confronto final. Cada incursão possui seus próprios perigos, duração, custo de Vigor "
+    "e regras de recuperação."
+)
+
+
+def _emoji(family_id: str) -> str:
+    return FAMILY_EMOJI.get(family_id, "🗝️")
+
+
+def _dungeon_title(view: DungeonView) -> str:
+    return f"{_emoji(view.family_id)} <b>{escape(view.dungeon_name)}</b>"
+
+
+def _gate_reason(view: DungeonView, suffix: str) -> str | None:
+    """None when the difficulty is open; otherwise the lock text the service implies."""
+    difficulty = DIFFICULTY_BUTTONS[suffix][0]
+    gate = dict(view.difficulty_gates).get(
+        difficulty, {"stable": "level", "fractured": "first_stable", "rupture": "level"}[
+            difficulty
+        ]
+    )
+    if gate == "available":
+        return None
+    if difficulty == "fractured":
+        return f"Requer Nv.{view.minimum_level}" if gate == "level" else "Concluir Estável"
+    if difficulty == "rupture":
+        return "Concluir Fraturada" if gate == "first_fractured" else f"Nv.{RUPTURE_LEVEL}"
+    return f"Requer Nv.{view.minimum_level}"
+
+
+def _notice(view: DungeonView) -> str | None:
+    if view.reason == "vigor":
+        return "🔒 Vigor · Insuficiente"
+    if view.reason == "foreground":
+        return "🔒 Atividade · Conclua o primeiro plano atual"
+    return None
+
+
+def render_dungeon_difficulty(view: DungeonView, suffix: str) -> Screen:
+    """Detalhes de uma dificuldade (Bloco UI 1 §5): Nível, Encontros e Vigor canônicos."""
+    key = FAMILY_KEYS.get(view.family_id)
+    if view.kind != "detail" or key is None or suffix not in DIFFICULTY_BUTTONS:
+        return _render_dungeons(view)
+    difficulty = DIFFICULTIES[DIFFICULTY_BUTTONS[suffix][0]]
+    level = RUPTURE_LEVEL if suffix == "r" else view.minimum_level
+    text = blocks(
+        _dungeon_title(view),
+        narrative(
+            f"Uma incursão pela {view.dungeon_name} avança por cinco encontros até "
+            "alcançar seu Chefe final."
+        ),
+        "\n".join(
+            (
+                field("⭐", "Nível", str(level)),
+                field("⚔️", "Encontros", str(DUNGEON_ENCOUNTERS)),
+                field("⚡", "Vigor", str(difficulty.vigor)),
+            )
+        ),
+        _notice(view),
+    )
+    locked = _gate_reason(view, suffix)
+    if locked is None:
+        rows = [
+            [button("🗝️ Iniciar Masmorra", f"dungeon:start:{key}:{suffix}")],
+            [
+                button("👥 Grupo", f"dungeon:group:{key}:{suffix}"),
+                button("🔎 Pareamento", f"dungeon:queue:{key}:{suffix}"),
+            ],
+        ]
+    else:
+        rows = [[button(f"🔒 {locked}", "dungeon:noop")]]
+    back_to = FAMILY_CALLBACKS.get(view.family_id, "dungeon:known")
+    return Screen(text, "dungeon_crypt", _kb(*rows, back(back_to)), "HTML")
+
+
 def _render_dungeons(view: DungeonView) -> Screen:
     if view.kind == "known":
-        rows = []
-        details = []
-        for family_id, name, level_range, location, region in view.known_dungeons:
-            callback = {
-                "dungeon.tdo.cripta_ocaso": "dungeon:crypt",
-                "dungeon.tdo.galerias_vigia": "dungeon:galleries",
-                "dungeon.vde.fosso_raizes": "dungeon:fosso",
-                "dungeon.vde.santuario_no_antigo": "dungeon:sanctuary",
-                "dungeon.nareth.galerias_meridiano": "dungeon:nareth-galleries",
-                "dungeon.nareth.observatorio_afundado": "dungeon:nareth-observatory",
-                "dungeon.varzeas.enfermaria_afundada": "dungeon:varzeas-infirmary",
-                "dungeon.varzeas.cisterna_transferencia": "dungeon:varzeas-cistern",
-                "dungeon.altos.pedreira_contrapeso": "dungeon:altos-pedreira",
-                "dungeon.altos.bastilha_profunda": "dungeon:altos-bastilha",
-                "dungeon.confins.arquivo_retorno": "dungeon:confins-arquivo",
-                "dungeon.confins.camara_contradicoes": "dungeon:confins-contradicoes",
-            }.get(family_id, "dungeon:known")
-            rows.append([_button(f"{name} · {level_range}", callback)])
-            details.append(f"{name} · {level_range}\n{region} · {location}")
-        text = "⛓️ Masmorras Conhecidas\n\n" + "\n\n".join(details)
-        rows.append([_button("← Aventura", "adv:hub")])
-        keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
-        return Screen(text, "dungeon_crypt", keyboard)
+        options = [
+            button(f"{_emoji(family_id)} {name}", FAMILY_CALLBACKS.get(family_id, "dungeon:known"))
+            for family_id, name, *_ in view.known_dungeons
+        ]
+        text = blocks("🗝️ <b>Masmorras</b>", narrative(DUNGEONS_TEXT))
+        return Screen(
+            text, "dungeon_crypt", _kb(*column(*options), back("menu:back")), "HTML"
+        )
     if view.kind in {"empty", "hidden"}:
         return Screen(
-            "⛓️ Masmorras Conhecidas\n\nNenhuma Masmorra conhecida.",
+            blocks("🗝️ <b>Masmorras</b>", "Nenhuma Masmorra conhecida."),
             "dungeon_crypt",
-            InlineKeyboardMarkup(inline_keyboard=[[_button("← Aventura", "adv:hub")]]),
+            _kb(back("menu:back")),
+            "HTML",
         )
     if view.kind == "detail":
-        text = (
-            f"⛓️ {view.dungeon_name} · {view.range_label}\n"
-            f"{view.region_display} · {view.entry_display}\n\n"
-            f"{escape(view.character_name)} · Nv.{view.level}\n"
-            f"❤️ HP · {view.hp} / {view.max_hp}\n"
-            f"⚡ Vigor · {view.vigor} / {view.max_vigor}"
-        )
-        if view.reason == "vigor":
-            text += "\n\n🔒 Vigor · Insuficiente"
-        elif view.reason == "foreground":
-            text += "\n\n🔒 Atividade · Conclua o primeiro plano atual"
-        stable_gate = dict(view.difficulty_gates).get("stable", "level")
-        fractured_gate = dict(view.difficulty_gates).get("fractured", "first_stable")
-        rupture_gate = dict(view.difficulty_gates).get("rupture", "level")
-        rows = []
-        family_key = {
-            "dungeon.tdo.cripta_ocaso": "c",
-            "dungeon.tdo.galerias_vigia": "g",
-            "dungeon.vde.fosso_raizes": "f",
-            "dungeon.vde.santuario_no_antigo": "s",
-            "dungeon.nareth.galerias_meridiano": "n",
-            "dungeon.nareth.observatorio_afundado": "o",
-            "dungeon.varzeas.enfermaria_afundada": "i",
-            "dungeon.varzeas.cisterna_transferencia": "t",
-            "dungeon.altos.pedreira_contrapeso": "p",
-            "dungeon.altos.bastilha_profunda": "b",
-            "dungeon.confins.arquivo_retorno": "a",
-            "dungeon.confins.camara_contradicoes": "v",
-        }.get(view.family_id)
-        if family_key is None:
+        key = FAMILY_KEYS.get(view.family_id)
+        if key is None:
             return Screen(
                 "⛓️ Masmorra indisponível\n\nEsta Masmorra não está disponível.",
                 "dungeon_crypt",
                 InlineKeyboardMarkup(
-                    inline_keyboard=[[_button("← Masmorras", "dungeon:known")]]
+                    inline_keyboard=[[_button("↩️ Voltar", "dungeon:known")]]
                 ),
             )
-        if stable_gate == "available":
-            rows.append(
-                [
-                    _button("🟢 Estável · Solo", f"dungeon:start:{family_key}:s"),
-                    _button("👥 Grupo", f"dungeon:group:{family_key}:s"),
-                    _button("🔎 Pareamento", f"dungeon:queue:{family_key}:s"),
-                ]
-            )
-        else:
-            rows.append(
-                [
-                    _button(
-                        f"🔒 Estável · Requer Nv.{view.minimum_level}", "dungeon:noop"
-                    )
-                ]
-            )
-        if fractured_gate == "available":
-            rows.append(
-                [
-                    _button("🟠 Fraturada · Solo", f"dungeon:start:{family_key}:f"),
-                    _button("👥 Grupo", f"dungeon:group:{family_key}:f"),
-                    _button("🔎 Pareamento", f"dungeon:queue:{family_key}:f"),
-                ]
-            )
-        else:
-            reason = (
-                f"Requer Nv.{view.minimum_level}"
-                if fractured_gate == "level"
-                else "Concluir Estável"
-            )
-            rows.append([_button(f"🔒 Fraturada · {reason}", "dungeon:noop")])
-        if rupture_gate == "available":
-            rows.append(
-                [
-                    _button("🔴 Ruptura · Solo", f"dungeon:start:{family_key}:r"),
-                    _button("👥 Grupo", f"dungeon:group:{family_key}:r"),
-                    _button("🔎 Pareamento", f"dungeon:queue:{family_key}:r"),
-                ]
-            )
-        elif rupture_gate == "first_fractured":
-            rows.append([_button("🔒 Ruptura · Concluir Fraturada", "dungeon:noop")])
-        else:
-            rows.append([_button("🔒 Ruptura · Nv.60", "dungeon:noop")])
-        rows.append([_button("← Masmorras", "dungeon:known")])
-        return Screen(text, "dungeon_crypt", InlineKeyboardMarkup(inline_keyboard=rows))
+        text = blocks(
+            _dungeon_title(view),
+            narrative(
+                f"Uma incursão pela {view.dungeon_name} avança por cinco encontros até "
+                "alcançar o confronto final. A dificuldade escolhida determina os perigos, o "
+                "custo de Vigor e as condições da incursão."
+            ),
+            _notice(view),
+        )
+        options = [
+            button(label, f"dungeon:d:{key}:{suffix}")
+            for suffix, (_, label) in DIFFICULTY_BUTTONS.items()
+        ]
+        return Screen(
+            text, "dungeon_crypt", _kb(*column(*options), back("dungeon:known")), "HTML"
+        )
     if view.kind == "invite":
         text = (
             f"👥 Convite de Masmorra\n{escape(view.dungeon_name)} · "
@@ -262,102 +321,111 @@ def _render_dungeons(view: DungeonView) -> Screen:
         )
     if view.kind == "combat" and view.combat is not None:
         return render_combat(view)
-    title = f"⛓️ {escape(view.dungeon_name)} · {escape(view.difficulty_label or '')}"
-    brazier_label = view.brazier_label
+    run = f"{view.run_id.hex}:{view.state_version}" if view.run_id is not None else ""
+    abandon = [_button("Abandonar Masmorra", f"dungeon:confirm:{run}")]
     if view.kind == "brazier":
-        text = (
-            f"{title}\n\n🔥 {brazier_label}\n"
-            "Uma pausa segura marca o início do próximo trecho."
+        text = blocks(
+            "🔥 <b>Braseiro da Masmorra</b>",
+            narrative(
+                "O fogo permanece aceso entre as pedras e oferece um ponto seguro dentro da "
+                "incursão."
+            ),
         )
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    _button(
-                        "🔥 Ativar Braseiro", f"dungeon:b:{view.run_id.hex}:{view.state_version}"
-                    )
-                ],
-                [_button("← Masmorras", "dungeon:known")],
-            ]
+        return Screen(
+            text,
+            "dungeon_crypt",
+            _kb([button("🔥 Descansar", f"dungeon:b:{run}")], back("dungeon:known")),
+            "HTML",
         )
-        return Screen(text, "dungeon_crypt", keyboard)
     if view.kind == "retry":
-        text = (
-            f"{title}\n\n💀 Encontro · Tentativa Encerrada\n"
-            f"🔥 {brazier_label} · Checkpoint no Encontro {view.ordinal}"
+        # Derrota com Braseiro ativo: a incursão continua no mesmo run_id.
+        text = blocks(
+            "💀 <b>Derrota</b>",
+            narrative(
+                "O personagem cai durante o confronto e deixa de participar dos combates "
+                "seguintes até alcançar uma condição válida de recuperação."
+            ),
+            narrative(
+                f"O grupo retorna ao último Braseiro ativo, no Encontro {view.ordinal}. Os "
+                "personagens derrotados são recuperados e a incursão continua."
+            ),
         )
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    _button(
-                        "↻ Tentar Novamente", f"dungeon:r:{view.run_id.hex}:{view.state_version}"
-                    )
-                ],
-                [
-                    _button(
-                        "Abandonar Masmorra",
-                        f"dungeon:confirm:{view.run_id.hex}:{view.state_version}",
-                    )
-                ],
-            ]
+        return Screen(
+            text,
+            "dungeon_crypt",
+            _kb([button("🔄 Retornar ao Braseiro", f"dungeon:r:{run}")], abandon),
+            "HTML",
         )
-        return Screen(text, "dungeon_crypt", keyboard)
     if view.kind == "ready":
-        text = (
-            f"⛓️ {escape(view.dungeon_name)} · {escape(view.difficulty_label or '')}\n\n"
-            f"{escape(view.character_name)} · Nv.{view.level}\n"
-            f"❤️ HP · {view.hp} / {view.max_hp}\n"
-            f"⚡ Vigor · {view.vigor} / {view.max_vigor}\n\n"
-            f"{escape(view.environment)}"
+        enter = f"dungeon:e:{run}"
+        counter = f"⚔️ <b>Encontro {view.ordinal} / {DUNGEON_ENCOUNTERS}</b>"
+        if view.ordinal >= DUNGEON_ENCOUNTERS:
+            parts = (
+                "👑 <b>Chefe</b>",
+                narrative(
+                    "O último confronto da incursão aguarda adiante. A derrota do Chefe "
+                    "encerra a masmorra e consolida a conclusão válida da run."
+                ),
+                counter,
+            )
+            label = "⚔️ Enfrentar"
+        elif view.ordinal <= 1:
+            parts = (
+                _dungeon_title(view),
+                narrative(
+                    "As portas se fecham atrás do grupo. O primeiro encontro aguarda adiante "
+                    "e a incursão começa."
+                ),
+                counter,
+            )
+            label = "⚔️ Avançar"
+        else:
+            # Molde "Encontro": a mesma tela abre depois de um retorno ao Braseiro, e
+            # o serviço não entrega recompensa por encontro (só na conclusão).
+            parts = (
+                f"⚔️ <b>{ORDINAL_NAMES.get(view.ordinal, str(view.ordinal))} Encontro</b>",
+                narrative(
+                    "O caminho termina diante da próxima ameaça da incursão. O confronto "
+                    "começa enquanto o restante da masmorra permanece adiante."
+                ),
+                counter,
+            )
+            label = "⚔️ Combater"
+        return Screen(
+            blocks(*parts), "dungeon_crypt", _kb([button(label, enter)], abandon), "HTML"
         )
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    _button(
-                        "⚔️ Entrar no Encontro", f"dungeon:e:{view.run_id.hex}:{view.state_version}"
-                    )
-                ],
-                [
-                    _button(
-                        "Abandonar Masmorra",
-                        f"dungeon:confirm:{view.run_id.hex}:{view.state_version}",
-                    )
-                ],
-            ]
-        )
-        return Screen(text, "dungeon_crypt", keyboard)
     if view.kind == "failed":
-        text = (
-            f"💀 Masmorra · Falhada\n{escape(view.dungeon_name)}\n\n"
-            "O Vigor reservado foi devolvido. Consumíveis usados permanecem consumidos."
+        text = blocks(
+            "💀 <b>Masmorra Falhada</b>",
+            narrative(
+                "Todos os participantes foram derrotados antes que um Braseiro válido "
+                "estivesse disponível. A incursão chega ao fim."
+            ),
+            narrative(
+                "O Vigor reservado é liberado integralmente. Recompensas econômicas "
+                "provisórias vinculadas à conclusão são descartadas, enquanto conhecimentos "
+                "persistentes permanecem registrados."
+            ),
         )
-        return Screen(
-            text,
-            "dungeon_crypt",
-            InlineKeyboardMarkup(inline_keyboard=[[_button("← Masmorras", "dungeon:known")]]),
-        )
+        return Screen(text, "dungeon_crypt", _kb(back("dungeon:known")), "HTML")
     if view.kind == "expired":
-        text = (
-            f"⌛ Masmorra · Expirada\n{escape(view.dungeon_name)}\n\n"
-            "O Vigor reservado foi devolvido."
+        text = blocks(
+            "⌛ <b>Masmorra Expirada</b>",
+            narrative(f"A incursão pela {view.dungeon_name} expirou."),
+            "O Vigor reservado foi devolvido.",
         )
-        return Screen(
-            text,
-            "dungeon_crypt",
-            InlineKeyboardMarkup(inline_keyboard=[[_button("← Masmorras", "dungeon:known")]]),
-        )
+        return Screen(text, "dungeon_crypt", _kb(back("dungeon:known")), "HTML")
     if view.kind == "completed":
-        rewards = "\n".join(escape(line) for line in view.reward_lines)
-        text = (
-            f"🏆 Masmorra · Concluída\n{escape(view.dungeon_name)} · "
-            f"{escape(view.difficulty_label or '')}\n\n{rewards}"
+        text = blocks(
+            "🏆 <b>Masmorra concluída</b>",
+            narrative(
+                "O Chefe foi derrotado e a incursão chega ao fim. O progresso e as "
+                "recompensas válidas da run são consolidados."
+            ),
+            rewards(reward_html(line) for line in view.reward_lines),
+            "✨ <b>Primeira Conclusão</b>" if view.first_clear else None,
         )
-        if view.first_clear:
-            text += "\n\n✨ Primeira Conclusão"
-        return Screen(
-            text,
-            "dungeon_crypt",
-            InlineKeyboardMarkup(inline_keyboard=[[_button("← Masmorras", "dungeon:known")]]),
-        )
+        return Screen(text, "dungeon_crypt", _kb(back("dungeon:known")), "HTML")
     if view.kind == "confirm_abandon":
         text = (
             f"⛓️ {escape(view.dungeon_name)} · {escape(view.difficulty_label or '')}\n\n"

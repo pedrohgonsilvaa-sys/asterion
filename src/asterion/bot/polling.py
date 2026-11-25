@@ -2,6 +2,7 @@ import asyncio
 
 from aiogram.types import BotCommand
 
+from asterion.bot import combat_timer
 from asterion.bot.creation_handlers import warm_photo_file_ids
 from asterion.bot.metrics_server import start_metrics_server
 from asterion.bot.round_scheduler import build_round_scheduler
@@ -28,6 +29,7 @@ async def _run() -> None:
         raise RuntimeError("Polling process can only run when ASTERION_TELEGRAM_MODE=polling")
 
     runtime = get_bot_runtime()
+    combat_timer.enable()
     await warm_photo_file_ids()
     metrics_runner = None
     if settings.metrics_port is not None:

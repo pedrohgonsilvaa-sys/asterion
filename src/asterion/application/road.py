@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal
 from hashlib import sha256
+from html import escape as html_escape
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -707,6 +708,10 @@ NARETH_EXPLORATION_UNIQUE_XP = {
     "explore.nareth.observatorio.entrada_observatorio_afundado": 4952,
     "explore.nareth.observatorio.prumo_fora_do_centro": 1548,
 }
+
+
+def _thousands(value) -> str:
+    return f"{int(value):,}".replace(",", ".")
 
 
 @dataclass(frozen=True)
@@ -7598,10 +7603,11 @@ class RoadService:
         reward_lines = []
         for row in rows:
             payload = row.payload or {}
+            # Bloco UI 1 §3/§4: valor em monoespaçado, quantidade em linguagem natural.
             if row.kind == "xp":
-                reward_lines.append(f"✨ XP · {row.quantity}")
+                reward_lines.append(f"✨ <code>{_thousands(row.quantity)} XP</code>")
             elif row.kind == "crowns":
-                reward_lines.append(f"🪙 Coroas · {row.quantity}")
+                reward_lines.append(f"🪙 <code>{_thousands(row.quantity)} Coroas</code>")
             elif row.kind == "equipment":
                 reward_lines.append(
                     "🛡️ "
@@ -7626,9 +7632,8 @@ class RoadService:
                     f"{payload.get('stage_label', payload.get('stage', 'Atualizado'))}"
                 )
             else:
-                reward_lines.append(
-                    f"📦 {labels.get(row.item_id, row.item_id or row.kind)} · {row.quantity}"
-                )
+                label = html_escape(str(labels.get(row.item_id, row.item_id or row.kind)))
+                reward_lines.append(f"📦 <code>{_thousands(row.quantity)} {label}</code>")
         return RoadView(
             "hunt_victory",
             c.id,

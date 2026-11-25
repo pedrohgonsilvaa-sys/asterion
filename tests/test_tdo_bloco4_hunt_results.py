@@ -23,16 +23,11 @@ async def test_real_hunt_victory_screen_and_back_to_hunt_screen(database, monkey
     assert victory.kind == "hunt_victory"
 
     screen = render_road(victory)
-    first, second, *rest = screen.text.split("\n")
-    assert first == f"🏆 Vitória · {victory.creature}"
-    assert second == "Bosque Calcinado · Terras do Ocaso"
-    assert "Caçada concluída" not in screen.text
-    assert ("🎁 Recompensas" in rest) == bool(victory.reward_lines)
+    # Bloco UI 1 §4: Vitória → narrativa → Recompensas → Caçar novamente / Voltar.
+    assert screen.text.startswith("🏆 <b>Vitória</b>\n\n<i>")
+    assert ("🎁 <b>Recompensas:</b>" in screen.text) == bool(victory.reward_lines)
     back = screen.keyboard.inline_keyboard[-1][0]
-    assert (back.text, back.callback_data) == (
-        "← Caçada",
-        f"road:hunt_screen:{victory.activity_id.hex}",
-    )
+    assert (back.text, back.callback_data) == ("↩️ Voltar", "tdo:hunt")
 
     # O que o handler de [← Caçada] faz: confirma o resultado e abre a tela de Caçada.
     await service.acknowledge_result(actor)

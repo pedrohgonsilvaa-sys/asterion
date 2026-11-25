@@ -267,6 +267,20 @@ class GuildService:
                 return None
             return await self._guild_view(session, guild, character.id)
 
+    async def tag_of(self, actor: int) -> str | None:
+        """Read-only: the active Guild tag of this character, for name labels."""
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                return None
+            membership = await session.get(GuildMember, character.id)
+            if membership is None:
+                return None
+            guild = await session.get(Guild, membership.guild_id)
+            if guild is None or guild.status != "active":
+                return None
+            return guild.tag
+
     async def public_page(
         self, guild_id: UUID, *, now: datetime | None = None
     ) -> PublicGuildView | None:

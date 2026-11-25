@@ -74,7 +74,7 @@ def render_s4_detail(view: S4View) -> Screen:
         f"🎯 Objetivo · {_objective(view)}\n📍 {view.location or 'Terras do Ocaso'}",
         "s4",
         _keyboard([
-            [_button("Deixar de Acompanhar" if view.tracked else "Acompanhar", f"s4:{view.state_version}:track")],
+            [_button("🚫 Deixar de acompanhar" if view.tracked else "👁️ Acompanhar missão", f"s4:{view.state_version}:track")],
             [_button("Ver Objetivo", "s4:resume")],
             [_button("Abandonar Missão", "s4:abandon")],
             [_button("← Missões", "world:missions")],

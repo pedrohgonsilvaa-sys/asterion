@@ -837,7 +837,7 @@ async def test_multidevice_callback_after_menu_open_is_idempotent_and_reconnects
     assert await _stack_quantity(database, actor, "consumable.heal") == 0
 
     reconnected = render_road(await service.resume(actor))
-    assert "📜 Registro de Combate · Recentes" in reconnected.text
+    assert "<b>📜 Histórico:</b>" in reconnected.text
     assert reconnected.text.count("usa <b>Poção de Cura</b>") == 1
     assert not any(
         button.text == "Consumível"

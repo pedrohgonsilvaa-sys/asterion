@@ -12,6 +12,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.prologue import CombatView
 from asterion.bot.asset_catalog import with_boss_transformation_art, with_creature_art
 from asterion.bot.creation_ui import COPY, Screen
+from asterion.bot.prologue_ui import art_label
 from asterion.domain.combat import (
     Combat,
     CombatConsumableOption,
@@ -540,6 +541,9 @@ class CombatConsumableFlowCallback(CallbackData, prefix="cf"):
         return {"c": "combat", "i": "items", "t": "targets"}.get(self.parent)
 
 
+HISTORY_HEADING = "<b>📜 Histórico:</b>"
+
+
 def number(value: Decimal | int) -> str:
     return (
         format(value, "f").rstrip("0").rstrip(".")
@@ -947,7 +951,7 @@ def event_line(
     if event.actor == "player" and event.action == "attack":
         line = (
             f"{emoji} <b>{actor_name}</b> ataca <b>{target_name}</b> "
-            f"e causa <code>{number(event.damage)}</code> de dano."
+            f"e causa <b>{number(event.damage)} de dano</b>."
         )
     elif action.heal_coefficient and event.healed:
         line = (
@@ -962,7 +966,7 @@ def event_line(
     else:
         line = (
             f"{emoji} <b>{actor_name}</b> usa <b>{escape(label)}</b> em "
-            f"<b>{target_name}</b> e causa <code>{number(event.damage)}</code> de dano."
+            f"<b>{target_name}</b> e causa <b>{number(event.damage)} de dano</b>."
         )
     if event.critical:
         line += " Crítico."
@@ -1730,7 +1734,7 @@ def _render_combat(view: CombatView) -> Screen:
             lines.extend(
                 _trial_fighter_card(state, key, icon=fighter_icon, viewer_key=player_key)
             )
-        lines.extend(["📜 Registro de Combate · Recentes", "", "\n".join(recent[-4:]), ""])
+        lines.extend([HISTORY_HEADING, "\n".join(recent[-4:]), ""])
     else:
         enemy = state.fighters["enemy"]
         lines = [
@@ -1753,7 +1757,7 @@ def _render_combat(view: CombatView) -> Screen:
                 hp_bar(player.hp, player.stats.hp),
             ]
         )
-        lines.extend(["", "📜 Registro de Combate · Recentes", "", "\n".join(recent[-4:]), ""])
+        lines.extend(["", HISTORY_HEADING, "\n".join(recent[-4:]), ""])
         status_lines: list[str] = []
         if enemy.barrier > 0 and enemy.barrier_remaining != 0:
             duration = _barrier_duration_summary(enemy)
@@ -1815,7 +1819,7 @@ def _render_combat(view: CombatView) -> Screen:
                 status_lines.append("")
             status_lines.extend(active_art_cooldowns)
         if status_lines:
-            insert_at = lines.index("📜 Registro de Combate · Recentes")
+            insert_at = lines.index(HISTORY_HEADING)
             lines[insert_at:insert_at] = status_lines
         if view.consumable_notice:
             lines[8:8] = [escape(view.consumable_notice), ""]
@@ -1831,13 +1835,14 @@ def _render_combat(view: CombatView) -> Screen:
     target_button_rows = []
     for action in available:
         if action == "attack":
-            label, hint = "Atacar", "⚔️ Atacar · Causa Dano"
+            label, hint = "⚔️ Atacar", "⚔️ Atacar · Causa Dano"
         elif action == "defend":
-            label, hint = "Defender", "🛡️ Defender · Reduz Dano até seu próximo Turno"
+            label, hint = "🛡️ Defender", "🛡️ Defender · Reduz Dano até seu próximo Turno"
         else:
             art = player_actions[action]
             clean = art.name.removeprefix("🎴 ").strip().removeprefix("🗡️ ")
-            label = clean
+            # Bloco UI 1 §7: the button is the character's real Art, emoji + name.
+            label = art_label(art.name, action)
             hint = clean
             if not is_trial and state.tutorial_stage == "art":
                 lines.extend(
@@ -2004,7 +2009,8 @@ def _render_combat(view: CombatView) -> Screen:
                 lines.append(f"{art.name} · CD{remaining}")
     if state.result == "victory" and view.context == "prologue":
         lines.append("320 XP")
-    keyboard_rows = [buttons] if buttons else []
+    # Bloco UI 1 §7: Atacar, Defender and the Art, one per row.
+    keyboard_rows = [[button] for button in buttons]
     keyboard_rows.extend(target_button_rows)
     if not is_trial and view.consumable_options:
         keyboard_rows.append(
@@ -2040,4 +2046,11 @@ def render_combat(view: CombatView) -> Screen:
     screen = with_boss_transformation_art(base, view.combat)
     if view.encounter_id is not None:
         screen = replace(screen, media_seed=f"encounter:{view.encounter_id}")
-    return screen
+    return with_turn_timer(screen, view.context, view.activity_id, view.combat)
+
+
+def with_turn_timer(screen: Screen, context: str, activity_id, combat: Combat) -> Screen:
+    """Mark a screen whose open player turn has a deadline (Bloco UI 1 §7)."""
+    if combat.result or combat.turn_deadline is None or activity_id is None:
+        return screen
+    return replace(screen, timer=f"{context}:{activity_id.hex}")

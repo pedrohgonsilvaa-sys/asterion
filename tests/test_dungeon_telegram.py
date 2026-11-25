@@ -70,7 +70,7 @@ async def test_clicking_attack_in_crypt_routes_through_the_live_dungeon_service(
     # exposed the missing campaign_shared field on DungeonView.
     fight = replace(fight, ordinal=5, dungeon_name="Enfermaria Afundada")
     screen = render_dungeons(fight)
-    attack = _button(screen, "Atacar")
+    attack = _button(screen, "⚔️ Atacar")
     assert "Masmorra ·" in screen.text
     assert attack.callback_data.startswith("df:")
     assert len(attack.callback_data.encode("utf-8")) <= 64
@@ -117,7 +117,7 @@ async def test_clicking_attack_in_crypt_routes_through_the_live_dungeon_service(
     assert replayed is not None
     assert replayed.combat.version == resumed.combat.version
 
-    current_attack = _button(render_dungeons(resumed), "Atacar")
+    current_attack = _button(render_dungeons(resumed), "⚔️ Atacar")
     current = DungeonCombatCallback.unpack(current_attack.callback_data)
     forged_indices = DungeonCombatCallback(
         run=current.run,

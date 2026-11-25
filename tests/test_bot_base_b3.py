@@ -413,7 +413,8 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     screen = _last_screen(bot)
     # HUD do Refúgio: Menu Principal em duas colunas.
     assert {button.text for row in screen.reply_markup.inline_keyboard for button in row} == {
-        "🧭 Explorar", "🌘 Refúgio", "🐺 Caçadas", "🗝️ Masmorras", "📜 Missões", "🌌 Eventos",
+        "🧭 Explorar", "🌘 Refúgio do Ocaso", "🐺 Caçadas", "🗝️ Masmorras", "📜 Missões",
+        "🌌 Eventos",
         "👤 Personagem", "🗺️ Mapa", "🏰 Guilda", "🏪 Mercado", "🏟️ Arena", "📖 Códice",
         "🏆 Classificação", "🌐 Comunidade", "🎁 Benefícios", "⚙️ Configurações",
     }

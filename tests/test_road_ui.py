@@ -155,10 +155,9 @@ def test_charneca_hunt_and_explore_recovery_never_offer_retry():
             route_available=True,
         )
     )
-    assert "💀 Caçada · Derrota" in hunt.text
-    assert "🔥 Braseiro do Refúgio" in hunt.text
-    assert "Refúgio do Ocaso · Terras do Ocaso" in hunt.text
-    assert "road:route:charneca" in _callbacks(hunt)
+    # Bloco UI 1 §4: Derrota de Caçada nas Terras do Ocaso.
+    assert hunt.text.startswith("💀 <b>Derrota</b>")
+    assert _callbacks(hunt) == ["tdo:hunt:manual", "tdo:hunt"]
     assert "road:prepare" not in _callbacks(hunt)
 
     explore = render_road(
@@ -179,8 +178,9 @@ def test_charneca_hunt_and_explore_recovery_never_offer_retry():
     estrada_defeat = render_road(
         RoadView("hunt_defeat", uuid4(), ROAD, recovery_brazier=None)
     )
+    # Bloco UI 1 §4: "Tentar novamente" é um novo sorteio de Caçada, nunca a mesma luta.
     assert "road:prepare" not in _callbacks(estrada_defeat)
-    assert _callbacks(estrada_defeat) == ["road:local"]
+    assert _callbacks(estrada_defeat) == ["tdo:hunt:manual", "tdo:hunt"]
 
 
 def test_charneca_round_screens_use_frozen_local_and_regional_recovery():

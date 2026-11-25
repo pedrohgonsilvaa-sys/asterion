@@ -343,7 +343,7 @@ async def _hunt_on_road(sessions, actor: int, monkeypatch, label: str):
         label=label,
     )
     assert finished.kind == "hunt_victory", (label, finished.kind)
-    assert any(line.startswith("✨ XP") for line in finished.reward_lines), label
+    assert any(line.startswith("✨ ") and "XP" in line for line in finished.reward_lines), label
     await road.acknowledge_result(actor)
     back = await road.travel(actor, REFUGE)
     assert back is not None and back.location == REFUGE, label

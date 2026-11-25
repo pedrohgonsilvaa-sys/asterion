@@ -170,24 +170,103 @@ def render_hunt_choice(route_destinations: tuple[str, ...]) -> Screen:
     return Screen("\n".join(lines), location_key(REFUGE_LABEL), keyboard)
 
 
+EXPLORE_TEXT = (
+    "Além das cinzas do Refúgio, caminhos pouco conhecidos se espalham pela região. A "
+    "cada avanço, novos lugares, acontecimentos e oportunidades podem surgir."
+)
+# Bloco UI 1 §3: três caminhos. Todos acionam o mesmo Explorar canônico (TDO v1.0.18
+# §33.2): nenhuma fonte define resultados diferentes por caminho.
+EXPLORE_PATHS = (
+    "👣 Seguir pela estrada",
+    "🌲 Seguir pela trilha",
+    "🪨 Explorar os arredores",
+)
+EXPLORE_GO = "tdo:explore:go"
+EXPLORE_ENTRY = "tdo:explore"
+# Primeiro parágrafo da descoberta. Charneca: Bloco UI 1; Câmara: Fonte Regional §3.6.
+_DISCOVERY_TEXT = {
+    "Charneca da Fuligem": (
+        "Depois de atravessar a trilha, uma extensa região coberta por cinzas surge além "
+        "das árvores. O terreno é silencioso, mas há sinais de que outros caminhos ainda "
+        "podem ser encontrados por ali."
+    ),
+    CAMARA_LABEL: TEXTO_CAMARA_DESCOBERTA,
+}
+_OF = {
+    "Charneca da Fuligem": "da",
+    "Bosque Calcinado": "do",
+    "Ruínas do Vigia": "das",
+    CAMARA_LABEL: "da",
+    "Estrada das Cinzas": "da",
+}
+
+
+def _explore_status(view) -> str:
+    """Status de Explorar: sem nome nem Classe (Bloco UI 1 §3)."""
+    from asterion.bot.ui_format import HP_FILL, VIGOR_FILL, XP_FILL, bar, mono, number
+
+    return "\n".join(
+        (
+            f"❤️ {mono(f'{number(int(view.hp))} / {number(int(view.max_hp))}')}",
+            bar(view.hp, view.max_hp, HP_FILL),
+            f"⚡ {mono(f'{view.vigor} / {view.max_vigor}')}",
+            bar(view.vigor, view.max_vigor, VIGOR_FILL),
+            f"✨ {mono(f'{number(view.xp)} / {number(view.xp_required)}')}",
+            bar(view.xp, view.xp_required, XP_FILL),
+        )
+    )
+
+
+def render_explore_entry(view, *, remaining: int | None) -> Screen:
+    """Entrada de Explorar. Explorar custa 0 Vigor (TDO v1.0.18 §33.2): sem custo exibido."""
+    from asterion.bot.ui_format import back, blocks, button, column, keyboard, narrative
+
+    parts = ["🧭 <b>Explorar</b>", narrative(EXPLORE_TEXT), _explore_status(view)]
+    rows: list[list[InlineKeyboardButton]] = []
+    if remaining == 0:
+        parts.append(TEXT_NOTHING_TO_EXPLORE)
+    else:
+        rows = column(*(button(label, EXPLORE_GO) for label in EXPLORE_PATHS))
+    return Screen(
+        blocks(*parts), location_key(REFUGE_LABEL), keyboard(*rows, back("menu:back")), "HTML"
+    )
+
+
 def render_explore_result(result: ExploreResult) -> Screen:
-    """Resultado de Explorar (66.2): Local revelado, XP e aparece no Refúgio; sem Vigor."""
-    back_button = InlineKeyboardButton(text=BACK_TO_REFUGE, callback_data="world:local")
-    back = InlineKeyboardMarkup(inline_keyboard=[[back_button]])
+    """Descoberta de Local (Bloco UI 1 §3): acontecimento → narrativa → Recompensas."""
+    from asterion.bot.ui_format import (
+        back,
+        blocks,
+        button,
+        keyboard,
+        narrative,
+        reward_line,
+        rewards,
+    )
+    from asterion.bot.ui_format import number as fmt
+
     if result.status == "discovered":
         label = result.label or ""
-        lines = ["🧭 Explorar", "", f"{hub_icon(label)} {escape(label)}"]
-        if label == CAMARA_LABEL:
-            lines.extend(["", TEXTO_CAMARA_DESCOBERTA])
-        lines.extend(["", f"✨ XP de descoberta · {result.xp}"])
-        lines.append(f"{escape(label)} agora aparece no Refúgio.")
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="Explorar", callback_data="tdo:explore")],
-                [InlineKeyboardButton(text=BACK_TO_REFUGE, callback_data="world:local")],
-            ]
+        known = (
+            f"A rota até {label} agora é conhecida, permitindo que o local seja acessado "
+            "novamente a partir dos caminhos já explorados."
         )
-        return Screen("\n".join(lines), location_key(REFUGE_LABEL), keyboard)
+        items = [f"🗺️ <b>Descoberta {_OF.get(label, 'de')} {escape(label)}</b>"]
+        if result.camara_codex:
+            items.append("📖 <b>Entrada do Códice</b>")
+        if result.xp:
+            items.append(reward_line("✨", f"{fmt(result.xp)} XP"))
+        text = blocks(
+            f"{hub_icon(label)} <b>{escape(label)}</b>",
+            narrative(_DISCOVERY_TEXT[label]) if label in _DISCOVERY_TEXT else None,
+            narrative(known),
+            rewards(items),
+        )
+        rows = keyboard(
+            [button("🧭 Continuar explorando", EXPLORE_ENTRY)],
+            [button("↩️ Voltar ao Refúgio", "menu:back")],
+        )
+        return Screen(text, location_key(label), rows, "HTML")
     text = {
         "unavailable": TEXT_NOTHING_TO_EXPLORE,
         "cooldown": TEXT_WAIT,
@@ -195,4 +274,9 @@ def render_explore_result(result: ExploreResult) -> Screen:
         "not_in_refuge": "Explorar só está disponível no Refúgio do Ocaso.",
         "foreground": "Termine o que está fazendo antes de explorar.",
     }.get(result.status, TEXT_WAIT)
-    return Screen(f"🧭 Explorar\n\n{text}", location_key(REFUGE_LABEL), back)
+    return Screen(
+        blocks("🧭 <b>Explorar</b>", escape(text)),
+        location_key(REFUGE_LABEL),
+        keyboard(back(EXPLORE_ENTRY if result.status != "unavailable" else "menu:back")),
+        "HTML",
+    )

@@ -21,7 +21,8 @@ LORE = (
 
 
 def bar(current, maximum, fill: str) -> str:
-    segments = 9
+    # Bloco UI 1 §1: barras com 10 segmentos.
+    segments = 10
     n = min(segments, max(0, int(current * segments / maximum))) if maximum else 0
     if current > 0 and maximum:
         n = max(1, n)
@@ -189,16 +190,18 @@ _ROMAN = ((10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"))
 REFUGE_TITLE = "🌘 Refúgio do Ocaso"
 REFUGE_IMAGE_KEY = location_key(REFUGE_LABEL)
 DAILY_GIFT_BUTTON = "🎁 Resgatar Dádiva Diária"
-# Menu Principal do Refúgio: duas colunas, cada botão mantém o callback do fluxo existente.
+# Menu Principal do Refúgio (Bloco UI 1 §2): Dádiva e Refúgio em largura total, depois
+# duas colunas. Cada botão mantém o callback do fluxo existente.
+REFUGE_LOCAL_BUTTON = ("🌘 Refúgio do Ocaso", "refuge:local")
 REFUGE_MENU = (
-    (("🧭 Explorar", "tdo:explore"), ("🌘 Refúgio", "menu:back")),
-    (("🐺 Caçadas", "tdo:hunt"), ("🗝️ Masmorras", "dungeon:known")),
-    (("📜 Missões", "world:missions"), ("🌌 Eventos", "wev:hub")),
-    (("👤 Personagem", "character:root"), ("🗺️ Mapa", "world:map")),
-    (("🏰 Guilda", "guild:root"), ("🏪 Mercado", "mkt:root")),
-    (("🏟️ Arena", "pvp:hub"), ("📖 Códice", "knowledge:codex")),
-    (("🏆 Classificação", "pvp:rank"), ("🌐 Comunidade", "community:open")),
+    (("🧭 Explorar", "tdo:explore"), ("🐺 Caçadas", "tdo:hunt")),
+    (("🗝️ Masmorras", "dungeon:known"), ("📜 Missões", "world:missions")),
+    (("🌌 Eventos", "wev:hub"), ("👤 Personagem", "character:root")),
+    (("🗺️ Mapa", "world:map"), ("🏰 Guilda", "guild:root")),
+    (("🏪 Mercado", "mkt:root"), ("🏟️ Arena", "pvp:hub")),
+    (("📖 Códice", "knowledge:codex"), ("🏆 Classificação", "pvp:rank")),
     (("🎁 Benefícios", "bn:root"), ("⚙️ Configurações", "settings:root")),
+    (("🌐 Comunidade", "community:open"),),
 )
 
 
@@ -212,37 +215,37 @@ def roman(value: int) -> str:
 
 
 def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
-    """HUD do Refúgio em HTML do Telegram, no padrão do Prólogo (negrito + <code>)."""
-    from asterion.bot.combat_ui import number as fmt
+    """HUD do Refúgio (Bloco UI 1 §2) em HTML do Telegram."""
+    from asterion.bot.ui_format import HP_FILL, VIGOR_FILL, XP_FILL, mono
 
     hud = hud or RefugeHud()
     emoji = CLASS_EMOJI.get(view.character_class, "👤")
     # Sempre Classe; o Caminho só acompanha quando já foi escolhido.
     class_label = CLASS_LABELS.get(view.character_class, view.character_class)
-    identity_line = f"<b>{emoji} {escape(view.name)}</b> · {class_label}"
+    identity_line = f"{emoji} {escape(view.name)} · {class_label}"
     path = PATH_LABELS.get(view.selected_path or "")
     if path:
         identity_line += f" · {escape(path)}"
     level = f"🏛️ Nv. {view.level}"
     if view.legacy_level > 0:
         level += f" · Legado {roman(view.legacy_level)}"
-    identity = [identity_line, level]
+    identity = [f"<b>{identity_line}</b>", f"<b>{level}</b>"]
     if view.selected_title:
         identity.append(f"🎖️ <i>{escape(view.selected_title)}</i>")
     stats = [
-        f"<b>❤️ HP</b> · <code>{fmt(view.hp)} / {fmt(view.max_hp)}</code>\n"
-        f"{bar(view.hp, view.max_hp, '🟥')}",
-        f"<b>⚡ Vigor</b> · <code>{view.vigor} / {view.max_vigor}</code>\n"
-        f"{bar(view.vigor, view.max_vigor, '🟨')}",
-        f"<b>✨ XP</b> · <code>{number(view.xp)} / {number(view.xp_required)}</code>\n"
-        f"{bar(view.xp, view.xp_required, '🟦')}",
+        f"❤️ <b>HP</b> · {mono(f'{number(int(view.hp))} / {number(int(view.max_hp))}')}",
+        bar(view.hp, view.max_hp, HP_FILL),
+        f"⚡ <b>Vigor</b> · {mono(f'{view.vigor} / {view.max_vigor}')}",
+        bar(view.vigor, view.max_vigor, VIGOR_FILL),
+        f"✨ <b>XP</b> · {mono(f'{number(view.xp)} / {number(view.xp_required)}')}",
+        bar(view.xp, view.xp_required, XP_FILL),
     ]
-    state = [f"<b>💰 Coroas</b> · <code>{number(view.crowns)}</code>"]
+    state = [f"💰 <b>Coroas</b> · {mono(number(view.crowns))}"]
     if hud.chronicle:
-        state.append(f"<b>📖 Crônica</b> · {escape(hud.chronicle)}")
+        state.append(f"📖 <b>Crônica</b> · {escape(hud.chronicle)}")
     # O Boss Regional não tem dado de progressão real no sistema: fica ausente.
     return "\n\n".join(
-        (f"<b>{REFUGE_TITLE}</b>", "\n".join(identity), *stats, *state)
+        (f"<b>{REFUGE_TITLE}</b>", "\n".join(identity), "\n".join(stats), "\n".join(state))
     )
 
 
@@ -250,6 +253,8 @@ def refuge_menu_keyboard(*, gift_available: bool) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if gift_available:
         rows.append([InlineKeyboardButton(text=DAILY_GIFT_BUTTON, callback_data="bn:gift")])
+    label, data = REFUGE_LOCAL_BUTTON
+    rows.append([InlineKeyboardButton(text=label, callback_data=data)])
     rows.extend(
         [InlineKeyboardButton(text=label, callback_data=data) for label, data in pair]
         for pair in REFUGE_MENU

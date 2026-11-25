@@ -163,9 +163,10 @@ def test_brazier_shows_arrival_hp_and_uses_approved_narration():
     assert "<code>80 / 100</code>" in screen.text
     assert "<code>100 / 100</code>" not in screen.text
     assert (
-        "<i>O fogo permanece aceso entre as pedras. O calor atravessa o corpo de "
-        f"{name}, enquanto a estrada permanece à frente, pronta para ser seguida.</i>"
+        "<i>O fogo permanece aceso entre as pedras. O calor atravessa o corpo, enquanto "
+        "a estrada permanece à frente, pronta para ser seguida.</i>"
     ) in screen.text
+    assert name not in screen.text.split("\n\n")[1]
     assert "devolve as forças" not in screen.text
 
 

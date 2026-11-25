@@ -70,6 +70,9 @@ class Screen:
     # Stable seed for art that belongs to one encounter/activity. Screens
     # without a seed keep the normal random variant behavior.
     media_seed: str | None = None
+    # "<context>:<activity hex>" of an open, timed combat turn: ``present`` starts
+    # the live countdown for it (Bloco UI 1 §7). None everywhere else.
+    timer: str | None = None
 
 
 def render(state: Creation) -> Screen:

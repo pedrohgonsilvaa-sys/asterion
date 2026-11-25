@@ -29,6 +29,8 @@ from asterion.application.world_events import (
     WorldEventResultView,
     WorldEventService,
 )
+from asterion.bot.combat_timer import TIMEOUT_ACTION, Tick
+from asterion.bot.combat_timer import register as register_timer
 from asterion.bot.combat_ui import (
     CombatCallback,
     CombatConsumableCallback,
@@ -93,6 +95,84 @@ def combat_router(
 ) -> Router:
     router = Router(name="foreground_combat")
     router.callback_query.filter(F.message.chat.type == "private")
+
+    def prologue_timer(message: Message, activity_id):
+        actor = message.chat.id
+
+        async def refresh():
+            view = await service.resume(actor)
+            if view is None or getattr(view, "activity_id", None) != activity_id:
+                return None
+            if view.combat.result:
+                # The timeout ended the fight: show the outcome with its own art.
+                await present(message, render_combat(view), images, edit=True)
+                return None
+            return Tick(render_combat(view), view.combat)
+
+        async def expire():
+            view = await service.resume(actor)
+            if view is not None and getattr(view, "activity_id", None) == activity_id:
+                await service.action(actor, activity_id, view.combat.version, TIMEOUT_ACTION)
+
+        return refresh, expire
+
+    register_timer("prologue", prologue_timer)
+
+    if road is not None:
+
+        def road_timer(message: Message, activity_id):
+            actor = message.chat.id
+
+            async def refresh():
+                view = await road.resume(actor)
+                if view is None or view.activity_id != activity_id:
+                    return None
+                if view.kind != "combat" or view.combat is None:
+                    await present(message, render_road(view), images, edit=True)
+                    return None
+                return Tick(render_road(view), view.combat)
+
+            async def expire():
+                view = await road.resume(actor)
+                if view is not None and view.activity_id == activity_id and view.combat:
+                    await road.action(actor, activity_id, view.combat.version, TIMEOUT_ACTION)
+
+            return refresh, expire
+
+        register_timer("road", road_timer)
+
+    if dungeons is not None:
+        from asterion.bot.dungeon_ui import render_dungeons
+
+        def dungeon_timer(message: Message, activity_id):
+            actor = message.chat.id
+
+            async def refresh():
+                view = await dungeons.resume(actor)
+                if view is None or view.activity_id != activity_id:
+                    if view is not None:
+                        await present(message, render_dungeons(view), images, edit=True)
+                    return None
+                if view.kind != "combat" or view.combat is None:
+                    await present(message, render_dungeons(view), images, edit=True)
+                    return None
+                return Tick(render_dungeons(view), view.combat)
+
+            async def expire():
+                view = await dungeons.resume(actor)
+                if (
+                    view is not None
+                    and view.activity_id == activity_id
+                    and view.combat is not None
+                    and view.run_id is not None
+                ):
+                    await dungeons.action(
+                        actor, view.run_id, activity_id, view.combat.version, TIMEOUT_ACTION
+                    )
+
+            return refresh, expire
+
+        register_timer("dungeon", dungeon_timer)
 
     async def consumable_action(actor, activity_id, version, *, item_id, target_id, effect_id):
         if chronicle is not None:

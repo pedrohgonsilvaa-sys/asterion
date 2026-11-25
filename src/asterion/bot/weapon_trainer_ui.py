@@ -1,6 +1,8 @@
 """Telas do Treinador de Armas (Proficiências de Armas, spec v1.0.0)."""
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from html import escape
+
+from aiogram.types import InlineKeyboardButton
 
 from asterion.application.weapon_proficiency import (
     TRAINER_LOCATION,
@@ -8,6 +10,16 @@ from asterion.application.weapon_proficiency import (
     TrainingRejected,
 )
 from asterion.bot.creation_ui import Screen
+from asterion.bot.ui_format import (
+    back,
+    blocks,
+    button,
+    field,
+    keyboard,
+    narrative,
+    number,
+    pairs,
+)
 from asterion.domain.weapon_proficiency import (
     FAMILY_LABELS,
     WEAPON_IDENTITIES,
@@ -39,53 +51,110 @@ def _weapons(view: TrainerView, family: ProficiencyFamily) -> str:
     )
 
 
+# Bloco UI 1 §2 · Treinamento de Armas (apresentação de Darian Veyr).
+FAMILY_EMOJI = {
+    ProficiencyFamily.SWORDS: "🗡️",
+    ProficiencyFamily.BLADES: "🔪",
+    ProficiencyFamily.BLUNT: "🔨",
+    ProficiencyFamily.AXES: "🪓",
+    ProficiencyFamily.POLEARMS: "⚔️",
+    ProficiencyFamily.BOWS: "🏹",
+    ProficiencyFamily.CROSSBOWS: "🏹",
+    ProficiencyFamily.ARCANE_FOCI: "🔮",
+    ProficiencyFamily.SHIELD: "🛡️",
+}
+WEAPONS_TEXT = (
+    "Treinamento voltado à aquisição de proficiência e ao domínio de diferentes "
+    "famílias de armas."
+)
+SHIELD_TEXT = (
+    "Treinamento voltado ao domínio de escudos, aprimorando o controle, a proteção e a "
+    "eficiência defensiva durante o combate."
+)
+# Texto de Espadas e de Escudos: Bloco UI 1. Demais famílias: descrição objetiva no
+# mesmo molde, a revisar pelo autor (nenhuma regra nasce daqui).
+FAMILY_TEXT = {
+    ProficiencyFamily.SWORDS: (
+        "Armas equilibradas, voltadas ao controle dos movimentos, precisão e "
+        "versatilidade em combate."
+    ),
+    ProficiencyFamily.BLADES: (
+        "Armas curtas e leves, voltadas à rapidez dos golpes, usadas de perto ou "
+        "arremessadas."
+    ),
+    ProficiencyFamily.BLUNT: (
+        "Armas de impacto, voltadas à força de cada golpe."
+    ),
+    ProficiencyFamily.AXES: (
+        "Armas pesadas na cabeça, voltadas a golpes amplos e de grande impacto."
+    ),
+    ProficiencyFamily.POLEARMS: (
+        "Armas de cabo longo, voltadas ao alcance e ao controle da distância em combate."
+    ),
+    ProficiencyFamily.BOWS: (
+        "Armas de disparo, voltadas à precisão e ao ataque a partir da distância."
+    ),
+    ProficiencyFamily.CROSSBOWS: (
+        "Armas de disparo mecânico, voltadas a tiros firmes, armados antes de cada "
+        "disparo."
+    ),
+    ProficiencyFamily.ARCANE_FOCI: (
+        "Instrumentos de canalização, voltados ao controle e à condução de forças "
+        "arcanas."
+    ),
+    ProficiencyFamily.SHIELD: SHIELD_TEXT,
+}
+ACQUIRE_LABEL = {ProficiencyFamily.SHIELD: "🛡️ Adquirir Proficiência"}
+
+
+def _family_label(family: ProficiencyFamily) -> str:
+    return f"{FAMILY_EMOJI[family]} {FAMILY_LABELS[family]}"
+
+
+def _with_notice(text: str, notice: str | None) -> str:
+    return f"{text}\n\n{escape(notice)}" if notice else text
+
+
 def render_weapon_trainer(view: TrainerView, notice: str | None = None) -> Screen:
-    terms = view.next_terms
-    lines = [
-        "⚔️ Treinador de Armas",
-        f"{TRAINER_LOCATION} · Terras do Ocaso",
-        "",
-        "Uma Proficiência autoriza, para sempre, equipar as armas daquela família "
-        "que sua Classe pode usar. Ela não concede atributos nem bônus de combate.",
-        "",
-        f"Próxima Proficiência ({terms.ordinal}ª): Nível {terms.min_level} · "
-        f"{_number(terms.cost_crowns)} Coroas",
-        f"Suas Coroas: {_number(view.crowns)}",
-        "",
+    """Lista só as famílias de arma que a Classe pode aprender (Escudo tem tela própria)."""
+    families = [
+        entry.family for entry in view.entries if entry.family != ProficiencyFamily.SHIELD
     ]
-    for entry in view.entries:
-        mark = "✅" if entry.owned else "◻️"
-        lines.append(
-            f"{mark} {FAMILY_LABELS[entry.family]} — {_weapons(view, entry.family)}"
-        )
-    if not view.at_trainer:
-        lines.extend(["", REJECTION_TEXT[TrainingRejected.LOCATION_REQUIRED]])
-    if notice:
-        lines.extend(["", notice])
-    rows = []
-    if view.at_trainer:
-        rows.extend(
-            [_button(f"Aprender {FAMILY_LABELS[entry.family]}", f"wpt:c:{entry.family.value}")]
-            for entry in view.entries
-            if not entry.owned
-        )
-    rows.append([_button("🛡️ Armaduras", "apt:root")])
-    rows.append([_button("← Refúgio do Ocaso", "road:local")])
-    return Screen("\n".join(lines), "menu", InlineKeyboardMarkup(inline_keyboard=rows))
+    text = blocks("⚔️ <b>Treinamento de Armas</b>", narrative(WEAPONS_TEXT))
+    options = [button(_family_label(family), f"wpt:c:{family.value}") for family in families]
+    return Screen(
+        _with_notice(text, notice),
+        "menu",
+        keyboard(*pairs(options), back("refuge:darian")),
+        "HTML",
+    )
 
 
-def render_weapon_trainer_confirm(view: TrainerView, family: ProficiencyFamily) -> Screen:
-    terms = view.next_terms
-    text = (
-        f"⚔️ Aprender {FAMILY_LABELS[family]}\n\n"
-        f"Armas liberadas para sua Classe: {_weapons(view, family)}.\n\n"
-        f"Custo: {_number(terms.cost_crowns)} Coroas · Nível mínimo {terms.min_level}.\n"
-        "A Proficiência é permanente: não pode ser trocada nem desfeita."
-    )
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [_button("Confirmar", f"wpt:ok:{family.value}")],
-            [_button("Cancelar", "wpt:root")],
-        ]
-    )
-    return Screen(text, "menu", keyboard)
+def render_weapon_family(
+    view: TrainerView, family: ProficiencyFamily, notice: str | None = None
+) -> Screen:
+    """Família: Nível e Custo da próxima Proficiência (spec v1.0.0) ou ``Adquirida``."""
+    owned = any(entry.family == family and entry.owned for entry in view.entries)
+    if family == ProficiencyFamily.SHIELD:
+        heading, back_to = "🛡️ <b>Treinamento de Escudos</b>", "refuge:darian"
+    else:
+        heading, back_to = f"<b>{_family_label(family)}</b>", "wpt:root"
+    if owned:
+        details = field("📜", "Proficiência", "Adquirida")
+        rows = []
+    else:
+        terms = view.next_terms
+        details = "\n".join(
+            (
+                field("⭐", "Nível", str(terms.min_level)),
+                field("💰", "Custo", f"{number(terms.cost_crowns)} Coroas"),
+            )
+        )
+        rows = (
+            [[button(ACQUIRE_LABEL.get(family, "⚔️ Adquirir Proficiência"),
+                     f"wpt:ok:{family.value}")]]
+            if view.at_trainer
+            else []
+        )
+    text = blocks(heading, narrative(FAMILY_TEXT[family]), details)
+    return Screen(_with_notice(text, notice), "menu", keyboard(*rows, back(back_to)), "HTML")

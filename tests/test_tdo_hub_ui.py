@@ -248,7 +248,7 @@ def test_camara_discovery_result_is_neutral():
     screen = render_explore_result(discovered)
     assert TEXTO_CAMARA_DESCOBERTA in screen.text
     assert "Âncora" not in screen.text
-    assert "120" in screen.text and "aparece no Refúgio" in screen.text
+    assert "<code>120 XP</code>" in screen.text and "agora é conhecida" in screen.text
     assert "Vigor" not in screen.text
 
 
@@ -261,5 +261,5 @@ def test_explore_result_other_states_use_source_texts():
     shown = render_explore_result(
         ExploreResult("discovered", location_id=CHARNECA_LOCATION_ID, label=CHARNECA, xp=120)
     )
-    assert "Charneca da Fuligem" in shown.text and "aparece no Refúgio" in shown.text
+    assert "Charneca da Fuligem" in shown.text and "agora é conhecida" in shown.text
     assert TEXTO_CAMARA_DESCOBERTA not in shown.text

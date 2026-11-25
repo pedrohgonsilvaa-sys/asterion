@@ -320,6 +320,48 @@ class RoundService(RoadService):
             return await self._round_view(s, c, result)
         return await super()._road_blocking_view(s, c)
 
+    async def round_familiar_locations(
+        self, actor: int, locations: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        """Read-only: the Locais whose Ronda is already open (first manual victory)."""
+        async with self.sessions() as s:
+            c = await self._character(s, actor)
+            if c is None:
+                return ()
+            unlocked = set(
+                (
+                    await s.scalars(
+                        select(Unlock.unlock_id).where(Unlock.character_id == c.id)
+                    )
+                ).all()
+            )
+        familiar = []
+        for location in locations:
+            profile = hunt_profile_for_location(location)
+            if profile is not None and profile.round_familiarity in unlocked:
+                familiar.append(location)
+        return tuple(familiar)
+
+    async def last_round_settings(self, actor: int) -> tuple[int, bool, bool] | None:
+        """Read-only: batch size and prepared Consumables of the latest started Ronda.
+
+        Bloco UI 1 §4: the Ronda keeps its configuration between runs instead of asking
+        for it every time. None until a first Ronda has been configured and started.
+        """
+        async with self.sessions() as s:
+            c = await self._character(s, actor)
+            if c is None:
+                return None
+            last = await s.scalar(
+                select(HuntRound)
+                .where(HuntRound.character_id == c.id, HuntRound.status != "preparing")
+                .order_by(HuntRound.created_at.desc())
+                .limit(1)
+            )
+            if last is None:
+                return None
+            return last.batch_size, bool(last.prepared_heal), bool(last.prepared_purify)
+
     async def prepare_round(self, actor: int, batch_size: int) -> RoadView | RoundView | None:
         if batch_size not in {5, 10, 20}:
             return None

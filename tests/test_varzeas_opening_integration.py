@@ -3260,7 +3260,7 @@ async def test_p24_solo_defender_visible_callback_dispatches_and_persists(databa
         button
         for row in screen.keyboard.inline_keyboard
         for button in row
-        if button.text == "Defender"
+        if button.text == "🛡️ Defender"
     )
     assert len(defender.callback_data.encode("utf-8")) <= 64
     callback = VarzeasSoloCombatCallback.unpack(defender.callback_data)
@@ -3734,7 +3734,7 @@ async def test_varzeas_shared_boss_callback_remains_cc_and_dispatches(database):
         button
         for row in screen.keyboard.inline_keyboard
         for button in row
-        if button.text == "Defender"
+        if button.text == "🛡️ Defender"
     )
     assert defender.callback_data.startswith("cc:")
     callback = CampaignCombatCallback.unpack(defender.callback_data)
@@ -4073,7 +4073,7 @@ async def test_matrix_failed_reservoir_window_is_persisted_by_public_combat_call
             (
                 button
                 for button in buttons
-                if button.text == "Atacar"
+                if button.text == "⚔️ Atacar"
                 and (button.callback_data or "").startswith("vsc:")
             ),
             None,
@@ -4083,7 +4083,7 @@ async def test_matrix_failed_reservoir_window_is_persisted_by_public_combat_call
                 (
                     button
                     for button in buttons
-                    if button.text == "Defender"
+                    if button.text == "🛡️ Defender"
                     and (button.callback_data or "").startswith("vsc:")
                 ),
                 None,
@@ -4114,7 +4114,7 @@ async def test_matrix_failed_reservoir_window_is_persisted_by_public_combat_call
         button
         for row in screen.keyboard.inline_keyboard
         for button in row
-        if button.text == "Defender"
+        if button.text == "🛡️ Defender"
         and (button.callback_data or "").startswith("vsc:")
     )
     await dispatcher.feed_raw_update(
