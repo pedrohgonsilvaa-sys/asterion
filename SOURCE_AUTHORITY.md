@@ -140,7 +140,9 @@ Por decisão do autor (2026-11-25), O Despertar dos Flagelos é uma **exceção 
 
 Também por decisão do autor (2026-11-25): IA simples e determinística (Preparada elegível → especial elegível de maior prioridade → ataque básico; recarga e alvo respeitados; recalcula se a ação deixou de ser executável); "aplicação significativa de efeito" é só o efeito que o motor de fato aplicou e que mudou o estado do alvo; desempate de ranking pelo instante do backend em que a métrica atingiu o valor; capacidade 200; reentrada 2 min sem limite.
 
-**Pendente (não implementar por inferência):** catálogo final dos 54 equipamentos/receitas especiais (nomes, raridade, Grau, Ofício, classe de armadura, Weapon Metadata, família de Proficiência, custos de receita e de fragmentos), raridade/template do equipamento sorteado, textos narrativos de Bestiário/Códice e imagens dos seis Flagelos. Registro em código: `src/asterion/domain/flagelos.py` (`PENDING`).
+**Especificação final aprovada (2026-11-25):** `docs/specs/ASTERION_O_DESPERTAR_DOS_FLAGELOS_ESPEC_FINAL.md` (SHA-256 `528d996cf5921b8ddac28feb4968a92cd7f09e1cf38f2ee6b54a222d9746c571`). Fecha o que a V1.0.0 deixava pendente: os 54 equipamentos e as 54 Receitas (IDs literais), raridade/SW/Ofício por slot, metadata das armas, custo de Receita (fórmula global de Crafting × SW + Fragmento do Flagelo), sorteio do equipamento (1/9 por template), descoberta de Receita (25%, uma por morte, sem pity), 6 Núcleos, textos de Bestiário/Códice, lock da Configuração durante o combate e esquiva global nos golpes do Flagelo. Prevalece sobre a V1.0.0 onde as duas diferem. Implementação: `src/asterion/domain/flagelo_catalog.py` e `src/asterion/domain/flagelo_lore.py`.
+
+**Pendente:** imagens dos seis Flagelos (a cargo do autor) e a forma de obter os seis Núcleos (a especificação final não inclui Núcleo no pacote de recompensa; ver `docs/specs/ASTERION_DESPERTAR_DOS_FLAGELOS_DECISOES_TECNICAS.md`).
 
 ## Fontes regionais vigentes
 

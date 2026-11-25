@@ -72,21 +72,46 @@ Véu e do motor continuam verdes):
 | 28 | Receita | decisão técnica | sorteio de 25% por participante elegível (receitas são por personagem); com catálogo vazio registra `pending_catalog` |
 | 29 | Códice | decisão do autor | `CodexEntry` gravada; invisível até existir texto canônico |
 | 30 | Notificação | A + B | Outbox, só nascimento e morte, uma por ocorrência; grupo da comunidade (`ASTERION_COMMUNITY_CHAT_ID`) e tópico opcional novo `ASTERION_COMMUNITY_EVENTS_TOPIC_ID`; botão para `/start flagelo` |
-| 31 | HUD | A (UI v1.6.2) | hub do evento com as 6 barras, entrada pela tela de Eventos. O Refúgio do Ocaso e a Aventura não mudaram (telas canônicas da UI v1.6.2) |
+| 31 | HUD | A (UI v1.6.2) | hub do evento com as 6 barras, entrada pela tela de Eventos (o HUD da Região foi acrescentado pela especificação final, #46) |
+
+## Especificação final (2026-11-25) — o que mudou
+
+Fonte: `ASTERION_O_DESPERTAR_DOS_FLAGELOS_ESPEC_FINAL.md`. As lacunas 1, 2, 4 e 5 da versão
+anterior deste documento foram fechadas pelo autor:
+
+| # | Tema | Classe | Comportamento |
+|---|---|---|---|
+| 32 | 54 templates | B (§10–§11) | `domain/flagelo_catalog.py`; raridade/SW/Ofício por slot; todos +0; sem classe de armadura |
+| 33 | Armas | B (§10) | 18 identidades novas no registro de Weapon Metadata (forma, mãos, slot e tag explícitos). Maça 2H usa a identidade de Proficiência Martelo de Guerra (a única contundente de duas mãos) |
+| 34 | Receitas | B (§12) | 54 Receitas especiais no Crafting global, IDs literais; só aparecem com `Unlock` |
+| 35 | Custo | A + B (§12) | `8/10/14 básicos × SW` + Catalisador/Fragmento de Aprimoramento do Grau + Núcleo (Lendário) + 1 Fragmento do Flagelo × SW. Divisão dos básicos igual às Receitas regionais do mesmo Ofício (Ferreiro metal+4º 70/30, Curteiro couro+erva 70/30, Joalheiro metal+4º 60/40) |
+| 36 | Lendário no Crafting | A (GDD §49) | requisito de Ofício 16 e taxa `C(n)×SW×0,75` (valores globais do GDD; o código não tinha Lendário) |
+| 37 | Grau | decisão técnica | Grau da Região (TDO I … Confins VI), a mesma faixa de nível do Flagelo |
+| 38 | Equipamento da morte | B (§6/§11) | 1/9 por template, determinístico pela ocorrência; materializador global no nível do Flagelo; entrega Inventário → Pendentes → retenção |
+| 39 | Bind do equipamento | decisão técnica | **Vinculado**, como os materiais do prêmio (#7). A especificação não declara Bind; ver divergências |
+| 40 | Descoberta de Receita | B (§12) | por elegível (Receita é conhecimento do personagem): 25%, uma desconhecida uniforme, no máximo uma por morte; com as 9 conhecidas não sorteia (`skipped`, motivo `all_known`) |
+| 41 | Lock da Configuração | B (§3) | `in_combat` do participante é o lock, lido pelo guarda global. Liberam: derrota, Sair do combate, inatividade do GDD §49 e morte do Flagelo. Tela, `/start`, `/menu`, reconexão não liberam. Entrada com outra atividade autoritativa ativa é recusada (`busy`) |
+| 42 | Snapshot | B (§3) | `entry_snapshot` = atributos do Flagelo + Configuração (versão, equipamento, Caminho, Talentos, Artes). Reentrada grava outro |
+| 43 | Esquiva | B (§3) | golpes do Flagelo rolam a Esquiva do motor (`CombatRng`, mesma trava anti-sequência de 2). Golpe esquivado não causa dano, DoT nem debuff. Implementado como opção do lote compartilhado; o Véu não a usa |
+| 44 | Bestiário | B (§15) | texto aprovado como nota da criatura no Bestiário da Região |
+| 45 | Códice | B (§16) | entrada geral + uma por Flagelo, em Mistérios e Fenômenos, com o texto como fragmento; concedidas aos elegíveis na morte |
+| 46 | HUD da Região | B (§17) | barra `atual / 500` (%) no HUD do Refúgio; botão "Enfrentar o Flagelo" quando há um desperto, apontando para o hub do evento |
+| 47 | Telas do evento | B (§17) | hub e combate mostram escala, métricas próprias (dano, defesa, cura) e a recompensa do último Flagelo |
 
 ## Lacunas e limitações (C)
 
-1. **Catálogo dos 54 equipamentos/receitas**, raridade/template do equipamento sorteado,
-   custos de receita e de fragmentos: pendentes (`flagelos.PENDING`).
-2. **Textos de Bestiário/Códice e imagens**: pendentes. Os Flagelos aparecem no Bestiário da
-   própria Região só com nome e ações observadas; usam a arte genérica de Eventos.
-3. **"Outro PvE equivalente"** (ex.: Ronda de Caça): nenhum valor definido, não contribui.
-4. **Lock da Configuração de Combate (GDD §21)**: o GDD manda travar a Configuração durante a
-   participação. Num evento sem fim isso travaria o equipamento indefinidamente; o Véu também
-   não trava. Fica pendente de decisão: o Flagelo usa a Configuração atual a cada rodada.
-5. **Golpes do Flagelo não rolam evasão/crítico/bloqueio**: limitação herdada do lote do Véu
-   (os passos 2, 4 e 8 do pipeline só existem no lado do jogador; o Defender é aplicado). Por
-   isso os debuffs de AGI de Nharvek e Azharel não mudam a chance de acerto do Flagelo.
+1. **Núcleos**: os seis existem como material e entram no custo das Receitas lendárias, mas a
+   especificação final não traz Núcleo no pacote de recompensa (§6) e manda não inventar moeda
+   alternativa. **Sem fonte de obtenção**: as 12 Receitas lendárias ficam descobríveis, mas não
+   craftáveis, até o autor definir a aquisição.
+2. **Imagens**: fora do escopo (a cargo do autor). Os Flagelos usam a arte genérica de Eventos.
+3. **"Outro PvE equivalente"** (ex.: Ronda de Caça): configurável em
+   `domain/flagelos.CONTRIBUTION_POINTS`; nenhum valor definido, então não contribui.
+4. **Talentos ativados por esquiva** (ex.: Desvio Ofensivo do Errante) não disparam quando o
+   personagem esquiva um golpe do Flagelo: o lote compartilhado não executa gatilhos de Talento
+   do lado defensivo. A chance de esquiva em si é a do motor.
+5. **Crítico/bloqueio dos golpes do Flagelo**: o lote não rola crítico nem bloqueio do inimigo
+   (limitação herdada do Véu). A especificação final só exigiu a esquiva.
 6. **AoE sem recarga na especificação** (Sopro de Fuligem, Tensão Compartilhada, Fratura
    Local): implementadas literalmente, então são usadas sempre que as especiais com recarga
    estão em espera. **Balanceamento** a revisar, não alterado.
