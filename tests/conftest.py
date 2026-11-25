@@ -12,7 +12,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from alembic import command
-
 from asterion.application.creation import CreationService
 
 if sys.platform == "win32":
