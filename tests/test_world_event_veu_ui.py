@@ -45,7 +45,7 @@ def test_panel_lists_active_nuclei_without_recommending_any():
     assert "⏳ Tempo restante · <code>18:42</code>" in screen.text
     assert "Escolha um Núcleo para participar." in screen.text
     assert "👥 7 participantes" in screen.text and "<code>7" not in screen.text
-    assert _callbacks(screen) == ["veu:n:D", "veu:n:E", "adv:hub"]
+    assert _callbacks(screen) == ["veu:n:D", "veu:n:E", "flg:hub", "adv:hub"]
     assert "recomend" not in screen.text.lower()
 
 
