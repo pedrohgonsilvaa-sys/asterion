@@ -1,6 +1,6 @@
-# Especificação: Ofícios fabricam o catálogo regional (v0.1.0, PROPOSTA)
+# Especificação: Ofícios fabricam o catálogo regional (v1.0.0)
 
-**Status:** proposta. Aguarda aprovação do autor. Nenhum código antes disso.
+**Status:** aprovada pelo autor em 2026-11-25 (v0.1.0 proposta, com P1 e P2 respondidas). Pronta para implementação.
 **Data:** 2026-11-25.
 **Origem:** a auditoria `docs/audits/ASTERION_AUDITORIA_FASE2E_v1.9.1_VS_MAIN_2026-11-25.md` (§9 e §10) encerrou a Fase 2E como superada. A lacuna que sobrou: os Ofícios (`src/asterion/domain/professions.py`) não fabricam nenhum item do catálogo regional de Saque (`src/asterion/domain/regional_equipment.py`).
 **Autores:** game-designer (desenho), systems-designer (custos e economia), consolidado pela sessão principal.
@@ -44,9 +44,9 @@ Fora do escopo:
 | A3 | Receitas-família atuais | Converter (ver §7). |
 | A4 | Confins §19 Regra A ("sem armadura leve/média/pesada mecânica") versus a exceção de Classes de Armadura | A exceção vence. Confins fabrica as 4 classes. A fonte de Confins fica superada neste ponto, por decisão do autor. |
 
-## 4. Recomendações que dependem de aprovação
+## 4. Regras aprovadas (R1 a R11)
 
-Os agentes propõem estas regras. Nenhuma tem número novo. O autor aprova ou corrige cada uma.
+Os agentes propuseram estas regras, e o autor aprovou todas em 2026-11-25. Nenhuma tem número novo.
 
 | # | Ponto | Recomendação | Por quê |
 |---|---|---|---|
@@ -135,7 +135,7 @@ Abaixo do teto, a taxa segue a mesma fórmula com o `item_level` real. Os valore
 Hoje cada região de TDO a Várzeas tem 13 famílias × 3 raridades. Altos e Confins não têm famílias genéricas no código, só receitas especiais.
 
 1. **Nome igual a um item do catálogo** (as 4 Vestes de Curteiro em TDO, VDE e Várzeas; o Selo e o Relicário do Joalheiro nas 6 regiões): a receita mantém o `recipe_id` e passa a apontar para o `template_id` do item (`output_id`).
-2. **Nome quase igual** (Nareth: "Capuz de Horizonte" na receita, "Capuz do Horizonte" no catálogo): o autor decide se conta como igual (pergunta P1).
+2. **Nome quase igual** (Nareth: "Capuz de Horizonte" na receita, "Capuz do Horizonte" no catálogo): conta como o mesmo item e é convertida (P1). O nome passa a ser o do catálogo.
 3. **Família sem item correspondente** (as 3 famílias de arma e as 4 peças de Ferreiro "de Fuligem", "Enlaçado" etc.): a receita fica com `creation_enabled = False`. Ela some da lista de fabricação, mas o ID continua existindo para desbloqueios (`unlock_id`) e Serviços (`service_offer`) antigos. Os itens já fabricados continuam nos inventários (R10).
 4. **Itens do catálogo sem receita**: ganham receita nova com o ID `recipe.<região>.<ofício>.<slug do template>.<raridade>`. O `programmer` pode ajustar o formato, desde que não colida com IDs existentes.
 
@@ -165,12 +165,12 @@ Pontos de código encontrados pelos agentes. A implementação é do `programmer
 - **Vínculo.** Fragmento e Catalisador não transmitem vínculo (regra atual). Isso não muda.
 - **PXP.** O multiplicador por Grau (100/50/20/0) já impede subir de nível com receita barata de região baixa.
 
-## 10. Perguntas ainda abertas
+## 10. Perguntas respondidas (2026-11-25)
 
-| # | Pergunta | Opções |
+| # | Pergunta | Resposta do autor |
 |---|---|---|
-| P1 | Em Nareth, "Capuz de Horizonte" (receita) e "Capuz do Horizonte" (catálogo) contam como o mesmo item na conversão? | (a) sim, converte; (b) não, a receita antiga é desativada |
-| P2 | As recomendações R1 a R11 estão aprovadas? | aprovar todas, ou indicar quais mudam |
+| P1 | "Capuz de Horizonte" (receita de Nareth) e "Capuz do Horizonte" (catálogo) são o mesmo item? | Sim: a receita é convertida. |
+| P2 | R1 a R11 aprovadas? | Sim, todas. |
 
 ## 11. Critérios de aceite (para a implementação depois da aprovação)
 
