@@ -123,7 +123,7 @@ def test_refuge_local_uses_refuge_art_and_lists_services():
     ]
     assert _callbacks(screen) == [
         "refuge:brazier", "refuge:darian", "refuge:alda", "refuge:oren",
-        "character:professions", "character:path", "world:missions", "warehouse:root",
+        "character:professions", "character:path", "world:missions", "warehouse:root:refuge",
         "menu:back",
     ]
     assert "Dádiva" not in screen.text and "Travessia" not in screen.text

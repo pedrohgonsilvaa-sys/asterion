@@ -214,6 +214,7 @@ CODEX_CATEGORY_SCREENS = {
     ),
 }
 CODEX_BACK = "↩️ Voltar"
+CODEX_BESTIARY = "🐾 Bestiário"
 
 
 def _codex_screen(title: str, description: str | None, rows) -> Screen:
@@ -232,6 +233,8 @@ def render_codex_root(view: KnowledgeView) -> Screen:
         for category_id, _label in CODEX_CATEGORY_ORDER
     ]
     rows = [buttons[index : index + 2] for index in range(0, len(buttons), 2)]
+    # Bestiário é sistema próprio, não categoria do Códice: entrada em linha separada.
+    rows.append([_button(CODEX_BESTIARY, "kb:b")])
     rows.append([_button(CODEX_BACK, "menu:back")])
     return _codex_screen("📖 Códice de Asterion", CODEX_TEXT, rows)
 

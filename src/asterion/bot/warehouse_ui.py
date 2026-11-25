@@ -31,12 +31,15 @@ SOURCE_TITLE = {
 }
 
 
-def render_warehouse(view: WarehouseView, page: int = 0) -> Screen:
+def render_warehouse(
+    view: WarehouseView, page: int = 0, *, back_to_refuge: bool = False
+) -> Screen:
+    """``back_to_refuge``: o Armazém foi aberto pelo Refúgio do Ocaso, e Voltar retorna a ele."""
     if view.kind == "warehouse_operation":
         return _render_operation(view)
     if view.kind == "warehouse_inventory_sources":
         return _render_sources(view, page)
-    return _render_root(view, page)
+    return _render_root(view, page, back_to_refuge)
 
 
 def render_warehouse_quantity(view: WarehouseView, selected: int) -> Screen:
@@ -172,7 +175,14 @@ def _render_sources(view: WarehouseView, page: int) -> Screen:
     )
 
 
-def _render_root(view: WarehouseView, page: int) -> Screen:
+def _back_row(back_to_refuge: bool) -> list[InlineKeyboardButton]:
+    """Voltar preserva a origem: Refúgio do Ocaso ou Inventário."""
+    if back_to_refuge:
+        return [InlineKeyboardButton(text="↩️ Voltar", callback_data="refuge:local")]
+    return [InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")]
+
+
+def _render_root(view: WarehouseView, page: int, back_to_refuge: bool) -> Screen:
     lines = [
         "🗄️ Armazém",
         "",
@@ -180,11 +190,7 @@ def _render_root(view: WarehouseView, page: int) -> Screen:
     ]
     if not view.accessible:
         lines.append("Acesse um Braseiro permanente descoberto para usar o Armazém.")
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")]
-            ]
-        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[_back_row(back_to_refuge)])
         return Screen("\n".join(lines), "warehouse", keyboard)
     page, pages, start, entries = page_slice(view.entries, page)
     lines.extend(_capacity_lines(view))
@@ -227,7 +233,7 @@ def _render_root(view: WarehouseView, page: int) -> Screen:
                     callback_data="warehouse:inventory:rune",
                 ),
             ],
-            [InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")],
+            _back_row(back_to_refuge),
         ]
     )
     return Screen(

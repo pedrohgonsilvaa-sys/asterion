@@ -41,7 +41,7 @@ CB_HUD = "menu:back"
 CB_PROFESSIONS = "character:professions"
 CB_PATH = "character:path"
 CB_MISSIONS = "world:missions"
-CB_WAREHOUSE = "warehouse:root"
+CB_WAREHOUSE = "warehouse:root:refuge"
 
 REFUGE_TEXT = (
     "Entre as cinzas do Ocaso, este abrigo permanece como um dos poucos lugares seguros "

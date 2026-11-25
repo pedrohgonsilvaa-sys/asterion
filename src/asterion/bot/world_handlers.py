@@ -1609,8 +1609,18 @@ def world_router(
             local_screen = await current_local_screen(query.from_user.id, view)
             await present(query.message, local_screen or render_road(view), images, edit=True)
 
+    # Origem do Armazém por usuário: aberto pelo Refúgio, Voltar retorna ao Refúgio;
+    # abrir o Inventário devolve o Armazém ao retorno padrão (Inventário).
+    warehouse_from_refuge: set[int] = set()
+
+    def warehouse_screen(actor: int, view, page: int = 0):
+        from asterion.bot.warehouse_ui import render_warehouse
+
+        return render_warehouse(view, page, back_to_refuge=actor in warehouse_from_refuge)
+
     @router.callback_query(F.data == "inventory:root")
     async def inventory_root(query: CallbackQuery):
+        warehouse_from_refuge.discard(query.from_user.id)
         await query.answer()
         if inventory is None or not isinstance(query.message, Message):
             return
@@ -1620,6 +1630,7 @@ def world_router(
 
     @router.callback_query(F.data.startswith("inventory:category:"))
     async def inventory_category(query: CallbackQuery):
+        warehouse_from_refuge.discard(query.from_user.id)
         await query.answer()
         if inventory is None or not isinstance(query.message, Message):
             return
@@ -1641,16 +1652,17 @@ def world_router(
             await present(query.message, render_inventory(view), images, edit=True)
 
     @router.callback_query(F.data == "warehouse:root")
+    @router.callback_query(F.data == "warehouse:root:refuge")
     @router.callback_query(F.data.startswith("warehouse:page:"))
     async def warehouse_root(query: CallbackQuery):
+        if query.data == "warehouse:root:refuge":
+            warehouse_from_refuge.add(query.from_user.id)
         await query.answer()
         if warehouse is None or not isinstance(query.message, Message):
             return
         view = await warehouse.root(query.from_user.id)
         if view is not None:
-            from asterion.bot.warehouse_ui import render_warehouse
-
-            screen = render_warehouse(view, _callback_page(query.data))
+            screen = warehouse_screen(query.from_user.id, view, _callback_page(query.data))
             await present(query.message, screen, images, edit=True)
 
     @router.callback_query(F.data.startswith("warehouse:inventory:"))
@@ -1667,9 +1679,7 @@ def world_router(
             return
         await query.answer()
         if view is not None:
-            from asterion.bot.warehouse_ui import render_warehouse
-
-            screen = render_warehouse(view, _callback_page(query.data))
+            screen = warehouse_screen(query.from_user.id, view, _callback_page(query.data))
             await present(query.message, screen, images, edit=True)
 
     @router.callback_query(F.data.startswith("warehouse:deposit:"))
@@ -1704,9 +1714,7 @@ def world_router(
             return
         await query.answer("Revise e confirme a transferência.")
         if view is not None:
-            from asterion.bot.warehouse_ui import render_warehouse
-
-            await present(query.message, render_warehouse(view), images, edit=True)
+            await present(query.message, warehouse_screen(query.from_user.id, view), images, edit=True)
 
     @router.callback_query(F.data.startswith("warehouse:qty:"))
     async def warehouse_choose_quantity(query: CallbackQuery):
@@ -1736,7 +1744,7 @@ def world_router(
         if warehouse is None or not isinstance(query.message, Message):
             await query.answer()
             return
-        from asterion.bot.warehouse_ui import parse_quantity_callback, render_warehouse
+        from asterion.bot.warehouse_ui import parse_quantity_callback
 
         try:
             direction, kind, item_id, selected = parse_quantity_callback(query.data or "")
@@ -1753,7 +1761,7 @@ def world_router(
             return
         await query.answer("Revise e confirme a transferência.")
         if view is not None:
-            await present(query.message, render_warehouse(view), images, edit=True)
+            await present(query.message, warehouse_screen(query.from_user.id, view), images, edit=True)
 
     @router.callback_query(F.data.startswith("warehouse:confirm:"))
     async def warehouse_confirm(query: CallbackQuery):
@@ -1782,9 +1790,7 @@ def world_router(
         else:
             view = await warehouse.root(query.from_user.id)
             if view is not None:
-                from asterion.bot.warehouse_ui import render_warehouse
-
-                await present(query.message, render_warehouse(view), images, edit=True)
+                await present(query.message, warehouse_screen(query.from_user.id, view), images, edit=True)
 
     @router.callback_query(F.data.startswith("warehouse:cancel:"))
     async def warehouse_cancel(query: CallbackQuery):
@@ -1799,9 +1805,7 @@ def world_router(
         await query.answer("Prévia cancelada." if status == "CANCELLED" else "Prévia não está mais ativa.", show_alert=status != "CANCELLED")
         view = await warehouse.root(query.from_user.id)
         if view is not None:
-            from asterion.bot.warehouse_ui import render_warehouse
-
-            await present(query.message, render_warehouse(view), images, edit=True)
+            await present(query.message, warehouse_screen(query.from_user.id, view), images, edit=True)
 
     @router.callback_query(F.data.startswith("consumable:vigor:"))
     async def use_vigor(query: CallbackQuery):
@@ -1852,9 +1856,7 @@ def world_router(
             return
         await query.answer("Revise e confirme o resgate.")
         if view is not None:
-            from asterion.bot.warehouse_ui import render_warehouse
-
-            await present(query.message, render_warehouse(view), images, edit=True)
+            await present(query.message, warehouse_screen(query.from_user.id, view), images, edit=True)
 
     @router.callback_query(F.data == "pending:retry")
     async def retry_blocked_deliveries(query: CallbackQuery):

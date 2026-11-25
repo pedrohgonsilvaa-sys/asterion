@@ -103,8 +103,10 @@ def test_codex_root_has_seven_categories_and_no_counter():
         ["👥 Povos", "👤 Figuras"],
         ["📜 História", "🌀 Mistérios"],
         ["📖 Crônicas"],
+        ["🐾 Bestiário"],
         ["↩️ Voltar"],
     ]
+    assert _callbacks(screen)[-2:] == ["kb:b", "menu:back"]
     for forbidden in ("???", "%", "0/", "Nenhuma"):
         assert forbidden not in screen.text
 
@@ -117,3 +119,24 @@ def test_empty_codex_category_shows_only_description_and_back():
     )
     assert _labels(screen) == [["↩️ Voltar"]]
     assert _callbacks(screen) == ["kb:cd"]
+
+
+# ---- Ajustes pós-validação: Armazém preserva a origem ---------------------------------
+
+
+def test_warehouse_back_follows_its_origin():
+    from uuid import uuid4
+
+    from asterion.application.warehouse import WarehouseView
+    from asterion.bot.refuge_ui import CB_WAREHOUSE
+    from asterion.bot.warehouse_ui import render_warehouse
+
+    assert CB_WAREHOUSE == "warehouse:root:refuge"
+    for accessible in (True, False):
+        view = WarehouseView("warehouse_root", uuid4(), accessible, "Refúgio do Ocaso", 60, 100)
+        from_refuge = render_warehouse(view, back_to_refuge=True)
+        assert _labels(from_refuge)[-1] == ["↩️ Voltar"]
+        assert _callbacks(from_refuge)[-1] == "refuge:local"
+        from_inventory = render_warehouse(view)
+        assert _labels(from_inventory)[-1] == ["← Inventário"]
+        assert _callbacks(from_inventory)[-1] == "inventory:root"
