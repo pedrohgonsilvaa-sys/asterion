@@ -16,6 +16,7 @@ from asterion.infrastructure.db.models import (
 )
 
 HUNT_ROUND_CONFIGURATION_LOCK_STATUSES = ("active", "interrupted")
+FLAGELO_ACTIVITY_CONTENT = "flagelo_combat"
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,7 +51,10 @@ async def find_combat_configuration_blocker(
     )
     if activity is not None:
         return CombatConfigurationBlocker(
-            kind="foreground_activity",
+            # O combate no Flagelo também mantém uma GameActivity (exclusividade); o tipo
+            # específico continua sendo ``flagelo``.
+            kind="flagelo" if activity.content_id == FLAGELO_ACTIVITY_CONTENT
+            else "foreground_activity",
             id=activity.id,
             status=activity.status,
             content_id=activity.content_id,

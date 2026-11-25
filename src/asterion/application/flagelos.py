@@ -38,13 +38,16 @@ from decimal import Decimal
 from typing import Protocol
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.bestiary import BestiaryRecorder
-from asterion.application.combat_configuration_guard import find_combat_configuration_blocker
+from asterion.application.combat_configuration_guard import (
+    FLAGELO_ACTIVITY_CONTENT,
+    find_combat_configuration_blocker,
+)
 from asterion.application.engagement import grant_bundle
 from asterion.application.equipment import equipment_instance_payload
 from asterion.application.equipment_configuration import load_equipment_configuration
@@ -77,11 +80,16 @@ from asterion.infrastructure.db.models import (
     FlageloRegionProgress,
     FlageloRewardSettlement,
     FlageloRound,
+    GameActivity,
     OutboxMessage,
     Unlock,
     WorldState,
 )
 
+# Exclusividade de atividade: o combate no Flagelo mantém uma ``GameActivity`` ativa, como o
+# Evento Mundial genérico. É a "linha de primeiro plano" única (``uq_active_foreground``) que
+# Caçada, Desbravar, Masmorra, PvP, Missões e Ofícios já consultam: nenhuma trava paralela.
+ACTIVITY_CONTENT = FLAGELO_ACTIVITY_CONTENT
 ACTION_TYPES = ("attack", "defend", "art")
 NOTICE_TOPIC = "flagelo.community_notice"
 OPEN, RESOLVING, RESOLVED = "OPEN", "RESOLVING", "RESOLVED"
@@ -628,8 +636,51 @@ class FlageloService:
             }
             event.last_zero_combat_at = None
             event.version += 1
+            session.add(
+                GameActivity(
+                    character_id=character.id,
+                    content_id=ACTIVITY_CONTENT,
+                    status="active",
+                    state_version=0,
+                    ruleset_version=fl.RULESET,
+                    last_valid_action_at=now,
+                )
+            )
             await session.flush()
             return event.id
+
+    @staticmethod
+    async def _release_activities(session, character_ids: Sequence[UUID] | None = None) -> None:
+        """Encerra a ``GameActivity`` do combate no Flagelo (saída, derrota, inatividade ou
+        morte do Flagelo). Idempotente: sem linha ativa não faz nada."""
+        statement = (
+            update(GameActivity)
+            .where(GameActivity.content_id == ACTIVITY_CONTENT, GameActivity.status == "active")
+            .values(status="completed")
+        )
+        if character_ids is not None:
+            if not character_ids:
+                return
+            statement = statement.where(GameActivity.character_id.in_(list(character_ids)))
+        await session.execute(statement)
+
+    async def _release_orphans(self, session) -> int:
+        """Rede de segurança do restart: nenhuma linha ativa sem ``in_combat`` correspondente."""
+        in_combat = (
+            select(FlageloParticipant.character_id)
+            .where(FlageloParticipant.in_combat.is_(True))
+            .scalar_subquery()
+        )
+        result = await session.execute(
+            update(GameActivity)
+            .where(
+                GameActivity.content_id == ACTIVITY_CONTENT,
+                GameActivity.status == "active",
+                GameActivity.character_id.not_in(in_combat),
+            )
+            .values(status="completed")
+        )
+        return int(result.rowcount or 0)
 
     async def leave(self, actor: int, *, now: datetime | None = None) -> None:
         now = _utc(now)
@@ -644,6 +695,7 @@ class FlageloService:
             if participant is None or not participant.in_combat:
                 return
             self._exit(participant, now)
+            await self._release_activities(session, [character.id])
             await session.flush()
             await self._mark_idle_if_empty(session, event, now)
 
@@ -948,6 +1000,7 @@ class FlageloService:
         event.enemy_state = state
         event.version += 1
         self._credit(participants, actions, outcome, intents, dot_credit, now)
+        released: list[UUID] = []
         for participant in participants:
             player = players.get(participant.character_id)
             if player is not None:
@@ -957,6 +1010,7 @@ class FlageloService:
                 player is not None and player.hp <= 0
             ):
                 self._exit(participant, now, defeated=True)
+                released.append(participant.character_id)
                 continue
             if participant in acting:
                 if any(a.character_id == participant.character_id for a in actions):
@@ -965,6 +1019,8 @@ class FlageloService:
                     participant.idle_rounds += 1
                     if participant.idle_rounds >= fl.INACTIVE_ROUNDS:
                         self._exit(participant, now)
+                        released.append(participant.character_id)
+        await self._release_activities(session, released)
         return outcome.history
 
     @staticmethod
@@ -1079,6 +1135,7 @@ class FlageloService:
         for participant in participants:
             if participant.in_combat:
                 participant.in_combat = False
+        await self._release_activities(session, [p.character_id for p in participants])
         eligible = [p for p in participants if fl.is_eligible(_metrics(p))]
         names = {
             row.id: row.name
@@ -1577,6 +1634,8 @@ class FlageloService:
         rodada e liquidação. Cada passo é idempotente; um restart retoma do estado salvo."""
         now = _utc(now)
         applied, spawned = await self.apply_contributions(now=now)
+        async with self.sessions.begin() as session:
+            await self._release_orphans(session)  # nenhum lock fantasma depois de um restart
         resolved = 0
         defeated: list[UUID] = []
         for round_id in await self.due_rounds(now):
