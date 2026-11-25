@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from asterion.domain import chronicle_codex
+from asterion.domain import chronicle_codex, flagelo_lore
 from asterion.domain.flagelos import FRAGMENT_NAMES as FLAGELO_FRAGMENT_NAMES
 from asterion.domain.flagelos import REGIONS as FLAGELO_REGIONS
 from asterion.domain.veu_bestiary import VEU_CREATURES
@@ -524,6 +524,11 @@ CODEX_ENTRIES = (
 CODEX_ENTRIES += tuple(
     CodexPresentation(entry.entry_id, entry.title, entry.category, entry.order)
     for entry in chronicle_codex.ENTRIES
+)
+# O Despertar dos Flagelos (espec. final §16): sem Local, listadas em Mistérios e Fenômenos.
+CODEX_ENTRIES += tuple(
+    CodexPresentation(entry.entry_id, entry.title, "mysteries", entry.order)
+    for entry in flagelo_lore.ALL_CODEX
 )
 CODEX_BY_ID = {entry.entry_id: entry for entry in CODEX_ENTRIES}
 
@@ -1202,6 +1207,10 @@ CODEX_FRAGMENTS.update(
         item.fragment_id: FragmentPresentation(item.title, item.text)
         for item in chronicle_codex.FRAGMENTS
     }
+)
+# O Despertar dos Flagelos (espec. final §16): o texto aprovado de cada entrada.
+CODEX_FRAGMENTS.update(
+    {item.fragment_id: FragmentPresentation(item.title, item.text) for item in flagelo_lore.ALL_CODEX}
 )
 
 
@@ -2091,7 +2100,7 @@ CREATURE_PRESENTATION.update(
     }
 )
 # O Despertar dos Flagelos: cada Flagelo fica no Bestiário da própria Região. Sem habitat
-# (aparece pelo evento, não por Local) e sem texto narrativo até o autor fornecê-lo.
+# (aparece pelo evento, não por Local); o texto aprovado entra em ``CREATURE_NOTES``.
 CREATURE_PRESENTATION.update(
     {
         region.flagelo.bestiary_key: CreaturePresentation(region.region_id, ())
@@ -2101,6 +2110,11 @@ CREATURE_PRESENTATION.update(
 CREATURE_NOTES = {
     # The regional source explicitly leaves this creature's origin and nature unconfirmed.
     "peregrino_calcinado": "Origem e natureza ainda não confirmadas.",
+    # O Despertar dos Flagelos (espec. final §15): texto aprovado de cada Flagelo.
+    **{
+        region.flagelo.bestiary_key: flagelo_lore.bestiary_note(region.flagelo.flagelo_id)
+        for region in FLAGELO_REGIONS
+    },
 }
 VARIANT_LABELS = {
     "furious": "Furioso",
