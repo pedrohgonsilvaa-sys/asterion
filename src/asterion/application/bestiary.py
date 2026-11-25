@@ -258,6 +258,15 @@ NARETH_DISTINCTIVE_ELITE_MASTERY = {
 }
 
 
+def _creature_name(creature_id: str) -> str:
+    """Nome para o aviso de estágio; os Flagelos não estão no catálogo da estrada."""
+    if creature_id.startswith("bestiary.flagelo."):
+        from asterion.domain.flagelos import REGIONS
+
+        return next(r.flagelo.name for r in REGIONS if r.flagelo.bestiary_key == creature_id)
+    return creature_for(creature_id).name
+
+
 class BestiaryRecorder:
     """Record shared first-contact, evidence, victory, and stage semantics."""
 
@@ -924,7 +933,7 @@ class BestiaryRecorder:
         ):
             return {
                 "creature_id": creature_id,
-                "creature_name": creature_for(creature_id).name,
+                "creature_name": _creature_name(creature_id),
                 "stage": entry.stage,
                 "stage_label": BESTIARY_STAGE_LABELS[entry.stage],
             }

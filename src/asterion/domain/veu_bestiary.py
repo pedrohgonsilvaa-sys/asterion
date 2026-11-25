@@ -73,6 +73,7 @@ class ActionKind(StrEnum):
     BARRIER = "barrier"
     AOE = "aoe"
     MULTI_TARGET = "multi_target"  # "contra dois alvos válidos"
+    HEAL = "heal"  # cura própria (O Despertar dos Flagelos); o Véu não usa
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +96,13 @@ class VeuAction:
     always_telegraphed: bool = False
     not_consecutive: bool = False
     max_uses: int | None = None
+    # Extensões opcionais usadas pelos Flagelos (O Despertar dos Flagelos). Os kits do Véu
+    # não as preenchem, então o comportamento do Véu não muda.
+    dot_kind: str | None = None  # "burn" (Queimadura) | "poison" (Veneno), DoT do motor
+    dot_stacks: int = 0
+    heal_hp_fraction: Decimal | None = None  # "cura própria 5% HP Máximo"
+    second_stat: str | None = None  # segundo atributo de um buff próprio (ex.: DEF)
+    second_magnitude: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -16,12 +16,19 @@ Decisões técnicas (a fonte não define; comportamento existente mais próximo)
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from uuid import UUID
 
-from asterion.domain.combat import Effect
-from asterion.domain.combat_math import direct_damage
+from asterion.domain.combat import (
+    DOT_DEFAULT_TICK_COEFFICIENT,
+    DOT_DURATIONS,
+    DOT_STACK_CAPS,
+    DOT_TICK_COEFFICIENTS,
+    Effect,
+)
+from asterion.domain.combat_math import direct_damage, dot_damage
 from asterion.domain.veu_bestiary import (
     BARRIER_DURATION_TURNS,
     EVENT_REFERENCE_LEVEL,
@@ -49,10 +56,19 @@ class EnemyUnit:
     buff_attack: Decimal = D(0)  # fração, ex.: 0.10
     buff_turns: int = 0
     agility: Decimal = D(0)
+    # Buff/debuff próprio de DEF (Flagelos: "Escora Inversa"). Zero no Véu.
+    defense_mod: Decimal = D(0)
+    defense_mod_turns: int = 0
 
     @property
     def defeated(self) -> bool:
         return self.hp <= 0
+
+    @property
+    def effective_defense(self) -> Decimal:
+        if self.defense_mod_turns > 0 and self.defense_mod:
+            return self.defense * (D(1) + self.defense_mod)
+        return self.defense
 
     def to_data(self) -> dict:
         return {
@@ -68,6 +84,8 @@ class EnemyUnit:
             "buff_attack": str(self.buff_attack),
             "buff_turns": self.buff_turns,
             "agility": str(self.agility),
+            "defense_mod": str(self.defense_mod),
+            "defense_mod_turns": self.defense_mod_turns,
         }
 
     @classmethod
@@ -86,6 +104,8 @@ class EnemyUnit:
             buff_attack=D(data.get("buff_attack", "0")),
             buff_turns=int(data.get("buff_turns", 0)),
             agility=D(data.get("agility", "0")),
+            defense_mod=D(data.get("defense_mod", "0")),
+            defense_mod_turns=int(data.get("defense_mod_turns", 0)),
         )
 
 
@@ -134,6 +154,37 @@ class PlayerEffect:
 
 
 @dataclass(slots=True)
+class PlayerDot:
+    """DoT do motor (``combat.DotState``) carregado por um jogador entre rodadas.
+
+    Duração, teto de pilhas e coeficiente de tick vêm do motor (``combat.DOT_*``); o tick usa
+    ``combat_math.dot_damage``. Só os kits dos Flagelos aplicam DoT; o Véu não.
+    """
+
+    kind: str
+    snapshots: list[Decimal]
+    remaining: int
+    source: str = ""
+
+    def to_data(self) -> dict:
+        return {
+            "kind": self.kind,
+            "snapshots": [str(value) for value in self.snapshots],
+            "remaining": self.remaining,
+            "source": self.source,
+        }
+
+    @classmethod
+    def from_data(cls, data: dict) -> PlayerDot:
+        return cls(
+            data["kind"],
+            [D(value) for value in data.get("snapshots", ())],
+            int(data["remaining"]),
+            data.get("source", ""),
+        )
+
+
+@dataclass(slots=True)
 class PlayerUnit:
     character_id: UUID
     hp: Decimal
@@ -143,14 +194,18 @@ class PlayerUnit:
     barrier_turns: int = 0
     barrier_source: UUID | None = None
     effects: list[PlayerEffect] = field(default_factory=list)
+    dots: list[PlayerDot] = field(default_factory=list)
 
     def state_data(self) -> dict:
-        return {
+        data = {
             "barrier": str(self.barrier),
             "barrier_turns": self.barrier_turns,
             "barrier_source": str(self.barrier_source) if self.barrier_source else None,
             "effects": [effect.to_data() for effect in self.effects],
         }
+        if self.dots:
+            data["dots"] = [dot.to_data() for dot in self.dots]
+        return data
 
     def load_state(self, data: dict) -> None:
         self.barrier = D(data.get("barrier", "0"))
@@ -158,6 +213,7 @@ class PlayerUnit:
         source = data.get("barrier_source")
         self.barrier_source = UUID(source) if source else None
         self.effects = [PlayerEffect.from_data(item) for item in data.get("effects", ())]
+        self.dots = [PlayerDot.from_data(item) for item in data.get("dots", ())]
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,6 +235,8 @@ class PlayerIntent:
     target: str | None  # código do inimigo; None em defender
     damage: int  # medido pelo motor sobre o estado inicial; 0 em defender
     support: tuple[SupportResult, ...] = ()
+    # O motor aplicou de fato um efeito novo/renovado/empilhado no inimigo (Flagelos).
+    effect_applied: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,6 +260,8 @@ class RoundOutcome:
     heal_by_character: dict[UUID, int] = field(default_factory=dict)
     barrier_absorbed_for: dict[UUID, int] = field(default_factory=dict)
     protection_credit: set[UUID] = field(default_factory=set)
+    # Dano que o Defender do próprio jogador impediu de fato (dano sem Defender − com).
+    prevented_by_character: dict[UUID, int] = field(default_factory=dict)
     history: list[dict] = field(default_factory=list)  # linhas estruturadas, sem texto
 
 
@@ -294,13 +354,35 @@ def _tick(player: PlayerUnit) -> None:
             player.barrier_source = None
 
 
+def _apply_player_dot(player: PlayerUnit, kind: str, stacks: int, snapshot: Decimal, source: str):
+    """Mesma regra do motor (``apply_dot_stacks``): pilhas até o teto, duração renovada."""
+    cap = max(1, DOT_STACK_CAPS.get(kind, 3))
+    current = next((dot for dot in player.dots if dot.kind == kind), None)
+    if current is None:
+        current = PlayerDot(kind, [], 0, source)
+        player.dots.append(current)
+    for _ in range(max(0, stacks)):
+        while len(current.snapshots) >= cap:
+            current.snapshots.pop(0)
+        current.snapshots.append(snapshot)
+    current.remaining = max(current.remaining, DOT_DURATIONS.get(kind, 2))
+    current.source = source
+
+
 def resolve_batch(
     enemies: dict[str, EnemyUnit],
     players: dict[UUID, PlayerUnit],
     intents: list[PlayerIntent],
     decisions: list[EnemyDecisionData],
+    *,
+    kit: Callable[[str], Sequence[VeuAction]] | None = None,
+    level: int = EVENT_REFERENCE_LEVEL,
 ) -> RoundOutcome:
-    """Aplica a rodada em lote a partir do estado inicial (§13.1 passos 8–11)."""
+    """Aplica a rodada em lote a partir do estado inicial (§13.1 passos 8–11).
+
+    ``kit``/``level``: o kit do inimigo e o nível de referência do dano inimigo. Sem eles,
+    valem o Bestiário do Véu e o nível do Véu (comportamento original).
+    """
     outcome = RoundOutcome()
     initial_barrier = {code: enemy.barrier for code, enemy in enemies.items()}
     defending = {i.character_id for i in intents if i.kind == "defend"}
@@ -347,10 +429,15 @@ def resolve_batch(
     # (as ações são simultâneas a partir do estado inicial, §13.4). A vida dos jogadores é
     # acumulada sem piso: curas da mesma rodada entram antes da checagem de derrota.
     pending_effects: dict[UUID, list[PlayerEffect]] = {}
+    pending_dots: list[tuple[UUID, str, int, Decimal, str]] = []
     unclamped = dict(start_hp)
     for decision in decisions:
         enemy = enemies[decision.enemy_code]
-        action = kit_action(enemy.code, decision.action_key)
+        action = (
+            next(a for a in kit(enemy.code) if a.key == decision.action_key)
+            if kit is not None
+            else kit_action(enemy.code, decision.action_key)
+        )
         enemy.uses[action.key] = enemy.uses.get(action.key, 0) + 1
         enemy.last_action = action.key
         if action.cooldown:
@@ -368,10 +455,26 @@ def resolve_batch(
                 {"kind": "enemy_barrier", "enemy": enemy.code, "action": action.key}
             )
             continue
+        if action.kind is ActionKind.HEAL:
+            # Cura própria nunca reergue um inimigo derrotado nesta mesma rodada.
+            if enemy.hp > 0 and action.heal_hp_fraction is not None:
+                healed = min(enemy.max_hp - enemy.hp, int(enemy.max_hp * action.heal_hp_fraction))
+                enemy.hp += max(D(0), D(healed))
+                outcome.history.append(
+                    {"kind": "enemy_healed", "enemy": enemy.code, "amount": int(max(0, healed))}
+                )
+            continue
         if action.kind is ActionKind.SELF_BUFF:
-            if action.stat == "ATQ":
-                enemy.buff_attack = abs(action.magnitude or D(0))
-                enemy.buff_turns = action.turns or 0
+            for stat, magnitude in (
+                (action.stat, action.magnitude),
+                (action.second_stat, action.second_magnitude),
+            ):
+                if stat == "ATQ":
+                    enemy.buff_attack = abs(magnitude or D(0))
+                    enemy.buff_turns = action.turns or 0
+                elif stat == "DEF" and action.second_stat is not None:
+                    enemy.defense_mod = magnitude or D(0)
+                    enemy.defense_mod_turns = action.turns or 0
             outcome.history.append(
                 {"kind": "enemy_buff", "enemy": enemy.code, "action": action.key}
             )
@@ -386,10 +489,17 @@ def resolve_batch(
                         attack,
                         action.coefficient,
                         player.defense,
-                        EVENT_REFERENCE_LEVEL,
+                        level,
                         mitigation=DEFEND_MITIGATION if target_id in defending else D(0),
                     )
                 )
+                if target_id in defending:
+                    unmitigated = direct_damage(attack, action.coefficient, player.defense, level)
+                    prevented = max(0, unmitigated - int(value))
+                    if prevented > 0:
+                        outcome.prevented_by_character[target_id] = (
+                            outcome.prevented_by_character.get(target_id, 0) + prevented
+                        )
                 absorbed = min(player.barrier, value)
                 if absorbed > 0:
                     player.barrier -= absorbed
@@ -418,7 +528,13 @@ def resolve_batch(
                     for effect in start_effects[target_id]:
                         if effect.stat == "defense" and effect.source:
                             outcome.protection_credit.add(UUID(effect.source))
-            if action.kind in (ActionKind.DAMAGE_DEBUFF, ActionKind.DEBUFF):
+                if action.dot_kind and action.dot_stacks > 0:
+                    pending_dots.append(
+                        (target_id, action.dot_kind, action.dot_stacks, attack, enemy.code)
+                    )
+            if action.kind in (ActionKind.DAMAGE_DEBUFF, ActionKind.DEBUFF) or (
+                action.kind is ActionKind.AOE and action.stat is not None
+            ):
                 stat = STAT_MAP.get(action.stat or "")
                 if stat and action.turns:
                     pending_effects.setdefault(target_id, []).append(
@@ -453,6 +569,35 @@ def resolve_batch(
             elif result.kind == "protection":
                 pending_effects.setdefault(result.target, []).extend(result.effects)
 
+    # 3b) ticks de DoT já carregados (aplicados em rodadas anteriores), regra do motor.
+    for character_id, player in sorted(players.items(), key=lambda item: str(item[0])):
+        if start_hp[character_id] <= 0 or not player.dots:
+            continue
+        for dot in player.dots:
+            tick = dot_damage(
+                dot.snapshots,
+                DOT_TICK_COEFFICIENTS.get(dot.kind, DOT_DEFAULT_TICK_COEFFICIENT),
+                player.defense,
+                level,
+            )
+            before = max(unclamped[character_id], D(0))
+            unclamped[character_id] -= D(tick)
+            shown = int(min(D(tick), before))
+            outcome.damage_taken[character_id] = outcome.damage_taken.get(character_id, 0) + shown
+            outcome.history.append(
+                {
+                    "kind": "player_dot",
+                    "dot": dot.kind,
+                    "character": str(character_id),
+                    "amount": shown,
+                }
+            )
+        player.dots = [
+            PlayerDot(d.kind, d.snapshots, d.remaining - 1, d.source)
+            for d in player.dots
+            if d.remaining - 1 > 0
+        ]
+
     # 4) vida final e derrotas; envelhecimento; efeitos novos valem a partir da próxima rodada.
     for character_id, player in players.items():
         player.hp = min(player.max_hp, max(unclamped[character_id], D(0)))
@@ -468,6 +613,10 @@ def resolve_batch(
             enemy.buff_turns -= 1
             if enemy.buff_turns == 0:
                 enemy.buff_attack = D(0)
+        if enemy.defense_mod_turns > 0:
+            enemy.defense_mod_turns -= 1
+            if enemy.defense_mod_turns == 0:
+                enemy.defense_mod = D(0)
     for character_id, player in players.items():
         # Quem recebeu Barreira nesta rodada ainda não a gastou: só a anterior envelhece.
         fresh_barrier = any(
@@ -479,6 +628,9 @@ def resolve_batch(
         _tick(player)
         if fresh_barrier:
             player.barrier_turns = turns_before
+        for target_id, kind, stacks, snapshot, source in pending_dots:
+            if target_id == character_id and player.hp > 0:
+                _apply_player_dot(player, kind, stacks, snapshot, source)
         for effect in pending_effects.get(character_id, ()):
             player.effects = [e for e in player.effects if e.id != effect.id]
             player.effects.append(
