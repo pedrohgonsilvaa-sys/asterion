@@ -631,7 +631,7 @@ async def test_group_galleries_attack_callback_routes_to_shared_combat(database)
         button
         for row in render_dungeons(ready).keyboard.inline_keyboard
         for button in row
-        if button.text == "⚔️ Entrar no Encontro"
+        if button.text in {"⚔️ Avançar", "⚔️ Combater", "⚔️ Enfrentar"}
     )
     await click(actors[0], enter.callback_data, 781057)
     fight = await service.resume(actors[0])
@@ -644,7 +644,7 @@ async def test_group_galleries_attack_callback_routes_to_shared_combat(database)
         button
         for row in render_dungeons(active_view).keyboard.inline_keyboard
         for button in row
-        if button.text == "Atacar"
+        if button.text == "⚔️ Atacar"
     )
     assert len(attack.callback_data.encode("utf-8")) <= 64
     callback = DungeonCombatCallback.unpack(attack.callback_data)

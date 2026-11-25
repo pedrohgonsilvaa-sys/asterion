@@ -198,7 +198,7 @@ async def test_p4_combat_callback_menu_and_start_reconnect_same_activity(databas
     path = await p4.action(actor, view.state_version, "path")
     combat = await p4.action(actor, path.state_version, "enter")
     assert combat is not None and combat.kind == "combat"
-    attack = _button(render_p4(combat), "Atacar")
+    attack = _button(render_p4(combat), "⚔️ Atacar")
     callback = P4CombatCallback.unpack(attack.callback_data)
     assert callback.activity_id == combat.activity_id
 

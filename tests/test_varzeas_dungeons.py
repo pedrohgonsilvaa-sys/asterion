@@ -18,7 +18,7 @@ from asterion.application.dungeons import (
     _enemy_rewards_for,
 )
 from asterion.application.road import REGION, VARZEAS_BREJOS, VARZEAS_GALERIAS
-from asterion.bot.dungeon_ui import render_dungeons
+from asterion.bot.dungeon_ui import render_dungeon_difficulty, render_dungeons
 from asterion.domain.combat import (
     Action,
     CombatEvent,
@@ -244,9 +244,15 @@ def test_varzeas_dungeon_known_and_detail_screens_expose_their_family_callbacks(
             ),
         )
         detail_screen = render_dungeons(detail)
+        # Bloco UI 1 §5: a tela da Masmorra escolhe a dificuldade; Iniciar, Grupo e
+        # Pareamento ficam nos Detalhes de cada dificuldade.
         callbacks = {
             button.callback_data
-            for row in detail_screen.keyboard.inline_keyboard
+            for screen in (
+                detail_screen,
+                *(render_dungeon_difficulty(detail, suffix) for suffix in "sfr"),
+            )
+            for row in screen.keyboard.inline_keyboard
             for button in row
         }
         assert f"dungeon:start:{family_key}:s" in callbacks

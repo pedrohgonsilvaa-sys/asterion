@@ -452,7 +452,7 @@ def test_firmeza_is_described_and_targeted_to_self_in_telegram_combat_ui():
         for row in available_screen.keyboard.inline_keyboard
         for button in row
     ]
-    firm_button = next(button for button in buttons if button.text == "Firmeza")
+    firm_button = next(button for button in buttons if button.text == "✨ Firmeza")
     callback = CombatCallback.unpack(firm_button.callback_data)
     assert callback.action == "a2"
 

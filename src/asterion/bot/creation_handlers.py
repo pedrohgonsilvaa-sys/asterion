@@ -238,7 +238,20 @@ async def _screen_media(screen: Screen, images: dict[str, str], chat: Chat):
 async def present(
     message: Message, screen: Screen, images: dict[str, str], *, edit=False
 ) -> int | None:
-    """Show ``screen`` and return the id of the Telegram message that now shows it."""
+    """Show ``screen`` and return the id of the Telegram message that now shows it.
+
+    A timed combat screen also (re)starts its live turn countdown on that message.
+    """
+    message_id = await _present(message, screen, images, edit=edit)
+    from asterion.bot.combat_timer import on_present
+
+    on_present(message, message_id, screen)
+    return message_id
+
+
+async def _present(
+    message: Message, screen: Screen, images: dict[str, str], *, edit=False
+) -> int | None:
     media, cache_key, path = await _screen_media(screen, images, message.chat)
     if edit:
         try:

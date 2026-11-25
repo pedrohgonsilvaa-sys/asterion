@@ -135,9 +135,9 @@ def render_s1(view: S1View) -> Screen:
         "🪙 Coroas · 60"
     )
     track = (
-        _button("Deixar de Acompanhar", f"s1:{version}:track")
+        _button("🚫 Deixar de acompanhar", f"s1:{version}:track")
         if view.tracked
-        else _button("Acompanhar", f"s1:{version}:track")
+        else _button("👁️ Acompanhar missão", f"s1:{version}:track")
     )
     keyboard = [
         [track],

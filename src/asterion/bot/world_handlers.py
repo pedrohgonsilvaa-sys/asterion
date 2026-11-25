@@ -1,4 +1,5 @@
 # ruff: noqa: E501
+import random
 from uuid import UUID
 
 from aiogram import F, Router
@@ -12,6 +13,7 @@ from asterion.application.class_trials import ClassTrialService
 from asterion.application.consumables import ConsumableService
 from asterion.application.dungeons import DungeonService
 from asterion.application.foreground import has_foreground_for_actor
+from asterion.application.guilds import GuildService
 from asterion.application.inventory import InventoryService
 from asterion.application.legacy import (
     LegacyActionRejected,
@@ -72,6 +74,7 @@ from asterion.application.road import (
     VDE_VIGILIA,
     RoadService,
 )
+from asterion.application.round import HEAL_CONSUMABLE, PURIFY_CONSUMABLE
 from asterion.application.s1 import S1Service
 from asterion.application.s2 import S2Service
 from asterion.application.s3 import S3Service
@@ -123,6 +126,13 @@ from asterion.bot.creation_ui import Screen
 from asterion.bot.dungeon_ui import render_dungeons
 from asterion.bot.flavor_ui import with_region_flavor
 from asterion.bot.inventory_ui import render_inventory
+from asterion.bot.missions_ui import MAIN as MISSIONS_MAIN
+from asterion.bot.missions_ui import SECTIONS as MISSION_SECTIONS
+from asterion.bot.missions_ui import SIDE as MISSIONS_SIDE
+from asterion.bot.missions_ui import has_missions, split_board
+from asterion.bot.missions_ui import render_entry as render_missions_entry
+from asterion.bot.missions_ui import render_main as render_missions_main
+from asterion.bot.missions_ui import render_side as render_missions_side
 from asterion.bot.nareth_missions_ui import render_nareth_mission
 from asterion.bot.p1_ui import render_p1
 from asterion.bot.p2_ui import render_p2, render_p2_mission_detail
@@ -131,8 +141,17 @@ from asterion.bot.p4_ui import render_p4, render_p4_detail
 from asterion.bot.p5_ui import render_p5, render_p5_detail
 from asterion.bot.p6_ui import render_p6
 from asterion.bot.refuge_hud import RefugeHudLoader
+from asterion.bot.refuge_ui import (
+    REFUGE_BRAZIER_ID,
+    render_alda,
+    render_darian,
+    render_oren,
+    render_refuge_brazier,
+    render_refuge_local,
+)
 from asterion.bot.road_ui import (
     render_current_local,
+    render_hunt_entry,
     render_invalid_location_menu,
     render_road,
     render_round_selection,
@@ -152,16 +171,22 @@ from asterion.bot.s33_ui import render_s33
 from asterion.bot.s34_ui import render_s34
 from asterion.bot.s35_ui import render_s35
 from asterion.bot.s36_ui import render_s36
-from asterion.bot.tdo_hub_ui import render_explore_result, render_hunt_choice
+from asterion.bot.tdo_hub_ui import render_explore_entry, render_explore_result
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
 from asterion.bot.vde_missions_ui import render_vde_mission
 from asterion.bot.world_ui import (
+    CLASS_EMOJI,
     render_adventure,
     render_campaign,
     render_legacy,
     render_refuge_dashboard,
     render_world,
 )
+from asterion.domain.tdo_hub import HUB_LOCATION_LABELS, HUNT_LABELS
+from asterion.domain.weapon_proficiency import ProficiencyFamily, learnable_families
+
+# Sorteio uniforme do Local das Caçadas (decisão do autor, 2026-11-24).
+HUNT_RANDOM = random.SystemRandom()
 
 
 def _warehouse_error(code: str) -> str:
@@ -233,6 +258,7 @@ def world_router(
     chronicle_encounters: ChronicleEncounterService | None = None,
     tdo_explore: TdoExploreService | None = None,
     refuge_hud: RefugeHudLoader | None = None,
+    guilds: GuildService | None = None,
 ) -> Router:
     router = Router(name="world")
     router.message.filter(F.chat.type == "private")
@@ -968,7 +994,95 @@ def world_router(
         )
         await restore_context(query)
 
+    # ---- Refúgio do Ocaso local (Bloco UI 1 §2) ---------------------------------
+
+    async def refuge_world_view(query: CallbackQuery):
+        view = await service.resume(query.from_user.id)
+        if view is None or view.location != REFUGE or not isinstance(query.message, Message):
+            return None
+        return view
+
+    async def refuge_brazier_screen(actor: int, view, *, recovered: bool = False):
+        tag = await guilds.tag_of(actor) if guilds is not None else None
+        return render_refuge_brazier(
+            view.name,
+            view.hp,
+            view.max_hp,
+            emoji=CLASS_EMOJI.get(view.character_class, "👤"),
+            guild_tag=tag,
+            recovered=recovered,
+        )
+
+    @router.callback_query(F.data.in_({"refuge:local", "refuge:brazier", "refuge:darian",
+                                       "refuge:alda", "refuge:oren"}))
+    async def refuge_local(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        await query.answer()
+        view = await refuge_world_view(query)
+        if view is None:
+            await restore_context(query)
+            return
+        data = query.data
+        if data == "refuge:brazier":
+            screen = await refuge_brazier_screen(query.from_user.id, view)
+        elif data == "refuge:darian":
+            screen = render_darian(
+                shields=ProficiencyFamily.SHIELD in learnable_families(view.character_class)
+            )
+        elif data == "refuge:alda":
+            screen = render_alda()
+        elif data == "refuge:oren":
+            screen = render_oren()
+        else:
+            screen = render_refuge_local()
+        await present(query.message, screen, images, edit=True)
+
+    @router.callback_query(F.data == "refuge:rest")
+    async def refuge_rest(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        rested = (
+            await road.rest(query.from_user.id, expected_brazier_id=REFUGE_BRAZIER_ID)
+            if road is not None
+            else None
+        )
+        if rested is None:
+            await query.answer(
+                "O descanso não está disponível neste Braseiro neste momento.",
+                show_alert=True,
+            )
+            return
+        await query.answer()
+        view = await refuge_world_view(query)
+        if view is not None:
+            screen = await refuge_brazier_screen(query.from_user.id, view, recovered=True)
+            await present(query.message, screen, images, edit=True)
+
     @router.callback_query(F.data == "tdo:explore")
+    async def tdo_explore_entry(query: CallbackQuery):
+        """Entrada de Explorar (Bloco UI 1 §3): status e os três caminhos."""
+        if await foreground(query):
+            await query.answer()
+            return
+        await query.answer()
+        if tdo_explore is None or not isinstance(query.message, Message):
+            return
+        view = await service.resume(query.from_user.id)
+        if view is None or view.location != REFUGE:
+            await restore_context(query)
+            return
+        remaining = await tdo_explore.remaining(query.from_user.id)
+        await present(
+            query.message,
+            render_explore_entry(view, remaining=len(remaining) if remaining is not None else None),
+            images,
+            edit=True,
+        )
+
+    @router.callback_query(F.data == "tdo:explore:go")
     async def tdo_explore_action(query: CallbackQuery):
         if await foreground(query):
             await query.answer()
@@ -985,20 +1099,115 @@ def world_router(
         await present(query.message, render_explore_result(result), images, edit=True)
 
     @router.callback_query(F.data == "tdo:hunt")
-    async def tdo_hunt_choice(query: CallbackQuery):
+    async def tdo_hunt_entry(query: CallbackQuery):
+        """Entrada de Caçadas (Bloco UI 1 §4)."""
         if await foreground(query):
             await query.answer()
             return
         await query.answer()
         if road is None or not isinstance(query.message, Message):
             return
-        view = await road.resume(query.from_user.id)
-        if view is None or view.location != REFUGE:
+        view = await acknowledged_road_view(query.from_user.id)
+        if view is None or view.location not in HUB_LOCATION_LABELS:
             await restore_context(query)
             return
-        await present(
-            query.message, render_hunt_choice(view.route_destinations), images, edit=True
-        )
+        await present(query.message, render_hunt_entry(), images, edit=True)
+
+    async def acknowledged_road_view(actor: int):
+        """Confirma um resultado de Caçada pendente, como ``road:local`` já faz."""
+        view = await road.resume(actor)
+        if view is not None and view.kind == "hunt_defeat":
+            view = await road.acknowledge_defeat(actor)
+        elif view is not None and view.kind == "hunt_victory":
+            view = await road.acknowledge_result(actor)
+        return view
+
+    async def tdo_hunt_destination(query: CallbackQuery, *, round_only: bool):
+        """Sorteia, com peso igual, um Local descoberto com Caçada e viaja até ele.
+
+        Decisão do autor (2026-11-24): Manual e Ronda não escolhem Local; cada início
+        sorteia de novo entre os Locais descobertos elegíveis. Ida e volta seguem o hub
+        (TDO v1.0.18 §33.1): de outro Local, primeiro o Refúgio.
+        """
+        view = await acknowledged_road_view(query.from_user.id)
+        if view is None or view.location not in HUB_LOCATION_LABELS:
+            return None, "unavailable"
+        if view.location != REFUGE:
+            view = await road.travel_route(query.from_user.id, REFUGE)
+            if view is None or view.location != REFUGE:
+                return None, "unavailable"
+        pool = tuple(label for label in view.route_destinations if label in HUNT_LABELS)
+        if round_only:
+            pool = await road.round_familiar_locations(query.from_user.id, pool)
+        if not pool:
+            return None, "empty"
+        destination = HUNT_RANDOM.choice(pool)
+        arrived = await road.travel_route(query.from_user.id, destination)
+        if arrived is None or arrived.location != destination:
+            return None, "unavailable"
+        return arrived, None
+
+    @router.callback_query(F.data == "tdo:hunt:manual")
+    async def tdo_hunt_manual(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        if road is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        arrived, problem = await tdo_hunt_destination(query, round_only=False)
+        if arrived is None:
+            await query.answer(
+                "Nenhum Local descoberto com Caçada disponível."
+                if problem == "empty"
+                else "A Caçada não está disponível neste momento.",
+                show_alert=True,
+            )
+            return
+        await query.answer()
+        view = await road.start_hunt(query.from_user.id)
+        await present(query.message, render_road(view or arrived), images, edit=True)
+
+    @router.callback_query(F.data == "tdo:hunt:round")
+    async def tdo_hunt_round(query: CallbackQuery):
+        if await foreground(query):
+            await query.answer()
+            return
+        if road is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        arrived, problem = await tdo_hunt_destination(query, round_only=True)
+        if arrived is None:
+            await query.answer(
+                "Vença uma Caçada Manual em um Local para liberar a Ronda."
+                if problem == "empty"
+                else "A Ronda não está disponível neste momento.",
+                show_alert=True,
+            )
+            return
+        await query.answer()
+        settings = await road.last_round_settings(query.from_user.id)
+        if settings is None:
+            # Primeira Ronda: a configuração é escolhida uma vez e depois reaproveitada.
+            await present(query.message, render_round_selection(arrived), images, edit=True)
+            return
+        batch_size, heal, purify = settings
+        view = await road.prepare_round(query.from_user.id, batch_size)
+        if view is None or getattr(view, "kind", None) != "round_prepare":
+            await present(query.message, render_road(view or arrived), images, edit=True)
+            return
+        for wanted, current, item in (
+            (heal, view.prepared_heal, HEAL_CONSUMABLE),
+            (purify, view.prepared_purify, PURIFY_CONSUMABLE),
+        ):
+            if wanted != current:
+                toggled = await road.toggle_round_consumable(
+                    query.from_user.id, view.round_id, view.state_version, item
+                )
+                if toggled is not None and getattr(toggled, "round_id", None) == view.round_id:
+                    view = toggled
+        started = await road.start_round(query.from_user.id, view.round_id, view.state_version)
+        await present(query.message, render_road(started or view), images, edit=True)
 
     @router.callback_query(F.data == "road:hunt")
     async def hunt(query: CallbackQuery):
@@ -1981,7 +2190,7 @@ def world_router(
                 edit=True,
             )
 
-    @router.callback_query(F.data == "world:missions")
+    @router.callback_query(F.data.in_(MISSION_SECTIONS))
     async def missions(query: CallbackQuery):
         if await foreground(query):
             await query.answer()
@@ -2796,9 +3005,9 @@ def world_router(
             else:
                 state, action = "Bloqueada · requer P36 concluída + Nv.60 atual", None
             secondary_entries.append((f"📜 Depois da Última Ordem · {state}", action))
+        secondary_buttons: list[list[InlineKeyboardButton]] = []
         if secondary_entries:
             secondary_lines = []
-            secondary_buttons = []
             choice_number = 0
             for line, action_callback in secondary_entries:
                 if action_callback is None:
@@ -2872,13 +3081,18 @@ def world_router(
                 keyboard.append([InlineKeyboardButton(text="Principal", callback_data="world:principal")])
             else:
                 text += "\n\n🔒 Onde Tudo se Enreda · Requer P10 concluída, Nv.19 e Claustro das Raízes"
-        keyboard.append([await region_return_button(query.from_user.id, "← Campanha")])
-        await present(
-            query.message,
-            Screen(text, "missions", InlineKeyboardMarkup(inline_keyboard=keyboard)),
-            images,
-            edit=True,
-        )
+        # Bloco UI 1 §6: o quadro calculado acima é repartido em entrada, Principais e
+        # Secundárias; cada Missão segue com a própria tela (objetivos, acompanhar...).
+        principal_text, principal_rows = split_board(text, keyboard, secondary_buttons)
+        if query.data == MISSIONS_MAIN:
+            screen = render_missions_main(principal_text, principal_rows)
+        elif query.data == MISSIONS_SIDE:
+            screen = render_missions_side(secondary_entries)
+        else:
+            screen = render_missions_entry(
+                any_mission=has_missions(principal_rows, secondary_entries)
+            )
+        await present(query.message, screen, images, edit=True)
 
     @router.callback_query(F.data == "world:oren")
     async def oren_npc(query: CallbackQuery):

@@ -13,18 +13,19 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.bot.creation_ui import Screen
 from asterion.domain.combat import turn_seconds_left
 from asterion.domain.prologue import prologue_enemy_for_name
-from asterion.domain.turn_clock import TURN_SECONDS, format_remaining
+from asterion.domain.turn_clock import TURN_SECONDS, format_turn_seconds
 
 SCENE_PREFIX = "pl:"
 COMBAT_ENTRY = "prologue:continue"
 FLAME_CALLBACK = "pl:chama"
 ENDING_CALLBACK = "menu:back"
-BAR_SEGMENTS = 9
+BAR_SEGMENTS = 10
 ENCOUNTER_LOCATION = "tdo.location.estrada_das_cinzas"
+ROAD_IMAGE_KEY = "local:Estrada das Cinzas"
 _CONTINUE = "🛤️ Continuar a caminhada"
-PURSE_LINE = "🪙 18 Coroas"
-RESIDUE_LINE = "💧 1 Resíduo do Ocaso"
-VICTORY_REWARD_LINES = ("✨ +320 XP", "🪙 +3 Coroas")
+PURSE_LINE = "🪙 <code>18 Coroas</code>"
+RESIDUE_LINE = "💧 <code>1 Resíduo do Ocaso</code>"
+VICTORY_REWARD_LINES = ("✨ <code>320 XP</code>", "🪙 <code>3 Coroas</code>")
 PURSE_NODE = "destrocos"
 
 # node -> (title, narration, objects shown inside the scene, buttons[(label, target)]).
@@ -38,14 +39,14 @@ SCENES: dict[str, tuple[str, str, tuple[str, ...], tuple[tuple[str, str], ...]]]
         "fuligem e indicam a direção de sua primeira jornada.",
         (),
         (
-            ("🦶 Seguir os rastros", "rastros"),
-            ("🔎 Examinar a estrada", "destrocos"),
-            ("👂 Ouvir o silêncio", "silencio"),
+            ("🦶 Seguir", "rastros"),
+            ("🔎 Examinar", "destrocos"),
+            ("👂 Ouvir", "silencio"),
         ),
     ),
     "rastros": (
         "👣 Seguindo os Rastros",
-        "As pegadas atravessam a estrada… duas marcas estreitas aparecem entre as pedras.\n\n"
+        "As pegadas atravessam a estrada. Duas marcas estreitas aparecem entre as pedras.\n\n"
         "As marcas ainda estão parcialmente visíveis na fuligem, indicando que alguma coisa "
         "passou por ali há pouco tempo.",
         (),
@@ -56,7 +57,7 @@ SCENES: dict[str, tuple[str, str, tuple[str, ...], tuple[tuple[str, str], ...]]]
         "Uma carroça tombada permanece parcialmente coberta pela cinza. Entre a madeira "
         "quebrada, uma pequena bolsa ainda está presa sob uma das tábuas.",
         (PURSE_LINE, RESIDUE_LINE),
-        ((_CONTINUE, COMBAT_ENTRY), ("🔎 Examinar os destroços", "queimada")),
+        ((_CONTINUE, COMBAT_ENTRY), ("🔎 Examinar", "queimada")),
     ),
     "silencio": (
         "👂 O Silêncio",
@@ -65,7 +66,7 @@ SCENES: dict[str, tuple[str, str, tuple[str, ...], tuple[tuple[str, str], ...]]]
         "Então, um ruído baixo surge em algum ponto adiante, abafado pela fuligem e difícil "
         "de localizar.",
         (),
-        (("🐾 Seguir o som", "pedras"), (_CONTINUE, COMBAT_ENTRY)),
+        (("🐾 Seguir", "pedras"), (_CONTINUE, COMBAT_ENTRY)),
     ),
     "queimada": (
         "🔎 A Estrada Queimada",
@@ -100,14 +101,16 @@ def render_scene(node_id: str, *, show_objects: bool = False) -> Screen:
     title, narration, objects, buttons = SCENES[node_id]
     parts = [f"<b>{title}</b>", f"<i>{narration}</i>"]
     if objects and show_objects:
-        parts.insert(2, "\n".join(objects))
+        parts.insert(2, "\n".join(("🎁 <b>Recompensas:</b>", *objects)))
     keyboard = _column(
         [
             (label, target if target == COMBAT_ENTRY else f"{SCENE_PREFIX}{target}")
             for label, target in buttons
         ]
     )
-    return Screen("\n\n".join(parts), "prologue", keyboard, "HTML")
+    # Bloco UI 1 §8 item 10: "Cinzas na Estrada" usa a arte da Estrada.
+    image = ROAD_IMAGE_KEY if node_id == "cinzas" else "prologue"
+    return Screen("\n\n".join(parts), image, keyboard, "HTML")
 
 
 def scene_id_from_callback(data: str) -> str | None:
@@ -118,6 +121,12 @@ def scene_id_from_callback(data: str) -> str | None:
 def hp_bar9(current: Decimal, maximum: Decimal) -> str:
     filled = min(BAR_SEGMENTS, max(0, int(current * BAR_SEGMENTS / maximum))) if maximum else 0
     return "🟩" * filled + "⬜" * (BAR_SEGMENTS - filled)
+
+
+def class_emoji(character_class: str | None) -> str:
+    from asterion.bot.world_ui import CLASS_EMOJI
+
+    return CLASS_EMOJI.get(character_class or "", "👤")
 
 
 def _hud(emoji: str, name: str, hp: Decimal, maximum: Decimal) -> list[str]:
@@ -132,53 +141,84 @@ def _hud(emoji: str, name: str, hp: Decimal, maximum: Decimal) -> list[str]:
 
 
 def turn_line(turn: int, seconds_left: float | None) -> str:
-    """Global turn/timer line: both values monospaced."""
+    """Global turn/timer line (Bloco UI 1 §7): ``🌐 Turno N · ⏱️ 10s``.
+
+    The turn number stays visible next to the timer; the timer reads the engine's
+    authoritative deadline and counts down 10s → 0s.
+    """
     shown = TURN_SECONDS if seconds_left is None else seconds_left
-    return f"🌐 <code>Turno {turn}</code> · ⏱️ <code>{format_remaining(shown)}</code>"
+    return f"🌐 <b>Turno {turn}</b> · ⏱️ <code>{format_turn_seconds(shown)}</code>"
 
 
-def prologue_turn_line(turn: int, seconds_left: float | None) -> str:
-    """Prólogo turn/timer line: the whole line monospaced."""
-    shown = TURN_SECONDS if seconds_left is None else seconds_left
-    return f"<code>🌐 Turno {turn} · ⏱️ {format_remaining(shown)}</code>"
+prologue_turn_line = turn_line
 
 
 def _art_name(name: str) -> str:
     return re.sub(r"^[^\w]+", "", name).strip()
 
 
+def art_label(name: str, action_id: str = "") -> str:
+    """Art button/history label: the Art's own emoji and name (Bloco UI 1 §7).
+
+    The emoji comes from the Art's canonical name when it carries one, or from the
+    first class Art of the same id; otherwise the generic ✨ of the Bloco UI 1 mold.
+    """
+    clean = _art_name(name)
+    lead = name.strip()[: len(name.strip()) - len(clean)].strip() if clean else ""
+    if lead and lead != "🎴":
+        return f"{lead} {clean}"
+    from asterion.domain.arts import FIRST_CLASS_ART_IDS
+    from asterion.domain.prologue import FIRST_ARTS
+
+    for character_class, art_id in FIRST_CLASS_ART_IDS.items():
+        first_name = FIRST_ARTS[character_class][0]
+        if action_id == art_id or _art_name(first_name) == clean:
+            return f"{first_name.split(' ', 1)[0]} {clean}"
+    return f"✨ {clean}"
+
+
+def _damage(value) -> str:
+    """Damage is the one value highlighted in the history (Bloco UI 1 §7)."""
+    from asterion.bot.combat_ui import number
+
+    return f"<b>{number(value)} de dano</b>"
+
+
 def _history_lines(combat, player, enemy, enemy_emoji: str) -> list[str]:
+    """Plain-text history of the last round, without the character's name."""
     visible = [event for event in combat.events if not event.internal]
     if not visible:
         return []
     last_round = max(event.round for event in visible)
+    foe = f"o {escape(enemy.name)}"
     lines: list[str] = []
     for event in visible:
         if event.round != last_round:
             continue
         if event.actor == "player":
-            actor, target = player, enemy
             if event.action == "hold":
-                lines.append(f"⏱️ {escape(actor.name)} perdeu o turno.")
+                lines.append("⏱️ O turno terminou sem ação.")
                 continue
             if event.action == "defend":
-                lines.append(f"🛡️ {escape(actor.name)} usou Defender.")
+                lines.append("🛡️ Defender foi usado.")
                 continue
             action = combat.player_actions.get(event.action)
             if event.dodged:
-                lines.append(f"💨 {escape(target.name)} esquivou do ataque.")
+                lines.append(f"💨 {foe[0].upper()}{foe[1:]} esquiva do ataque.")
             elif event.action == "attack" or action is None:
-                lines.append(f"⚔️ {escape(actor.name)} causou {event.damage} de dano.")
+                lines.append(f"⚔️ O golpe atinge {foe} e causa {_damage(event.damage)}.")
             else:
                 lines.append(
-                    f"✨ {escape(actor.name)} usou {escape(_art_name(action.name))} "
-                    f"e causou {event.damage} de dano."
+                    f"{escape(art_label(action.name, event.action))} atinge {foe} "
+                    f"e causa {_damage(event.damage)}."
                 )
         else:
             if event.dodged:
-                lines.append(f"💨 {escape(player.name)} esquivou do ataque.")
+                lines.append(f"💨 O ataque d{foe} é evitado.")
             else:
-                lines.append(f"{enemy_emoji} {escape(enemy.name)} causou {event.damage} de dano.")
+                lines.append(
+                    f"{enemy_emoji} O {escape(enemy.name)} ataca e causa {_damage(event.damage)}."
+                )
     return lines
 
 
@@ -197,7 +237,7 @@ def render_prologue_combat(view, keyboard: InlineKeyboardMarkup | None) -> Scree
         turn,
         turn_seconds_left(combat),
         _history_lines(combat, player, enemy, creature.emoji),
-        f"<i>{creature.emoji} {escape(creature.opening)}</i>",
+        f"{creature.emoji} {escape(creature.opening)}",
         keyboard,
     )
 
@@ -220,29 +260,29 @@ def render_standard_hud(
     """
     lines = [f"<b>{title}</b>", "", prologue_turn_line(turn, seconds_left), ""]
     lines += _hud(enemy_emoji, enemy.name, enemy.hp, enemy.stats.hp)
-    lines += _hud("👤", player.name, player.hp, player.stats.hp)
+    lines += _hud(class_emoji(player.character_class), player.name, player.hp, player.stats.hp)
     lines.append("<b>📜 Histórico:</b>")
     lines.extend(history or [opening_line])
     return Screen(chr(10).join(lines), image_key, keyboard, "HTML")
 
 
 def render_prologue_outcome(view) -> Screen:
-    name = escape(view.combat.fighters["player"].name)
+    """Resultado do primeiro combate, sem o nome do personagem na narrativa."""
     if view.combat.result == "victory":
         text = (
-            "<b>🔥 O Caminho Está Livre</b>\n\n"
-            "<i>O último golpe derruba a criatura. Por alguns instantes, só o vento volta a "
-            "ocupar a estrada.\n\n"
-            f"A experiência adquirida no confronto fortalece {name}, enquanto mais adiante "
-            "uma pequena chama permanece acesa entre as ruínas.</i>\n\n"
-            + "\n".join(VICTORY_REWARD_LINES)
+            "<b>🏆 O Caminho Está Livre</b>\n\n"
+            "<i>O último golpe derruba a criatura. Por alguns instantes, apenas o vento volta "
+            "a ocupar a estrada.</i>\n\n"
+            "<i>A experiência adquirida no confronto permanece registrada, junto das "
+            "recompensas obtidas durante a caçada.</i>\n\n"
+            + "\n".join(("🎁 <b>Recompensas:</b>", *VICTORY_REWARD_LINES))
         )
     else:
         text = (
             "<b>🩸 O Caminho Interrompido</b>\n\n"
-            f"<i>As forças abandonam {name}, e a estrada desaparece por alguns instantes "
-            "atrás da fuligem.\n\n"
-            "Quando a visão retorna, uma pequena chama permanece acesa entre as ruínas, "
+            "<i>As forças se esgotam, e a estrada desaparece por alguns instantes atrás da "
+            "fuligem.</i>\n\n"
+            "<i>Quando a visão retorna, uma pequena chama permanece acesa entre as ruínas, "
             "iluminando o caminho adiante.</i>"
         )
     return Screen(text, "prologue", _column([("🔥 Seguir até a chama", FLAME_CALLBACK)]), "HTML")
@@ -250,12 +290,11 @@ def render_prologue_outcome(view) -> Screen:
 
 def render_brazier(name: str, hp: Decimal, max_hp: Decimal) -> Screen:
     """First brazier. Shows the HP the character arrives with; resting is what refills it."""
-    safe = escape(name)
     lines = [
         "<b>🔥 Braseiro da Estrada</b>",
         "",
-        "<i>O fogo permanece aceso entre as pedras. O calor atravessa o corpo de "
-        f"{safe}, enquanto a estrada permanece à frente, pronta para ser seguida.</i>",
+        "<i>O fogo permanece aceso entre as pedras. O calor atravessa o corpo, enquanto "
+        "a estrada permanece à frente, pronta para ser seguida.</i>",
         "",
         *_hud("👤", name, hp, max_hp),
     ]

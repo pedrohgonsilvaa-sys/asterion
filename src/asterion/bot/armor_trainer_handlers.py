@@ -6,11 +6,11 @@ from aiogram.types import CallbackQuery, Message
 from asterion.application.armor_proficiency import ArmorTrainerService
 from asterion.bot.armor_trainer_ui import (
     REJECTION_TEXT,
+    render_armor_class,
     render_armor_trainer,
-    render_armor_trainer_confirm,
 )
 from asterion.bot.creation_handlers import present
-from asterion.domain.armor_proficiency import ARMOR_CLASS_LABELS, parse_armor_class
+from asterion.domain.armor_proficiency import parse_armor_class
 
 
 def armor_trainer_router(service: ArmorTrainerService, images: dict[str, str]) -> Router:
@@ -26,19 +26,16 @@ def armor_trainer_router(service: ArmorTrainerService, images: dict[str, str]) -
         await present(query.message, render_armor_trainer(view), images, edit=True)
 
     @router.callback_query(F.data.startswith("apt:c:"))
-    async def armor_confirm(query: CallbackQuery):
+    async def armor_class_screen(query: CallbackQuery):
         await query.answer()
         view = await service.view(query.from_user.id)
         armor_class = parse_armor_class(query.data.removeprefix("apt:c:"))
         if view is None or not isinstance(query.message, Message):
             return
-        owned = {e.terms.armor_class for e in view.entries if e.owned}
-        if armor_class is None or armor_class in owned:
+        if armor_class is None:
             await present(query.message, render_armor_trainer(view), images, edit=True)
             return
-        await present(
-            query.message, render_armor_trainer_confirm(armor_class), images, edit=True
-        )
+        await present(query.message, render_armor_class(view, armor_class), images, edit=True)
 
     @router.callback_query(F.data.startswith("apt:ok:"))
     async def armor_learn(query: CallbackQuery):
@@ -48,15 +45,17 @@ def armor_trainer_router(service: ArmorTrainerService, images: dict[str, str]) -
             await query.answer()
             return
         armor_class = parse_armor_class(value)
-        if outcome.learned and armor_class is not None:
-            notice = f"Proficiência aprendida: Armadura {ARMOR_CLASS_LABELS[armor_class]}."
-            await query.answer(notice)
-        elif outcome.already_owned:
-            notice = "Você já possui essa Proficiência."
-            await query.answer(notice)
+        notice = None
+        if outcome.learned or outcome.already_owned:
+            await query.answer()
         else:
             notice = REJECTION_TEXT[outcome.reason]
             await query.answer(notice, show_alert=True)
-        await present(query.message, render_armor_trainer(outcome.view, notice), images, edit=True)
+        if armor_class is None:
+            await present(query.message, render_armor_trainer(outcome.view), images, edit=True)
+            return
+        await present(
+            query.message, render_armor_class(outcome.view, armor_class, notice), images, edit=True
+        )
 
     return router

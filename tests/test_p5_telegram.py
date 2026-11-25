@@ -83,12 +83,12 @@ async def test_alda_offer_and_missions_menu_do_not_create_p5_until_accept(databa
         ) is None
 
     await dispatcher.feed_raw_update(
-        bot, callback_update("world:missions", update_id=998713, actor=actor)
+        bot, callback_update("world:missions:main", update_id=998713, actor=actor)
     )
     missions = _last_method(bot)
-    assert "A Porta do Poente · Disponível" in missions.text
+    assert "Missões Principais" in missions.text
     assert _button(
-        type("ScreenRef", (), {"keyboard": missions.reply_markup})(), "Principal"
+        type("ScreenRef", (), {"keyboard": missions.reply_markup})(), "📖 A Porta do Poente"
     ).callback_data == "p5:offer"
 
     await dispatcher.feed_raw_update(

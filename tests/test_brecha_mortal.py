@@ -616,7 +616,7 @@ def test_brecha_mortal_detail_combat_hud_and_round_keep_equipped_action_context(
         button
         for row in screen.keyboard.inline_keyboard
         for button in row
-        if button.text == "Brecha Mortal"
+        if button.text == "✨ Brecha Mortal"
     )
     assert CombatCallback.unpack(button.callback_data).action == "a2"
     resolved = act(state, BRECHA_ID, target_id="enemy")

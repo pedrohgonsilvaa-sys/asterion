@@ -23,6 +23,16 @@ def set_clock(clock: Callable[[], float] | None) -> None:
     _clock = clock or time.time
 
 
+def whole_seconds(seconds: float | int | None) -> int:
+    """Seconds shown to the player: rounded up, so a fresh turn reads 10 and 0 means over."""
+    return 0 if seconds is None else max(0, int(seconds + 0.999))
+
+
 def format_remaining(seconds: float | int | None) -> str:
-    whole = 0 if seconds is None else max(0, int(seconds + 0.999))
+    whole = whole_seconds(seconds)
     return f"{whole // 60:02d}:{whole % 60:02d}"
+
+
+def format_turn_seconds(seconds: float | int | None) -> str:
+    """Turn timer as the combat HUD shows it: ``10s`` down to ``0s``."""
+    return f"{whole_seconds(seconds)}s"

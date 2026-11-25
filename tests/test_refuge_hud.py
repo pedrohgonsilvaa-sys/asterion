@@ -59,8 +59,8 @@ def test_header_with_path_legacy_and_title():
     lines = text.split("\n\n")
     assert lines[0] == "<b>🌘 Refúgio do Ocaso</b>"
     assert lines[1].split("\n") == [
-        "<b>🏹 Tess</b> · Vigia · Atirador",
-        "🏛️ Nv. 12 · Legado II",
+        "<b>🏹 Tess · Vigia · Atirador</b>",
+        "<b>🏛️ Nv. 12 · Legado II</b>",
         "🎖️ <i>Aliado do Refúgio</i>",
     ]
     assert "Caminho" not in text
@@ -68,13 +68,13 @@ def test_header_with_path_legacy_and_title():
 
 def test_path_absent_hides_path_and_never_writes_caminho():
     text = _screen(selected_path=None).text
-    assert "<b>🏹 Tess</b> · Vigia\n" in text
+    assert "<b>🏹 Tess · Vigia</b>\n" in text
     assert "Atirador" not in text and "Caminho" not in text
 
 
 def test_legacy_absent_shows_only_level():
     text = _screen(legacy_level=0, level=7).text
-    assert "🏛️ Nv. 7\n" in text + "\n"
+    assert "<b>🏛️ Nv. 7</b>\n" in text + "\n"
     assert "Legado" not in text
 
 
@@ -98,17 +98,20 @@ def test_title_is_html_escaped():
 
 def test_status_block_is_compact_bold_and_monospaced():
     text = _screen().text
-    assert "<b>❤️ HP</b> · <code>631 / 631</code>\n🟥" in text
-    assert "<b>⚡ Vigor</b> · <code>100 / 100</code>\n🟨" in text
-    assert "<b>✨ XP</b> · <code>320 / 4.800</code>\n🟦" in text
+    # Bloco UI 1 §2: HP, Vigor e XP juntos, sem linha vazia entre eles.
+    assert (
+        "❤️ <b>HP</b> · <code>631 / 631</code>\n" + "🟥" * 10 + "\n"
+        "⚡ <b>Vigor</b> · <code>100 / 100</code>\n" + "🟨" * 10 + "\n"
+        "✨ <b>XP</b> · <code>320 / 4.800</code>\n🟦"
+    ) in text
     assert "━" not in text
-    assert "<b>💰 Coroas</b> · <code>1.500</code>" in text
+    assert "💰 <b>Coroas</b> · <code>1.500</code>" in text
 
 
 def test_state_lines_use_real_data_and_boss_is_absent():
     text = _screen(RefugeHud(chronicle="Sem data ainda")).text
     assert "Apoiador" not in text and "Patrono" not in text and "⭐" not in text
-    assert "<b>📖 Crônica</b> · Sem data ainda" in text
+    assert "📖 <b>Crônica</b> · Sem data ainda" in text
     assert "👹" not in text
 
 
@@ -126,7 +129,7 @@ def test_removed_items_do_not_appear():
 
 def test_chronicle_is_in_hud_not_a_button():
     screen = _screen(RefugeHud(chronicle="Em andamento · termina em 10/12 às 06:00"))
-    assert "📖 Crônica" in screen.text
+    assert "📖 <b>Crônica</b>" in screen.text
     assert all("Crônica" not in b.text for b in _buttons(screen))
 
 
@@ -134,18 +137,19 @@ def test_menu_layout_two_columns_and_eventos_direct():
     screen = _screen()
     rows = [[b.text for b in row] for row in screen.keyboard.inline_keyboard]
     assert rows == [
-        ["🧭 Explorar", "🌘 Refúgio"],
-        ["🐺 Caçadas", "🗝️ Masmorras"],
-        ["📜 Missões", "🌌 Eventos"],
-        ["👤 Personagem", "🗺️ Mapa"],
-        ["🏰 Guilda", "🏪 Mercado"],
-        ["🏟️ Arena", "📖 Códice"],
-        ["🏆 Classificação", "🌐 Comunidade"],
+        ["🌘 Refúgio do Ocaso"],
+        ["🧭 Explorar", "🐺 Caçadas"],
+        ["🗝️ Masmorras", "📜 Missões"],
+        ["🌌 Eventos", "👤 Personagem"],
+        ["🗺️ Mapa", "🏰 Guilda"],
+        ["🏪 Mercado", "🏟️ Arena"],
+        ["📖 Códice", "🏆 Classificação"],
         ["🎁 Benefícios", "⚙️ Configurações"],
+        ["🌐 Comunidade"],
     ]
     pairs = {b.text: b.callback_data for b in _buttons(screen)}
     assert pairs["🌌 Eventos"] == "wev:hub"
-    assert pairs["🌘 Refúgio"] == "menu:back"  # só navegação: não move o personagem
+    assert pairs["🌘 Refúgio do Ocaso"] == "refuge:local"  # só navegação: não move o personagem
 
 
 def test_daily_gift_button_only_when_available_and_alone_on_first_row():
@@ -290,5 +294,5 @@ async def test_real_flow_open_gift_claim_and_return_to_refuge(database):
     await dispatcher.feed_raw_update(bot, callback_update("menu:back", update_id=5, actor=actor))
     assert "🌘 Refúgio do Ocaso" in _last_screen(bot).text
     assert "🎁 Resgatar Dádiva Diária" not in labels()
-    assert labels()[0] == "🧭 Explorar"
+    assert labels()[0] == "🌘 Refúgio do Ocaso"
     await bot.session.close()

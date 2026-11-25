@@ -77,7 +77,7 @@ async def test_s2_combat_callback_and_start_menu_reconnect_same_foreground(datab
         button
         for row in screen.keyboard.inline_keyboard
         for button in row
-        if button.text == "Atacar"
+        if button.text == "⚔️ Atacar"
     )
     callback = S2CombatCallback.unpack(attack.callback_data)
     assert callback.activity_id == combat.activity_id

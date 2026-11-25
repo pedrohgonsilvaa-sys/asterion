@@ -616,7 +616,7 @@ def test_golpe_de_rechaco_target_callback_ui_and_reconnect_preserve_action_conte
         button
         for row in screen.keyboard.inline_keyboard
         for button in row
-        if button.text == "Golpe de Rechaço"
+        if button.text == "✨ Golpe de Rechaço"
     )
     assert CombatCallback.unpack(action_button.callback_data).action == "a2"
 

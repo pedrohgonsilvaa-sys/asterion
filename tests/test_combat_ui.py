@@ -55,15 +55,15 @@ async def test_first_hud_matches_authoritative_shape(prologue, database):
     view = await prologue.enter(1)
     screen = render_combat(view)
     assert screen.text.startswith(
-        "<b>⚔️ O Primeiro Confronto</b>\n\n<code>🌐 Turno 1 · ⏱️ 00:10</code>\n\n"
-        "🐺 <b>Cão Cinéreo</b>\n❤️ <code>244 / 244</code>\n" + "🟩" * 9
+        "<b>⚔️ O Primeiro Confronto</b>\n\n🌐 <b>Turno 1</b> · ⏱️ <code>10s</code>\n\n"
+        "🐺 <b>Cão Cinéreo</b>\n❤️ <code>244 / 244</code>\n" + "🟩" * 10
     )
-    assert "👤 <b>Heroa</b>\n❤️ <code>" in screen.text
-    assert "<b>📜 Histórico:</b>\n<i>🐺" in screen.text
+    assert "🛡️ <b>Heroa</b>\n❤️ <code>" in screen.text
+    assert "<b>📜 Histórico:</b>\n🐺" in screen.text and "<i>" not in screen.text
     assert "O som se aproxima pela fuligem." in screen.text
     assert "Causa Dano" not in screen.text and "Reduz Dano" not in screen.text
     assert [[button.text for button in row] for row in screen.keyboard.inline_keyboard] == [
-        ["Atacar", "Defender"]
+        ["⚔️ Atacar"], ["🛡️ Defender"]
     ]
     assert all(
         forbidden not in screen.text
@@ -257,7 +257,7 @@ def test_target_markers_appear_on_the_relevant_target_card():
     defensive_omen = "🔮 Presságio Defensivo · <code>2T</code>"
     assert defensive_omen in screen.text
     assert screen.text.index("👉 🔮 <b>Luiken</b>") < screen.text.index(defensive_omen)
-    assert screen.text.index(defensive_omen) < screen.text.index("📜 Registro de Combate")
+    assert screen.text.index(defensive_omen) < screen.text.index("<b>📜 Histórico:</b>")
 
     view = _class_mechanic_combat_view("errante")
     view.combat.fighters["enemy"].effects.append(
@@ -324,7 +324,7 @@ def test_campaign_solo_path_art_uses_short_frozen_slot_callback():
         button
         for row in screen.keyboard.inline_keyboard
         for button in row
-        if button.text == "Aríete"
+        if button.text == "✨ Aríete"
     )
     assert len(button.callback_data.encode("utf-8")) <= 64
     assert CombatCallback.unpack(button.callback_data).action == "a2"
@@ -378,16 +378,17 @@ async def test_hud_reconstructs_persisted_events_and_tutorial_buttons(prologue, 
     view = await prologue.enter(1)
     view = await prologue.action(1, view.activity_id, view.combat.version, "attack")
     screen = render_combat(view)
-    assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["Defender"]
-    assert "<code>🌐 Turno 2 · ⏱️ 00:10</code>" in screen.text
-    assert "⚔️ Heroa causou" in screen.text
-    assert "🐺 Cão Cinéreo causou" in screen.text or "💨 Heroa esquivou" in screen.text
+    assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["🛡️ Defender"]
+    assert "🌐 <b>Turno 2</b> · ⏱️ <code>10s</code>" in screen.text
+    assert "⚔️ O golpe atinge o Cão Cinéreo e causa <b>" in screen.text
+    assert "🐺 O Cão Cinéreo ataca e causa <b>" in screen.text or "💨 O ataque do" in screen.text
+    assert "Heroa causou" not in screen.text
     assert "O som se aproxima" not in screen.text
     view = await prologue.action(1, view.activity_id, view.combat.version, "defend")
     screen = render_combat(view)
-    assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["Golpe de Guarda"]
-    assert "<code>🌐 Turno 3 · ⏱️ 00:10</code>" in screen.text
-    assert "🛡️ Heroa usou Defender." in screen.text
+    assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["🗡️ Golpe de Guarda"]
+    assert "🌐 <b>Turno 3</b> · ⏱️ <code>10s</code>" in screen.text
+    assert "🛡️ Defender foi usado." in screen.text
     assert "Arte de Classe" not in screen.text
     # Reconnect uses the same persisted log and controls.
     assert render_combat(await prologue.resume(1)) == screen
@@ -436,7 +437,7 @@ async def test_prologue_defeat_render_has_no_xp_receipt_or_retry(prologue, datab
     screen = render_combat(defeated)
     assert defeated.combat.result == "defeat"
     assert "320 XP" not in screen.text
-    assert "<b>🩸 O Caminho Interrompido</b>" in screen.text and "Heroa" in screen.text
+    assert "<b>🩸 O Caminho Interrompido</b>" in screen.text and "Heroa" not in screen.text
     assert [b.callback_data for row in screen.keyboard.inline_keyboard for b in row] == [
         "pl:chama"
     ]
@@ -850,7 +851,7 @@ def test_consumable_and_ward_combat_log_lines_follow_the_ui_source():
     )
     assert damage == (
         "🐺 <b>Cão Cinéreo</b> usa <b>Garra</b> em <b>Luiken</b> "
-        "e causa <code>12</code> de dano."
+        "e causa <b>12 de dano</b>."
     )
     assert blocked == "🛡️ Resguardo bloqueia <b>Fraqueza</b> em <b>Luiken</b>."
     assert "weak" not in blocked
@@ -871,10 +872,10 @@ async def test_purse_callback_credits_and_shows_the_line_once(database, telegram
         return getattr(sent, "text", None) or getattr(sent, "caption", "")
 
     await dispatcher.feed_raw_update(telegram, callback_update("pl:destrocos", actor=1))
-    assert "🪙 18 Coroas" in shown()
+    assert "🪙 <code>18 Coroas</code>" in shown()
     await dispatcher.feed_raw_update(
         telegram, callback_update("pl:destrocos", actor=1, update_id=3)
     )
-    assert "🪙 18 Coroas" not in shown()
+    assert "18 Coroas" not in shown()
     async with database[1]() as session:
         assert (await session.scalar(select(Character))).crowns == 18

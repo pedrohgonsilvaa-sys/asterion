@@ -165,9 +165,9 @@ def test_refuge_keyboard_follows_source_order_and_grouping():
     )
     rows = [[b.text for b in row] for row in screen.keyboard.inline_keyboard]
     # HUD congelado: Menu Principal em duas colunas, sem Locais avulsos nem NPCs.
-    assert rows[0] == ["🧭 Explorar", "🌘 Refúgio"]
-    assert rows[1] == ["🐺 Caçadas", "🗝️ Masmorras"]
-    assert rows[-1] == ["🎁 Benefícios", "⚙️ Configurações"]
+    assert rows[0] == ["🌘 Refúgio do Ocaso"]
+    assert rows[1] == ["🧭 Explorar", "🐺 Caçadas"]
+    assert rows[-1] == ["🌐 Comunidade"]
     flat = [text for row in rows for text in row]
     for absent in ("Campanha", "Aventura", "← Menu", "Local Atual", "Alda Veyr"):
         assert absent not in flat
@@ -269,23 +269,18 @@ def _victory(**kwargs):
 def test_hunt_victory_follows_47_3_structure():
     view = _victory()
     screen = render_road(view)
-    assert screen.text == (
-        "🏆 Vitória · Cão Cinéreo\n"
-        "Charneca da Fuligem · Terras do Ocaso\n\n"
-        "🎁 Recompensas\n\n"
-        "✨ XP · 120\n"
-        "🪙 Coroas · 15"
-    )
+    # Bloco UI 1 §4 substitui a 47.3: narrativa + Recompensas sem linha vazia.
+    assert screen.text.startswith("🏆 <b>Vitória</b>\n\n<i>O confronto chega ao fim")
+    assert screen.text.endswith("🎁 <b>Recompensas:</b>\n✨ XP · 120\n🪙 Coroas · 15")
     pairs = [(b.text, b.callback_data) for row in screen.keyboard.inline_keyboard for b in row]
-    assert pairs[-1] == ("← Caçada", f"road:hunt_screen:{view.activity_id.hex}")
-    assert len(pairs[-1][1].encode()) <= 64
+    assert pairs == [("🎯 Caçar novamente", "tdo:hunt:manual"), ("↩️ Voltar", "tdo:hunt")]
     # nada de texto inventado: sem "Caçada concluída" nem flavor
     assert "Caçada concluída" not in screen.text
 
 
 def test_hunt_victory_without_rewards_omits_the_block_and_invents_no_flavor():
     screen = render_road(_victory(reward_lines=()))
-    assert screen.text == "🏆 Vitória · Cão Cinéreo\nCharneca da Fuligem · Terras do Ocaso"
+    assert "Recompensas" not in screen.text
 
 
 def test_hunt_victory_group_keeps_no_repeat_button():

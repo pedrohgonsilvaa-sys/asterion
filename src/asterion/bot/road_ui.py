@@ -599,6 +599,8 @@ def render_road(view: RoadView) -> Screen:
                 screen.media_seed,
             )
         return screen
+    if view.kind in {"hunt_victory", "hunt_defeat"} and _is_tdo_hunt(view):
+        return render_tdo_hunt_result(view)
     if view.kind == "hunt_defeat":
         heading = (
             "💀 PvPvE · Derrota"
@@ -1185,6 +1187,82 @@ def render_invalid_location_menu() -> Screen:
                 [InlineKeyboardButton(text="Campanha", callback_data="world:adventure")],
             ]
         ),
+    )
+
+
+HUNT_VICTORY_TEXT = (
+    "O confronto chega ao fim com a criatura derrotada. Por alguns instantes, o local "
+    "volta ao silêncio enquanto os vestígios do combate permanecem espalhados pela área.",
+    "O resultado da caçada é registrado e as recompensas correspondentes são concedidas.",
+)
+HUNT_DEFEAT_TEXT = (
+    "O confronto termina antes que a ameaça seja derrotada. Sem condições para continuar "
+    "a caçada, o personagem é retirado do encontro.",
+    "Nenhuma recompensa de vitória é concedida. Uma nova tentativa poderá ser iniciada "
+    "quando houver condições para um novo confronto.",
+)
+HUNT_MANUAL_CALLBACK = "tdo:hunt:manual"
+HUNT_ENTRY_CALLBACK = "tdo:hunt"
+
+
+def _is_tdo_hunt(view: RoadView) -> bool:
+    """Caçada solo das Terras do Ocaso (Bloco UI 1 §4); PvPvE e Grupo mantêm a tela própria."""
+    from asterion.domain.tdo_hub import HUB_LOCATION_LABELS
+
+    if view.combat_context != "road":
+        return False
+    return (view.recovery_location or view.location) in HUB_LOCATION_LABELS
+
+
+def render_tdo_hunt_result(view: RoadView) -> Screen:
+    """Vitória ou Derrota de Caçada: título → narrativa → Recompensas → próxima etapa."""
+    from asterion.bot.ui_format import back, blocks, button, keyboard, narrative, rewards
+
+    victory = view.kind == "hunt_victory"
+    first, second = HUNT_VICTORY_TEXT if victory else HUNT_DEFEAT_TEXT
+    # Derrota: a recuperação no Braseiro já aconteceu no serviço; a tela só a mostra.
+    recovery = None
+    if not victory:
+        brazier = view.recovery_brazier or "Braseiro da Estrada"
+        recovery = f"🔥 <b>{escape(brazier)}</b> · ❤️ HP restaurado"
+    text = blocks(
+        "🏆 <b>Vitória</b>" if victory else "💀 <b>Derrota</b>",
+        narrative(first),
+        narrative(second),
+        rewards(view.reward_lines) if victory else recovery,
+    )
+    again = "🎯 Caçar novamente" if victory else "🎯 Tentar novamente"
+    return Screen(
+        text,
+        "road_victory" if victory else "road_defeat",
+        keyboard([button(again, HUNT_MANUAL_CALLBACK)], back(HUNT_ENTRY_CALLBACK)),
+        parse_mode="HTML",
+    )
+
+
+def render_hunt_entry() -> Screen:
+    """Entrada de Caçadas (Bloco UI 1 §4): Manual e Ronda, sem escolher Local."""
+    from asterion.bot.ui_format import back, blocks, button, column, keyboard, narrative
+    from asterion.domain.tdo_hub import REFUGE_LABEL
+
+    text = blocks(
+        "🐺 <b>Caçadas</b>",
+        narrative(
+            "As Terras do Ocaso se estendem entre cinzas, florestas queimadas e ruínas "
+            "deixadas por tempos antigos. Por essas terras, criaturas se escondem entre a "
+            "vegetação, os caminhos abandonados e os vestígios de antigas construções."
+        ),
+        narrative(
+            "Cada região guarda seus próprios perigos e sinais de vida, tornando as caçadas "
+            "diferentes conforme os caminhos já conhecidos."
+        ),
+    )
+    rows = column(
+        button("🎯 Caçada Manual", HUNT_MANUAL_CALLBACK),
+        button("🔄 Ronda de Caça", "tdo:hunt:round"),
+    )
+    return Screen(
+        text, location_key(REFUGE_LABEL), keyboard(*rows, back("menu:back")), parse_mode="HTML"
     )
 
 

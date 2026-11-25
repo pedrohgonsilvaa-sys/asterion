@@ -552,6 +552,7 @@ def get_bot_runtime() -> BotRuntime:
             chronicle_encounters=chronicle_encounters,
             tdo_explore=tdo_explore,
             refuge_hud=refuge_hud,
+            guilds=guilds,
         )
     )
     dispatcher.include_router(

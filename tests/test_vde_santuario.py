@@ -8,7 +8,7 @@ from sqlalchemy import select
 from asterion.application.bestiary import BestiaryRecorder
 from asterion.application.dungeons import DUNGEON_FAMILIES, DungeonService, DungeonView
 from asterion.application.knowledge_catalog import CODEX_BY_ID, CODEX_FRAGMENTS
-from asterion.bot.dungeon_ui import render_dungeons
+from asterion.bot.dungeon_ui import render_dungeon_difficulty, render_dungeons
 from asterion.domain.combat import (
     _damage_aura_reduction,
     _enemy_action,
@@ -377,9 +377,15 @@ def test_sanctuary_is_player_visible_with_a_live_callback():
         ),
     )
     detail_screen = render_dungeons(detail)
+    # Bloco UI 1 §5: a tela da Masmorra escolhe a dificuldade; Iniciar, Grupo e
+    # Pareamento ficam nos Detalhes de cada dificuldade.
     callbacks = {
         button.callback_data
-        for row in detail_screen.keyboard.inline_keyboard
+        for screen in (
+            detail_screen,
+            *(render_dungeon_difficulty(detail, suffix) for suffix in "sfr"),
+        )
+        for row in screen.keyboard.inline_keyboard
         for button in row
     }
     assert "dungeon:start:s:s" in callbacks

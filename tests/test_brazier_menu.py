@@ -61,7 +61,7 @@ def test_menu_is_authoritative_and_preserves_fractional_hp():
 
 def test_vigor_bar_is_derived_not_hardcoded():
     text = render_world(world_view(vigor=72)).text
-    assert "⚡ Vigor · 72 / 100\n🟨🟨🟨🟨🟨🟨⬜⬜⬜" in text
+    assert "⚡ Vigor · 72 / 100\n🟨🟨🟨🟨🟨🟨🟨⬜⬜⬜" in text
 
 
 def test_brazier_screen_has_discovered_state_and_rest_only():
