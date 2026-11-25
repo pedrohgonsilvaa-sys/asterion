@@ -1,4 +1,4 @@
-"""Telas locais do Refúgio do Ocaso (Bloco UI 1 v1.1.0 §2).
+"""Telas locais do Refúgio do Ocaso (Contrato Mestre de Telas UI v1.0.0 §7–§14).
 
 Refúgio-local, Braseiro do Refúgio e os NPCs do abrigo. O HUD principal fica em
 ``world_ui.refuge_hud_text``. Regras (descanso, Proficiências, Missões) seguem nos
@@ -23,6 +23,7 @@ from asterion.bot.ui_format import (
     mono,
     narrative,
     number,
+    pairs,
 )
 from asterion.domain.tdo_hub import REFUGE_LABEL
 
@@ -37,6 +38,10 @@ CB_DARIAN = "refuge:darian"
 CB_ALDA = "refuge:alda"
 CB_OREN = "refuge:oren"
 CB_HUD = "menu:back"
+CB_PROFESSIONS = "character:professions"
+CB_PATH = "character:path"
+CB_MISSIONS = "world:missions"
+CB_WAREHOUSE = "warehouse:root"
 
 REFUGE_TEXT = (
     "Entre as cinzas do Ocaso, este abrigo permanece como um dos poucos lugares seguros "
@@ -77,13 +82,23 @@ OREN_TEXT = (
 
 
 def render_refuge_local() -> Screen:
-    """Refúgio-local: serviços e pessoas do abrigo. Sem Dádiva Diária."""
+    """Refúgio-local (Contrato Mestre de Telas UI v1.0.0 §7): serviços e pessoas do abrigo.
+
+    Sem Travessia (deslocamento regional é pelo Mapa); Missões entram pelo Mural; Ofícios,
+    Caminho e Armazém abrem os sistemas existentes.
+    """
     text = blocks("🌘 <b>Refúgio do Ocaso</b>", narrative(REFUGE_TEXT))
-    rows = column(
-        button("🔥 Braseiro do Refúgio", CB_BRAZIER),
-        button("⚔️ Darian Veyr", CB_DARIAN),
-        button("🧭 Alda Veyr", CB_ALDA),
-        button("📜 Oren Cal", CB_OREN),
+    rows = pairs(
+        [
+            button("🔥 Braseiro do Refúgio", CB_BRAZIER),
+            button("⚔️ Darian Veyr", CB_DARIAN),
+            button("🧭 Alda Veyr", CB_ALDA),
+            button("🖋️ Oren Cal", CB_OREN),
+            button("🛠️ Ofícios", CB_PROFESSIONS),
+            button("🎭 Caminho", CB_PATH),
+            button("📜 Mural de Missões", CB_MISSIONS),
+            button("🏦 Armazém", CB_WAREHOUSE),
+        ]
     )
     return Screen(text, REFUGE_IMAGE_KEY, keyboard(*rows, back(CB_HUD)), "HTML")
 
@@ -143,4 +158,4 @@ def render_alda() -> Screen:
 
 
 def render_oren() -> Screen:
-    return _npc("📜 <b>Oren Cal</b>", OREN_TEXT, npc_key("oren cal"))
+    return _npc("🖋️ <b>Oren Cal</b>", OREN_TEXT, npc_key("oren cal"))

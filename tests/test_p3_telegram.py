@@ -314,17 +314,18 @@ async def test_bosque_map_does_not_auto_open_p3_and_mission_remains_reachable(da
         for button in row
         if button.callback_data == "world:map:local:bosque"
     )
-    assert bosque_button.text.isdigit()
+    assert bosque_button.text == "🌲 Bosque Calcinado"
     await dispatcher.feed_raw_update(
         bot, callback_update(bosque_button.callback_data, update_id=998331, actor=actor)
     )
     place = _last_method(bot)
     assert "Fragmentos de Construção" not in place.text
-    assert "world:local" in [
+    # Contrato Mestre §15: o Local no Mapa só volta à Região.
+    assert [
         button.callback_data
         for row in place.reply_markup.inline_keyboard
         for button in row
-    ]
+    ] == ["world:map:region:tdo"]
     await dispatcher.feed_raw_update(
         bot, callback_update("world:local", update_id=998337, actor=actor)
     )
@@ -398,34 +399,16 @@ async def test_completed_p3_map_exposes_bosque_and_route(database):
         bot, callback_update("world:map:local:bosque", update_id=998334, actor=actor)
     )
     accessible = _last_method(bot)
-    route_button = next(
-        button
+    # O Mapa não desloca (Contrato Mestre §15): a rota segue pelo Refúgio.
+    assert all(
+        not button.callback_data.startswith("road:route:")
         for row in accessible.reply_markup.inline_keyboard
         for button in row
-        if button.callback_data == "road:route:bosque"
     )
     await dispatcher.feed_raw_update(
-        bot, callback_update(route_button.callback_data, update_id=998335, actor=actor)
+        bot, callback_update("road:route:bosque", update_id=998335, actor=actor)
     )
     assert "📍 Local Atual\n🌲 Bosque Calcinado" in _last_method(bot).text
-    await dispatcher.feed_raw_update(
-        bot, callback_update("world:map:local:bosque", update_id=998336, actor=actor)
-    )
-    bosque = _last_method(bot)
-    assert "Bosque Calcinado · Local Atual" in bosque.text
-    callbacks = [
-        button.callback_data
-        for row in bosque.reply_markup.inline_keyboard
-        for button in row
-    ]
-    assert "world:local" in callbacks
-    assert "road:prepare" not in callbacks
-    assert "road:explore" not in callbacks
-    assert "road:route:refuge" in callbacks
-    assert "road:route:charneca" not in callbacks
-    assert "Caçar" not in [
-        button.text for row in bosque.reply_markup.inline_keyboard for button in row
-    ]
     await dispatcher.feed_raw_update(
         bot, callback_update("world:local", update_id=998337, actor=actor)
     )

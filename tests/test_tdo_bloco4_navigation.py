@@ -165,9 +165,8 @@ def test_refuge_keyboard_follows_source_order_and_grouping():
     )
     rows = [[b.text for b in row] for row in screen.keyboard.inline_keyboard]
     # HUD congelado: Menu Principal em duas colunas, sem Locais avulsos nem NPCs.
-    assert rows[0] == ["🌘 Refúgio do Ocaso"]
-    assert rows[1] == ["🧭 Explorar", "🐺 Caçadas"]
-    assert rows[-1] == ["🌐 Comunidade"]
+    assert rows[0] == ["🌘 Refúgio", "🧭 Explorar"]
+    assert rows[-1] == ["🌐 Comunidade", "⚙️ Configurações"]
     flat = [text for row in rows for text in row]
     for absent in ("Campanha", "Aventura", "← Menu", "Local Atual", "Alda Veyr"):
         assert absent not in flat
@@ -205,7 +204,7 @@ def test_hunt_choice_lists_hunt_locals_then_back_to_refuge():
     pairs = [(b.text, b.callback_data) for row in screen.keyboard.inline_keyboard for b in row]
     assert pairs == [
         ("🔥 Estrada das Cinzas", "road:route:road"),
-        ("🌑 Charneca da Fuligem", "road:route:charneca"),
+        ("🌫️ Charneca da Fuligem", "road:route:charneca"),
         (BACK_TO_REFUGE_LABEL, "world:local"),
     ]
 

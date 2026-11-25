@@ -6,8 +6,8 @@ from sqlalchemy import select
 
 from asterion.application.crafting import CraftingService
 from asterion.application.professions import ProfessionService
-from asterion.bot.character_ui import render_character
 from asterion.bot.profession_handlers import profession_router
+from asterion.bot.refuge_ui import render_refuge_local
 from asterion.domain.professions import RECIPE_DEFINITIONS, VARZEAS_ESSENCE, VARZEAS_REAGENT
 from asterion.infrastructure.db.models import (
     Brazier,
@@ -89,7 +89,8 @@ async def test_telegram_character_to_professions_crafting_and_change(database):
         )
         character_id = character.id
 
-    screen = render_character()
+    # Contrato Mestre de Telas UI v1.0.0 §7: Ofícios fica no Refúgio do Ocaso.
+    screen = render_refuge_local()
     assert any(
         button.callback_data == "character:professions"
         for row in screen.keyboard.inline_keyboard

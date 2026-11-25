@@ -81,37 +81,63 @@ def _root(items=None, *, version=4, blocked_secondary=False):
     return EquipmentRootView(uuid4(), 20, version, slots)
 
 
-def test_character_hub_has_canonical_copy_and_only_live_navigation():
-    screen = render_character()
-    assert screen.text.startswith("🪪 Personagem\n\n")
-    assert "Consulte os atributos, escolhas e recursos" in screen.text
+def _identity(**overrides):
+    from asterion.application.character_surfaces import IdentityView
+
+    data = dict(
+        name="Oppan",
+        character_class="vigia",
+        level=1,
+        legacy_level=1,
+        selected_title=None,
+        guild_tag="CIN",
+    )
+    data.update(overrides)
+    return IdentityView(**data)
+
+
+def test_character_hub_follows_master_contract():
+    screen = render_character(_identity())
+    assert screen.text == (
+        "👤 <b>Personagem</b>\n\n"
+        "🏹 <b>[CIN] Oppan</b> · <code>Nv. 1 · Legado I</code>\n🎖️ <i>Iniciado</i>"
+    )
     assert [[button.text for button in row] for row in screen.keyboard.inline_keyboard] == [
-        ["Inventário", "Equipamentos"],
-        ["Artes", "Talentos"],
-        ["Atributos", "Ofícios"],
-        ["Perfil", "Caminho"],
-        ["Doutrinas", "Cosméticos"],
-        ["Legado"],
-        ["← Menu"],
+        ["⚔️ Equipamentos", "🎒 Inventário"],
+        ["📊 Atributos", "✨ Artes"],
+        ["🌿 Talentos", "🪪 Perfil"],
+        ["🧩 Doutrinas", "🎨 Cosméticos"],
+        ["🏆 Feitos"],
+        ["🏛️ Legado"],
+        ["↩️ Voltar"],
     ]
     callbacks = [button.callback_data for button in _buttons(screen)]
     assert callbacks == [
-        "inventory:root",
         "eq:r",
+        "inventory:root",
+        "character:attributes",
         "character:arts",
         "character:talents",
-        "character:attributes",
-        "character:professions",
         "character:profile",
-        "character:path",
         "character:doctrines",
         "character:cosmetics",
+        "kb:a",
         "legacy:root",
         "menu:back",
     ]
-    assert "🎴 Artes · Combate" in screen.text
-    assert all("menu:noop" not in value for value in callbacks)
+    # §6: Ofícios, Caminho e Proficiências ficam fora do Personagem.
+    assert not set(callbacks) & {"character:professions", "character:path", "wpt:root"}
     assert screen.image_key == "character"
+
+
+def test_character_hub_shows_legado_only_when_applicable():
+    def labels(view):
+        return [b.text for row in render_character(view).keyboard.inline_keyboard for b in row]
+
+    assert "🏛️ Legado" not in labels(_identity(legacy_level=0, level=59))
+    assert "🏛️ Legado" in labels(_identity(legacy_level=0, level=60))
+    no_tag = render_character(_identity(guild_tag=None, legacy_level=0)).text
+    assert "🏹 <b>Oppan</b> · <code>Nv. 1</code>" in no_tag
 
 
 def test_main_menu_personagem_button_has_real_character_destination():

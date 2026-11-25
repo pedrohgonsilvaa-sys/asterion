@@ -105,3 +105,43 @@ def keyboard(*rows: list[InlineKeyboardButton]) -> InlineKeyboardMarkup:
 def blocks(*parts: str | None) -> str:
     """Blocos separados por uma linha; blocos vazios não deixam espaço sobrando."""
     return "\n\n".join(part for part in parts if part)
+
+
+# Contrato Mestre de Telas UI v1.0.0 §4: identidade padrão do personagem.
+DEFAULT_TITLE = "Iniciado"
+_ROMAN = ((10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"))
+
+
+def roman(value: int) -> str:
+    result = ""
+    for size, symbol in _ROMAN:
+        while value >= size:
+            result += symbol
+            value -= size
+    return result
+
+
+def identity(
+    *,
+    emoji: str,
+    name: str,
+    level: int,
+    legacy_level: int = 0,
+    guild_tag: str | None = None,
+    title: str | None = None,
+) -> str:
+    """``🏹 **[CIN] Oppan** · `Nv. 1 · Legado I` `` e ``🎖️ *Iniciado*``.
+
+    Sem Guilda, a TAG some; sem Legado, ``· Legado I`` some; sem Título escolhido,
+    vale o Título inicial ``Iniciado``.
+    """
+    tag = f"[{guild_tag}] " if guild_tag else ""
+    level_text = f"Nv. {level}"
+    if legacy_level > 0:
+        level_text += f" · Legado {roman(legacy_level)}"
+    return "\n".join(
+        (
+            f"{emoji} <b>{escape(tag + name)}</b> · {mono(level_text)}",
+            f"🎖️ {narrative(title or DEFAULT_TITLE)}",
+        )
+    )

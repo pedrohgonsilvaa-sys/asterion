@@ -16,7 +16,6 @@ from asterion.application.road import ALTOS_ESCARPA_LABEL, CONFINS_MARCHA_LABEL
 from asterion.application.talents import TalentView
 from asterion.bot import flavor_ui, world_handlers
 from asterion.bot.character_progression_ui import render_art_root, render_talent_root
-from asterion.bot.character_ui import render_character
 from asterion.bot.chronicle_ui import render_calendar
 from asterion.bot.creation_ui import Screen
 from asterion.bot.equipment_ui import render_equipment_root
@@ -72,7 +71,6 @@ def _inventory_view() -> InventoryView:
 GUILD = _guild_view(GuildRole.LEADER)  # uma vez só: o id da Guilda entra nos botões
 
 SYSTEM_SCREENS = {
-    "personagem": render_character,
     "inventario": lambda: render_inventory(_inventory_view()),
     "mercado": lambda: render_root(None),
     "equipamentos": lambda: render_equipment_root(_equipment_root()),
@@ -194,7 +192,8 @@ def _region_dispatcher() -> Dispatcher:
     return dispatcher
 
 
-REGIONS = ("tdo", "vde", "nareth", "varzeas", "altos", "confins")
+# Terras do Ocaso: a tela da Região segue o Contrato Mestre de Telas UI v1.0.0 §15.
+REGIONS = ("vde", "nareth", "varzeas", "altos", "confins")
 
 
 @pytest.mark.parametrize("region", REGIONS)

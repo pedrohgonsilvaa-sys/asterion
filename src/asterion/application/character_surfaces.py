@@ -43,10 +43,24 @@ from asterion.infrastructure.db.models import (
     CharacterProfile,
     CodexEntry,
     CodexFragment,
+    Guild,
+    GuildMember,
     LocationDiscovery,
 )
 
 MAX_HISTORY_CHARACTERS = MAX_STORY_CHARACTERS  # §49.18
+
+
+@dataclass(frozen=True, slots=True)
+class IdentityView:
+    """Identidade padrão do personagem (Contrato Mestre de Telas UI v1.0.0 §4)."""
+
+    name: str
+    character_class: str
+    level: int
+    legacy_level: int
+    selected_title: str | None
+    guild_tag: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +198,36 @@ class CharacterSurfacesService:
                 critical=stats.crit,
                 evasion=stats.evasion,
                 block=stats.block,
+            )
+
+    async def identity(self, actor_id: int) -> IdentityView | None:
+        """Read-only: nome, Classe, Nível, Legado, Título escolhido e TAG da Guilda."""
+        async with self.sessions() as session:
+            character = await self._character(session, actor_id)
+            if character is None:
+                return None
+            selected_title_id = await session.scalar(
+                select(CharacterCosmeticSelection.cosmetic_id).where(
+                    CharacterCosmeticSelection.character_id == character.id,
+                    CharacterCosmeticSelection.cosmetic_type == "title",
+                )
+            )
+            guild_tag = await session.scalar(
+                select(Guild.tag)
+                .join(GuildMember, GuildMember.guild_id == Guild.id)
+                .where(GuildMember.character_id == character.id, Guild.status == "active")
+            )
+            return IdentityView(
+                name=character.name,
+                character_class=character.character_class,
+                level=character.level,
+                legacy_level=character.legacy_level,
+                selected_title=(
+                    COSMETICS_BY_ID[selected_title_id].name
+                    if selected_title_id in COSMETICS_BY_ID
+                    else None
+                ),
+                guild_tag=guild_tag,
             )
 
     async def profile(self, actor_id: int) -> ProfileView | None:

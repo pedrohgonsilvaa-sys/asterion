@@ -146,7 +146,7 @@ async def test_telegram_inventory_equip_unequip_and_duplicate_callback_are_persi
     dispatcher, telegram = _dispatcher(database), _telegram()
 
     screen = await _click(dispatcher, telegram, "character:root", actor=actor, update_id=9101)
-    assert "🪪 Personagem" in screen.text
+    assert "👤 <b>Personagem</b>" in screen.text
     screen = await _click(dispatcher, telegram, "inventory:root", actor=actor, update_id=9102)
     assert "🎒 Inventário" in screen.text
     screen = await _click(

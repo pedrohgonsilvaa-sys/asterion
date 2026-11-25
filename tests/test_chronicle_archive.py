@@ -270,8 +270,9 @@ async def test_conclusion_registers_codex_and_later_layers_and_desfecho(database
     assert "codex_cr01_desfecho_selar_c3" not in held
     titles = {entry.title for entry in knowledge.codex_entries}
     assert {"Ecos da Convergência", "O Pulso", "O Que Foi Respondido"} <= titles
-    root = render_codex_root(knowledge).text
-    assert "Crônicas" in root and "Mistérios e Fenômenos" in root
+    root = render_codex_root(knowledge)
+    labels = [b.text for row in root.keyboard.inline_keyboard for b in row]
+    assert "📖 Crônicas" in labels and "🌀 Mistérios" in labels
 
 
 async def test_archived_conclusion_registers_codex_without_points(database):
@@ -304,7 +305,8 @@ async def test_archived_conclusion_registers_codex_without_points(database):
     assert "pts" not in chapter
     knowledge = await CharacterSurfacesService(database[1], SERVER).knowledge(ANA)
     # A Crônica Entry of "Regiões e Locais" has no Local: listed by itself.
-    assert "Marcas que Vibram" in render_codex_category(knowledge, "regions").text
+    category = render_codex_category(knowledge, "regions")
+    assert "Marcas que Vibram" in [b.text for row in category.keyboard.inline_keyboard for b in row]
 
 
 async def test_cr01_creatures_have_their_own_bestiary_group(database):

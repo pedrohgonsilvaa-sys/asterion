@@ -222,6 +222,7 @@ def get_bot_runtime() -> BotRuntime:
     refuge_hud = RefugeHudLoader(
         DailyGiftService(SessionFactory, settings.server_id),
         ChronicleService(SessionFactory, settings.server_id),
+        GuildService(SessionFactory, settings.server_id).tag_of,
     )
     inventory = InventoryService(SessionFactory, settings.server_id)
     warehouse = WarehouseService(SessionFactory, settings.server_id)

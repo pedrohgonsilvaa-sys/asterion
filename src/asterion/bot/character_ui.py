@@ -1,53 +1,53 @@
-"""Player-facing Character hub."""
+"""Menu de Personagem (Contrato Mestre de Telas UI v1.0.0 §6).
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+Personagem é só menu: identidade padrão e as entradas do personagem. Ofícios e
+Caminho ficam no Refúgio do Ocaso; Legado só aparece quando aplicável.
+"""
 
+from __future__ import annotations
+
+from asterion.application.character_surfaces import IdentityView
 from asterion.bot.creation_ui import Screen
-from asterion.bot.flavor_ui import with_flavor
+from asterion.bot.ui_format import back, blocks, button, identity, keyboard, pairs
+from asterion.bot.world_ui import CLASS_EMOJI
 
-CHARACTER_COPY = (
-    "🪪 Personagem\n\n"
-    "Consulte os atributos, escolhas e recursos que já fazem parte da "
-    "jornada do seu personagem.\n\n"
-    "🎒 Inventário · Itens\n"
-    "🛡️ Equipamentos · Arsenal\n"
-    "🎴 Artes · Combate\n"
-    "🌿 Talentos · Evolução\n"
-    "📈 Atributos · Status\n"
-    "⚒️ Ofícios · Criação\n"
-    "📇 Perfil · Identidade\n"
-    "🎭 Caminho · Especialização\n"
-    "🧩 Doutrinas · Configurações salvas\n"
-    "🎨 Cosméticos · Apresentação\n"
-    "🔱 Legado · Ascensão"
+# Legado I exige somente Nv.60 (SOURCE_AUTHORITY, override de 2026-11-20).
+LEGACY_LEVEL = 60
+CHARACTER_BUTTONS = (
+    ("⚔️ Equipamentos", "eq:r"),
+    ("🎒 Inventário", "inventory:root"),
+    ("📊 Atributos", "character:attributes"),
+    ("✨ Artes", "character:arts"),
+    ("🌿 Talentos", "character:talents"),
+    ("🪪 Perfil", "character:profile"),
+    ("🧩 Doutrinas", "character:doctrines"),
+    ("🎨 Cosméticos", "character:cosmetics"),
+    ("🏆 Feitos", "kb:a"),
 )
+LEGACY_BUTTON = ("🏛️ Legado", "legacy:root")
 
 
-def render_character() -> Screen:
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="Inventário", callback_data="inventory:root"),
-                InlineKeyboardButton(text="Equipamentos", callback_data="eq:r"),
-            ],
-            [
-                InlineKeyboardButton(text="Artes", callback_data="character:arts"),
-                InlineKeyboardButton(text="Talentos", callback_data="character:talents"),
-            ],
-            [
-                InlineKeyboardButton(text="Atributos", callback_data="character:attributes"),
-                InlineKeyboardButton(text="Ofícios", callback_data="character:professions"),
-            ],
-            [
-                InlineKeyboardButton(text="Perfil", callback_data="character:profile"),
-                InlineKeyboardButton(text="Caminho", callback_data="character:path"),
-            ],
-            [
-                InlineKeyboardButton(text="Doutrinas", callback_data="character:doctrines"),
-                InlineKeyboardButton(text="Cosméticos", callback_data="character:cosmetics"),
-            ],
-            [InlineKeyboardButton(text="Legado", callback_data="legacy:root")],
-            [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
-        ]
+def legacy_applies(view: IdentityView | None) -> bool:
+    return view is not None and (view.legacy_level > 0 or view.level >= LEGACY_LEVEL)
+
+
+def render_character(view: IdentityView | None = None) -> Screen:
+    header = "👤 <b>Personagem</b>"
+    text = (
+        blocks(
+            header,
+            identity(
+                emoji=CLASS_EMOJI.get(view.character_class, "👤"),
+                name=view.name,
+                level=view.level,
+                legacy_level=view.legacy_level,
+                guild_tag=view.guild_tag,
+                title=view.selected_title,
+            ),
+        )
+        if view is not None
+        else header
     )
-    return with_flavor(Screen(CHARACTER_COPY, "character", keyboard), "personagem")
+    rows = pairs([button(label, callback) for label, callback in CHARACTER_BUTTONS])
+    legacy = [button(*LEGACY_BUTTON)] if legacy_applies(view) else []
+    return Screen(text, "character", keyboard(*rows, legacy, back("menu:back")), "HTML")

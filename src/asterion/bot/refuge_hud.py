@@ -1,7 +1,8 @@
-"""Dados reais do HUD do Refúgio do Ocaso: Dádiva Diária e Crônica."""
+"""Dados reais do HUD do Refúgio do Ocaso: Dádiva Diária, Crônica e TAG da Guilda."""
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -14,6 +15,7 @@ from asterion.bot.chronicle_ui import chronicle_hud_status
 class RefugeHud:
     gift_available: bool = False
     chronicle: str | None = None
+    guild_tag: str | None = None
 
 
 class RefugeHudLoader:
@@ -23,8 +25,9 @@ class RefugeHudLoader:
         self,
         gifts: DailyGiftService,
         chronicle: ChronicleService,
+        guild_tag: Callable[[int], Awaitable[str | None]] | None = None,
     ):
-        self.gifts, self.chronicle = gifts, chronicle
+        self.gifts, self.chronicle, self.guild_tag = gifts, chronicle, guild_tag
 
     async def __call__(self, actor: int, *, now: datetime | None = None) -> RefugeHud:
         moment = now or datetime.now(UTC)
@@ -36,4 +39,5 @@ class RefugeHudLoader:
             chronicle = chronicle_hud_status(await self.chronicle.view(actor, now=moment))
         except EngagementError:
             chronicle = None
-        return RefugeHud(gift_available, chronicle)
+        tag = await self.guild_tag(actor) if self.guild_tag is not None else None
+        return RefugeHud(gift_available, chronicle, tag)
