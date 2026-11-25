@@ -999,7 +999,26 @@ class FlageloService:
         state["player_effects"] = next_boss.to_data()
         event.enemy_state = state
         event.version += 1
-        self._credit(participants, actions, outcome, intents, dot_credit, now)
+        # O DoT continua valendo depois que o aplicador saiu ou morreu: o dano efetivo do tick é
+        # creditado a quem aplicou (identidade vinda do motor em ``BossDot.source_character``).
+        present_ids = {p.character_id for p in participants}
+        absent = sorted(set(dot_credit) - present_ids, key=str)
+        departed = []
+        if absent:
+            departed = list(
+                (
+                    await session.scalars(
+                        select(FlageloParticipant)
+                        .where(
+                            FlageloParticipant.flagelo_id == event.id,
+                            FlageloParticipant.character_id.in_(absent),
+                        )
+                        .order_by(FlageloParticipant.character_id)
+                        .with_for_update()
+                    )
+                ).all()
+            )
+        self._credit([*participants, *departed], actions, outcome, intents, dot_credit, now)
         released: list[UUID] = []
         for participant in participants:
             player = players.get(participant.character_id)
@@ -1092,10 +1111,11 @@ class FlageloService:
                 if fl.ranking_metric(category, metrics) > before[category]:
                     stamps[category] = stamp
             participant.first_metric_timestamps = stamps
-        # Dano de DoT de quem já saiu do combate também é efetivo.
+        # Dano de DoT de quem já saiu do combate também é efetivo: quem saiu é carregado por
+        # ``_resolve_combat`` e creditado aqui; só um aplicador sem linha no evento fica de fora.
         missing = set(dot_credit) - set(by_id)
         if missing:
-            outcome.history.append({"kind": "dot_credit_pending", "count": len(missing)})
+            outcome.history.append({"kind": "dot_credit_unassigned", "count": len(missing)})
 
     async def _record_observations(self, session, definition, character_ids: set[UUID]):
         """Primeira observação no Bestiário quando o personagem age validamente (como o Véu)."""
