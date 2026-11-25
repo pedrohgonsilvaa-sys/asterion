@@ -11,7 +11,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install Ruff
+        run: python -m pip install "ruff>=0.8,<1"
+      - name: Lint
+        run: ruff check .
+
   test:
+    name: Test
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -34,15 +50,14 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install
-        run: pip install -e ".[dev]"
+        run: python -m pip install -e ".[dev]"
       - name: Point backup tests at the Postgres service container
         # pg_dump must match the server (16); the runner's newer client emits SQL it rejects.
         run: echo "ASTERION_TEST_PG_CONTAINER=$(docker ps -q --filter ancestor=postgres:16-alpine | head -n1)" >> "$GITHUB_ENV"
-      - name: Lint
-        run: ruff check .
       - name: Test
-        run: pytest
+        run: pytest -n auto
       - name: Alembic check
         run: |
           alembic upgrade head
