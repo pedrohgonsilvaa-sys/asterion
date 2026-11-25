@@ -79,6 +79,7 @@ from asterion.infrastructure.db.models import (
     FlageloRound,
     OutboxMessage,
     Unlock,
+    WorldState,
 )
 
 ACTION_TYPES = ("attack", "defend", "art")
@@ -182,6 +183,7 @@ class SelfState:
     reentry_seconds: int
     participation_points: int
     eligible: bool
+    metrics: fl.ParticipationMetrics | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,12 +195,22 @@ class RankingLine:
 
 
 @dataclass(frozen=True, slots=True)
+class RegionStatus:
+    """Barra da Região atual do personagem e se há um Flagelo desperto (HUD da Região)."""
+
+    bar: RegionBar
+    flagelo_awake: bool
+
+
+@dataclass(frozen=True, slots=True)
 class HubView:
     bars: tuple[RegionBar, ...]
     active: ActiveFlagelo | None
     me: SelfState | None
     last_rankings: tuple[RankingLine, ...] = ()
     last_name: str | None = None
+    # Recompensa do personagem no último Flagelo morto (quando já liquidada).
+    last_reward: dict | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,6 +230,9 @@ class CombatScreen:
     telegraph: str | None
     history: tuple[dict, ...]
     participation_points: int
+    # Escala atual (passos de 15 min sem combatente) e métricas do próprio personagem.
+    scaling_steps: int = 0
+    metrics: fl.ParticipationMetrics | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -486,11 +501,40 @@ class FlageloService:
                         _seconds(participant.reentry_available_at, now),
                         participant.participation_points,
                         fl.is_eligible(_metrics(participant)),
+                        _metrics(participant),
                     )
-            last_rankings, last_name = await self._last_rankings(session)
-            return HubView(bars, active, me, last_rankings, last_name)
+            last_rankings, last_name, last_reward = await self._last_rankings(
+                session, character.id
+            )
+            return HubView(bars, active, me, last_rankings, last_name, last_reward)
 
-    async def _last_rankings(self, session):
+    async def region_status(self, actor: int) -> RegionStatus | None:
+        """Barra da Região onde o personagem está (``WorldState.region``). Só leitura."""
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            place = await session.scalar(
+                select(WorldState.region).where(WorldState.character_id == character.id)
+            )
+            region = fl.REGIONS_BY_NAME.get(place or "")
+            if region is None:
+                return None
+            row = await session.get(FlageloRegionProgress, (self.server_id, region.region_id))
+            points = row.current_points if row is not None else 0
+            awake = await self.active_event(session) is not None
+            return RegionStatus(
+                RegionBar(
+                    region.region_id,
+                    region.emoji,
+                    region.short_label,
+                    points,
+                    fl.THRESHOLD,
+                    fl.percent(points),
+                    row is not None and row.active_flagelo_id is not None,
+                ),
+                awake,
+            )
+
+    async def _last_rankings(self, session, character_id: UUID | None = None):
         event = await session.scalar(
             select(FlageloEvent)
             .where(
@@ -501,14 +545,19 @@ class FlageloService:
             .limit(1)
         )
         if event is None:
-            return (), None
+            return (), None, None
+        reward = None
+        if character_id is not None:
+            mine = await session.get(FlageloParticipant, (event.id, character_id))
+            if mine is not None and mine.settled_at is not None and mine.eligible:
+                reward = dict(mine.reward or {})
         lines = []
         for category in fl.RANKING_CATEGORIES:
             for entry in event.rankings.get(category, ()):
                 lines.append(
                     RankingLine(category, int(entry["position"]), entry["name"], entry["value"])
                 )
-        return tuple(lines), fl.region(event.region_id).flagelo.name
+        return tuple(lines), fl.region(event.region_id).flagelo.name, reward
 
     # ------------------------------------------------------------ entrada e saída
 
@@ -1323,10 +1372,9 @@ class FlageloService:
         )
         unknown = [recipe for recipe in recipes if recipe not in known]
         found = fl.recipe_roll(str(event.id), character.id, unknown)
-        status = "granted" if found else ("skipped" if unknown else "exhausted")
-        if not await self._grant_once(
-            session, event, character, "recipe", status, {"recipe": found} if found else {}
-        ):
+        status = "granted" if found else "skipped"
+        payload = {"recipe": found} if found else ({} if unknown else {"reason": "all_known"})
+        if not await self._grant_once(session, event, character, "recipe", status, payload):
             return
         if found:
             session.add(Unlock(character_id=character.id, unlock_id=found))
@@ -1456,6 +1504,8 @@ class FlageloService:
                 telegraph,
                 tuple(last.result.get("history", ())) if last is not None else (),
                 participant.participation_points,
+                event.abandonment_steps,
+                _metrics(participant),
             )
 
     async def art_target_mode(self, actor: int, slot: int) -> str | None:

@@ -1,4 +1,4 @@
-"""Dados reais do HUD do Refúgio do Ocaso: Dádiva Diária e Crônica."""
+"""Dados reais do HUD do Refúgio do Ocaso: Dádiva Diária, Crônica e barra do Flagelo."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 from asterion.application.chronicle import ChronicleService
 from asterion.application.engagement import DailyGiftService, EngagementError
+from asterion.application.flagelos import FlageloError, FlageloService, RegionStatus
 from asterion.bot.chronicle_ui import chronicle_hud_status
 
 
@@ -14,6 +15,8 @@ from asterion.bot.chronicle_ui import chronicle_hud_status
 class RefugeHud:
     gift_available: bool = False
     chronicle: str | None = None
+    # O Despertar dos Flagelos (espec. final §17): barra da Região atual e Flagelo desperto.
+    flagelo: RegionStatus | None = None
 
 
 class RefugeHudLoader:
@@ -23,8 +26,9 @@ class RefugeHudLoader:
         self,
         gifts: DailyGiftService,
         chronicle: ChronicleService,
+        flagelos: FlageloService | None = None,
     ):
-        self.gifts, self.chronicle = gifts, chronicle
+        self.gifts, self.chronicle, self.flagelos = gifts, chronicle, flagelos
 
     async def __call__(self, actor: int, *, now: datetime | None = None) -> RefugeHud:
         moment = now or datetime.now(UTC)
@@ -36,4 +40,10 @@ class RefugeHudLoader:
             chronicle = chronicle_hud_status(await self.chronicle.view(actor, now=moment))
         except EngagementError:
             chronicle = None
-        return RefugeHud(gift_available, chronicle)
+        flagelo = None
+        if self.flagelos is not None:
+            try:
+                flagelo = await self.flagelos.region_status(actor)
+            except FlageloError:
+                flagelo = None
+        return RefugeHud(gift_available, chronicle, flagelo)

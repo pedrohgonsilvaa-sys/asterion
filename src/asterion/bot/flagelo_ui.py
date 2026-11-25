@@ -59,6 +59,42 @@ def _elapsed(seconds: int) -> str:
     return f"{minutes // 60}h {minutes % 60:02d}m"
 
 
+def _scaling_line(steps: int, paused: bool) -> str:
+    """Escala por abandono (espec. final §4): +8% HP Máx. e +3% ATQ por passo, com teto."""
+    scaling = fl.scaling_for_steps(steps)
+    hp = int(scaling.hp_bonus * 100)
+    atq = int(scaling.atq_bonus * 100)
+    state = " · pausada (há combatentes)" if paused else ""
+    return f"📈 Escala · <code>+{hp}% HP · +{atq}% ATQ</code>{state}"
+
+
+def _metric_lines(metrics: fl.ParticipationMetrics) -> list[str]:
+    defensive = metrics.defender_prevented_damage + metrics.barrier_absorbed
+    return [
+        f"🗡️ Dano efetivo · <code>{_fmt(metrics.effective_damage)}</code>",
+        f"🛡️ Defesa · <code>{_fmt(defensive)}</code>",
+        f"✨ Cura efetiva · <code>{_fmt(metrics.effective_healing)}</code>",
+    ]
+
+
+def _reward_lines(reward: dict) -> list[str]:
+    lines = []
+    if reward.get("xp"):
+        lines.append(f"✨ <code>{_fmt(int(reward['xp']))}</code> XP")
+    if reward.get("crowns"):
+        lines.append(f"💰 <code>{_fmt(int(reward['crowns']))}</code> Coroas")
+    totals: dict[str, int] = {}
+    for item in reward.get("items", ()):
+        totals[item["name"]] = totals.get(item["name"], 0) + int(item["quantity"])
+    lines.extend(f"🧱 {escape(name)} × {quantity}" for name, quantity in totals.items())
+    equipment = reward.get("equipment")
+    if isinstance(equipment, dict):
+        lines.append(f"🎁 {escape(equipment['name'])} · {escape(equipment['rarity'])}")
+    if reward.get("recipe_name"):
+        lines.append(f"📜 Receita descoberta · {escape(reward['recipe_name'])}")
+    return lines
+
+
 def render_hub(view: HubView) -> Screen:
     lines = [f"<b>{escape(TITLE)}</b>", ""]
     for bar in view.bars:
@@ -81,6 +117,7 @@ def render_hub(view: HubView) -> Screen:
                 "",
                 f"⏱️ Ativo há {_elapsed(active.active_seconds)}",
                 f"👥 <code>{active.combatants} / {active.capacity}</code> em combate",
+                _scaling_line(active.scaling_steps, active.scaling_paused),
             ]
         )
         me = view.me
@@ -88,6 +125,8 @@ def render_hub(view: HubView) -> Screen:
             lines.append(
                 f"🎖️ Participação · <code>{me.participation_points} / {fl.PARTICIPATION_MIN}</code>"
             )
+            if me.metrics is not None:
+                lines.extend(_metric_lines(me.metrics))
         if me is not None and me.in_combat:
             rows.append([_button("⚔️ Voltar ao combate", "flg:fight")])
         elif me is not None and me.reentry_seconds > 0:
@@ -108,6 +147,10 @@ def render_hub(view: HubView) -> Screen:
                 lines.append(
                     f"{line.position}º {escape(line.name)} · <code>{_fmt(line.value)}</code>"
                 )
+    if view.last_reward:
+        reward_lines = _reward_lines(view.last_reward)
+        if reward_lines:
+            lines.extend(["", "🎁 <b>Sua recompensa</b>", *reward_lines])
     rows.append([_button("🔙 Voltar", "wev:hub")])
     return Screen("\n".join(lines), IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")
 
@@ -124,6 +167,9 @@ def _history_line(item: dict, names: dict[str, str]) -> str | None:
     if kind in {"player_damaged", "player_dot"}:
         name = names.get(item.get("character", ""), "Um combatente")
         return f"💥 {escape(name)} sofreu <b>{amount} de dano</b>."
+    if kind == "player_dodged":
+        name = names.get(item.get("character", ""), "Um combatente")
+        return f"💨 {escape(name)} <b>esquivou</b> o golpe."
     return None
 
 
@@ -141,6 +187,9 @@ def render_combat(view: CombatScreen, names: dict[str, str] | None = None) -> Sc
         hp_bar(Decimal(view.self_hp), Decimal(view.self_max_hp), color="🟥"),
         f"🎖️ Participação · <code>{view.participation_points} / {fl.PARTICIPATION_MIN}</code>",
     ]
+    if view.metrics is not None:
+        lines.extend(_metric_lines(view.metrics))
+    lines.append(_scaling_line(view.scaling_steps, True))
     if view.telegraph:
         lines.extend(["", f"⚠️ <i>O Flagelo prepara {escape(view.telegraph)}.</i>"])
     history = [line for item in view.history if (line := _history_line(item, names or {}))]
