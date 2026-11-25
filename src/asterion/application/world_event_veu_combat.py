@@ -108,6 +108,9 @@ class EngineRoundSimulator:
             ctx.unit.load_state(ctx.participant.combat_state or {})
             self._apply_effects(combat.fighters[_ACTOR], ctx.unit)
             ctx.unit.defense = Decimal(combat.fighters[_ACTOR].stat("defense"))
+            # Esquiva efetiva do motor (equipamento, Talentos e efeitos carregados). O lote só
+            # a usa quando a esquiva global está ligada (Flagelos); o Véu não a rola.
+            ctx.unit.evasion = Decimal(combat.fighters[_ACTOR].stat("evasion"))
         players = {cid: ctx.unit for cid, ctx in contexts.items() if ctx.unit is not None}
         intents: list[vc.PlayerIntent] = []
         for ctx in contexts.values():

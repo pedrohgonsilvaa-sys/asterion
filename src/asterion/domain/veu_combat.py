@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from asterion.domain.combat import (
     DOT_DEFAULT_TICK_COEFFICIENT,
@@ -28,7 +28,12 @@ from asterion.domain.combat import (
     DOT_TICK_COEFFICIENTS,
     Effect,
 )
-from asterion.domain.combat_math import direct_damage, dot_damage
+from asterion.domain.combat_math import (
+    CombatRng,
+    chance_from_percentage_points,
+    direct_damage,
+    dot_damage,
+)
 from asterion.domain.veu_bestiary import (
     BARRIER_DURATION_TURNS,
     EVENT_REFERENCE_LEVEL,
@@ -195,6 +200,11 @@ class PlayerUnit:
     barrier_source: UUID | None = None
     effects: list[PlayerEffect] = field(default_factory=list)
     dots: list[PlayerDot] = field(default_factory=list)
+    # Esquiva do motor (``Fighter.stat("evasion")``, p.p.) e a sequência de esquivas seguidas
+    # (trava anti-sequência do motor). Só usadas quando ``resolve_batch`` recebe
+    # ``evasion_seed`` (Flagelos); o Véu não as usa.
+    evasion: Decimal = D(0)
+    evasion_streak: int = 0
 
     def state_data(self) -> dict:
         data = {
@@ -205,6 +215,8 @@ class PlayerUnit:
         }
         if self.dots:
             data["dots"] = [dot.to_data() for dot in self.dots]
+        if self.evasion_streak:
+            data["evasion_streak"] = self.evasion_streak
         return data
 
     def load_state(self, data: dict) -> None:
@@ -214,6 +226,7 @@ class PlayerUnit:
         self.barrier_source = UUID(source) if source else None
         self.effects = [PlayerEffect.from_data(item) for item in data.get("effects", ())]
         self.dots = [PlayerDot.from_data(item) for item in data.get("dots", ())]
+        self.evasion_streak = int(data.get("evasion_streak", 0))
 
 
 @dataclass(frozen=True, slots=True)
@@ -262,6 +275,8 @@ class RoundOutcome:
     protection_credit: set[UUID] = field(default_factory=set)
     # Dano que o Defender do próprio jogador impediu de fato (dano sem Defender − com).
     prevented_by_character: dict[UUID, int] = field(default_factory=dict)
+    # Golpes inimigos esquivados por alvo (esquiva global; só com ``evasion_seed``).
+    dodged_by_character: dict[UUID, int] = field(default_factory=dict)
     history: list[dict] = field(default_factory=list)  # linhas estruturadas, sem texto
 
 
@@ -377,12 +392,21 @@ def resolve_batch(
     *,
     kit: Callable[[str], Sequence[VeuAction]] | None = None,
     level: int = EVENT_REFERENCE_LEVEL,
+    evasion_seed: str | None = None,
 ) -> RoundOutcome:
     """Aplica a rodada em lote a partir do estado inicial (§13.1 passos 8–11).
 
     ``kit``/``level``: o kit do inimigo e o nível de referência do dano inimigo. Sem eles,
     valem o Bestiário do Véu e o nível do Véu (comportamento original).
+
+    ``evasion_seed``: liga a esquiva global nos golpes inimigos (Flagelos, espec. final §3).
+    Mesma regra do motor (``combat._apply_action``): todo golpe com coeficiente direto rola
+    a Esquiva do alvo com ``CombatRng``; depois de 2 esquivas seguidas o golpe seguinte não
+    rola. Golpe esquivado não causa dano nem aplica DoT/debuff. Sem a semente (Véu), nada muda.
     """
+    evasion_rng = (
+        CombatRng(uuid5(NAMESPACE_URL, f"evasion|{evasion_seed}")) if evasion_seed else None
+    )
     outcome = RoundOutcome()
     initial_barrier = {code: enemy.barrier for code, enemy in enemies.items()}
     defending = {i.character_id for i in intents if i.kind == "defend"}
@@ -483,6 +507,34 @@ def resolve_batch(
             player = players.get(target_id)
             if player is None or start_hp[target_id] <= 0:
                 continue
+            if (
+                evasion_rng is not None
+                and action.coefficient is not None
+                and action.coefficient > 0
+                and action.kind is not ActionKind.DEBUFF
+            ):
+                if player.evasion_streak >= 2:
+                    player.evasion_streak = 0
+                else:
+                    chance = chance_from_percentage_points(player.evasion)
+                    dodged = chance > 0 and evasion_rng.chance(
+                        chance, f"evasion:{enemy.code}:{action.key}:{target_id}"
+                    )
+                    if dodged:
+                        player.evasion_streak += 1
+                        outcome.dodged_by_character[target_id] = (
+                            outcome.dodged_by_character.get(target_id, 0) + 1
+                        )
+                        outcome.history.append(
+                            {
+                                "kind": "player_dodged",
+                                "enemy": enemy.code,
+                                "action": action.key,
+                                "character": str(target_id),
+                            }
+                        )
+                        continue
+                    player.evasion_streak = 0
             if action.coefficient is not None and action.kind is not ActionKind.DEBUFF:
                 value = D(
                     direct_damage(
