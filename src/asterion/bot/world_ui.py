@@ -243,16 +243,33 @@ def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
     state = [f"💰 <b>Coroas</b> · {mono(number(view.crowns))}"]
     if hud.chronicle:
         state.append(f"📖 <b>Crônica</b> · {escape(hud.chronicle)}")
-    # O Boss Regional não tem dado de progressão real no sistema: fica ausente.
+    if hud.flagelo is not None:
+        # O Despertar dos Flagelos (espec. final §17): barra da Região, ``atual / 500`` e %.
+        flagelo_bar = hud.flagelo.bar
+        state.append(
+            f"🩸 <b>Flagelo</b> · <code>{flagelo_bar.points} / {flagelo_bar.threshold}</code>"
+            f" ({flagelo_bar.percent}%)\n"
+            f"{bar(flagelo_bar.points, flagelo_bar.threshold, '🟥')}"
+        )
     return "\n\n".join(
         (f"<b>{REFUGE_TITLE}</b>", "\n".join(identity), "\n".join(stats), "\n".join(state))
     )
 
 
-def refuge_menu_keyboard(*, gift_available: bool) -> InlineKeyboardMarkup:
+FLAGELO_BUTTON = ("⚔️ Enfrentar o Flagelo", "flg:hub")
+
+
+def refuge_menu_keyboard(
+    *, gift_available: bool, flagelo_awake: bool = False
+) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if gift_available:
         rows.append([InlineKeyboardButton(text=DAILY_GIFT_BUTTON, callback_data="bn:gift")])
+    if flagelo_awake:
+        # Leva ao hub do evento (barras, status e acesso ao combate), sem navegação paralela.
+        rows.append(
+            [InlineKeyboardButton(text=FLAGELO_BUTTON[0], callback_data=FLAGELO_BUTTON[1])]
+        )
     label, data = REFUGE_LOCAL_BUTTON
     rows.append([InlineKeyboardButton(text=label, callback_data=data)])
     rows.extend(
@@ -285,7 +302,10 @@ def render_refuge_dashboard(
     return Screen(
         refuge_hud_text(view, hud),
         REFUGE_IMAGE_KEY,
-        refuge_menu_keyboard(gift_available=hud.gift_available),
+        refuge_menu_keyboard(
+            gift_available=hud.gift_available,
+            flagelo_awake=hud.flagelo is not None and hud.flagelo.flagelo_awake,
+        ),
         "HTML",
     )
 

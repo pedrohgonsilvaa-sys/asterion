@@ -23,6 +23,8 @@ OPENING_TEXT = "Uma ruptura surgiu no Véu.\nAlgo está atravessando."
 CHOOSE_TEXT = "Uma ruptura surgiu no Véu.\nEscolha um Núcleo para participar."
 SPECIAL_ICONS = {"A": "🌫️", "D": "🦴", "E": "🕳️"}
 ACTION_REGISTERED = "✅ Ação registrada."
+# Entrada de O Despertar dos Flagelos (evento permanente) na mesma tela de Eventos.
+FLAGELO_ENTRY = ("⚔️ O Despertar dos Flagelos", "flg:hub")
 
 _ERRORS = {
     "no_character": "Crie um personagem antes de participar do Evento.",
@@ -89,7 +91,7 @@ def _render_scheduled(view: PanelView) -> Screen:
         "",
         *escape(OPENING_TEXT).split("\n"),
     ]
-    rows = [[_button("🔙 Voltar", "adv:hub")]]
+    rows = [[_button(*FLAGELO_ENTRY)], [_button("🔙 Voltar", "adv:hub")]]
     return Screen("\n".join(lines), IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")
 
 
@@ -117,6 +119,7 @@ def _render_active(view: PanelView) -> Screen:
                 ]
             )
             rows.append([_button(f"{_icon(line.key)} {line.name}", f"veu:n:{line.key}")])
+    rows.append([_button(*FLAGELO_ENTRY)])
     rows.append([_button("🔙 Voltar", "adv:hub")])
     return Screen("\n".join(lines), IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")
 
@@ -154,7 +157,7 @@ def _render_final(view: PanelView) -> Screen:
         lines.append(f"✨ XP · <code>{_fmt(int(reward.get('xp', 0)))}</code>")
         for item in reward.get("items", ()):
             lines.append(f"📦 {escape(str(item['name']))} × {item['quantity']}")
-    rows = [[_button("🔙 Voltar", "adv:hub")]]
+    rows = [[_button(*FLAGELO_ENTRY)], [_button("🔙 Voltar", "adv:hub")]]
     return Screen("\n".join(lines), IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")
 
 

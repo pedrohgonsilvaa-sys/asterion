@@ -16,9 +16,11 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from asterion.application.flagelo_contributions import record_contribution
 from asterion.application.item_escrow import require_trading_character
 from asterion.application.progression import consolidate_character_level
 from asterion.domain import contracts_config as cfg
+from asterion.domain import flagelos
 from asterion.domain.chronicle_content import REGIONS_BY_NAME
 from asterion.domain.contracts_catalog import BY_ID, ContractDefinition, definitions_for
 from asterion.infrastructure.db.models import (
@@ -548,6 +550,12 @@ class ContractService:
             _transition(row, CLAIMED, now)
             row.claimed = True
             row.claimed_at = now
+            # O Despertar dos Flagelos §4.2: Contrato Regional concluído +2 na Região dele.
+            target = flagelos.REGIONS_BY_CONTRACT.get(row.region_id)
+            if target is not None:
+                await record_contribution(
+                    session, character, "contract", source_id, region_id=target.region_id
+                )
             return await self._view(session, character, row)
 
     @staticmethod

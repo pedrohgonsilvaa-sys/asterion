@@ -27,6 +27,7 @@ from asterion.application.equipment import EquipmentService
 from asterion.application.equipment_modifications import EquipmentModificationService
 from asterion.application.equipment_view import EquipmentViewService
 from asterion.application.expeditions import ExpeditionService
+from asterion.application.flagelos import FlageloService
 from asterion.application.groups import GroupService
 from asterion.application.guild_battle import GuildBattleService
 from asterion.application.guilds import GuildService
@@ -101,6 +102,7 @@ from asterion.bot.dungeon_handlers import dungeon_router
 from asterion.bot.equipment_handlers import equipment_router
 from asterion.bot.equipment_modification_handlers import equipment_modification_router
 from asterion.bot.expedition_handlers import expedition_router
+from asterion.bot.flagelo_handlers import flagelo_router
 from asterion.bot.groups_handlers import groups_router
 from asterion.bot.guards import FloodGuardMiddleware, SuspensionMiddleware
 from asterion.bot.guild_activity import GuildActivityMiddleware
@@ -222,6 +224,7 @@ def get_bot_runtime() -> BotRuntime:
     refuge_hud = RefugeHudLoader(
         DailyGiftService(SessionFactory, settings.server_id),
         ChronicleService(SessionFactory, settings.server_id),
+        FlageloService(SessionFactory, settings.server_id),
     )
     inventory = InventoryService(SessionFactory, settings.server_id)
     warehouse = WarehouseService(SessionFactory, settings.server_id)
@@ -307,6 +310,9 @@ def get_bot_runtime() -> BotRuntime:
     veu_service = VeuEventService(SessionFactory, settings.server_id)
     veu_views = VeuEventViews(veu_service)
     dispatcher.include_router(veu_event_router(veu_service, veu_views, settings.creation_images))
+    # O Despertar dos Flagelos: antes do creation_router (deep link ``/start flagelo``).
+    flagelos = FlageloService(SessionFactory, settings.server_id)
+    dispatcher.include_router(flagelo_router(flagelos, settings.creation_images))
     oaths = OathService(SessionFactory, settings.server_id, notifier=runtime_oath_notifier)
     # Also before the world routers: /start must resume a Provação.
     dispatcher.include_router(oath_router(oaths, settings.creation_images))

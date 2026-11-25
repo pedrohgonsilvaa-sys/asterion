@@ -8,6 +8,9 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
 
+from asterion.domain.flagelo_catalog import RECIPE_TO_WEAPON_TYPE as _FLAGELO_RECIPE_WEAPONS
+from asterion.domain.flagelo_catalog import WEAPON_ROWS as _FLAGELO_WEAPON_ROWS
+
 WEAPON_FORM_LABELS = {
     "weapon.form.sword": "Espada",
     "weapon.form.dagger": "Adaga",
@@ -491,7 +494,8 @@ _BASE_WEAPON_ROWS = (
         (),
     ),
 )
-_ALL_WEAPON_ROWS = (*_CANONICAL_WEAPON_ROWS, *_BASE_WEAPON_ROWS)
+# O Despertar dos Flagelos (espec. final §10): 18 armas com metadata explícita.
+_ALL_WEAPON_ROWS = (*_CANONICAL_WEAPON_ROWS, *_BASE_WEAPON_ROWS, *_FLAGELO_WEAPON_ROWS)
 _CANONICAL_WEAPON_IDS = frozenset(row[0] for row in _ALL_WEAPON_ROWS)
 WEAPON_DEFINITIONS = MappingProxyType(
     {
@@ -569,6 +573,7 @@ _EXACT_RECIPE_TO_WEAPON_ID = {
     "recipe.confins.contradicoes.guarda_duas_versoes": (
         "equipment.confins.special.guarda_duas_versoes"
     ),
+    **_FLAGELO_RECIPE_WEAPONS,
 }
 
 

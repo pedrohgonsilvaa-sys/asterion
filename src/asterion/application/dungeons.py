@@ -21,6 +21,7 @@ from asterion.application.equipment_configuration import (
     load_equipment_configuration,
     reconcile_character_hp,
 )
+from asterion.application.flagelo_contributions import record_contribution
 from asterion.application.progression import consolidate_character_level
 from asterion.application.road import CHARNECA, RUINS, RoadService
 from asterion.application.social_graph import record_recent_contacts
@@ -2792,6 +2793,14 @@ class DungeonService:
                 continue
             if event is not None:
                 continue
+            # O Despertar dos Flagelos §4.2: Masmorra concluída +6, uma vez por run e membro.
+            await record_contribution(
+                session,
+                character,
+                "dungeon",
+                f"dungeon:{run.id.hex}",
+                region=family.region_display,
+            )
             # Trilha da Crônica: 25 points per valid run, once per run (§49.16).
             await record_repeatable(
                 session,

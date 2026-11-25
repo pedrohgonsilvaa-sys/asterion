@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from asterion.application.chronicle import ChronicleService
 from asterion.application.craft_services import CraftServiceService
 from asterion.application.expeditions import ExpeditionService
+from asterion.application.flagelos import FlageloService
 from asterion.application.guild_battle import GuildBattleService
 from asterion.application.guilds import GuildService
 from asterion.application.market import MarketService
@@ -27,6 +28,7 @@ from asterion.application.world_event_veu import VeuEventService, VeuEventUpkeep
 from asterion.application.world_event_veu_combat import EngineRoundSimulator
 from asterion.application.world_event_veu_views import VeuEventViews
 from asterion.bot.expedition_handlers import deliver_expedition_notices
+from asterion.bot.flagelo_handlers import register_flagelo_notices
 from asterion.bot.guild_battle_ui import render_guild_battle
 from asterion.bot.oath_ui import render_oath
 from asterion.bot.ops_alerts import AlertThresholds, OpsAlerter, check_and_alert
@@ -153,6 +155,23 @@ def build_round_scheduler() -> AsyncIOScheduler:
         "interval",
         seconds=2,
         id="veu-event-upkeep",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    # O Despertar dos Flagelos: contribuições/spawn, oportunidades de 10 s, escalonamento por
+    # abandono, morte e liquidação. Intervalo curto pela janela de 10 s; cada passo é
+    # idempotente e a trava exclusiva dos jobs (abaixo) impede duas instâncias juntas.
+    flagelos = FlageloService(SessionFactory, settings.server_id)
+    register_flagelo_notices(
+        flagelos, settings.community_chat_id, settings.community_events_topic_id
+    )
+
+    scheduler.add_job(
+        flagelos.tick,
+        "interval",
+        seconds=2,
+        id="flagelo-upkeep",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

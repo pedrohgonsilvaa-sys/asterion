@@ -1628,6 +1628,12 @@ _RESGUARDO_DEFAULT_STATS = frozenset(
 )
 _DOT_STACK_CAPS = {"poison": 3, "bleed": 3, "burn": 2}
 _DOT_DURATIONS = {"poison": 3, "bleed": 2, "burn": 2}
+# Official tick coefficient per DoT kind (any other kind: 10% ATQ). Public so the shared
+# World Event batch resolution ticks with the same numbers instead of a copy.
+DOT_TICK_COEFFICIENTS = {"poison": D("0.12"), "burn": D("0.15")}
+DOT_DEFAULT_TICK_COEFFICIENT = D("0.10")
+DOT_STACK_CAPS = _DOT_STACK_CAPS
+DOT_DURATIONS = _DOT_DURATIONS
 
 
 def dissipatable(effect: Effect) -> bool:
@@ -2909,13 +2915,7 @@ def _end_turn(state: Combat) -> None:
     actor_key = state.order[state.turn_index]
     actor = state.fighters[actor_key]
     for dot in state.dot_states.get(actor.id, []):
-        coefficient = (
-            D("0.12")
-            if dot.kind == "poison"
-            else D("0.15")
-            if dot.kind == "burn"
-            else D("0.10")
-        )
+        coefficient = DOT_TICK_COEFFICIENTS.get(dot.kind, DOT_DEFAULT_TICK_COEFFICIENT)
         snapshots = dot.stack_snapshots or [dot.snapshot_attack] * dot.stacks
         source_key = _resolve_fighter_key(state, dot.source)
         source = state.fighters.get(source_key) if source_key is not None else None
