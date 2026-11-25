@@ -9,19 +9,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from asterion.infrastructure.db.models import (
     Character,
+    FlageloParticipant,
     GameActivity,
     HuntRound,
     WorldEventParticipation,
 )
 
 HUNT_ROUND_CONFIGURATION_LOCK_STATUSES = ("active", "interrupted")
+FLAGELO_ACTIVITY_CONTENT = "flagelo_combat"
 
 
 @dataclass(frozen=True, slots=True)
 class CombatConfigurationBlocker:
     """Minimal authoritative activity metadata for a rejected mutation."""
 
-    kind: Literal["foreground_activity", "hunt_round", "world_event"]
+    kind: Literal["foreground_activity", "hunt_round", "world_event", "flagelo"]
     id: UUID
     status: str
     content_id: str | None = None
@@ -49,7 +51,10 @@ async def find_combat_configuration_blocker(
     )
     if activity is not None:
         return CombatConfigurationBlocker(
-            kind="foreground_activity",
+            # O combate no Flagelo também mantém uma GameActivity (exclusividade); o tipo
+            # específico continua sendo ``flagelo``.
+            kind="flagelo" if activity.content_id == FLAGELO_ACTIVITY_CONTENT
+            else "foreground_activity",
             id=activity.id,
             status=activity.status,
             content_id=activity.content_id,
@@ -86,6 +91,24 @@ async def find_combat_configuration_blocker(
             kind="world_event",
             id=world_event.occurrence_id,
             status=world_event.status,
+        )
+
+    # O Despertar dos Flagelos (espec. final §3): o lock vale do início do combate até a
+    # resolução válida do encontro (derrota, saída registrada ou morte do Flagelo). Sair da
+    # tela, /start, /menu ou reconectar não muda ``in_combat``, então não libera.
+    flagelo = await session.scalar(
+        select(FlageloParticipant)
+        .where(
+            FlageloParticipant.character_id == character_id,
+            FlageloParticipant.in_combat.is_(True),
+        )
+        .limit(1)
+    )
+    if flagelo is not None:
+        return CombatConfigurationBlocker(
+            kind="flagelo",
+            id=flagelo.flagelo_id,
+            status="in_combat",
         )
     return None
 

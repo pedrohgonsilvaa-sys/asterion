@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from decimal import ROUND_FLOOR, Decimal
 from enum import StrEnum
 
+from asterion.domain import flagelo_catalog
 from asterion.domain.consumables import definition as consumable_definition
 from asterion.domain.economy import crowns_per_level, round_10
 
@@ -169,6 +170,14 @@ MATERIAL_NAMES = {
     VDE_RESIN: "Resina Enredada",
     VDE_CATALYST_II: "Catalisador de Elite II",
     VDE_FRAGMENT_II: "Fragmento de Aprimoramento II",
+    # O Despertar dos Flagelos (especificação V1.0.0 §3): material específico de cada Flagelo.
+    # Mesmo texto de ``domain/flagelos.py`` (o teste de catálogo confere).
+    "material.flagelo.fragmento_cinza_condensada": "Fragmento de Cinza Condensada",
+    "material.flagelo.fibra_laco_morto": "Fibra do Laço Morto",
+    "material.flagelo.marco_meridiano_partido": "Marco do Meridiano Partido",
+    "material.flagelo.coagulo_salmoura_rubra": "Coágulo de Salmoura Rubra",
+    "material.flagelo.peso_fraturado": "Peso Fraturado",
+    "material.flagelo.fragmento_leitura_incompativel": "Fragmento de Leitura Incompatível",
 }
 
 SLOT_ECONOMY_SW = {
@@ -184,6 +193,11 @@ SLOT_ECONOMY_SW = {
 }
 RARITY_REQUIREMENTS = {"Comum": 1, "Raro": 5, "Épico": 10}
 RARITY_COST_FACTORS = {"Comum": D("0.25"), "Raro": D("0.35"), "Épico": D("0.50")}
+# GDD v1.7.1 §49 (Crafting): Lendário exige Ofício 16 + Receita especial; taxa C(n)×SW×0,75.
+# Só as Receitas especiais que declaram Lendário usam estes valores (hoje, as dos Flagelos).
+LEGENDARY_REQUIREMENT = 16
+LEGENDARY_COST_FACTOR = D("0.75")
+GRADE_REQUIREMENTS = {1: 1, 2: 3, 3: 6, 4: 9, 5: 12, 6: 15}
 RARITY_COSTS_PER_SW = {"Comum": 5, "Raro": 8, "Épico": 10}
 
 
@@ -1403,6 +1417,55 @@ def _varzeas_rune_recipes() -> list[RecipeDefinition]:
     return recipes
 
 
+def _flagelo_recipes() -> list[RecipeDefinition]:
+    """Espec. final §12: uma Receita especial por equipamento dos Flagelos (54).
+
+    Fórmula global por SW (``flagelo_catalog.recipe_cost_lines``), Grau da Região, requisito
+    de Ofício = maior entre o do Grau e o da raridade (como as demais Receitas especiais) e
+    taxa global ``C(n)×SW×RarityFactor``. Só aparecem para quem descobriu (``unlock_id``).
+    """
+    recipes = []
+    for template in flagelo_catalog.TEMPLATES:
+        rarity_requirement = (
+            LEGENDARY_REQUIREMENT
+            if template.rarity == "Lendário"
+            else RARITY_REQUIREMENTS[template.rarity]
+        )
+        hands = ""
+        if template.weapon_shape is not None:
+            hands = " · 2H" if template.slot == "2H" else " · 1H"
+        recipes.append(
+            RecipeDefinition(
+                recipe_id=template.recipe_id,
+                profession_id=template.profession_id,
+                name=template.name,
+                output_kind="equipment",
+                required_level=max(GRADE_REQUIREMENTS[template.grade], rarity_requirement),
+                grade=template.grade,
+                rarity=template.rarity,
+                output_name=template.name,
+                output_slot=template.slot,
+                output_id=template.template_id,
+                sw=template.sw,
+                fixed_materials=tuple(
+                    MaterialRequirement(material_id, quantity, transmits)
+                    for material_id, quantity, transmits in flagelo_catalog.recipe_cost_lines(
+                        template
+                    )
+                ),
+                unlock_id=template.recipe_id,
+                description=(
+                    f"{template.slot} · {template.rarity} · Grau {_ROMAN[template.grade]}"
+                    f" · SW{template.sw}{hands}"
+                ),
+            )
+        )
+    return recipes
+
+
+_ROMAN = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI"}
+
+
 RECIPE_DEFINITIONS = tuple(
     _equipment_recipes()
     + _vde_equipment_recipes()
@@ -1418,6 +1481,7 @@ RECIPE_DEFINITIONS = tuple(
     + _nareth_enchantment_recipes()
     + _varzeas_enchantment_recipes()
     + _special_recipes()
+    + _flagelo_recipes()
 )
 RECIPE_BY_ID = {recipe.recipe_id: recipe for recipe in RECIPE_DEFINITIONS}
 RECIPES_BY_PROFESSION = {
@@ -1520,9 +1584,10 @@ def recipe_crown_cost(recipe: RecipeDefinition, item_level: int) -> int:
         return recipe.fixed_crown_cost
     if recipe.output_kind != "equipment" or recipe.rarity is None:
         return 0
-    return round_10(
-        D(crowns_per_level(item_level)) * recipe.sw * RARITY_COST_FACTORS[recipe.rarity]
+    factor = (
+        LEGENDARY_COST_FACTOR if recipe.rarity == "Lendário" else RARITY_COST_FACTORS[recipe.rarity]
     )
+    return round_10(D(crowns_per_level(item_level)) * recipe.sw * factor)
 
 
 def recipe_item_level(character_level: int, recipe_grade: int = 1) -> int:

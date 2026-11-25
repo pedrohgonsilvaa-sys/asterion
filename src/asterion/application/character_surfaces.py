@@ -30,6 +30,7 @@ from asterion.application.knowledge_catalog import (
 )
 from asterion.application.tdo_feats import reconcile_tdo_feats
 from asterion.application.vigor import reconcile_character_vigor
+from asterion.domain.flagelos import REGIONS as FLAGELO_REGIONS
 from asterion.domain.road import creature_for
 from asterion.domain.social import MAX_STORY_CHARACTERS, story_is_allowed
 from asterion.domain.veu_bestiary import VEU_CREATURES
@@ -122,6 +123,11 @@ def _creature_for(creature_id: str):
     if creature_id.startswith("bestiary.veu."):
         found = next(c for c in VEU_CREATURES if c.bestiary_key == creature_id)
         return _EventCreature(found.name, tuple((a.key, a.label) for a in found.actions))
+    if creature_id.startswith("bestiary.flagelo."):
+        flagelo = next(
+            r.flagelo for r in FLAGELO_REGIONS if r.flagelo.bestiary_key == creature_id
+        )
+        return _EventCreature(flagelo.name, tuple((a.key, a.label) for a in flagelo.actions))
     return creature_for(creature_id)
 
 

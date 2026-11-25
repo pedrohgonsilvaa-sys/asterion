@@ -123,6 +123,31 @@ Arquivo: `docs/specs/ASTERION_CONTRATOS_REGIONAIS_DECISOES_FECHADAS_v1_0_0.md`.
 
 Fecha, por decisão do autor (2026-11-13), as lacunas do Documento B de Contratos Regionais: alvo individual por contrato, regra de contagem de Caça (só vitória Manual Solo) e Coleta (só ganho pós-ativação, exclui estoque prévio/prêmio próprio/transferência), regra de Material de recompensa (primeiro Material Básico regional; Coleta paga o próprio Material-alvo), os dois mapeamentos de Material (Ferro da Estrada → Ferro de Fuligem; Coleta das Planícies → Bronze de Marco), recalibração de XP/Coroas para ~25% (faixa 20–30%) do ganho de referência da região, e ausência de teto diário adicional (mantém 3 contratos simultâneos + renovação 24h). Não altera sistemas fora do escopo de Contratos Regionais.
 
+## Exceção autoral — O Despertar dos Flagelos (2026-11-25)
+
+**ASTERION — O Despertar dos Flagelos — Especificação de Implementação V1.0.0**
+
+Arquivo: `docs/specs/ASTERION_DESPERTAR_DOS_FLAGELOS_V1_0_0.md`.
+SHA-256 verificado: `04bf379472aca6e8690c7bac3a7426e1ecf760287c0d6c79580f99044a5470e2`.
+Decisões técnicas e pendências: `docs/specs/ASTERION_DESPERTAR_DOS_FLAGELOS_DECISOES_TECNICAS.md`.
+
+Por decisão do autor (2026-11-25), O Despertar dos Flagelos é uma **exceção autoral formal ao GDD v1.7.1 §21 e §49.15**. A regra geral de Evento Mundial continua válida; a exceção vale **somente** para o sistema dos Flagelos e **não altera** o Evento Mundial genérico (`domain/world_events.py`) nem A Ruptura do Véu.
+
+- **Persistência:** o Flagelo não expira. Depois de nascer, permanece ativo até ser derrotado. Não existe deadline de 60 minutos.
+- **Escalonamento:** próprio, por abandono. Só quando ninguém está em combate com o Flagelo; a cada 15 minutos completos, +8% HP Máximo e +3% ATQ; teto +80% HP e +30% ATQ; DEF e AGI não escalam; não cura; só volta a zero com a morte do Flagelo. Não se aplica `N^0,88` nem o ATQ por participante.
+- **Vigor e recompensa:** 0 Vigor. Recompensa-base `0,50×C + 3 materiais básicos regionais + 1 Fragmento/material específico do Flagelo`, com a infraestrutura de recompensa existente.
+- **Elegibilidade:** 3 Participation Points. Não exige fases nem as 8 Ações Significativas do Evento Mundial genérico.
+
+Também por decisão do autor (2026-11-25): IA simples e determinística (Preparada elegível → especial elegível de maior prioridade → ataque básico; recarga e alvo respeitados; recalcula se a ação deixou de ser executável); "aplicação significativa de efeito" é só o efeito que o motor de fato aplicou e que mudou o estado do alvo; desempate de ranking pelo instante do backend em que a métrica atingiu o valor; capacidade 200; reentrada 2 min sem limite.
+
+**Especificação final aprovada (2026-11-25):** `docs/specs/ASTERION_O_DESPERTAR_DOS_FLAGELOS_ESPEC_FINAL.md` (SHA-256 `2d4d0e540dba48edb6c8074c6636359acc4d79898de71e1fc3ea6a4bfd7be021`). Fecha o que a V1.0.0 deixava pendente: os 54 equipamentos e as 54 Receitas (IDs literais), raridade/SW/Ofício por slot, metadata das armas, custo de Receita (fórmula global de Crafting × SW + Fragmento do Flagelo), sorteio do equipamento (1/9 por template), descoberta de Receita (25%, uma por morte, sem pity), textos de Bestiário/Códice, lock da Configuração durante o combate e esquiva global nos golpes do Flagelo. Prevalece sobre a V1.0.0 onde as duas diferem. Implementação: `src/asterion/domain/flagelo_catalog.py` e `src/asterion/domain/flagelo_lore.py`.
+
+**Núcleo das Receitas lendárias (decisão do autor, 2026-11-25):** o §14 da especificação final foi corrigido em `c163d05` para refletir esta decisão (a versão anterior, com Núcleo próprio do Flagelo, está superada). Não existe "Núcleo do Flagelo". As Receitas lendárias usam o Núcleo de Masmorra já existente da 2ª Masmorra da Região (Galerias do Vigia, Nó Antigo, Observatório Afundado, Cisterna de Transferência, Bastilha Profunda, Câmara das Contradições), na quantidade 1 × SW; Núcleos de Chefe de Campanha não entram. Detalhe na decisão #48 de `docs/specs/ASTERION_DESPERTAR_DOS_FLAGELOS_DECISOES_TECNICAS.md`.
+
+**Fechamentos da V1 (decisão do autor, 2026-11-25):** (1) **Bind:** os 54 equipamentos regionais do Flagelo são **Vinculados ao Adquirir**, pelo mecanismo global de Bind (sem sistema paralelo); (2) **Outros PvE equivalentes:** na V1 não existem; a contribuição é exatamente Caçada +1, Caçada em Grupo +1 por participante elegível, Desbravar +1, Contrato Regional +2, Missão Regional +4 e Masmorra +6, e nenhuma outra atividade concede pontos; (3) **Balanceamento:** kits e atributos baseline dos seis Flagelos permanecem como estão; a medição determinística sobre o motor real está em `docs/balance/FLAGELOS_BALANCEAMENTO_V1.md` (sem buff/nerf automático). Detalhe nas decisões #39, #50 e #51 de `docs/specs/ASTERION_DESPERTAR_DOS_FLAGELOS_DECISOES_TECNICAS.md`. A especificação final não foi editada (o SHA-256 acima continua válido).
+
+**Pendente:** imagens dos seis Flagelos (a cargo do autor).
+
 ## Fontes regionais vigentes
 
 As Fontes Regionais FINAL possuem o mesmo nível hierárquico entre si dentro de seus respectivos escopos. Todas permanecem subordinadas à Fonte Mestra v1.7.1 para sistemas globais e não podem sobrescrever conteúdo de outra Região.

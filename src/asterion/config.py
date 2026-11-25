@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     community_market_topic_id: int | None = None
     # Relatos topic of the same supergroup; unset means Compartilhar História is off.
     community_relatos_topic_id: int | None = None
+    # Tópico do mesmo supergrupo para os avisos de O Despertar dos Flagelos (nascimento e
+    # morte); sem ele o aviso vai para o chat geral da comunidade.
+    community_events_topic_id: int | None = None
     # §32.3 public invite link of the Comunidade Oficial; never hardcoded.
     community_url: str | None = None
     # Operation metrics and alerts (B6). Not game rules: technical thresholds.
@@ -60,6 +63,7 @@ class Settings(BaseSettings):
         "community_chat_id",
         "community_market_topic_id",
         "community_relatos_topic_id",
+        "community_events_topic_id",
         "metrics_port",
         "alert_chat_id",
         "patron_price_cents",

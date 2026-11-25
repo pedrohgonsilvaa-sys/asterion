@@ -59,6 +59,11 @@ class _Ctx:
 
 
 class EngineRoundSimulator:
+    """``reference_level``: nível das instâncias-molde do inimigo (o Véu usa o do Evento)."""
+
+    def __init__(self, reference_level: int = EVENT_REFERENCE_LEVEL):
+        self.reference_level = reference_level
+
     async def prepare(
         self,
         session: AsyncSession,
@@ -103,6 +108,9 @@ class EngineRoundSimulator:
             ctx.unit.load_state(ctx.participant.combat_state or {})
             self._apply_effects(combat.fighters[_ACTOR], ctx.unit)
             ctx.unit.defense = Decimal(combat.fighters[_ACTOR].stat("defense"))
+            # Esquiva efetiva do motor (equipamento, Talentos e efeitos carregados). O lote só
+            # a usa quando a esquiva global está ligada (Flagelos); o Véu não a rola.
+            ctx.unit.evasion = Decimal(combat.fighters[_ACTOR].stat("evasion"))
         players = {cid: ctx.unit for cid, ctx in contexts.items() if ctx.unit is not None}
         intents: list[vc.PlayerIntent] = []
         for ctx in contexts.values():
@@ -126,9 +134,15 @@ class EngineRoundSimulator:
             target = self._target(action, enemies)
             if target is None:
                 continue
-            damage = self._measure(solo, art_id, target)
-            intents.append(vc.PlayerIntent(ctx.character.id, action.action_type, target, damage))
+            damage, updated = self._measure_with_result(solo, art_id, target)
+            intents.append(
+                self._attack_intent(ctx, action.action_type, target, damage, solo, updated)
+            )
         return RoundInputs(intents, players)
+
+    def _attack_intent(self, ctx, action_type, target, damage, before, updated):
+        """Gancho: o Véu só usa o dano; os Flagelos também leem o efeito aplicado."""
+        return vc.PlayerIntent(ctx.character.id, action_type, target, damage)
 
     # ------------------------------------------------------------------ alvos / ações
 
@@ -153,13 +167,13 @@ class EngineRoundSimulator:
 
     # --------------------------------------------------------------- instâncias do motor
 
-    @staticmethod
-    def _enemy_specs(enemies: dict[str, vc.EnemyUnit]):
+    def _enemy_specs(self, enemies: dict[str, vc.EnemyUnit]):
+        level = self.reference_level
         return tuple(
-            CreatureCombatantSpec(_MOLD, EVENT_REFERENCE_LEVEL, code, passive=True)
+            CreatureCombatantSpec(_MOLD, level, code, passive=True)
             for code, unit in sorted(enemies.items())
             if not unit.defeated
-        ) or (CreatureCombatantSpec(_MOLD, EVENT_REFERENCE_LEVEL, "sentinel", passive=True),)
+        ) or (CreatureCombatantSpec(_MOLD, level, "sentinel", passive=True),)
 
     @staticmethod
     def _sync_enemies(combat, enemies: dict[str, vc.EnemyUnit]) -> None:
@@ -167,7 +181,9 @@ class EngineRoundSimulator:
             fighter = combat.fighters.get(code)
             if fighter is None:
                 continue
-            fighter.stats = CombatStats(unit.max_hp, unit.attack, unit.defense, unit.agility)
+            fighter.stats = CombatStats(
+                unit.max_hp, unit.attack, unit.effective_defense, unit.agility
+            )
             fighter.hp = unit.hp
 
     @staticmethod
@@ -196,14 +212,19 @@ class EngineRoundSimulator:
 
     @staticmethod
     def _measure(combat, action_id: str, target: str) -> int:
+        return EngineRoundSimulator._measure_with_result(combat, action_id, target)[0]
+
+    @staticmethod
+    def _measure_with_result(combat, action_id: str, target: str):
+        """Dano no alvo e o estado do motor depois da ação (``None`` se nada aconteceu)."""
         allowed = allowed_actions(combat, _ACTOR)
         if action_id not in allowed:
             action_id = "art" if action_id != "attack" and "art" in allowed else action_id
         before = combat.fighters[target].hp
         updated = act(combat, action_id, target_id=target, actor_key=_ACTOR)
         if updated.version == combat.version:
-            return 0
-        return max(0, int(before - updated.fighters[target].hp))
+            return 0, None
+        return max(0, int(before - updated.fighters[target].hp)), updated
 
     # ------------------------------------------------------------------------- suporte
 

@@ -28,6 +28,7 @@ from asterion.application.professions import (
     ProfessionService,
 )
 from asterion.application.safe_location import current_permanent_brazier
+from asterion.domain.flagelo_catalog import TEMPLATES_BY_RECIPE
 from asterion.domain.guild_works import discounted
 from asterion.domain.professions import (
     MATERIAL_NAMES,
@@ -507,8 +508,17 @@ class CraftingService:
             True,
             reason is None,
             reason,
-            bound if recipe.output_kind in {"equipment", "rune"} else False,
+            self._result_bound(recipe, bound),
         )
+
+    @staticmethod
+    def _result_bound(recipe, ingredients_bound: bool) -> bool:
+        """Bind do resultado: o do Crafting global (ingredientes vinculados) e, para os 54
+        equipamentos regionais do Flagelo, sempre Vinculado ao Adquirir (decisão do autor,
+        2026-11-25), sem depender do estado dos ingredientes."""
+        if recipe.output_kind == "equipment" and recipe.recipe_id in TEMPLATES_BY_RECIPE:
+            return True
+        return ingredients_bound if recipe.output_kind in {"equipment", "rune"} else False
 
     async def _recipe_view_for_session(
         self,

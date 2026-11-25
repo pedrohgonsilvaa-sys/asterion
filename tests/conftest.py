@@ -17,6 +17,41 @@ from asterion.application.creation import CreationService
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+def pytest_collection_modifyitems(items):
+    """Run each CI shard on a deterministic subset of test files."""
+    total = int(os.environ.get("ASTERION_TEST_SHARDS", "1"))
+    shard = int(os.environ.get("ASTERION_TEST_SHARD", "1"))
+    if total <= 1:
+        return
+    if not 1 <= shard <= total:
+        raise pytest.UsageError(
+            f"ASTERION_TEST_SHARD must be between 1 and {total}, got {shard}"
+        )
+
+    groups = {}
+    for item in items:
+        groups.setdefault(str(item.path), []).append(item)
+
+    shard_paths = [set() for _ in range(total)]
+    shard_sizes = [0] * total
+
+    for path, group in sorted(groups.items(), key=lambda pair: -len(pair[1])):
+        target = min(range(total), key=lambda index: shard_sizes[index])
+        shard_paths[target].add(path)
+        shard_sizes[target] += len(group)
+
+    selected = []
+    deselected = []
+    for item in items:
+        if str(item.path) in shard_paths[shard - 1]:
+            selected.append(item)
+        else:
+            deselected.append(item)
+
+    items[:] = selected
+    if deselected:
+        item.config.hook.pytest_deselected(items=deselected)
+
 
 @pytest_asyncio.fixture
 async def database():

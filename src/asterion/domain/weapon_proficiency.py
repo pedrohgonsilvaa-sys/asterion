@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
+from asterion.domain.flagelo_catalog import WEAPON_IDENTITY_BY_TYPE as FLAGELO_WEAPON_IDENTITIES
+
 
 class ProficiencyFamily(StrEnum):
     SWORDS = "proficiency.swords"
@@ -231,6 +233,11 @@ WEAPON_TYPE_IDENTITIES = MappingProxyType(
         "craft.confins.ferreiro.principal.lamina_baliza": _I.SWORD,
         "craft.confins.ferreiro.secundaria.guarda_marcha": _I.DAGGER,
         "craft.confins.ferreiro.2h.arco_retorno": _I.BOW,
+        # O Despertar dos Flagelos: identidade explícita por forma/mãos do catálogo.
+        **{
+            weapon_type_id: WeaponIdentity(identity)
+            for weapon_type_id, identity in FLAGELO_WEAPON_IDENTITIES.items()
+        },
     }
 )
 
