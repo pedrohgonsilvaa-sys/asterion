@@ -169,6 +169,14 @@ MATERIAL_NAMES = {
     VDE_RESIN: "Resina Enredada",
     VDE_CATALYST_II: "Catalisador de Elite II",
     VDE_FRAGMENT_II: "Fragmento de Aprimoramento II",
+    # O Despertar dos Flagelos (especificação V1.0.0 §3): material específico de cada Flagelo.
+    # Mesmo texto de ``domain/flagelos.py`` (o teste de catálogo confere).
+    "material.flagelo.fragmento_cinza_condensada": "Fragmento de Cinza Condensada",
+    "material.flagelo.fibra_laco_morto": "Fibra do Laço Morto",
+    "material.flagelo.marco_meridiano_partido": "Marco do Meridiano Partido",
+    "material.flagelo.coagulo_salmoura_rubra": "Coágulo de Salmoura Rubra",
+    "material.flagelo.peso_fraturado": "Peso Fraturado",
+    "material.flagelo.fragmento_leitura_incompativel": "Fragmento de Leitura Incompatível",
 }
 
 SLOT_ECONOMY_SW = {

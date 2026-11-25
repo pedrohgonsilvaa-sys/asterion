@@ -4896,3 +4896,281 @@ class ContractInstance(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+# --------------------------------------------------------------------------------------
+# O Despertar dos Flagelos (migration 0060). Exceção autoral ao GDD §21/§49.15: ver
+# ``SOURCE_AUTHORITY.md`` e ``domain/flagelos.py``.
+
+
+class FlageloRegionProgress(Base):
+    """Barra regional ``current_points / threshold``. Congelada enquanto o Flagelo vive."""
+
+    __tablename__ = "flagelo_region_progress"
+    __table_args__ = (
+        CheckConstraint(
+            "current_points >= 0 AND current_points <= threshold",
+            name="ck_flagelo_progress_points",
+        ),
+        CheckConstraint("threshold > 0", name="ck_flagelo_progress_threshold"),
+        CheckConstraint("cycle >= 1", name="ck_flagelo_progress_cycle"),
+    )
+
+    server_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    region_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    current_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    threshold: Mapped[int] = mapped_column(Integer, nullable=False)
+    cycle: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    active_flagelo_id: Mapped[UUID | None] = mapped_column(Uuid)
+    threshold_reached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_defeated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class FlageloContribution(Base):
+    """Exatamente uma contribuição por ``activity_id + character_id`` (§4.2)."""
+
+    __tablename__ = "flagelo_contributions"
+    __table_args__ = (
+        UniqueConstraint(
+            "server_id", "activity_id", "character_id", name="uq_flagelo_contribution"
+        ),
+        CheckConstraint("points > 0", name="ck_flagelo_contribution_points"),
+        CheckConstraint(
+            "counted_points IS NULL OR counted_points >= 0",
+            name="ck_flagelo_contribution_counted",
+        ),
+        Index(
+            "ix_flagelo_contribution_pending",
+            "server_id",
+            "seq",
+            postgresql_where=text("applied_at IS NULL"),
+        ),
+    )
+
+    seq: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    activity_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    region_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    points: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("clock_timestamp()")
+    )
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    counted_points: Mapped[int | None] = mapped_column(Integer)
+    cycle: Mapped[int | None] = mapped_column(Integer)
+
+
+class FlageloEvent(Base):
+    """Um Flagelo (uma ocorrência). Zero ou um ``active`` por servidor (§6)."""
+
+    __tablename__ = "flagelo_events"
+    __table_args__ = (
+        UniqueConstraint("server_id", "region_id", "cycle", name="uq_flagelo_event_cycle"),
+        Index(
+            "uq_flagelo_event_active",
+            "server_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+        CheckConstraint(
+            "status IN ('active','defeated','settled')", name="ck_flagelo_event_status"
+        ),
+        CheckConstraint(
+            "hp_current >= 0 AND hp_current <= max_hp", name="ck_flagelo_event_hp"
+        ),
+        CheckConstraint(
+            "abandonment_steps BETWEEN 0 AND 10", name="ck_flagelo_event_steps"
+        ),
+        CheckConstraint(
+            "(status = 'active') = (defeated_at IS NULL)", name="ck_flagelo_event_defeat"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    server_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    region_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    flagelo_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    cycle: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    spawned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    defeated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lifetime_seconds: Mapped[int | None] = mapped_column(BigInteger)
+    base_hp: Mapped[int] = mapped_column(Integer, nullable=False)
+    base_atq: Mapped[int] = mapped_column(Integer, nullable=False)
+    base_def: Mapped[int] = mapped_column(Integer, nullable=False)
+    base_agi: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_hp: Mapped[int] = mapped_column(Integer, nullable=False)
+    attack: Mapped[int] = mapped_column(Integer, nullable=False)
+    hp_current: Mapped[int] = mapped_column(Integer, nullable=False)
+    abandonment_steps: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    hp_scaling_bonus: Mapped[Decimal] = mapped_column(Numeric(6, 4), nullable=False)
+    atq_scaling_bonus: Mapped[Decimal] = mapped_column(Numeric(6, 4), nullable=False)
+    # Início da ausência atual de combatentes (ou do último passo aplicado); NULL em combate.
+    last_zero_combat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    enemy_state: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    round_number: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    equipment_winner_id: Mapped[UUID | None] = mapped_column(Uuid)
+    equipment_status: Mapped[str | None] = mapped_column(String(24))
+    rankings: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+
+
+class FlageloParticipant(Base):
+    __tablename__ = "flagelo_participants"
+    __table_args__ = (
+        CheckConstraint(
+            "effective_damage >= 0 AND effective_healing >= 0 AND barrier_absorbed >= 0 "
+            "AND defender_prevented_damage >= 0 AND meaningful_effects >= 0",
+            name="ck_flagelo_participant_metrics",
+        ),
+        CheckConstraint(
+            "participation_points BETWEEN 0 AND 5", name="ck_flagelo_participant_points"
+        ),
+        Index("ix_flagelo_participant_combat", "flagelo_id", "in_combat"),
+        Index("ix_flagelo_participant_character", "character_id"),
+    )
+
+    flagelo_id: Mapped[UUID] = mapped_column(
+        ForeignKey("flagelo_events.id", ondelete="CASCADE"), primary_key=True
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    in_combat: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    combat_entered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    acts_from_round: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    idle_rounds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Atributos do Flagelo congelados na entrada do combate (§7.5).
+    entry_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    hp: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    combat_state: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    reentry_available_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    defeated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    effective_damage: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    effective_healing: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    barrier_absorbed: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    defender_prevented_damage: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0
+    )
+    meaningful_effects: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    participation_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Instante (backend) em que cada métrica de ranking atingiu o valor registrado.
+    first_metric_timestamps: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    eligible: Mapped[bool | None] = mapped_column(Boolean)
+    reward: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class FlageloRound(Base):
+    """Oportunidade de ação de 10 s: OPEN → RESOLVING → RESOLVED, uma única vez."""
+
+    __tablename__ = "flagelo_rounds"
+    __table_args__ = (
+        UniqueConstraint("flagelo_id", "round_number", name="uq_flagelo_round"),
+        Index(
+            "uq_flagelo_round_open",
+            "flagelo_id",
+            unique=True,
+            postgresql_where=text("state <> 'RESOLVED'"),
+        ),
+        CheckConstraint(
+            "state IN ('OPEN','RESOLVING','RESOLVED')", name="ck_flagelo_round_state"
+        ),
+        CheckConstraint("round_number >= 1", name="ck_flagelo_round_number"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    flagelo_id: Mapped[UUID] = mapped_column(
+        ForeignKey("flagelo_events.id", ondelete="CASCADE"), nullable=False
+    )
+    round_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    decision_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    boss_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    decision: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    result: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+
+
+class FlageloAction(Base):
+    __tablename__ = "flagelo_actions"
+    __table_args__ = (
+        UniqueConstraint("round_id", "character_id", name="uq_flagelo_action"),
+        CheckConstraint(
+            "action_type IN ('attack','defend','art')", name="ck_flagelo_action_type"
+        ),
+        CheckConstraint(
+            "(action_type = 'art') = (art_slot IS NOT NULL)", name="ck_flagelo_action_art"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    round_id: Mapped[UUID] = mapped_column(
+        ForeignKey("flagelo_rounds.id", ondelete="CASCADE"), nullable=False
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    action_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    art_slot: Mapped[int | None] = mapped_column(Integer)
+    target_ref: Mapped[str | None] = mapped_column(String(64))
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class FlageloRewardSettlement(Base):
+    """Uma linha por recompensa paga: retry/restart nunca paga de novo (§21)."""
+
+    __tablename__ = "flagelo_reward_settlements"
+    __table_args__ = (
+        UniqueConstraint("settlement_key", name="uq_flagelo_settlement_key"),
+        CheckConstraint(
+            "status IN ('granted','pending_catalog','skipped')",
+            name="ck_flagelo_settlement_status",
+        ),
+    )
+
+    flagelo_id: Mapped[UUID] = mapped_column(
+        ForeignKey("flagelo_events.id", ondelete="CASCADE"), primary_key=True
+    )
+    character_id: Mapped[UUID] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
+    )
+    reward_type: Mapped[str] = mapped_column(String(32), primary_key=True)
+    settlement_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
