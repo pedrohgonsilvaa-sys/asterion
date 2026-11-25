@@ -88,7 +88,7 @@ anterior deste documento foram fechadas pelo autor:
 | 36 | Lendário no Crafting | A (GDD §49) | requisito de Ofício 16 e taxa `C(n)×SW×0,75` (valores globais do GDD; o código não tinha Lendário) |
 | 37 | Grau | decisão técnica | Grau da Região (TDO I … Confins VI), a mesma faixa de nível do Flagelo |
 | 38 | Equipamento da morte | B (§6/§11) | 1/9 por template, determinístico pela ocorrência; materializador global no nível do Flagelo; entrega Inventário → Pendentes → retenção |
-| 39 | Bind do equipamento | decisão técnica | **Vinculado**, como os materiais do prêmio (#7). A especificação não declara Bind; ver divergências |
+| 39 | Bind do equipamento | decisão técnica | **Vinculado**, como os materiais do prêmio (#7). A especificação não declara Bind. |
 | 40 | Descoberta de Receita | B (§12) | por elegível (Receita é conhecimento do personagem): 25%, uma desconhecida uniforme, no máximo uma por morte; com as 9 conhecidas não sorteia (`skipped`, motivo `all_known`) |
 | 41 | Lock da Configuração | B (§3) | `in_combat` do participante é o lock, lido pelo guarda global. Liberam: derrota, Sair do combate, inatividade do GDD §49 e morte do Flagelo. Tela, `/start`, `/menu`, reconexão não liberam. Entrada com outra atividade autoritativa ativa é recusada (`busy`) |
 | 42 | Snapshot | B (§3) | `entry_snapshot` = atributos do Flagelo + Configuração (versão, equipamento, Caminho, Talentos, Artes). Reentrada grava outro |
