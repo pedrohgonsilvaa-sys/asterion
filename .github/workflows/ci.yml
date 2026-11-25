@@ -72,7 +72,8 @@ jobs:
           alembic check
 
   test:
-    name: Test
+    # Must stay "test": branch protection on main requires this exact check name.
+    name: test
     if: always()
     needs: test-shard
     runs-on: ubuntu-latest
