@@ -499,7 +499,7 @@ Raro:
 `10 básicos × SW + 2 Catalisadores de Elite × SW + 6 Fragmentos de Aprimoramento × SW + 1 Fragmento do Flagelo × SW`
 
 Lendário:
-`14 básicos × SW + 4 Catalisadores de Elite × SW + 12 Fragmentos de Aprimoramento × SW + 1 Núcleo × SW + 1 Fragmento do Flagelo × SW`
+`14 básicos × SW + 4 Catalisadores de Elite × SW + 12 Fragmentos de Aprimoramento × SW + 1 Núcleo da 2ª Masmorra da Região × SW + 1 Fragmento do Flagelo × SW`
 
 Os custos globais existentes devem ser consultados no código/fonte
 vigente antes de materialização; não criar nomenclatura econômica
@@ -529,14 +529,23 @@ Não criar materiais básicos paralelos.
 
 # 14. Núcleos
 
-Núcleos específicos das receitas lendárias:
+Não existem Núcleos próprios do Flagelo. Cada Região usa o Núcleo de
+Masmorra já existente da **segunda Masmorra daquela Região**:
 
--   Núcleo do Flagelo das Cinzas
--   Núcleo do Flagelo dos Laços
--   Núcleo do Flagelo do Meridiano
--   Núcleo do Flagelo Rubro
--   Núcleo do Flagelo do Contrapeso
--   Núcleo do Flagelo da Fratura
+-   Terras do Ocaso: `material.tdo.nucleo_galerias_vigia`
+-   Vales dos Enforcados: `material.vde.nucleo_no_antigo`
+-   Planícies de Nareth: `material.nareth.nucleo_observatorio_afundado`
+-   Várzeas Carmesins: `material.varzeas.nucleo_cisterna_transferencia`
+-   Altos Cinéreos: `material.special.altos.core.bastilha_profunda`
+-   Confins do Véu: `material.special.confins.core.camara_contradicoes`
+
+Quantidade: 1 Núcleo × SW.
+
+-   receita Lendária SW3: 3 Núcleos;
+-   receita Lendária SW2: 2 Núcleos;
+-   nenhuma receita Rara ou Épica usa Núcleo;
+-   não criar materiais `material.flagelo.nucleo_*`;
+-   Núcleos de Chefe de Campanha não são usados.
 
 O sistema de aquisição deve ser implementado conforme o pacote de
 recompensa aprovado; não criar moeda alternativa.
