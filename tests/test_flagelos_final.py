@@ -333,3 +333,63 @@ async def test_region_hud_shows_bar_and_face_button(service, database):
     screen = render_refuge_dashboard(_view(), hud=RefugeHud(flagelo=status))
     pairs = {b.text: b.callback_data for row in screen.keyboard.inline_keyboard for b in row}
     assert pairs["⚔️ Enfrentar o Flagelo"] == "flg:hub"
+
+
+# ------------------------------------------------------------------ Crafting global
+
+
+@pytest.mark.parametrize(
+    "recipe_id",
+    [
+        "recipe.flagelo.confins.arco.protocolo_incompativel",  # Lendário 2H, Núcleo
+        "recipe.flagelo.vde.luvas.estrangulamento",  # Raro, Curteiro
+    ],
+)
+async def test_flagelo_recipe_crafts_through_the_global_crafting(database, recipe_id):
+    from uuid import UUID
+
+    from asterion.application.crafting import CraftingRejected, CraftingService
+    from asterion.domain import flagelo_catalog as cat
+    from asterion.domain.professions import RECIPE_BY_ID, recipe_crown_cost, recipe_materials
+    from tests.test_professions_crafting_integration import (
+        _add_materials,
+        _seed_active_professions,
+        _set_profession_level,
+    )
+
+    template = cat.TEMPLATES_BY_RECIPE[recipe_id]
+    recipe = RECIPE_BY_ID[recipe_id]
+    actor = 993_100 + template.number
+    secondary = "alchemist"
+    character_id = await _seed_active_professions(
+        database, actor, template.profession_id, secondary
+    )
+    await _set_profession_level(database, character_id, template.profession_id, 30)
+    service = CraftingService(database[1], "ocaso")
+    async with database[1].begin() as session:
+        character = await session.get(Character, character_id)
+        character.level = 60
+        character.crowns = 100_000
+    # Sem descobrir, a Receita não existe para o personagem.
+    with pytest.raises(CraftingRejected) as unknown:
+        await service.preview(actor, recipe_id)
+    assert str(unknown.value) == "recipe_not_known"
+    materials = {m.material_id: m.quantity for m in recipe_materials(recipe, 60)}
+    await _add_materials(database, character_id, materials)
+    async with database[1].begin() as session:
+        session.add(Unlock(character_id=character_id, unlock_id=recipe_id))
+    preview = await service.preview(actor, recipe_id)
+    assert preview is not None and preview.crown_cost == recipe_crown_cost(
+        recipe, preview.item_level
+    )
+    assert {i.material_id: i.required for i in preview.ingredients} == materials
+    crafted = await service.commit(actor, preview.receipt_id)
+    payload = crafted.output_payload["equipment"]
+    assert payload["item_name"] == template.name and payload["rarity"] == template.rarity
+    assert payload["slot"] == template.slot and payload["enhancement"] == 0
+    assert payload["template_id"] == template.template_id
+    if template.weapon_type_id:
+        assert payload["weapon_type_id"] == template.weapon_type_id
+    async with database[1]() as session:
+        item = await session.get(EquipmentItem, UUID(crafted.output_payload["equipment_item_id"]))
+        assert item is not None and item.character_id == character_id
