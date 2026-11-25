@@ -56,6 +56,15 @@ jobs:
       - name: Point backup tests at the Postgres service container
         # pg_dump must match the server (16); the runner's newer client emits SQL it rejects.
         run: echo "ASTERION_TEST_PG_CONTAINER=$(docker ps -q --filter ancestor=postgres:16-alpine | head -n1)" >> "$GITHUB_ENV"
+      - name: Raise the Postgres lock table for parallel workers
+        # pytest -n auto truncates every table per worker; the default lock table (64 per
+        # transaction) runs out ("out of shared memory", HINT: max_locks_per_transaction).
+        run: |
+          docker exec "$ASTERION_TEST_PG_CONTAINER" psql -U asterion -d asterion_test \
+            -c "ALTER SYSTEM SET max_locks_per_transaction = 512"
+          docker restart "$ASTERION_TEST_PG_CONTAINER"
+          until docker exec "$ASTERION_TEST_PG_CONTAINER" pg_isready -U asterion -d asterion_test; do sleep 1; done
+          docker exec "$ASTERION_TEST_PG_CONTAINER" psql -U asterion -d asterion_test -tAc "SHOW max_locks_per_transaction"
       - name: Test
         run: pytest -n auto
       - name: Alembic check
