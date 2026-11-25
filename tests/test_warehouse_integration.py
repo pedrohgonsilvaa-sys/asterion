@@ -653,6 +653,42 @@ async def test_page_buttons_open_later_items_with_player_names(database):
     assert f"16. {label} · 5" in sources.text
 
 
+
+@pytest.mark.asyncio
+async def test_warehouse_back_returns_to_where_it_was_opened(database):
+    """Refúgio → Armazém → Voltar volta ao Refúgio; Inventário → Armazém → Voltar, ao
+    Inventário. Sub-telas do Armazém preservam a origem."""
+    actor, _ = await _seed_road(database, 781012)
+    sessions = database[1]
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(return_value=True)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        world_router(
+            WorldService(sessions, "ocaso"),
+            {},
+            inventory=InventoryService(sessions, "ocaso"),
+            warehouse=WarehouseService(sessions, "ocaso"),
+        )
+    )
+    update_id = 0
+
+    async def back_of(data):
+        nonlocal update_id
+        update_id += 1
+        await dispatcher.feed_raw_update(
+            bot, callback_update(data, update_id=update_id, actor=actor)
+        )
+        method = bot.session.make_request.call_args.args[1]
+        return method.reply_markup.inline_keyboard[-1][0].callback_data
+
+    assert await back_of("warehouse:root:refuge") == "refuge:local"
+    await back_of("warehouse:inventory:material")
+    assert await back_of("warehouse:root") == "refuge:local"
+    await back_of("inventory:root")
+    assert await back_of("warehouse:root") == "inventory:root"
+
+
 VIGOR_ID = "consumable.vigor.tdo.i"
 
 

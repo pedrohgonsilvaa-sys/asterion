@@ -129,7 +129,8 @@ async def test_character_knowledge_telegram_navigation_and_history_reply(databas
         bot, callback_update("kb:c:h", actor=actor, update_id=update_id)
     )
     screen = _last_screen(bot)
-    assert "Antigos Asterianos" in screen.text
+    # Contrato Mestre §20: as entradas descobertas são botões da categoria.
+    assert _button(screen, "Antigos Asterianos").callback_data == "kb:e:antigos_asterianos"
     update_id += 1
     await dispatcher.feed_raw_update(
         bot,
@@ -179,7 +180,8 @@ async def test_character_knowledge_telegram_navigation_and_history_reply(databas
         bot, callback_update("character:root", actor=actor, update_id=update_id)
     )
     screen = _last_screen(bot)
-    assert "Atributos" in screen.text and "Perfil" in screen.text
+    labels = [b.text for row in screen.reply_markup.inline_keyboard for b in row]
+    assert "📊 Atributos" in labels and "🪪 Perfil" in labels
     update_id += 1
     await dispatcher.feed_raw_update(
         bot,

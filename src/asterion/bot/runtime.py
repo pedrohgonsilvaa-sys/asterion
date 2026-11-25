@@ -224,7 +224,8 @@ def get_bot_runtime() -> BotRuntime:
     refuge_hud = RefugeHudLoader(
         DailyGiftService(SessionFactory, settings.server_id),
         ChronicleService(SessionFactory, settings.server_id),
-        FlageloService(SessionFactory, settings.server_id),
+        guild_tag=GuildService(SessionFactory, settings.server_id).tag_of,
+        flagelos=FlageloService(SessionFactory, settings.server_id),
     )
     inventory = InventoryService(SessionFactory, settings.server_id)
     warehouse = WarehouseService(SessionFactory, settings.server_id)

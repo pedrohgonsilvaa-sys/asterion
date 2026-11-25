@@ -52,29 +52,34 @@ def _buttons(screen):
     return [b for row in screen.keyboard.inline_keyboard for b in row]
 
 
-def test_header_with_path_legacy_and_title():
+def test_header_is_the_default_identity_with_tag_legacy_and_title():
     text = _screen(
-        selected_path="atirador", legacy_level=2, level=12, selected_title="Aliado do Refúgio"
+        RefugeHud(guild_tag="CIN"),
+        name="Oppan",
+        selected_path="atirador",
+        legacy_level=1,
+        level=1,
+        selected_title="Aliado do Refúgio",
     ).text
     lines = text.split("\n\n")
     assert lines[0] == "<b>🌘 Refúgio do Ocaso</b>"
+    # Contrato Mestre de Telas UI v1.0.0 §4: identidade padrão.
     assert lines[1].split("\n") == [
-        "<b>🏹 Tess · Vigia · Atirador</b>",
-        "<b>🏛️ Nv. 12 · Legado II</b>",
+        "🏹 <b>[CIN] Oppan</b> · <code>Nv. 1 · Legado I</code>",
         "🎖️ <i>Aliado do Refúgio</i>",
     ]
-    assert "Caminho" not in text
+    assert "Atirador" not in text and "Caminho" not in text and "Vigia" not in text
 
 
-def test_path_absent_hides_path_and_never_writes_caminho():
-    text = _screen(selected_path=None).text
-    assert "<b>🏹 Tess · Vigia</b>\n" in text
-    assert "Atirador" not in text and "Caminho" not in text
+def test_identity_without_guild_hides_tag():
+    text = _screen(name="Oppan").text
+    assert "🏹 <b>Oppan</b> · <code>Nv. 1</code>" in text
+    assert "[" not in text
 
 
 def test_legacy_absent_shows_only_level():
     text = _screen(legacy_level=0, level=7).text
-    assert "<b>🏛️ Nv. 7</b>\n" in text + "\n"
+    assert "<code>Nv. 7</code>\n" in text
     assert "Legado" not in text
 
 
@@ -83,13 +88,14 @@ def test_legacy_absent_shows_only_level():
 )
 def test_legacy_uses_roman_numerals(level, expected):
     assert roman(level) == expected
-    assert f"Legado {expected}" in _screen(legacy_level=level).text
+    assert f"Legado {expected}</code>" in _screen(legacy_level=level).text
 
 
-def test_equipped_title_appears_and_no_title_hides_line():
+def test_equipped_title_appears_and_no_title_shows_iniciado():
     assert "🎖️ <i>Guardião da Chama</i>" in _screen(selected_title="Guardião da Chama").text
     text = _screen(selected_title=None).text
-    assert "🎖️" not in text and "Título" not in text
+    assert "🎖️ <i>Iniciado</i>" in text
+    assert "Primeiros Passos" not in text and "Título" not in text
 
 
 def test_title_is_html_escaped():
@@ -98,20 +104,20 @@ def test_title_is_html_escaped():
 
 def test_status_block_is_compact_bold_and_monospaced():
     text = _screen().text
-    # Bloco UI 1 §2: HP, Vigor e XP juntos, sem linha vazia entre eles.
     assert (
         "❤️ <b>HP</b> · <code>631 / 631</code>\n" + "🟥" * 10 + "\n"
         "⚡ <b>Vigor</b> · <code>100 / 100</code>\n" + "🟨" * 10 + "\n"
         "✨ <b>XP</b> · <code>320 / 4.800</code>\n🟦"
     ) in text
     assert "━" not in text
-    assert "💰 <b>Coroas</b> · <code>1.500</code>" in text
+    assert text.endswith("💰 <b>Coroas</b> · <code>1.500</code>")
 
 
-def test_state_lines_use_real_data_and_boss_is_absent():
+def test_hud_has_only_contract_blocks():
     text = _screen(RefugeHud(chronicle="Sem data ainda")).text
     assert "Apoiador" not in text and "Patrono" not in text and "⭐" not in text
-    assert "📖 <b>Crônica</b> · Sem data ainda" in text
+    # §5: o HUD termina nas Coroas; a Crônica não é uma linha do HUD.
+    assert "Crônica" not in text
     assert "👹" not in text
 
 
@@ -120,42 +126,38 @@ def test_removed_items_do_not_appear():
     everything = screen.text + " ".join(b.text for b in _buttons(screen))
     for gone in (
         "Poç", "Energia", "Calendário", "Locais descobertos", "Estrada das Cinzas",
-        "Alda Veyr", "Oren Cal", "Treinador de Armas", "Aventura", "Título", "━",
+        "Alda Veyr", "Oren Cal", "Treinador de Armas", "Aventura", "Título", "━", "Missões",
     ):
         assert gone not in everything
     callbacks = {b.callback_data for b in _buttons(screen)}
-    assert not callbacks & {"calendar:root", "cr:root", "p2:alda", "world:oren", "wpt:root"}
+    assert not callbacks & {
+        "calendar:root", "cr:root", "p2:alda", "world:oren", "wpt:root", "world:missions"
+    }
 
 
-def test_chronicle_is_in_hud_not_a_button():
-    screen = _screen(RefugeHud(chronicle="Em andamento · termina em 10/12 às 06:00"))
-    assert "📖 <b>Crônica</b>" in screen.text
-    assert all("Crônica" not in b.text for b in _buttons(screen))
-
-
-def test_menu_layout_two_columns_and_eventos_direct():
+def test_menu_layout_two_columns():
     screen = _screen()
     rows = [[b.text for b in row] for row in screen.keyboard.inline_keyboard]
     assert rows == [
-        ["🌘 Refúgio do Ocaso"],
-        ["🧭 Explorar", "🐺 Caçadas"],
-        ["🗝️ Masmorras", "📜 Missões"],
-        ["🌌 Eventos", "👤 Personagem"],
-        ["🗺️ Mapa", "🏰 Guilda"],
-        ["🏪 Mercado", "🏟️ Arena"],
-        ["📖 Códice", "🏆 Classificação"],
-        ["🎁 Benefícios", "⚙️ Configurações"],
-        ["🌐 Comunidade"],
+        ["🌘 Refúgio", "🧭 Explorar"],
+        ["🗺️ Mapa", "👤 Personagem"],
+        ["🐺 Caçadas", "🗝️ Masmorras"],
+        ["🏟️ Arena", "🏰 Guilda"],
+        ["🔨 Forja", "🏪 Mercado"],
+        ["🌌 Eventos", "📖 Códice"],
+        ["🏆 Classificação", "🎁 Benefícios"],
+        ["🌐 Comunidade", "⚙️ Configurações"],
     ]
     pairs = {b.text: b.callback_data for b in _buttons(screen)}
     assert pairs["🌌 Eventos"] == "wev:hub"
-    assert pairs["🌘 Refúgio do Ocaso"] == "refuge:local"  # só navegação: não move o personagem
+    assert pairs["🌘 Refúgio"] == "refuge:local"  # só navegação: não move o personagem
+    assert pairs["🔨 Forja"] == "craft:root"
 
 
 def test_daily_gift_button_only_when_available_and_alone_on_first_row():
     available = _screen(RefugeHud(gift_available=True))
     first = available.keyboard.inline_keyboard[0]
-    assert [(b.text, b.callback_data) for b in first] == [("🎁 Resgatar Dádiva Diária", "bn:gift")]
+    assert [(b.text, b.callback_data) for b in first] == [("✨ Resgatar Dádiva Diária", "bn:gift")]
     claimed = _screen(RefugeHud(gift_available=False))
     assert all("Dádiva" not in b.text for b in _buttons(claimed))
 
@@ -284,7 +286,7 @@ async def test_real_flow_open_gift_claim_and_return_to_refuge(database):
         return [b.text for row in _last_screen(bot).reply_markup.inline_keyboard for b in row]
 
     await dispatcher.feed_raw_update(bot, message_update("/menu", actor=actor))
-    assert labels()[0] == "🎁 Resgatar Dádiva Diária"
+    assert labels()[0] == "✨ Resgatar Dádiva Diária"
     await dispatcher.feed_raw_update(bot, callback_update("bn:gift", update_id=3, actor=actor))
     assert "Resgatar" in labels()
     await dispatcher.feed_raw_update(
@@ -293,6 +295,6 @@ async def test_real_flow_open_gift_claim_and_return_to_refuge(database):
     assert "Resgatar" not in labels()
     await dispatcher.feed_raw_update(bot, callback_update("menu:back", update_id=5, actor=actor))
     assert "🌘 Refúgio do Ocaso" in _last_screen(bot).text
-    assert "🎁 Resgatar Dádiva Diária" not in labels()
-    assert labels()[0] == "🌘 Refúgio do Ocaso"
+    assert "✨ Resgatar Dádiva Diária" not in labels()
+    assert labels()[0] == "🌘 Refúgio"
     await bot.session.close()

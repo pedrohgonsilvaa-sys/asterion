@@ -226,7 +226,11 @@ def test_altos_codex_and_bestiary_surfaces_include_the_current_location():
     )
 
     regions = render_codex_category(view, "regions")
-    assert "Altos Cinéreos" in regions.text
+    assert any(
+        b.text.startswith("🌋 Altos Cinéreos")
+        for row in regions.keyboard.inline_keyboard
+        for b in row
+    )
     assert any(
         button.callback_data == "kb:r:altos"
         for row in regions.keyboard.inline_keyboard
@@ -234,7 +238,9 @@ def test_altos_codex_and_bestiary_surfaces_include_the_current_location():
     )
     region = render_codex_region(view, "altos")
     assert "Altos Cinéreos" in region.text
-    assert "Infraestrutura de Sustentação" in region.text
+    assert "Infraestrutura de Sustentação" in [
+        b.text for row in region.keyboard.inline_keyboard for b in row
+    ]
     detail = render_codex_detail(view, infrastructure_entry)
     assert "Carga Observável" in detail.text
     assert any(

@@ -21,6 +21,8 @@ MAIN = "world:missions:main"
 SIDE = "world:missions:side"
 SECTIONS = frozenset({ENTRY, MAIN, SIDE})
 CONTRACTS = "ctr:root"
+# Contrato Mestre de Telas UI v1.0.0 §19: Missões entram pelo Mural do Refúgio.
+BACK = "refuge:local"
 SIDE_MARKER = "\n\n📖 Missões Secundárias\n\n"
 
 ENTRY_TEXT = (
@@ -112,7 +114,7 @@ def render_entry(*, any_mission: bool) -> Screen:
             "missions",
             keyboard(
                 [button("📜 Contratos", CONTRACTS)],
-                back("menu:back"),
+                back(BACK),
             ),
             "HTML",
         )
@@ -123,7 +125,7 @@ def render_entry(*, any_mission: bool) -> Screen:
             [button("📖 Missões Principais", MAIN)],
             [button("🗺️ Missões Secundárias", SIDE)],
             [button("📜 Contratos", CONTRACTS)],
-            back("menu:back"),
+            back(BACK),
         ),
         "HTML",
     )

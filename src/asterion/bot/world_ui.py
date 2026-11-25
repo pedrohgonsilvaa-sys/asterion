@@ -186,52 +186,35 @@ CLASS_EMOJI = {
     "oraculo": "🔮",
     "luminar": "☀️",
 }
-_ROMAN = ((10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"))
 REFUGE_TITLE = "🌘 Refúgio do Ocaso"
 REFUGE_IMAGE_KEY = location_key(REFUGE_LABEL)
-DAILY_GIFT_BUTTON = "🎁 Resgatar Dádiva Diária"
-# Menu Principal do Refúgio (Bloco UI 1 §2): Dádiva e Refúgio em largura total, depois
-# duas colunas. Cada botão mantém o callback do fluxo existente.
-REFUGE_LOCAL_BUTTON = ("🌘 Refúgio do Ocaso", "refuge:local")
+DAILY_GIFT_BUTTON = "✨ Resgatar Dádiva Diária"
+# Menu Principal (Contrato Mestre de Telas UI v1.0.0 §5): Dádiva Diária em largura
+# total, depois duas colunas. Missões não ficam aqui: entram pelo Mural do Refúgio.
 REFUGE_MENU = (
-    (("🧭 Explorar", "tdo:explore"), ("🐺 Caçadas", "tdo:hunt")),
-    (("🗝️ Masmorras", "dungeon:known"), ("📜 Missões", "world:missions")),
-    (("🌌 Eventos", "wev:hub"), ("👤 Personagem", "character:root")),
-    (("🗺️ Mapa", "world:map"), ("🏰 Guilda", "guild:root")),
-    (("🏪 Mercado", "mkt:root"), ("🏟️ Arena", "pvp:hub")),
-    (("📖 Códice", "knowledge:codex"), ("🏆 Classificação", "pvp:rank")),
-    (("🎁 Benefícios", "bn:root"), ("⚙️ Configurações", "settings:root")),
-    (("🌐 Comunidade", "community:open"),),
+    (("🌘 Refúgio", "refuge:local"), ("🧭 Explorar", "tdo:explore")),
+    (("🗺️ Mapa", "world:map"), ("👤 Personagem", "character:root")),
+    (("🐺 Caçadas", "tdo:hunt"), ("🗝️ Masmorras", "dungeon:known")),
+    (("🏟️ Arena", "pvp:hub"), ("🏰 Guilda", "guild:root")),
+    # Não há tela de Forja própria: a entrada abre a Criação de itens existente.
+    (("🔨 Forja", "craft:root"), ("🏪 Mercado", "mkt:root")),
+    (("🌌 Eventos", "wev:hub"), ("📖 Códice", "knowledge:codex")),
+    (("🏆 Classificação", "pvp:rank"), ("🎁 Benefícios", "bn:root")),
+    (("🌐 Comunidade", "community:open"), ("⚙️ Configurações", "settings:root")),
 )
 
 
 def roman(value: int) -> str:
-    result = ""
-    for size, symbol in _ROMAN:
-        while value >= size:
-            result += symbol
-            value -= size
-    return result
+    from asterion.bot.ui_format import roman as _roman
+
+    return _roman(value)
 
 
 def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
-    """HUD do Refúgio (Bloco UI 1 §2) em HTML do Telegram."""
-    from asterion.bot.ui_format import HP_FILL, VIGOR_FILL, XP_FILL, mono
+    """HUD do Refúgio (Contrato Mestre de Telas UI v1.0.0 §5) em HTML do Telegram."""
+    from asterion.bot.ui_format import HP_FILL, VIGOR_FILL, XP_FILL, identity, mono
 
     hud = hud or RefugeHud()
-    emoji = CLASS_EMOJI.get(view.character_class, "👤")
-    # Sempre Classe; o Caminho só acompanha quando já foi escolhido.
-    class_label = CLASS_LABELS.get(view.character_class, view.character_class)
-    identity_line = f"{emoji} {escape(view.name)} · {class_label}"
-    path = PATH_LABELS.get(view.selected_path or "")
-    if path:
-        identity_line += f" · {escape(path)}"
-    level = f"🏛️ Nv. {view.level}"
-    if view.legacy_level > 0:
-        level += f" · Legado {roman(view.legacy_level)}"
-    identity = [f"<b>{identity_line}</b>", f"<b>{level}</b>"]
-    if view.selected_title:
-        identity.append(f"🎖️ <i>{escape(view.selected_title)}</i>")
     stats = [
         f"❤️ <b>HP</b> · {mono(f'{number(int(view.hp))} / {number(int(view.max_hp))}')}",
         bar(view.hp, view.max_hp, HP_FILL),
@@ -241,8 +224,6 @@ def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
         bar(view.xp, view.xp_required, XP_FILL),
     ]
     state = [f"💰 <b>Coroas</b> · {mono(number(view.crowns))}"]
-    if hud.chronicle:
-        state.append(f"📖 <b>Crônica</b> · {escape(hud.chronicle)}")
     if hud.flagelo is not None:
         # O Despertar dos Flagelos (espec. final §17): barra da Região, ``atual / 500`` e %.
         flagelo_bar = hud.flagelo.bar
@@ -252,7 +233,19 @@ def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
             f"{bar(flagelo_bar.points, flagelo_bar.threshold, '🟥')}"
         )
     return "\n\n".join(
-        (f"<b>{REFUGE_TITLE}</b>", "\n".join(identity), "\n".join(stats), "\n".join(state))
+        (
+            f"<b>{REFUGE_TITLE}</b>",
+            identity(
+                emoji=CLASS_EMOJI.get(view.character_class, "👤"),
+                name=view.name,
+                level=view.level,
+                legacy_level=view.legacy_level,
+                guild_tag=hud.guild_tag,
+                title=view.selected_title,
+            ),
+            "\n".join(stats),
+            "\n".join(state),
+        )
     )
 
 
@@ -270,8 +263,6 @@ def refuge_menu_keyboard(
         rows.append(
             [InlineKeyboardButton(text=FLAGELO_BUTTON[0], callback_data=FLAGELO_BUTTON[1])]
         )
-    label, data = REFUGE_LOCAL_BUTTON
-    rows.append([InlineKeyboardButton(text=label, callback_data=data)])
     rows.extend(
         [InlineKeyboardButton(text=label, callback_data=data) for label, data in pair]
         for pair in REFUGE_MENU

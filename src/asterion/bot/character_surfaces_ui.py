@@ -162,29 +162,89 @@ def render_profile(view: ProfileView) -> Screen:
     return Screen("\n".join(lines), "character", keyboard, parse_mode="HTML")
 
 
+# Contrato Mestre de Telas UI v1.0.0 §20: Códice de Asterion.
+CODEX_TEXT = (
+    "O conhecimento que o personagem conquista durante sua jornada permanece registrado "
+    "aqui. Cada descoberta amplia sua compreensão sobre o mundo, suas histórias e os "
+    "acontecimentos que encontrou pelo caminho."
+)
+# category_id → (botão, título, descrição)
+CODEX_CATEGORY_SCREENS = {
+    "world": (
+        "🌌 Mundo",
+        "🌌 Mundo e Cosmologia",
+        "Registros sobre Asterion, o Véu, sua cosmologia e os princípios que moldam a "
+        "realidade conhecida.",
+    ),
+    "regions": (
+        "🗺️ Locais",
+        "🗺️ Regiões e Locais",
+        "Conhecimentos adquiridos sobre as terras percorridas, os lugares descobertos e "
+        "aquilo que o personagem aprendeu sobre cada região.",
+    ),
+    "peoples": (
+        "👥 Povos",
+        "👥 Povos e Facções",
+        "Registros sobre povos, culturas, facções e instituições que o personagem conheceu "
+        "ou sobre os quais adquiriu conhecimento.",
+    ),
+    "figures": (
+        "👤 Figuras",
+        "👤 Figuras",
+        "Registros sobre pessoas cuja história, importância ou participação nos "
+        "acontecimentos foi conhecida durante a jornada.",
+    ),
+    "history": (
+        "📜 História",
+        "📜 História e Acontecimentos",
+        "Conhecimentos sobre acontecimentos do passado e do presente, preservados conforme "
+        "o personagem descobre suas causas, consequências e contexto.",
+    ),
+    "mysteries": (
+        "🌀 Mistérios",
+        "🌀 Mistérios e Fenômenos",
+        "Registros sobre fenômenos, mistérios e verdades ocultas que foram legitimamente "
+        "descobertos pelo personagem.",
+    ),
+    "chronicles": (
+        "📖 Crônicas",
+        "📖 Crônicas",
+        "Conhecimentos preservados das Crônicas vividas pelo personagem, registrando "
+        "acontecimentos e descobertas que passam a fazer parte de sua história.",
+    ),
+}
+CODEX_BACK = "↩️ Voltar"
+CODEX_BESTIARY = "🐾 Bestiário"
+
+
+def _codex_screen(title: str, description: str | None, rows) -> Screen:
+    from html import escape
+
+    parts = [f"<b>{escape(title)}</b>"]
+    if description:
+        parts.append(f"<i>{escape(description)}</i>")
+    return Screen("\n\n".join(parts), "codex", _keyboard(rows), parse_mode="HTML")
+
+
 def render_codex_root(view: KnowledgeView) -> Screen:
-    categories = _known_codex_categories(view)
-    lines = ["📚 Códice", ""]
-    rows: list[list[InlineKeyboardButton]] = []
-    for category_id, label in CODEX_CATEGORY_ORDER:
-        if category_id not in categories:
-            continue
-        lines.append(label)
-        key = CODEX_CATEGORY_KEYS[category_id]
-        rows.append([_button(label, f"kb:c:{key}")])
-    rows.append([_button("Bestiário", "kb:b"), _button("Feitos", "kb:a")])
-    rows.append([_button("← Menu", "menu:back")])
-    if not categories:
-        lines.append("Nenhuma entrada foi registrada ainda.")
-    return Screen("\n".join(lines), "codex", _keyboard(rows))
+    """Raiz do Códice: as sete categorias, sem contador nem indicação de conteúdo oculto."""
+    buttons = [
+        _button(CODEX_CATEGORY_SCREENS[category_id][0], f"kb:c:{CODEX_CATEGORY_KEYS[category_id]}")
+        for category_id, _label in CODEX_CATEGORY_ORDER
+    ]
+    rows = [buttons[index : index + 2] for index in range(0, len(buttons), 2)]
+    # Bestiário é sistema próprio, não categoria do Códice: entrada em linha separada.
+    rows.append([_button(CODEX_BESTIARY, "kb:b")])
+    rows.append([_button(CODEX_BACK, "menu:back")])
+    return _codex_screen("📖 Códice de Asterion", CODEX_TEXT, rows)
 
 
 def render_codex_category(view: KnowledgeView, category: str) -> Screen:
-    label = dict(CODEX_CATEGORY_ORDER).get(category)
-    if label is None:
+    """Categoria: descrição e só o que foi descoberto; vazia, só descrição e Voltar."""
+    if category not in CODEX_CATEGORY_SCREENS:
         return render_codex_root(view)
+    _button_label, title, description = CODEX_CATEGORY_SCREENS[category]
     rows: list[list[InlineKeyboardButton]] = []
-    lines = ["📚 Códice", "", label, ""]
     regions = _known_codex_regions(view) if category == "regions" else []
     # Entries without a Local (the Crônica's) are listed after the Regions.
     entries = [
@@ -192,16 +252,12 @@ def render_codex_category(view: KnowledgeView, category: str) -> Screen:
         for entry in view.codex_entries
         if entry.category == category and entry.location_id is None
     ]
-    if not regions and not entries:
-        return render_codex_root(view)
     for region_id, region_label in regions:
-        lines.append(region_label)
         rows.append([_button(region_label, f"kb:r:{region_id}")])
     for entry in entries:
-        lines.append(entry.title)
         rows.append([_button(entry.title, f"kb:e:{CODEX_ENTRY_KEYS[entry.entry_id]}")])
-    rows.extend(_knowledge_navigation("kb"))
-    return Screen("\n".join(lines), "codex", _keyboard(rows))
+    rows.append([_button(CODEX_BACK, "kb:cd")])
+    return _codex_screen(title, description, rows)
 
 
 def render_codex_region(view: KnowledgeView, region_id: str) -> Screen:
@@ -211,36 +267,32 @@ def render_codex_region(view: KnowledgeView, region_id: str) -> Screen:
     locations = _locations_in_region(view, region_id)
     if not locations:
         return render_codex_category(view, "regions")
-    lines = ["🗺️ Regiões e Locais", "", region_labels[region_id], ""]
-    rows = []
-    for entry in locations:
-        lines.append(entry.title)
-        rows.append([_button(entry.title, f"kb:l:{CODEX_ENTRY_KEYS[entry.entry_id]}")])
-    rows.append([_button("← Regiões e Locais", "kb:c:r")])
-    rows.extend(_knowledge_navigation("kb"))
-    return Screen("\n".join(lines), "codex", _keyboard(rows))
+    rows = [
+        [_button(entry.title, f"kb:l:{CODEX_ENTRY_KEYS[entry.entry_id]}")]
+        for entry in locations
+    ]
+    rows.append([_button(CODEX_BACK, "kb:c:r")])
+    return _codex_screen(f"🗺️ {region_labels[region_id]}", None, rows)
 
 
 def render_codex_detail(view: KnowledgeView, entry: CodexEntryView) -> Screen:
+    from html import escape
+
     if entry not in view.codex_entries:
         return render_codex_root(view)
-    lines = [f"📖 {entry.title}"]
-    if entry.location_id:
-        lines.extend(["", LOCATION_LABELS.get(entry.location_id, "")])
-    if entry.fragments:
-        lines.append("")
-        for fragment in entry.fragments:
-            lines.extend([f"📜 {fragment.title}", fragment.text, ""])
-        lines.pop()
+    parts = [f"📖 <b>{escape(entry.title)}</b>"]
+    if entry.location_id and LOCATION_LABELS.get(entry.location_id):
+        parts.append(f"<i>{escape(LOCATION_LABELS[entry.location_id])}</i>")
+    for fragment in entry.fragments:
+        parts.append(f"📜 <b>{escape(fragment.title)}</b>\n{escape(fragment.text)}")
     region_id = _codex_region_id(entry.location_id) if entry.location_id else None
     parent = (
         f"kb:r:{region_id}"
         if region_id in _region_labels()
         else f"kb:c:{CODEX_CATEGORY_KEYS[entry.category]}"
     )
-    rows = [[_button("← Região" if entry.location_id else "← Categoria", parent)]]
-    rows.extend(_knowledge_navigation("kb"))
-    return Screen("\n".join(lines), "codex", _keyboard(rows))
+    rows = [[_button(CODEX_BACK, parent)]]
+    return Screen("\n\n".join(parts), "codex", _keyboard(rows), parse_mode="HTML")
 
 
 def render_bestiary_root(view: KnowledgeView) -> Screen:
@@ -328,7 +380,8 @@ def render_achievement_root(view: KnowledgeView) -> Screen:
                 continue
             lines.append(label)
             rows.append([_button(label, f"kb:ac:{ACHIEVEMENT_CATEGORY_KEYS[category]}")])
-    rows.extend(_knowledge_navigation("kb"))
+    # Feitos fica no Personagem (Contrato Mestre de Telas UI v1.0.0 §6).
+    rows.append([_button("↩️ Voltar", "character:root")])
     return Screen("\n".join(lines), "achievements", _keyboard(rows))
 
 
@@ -347,8 +400,7 @@ def render_achievement_category(view: KnowledgeView, category: str) -> Screen:
             lines.append(f"🎁 {entry.reward}")
         lines.append("")
     lines.pop()
-    rows = [[_button("← Feitos", "kb:a")]]
-    rows.extend(_knowledge_navigation("kb"))
+    rows = [[_button("↩️ Voltar", "kb:a")]]
     return Screen("\n".join(lines), "achievements", _keyboard(rows))
 
 

@@ -96,7 +96,7 @@ def render_profession_home(view: ProfessionHomeView) -> Screen:
                 [_button("Trocar Ofícios", "prof:change")],
             ]
         )
-    rows.append([_button("← Personagem", "character:root")])
+    rows.append([_button("↩️ Voltar", "refuge:local")])
     screen = Screen(
         "\n".join(line for line in lines if line is not None),
         "character",

@@ -126,6 +126,10 @@ from asterion.bot.creation_ui import Screen
 from asterion.bot.dungeon_ui import render_dungeons
 from asterion.bot.flavor_ui import with_region_flavor
 from asterion.bot.inventory_ui import render_inventory
+from asterion.bot.map_ui import TDO_LOCAL_BY_KEY as TDO_MAP_LOCALS
+from asterion.bot.map_ui import render_map as render_map_screen
+from asterion.bot.map_ui import render_tdo_local as render_tdo_map_local
+from asterion.bot.map_ui import render_tdo_region as render_tdo_map_region
 from asterion.bot.missions_ui import MAIN as MISSIONS_MAIN
 from asterion.bot.missions_ui import SECTIONS as MISSION_SECTIONS
 from asterion.bot.missions_ui import SIDE as MISSIONS_SIDE
@@ -1605,8 +1609,18 @@ def world_router(
             local_screen = await current_local_screen(query.from_user.id, view)
             await present(query.message, local_screen or render_road(view), images, edit=True)
 
+    # Origem do Armazém por usuário: aberto pelo Refúgio, Voltar retorna ao Refúgio;
+    # abrir o Inventário devolve o Armazém ao retorno padrão (Inventário).
+    warehouse_from_refuge: set[int] = set()
+
+    def warehouse_screen(actor: int, view, page: int = 0):
+        from asterion.bot.warehouse_ui import render_warehouse
+
+        return render_warehouse(view, page, back_to_refuge=actor in warehouse_from_refuge)
+
     @router.callback_query(F.data == "inventory:root")
     async def inventory_root(query: CallbackQuery):
+        warehouse_from_refuge.discard(query.from_user.id)
         await query.answer()
         if inventory is None or not isinstance(query.message, Message):
             return
@@ -1616,6 +1630,7 @@ def world_router(
 
     @router.callback_query(F.data.startswith("inventory:category:"))
     async def inventory_category(query: CallbackQuery):
+        warehouse_from_refuge.discard(query.from_user.id)
         await query.answer()
         if inventory is None or not isinstance(query.message, Message):
             return
@@ -1637,16 +1652,17 @@ def world_router(
             await present(query.message, render_inventory(view), images, edit=True)
 
     @router.callback_query(F.data == "warehouse:root")
+    @router.callback_query(F.data == "warehouse:root:refuge")
     @router.callback_query(F.data.startswith("warehouse:page:"))
     async def warehouse_root(query: CallbackQuery):
+        if query.data == "warehouse:root:refuge":
+            warehouse_from_refuge.add(query.from_user.id)
         await query.answer()
         if warehouse is None or not isinstance(query.message, Message):
             return
         view = await warehouse.root(query.from_user.id)
         if view is not None:
-            from asterion.bot.warehouse_ui import render_warehouse
-
-            screen = render_warehouse(view, _callback_page(query.data))
+            screen = warehouse_screen(query.from_user.id, view, _callback_page(query.data))
             await present(query.message, screen, images, edit=True)
 
     @router.callback_query(F.data.startswith("warehouse:inventory:"))
@@ -1663,9 +1679,7 @@ def world_router(
             return
         await query.answer()
         if view is not None:
-            from asterion.bot.warehouse_ui import render_warehouse
-
-            screen = render_warehouse(view, _callback_page(query.data))
+            screen = warehouse_screen(query.from_user.id, view, _callback_page(query.data))
             await present(query.message, screen, images, edit=True)
 
     @router.callback_query(F.data.startswith("warehouse:deposit:"))
@@ -1700,9 +1714,7 @@ def world_router(
             return
         await query.answer("Revise e confirme a transferência.")
         if view is not None:
-            from asterion.bot.warehouse_ui import render_warehouse
-
-            await present(query.message, render_warehouse(view), images, edit=True)
+            await present(query.message, warehouse_screen(query.from_user.id, view), images, edit=True)
 
     @router.callback_query(F.data.startswith("warehouse:qty:"))
     async def warehouse_choose_quantity(query: CallbackQuery):
@@ -1732,7 +1744,7 @@ def world_router(
         if warehouse is None or not isinstance(query.message, Message):
             await query.answer()
             return
-        from asterion.bot.warehouse_ui import parse_quantity_callback, render_warehouse
+        from asterion.bot.warehouse_ui import parse_quantity_callback
 
         try:
             direction, kind, item_id, selected = parse_quantity_callback(query.data or "")
@@ -1749,7 +1761,7 @@ def world_router(
             return
         await query.answer("Revise e confirme a transferência.")
         if view is not None:
-            await present(query.message, render_warehouse(view), images, edit=True)
+            await present(query.message, warehouse_screen(query.from_user.id, view), images, edit=True)
 
     @router.callback_query(F.data.startswith("warehouse:confirm:"))
     async def warehouse_confirm(query: CallbackQuery):
@@ -1778,9 +1790,7 @@ def world_router(
         else:
             view = await warehouse.root(query.from_user.id)
             if view is not None:
-                from asterion.bot.warehouse_ui import render_warehouse
-
-                await present(query.message, render_warehouse(view), images, edit=True)
+                await present(query.message, warehouse_screen(query.from_user.id, view), images, edit=True)
 
     @router.callback_query(F.data.startswith("warehouse:cancel:"))
     async def warehouse_cancel(query: CallbackQuery):
@@ -1795,9 +1805,7 @@ def world_router(
         await query.answer("Prévia cancelada." if status == "CANCELLED" else "Prévia não está mais ativa.", show_alert=status != "CANCELLED")
         view = await warehouse.root(query.from_user.id)
         if view is not None:
-            from asterion.bot.warehouse_ui import render_warehouse
-
-            await present(query.message, render_warehouse(view), images, edit=True)
+            await present(query.message, warehouse_screen(query.from_user.id, view), images, edit=True)
 
     @router.callback_query(F.data.startswith("consumable:vigor:"))
     async def use_vigor(query: CallbackQuery):
@@ -1848,9 +1856,7 @@ def world_router(
             return
         await query.answer("Revise e confirme o resgate.")
         if view is not None:
-            from asterion.bot.warehouse_ui import render_warehouse
-
-            await present(query.message, render_warehouse(view), images, edit=True)
+            await present(query.message, warehouse_screen(query.from_user.id, view), images, edit=True)
 
     @router.callback_query(F.data == "pending:retry")
     async def retry_blocked_deliveries(query: CallbackQuery):
@@ -4278,69 +4284,38 @@ def world_router(
         if not isinstance(query.message, Message):
             return
         from_local = (query.data or "") == "world:map:fromlocal"
-        known, current, _road_view, _p2_view, _p3_view, _p4_view = await map_state(query.from_user.id)
-        world_view = await service.resume(query.from_user.id)
-        in_tdo = world_view is not None and world_view.region == "Terras do Ocaso"
-        parent_callback = "world:local" if from_local or in_tdo else "world:adventure"
-        parent_label = "Voltar ao Refúgio" if in_tdo else "← Local Atual" if from_local else "← Campanha"
+        known, current, _road_view, _p2_view, _p3_view, _p4_view = await map_state(
+            query.from_user.id
+        )
+        in_tdo = current in TDO_LOCATIONS
+        # Contrato Mestre de Telas UI v1.0.0 §15: nas Terras do Ocaso, o Voltar do Mapa
+        # retorna ao Menu Principal do Refúgio; nas demais regiões, ao Local/Campanha.
+        back_callback = (
+            "menu:back" if in_tdo else "world:local" if from_local else "world:adventure"
+        )
+        regions = [("Terras do Ocaso", "tdo", "🌘")]
+        if VDE_GARGANTA in known or VDE_VIGILIA in known:
+            regions.append(("Vales dos Enforcados", "vde", "🪢"))
+        if NARETH_CAMPINAS in known or NARETH_POSTO in known:
+            regions.append((NARETH_REGION, "nareth", "🌾"))
+        if VARZEAS_DIQUES in known or VARZEAS_PORTO in known or VARZEAS_BREJOS in known:
+            regions.append((VARZEAS_REGION, "varzeas", "🥀"))
+        if known & {
+            ALTOS_ESCARPA_LABEL, ALTOS_ABRIGO_LABEL, ALTOS_PONTES_LABEL,
+            ALTOS_PEDREIRAS_LABEL, ALTOS_BASTILHA_LABEL, ALTOS_CORACAO_LABEL,
+        }:
+            regions.append((ALTOS_REGION_LABEL, "altos", "🌋"))
+        if known & {
+            CONFINS_MARCHA_LABEL, CONFINS_ULTIMO_REFUGIO_LABEL,
+            CONFINS_ESTRADAS_AUSENTES_LABEL, CONFINS_FRATURAS_LIMIAR_LABEL,
+            CONFINS_NO_CENTRAL_LABEL, CONFINS_CAMARA_REGENCIA_LABEL,
+        }:
+            regions.append((CONFINS_REGION_LABEL, "confins", "🌫️"))
         if not known:
-            text = "🗺️ Mapa\n\nNenhuma Região conhecida."
-            keyboard = [[InlineKeyboardButton(text=parent_label, callback_data=parent_callback)]]
-        else:
-            current_icon = (
-                "🌑" if current in {CHARNECA, VDE_GARGANTA} else
-                "🌲" if current in {BOSQUE, VDE_MATA} else
-                "🌫️" if current == VDE_BAIXIOS else
-                "🪨" if current == VDE_CLAUSTRO else
-                "🌿" if current == VDE_BERCO else
-                "🌾" if current == NARETH_CAMPINAS else
-                "🏘️" if current == NARETH_POSTO else
-                "🧱" if current == VARZEAS_DIQUES else
-                "⚓" if current == VARZEAS_PORTO else
-                "🌫️" if current == VARZEAS_BREJOS else
-                "🌋" if current == ALTOS_ESCARPA_LABEL else
-                "🏘️" if current == ALTOS_ABRIGO_LABEL else
-                "🌉" if current == ALTOS_PONTES_LABEL else
-                "⛏️" if current == ALTOS_PEDREIRAS_LABEL else
-                "🏰" if current == ALTOS_BASTILHA_LABEL else
-                "🌋" if current == ALTOS_CORACAO_LABEL else
-                "🌫️" if current == CONFINS_MARCHA_LABEL else
-                "🏚️" if current == CONFINS_ULTIMO_REFUGIO_LABEL else
-                "🧭" if current == CONFINS_ESTRADAS_AUSENTES_LABEL else
-                "🌫️" if current == CONFINS_FRATURAS_LIMIAR_LABEL else
-                "🧭" if current == CONFINS_NO_CENTRAL_LABEL else
-                "🪨" if current == RUINS else
-                "🌫️" if current == VDE_VIGILIA else "🔥"
-            )
-            known_regions = ["Terras do Ocaso"]
-            if VDE_GARGANTA in known or VDE_VIGILIA in known:
-                known_regions.append("Vales dos Enforcados")
-            if NARETH_CAMPINAS in known or NARETH_POSTO in known:
-                known_regions.append(NARETH_REGION)
-            if VARZEAS_DIQUES in known or VARZEAS_PORTO in known or VARZEAS_BREJOS in known:
-                known_regions.append(VARZEAS_REGION)
-            if ALTOS_ESCARPA_LABEL in known or ALTOS_ABRIGO_LABEL in known or ALTOS_PONTES_LABEL in known or ALTOS_PEDREIRAS_LABEL in known or ALTOS_BASTILHA_LABEL in known or ALTOS_CORACAO_LABEL in known:
-                known_regions.append(ALTOS_REGION_LABEL)
-            if CONFINS_MARCHA_LABEL in known or CONFINS_ULTIMO_REFUGIO_LABEL in known or CONFINS_ESTRADAS_AUSENTES_LABEL in known or CONFINS_FRATURAS_LIMIAR_LABEL in known or CONFINS_NO_CENTRAL_LABEL in known or CONFINS_CAMARA_REGENCIA_LABEL in known:
-                known_regions.append(CONFINS_REGION_LABEL)
-            current_line = f"{current_icon} {current} · Local Atual" if current else ""
-            text = (
-                "🗺️ Mapa\n\n"
-                f"{current_line}\n\n"
-                "🗺️ Regiões Conhecidas\n\n"
-                + "\n".join(
-                    f"{index} {'🌑' if name == 'Terras do Ocaso' else '🪢' if name == 'Vales dos Enforcados' else '🌾' if name == NARETH_REGION else '🌋' if name == ALTOS_REGION_LABEL else '🌫️' if name == CONFINS_REGION_LABEL else '🥀'} {name}"
-                    for index, name in enumerate(known_regions, start=1)
-                )
-            )
-            region_buttons = [
-                [InlineKeyboardButton(text=str(index), callback_data=f"world:map:region:{'tdo' if name == 'Terras do Ocaso' else 'vde' if name == 'Vales dos Enforcados' else 'nareth' if name == NARETH_REGION else 'altos' if name == ALTOS_REGION_LABEL else 'confins' if name == CONFINS_REGION_LABEL else 'varzeas'}{':fromlocal' if from_local else ''}")]
-                for index, name in enumerate(known_regions, start=1)
-            ]
-            keyboard = region_buttons + [[InlineKeyboardButton(text=parent_label, callback_data=parent_callback)]]
+            regions = []
         await present(
             query.message,
-            Screen(text, "map", InlineKeyboardMarkup(inline_keyboard=keyboard)),
+            render_map_screen(regions, back_callback=back_callback, from_local=from_local),
             images,
             edit=True,
         )
@@ -4356,64 +4331,9 @@ def world_router(
         if not isinstance(query.message, Message):
             return
         from_local = (query.data or "").endswith(":fromlocal")
-        map_callback = "world:map:fromlocal" if from_local else "world:map"
-        known, current, road_view, _p2_view, _p3_view, p4_view = await map_state(query.from_user.id)
-        ordered = [
-            ("Estrada das Cinzas", "road"),
-            ("Refúgio do Ocaso", "refuge"),
-            (CHARNECA, "charneca"),
-            (BOSQUE, "bosque"),
-            (RUINS, "ruinas"),
-            (CAMARA, "camara"),
-        ]
-        visible = [(name, key) for name, key in ordered if name in known]
-        lines = ["🌑 Terras do Ocaso · Nv. 1–10", ""]
-        buttons = []
-        for index, (name, key) in enumerate(visible, start=1):
-            reachable_by_route = bool(road_view is not None and name in road_view.route_destinations)
-            reachable_by_brazier = bool(
-                road_view is not None
-                and any(destination == name for _id, _label, destination in road_view.brazier_destinations)
-            )
-            if name == current:
-                state = "Local Atual"
-            elif reachable_by_route or reachable_by_brazier:
-                state = "Acessível"
-            elif key == "ruinas" and p4_view is not None and p4_view.status == "active":
-                state = "🔒 P4 em andamento"
-            else:
-                state = "Conhecido"
-            icon = (
-                "🌑" if key == "charneca" else
-                "🌲" if key == "bosque" else
-                "🪨" if key == "ruinas" else
-                "🕯" if key == "camara" else
-                "🔥" if name == current else
-                "🏚️" if key == "refuge" else "📍"
-            )
-            lines.append(f"{index} {icon} {name} · {state}")
-            buttons.append(
-                InlineKeyboardButton(
-                    text=str(index),
-                    callback_data=f"world:map:local:{key}{':fromlocal' if from_local else ''}",
-                )
-            )
-        keyboard = []
-        if buttons:
-            keyboard.append(buttons)
-        keyboard.append([InlineKeyboardButton(text="← Mapa", callback_data=map_callback)])
+        known, *_ = await map_state(query.from_user.id)
         await present(
-            query.message,
-            with_region_flavor(
-                Screen(
-                    "\n".join(lines),
-                    "region.tdo",
-                    InlineKeyboardMarkup(inline_keyboard=keyboard),
-                ),
-                "tdo",
-            ),
-            images,
-            edit=True,
+            query.message, render_tdo_map_region(known, from_local=from_local), images, edit=True
         )
 
     @router.callback_query(
@@ -4723,6 +4643,26 @@ def world_router(
             edit=True,
         )
 
+    TDO_LOCATIONS = frozenset((ROAD, *HUB_LOCATION_LABELS))
+
+    async def tdo_map_local(actor: int, key: str, *, from_local: bool) -> Screen | None:
+        """Local das Terras do Ocaso no Mapa (Contrato Mestre §15): só descrição e Voltar.
+
+        Fora das Terras do Ocaso o detalhe anterior continua, porque é por ele que o
+        deslocamento regional de volta às Terras do Ocaso acontece.
+        """
+        if key not in TDO_MAP_LOCALS:
+            return None
+        known, current, *_ = await map_state(actor)
+        if current not in TDO_LOCATIONS or TDO_MAP_LOCALS[key][0] not in known:
+            return None
+        p6_view = await p6.resume(actor) if p6 is not None else None
+        return render_tdo_map_local(
+            key,
+            p6_completed=p6_view is not None and p6_view.status == "completed",
+            from_local=from_local,
+        )
+
     @router.callback_query(F.data.startswith("world:map:local:"))
     async def map_local(query: CallbackQuery):
         if await foreground(query):
@@ -4735,11 +4675,13 @@ def world_router(
         if len(parts) not in {4, 5} or (len(parts) == 5 and parts[4] != "fromlocal"):
             await restore_context(query)
             return
-        screen = await map_local_detail(
-            query.from_user.id,
-            parts[3],
-            from_local=len(parts) == 5,
-        )
+        screen = await tdo_map_local(query.from_user.id, parts[3], from_local=len(parts) == 5)
+        if screen is None:
+            screen = await map_local_detail(
+                query.from_user.id,
+                parts[3],
+                from_local=len(parts) == 5,
+            )
         if screen is None:
             await restore_context(query)
             return

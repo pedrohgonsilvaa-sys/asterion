@@ -80,7 +80,7 @@ def test_hud_layout_and_menu_order():
     screen = render_refuge_dashboard(_view(legacy_level=1))
     blocks = screen.text.split("\n\n")
     assert blocks[0] == "<b>🌘 Refúgio do Ocaso</b>"
-    assert blocks[1] == "<b>🏹 Ornn · Vigia</b>\n<b>🏛️ Nv. 1 · Legado I</b>"
+    assert blocks[1] == "🏹 <b>Ornn</b> · <code>Nv. 1 · Legado I</code>\n🎖️ <i>Iniciado</i>"
     assert blocks[2].splitlines() == [
         "❤️ <b>HP</b> · <code>631 / 631</code>",
         "🟥" * 10,
@@ -91,15 +91,14 @@ def test_hud_layout_and_menu_order():
     ]
     assert blocks[3] == "💰 <b>Coroas</b> · <code>1.250</code>"
     assert _labels(screen) == [
-        ["🌘 Refúgio do Ocaso"],
-        ["🧭 Explorar", "🐺 Caçadas"],
-        ["🗝️ Masmorras", "📜 Missões"],
-        ["🌌 Eventos", "👤 Personagem"],
-        ["🗺️ Mapa", "🏰 Guilda"],
-        ["🏪 Mercado", "🏟️ Arena"],
-        ["📖 Códice", "🏆 Classificação"],
-        ["🎁 Benefícios", "⚙️ Configurações"],
-        ["🌐 Comunidade"],
+        ["🌘 Refúgio", "🧭 Explorar"],
+        ["🗺️ Mapa", "👤 Personagem"],
+        ["🐺 Caçadas", "🗝️ Masmorras"],
+        ["🏟️ Arena", "🏰 Guilda"],
+        ["🔨 Forja", "🏪 Mercado"],
+        ["🌌 Eventos", "📖 Códice"],
+        ["🏆 Classificação", "🎁 Benefícios"],
+        ["🌐 Comunidade", "⚙️ Configurações"],
     ]
 
 
@@ -107,8 +106,8 @@ def test_hud_daily_gift_is_full_width_first_row():
     from asterion.bot.refuge_hud import RefugeHud
 
     screen = render_refuge_dashboard(_view(), hud=RefugeHud(gift_available=True))
-    assert _labels(screen)[0] == ["🎁 Resgatar Dádiva Diária"]
-    assert _labels(screen)[1] == ["🌘 Refúgio do Ocaso"]
+    assert _labels(screen)[0] == ["✨ Resgatar Dádiva Diária"]
+    assert _labels(screen)[1] == ["🌘 Refúgio", "🧭 Explorar"]
 
 
 def test_refuge_local_uses_refuge_art_and_lists_services():
@@ -116,13 +115,18 @@ def test_refuge_local_uses_refuge_art_and_lists_services():
     assert screen.image_key == location_key(REFUGE)
     assert screen.image_key != refuge_ui.REFUGE_BRAZIER_ID
     assert _labels(screen) == [
-        ["🔥 Braseiro do Refúgio"],
-        ["⚔️ Darian Veyr"],
-        ["🧭 Alda Veyr"],
-        ["📜 Oren Cal"],
+        ["🔥 Braseiro do Refúgio", "⚔️ Darian Veyr"],
+        ["🧭 Alda Veyr", "🖋️ Oren Cal"],
+        ["🛠️ Ofícios", "🎭 Caminho"],
+        ["📜 Mural de Missões", "🏦 Armazém"],
         ["↩️ Voltar"],
     ]
-    assert "Dádiva" not in screen.text
+    assert _callbacks(screen) == [
+        "refuge:brazier", "refuge:darian", "refuge:alda", "refuge:oren",
+        "character:professions", "character:path", "world:missions", "warehouse:root:refuge",
+        "menu:back",
+    ]
+    assert "Dádiva" not in screen.text and "Travessia" not in screen.text
 
 
 def test_brazier_shows_only_hp_and_hides_recover_when_full():
@@ -149,7 +153,7 @@ def test_darian_and_npcs():
     for npc in (refuge_ui.render_alda(), refuge_ui.render_oren()):
         assert _labels(npc) == [["↩️ Voltar"]]
         assert _callbacks(npc) == ["refuge:local"]
-    assert "📜 <b>Oren Cal</b>" in refuge_ui.render_oren().text
+    assert "🖋️ <b>Oren Cal</b>" in refuge_ui.render_oren().text
 
 
 # ---- §3 Explorar ----------------------------------------------------------------------
@@ -176,7 +180,7 @@ def test_explore_discovery_mold():
     screen = render_explore_result(
         ExploreResult("discovered", label="Charneca da Fuligem", xp=120)
     )
-    assert screen.text.startswith("🌑 <b>Charneca da Fuligem</b>\n\n<i>Depois de atravessar")
+    assert screen.text.startswith("🌫️ <b>Charneca da Fuligem</b>\n\n<i>Depois de atravessar")
     assert (
         "🎁 <b>Recompensas:</b>\n🗺️ <b>Descoberta da Charneca da Fuligem</b>\n"
         "✨ <code>120 XP</code>"
@@ -339,7 +343,7 @@ def test_armor_training_uses_canonical_terms():
         tuple(ArmorTrainerEntry(t, t.armor_class == "veste") for t in ARMOR_TERMS.values()),
     )
     assert _labels(render_armor_trainer(view)) == [
-        ["👘 Vestes"], ["🥋 Leves"], ["🦺 Médias"], ["⛑️ Pesadas"], ["↩️ Voltar"]
+        ["👘 Vestes"], ["🥋 Leve"], ["🦺 Média"], ["⛑️ Pesada"], ["↩️ Voltar"]
     ]
     media = render_armor_class(view, "media")
     assert "⭐ <b>Nível</b> · <code>20</code>" in media.text

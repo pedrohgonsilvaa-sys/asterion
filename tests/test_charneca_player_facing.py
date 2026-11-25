@@ -126,7 +126,11 @@ async def test_map_opens_p2_context_during_mission_and_normal_local_after_comple
         callback_update("world:map:region:tdo", update_id=880403, actor=actor),
     )
     region = _last_method(bot)
-    assert "Charneca da Fuligem · Local Atual" in region.text
+    # Contrato Mestre de Telas UI v1.0.0 §15: sem nível nem estado na Região.
+    assert "🌫️ Charneca da Fuligem" in [
+        b.text for row in region.reply_markup.inline_keyboard for b in row
+    ]
+    assert "Nv." not in region.text and "Local Atual" not in region.text
     assert "world:map:local:charneca" in _callbacks(region)
     await dispatcher.feed_raw_update(
         bot,
@@ -134,7 +138,9 @@ async def test_map_opens_p2_context_during_mission_and_normal_local_after_comple
     )
     contextual = _last_method(bot)
     assert "Examinar Pontos de Fuligem · 0/3" not in contextual.text
-    assert "world:local" in _callbacks(contextual)
+    # Local no Mapa: só título, descrição e Voltar à Região.
+    assert _callbacks(contextual) == ["world:map:region:tdo"]
+    assert "Uma extensa região coberta por cinzas" in contextual.text
     assert "Caçadas · Disponível" not in contextual.text
     assert "Desbravar · Disponível" not in contextual.text
     await dispatcher.feed_raw_update(
@@ -171,8 +177,8 @@ async def test_map_opens_p2_context_during_mission_and_normal_local_after_comple
     )
     normal = _last_method(bot)
     assert "Charneca da Fuligem" in normal.text
-    assert normal.text.count("Local Atual") == 1
-    assert "world:local" in _callbacks(normal)
+    assert "Local Atual" not in normal.text
+    assert _callbacks(normal) == ["world:map:region:tdo"]
     assert "road:prepare" not in _callbacks(normal)
     assert "road:explore" not in _callbacks(normal)
     assert "Cripta" not in normal.text
@@ -461,29 +467,20 @@ async def test_map_region_lists_all_known_locations_and_brazier_detail_travels_d
     await click("world:map:fromlocal", 880425)
     await click("world:map:region:tdo:fromlocal", 880426)
     region = _last_method(bot)
-    numeric_buttons = [
+    local_buttons = [
         button
         for row in region.reply_markup.inline_keyboard
         for button in row
-        if button.text.isdigit()
+        if button.callback_data.startswith("world:map:local:")
     ]
-    assert [button.text for button in numeric_buttons] == ["1", "2", "3"]
-    assert len({button.callback_data for button in numeric_buttons}) == 3
+    assert [button.text for button in local_buttons] == [
+        "🛖 Refúgio do Ocaso", "🌫️ Charneca da Fuligem"
+    ]
+    assert len({button.callback_data for button in local_buttons}) == 2
 
     detail = await click("world:map:local:refuge:fromlocal", 880427)
-    assert "Viajar pelo Braseiro" not in [
-        button.text
-        for row in detail.reply_markup.inline_keyboard
-        for button in row
-    ]
-    back = "road:route:refuge"
-    assert back in _callbacks(detail)
-    arrived = await click(back, 880428)
-    assert "Refúgio do Ocaso" in _text(arrived)
-    assert travel_calls == []
-
-    stale = await click(back, 880429)
-    assert "Refúgio do Ocaso" in _text(stale)
+    # Mapa não desloca: sem Braseiro, sem "Ir para o Local".
+    assert _callbacks(detail) == ["world:map:region:tdo:fromlocal"]
     assert travel_calls == []
 
 
@@ -534,11 +531,10 @@ async def test_known_inaccessible_location_has_map_detail_without_fake_travel(da
     await click("world:map", 880432)
     await click("world:map:region:tdo", 880433)
     region = _last_method(bot)
-    assert "Bosque Calcinado · Conhecido" in region.text
+    assert "Conhecido" not in region.text
     assert "world:map:local:bosque" in _callbacks(region)
     detail = await click("world:map:local:bosque", 880434)
     assert "Bosque Calcinado" in _text(detail)
-    assert "Deslocamento · Indisponível a partir do Local atual" in _text(detail)
     assert not any(
         callback.startswith("road:route:") or callback.startswith("world:travel")
         for callback in _callbacks(detail)

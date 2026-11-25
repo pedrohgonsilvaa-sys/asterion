@@ -905,7 +905,7 @@ async def test_cosmetic_and_doctrine_telegram_flows_use_real_callbacks(database)
     screen = _last_screen(bot)
     await dispatcher.feed_raw_update(
         bot,
-        callback_update(_button(screen, "Cosméticos").callback_data, actor=actor, update_id=2),
+        callback_update(_button(screen, "🎨 Cosméticos").callback_data, actor=actor, update_id=2),
     )
     screen = _last_screen(bot)
     assert "Cosméticos" in screen.text
@@ -930,7 +930,7 @@ async def test_cosmetic_and_doctrine_telegram_flows_use_real_callbacks(database)
     await dispatcher.feed_raw_update(
         bot,
         callback_update(
-            _button(character_screen, "Perfil").callback_data, actor=actor, update_id=7
+            _button(character_screen, "🪪 Perfil").callback_data, actor=actor, update_id=7
         ),
     )
     assert "🎖️ Vigia das Cinzas" in _last_screen(bot).text
@@ -941,7 +941,7 @@ async def test_cosmetic_and_doctrine_telegram_flows_use_real_callbacks(database)
     screen = _last_screen(bot)
     await dispatcher.feed_raw_update(
         bot,
-        callback_update(_button(screen, "Doutrinas").callback_data, actor=actor, update_id=9),
+        callback_update(_button(screen, "🧩 Doutrinas").callback_data, actor=actor, update_id=9),
     )
     screen = _last_screen(bot)
     await dispatcher.feed_raw_update(

@@ -40,9 +40,9 @@ def _bonus(armor_class: str) -> str:
 # Bloco UI 1 §2 · Treinamento de Armaduras (apresentação de Darian Veyr).
 ARMOR_BUTTONS = {
     "veste": "👘 Vestes",
-    "leve": "🥋 Leves",
-    "media": "🦺 Médias",
-    "pesada": "⛑️ Pesadas",
+    "leve": "🥋 Leve",
+    "media": "🦺 Média",
+    "pesada": "⛑️ Pesada",
 }
 ARMOR_TEXT = (
     "Treinamento voltado ao domínio de diferentes categorias de armaduras, preparando o "

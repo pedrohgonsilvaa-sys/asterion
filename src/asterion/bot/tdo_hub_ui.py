@@ -21,7 +21,7 @@ from asterion.domain.tdo_hub import (
     is_hub_location,
 )
 
-CAMARA_ICON = "🕯"
+CAMARA_ICON = "🏛️"
 BACK_TO_REFUGE = "Voltar ao Refúgio"
 BACK_TO_REFUGE_CALLBACK = "road:route:refuge"
 
@@ -31,9 +31,10 @@ TEXT_EXPLORE_FOR_PLACE = "Explore para encontrar este lugar."
 
 _ICONS = {
     "Estrada das Cinzas": "🔥",
-    "Charneca da Fuligem": "🌑",
+    # Contrato Mestre de Telas UI v1.0.0 §15–§16.
+    "Charneca da Fuligem": "🌫️",
     "Bosque Calcinado": "🌲",
-    "Ruínas do Vigia": "🪨",
+    "Ruínas do Vigia": "🏚️",
     CAMARA_LABEL: CAMARA_ICON,
 }
 _ROUTE_KEYS = {
