@@ -19,6 +19,7 @@ from asterion.infrastructure.db.models import (
     BestiaryEntry,
     Character,
     CodexEntry,
+    EquipmentItem,
     FlageloContribution,
     FlageloEvent,
     FlageloParticipant,
@@ -392,7 +393,14 @@ async def test_round_snapshot_is_stable(service, database):
     snapshot = dict(round_.boss_snapshot)
     async with database[1].begin() as session:
         participant = (await session.scalars(select(FlageloParticipant))).one()
-        assert participant.entry_snapshot == snapshot
+        boss = {k: v for k, v in participant.entry_snapshot.items() if k != "configuration"}
+        assert boss == snapshot
+        configuration = participant.entry_snapshot["configuration"]
+        assert set(configuration) == {
+            "combat_configuration_version",
+            "equipment",
+            "active_arts",
+        }
     await service.leave(actor, now=T0 + timedelta(seconds=1))
     await service.apply_scaling(now=T0 + timedelta(minutes=40))
     async with database[1]() as session:
@@ -494,9 +502,22 @@ async def test_eligible_rewards_ranking_equipment_and_idempotent_settlement(data
         crowns = {row.id: row.crowns for row in (await session.scalars(select(Character))).all()}
         settlements = (await session.scalars(select(FlageloRewardSettlement))).all()
         equipment = [s for s in settlements if s.reward_type == "equipment"]
-        assert len(equipment) == 1 and equipment[0].status == "pending_catalog"
-        recipes = {s.status for s in settlements if s.reward_type == "recipe"}
-        assert recipes == {"pending_catalog"}
+        assert len(equipment) == 1 and equipment[0].status == "granted"
+        assert equipment[0].character_id == dead.equipment_winner_id
+        template_id = equipment[0].payload["template_id"]
+        assert template_id in fl.FLAGELO_EQUIPMENT_TEMPLATES["varkhenn"]
+        items = (
+            await session.scalars(
+                select(EquipmentItem).where(EquipmentItem.source_key.like("flagelo:%"))
+            )
+        ).all()
+        assert len(items) == 1
+        item = items[0]
+        assert item.character_id == dead.equipment_winner_id
+        assert item.payload["template_id"] == template_id
+        assert item.payload["enhancement"] == 0 and item.item_level == 10
+        recipes = [s for s in settlements if s.reward_type == "recipe"]
+        assert len(recipes) == 3 and {s.status for s in recipes} <= {"granted", "skipped"}
         fragments = await session.scalar(
             select(func.sum(MaterialStack.quantity)).where(
                 MaterialStack.character_id == players[0][1],

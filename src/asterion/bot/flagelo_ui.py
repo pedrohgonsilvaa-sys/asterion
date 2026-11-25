@@ -33,6 +33,7 @@ _ERRORS = {
     "not_in_combat": "Você não está em combate contra o Flagelo.",
     "already_registered": "Sua ação desta oportunidade já foi registrada.",
     "invalid_action": "Ação inválida.",
+    "busy": "Conclua sua atividade atual antes de enfrentar o Flagelo.",
 }
 
 

@@ -16,8 +16,12 @@ Infraestrutura reaproveitada, sem sistema paralelo:
 
 Ordem de travas (todas as escritas a seguem; impede deadlock):
 ``flagelo_region_progress`` (ordem de ``region_id``) → ``flagelo_events`` → ``flagelo_rounds``
-→ ``flagelo_participants`` → ``characters``. A liquidação paga um personagem por transação e
+→ ``characters`` → ``flagelo_participants``. A liquidação paga um personagem por transação e
 não trava progresso nem rodada.
+
+Lock da Configuração de Combate (espec. final §3): ``in_combat`` é o lock. Ele é lido pelo
+guarda global ``combat_configuration_guard`` e só termina pela resolução válida do encontro
+(derrota, saída registrada, inatividade do GDD §49 ou morte do Flagelo).
 
 Idempotência: contribuição por ``activity_id + character_id``; um único ``active`` por
 servidor (índice único parcial); morte registrada uma vez (``status``); rodada resolvida uma
@@ -40,7 +44,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.active_arts import load_active_art_configuration
 from asterion.application.bestiary import BestiaryRecorder
+from asterion.application.combat_configuration_guard import find_combat_configuration_blocker
 from asterion.application.engagement import grant_bundle
+from asterion.application.equipment import equipment_instance_payload
+from asterion.application.equipment_configuration import load_equipment_configuration
 from asterion.application.flagelo_combat import (
     BossEffects,
     FlageloRoundSimulator,
@@ -49,15 +56,20 @@ from asterion.application.flagelo_combat import (
 from asterion.application.item_escrow import return_to_owner
 from asterion.application.progression import consolidate_character_level, level_xp
 from asterion.application.world_event_veu import RoundInputs
+from asterion.domain import flagelo_catalog as catalog
+from asterion.domain import flagelo_lore
 from asterion.domain import flagelos as fl
 from asterion.domain import veu_combat as vc
 from asterion.domain.combat_math import CombatStats
 from asterion.domain.engagement import Bundle
+from asterion.domain.road import RULESET as COMBAT_RULESET
+from asterion.domain.road import materialize_equipment
 from asterion.domain.veu_bestiary import ActionKind
 from asterion.infrastructure.db.models import (
     BestiaryEntry,
     Character,
     CodexEntry,
+    CodexFragment,
     FlageloAction,
     FlageloContribution,
     FlageloEvent,
@@ -111,6 +123,17 @@ def _metrics(row: FlageloParticipant) -> fl.ParticipationMetrics:
         int(row.defender_prevented_damage),
         int(row.meaningful_effects),
     )
+
+
+async def _configuration_snapshot(session, character: Character) -> dict:
+    """A Configuração de Combate efetiva na entrada (equipamento, Caminho, Talentos, Artes)."""
+    equipment = await load_equipment_configuration(session, character)
+    arts = await load_active_art_configuration(session, character)
+    return {
+        "combat_configuration_version": int(character.combat_configuration_version),
+        "equipment": equipment.to_data(COMBAT_RULESET),
+        "active_arts": arts.to_data(),
+    }
 
 
 def _boss_snapshot(event: FlageloEvent) -> dict:
@@ -496,7 +519,10 @@ class FlageloService:
             event = await self.active_event(session, lock=True)
             if event is None:
                 raise FlageloError("no_flagelo")
-            character = await self._character(session, actor)
+            # Trava do personagem primeiro: é a mesma trava das mutações de Configuração
+            # (``combat_configuration_guard``), então entrada e troca de equipamento se
+            # serializam e nenhuma escapa do lock.
+            character = await self._character(session, actor, lock=True)
             participant = await session.scalar(
                 select(FlageloParticipant)
                 .where(
@@ -507,6 +533,10 @@ class FlageloService:
             )
             if participant is not None and participant.in_combat:
                 return event.id
+            blocker = await find_combat_configuration_blocker(session, character.id)
+            if blocker is not None:
+                # Outra atividade autoritativa já detém a Configuração (Caçada, Masmorra...).
+                raise FlageloError("busy")
             if (
                 participant is not None
                 and participant.reentry_available_at is not None
@@ -541,7 +571,12 @@ class FlageloService:
             participant.acts_from_round = event.round_number + 1
             participant.idle_rounds = 0
             participant.left_at = None
-            participant.entry_snapshot = _boss_snapshot(event)
+            # Snapshot autoritativo da entrada: atributos do Flagelo e a Configuração de
+            # Combate travada. Reentrada grava um novo.
+            participant.entry_snapshot = {
+                **_boss_snapshot(event),
+                "configuration": await _configuration_snapshot(session, character),
+            }
             event.last_zero_combat_at = None
             event.version += 1
             await session.flush()
@@ -828,7 +863,14 @@ class FlageloService:
             )
             players, intents = inputs.players, inputs.intents
         outcome = vc.resolve_batch(
-            enemies, players, intents, decisions, kit=fl.kit, level=definition.level
+            enemies,
+            players,
+            intents,
+            decisions,
+            kit=fl.kit,
+            level=definition.level,
+            # Esquiva global (espec. final §3): semente da ocorrência e da rodada.
+            evasion_seed=f"{event.id}|{round_.round_number}",
         )
         # Efeitos de jogadores no Flagelo: ticks dos DoTs carregados, envelhecimento e os novos.
         merged = simulator.merged() if isinstance(simulator, FlageloRoundSimulator) else boss
@@ -1188,18 +1230,9 @@ class FlageloService:
                             {"category": category, "position": int(entry["position"])}
                         )
                 if event.equipment_winner_id == character.id:
-                    # §14: o sorteio é definitivo; o template final é configuração pendente
-                    # (``flagelos.PENDING``), então a entrega fica registrada como pendente.
-                    templates = fl.FLAGELO_EQUIPMENT_TEMPLATES.get(definition.flagelo_id, ())
-                    await self._grant_once(
-                        session,
-                        event,
-                        character,
-                        "equipment",
-                        "pending_catalog" if not templates else "granted",
-                        {},
+                    reward["equipment"] = await self._equipment(
+                        session, event, character, region, definition
                     )
-                    reward["equipment"] = "pending_catalog" if not templates else "granted"
                 await self._recipe(session, event, character, definition, reward)
                 await consolidate_character_level(session, character)
                 await self._knowledge(session, character, definition)
@@ -1208,6 +1241,57 @@ class FlageloService:
                 participant.reward = reward if eligible else {}
             participant.settled_at = now
             return 1 if paid else 0
+
+    async def _equipment(self, session, event, character, region, definition) -> dict | None:
+        """O único equipamento da morte (espec. final §6/§11): template 1/9, +0, materializado
+        pelo materializador global (núcleo, secundários e metadata de arma), no nível de
+        referência do Flagelo. Entrega pelo caminho comum (Inventário → Pendentes → retenção).
+        """
+        template_id = fl.equipment_template(str(event.id), definition.flagelo_id)
+        template = catalog.TEMPLATES_BY_ID[template_id]
+        source_key = f"flagelo:{event.id.hex}:equipment"
+        if not await self._grant_once(
+            session, event, character, "equipment", "granted", {"template_id": template_id}
+        ):
+            return None
+        payload = materialize_equipment(
+            source_key,
+            template.rarity,
+            region.reference_level,
+            forced_name=template.name,
+            forced_slot=template.slot,
+            bound=True,
+            weapon_type_id=template.weapon_type_id,
+        )
+        payload["template_id"] = template_id
+        payload["catalog_item_id"] = template_id
+        instance_id, instance = equipment_instance_payload(
+            payload, instance_id=uuid5(NAMESPACE_URL, source_key)
+        )
+        await return_to_owner(
+            session,
+            character,
+            "equipment",
+            {
+                "id": str(instance_id),
+                "source_key": source_key,
+                "item_name": instance["item_name"],
+                "rarity": instance["rarity"],
+                "slot": instance["slot"],
+                "item_level": instance["item_level"],
+                "bound": True,
+                "payload": instance,
+            },
+            1,
+            source_key,
+        )
+        return {
+            "template_id": template_id,
+            "name": template.name,
+            "rarity": template.rarity,
+            "slot": template.slot,
+            "item_id": str(instance_id),
+        }
 
     async def _fragment(self, session, character, definition, quantity: int, key: str) -> None:
         if quantity <= 0:
@@ -1222,24 +1306,24 @@ class FlageloService:
         )
 
     async def _recipe(self, session, event, character, definition, reward: dict) -> None:
-        """§16: 25% por morte enquanto houver receita desconhecida; sem pity. Usa ``Unlock``."""
-        catalog = definition.recipe_unlock_ids()
-        known = (
-            set(
-                (
-                    await session.scalars(
-                        select(Unlock.unlock_id).where(
-                            Unlock.character_id == character.id, Unlock.unlock_id.in_(catalog)
-                        )
+        """Espec. final §12: enquanto houver Receita desconhecida daquele Flagelo, 25% por
+        morte; uma desconhecida, uniforme; no máximo uma por morte; sem pity; com as 9
+        conhecidas não há sorteio. As Receitas são conhecimento do personagem (``Unlock``,
+        o mesmo vínculo das Receitas especiais do Crafting), então o sorteio é por elegível.
+        """
+        recipes = definition.recipe_unlock_ids()
+        known = set(
+            (
+                await session.scalars(
+                    select(Unlock.unlock_id).where(
+                        Unlock.character_id == character.id, Unlock.unlock_id.in_(recipes)
                     )
-                ).all()
-            )
-            if catalog
-            else set()
+                )
+            ).all()
         )
-        unknown = [recipe for recipe in catalog if recipe not in known]
+        unknown = [recipe for recipe in recipes if recipe not in known]
         found = fl.recipe_roll(str(event.id), character.id, unknown)
-        status = "granted" if found else ("skipped" if catalog else "pending_catalog")
+        status = "granted" if found else ("skipped" if unknown else "exhausted")
         if not await self._grant_once(
             session, event, character, "recipe", status, {"recipe": found} if found else {}
         ):
@@ -1247,13 +1331,11 @@ class FlageloService:
         if found:
             session.add(Unlock(character_id=character.id, unlock_id=found))
             reward["recipe"] = found
+            reward["recipe_name"] = catalog.TEMPLATES_BY_RECIPE[found].name
 
     async def _knowledge(self, session, character, definition) -> None:
-        """Bestiário: derrota + material associado; Códice: registro da ocorrência.
-
-        A entrada do Códice não tem texto ainda (``PENDING``): fica registrada e só aparece
-        quando o texto canônico existir (``knowledge_catalog`` ignora entrada sem texto).
-        """
+        """Bestiário: derrota + material associado; Códice: a entrada geral do evento e a do
+        Flagelo, com o texto aprovado (espec. final §16) como fragmento da entrada."""
         await BestiaryRecorder().record(
             session,
             character.id,
@@ -1262,14 +1344,22 @@ class FlageloService:
             evidence_id=f"material:{definition.fragment_material_id}",
             evidence_category="material",
         )
-        known = await session.scalar(
-            select(CodexEntry.id).where(
-                CodexEntry.character_id == character.id,
-                CodexEntry.entry_id == definition.codex_key,
+        for text in (flagelo_lore.GENERAL_CODEX, flagelo_lore.FLAGELO_CODEX[definition.flagelo_id]):
+            await session.execute(
+                insert(CodexEntry)
+                .values(id=uuid4(), character_id=character.id, entry_id=text.entry_id)
+                .on_conflict_do_nothing(constraint="uq_character_codex")
             )
-        )
-        if known is None:
-            session.add(CodexEntry(character_id=character.id, entry_id=definition.codex_key))
+            await session.execute(
+                insert(CodexFragment)
+                .values(
+                    id=uuid4(),
+                    character_id=character.id,
+                    entry_id=text.entry_id,
+                    fragment_id=text.fragment_id,
+                )
+                .on_conflict_do_nothing(constraint="uq_character_fragment")
+            )
 
     # ------------------------------------------------------------ escalonamento
 

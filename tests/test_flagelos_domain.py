@@ -216,8 +216,11 @@ def test_equipment_roll_is_one_eligible_with_equal_chance_and_stable():
     assert all(800 < wins[c] < 1200 for c in eligible)
 
 
-def test_recipe_roll_is_25_percent_without_pity_and_needs_a_catalog():
+def test_recipe_roll_is_25_percent_without_pity_and_stops_after_nine():
+    # Com as 9 conhecidas não existe sorteio.
     assert fl.recipe_roll("evt", uuid4(), []) is None
     found = sum(1 for i in range(8000) if fl.recipe_roll(f"evt{i}", "c", ["r1", "r2"]))
     assert 0.22 < found / 8000 < 0.28
-    assert fl.FLAGELO_RECIPES == {}  # catálogo final pendente: nada inventado
+    assert {flagelo: len(ids) for flagelo, ids in fl.FLAGELO_RECIPES.items()} == {
+        region.flagelo.flagelo_id: 9 for region in fl.REGIONS
+    }

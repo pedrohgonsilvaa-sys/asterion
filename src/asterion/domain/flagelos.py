@@ -1,14 +1,13 @@
 """O Despertar dos Flagelos: regras puras (sem banco, sem motor, sem texto de interface).
 
-Fonte: ``docs/specs/ASTERION_DESPERTAR_DOS_FLAGELOS_V1_0_0.md`` (especificação V1.0.0) e as
-decisões do autor de 2026-11-25 registradas em ``SOURCE_AUTHORITY.md`` como exceção autoral ao
-GDD §21 e §49.15. A exceção vale só para os Flagelos: o Evento Mundial genérico
-(``domain/world_events.py``) e A Ruptura do Véu não mudam.
+Fontes: ``docs/specs/ASTERION_DESPERTAR_DOS_FLAGELOS_V1_0_0.md`` (V1.0.0), as decisões do autor
+de 2026-11-25 (``SOURCE_AUTHORITY.md``, exceção autoral ao GDD §21 e §49.15) e a especificação
+final aprovada ``docs/specs/ASTERION_O_DESPERTAR_DOS_FLAGELOS_ESPEC_FINAL.md``. A exceção vale só
+para os Flagelos: o Evento Mundial genérico (``domain/world_events.py``) e A Ruptura do Véu não
+mudam.
 
-O que este módulo NÃO define (configuração pendente, ver ``PENDING``): o catálogo dos 54
-equipamentos/receitas especiais (nomes, raridade, Grau, Ofício, classe de armadura, Weapon
-Metadata, Proficiência, custos), a raridade/template do equipamento sorteado, os textos de
-Bestiário/Códice e as imagens.
+Catálogo de equipamentos, Receitas e Núcleos: ``domain/flagelo_catalog.py``. Textos de
+Bestiário/Códice: ``domain/flagelo_lore.py``. Imagens ficam fora do escopo (a cargo do autor).
 """
 
 from __future__ import annotations
@@ -19,6 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
+from asterion.domain import flagelo_catalog as catalog
 from asterion.domain.economy import crowns_per_level, round_10
 from asterion.domain.engagement import Bundle
 from asterion.domain.veu_bestiary import ActionKind, VeuAction
@@ -84,16 +84,8 @@ CONTRIBUTION_POINTS: dict[str, int] = {
 
 RANKING_CATEGORIES = ("offensive", "defensive", "support")
 
-# Configuração pendente: estrutura existe, conteúdo não. Nada aqui é canônico.
-PENDING = frozenset(
-    {
-        "equipment_catalog",  # 54 templates: nomes, raridade, Grau, Ofício, armadura, armas
-        "equipment_drop_rarity",
-        "recipe_costs",
-        "bestiary_codex_texts",
-        "images",
-    }
-)
+# Fora do escopo desta implementação (espec. final §17 e §19).
+PENDING = frozenset({"images"})
 
 
 # ------------------------------------------------------------------ catálogo
@@ -151,7 +143,7 @@ class FlageloDefinition:
         return f"codex.flagelo.{self.flagelo_id}"
 
     def recipe_unlock_ids(self) -> tuple[str, ...]:
-        """Receitas especiais do Flagelo: vazio até o catálogo final (``PENDING``)."""
+        """As 9 Receitas especiais do Flagelo (espec. final §12)."""
         return FLAGELO_RECIPES.get(self.flagelo_id, ())
 
 
@@ -385,11 +377,12 @@ FRAGMENT_NAMES = {
     region.flagelo.fragment_material_id: region.flagelo.fragment_name for region in REGIONS
 }
 
-# Catálogo final pendente (§15–§16): nenhuma receita/template até o autor fechar os dados.
-FLAGELO_RECIPES: dict[str, tuple[str, ...]] = {}
-# Equipamento sorteado: sem template até o catálogo final. ``None`` = sorteio registrado,
-# entrega pendente de catálogo.
-FLAGELO_EQUIPMENT_TEMPLATES: dict[str, tuple[str, ...]] = {}
+# Espec. final §11–§12: 9 templates e 9 Receitas por Flagelo.
+FLAGELO_RECIPES: dict[str, tuple[str, ...]] = dict(catalog.RECIPES_BY_FLAGELO)
+FLAGELO_EQUIPMENT_TEMPLATES: dict[str, tuple[str, ...]] = {
+    flagelo_id: tuple(template.template_id for template in templates)
+    for flagelo_id, templates in catalog.TEMPLATES_BY_FLAGELO.items()
+}
 
 
 def region(region_id: str) -> FlageloRegion:
@@ -628,6 +621,13 @@ def equipment_winner(flagelo_key: str, eligible: Sequence) -> object | None:
     if not ordered:
         return None
     return ordered[_draw(f"{flagelo_key}:equipment") % len(ordered)]
+
+
+def equipment_template(flagelo_key: str, flagelo_id: str) -> str:
+    """Template do único equipamento da morte: 1/9 para cada um, duplicatas permitidas, sem
+    pity (espec. final §6/§11). Determinístico pela ocorrência: retry sorteia o mesmo."""
+    options = FLAGELO_EQUIPMENT_TEMPLATES[flagelo_id]
+    return options[_draw(f"{flagelo_key}:equipment:template") % len(options)]
 
 
 def recipe_roll(flagelo_key: str, character_id, unknown: Sequence[str]) -> str | None:
