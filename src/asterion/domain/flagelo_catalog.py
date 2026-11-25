@@ -125,22 +125,16 @@ REGION_UPGRADE_MATERIALS: dict[str, tuple[str, str]] = {
     "confins": ("material.tdo.catalisador_elite_vi", "material.tdo.fragmento_aprimoramento_vi"),
 }
 
-# §14 Núcleos das Receitas lendárias.
+# Núcleo das Receitas lendárias: o Núcleo de Masmorra já existente da 2ª Masmorra da Região
+# (decisão do autor, 2026-11-25). Não existe "Núcleo do Flagelo" e Núcleos de Chefe de
+# Campanha não entram. Quantidade: 1 × SW (§12).
 NUCLEUS_IDS = {
-    "tdo": "material.flagelo.nucleo_cinzas",
-    "vde": "material.flagelo.nucleo_lacos",
-    "nareth": "material.flagelo.nucleo_meridiano",
-    "varzeas": "material.flagelo.nucleo_rubro",
-    "altos": "material.flagelo.nucleo_contrapeso",
-    "confins": "material.flagelo.nucleo_fratura",
-}
-NUCLEUS_NAMES = {
-    "material.flagelo.nucleo_cinzas": "Núcleo do Flagelo das Cinzas",
-    "material.flagelo.nucleo_lacos": "Núcleo do Flagelo dos Laços",
-    "material.flagelo.nucleo_meridiano": "Núcleo do Flagelo do Meridiano",
-    "material.flagelo.nucleo_rubro": "Núcleo do Flagelo Rubro",
-    "material.flagelo.nucleo_contrapeso": "Núcleo do Flagelo do Contrapeso",
-    "material.flagelo.nucleo_fratura": "Núcleo do Flagelo da Fratura",
+    "tdo": "material.tdo.nucleo_galerias_vigia",
+    "vde": "material.vde.nucleo_no_antigo",
+    "nareth": "material.nareth.nucleo_observatorio_afundado",
+    "varzeas": "material.varzeas.nucleo_cisterna_transferencia",
+    "altos": "material.special.altos.core.bastilha_profunda",
+    "confins": "material.special.confins.core.camara_contradicoes",
 }
 # Fragmento do Flagelo (mesmo id de ``domain/flagelos.py``) por Região.
 FLAGELO_FRAGMENT_IDS = {

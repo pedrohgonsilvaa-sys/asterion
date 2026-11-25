@@ -178,8 +178,6 @@ MATERIAL_NAMES = {
     "material.flagelo.coagulo_salmoura_rubra": "Coágulo de Salmoura Rubra",
     "material.flagelo.peso_fraturado": "Peso Fraturado",
     "material.flagelo.fragmento_leitura_incompativel": "Fragmento de Leitura Incompatível",
-    # Espec. final §14: Núcleos das Receitas lendárias dos Flagelos.
-    **flagelo_catalog.NUCLEUS_NAMES,
 }
 
 SLOT_ECONOMY_SW = {

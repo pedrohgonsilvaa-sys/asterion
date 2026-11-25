@@ -242,16 +242,38 @@ def test_crown_fee_is_c_times_sw_times_rarity_factor():
             )
 
 
-def test_six_nuclei_and_six_fragments_are_named_materials():
-    assert len(cat.NUCLEUS_IDS) == 6 and len(set(cat.NUCLEUS_IDS.values())) == 6
-    assert {MATERIAL_NAMES[i] for i in cat.NUCLEUS_IDS.values()} == {
-        "Núcleo do Flagelo das Cinzas",
-        "Núcleo do Flagelo dos Laços",
-        "Núcleo do Flagelo do Meridiano",
-        "Núcleo do Flagelo Rubro",
-        "Núcleo do Flagelo do Contrapeso",
-        "Núcleo do Flagelo da Fratura",
+def test_legendary_nucleus_is_the_second_dungeon_core_and_fragments_are_named():
+    # Decisão do autor (2026-11-25): Núcleo da 2ª Masmorra da Região, sem Núcleo do Flagelo.
+    assert cat.NUCLEUS_IDS == {
+        "tdo": "material.tdo.nucleo_galerias_vigia",
+        "vde": "material.vde.nucleo_no_antigo",
+        "nareth": "material.nareth.nucleo_observatorio_afundado",
+        "varzeas": "material.varzeas.nucleo_cisterna_transferencia",
+        "altos": "material.special.altos.core.bastilha_profunda",
+        "confins": "material.special.confins.core.camara_contradicoes",
     }
+    assert not any(i.startswith("material.flagelo.nucleo") for i in MATERIAL_NAMES)
+    assert not hasattr(cat, "NUCLEUS_NAMES")
+    assert {MATERIAL_NAMES[i] for i in cat.NUCLEUS_IDS.values()} == {
+        "Núcleo das Galerias do Vigia",
+        "Núcleo do Nó Antigo",
+        "Núcleo do Observatório Afundado",
+        "Núcleo da Cisterna de Transferência",
+        "Núcleo da Bastilha Profunda",
+        "Núcleo da Câmara das Contradições",
+    }
+    campaign_boss_cores = {
+        "material.tdo.nucleo_vigia_partido",
+        "material.vde.nucleo_matriarca_das_raizes",
+        "material.nareth.nucleo_arconte_invertido",
+        "material.varzeas.nucleo_matriz_rubra",
+        "material.special.altos.core.colosso_cinereo",
+        "material.special.confins.core.regente_fraturado",
+    }
+    for template in cat.TEMPLATES:
+        ids = {m.material_id for m in recipe_materials(RECIPE_BY_ID[template.recipe_id], 60)}
+        assert not ids & campaign_boss_cores
+        assert (cat.NUCLEUS_IDS[template.region] in ids) == (template.rarity == "Lendário")
     assert {MATERIAL_NAMES[i] for i in cat.FLAGELO_FRAGMENT_IDS.values()} == set(
         fl.FRAGMENT_NAMES.values()
     )

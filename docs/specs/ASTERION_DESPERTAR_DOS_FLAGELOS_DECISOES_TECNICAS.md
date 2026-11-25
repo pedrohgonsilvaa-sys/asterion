@@ -84,7 +84,7 @@ anterior deste documento foram fechadas pelo autor:
 | 32 | 54 templates | B (§10–§11) | `domain/flagelo_catalog.py`; raridade/SW/Ofício por slot; todos +0; sem classe de armadura |
 | 33 | Armas | B (§10) | 18 identidades novas no registro de Weapon Metadata (forma, mãos, slot e tag explícitos). Maça 2H usa a identidade de Proficiência Martelo de Guerra (a única contundente de duas mãos) |
 | 34 | Receitas | B (§12) | 54 Receitas especiais no Crafting global, IDs literais; só aparecem com `Unlock` |
-| 35 | Custo | A + B (§12) | `8/10/14 básicos × SW` + Catalisador/Fragmento de Aprimoramento do Grau + Núcleo (Lendário) + 1 Fragmento do Flagelo × SW. Divisão dos básicos igual às Receitas regionais do mesmo Ofício (Ferreiro metal+4º 70/30, Curteiro couro+erva 70/30, Joalheiro metal+4º 60/40) |
+| 35 | Custo | A + B (§12) | `8/10/14 básicos × SW` + Catalisador/Fragmento de Aprimoramento do Grau + Núcleo de Masmorra × SW (só Lendário; ver #48) + 1 Fragmento do Flagelo × SW. Divisão dos básicos igual às Receitas regionais do mesmo Ofício (Ferreiro metal+4º 70/30, Curteiro couro+erva 70/30, Joalheiro metal+4º 60/40) |
 | 36 | Lendário no Crafting | A (GDD §49) | requisito de Ofício 16 e taxa `C(n)×SW×0,75` (valores globais do GDD; o código não tinha Lendário) |
 | 37 | Grau | decisão técnica | Grau da Região (TDO I … Confins VI), a mesma faixa de nível do Flagelo |
 | 38 | Equipamento da morte | B (§6/§11) | 1/9 por template, determinístico pela ocorrência; materializador global no nível do Flagelo; entrega Inventário → Pendentes → retenção |
@@ -97,13 +97,13 @@ anterior deste documento foram fechadas pelo autor:
 | 45 | Códice | B (§16) | entrada geral + uma por Flagelo, em Mistérios e Fenômenos, com o texto como fragmento; concedidas aos elegíveis na morte |
 | 46 | HUD da Região | B (§17) | barra `atual / 500` (%) no HUD do Refúgio; botão "Enfrentar o Flagelo" quando há um desperto, apontando para o hub do evento |
 | 47 | Telas do evento | B (§17) | hub e combate mostram escala, métricas próprias (dano, defesa, cura) e a recompensa do último Flagelo |
+| 48 | Núcleo das Lendárias | decisão do autor (2026-11-25) | **revoga o §14 da especificação final** ("Núcleos do Flagelo"): não existe Núcleo do Flagelo. As 2 Receitas lendárias de cada Região (2H SW3 → 3 Núcleos; Artefato SW2 → 2 Núcleos) usam o Núcleo de Masmorra já existente da **2ª Masmorra da Região**: TDO `material.tdo.nucleo_galerias_vigia`, VDE `material.vde.nucleo_no_antigo`, Nareth `material.nareth.nucleo_observatorio_afundado`, Várzeas `material.varzeas.nucleo_cisterna_transferencia`, Altos `material.special.altos.core.bastilha_profunda`, Confins `material.special.confins.core.camara_contradicoes`. Quantidade **× SW** (§12), não o 1 fixo das Receitas regionais. Núcleos de Chefe de Campanha não entram. Obtenção: a da própria Masmorra (GDD §49: Estável 1, Fraturada 2, Ruptura 4 por conclusão) |
+| 49 | Nome repetido | decisão do autor (2026-11-25) | "Relicário do Peso Suspenso" existe na Pedreira do Contrapeso (`equipment.altos.special.relicario_peso_suspenso`, Raro) e no Flagelo (`equipment.flagelo.altos.relicario.peso_suspenso`, Lendário). Nomes aprovados mantidos; IDs distintos. Problema concreto de UI vira pendência separada, sem renomear |
 
 ## Lacunas e limitações (C)
 
-1. **Núcleos**: os seis existem como material e entram no custo das Receitas lendárias, mas a
-   especificação final não traz Núcleo no pacote de recompensa (§6) e manda não inventar moeda
-   alternativa. **Sem fonte de obtenção**: as 12 Receitas lendárias ficam descobríveis, mas não
-   craftáveis, até o autor definir a aquisição.
+1. **Núcleos**: resolvido pela decisão #48. As 12 Receitas lendárias são craftáveis com o
+   Núcleo da 2ª Masmorra da Região.
 2. **Imagens**: fora do escopo (a cargo do autor). Os Flagelos usam a arte genérica de Eventos.
 3. **"Outro PvE equivalente"** (ex.: Ronda de Caça): configurável em
    `domain/flagelos.CONTRIBUTION_POINTS`; nenhum valor definido, então não contribui.
