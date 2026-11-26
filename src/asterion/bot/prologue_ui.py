@@ -22,7 +22,7 @@ ENDING_CALLBACK = "menu:back"
 BAR_SEGMENTS = 10
 ENCOUNTER_LOCATION = "tdo.location.estrada_das_cinzas"
 ROAD_IMAGE_KEY = "local:Estrada das Cinzas"
-_CONTINUE = "🛤️ Continuar a caminhada"
+_CONTINUE = "🛤️ Avançar"
 PURSE_LINE = "🪙 <code>18 Coroas</code>"
 RESIDUE_LINE = "💧 <code>1 Resíduo do Ocaso</code>"
 VICTORY_REWARD_LINES = ("✨ <code>320 XP</code>", "🪙 <code>3 Coroas</code>")
@@ -35,8 +35,9 @@ SCENES: dict[str, tuple[str, str, tuple[str, ...], tuple[tuple[str, str], ...]]]
         "🔥 Cinzas na Estrada",
         "O mundo desperta sob um céu sem cor. Cinzas atravessam a estrada como neve morta, "
         "cobrindo pedras, árvores retorcidas e os restos de algo que um dia talvez tenha sido "
-        "um caminho seguro. À frente, entre a névoa e o silêncio, marcas recentes cortam a "
-        "fuligem e indicam a direção de sua primeira jornada.",
+        "um caminho seguro.\n\n"
+        "À frente, entre a névoa e o silêncio, marcas recentes cortam a fuligem e indicam a "
+        "direção de sua primeira jornada.",
         (),
         (
             ("🦶 Seguir", "rastros"),
@@ -57,7 +58,7 @@ SCENES: dict[str, tuple[str, str, tuple[str, ...], tuple[tuple[str, str], ...]]]
         "Uma carroça tombada permanece parcialmente coberta pela cinza. Entre a madeira "
         "quebrada, uma pequena bolsa ainda está presa sob uma das tábuas.",
         (PURSE_LINE, RESIDUE_LINE),
-        ((_CONTINUE, COMBAT_ENTRY), ("🔎 Examinar", "queimada")),
+        (("🔎 Examinar", "queimada"), (_CONTINUE, COMBAT_ENTRY)),
     ),
     "silencio": (
         "👂 O Silêncio",
@@ -99,9 +100,9 @@ def _column(buttons: list[tuple[str, str]]) -> InlineKeyboardMarkup:
 def render_scene(node_id: str, *, show_objects: bool = False) -> Screen:
     """Objects are shown only when they were really credited by this very visit."""
     title, narration, objects, buttons = SCENES[node_id]
-    parts = [f"<b>{title}</b>", f"<i>{narration}</i>"]
+    parts = [f"<b>{title}</b>", *(f"<i>{part}</i>" for part in narration.split("\n\n"))]
     if objects and show_objects:
-        parts.insert(2, "\n".join(("🎁 <b>Recompensas:</b>", *objects)))
+        parts.append("\n".join(("🎁 <b>Recompensas:</b>", *objects)))
     keyboard = _column(
         [
             (label, target if target == COMBAT_ENTRY else f"{SCENE_PREFIX}{target}")
@@ -134,7 +135,7 @@ def _hud(emoji: str, name: str, hp: Decimal, maximum: Decimal) -> list[str]:
 
     return [
         f"{emoji} <b>{escape(name)}</b>",
-        f"❤️ <code>{number(hp)} / {number(maximum)}</code>",
+        f"❤️ <code>{number(hp)}/{number(maximum)}</code>",
         hp_bar9(hp, maximum),
         "",
     ]
@@ -222,24 +223,73 @@ def _history_lines(combat, player, enemy, enemy_emoji: str) -> list[str]:
     return lines
 
 
+# Narração persistente (fica durante todo o combate) e primeira linha do Histórico de
+# cada criatura do primeiro combate (decisão fechada do autor, Prólogo §8).
+PERSISTENT_NARRATION = {
+    "dog_cinereo": (
+        "🐺 O Cão Cinéreo surge entre a fuligem, corpo baixo e olhos atentos. Um rosnado "
+        "baixo acompanha seus movimentos."
+    ),
+    "corvo_fuligem": (
+        "🐦 O Corvo de Fuligem pousa entre as pedras, com as penas cobertas de fuligem. Os "
+        "olhos acompanham cada movimento."
+    ),
+}
+OPENING_HISTORY = {
+    "dog_cinereo": (
+        "🐺 <i>O Cão Cinéreo avança alguns passos, testa a distância e baixa o corpo, pronto "
+        "para atacar.</i>"
+    ),
+    "corvo_fuligem": (
+        "🐦 <i>O Corvo de Fuligem abre as asas por um instante, deslocando a fuligem ao redor "
+        "antes de se preparar para avançar.</i>"
+    ),
+}
+HISTORY_HEADING = "<b>📜 Histórico de Combate:</b>"
+
+
+def _prologue_card(emoji: str, name: str, hp: Decimal, maximum: Decimal) -> list[str]:
+    from asterion.bot.combat_ui import number
+
+    return [
+        f"<b>{emoji} {escape(name)}</b>",
+        f"❤️ <code>{number(hp)}/{number(maximum)}</code>",
+        hp_bar9(hp, maximum),
+    ]
+
+
+def prologue_turn_text(turn: int, seconds_left: float | None) -> str:
+    """``🌐 Turno 1 · ⏱️ 10s`` numa única linha monoespaçada; o tempo vem do motor."""
+    shown = TURN_SECONDS if seconds_left is None else seconds_left
+    return f"<code>🌐 Turno {turn} · ⏱️ {format_turn_seconds(shown)}</code>"
+
+
 def render_prologue_combat(view, keyboard: InlineKeyboardMarkup | None) -> Screen:
-    """Title, both HUDs and the mechanical history; the keyboard comes from the engine."""
+    """Imagem, narração persistente, HUD do inimigo, HUD do personagem, turno e Histórico.
+
+    As ações chegam do motor, uma por linha.
+    """
     combat = view.combat
     player = combat.fighters["player"]
     enemy = combat.fighters["enemy"]
     creature = prologue_enemy_for_name(enemy.name)
     turn = max(1, player.opportunity)
-    return render_standard_hud(
-        "⚔️ O Primeiro Confronto",
-        creature.emoji,
-        enemy,
-        player,
-        turn,
-        turn_seconds_left(combat),
-        _history_lines(combat, player, enemy, creature.emoji),
-        f"{creature.emoji} {escape(creature.opening)}",
-        keyboard,
-    )
+    history = _history_lines(combat, player, enemy, creature.emoji)
+    lines = [
+        f"<i>{escape(PERSISTENT_NARRATION[creature.creature_id])}</i>",
+        "",
+        *_prologue_card(creature.emoji, enemy.name, enemy.hp, enemy.stats.hp),
+        "",
+        *_prologue_card(
+            class_emoji(player.character_class), player.name, player.hp, player.stats.hp
+        ),
+        "",
+        prologue_turn_text(turn, turn_seconds_left(combat)),
+        "",
+        HISTORY_HEADING,
+        *(history or [OPENING_HISTORY[creature.creature_id]]),
+    ]
+    return Screen("\n".join(lines), "prologue", keyboard, "HTML")
 
 
 def render_standard_hud(
@@ -270,13 +320,13 @@ def render_prologue_outcome(view) -> Screen:
     """Resultado do primeiro combate, sem o nome do personagem na narrativa."""
     if view.combat.result == "victory":
         text = (
-            "<b>🏆 O Caminho Está Livre</b>\n\n"
+            "<b>🏆 Caminho Aberto</b>\n\n"
             "<i>O último golpe derruba a criatura. Por alguns instantes, apenas o vento volta "
             "a ocupar a estrada.</i>\n\n"
-            "<i>A experiência adquirida no confronto permanece registrada, junto das "
-            "recompensas obtidas durante a caçada.</i>\n\n"
+            "<i>O confronto chega ao fim, e a estrada permanece aberta adiante.</i>\n\n"
             + "\n".join(("🎁 <b>Recompensas:</b>", *VICTORY_REWARD_LINES))
         )
+        return Screen(text, "prologue", _column([("🔥 Chama", FLAME_CALLBACK)]), "HTML")
     else:
         text = (
             "<b>🩸 O Caminho Interrompido</b>\n\n"
@@ -289,14 +339,20 @@ def render_prologue_outcome(view) -> Screen:
 
 
 def render_brazier(name: str, hp: Decimal, max_hp: Decimal) -> Screen:
-    """First brazier. Shows the HP the character arrives with; resting is what refills it."""
+    """First brazier. Shows the HP the character arrives with; resting is what refills it.
+
+    Sem o nome do personagem (decisão fechada do autor, Prólogo §10).
+    """
+    from asterion.bot.combat_ui import number
+
     lines = [
         "<b>🔥 Braseiro da Estrada</b>",
         "",
         "<i>O fogo permanece aceso entre as pedras. O calor atravessa o corpo, enquanto "
         "a estrada permanece à frente, pronta para ser seguida.</i>",
         "",
-        *_hud("👤", name, hp, max_hp),
+        f"❤️ <code>{number(hp)}/{number(max_hp)}</code>",
+        hp_bar9(hp, max_hp),
     ]
     return Screen(
         "\n".join(lines).rstrip(),
@@ -306,12 +362,12 @@ def render_brazier(name: str, hp: Decimal, max_hp: Decimal) -> Screen:
     )
 
 
-def render_prologue_ending(name: str) -> Screen:
+def render_prologue_ending(name: str | None = None) -> Screen:
+    """Fim do Prólogo, sem o nome do personagem na narrativa (Prólogo §11)."""
     text = (
         "<b>🏠 O Refúgio do Ocaso</b>\n\n"
         "<i>As chamas diminuem lentamente enquanto a estrada continua entre ruínas e campos "
         "de cinza. O primeiro trecho da jornada ficou para trás, mas o caminho adiante "
-        "permanece aberto, levando para além da estrada que "
-        f"{escape(name)} acabou de atravessar.</i>"
+        "permanece aberto, levando para além da estrada recém-atravessada.</i>"
     )
     return Screen(text, "brazier_estrada", _column([("🛤️ Continuar", ENDING_CALLBACK)]), "HTML")

@@ -54,13 +54,17 @@ async def test_first_hud_matches_authoritative_shape(prologue, database):
     await character(database)
     view = await prologue.enter(1)
     screen = render_combat(view)
+    # Prólogo §8: narração persistente, HUD do inimigo, HUD do personagem, turno, Histórico.
     assert screen.text.startswith(
-        "<b>⚔️ O Primeiro Confronto</b>\n\n🌐 <b>Turno 1</b> · ⏱️ <code>10s</code>\n\n"
-        "🐺 <b>Cão Cinéreo</b>\n❤️ <code>244 / 244</code>\n" + "🟩" * 10
+        "<i>🐺 O Cão Cinéreo surge entre a fuligem, corpo baixo e olhos atentos. Um rosnado "
+        "baixo acompanha seus movimentos.</i>\n\n"
+        "<b>🐺 Cão Cinéreo</b>\n❤️ <code>244/244</code>\n" + "🟩" * 10
     )
-    assert "🛡️ <b>Heroa</b>\n❤️ <code>" in screen.text
-    assert "<b>📜 Histórico:</b>\n🐺" in screen.text and "<i>" not in screen.text
-    assert "O som se aproxima pela fuligem." in screen.text
+    assert "<b>🛡️ Heroa</b>\n❤️ <code>" in screen.text
+    assert (
+        "<code>🌐 Turno 1 · ⏱️ 10s</code>\n\n<b>📜 Histórico de Combate:</b>\n🐺 <i>"
+    ) in screen.text
+    assert "O Primeiro Confronto" not in screen.text and "combate começa" not in screen.text
     assert "Causa Dano" not in screen.text and "Reduz Dano" not in screen.text
     assert [[button.text for button in row] for row in screen.keyboard.inline_keyboard] == [
         ["⚔️ Atacar"], ["🛡️ Defender"]
@@ -71,8 +75,8 @@ async def test_first_hud_matches_authoritative_shape(prologue, database):
             "Guilda",
             "Vigor",
             "Sentinela",
-            "240 / 240",
-            "132 / 240",
+            "240/240",
+            "132/240",
             "SIMULAR",
             "[Imagem",
         )
@@ -379,7 +383,7 @@ async def test_hud_reconstructs_persisted_events_and_tutorial_buttons(prologue, 
     view = await prologue.action(1, view.activity_id, view.combat.version, "attack")
     screen = render_combat(view)
     assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["🛡️ Defender"]
-    assert "🌐 <b>Turno 2</b> · ⏱️ <code>10s</code>" in screen.text
+    assert "<code>🌐 Turno 2 · ⏱️ 10s</code>" in screen.text
     assert "⚔️ O golpe atinge o Cão Cinéreo e causa <b>" in screen.text
     assert "🐺 O Cão Cinéreo ataca e causa <b>" in screen.text or "💨 O ataque do" in screen.text
     assert "Heroa causou" not in screen.text
@@ -387,7 +391,7 @@ async def test_hud_reconstructs_persisted_events_and_tutorial_buttons(prologue, 
     view = await prologue.action(1, view.activity_id, view.combat.version, "defend")
     screen = render_combat(view)
     assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["🗡️ Golpe de Guarda"]
-    assert "🌐 <b>Turno 3</b> · ⏱️ <code>10s</code>" in screen.text
+    assert "<code>🌐 Turno 3 · ⏱️ 10s</code>" in screen.text
     assert "🛡️ Defender foi usado." in screen.text
     assert "Arte de Classe" not in screen.text
     # Reconnect uses the same persisted log and controls.
@@ -417,7 +421,7 @@ async def test_real_dispatcher_enters_and_executes_backend_actions(database, tel
     entered = await service.resume(1)
     assert entered is not None
     sent = telegram.session.make_request.call_args.args[1]
-    assert "🐺 <b>Cão Cinéreo</b>" in (
+    assert "<b>🐺 Cão Cinéreo</b>" in (
         getattr(sent, "text", None) or getattr(sent, "caption", "")
     )
     callback = CombatCallback(

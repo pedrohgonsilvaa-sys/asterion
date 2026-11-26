@@ -1,42 +1,25 @@
-"""Telegram screens for Vínculos (GDD v1.6.0 §31). Player text is sent without parse mode."""
+"""Telegram screens for the public Profile and Relatos. Player text is sent without parse mode.
+
+Vínculos (Amigos, Pedidos, Recentes, Bloqueados e Buscar Jogador) saiu do produto por
+decisão do autor; o Grupo segue independente.
+"""
 
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from math import ceil
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from asterion.application.social import (
-    CardPage,
-    PlayerCard,
-    PublicProfile,
-    RelatoView,
-    RequestsView,
-)
+from asterion.application.social import PublicProfile, RelatoView
 from asterion.bot.creation_ui import Screen
-from asterion.domain.social import MAX_BLOCKED, MAX_FRIENDS, PAGE_SIZE
 
 _IMAGE = "links"
-_REF = re.compile(r"\nRef: (so:[\w:-]+)$")
-
-SEARCH_PROMPT = "Envie o nome, ou o começo do nome, do personagem.\n\nRef: so:search"
-
 _ERRORS = {
-    "no_character": "Crie um personagem para usar Vínculos.",
+    "no_character": "Crie um personagem primeiro.",
     "not_found": "Este personagem não está disponível.",
     "self": "Essa ação não vale para o seu próprio personagem.",
     "unavailable": "Essa ação não está disponível para este personagem.",
-    "already_friends": "Vocês já são Amigos.",
-    "incoming_pending": "Este personagem já enviou um pedido para você. Veja em Pedidos.",
-    "friends_full": f"Sua lista já tem o máximo de {MAX_FRIENDS} Amigos.",
-    "target_full": "Este personagem não pode receber pedidos agora.",
-    "sent_full": "Você atingiu o limite de pedidos enviados.",
-    "blocked_full": f"Sua lista já tem o máximo de {MAX_BLOCKED} Bloqueados.",
-    "request_gone": "Este pedido não existe mais.",
-    "query_invalid": "Envie de 2 a 16 caracteres.",
-    "search_rate_limited": "Muitas buscas em pouco tempo. Tente de novo em um minuto.",
     "no_story": "Escreva uma História no Perfil antes de compartilhar.",
     "story_too_long": "Encurte a História para compartilhar.",
     "story_forbidden": "Remova links e menções da História para compartilhar.",
@@ -52,11 +35,6 @@ def error_text(code: str, available_at: datetime | None = None, now: datetime | 
     return _ERRORS.get(code, "Esta ação não está mais disponível.")
 
 
-def parse_ref(text: str | None) -> str | None:
-    match = _REF.search(text or "")
-    return None if match is None else match.group(1)
-
-
 def _button(text: str, data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=data)
 
@@ -65,76 +43,7 @@ def _keyboard(rows: list[list[InlineKeyboardButton]]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-_BACK = [_button("← Vínculos", "links:root")]
-
-
-def _card_label(card: PlayerCard) -> str:
-    return f"{card.name} · Nv.{card.level} · {card.character_class}"
-
-
-def _paged(view: CardPage, title: str, empty: str, section: str) -> Screen:
-    pages = max(1, ceil(view.total / PAGE_SIZE))
-    text = f"{title} · {view.total}\n\n{empty}" if not view.cards else f"{title} · {view.total}"
-    rows = [[_button(_card_label(card), f"so:p:{card.character_id.hex}")] for card in view.cards]
-    navigation = []
-    if view.page > 0:
-        navigation.append(_button("←", f"so:{section}:{view.page - 1}"))
-    if view.page + 1 < pages:
-        navigation.append(_button("→", f"so:{section}:{view.page + 1}"))
-    if navigation:
-        rows.append(navigation)
-    rows.append(_BACK)
-    return Screen(text, _IMAGE, _keyboard(rows))
-
-
-def render_friends(view: CardPage) -> Screen:
-    return _paged(view, "🤝 Amigos", "Você ainda não tem Amigos. Use Buscar Jogador.", "friends")
-
-
-def render_recents(view: CardPage) -> Screen:
-    return _paged(
-        view,
-        "🕯️ Recentes",
-        "Quem jogar com você em Grupo, Masmorra, Arena, Duelo ou Troca aparece aqui por 14 dias.",
-        "recents",
-    )
-
-
-def render_blocked(view: CardPage) -> Screen:
-    return _paged(view, "🚫 Bloqueados", "Nenhum personagem bloqueado.", "blocked")
-
-
-def render_search_results(cards: tuple[PlayerCard, ...]) -> Screen:
-    text = "🔎 Resultado da busca" if cards else "🔎 Nenhum personagem encontrado."
-    rows = [[_button(_card_label(card), f"so:p:{card.character_id.hex}")] for card in cards]
-    rows.append([_button("Buscar novamente", "so:search")])
-    rows.append(_BACK)
-    return Screen(text, _IMAGE, _keyboard(rows))
-
-
-def render_requests(view: RequestsView) -> Screen:
-    lines = [f"📩 Pedidos · {len(view.incoming)} recebidos · {len(view.outgoing)} enviados"]
-    rows: list[list[InlineKeyboardButton]] = []
-    # Telegram rejects a keyboard above 100 buttons; 30 + 20 requests would exceed it.
-    for item in view.incoming[:PAGE_SIZE]:
-        rows.append([_button(_card_label(item.card), f"so:p:{item.card.character_id.hex}")])
-        rows.append(
-            [
-                _button("Aceitar", f"so:acc:{item.request_id.hex}"),
-                _button("Recusar", f"so:dec:{item.request_id.hex}"),
-            ]
-        )
-    for item in view.outgoing[:PAGE_SIZE]:
-        rows.append(
-            [
-                _button(f"Enviado · {item.card.name}", f"so:p:{item.card.character_id.hex}"),
-                _button("Cancelar", f"so:can:{item.request_id.hex}"),
-            ]
-        )
-    if not rows:
-        lines.extend(["", "Nenhum pedido pendente."])
-    rows.append(_BACK)
-    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+_BACK = [_button("← Menu", "menu:back")]
 
 
 def render_public_profile(view: PublicProfile, notice: str | None = None) -> Screen:
@@ -161,41 +70,10 @@ def _profile_rows(view: PublicProfile) -> list[list[InlineKeyboardButton]]:
     rows: list[list[InlineKeyboardButton]] = []
     if view.is_self:
         return [_BACK]
-    if view.blocked_by_me:
-        rows.append([_button("Desbloquear", f"so:unb:{key}")])
-    else:
-        if view.incoming_request_id is not None:
-            request = view.incoming_request_id.hex
-            rows.append(
-                [_button("Aceitar", f"so:acc:{request}"), _button("Recusar", f"so:dec:{request}")]
-            )
-        elif view.outgoing_request_id is not None:
-            rows.append([_button("Cancelar Pedido", f"so:can:{view.outgoing_request_id.hex}")])
-        elif view.is_friend:
-            rows.append([_button("Remover Amigo", f"so:rm:{key}")])
-        elif not view.blocked_me:
-            rows.append([_button("Adicionar Amigo", f"so:add:{key}")])
-        rows.append([_button("Bloquear", f"so:blk:{key}")])
     if view.history:
         rows.append([_button("Denunciar História", f"so:rep:{key}")])
     rows.append(_BACK)
     return rows
-
-
-def render_confirm_block(view: PublicProfile) -> Screen:
-    key = view.character_id.hex
-    return Screen(
-        f"🚫 Bloquear {view.name}?\n\n"
-        "Vocês deixam de ser Amigos e os pedidos entre vocês são apagados. "
-        "Depois disso não há convite direto de Grupo, Guilda, Troca ou Duelo entre vocês.",
-        _IMAGE,
-        _keyboard(
-            [
-                [_button("Confirmar Bloqueio", f"so:bly:{key}")],
-                [_button("← Perfil", f"so:p:{key}")],
-            ]
-        ),
-    )
 
 
 def render_relato(view: RelatoView, notice: str | None = None) -> Screen:

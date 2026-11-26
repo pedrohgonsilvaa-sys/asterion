@@ -272,7 +272,7 @@ def test_luminar_hud_and_target_selection_include_only_live_friendly_targets():
     )
     screen = render_trial_combat(view, combat)
     assert "✨ <b>Eco Aliado</b>" in screen.text
-    assert "300 / 480" in screen.text
+    assert "300/480" in screen.text
     assert "Barreira de Eco Aliado" in screen.text
     assert "Atq" not in screen.text and "Consumível" not in screen.text
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from unittest.mock import AsyncMock
-from uuid import uuid4
 
 import pytest
 from aiogram import Bot, Dispatcher
@@ -15,11 +14,11 @@ from aiogram.types import Message as TelegramMessage
 from asterion.application.engagement import DailyGiftService
 from asterion.application.promo_codes import PromoCodeAdmin, PromoCodeService
 from asterion.application.recruitment import RecruitmentService
-from asterion.application.social import PlayerCard, RequestsView, RequestView, SocialService
+from asterion.application.social import SocialService
 from asterion.bot.benefits_handlers import benefits_router
 from asterion.bot.benefits_ui import CODE_PROMPT, render_community
 from asterion.bot.social_handlers import social_router
-from asterion.bot.social_ui import SEARCH_PROMPT, relato_message, render_requests
+from asterion.bot.social_ui import relato_message
 from tests.test_guilds_telegram import _message_update, callback_update
 from tests.test_social import ANA, BEA, SERVER, _seed, _set_history
 
@@ -114,30 +113,18 @@ def _labels(screen):
 
 
 @pytest.mark.asyncio
-async def test_search_reply_opens_public_profile_and_request(database):
+async def test_public_profile_has_no_friend_or_block_actions(database):
+    """Vínculos saiu do produto: o Perfil público não oferece Amigos nem Bloqueio."""
     ids = await _seed(database)
     client = _Client(database)
-    screen = await client.say(ANA, "be", reply_prompt=SEARCH_PROMPT)
-    assert any("Bea" in label for label in _labels(screen))
-
     profile = await client.click(ANA, f"so:p:{ids[BEA].hex}")
     assert "Bea" in profile.text and str(BEA) not in profile.text
-    assert {"Adicionar Amigo", "Bloquear"} <= _labels(profile)
-
-    after = await client.click(ANA, f"so:add:{ids[BEA].hex}")
-    assert "Pedido enviado" in after.text and "Cancelar Pedido" in _labels(after)
-
-
-@pytest.mark.asyncio
-async def test_block_needs_confirmation(database):
-    ids = await _seed(database)
-    client = _Client(database)
-    confirm = await client.click(ANA, f"so:blk:{ids[BEA].hex}")
-    assert "Confirmar Bloqueio" in _labels(confirm)
+    assert not {"Adicionar Amigo", "Bloquear", "Desbloquear", "Remover Amigo"} & _labels(profile)
+    assert "← Vínculos" not in _labels(profile)
+    for removed in ("so:add", "so:blk", "so:bly", "so:friends", "so:requests", "so:search"):
+        await client.click(ANA, f"{removed}:{ids[BEA].hex}")
+    assert len(client.alerts()) == 6
     assert (await client.social.blocked(ANA)).total == 0
-    done = await client.click(ANA, f"so:bly:{ids[BEA].hex}")
-    assert "Desbloquear" in _labels(done)
-    assert (await client.social.blocked(ANA)).total == 1
 
 
 @pytest.mark.asyncio
@@ -258,17 +245,6 @@ async def test_community_entry_uses_the_configured_link(database):
     client = _Client(database)
     screen = await client.click(ANA, "community:open")
     assert screen.reply_markup.inline_keyboard[0][0].url == "https://t.me/+comunidade"
-
-
-def test_requests_screen_stays_under_the_telegram_button_limit():
-    card = PlayerCard(uuid4(), "Nome", 1, "sentinela")
-    view = RequestsView(
-        tuple(RequestView(uuid4(), card) for _ in range(30)),
-        tuple(RequestView(uuid4(), card) for _ in range(20)),
-    )
-    screen = render_requests(view)
-    assert sum(len(row) for row in screen.keyboard.inline_keyboard) <= 100
-    assert "30 recebidos" in screen.text
 
 
 def test_community_without_link_says_so():

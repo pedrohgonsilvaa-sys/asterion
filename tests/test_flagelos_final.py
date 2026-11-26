@@ -324,7 +324,10 @@ async def test_region_hud_shows_bar_and_face_button(service, database):
     from tests.test_refuge_hud import _view
 
     screen = render_refuge_dashboard(_view(), hud=RefugeHud(flagelo=status))
-    assert "🩸 <b>Flagelo</b> · <code>123 / 500</code> (24%)" in screen.text
+    assert (
+        "🩸 <b>Varkhenn, o Flagelo das Cinzas</b>\n🟥🟥⬜⬜⬜⬜⬜⬜⬜⬜ <code>24%</code>"
+        .replace("🟥", "🟪")
+    ) in screen.text
     buttons = [b.text for row in screen.keyboard.inline_keyboard for b in row]
     assert "⚔️ Enfrentar o Flagelo" not in buttons
     await _spawn(database, service, region_id="vde")

@@ -135,9 +135,8 @@ def refuge_global_rows() -> list[list[InlineKeyboardButton]]:
         (("Personagem", "character:root"), ("Guilda", "guild:root")),
         (("Mercado", "mkt:root"), ("Arena", "pvp:hub")),
         (("Códice", "knowledge:codex"), ("Calendário", "calendar:root")),
-        (("Vínculos", "links:root"), ("Classificação", "pvp:rank")),
-        (("Benefícios", "bn:root"), ("Comunidade", "community:open")),
-        (("Configurações", "settings:root"),),
+        (("Classificação", "pvp:rank"), ("Benefícios", "bn:root")),
+        (("Comunidade", "community:open"), ("Configurações", "settings:root")),
     )
     return [
         [InlineKeyboardButton(text=label, callback_data=callback) for label, callback in pair]
@@ -208,11 +207,11 @@ def _explore_status(view) -> str:
 
     return "\n".join(
         (
-            f"❤️ {mono(f'{number(int(view.hp))} / {number(int(view.max_hp))}')}",
+            f"❤️ {mono(f'{number(int(view.hp))}/{number(int(view.max_hp))}')}",
             bar(view.hp, view.max_hp, HP_FILL),
-            f"⚡ {mono(f'{view.vigor} / {view.max_vigor}')}",
+            f"⚡ {mono(f'{view.vigor}/{view.max_vigor}')}",
             bar(view.vigor, view.max_vigor, VIGOR_FILL),
-            f"✨ {mono(f'{number(view.xp)} / {number(view.xp_required)}')}",
+            f"✨ {mono(f'{number(view.xp)}/{number(view.xp_required)}')}",
             bar(view.xp, view.xp_required, XP_FILL),
         )
     )

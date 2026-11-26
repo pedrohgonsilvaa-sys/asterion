@@ -639,9 +639,10 @@ def _config(connection=None) -> Config:
 
 def test_alembic_has_a_single_head_and_it_chains_the_veu_migrations():
     script = ScriptDirectory.from_config(_config())
-    # O Despertar dos Flagelos (0060) entrou depois do Véu: a cabeça única continua
-    # encadeando as migrations do Véu.
-    assert script.get_heads() == ["20261125_0060"]
+    # O Despertar dos Flagelos (0060) e o Título persistido (0061) entraram depois do Véu:
+    # a cabeça única continua encadeando as migrations do Véu.
+    assert script.get_heads() == ["20261126_0061"]
+    assert script.get_revision("20261126_0061").down_revision == "20261125_0060"
     assert script.get_revision("20261125_0060").down_revision == "20261123_0059"
     assert script.get_revision("20261123_0059").down_revision == "20261123_0058"
     assert script.get_revision("20261123_0058").down_revision == "20261123_0057"

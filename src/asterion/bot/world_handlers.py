@@ -955,7 +955,7 @@ def world_router(
             if view.first_menu:
                 from asterion.bot.prologue_ui import render_prologue_ending
 
-                screen = render_prologue_ending(view.name)
+                screen = render_prologue_ending()
             else:
                 screen = await region_main_screen(query.from_user.id, view)
             await present(query.message, screen, images, edit=True)

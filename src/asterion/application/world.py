@@ -1,6 +1,7 @@
 """Persistent post-prologue brazier and menu boundary."""
 
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -13,6 +14,7 @@ from asterion.application.narrative_choices import (
 )
 from asterion.application.progression import level_xp
 from asterion.application.vigor import reconcile_character_vigor
+from asterion.domain.payments import patron_active
 from asterion.infrastructure.db.models import (
     Achievement,
     Brazier,
@@ -20,6 +22,7 @@ from asterion.infrastructure.db.models import (
     CharacterCosmeticSelection,
     GameActivity,
     LocationDiscovery,
+    PatronAccount,
     Quest,
     WorldState,
 )
@@ -52,6 +55,8 @@ class WorldView:
     # True only on the rest that opens the Menu, for the §32.3 onboarding invite.
     first_menu: bool = False
     crowns: int = 0
+    # Patrono de Asterion ativo na conta (GDD §49.19), lido só para o HUD do Refúgio.
+    patron_active: bool = False
 
 
 class WorldService:
@@ -157,6 +162,7 @@ class WorldService:
                     CharacterCosmeticSelection.cosmetic_type == "title",
                 )
             )
+            patron = await session.get(PatronAccount, c.telegram_id)
             return WorldView(
                 "menu" if c.stage == "menu:ready" else "brazier",
                 c.id,
@@ -179,11 +185,14 @@ class WorldService:
                 selected_path=c.selected_path,
                 legacy_level=c.legacy_level,
                 crowns=c.crowns,
+                # O Título escolhido no sistema de Títulos substitui o Título persistido.
                 selected_title=(
                     COSMETICS_BY_ID[selected_title_id].name
                     if selected_title_id in COSMETICS_BY_ID
-                    else None
+                    else c.title
                 ),
+                patron_active=patron is not None
+                and patron_active(datetime.now(UTC), patron.active_until),
             )
 
     async def rest(self, actor: int) -> WorldView | None:

@@ -137,10 +137,10 @@ def render_world(view: WorldView) -> Screen:
     )
     stats = "\n".join(
         (
-            f"❤️ HP · {view.hp} / {view.max_hp}\n{bar(view.hp, view.max_hp, '🟥')}",
-            f"⚡ Vigor · {view.vigor} / {view.max_vigor}\n"
+            f"❤️ HP · {view.hp}/{view.max_hp}\n{bar(view.hp, view.max_hp, '🟥')}",
+            f"⚡ Vigor · {view.vigor}/{view.max_vigor}\n"
             f"{bar(view.vigor, view.max_vigor, '🟨')}",
-            f"✨ XP · {number(view.xp)} / {number(view.xp_required)}\n"
+            f"✨ XP · {number(view.xp)}/{number(view.xp_required)}\n"
             f"{bar(view.xp, view.xp_required, '🟦')}",
         )
     )
@@ -162,7 +162,6 @@ def render_world(view: WorldView) -> Screen:
         ("🏰 Guilda", "guild:root"),
         ("🏟️ Arena", "pvp:hub"),
         ("🏪 Mercado", "mkt:root"),
-        ("🤝 Vínculos", "links:root"),
         ("🏆 Classificação", "pvp:rank"),
         ("📖 Códice", "knowledge:codex"),
         ("📅 Calendário", "calendar:root"),
@@ -210,43 +209,57 @@ def roman(value: int) -> str:
     return _roman(value)
 
 
+PATRON_ACTIVE_LINE = "👑 <b>Patrono de Asterion.</b>"
+PATRON_INACTIVE_LINE = "👑 <b>Ainda não é um Patrono de Asterion.</b>"
+FLAGELO_FILL = "🟪"
+
+
+def _flagelo_name(region_id: str) -> str:
+    from asterion.domain.flagelos import REGIONS_BY_ID
+
+    region = REGIONS_BY_ID.get(region_id)
+    return region.flagelo.name if region is not None else "Flagelo"
+
+
 def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
-    """HUD do Refúgio (Contrato Mestre de Telas UI v1.0.0 §5) em HTML do Telegram."""
+    """HUD do Refúgio do Ocaso (decisão fechada do autor) em HTML do Telegram.
+
+    Ordem: título; identidade, Título, Patrono e Coroas; HP, Vigor e XP; Flagelo.
+    Valores ``atual/máximo`` sem espaços ao redor da barra.
+    """
     from asterion.bot.ui_format import HP_FILL, VIGOR_FILL, XP_FILL, identity, mono
 
     hud = hud or RefugeHud()
+    header = [
+        identity(
+            emoji=CLASS_EMOJI.get(view.character_class, "👤"),
+            name=view.name,
+            level=view.level,
+            legacy_level=view.legacy_level,
+            guild_tag=hud.guild_tag,
+            title=view.selected_title,
+        ),
+        PATRON_ACTIVE_LINE if view.patron_active else PATRON_INACTIVE_LINE,
+        f"🪙 <b>Coroas</b> · {mono(number(view.crowns))}",
+    ]
     stats = [
-        f"❤️ <b>HP</b> · {mono(f'{number(int(view.hp))} / {number(int(view.max_hp))}')}",
+        f"❤️ <b>HP</b> · {mono(f'{number(int(view.hp))}/{number(int(view.max_hp))}')}",
         bar(view.hp, view.max_hp, HP_FILL),
-        f"⚡ <b>Vigor</b> · {mono(f'{view.vigor} / {view.max_vigor}')}",
+        f"⚡ <b>Vigor</b> · {mono(f'{view.vigor}/{view.max_vigor}')}",
         bar(view.vigor, view.max_vigor, VIGOR_FILL),
-        f"✨ <b>XP</b> · {mono(f'{number(view.xp)} / {number(view.xp_required)}')}",
+        f"✨ <b>XP</b> · {mono(f'{number(view.xp)}/{number(view.xp_required)}')}",
         bar(view.xp, view.xp_required, XP_FILL),
     ]
-    state = [f"💰 <b>Coroas</b> · {mono(number(view.crowns))}"]
+    parts = [f"<b>{REFUGE_TITLE}</b>", "\n".join(header), "\n".join(stats)]
     if hud.flagelo is not None:
-        # O Despertar dos Flagelos (espec. final §17): barra da Região, ``atual / 500`` e %.
+        # O Despertar dos Flagelos (espec. final §17): barra da Região e percentual.
         flagelo_bar = hud.flagelo.bar
-        state.append(
-            f"🩸 <b>Flagelo</b> · <code>{flagelo_bar.points} / {flagelo_bar.threshold}</code>"
-            f" ({flagelo_bar.percent}%)\n"
-            f"{bar(flagelo_bar.points, flagelo_bar.threshold, '🟥')}"
+        parts.append(
+            f"🩸 <b>{escape(_flagelo_name(flagelo_bar.region_id))}</b>\n"
+            f"{bar(flagelo_bar.points, flagelo_bar.threshold, FLAGELO_FILL)} "
+            f"{mono(f'{flagelo_bar.percent}%')}"
         )
-    return "\n\n".join(
-        (
-            f"<b>{REFUGE_TITLE}</b>",
-            identity(
-                emoji=CLASS_EMOJI.get(view.character_class, "👤"),
-                name=view.name,
-                level=view.level,
-                legacy_level=view.legacy_level,
-                guild_tag=hud.guild_tag,
-                title=view.selected_title,
-            ),
-            "\n".join(stats),
-            "\n".join(state),
-        )
-    )
+    return "\n\n".join(parts)
 
 
 FLAGELO_BUTTON = ("⚔️ Enfrentar o Flagelo", "flg:hub")

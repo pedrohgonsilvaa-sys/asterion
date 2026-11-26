@@ -100,7 +100,7 @@ def render_hub(view: HubView) -> Screen:
     for bar in view.bars:
         state = " · ⚔️ desperto" if bar.active else ""
         lines.append(
-            f"{bar.emoji} {escape(bar.label)} <code>{bar.points} / {bar.threshold}</code>"
+            f"{bar.emoji} {escape(bar.label)} <code>{bar.points}/{bar.threshold}</code>"
             f" ({bar.percent}%){state}"
         )
     rows: list[list[InlineKeyboardButton]] = []
@@ -112,18 +112,18 @@ def render_hub(view: HubView) -> Screen:
                 f"⚔️ <b>{escape(active.name)}</b>",
                 f"🗺️ {escape(active.region)}",
                 "",
-                f"❤️ <code>{_fmt(active.hp)} / {_fmt(active.max_hp)}</code>",
+                f"❤️ <code>{_fmt(active.hp)}/{_fmt(active.max_hp)}</code>",
                 hp_bar(Decimal(active.hp), Decimal(active.max_hp), color="🟥"),
                 "",
                 f"⏱️ Ativo há {_elapsed(active.active_seconds)}",
-                f"👥 <code>{active.combatants} / {active.capacity}</code> em combate",
+                f"👥 <code>{active.combatants}/{active.capacity}</code> em combate",
                 _scaling_line(active.scaling_steps, active.scaling_paused),
             ]
         )
         me = view.me
         if me is not None:
             lines.append(
-                f"🎖️ Participação · <code>{me.participation_points} / {fl.PARTICIPATION_MIN}</code>"
+                f"🎖️ Participação · <code>{me.participation_points}/{fl.PARTICIPATION_MIN}</code>"
             )
             if me.metrics is not None:
                 lines.extend(_metric_lines(me.metrics))
@@ -179,13 +179,13 @@ def render_combat(view: CombatScreen, names: dict[str, str] | None = None) -> Sc
         "",
         f"🌐 <code>Oportunidade {view.round_number}</code> · ⏱️ <code>{view.seconds_left} s</code>",
         "",
-        f"❤️ <code>{_fmt(view.boss_hp)} / {_fmt(view.boss_max_hp)}</code>",
+        f"❤️ <code>{_fmt(view.boss_hp)}/{_fmt(view.boss_max_hp)}</code>",
         hp_bar(Decimal(view.boss_hp), Decimal(view.boss_max_hp), color="🟥"),
         "",
         f"🧙 <b>{escape(view.self_name)}</b>",
-        f"❤️ <code>{_fmt(view.self_hp)} / {_fmt(view.self_max_hp)}</code>",
+        f"❤️ <code>{_fmt(view.self_hp)}/{_fmt(view.self_max_hp)}</code>",
         hp_bar(Decimal(view.self_hp), Decimal(view.self_max_hp), color="🟥"),
-        f"🎖️ Participação · <code>{view.participation_points} / {fl.PARTICIPATION_MIN}</code>",
+        f"🎖️ Participação · <code>{view.participation_points}/{fl.PARTICIPATION_MIN}</code>",
     ]
     if view.metrics is not None:
         lines.extend(_metric_lines(view.metrics))

@@ -100,7 +100,8 @@ def test_character_hub_follows_master_contract():
     screen = render_character(_identity())
     assert screen.text == (
         "👤 <b>Personagem</b>\n\n"
-        "🏹 <b>[CIN] Oppan</b> · <code>Nv. 1 · Legado I</code>\n🎖️ <i>Iniciado</i>"
+        "🏹 <b>[CIN] Oppan</b> · <code>Nv. 1 · Legado I</code>\n"
+        "🎖️ <code>Caminhante das Cinzas</code>"
     )
     assert [[button.text for button in row] for row in screen.keyboard.inline_keyboard] == [
         ["⚔️ Equipamentos", "🎒 Inventário"],

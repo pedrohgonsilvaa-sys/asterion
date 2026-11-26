@@ -181,8 +181,8 @@ def test_local_is_the_entry_for_manual_hunt_round_and_explore():
     assert _buttons(local)["road:route:refuge"] == "Voltar ao Refúgio"
     # v1.0.18: nas Terras do Ocaso o hub do Refúgio substitui "Viajar".
     assert "world:map:fromlocal" not in _callbacks(local)
-    assert "❤️ HP · 120 / 200" in local.text
-    assert "⚡ Vigor · 75 / 100" in local.text
+    assert "❤️ HP · 120/200" in local.text
+    assert "⚡ Vigor · 75/100" in local.text
 
     selection = render_round_selection(
         RoadView("charneca", uuid4(), CHARNECA, familiar=True)

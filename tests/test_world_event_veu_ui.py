@@ -69,9 +69,9 @@ def test_nucleus_screen_follows_the_closed_combat_pattern():
     )
     text = screen.text
     assert "<code>Turno 12</code> · ⏱️ <code>00:08</code>" in text
-    assert "❤️ <code>6.840 / 9.000</code>" in text
+    assert "❤️ <code>6.840/9.000</code>" in text
     assert "🟥🟥🟥🟥🟥🟥🟥⬜⬜⬜" in text
-    assert "❤️ <code>842 / 1.180</code>" in text  # HP próprio sempre visível
+    assert "❤️ <code>842/1.180</code>" in text  # HP próprio sempre visível
     assert "📜 <b>Histórico:</b>" in text
     assert "⚔️ Mandíbula de Vigília sofreu <b>312 de dano</b>." in text
     assert "🛡️ A barreira absorveu <b>72 de dano</b>." in text

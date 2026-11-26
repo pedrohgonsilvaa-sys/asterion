@@ -9,6 +9,8 @@ RACES = ("remanescente", "velado", "cinereo", "hemario", "alvorano")
 CLASSES = ("sentinela", "errante", "vigia", "tecelao", "oraculo", "luminar")
 PROLOGUE = "cinzas_na_estrada:intro"
 RULESET = "gdd-1.4.3-baseline-1.0"
+# Título inicial persistido de todo personagem (decisão do autor, HUD do Refúgio).
+STARTING_CHARACTER_TITLE = "Caminhante das Cinzas"
 
 
 def normalize_name(value: str) -> str | None:

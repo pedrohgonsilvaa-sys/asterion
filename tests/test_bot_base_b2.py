@@ -933,7 +933,7 @@ async def test_cosmetic_and_doctrine_telegram_flows_use_real_callbacks(database)
             _button(character_screen, "🪪 Perfil").callback_data, actor=actor, update_id=7
         ),
     )
-    assert "🎖️ Vigia das Cinzas" in _last_screen(bot).text
+    assert "🎖️ <code>Vigia das Cinzas</code>" in _last_screen(bot).text
 
     await dispatcher.feed_raw_update(
         bot, callback_update("character:root", actor=actor, update_id=8)

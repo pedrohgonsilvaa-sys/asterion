@@ -64,9 +64,12 @@ def test_header_is_the_default_identity_with_tag_legacy_and_title():
     lines = text.split("\n\n")
     assert lines[0] == "<b>🌘 Refúgio do Ocaso</b>"
     # Contrato Mestre de Telas UI v1.0.0 §4: identidade padrão.
+    # Decisão fechada do autor: identidade, Título monoespaçado, Patrono e Coroas.
     assert lines[1].split("\n") == [
         "🏹 <b>[CIN] Oppan</b> · <code>Nv. 1 · Legado I</code>",
-        "🎖️ <i>Aliado do Refúgio</i>",
+        "🎖️ <code>Aliado do Refúgio</code>",
+        "👑 <b>Ainda não é um Patrono de Asterion.</b>",
+        "🪙 <b>Coroas</b> · <code>1.500</code>",
     ]
     assert "Atirador" not in text and "Caminho" not in text and "Vigia" not in text
 
@@ -91,34 +94,53 @@ def test_legacy_uses_roman_numerals(level, expected):
     assert f"Legado {expected}</code>" in _screen(legacy_level=level).text
 
 
-def test_equipped_title_appears_and_no_title_shows_iniciado():
-    assert "🎖️ <i>Guardião da Chama</i>" in _screen(selected_title="Guardião da Chama").text
+def test_equipped_title_appears_and_no_title_shows_the_starting_title():
+    assert "🎖️ <code>Guardião da Chama</code>" in _screen(selected_title="Guardião da Chama").text
     text = _screen(selected_title=None).text
-    assert "🎖️ <i>Iniciado</i>" in text
+    assert "🎖️ <code>Caminhante das Cinzas</code>" in text
     assert "Primeiros Passos" not in text and "Título" not in text
 
 
 def test_title_is_html_escaped():
-    assert "<i>A &lt;b&gt;</i>" in _screen(selected_title="A <b>").text
+    assert "<code>A &lt;b&gt;</code>" in _screen(selected_title="A <b>").text
 
 
 def test_status_block_is_compact_bold_and_monospaced():
     text = _screen().text
     assert (
-        "❤️ <b>HP</b> · <code>631 / 631</code>\n" + "🟥" * 10 + "\n"
-        "⚡ <b>Vigor</b> · <code>100 / 100</code>\n" + "🟨" * 10 + "\n"
-        "✨ <b>XP</b> · <code>320 / 4.800</code>\n🟦"
+        "❤️ <b>HP</b> · <code>631/631</code>\n" + "🟥" * 10 + "\n"
+        "⚡ <b>Vigor</b> · <code>100/100</code>\n" + "🟨" * 10 + "\n"
+        "✨ <b>XP</b> · <code>320/4.800</code>\n🟦"
     ) in text
     assert "━" not in text
-    assert text.endswith("💰 <b>Coroas</b> · <code>1.500</code>")
+    assert " / " not in text
+    # Sem Flagelo carregado, o HUD termina na barra de XP.
+    assert text.endswith("🟦" + "⬜" * 9)
 
 
 def test_hud_has_only_contract_blocks():
     text = _screen(RefugeHud(chronicle="Sem data ainda")).text
-    assert "Apoiador" not in text and "Patrono" not in text and "⭐" not in text
+    assert "Apoiador" not in text and "⭐" not in text
     # §5: o HUD termina nas Coroas; a Crônica não é uma linha do HUD.
     assert "Crônica" not in text
     assert "👹" not in text
+
+
+def test_patron_state_follows_the_account_status():
+    assert "👑 <b>Ainda não é um Patrono de Asterion.</b>" in _screen(patron_active=False).text
+    active = _screen(patron_active=True).text
+    assert "Ainda não é um Patrono" not in active
+    assert "👑 <b>Patrono de Asterion.</b>" in active
+
+
+def test_flagelo_block_has_bold_name_then_bar_and_percent():
+    from asterion.application.flagelos import RegionBar, RegionStatus
+
+    status = RegionStatus(RegionBar("tdo", "🌑", "Ocaso", 21, 500, 4, False), False)
+    text = _screen(RefugeHud(flagelo=status)).text
+    assert text.split("\n\n")[-1] == (
+        "🩸 <b>Varkhenn, o Flagelo das Cinzas</b>\n🟪" + "⬜" * 9 + " <code>4%</code>"
+    )
 
 
 def test_removed_items_do_not_appear():
