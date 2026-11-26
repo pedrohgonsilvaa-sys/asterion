@@ -18,7 +18,7 @@ from asterion.bot.creation_ui import Screen
 from asterion.domain import flagelos as fl
 
 IMAGE = "world_events"
-TITLE = "⚔️ O Despertar dos Flagelos"
+TITLE = "🔥 Despertar dos Flagelos"
 FACE = "Enfrentar o Flagelo"
 ACTION_REGISTERED = "✅ Ação registrada."
 _CATEGORY = {"offensive": "🗡️ Ofensivo", "defensive": "🛡️ Defensivo", "support": "✨ Suporte"}
@@ -95,14 +95,44 @@ def _reward_lines(reward: dict) -> list[str]:
     return lines
 
 
+# Decisão do autor 2026-11-26 §33.2: emoji de cada Região na tela do Despertar.
+REGION_EMOJI = {
+    "tdo": "🌘",
+    "vde": "🌊",
+    "nareth": "🌾",
+    "varzeas": "🌹",
+    "altos": "🏔️",
+    "confins_do_veu": "⬜",
+}
+NONE_AWAKE = (
+    "Nenhum Flagelo despertou. A progressão de cada Região aumenta conforme os jogadores "
+    "realizam atividades nela."
+)
+
+
+def awakening_bar(points: int, threshold: int) -> str:
+    """🟥 enquanto progride; em 100%, a barra inteira fica 🟪 (decisão 2026-11-26 §33.2)."""
+    if threshold and points >= threshold:
+        return "🟪" * 10
+    filled = min(10, points * 10 // threshold) if threshold else 0
+    if points > 0:
+        filled = max(1, filled)
+    return "🟥" * filled + "⬜" * (10 - filled)
+
+
 def render_hub(view: HubView) -> Screen:
-    lines = [f"<b>{escape(TITLE)}</b>", ""]
+    lines = ["🔥 <b>Despertar dos Flagelos</b>", ""]
     for bar in view.bars:
-        state = " · ⚔️ desperto" if bar.active else ""
-        lines.append(
-            f"{bar.emoji} {escape(bar.label)} <code>{bar.points}/{bar.threshold}</code>"
-            f" ({bar.percent}%){state}"
+        emoji = REGION_EMOJI.get(bar.region_id, bar.emoji)
+        lines.extend(
+            [
+                f"{emoji} <b>{escape(bar.label)}</b> · <code>{bar.points}/{bar.threshold}</code>",
+                f"{awakening_bar(bar.points, bar.threshold)} <code>{bar.percent}%</code>",
+                "",
+            ]
         )
+    if lines[-1] == "":
+        lines.pop()
     rows: list[list[InlineKeyboardButton]] = []
     active = view.active
     if active is not None:
@@ -135,7 +165,7 @@ def render_hub(view: HubView) -> Screen:
         else:
             rows.append([_button(f"[ {FACE} ]", "flg:enter")])
     else:
-        lines.extend(["", "Nenhum Flagelo desperto. A barra de cada Região sobe com o PvE dela."])
+        lines.extend(["", f"<i>{escape(NONE_AWAKE)}</i>"])
     if view.last_rankings:
         lines.extend(["", f"🏆 <b>Último Flagelo · {escape(view.last_name or '')}</b>"])
         for category in fl.RANKING_CATEGORIES:
@@ -151,7 +181,7 @@ def render_hub(view: HubView) -> Screen:
         reward_lines = _reward_lines(view.last_reward)
         if reward_lines:
             lines.extend(["", "🎁 <b>Sua recompensa</b>", *reward_lines])
-    rows.append([_button("🔙 Voltar", "wev:hub")])
+    rows.append([_button("↩️ Retornar", "wev:hub")])
     return Screen("\n".join(lines), IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")
 
 
@@ -216,7 +246,7 @@ def render_ally_targets(rows_data, kind: str, number: int) -> Screen:
         [_button(name, f"flg:t:{kind}:{number}:c{character_id.hex}")]
         for character_id, name in rows_data
     ]
-    rows.append([_button("↩️ Voltar", "flg:fight")])
+    rows.append([_button("↩️ Retornar", "flg:fight")])
     return Screen(
         "🎯 <b>Escolha o aliado</b>", IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML"
     )

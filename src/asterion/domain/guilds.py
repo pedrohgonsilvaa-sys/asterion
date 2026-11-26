@@ -19,6 +19,16 @@ GUILD_TAG_RE = re.compile(r"^[A-Za-z]{3}$")
 GUILD_MAX_MEMBERS = 12
 LODGING_CAPACITY = (5, 7, 9, 10, 11, 12)
 
+# Decisão do autor 2026-11-26 §16: lista controlada de 20 símbolos, 5 colunas × 4 linhas.
+GUILD_SYMBOLS = (
+    "⚔️", "🛡️", "🥀", "🔥", "🌌",
+    "🐺", "🦅", "🐍", "🦁", "🦉",
+    "🌿", "💀", "👑", "🐉", "🌙",
+    "☀️", "🩸", "🪶", "🐻", "🦂",
+)  # fmt: skip
+# Guildas fundadas antes do seletor de símbolo não têm símbolo próprio.
+DEFAULT_GUILD_SYMBOL = "🏰"
+
 # §49.18
 GUILD_SWITCH_COOLDOWN = timedelta(hours=12)
 MAX_PENDING_APPLICATIONS = 3

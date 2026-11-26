@@ -81,7 +81,89 @@ def _keyboard(*rows: list[InlineKeyboardButton]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=list(rows))
 
 
-_BACK = [_button("← PvP", "pvp:hub")]
+_BACK = [_button("↩️ Retornar", "pvp:hub")]
+_BACK_VIGIL = [_button("↩️ Retornar", "pvp:vig")]
+
+# Decisão do autor 2026-11-26 §7.3: emoji de cada Elo.
+ELO_EMOJI = {
+    "Brasa": "🔸",
+    "Chama": "🔥",
+    "Forjado": "⚒️",
+    "Ascendente": "🪽",
+    "Arauto": "📯",
+    "Regente": "👑",
+}
+ARENA_TEXT = (
+    "Na Arena, aventureiros podem participar de confrontos competitivos, acompanhar sua "
+    "classificação e desafiar outros jogadores."
+)
+VIGIL_TEXT = (
+    "Uma competição ranqueada entre aventureiros. A posição de cada participante é "
+    "definida pelo seu desempenho nos confrontos da Vigília."
+)
+RANKING_TEXT = (
+    "Os nomes que mais se destacam na Vigília permanecem registrados enquanto o ciclo "
+    "competitivo estiver em andamento."
+)
+DUEL_TEXT = "O Duelo permite desafiar outro aventureiro para um confronto direto."
+DUEL_RULES = (
+    "O confronto só começa depois que os dois jogadores aceitarem o desafio. Não há "
+    "normalização de atributos."
+)
+WINDOW_ICONS = ("🕕", "🕐")
+
+
+def elo_emoji(elo: str | None) -> str:
+    if not elo:
+        return ""
+    return ELO_EMOJI.get(elo.split()[0], "")
+
+
+def _elo_line(elo: str, renome: int) -> str:
+    renome_text = f"{renome:,}".replace(",", ".")
+    return f"{elo_emoji(elo)} <code>{escape(elo)} · {renome_text} Renome</code>"
+
+
+def window_lines(now: datetime) -> list[str]:
+    """Cada janela da Vigília com o estado real, no horário de São Paulo (§7.2)."""
+    from asterion.domain.arena import ARENA_WINDOWS
+
+    local = now.astimezone(ARENA_TIMEZONE).time()
+    lines = []
+    for icon, (start, end) in zip(WINDOW_ICONS, ARENA_WINDOWS, strict=False):
+        state = "🟢 Aberto" if start <= local < end else "🔴 Fechado"
+        lines.append(
+            f"{icon} <b>{start:%H:%M} à {end:%H:%M}</b> · <code>{state}</code>"
+        )
+    return lines
+
+
+def render_arena() -> Screen:
+    """Tela inicial da Arena (§7.1)."""
+    return Screen(
+        "\n\n".join(
+            (
+                "⚔️ <b>Arena</b>",
+                f"<i>{escape(ARENA_TEXT)}</i>",
+                "<i>Escolha uma modalidade para conhecer suas regras e participar.</i>",
+            )
+        ),
+        _IMAGE,
+        _keyboard(
+            [_button("🏆 Arena da Vigília", "pvp:vig"), _button("⚔️ Duelo", "pvp:duel")],
+            [_button("↩️ Retornar", "menu:back")],
+        ),
+        "HTML",
+    )
+
+
+def render_duel_prompt(error: str | None = None) -> Screen:
+    """Duelo (§7.4): o nome é digitado no próprio fluxo, sem quote."""
+    parts = ["⚔️ <b>Duelo</b>", f"<i>{escape(DUEL_TEXT)}</i>", f"<i>{escape(DUEL_RULES)}</i>"]
+    if error:
+        parts.append(escape(error))
+    parts.append("⚔️ <b>Digite o nome do personagem que deseja desafiar.</b>")
+    return Screen("\n\n".join(parts), _IMAGE, _keyboard(_BACK), "HTML")
 
 
 def _clock(moment: datetime) -> str:
@@ -93,34 +175,43 @@ def _class_name(value: str) -> str:
 
 
 def _render_hub(view: PvpHubView) -> Screen:
+    """Arena da Vigília (§7.2), com a Posição Atual e o estado real das duas janelas."""
+    return render_vigil(view)
+
+
+def render_vigil(view: PvpHubView, *, position: int | None = None, now=None) -> Screen:
+    from datetime import UTC
+    from datetime import datetime as _dt
+
+    moment = now or _dt.now(UTC)
+    parts = ["🏆 <b>Arena da Vigília</b>", f"<i>{escape(VIGIL_TEXT)}</i>"]
     if view.elo is not None:
-        rank = f"🏅 Renome · {view.renome}\n🔥 Elo · {view.elo}"
+        rank = [
+            f"🏅 <b>Posição Atual</b> · <code>#{position}</code>"
+            if position is not None
+            else "🏅 <b>Posição Atual</b>",
+            _elo_line(view.elo, view.renome),
+        ]
     else:
-        rank = f"🏅 Colocação · {view.placement_played}/{PLACEMENT_MATCHES}"
-    lines = [
-        "⚔️ PvP · Competição",
-        "",
-        f"<b>{escape(view.name)}</b> · Nv. {view.level}",
-        rank,
-        f"📜 {view.wins}V · {view.losses}D · {view.draws}E",
-        "",
-        "🕛 Arena da Vigília: 12:00–13:00 e 19:00–20:00",
-        "🟢 Aberta agora" if view.window_open else "🔴 Fechada agora",
-    ]
+        rank = [
+            f"🏅 <b>Colocação</b> · <code>{view.placement_played}/{PLACEMENT_MATCHES}</code>"
+        ]
+    parts.append("\n".join(rank))
+    parts.append("\n".join(window_lines(moment)))
     if view.blocked_until is not None:
-        lines.append(f"⏳ Fila em Recarga até {_clock(view.blocked_until)}")
+        parts.append(f"⏳ <b>Fila em Recarga</b> · <code>{_clock(view.blocked_until)}</code>")
     rows = []
     if view.invite is not None:
-        lines.extend(["", _invite_line(view.invite)])
+        parts.append(_invite_line(view.invite))
         rows.extend(_invite_rows(view.invite))
     rows.extend(
         [
-            [_button("Arena da Vigília", "pvp:q"), _button("Duelo", "pvp:duel")],
-            [_button("Classificação da Vigília", "pvp:rank")],
-            [_button("← Aventura", "adv:hub")],
+            [_button("🏆 Classificação", "pvp:rank")],
+            [_button("⚔️ Entrar na Arena", "pvp:q")],
+            [_button("↩️ Retornar", "pvp:hub")],
         ]
     )
-    return Screen("\n".join(lines), _IMAGE, _keyboard(*rows), "HTML")
+    return Screen("\n\n".join(parts), _IMAGE, _keyboard(*rows), "HTML")
 
 
 def _invite_line(view: DuelInviteView) -> str:
@@ -283,21 +374,53 @@ def render_pvp(view: PvpView) -> Screen:
 
 
 def render_ranking(view: RankingView) -> Screen:
-    lines = ["🏆 Classificação da Vigília", "", "🏅 Posição Atual", ""]
-    if view.own is not None:
-        lines.extend(
-            [
-                f"{escape(view.own.name)} · #{view.own.position}",
-                f"{view.own.elo} · {view.own.renome} Renome",
-            ]
+    """Classificação da Vigília (§7.3): 50 por página, Elo com emoji, sem medalhas."""
+    parts = ["🏆 <b>Classificação da Vigília</b>", f"<i>{escape(RANKING_TEXT)}</i>"]
+    if view.highlights:
+        parts.append(
+            "\n\n".join(
+                f"<b>#{row.position} {elo_emoji(row.elo)} {escape(row.name)}</b>\n"
+                f"{_elo_line(row.elo, row.renome)}"
+                for row in view.highlights
+            )
         )
     else:
-        lines.append(f"Em Colocação · {view.own_placement_played}/{PLACEMENT_MATCHES}")
-    lines.extend(["", "🏆 Destaques da Vigília", ""])
-    if view.highlights:
-        for row in view.highlights:
-            lines.extend([f"{row.position} {escape(row.name)}", f"{row.elo} · {row.renome} Renome"])
-    else:
-        lines.append("Nenhum nome registrado ainda.")
-    rows = [_BACK]
-    return Screen("\n".join(lines), _IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")
+        parts.append("<i>Nenhum nome registrado ainda.</i>")
+    nav = []
+    if view.page > 0:
+        nav.append(_button("◀️ Anterior", f"pvp:rank:{view.page - 1}"))
+    if view.has_more:
+        nav.append(_button("▶️ Próxima", f"pvp:rank:{view.page + 1}"))
+    rows = [row for row in (nav, _BACK_VIGIL) if row]
+    return Screen("\n\n".join(parts), _IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")
+
+
+def render_level_ranking(view) -> Screen:
+    """Ranking de Nível (§34.3): Classe, nome, Elo real (quando existir), Nível e Legado."""
+    from asterion.bot.ui_format import roman
+    from asterion.bot.world_ui import CLASS_EMOJI
+
+    parts = [
+        "🏆 <b>Ranking de Nível</b>",
+        "<i>Os aventureiros são classificados de acordo com o nível atual de seus "
+        "personagens.</i>",
+    ]
+    lines = []
+    for row in view.rows:
+        detail = f"<code>Nv. {row.level}</code>"
+        if row.legacy_level > 0:
+            detail += f" · <code>Legado {roman(row.legacy_level)}</code>"
+        emoji = elo_emoji(row.elo)
+        lines.append(
+            f"<b>#{row.position} {CLASS_EMOJI.get(row.character_class, '👤')} "
+            f"{escape(row.name)}</b>\n{f'{emoji} ' if emoji else ''}{detail}"
+        )
+    if lines:
+        parts.append("\n\n".join(lines))
+    nav = []
+    if view.page > 0:
+        nav.append(_button("◀️ Anterior", f"rank:level:{view.page - 1}"))
+    if view.has_more:
+        nav.append(_button("▶️ Próxima", f"rank:level:{view.page + 1}"))
+    rows = [row for row in (nav, [_button("↩️ Retornar", "menu:back")]) if row]
+    return Screen("\n\n".join(parts), _IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")

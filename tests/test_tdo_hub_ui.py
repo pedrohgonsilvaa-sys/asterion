@@ -132,7 +132,7 @@ def test_refuge_dashboard_has_regional_and_global_actions_without_campaign_adven
     labels = _texts(screen)
     # Decisão do autor: Caçadas e Masmorras saem do Menu Principal (Masmorras entram
     # pelo Desbravar).
-    assert {"tdo:explore", "world:map", "wev:hub"} <= set(callbacks)
+    assert {"adv:hub", "world:map", "wev:hub"} <= set(callbacks)
     assert "tdo:hunt" not in callbacks and "dungeon:known" not in callbacks
     # Contrato Mestre de Telas UI v1.0.0 §5: Missões entram pelo Mural do Refúgio.
     assert "world:missions" not in callbacks
@@ -144,8 +144,8 @@ def test_refuge_dashboard_has_regional_and_global_actions_without_campaign_adven
         "bn:root",
         "community:open",
     } <= set(callbacks)
-    assert "⛰️ Desbravar" in labels and "(Covil)" not in labels
-    assert "Campanha" not in labels and "Aventura" not in labels
+    assert "⚔️ Aventura" in labels and "(Covil)" not in labels
+    assert "Campanha" not in labels
 
 
 def test_refuge_local_offers_desbravar_without_reveal_status():
@@ -190,7 +190,7 @@ def test_local_screen_has_hunt_explore_round_and_back_to_refuge():
     screen = render_current_local(view, explore_state="available")
     callbacks = _callbacks(screen)
     assert {"road:hunt", "road:explore:start", "world:round", "road:route:refuge"} <= set(callbacks)
-    assert "Voltar ao Refúgio" in _texts(screen)
+    assert "↩️ Retornar" in _texts(screen)
     # Nenhuma ida direta Local-Local.
     for other in ("road:route:charneca", "road:route:ruinas", "road:route:camara"):
         assert other not in callbacks
@@ -221,7 +221,7 @@ def test_camara_screen_pre_p6_exact_text_without_ancora_and_only_back():
     assert screen.text == f"🕯️ Câmara do Poente\n\n{TEXTO_CAMARA_PRE_P6}"
     assert "Âncora" not in screen.text
     assert _callbacks(screen) == ["road:route:refuge"]
-    assert _texts(screen) == ["Voltar ao Refúgio"]
+    assert _texts(screen) == ["↩️ Retornar"]
 
 
 def test_camara_screen_post_p6_exact_text_with_ancora():

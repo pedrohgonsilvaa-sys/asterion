@@ -130,7 +130,7 @@ def test_patron_state_follows_the_account_status():
     assert "👑 <b>Ainda não é um Patrono de Asterion.</b>" in _screen(patron_active=False).text
     active = _screen(patron_active=True).text
     assert "Ainda não é um Patrono" not in active
-    assert "👑 <b>Patrono de Asterion.</b>" in active
+    assert "👑 <b>Patrono de Asterion</b>" in active
 
 
 def test_flagelo_block_has_bold_name_then_bar_and_percent():
@@ -139,7 +139,7 @@ def test_flagelo_block_has_bold_name_then_bar_and_percent():
     status = RegionStatus(RegionBar("tdo", "🌑", "Ocaso", 21, 500, 4, False), False)
     text = _screen(RefugeHud(flagelo=status)).text
     assert text.split("\n\n")[-1] == (
-        "🩸 <b>Varkhenn, o Flagelo das Cinzas</b>\n🟪" + "⬜" * 9 + " <code>4%</code>"
+        "🔥 <b>Despertar de Varkhenn</b>\n🟥" + "⬜" * 9 + " <code>4%</code>"
     )
 
 
@@ -148,7 +148,7 @@ def test_removed_items_do_not_appear():
     everything = screen.text + " ".join(b.text for b in _buttons(screen))
     for gone in (
         "Poç", "Energia", "Calendário", "Locais descobertos", "Estrada das Cinzas",
-        "Alda Veyr", "Oren Cal", "Treinador de Armas", "Aventura", "Título", "━", "Missões",
+        "Alda Veyr", "Oren Cal", "Treinador de Armas", "Título", "━", "Missões",
     ):
         assert gone not in everything
     callbacks = {b.callback_data for b in _buttons(screen)}
@@ -161,7 +161,7 @@ def test_menu_layout_two_columns():
     screen = _screen()
     rows = [[b.text for b in row] for row in screen.keyboard.inline_keyboard]
     assert rows == [
-        ["⛰️ Desbravar", "🗺️ Mapa"],
+        ["⚔️ Aventura", "🗺️ Mapa"],
         ["👤 Personagem", "🏪 Mercado"],
         ["🏟️ Arena", "🏰 Guilda"],
         ["🌌 Eventos", "📖 Códice"],
@@ -170,7 +170,7 @@ def test_menu_layout_two_columns():
     ]
     pairs = {b.text: b.callback_data for b in _buttons(screen)}
     assert pairs["🌌 Eventos"] == "wev:hub"
-    assert pairs["⛰️ Desbravar"] == "tdo:explore"  # só navegação: não move o personagem
+    assert pairs["⚔️ Aventura"] == "adv:hub"  # só navegação: não move o personagem
 
 
 def test_daily_gift_button_only_when_available_and_alone_on_first_row():
@@ -307,7 +307,7 @@ async def test_real_flow_open_gift_claim_and_return_to_refuge(database):
     await dispatcher.feed_raw_update(bot, message_update("/menu", actor=actor))
     assert labels()[0] == "✨ Resgatar Dádiva Diária"
     await dispatcher.feed_raw_update(bot, callback_update("bn:gift", update_id=3, actor=actor))
-    assert "Resgatar" in labels()
+    assert "🎁 Resgatar" in labels()
     await dispatcher.feed_raw_update(
         bot, callback_update("bn:gift:claim", update_id=4, actor=actor)
     )
@@ -315,5 +315,5 @@ async def test_real_flow_open_gift_claim_and_return_to_refuge(database):
     await dispatcher.feed_raw_update(bot, callback_update("menu:back", update_id=5, actor=actor))
     assert "🌘 Refúgio do Ocaso" in _last_screen(bot).text
     assert "✨ Resgatar Dádiva Diária" not in labels()
-    assert labels()[0] == "⛰️ Desbravar"
+    assert labels()[0] == "⚔️ Aventura"
     await bot.session.close()

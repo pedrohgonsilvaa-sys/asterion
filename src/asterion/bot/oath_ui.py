@@ -29,8 +29,8 @@ from asterion.domain.oaths import (
 _IMAGE = "links"
 _WEEKDAYS = ("Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo")
 _TIERS = ("", "I", "II", "III", "IV")
-_BACK_TO_GUILD = [InlineKeyboardButton(text="← Guilda", callback_data="guild:root")]
-_BACK_TO_OATH = [InlineKeyboardButton(text="← Juramento", callback_data="oath:hub")]
+_BACK_TO_GUILD = [InlineKeyboardButton(text="↩️ Retornar", callback_data="guild:root")]
+_BACK_TO_OATH = [InlineKeyboardButton(text="↩️ Retornar", callback_data="oath:hub")]
 
 _ERRORS = {
     "no_character": "Crie um personagem antes de abrir o Juramento.",
@@ -72,10 +72,10 @@ def _keyboard(rows: list[list[InlineKeyboardButton]]) -> InlineKeyboardMarkup:
 
 
 def _render_hub(view: OathHubView) -> Screen:
-    lines = ["⚜️ Juramento"]
+    # Decisão do autor 2026-11-26 §9.9 (apresentação): título, Guilda e Próximo Juramento.
+    lines = ["⚜️ <b>Juramento</b>", ""]
     if view.guild_name:
-        lines.append(escape(view.guild_name))
-    lines.append("")
+        lines.extend([f"🏰 <b>{escape(view.guild_name)}</b>", ""])
     if view.notice:
         lines.extend([escape(view.notice), ""])
     rows: list[list[InlineKeyboardButton]] = []
@@ -85,7 +85,7 @@ def _render_hub(view: OathHubView) -> Screen:
         if view.guild_name is None:
             lines.append("Entre em uma Guilda para participar do Juramento.")
         if view.next_opening is not None:
-            lines.append(f"Próximo Juramento · {_when(view.next_opening)}")
+            lines.append(f"⚜️ <b>Próximo Juramento</b> · <code>{_when(view.next_opening)}</code>")
     else:
         _active_lines(view, lines)
         _active_rows(view, rows)
@@ -105,8 +105,9 @@ def _active_lines(view: OathHubView, lines: list[str]) -> None:
     lines.extend(
         [
             "",
-            f"⚔️ Provações · {view.provacoes_left}/{PROVACOES_PER_CYCLE}",
-            f"📈 Contribuição · {view.individual}/{MAX_INDIVIDUAL_CONTRIBUTION}",
+            f"⚔️ <b>Provações</b> · <code>{view.provacoes_left}/{PROVACOES_PER_CYCLE}</code>",
+            f"💠 <b>Contribuição</b> · "
+            f"<code>{view.individual}/{MAX_INDIVIDUAL_CONTRIBUTION}</code>",
         ]
     )
     if view.bound and view.individual < MIN_INDIVIDUAL_CONTRIBUTION:
@@ -135,7 +136,7 @@ def _active_rows(view: OathHubView, rows: list[list[InlineKeyboardButton]]) -> N
         rows.append([_button("Iniciar sozinho", "oath:solo")])
         if view.has_group:
             rows.append([_button("Iniciar com o Grupo", "group:oath:p")])
-    rows.append([_button("Atualizar", "oath:hub")])
+    rows.append([_button("🔄 Atualizar", "oath:hub")])
 
 
 def render_abandon_confirm() -> Screen:

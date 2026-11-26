@@ -22,7 +22,7 @@ from asterion.domain.tdo_hub import (
 )
 
 CAMARA_ICON = "🕯️"
-BACK_TO_REFUGE = "Voltar ao Refúgio"
+BACK_TO_REFUGE = "↩️ Retornar"
 BACK_TO_REFUGE_CALLBACK = "road:route:refuge"
 
 TEXT_NOTHING_TO_EXPLORE = "Não há mais o que explorar por aqui."
@@ -262,7 +262,7 @@ def render_explore_result(result: ExploreResult) -> Screen:
         )
         rows = keyboard(
             [button("🧭 Continuar explorando", EXPLORE_ENTRY)],
-            [button("↩️ Voltar ao Refúgio", "menu:back")],
+            [button("↩️ Retornar", "menu:back")],
         )
         return Screen(text, location_key(label), rows, "HTML")
     text = {

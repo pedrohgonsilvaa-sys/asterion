@@ -68,6 +68,7 @@ class ExpeditionRosterEntry:
     name: str
     level: int
     selected: bool
+    character_class: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -573,7 +574,12 @@ class ExpeditionService:
         selected = {row.character_id for row in rows}
         members = (
             await session.execute(
-                select(GuildMember.character_id, Character.name, Character.level)
+                select(
+                    GuildMember.character_id,
+                    Character.name,
+                    Character.level,
+                    Character.character_class,
+                )
                 .join(Character, Character.id == GuildMember.character_id)
                 .where(GuildMember.guild_id == guild.id)
                 .order_by(Character.name)
@@ -588,7 +594,8 @@ class ExpeditionService:
             route_name=route.name if route is not None else None,
             starts_at=start.astimezone(UTC),
             roster=tuple(
-                ExpeditionRosterEntry(row[0], row[1], row[2], row[0] in selected) for row in members
+                ExpeditionRosterEntry(row[0], row[1], row[2], row[0] in selected, row[3])
+                for row in members
             ),
             roster_count=len(selected),
             in_roster=character.id in selected,

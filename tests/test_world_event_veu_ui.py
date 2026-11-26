@@ -45,17 +45,16 @@ def test_panel_lists_active_nuclei_without_recommending_any():
     assert "⏳ Tempo restante · <code>18:42</code>" in screen.text
     assert "Escolha um Núcleo para participar." in screen.text
     assert "👥 7 participantes" in screen.text and "<code>7" not in screen.text
-    assert _callbacks(screen) == ["veu:n:D", "veu:n:E", "flg:hub", "adv:hub"]
+    assert _callbacks(screen) == ["veu:n:D", "veu:n:E", "wev:hub"]
     assert "recomend" not in screen.text.lower()
 
 
 def test_scheduled_panel_matches_the_list_layout():
     view = PanelView("scheduled", datetime(2026, 11, 24, 23, tzinfo=UTC))
     screen = ui.render_panel(view)
-    assert screen.text.startswith("📅 <b>Eventos Mundiais</b>")
-    assert "🌫️ <b>A Ruptura do Véu</b>" in screen.text
-    assert "<code>20:00</code>" in screen.text and "🌍 Evento Global" in screen.text
-    assert "Uma ruptura surgiu no Véu." in screen.text
+    assert screen.text.startswith("🕳️ <b>Ruptura do Véu</b>")
+    assert "🕐 <b>Próxima Ruptura</b> · <code>20:00</code>" in screen.text
+    assert _callbacks(screen) == ["wev:hub"]
 
 
 def test_nucleus_screen_follows_the_closed_combat_pattern():
@@ -138,4 +137,4 @@ def test_router_registers_every_callback_family_used_by_the_screens():
     from asterion.bot.world_event_veu_handlers import veu_event_router
 
     router = veu_event_router(object(), object(), {})
-    assert len(router.callback_query.handlers) == 7  # hub (e alias wev:hub), back, n, a, ta, t, p
+    assert len(router.callback_query.handlers) == 8  # wev:hub, hub, back, n, a, ta, t, p

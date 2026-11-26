@@ -90,7 +90,7 @@ def render_path_root(view: PathView, trial: ClassTrialView | None) -> Screen:
             )
         else:
             lines.append("🔒 Provação de Classe · Indisponível")
-        rows.append([_button("↩️ Voltar", "refuge:local")])
+        rows.append([_button("↩️ Retornar", "refuge:local")])
         return Screen("\n".join(lines), "character", _keyboard(rows))
 
     if view.selected_path is None:
@@ -103,7 +103,7 @@ def render_path_root(view: PathView, trial: ClassTrialView | None) -> Screen:
         rows.extend(
             [
                 [_button("Escolher Caminho", "path:choose")],
-                [_button("↩️ Voltar", "refuge:local")],
+                [_button("↩️ Retornar", "refuge:local")],
             ]
         )
         return Screen("\n".join(lines), "character", _keyboard(rows))
@@ -133,7 +133,7 @@ def render_path_root(view: PathView, trial: ClassTrialView | None) -> Screen:
             _button("2", f"path:detail:{other}:{version}"),
         ]
     )
-    rows.append([_button("↩️ Voltar", "refuge:local")])
+    rows.append([_button("↩️ Retornar", "refuge:local")])
     return Screen("\n".join(lines), "character", _keyboard(rows))
 
 

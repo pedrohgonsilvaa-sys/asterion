@@ -181,7 +181,7 @@ async def test_character_knowledge_telegram_navigation_and_history_reply(databas
     )
     screen = _last_screen(bot)
     labels = [b.text for row in screen.reply_markup.inline_keyboard for b in row]
-    assert "📊 Atributos" in labels and "🪪 Perfil" in labels
+    assert "🪪 Perfil" in labels and "❤️ <b>HP</b>" in screen.text
     update_id += 1
     await dispatcher.feed_raw_update(
         bot,

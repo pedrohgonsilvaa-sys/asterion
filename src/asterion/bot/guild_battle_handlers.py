@@ -29,8 +29,8 @@ from asterion.bot.guild_battle_ui import (
     render_draft,
     render_guild_battle,
     render_hub,
+    render_ranking,
     render_review,
-    render_standings,
     render_substitution,
 )
 from asterion.bot.guilds_ui import unpack
@@ -110,22 +110,19 @@ def guild_battle_router(
             return
         await show(query, render_guild_battle(view))
 
-    @router.callback_query(F.data == "gb:std")
+    @router.callback_query(F.data.regexp(r"^gb:std(:\d+)?$"))
     async def standings(query: CallbackQuery) -> None:
+        parts = (query.data or "").split(":")
+        page = int(parts[2]) if len(parts) == 3 else 0
         try:
             hub = await service.hub(query.from_user.id, now=clock())
         except GuildBattleError:
             hub = None
         rows = await service.standings()
-        eligible = await service.individual_reward_eligible(query.from_user.id)
-        await show(
-            query,
-            render_standings(
-                rows,
-                own_guild=None if hub is None else hub.guild_name,
-                individual_eligible=None if hub is None else eligible,
-            ),
-        )
+        own_id = None
+        if hub is not None:
+            own_id = next((r.guild_id for r in rows if r.guild_name == hub.guild_name), None)
+        await show(query, render_ranking(rows, own_guild_id=own_id, page=page))
 
     async def draft_of(query: CallbackQuery) -> tuple[GuildBattleHubView, Draft] | None:
         """Revalidate the Leader and the draft carried in the callback data."""

@@ -94,7 +94,7 @@ def test_name_errors_and_confirmation_exact_copy():
         ["✅ Confirmar Personagem"],
         ["👤 Nome", "🎭 Gênero"],
         ["🧿 Raça", "⚜️ Classe"],
-        ["↩️ Voltar"],
+        ["↩️ Retornar"],
     ]
     assert "HP" not in confirm.text and "ATQ" not in confirm.text
 
@@ -132,7 +132,7 @@ def test_creation_layout_and_navigation_follow_contract():
     gender = render(Creation(uuid4(), step="gender"))
     assert [[button.text for button in row] for row in gender.keyboard.inline_keyboard] == [
         ["🚹 Masculino", "🚺 Feminino"],
-        ["↩️ Voltar"],
+        ["↩️ Retornar"],
     ]
     assert "🎭 <b>Gênero</b>" in gender.text
     assert "<i>Existe o rosto que o mundo vai reconhecer." in gender.text
@@ -141,7 +141,7 @@ def test_creation_layout_and_navigation_follow_contract():
         ["🕯️ Remanescente", "🌘 Velado"],
         ["🌪️ Cinéreo", "🩸 Hemário"],
         ["☀️ Alvorano"],
-        ["↩️ Voltar"],
+        ["↩️ Retornar"],
     ]
     assert "🧿 <b>Raça</b>" in race.text
     assert "Identidade Flexível" not in race.text
@@ -162,7 +162,7 @@ def test_race_detail_shows_title_flavor_and_passive_paragraph(race):
     assert "🧭 Para quem é" not in screen.text
     assert [[b.text for b in row] for row in screen.keyboard.inline_keyboard] == [
         [f"{data['emoji']} Escolher {data['name']}"],
-        ["↩️ Voltar"],
+        ["↩️ Retornar"],
     ]
 
 
@@ -178,7 +178,7 @@ def test_class_detail_uses_future_paths_without_class_arts(cls):
     assert all(path["description"] in screen.text for path in CLASS_CONTENT[cls]["paths"])
     assert [[b.text for b in row] for row in screen.keyboard.inline_keyboard] == [
         [f"{CLASS_CONTENT[cls]['emoji']} Escolher {CLASS_CONTENT[cls]['name']}"],
-        ["↩️ Voltar"],
+        ["↩️ Retornar"],
     ]
 
 
@@ -186,7 +186,7 @@ def test_class_list_back_goes_to_races_and_confirm_edit_buttons_return_to_confir
     from asterion.domain.creation import navigate
 
     class_list = render(Creation(uuid4(), step="class"))
-    assert class_list.keyboard.inline_keyboard[-1][0].text == "↩️ Voltar"
+    assert class_list.keyboard.inline_keyboard[-1][0].text == "↩️ Retornar"
     base = Creation(
         uuid4(), step="confirm", name="Aster", gender="feminino",
         race="velado", character_class="errante",

@@ -38,6 +38,7 @@ CB_DARIAN = "refuge:darian"
 CB_ALDA = "refuge:alda"
 CB_OREN = "refuge:oren"
 CB_HUD = "menu:back"
+CB_ADVENTURE = "adv:hub"
 CB_PROFESSIONS = "character:professions"
 CB_PATH = "character:path"
 CB_MISSIONS = "world:missions"
@@ -78,7 +79,7 @@ OREN_TEXT = (
 )
 # As etapas de Missão com Alda e Oren seguem no fluxo de Missão existente (``p2:alda``,
 # ``world:oren``, alcançados pelas telas de Missão via ``road:local``); as telas do
-# Refúgio mostram só a descrição e ``↩️ Voltar``.
+# Refúgio mostram só a descrição e ``↩️ Retornar``.
 
 
 def render_refuge_local() -> Screen:
@@ -88,19 +89,19 @@ def render_refuge_local() -> Screen:
     Caminho e Armazém abrem os sistemas existentes.
     """
     text = blocks("🌘 <b>Refúgio do Ocaso</b>", narrative(REFUGE_TEXT))
+    # Decisão do autor 2026-11-26 §4.2: Armazém foi para o Mercado e o Braseiro do
+    # Refúgio não aparece como botão próprio.
     rows = pairs(
         [
-            button("🔥 Braseiro do Refúgio", CB_BRAZIER),
-            button("⚔️ Darian Veyr", CB_DARIAN),
             button("🧭 Alda Veyr", CB_ALDA),
             button("🖋️ Oren Cal", CB_OREN),
+            button("⚔️ Darian Veyr", CB_DARIAN),
             button("🛠️ Ofícios", CB_PROFESSIONS),
             button("🎭 Caminho", CB_PATH),
-            button("📜 Mural de Missões", CB_MISSIONS),
-            button("🏦 Armazém", CB_WAREHOUSE),
+            button("📜 Missões", CB_MISSIONS),
         ]
     )
-    return Screen(text, REFUGE_IMAGE_KEY, keyboard(*rows, back(CB_HUD)), "HTML")
+    return Screen(text, REFUGE_IMAGE_KEY, keyboard(*rows, back(CB_ADVENTURE)), "HTML")
 
 
 def brazier_status(

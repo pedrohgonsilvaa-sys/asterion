@@ -93,22 +93,24 @@ def render_campaign(
     return Screen(text, "adventure", InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 
+ADVENTURE_ENTRY = "adv:hub"
+
+
 def render_adventure() -> Screen:
-    """Aventura hub: activities played with or against other players."""
-    text = (
-        "⚔️ Aventura\n\n"
-        "Masmorras, Eventos e confrontos contra outros jogadores. "
-        "Para a história e o mapa, use a Campanha."
+    """Submenu ⚔️ Aventura (decisão do autor 2026-11-26 §4): Refúgio, Desbravar, Caçadas
+    e Masmorras. Só navegação: abrir o submenu não move o personagem."""
+    from asterion.bot.ui_format import back, button, keyboard
+
+    return Screen(
+        "<b>⚔️ Aventura</b>",
+        "adventure",
+        keyboard(
+            [button("🌘 Refúgio", "refuge:local"), button("⛰️ Desbravar", DESBRAVAR_ENTRY)],
+            [button("🐺 Caçadas", "tdo:hunt"), button("🗝️ Masmorras", "dungeon:known")],
+            back("menu:back"),
+        ),
+        "HTML",
     )
-    keyboard = [
-        [
-            InlineKeyboardButton(text="Masmorras", callback_data="dungeon:known"),
-            InlineKeyboardButton(text="Eventos", callback_data="wev:hub"),
-        ],
-        [InlineKeyboardButton(text="PvP", callback_data="pvp:hub")],
-        [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
-    ]
-    return Screen(text, "adventure", InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 
 RACE_LABEL = {
@@ -188,16 +190,16 @@ CLASS_EMOJI = {
 REFUGE_TITLE = "🌘 Refúgio do Ocaso"
 REFUGE_IMAGE_KEY = location_key(REFUGE_LABEL)
 DAILY_GIFT_BUTTON = "✨ Resgatar Dádiva Diária"
-# Menu Principal (decisão fechada do autor): Dádiva Diária em largura total, depois duas
-# colunas. A Forja fica dentro do Mercado; Refúgio, Caçadas e Masmorras saem daqui
-# (Refúgio e Masmorras entram pelo Desbravar). Missões entram pelo Mural do Refúgio.
 DESBRAVAR_ENTRY = "tdo:explore"
+# Menu Principal (decisão do autor 2026-11-26 §3): Dádiva Diária em largura total, depois
+# duas colunas. ⚔️ Aventura substitui ⛰️ Desbravar e reúne Refúgio, Desbravar, Caçadas e
+# Masmorras. A Forja fica dentro do Mercado.
 REFUGE_MENU = (
-    (("⛰️ Desbravar", DESBRAVAR_ENTRY), ("🗺️ Mapa", "world:map")),
+    (("⚔️ Aventura", ADVENTURE_ENTRY), ("🗺️ Mapa", "world:map")),
     (("👤 Personagem", "character:root"), ("🏪 Mercado", "mkt:root")),
     (("🏟️ Arena", "pvp:hub"), ("🏰 Guilda", "guild:root")),
     (("🌌 Eventos", "wev:hub"), ("📖 Códice", "knowledge:codex")),
-    (("🏆 Classificação", "pvp:rank"), ("🎁 Benefícios", "bn:root")),
+    (("🏆 Classificação", "rank:level"), ("🎁 Benefícios", "bn:root")),
     (("🌐 Comunidade", "community:open"), ("⚙️ Configurações", "settings:root")),
 )
 
@@ -238,7 +240,7 @@ def render_desbravar() -> Screen:
             locals_[0:2],
             locals_[2:4],
             locals_[4:5],
-            back("menu:back"),
+            back(ADVENTURE_ENTRY),
         ),
         "HTML",
     )
@@ -250,16 +252,57 @@ def roman(value: int) -> str:
     return _roman(value)
 
 
-PATRON_ACTIVE_LINE = "👑 <b>Patrono de Asterion.</b>"
 PATRON_INACTIVE_LINE = "👑 <b>Ainda não é um Patrono de Asterion.</b>"
 FLAGELO_FILL = "🟪"
+# Decisão do autor 2026-11-26 §5.2: emoji exclusivo de cada Flagelo.
+FLAGELO_EMOJI = {
+    "varkhenn": "🔥",
+    "nharvek": "🐍",
+    "azharel": "🪬",
+    "hemrath": "🩸",
+    "korvann": "⚖️",
+    "vaelith": "🌀",
+}
 
 
-def _flagelo_name(region_id: str) -> str:
+def patron_line(active: bool, until=None, *, now=None) -> str:
+    """``👑 **Patrono de Asterion** · `X Dias` `` (dias restantes) ou o estado inativo."""
+    if not active:
+        return PATRON_INACTIVE_LINE
+    if until is None:
+        return "👑 <b>Patrono de Asterion</b>"
+    from datetime import UTC, datetime
+
+    from asterion.bot.ui_format import mono
+
+    seconds = (until - (now or datetime.now(UTC))).total_seconds()
+    days = max(1, -(-int(seconds) // 86400))
+    return f"👑 <b>Patrono de Asterion</b> · {mono(f'{days} Dias' if days != 1 else '1 Dia')}"
+
+
+def flagelo_heading(region_id: str) -> str:
     from asterion.domain.flagelos import REGIONS_BY_ID
 
     region = REGIONS_BY_ID.get(region_id)
-    return region.flagelo.name if region is not None else "Flagelo"
+    if region is None:
+        return "<b>Despertar</b>"
+    flagelo = region.flagelo
+    emoji = FLAGELO_EMOJI.get(flagelo.flagelo_id, "🩸")
+    return f"{emoji} <b>Despertar de {escape(flagelo.short_name)}</b>"
+
+
+def _flagelo_emoji(hud) -> str:
+    from asterion.domain.flagelos import REGIONS_BY_ID
+
+    region = REGIONS_BY_ID.get(hud.flagelo.bar.region_id) if hud.flagelo else None
+    return FLAGELO_EMOJI.get(region.flagelo.flagelo_id, "🔥") if region else "🔥"
+
+
+def awakening_bar(points: int, threshold: int) -> str:
+    """Barra do Despertar: 🟥 enquanto progride; em 100%, toda 🟪 (decisão 2026-11-26)."""
+    if threshold and points >= threshold:
+        return FLAGELO_FILL * 10
+    return bar(points, threshold, "🟥")
 
 
 def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
@@ -280,7 +323,7 @@ def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
             guild_tag=hud.guild_tag,
             title=view.selected_title,
         ),
-        PATRON_ACTIVE_LINE if view.patron_active else PATRON_INACTIVE_LINE,
+        patron_line(view.patron_active, view.patron_until),
         f"🪙 <b>Coroas</b> · {mono(number(view.crowns))}",
     ]
     stats = [
@@ -293,21 +336,22 @@ def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
     ]
     parts = [f"<b>{REFUGE_TITLE}</b>", "\n".join(header), "\n".join(stats)]
     if hud.flagelo is not None:
-        # O Despertar dos Flagelos (espec. final §17): barra da Região e percentual.
+        # Decisão do autor 2026-11-26 §5.2: emoji exclusivo + "Despertar de <nome curto>";
+        # a barra começa vermelha e fica toda roxa em 100%.
         flagelo_bar = hud.flagelo.bar
         parts.append(
-            f"🩸 <b>{escape(_flagelo_name(flagelo_bar.region_id))}</b>\n"
-            f"{bar(flagelo_bar.points, flagelo_bar.threshold, FLAGELO_FILL)} "
+            f"{flagelo_heading(flagelo_bar.region_id)}\n"
+            f"{awakening_bar(flagelo_bar.points, flagelo_bar.threshold)} "
             f"{mono(f'{flagelo_bar.percent}%')}"
         )
     return "\n\n".join(parts)
 
 
-FLAGELO_BUTTON = ("⚔️ Enfrentar o Flagelo", "flg:hub")
+FLAGELO_BUTTON = ("🔥 Despertar", "flg:hub")
 
 
 def refuge_menu_keyboard(
-    *, gift_available: bool, flagelo_awake: bool = False
+    *, gift_available: bool, flagelo_awake: bool = False, flagelo_emoji: str = "🔥"
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if gift_available:
@@ -315,7 +359,11 @@ def refuge_menu_keyboard(
     if flagelo_awake:
         # Leva ao hub do evento (barras, status e acesso ao combate), sem navegação paralela.
         rows.append(
-            [InlineKeyboardButton(text=FLAGELO_BUTTON[0], callback_data=FLAGELO_BUTTON[1])]
+            [
+                InlineKeyboardButton(
+                    text=f"{flagelo_emoji} Despertar", callback_data=FLAGELO_BUTTON[1]
+                )
+            ]
         )
     rows.extend(
         [InlineKeyboardButton(text=label, callback_data=data) for label, data in pair]
@@ -350,6 +398,7 @@ def render_refuge_dashboard(
         refuge_menu_keyboard(
             gift_available=hud.gift_available,
             flagelo_awake=hud.flagelo is not None and hud.flagelo.flagelo_awake,
+            flagelo_emoji=_flagelo_emoji(hud),
         ),
         "HTML",
     )

@@ -24,7 +24,7 @@ from asterion.application.pvp import (
     RankingView,
 )
 from asterion.bot.guilds_ui import pack
-from asterion.bot.pvp_handlers import DUEL_PROMPT, deliver_notices, pvp_router
+from asterion.bot.pvp_handlers import deliver_notices, pvp_router
 from asterion.bot.pvp_ui import error_text, render_pvp, render_ranking
 from tests.test_guilds_telegram import _button, _message_update, callback_update
 from tests.test_pvp import A, B, _seed
@@ -112,7 +112,7 @@ def test_arena_result_follows_ui_48_and_hides_mmr():
     assert "🏅 Renome · 1190 → 1210 (+20)" in screen.text
     assert "🔥 Elo · Chama I → Forjado III" in screen.text
     assert "MMR" not in screen.text and "Recompensas" not in screen.text
-    assert _labels(screen) == ["← PvP"]
+    assert _labels(screen) == ["↩️ Retornar"]
 
 
 def test_same_elo_shows_only_the_elo():
@@ -163,12 +163,26 @@ def test_invite_screens():
 
 
 def test_hub_states():
+    from asterion.bot.pvp_ui import render_arena, render_vigil
+
+    arena = render_arena()
+    assert [[b.text for b in r] for r in arena.keyboard.inline_keyboard] == [
+        ["🏆 Arena da Vigília", "⚔️ Duelo"],
+        ["↩️ Retornar"],
+    ]
+    noon = datetime(2026, 11, 26, 15, 30, tzinfo=UTC)  # 12:30 em São Paulo
     hub = PvpHubView("Alfa", 30, 0, None, 2, 1, 1, 0, False, None, None)
-    screen = render_pvp(hub)
-    assert "🏅 Colocação · 2/5" in screen.text and "Fechada" in screen.text
-    assert _labels(screen)[:2] == ["Arena da Vigília", "Duelo"]
-    placed = PvpHubView("Alfa", 30, 1500, "Forjado II", 5, 9, 1, 0, True, None, None)
-    assert "🔥 Elo · Forjado II" in render_pvp(placed).text
+    screen = render_vigil(hub, now=noon)
+    assert "🏅 <b>Colocação</b> · <code>2/5</code>" in screen.text
+    assert "🕕 <b>12:00 à 13:00</b> · <code>🟢 Aberto</code>" in screen.text
+    assert "🕐 <b>19:00 à 20:00</b> · <code>🔴 Fechado</code>" in screen.text
+    assert _labels(screen) == ["🏆 Classificação", "⚔️ Entrar na Arena", "↩️ Retornar"]
+    placed = PvpHubView("Alfa", 30, 1842, "Forjado II", 5, 9, 1, 0, True, None, None)
+    text = render_vigil(placed, position=128, now=noon).text
+    assert "🏅 <b>Posição Atual</b> · <code>#128</code>" in text
+    assert "⚒️ <code>Forjado II · 1.842 Renome</code>" in text
+    night = datetime(2026, 11, 26, 3, 0, tzinfo=UTC)
+    assert render_vigil(hub, now=night).text.count("🔴 Fechado") == 2
 
 
 def test_messages_and_errors_have_text():
@@ -181,8 +195,10 @@ def test_messages_and_errors_have_text():
 def test_ranking_screen():
     row = RankingRow(1, "Alfa", "Regente", 3100)
     screen = render_ranking(RankingView((row,), row, 5))
-    assert "Alfa · #1" in screen.text and "Regente · 3100 Renome" in screen.text
-    assert "Em Colocação · 2/5" in render_ranking(RankingView((), None, 2)).text
+    assert "<b>#1 👑 Alfa</b>\n👑 <code>Regente · 3.100 Renome</code>" in screen.text
+    assert "🥇" not in screen.text and "▶️ Próxima" not in _labels(screen)
+    more = render_ranking(RankingView((row,), row, 5, page=0, has_more=True))
+    assert _labels(more) == ["▶️ Próxima", "↩️ Retornar"]
 
 
 @pytest.mark.asyncio
@@ -206,10 +222,10 @@ async def test_duel_through_buttons_and_resume_with_menu(database):
     await _seed(database)
     client = _Client(database)
     hub = await client.click(A, "pvp:hub")
-    assert "PvP · Competição" in hub.text
+    assert hub.text.startswith("⚔️ <b>Arena</b>")
     await client.click(A, "pvp:duel")
-    assert client.screen_of(A).text == DUEL_PROMPT
-    preview = await client.say(A, "Beta", reply_prompt=DUEL_PROMPT)
+    assert "Digite o nome do personagem que deseja desafiar." in client.screen_of(A).text
+    preview = await client.say(A, "Beta")
     assert "Nv. 30 · Sentinela" in preview.text
     sent = await client.click(A, _button(preview, "Enviar Desafio"))
     assert "Duelo enviado" in sent.text

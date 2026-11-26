@@ -177,7 +177,8 @@ async def test_rename_costs_treasury_has_recharge_and_retains_old_name(database)
 
 
 @pytest.mark.asyncio
-async def test_dissolution_waits_72h_freezes_treasury_and_forfeits_the_balance(database):
+async def test_dissolution_is_immediate_and_only_for_a_sole_leader(database):
+    """Decisão do autor 2026-11-26 §9.12: sem 72h; só o Líder, e só sozinho."""
     a = await _seed(database)
     service = GuildService(database[1], "ocaso")
     guild, ids = await _guild_with(service, a)
@@ -186,24 +187,19 @@ async def test_dissolution_waits_72h_freezes_treasury_and_forfeits_the_balance(d
     forge = (await service.my_guild(a["Alpha"], now=NOW)).active_projects[0]
     await service.contribute(a["Cedar"], forge.project_id, 4_000, now=NOW)
 
-    assert await _code(service.request_dissolution(a["Bravo"], now=NOW)) == "no_permission"
-    view = await service.request_dissolution(a["Alpha"], now=NOW)
-    assert view.dissolution_due_at == NOW + timedelta(hours=72)
-    assert await _code(service.deposit(a["Bravo"], 1, now=NOW)) == "guild_dissolving"
-    assert await _code(service.rename(a["Alpha"], name="Brasa", now=NOW)) == "guild_dissolving"
-    cancelled = await service.cancel_dissolution(a["Alpha"], now=NOW + timedelta(hours=1))
-    assert cancelled.dissolution_due_at is None
-    await service.deposit(a["Bravo"], 1_000, now=NOW + timedelta(hours=1))
-
-    start = NOW + timedelta(hours=2)
-    await service.request_dissolution(a["Alpha"], now=start)
-    assert await service.run_maintenance(now=start + timedelta(hours=71)) == 0
-    assert await service.run_maintenance(now=start + timedelta(hours=72)) == 1
-    assert await service.my_guild(a["Alpha"], now=start + timedelta(hours=72)) is None
+    assert await _code(service.dissolve(a["Bravo"], now=NOW)) == "no_permission"
+    assert await _code(service.dissolve(a["Alpha"], now=NOW)) == "dissolve_has_members"
+    assert await service.my_guild(a["Alpha"], now=NOW) is not None
+    for name in ("Bravo", "Cedar", "Doran"):
+        if name in ids:
+            await service.remove_member(a["Alpha"], ids[name], now=NOW)
+    await service.dissolve(a["Alpha"], now=NOW)
+    assert await service.my_guild(a["Alpha"], now=NOW) is None
 
     async with database[1]() as session:
         row = await session.get(Guild, guild.guild_id)
         assert (row.status, row.treasury_crowns) == ("dissolved", 0)
+        assert row.dissolution_due_at is None
         assert (
             await session.scalar(
                 select(func.count()).select_from(GuildMember).where(GuildMember.guild_id == row.id)
@@ -215,42 +211,32 @@ async def test_dissolution_waits_72h_freezes_treasury_and_forfeits_the_balance(d
                 GuildTreasuryEntry.guild_id == row.id, GuildTreasuryEntry.kind == "forfeit"
             )
         )
-        assert forfeit == -51_000
+        assert forfeit == -50_000
         details = await session.scalar(
             select(GuildAuditEntry.details).where(
                 GuildAuditEntry.guild_id == row.id, GuildAuditEntry.action == "guild_dissolved"
             )
         )
         assert details["forfeited_project_funds"] == 4_000
-        assert await session.scalar(select(func.count()).select_from(GuildSwitchCooldown)) == 3
-    # Name and TAG are free again; members wait the 12h cooldown.
+    # Name and TAG are free again; the Leader waits the 12h cooldown.
     assert (
-        await _code(
-            service.create_guild(a["Bravo"], "Vigilia", "VGL", now=start + timedelta(hours=73))
-        )
+        await _code(service.create_guild(a["Alpha"], "Vigilia", "VGL", now=NOW))
         == "switch_cooldown"
     )
-    again = await service.create_guild(
-        a["Doran"], "Vigilia", "VGL", now=start + timedelta(hours=73)
-    )
+    again = await service.create_guild(a["Doran"], "Vigilia", "VGL", now=NOW)
     assert again.tag == "VGL"
 
 
 @pytest.mark.asyncio
-async def test_obra_in_construction_holds_the_final_dissolution(database):
+async def test_obra_in_construction_is_lost_with_the_immediate_dissolution(database):
     a = await _seed(database)
     service = GuildService(database[1], "ocaso")
-    guild, _ids = await _guild_with(service, a, members=())
+    _guild, _ids = await _guild_with(service, a, members=())
     await service.start_project(a["Alpha"], ProjectKind.LODGING, now=NOW)
     lodging = (await service.my_guild(a["Alpha"], now=NOW)).active_projects[0]
     await service.contribute(a["Alpha"], lodging.project_id, 20_000, now=NOW)  # builds to +6h
-    await service.request_dissolution(a["Alpha"], now=NOW)
-    # Make the 72h period end while the Obra is still under Construção.
-    async with database[1].begin() as session:
-        row = await session.get(Guild, guild.guild_id)
-        row.dissolution_due_at = NOW + timedelta(hours=1)
-    assert await service.my_guild(a["Alpha"], now=NOW + timedelta(hours=2)) is not None
-    assert await service.my_guild(a["Alpha"], now=NOW + timedelta(hours=6)) is None
+    await service.dissolve(a["Alpha"], now=NOW + timedelta(hours=1))
+    assert await service.my_guild(a["Alpha"], now=NOW + timedelta(hours=2)) is None
 
 
 @pytest.mark.asyncio

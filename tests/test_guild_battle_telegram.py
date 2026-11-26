@@ -43,6 +43,7 @@ from asterion.infrastructure.db.models import (
     Character,
     CharacterNotificationPreference,
     GuildBattleRegistration,
+    GuildMember,
 )
 from tests.test_guild_battle import (
     CLOSED,
@@ -153,7 +154,7 @@ def test_champion_is_shown_apart_from_the_fronts():
     assert "⚔️ Frentes · 1,5–1,5\n👑 Campeão · Empate" in draw and "+1" in draw
     loss = render_guild_battle(_result("loss", "0.5", "1.5")).text
     assert loss.startswith("💀") and "0,5–1,5" in loss and "+0" in loss
-    assert _labels(render_guild_battle(_result("loss", 0, 2))) == ["← Guilda"]
+    assert _labels(render_guild_battle(_result("loss", 0, 2))) == ["↩️ Retornar"]
 
 
 def test_notices_have_text_and_follow_the_author_categories():
@@ -207,7 +208,7 @@ def test_guild_menu_has_the_entry_point():
     from tests.test_guilds_telegram import _view
 
     screen = render_guild_menu(_view(GuildRole.MEMBER))
-    assert "🛡️ Batalha de Guildas" in _labels(screen)
+    assert "⚔️ Batalha" in _labels(screen)
 
 
 async def test_delivery_skips_what_the_player_switched_off():
@@ -229,8 +230,8 @@ async def test_leader_drafts_registers_and_members_see_the_roster(database):
     leader, member = _actor("Aurora", 1), _actor("Aurora", 2)
 
     hub = await client.click(leader, "gb:hub")
-    assert "🟢 Inscrição aberta" in hub.text
-    screen = await client.click(leader, _data(hub, "Montar Inscrição"))
+    assert "📅 <b>Próxima Batalha</b>" in hub.text and "Nv." not in hub.text
+    screen = await client.click(leader, _data(hub, "📝 Inscrever"))
     for name in ("Aura", "Aurb", "Aurc", "Aurd", "Aure"):
         screen = await client.click(leader, _data(screen, name))
     assert "Escolha o Campeão" in screen.text
@@ -249,7 +250,7 @@ async def test_leader_drafts_registers_and_members_see_the_roster(database):
 
     seen = await client.click(member, "gb:hub")
     assert "Aurc 👑 Campeão" in seen.text
-    assert not {"Montar Inscrição", "Cancelar Inscrição", "Refazer Inscrição"} & set(
+    assert not {"📝 Inscrever", "Cancelar Inscrição", "Refazer Inscrição"} & set(
         _labels(seen)
     )
     await client.click(member, "gb:d:AAAA:...")
@@ -257,7 +258,7 @@ async def test_leader_drafts_registers_and_members_see_the_roster(database):
 
     await client.click(leader, "gb:cx")
     hub = await client.click(leader, "gb:cxok")
-    assert "📝 Inscrita" not in hub.text and "Montar Inscrição" in _labels(hub)
+    assert "📝 Inscrita" not in hub.text and "📝 Inscrever" in _labels(hub)
 
 
 @pytest.mark.asyncio
@@ -266,13 +267,14 @@ async def test_stale_draft_restarts_when_the_member_list_changes(database):
     client = _Client(database, REGISTER)
     leader = _actor("Aurora", 1)
     hub = await client.click(leader, "gb:hub")
-    first = await client.click(leader, _data(hub, "Montar Inscrição"))
+    first = await client.click(leader, _data(hub, "📝 Inscrever"))
     pick = _data(first, "Aura")
     async with database[1].begin() as session:
         character = await session.scalar(
             select(Character).where(Character.telegram_id == _actor("Aurora", 7))
         )
-        character.level = 29
+        # Sem requisito de nível (2026-11-26): a lista muda quando alguém sai da Guilda.
+        await session.delete(await session.get(GuildMember, character.id))
     screen = await client.click(leader, pick)
     assert client.alerts[-1] == error_text("roster_changed")
     assert "Frente I · —" in screen.text and "Aurg" not in str(_labels(screen))
@@ -392,7 +394,7 @@ async def test_hub_errors_and_bad_tokens(database):
     await client.click(leader, "gb:sbok:x:y")
     assert client.alerts[-1] == error_text("invalid_substitution")
     hub = await client.click(leader, "gb:hub")
-    fp = _data(hub, "Montar Inscrição").split(":")[2]
+    fp = _data(hub, "📝 Inscrever").split(":")[2]
     await client.click(leader, f"gb:reg:{fp}:AB.CDE..")
     assert client.alerts[-1] == error_text("invalid_roster")
     await client.click(leader, f"gb:d:{fp}:zz.zzz..")
@@ -402,7 +404,7 @@ async def test_hub_errors_and_bad_tokens(database):
     assert client.bot.session.make_request.await_count == calls
     client.now = PAIR
     hub = await client.click(leader, "gb:hub")
-    assert "🔴 Inscrição fechada" in hub.text
+    assert "📝 Inscrever" not in _labels(hub)
     async with database[1]() as session:
         assert (await session.scalars(select(GuildBattleRegistration))).first() is None
 

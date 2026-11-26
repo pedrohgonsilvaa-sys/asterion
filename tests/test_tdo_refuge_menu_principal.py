@@ -34,7 +34,7 @@ from tests.test_tdo_voltar_refugio_navegacao import _snapshot
 TDO_REGION = "Terras do Ocaso"
 OUTSIDE_REGION = "Vales dos Enforcados"
 # Marcadores de tela: o Refúgio tem o botão de Explorar do hub; o Menu Principal não tem.
-REFUGE_MARKER = "tdo:explore"
+REFUGE_MARKER = "adv:hub"  # ⚔️ Aventura só existe no Menu do Refúgio (2026-11-26)
 MAIN_MENU_MARKER = "road:explore:start"
 
 

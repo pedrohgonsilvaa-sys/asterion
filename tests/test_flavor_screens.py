@@ -20,9 +20,7 @@ from asterion.bot.chronicle_ui import render_calendar
 from asterion.bot.creation_ui import Screen
 from asterion.bot.equipment_ui import render_equipment_root
 from asterion.bot.flavor_ui import CAPTION_LIMIT, with_flavor
-from asterion.bot.guilds_ui import render_guild_menu
 from asterion.bot.inventory_ui import render_inventory
-from asterion.bot.market_ui import render_root
 from asterion.bot.professions_ui import render_profession_home
 from asterion.bot.world_handlers import world_router
 from asterion.bot.world_ui import render_legacy
@@ -72,14 +70,11 @@ GUILD = _guild_view(GuildRole.LEADER)  # uma vez só: o id da Guilda entra nos b
 
 SYSTEM_SCREENS = {
     "inventario": lambda: render_inventory(_inventory_view()),
-    "mercado": lambda: render_root(None),
     "equipamentos": lambda: render_equipment_root(_equipment_root()),
     "artes": lambda: render_art_root(_art_view()),
     "talentos": lambda: render_talent_root(_talent_view()),
     "oficios": lambda: render_profession_home(_profession_view()),
     "legado": lambda: render_legacy(_legacy_view()),
-    "guilda": lambda: render_guild_menu(GUILD),
-    "guilda_sem_guilda": lambda: render_guild_menu(None),
     "calendario": lambda: render_calendar(_chronicle_view(Phase.UNSCHEDULED, None), CALENDAR_NOW),
 }
 

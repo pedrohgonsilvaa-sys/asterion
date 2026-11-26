@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from html import escape
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -57,38 +58,58 @@ def _keyboard(rows: list[list[InlineKeyboardButton]]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-_BACK = [_button("← Benefícios", "bn:root")]
+_BACK = [_button("↩️ Retornar", "bn:root")]
+
+
+def _html(*parts: str | None) -> str:
+    return "\n\n".join(part for part in parts if part)
+
+
+def _m(text: str) -> str:
+    return f"<code>{escape(text)}</code>"
+
+
+def _n(value: int) -> str:
+    return f"{value:,}".replace(",", ".")
 
 
 def render_benefits(*, shop_open: bool = False) -> Screen:
-    shop = [[_button("Apoiar Asterion", "pay:root")]] if shop_open else []
+    """Benefícios (decisão do autor 2026-11-26 §32.1)."""
+    codes = [_button("🎟️ Códigos", "bn:code")]
+    if shop_open:
+        codes.append(_button("🔱 Patrono", "pay:root"))
     return Screen(
-        "🎁 Benefícios\n\nRecompensas, recrutamento e códigos de Asterion.",
+        _html(
+            "🎁 <b>Benefícios</b>",
+            "<i>Recompensas, recrutamento e códigos de Asterion ficam reunidos aqui.</i>",
+        ),
         _IMAGE,
         _keyboard(
             [
-                [_button("Dádiva Diária", "bn:gift")],
-                [_button("Chamado de Asterion", "bn:call")],
-                [_button("Códigos de Asterion", "bn:code")],
-                *shop,
-                [_button("← Menu", "menu:back")],
+                [_button("🎁 Dádiva", "bn:gift"), _button("📣 Chamado", "bn:call")],
+                codes,
+                [_button("↩️ Retornar", "menu:back")],
             ]
         ),
+        "HTML",
     )
 
 
-def _bundle_text(bundle: Bundle) -> str:
+def _bundle_values(bundle: Bundle) -> list[str]:
+    """Emoji da recompensa antes do valor configurado (§32.2)."""
     parts = []
     if bundle.crowns:
-        parts.append(f"{bundle.crowns} Coroas")
+        parts.append(f"🪙 {_m(f'{_n(bundle.crowns)} Coroas')}")
     if bundle.basics:
-        parts.append(f"{bundle.basics} Materiais Básicos")
+        parts.append(f"🧱 {_m(f'{bundle.basics} Materiais Básicos')}")
     if bundle.fragments:
-        parts.append(f"{bundle.fragments} Fragmentos" if bundle.fragments > 1 else "1 Fragmento")
-    return " + ".join(parts)
+        label = "Fragmentos" if bundle.fragments > 1 else "Fragmento"
+        parts.append(f"✨ {_m(f'{bundle.fragments} {label}')}")
+    return parts
 
 
 def granted_lines(granted: Granted) -> list[str]:
+    """Texto puro (telas fora desta etapa, como a Trilha da Crônica)."""
     lines = []
     if granted.crowns:
         lines.append(f"🪙 {granted.crowns} Coroas")
@@ -96,53 +117,123 @@ def granted_lines(granted: Granted) -> list[str]:
     return lines
 
 
+def granted_html(granted: Granted) -> list[str]:
+    """Recompensas em monoespaçado, com o emoji antes do valor (§32.5)."""
+    lines = []
+    if granted.crowns:
+        lines.append(f"🪙 {_m(f'{_n(granted.crowns)} Coroas')}")
+    lines.extend(f"📦 {_m(f'{item.quantity} {item.name}')}" for item in granted.items)
+    return lines
+
+
 def render_gift(view: DailyGiftView, result: DailyGiftResult | None = None) -> Screen:
-    lines = ["🎁 Dádiva Diária", ""]
-    if result is not None and result.granted is not None:
-        lines.extend([f"Dia {result.day} resgatado:", *granted_lines(result.granted), ""])
+    """Dádiva Diária (§32.2): ✅ dia resgatado, ❌ dia ainda não resgatado."""
+    lines = []
     for index, bundle in enumerate(DAILY_GIFT, start=1):
-        marker = "👉" if index == view.next_day and not view.claimed_today else "▫️"
-        lines.append(f"{marker} Dia {index} · {_bundle_text(bundle)}")
-    lines.extend(["", "Perder um dia apenas adia o próximo resgate. Nova Dádiva às 06:00."])
+        done = index < view.next_day or (view.claimed_today and index == view.next_day)
+        mark = "✅" if done else "❌"
+        lines.append(f"{mark} <b>Dia {index}</b> · " + " · ".join(_bundle_values(bundle)))
     rows = []
     if not view.claimed_today:
-        rows.append([_button("Resgatar", "bn:gift:claim")])
+        rows.append([_button("🎁 Resgatar", "bn:gift:claim")])
     rows.append(_BACK)
-    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+    return Screen(
+        _html("🎁 <b>Dádiva Diária</b>", "\n".join(lines)), _IMAGE, _keyboard(rows), "HTML"
+    )
 
 
 def render_call(view: RecruitmentView, link: str | None, notice: str | None = None) -> Screen:
-    lines = ["📯 Chamado de Asterion", ""]
-    if notice:
-        lines.extend([notice, ""])
-    lines.append(f"Seu código: {view.code}")
+    """Chamado de Asterion (§32.3)."""
+    identity = [f"🎟️ <b>Código</b> · {_m(view.code)}"]
     if link:
-        lines.append(f"Seu link: {link}")
-    if not view.recruiter_eligible:
-        lines.append(f"Seu código passa a valer no Nv.{RECRUITER_MIN_LEVEL}.")
-    lines.extend(["", f"Recrutas: {view.recruits}"])
-    for milestone, crowns in RECRUIT_MILESTONES.items():
-        lines.append(
-            f"Nv.{milestone} · {view.recruits_at[milestone]} recruta(s) · {crowns} Coroas por marco"
-        )
-    if view.prestige:
-        lines.extend(["", "Prestígio: " + ", ".join(view.prestige)])
-    if view.claimable_crowns:
-        lines.extend(["", f"Disponível para resgate: {view.claimable_crowns} Coroas"])
+        identity.append(f"🔗 <b>Link</b> · {_m(link)}")
+    milestones = "\n".join(
+        f"🪙 <b>Nv. {milestone}</b> · {_m(f'{crowns} Coroas por marco')}"
+        for milestone, crowns in RECRUIT_MILESTONES.items()
+    )
+    claim = (
+        f"🪙 <b>Disponível</b> · {_m(f'{_n(view.claimable_crowns)} Coroas')}"
+        if view.claimable_crowns
+        else None
+    )
     rows = []
     if view.claimable_crowns:
-        rows.append([_button("Resgatar", "bn:call:claim")])
+        rows.append([_button("🪙 Resgatar", "bn:call:claim")])
     if view.can_link:
-        rows.append([_button("Inserir código de quem me convidou", "bn:call:enter")])
+        rows.append([_button("🎟️ Código", "bn:call:enter")])
     rows.append(_BACK)
-    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+    return Screen(
+        _html(
+            escape(notice) if notice else None,
+            "📣 <b>Chamado de Asterion</b>",
+            "<i>O Chamado permite convidar novos aventureiros para Asterion e acompanhar o "
+            "progresso dos recrutados.</i>",
+            "\n".join(identity),
+            f"👥 <b>Recrutas</b> · {_m(str(view.recruits))}",
+            milestones,
+            claim,
+        ),
+        _IMAGE,
+        _keyboard(rows),
+        "HTML",
+    )
+
+
+def render_code_prompt(error: str | None = None) -> Screen:
+    """Código de Asterion (§32.4): o pedido usa a própria tela."""
+    return Screen(
+        _html(
+            "🎟️ <b>Código de Asterion</b>",
+            "<i>Resgate códigos promocionais para receber recompensas especiais de "
+            "Asterion.</i>",
+            escape(error) if error else None,
+            "✏️ <b>Digite o código para resgatar.</b>",
+        ),
+        _IMAGE,
+        _keyboard([_BACK]),
+        "HTML",
+    )
+
+
+def render_recruit_prompt(error: str | None = None) -> Screen:
+    return Screen(
+        _html(
+            "📣 <b>Chamado de Asterion</b>",
+            escape(error) if error else None,
+            "✏️ <b>Digite o código de quem convidou você.</b>",
+        ),
+        _IMAGE,
+        _keyboard([[_button("↩️ Retornar", "bn:call")]]),
+        "HTML",
+    )
 
 
 def render_promo_result(code: str, granted: Granted) -> Screen:
+    """Código resgatado (§32.5)."""
+    lines = granted_html(granted)
     return Screen(
-        "\n".join([f"🎟️ Código {code} resgatado", "", *granted_lines(granted)]),
+        _html(
+            "🎟️ <b>Código de Asterion</b>",
+            "<i>Código resgatado com sucesso.</i>",
+            "\n".join(["🎁 <b>Recompensas:</b>", *lines]) if lines else None,
+        ),
         _IMAGE,
         _keyboard([_BACK]),
+        "HTML",
+    )
+
+
+def render_promo_invalid() -> Screen:
+    """Código inválido (§32.6)."""
+    return Screen(
+        _html(
+            "🎟️ <b>Código</b>",
+            "❌ <b>Código Inválido</b>",
+            "<i>O código informado não existe, expirou ou já foi utilizado.</i>",
+        ),
+        _IMAGE,
+        _keyboard([[_button("🎟️ Tentar Novamente", "bn:code")], _BACK]),
+        "HTML",
     )
 
 

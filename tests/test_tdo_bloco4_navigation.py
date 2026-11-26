@@ -165,10 +165,10 @@ def test_refuge_keyboard_follows_source_order_and_grouping():
     )
     rows = [[b.text for b in row] for row in screen.keyboard.inline_keyboard]
     # HUD congelado: Menu Principal em duas colunas, sem Locais avulsos nem NPCs.
-    assert rows[0] == ["⛰️ Desbravar", "🗺️ Mapa"]
+    assert rows[0] == ["⚔️ Aventura", "🗺️ Mapa"]
     assert rows[-1] == ["🌐 Comunidade", "⚙️ Configurações"]
     flat = [text for row in rows for text in row]
-    for absent in ("Campanha", "Aventura", "← Menu", "Local Atual", "Alda Veyr"):
+    for absent in ("Campanha", "← Menu", "Local Atual", "Alda Veyr"):
         assert absent not in flat
     assert "Travessia" not in screen.text
 
@@ -182,9 +182,9 @@ def test_menu_principal_rendering_is_not_used_inside_tdo_refuge_screen():
         known_dungeons=False,
     )
     callbacks = [b.callback_data for row in screen.keyboard.inline_keyboard for b in row]
-    # entradas Campanha e Aventura do Menu Principal geral não existem no Refúgio
+    # Campanha não existe no Refúgio; ⚔️ Aventura é entrada do Menu (decisão 2026-11-26).
     assert "world:adventure" not in callbacks
-    assert "adv:hub" not in callbacks
+    assert "adv:hub" in callbacks
     assert screen.image_key == "local:Refúgio do Ocaso"
 
 
@@ -272,7 +272,7 @@ def test_hunt_victory_follows_47_3_structure():
     assert screen.text.startswith("🏆 <b>Vitória</b>\n\n<i>O confronto chega ao fim")
     assert screen.text.endswith("🎁 <b>Recompensas:</b>\n✨ XP · 120\n🪙 Coroas · 15")
     pairs = [(b.text, b.callback_data) for row in screen.keyboard.inline_keyboard for b in row]
-    assert pairs == [("🎯 Caçar novamente", "tdo:hunt:manual"), ("↩️ Voltar", "tdo:hunt")]
+    assert pairs == [("🎯 Caçar novamente", "tdo:hunt:manual"), ("↩️ Retornar", "tdo:hunt")]
     # nada de texto inventado: sem "Caçada concluída" nem flavor
     assert "Caçada concluída" not in screen.text
 

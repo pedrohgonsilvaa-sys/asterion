@@ -101,7 +101,7 @@ def tdo_local_text(label: str, *, p6_completed: bool = False) -> str | None:
 
 
 def render_tdo_local(key: str, *, p6_completed: bool = False, from_local: bool = False) -> Screen:
-    """Local das Terras do Ocaso no Mapa: título, descrição e ``↩️ Voltar``."""
+    """Local das Terras do Ocaso no Mapa: título, descrição e ``↩️ Retornar``."""
     label, icon = TDO_LOCAL_BY_KEY[key]
     description = tdo_local_text(label, p6_completed=p6_completed)
     return Screen(

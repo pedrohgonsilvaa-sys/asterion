@@ -2,8 +2,9 @@
 
 Nas Terras do Ocaso o Refúgio do Ocaso substitui o Menu Principal. Toda navegação
 de retorno antes rotulada ``← Menu``, ``← Campanha`` ou ``← Aventura`` usa o rótulo
-``Voltar ao Refúgio``. O destino não muda: os três callbacks já abrem o Refúgio
-quando o personagem está na Região. Fora das Terras do Ocaso nada é alterado.
+``↩️ Retornar`` (decisão do autor 2026-11-26 §2). O destino não muda: ``← Menu`` e
+``← Campanha`` abrem o Refúgio na Região; ``← Aventura`` abre o submenu Aventura.
+Fora das Terras do Ocaso nada é alterado.
 """
 
 from collections.abc import Awaitable, Callable
@@ -16,7 +17,7 @@ from aiogram.methods.base import Response, TelegramType
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 TDO_REGION = "Terras do Ocaso"
-BACK_TO_REFUGE_LABEL = "Voltar ao Refúgio"
+BACK_TO_REFUGE_LABEL = "↩️ Retornar"
 
 # (rótulo antigo, callback) -> mesmo callback com o rótulo do Refúgio.
 _LEGACY_RETURNS = frozenset(
@@ -39,7 +40,7 @@ def has_legacy_return(markup: InlineKeyboardMarkup) -> bool:
 
 
 def relabel_returns_to_refuge(markup: InlineKeyboardMarkup) -> InlineKeyboardMarkup:
-    """Cópia do teclado com os retornos antigos rotulados ``Voltar ao Refúgio``."""
+    """Cópia do teclado com os retornos antigos rotulados ``↩️ Retornar``."""
     rows = [
         [
             InlineKeyboardButton(text=BACK_TO_REFUGE_LABEL, callback_data=button.callback_data)

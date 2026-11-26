@@ -121,7 +121,8 @@ def character_surfaces_router(service: CharacterSurfacesService, images: dict[st
         await query.answer()
         if isinstance(query.message, Message):
             view = await service.identity(query.from_user.id)
-            await present(query.message, render_character(view), images, edit=True)
+            stats = await service.attributes(query.from_user.id)
+            await present(query.message, render_character(view, stats), images, edit=True)
 
     @router.callback_query(F.data == "character:attributes")
     async def open_attributes(query: CallbackQuery) -> None:

@@ -205,6 +205,28 @@ class RankingView:
     highlights: tuple[RankingRow, ...]
     own: RankingRow | None
     own_placement_played: int
+    page: int = 0
+    has_more: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class LevelRankingRow:
+    position: int
+    name: str
+    character_class: str
+    level: int
+    legacy_level: int
+    elo: str | None  # Elo real da Arena; None quando o personagem ainda não tem Elo.
+
+
+@dataclass(frozen=True, slots=True)
+class LevelRankingView:
+    rows: tuple[LevelRankingRow, ...]
+    page: int = 0
+    has_more: bool = False
+
+
+RANKING_PAGE_SIZE = 50
 
 
 def _utcnow(now: datetime | None) -> datetime:
@@ -244,7 +266,41 @@ class PvpService:
             view = await self._foreground_view(session, character, now)
             return view if view is not None else await self._hub(session, character, now)
 
-    async def ranking(self, actor: int) -> RankingView:
+    async def level_ranking(self, *, page: int = 0) -> LevelRankingView:
+        """Ranking de Nível (decisão do autor 2026-11-26 §34.3), 50 por página.
+
+        Ordem: Nível atual, depois Legado, com ``character_id`` como desempate estável.
+        """
+        page = max(0, page)
+        async with self.sessions() as session:
+            rows = (
+                await session.execute(
+                    select(Character, ArenaProfile)
+                    .outerjoin(ArenaProfile, ArenaProfile.character_id == Character.id)
+                    .where(Character.server_id == self.server_id)
+                    .order_by(
+                        Character.level.desc(), Character.legacy_level.desc(), Character.id
+                    )
+                    .offset(page * RANKING_PAGE_SIZE)
+                    .limit(RANKING_PAGE_SIZE + 1)
+                )
+            ).all()
+        items = tuple(
+            LevelRankingRow(
+                page * RANKING_PAGE_SIZE + index,
+                character.name,
+                character.character_class,
+                character.level,
+                character.legacy_level,
+                elo_for(profile.renome) if profile is not None and _is_placed(profile) else None,
+            )
+            for index, (character, profile) in enumerate(rows[:RANKING_PAGE_SIZE], start=1)
+        )
+        return LevelRankingView(items, page, len(rows) > RANKING_PAGE_SIZE)
+
+    async def ranking(self, actor: int, *, page: int = 0) -> RankingView:
+        """Classificação da Vigília: 50 por página (decisão do autor 2026-11-26 §7.3)."""
+        page = max(0, page)
         async with self.sessions() as session:
             character = await self._require_character(session, actor)
             rows = (
@@ -256,17 +312,21 @@ class PvpService:
                         ArenaProfile.placement_played >= PLACEMENT_MATCHES,
                     )
                     .order_by(ArenaProfile.renome.desc(), ArenaProfile.character_id)
-                    .limit(3)
+                    .offset(page * RANKING_PAGE_SIZE)
+                    .limit(RANKING_PAGE_SIZE + 1)
                 )
             ).all()
+            has_more = len(rows) > RANKING_PAGE_SIZE
             highlights = tuple(
-                RankingRow(index, name, elo_for(profile.renome), profile.renome)
-                for index, (profile, name) in enumerate(rows, start=1)
+                RankingRow(
+                    page * RANKING_PAGE_SIZE + index, name, elo_for(profile.renome), profile.renome
+                )
+                for index, (profile, name) in enumerate(rows[:RANKING_PAGE_SIZE], start=1)
             )
             mine = await session.get(ArenaProfile, character.id)
             if mine is None or not _is_placed(mine):
                 played = 0 if mine is None else mine.placement_played
-                return RankingView(highlights, None, played)
+                return RankingView(highlights, None, played, page, has_more)
             ahead = await session.scalar(
                 select(func.count())
                 .select_from(ArenaProfile)
@@ -280,6 +340,8 @@ class PvpService:
                 highlights,
                 RankingRow(int(ahead or 0) + 1, character.name, elo_for(mine.renome), mine.renome),
                 mine.placement_played,
+                page,
+                has_more,
             )
 
     async def _hub(self, session, character: Character, now: datetime) -> PvpHubView:

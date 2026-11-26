@@ -109,6 +109,7 @@ class ShopView:
     listings: tuple[ListingView, ...]
     promotion_available_at: datetime | None
     listing_slots: int = LISTING_SLOTS
+    viewer_crowns: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,6 +306,7 @@ class MarketService:
                 listings=tuple(_listing_view(row) for row in rows),
                 promotion_available_at=available_at,
                 listing_slots=await listing_slots(session, shop.owner_character_id),
+                viewer_crowns=viewer.crowns,
             )
 
     async def edit_shop(

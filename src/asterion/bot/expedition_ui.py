@@ -19,14 +19,13 @@ from asterion.domain.expeditions import (
     EXPEDITION_TIMEZONE,
     RESULT_LABELS,
     ROSTER_MAX,
-    ROSTER_MIN,
     STAGE_COUNT,
 )
 
 _IMAGE = "links"
 _WEEKDAYS = ("Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo")
-_BACK_TO_GUILD = [InlineKeyboardButton(text="← Guilda", callback_data="guild:root")]
-_BACK_TO_EXPEDITION = [InlineKeyboardButton(text="← Expedição", callback_data="exp:hub")]
+_BACK_TO_GUILD = [InlineKeyboardButton(text="↩️ Retornar", callback_data="guild:root")]
+_BACK_TO_EXPEDITION = [InlineKeyboardButton(text="↩️ Retornar", callback_data="exp:hub")]
 
 _ERRORS = {
     "no_character": "Crie um personagem antes de abrir a Expedição.",
@@ -66,10 +65,9 @@ def _screen(lines: list[str], rows: list[list[InlineKeyboardButton]]) -> Screen:
 
 
 def _render_hub(view: ExpeditionHubView) -> Screen:
-    lines = ["🚩 Expedição"]
+    lines = ["🚩 <b>Expedição</b>", ""]
     if view.guild_name:
-        lines.append(escape(view.guild_name))
-    lines.append("")
+        lines.extend([f"{_symbol(view)} <b>{escape(view.guild_name)}</b>", ""])
     if view.notice:
         lines.extend([escape(view.notice), ""])
     rows: list[list[InlineKeyboardButton]] = []
@@ -87,25 +85,32 @@ def _render_hub(view: ExpeditionHubView) -> Screen:
     return _screen(lines, rows)
 
 
+def _symbol(view) -> str:
+    return getattr(view, "guild_symbol", None) or "🏰"
+
+
 def _forming(view, lines, rows) -> None:
+    # Decisão do autor 2026-11-26 §9.10: rota, Partida e Participantes, sem mínimo exibido.
+    from asterion.bot.guilds_ui import character_card
+
     if view.route_name:
-        lines.append(escape(view.route_name))
+        lines.extend([f"🧭 <b>{escape(view.route_name)}</b>", ""])
     lines.extend(
         [
-            f"Partida · {_when(view.starts_at)}",
-            f"👥 Grupo · {view.roster_count}/{ROSTER_MAX} (mínimo {ROSTER_MIN})",
+            f"🕕 <b>Partida</b> · <code>{_when(view.starts_at)}</code>",
+            f"👥 <b>Participantes</b> · <code>{view.roster_count}/{ROSTER_MAX}</code>",
             "",
         ]
     )
     selected = [entry for entry in view.roster if entry.selected]
-    lines.extend(f"· {escape(entry.name)} · Nv. {entry.level}" for entry in selected)
-    if not selected:
-        lines.append("Ninguém escolhido ainda.")
+    for entry in selected:
+        lines.extend([character_card(entry.name, entry.level, entry.character_class), ""])
+    lines.append("<i>Escolha os aventureiros que participarão da Expedição.</i>")
     if view.can_manage:
         for entry in view.roster:
             mark = "✅" if entry.selected else "➕"
             rows.append([_button(f"{mark} {entry.name}", f"exp:t:{pack(entry.character_id)}")])
-    rows.append([_button("Atualizar", "exp:hub")])
+    rows.append([_button("🔄 Atualizar", "exp:hub")])
 
 
 def _active(view, lines, rows) -> None:
@@ -126,7 +131,7 @@ def _active(view, lines, rows) -> None:
             [_button(option.label, f"exp:c:{token}:{view.stage}:{option.index}")]
             for option in view.options
         )
-    rows.append([_button("Atualizar", "exp:hub")])
+    rows.append([_button("🔄 Atualizar", "exp:hub")])
 
 
 def _render_result(view: ExpeditionResultView) -> Screen:

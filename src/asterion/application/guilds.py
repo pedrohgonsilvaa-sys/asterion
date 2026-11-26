@@ -27,7 +27,7 @@ Pending author review: on transfer or succession the old Leader becomes Officer.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -41,6 +41,8 @@ from asterion.application.guild_upkeep import (
     ACTIVE_PROJECT_STATES,
     audit,
     due_guild_ids,
+    finalize_dissolution,
+    has_cooperative_commitment,
     maintenance_due,
     promote_successor,
     record_treasury,
@@ -48,8 +50,9 @@ from asterion.application.guild_upkeep import (
     start_cooldown,
 )
 from asterion.domain.guilds import (
-    DISSOLUTION_PERIOD,
+    DEFAULT_GUILD_SYMBOL,
     GUILD_SWITCH_COOLDOWN,
+    GUILD_SYMBOLS,
     LODGING_CAPACITY,
     MAX_ACTIVE_PROJECTS,
     MAX_NEW_APPLICATIONS_PER_WINDOW,
@@ -88,6 +91,7 @@ from asterion.infrastructure.db.models import (
     GuildProject,
     GuildProjectContribution,
     GuildSwitchCooldown,
+    GuildTreasuryEntry,
 )
 
 DEFAULT_PAGE_SIZE = 5
@@ -140,6 +144,9 @@ class GuildView:
     active_projects: tuple[GuildProjectView, ...] = ()
     rename_available_at: datetime | None = None
     dissolution_due_at: datetime | None = None
+    symbol: str = DEFAULT_GUILD_SYMBOL
+    leader_name: str | None = None
+    viewer_crowns: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +160,8 @@ class PublicGuildView:
     capacity: int
     recruitment: Recruitment
     accepts_applications: bool
+    symbol: str = DEFAULT_GUILD_SYMBOL
+    leader_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,6 +181,10 @@ class GuildInviteView:
     invitee_telegram_id: int
     inviter_name: str | None
     status: str
+    guild_symbol: str = DEFAULT_GUILD_SYMBOL
+    leader_name: str | None = None
+    member_count: int = 0
+    capacity: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,6 +200,28 @@ class GuildApplicationView:
     closed_by: str | None
     created_at: datetime
     character_telegram_id: int | None = None
+    character_class: str = ""
+    guild_symbol: str = DEFAULT_GUILD_SYMBOL
+    member_count: int = 0
+    capacity: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class TreasuryEntryView:
+    kind: str
+    amount: int
+    created_at: datetime
+    character_name: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class CharacterCandidateView:
+    """Personagem encontrado pelo nome para receber Convite (decisão 2026-11-26 §9.4)."""
+
+    character_id: UUID
+    name: str
+    level: int
+    character_class: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,7 +323,9 @@ class GuildService:
             guild = await session.get(Guild, guild_id)
             if guild is None or guild.status != "active" or guild.server_id != self.server_id:
                 return None
-            return self._public_view(guild, await self._member_count(session, guild.id))
+            return await self._public_view_with_leader(
+                session, guild, await self._member_count(session, guild.id)
+            )
 
     async def search(self, query: str) -> tuple[PublicGuildView, ...]:
         """Exact search by official Name or TAG, restricted to this server."""
@@ -311,12 +348,21 @@ class GuildService:
                 )
             ).all()
             counts = await self._member_counts(session, [guild.id for guild in guilds])
-            return tuple(self._public_view(guild, counts.get(guild.id, 0)) for guild in guilds)
+            return tuple(
+                [
+                    await self._public_view_with_leader(session, guild, counts.get(guild.id, 0))
+                    for guild in guilds
+                ]
+            )
 
     async def recruiting(
-        self, *, after: UUID | None = None, limit: int = DEFAULT_PAGE_SIZE
+        self, *, after: UUID | None = None, limit: int = DEFAULT_PAGE_SIZE, offset: int = 0
     ) -> GuildPage:
-        """Open Guilds with a free slot, paged by stable `guild_id` (not a ranking)."""
+        """Open Guilds with a free slot, in alphabetical order (not a ranking).
+
+        Decisão do autor 2026-11-26 §10: ordem alfabética, 5 por página, `guild_id` como
+        desempate estável. ``after`` continua aceitando o último `guild_id` da página.
+        """
         if limit < 1:
             raise ValueError("limit must be positive")
         counts = (
@@ -338,14 +384,28 @@ class GuildService:
                 Guild.recruitment == Recruitment.OPEN.value,
                 member_count < capacity,
             )
-            .order_by(Guild.id)
+            .order_by(func.lower(Guild.name), Guild.id)
             .limit(limit + 1)
+            .offset(max(0, offset))
         )
-        if after is not None:
-            statement = statement.where(Guild.id > after)
         async with self.sessions() as session:
+            if after is not None:
+                anchor = await session.get(Guild, after)
+                if anchor is not None:
+                    key = func.lower(anchor.name)
+                    statement = statement.where(
+                        or_(
+                            func.lower(Guild.name) > key,
+                            and_(func.lower(Guild.name) == key, Guild.id > anchor.id),
+                        )
+                    )
             rows = (await session.execute(statement)).all()
-        items = tuple(self._public_view(guild, int(count)) for guild, count in rows[:limit])
+            items = tuple(
+                [
+                    await self._public_view_with_leader(session, guild, int(count))
+                    for guild, count in rows[:limit]
+                ]
+            )
         next_after = items[-1].guild_id if len(rows) > limit else None
         return GuildPage(items=items, next_after=next_after)
 
@@ -407,10 +467,21 @@ class GuildService:
     # ----------------------------------------------------------- founding
 
     async def create_guild(
-        self, actor: int, name: str, tag: str, *, now: datetime | None = None
+        self,
+        actor: int,
+        name: str,
+        tag: str,
+        *,
+        symbol: str | None = None,
+        now: datetime | None = None,
     ) -> GuildView:
-        """§55.5: founding costs nothing; the founder becomes Leader."""
+        """§55.5: founding costs nothing; the founder becomes Leader.
+
+        ``symbol`` vem da lista controlada (decisão do autor 2026-11-26 §16).
+        """
         now = _utcnow(now)
+        if symbol is not None and symbol not in GUILD_SYMBOLS:
+            raise GuildError("invalid_symbol")
         try:
             clean_name = normalize_guild_name(name)
             clean_tag = normalize_guild_tag(tag)
@@ -435,6 +506,7 @@ class GuildService:
                     revision=0,
                     created_at=now,
                     treasury_crowns=0,
+                    symbol=symbol,
                 )
                 session.add(guild)
                 await session.flush()
@@ -482,24 +554,77 @@ class GuildService:
 
     # -------------------------------------------------------------- invites
 
+    async def treasury_history(
+        self, actor: int, *, limit: int = 10
+    ) -> tuple[TreasuryEntryView, ...]:
+        """Últimos movimentos da Tesouraria (só membros)."""
+        async with self.sessions() as session:
+            character = await self._character(session, actor)
+            if character is None:
+                raise GuildError("character_missing")
+            membership = await session.get(GuildMember, character.id)
+            if membership is None:
+                raise GuildError("not_in_guild")
+            rows = (
+                await session.execute(
+                    select(GuildTreasuryEntry, Character.name)
+                    .outerjoin(Character, Character.id == GuildTreasuryEntry.character_id)
+                    .where(GuildTreasuryEntry.guild_id == membership.guild_id)
+                    .order_by(GuildTreasuryEntry.created_at.desc(), GuildTreasuryEntry.id)
+                    .limit(limit)
+                )
+            ).all()
+            return tuple(
+                TreasuryEntryView(entry.kind, entry.amount, entry.created_at, name)
+                for entry, name in rows
+            )
+
+    async def find_characters(self, name: str) -> tuple[CharacterCandidateView, ...]:
+        """Personagens deste servidor com esse nome (comparação sem maiúsculas)."""
+        clean = name.strip()
+        if not clean or len(clean) > 16:
+            return ()
+        async with self.sessions() as session:
+            rows = (
+                await session.scalars(
+                    select(Character)
+                    .where(
+                        Character.server_id == self.server_id,
+                        func.lower(Character.name) == clean.casefold(),
+                    )
+                    .order_by(Character.level, Character.id)
+                )
+            ).all()
+            return tuple(
+                CharacterCandidateView(row.id, row.name, row.level, row.character_class)
+                for row in rows
+            )
+
     async def invite(
-        self, actor: int, target_name: str, *, now: datetime | None = None
+        self,
+        actor: int,
+        target_name: str,
+        *,
+        target_character_id: UUID | None = None,
+        now: datetime | None = None,
     ) -> GuildInviteView:
         now = _utcnow(now)
         name = target_name.strip()
-        if not name or len(name) > 16:
+        if target_character_id is None and (not name or len(name) > 16):
             raise GuildError("character_not_found")
         await self._maintain_actor(actor, now)
         async with self.sessions.begin() as session:
             character, guild, membership = await self._actor_guild(session, actor, now)
             if not can_invite(GuildRole(membership.role)):
                 raise GuildError("no_permission")
+            lookup = (
+                Character.id == target_character_id
+                if target_character_id is not None
+                else func.lower(Character.name) == name.casefold()
+            )
             target = await session.scalar(
                 select(Character)
-                .where(
-                    Character.server_id == self.server_id,
-                    func.lower(Character.name) == name.casefold(),
-                )
+                .where(Character.server_id == self.server_id, lookup)
                 .with_for_update()
             )
             if target is None:
@@ -1065,37 +1190,31 @@ class GuildService:
 
     # ---------------------------------------------------------- dissolution
 
-    async def request_dissolution(self, actor: int, *, now: datetime | None = None) -> GuildView:
-        """Leader starts the 72h safety period; Treasury and Obras freeze meanwhile."""
-        now = _utcnow(now)
-        await self._maintain_actor(actor, now)
-        async with self.sessions.begin() as session:
-            character, guild, membership = await self._actor_guild(session, actor, now)
-            if membership.role != GuildRole.LEADER.value:
-                raise GuildError("no_permission")
-            if guild.dissolution_due_at is not None:
-                return await self._guild_view(session, guild, character.id)
-            guild.dissolution_requested_at = now
-            guild.dissolution_due_at = now + DISSOLUTION_PERIOD
-            guild.revision += 1
-            audit(session, guild.id, "dissolution_requested", character.id, None, now)
-            await session.flush()
-            return await self._guild_view(session, guild, character.id)
+    async def dissolve(self, actor: int, *, now: datetime | None = None) -> None:
+        """Dissolução imediata e definitiva (decisão do autor 2026-11-26 §9.12).
 
-    async def cancel_dissolution(self, actor: int, *, now: datetime | None = None) -> GuildView:
+        Só o Líder, e só quando ele é o único membro. Tesouraria e Obras são encerradas
+        com a Guilda (registro explícito de perda); não há período de 72h nem cancelamento.
+        Batalha de Guildas, Juramento ou Expedição em andamento continuam impedindo o
+        encerramento (GDD §30.3), pois a decisão não trata desses compromissos.
+        """
         now = _utcnow(now)
         await self._maintain_actor(actor, now)
         async with self.sessions.begin() as session:
             character, guild, membership = await self._actor_guild(session, actor, now)
             if membership.role != GuildRole.LEADER.value:
                 raise GuildError("no_permission")
-            if guild.dissolution_due_at is not None:
-                guild.dissolution_requested_at = None
-                guild.dissolution_due_at = None
-                guild.revision += 1
-                audit(session, guild.id, "dissolution_cancelled", character.id, None, now)
-            await session.flush()
-            return await self._guild_view(session, guild, character.id)
+            if await self._member_count(session, guild.id) > 1:
+                raise GuildError("dissolve_has_members")
+            if await has_cooperative_commitment(session, guild.id):
+                raise GuildError("dissolve_commitment")
+            await finalize_dissolution(
+                session, guild, now, reason="requested", actor_id=character.id
+            )
+
+    async def request_dissolution(self, actor: int, *, now: datetime | None = None) -> None:
+        """Compatibilidade: a dissolução passou a ser imediata (ver ``dissolve``)."""
+        await self.dissolve(actor, now=now)
 
     # -------------------------------------------------------------- helpers
 
@@ -1442,6 +1561,10 @@ class GuildService:
                 kind = ProjectKind(project.kind)
                 levels[kind] = max(levels[kind], project.level)
         capacity = _capacity(guild)
+        leader_name = next(
+            (character.name for member, character in rows if member.role == GuildRole.LEADER.value),
+            None,
+        )
         return GuildView(
             guild_id=guild.id,
             name=guild.name,
@@ -1473,7 +1596,26 @@ class GuildService:
                 guild.last_renamed_at + RENAME_COOLDOWN if guild.last_renamed_at else None
             ),
             dissolution_due_at=guild.dissolution_due_at,
+            symbol=guild.symbol or DEFAULT_GUILD_SYMBOL,
+            leader_name=leader_name,
+            viewer_crowns=next(
+                (character.crowns for member, character in rows if character.id == viewer_id), 0
+            ),
         )
+
+    async def _leader_name(self, session: AsyncSession, guild_id: UUID) -> str | None:
+        return await session.scalar(
+            select(Character.name)
+            .join(GuildMember, GuildMember.character_id == Character.id)
+            .where(GuildMember.guild_id == guild_id, GuildMember.role == GuildRole.LEADER.value)
+            .limit(1)
+        )
+
+    async def _public_view_with_leader(
+        self, session: AsyncSession, guild: Guild, member_count: int
+    ) -> PublicGuildView:
+        view = self._public_view(guild, member_count)
+        return replace(view, leader_name=await self._leader_name(session, guild.id))
 
     def _public_view(self, guild: Guild, member_count: int) -> PublicGuildView:
         capacity = _capacity(guild)
@@ -1488,6 +1630,7 @@ class GuildService:
             accepts_applications=(
                 recruitment is Recruitment.OPEN and accepts_entry(member_count, capacity)
             ),
+            symbol=guild.symbol or DEFAULT_GUILD_SYMBOL,
         )
 
     async def _invite_view(self, session: AsyncSession, invite: GuildInvite) -> GuildInviteView:
@@ -1509,6 +1652,10 @@ class GuildService:
             invitee_telegram_id=invitee.telegram_id,
             inviter_name=inviter.name if inviter is not None else None,
             status=invite.status,
+            guild_symbol=guild.symbol or DEFAULT_GUILD_SYMBOL,
+            leader_name=await self._leader_name(session, guild.id),
+            member_count=await self._member_count(session, guild.id),
+            capacity=_capacity(guild),
         )
 
     async def _application_view(
@@ -1529,6 +1676,10 @@ class GuildService:
             closed_by=application.closed_by,
             created_at=application.created_at,
             character_telegram_id=character.telegram_id,
+            character_class=character.character_class,
+            guild_symbol=guild.symbol or DEFAULT_GUILD_SYMBOL,
+            member_count=await self._member_count(session, guild.id),
+            capacity=_capacity(guild),
         )
 
 

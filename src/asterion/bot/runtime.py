@@ -146,6 +146,7 @@ from asterion.bot.settings_handlers import settings_router
 from asterion.bot.shop_handlers import shop_router
 from asterion.bot.social_handlers import social_router
 from asterion.bot.tdo_navigation_labels import TdoReturnLabelMiddleware
+from asterion.bot.text_prompt import PromptResetMiddleware
 from asterion.bot.varzeas_missions_handlers import varzeas_missions_router
 from asterion.bot.vde_missions_handlers import vde_missions_router
 from asterion.bot.weapon_trainer_handlers import weapon_trainer_router
@@ -210,6 +211,8 @@ def get_bot_runtime() -> BotRuntime:
         )
     )
     dispatcher.update.outer_middleware(SuspensionMiddleware(SanctionService(SessionFactory)))
+    # Prompts de texto temporários: qualquer botão encerra o pedido aberto (2026-11-26 §2).
+    dispatcher.callback_query.outer_middleware(PromptResetMiddleware())
     prologue = PrologueService(SessionFactory, settings.server_id, PROFILE)
     world = WorldService(SessionFactory, settings.server_id)
     legacy = LegacyService(SessionFactory, settings.server_id)

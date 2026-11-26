@@ -107,14 +107,14 @@ def render(state: Creation) -> Screen:
     elif step == "gender":
         rows = [
             [button(label, f"g{i}") for i, label in enumerate(GENDER_LABELS)],
-            [button("↩️ Voltar", "backname")],
+            [button("↩️ Retornar", "backname")],
         ]
     elif step == "race":
         rows = _pairs([button(_label("race", race), f"r{i}") for i, race in enumerate(RACES)])
-        rows.append([button("↩️ Voltar", "backgender")])
+        rows.append([button("↩️ Retornar", "backgender")])
     elif step == "class":
         rows = _pairs([button(_label("class", cls), f"c{i}") for i, cls in enumerate(CLASSES)])
-        rows.append([button("↩️ Voltar", "races")])
+        rows.append([button("↩️ Retornar", "races")])
     elif step.startswith(("race:", "class:")):
         race_page = step.startswith("race:")
         kind = "race" if race_page else "class"
@@ -123,7 +123,7 @@ def render(state: Creation) -> Screen:
         text = data["detail"]
         rows = [
             [button(f"{data['emoji']} Escolher {data['name']}", "choose")],
-            [button("↩️ Voltar", "races" if race_page else "classes")],
+            [button("↩️ Retornar", "races" if race_page else "classes")],
         ]
     elif step == "confirm":
         race = _entity("race", state.race or RACES[0])
@@ -140,7 +140,7 @@ def render(state: Creation) -> Screen:
             [button("✅ Confirmar Personagem", "confirm")],
             [button("👤 Nome", "name"), button("🎭 Gênero", "gender")],
             [button("🧿 Raça", "race"), button("⚜️ Classe", "class")],
-            [button("↩️ Voltar", "classes")],
+            [button("↩️ Retornar", "classes")],
         ]
     image_key = step
     if state.gender and step.startswith("race:"):

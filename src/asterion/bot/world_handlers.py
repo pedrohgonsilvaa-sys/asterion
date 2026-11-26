@@ -1695,9 +1695,11 @@ def world_router(
 
     @router.callback_query(F.data == "warehouse:root")
     @router.callback_query(F.data == "warehouse:root:refuge")
+    @router.callback_query(F.data == "warehouse:root:market")
     @router.callback_query(F.data.startswith("warehouse:page:"))
     async def warehouse_root(query: CallbackQuery):
-        if query.data == "warehouse:root:refuge":
+        # Decisão do autor 2026-11-26 §4.2/§8.1: o Armazém fica no Mercado.
+        if query.data in {"warehouse:root:refuge", "warehouse:root:market"}:
             warehouse_from_refuge.add(query.from_user.id)
         await query.answer()
         if warehouse is None or not isinstance(query.message, Message):
@@ -2147,8 +2149,8 @@ def world_router(
 
     @router.callback_query(F.data == "adv:hub")
     async def adventure_hub(query: CallbackQuery):
-        if await open_region_home(query):
-            return
+        # Decisão do autor 2026-11-26 §3–§4: ⚔️ Aventura é entrada do Menu Principal e
+        # abre o próprio submenu também nas Terras do Ocaso (só navegação).
         if await foreground(query):
             await query.answer()
             return

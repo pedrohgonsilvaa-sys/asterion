@@ -682,9 +682,9 @@ async def test_warehouse_back_returns_to_where_it_was_opened(database):
         method = bot.session.make_request.call_args.args[1]
         return method.reply_markup.inline_keyboard[-1][0].callback_data
 
-    assert await back_of("warehouse:root:refuge") == "refuge:local"
+    assert await back_of("warehouse:root:refuge") == "mkt:root"
     await back_of("warehouse:inventory:material")
-    assert await back_of("warehouse:root") == "refuge:local"
+    assert await back_of("warehouse:root") == "mkt:root"
     await back_of("inventory:root")
     assert await back_of("warehouse:root") == "inventory:root"
 

@@ -14,17 +14,26 @@ from asterion.application.character_surfaces import CharacterSurfacesService
 from asterion.bot.account_ui import (
     render_account,
     render_delete_confirmation,
+    render_deleted,
     render_deletion_pending,
     render_expired_action,
     render_help_root,
     render_help_topic,
     render_notifications,
     render_rename_preview,
+    render_rename_prompt,
     render_rename_start,
     render_settings,
 )
 from asterion.bot.character_surfaces_ui import render_profile
 from asterion.bot.creation_handlers import present
+from asterion.bot.text_prompt import (
+    PROMPTS,
+    HasPrompt,
+    PendingPrompt,
+    consume_reply,
+    show_on_prompt,
+)
 
 RENAME_PROMPT = "Responda a esta mensagem com o novo nome do personagem."
 DELETE_PROMPT = "⚠️ Para EXCLUIR o personagem, responda a esta mensagem digitando exatamente o nome:"
@@ -59,7 +68,9 @@ def settings_router(
             else:
                 await target.answer("Personagem indisponível.", show_alert=True)
             return
-        screen = render_account(view)
+        identity = await character_surfaces.identity(actor)
+        stats = await character_surfaces.attributes(actor)
+        screen = render_account(view, identity, stats)
         message = target if isinstance(target, Message) else target.message
         if isinstance(message, Message):
             await present(message, screen, images, edit=isinstance(target, CallbackQuery))
@@ -171,40 +182,48 @@ def settings_router(
         await query.answer()
         await show_account(query)
 
-    @router.callback_query(F.data == "account:rename")
+    @router.callback_query(F.data.in_({"account:rename", "account:rename:input"}))
     async def rename_start(query: CallbackQuery) -> None:
+        """Renomear (2026-11-26 §35.5): a tela atual vira o pedido do novo nome."""
         view = await service.account(query.from_user.id)
-        if view is None:
+        if view is None or not isinstance(query.message, Message):
             await query.answer("Personagem indisponível.", show_alert=True)
             return
-        await query.answer()
-        if isinstance(query.message, Message):
-            await present(query.message, render_rename_start(view), images, edit=True)
-
-    @router.callback_query(F.data == "account:rename:input")
-    async def rename_input(query: CallbackQuery) -> None:
-        if not isinstance(query.message, Message):
-            await query.answer()
-            return
-        prompt = await query.message.answer(
-            RENAME_PROMPT,
-            reply_markup=ForceReply(selective=True, input_field_placeholder="Novo nome"),
-            parse_mode=None,
-        )
         try:
-            await service.begin_rename(query.from_user.id, prompt.message_id)
+            await service.begin_rename(query.from_user.id, query.message.message_id)
         except AccountRejected as exc:
-            await prompt.edit_text(_account_error(exc.code))
-            await query.answer("Não foi possível iniciar o Renome.", show_alert=True)
+            if exc.code == "rename_cooldown" or view.rename_available_at is not None:
+                await query.answer()
+                await present(query.message, render_rename_start(view), images, edit=True)
+                return
+            await query.answer(_account_error(exc.code), show_alert=True)
             return
-        await query.answer("Responda à mensagem com o novo nome.")
+        await query.answer()
+        await present(query.message, render_rename_prompt(), images, edit=True)
+        PROMPTS.open(query.from_user.id, "acct:rename", query.message)
+
+    @router.message(F.text, HasPrompt("acct:rename"))
+    async def rename_text(message: Message, prompt: PendingPrompt, event_update) -> None:
+        text = message.text or ""
+        await consume_reply(message)
+        PROMPTS.close(message.from_user.id)
+        try:
+            view = await service.preview_rename(
+                message.from_user.id, prompt.message_id, event_update.update_id, text
+            )
+        except AccountRejected as exc:
+            screen = render_rename_prompt(_account_error(exc.code))
+            await show_on_prompt(message, prompt, screen, images)
+            PROMPTS.follow(message.from_user.id, prompt)
+            return
+        await show_on_prompt(message, prompt, render_rename_preview(view), images)
 
     @router.callback_query(F.data.startswith("account:r:confirm:"))
     async def rename_confirm(query: CallbackQuery) -> None:
         parts = (query.data or "").split(":")
         try:
             revision = _parse_base36(parts[3]) if len(parts) == 4 else -1
-            new_name = await service.confirm_rename(query.from_user.id, revision)
+            await service.confirm_rename(query.from_user.id, revision)
         except (ValueError, AccountRejected) as exc:
             await query.answer(_account_error(getattr(exc, "code", "expired")), show_alert=True)
             if isinstance(query.message, Message):
@@ -213,7 +232,6 @@ def settings_router(
         await query.answer("Nome alterado.")
         if isinstance(query.message, Message):
             await show_account(query)
-            await query.message.answer(f"✅ Nome Alterado · {new_name}")
 
     @router.callback_query(F.data == "account:delete")
     async def delete_preview(query: CallbackQuery) -> None:
@@ -229,7 +247,32 @@ def settings_router(
             return
         await query.answer()
         if isinstance(query.message, Message):
-            await present(query.message, render_delete_confirmation(view), images, edit=True)
+            identity = await character_surfaces.identity(query.from_user.id)
+            stats = await character_surfaces.attributes(query.from_user.id)
+            await present(
+                query.message,
+                render_delete_confirmation(view, identity, stats),
+                images,
+                edit=True,
+            )
+
+    @router.callback_query(F.data == "account:d:now")
+    async def delete_now(query: CallbackQuery) -> None:
+        """Apagar (2026-11-26 §35.6): confirmado pelo botão da tela de confirmação."""
+        view = await service.account(query.from_user.id)
+        if view is None or (view.deletion_preview_id is None and not view.deletion_pending):
+            await query.answer("Esta ação expirou.", show_alert=True)
+            if isinstance(query.message, Message):
+                await present(query.message, render_expired_action(), images, edit=True)
+            return
+        try:
+            deleted = await service.delete_now(query.from_user.id, view.name)
+        except AccountRejected as exc:
+            await query.answer(_account_error(exc.code), show_alert=True)
+            return
+        await query.answer("Personagem apagado.")
+        if isinstance(query.message, Message):
+            await present(query.message, render_deleted(deleted), images, edit=True)
 
     @router.callback_query(F.data == "account:d:input")
     async def delete_input(query: CallbackQuery) -> None:

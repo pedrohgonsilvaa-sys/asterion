@@ -325,17 +325,16 @@ async def test_region_hud_shows_bar_and_face_button(service, database):
 
     screen = render_refuge_dashboard(_view(), hud=RefugeHud(flagelo=status))
     assert (
-        "🩸 <b>Varkhenn, o Flagelo das Cinzas</b>\n🟥🟥⬜⬜⬜⬜⬜⬜⬜⬜ <code>24%</code>"
-        .replace("🟥", "🟪")
+        "🔥 <b>Despertar de Varkhenn</b>\n🟥🟥⬜⬜⬜⬜⬜⬜⬜⬜ <code>24%</code>"
     ) in screen.text
     buttons = [b.text for row in screen.keyboard.inline_keyboard for b in row]
-    assert "⚔️ Enfrentar o Flagelo" not in buttons
+    assert not any(text.endswith(" Despertar") for text in buttons)
     await _spawn(database, service, region_id="vde")
     status = await service.region_status(actor)
     assert status.flagelo_awake is True
     screen = render_refuge_dashboard(_view(), hud=RefugeHud(flagelo=status))
     pairs = {b.text: b.callback_data for row in screen.keyboard.inline_keyboard for b in row}
-    assert pairs["⚔️ Enfrentar o Flagelo"] == "flg:hub"
+    assert [data for text, data in pairs.items() if text.endswith(" Despertar")] == ["flg:hub"]
 
 
 # ------------------------------------------------------------------ Crafting global

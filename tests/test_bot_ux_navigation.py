@@ -50,7 +50,10 @@ def _button(screen, label):
 
 def test_adventure_hub_exposes_only_shared_activities():
     screen = render_adventure()
-    assert set(_callbacks(screen)) == {"dungeon:known", "wev:hub", "pvp:hub", "menu:back"}
+    # Decisão do autor 2026-11-26 §4: Refúgio, Desbravar, Caçadas e Masmorras.
+    assert set(_callbacks(screen)) == {
+        "refuge:local", "tdo:explore", "tdo:hunt", "dungeon:known", "menu:back"
+    }
 
 
 def test_campaign_root_only_exposes_navigation_and_contextual_activities():
@@ -178,7 +181,7 @@ def test_local_is_the_entry_for_manual_hunt_round_and_explore():
     assert _buttons(local)["world:round"] == "Ronda"
     assert _buttons(local)["road:explore:start"] == "Desbravar"
     assert "road:round:new:5" not in _callbacks(local)
-    assert _buttons(local)["road:route:refuge"] == "Voltar ao Refúgio"
+    assert _buttons(local)["road:route:refuge"] == "↩️ Retornar"
     # v1.0.18: nas Terras do Ocaso o hub do Refúgio substitui "Viajar".
     assert "world:map:fromlocal" not in _callbacks(local)
     assert "❤️ HP · 120/200" in local.text

@@ -37,7 +37,7 @@ def test_main_menu_has_desbravar_and_no_removed_entries():
     rows = _labels(refuge_menu_keyboard(gift_available=True))
     assert rows == [
         ["✨ Resgatar Dádiva Diária"],
-        ["⛰️ Desbravar", "🗺️ Mapa"],
+        ["⚔️ Aventura", "🗺️ Mapa"],
         ["👤 Personagem", "🏪 Mercado"],
         ["🏟️ Arena", "🏰 Guilda"],
         ["🌌 Eventos", "📖 Códice"],
@@ -45,14 +45,14 @@ def test_main_menu_has_desbravar_and_no_removed_entries():
         ["🌐 Comunidade", "⚙️ Configurações"],
     ]
     everything = " ".join(label for row in rows for label in row)
-    for gone in ("Explorar", "Refúgio", "Caçadas", "Masmorras", "Forja"):
+    for gone in ("Explorar", "Desbravar", "Refúgio", "Caçadas", "Masmorras", "Forja"):
         assert gone not in everything
     callbacks = {
         b.text: b.callback_data
         for row in refuge_menu_keyboard(gift_available=False).inline_keyboard
         for b in row
     }
-    assert callbacks["⛰️ Desbravar"] == "tdo:explore"
+    assert callbacks["⚔️ Aventura"] == "adv:hub"
     assert callbacks["🗺️ Mapa"] == "world:map"
 
 
@@ -72,11 +72,11 @@ def test_desbravar_menu_layout_and_text():
         ["🔥 Estrada das Cinzas", "🌑 Charneca da Fuligem"],
         ["🌲 Bosque Calcinado", "🏚️ Ruínas do Vigia"],
         ["🕯️ Câmara do Poente"],
-        ["↩️ Voltar"],
+        ["↩️ Retornar"],
     ]
     data = [b.callback_data for row in screen.keyboard.inline_keyboard for b in row]
     assert data[:2] == ["dungeon:known", "refuge:local"]
-    assert data[-1] == "menu:back"
+    assert data[-1] == "adv:hub"
     assert "Caçada" not in screen.text + " ".join(
         b.text for row in screen.keyboard.inline_keyboard for b in row
     )

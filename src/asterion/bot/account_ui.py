@@ -14,92 +14,56 @@ from asterion.application.account import (
 )
 from asterion.bot.creation_ui import Screen
 
+# Ajuda/Wiki (decisão do autor 2026-11-26 §35.3): um assunto por botão, na ordem do molde.
+# Os textos vêm das explicações já existentes, separadas por assunto.
 HELP_TOPICS = (
-    (
-        "start",
-        "Primeiros Passos",
-        "Use o Menu para abrir Campanha, Aventura, Personagem, Códice e Configurações. "
-        "O jogo salva seu progresso no servidor.",
-    ),
-    (
-        "combat",
-        "Combate",
-        "Durante um combate, escolha uma ação disponível no painel. /menu e /start "
-        "retomam a atividade ativa sem encerrá-la.",
-    ),
-    (
-        "adventure",
-        "Campanha e Aventura",
-        "Campanha: Mapa e Missões mostram caminhos e objetivos conhecidos; Caçadas e "
-        "Desbravar seguem as regras de cada atividade. Aventura: Masmorras, Eventos e PvP.",
-    ),
-    (
-        "character",
-        "Personagem",
-        "Atributos mostram os valores atuais. Perfil guarda uma História opcional. "
-        "Caminhos, Talentos, Artes e Doutrinas configuram seu personagem.",
-    ),
-    (
-        "equipment",
-        "Equipamentos",
-        "Inventário e Equipamentos mostram itens adquiridos. Aprimoramentos, Runas e "
-        "Encantamentos alteram a configuração conforme as regras do jogo.",
-    ),
-    (
-        "progression",
-        "Artes, Talentos e Caminho",
-        "Artes equipadas podem ser usadas em combate. Talentos e Caminho têm requisitos "
-        "próprios e podem ser configurados em locais permitidos.",
-    ),
-    (
-        "hunt",
-        "Caçada e Ronda",
-        "Caçadas são encontros manuais. Rondas resolvem um lote de encontros conforme "
-        "a preparação e as regras da atividade.",
-    ),
-    (
-        "explore",
-        "Desbravar",
-        "A exploração revela informações e locais conforme as escolhas disponíveis. "
-        "Descobertas podem aparecer no Mapa e no Códice.",
-    ),
-    (
-        "dungeon",
-        "Masmorras e Grupo",
-        "Masmorras conhecidas podem ser iniciadas nas dificuldades liberadas. A run "
-        "mantém seu estado ao reconectar.",
-    ),
-    (
-        "craft",
-        "Ofícios e Criação",
-        "Ofícios liberam receitas. A Criação mostra custos e resultado antes da "
-        "confirmação, e valida materiais e Coroas no commit.",
-    ),
-    (
-        "runes",
-        "Runas e Encantamentos",
-        "Runas e Encantamentos modificam Equipamentos. Consulte o detalhe do item "
-        "para compatibilidade, custos e ações disponíveis.",
-    ),
-    (
-        "knowledge",
-        "Bestiário e Códice",
-        "Essas telas guardam apenas criaturas observadas e conhecimentos adquiridos "
-        "durante a jornada.",
-    ),
-    (
-        "cosmetics",
-        "Doutrinas e Cosméticos",
-        "Cosméticos mudam a apresentação. Doutrinas salvam referências à configuração "
-        "de combate e respeitam os bloqueios de atividade.",
-    ),
-    (
-        "account",
-        "Conta e Configurações",
-        "Ajuste notificações, renomeie o personagem ou solicite a exclusão pendente, "
-        "que pode ser cancelada dentro do prazo.",
-    ),
-)
+    ("start", "📖", "Tutorial",
+     "Use o Menu para abrir Aventura, Personagem, Códice e Configurações. "
+     "O jogo salva seu progresso no servidor."),
+    ("combat", "⚔️", "Combate",
+     "Durante um combate, escolha uma ação disponível no painel. /menu e /start "
+     "retomam a atividade ativa sem encerrá-la."),
+    ("explore", "⛰️", "Desbravar",
+     "A exploração revela informações e locais conforme as escolhas disponíveis. "
+     "Descobertas podem aparecer no Mapa e no Códice."),
+    ("character", "👤", "Personagem",
+     "Atributos mostram os valores atuais. Perfil guarda uma História opcional."),
+    ("equipment", "🛡️", "Equipamentos",
+     "Inventário e Equipamentos mostram itens adquiridos. Aprimoramentos alteram a "
+     "configuração conforme as regras do jogo."),
+    ("arts", "✨", "Artes", "Artes equipadas podem ser usadas em combate."),
+    ("talents", "🌟", "Talentos",
+     "Talentos têm requisitos próprios e podem ser configurados em locais permitidos."),
+    ("path", "🧭", "Caminho",
+     "O Caminho tem requisitos próprios e pode ser configurado em locais permitidos."),
+    ("hunt", "🐺", "Caçada", "Caçadas são encontros manuais."),
+    ("round", "🔄", "Ronda",
+     "Rondas resolvem um lote de encontros conforme a preparação e as regras da atividade."),
+    ("dungeon", "🗝️", "Masmorras",
+     "Masmorras conhecidas podem ser iniciadas nas dificuldades liberadas. A run "
+     "mantém seu estado ao reconectar."),
+    ("group", "👥", "Grupo", "O Grupo reúne até 4 personagens."),
+    ("professions", "⚒️", "Ofícios", "Ofícios liberam receitas."),
+    ("craft", "🛠️", "Criação",
+     "A Criação mostra custos e resultado antes da confirmação, e valida materiais e "
+     "Coroas no commit."),
+    ("runes", "🔮", "Runas",
+     "Runas modificam Equipamentos. Consulte o detalhe do item para compatibilidade, "
+     "custos e ações disponíveis."),
+    ("enchantments", "✨", "Encantamentos",
+     "Encantamentos modificam Equipamentos. Consulte o detalhe do item para "
+     "compatibilidade, custos e ações disponíveis."),
+    ("bestiary", "🐾", "Bestiário",
+     "O Bestiário guarda apenas criaturas observadas durante a jornada."),
+    ("codex", "📚", "Códice",
+     "O Códice guarda apenas conhecimentos adquiridos durante a jornada."),
+    ("doctrines", "⚜️", "Doutrinas",
+     "Doutrinas salvam referências à configuração de combate e respeitam os bloqueios de "
+     "atividade."),
+    ("cosmetics", "🎨", "Cosméticos", "Cosméticos mudam a apresentação."),
+    ("account", "👤", "Conta", "Na Conta você renomeia ou apaga o personagem."),
+    ("settings", "⚙️", "Configurações", "Nas Configurações você ajusta as notificações."),
+)  # fmt: skip
 
 
 def _button(text: str, data: str) -> InlineKeyboardButton:
@@ -121,118 +85,173 @@ def _base36(value: int) -> str:
     return out
 
 
+def _html(*parts: str | None) -> str:
+    return "\n\n".join(part for part in parts if part)
+
+
+def _back(data: str, label: str = "↩️ Retornar") -> list[InlineKeyboardButton]:
+    return [_button(label, data)]
+
+
 def render_settings() -> Screen:
+    """Configurações (decisão do autor 2026-11-26 §35.1)."""
     return Screen(
-        "🎛️ Configurações\n\nEscolha uma opção.",
+        _html(
+            "⚙️ <b>Configurações</b>",
+            "<i>Aqui você gerencia as preferências da sua conta, as notificações e as opções "
+            "de ajuda de Asterion.</i>",
+        ),
         "menu",
         _keyboard(
             [
-                [_button("🔔 Notificações", "settings:notifications")],
-                [_button("🛟 Ajuda", "help:root")],
+                [_button("🔔 Notificações", "settings:notifications"), _button("🆘 Ajuda", "help:root")],  # noqa: E501
                 [_button("👤 Conta", "account:root")],
-                [_button("← Menu", "menu:back")],
-            ]
-        ),
-    )
-
-
-def render_notifications(view: NotificationPreferenceView) -> Screen:
-    state = "Ativas" if view.enabled else "Silenciadas"
-    next_state = "Desativar" if view.enabled else "Ativar"
-    return Screen(
-        f"🔔 Notificações\n\nEssenciais · {state}\n\n"
-        "Mensagens necessárias para as ações que você iniciou continuam sendo exibidas.",
-        "menu",
-        _keyboard(
-            [
-                [
-                    _button(
-                        next_state,
-                        f"settings:n:essentials:{_base36(view.revision)}:{int(view.enabled)}",
-                    )
-                ],
-                [_button("← Configurações", "settings:root")],
-            ]
-        ),
-    )
-
-
-def render_help_root() -> Screen:
-    rows = []
-    lines = ["🛟 Ajuda", "", "Escolha um assunto.", ""]
-    for key, title, _body in HELP_TOPICS:
-        lines.append(title)
-        rows.append([_button(title, f"help:{key}")])
-    rows.extend([[_button("← Configurações", "settings:root")]])
-    return Screen("\n".join(lines), "menu", _keyboard(rows))
-
-
-def render_help_topic(key: str) -> Screen:
-    topic = next((item for item in HELP_TOPICS if item[0] == key), None)
-    if topic is None:
-        return render_help_root()
-    _key, title, body = topic
-    return Screen(
-        f"🛟 {title}\n\n{body}",
-        "menu",
-        _keyboard(
-            [
-                [_button("← Ajuda", "help:root")],
-                [_button("Configurações", "settings:root"), _button("Menu", "menu:back")],
-            ]
-        ),
-    )
-
-
-def render_account(view: AccountView) -> Screen:
-    if view.deletion_pending:
-        return Screen(
-            f"👤 Conta\n\n{escape(view.name)} · Nv. {view.level}\n\n"
-            f"⏳ Exclusão Pendente · {_remaining(view.deletion_due_at)}",
-            "character",
-            _keyboard(
-                [
-                    [_button("Acompanhar Exclusão", "account:d:pending")],
-                    [_button("← Configurações", "settings:root")],
-                ]
-            ),
-            parse_mode="HTML",
-        )
-    return Screen(
-        f"👤 Conta\n\n{escape(view.name)} · Nv. {view.level}",
-        "character",
-        _keyboard(
-            [
-                [_button("✏️ Renomear Personagem · Identidade", "account:rename")],
-                [_button("🗑️ Excluir Personagem · Exclusão", "account:delete")],
-                [_button("← Configurações", "settings:root")],
+                _back("menu:back"),
             ]
         ),
         parse_mode="HTML",
     )
 
 
-def render_rename_start(view: AccountView) -> Screen:
-    if view.rename_available_at is not None:
+def render_notifications(view: NotificationPreferenceView) -> Screen:
+    """Notificações (§35.2)."""
+    state = "Ativas" if view.enabled else "Silenciadas"
+    toggle = "🔕 Desativar" if view.enabled else "🔔 Ativar"
+    return Screen(
+        _html(
+            "🔔 <b>Notificações</b>",
+            "<i>Controle as mensagens automáticas que Asterion envia sobre ações iniciadas "
+            "por você.</i>",
+            f"🔔 <b>Essenciais</b> · <code>{state}</code>",
+            "<i>Mensagens necessárias para concluir ou acompanhar ações iniciadas por você "
+            "continuam sendo exibidas.</i>",
+        ),
+        "menu",
+        _keyboard(
+            [
+                [
+                    _button(
+                        toggle,
+                        f"settings:n:essentials:{_base36(view.revision)}:{int(view.enabled)}",
+                    )
+                ],
+                _back("settings:root"),
+            ]
+        ),
+        parse_mode="HTML",
+    )
+
+
+def render_help_root() -> Screen:
+    """Ajuda/Wiki (§35.3): cada assunto em um botão, duas colunas."""
+    buttons = [_button(f"{emoji} {title}", f"help:{key}") for key, emoji, title, _ in HELP_TOPICS]
+    rows = [buttons[index : index + 2] for index in range(0, len(buttons), 2)]
+    return Screen(
+        _html(
+            "🆘 <b>Ajuda</b>",
+            "<i>Consulte os sistemas de Asterion e encontre explicações rápidas sobre cada "
+            "parte da sua jornada.</i>",
+        ),
+        "menu",
+        _keyboard([*rows, _back("settings:root")]),
+        parse_mode="HTML",
+    )
+
+
+def render_help_topic(key: str) -> Screen:
+    topic = next((item for item in HELP_TOPICS if item[0] == key), None)
+    if topic is None:
+        return render_help_root()
+    _key, emoji, title, body = topic
+    return Screen(
+        _html(f"{emoji} <b>{escape(title)}</b>", f"<i>{escape(body)}</i>"),
+        "menu",
+        _keyboard([_back("help:root")]),
+        parse_mode="HTML",
+    )
+
+
+def _status_block(identity, stats) -> str | None:
+    """Classe + nome + nível, Título dinâmico e HP/Vigor/XP com barras (§35.4)."""
+    from asterion.bot.character_ui import resource_bars
+    from asterion.bot.ui_format import DEFAULT_TITLE
+    from asterion.bot.world_ui import CLASS_EMOJI
+
+    if identity is None:
+        return None
+    head = (
+        f"{CLASS_EMOJI.get(identity.character_class, '👤')} <b>{escape(identity.name)}</b> · "
+        f"<code>Nv. {identity.level}</code>\n"
+        f"🎖️ <code>{escape(identity.selected_title or DEFAULT_TITLE)}</code>"
+    )
+    if stats is None:
+        return head
+    bars = resource_bars(
+        stats.hp, stats.max_hp, stats.vigor, stats.max_vigor, stats.xp, stats.xp_required
+    )
+    return f"{head}\n\n{bars}"
+
+
+def render_account(view: AccountView, identity=None, stats=None) -> Screen:
+    """Conta (§35.4): imagem do personagem, status e Renomear/Apagar lado a lado."""
+    if view.deletion_pending:
         return Screen(
-            "✏️ Renomear Personagem\n\n"
-            f"🏷️ Nome Atual · {escape(view.name)}\n\n"
-            f"🔒 Renome disponível em · {_date(view.rename_available_at)}",
+            _html(
+                "👤 <b>Conta</b>",
+                f"{escape(view.name)} · <code>Nv. {view.level}</code>",
+                f"⏳ <b>Exclusão Pendente</b> · <code>{_remaining(view.deletion_due_at)}</code>",
+            ),
             "character",
-            _keyboard([[_button("← Conta", "account:root")]]),
+            _keyboard([[_button("⏳ Exclusão", "account:d:pending")], _back("settings:root")]),
             parse_mode="HTML",
         )
+    status = _status_block(identity, stats) or (
+        f"<b>{escape(view.name)}</b> · <code>Nv. {view.level}</code>"
+    )
     return Screen(
-        "✏️ Renomear Personagem\n\n"
-        f"🏷️ Nome Atual · {escape(view.name)}\n\n"
-        "✅ Renome · Disponível\n\nEnvie no chat o novo nome do personagem.",
+        _html(
+            "👤 <b>Conta</b>",
+            "<i>Aqui você gerencia a identidade da sua conta e acompanha os principais "
+            "status do seu personagem.</i>",
+            status,
+        ),
         "character",
         _keyboard(
             [
-                [_button("Enviar novo nome", "account:rename:input")],
-                [_button("← Conta", "account:root")],
+                [_button("✏️ Renomear", "account:rename"), _button("🗑️ Apagar", "account:delete")],
+                _back("settings:root"),
             ]
         ),
+        parse_mode="HTML",
+    )
+
+
+def render_rename_prompt(error: str | None = None) -> Screen:
+    """Renomear (§35.5): o pedido usa a própria tela, sem botão de Identidade."""
+    return Screen(
+        _html(
+            "✏️ <b>Renomear</b>",
+            "<i>Escolha um novo nome para o seu personagem.</i>",
+            escape(error) if error else None,
+            "✏️ <b>Envie o novo nome do personagem.</b>",
+        ),
+        "character",
+        _keyboard([_back("account:root")]),
+        parse_mode="HTML",
+    )
+
+
+def render_rename_start(view: AccountView) -> Screen:
+    """Renome em recarga: mostra quando volta a ficar disponível."""
+    return Screen(
+        _html(
+            "✏️ <b>Renomear</b>",
+            f"🏷️ <b>Nome Atual</b> · <code>{escape(view.name)}</code>",
+            "🔒 <b>Renome disponível em</b> · "
+            f"<code>{_date(view.rename_available_at) if view.rename_available_at else '—'}</code>",
+        ),
+        "character",
+        _keyboard([_back("account:root")]),
         parse_mode="HTML",
     )
 
@@ -249,8 +268,8 @@ def render_rename_preview(view: RenameInputView) -> Screen:
             "character",
             _keyboard(
                 [
-                    [_button("Alterar Nome", "account:rename:input")],
-                    [_button("← Conta", "account:root")],
+                    [_button("✏️ Alterar", "account:rename")],
+                    [_button("↩️ Retornar", "account:root")],
                 ]
             ),
         )
@@ -263,31 +282,31 @@ def render_rename_preview(view: RenameInputView) -> Screen:
         _keyboard(
             [
                 [_button("Confirmar Renome", f"account:r:confirm:{_base36(view.revision)}")],
-                [_button("Alterar Nome", "account:rename:input")],
-                [_button("← Conta", "account:root")],
+                [_button("✏️ Alterar", "account:rename")],
+                [_button("↩️ Retornar", "account:root")],
             ]
         ),
         parse_mode="HTML",
     )
 
 
-def render_delete_confirmation(view: AccountView) -> Screen:
+def render_delete_confirmation(view: AccountView, identity=None, stats=None) -> Screen:
+    """Apagar Personagem (§35.6). O aviso ⚠️ é texto normal, sem negrito."""
     if view.deletion_preview_id is None:
         return render_expired_action()
+    status = _status_block(identity, stats) or (
+        f"<b>{escape(view.name)}</b> · <code>Nv. {view.level}</code>"
+    )
     return Screen(
-        "🗑️ Excluir Personagem\n\n"
-        f"{escape(view.name)} · Nv. {view.level}\n\n"
-        "⚠️ Tem certeza? A exclusão é imediata e definitiva.\n"
-        "Todo o progresso deste personagem será apagado e não há recuperação.\n"
-        "Depois você poderá criar um novo personagem.\n\n"
-        "Para confirmar, você vai digitar o nome do personagem.",
-        "character",
-        _keyboard(
-            [
-                [_button("Digitar o nome para excluir", "account:d:input")],
-                [_button("← Conta", "account:root")],
-            ]
+        _html(
+            "🗑️ <b>Apagar Personagem</b>",
+            status,
+            "<i>Apagar o personagem é uma ação definitiva. Todo o progresso, equipamentos e "
+            "dados vinculados a este personagem serão removidos.</i>",
+            "⚠️ Essa ação não pode ser desfeita.",
         ),
+        "character",
+        _keyboard([[_button("🗑️ Apagar", "account:d:now")], _back("account:root", "↩️ Cancelar")]),
         parse_mode="HTML",
     )
 
@@ -310,9 +329,19 @@ def render_deletion_pending(view: AccountView) -> Screen:
                     )
                 ],
                 [_button("Excluir agora (digitar o nome)", "account:d:input")],
-                [_button("← Conta", "account:root")],
+                [_button("↩️ Retornar", "account:root")],
             ]
         ),
+        parse_mode="HTML",
+    )
+
+
+def render_deleted(name: str) -> Screen:
+    return Screen(
+        f"🗑️ <b>Apagar Personagem</b>\n\n<i>{escape(name)} foi apagado. Use /start para "
+        "criar um novo personagem.</i>",
+        "menu",
+        None,
         parse_mode="HTML",
     )
 
@@ -321,7 +350,7 @@ def render_expired_action() -> Screen:
     return Screen(
         "⏳ Ação Expirada\n\nEsta ação não está mais disponível. Atualize a tela para continuar.",
         "menu",
-        _keyboard([[_button("Atualizar", "account:root"), _button("← Menu", "menu:back")]]),
+        _keyboard([[_button("Atualizar", "account:root"), _button("↩️ Retornar", "menu:back")]]),
     )
 
 

@@ -50,7 +50,6 @@ from asterion.domain.guild_battle import (
     COMBATANTS,
     FRONT_SIZES,
     FRONTS,
-    GUILD_BATTLE_MIN_LEVEL,
     INITIAL_RATING,
     MAX_RESERVES,
     TURN_TTL,
@@ -70,7 +69,7 @@ from asterion.domain.guild_battle import (
     reward_eligible,
     schedule_for,
 )
-from asterion.domain.guilds import GuildRole
+from asterion.domain.guilds import DEFAULT_GUILD_SYMBOL, GuildRole
 from asterion.domain.road import (
     RULESET,
     PlayerCombatantSpec,
@@ -141,9 +140,11 @@ class GuildBattleHubView:
     next_starts_at: datetime
     registration_open: bool
     registration: RegistrationView | None
-    # Members at the current Nv.30 or more, by name; only filled for the Leader.
+    # Members of the Guild, by name; only filled for the Leader.
     candidates: tuple[MemberOption, ...]
     in_fight: bool
+    guild_tag: str = ""
+    guild_symbol: str = DEFAULT_GUILD_SYMBOL
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,6 +220,8 @@ class StandingRow:
     losses: int
     byes: int
     reward_eligible: bool
+    guild_tag: str = ""
+    guild_symbol: str = DEFAULT_GUILD_SYMBOL
 
 
 def _utcnow(now: datetime | None) -> datetime:
@@ -384,7 +387,6 @@ class GuildBattleService:
                         .where(
                             GuildMember.guild_id == guild.id,
                             Character.server_id == self.server_id,
-                            Character.level >= GUILD_BATTLE_MIN_LEVEL,
                         )
                         .order_by(Character.name, Character.id)
                     )
@@ -409,6 +411,8 @@ class GuildBattleService:
             registration,
             candidates,
             in_fight is not None,
+            guild.tag,
+            guild.symbol or DEFAULT_GUILD_SYMBOL,
         )
 
     async def deliverable(
@@ -1054,7 +1058,7 @@ class GuildBattleService:
         async with self.sessions() as session:
             rows = (
                 await session.execute(
-                    select(GuildBattleProfile, Guild.name)
+                    select(GuildBattleProfile, Guild.name, Guild.tag, Guild.symbol)
                     .join(Guild, Guild.id == GuildBattleProfile.guild_id)
                     .where(
                         GuildBattleProfile.server_id == self.server_id,
@@ -1062,13 +1066,13 @@ class GuildBattleService:
                     )
                 )
             ).all()
-        by_id = {profile.guild_id: (profile, name) for profile, name in rows}
+        by_id = {row[0].guild_id: tuple(row) for row in rows}
         ordered = order_standings(
-            [StandingCandidate(p.guild_id, p.points, p.rating) for p, _ in rows]
+            [StandingCandidate(p.guild_id, p.points, p.rating) for p, *_ in rows]
         )
         result = []
         for position, item in enumerate(ordered, start=1):
-            profile, name = by_id[item.guild_id]
+            profile, name, tag, symbol = by_id[item.guild_id]
             result.append(
                 StandingRow(
                     position,
@@ -1082,6 +1086,8 @@ class GuildBattleService:
                     profile.losses,
                     profile.byes,
                     reward_eligible(profile.real_battles),
+                    tag,
+                    symbol or DEFAULT_GUILD_SYMBOL,
                 )
             )
         return tuple(result)
@@ -1260,7 +1266,7 @@ class GuildBattleService:
         return character, guild
 
     async def _eligible_members(self, session, guild_id, character_ids) -> dict[UUID, Character]:
-        """Members of this Guild, on this server, at the current Nv.30 or more."""
+        """Members of this Guild, on this server (sem requisito de nível, decisão 2026-11-26)."""
         rows = (
             await session.scalars(
                 select(Character)
@@ -1268,7 +1274,6 @@ class GuildBattleService:
                 .where(
                     Character.id.in_(list(character_ids)),
                     Character.server_id == self.server_id,
-                    Character.level >= GUILD_BATTLE_MIN_LEVEL,
                     GuildMember.guild_id == guild_id,
                 )
             )
