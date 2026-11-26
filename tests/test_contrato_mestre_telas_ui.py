@@ -51,7 +51,7 @@ def test_tdo_region_lists_only_known_locals_without_level_or_brazier():
     assert _labels(screen) == [
         ["🛖 Refúgio do Ocaso"],
         ["🌫️ Charneca da Fuligem"],
-        ["🏛️ Câmara do Poente"],
+        ["🕯️ Câmara do Poente"],
         ["↩️ Voltar"],
     ]
     assert "Nv." not in screen.text and "Braseiro" not in screen.text
@@ -63,7 +63,7 @@ def test_tdo_region_lists_only_known_locals_without_level_or_brazier():
         "🌫️ Charneca da Fuligem",
         "🌲 Bosque Calcinado",
         "🏚️ Ruínas do Vigia",
-        "🏛️ Câmara do Poente",
+        "🕯️ Câmara do Poente",
     ]
 
 

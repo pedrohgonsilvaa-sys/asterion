@@ -65,13 +65,13 @@ def test_forge_lives_inside_the_market():
 
 def test_desbravar_menu_layout_and_text():
     screen = render_desbravar()
-    assert screen.text.startswith("<b>🧭 Desbravar</b>\n\n<i>As Terras do Ocaso se estendem")
+    assert screen.text.startswith("<b>⛰️ Desbravar</b>\n\n<i>As Terras do Ocaso se estendem")
     assert screen.text.endswith("uma ameaça à espreita.</i>")
     assert _labels(screen.keyboard) == [
         ["🗝️ Masmorras", "🌘 Refúgio do Ocaso"],
         ["🔥 Estrada das Cinzas", "🌑 Charneca da Fuligem"],
         ["🌲 Bosque Calcinado", "🏚️ Ruínas do Vigia"],
-        ["🌒 Câmara do Poente"],
+        ["🕯️ Câmara do Poente"],
         ["↩️ Voltar"],
     ]
     data = [b.callback_data for row in screen.keyboard.inline_keyboard for b in row]
@@ -130,7 +130,7 @@ async def test_discover_all_locations_is_idempotent_and_records_the_camara(datab
 async def test_desbravar_entry_opens_the_menu_without_moving(database):
     actor, road, sessions = await _ready(database, 894502)
     screen = await _feed(sessions, road, actor, callback_update("tdo:explore", actor=actor))
-    assert "🧭 Desbravar" in screen.text
+    assert "⛰️ Desbravar" in screen.text
     assert "tdo:desb:charneca" in _callbacks(screen)
     assert await _location(sessions, actor) == REFUGE
 

@@ -44,7 +44,7 @@ TDO_LOCALS = (
     (CHARNECA_LABEL, "charneca", "🌫️"),
     (BOSQUE_LABEL, "bosque", "🌲"),
     (RUINS_LABEL, "ruinas", "🏚️"),
-    (CAMARA_LABEL, "camara", "🏛️"),
+    (CAMARA_LABEL, "camara", "🕯️"),
 )
 TDO_LOCAL_BY_KEY = {key: (label, icon) for label, key, icon in TDO_LOCALS}
 REGION_ICONS = {TDO_REGION: "🌘"}

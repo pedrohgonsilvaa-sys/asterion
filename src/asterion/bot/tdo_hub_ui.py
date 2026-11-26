@@ -21,7 +21,7 @@ from asterion.domain.tdo_hub import (
     is_hub_location,
 )
 
-CAMARA_ICON = "🏛️"
+CAMARA_ICON = "🕯️"
 BACK_TO_REFUGE = "Voltar ao Refúgio"
 BACK_TO_REFUGE_CALLBACK = "road:route:refuge"
 

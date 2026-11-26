@@ -215,7 +215,7 @@ DESBRAVAR_LOCALS = (
     ("🌑 Charneca da Fuligem", "Charneca da Fuligem", "charneca"),
     ("🌲 Bosque Calcinado", "Bosque Calcinado", "bosque"),
     ("🏚️ Ruínas do Vigia", "Ruínas do Vigia", "ruinas"),
-    ("🌒 Câmara do Poente", "Câmara do Poente", "camara"),
+    ("🕯️ Câmara do Poente", "Câmara do Poente", "camara"),
 )
 DESBRAVAR_LOCAL_BY_KEY = {key: label for _button, label, key in DESBRAVAR_LOCALS}
 
@@ -228,7 +228,7 @@ def render_desbravar() -> Screen:
         button(text, f"{DESBRAVAR_LOCAL_PREFIX}{key}") for text, _label, key in DESBRAVAR_LOCALS
     ]
     return Screen(
-        blocks("<b>🧭 Desbravar</b>", narrative(DESBRAVAR_TEXT)),
+        blocks("<b>⛰️ Desbravar</b>", narrative(DESBRAVAR_TEXT)),
         REFUGE_IMAGE_KEY,
         keyboard(
             [

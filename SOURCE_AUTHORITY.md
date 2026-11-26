@@ -1,6 +1,6 @@
 # Autoridade das Fontes
 
-**Índice atualizado:** 2026-11-19.
+**Índice atualizado:** 2026-11-26.
 
 > **Índice geral único:** `SOURCE_AUTHORITY.md` é o registro de governança que seleciona as versões autoritativas por escopo. Patches de sincronização são artefatos operacionais e não constituem uma segunda autoridade. Em conflito com índices/patches anteriores, este arquivo prevalece quanto à seleção de versões, sem alterar o conteúdo interno das Fontes.
 
@@ -22,6 +22,8 @@
 > **Sincronização 2026-11-19 (autoridade vigente):** a Fonte Mestra vigente é o **GDD Estrutural v1.7.1**; a Fonte Visual/UI vigente é a **Consolidação de Visual & UI v1.6.2**; a Fonte Regional vigente da Região 1 é **Terras do Ocaso v1.0.18 FINAL**. A **Especificação de Classes de Armadura v1.0.0** (`docs/specs/ASTERION_ESPECIFICACAO_CLASSES_DE_ARMADURA_v1_0_0.md`) é **exceção canônica, por decisão autoral**, ao GDD v1.7.1: mantém as categorias de proteção corporal Vestes, Leve, Média e Pesada, com Proficiências de Armadura e camada de Esquiva/Bloqueio. Essa exceção revoga, só nesse ponto, a revogação de 2026-11-13 descrita acima; o restante do GDD v1.7.1 permanece como está.
 
 > **Sincronização 2026-11-25 (Receitas regionais nos Ofícios):** por decisão do autor, a **Especificação de Receitas Regionais nos Ofícios v1.0.0** (`docs/specs/ASTERION_ESPECIFICACAO_RECEITAS_REGIONAIS_OFICIOS_v1_0_0.md`) define quais Ofícios fabricam os 42 itens por região do catálogo de `domain/regional_equipment.py` (756 receitas: Comum, Raro e Épico). Os custos seguem o GDD v1.7.1 §49.11, sem número novo. Override regional: a regra de Confins do Véu v1.0.0 §19 Regra A ("sem armadura leve/média/pesada mecânica") fica superada pela exceção de Classes de Armadura, e Confins fabrica as 4 classes. A Fase 2E (pacote v1.9.x) foi encerrada como superada em 2026-11-25 e não tem autoridade (`docs/audits/ASTERION_AUDITORIA_FASE2E_v1.9.1_VS_MAIN_2026-11-25.md`).
+
+> **Sincronização 2026-11-26 (Desbravar, Locais descobertos e telas do Refúgio):** por decisão do autor de 2026-11-26, a Fonte Visual/UI vigente passa a ser a **Consolidação de Visual & UI v1.6.3** (`ASTERION_UI_DECISOES_2026-11-26_FINAL_SYNC_v1.6.3_TDO_v1.0.19_VALES_v1.0.6.md`) e a Fonte Regional vigente da Região 1 passa a ser **Terras do Ocaso v1.0.19 FINAL** (`ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.19_FINAL.md`). A v1.6.2 e a v1.0.18 FINAL passam a históricas; o conteúdo delas não foi alterado. Decisões: (1) no Menu Principal, `⛰️ Desbravar` substitui `🧭 Explorar`; Refúgio, Caçadas, Masmorras e Forja saem do Menu Principal; a Forja fica dentro do Mercado; (2) o menu Desbravar reúne Masmorras, Refúgio do Ocaso e os cinco Locais; tocar num Local leva o personagem até ele pelo hub (custo 0) e gera o evento do Local pelo Desbravar canônico; a Câmara do Poente é clicável e ainda não tem evento; (3) todos os Locais das Terras do Ocaso nascem descobertos (fim do Prólogo; personagens existentes pela migration 0062), sem XP, e o XP de descoberta de Local por Explorar deixa de existir; (4) Vínculos (amizades, pedidos, bloqueios, Recentes, busca) sai da interface; Grupo continua independente; (5) HUD do Refúgio com ordem fechada, Título persistido `Caminhante das Cinzas` (migration 0061) e estado de Patrono; valores `a/b` sem espaços; telas do Prólogo fechadas. (6) meta de Exploração das Terras do Ocaso sem o XP de descoberta: `5.560 + 1.489 = 7.049 XP` = `7,21%` de `97.800 XP`, dentro da meta de 7–9%, sem compensação (item 5 do override; TDO v1.0.19 §33.10); (7) Prólogo: a Vitória concede 320 XP e 3 Coroas, e a bolsa dos destroços concede 18 Coroas e 1 Resíduo do Ocaso, uma vez por personagem (TDO v1.0.19 §1.1; antes, 0 Coroas e nenhum Material); (8) ícone da Câmara do Poente `🕯️` em todas as telas; título do menu Desbravar `⛰️ Desbravar`. **Pendente:** evento próprio da Câmara do Poente no menu Desbravar (TDO v1.0.19 §33.15, L16). Os números de (6) e (7) foram definidos pelo autor; nenhum outro número de jogo foi criado.
 
 > **Decisões do autor registradas em 2026-11-19 (somente documentação; nenhuma mudança em `src/`, `tests/` ou `alembic/` nesta etapa):**
 >
@@ -156,9 +158,11 @@ As Fontes Regionais FINAL possuem o mesmo nível hierárquico entre si dentro de
 
 ### Região 1 — Terras do Ocaso · Nv.1–10
 
-**ASTERION — Conteúdo: Terras do Ocaso v1.0.18 FINAL**
+**ASTERION — Conteúdo: Terras do Ocaso v1.0.19 FINAL**
 
-Arquivo vigente: `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.18_FINAL.md`.
+Arquivo vigente: `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.19_FINAL.md`.
+
+> **Sincronização 2026-11-26:** o autor adotou a v1.0.19 FINAL no lugar da v1.0.18 FINAL, que passa a **histórica**. A v1.0.19 revê só a seção 33: Explorar substituído pelo menu Desbravar, todos os Locais descobertos desde o fim do Prólogo, toque num Local gera o evento do Desbravar canônico após a viagem pelo hub, Câmara do Poente sem evento e fim do XP de descoberta de Local. Os itens 2 e 5 do override abaixo foram revistos (ver a nota logo após o override).
 
 > **Sincronização 2026-11-14:** o autor adotou a v1.0.18 FINAL no lugar da v1.0.17 FINAL, que passa a **histórica** (preservada só como registro, sem autoridade). A v1.0.18 reestrutura a navegação da Região: Refúgio do Ocaso como hub, Locais revelados pela ação Explorar, Travessia dos Braseiros oculta, nível do inimigo pelo Local, XP de descoberta de Local, Câmara do Poente com dois textos de entrada e remoção de travas de nível de Missão. Os pontos que contrariam a Fonte Mestra só valem pelo override registrado abaixo. A `ASTERION_CONTEUDO_TERRAS_DO_OCASO_v1.0.18_PROPOSTA.md` está **superada** pela FINAL: não é autoridade e não deve ser usada.
 
@@ -179,6 +183,8 @@ A v1.0.16 substituiu integralmente a v1.0.15 como autoridade regional vigente. P
 > 7. **Nível do inimigo e `unlock_level`.** Em **Solo**, o nível do inimigo é o `max_enemy_level` do Local/região e não escala com o jogador; o `unlock_level` das criaturas não se aplica (a linha 899 já delega o Solo à Fonte Regional). Em **Grupo**, o nível do inimigo também é o `max_enemy_level` do Local. **Conflito:** a linha 899 define, em Grupo, `encounter_reference_level` = maior nível atual entre os participantes válidos e `enemy_level = min(encounter_reference_level, max_enemy_level da criatura)`, congelado no `encounter_id`. Este item sobrescreve essa regra de nível. O `unlock_level` continua como requisito individual de cada membro em Grupo (isto já é a regra da linha 899 e não conflita). Se nenhuma criatura do Local é elegível para todos os membros, a Caçada não abre e a interface cita **todos** os membros que não cumprem o `unlock_level`. Reescrita necessária na consolidação do GDD: a regra `enemy_level = min(player_level, max_enemy_level)` não está no GDD (nem na v1.6.0 nem na v1.7.1); vem das Fontes Regionais v1.0.11 a v1.0.17 e deste índice (conferido em 2026-11-14). Motivo registrado: coerência com o estilo soulslike e carona coberta pelo `unlock_level` individual.
 > 8. **PowerlevelFactor em Coop de Chefe.** O PowerlevelFactor (GDD linha 3795: `100/70/45/20/5%` para diferença `0-10 / 11-15 / 16-20 / 21-30 / 31+`) se aplica também à XP fixa de Missão em Coop de Chefe (P5, P6, S6). O GDD aplica o fator só à XP de inimigo (linha 3822) e não o define para XP fixa de Missão (linhas 3840-3842); esta Fonte Regional o define para P5, P6 e S6 (conferido em 2026-11-14, decisão do autor: manter como override).
 > 9. **Ronda em Grupo.** A vitória manual válida em Grupo libera a Ronda do Local para todos os membros que participaram da vitória.
+
+> **Nota 2026-11-26 (v1.0.19):** o item 2 passa a valer como "todos os Locais nascem descobertos; Explorar não existe mais; o toque num Local do menu Desbravar leva ao Local pelo hub e gera o evento do Desbravar canônico". O item 5 passa a valer como "não existe XP de descoberta de Local; a Exploração única nas Terras do Ocaso é `5.560 + 1.489 = 7.049 XP` = `7,21%` de `97.800 XP`, dentro da meta de 7–9%, sem compensação" (decisão do autor de 2026-11-26; TDO v1.0.19 §33.10). O texto dos itens acima fica como registro da decisão de 2026-11-14.
 
 Não são override (conferido contra a Fonte Mestra): BKP de investigação Desbravar e de Habitat como marco único por criatura e por Local; S4 e S5 em Grupo; recovery por Local e Travessia oculta na Região (a regra global da Travessia e do Braseiro permanece). O texto de trabalho está em `docs/specs/RASCUNHO_OVERRIDE_FONTE_MESTRA_TDO_v1.0.18.md`. Os 9 itens devem entrar na próxima revisão do GDD.
 
@@ -231,9 +237,11 @@ A aprovação de conteúdo regional C foi confirmada em 2026-10-18. Para sistema
 
 A apresentação player-facing deve seguir:
 
-**ASTERION — Consolidação de Visual & UI v1.6.2 — sincronizada com Fonte Mestra v1.7.1 + Terras do Ocaso v1.0.18 + Vales dos Enforcados v1.0.6**
+**ASTERION — Consolidação de Visual & UI v1.6.3 — sincronizada com Fonte Mestra v1.7.1 + Terras do Ocaso v1.0.19 + Vales dos Enforcados v1.0.6**
 
-Arquivo vigente: `ASTERION_UI_DECISOES_2026-11-16_FINAL_SYNC_v1.6.2_TDO_v1.0.18_VALES_v1.0.6.md`.
+Arquivo vigente: `ASTERION_UI_DECISOES_2026-11-26_FINAL_SYNC_v1.6.3_TDO_v1.0.19_VALES_v1.0.6.md`.
+
+> **Atualização 2026-11-26:** a v1.6.3 é cópia versionada da v1.6.2 com a seção 66 reescrita por decisão do autor: Menu Principal com `⛰️ Desbravar`, menu Desbravar, Locais descobertos desde o início, Câmara clicável e sem evento, Forja dentro do Mercado, remoção de Vínculos, HUD do Refúgio, formato `a/b` e telas do Prólogo. As seções 40, 41 e 64 recebem só notas de superação. A v1.6.2 passa a histórica.
 
 > **Atualização 2026-11-16:** a v1.6.2 é cópia versionada da v1.6.1 com a seção 66.1 reescrita por decisão do autor. Nas Terras do Ocaso, o Refúgio passa a tela principal e recebe as ações regionais e atalhos globais aprovados; retornos regionais e fim de Missão levam ao Refúgio. O personagem continua reabrindo no Local atual. Após o Prólogo, fica fisicamente no Refúgio; a etapa 1 de P1 conduz à Estrada. A seção 66.1 prevalece sobre indicações conflitantes das seções 45.9 e 46.2. Campanha/Aventura não aparecem nas Terras do Ocaso e permanecem nas demais regiões. A v1.6.1 e a v1.6.0 passam a históricas.
 

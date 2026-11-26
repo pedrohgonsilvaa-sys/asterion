@@ -218,7 +218,7 @@ def test_camara_screen_pre_p6_exact_text_without_ancora_and_only_back():
         "camara", CAMARA, hunt_enabled=False, explore_enabled=False, route_destinations=(REFUGE,)
     )
     screen = render_current_local(view)
-    assert screen.text == f"🏛️ Câmara do Poente\n\n{TEXTO_CAMARA_PRE_P6}"
+    assert screen.text == f"🕯️ Câmara do Poente\n\n{TEXTO_CAMARA_PRE_P6}"
     assert "Âncora" not in screen.text
     assert _callbacks(screen) == ["road:route:refuge"]
     assert _texts(screen) == ["Voltar ao Refúgio"]
@@ -234,7 +234,7 @@ def test_camara_screen_post_p6_exact_text_with_ancora():
         camara_p6_completed=True,
     )
     screen = render_current_local(view)
-    assert screen.text == f"🏛️ Câmara do Poente\n\n{TEXTO_CAMARA_POS_P6}"
+    assert screen.text == f"🕯️ Câmara do Poente\n\n{TEXTO_CAMARA_POS_P6}"
     assert "Âncora do Poente" in screen.text
     assert _callbacks(screen) == ["road:route:refuge"]
     for forbidden in ("road:hunt", "road:explore:start", "world:round"):
