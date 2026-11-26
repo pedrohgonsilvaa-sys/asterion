@@ -117,8 +117,8 @@ def render_attributes(view: AttributesView) -> Screen:
         "",
         *_identity(view.name, view.level, view.character_class, view.selected_path),
         "",
-        f"❤️ HP · {_format_number(view.hp)} / {_format_number(view.max_hp)}",
-        f"⚡ Vigor · {view.vigor} / {view.max_vigor}",
+        f"❤️ HP · {_format_number(view.hp)}/{_format_number(view.max_hp)}",
+        f"⚡ Vigor · {view.vigor}/{view.max_vigor}",
         "",
         f"⚔️ ATQ · {_format_number(view.attack)}",
         f"🛡️ DEF · {_format_number(view.defense)}",
@@ -140,7 +140,9 @@ def render_profile(view: ProfileView) -> Screen:
         *_identity(view.name, view.level, view.character_class, view.selected_path),
     ]
     if view.selected_title:
-        lines.extend(["", f"🎖️ {view.selected_title}"])
+        from html import escape as _escape
+
+        lines.extend(["", f"🎖️ <code>{_escape(view.selected_title)}</code>"])
     lines.extend(["", "📖 História", ""])
     if view.history:
         from html import escape

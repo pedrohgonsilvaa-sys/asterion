@@ -290,7 +290,8 @@ async def test_victory_grants_exactly_once_and_persists_hp(prologue, database):
         assert await session.scalar(select(func.count()).select_from(RewardGrant)) == 1
         assert await session.scalar(select(func.count()).select_from(Brazier)) == 1
         assert await session.scalar(select(func.count()).select_from(WorldState)) == 1
-        assert await session.scalar(select(func.count()).select_from(LocationDiscovery)) == 1
+        # Estrada + os quatro Locais que nascem descobertos (decisão do autor).
+        assert await session.scalar(select(func.count()).select_from(LocationDiscovery)) == 5
         assert await session.scalar(
             select(func.count()).select_from(Achievement).where(
                 Achievement.achievement_id == "feat.tdo.cinzas_na_estrada"
@@ -371,8 +372,9 @@ async def test_defeat_completes_prologue_without_reward_and_reaches_brazier(
         assert await session.scalar(select(func.count()).select_from(Brazier)) == 1
         world = await session.scalar(select(WorldState))
         assert (world.region, world.location) == ("Terras do Ocaso", "Estrada das Cinzas")
-        discovery = await session.scalar(select(LocationDiscovery))
-        assert discovery.location_id == "tdo.location.estrada_das_cinzas"
+        discovered = set((await session.scalars(select(LocationDiscovery.location_id))).all())
+        assert "tdo.location.estrada_das_cinzas" in discovered
+        assert "tdo.location.camara_do_poente" in discovered
 
 
 async def test_defeat_reconnects_and_duplicate_callbacks_do_not_recreate_or_reward(
@@ -393,7 +395,8 @@ async def test_defeat_reconnects_and_duplicate_callbacks_do_not_recreate_or_rewa
         assert await session.scalar(select(func.count()).select_from(Encounter)) == 1
         assert await session.scalar(select(func.count()).select_from(Brazier)) == 1
         assert await session.scalar(select(func.count()).select_from(WorldState)) == 1
-        assert await session.scalar(select(func.count()).select_from(LocationDiscovery)) == 1
+        # Estrada + os quatro Locais que nascem descobertos (decisão do autor).
+        assert await session.scalar(select(func.count()).select_from(LocationDiscovery)) == 5
         assert await session.scalar(select(func.count()).select_from(RewardGrant)) == 0
 
 
@@ -420,7 +423,8 @@ async def test_legacy_failed_prologue_is_reconciled_once_without_xp(prologue, da
         assert await session.scalar(select(func.count()).select_from(RewardGrant)) == 0
         assert await session.scalar(select(func.count()).select_from(Brazier)) == 1
         assert await session.scalar(select(func.count()).select_from(WorldState)) == 1
-        assert await session.scalar(select(func.count()).select_from(LocationDiscovery)) == 1
+        # Estrada + os quatro Locais que nascem descobertos (decisão do autor).
+        assert await session.scalar(select(func.count()).select_from(LocationDiscovery)) == 5
 
 
 async def test_rest_after_prologue_defeat_restores_hp_and_starts_p1(prologue, database):

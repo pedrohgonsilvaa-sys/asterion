@@ -155,7 +155,7 @@ def render_guild_menu(
                     [_button("Guildas abertas", "guild:browse:0")],
                     [_button("Minhas Inscrições", "guild:myapps")],
                     [_button(f"Convites recebidos · {invites}", "guild:inbox")],
-                    [_button("← Vínculos", "links:root")],
+                    [_button("← Menu", "menu:back")],
                 ]
             ),
         )
@@ -211,7 +211,7 @@ def render_guild_menu(
             rows.append([_button("Cancelar dissolução", f"guild:dissno:{gid}")])
     if guild.viewer_role is not GuildRole.LEADER:
         rows.append([_button("Sair da Guilda", f"guild:leave:{gid}")])
-    rows.append([_button("← Vínculos", "links:root")])
+    rows.append([_button("← Menu", "menu:back")])
     return with_flavor(Screen("\n".join(lines), "links", _keyboard(rows)), "guilda")
 
 
@@ -526,5 +526,5 @@ def render_expired() -> Screen:
     return Screen(
         "⏳ Ação Expirada\n\nEsta ação não está mais disponível. Atualize a tela para continuar.",
         "links",
-        _keyboard([[_button("Atualizar", "guild:root")], [_button("← Vínculos", "links:root")]]),
+        _keyboard([[_button("Atualizar", "guild:root")], [_button("← Menu", "menu:back")]]),
     )

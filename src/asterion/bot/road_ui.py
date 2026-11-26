@@ -236,8 +236,8 @@ def _round_screen(view) -> Screen | None:
         text = (
             "🏕️ Ronda de Caça\n"
             f"{place}\n\n"
-            f"❤️ HP · <code>{view.hp} / {view.max_hp}</code>\n"
-            f"⚡ Vigor · <code>{view.vigor} / {view.max_vigor}</code>\n\n"
+            f"❤️ HP · <code>{view.hp}/{view.max_hp}</code>\n"
+            f"⚡ Vigor · <code>{view.vigor}/{view.max_vigor}</code>\n\n"
             f"🎯 Ronda · {view.batch_size} Encontros\n"
             "⏱️ Cadência · 3 min por Encontro\n"
             f"🧪 Consumíveis · {_round_consumable_state(view)}"
@@ -633,8 +633,8 @@ def render_road(view: RoadView) -> Screen:
         text = (
             "🦌 Caçada\n\n"
             f"{local_block}\n\n"
-            f"👤 {escape(view.name or 'Personagem')}\n❤️ <code>{view.hp} / {view.max_hp}</code>\n"
-            f"⚡ Vigor · <code>{view.vigor} / {view.max_vigor}</code>"
+            f"👤 {escape(view.name or 'Personagem')}\n❤️ <code>{view.hp}/{view.max_hp}</code>\n"
+            f"⚡ Vigor · <code>{view.vigor}/{view.max_vigor}</code>"
         )
         keyboard = [
             [InlineKeyboardButton(text="Caçar", callback_data="road:hunt")],
@@ -705,8 +705,8 @@ def render_road(view: RoadView) -> Screen:
         text = (
             "🧭 Desbravar\n\n"
             f"{title} · Local Atual\n{subtitle}\n\n👤 Solo\n"
-            f"❤️ <code>{view.hp} / {view.max_hp}</code>\n"
-            f"⚡ Vigor · <code>{view.vigor} / {view.max_vigor}</code>"
+            f"❤️ <code>{view.hp}/{view.max_hp}</code>\n"
+            f"⚡ Vigor · <code>{view.vigor}/{view.max_vigor}</code>"
         )
         keyboard = [
             [InlineKeyboardButton(text="Desbravar", callback_data="road:explore:start")],
@@ -797,9 +797,9 @@ def render_current_local(
         subtitle,
         "",
         f"👤 {escape(view.name or 'Personagem')}",
-        f"❤️ HP · {view.hp} / {view.max_hp}",
+        f"❤️ HP · {view.hp}/{view.max_hp}",
         bar(view.hp, view.max_hp, "🟩"),
-        f"⚡ Vigor · {view.vigor} / {view.max_vigor}",
+        f"⚡ Vigor · {view.vigor}/{view.max_vigor}",
         bar(view.vigor, view.max_vigor, "🟨"),
     ]
     keyboard: list[list[InlineKeyboardButton]] = []
@@ -1180,10 +1180,7 @@ def render_invalid_location_menu() -> Screen:
                     InlineKeyboardButton(text="Personagem", callback_data="character:root"),
                     InlineKeyboardButton(text="Códice", callback_data="knowledge:codex"),
                 ],
-                [
-                    InlineKeyboardButton(text="Vínculos", callback_data="links:root"),
-                    InlineKeyboardButton(text="Configurações", callback_data="settings:root"),
-                ],
+                [InlineKeyboardButton(text="Configurações", callback_data="settings:root")],
                 [InlineKeyboardButton(text="Campanha", callback_data="world:adventure")],
             ]
         ),

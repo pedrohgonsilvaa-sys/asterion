@@ -13,6 +13,8 @@ from html import escape
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from asterion.domain.creation import STARTING_CHARACTER_TITLE
+
 BACK_LABEL = "↩️ Voltar"
 BAR_SEGMENTS = 10
 HP_FILL, VIGOR_FILL, XP_FILL = "🟥", "🟨", "🟦"
@@ -107,8 +109,9 @@ def blocks(*parts: str | None) -> str:
     return "\n\n".join(part for part in parts if part)
 
 
-# Contrato Mestre de Telas UI v1.0.0 §4: identidade padrão do personagem.
-DEFAULT_TITLE = "Iniciado"
+# Identidade padrão do personagem. Sem Título escolhido nem persistido, vale o Título
+# inicial persistido (decisão do autor, HUD do Refúgio).
+DEFAULT_TITLE = STARTING_CHARACTER_TITLE
 _ROMAN = ((10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"))
 
 
@@ -130,10 +133,10 @@ def identity(
     guild_tag: str | None = None,
     title: str | None = None,
 ) -> str:
-    """``🏹 **[CIN] Oppan** · `Nv. 1 · Legado I` `` e ``🎖️ *Iniciado*``.
+    """``🗡️ **[RSN] Oheen** · `Nv. 1 · Legado I` `` e ``🎖️ `Caminhante das Cinzas` ``.
 
-    Sem Guilda, a TAG some; sem Legado, ``· Legado I`` some; sem Título escolhido,
-    vale o Título inicial ``Iniciado``.
+    TAG da Guilda e nome em negrito; sem Guilda, a TAG some; sem Legado, ``· Legado I``
+    some; o Título fica em monoespaçado e, sem Título, vale o Título inicial persistido.
     """
     tag = f"[{guild_tag}] " if guild_tag else ""
     level_text = f"Nv. {level}"
@@ -142,6 +145,6 @@ def identity(
     return "\n".join(
         (
             f"{emoji} <b>{escape(tag + name)}</b> · {mono(level_text)}",
-            f"🎖️ {narrative(title or DEFAULT_TITLE)}",
+            f"🎖️ {mono(title or DEFAULT_TITLE)}",
         )
     )

@@ -156,6 +156,8 @@ def render_root(trade: TradeView | None) -> Screen:
             [_button("Buscar Loja", "mkt:search")],
             [_button("Minha Loja", "mkt:mine")],
             [_button(label, "trd:root")],
+            # Decisão do autor: a Forja fica dentro do Mercado (abre a Criação existente).
+            [_button("🔨 Forja", "craft:root")],
             [_button("← Menu", "menu:back")],
         ),
     )

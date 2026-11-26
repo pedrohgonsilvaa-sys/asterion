@@ -80,22 +80,25 @@ def test_hud_layout_and_menu_order():
     screen = render_refuge_dashboard(_view(legacy_level=1))
     blocks = screen.text.split("\n\n")
     assert blocks[0] == "<b>🌘 Refúgio do Ocaso</b>"
-    assert blocks[1] == "🏹 <b>Ornn</b> · <code>Nv. 1 · Legado I</code>\n🎖️ <i>Iniciado</i>"
+    assert blocks[1].splitlines() == [
+        "🏹 <b>Ornn</b> · <code>Nv. 1 · Legado I</code>",
+        "🎖️ <code>Caminhante das Cinzas</code>",
+        "👑 <b>Ainda não é um Patrono de Asterion.</b>",
+        "🪙 <b>Coroas</b> · <code>1.250</code>",
+    ]
     assert blocks[2].splitlines() == [
-        "❤️ <b>HP</b> · <code>631 / 631</code>",
+        "❤️ <b>HP</b> · <code>631/631</code>",
         "🟥" * 10,
-        "⚡ <b>Vigor</b> · <code>100 / 100</code>",
+        "⚡ <b>Vigor</b> · <code>100/100</code>",
         "🟨" * 10,
-        "✨ <b>XP</b> · <code>320 / 4.800</code>",
+        "✨ <b>XP</b> · <code>320/4.800</code>",
         "🟦" + "⬜" * 9,
     ]
-    assert blocks[3] == "💰 <b>Coroas</b> · <code>1.250</code>"
+    assert len(blocks) == 3
     assert _labels(screen) == [
-        ["🌘 Refúgio", "🧭 Explorar"],
-        ["🗺️ Mapa", "👤 Personagem"],
-        ["🐺 Caçadas", "🗝️ Masmorras"],
+        ["⛰️ Desbravar", "🗺️ Mapa"],
+        ["👤 Personagem", "🏪 Mercado"],
         ["🏟️ Arena", "🏰 Guilda"],
-        ["🔨 Forja", "🏪 Mercado"],
         ["🌌 Eventos", "📖 Códice"],
         ["🏆 Classificação", "🎁 Benefícios"],
         ["🌐 Comunidade", "⚙️ Configurações"],
@@ -107,7 +110,7 @@ def test_hud_daily_gift_is_full_width_first_row():
 
     screen = render_refuge_dashboard(_view(), hud=RefugeHud(gift_available=True))
     assert _labels(screen)[0] == ["✨ Resgatar Dádiva Diária"]
-    assert _labels(screen)[1] == ["🌘 Refúgio", "🧭 Explorar"]
+    assert _labels(screen)[1] == ["⛰️ Desbravar", "🗺️ Mapa"]
 
 
 def test_refuge_local_uses_refuge_art_and_lists_services():
@@ -133,7 +136,7 @@ def test_brazier_shows_only_hp_and_hides_recover_when_full():
     hurt = refuge_ui.render_refuge_brazier(
         "Ornn", Decimal(420), Decimal(631), emoji="🏹", guild_tag="CIN"
     )
-    assert "<b>🏹 [CIN] Ornn</b>\n❤️ <b>HP</b> · <code>420 / 631</code>\n" in hurt.text
+    assert "<b>🏹 [CIN] Ornn</b>\n❤️ <b>HP</b> · <code>420/631</code>\n" in hurt.text
     assert "Vigor" not in hurt.text
     assert _labels(hurt) == [["🔥 Recuperar-se"], ["↩️ Voltar"]]
     full = refuge_ui.render_refuge_brazier("Ornn", Decimal(631), Decimal(631), emoji="🏹")
@@ -162,7 +165,7 @@ def test_darian_and_npcs():
 def test_explore_entry_has_three_paths_status_without_name_and_back():
     screen = render_explore_entry(_view(xp=1240), remaining=2)
     assert "Ornn" not in screen.text and "Vigia" not in screen.text
-    assert "✨ <code>1.240 / 4.800</code>\n" + "🟦" * 2 + "⬜" * 8 in screen.text
+    assert "✨ <code>1.240/4.800</code>\n" + "🟦" * 2 + "⬜" * 8 in screen.text
     assert _labels(screen) == [
         ["👣 Seguir pela estrada"],
         ["🌲 Seguir pela trilha"],

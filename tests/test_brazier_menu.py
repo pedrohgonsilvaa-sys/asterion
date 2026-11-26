@@ -53,15 +53,15 @@ def test_menu_is_authoritative_and_preserves_fractional_hp():
     text = render_world(world_view()).text
     assert "🌘 Refúgio do Ocaso" in text
     assert "👤 Heroa · Sentinela · Caminho" in text
-    assert "❤️ HP · 712.530 / 712.530" in text
-    assert "⚡ Vigor · 100 / 100" in text
-    assert "✨ XP · 320 / 4.800" in text
+    assert "❤️ HP · 712.530/712.530" in text
+    assert "⚡ Vigor · 100/100" in text
+    assert "✨ XP · 320/4.800" in text
     assert "Vozes na Estrada" not in text
 
 
 def test_vigor_bar_is_derived_not_hardcoded():
     text = render_world(world_view(vigor=72)).text
-    assert "⚡ Vigor · 72 / 100\n🟨🟨🟨🟨🟨🟨🟨⬜⬜⬜" in text
+    assert "⚡ Vigor · 72/100\n🟨🟨🟨🟨🟨🟨🟨⬜⬜⬜" in text
 
 
 def test_brazier_screen_has_discovered_state_and_rest_only():

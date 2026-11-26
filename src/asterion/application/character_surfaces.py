@@ -231,7 +231,7 @@ class CharacterSurfacesService:
                 selected_title=(
                     COSMETICS_BY_ID[selected_title_id].name
                     if selected_title_id in COSMETICS_BY_ID
-                    else None
+                    else character.title
                 ),
                 guild_tag=guild_tag,
             )
@@ -254,7 +254,7 @@ class CharacterSurfacesService:
             selected_title = (
                 COSMETICS_BY_ID[selected_title_id].name
                 if selected_title_id in COSMETICS_BY_ID
-                else None
+                else character.title
             )
             return self._profile_view(character, profile, selected_title)
 

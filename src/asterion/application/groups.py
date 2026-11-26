@@ -13,7 +13,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.account_risk import record_linked_cooccurrence
-from asterion.application.social_graph import blocked_between, record_recent_contacts
 from asterion.domain.mission_coop import mission_coop_allowed
 from asterion.infrastructure.db.models import (
     Character,
@@ -225,8 +224,6 @@ class GroupService:
                 raise GroupError("character_not_found")
             if target.id == actor_character.id:
                 raise GroupError("cannot_invite_self")
-            if await blocked_between(session, actor_character.id, target.id):
-                raise GroupError("invite_refused")
             if await session.get(SocialGroupMember, target.id) is not None:
                 raise GroupError("already_in_group")
             count = await self._member_count(session, group.id)
@@ -844,7 +841,6 @@ class GroupService:
             proposal.started_at = now
             proposal.revision += 1
             await session.flush()
-            await record_recent_contacts(session, [row.id for row in characters], now)
             await record_linked_cooccurrence(
                 session,
                 server_id=self.server_id,

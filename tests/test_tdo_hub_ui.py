@@ -130,13 +130,10 @@ def test_refuge_dashboard_has_regional_and_global_actions_without_campaign_adven
     )
     callbacks = _callbacks(screen)
     labels = _texts(screen)
-    assert {
-        "tdo:explore",
-        "world:map",
-        "tdo:hunt",
-        "dungeon:known",
-        "wev:hub",
-    } <= set(callbacks)
+    # Decisão do autor: Caçadas e Masmorras saem do Menu Principal (Masmorras entram
+    # pelo Desbravar).
+    assert {"tdo:explore", "world:map", "wev:hub"} <= set(callbacks)
+    assert "tdo:hunt" not in callbacks and "dungeon:known" not in callbacks
     # Contrato Mestre de Telas UI v1.0.0 §5: Missões entram pelo Mural do Refúgio.
     assert "world:missions" not in callbacks
     assert {
@@ -147,15 +144,17 @@ def test_refuge_dashboard_has_regional_and_global_actions_without_campaign_adven
         "bn:root",
         "community:open",
     } <= set(callbacks)
-    assert "🗝️ Masmorras" in labels and "(Covil)" not in labels
+    assert "⛰️ Desbravar" in labels and "(Covil)" not in labels
     assert "Campanha" not in labels and "Aventura" not in labels
 
 
-def test_refuge_explore_unavailable_when_nothing_left():
+def test_refuge_local_offers_desbravar_without_reveal_status():
+    """Todos os Locais nascem descobertos: o Refúgio leva ao menu Desbravar."""
     view = _view("refuge", REFUGE, route_destinations=(ROAD,))
     screen = render_current_local(view, explore_remaining=0)
-    assert "tdo:explore" not in _callbacks(screen)
-    assert "Não há mais o que explorar por aqui." in screen.text
+    assert "tdo:explore" in _callbacks(screen)
+    assert "Não há mais o que explorar" not in screen.text
+    assert "Revela um Local" not in screen.text
 
 
 def test_refuge_hunt_button_hidden_without_hunt_local():
@@ -219,7 +218,7 @@ def test_camara_screen_pre_p6_exact_text_without_ancora_and_only_back():
         "camara", CAMARA, hunt_enabled=False, explore_enabled=False, route_destinations=(REFUGE,)
     )
     screen = render_current_local(view)
-    assert screen.text == f"🏛️ Câmara do Poente\n\n{TEXTO_CAMARA_PRE_P6}"
+    assert screen.text == f"🕯️ Câmara do Poente\n\n{TEXTO_CAMARA_PRE_P6}"
     assert "Âncora" not in screen.text
     assert _callbacks(screen) == ["road:route:refuge"]
     assert _texts(screen) == ["Voltar ao Refúgio"]
@@ -235,7 +234,7 @@ def test_camara_screen_post_p6_exact_text_with_ancora():
         camara_p6_completed=True,
     )
     screen = render_current_local(view)
-    assert screen.text == f"🏛️ Câmara do Poente\n\n{TEXTO_CAMARA_POS_P6}"
+    assert screen.text == f"🕯️ Câmara do Poente\n\n{TEXTO_CAMARA_POS_P6}"
     assert "Âncora do Poente" in screen.text
     assert _callbacks(screen) == ["road:route:refuge"]
     for forbidden in ("road:hunt", "road:explore:start", "world:round"):

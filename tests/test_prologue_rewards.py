@@ -160,13 +160,13 @@ async def test_purse_reward_components_record_crowns_and_material(database):
 def test_brazier_shows_arrival_hp_and_uses_approved_narration():
     name = "Heroa"
     screen = render_brazier(name, Decimal(80), Decimal(100))
-    assert "<code>80 / 100</code>" in screen.text
-    assert "<code>100 / 100</code>" not in screen.text
+    assert "<code>80/100</code>" in screen.text
+    assert "<code>100/100</code>" not in screen.text
     assert (
         "<i>O fogo permanece aceso entre as pedras. O calor atravessa o corpo, enquanto "
         "a estrada permanece à frente, pronta para ser seguida.</i>"
     ) in screen.text
-    assert name not in screen.text.split("\n\n")[1]
+    assert name not in screen.text
     assert "devolve as forças" not in screen.text
 
 

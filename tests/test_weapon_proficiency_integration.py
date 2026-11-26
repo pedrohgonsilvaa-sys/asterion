@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 from alembic.config import Config
-from sqlalchemy import func, select
+from sqlalchemy import func, insert, select
 
 from alembic import command
 from asterion.application.creation import CreationService
@@ -452,8 +452,10 @@ async def test_migration_seeds_initial_proficiency_and_binds_legacy_drops(databa
     character_id = uuid4()
     async with database[1].begin() as session:
         session.add(Account(telegram_id=9930))
-        session.add(
-            Character(
+        # Insert explícito: o schema 0052 ainda não tem colunas posteriores (ex.: ``title``),
+        # e o ORM pediria essas colunas no RETURNING.
+        await session.execute(
+            insert(Character.__table__).values(
                 id=character_id,
                 telegram_id=9930,
                 server_id="ocaso",
@@ -471,7 +473,6 @@ async def test_migration_seeds_initial_proficiency_and_binds_legacy_drops(databa
                 crowns=0,
             )
         )
-        await session.flush()
         for key, name, slot in (
             ("legacy:1", "Arma Pesada do Caminhante", "2H"),
             ("legacy:2", "Arma Estranha", "Principal"),

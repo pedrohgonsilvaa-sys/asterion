@@ -128,7 +128,7 @@ async def _snapshot(database):
 def _assert_six_bars(text: str, points: dict[str, int]) -> None:
     for region in fl.REGIONS:
         value = points.get(region.region_id, 0)
-        assert f"{region.short_label} <code>{value} / {fl.THRESHOLD}</code>" in text
+        assert f"{region.short_label} <code>{value}/{fl.THRESHOLD}</code>" in text
 
 
 def test_adventure_events_button_opens_the_world_events_screen():
@@ -171,7 +171,7 @@ async def test_hub_with_an_active_flagelo_shows_its_region_and_the_face_button(d
     before = await _snapshot(database)
     await client.click(actor, "wev:hub")
     hub = await client.click(actor, "flg:hub")
-    assert f"{region.short_label} <code>{fl.THRESHOLD} / {fl.THRESHOLD}</code>" in hub.text
+    assert f"{region.short_label} <code>{fl.THRESHOLD}/{fl.THRESHOLD}</code>" in hub.text
     assert "⚔️ desperto" in hub.text
     assert region.flagelo.name in hub.text
     assert region.region in hub.text

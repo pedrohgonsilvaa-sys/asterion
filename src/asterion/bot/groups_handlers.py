@@ -1,4 +1,4 @@
-"""Telegram adapters for Vínculos → Grupo and persistent invitations."""
+"""Telegram adapters for Grupo and persistent invitations (independente de Vínculos)."""
 
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from asterion.bot.groups_ui import (
     render_hunt_roster,
     render_hunt_unlock_blocked,
     render_invites,
-    render_links,
     revision36,
 )
 from asterion.bot.oath_ui import error_text as oath_error_text
@@ -54,19 +53,6 @@ def groups_router(
     router = Router(name="groups")
     router.message.filter(F.chat.type == "private")
     router.callback_query.filter(F.message.chat.type == "private")
-
-    async def show_links(target: Message | CallbackQuery) -> None:
-        actor = target.from_user.id
-        group = await service.group(actor)
-        invites = await service.incoming_invites(actor)
-        message = target if isinstance(target, Message) else target.message
-        if isinstance(message, Message):
-            await present(
-                message,
-                render_links(group, len(invites)),
-                images,
-                edit=isinstance(target, CallbackQuery),
-            )
 
     async def show_group(target: Message | CallbackQuery) -> None:
         group = await service.group(target.from_user.id)
@@ -149,13 +135,8 @@ def groups_router(
                 reply_markup=keyboard,
             )
         except TelegramAPIError:
-            # The invitation remains durable and can be accepted from Vínculos → Convites.
+            # The invitation remains durable and can be accepted from Grupo → Convites.
             return
-
-    @router.callback_query(F.data == "links:root")
-    async def links_root(query: CallbackQuery) -> None:
-        await query.answer()
-        await show_links(query)
 
     @router.callback_query(F.data == "group:root")
     async def group_root(query: CallbackQuery) -> None:
@@ -210,7 +191,7 @@ def groups_router(
             parts = (query.data or "").split(":")
             if len(parts) != 3:
                 raise ValueError("invalid callback")
-            group = await service.leave(
+            await service.leave(
                 query.from_user.id,
                 expected_group_revision=_parse_revision(parts[2]),
             )
@@ -221,10 +202,7 @@ def groups_router(
             await stale(query)
             return
         await query.answer("Você saiu do Grupo.")
-        if group is None:
-            await show_links(query)
-        else:
-            await show_group(query)
+        await show_group(query)
 
     @router.callback_query(F.data.startswith("group:kick:"))
     async def group_kick(query: CallbackQuery) -> None:

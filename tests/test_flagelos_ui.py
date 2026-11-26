@@ -42,12 +42,12 @@ def _bars(points=(420, 310, 271, 412, 198, 337), active=None):
 def test_hub_shows_the_six_bars_absolute_and_percent():
     screen = render_hub(HubView(_bars(), None, None))
     for line in (
-        "🌑 Ocaso <code>420 / 500</code> (84%)",
-        "🪢 Vales <code>310 / 500</code> (62%)",
-        "🌾 Nareth <code>271 / 500</code> (54%)",
-        "🥀 Várzeas <code>412 / 500</code> (82%)",
-        "⛰️ Altos <code>198 / 500</code> (39%)",
-        "🌫️ Confins <code>337 / 500</code> (67%)",
+        "🌑 Ocaso <code>420/500</code> (84%)",
+        "🪢 Vales <code>310/500</code> (62%)",
+        "🌾 Nareth <code>271/500</code> (54%)",
+        "🥀 Várzeas <code>412/500</code> (82%)",
+        "⛰️ Altos <code>198/500</code> (39%)",
+        "🌫️ Confins <code>337/500</code> (67%)",
     ):
         assert line in screen.text
     assert _callbacks(screen) == ["wev:hub"]
@@ -69,7 +69,7 @@ def test_active_flagelo_shows_hp_lifetime_and_face_button():
     )
     screen = render_hub(HubView(_bars(active="tdo"), active, None))
     assert "⚔️ <b>Varkhenn, o Flagelo das Cinzas</b>" in screen.text
-    assert "❤️ <code>31.840 / 35.060</code>" in screen.text
+    assert "❤️ <code>31.840/35.060</code>" in screen.text
     assert "⏱️ Ativo há 18m" in screen.text
     assert _callbacks(screen) == ["flg:enter", "wev:hub"]
     assert screen.keyboard.inline_keyboard[0][0].text == "[ Enfrentar o Flagelo ]"

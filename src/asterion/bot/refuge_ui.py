@@ -111,7 +111,7 @@ def brazier_status(
     return "\n".join(
         (
             f"<b>{emoji} {tag}{escape(name)}</b>",
-            f"❤️ <b>HP</b> · {mono(f'{number(int(hp))} / {number(int(max_hp))}')}",
+            f"❤️ <b>HP</b> · {mono(f'{number(int(hp))}/{number(int(max_hp))}')}",
             bar(hp, max_hp, HP_FILL),
         )
     )

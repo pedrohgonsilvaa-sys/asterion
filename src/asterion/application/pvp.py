@@ -32,7 +32,6 @@ from asterion.application.combat_configuration_guard import find_combat_configur
 from asterion.application.competitive_cycle import entry_closed
 from asterion.application.equipment_configuration import load_equipment_configuration
 from asterion.application.prologue import CombatView
-from asterion.application.social_graph import blocked_between, record_recent_contacts
 from asterion.domain.arena import (
     AFK_CONSECUTIVE_TIMEOUTS,
     AFK_TOTAL_TIMEOUTS,
@@ -503,10 +502,6 @@ class PvpService:
             members = await self._members(session, match.id)
             member = next(row for row in members if row.character_id == character.id)
             if match.status == "invited" and match.kind == "duel" and not member.is_challenger:
-                if await blocked_between(
-                    session, characters[0].id, characters[-1].id
-                ):
-                    raise PvpError("expired")
                 return await self._accept_duel(session, match, members, characters, character, now)
             if match.status != "confirming":
                 raise PvpError("expired")
@@ -754,9 +749,6 @@ class PvpService:
             if target is None or target.server_id != self.server_id:
                 raise PvpError("target_not_found")
             self._check_duel_pair(character, target)
-            # Author decision 2026-11-08: a Duel challenge is a direct invite.
-            if await blocked_between(session, character.id, target.id):
-                raise PvpError("opponent_busy")
             if await find_combat_configuration_blocker(session, character.id) is not None:
                 raise PvpError("busy")
             if await find_combat_configuration_blocker(session, target.id) is not None:
@@ -857,7 +849,6 @@ class PvpService:
         self._store_combat(match, combat, now)
         await session.flush()
         await self._sync_activities(session, match, members, combat, now, content=True)
-        await record_recent_contacts(session, [row.id for row in characters], now)
         await record_linked_cooccurrence(
             session,
             server_id=self.server_id,

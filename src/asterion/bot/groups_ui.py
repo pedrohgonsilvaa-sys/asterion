@@ -1,4 +1,4 @@
-"""Telegram presentation for the initial Vínculos → Grupo surface."""
+"""Telegram presentation for the Grupo surface (independente de Vínculos)."""
 
 from html import escape
 
@@ -22,33 +22,6 @@ def revision36(value: int) -> str:
     return output
 
 
-def render_links(group: GroupView | None, incoming_count: int) -> Screen:
-    group_line = (
-        f"👥 Grupo · {len(group.members)}/4"
-        if group is not None
-        else "👥 Você ainda não faz parte de um Grupo."
-    )
-    text = f"🤝 Vínculos\n\n{group_line}\n📩 Convites · {incoming_count}"
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Grupo", callback_data="group:root")],
-            [InlineKeyboardButton(text="Convites", callback_data="group:inbox")],
-            [InlineKeyboardButton(text="Guilda", callback_data="guild:root")],
-            [
-                InlineKeyboardButton(text="Amigos", callback_data="so:friends"),
-                InlineKeyboardButton(text="Pedidos", callback_data="so:requests"),
-            ],
-            [
-                InlineKeyboardButton(text="Recentes", callback_data="so:recents"),
-                InlineKeyboardButton(text="Bloqueados", callback_data="so:blocked"),
-            ],
-            [InlineKeyboardButton(text="Buscar Jogador", callback_data="so:search")],
-            [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
-        ]
-    )
-    return Screen(text, "links", keyboard)
-
-
 def render_group(
     group: GroupView | None,
     proposals: tuple[ActivityProposalView, ...] = (),
@@ -62,7 +35,7 @@ def render_group(
                 inline_keyboard=[
                     [InlineKeyboardButton(text="Criar Grupo", callback_data="group:create")],
                     [InlineKeyboardButton(text="Convites", callback_data="group:inbox")],
-                    [InlineKeyboardButton(text="← Vínculos", callback_data="links:root")],
+                    [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
                 ]
             ),
         )
@@ -165,7 +138,7 @@ def render_group(
                     callback_data=f"group:leave:{revision36(group.revision)}",
                 )
             ],
-            [InlineKeyboardButton(text="← Vínculos", callback_data="links:root")],
+            [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
         ]
     )
     return Screen("\n".join(lines), "links", InlineKeyboardMarkup(inline_keyboard=rows))
@@ -276,7 +249,7 @@ def render_expired_group_action() -> Screen:
         InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text="Atualizar", callback_data="group:root")],
-                [InlineKeyboardButton(text="← Vínculos", callback_data="links:root")],
+                [InlineKeyboardButton(text="← Menu", callback_data="menu:back")],
             ]
         ),
     )

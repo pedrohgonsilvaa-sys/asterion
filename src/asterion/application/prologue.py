@@ -326,6 +326,9 @@ class PrologueService:
             )
             .on_conflict_do_nothing()
         )
+        from asterion.application.tdo_explore import discover_all_locations
+
+        await discover_all_locations(session, character.id)
         from asterion.application.tdo_feats import reconcile_tdo_feats
 
         await reconcile_tdo_feats(session, character)

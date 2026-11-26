@@ -16,7 +16,7 @@ from asterion.application.groups import (
 )
 from asterion.application.world import WorldView
 from asterion.bot.groups_handlers import groups_router
-from asterion.bot.groups_ui import render_group, render_invites, render_links
+from asterion.bot.groups_ui import render_group, render_invites
 from asterion.bot.world_ui import render_world
 from tests.test_character_surfaces_telegram import _last_screen, _message_update
 from tests.test_creation_ui import callback_update
@@ -31,7 +31,7 @@ def _callbacks(screen):
     ]
 
 
-def test_vinculos_menu_exposes_group_without_root_group_button():
+def test_menu_has_no_vinculos_entry_and_no_root_group_button():
     view = WorldView(
         kind="menu",
         character_id=uuid4(),
@@ -49,9 +49,10 @@ def test_vinculos_menu_exposes_group_without_root_group_button():
     )
     screen = render_world(view)
     labels = {button.text for row in screen.keyboard.inline_keyboard for button in row}
-    assert "🤝 Vínculos" in labels
-    assert "Grupo" not in {button.text for row in screen.keyboard.inline_keyboard for button in row}
-    assert "links:root" in _callbacks(screen)
+    # Vínculos saiu do produto; o Grupo segue independente e sem entrada nova inventada.
+    assert "🤝 Vínculos" not in labels
+    assert "Grupo" not in labels
+    assert "links:root" not in _callbacks(screen)
 
 
 def test_group_screens_have_only_compact_callbacks_and_named_back_paths():
@@ -81,7 +82,6 @@ def test_group_screens_have_only_compact_callbacks_and_named_back_paths():
         ),
     )
     screens = (
-        render_links(group, 2),
         render_group(None),
         render_group(group),
         render_invites(
@@ -101,12 +101,13 @@ def test_group_screens_have_only_compact_callbacks_and_named_back_paths():
         assert _callbacks(screen)
         assert all(len(callback.encode("utf-8")) <= 64 for callback in _callbacks(screen))
     group_buttons = {
-        button.text for row in screens[2].keyboard.inline_keyboard for button in row
+        button.text for row in screens[1].keyboard.inline_keyboard for button in row
     }
     invite_buttons = {
-        button.text for row in screens[3].keyboard.inline_keyboard for button in row
+        button.text for row in screens[2].keyboard.inline_keyboard for button in row
     }
-    assert "← Vínculos" in group_buttons
+    assert "← Vínculos" not in group_buttons
+    assert "← Menu" in group_buttons
     assert "← Grupo" in invite_buttons
 
 

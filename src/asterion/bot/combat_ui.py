@@ -1567,7 +1567,7 @@ def _trial_fighter_card(
     name = escape(fighter.name)
     lines = [
         f"{icon} <b>{name}</b>",
-        f"❤️ <code>{number(fighter.hp)} / {number(fighter.stats.hp)}</code>",
+        f"❤️ <code>{number(fighter.hp)}/{number(fighter.stats.hp)}</code>",
         hp_bar(fighter.hp, fighter.stats.hp),
     ]
     lines.extend(
@@ -1741,7 +1741,7 @@ def _render_combat(view: CombatView) -> Screen:
             _turn_line(state, player.opportunity),
             "",
             f"<b>🐺 {escape(enemy.name)}</b>",
-            f"❤️ <code>{number(enemy.hp)} / {number(enemy.stats.hp)}</code>",
+            f"❤️ <code>{number(enemy.hp)}/{number(enemy.stats.hp)}</code>",
             hp_bar(enemy.hp, enemy.stats.hp),
         ]
         enemy_class_lines = _class_mechanic_status_lines(state, "enemy", player_key)
@@ -1753,7 +1753,7 @@ def _render_combat(view: CombatView) -> Screen:
                 state.flavor,
                 "",
                 f"👉 {icon} <b>{escape(player.name)}</b>",
-                f"❤️ <code>{number(player.hp)} / {number(player.stats.hp)}</code>",
+                f"❤️ <code>{number(player.hp)}/{number(player.stats.hp)}</code>",
                 hp_bar(player.hp, player.stats.hp),
             ]
         )

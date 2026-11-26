@@ -26,6 +26,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from asterion.domain.creation import STARTING_CHARACTER_TITLE
 from asterion.domain.equipment import EQUIPMENT_SLOT_VALUES
 from asterion.domain.world_event_veu import AFK_LIMIT as VEU_AFK_LIMIT
 from asterion.domain.world_event_veu import DECISION_WINDOW as VEU_DECISION_WINDOW
@@ -133,6 +134,12 @@ class Character(Base):
     xp: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
     legacy_level: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
+    )
+    # Título persistido do personagem (decisão do autor, HUD do Refúgio). O sistema de
+    # Títulos pode substituí-lo; sem Título escolhido, é este que aparece.
+    # Só ``server_default``: o banco preenche e o INSERT ... RETURNING devolve o valor.
+    title: Mapped[str] = mapped_column(
+        String(64), nullable=False, server_default=STARTING_CHARACTER_TITLE
     )
     hp: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
     max_hp: Mapped[Decimal] = mapped_column(Numeric, nullable=False)

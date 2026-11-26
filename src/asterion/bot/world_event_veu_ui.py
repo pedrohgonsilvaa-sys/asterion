@@ -172,7 +172,7 @@ def render_nucleus(view: NucleusScreen) -> Screen:
             [
                 "",
                 f"🕳️ <b>{escape(enemy.name)}</b>",
-                f"❤️ <code>{_fmt(enemy.hp)} / {_fmt(enemy.max_hp)}</code>",
+                f"❤️ <code>{_fmt(enemy.hp)}/{_fmt(enemy.max_hp)}</code>",
                 _bar(enemy.hp, enemy.max_hp),
             ]
         )
@@ -180,7 +180,7 @@ def render_nucleus(view: NucleusScreen) -> Screen:
         [
             "",
             f"🧙 <b>{escape(view.self_name)}</b>",
-            f"❤️ <code>{_fmt(view.self_hp)} / {_fmt(view.self_max_hp)}</code>",
+            f"❤️ <code>{_fmt(view.self_hp)}/{_fmt(view.self_max_hp)}</code>",
             _bar(view.self_hp, view.self_max_hp),
         ]
     )
