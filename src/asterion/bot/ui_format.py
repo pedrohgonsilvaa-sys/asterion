@@ -2,7 +2,7 @@
 
 Títulos em negrito, narrativas em itálico, valores numéricos em monoespaçado,
 barras de 10 segmentos, bloco de Recompensas sem linha vazia e retorno
-``↩️ Voltar``. Só formatação: nenhum número de jogo nasce aqui.
+``↩️ Retornar``. Só formatação: nenhum número de jogo nasce aqui.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.domain.creation import STARTING_CHARACTER_TITLE
 
-BACK_LABEL = "↩️ Voltar"
+BACK_LABEL = "↩️ Retornar"
 BAR_SEGMENTS = 10
 HP_FILL, VIGOR_FILL, XP_FILL = "🟥", "🟨", "🟦"
 REWARDS_HEADING = "🎁 <b>Recompensas:</b>"

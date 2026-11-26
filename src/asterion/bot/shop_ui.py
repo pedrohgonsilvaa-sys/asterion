@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from html import escape
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.payments import OrderView, ShopView
@@ -17,7 +19,6 @@ from asterion.domain.payments import (
     PATRON_PRESTIGE,
     PATRON_TEMPORARY_COSMETICS,
     PRODUCTS,
-    REFUND_WINDOW,
     REFUNDED,
     REVERSED,
     TERMS_VERSION,
@@ -67,90 +68,92 @@ _TEMPORARY = " e ".join(
 _PRESTIGE_DAYS = "/".join(str(days) for days, _ in PATRON_PRESTIGE)
 
 
+_PRODUCT_EMOJI = {PATRON: "👑", CHRONICLE_PASS: "📜"}
+_ORDER_STATUS = {
+    CREATED: "⏳ <b>Aguardando pagamento</b>",
+    PAID: "✅ <b>Pago</b>",
+    EXPIRED: "⏳ <b>Expirado</b>",
+    REFUNDED: "↩️ <b>Reembolsado</b>",
+    REVERSED: "↩️ <b>Estornado</b>",
+}
+_BACK = [_button("↩️ Retornar", "pay:root")]
+SUPPORT_TEXT = (
+    "O apoio mantém Asterion vivo. O Patrono concede uma skin exclusiva, o título Patrono "
+    "das Cinzas, a moldura Vigília do Patrono e prestígio permanente."
+)
+
+
+def _html(*parts: str | None) -> str:
+    return "\n\n".join(part for part in parts if part)
+
+
+def _m(text: str) -> str:
+    return f"<code>{escape(text)}</code>"
+
+
+def _days_list() -> str:
+    days = [str(value) for value, _ in PATRON_PRESTIGE]
+    return ", ".join(days[:-1]) + f" e {days[-1]}" if len(days) > 1 else days[0]
+
+
 def render_shop(view: ShopView, notice: str | None = None) -> Screen:
-    lines = ["🕯️ Apoiar Asterion", ""]
-    if notice:
-        lines.extend([notice, ""])
-    lines.extend(
-        [
-            "O apoio mantém Asterion vivo. Só concede cosméticos e prestígio: "
-            "nada de XP, Coroas, itens, combate ou progressão.",
-            "",
-        ]
-    )
+    """Apoiar Asterion (decisão do autor 2026-11-26 §31.1)."""
     patron_price = view.prices.get(PATRON)
-    pass_price = view.prices.get(CHRONICLE_PASS)
-    lines.append(
-        "👑 Patrono de Asterion"
-        + (f" · {format_brl(patron_price)} por {PATRON_DAYS} dias" if patron_price else "")
+    price = (
+        f"💰 {_m(format_brl(patron_price))} · {_m(f'{PATRON_DAYS} dias')}"
+        if patron_price
+        else f"⏳ {_m(f'{PATRON_DAYS} dias')}"
     )
-    lines.append(f"{_TEMPORARY} enquanto ativo.")
-    lines.append(f"Prestígio permanente aos {_PRESTIGE_DAYS} dias de apoio acumulado.")
-    if view.patron_active and view.patron_until is not None:
-        lines.append(f"Status: ativo até {_when(view.patron_until)}.")
-    else:
-        lines.append("Status: inativo.")
-    if view.patron_paid_days:
-        lines.append(f"Apoio acumulado: {view.patron_paid_days} dias.")
-    if view.patron_prestige:
-        lines.append("Prestígio: " + ", ".join(view.patron_prestige) + ".")
-    lines.extend(
-        [
-            "",
-            "📜 Passe da Crônica" + (f" · {format_brl(pass_price)}" if pass_price else ""),
-            "Libera a camada Premium da Trilha desta Crônica, inclusive nos Marcos já alcançados.",
-        ]
+    return Screen(
+        _html(
+            escape(notice) if notice else None,
+            "🕯️ <b>Apoiar Asterion</b>",
+            f"<i>{escape(SUPPORT_TEXT)}</i>",
+            f"👑 <b>Patrono de Asterion</b>\n{price}",
+            "🏅 <b>Prestígio</b>\n"
+            f"<i>Reconhecimentos permanentes aos {_days_list()} dias de apoio acumulado.</i>",
+            "📜 <b>Passe da Crônica</b>\n<i>Libera a camada Premium da Trilha da Crônica "
+            "desta Crônica, inclusive nos Marcos já alcançados.</i>",
+        ),
+        _IMAGE,
+        _keyboard(
+            [
+                [_button("👑 Patrono", f"pay:t:{PATRON}"), _button("📜 Crônica", "pay:pass")],
+                [_button("🧾 Pedidos", "pay:orders")],
+                [_button("↩️ Retornar", "bn:root")],
+            ]
+        ),
+        "HTML",
     )
-    if view.pass_active:
-        lines.append("Status: ativo.")
-    elif not view.pass_open:
-        lines.append("Status: fora de uma Crônica aberta.")
-    else:
-        lines.append("Status: disponível.")
-    rows = []
-    if not view.enabled:
-        lines.extend(["", "As compras ainda não estão disponíveis."])
-    else:
-        if patron_price:
-            label = "Renovar Patrono" if view.patron_active else "Ser Patrono"
-            rows.append([_button(f"👑 {label}", f"pay:t:{PATRON}")])
-        if pass_price and view.pass_open and not view.pass_active:
-            rows.append([_button("📜 Comprar Passe da Crônica", f"pay:t:{CHRONICLE_PASS}")])
-    rows.append([_button("🧾 Meus pedidos", "pay:orders")])
-    rows.append([_button("← Benefícios", "bn:root")])
-    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
 
 
 def terms_text(product_id: str, price_cents: int, link_minutes: int) -> str:
+    """Termos (§31.2). ``link_minutes`` fica na assinatura por compatibilidade."""
     product = PRODUCTS[product_id]
     if product_id == PATRON:
-        what = (
-            f"• {PATRON_DAYS} dias de Patrono, somados ao tempo que você já tiver. "
-            "Vale para toda a conta."
+        title = "📄 <b>Termos do Patrono de Asterion</b>"
+        duration = f"\n⏳ <b>Duração</b> · {_m(f'{PATRON_DAYS} dias')}"
+        benefit = (
+            "O Patrono concede uma skin, título e moldura exclusivas conforme o tempo de "
+            "apoio acumulado. No entanto, não concede XP, Coroas, itens, combate ou "
+            "progressão. O benefício não pode ser trocado nem vendido no Mercado."
         )
     else:
-        what = (
-            "• Libera a camada Premium da Trilha desta Crônica neste servidor, inclusive "
-            "nos Marcos já alcançados. Não pode ser comprado depois do fim da Crônica."
+        title = f"📄 <b>Termos do {escape(product.name)}</b>"
+        duration = ""
+        benefit = (
+            "O Passe libera a camada Premium da Trilha desta Crônica neste servidor, "
+            "inclusive nos Marcos já alcançados. Não concede XP, Coroas, itens, combate ou "
+            "progressão e não pode ser trocado nem vendido no Mercado."
         )
-    days = REFUND_WINDOW.days
-    return "\n".join(
-        [
-            f"📄 Termos de compra · {product.name}",
-            f"Versão {TERMS_VERSION}",
-            "",
-            f"Valor: {format_brl(price_cents)}.",
-            what,
-            "• Só concede cosméticos e prestígio. Não dá XP, Coroas, itens, combate nem "
-            "progressão. Não pode ser trocado nem vendido no Mercado.",
-            "• Pagamento por Pix ou cartão no checkout da InfinitePay, fora do Telegram.",
-            "• O benefício é liberado sozinho depois que o pagamento é confirmado.",
-            f"• O link de pagamento vale {link_minutes} minutos.",
-            f"• Reembolso: até {days} dias após o pagamento, sem perguntas, pelo suporte do "
-            "jogo. Depois disso, só em caso de erro nosso.",
-            "• O reembolso remove apenas o que esta compra concedeu.",
-            "• Pedidos de reembolso repetidos podem ser analisados.",
-        ]
+    return _html(
+        title,
+        f"💰 <b>Valor</b> · {_m(format_brl(price_cents))}{duration}",
+        f"🎁 <b>Benefícios</b>\n\n<i>{escape(benefit)}</i>",
+        "💳 <b>Pagamento</b>\n\n<i>O pagamento é realizado por Pix ou cartão no checkout "
+        "externo. Após a confirmação, o benefício é liberado automaticamente.</i>",
+        "🔄 <b>Reembolso</b>\n\n<i>Reembolsos seguem as condições de suporte e dos termos "
+        "da compra.</i>",
     )
 
 
@@ -160,64 +163,101 @@ def render_terms(product_id: str, price_cents: int, link_minutes: int) -> Screen
         _IMAGE,
         _keyboard(
             [
-                [
-                    _button(
-                        "✅ Aceito os termos e quero pagar",
-                        f"pay:b:{product_id}:{TERMS_VERSION}",
-                    )
-                ],
-                [_button("← Apoiar Asterion", "pay:root")],
+                [_button("✅ Aceitar", f"pay:b:{product_id}:{TERMS_VERSION}")],
+                _BACK,
             ]
         ),
+        "HTML",
     )
 
 
 def render_checkout(order: OrderView) -> Screen:
-    lines = [
-        f"🧾 Pedido criado: {order.product_name}",
-        "",
-        f"Valor: {format_brl(order.amount_cents)}.",
-    ]
-    if order.expires_at is not None:
-        lines.append(f"Pague até {_when(order.expires_at)}.")
-    lines.extend(
-        [
-            "",
-            "Toque em Pagar, escolha Pix e pague no app do seu banco.",
-            "O benefício é liberado sozinho quando o pagamento for confirmado. "
-            "Você vai receber uma mensagem aqui.",
-        ]
-    )
+    """Pedido criado (§31.4)."""
     rows = []
     if order.checkout_url:
         rows.append([InlineKeyboardButton(text="💳 Pagar", url=order.checkout_url)])
-    rows.append([_button("🧾 Meus pedidos", "pay:orders")])
-    rows.append([_button("← Apoiar Asterion", "pay:root")])
-    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+    rows.append([_button("🧾 Pedidos", "pay:orders")])
+    rows.append(_BACK)
+    product = "Patrono" if order.product == PATRON else order.product_name
+    return Screen(
+        _html(
+            f"🧾 <b>Pedido do {escape(product)}</b>",
+            f"💰 <b>Valor</b> · {_m(format_brl(order.amount_cents))}\n"
+            f"⏳ <b>Status</b> · {_m('Aguardando pagamento')}",
+            "<i>Pague pelo checkout para concluir a compra. O benefício será liberado "
+            "automaticamente quando o pagamento for confirmado.</i>",
+        ),
+        _IMAGE,
+        _keyboard(rows),
+        "HTML",
+    )
 
 
 def render_orders(orders: list[OrderView], now) -> Screen:
-    lines = ["🧾 Meus pedidos", ""]
-    rows = []
-    if not orders:
-        lines.append("Nenhum pedido ainda.")
+    """Meus Pedidos (§31.3)."""
+    blocks = []
+    pay_url = None
     for order in orders:
-        status = _STATUS.get(order.status, order.status)
+        status = _ORDER_STATUS.get(order.status, escape(order.status))
         if order.status == PAID and order.grant_error:
-            status += " · liberação pendente"
-        lines.append(
-            f"{_when(order.created_at)} · {order.product_name} · "
-            f"{format_brl(order.amount_cents)} · {status}"
+            status += " · <b>liberação pendente</b>"
+        emoji = _PRODUCT_EMOJI.get(order.product, "🧾")
+        local = order.created_at.astimezone(TIMEZONE)
+        blocks.append(
+            f"<b>{local:%d/%m/%Y, %H:%M}</b>\n"
+            f"{emoji} <b>{escape(order.product_name)}</b>\n"
+            f"💰 {_m(format_brl(order.amount_cents))} · {status}"
         )
         if (
-            order.status == CREATED
+            pay_url is None
+            and order.status == CREATED
             and order.checkout_url
             and order.expires_at is not None
             and order.expires_at > now
-            and len(rows) < 3
         ):
-            label = f"💳 Pagar · {order.product_name}"
-            rows.append([InlineKeyboardButton(text=label, url=order.checkout_url)])
-    lines.extend(["", "Dúvidas ou reembolso: fale com o suporte do jogo."])
-    rows.append([_button("← Apoiar Asterion", "pay:root")])
-    return Screen("\n".join(lines), _IMAGE, _keyboard(rows))
+            pay_url = order.checkout_url
+    rows = []
+    if pay_url:
+        rows.append([InlineKeyboardButton(text="💳 Pagar", url=pay_url)])
+    rows.append(_BACK)
+    return Screen(
+        _html(
+            "🧾 <b>Meus Pedidos</b>",
+            "\n\n".join(blocks) if blocks else "<code>❌ Vazio.</code>",
+            "<i>Dúvidas ou solicitações de reembolso: fale com o suporte do jogo.</i>",
+        ),
+        _IMAGE,
+        _keyboard(rows),
+        "HTML",
+    )
+
+
+def render_pass(view: ShopView) -> Screen:
+    """Passe da Crônica (§31.5). Sem Crônica aberta, a tela é só informativa."""
+    if view.pass_active:
+        current, status = "Aberta", "Ativo"
+    elif view.pass_open:
+        current, status = "Aberta", "Disponível"
+    else:
+        current, status = "Nenhuma Crônica aberta", "Indisponível"
+    rows = []
+    pass_price = view.prices.get(CHRONICLE_PASS)
+    if view.enabled and pass_price and view.pass_open and not view.pass_active:
+        rows.append([_button("📜 Comprar", f"pay:t:{CHRONICLE_PASS}")])
+    rows.append(_BACK)
+    return Screen(
+        _html(
+            "📜 <b>Passe da Crônica</b>",
+            "<i>O Passe libera a camada Premium da Trilha da Crônica e permite receber os "
+            "benefícios Premium dos Marcos da Crônica.</i>",
+            f"📜 <b>Crônica Atual</b> · {_m(current)}",
+            f"✨ <b>Status</b> · {_m(status)}",
+            None
+            if view.pass_open
+            else "<i>Uma nova Crônica aparecerá aqui quando uma temporada estiver "
+            "disponível.</i>",
+        ),
+        _IMAGE,
+        _keyboard(rows),
+        "HTML",
+    )

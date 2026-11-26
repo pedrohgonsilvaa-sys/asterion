@@ -6,24 +6,32 @@ from aiogram import Bot, F, Router
 from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import CommandObject, CommandStart
-from aiogram.types import CallbackQuery, ForceReply, Message
+from aiogram.types import CallbackQuery, Message
 
 from asterion.application.engagement import DailyGiftService, EngagementError
 from asterion.application.promo_codes import PromoCodeService
 from asterion.application.recruitment import RecruitmentService
 from asterion.bot.benefits_ui import (
-    CODE_PROMPT,
-    RECRUIT_PROMPT,
     error_text,
     parse_ref,
     render_benefits,
     render_call,
+    render_code_prompt,
     render_community,
     render_gift,
+    render_promo_invalid,
     render_promo_result,
+    render_recruit_prompt,
 )
 from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
+from asterion.bot.text_prompt import (
+    PROMPTS,
+    HasPrompt,
+    PendingPrompt,
+    consume_reply,
+    show_on_prompt,
+)
 
 RECRUIT_LINK_PREFIX = "chamado_"
 
@@ -43,9 +51,11 @@ def benefits_router(
         if isinstance(query.message, Message):
             await present(query.message, screen, images, edit=True)
 
-    async def ask(query: CallbackQuery, text: str) -> None:
+    async def prompt_on_screen(query: CallbackQuery, kind: str, screen: Screen) -> None:
+        """Prompt temporário (decisão do autor 2026-11-26 §32.4): a tela vira o pedido."""
         if isinstance(query.message, Message):
-            await query.message.answer(text, reply_markup=ForceReply(selective=True))
+            await present(query.message, screen, images, edit=True)
+            PROMPTS.open(query.from_user.id, kind, query.message)
 
     async def recruit_link(bot: Bot, code: str) -> str | None:
         try:
@@ -76,9 +86,9 @@ def benefits_router(
             notice = f"🪙 {payout.crowns} Coroas resgatadas."
             await show(query, await call_screen(query.bot, actor, notice))
         elif data == "bn:call:enter":
-            await ask(query, RECRUIT_PROMPT)
+            await prompt_on_screen(query, "bn:recruit", render_recruit_prompt())
         elif data == "bn:code":
-            await ask(query, CODE_PROMPT)
+            await prompt_on_screen(query, "bn:code", render_code_prompt())
         else:
             raise EngagementError("unknown")
 
@@ -95,6 +105,38 @@ def benefits_router(
             await query.answer(error_text(exc.code), show_alert=True)
             return
         await query.answer()
+
+    _PROMO_INVALID = {"promo_invalid", "promo_expired", "promo_exhausted", "promo_already_redeemed"}
+
+    @router.message(F.text, HasPrompt("bn:"))
+    async def prompt_reply(message: Message, prompt: PendingPrompt) -> None:
+        actor = message.from_user.id
+        text = message.text or ""
+        await consume_reply(message)
+        PROMPTS.close(actor)
+        try:
+            if prompt.kind == "bn:code":
+                result = await codes.redeem(actor, text)
+                screen = render_promo_result(result.code, result.granted)
+            else:
+                await recruitment.link(actor, text)
+                screen = await call_screen(message.bot, actor, "📣 Recrutador vinculado.")
+        except EngagementError as exc:
+            if prompt.kind == "bn:code" and exc.code in _PROMO_INVALID:
+                screen = render_promo_invalid()
+            elif prompt.kind == "bn:code":
+                await show_on_prompt(
+                    message, prompt, render_code_prompt(error_text(exc.code)), images
+                )
+                PROMPTS.follow(actor, prompt)
+                return
+            else:
+                await show_on_prompt(
+                    message, prompt, render_recruit_prompt(error_text(exc.code)), images
+                )
+                PROMPTS.follow(actor, prompt)
+                return
+        await show_on_prompt(message, prompt, screen, images)
 
     @router.message(
         F.text,

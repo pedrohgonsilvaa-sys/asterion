@@ -18,7 +18,7 @@ from asterion.application.guild_battle import (
     individual_participations,
 )
 from asterion.application.guild_battle_locks import character_roster_locked
-from asterion.application.guild_upkeep import _has_cooperative_commitment
+from asterion.application.guild_upkeep import has_cooperative_commitment
 from asterion.application.guilds import GuildError, GuildService
 from asterion.domain.combat import withdraw_fighter
 from asterion.domain.guild_battle import TURN_TTL
@@ -201,12 +201,9 @@ async def test_registration_rules(database):
             champion=ids[0], now=REGISTER,
         )
     ) == "member_ineligible"  # fmt: skip
+    # Decisão do autor 2026-11-26 §34.1: sem requisito de nível; Nv.1 pode lutar.
     async with database[1].begin() as session:
-        low = await session.get(Character, ids[4])
-        low.level = 29
-    assert await _code(_register(database, service, "Aurora")) == "member_ineligible"
-    async with database[1].begin() as session:
-        (await session.get(Character, ids[4])).level = 30
+        (await session.get(Character, ids[4])).level = 1
     assert await _code(
         service.register(
             _actor("Aurora", 1), front_1=tuple(ids[0:2]), front_2=tuple(ids[2:5]),
@@ -222,11 +219,11 @@ async def test_registration_rules(database):
     assert next(row for row in view.roster if row.is_champion).character_id == ids[3]
     async with database[1]() as session:
         guild_id = (await session.get(GuildMember, ids[0])).guild_id
-        assert await _has_cooperative_commitment(session, guild_id)
+        assert await has_cooperative_commitment(session, guild_id)
     await service.cancel_registration(_actor("Aurora", 1), now=REGISTER)
     assert await service.registration(_actor("Aurora", 1)) is None
     async with database[1]() as session:
-        assert not await _has_cooperative_commitment(session, guild_id)
+        assert not await has_cooperative_commitment(session, guild_id)
 
 
 @pytest.mark.asyncio
@@ -467,7 +464,7 @@ async def test_odd_count_bye_and_dissolution_waits_for_battle(database):
     # A Guild in a Batalha cannot finish its dissolution (§30.3).
     assert guild_id in paired
     async with database[1]() as session:
-        assert await _has_cooperative_commitment(session, guild_id)
+        assert await has_cooperative_commitment(session, guild_id)
     await GuildService(database[1], "ocaso").run_maintenance(now=PAIR + timedelta(minutes=1))
     async with database[1]() as session:
         assert (await session.get(Guild, guild_id)).status == "active"
@@ -479,7 +476,7 @@ async def test_odd_count_bye_and_dissolution_waits_for_battle(database):
         fights = (await session.scalars(select(GuildBattleFight))).all()
         assert sorted(row.kind for row in fights) == ["champion", "front_1", "front_2"]
         assert all(row.absent_a and row.absent_b for row in fights)
-        assert not await _has_cooperative_commitment(session, guild_id)
+        assert not await has_cooperative_commitment(session, guild_id)
 
 
 @pytest.mark.asyncio

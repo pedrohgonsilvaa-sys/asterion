@@ -105,22 +105,20 @@ def test_character_hub_follows_master_contract():
     )
     assert [[button.text for button in row] for row in screen.keyboard.inline_keyboard] == [
         ["⚔️ Equipamentos", "🎒 Inventário"],
-        ["📊 Atributos", "✨ Artes"],
-        ["🌿 Talentos", "🪪 Perfil"],
-        ["🧩 Doutrinas", "🎨 Cosméticos"],
-        ["🏆 Feitos"],
+        ["✨ Artes", "🌿 Talentos"],
+        ["🧩 Doutrinas", "🪪 Perfil"],
+        ["🎨 Cosméticos", "🏆 Feitos"],
         ["🏛️ Legado"],
-        ["↩️ Voltar"],
+        ["↩️ Retornar"],
     ]
     callbacks = [button.callback_data for button in _buttons(screen)]
     assert callbacks == [
         "eq:r",
         "inventory:root",
-        "character:attributes",
         "character:arts",
         "character:talents",
-        "character:profile",
         "character:doctrines",
+        "character:profile",
         "character:cosmetics",
         "kb:a",
         "legacy:root",

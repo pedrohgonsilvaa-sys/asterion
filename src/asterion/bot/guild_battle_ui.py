@@ -33,7 +33,6 @@ from asterion.bot.guilds_ui import pack
 from asterion.domain.guild_battle import (
     COMBATANTS,
     FRONT_SIZES,
-    GUILD_BATTLE_MIN_LEVEL,
     GUILD_BATTLE_TIMEZONE,
     MAX_RESERVES,
     MIN_INDIVIDUAL_PARTICIPATIONS,
@@ -82,9 +81,7 @@ _ERRORS = {
         f"{COMBATANTS} e até {MAX_RESERVES} reservas, sem repetir ninguém."
     ),
     "guild_dissolving": "A Guilda está em dissolução e não pode se inscrever.",
-    "member_ineligible": (
-        f"Todos precisam ser membros da Guilda e estar no Nv. {GUILD_BATTLE_MIN_LEVEL} ou acima."
-    ),
+    "member_ineligible": "Todos precisam ser membros da Guilda.",
     "not_registered": "A Guilda não tem Inscrição para cancelar.",
     "not_in_roster": "Você não é combatente desta Batalha de Guildas.",
     "confirmation_closed": "A Confirmação de Entrada fechou às 20:50.",
@@ -124,8 +121,14 @@ def _keyboard(*rows: list[InlineKeyboardButton]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=list(rows))
 
 
-_BACK_TO_GUILD = [_button("← Guilda", "guild:root")]
-_BACK_TO_HUB = [_button("← Batalha de Guildas", "gb:hub")]
+_BACK_TO_GUILD = [_button("↩️ Retornar", "guild:root")]
+_BACK_TO_HUB = [_button("↩️ Retornar", "gb:hub")]
+BATTLE_TEXT = (
+    "Duas Guildas se enfrentam em duas frentes. Cada frente é disputada separadamente, e o "
+    "resultado das batalhas define a vencedora. Em caso de empate geral, um Campeão 1v1 "
+    "decide o confronto."
+)
+STANDINGS_PAGE = 50
 
 
 def _when(moment: datetime) -> str:
@@ -307,8 +310,7 @@ def render_draft(hub: GuildBattleHubView, draft: Draft) -> Screen:
         lines.extend(
             [
                 "",
-                f"⚠️ A Guilda tem {len(candidates)} membros no Nv. {GUILD_BATTLE_MIN_LEVEL}+. "
-                f"São necessários {COMBATANTS}.",
+                f"⚠️ A Guilda tem {len(candidates)} membros. São necessários {COMBATANTS}.",
             ]
         )
     if step == "reserve":
@@ -379,71 +381,133 @@ def _own_slot(hub: GuildBattleHubView) -> RosterSlotView | None:
 
 def render_hub(hub: GuildBattleHubView, *, now: datetime) -> Screen:
     registration = hub.registration
-    lines = [f"🛡️ Batalha de Guildas · {escape(hub.guild_name)}", ""]
     rows: list[list[InlineKeyboardButton]] = []
     if hub.in_fight:
-        rows.append([_button("⚔️ Voltar ao combate", "gb:ref")])
+        rows.append([_button("⚔️ Combate", "gb:ref")])
+    guild_line = f"{hub.guild_symbol} <b>{escape(f'[{hub.guild_tag}] {hub.guild_name}')}</b>"
     if registration is None:
+        # Decisão do autor 2026-11-26 §34.1: só descrição, Guilda, Próxima Batalha e
+        # Inscrição; sem blocos de Formato, Pontuação, Desempate ou Requisito.
         schedule = schedule_for(hub.next_starts_at)
+        text = "\n\n".join(
+            (
+                "🛡️ <b>Batalha de Guildas</b>",
+                f"<i>{escape(BATTLE_TEXT)}</i>",
+                guild_line,
+                f"📅 <b>Próxima Batalha</b> · <code>{_short_when(hub.next_starts_at)}</code>\n"
+                f"📝 <b>Inscrição</b> · "
+                f"<code>{_short_when(schedule.registration_closes_at)}</code>",
+            )
+        )
+        inscribe = (
+            _button("📝 Inscrever", f"gb:d:{fingerprint(hub.candidates)}:{Draft().pack()}")
+            if hub.is_leader and hub.registration_open
+            else None
+        )
+        rows.append(
+            [b for b in (inscribe, _button("🏆 Ranking", "gb:std")) if b is not None]
+        )
+        rows.append(_BACK_TO_GUILD)
+        return Screen(text, _IMAGE, _keyboard(*rows), "HTML")
+    lines = ["🛡️ <b>Batalha de Guildas</b>", "", guild_line, ""]
+    schedule = schedule_for(registration.starts_at)
+    lines.append(f"📅 {_when(registration.starts_at)}")
+    lines.append(_STATUS.get(registration.status, registration.status))
+    if registration.opponent_name:
+        lines.append(f"🆚 {escape(registration.opponent_name)}")
+    paired = registration.status == "paired"
+    confirming = paired and now < schedule.confirmation_closes_at
+    if registration.status == "registered":
+        lines.append(f"Pareamento às {_clock(schedule.registration_closes_at)}.")
+    if confirming:
+        lines.append(
+            f"Confirmação de Entrada até {_clock(schedule.confirmation_closes_at)}. "
+            f"Início às {_clock(schedule.starts_at)}."
+        )
+    if registration.status == "bye":
+        lines.append("Sem adversário nesta Batalha: sem vitória, rating ou recompensa.")
+    lines.extend(_roster_lines(registration, show_confirmation=paired))
+    own = _own_slot(hub)
+    if (
+        confirming
+        and own is not None
+        and own.slot != "reserve"
+        and not own.replaced
+        and not own.confirmed
+    ):
         lines.extend(
             [
-                f"📅 Próxima Batalha · {_when(hub.next_starts_at)}",
-                f"📝 Inscrição · {_when(schedule.registration_opens_at)} até "
-                f"{_clock(schedule.registration_closes_at)}",
                 "",
-                "Frente I 2v2 e Frente II 3v3, cada uma vale 1 ponto. Empate nos pontos "
-                "leva ao Campeão 1v1. Todos precisam do Nv. "
-                f"{GUILD_BATTLE_MIN_LEVEL} atual.",
-                "",
-                "🟢 Inscrição aberta" if hub.registration_open else "🔴 Inscrição fechada",
+                "A Confirmação de Entrada registra e trava sua Configuração de Combate "
+                "completa até o fim da sua participação.",
             ]
         )
-        if hub.is_leader and hub.registration_open:
-            fp = fingerprint(hub.candidates)
-            rows.append([_button("Montar Inscrição", f"gb:d:{fp}:{Draft().pack()}")])
-    else:
-        schedule = schedule_for(registration.starts_at)
-        lines.append(f"📅 {_when(registration.starts_at)}")
-        lines.append(_STATUS.get(registration.status, registration.status))
-        if registration.opponent_name:
-            lines.append(f"🆚 {escape(registration.opponent_name)}")
-        paired = registration.status == "paired"
-        confirming = paired and now < schedule.confirmation_closes_at
-        if registration.status == "registered":
-            lines.append(f"Pareamento às {_clock(schedule.registration_closes_at)}.")
-        if confirming:
-            lines.append(
-                f"Confirmação de Entrada até {_clock(schedule.confirmation_closes_at)}. "
-                f"Início às {_clock(schedule.starts_at)}."
-            )
-        if registration.status == "bye":
-            lines.append("Sem adversário nesta Batalha: sem vitória, rating ou recompensa.")
-        lines.extend(_roster_lines(registration, show_confirmation=paired))
-        own = _own_slot(hub)
-        if (
-            confirming
-            and own is not None
-            and own.slot != "reserve"
-            and not own.replaced
-            and not own.confirmed
-        ):
-            lines.extend(
-                [
-                    "",
-                    "A Confirmação de Entrada registra e trava sua Configuração de Combate "
-                    "completa até o fim da sua participação.",
-                ]
-            )
-            rows.append([_button("✅ Confirmar Entrada", "gb:ok")])
-        if hub.is_leader and registration.status == "registered" and hub.registration_open:
-            fp = fingerprint(hub.candidates)
-            rows.append([_button("Refazer Inscrição", f"gb:d:{fp}:{Draft().pack()}")])
-            rows.append([_button("Cancelar Inscrição", "gb:cx")])
-        if hub.is_leader and confirming and _substitution_pairs(registration):
-            rows.append([_button("Substituir por reserva", "gb:sub")])
-    rows.append([_button("📈 Classificação", "gb:std")])
+        rows.append([_button("✅ Confirmar Entrada", "gb:ok")])
+    if hub.is_leader and registration.status == "registered" and hub.registration_open:
+        fp = fingerprint(hub.candidates)
+        rows.append([_button("Refazer Inscrição", f"gb:d:{fp}:{Draft().pack()}")])
+        rows.append([_button("Cancelar Inscrição", "gb:cx")])
+    if hub.is_leader and confirming and _substitution_pairs(registration):
+        rows.append([_button("Substituir por reserva", "gb:sub")])
+    rows.append([_button("🏆 Ranking", "gb:std")])
     rows.append(_BACK_TO_GUILD)
     return Screen("\n".join(lines), _IMAGE, _keyboard(*rows), "HTML")
+
+
+def _short_when(moment: datetime) -> str:
+    local = moment.astimezone(GUILD_BATTLE_TIMEZONE)
+    return f"{local:%d/%m} às {local:%H:%M}"
+
+
+def _plural(value: int, one: str, many: str) -> str:
+    return f"{value} {one if value == 1 else many}"
+
+
+def _record(row: StandingRow) -> str:
+    return " · ".join(
+        (
+            _plural(row.wins, "Vitória", "Vitórias"),
+            _plural(row.draws, "Empate", "Empates"),
+            _plural(row.losses, "Derrota", "Derrotas"),
+        )
+    )
+
+
+def render_ranking(
+    rows: tuple[StandingRow, ...], *, own_guild_id=None, page: int = 0
+) -> Screen:
+    """Ranking de Batalhas (decisão do autor 2026-11-26 §34.2), 50 Guildas por página."""
+    parts = ["🏆 <b>Ranking de Batalhas</b>"]
+    own = next((row for row in rows if row.guild_id == own_guild_id), None)
+    if own is not None:
+        parts.append(f"{own.guild_symbol} <b>{escape(f'[{own.guild_tag}] {own.guild_name}')}</b>")
+        parts.append(
+            f"🏆 <b>Vitórias</b> · <code>{own.wins}</code>\n"
+            f"🤝 <b>Empates</b> · <code>{own.draws}</code>\n"
+            f"❌ <b>Derrotas</b> · <code>{own.losses}</code>"
+        )
+    parts.append(
+        "<i>O Ranking de Batalhas registra o desempenho das Guildas nos confrontos "
+        "realizados durante o ciclo competitivo.</i>"
+    )
+    start = page * STANDINGS_PAGE
+    shown = rows[start : start + STANDINGS_PAGE]
+    if shown:
+        parts.append(
+            "\n\n".join(
+                f"<b>#{row.position} {row.guild_symbol} "
+                f"{escape(f'[{row.guild_tag}] {row.guild_name}')}</b>\n"
+                f"🏆 <code>{_record(row)}</code>"
+                for row in shown
+            )
+        )
+    nav = []
+    if page > 0:
+        nav.append(_button("◀️ Anterior", f"gb:std:{page - 1}"))
+    if start + STANDINGS_PAGE < len(rows):
+        nav.append(_button("▶️ Próxima", f"gb:std:{page + 1}"))
+    keyboard_rows = [row for row in (nav, _BACK_TO_HUB) if row]
+    return Screen("\n\n".join(parts), _IMAGE, _keyboard(*keyboard_rows), "HTML")
 
 
 def render_cancel_confirm() -> Screen:

@@ -31,7 +31,7 @@ from tests.test_creation_ui import callback_update
 from tests.test_road_integration import _seed_road
 
 TDO_REGION = "Terras do Ocaso"
-RETURN_CALLBACKS = ["menu:back", "world:adventure", "adv:hub"]
+RETURN_CALLBACKS = ["menu:back", "world:adventure"]
 
 
 async def _snapshot(sessions, actor):

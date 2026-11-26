@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from datetime import datetime
+from html import escape
 from uuid import UUID
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -24,7 +25,6 @@ from asterion.application.market import (
 )
 from asterion.application.trades import TradeItemView, TradeView
 from asterion.bot.creation_ui import Screen
-from asterion.bot.flavor_ui import with_flavor
 from asterion.bot.guilds_ui import pack
 from asterion.domain.market import (
     MARKET_FEE_PERCENT,
@@ -146,64 +146,152 @@ def _offer_price(row: ListingView) -> str:
     return _crowns(row.unit_price)
 
 
+MARKET_TEXT = (
+    "O comércio de Asterion reúne lojas de outros aventureiros, trocas diretas e serviços "
+    "para transformar recursos em novas possibilidades. Cada negociação acontece por conta "
+    "e risco de quem decide fechar o negócio."
+)
+MARKET_HINT = (
+    "Confira os itens, compare ofertas e mantenha seus recursos sob controle antes de "
+    "confirmar qualquer transação."
+)
+# Emoji de cada tipo de oferta na vitrine.
+KIND_EMOJI = {"equipment": "⚔️", "material": "🧱", "consumable": "🧪", "rune": "🔮"}
+
+
+def _b(text: str) -> str:
+    return f"<b>{escape(text)}</b>"
+
+
+def _i(text: str) -> str:
+    return f"<i>{escape(text)}</i>"
+
+
+def _m(text: str) -> str:
+    return f"<code>{escape(text)}</code>"
+
+
+def _html(*parts: str | None) -> str:
+    return "\n\n".join(part for part in parts if part)
+
+
+def _showcase(shop: ShopView) -> str:
+    if not shop.listings:
+        return "📦 <b>Itens na Vitrine:</b>\n" + _m("❌ Vazio.")
+    lines = [
+        f"{KIND_EMOJI.get(row.kind, '📦')} {_b(row.title)} · {_m('🪙 ' + _offer_price(row))}"
+        for row in shop.listings
+    ]
+    return "\n".join(["📦 <b>Itens na Vitrine:</b>", *lines])
+
+
 def render_root(trade: TradeView | None) -> Screen:
-    label = "Troca Direta" if trade is None else "Troca Direta · em andamento"
-    screen = Screen(
-        "🛒 Mercado\n\nEncontre uma Loja pelo Código, cuide da sua ou troque itens direto "
-        "com outro jogador.",
+    """Menu do Mercado (decisão do autor 2026-11-26 §8.1)."""
+    return Screen(
+        _html("🏪 <b>Mercado</b>", _i(MARKET_TEXT), _i(MARKET_HINT)),
         IMAGE_KEY,
         _keyboard(
-            [_button("Buscar Loja", "mkt:search")],
-            [_button("Minha Loja", "mkt:mine")],
-            [_button(label, "trd:root")],
-            # Decisão do autor: a Forja fica dentro do Mercado (abre a Criação existente).
-            [_button("🔨 Forja", "craft:root")],
-            [_button("← Menu", "menu:back")],
+            [_button("🔎 Buscar Loja", "mkt:search"), _button("🏪 Minha Loja", "mkt:mine")],
+            [_button("🤝 Troca Direta", "trd:root"), _button("🔨 Forja", "craft:root")],
+            [_button("📦 Armazém", "warehouse:root:market")],
+            [_button("↩️ Retornar", "menu:back")],
         ),
+        "HTML",
     )
-    return with_flavor(screen, "mercado")
+
+
+def render_search_prompt(error: str | None = None) -> Screen:
+    """Buscar Loja (§8.2). A busca segue o modelo oficial: o Código da Loja (GDD §28.4)."""
+    return Screen(
+        _html(
+            "🔎 <b>Buscar Loja</b>",
+            _i("Informe o código da loja que deseja visitar."),
+            _i("O código será usado para localizar a loja de outro aventureiro."),
+            escape(error) if error else None,
+            "✏️ Digite o código da loja:",
+        ),
+        IMAGE_KEY,
+        _keyboard([_button("↩️ Retornar", "mkt:root")]),
+        "HTML",
+    )
 
 
 def render_my_shop(shop: ShopView, notice: str | None = None) -> Screen:
-    lines = [f"🏪 {shop.name}", f"Código · {shop.code}"]
-    if shop.description:
-        lines += ["", shop.description]
-    lines += ["", f"Ofertas ativas · {len(shop.listings)}/{shop.listing_slots}"]
-    lines += [f"• {row.title} · {_offer_price(row)}" for row in shop.listings]
-    if notice:
-        lines = [notice, "", *lines]
-    rows = [
-        [_button(f"{row.title} · {_offer_price(row)}", f"mkt:own:{pack(row.listing_id)}")]
-        for row in shop.listings
-    ]
+    """Minha Loja (§8.4)."""
+    rows = []
     if len(shop.listings) < shop.listing_slots:
-        rows.append([_button("Adicionar oferta", "mkt:add")])
-    rows.append([_button("🛠️ Meus Serviços", "svc:mine")])
-    rows.append([_button("Editar Loja", "mkt:edit"), _button("Divulgar Loja", "mkt:promote")])
-    rows.append([_button("← Mercado", "mkt:root")])
-    return Screen("\n".join(lines), IMAGE_KEY, _keyboard(*rows))
+        rows.append([_button("➕ Anunciar Item", "mkt:add")])
+    rows.append([_button("📋 Meus Anúncios", "mkt:ads")])
+    rows.append([_button("↩️ Retornar", "mkt:root")])
+    return Screen(
+        _html(
+            escape(notice) if notice else None,
+            "🏪 <b>Minha Loja</b>",
+            _i(
+                "Esta é a sua banca no Mercado. Aqui ficam os itens que foram colocados à "
+                "venda por você."
+            ),
+            f"🪙 <b>Coroas</b> · {_m(number(shop.viewer_crowns))}",
+            _showcase(shop),
+            _i(
+                "Adicione itens ao seu estoque de vendas quando quiser colocá-los à "
+                "disposição de outros aventureiros."
+            ),
+        ),
+        IMAGE_KEY,
+        _keyboard(*rows),
+        "HTML",
+    )
 
 
 def render_public_shop(shop: ShopView, notice: str | None = None) -> Screen:
-    lines = [f"🏪 {shop.name}", f"Código · {shop.code}"]
-    if shop.description:
-        lines += ["", shop.description]
-    lines.append("")
-    if shop.listings:
-        lines.append("Ofertas disponíveis:")
-    else:
-        lines.append("Não existem ofertas disponíveis no momento.")
-    if notice:
-        lines = [notice, "", *lines]
+    """Loja de outro aventureiro (§8.3)."""
     rows = [
-        [_button(f"{row.title} · {_offer_price(row)}", f"mkt:l:{pack(row.listing_id)}")]
+        [_button(f"{KIND_EMOJI.get(row.kind, '📦')} {row.title}", f"mkt:l:{pack(row.listing_id)}")]
         for row in shop.listings
     ]
-    # §27.3: Services are found only here, inside the artisan's Shop.
-    rows.append([_button("🛠️ Serviços da Loja", f"svc:shop:{pack(shop.shop_id)}")])
-    rows.append([_button("Buscar outra Loja", "mkt:search")])
-    rows.append([_button("← Mercado", "mkt:root")])
-    return Screen("\n".join(lines), IMAGE_KEY, _keyboard(*rows))
+    # GDD §27.3: Serviços públicos são acessados dentro da Loja Pessoal do artesão.
+    rows.append([_button("🛠️ Serviços", f"svc:shop:{pack(shop.shop_id)}")])
+    rows.append([_button("↩️ Retornar", "mkt:root")])
+    return Screen(
+        _html(
+            escape(notice) if notice else None,
+            f"🏪 {_b(shop.name)}",
+            _i(
+                "Uma banca organizada reúne equipamentos, materiais e outros itens deixados "
+                "à venda por este aventureiro."
+            ),
+            _showcase(shop),
+        ),
+        IMAGE_KEY,
+        _keyboard(*rows),
+        "HTML",
+    )
+
+
+def render_my_ads(shop: ShopView) -> Screen:
+    """Meus Anúncios: as ofertas ativas e a gestão da própria Loja."""
+    rows = [
+        [
+            _button(
+                f"{KIND_EMOJI.get(row.kind, '📦')} {row.title}", f"mkt:own:{pack(row.listing_id)}"
+            )
+        ]
+        for row in shop.listings
+    ]
+    rows.append([_button("🛠️ Meus Serviços", "svc:mine")])
+    rows.append([_button("✏️ Editar Loja", "mkt:edit"), _button("📣 Divulgar", "mkt:promote")])
+    rows.append([_button("↩️ Retornar", "mkt:mine")])
+    return Screen(
+        _html(
+            "📋 <b>Meus Anúncios</b>",
+            f"🏷️ <b>Código</b> · {_m(shop.code)}",
+            f"📦 <b>Ofertas</b> · {_m(f'{len(shop.listings)}/{shop.listing_slots}')}",
+        ),
+        IMAGE_KEY,
+        _keyboard(*rows),
+        "HTML",
+    )
 
 
 def render_edit_shop(shop: ShopView) -> Screen:

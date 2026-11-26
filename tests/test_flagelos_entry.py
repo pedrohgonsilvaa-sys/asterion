@@ -25,8 +25,7 @@ from asterion.bot.creation_handlers import creation_router
 from asterion.bot.flagelo_handlers import flagelo_router
 from asterion.bot.flagelo_ui import FACE, TITLE
 from asterion.bot.world_event_veu_handlers import veu_event_router
-from asterion.bot.world_event_veu_ui import FLAGELO_ENTRY
-from asterion.bot.world_ui import render_adventure
+from asterion.bot.world_ui import refuge_menu_keyboard
 from asterion.domain import flagelos as fl
 from asterion.domain.creation import NamePolicy
 from asterion.infrastructure.db.models import (
@@ -128,11 +127,11 @@ async def _snapshot(database):
 def _assert_six_bars(text: str, points: dict[str, int]) -> None:
     for region in fl.REGIONS:
         value = points.get(region.region_id, 0)
-        assert f"{region.short_label} <code>{value}/{fl.THRESHOLD}</code>" in text
+        assert f"<b>{region.short_label}</b> · <code>{value}/{fl.THRESHOLD}</code>" in text
 
 
-def test_adventure_events_button_opens_the_world_events_screen():
-    keyboard = render_adventure().keyboard.inline_keyboard
+def test_main_menu_events_button_opens_the_world_events_screen():
+    keyboard = refuge_menu_keyboard(gift_available=False).inline_keyboard
     assert "wev:hub" in [b.callback_data for row in keyboard for b in row]
 
 
@@ -144,14 +143,14 @@ async def test_world_events_lists_the_flagelo_and_opens_the_hub_without_one_acti
     await client.flagelos.apply_contributions(now=T0)
 
     events = await client.click(actor, "wev:hub")
-    assert FLAGELO_ENTRY[0] in _labels(events)
-    assert FLAGELO_ENTRY[1] == "flg:hub"
+    assert _labels(events) == ["🔥 Despertar", "🕳️ Ruptura", "↩️ Retornar"]
+    assert "flg:hub" in _callbacks(events)
 
     before = await _snapshot(database)
     hub = await client.click(actor, "flg:hub")
-    assert TITLE in hub.text
+    assert f"<b>{TITLE[2:]}</b>" in hub.text
     _assert_six_bars(hub.text, {"varzeas": 412})
-    assert "Nenhum Flagelo desperto" in hub.text
+    assert "Nenhum Flagelo despertou." in hub.text
     assert "flg:enter" not in _callbacks(hub)
     assert f"[ {FACE} ]" not in _labels(hub)
     assert "wev:hub" in _callbacks(hub)
@@ -171,8 +170,9 @@ async def test_hub_with_an_active_flagelo_shows_its_region_and_the_face_button(d
     before = await _snapshot(database)
     await client.click(actor, "wev:hub")
     hub = await client.click(actor, "flg:hub")
-    assert f"{region.short_label} <code>{fl.THRESHOLD}/{fl.THRESHOLD}</code>" in hub.text
-    assert "⚔️ desperto" in hub.text
+    assert f"<b>{region.short_label}</b> · <code>{fl.THRESHOLD}/{fl.THRESHOLD}</code>" in hub.text
+    # Em 100% a barra fica toda roxa, sem status separado de "Ativo" (2026-11-26 §33.2).
+    assert "🟪" * 10 + " <code>100%</code>" in hub.text and "desperto" not in hub.text
     assert region.flagelo.name in hub.text
     assert region.region in hub.text
     assert f"[ {FACE} ]" in _labels(hub)
@@ -196,7 +196,7 @@ async def test_start_flagelo_deep_link_opens_the_hub_not_the_main_menu(database)
 
     before = await _snapshot(database)
     hub = await client.say(actor, "/start flagelo")
-    assert TITLE in hub.text
+    assert f"<b>{TITLE[2:]}</b>" in hub.text
     _assert_six_bars(hub.text, {"nareth": 120})
     assert "flg:enter" not in _callbacks(hub)
     # O deep link só mostra o hub: não inicia Flagelo, não contribui, não entra em combate.

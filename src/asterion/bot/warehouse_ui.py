@@ -176,9 +176,9 @@ def _render_sources(view: WarehouseView, page: int) -> Screen:
 
 
 def _back_row(back_to_refuge: bool) -> list[InlineKeyboardButton]:
-    """Voltar preserva a origem: Refúgio do Ocaso ou Inventário."""
+    """Retornar preserva a origem: Mercado (antes, Refúgio do Ocaso) ou Inventário."""
     if back_to_refuge:
-        return [InlineKeyboardButton(text="↩️ Voltar", callback_data="refuge:local")]
+        return [InlineKeyboardButton(text="↩️ Retornar", callback_data="mkt:root")]
     return [InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")]
 
 

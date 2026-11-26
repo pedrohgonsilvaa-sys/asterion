@@ -13,7 +13,7 @@ from aiogram.types import Message as TelegramMessage
 from asterion.application.market import MarketService
 from asterion.application.trades import TradeService
 from asterion.bot.guilds_ui import pack
-from asterion.bot.market_handlers import SEARCH_PROMPT, market_router
+from asterion.bot.market_handlers import market_router
 from asterion.bot.market_ui import (
     ERROR_FALLBACK,
     ERROR_MESSAGES,
@@ -127,7 +127,9 @@ async def test_sell_search_and_buy_flow(database):
     stack = await _give_material(database, SELLER, 10)
 
     screen = await client.click(SELLER, "mkt:mine")
-    assert "Loja de Vendedor" in screen.text and "Ofertas ativas · 0/6" in screen.text
+    assert "🏪 <b>Minha Loja</b>" in screen.text and "<code>❌ Vazio.</code>" in screen.text
+    screen = await client.click(SELLER, "mkt:ads")
+    assert "📦 <b>Ofertas</b> · <code>0/6</code>" in screen.text
 
     prompt = listing_prompt("material", stack, "Ferro", 10)
     screen = await client.say(SELLER, "4 100", reply_prompt=prompt)
@@ -135,8 +137,11 @@ async def test_sell_search_and_buy_flow(database):
     assert await _material_total(database, SELLER) == 6
 
     code = (await client.market.my_shop(SELLER)).code
-    screen = await client.say(BUYER, code, reply_prompt=SEARCH_PROMPT)
-    assert "Ofertas disponíveis" in screen.text
+    screen = await client.click(BUYER, "mkt:search")
+    assert "✏️ Digite o código da loja:" in screen.text
+    screen = await client.say(BUYER, code)
+    assert "🏪 <b>Loja de Vendedor</b>" in screen.text
+    assert "📦 <b>Itens na Vitrine:</b>" in screen.text
     listing = (await client.market.find_shop(BUYER, code)).listings[0]
 
     reference = with_ref("Quantas?", f"mkt:buy:{pack(listing.listing_id)}")

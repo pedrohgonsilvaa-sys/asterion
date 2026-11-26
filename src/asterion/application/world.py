@@ -57,6 +57,7 @@ class WorldView:
     crowns: int = 0
     # Patrono de Asterion ativo na conta (GDD §49.19), lido só para o HUD do Refúgio.
     patron_active: bool = False
+    patron_until: datetime | None = None
 
 
 class WorldService:
@@ -193,6 +194,7 @@ class WorldService:
                 ),
                 patron_active=patron is not None
                 and patron_active(datetime.now(UTC), patron.active_until),
+                patron_until=patron.active_until if patron is not None else None,
             )
 
     async def rest(self, actor: int) -> WorldView | None:

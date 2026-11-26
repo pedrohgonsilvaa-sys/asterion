@@ -41,7 +41,7 @@ REGISTRATION_OPENS_BEFORE = timedelta(hours=24)
 REGISTRATION_CLOSES_BEFORE = timedelta(minutes=30)  # 20:30
 CONFIRMATION_CLOSES_BEFORE = timedelta(minutes=10)  # 20:50
 
-GUILD_BATTLE_MIN_LEVEL = 30
+# Decisão do autor 2026-11-26 §34.1: a Batalha de Guildas não exige nível mínimo.
 TURN_TTL = timedelta(seconds=60)
 COMBATANTS = 5
 MAX_RESERVES = 2

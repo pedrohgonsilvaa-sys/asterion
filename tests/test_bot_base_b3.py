@@ -50,7 +50,7 @@ def _service(sessions):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("callback_data", ["world:adventure", "adv:hub", "menu:back"])
+@pytest.mark.parametrize("callback_data", ["world:adventure", "menu:back"])
 async def test_legacy_callbacks_from_active_p1_road_show_refuge_without_moving(
     database, callback_data
 ):
@@ -413,7 +413,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     screen = _last_screen(bot)
     # HUD do Refúgio: Menu Principal (Contrato Mestre §5), sem Missões.
     assert {button.text for row in screen.reply_markup.inline_keyboard for button in row} == {
-        "⛰️ Desbravar", "🌌 Eventos",
+        "⚔️ Aventura", "🌌 Eventos",
         "👤 Personagem", "🗺️ Mapa", "🏰 Guilda", "🏪 Mercado", "🏟️ Arena", "📖 Códice",
         "🏆 Classificação", "🌐 Comunidade", "🎁 Benefícios", "⚙️ Configurações",
     }
@@ -432,17 +432,18 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     labels = {
         button.text for row in screen.reply_markup.inline_keyboard for button in row
     }
-    assert "Campanha" not in labels and "Aventura" not in labels
+    assert "Campanha" not in labels and "⚔️ Aventura" in labels
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, callback_update("adv:hub", actor=actor, update_id=update_id)
     )
     screen = _last_screen(bot)
-    assert "Refúgio do Ocaso" in screen.text
+    # Decisão do autor 2026-11-26 §4: ⚔️ Aventura abre o próprio submenu.
+    assert screen.text == "<b>⚔️ Aventura</b>"
     labels = {
         button.text for row in screen.reply_markup.inline_keyboard for button in row
     }
-    assert "🏰 Guilda" in labels
+    assert {"🌘 Refúgio", "⛰️ Desbravar", "🐺 Caçadas", "🗝️ Masmorras"} <= labels
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, callback_update("settings:root", actor=actor, update_id=update_id)
@@ -455,7 +456,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     )
     screen = _last_screen(bot)
     assert "Essenciais" in screen.text
-    toggle = _button(screen, "Desativar")
+    toggle = _button(screen, "🔕 Desativar")
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, callback_update(toggle.callback_data, actor=actor, update_id=update_id)
@@ -466,12 +467,12 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     await dispatcher.feed_raw_update(
         bot, callback_update("help:root", actor=actor, update_id=update_id)
     )
-    assert "🛟 Ajuda" in _last_screen(bot).text
+    assert "🆘 <b>Ajuda</b>" in _last_screen(bot).text
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, _message_update("/ajuda", actor=actor, update_id=update_id)
     )
-    assert "🛟 Ajuda" in _last_screen(bot).text
+    assert "🆘 <b>Ajuda</b>" in _last_screen(bot).text
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, _message_update("/perfil", actor=actor, update_id=update_id)
@@ -498,7 +499,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     await dispatcher.feed_raw_update(
         bot, _message_update("/ajuda", actor=actor, update_id=update_id)
     )
-    assert "🛟 Ajuda" in _last_screen(bot).text
+    assert "🆘 <b>Ajuda</b>" in _last_screen(bot).text
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, _message_update("/perfil", actor=actor, update_id=update_id)
@@ -576,13 +577,14 @@ async def test_start_and_menu_show_pending_deletion_until_cancelled(database):
     await dispatcher.feed_raw_update(bot, _message_update("/start", actor=actor, update_id=80))
     screen = _last_screen(bot)
     assert "Exclusão Pendente" in screen.text
-    back_to_account = _button(screen, "← Conta")
+    back_to_account = _button(screen, "↩️ Retornar")
     await dispatcher.feed_raw_update(
         bot, callback_update(back_to_account.callback_data, actor=actor, update_id=81)
     )
     account_screen = _last_screen(bot)
-    assert "👤 Conta" in account_screen.text and "Exclusão Pendente" in account_screen.text
-    follow_pending = _button(account_screen, "Acompanhar Exclusão")
+    assert "👤 <b>Conta</b>" in account_screen.text
+    assert "Exclusão Pendente" in account_screen.text
+    follow_pending = _button(account_screen, "⏳ Exclusão")
     await dispatcher.feed_raw_update(
         bot, callback_update(follow_pending.callback_data, actor=actor, update_id=82)
     )
@@ -597,7 +599,7 @@ async def test_start_and_menu_show_pending_deletion_until_cancelled(database):
 
 
 @pytest.mark.asyncio
-async def test_delete_flow_through_dispatcher_deletes_after_typed_name(database):
+async def test_delete_flow_through_dispatcher_deletes_after_the_button(database):
     actor = 893030
     await _seed_road(database, actor=actor)
     sessions = database[1]
@@ -624,24 +626,14 @@ async def test_delete_flow_through_dispatcher_deletes_after_typed_name(database)
         bot, callback_update("account:delete", actor=actor, update_id=1)
     )
     screen = _last_screen(bot)
-    assert "Tem certeza" in screen.text
+    # Decisão do autor 2026-11-26 §35.6: confirmação por botão, aviso ⚠️ sem negrito.
+    assert "🗑️ <b>Apagar Personagem</b>" in screen.text
+    assert "\n⚠️ Essa ação não pode ser desfeita." in screen.text
+    assert "❤️ <b>HP</b>" in screen.text
     await dispatcher.feed_raw_update(
-        bot, callback_update("account:d:input", actor=actor, update_id=2)
+        bot, callback_update(_button(screen, "🗑️ Apagar").callback_data, actor=actor, update_id=2)
     )
-    prompt = _last_screen(bot)
-    assert prompt.text.startswith("⚠️ Para EXCLUIR")
-    name = prompt.text.rsplit(":", 1)[1].strip()
-    reply_to = {
-        "message_id": 2001,
-        "date": 1,
-        "chat": {"id": actor, "type": "private"},
-        "from": {"id": 123456, "is_bot": True, "first_name": "Asterion"},
-        "text": prompt.text,
-    }
-    await dispatcher.feed_raw_update(
-        bot, _message_update(name, actor=actor, update_id=3, reply_to=reply_to)
-    )
-    assert "excluído" in _last_screen(bot).text
+    assert "foi apagado" in _last_screen(bot).text
     assert await service.account(actor) is None
     await bot.session.close()
 

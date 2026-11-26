@@ -8,11 +8,12 @@ from aiogram import Bot, F, Router
 from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandStart
-from aiogram.types import CallbackQuery, ForceReply, Message
+from aiogram.types import CallbackQuery, Message
 
 from asterion.application.pvp import (
     PvpCombatView,
     PvpError,
+    PvpHubView,
     PvpNotice,
     PvpOutcome,
     PvpService,
@@ -20,16 +21,23 @@ from asterion.application.pvp import (
 from asterion.bot.combat_ui import PvpCombatCallback
 from asterion.bot.creation_handlers import present
 from asterion.bot.guilds_ui import unpack
-from asterion.bot.market_ui import with_ref
 from asterion.bot.pvp_ui import (
-    DUEL_PROMPT_REF,
     error_text,
+    render_arena,
+    render_duel_prompt,
+    render_level_ranking,
     render_pvp,
     render_ranking,
     render_surrender_confirm,
+    render_vigil,
 )
-
-DUEL_PROMPT = with_ref("Envie o nome do personagem que você quer desafiar.", DUEL_PROMPT_REF)
+from asterion.bot.text_prompt import (
+    PROMPTS,
+    HasPrompt,
+    PendingPrompt,
+    consume_reply,
+    show_on_prompt,
+)
 
 
 async def deliver_notices(bot: Bot, notices: Iterable[PvpNotice]) -> None:
@@ -71,25 +79,46 @@ def pvp_router(service: PvpService, images: dict[str, str]) -> Router:
             raise SkipHandler
         await present(message, render_pvp(view), images)
 
-    @router.callback_query(F.data.in_({"pvp:hub", "pvp:ref"}))
+    async def show(query: CallbackQuery, screen) -> None:
+        await query.answer()
+        if isinstance(query.message, Message):
+            await present(query.message, screen, images, edit=True)
+
+    @router.callback_query(F.data.in_({"pvp:hub", "pvp:ref", "pvp:vig"}))
     async def hub(query: CallbackQuery) -> None:
+        """Arena (§7.1) e Arena da Vigília (§7.2); uma atividade aberta tem prioridade."""
         try:
             view = await service.resume(query.from_user.id)
         except PvpError as error:
             await fail(query, error)
             return
+        if isinstance(view, PvpHubView) and view.invite is None:
+            if query.data == "pvp:hub":
+                await show(query, render_arena())
+                return
+            ranking = await service.ranking(query.from_user.id)
+            position = ranking.own.position if ranking.own is not None else None
+            await show(query, render_vigil(view, position=position))
+            return
         await finish(query, PvpOutcome(view))
 
-    @router.callback_query(F.data == "pvp:rank")
+    @router.callback_query(F.data.regexp(r"^pvp:rank(:\d+)?$"))
     async def ranking(query: CallbackQuery) -> None:
+        parts = (query.data or "").split(":")
         try:
-            view = await service.ranking(query.from_user.id)
+            view = await service.ranking(
+                query.from_user.id, page=int(parts[2]) if len(parts) == 3 else 0
+            )
         except PvpError as error:
             await fail(query, error)
             return
-        await query.answer()
-        if isinstance(query.message, Message):
-            await present(query.message, render_ranking(view), images, edit=True)
+        await show(query, render_ranking(view))
+
+    @router.callback_query(F.data.regexp(r"^rank:level(:\d+)?$"))
+    async def level_ranking(query: CallbackQuery) -> None:
+        parts = (query.data or "").split(":")
+        view = await service.level_ranking(page=int(parts[2]) if len(parts) == 3 else 0)
+        await show(query, render_level_ranking(view))
 
     @router.callback_query(F.data == "pvp:q")
     async def enter_queue(query: CallbackQuery) -> None:
@@ -111,24 +140,26 @@ def pvp_router(service: PvpService, images: dict[str, str]) -> Router:
 
     @router.callback_query(F.data == "pvp:duel")
     async def duel_prompt(query: CallbackQuery) -> None:
+        """Duelo (§7.4): edita a tela atual e espera o nome digitado."""
         await query.answer()
         if isinstance(query.message, Message):
-            await query.message.answer(DUEL_PROMPT, reply_markup=ForceReply(selective=True))
+            await present(query.message, render_duel_prompt(), images, edit=True)
+            PROMPTS.open(query.from_user.id, "pvp:duel", query.message)
 
-    @router.message(
-        F.text,
-        F.reply_to_message.text.func(lambda text: text == DUEL_PROMPT),
-        F.reply_to_message.from_user.is_bot,
-    )
-    async def duel_name(message: Message) -> None:
-        if message.from_user is None:
-            return
+    @router.message(F.text, HasPrompt("pvp:duel"))
+    async def duel_name(message: Message, prompt: PendingPrompt) -> None:
+        text = message.text or ""
+        await consume_reply(message)
+        PROMPTS.close(message.from_user.id)
         try:
-            view = await service.duel_preview(message.from_user.id, message.text or "")
+            view = await service.duel_preview(message.from_user.id, text)
         except PvpError as error:
-            await message.answer(error_text(error.code))
+            message_id = await show_on_prompt(
+                message, prompt, render_duel_prompt(error_text(error.code)), images
+            )
+            PROMPTS.follow(message.from_user.id, prompt, message_id=message_id)
             return
-        await present(message, render_pvp(view), images)
+        await show_on_prompt(message, prompt, render_pvp(view), images)
 
     async def by_token(query: CallbackQuery, method) -> None:
         try:

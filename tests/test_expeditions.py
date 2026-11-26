@@ -16,7 +16,7 @@ from asterion.application.expeditions import (
     ExpeditionService,
     ExpeditionStageNotice,
 )
-from asterion.application.guild_upkeep import _has_cooperative_commitment
+from asterion.application.guild_upkeep import has_cooperative_commitment
 from asterion.bot.expedition_ui import render_expedition
 from asterion.domain.expeditions import (
     ExpeditionOption,
@@ -344,10 +344,10 @@ async def test_active_expedition_blocks_final_dissolution(database):
     service = _service(database)
     expedition = await _launch(database, service)
     async with database[1]() as session:
-        assert await _has_cooperative_commitment(session, expedition.guild_id)
+        assert await has_cooperative_commitment(session, expedition.guild_id)
     await service.run_maintenance(now=END)
     async with database[1]() as session:
-        assert not await _has_cooperative_commitment(session, expedition.guild_id)
+        assert not await has_cooperative_commitment(session, expedition.guild_id)
 
 
 async def test_linked_accounts_in_the_roster_are_only_flagged(database):

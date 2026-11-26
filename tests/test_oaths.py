@@ -13,7 +13,7 @@ from asterion.application.combat_configuration_guard import (
     lock_for_combat_configuration_mutation,
 )
 from asterion.application.groups import GroupService
-from asterion.application.guild_upkeep import _has_cooperative_commitment
+from asterion.application.guild_upkeep import has_cooperative_commitment
 from asterion.application.oaths import (
     OATH_ACTIVITY_TYPE,
     OathAttemptResultView,
@@ -513,10 +513,10 @@ async def test_finalization_blocks_guild_dissolution_until_done(database):
     await _bind(service, database, A)
     attempt = await _attempt(database)
     async with database[1]() as session:
-        assert await _has_cooperative_commitment(session, attempt.guild_id)
+        assert await has_cooperative_commitment(session, attempt.guild_id)
     await service.run_maintenance(now=GRACE_END)
     async with database[1]() as session:
-        assert not await _has_cooperative_commitment(session, attempt.guild_id)
+        assert not await has_cooperative_commitment(session, attempt.guild_id)
 
 
 async def _open_cycle_now(database, service) -> None:

@@ -78,8 +78,8 @@ def test_open_oath_offers_solo_and_group():
             has_group=True,
         )
     )
-    assert "Provações · 2/3" in screen.text
-    assert "Contribuição · 25/180" in screen.text
+    assert "⚔️ <b>Provações</b> · <code>2/3</code>" in screen.text
+    assert "💠 <b>Contribuição</b> · <code>25/180</code>" in screen.text
     assert "130 pontos · Faixa I" in screen.text
     assert {"oath:solo", "group:oath:p"} <= set(_data(screen))
 
@@ -266,7 +266,7 @@ async def test_start_and_fight_a_provacao_through_the_buttons(database):
     assert packed, "the combat must use the Juramento callback"
     assert OathCombatCallback.unpack(packed[0]).action_index >= 0
     assert await client.click(A, packed[0]) is not None
-    assert (await client.click(A, "oath:hub")).text.startswith("⚜️ Juramento")
+    assert (await client.click(A, "oath:hub")).text.startswith("⚜️ <b>Juramento</b>")
     confirm = await client.click(A, "oath:out")
     assert "oath:outy" in _buttons(confirm)
     ended = await client.click(A, "oath:outy")

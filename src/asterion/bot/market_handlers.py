@@ -35,6 +35,7 @@ from asterion.bot.market_ui import (
     render_edit_shop,
     render_kinds,
     render_listing,
+    render_my_ads,
     render_my_shop,
     render_own_listing,
     render_promotion_copy,
@@ -42,6 +43,7 @@ from asterion.bot.market_ui import (
     render_purchase_done,
     render_purchase_preview,
     render_root,
+    render_search_prompt,
     render_sources,
     render_trade,
     render_trade_closed,
@@ -50,6 +52,13 @@ from asterion.bot.market_ui import (
     sale_notice,
     trade_quantity_prompt,
     with_ref,
+)
+from asterion.bot.text_prompt import (
+    PROMPTS,
+    HasPrompt,
+    PendingPrompt,
+    consume_reply,
+    show_on_prompt,
 )
 from asterion.domain.market import SHOP_DESCRIPTION_MAX, SHOP_NAME_MAX
 
@@ -151,9 +160,14 @@ def market_router(
         if action == "root":
             await show(query, render_root(await trades.current(actor)))
         elif action == "search":
-            await ask(query, SEARCH_PROMPT)
+            # Decisão do autor 2026-11-26 §8.2: o pedido usa a própria tela (prompt temporário).
+            await show(query, render_search_prompt())
+            if isinstance(query.message, Message):
+                PROMPTS.open(actor, "mkt:search", query.message)
         elif action == "mine":
             await show(query, render_my_shop(await market.my_shop(actor)))
+        elif action == "ads":
+            await show(query, render_my_ads(await market.my_shop(actor)))
         elif action == "add":
             await show(query, render_kinds("mkt", "📦 Nova oferta", "mkt:mine"))
         elif action == "src":
@@ -336,6 +350,21 @@ def market_router(
             await message.answer(error_text(exc.code))
             return
         await present(message, await shop_screen(shop), images)
+
+    @router.message(F.text, HasPrompt("mkt:search"))
+    async def search_text(message: Message, prompt: PendingPrompt) -> None:
+        text = message.text or ""
+        await consume_reply(message)
+        PROMPTS.close(message.from_user.id)
+        try:
+            shop = await market.find_shop(message.from_user.id, text)
+        except _Failure as exc:
+            message_id = await show_on_prompt(
+                message, prompt, render_search_prompt(error_text(exc.code)), images
+            )
+            PROMPTS.follow(message.from_user.id, prompt, message_id=message_id)
+            return
+        await show_on_prompt(message, prompt, await shop_screen(shop), images)
 
     @router.message(
         F.text,

@@ -14,6 +14,7 @@ from asterion.bot.shop_ui import (
     error_text,
     render_checkout,
     render_orders,
+    render_pass,
     render_shop,
     render_terms,
 )
@@ -32,6 +33,8 @@ def shop_router(payments: PaymentService, images: dict[str, str]) -> Router:
         parts = data.split(":")
         if data == "pay:root":
             await show(query, render_shop(await payments.shop(actor)))
+        elif data == "pay:pass":
+            await show(query, render_pass(await payments.shop(actor)))
         elif data == "pay:orders":
             await show(query, render_orders(await payments.orders(actor), datetime.now(UTC)))
         elif len(parts) == 3 and parts[1] == "t" and parts[2] in PRODUCTS:

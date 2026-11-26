@@ -174,7 +174,8 @@ def test_link_url_from_unknown_response_shape():
 
 def test_terms_and_buttons():
     text = terms_text(PATRON, 1490, 60)
-    assert TERMS_VERSION in text and "R$ 14,90" in text and "7 dias" in text
+    assert "📄 <b>Termos do Patrono de Asterion</b>" in text and "R$ 14,90" in text
+    assert "⏳ <b>Duração</b> · <code>30 dias</code>" in text
     screen = render_terms(CHRONICLE_PASS, 2490, 60)
     buttons = [b.callback_data for row in screen.keyboard.inline_keyboard for b in row]
     assert f"pay:b:{CHRONICLE_PASS}:{TERMS_VERSION}" in buttons
@@ -217,10 +218,10 @@ async def test_repeated_webhook_delivers_once_and_shows_in_orders(database):
 
     orders = await service.orders(ANA)
     assert [(o.status, o.product) for o in orders] == [("paid", PATRON)]
-    assert "✅ Pago" in render_orders(orders, NOW).text
+    assert "✅ <b>Pago</b>" in render_orders(orders, NOW).text
     shop = await service.shop(ANA, now=NOW)
     assert shop.patron_active and shop.patron_prestige == ("Aliado do Refúgio",)
-    assert "ativo até" in render_shop(shop).text
+    assert "👑 <b>Patrono de Asterion</b>" in render_shop(shop).text
 
 
 async def test_terms_and_availability_are_checked(database):
@@ -472,5 +473,5 @@ def test_benefits_shows_the_shop_only_when_open():
     def labels(screen):
         return {b.text for row in screen.keyboard.inline_keyboard for b in row}
 
-    assert "Apoiar Asterion" not in labels(render_benefits())
-    assert "Apoiar Asterion" in labels(render_benefits(shop_open=True))
+    assert "🔱 Patrono" not in labels(render_benefits())
+    assert "🔱 Patrono" in labels(render_benefits(shop_open=True))

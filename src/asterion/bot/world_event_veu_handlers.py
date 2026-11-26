@@ -16,6 +16,7 @@ from asterion.bot.world_event_veu_ui import (
     ACTION_REGISTERED,
     error_text,
     render_ally_targets,
+    render_events_menu,
     render_notice,
     render_nucleus,
     render_panel,
@@ -65,7 +66,12 @@ def veu_event_router(
     async def fail(query: CallbackQuery, error: VeuEventError) -> None:
         await query.answer(error_text(error.code), show_alert=True)
 
-    @router.callback_query(F.data.in_({"veu:hub", "wev:hub"}))
+    @router.callback_query(F.data == "wev:hub")
+    async def events_menu(query: CallbackQuery) -> None:
+        """🌌 Eventos (decisão do autor 2026-11-26 §33.1): Despertar e Ruptura."""
+        await show(query, render_events_menu())
+
+    @router.callback_query(F.data == "veu:hub")
     async def hub(query: CallbackQuery) -> None:
         try:
             view = await views.panel(query.from_user.id)

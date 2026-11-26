@@ -27,7 +27,7 @@ async def test_real_hunt_victory_screen_and_back_to_hunt_screen(database, monkey
     assert screen.text.startswith("🏆 <b>Vitória</b>\n\n<i>")
     assert ("🎁 <b>Recompensas:</b>" in screen.text) == bool(victory.reward_lines)
     back = screen.keyboard.inline_keyboard[-1][0]
-    assert (back.text, back.callback_data) == ("↩️ Voltar", "tdo:hunt")
+    assert (back.text, back.callback_data) == ("↩️ Retornar", "tdo:hunt")
 
     # O que o handler de [← Caçada] faz: confirma o resultado e abre a tela de Caçada.
     await service.acknowledge_result(actor)

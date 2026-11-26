@@ -16,7 +16,7 @@ from asterion.application.promo_codes import PromoCodeAdmin, PromoCodeService
 from asterion.application.recruitment import RecruitmentService
 from asterion.application.social import SocialService
 from asterion.bot.benefits_handlers import benefits_router
-from asterion.bot.benefits_ui import CODE_PROMPT, render_community
+from asterion.bot.benefits_ui import render_community
 from asterion.bot.social_handlers import social_router
 from asterion.bot.social_ui import relato_message
 from tests.test_guilds_telegram import _message_update, callback_update
@@ -199,12 +199,7 @@ async def test_benefits_menu_lists_only_what_exists_before_monetization(database
     await _seed(database)
     client = _Client(database)
     screen = await client.click(ANA, "bn:root")
-    assert _labels(screen) == {
-        "Dádiva Diária",
-        "Chamado de Asterion",
-        "Códigos de Asterion",
-        "← Menu",
-    }
+    assert _labels(screen) == {"🎁 Dádiva", "📣 Chamado", "🎟️ Códigos", "↩️ Retornar"}
 
 
 @pytest.mark.asyncio
@@ -212,9 +207,11 @@ async def test_daily_gift_screen_claims_and_hides_the_button(database):
     await _seed(database)
     client = _Client(database)
     screen = await client.click(ANA, "bn:gift")
-    assert "Resgatar" in _labels(screen) and "Dia 7" in screen.text
+    assert "🎁 Resgatar" in _labels(screen) and "❌ <b>Dia 7</b>" in screen.text
+    assert "✅" not in screen.text
     claimed = await client.click(ANA, "bn:gift:claim")
-    assert "Dia 1 resgatado" in claimed.text and "Resgatar" not in _labels(claimed)
+    assert "✅ <b>Dia 1</b> · 🪙 <code>" in claimed.text
+    assert "🎁 Resgatar" not in _labels(claimed)
 
 
 @pytest.mark.asyncio
@@ -232,10 +229,12 @@ async def test_code_reply_redeems(database):
         code="TESTE-1", reward_table=[{"c_multiplier": "0.10", "basics": 0, "fragments": 0}]
     )
     client = _Client(database)
-    screen = await client.say(ANA, "teste-1", reply_prompt=CODE_PROMPT)
-    assert "TESTE-1 resgatado" in screen.text and "Coroas" in screen.text
-    again = await client.say(ANA, "teste-1", reply_prompt=CODE_PROMPT)
-    assert "já resgatou" in again.text
+    await client.click(ANA, "bn:code")
+    screen = await client.say(ANA, "teste-1")
+    assert "<i>Código resgatado com sucesso.</i>" in screen.text and "Coroas" in screen.text
+    await client.click(ANA, "bn:code")
+    again = await client.say(ANA, "teste-1")
+    assert "❌ <b>Código Inválido</b>" in again.text
 
 
 @pytest.mark.asyncio

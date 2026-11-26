@@ -21,15 +21,13 @@ from asterion.application.guilds import (
 )
 from asterion.bot.guilds_handlers import guilds_router
 from asterion.bot.guilds_ui import (
-    FOUND_PROMPT,
     GUILD_ERROR_MESSAGES,
-    INVITE_PROMPT,
-    SEARCH_PROMPT,
     error_text,
     pack,
     render_browse,
     render_guild_menu,
     render_inbox,
+    render_manage,
     render_manage_members,
     render_my_applications,
     render_public_page,
@@ -37,6 +35,7 @@ from asterion.bot.guilds_ui import (
     render_search_results,
     unpack,
 )
+from asterion.bot.text_prompt import PromptResetMiddleware
 from asterion.domain.guilds import GuildRole, Recruitment
 from tests.test_character_surfaces_telegram import _last_screen, _message_update
 from tests.test_creation_ui import callback_update
@@ -150,7 +149,9 @@ def test_guild_screens_use_ids_only_and_fit_telegram_limit():
         status="pending",
     )
     screens = [
-        render_guild_menu(None, invites=2),
+        render_guild_menu(None),
+        render_manage(leader),
+        render_manage(officer),
         render_guild_menu(leader),
         render_guild_menu(officer),
         render_guild_menu(member),
@@ -171,47 +172,62 @@ def test_guild_screens_use_ids_only_and_fit_telegram_limit():
             assert "Aurora" not in callback and "AUR" not in callback
 
 
-def test_menu_buttons_depend_on_role():
-    def labels(view, **kwargs):
-        return {
-            button.text
-            for row in render_guild_menu(view, **kwargs).keyboard.inline_keyboard
-            for button in row
-        }
+def test_menu_buttons_follow_the_closed_layout():
+    def rows(screen):
+        return [[button.text for button in row] for row in screen.keyboard.inline_keyboard]
 
-    without = labels(None, invites=3)
-    assert {"Fundar Guilda", "Procurar Guilda", "Minhas Inscrições"} <= without
-    assert "Convites recebidos · 3" in without
+    # §9.1: sem Guilda, sem frase "ainda não faz parte" e Convites sem contagem.
+    without = render_guild_menu(None)
+    assert rows(without) == [
+        ["⚒️ Fundar", "🔎 Procurar"],
+        ["🏰 Guildas", "📝 Inscrições"],
+        ["✉️ Convites"],
+        ["↩️ Retornar"],
+    ]
+    assert "ainda não faz parte" not in without.text
+    assert without.text.startswith("🏰 <b>Guilda</b>\n\n<i>Encontre uma Guilda")
 
-    leader, officer, member = (
-        labels(_view(GuildRole.LEADER)),
-        labels(_view(GuildRole.OFFICER)),
-        labels(_view(GuildRole.MEMBER)),
-    )
-    assert "Convidar" in leader and "Convidar" in officer and "Convidar" not in member
-    assert "Fechar recrutamento" in leader
-    assert "Sair da Guilda" not in leader  # the Leader must transfer first
-    assert "Sair da Guilda" in officer and "Sair da Guilda" in member
+    # §9.2: com Guilda, TAG antes do nome e botões em duas colunas.
+    member = render_guild_menu(_view(GuildRole.MEMBER))
+    assert "🏰 <b>[AUR] Aurora</b>" in member.text
+    assert "👥 <b>Membros</b> · <code>3/5</code>" in member.text
+    assert rows(member) == [
+        ["👥 Gerenciar", "💰 Tesouraria"],
+        ["🏗️ Obras", "⚔️ Batalha"],
+        ["⚜️ Juramento", "🚩 Expedição"],
+        ["↩️ Retornar"],
+    ]
+
+    # §9.3: o Líder vê o Gerenciar completo; Oficial sem Renomear/Dissolver.
+    assert rows(render_manage(_view(GuildRole.LEADER))) == [
+        ["📨 Convidar", "📢 Recrutar"],
+        ["📝 Inscrições", "👥 Membros"],
+        ["✏️ Renomear", "🗑️ Dissolver"],
+        ["↩️ Retornar"],
+    ]
+    officer = " ".join(" ".join(r) for r in rows(render_manage(_view(GuildRole.OFFICER))))
+    assert "Renomear" not in officer and "Dissolver" not in officer
 
     def manage(view):
-        return {
-            button.text
+        return " ".join(
+            button.callback_data
             for row in render_manage_members(view).keyboard.inline_keyboard
             for button in row
-        }
+        )
 
-    leader_actions = " ".join(manage(_view(GuildRole.LEADER)))
-    officer_actions = " ".join(manage(_view(GuildRole.OFFICER)))
-    assert "Promover" in leader_actions and "Rebaixar" in leader_actions
-    assert "Liderança" in leader_actions
-    assert "Promover" not in officer_actions and "Liderança" not in officer_actions
-    assert "Expulsar Cedar" in officer_actions and "Expulsar Bravo" not in officer_actions
+    leader_actions = manage(_view(GuildRole.LEADER))
+    officer_actions = manage(_view(GuildRole.OFFICER))
+    assert "guild:pro:" in leader_actions and "guild:dem:" in leader_actions
+    assert "guild:lead:" in leader_actions
+    assert "guild:pro:" not in officer_actions and "guild:lead:" not in officer_actions
+    assert "guild:leave:" in officer_actions and "guild:leave:" not in leader_actions
 
 
 class _Client:
     def __init__(self, database):
         self.service = GuildService(database[1], "ocaso")
         self.dispatcher = Dispatcher(disable_fsm=True)
+        self.dispatcher.callback_query.outer_middleware(PromptResetMiddleware())
         self.dispatcher.include_router(guilds_router(self.service, {}))
         self.bot = Bot("123456:local-test-token")
         self.update_id = 0
@@ -275,43 +291,56 @@ async def test_found_search_apply_approve_and_manage_flow(database):
     client = _Client(database)
 
     screen = await client.say(alpha, "/guilda")
-    assert "ainda não faz parte" in screen.text
-    # a bad Name is answered in Portuguese and nothing is created
-    screen = await client.say(alpha, "Au AUR", reply_prompt=FOUND_PROMPT)
+    assert "⚒️ Fundar" in str(screen.reply_markup)
+    # fundação em etapas: Nome, TAG, Símbolo e Confirmação, sempre na mesma tela
+    await client.click(alpha, "guild:found")
+    screen = await client.say(alpha, "Au")
     assert "3 a 16 letras" in screen.text
     assert await client.service.my_guild(alpha) is None
-    screen = await client.say(alpha, "Aurora AUR", reply_prompt=FOUND_PROMPT)
-    assert "Aurora [AUR]" in screen.text and "Líder" in screen.text
+    screen = await client.say(alpha, "Aurora")
+    assert "🏷️ Envie a TAG da Guilda." in screen.text
+    screen = await client.say(alpha, "aur")
+    assert "Símbolo da Guilda" in screen.text
+    screen = await client.click(alpha, _button(screen, "🌌"))
+    assert "🌌 <b>[AUR] Aurora</b>" in screen.text
+    screen = await client.click(alpha, _button(screen, "✅ Confirmar"))
+    assert "🌌 <b>[AUR] Aurora</b>" in screen.text
+    guild = await client.service.my_guild(alpha)
+    assert guild.symbol == "🌌" and guild.viewer_role is GuildRole.LEADER
 
     # a closed Guild shows no application button on its public page
-    guild = await client.service.my_guild(alpha)
     screen = await client.click(bravo, f"guild:page:{pack(guild.guild_id)}")
-    assert "não aceita inscrições" in screen.text
+    assert "Solicitar Entrada" not in str(screen.reply_markup)
 
     screen = await client.click(alpha, f"guild:recr:o:{pack(guild.guild_id)}")
-    assert "Recrutamento · Aberto" in screen.text
+    assert "🚪 <b>Recrutamento</b> · <code>Aberto</code>" in screen.text
+    assert _button(screen, "🔴 Fechar")
 
-    # search by TAG, open the public page, apply
-    screen = await client.say(bravo, "aur", reply_prompt=SEARCH_PROMPT)
-    page_callback = _button(screen, "Aurora [AUR] · 1/5")
-    screen = await client.click(bravo, page_callback)
-    screen = await client.click(bravo, _button(screen, "Enviar Inscrição"))
-    assert "Pendente" in screen.text
+    # search by TAG opens the public page; apply
+    await client.click(bravo, "guild:search")
+    screen = await client.say(bravo, "aur")
+    assert "👑 <b>Líder</b> · <code>Alpha</code>" in screen.text
+    screen = await client.click(bravo, _button(screen, "📨 Solicitar Entrada"))
+    assert "🌌 <b>[AUR] Aurora</b>" in screen.text
 
-    # the Leader sees and approves it
+    # the Leader sees and accepts it
     screen = await client.click(alpha, f"guild:recv:{pack(guild.guild_id)}")
-    assert "Bravo" in screen.text
-    screen = await client.click(alpha, _button(screen, "Aprovar · 1"))
-    assert "Nenhuma inscrição pendente" in screen.text
+    assert "👤 <b>Bravo</b>" in screen.text
+    screen = await client.click(alpha, _button(screen, "🛡️ Bravo"))
+    screen = await client.click(alpha, _button(screen, "✅ Aceitar"))
+    assert "Bravo" not in screen.text
     assert (await client.service.my_guild(bravo)).viewer_role is GuildRole.MEMBER
 
-    # invite Cedar by name; Cedar accepts from the inbox
+    # invite Cedar by name; Cedar accepts the single invite directly
     await client.click(alpha, f"guild:invite:{pack(guild.guild_id)}")
-    await client.say(alpha, "Cedar", reply_prompt=INVITE_PROMPT)
+    screen = await client.say(alpha, "Cedar")
+    assert "👤 <b>Cedar</b>" in screen.text
+    await client.click(alpha, _button(screen, "📨 Convidar"))
     assert any("convidou você" in text for _chat, text in client.sent_to_others)
     screen = await client.click(cedar, "guild:inbox")
-    screen = await client.click(cedar, _button(screen, "Aceitar · 1"))
-    assert "Membros · 3/5" in screen.text
+    assert "Convite para Guilda" in screen.text
+    screen = await client.click(cedar, _button(screen, "✅ Aceitar"))
+    assert "<code>3/5</code>" in screen.text
 
     # promote, demote and a guarded kick
     bravo_id = (await client.service.my_guild(bravo)).viewer_character_id
@@ -321,7 +350,7 @@ async def test_found_search_apply_approve_and_manage_flow(database):
     await client.click(alpha, f"guild:dem:{gid}:{pack(bravo_id)}")
     assert (await client.service.my_guild(bravo)).viewer_role is GuildRole.MEMBER
     screen = await client.click(alpha, f"guild:kick:{gid}:{pack(bravo_id)}")
-    assert "Expulsar Bravo" in screen.text
+    assert "Remover Bravo" in screen.text
     assert await client.service.my_guild(bravo) is not None  # still only a confirmation
     await client.click(alpha, f"guild:kickok:{gid}:{pack(bravo_id)}")
     assert await client.service.my_guild(bravo) is None

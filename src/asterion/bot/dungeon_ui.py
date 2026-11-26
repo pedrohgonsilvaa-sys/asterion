@@ -173,7 +173,7 @@ def _render_dungeons(view: DungeonView) -> Screen:
                 "⛓️ Masmorra indisponível\n\nEsta Masmorra não está disponível.",
                 "dungeon_crypt",
                 InlineKeyboardMarkup(
-                    inline_keyboard=[[_button("↩️ Voltar", "dungeon:known")]]
+                    inline_keyboard=[[_button("↩️ Retornar", "dungeon:known")]]
                 ),
             )
         text = blocks(

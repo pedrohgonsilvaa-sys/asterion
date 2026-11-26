@@ -168,11 +168,11 @@ async def settle(session: AsyncSession, guild: Guild, now: datetime) -> None:
         )
         # §30.3: an Obra under Construção must finish before the final dissolution,
         # and so must an ongoing Juramento, Expedição or Batalha de Guildas.
-        if building is None and not await _has_cooperative_commitment(session, guild.id):
+        if building is None and not await has_cooperative_commitment(session, guild.id):
             await finalize_dissolution(session, guild, now, reason="requested")
 
 
-async def _has_cooperative_commitment(session: AsyncSession, guild_id: UUID) -> bool:
+async def has_cooperative_commitment(session: AsyncSession, guild_id: UUID) -> bool:
     oath = await session.scalar(
         select(OathGuildProgress.cycle_id)
         .where(OathGuildProgress.guild_id == guild_id, OathGuildProgress.finalized_at.is_(None))

@@ -96,7 +96,7 @@ def test_hud_layout_and_menu_order():
     ]
     assert len(blocks) == 3
     assert _labels(screen) == [
-        ["⛰️ Desbravar", "🗺️ Mapa"],
+        ["⚔️ Aventura", "🗺️ Mapa"],
         ["👤 Personagem", "🏪 Mercado"],
         ["🏟️ Arena", "🏰 Guilda"],
         ["🌌 Eventos", "📖 Códice"],
@@ -110,7 +110,7 @@ def test_hud_daily_gift_is_full_width_first_row():
 
     screen = render_refuge_dashboard(_view(), hud=RefugeHud(gift_available=True))
     assert _labels(screen)[0] == ["✨ Resgatar Dádiva Diária"]
-    assert _labels(screen)[1] == ["⛰️ Desbravar", "🗺️ Mapa"]
+    assert _labels(screen)[1] == ["⚔️ Aventura", "🗺️ Mapa"]
 
 
 def test_refuge_local_uses_refuge_art_and_lists_services():
@@ -118,16 +118,14 @@ def test_refuge_local_uses_refuge_art_and_lists_services():
     assert screen.image_key == location_key(REFUGE)
     assert screen.image_key != refuge_ui.REFUGE_BRAZIER_ID
     assert _labels(screen) == [
-        ["🔥 Braseiro do Refúgio", "⚔️ Darian Veyr"],
         ["🧭 Alda Veyr", "🖋️ Oren Cal"],
-        ["🛠️ Ofícios", "🎭 Caminho"],
-        ["📜 Mural de Missões", "🏦 Armazém"],
-        ["↩️ Voltar"],
+        ["⚔️ Darian Veyr", "🛠️ Ofícios"],
+        ["🎭 Caminho", "📜 Missões"],
+        ["↩️ Retornar"],
     ]
     assert _callbacks(screen) == [
-        "refuge:brazier", "refuge:darian", "refuge:alda", "refuge:oren",
-        "character:professions", "character:path", "world:missions", "warehouse:root:refuge",
-        "menu:back",
+        "refuge:alda", "refuge:oren", "refuge:darian", "character:professions",
+        "character:path", "world:missions", "adv:hub",
     ]
     assert "Dádiva" not in screen.text and "Travessia" not in screen.text
 
@@ -138,9 +136,9 @@ def test_brazier_shows_only_hp_and_hides_recover_when_full():
     )
     assert "<b>🏹 [CIN] Ornn</b>\n❤️ <b>HP</b> · <code>420/631</code>\n" in hurt.text
     assert "Vigor" not in hurt.text
-    assert _labels(hurt) == [["🔥 Recuperar-se"], ["↩️ Voltar"]]
+    assert _labels(hurt) == [["🔥 Recuperar-se"], ["↩️ Retornar"]]
     full = refuge_ui.render_refuge_brazier("Ornn", Decimal(631), Decimal(631), emoji="🏹")
-    assert _labels(full) == [["↩️ Voltar"]]
+    assert _labels(full) == [["↩️ Retornar"]]
     recovered = refuge_ui.render_refuge_brazier(
         "Ornn", Decimal(631), Decimal(631), emoji="🏹", recovered=True
     )
@@ -150,11 +148,11 @@ def test_brazier_shows_only_hp_and_hides_recover_when_full():
 
 def test_darian_and_npcs():
     darian = refuge_ui.render_darian(shields=True)
-    assert _labels(darian) == [["⚔️ Armas"], ["🥋 Armaduras"], ["🛡️ Escudos"], ["↩️ Voltar"]]
+    assert _labels(darian) == [["⚔️ Armas"], ["🥋 Armaduras"], ["🛡️ Escudos"], ["↩️ Retornar"]]
     assert ["🛡️ Escudos"] not in _labels(refuge_ui.render_darian(shields=False))
     # Bloco UI 1 §2: só descrição + Voltar (sem Missões nem Conversar).
     for npc in (refuge_ui.render_alda(), refuge_ui.render_oren()):
-        assert _labels(npc) == [["↩️ Voltar"]]
+        assert _labels(npc) == [["↩️ Retornar"]]
         assert _callbacks(npc) == ["refuge:local"]
     assert "🖋️ <b>Oren Cal</b>" in refuge_ui.render_oren().text
 
@@ -170,13 +168,13 @@ def test_explore_entry_has_three_paths_status_without_name_and_back():
         ["👣 Seguir pela estrada"],
         ["🌲 Seguir pela trilha"],
         ["🪨 Explorar os arredores"],
-        ["↩️ Voltar"],
+        ["↩️ Retornar"],
     ]
     assert set(_callbacks(screen)[:3]) == {"tdo:explore:go"}
     assert _callbacks(screen)[-1] == "menu:back"
     empty = render_explore_entry(_view(), remaining=0)
     assert "Não há mais o que explorar por aqui." in empty.text
-    assert _labels(empty) == [["↩️ Voltar"]]
+    assert _labels(empty) == [["↩️ Retornar"]]
 
 
 def test_explore_discovery_mold():
@@ -189,7 +187,7 @@ def test_explore_discovery_mold():
         "✨ <code>120 XP</code>"
     ) in screen.text
     assert screen.image_key == location_key("Charneca da Fuligem")
-    assert _labels(screen) == [["🧭 Continuar explorando"], ["↩️ Voltar ao Refúgio"]]
+    assert _labels(screen) == [["🧭 Continuar explorando"], ["↩️ Retornar"]]
 
 
 # ---- §4 Caçadas -----------------------------------------------------------------------
@@ -197,7 +195,7 @@ def test_explore_discovery_mold():
 
 def test_hunt_entry_has_manual_and_round_without_choosing_a_place():
     screen = render_hunt_entry()
-    assert _labels(screen) == [["🎯 Caçada Manual"], ["🔄 Ronda de Caça"], ["↩️ Voltar"]]
+    assert _labels(screen) == [["🎯 Caçada Manual"], ["🔄 Ronda de Caça"], ["↩️ Retornar"]]
     assert _callbacks(screen) == ["tdo:hunt:manual", "tdo:hunt:round", "menu:back"]
 
 
@@ -215,7 +213,7 @@ def test_hunt_victory_and_defeat_molds():
     assert "🎁 <b>Recompensas:</b>\n✨ <code>120 XP</code>\n🪙 <code>80 Coroas</code>" in (
         victory.text
     )
-    assert _labels(victory) == [["🎯 Caçar novamente"], ["↩️ Voltar"]]
+    assert _labels(victory) == [["🎯 Caçar novamente"], ["↩️ Retornar"]]
     defeat = render_road(
         RoadView("hunt_defeat", uuid4(), REFUGE, recovery_location=REFUGE)
     )
@@ -223,7 +221,7 @@ def test_hunt_victory_and_defeat_molds():
     assert "Recompensas" not in defeat.text
     # A recuperação real (Braseiro + HP restaurado) continua visível.
     assert "🔥 <b>Braseiro da Estrada</b> · ❤️ HP restaurado" in defeat.text
-    assert _labels(defeat) == [["🎯 Tentar novamente"], ["↩️ Voltar"]]
+    assert _labels(defeat) == [["🎯 Tentar novamente"], ["↩️ Retornar"]]
 
 
 # ---- §6 Missões -----------------------------------------------------------------------
@@ -242,7 +240,7 @@ def test_missions_board_is_split_in_entry_main_and_side():
     assert "Luzes" not in main_text and "Pedras que Ainda Vigiam" in main_text
     main = missions_ui.render_main(main_text, main_rows)
     assert "<b>Em andamento</b>" in main.text
-    assert _labels(main) == [["📖 Vozes na Estrada"], ["↩️ Voltar"]]
+    assert _labels(main) == [["📖 Vozes na Estrada"], ["↩️ Retornar"]]
     side_screen = missions_ui.render_side(
         [
             ("🕯️ Luzes sob as Cinzas · Em Andamento", "s1:detail"),
@@ -254,14 +252,14 @@ def test_missions_board_is_split_in_entry_main_and_side():
     assert _labels(side_screen) == [
         ["📜 Luzes sob as Cinzas"],
         ["▶️ Os Nomes Esquecidos"],
-        ["↩️ Voltar"],
+        ["↩️ Retornar"],
     ]
     entry = missions_ui.render_entry(any_mission=True)
     assert _labels(entry) == [
         ["📖 Missões Principais"],
         ["🗺️ Missões Secundárias"],
         ["📜 Contratos"],
-        ["↩️ Voltar"],
+        ["↩️ Retornar"],
     ]
     assert "Ainda não há novas missões" in missions_ui.render_entry(any_mission=False).text
 
@@ -320,15 +318,15 @@ def test_weapon_training_lists_class_families_and_family_shows_canonical_terms()
         ),
     )
     root = render_weapon_trainer(view)
-    assert _labels(root) == [["🏹 Arcos", "🗡️ Espadas"], ["↩️ Voltar"]]
+    assert _labels(root) == [["🏹 Arcos", "🗡️ Espadas"], ["↩️ Retornar"]]
     assert "Coroas" not in root.text
     family = render_weapon_family(view, ProficiencyFamily.SWORDS)
     assert f"⭐ <b>Nível</b> · <code>{terms.min_level}</code>" in family.text
     assert "💰 <b>Custo</b> · <code>" in family.text and "1.500" not in family.text
-    assert _labels(family) == [["⚔️ Adquirir Proficiência"], ["↩️ Voltar"]]
+    assert _labels(family) == [["⚔️ Adquirir Proficiência"], ["↩️ Retornar"]]
     owned = render_weapon_family(view, ProficiencyFamily.BOWS)
     assert "📜 <b>Proficiência</b> · <code>Adquirida</code>" in owned.text
-    assert _labels(owned) == [["↩️ Voltar"]]
+    assert _labels(owned) == [["↩️ Retornar"]]
     shield = render_weapon_family(view, ProficiencyFamily.SHIELD)
     assert shield.text.startswith("🛡️ <b>Treinamento de Escudos</b>")
     assert _labels(shield)[0] == ["🛡️ Adquirir Proficiência"]
@@ -346,7 +344,7 @@ def test_armor_training_uses_canonical_terms():
         tuple(ArmorTrainerEntry(t, t.armor_class == "veste") for t in ARMOR_TERMS.values()),
     )
     assert _labels(render_armor_trainer(view)) == [
-        ["👘 Vestes"], ["🥋 Leve"], ["🦺 Média"], ["⛑️ Pesada"], ["↩️ Voltar"]
+        ["👘 Vestes"], ["🥋 Leve"], ["🦺 Média"], ["⛑️ Pesada"], ["↩️ Retornar"]
     ]
     media = render_armor_class(view, "media")
     assert "⭐ <b>Nível</b> · <code>20</code>" in media.text
@@ -385,10 +383,10 @@ def test_dungeon_screens_follow_the_mold_with_canonical_values():
             **base,
         )
     )
-    assert _labels(known) == [["🏚️ Cripta do Ocaso"], ["🏛️ Galerias do Vigia"], ["↩️ Voltar"]]
+    assert _labels(known) == [["🏚️ Cripta do Ocaso"], ["🏛️ Galerias do Vigia"], ["↩️ Retornar"]]
     detail_view = DungeonView("detail", **base)
     detail = render_dungeons(detail_view)
-    assert _labels(detail) == [["🟢 Estável"], ["🟠 Fraturada"], ["🔴 Ruptura"], ["↩️ Voltar"]]
+    assert _labels(detail) == [["🟢 Estável"], ["🟠 Fraturada"], ["🔴 Ruptura"], ["↩️ Retornar"]]
     assert "Estável" not in detail.text.split("\n")[0]
     stable = render_dungeon_difficulty(detail_view, "s")
     assert "⭐ <b>Nível</b> · <code>4</code>" in stable.text

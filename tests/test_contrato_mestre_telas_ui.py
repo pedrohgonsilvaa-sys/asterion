@@ -40,7 +40,7 @@ def test_identity_variants():
 def test_map_root_lists_known_regions_and_returns_to_menu():
     screen = map_ui.render_map([("Terras do Ocaso", "tdo", "🌘")], back_callback="menu:back")
     assert screen.text.startswith("🗺️ <b>Mapa</b>\n\n<i>O conhecimento das terras")
-    assert _labels(screen) == [["🌘 Terras do Ocaso"], ["↩️ Voltar"]]
+    assert _labels(screen) == [["🌘 Terras do Ocaso"], ["↩️ Retornar"]]
     assert _callbacks(screen) == ["world:map:region:tdo", "menu:back"]
 
 
@@ -52,7 +52,7 @@ def test_tdo_region_lists_only_known_locals_without_level_or_brazier():
         ["🛖 Refúgio do Ocaso"],
         ["🌫️ Charneca da Fuligem"],
         ["🕯️ Câmara do Poente"],
-        ["↩️ Voltar"],
+        ["↩️ Retornar"],
     ]
     assert "Nv." not in screen.text and "Braseiro" not in screen.text
     assert _callbacks(screen)[-1] == "world:map"
@@ -72,7 +72,7 @@ def test_tdo_local_is_title_description_and_back_only():
     assert charneca.text == (
         "🌫️ <b>Charneca da Fuligem</b>\n\n<i>" + map_ui.CHARNECA_TEXT + "</i>"
     )
-    assert _labels(charneca) == [["↩️ Voltar"]]
+    assert _labels(charneca) == [["↩️ Retornar"]]
     assert _callbacks(charneca) == ["world:map:region:tdo"]
     assert "Ir para o Local" not in str(_labels(charneca))
     assert TEXTO_CAMARA_PRE_P6 in map_ui.render_tdo_local("camara").text
@@ -107,7 +107,7 @@ def test_codex_root_has_seven_categories_and_no_counter():
         ["📜 História", "🌀 Mistérios"],
         ["📖 Crônicas"],
         ["🐾 Bestiário"],
-        ["↩️ Voltar"],
+        ["↩️ Retornar"],
     ]
     assert _callbacks(screen)[-2:] == ["kb:b", "menu:back"]
     for forbidden in ("???", "%", "0/", "Nenhuma"):
@@ -120,7 +120,7 @@ def test_empty_codex_category_shows_only_description_and_back():
         "<b>🌀 Mistérios e Fenômenos</b>\n\n<i>Registros sobre fenômenos, mistérios e "
         "verdades ocultas que foram legitimamente descobertos pelo personagem.</i>"
     )
-    assert _labels(screen) == [["↩️ Voltar"]]
+    assert _labels(screen) == [["↩️ Retornar"]]
     assert _callbacks(screen) == ["kb:cd"]
 
 
@@ -138,8 +138,9 @@ def test_warehouse_back_follows_its_origin():
     for accessible in (True, False):
         view = WarehouseView("warehouse_root", uuid4(), accessible, "Refúgio do Ocaso", 60, 100)
         from_refuge = render_warehouse(view, back_to_refuge=True)
-        assert _labels(from_refuge)[-1] == ["↩️ Voltar"]
-        assert _callbacks(from_refuge)[-1] == "refuge:local"
+        assert _labels(from_refuge)[-1] == ["↩️ Retornar"]
+        # Decisão do autor 2026-11-26 §4.2/§8.1: o Armazém fica no Mercado.
+        assert _callbacks(from_refuge)[-1] == "mkt:root"
         from_inventory = render_warehouse(view)
         assert _labels(from_inventory)[-1] == ["← Inventário"]
         assert _callbacks(from_inventory)[-1] == "inventory:root"

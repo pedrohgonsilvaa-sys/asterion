@@ -28,6 +28,7 @@ from asterion.application.knowledge_catalog import (
     MATERIAL_LABELS,
     VARIANT_LABELS,
 )
+from asterion.application.progression import level_xp
 from asterion.application.tdo_feats import reconcile_tdo_feats
 from asterion.application.vigor import reconcile_character_vigor
 from asterion.domain.flagelos import REGIONS as FLAGELO_REGIONS
@@ -81,6 +82,9 @@ class AttributesView:
     critical: Decimal
     evasion: Decimal
     block: Decimal
+    xp: int = 0
+    xp_required: int = 0
+    crowns: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +208,9 @@ class CharacterSurfacesService:
                 critical=stats.crit,
                 evasion=stats.evasion,
                 block=stats.block,
+                xp=character.xp,
+                xp_required=level_xp(character.level) if character.level < 60 else 0,
+                crowns=character.crowns,
             )
 
     async def identity(self, actor_id: int) -> IdentityView | None:

@@ -42,14 +42,15 @@ def _bars(points=(420, 310, 271, 412, 198, 337), active=None):
 def test_hub_shows_the_six_bars_absolute_and_percent():
     screen = render_hub(HubView(_bars(), None, None))
     for line in (
-        "🌑 Ocaso <code>420/500</code> (84%)",
-        "🪢 Vales <code>310/500</code> (62%)",
-        "🌾 Nareth <code>271/500</code> (54%)",
-        "🥀 Várzeas <code>412/500</code> (82%)",
-        "⛰️ Altos <code>198/500</code> (39%)",
-        "🌫️ Confins <code>337/500</code> (67%)",
+        "🌘 <b>Ocaso</b> · <code>420/500</code>\n🟥🟥🟥🟥🟥🟥🟥🟥⬜⬜ <code>84%</code>",
+        "🌊 <b>Vales</b> · <code>310/500</code>",
+        "🌾 <b>Nareth</b> · <code>271/500</code>",
+        "🌹 <b>Várzeas</b> · <code>412/500</code>",
+        "🏔️ <b>Altos</b> · <code>198/500</code>",
+        "⬜ <b>Confins</b> · <code>337/500</code>",
     ):
         assert line in screen.text
+    assert screen.text.startswith("🔥 <b>Despertar dos Flagelos</b>")
     assert _callbacks(screen) == ["wev:hub"]
 
 

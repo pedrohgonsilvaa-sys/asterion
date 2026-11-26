@@ -2535,6 +2535,8 @@ class Guild(Base):
     recruitment: Mapped[str] = mapped_column(
         String(8), nullable=False, default="closed", server_default="closed"
     )
+    # Decisão do autor 2026-11-26 §16: símbolo da lista controlada (NULL nas antigas).
+    symbol: Mapped[str | None] = mapped_column(String(16))
     lodging_level: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )

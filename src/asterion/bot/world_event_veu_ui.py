@@ -79,20 +79,47 @@ def render_panel(view: PanelView, *, now: datetime | None = None) -> Screen:
     return _render_active(view)
 
 
+EVENTS_TEXT = (
+    "Eventos especiais acontecem em diferentes momentos de Asterion e podem alterar o "
+    "estado das Regiões ou abrir novas oportunidades para os aventureiros."
+)
+RUPTURE_TEXT = (
+    "Em determinados momentos do dia, uma Ruptura manifesta-se em Asterion e altera "
+    "temporariamente o comportamento do Véu. Os aventureiros podem acompanhar o horário do "
+    "evento e verificar se a última Ruptura foi concluída."
+)
+RUPTURE_FOOTER = (
+    "Quando uma Ruptura acontece, o Véu permanece instável por um período limitado antes "
+    "de desaparecer novamente."
+)
+_BACK_EVENTS = [InlineKeyboardButton(text="↩️ Retornar", callback_data="wev:hub")]
+
+
+def render_events_menu() -> Screen:
+    """Menu de Eventos (decisão do autor 2026-11-26 §33.1)."""
+    return Screen(
+        f"🌌 <b>Eventos</b>\n\n<i>{escape(EVENTS_TEXT)}</i>",
+        IMAGE,
+        InlineKeyboardMarkup(
+            inline_keyboard=[
+                [_button("🔥 Despertar", "flg:hub"), _button("🕳️ Ruptura", "veu:hub")],
+                [_button("↩️ Retornar", "menu:back")],
+            ]
+        ),
+        "HTML",
+    )
+
+
 def _render_scheduled(view: PanelView) -> Screen:
+    """Ruptura do Véu fora do horário (§33.3): só o horário real da próxima Ruptura."""
     local = view.next_slot.astimezone(ev.EVENT_TIMEZONE) if view.next_slot else None
-    when = f"{local:%d/%m} · <code>{local:%H:%M}</code>" if local else ""
-    lines = [
-        "📅 <b>Eventos Mundiais</b>",
-        "",
-        "🌫️ <b>A Ruptura do Véu</b>",
-        f"⏰ {when}",
-        "🌍 Evento Global",
-        "",
-        *escape(OPENING_TEXT).split("\n"),
-    ]
-    rows = [[_button(*FLAGELO_ENTRY)], [_button("🔙 Voltar", "adv:hub")]]
-    return Screen("\n".join(lines), IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")
+    parts = ["🕳️ <b>Ruptura do Véu</b>", f"<i>{escape(RUPTURE_TEXT)}</i>"]
+    if local is not None:
+        parts.append(f"🕐 <b>Próxima Ruptura</b> · <code>{local:%H:%M}</code>")
+    parts.append(f"<i>{escape(RUPTURE_FOOTER)}</i>")
+    return Screen(
+        "\n\n".join(parts), IMAGE, InlineKeyboardMarkup(inline_keyboard=[_BACK_EVENTS]), "HTML"
+    )
 
 
 def _render_active(view: PanelView) -> Screen:
@@ -119,8 +146,7 @@ def _render_active(view: PanelView) -> Screen:
                 ]
             )
             rows.append([_button(f"{_icon(line.key)} {line.name}", f"veu:n:{line.key}")])
-    rows.append([_button(*FLAGELO_ENTRY)])
-    rows.append([_button("🔙 Voltar", "adv:hub")])
+    rows.append(_BACK_EVENTS)
     return Screen("\n".join(lines), IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")
 
 
@@ -157,7 +183,7 @@ def _render_final(view: PanelView) -> Screen:
         lines.append(f"✨ XP · <code>{_fmt(int(reward.get('xp', 0)))}</code>")
         for item in reward.get("items", ()):
             lines.append(f"📦 {escape(str(item['name']))} × {item['quantity']}")
-    rows = [[_button(*FLAGELO_ENTRY)], [_button("🔙 Voltar", "adv:hub")]]
+    rows = [_BACK_EVENTS]
     return Screen("\n".join(lines), IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")
 
 
@@ -239,7 +265,7 @@ def render_targets(view: NucleusScreen, action: str) -> Screen:
         for enemy in view.enemies
         if not enemy.defeated
     ]
-    rows.append([_button("↩️ Voltar", f"veu:n:{view.key}")])
+    rows.append([_button("↩️ Retornar", f"veu:n:{view.key}")])
     return Screen(
         "🎯 <b>Escolha o alvo</b>", IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML"
     )
@@ -265,7 +291,7 @@ def render_ally_targets(page: ParticipantsPage, kind: str, round_number: int) ->
         nav.append(_button("➡️ Próxima", f"veu:ta:{kind}:{key}:{round_number}:{page.page + 1}"))
     if nav:
         rows.append(nav)
-    rows.append([_button("↩️ Voltar", f"veu:n:{key}")])
+    rows.append([_button("↩️ Retornar", f"veu:n:{key}")])
     return Screen(
         "🎯 <b>Escolha o alvo</b>", IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML"
     )
@@ -288,7 +314,7 @@ def render_participants(page: ParticipantsPage) -> Screen:
     if page.page < page.pages - 1:
         nav.append(_button("➡️ Próxima", f"veu:p:{page.key}:{page.page + 1}"))
     rows = [nav] if nav else []
-    rows.append([_button("↩️ Voltar", f"veu:n:{page.key}")])
+    rows.append([_button("↩️ Retornar", f"veu:n:{page.key}")])
     return Screen("\n".join(lines), IMAGE, InlineKeyboardMarkup(inline_keyboard=rows), "HTML")
 
 

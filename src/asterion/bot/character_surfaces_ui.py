@@ -215,7 +215,7 @@ CODEX_CATEGORY_SCREENS = {
         "acontecimentos e descobertas que passam a fazer parte de sua história.",
     ),
 }
-CODEX_BACK = "↩️ Voltar"
+CODEX_BACK = "↩️ Retornar"
 CODEX_BESTIARY = "🐾 Bestiário"
 
 
@@ -383,7 +383,7 @@ def render_achievement_root(view: KnowledgeView) -> Screen:
             lines.append(label)
             rows.append([_button(label, f"kb:ac:{ACHIEVEMENT_CATEGORY_KEYS[category]}")])
     # Feitos fica no Personagem (Contrato Mestre de Telas UI v1.0.0 §6).
-    rows.append([_button("↩️ Voltar", "character:root")])
+    rows.append([_button("↩️ Retornar", "character:root")])
     return Screen("\n".join(lines), "achievements", _keyboard(rows))
 
 
@@ -402,7 +402,7 @@ def render_achievement_category(view: KnowledgeView, category: str) -> Screen:
             lines.append(f"🎁 {entry.reward}")
         lines.append("")
     lines.pop()
-    rows = [[_button("↩️ Voltar", "kb:a")]]
+    rows = [[_button("↩️ Retornar", "kb:a")]]
     return Screen("\n".join(lines), "achievements", _keyboard(rows))
 
 
